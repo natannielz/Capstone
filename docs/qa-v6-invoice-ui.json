@@ -1,0 +1,24 @@
+{
+  "passed": true,
+  "at": "2026-09-17T12:23:23.334Z",
+  "localOnly": true,
+  "method": "Invoices issued using browser UI, persisted results verified through authenticated local API",
+  "fixtureRows": 101,
+  "billedRows": 101,
+  "uniqueBilledRows": 101,
+  "remaining": 0,
+  "invoices": [
+    {
+      "id": "2b3382be-c71b-4b66-a858-60e53e17c4b7",
+      "number": "INV/202609/0004",
+      "divisionId": "div-ti",
+      "rows": 100
+    },
+    {
+      "id": "982f0b44-fc69-4791-bd2e-2ea4def9b3bd",
+      "number": "INV/202609/0005",
+      "divisionId": "div-ti",
+      "rows": 1
+    }
+  ]
+}

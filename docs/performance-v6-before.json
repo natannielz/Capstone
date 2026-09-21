@@ -1,0 +1,265 @@
+{
+  "at": "2026-09-17T12:10:15.760Z",
+  "base": "https://unit-toko-bni.vercel.app",
+  "label": "before",
+  "method": "Three sequential unauthenticated GET requests per page from the same local Node runtime; asset sizes are decoded bytes. Not browser LCP, TTI or field performance.",
+  "measurements": [
+    {
+      "path": "/",
+      "samples": [
+        {
+          "status": 200,
+          "ms": 703,
+          "htmlBytes": 48350
+        },
+        {
+          "status": 200,
+          "ms": 66,
+          "htmlBytes": 48350
+        },
+        {
+          "status": 200,
+          "ms": 77,
+          "htmlBytes": 48350
+        }
+      ],
+      "jsBytes": 590296,
+      "cssBytes": 232552,
+      "assets": [
+        {
+          "path": "/_next/static/css/4374dac7cffdf26a.css",
+          "bytes": 864,
+          "status": 200
+        },
+        {
+          "path": "/_next/static/css/965780dc7aedd753.css",
+          "bytes": 165481,
+          "status": 200
+        },
+        {
+          "path": "/_next/static/css/592d3f0bc3bc2e2f.css",
+          "bytes": 66207,
+          "status": 200
+        },
+        {
+          "path": "/_next/static/chunks/webpack-fa8bf11279886096.js",
+          "bytes": 3358,
+          "status": 200
+        },
+        {
+          "path": "/_next/static/chunks/4bd1b696-58970b7b91aecaf4.js",
+          "bytes": 201054,
+          "status": 200
+        },
+        {
+          "path": "/_next/static/chunks/794-9757f25053b31f05.js",
+          "bytes": 240805,
+          "status": 200
+        },
+        {
+          "path": "/_next/static/chunks/main-app-b0436e322d2ee9bb.js",
+          "bytes": 931,
+          "status": 200
+        },
+        {
+          "path": "/_next/static/chunks/552-3270a868cda73c62.js",
+          "bytes": 17575,
+          "status": 200
+        },
+        {
+          "path": "/_next/static/chunks/954-59b5b28f93d4e1be.js",
+          "bytes": 8501,
+          "status": 200
+        },
+        {
+          "path": "/_next/static/chunks/app/page-ae94e08fdce1f021.js",
+          "bytes": 5478,
+          "status": 200
+        },
+        {
+          "path": "/_next/static/chunks/polyfills-42372ed130431b0a.js",
+          "bytes": 112594,
+          "status": 200
+        }
+      ]
+    },
+    {
+      "path": "/login",
+      "samples": [
+        {
+          "status": 200,
+          "ms": 92,
+          "htmlBytes": 23088
+        },
+        {
+          "status": 200,
+          "ms": 64,
+          "htmlBytes": 23088
+        },
+        {
+          "status": 200,
+          "ms": 226,
+          "htmlBytes": 23088
+        }
+      ],
+      "jsBytes": 641776,
+      "cssBytes": 232552,
+      "assets": [
+        {
+          "path": "/_next/static/css/4374dac7cffdf26a.css",
+          "bytes": 864,
+          "status": 200
+        },
+        {
+          "path": "/_next/static/css/965780dc7aedd753.css",
+          "bytes": 165481,
+          "status": 200
+        },
+        {
+          "path": "/_next/static/css/592d3f0bc3bc2e2f.css",
+          "bytes": 66207,
+          "status": 200
+        },
+        {
+          "path": "/_next/static/chunks/webpack-fa8bf11279886096.js",
+          "bytes": 3358,
+          "status": 200
+        },
+        {
+          "path": "/_next/static/chunks/4bd1b696-58970b7b91aecaf4.js",
+          "bytes": 201054,
+          "status": 200
+        },
+        {
+          "path": "/_next/static/chunks/794-9757f25053b31f05.js",
+          "bytes": 240805,
+          "status": 200
+        },
+        {
+          "path": "/_next/static/chunks/main-app-b0436e322d2ee9bb.js",
+          "bytes": 931,
+          "status": 200
+        },
+        {
+          "path": "/_next/static/chunks/552-3270a868cda73c62.js",
+          "bytes": 17575,
+          "status": 200
+        },
+        {
+          "path": "/_next/static/chunks/983-a707d3b1ef08bb02.js",
+          "bytes": 35431,
+          "status": 200
+        },
+        {
+          "path": "/_next/static/chunks/954-59b5b28f93d4e1be.js",
+          "bytes": 8501,
+          "status": 200
+        },
+        {
+          "path": "/_next/static/chunks/674-1eda185ff5d665fa.js",
+          "bytes": 13260,
+          "status": 200
+        },
+        {
+          "path": "/_next/static/chunks/app/login/page-524a2f876ab1a11b.js",
+          "bytes": 8267,
+          "status": 200
+        },
+        {
+          "path": "/_next/static/chunks/polyfills-42372ed130431b0a.js",
+          "bytes": 112594,
+          "status": 200
+        }
+      ]
+    },
+    {
+      "path": "/workspace",
+      "samples": [
+        {
+          "status": 200,
+          "ms": 60,
+          "htmlBytes": 9997
+        },
+        {
+          "status": 200,
+          "ms": 84,
+          "htmlBytes": 9997
+        },
+        {
+          "status": 200,
+          "ms": 110,
+          "htmlBytes": 9997
+        }
+      ],
+      "jsBytes": 873769,
+      "cssBytes": 232552,
+      "assets": [
+        {
+          "path": "/_next/static/css/4374dac7cffdf26a.css",
+          "bytes": 864,
+          "status": 200
+        },
+        {
+          "path": "/_next/static/css/965780dc7aedd753.css",
+          "bytes": 165481,
+          "status": 200
+        },
+        {
+          "path": "/_next/static/css/592d3f0bc3bc2e2f.css",
+          "bytes": 66207,
+          "status": 200
+        },
+        {
+          "path": "/_next/static/chunks/webpack-fa8bf11279886096.js",
+          "bytes": 3358,
+          "status": 200
+        },
+        {
+          "path": "/_next/static/chunks/4bd1b696-58970b7b91aecaf4.js",
+          "bytes": 201054,
+          "status": 200
+        },
+        {
+          "path": "/_next/static/chunks/794-9757f25053b31f05.js",
+          "bytes": 240805,
+          "status": 200
+        },
+        {
+          "path": "/_next/static/chunks/main-app-b0436e322d2ee9bb.js",
+          "bytes": 931,
+          "status": 200
+        },
+        {
+          "path": "/_next/static/chunks/552-3270a868cda73c62.js",
+          "bytes": 17575,
+          "status": 200
+        },
+        {
+          "path": "/_next/static/chunks/983-a707d3b1ef08bb02.js",
+          "bytes": 35431,
+          "status": 200
+        },
+        {
+          "path": "/_next/static/chunks/15-9fe4c36fb677ac2a.js",
+          "bytes": 100343,
+          "status": 200
+        },
+        {
+          "path": "/_next/static/chunks/674-1eda185ff5d665fa.js",
+          "bytes": 13260,
+          "status": 200
+        },
+        {
+          "path": "/_next/static/chunks/app/workspace/page-8db4b0d6287135ff.js",
+          "bytes": 148418,
+          "status": 200
+        },
+        {
+          "path": "/_next/static/chunks/polyfills-42372ed130431b0a.js",
+          "bytes": 112594,
+          "status": 200
+        }
+      ]
+    }
+  ]
+}

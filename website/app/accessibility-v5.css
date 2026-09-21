@@ -1,0 +1,129 @@
+/* Interaction fixes loaded after the existing component styles. */
+.search-field:focus-within {
+  outline: 3px solid var(--ring);
+  outline-offset: 3px;
+  border-color: var(--ring);
+}
+
+.search-field input:focus-visible {
+  /* The entire search field carries the visible focus indicator. */
+  outline: none;
+}
+
+.profile-form [data-slot=input][aria-invalid=true] {
+  border-color: var(--destructive);
+}
+
+.profile-form [data-slot=field][data-invalid=true] [data-slot=field-label] {
+  color: var(--destructive);
+}
+
+.profile-form [data-slot=field-error],
+.profile-card [data-slot=field-error] {
+  font-size: 14px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.profile-card [data-slot=field-error] {
+  margin-top: 16px;
+  text-align: left;
+}
+
+.profile-form [data-slot=alert] {
+  border-color: var(--destructive);
+}
+
+.profile-form [data-slot=alert-description] {
+  font-size: 14px;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+
+.profile-form-actions {
+  flex-wrap: wrap;
+}
+
+.profile-save-state {
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.profile-save-state:empty {
+  display: none;
+}
+
+[data-slot=dialog-content].mobile-navigation-dialog {
+  inset: 0 auto 0 0;
+  translate: none;
+  transform: none;
+  display: flex;
+  flex-direction: column;
+  width: min(320px, calc(100vw - 32px));
+  max-width: none;
+  height: 100dvh;
+  max-height: none;
+  padding: 0;
+  gap: 0;
+  border: 0;
+  border-radius: 0;
+  background: var(--petroleum);
+  color: var(--primary-foreground);
+  overflow: hidden;
+  animation: none;
+}
+
+.mobile-navigation-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 20px;
+  border-bottom: 1px solid color-mix(in srgb, var(--primary-foreground) 20%, transparent);
+  flex-shrink: 0;
+}
+
+.mobile-navigation-header [data-slot=dialog-title] {
+  color: inherit;
+  font-size: 16px;
+  font-weight: 550;
+}
+
+.mobile-navigation-header [data-slot=button] {
+  color: inherit;
+}
+
+.mobile-navigation-header [data-slot=button]:hover {
+  background: color-mix(in srgb, var(--primary-foreground) 12%, transparent);
+}
+
+.mobile-navigation-dialog .mobile-navigation-sidebar {
+  position: static;
+  inset: auto;
+  z-index: auto;
+  transform: none;
+  transition: none;
+  width: 100%;
+  min-height: 0;
+  flex: 1;
+  padding: 28px 16px 20px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.mobile-navigation-dialog :is(a, button):focus-visible {
+  outline-color: var(--primary-foreground);
+  outline-offset: 2px;
+}
+
+@media (max-width: 760px) {
+  .panel-title > .search-field {
+    max-width: none;
+  }
+
+  .profile-form-actions [data-slot=button] {
+    white-space: normal;
+    text-align: center;
+  }
+}

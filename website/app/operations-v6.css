@@ -1,0 +1,114 @@
+/* Operational views share the existing petroleum palette and working typography. */
+.ops-workspace,.ops-workspace [data-slot=tabs-content],.ops-section-stack,.ops-workspace .panel{min-width:0}
+.ops-workspace{gap:24px}
+.ops-workspace [data-slot=tabs-content][hidden]{display:none}
+.ops-workspace .ops-tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;width:auto;height:auto;min-height:48px;margin:0;padding:4px}
+.inventory-v6 .ops-tabs{margin:20px 24px 0}
+.ops-tabs [data-slot=tabs-trigger]{min-height:44px;height:auto;white-space:normal;gap:8px;padding:10px 12px;line-height:1.4}
+.ops-tab-count{display:inline-flex;align-items:center;justify-content:center;min-width:22px;min-height:22px;padding:1px 5px;border:1px solid currentColor;border-radius:5px;font-size:12px;font-variant-numeric:tabular-nums}
+.ops-filters[data-slot=field-group]{display:grid;grid-template-columns:minmax(180px,1.6fr) repeat(2,minmax(140px,1fr));gap:20px;padding:24px}
+.ops-filters-four[data-slot=field-group]{grid-template-columns:repeat(4,minmax(0,1fr))}
+.ops-filters [data-slot=field],.ops-asof [data-slot=field]{min-width:0;gap:8px}
+.ops-filters [data-slot=field-label],.ops-asof [data-slot=field-label]{font-size:13px;line-height:1.5;font-weight:600}
+.ops-filters [data-slot=input-group],.ops-filters input,.ops-filters select,.ops-asof input{height:44px;min-width:0;width:100%}
+.ops-results-heading{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;padding:16px 24px;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.ops-results-heading p{font-size:14px;line-height:1.6;color:var(--text-secondary)}
+.ops-results-heading strong{font-size:18px;line-height:1.4;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.inventory-desktop,.ops-desktop-table{overflow-x:auto;overscroll-behavior-x:contain}
+.inventory-desktop .data-table{min-width:760px}
+.inventory-desktop .data-table th,.inventory-desktop .data-table td{padding:16px}
+.inventory-desktop .data-table th:first-child,.inventory-desktop .data-table td:first-child{padding-left:24px}
+.inventory-desktop .data-table td:first-child{min-width:200px}
+.inventory-desktop .data-table td:last-child{min-width:150px}
+.inventory-desktop .data-table td strong{font-size:14px}
+.inventory-mobile,.ops-mobile-list{display:none}
+.ops-row-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px;min-width:0}
+.ops-row-actions [data-slot=button]{white-space:normal;min-height:40px;line-height:1.45}
+.ops-status-list{display:flex;flex-wrap:wrap;gap:6px;font-size:13px;line-height:1.5}
+.ops-status-list [data-slot=badge]{max-width:100%;white-space:normal;line-height:1.5;text-align:left}
+.inventory-desktop .ops-status-list{min-width:120px;margin-top:6px}
+.ops-record{padding:24px;min-width:0}
+.ops-record+.ops-record{border-top:1px solid var(--line)}
+.ops-record-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;min-width:0;margin-bottom:16px}
+.ops-record-heading>div:first-child{min-width:0;flex:1}
+.ops-record h3{font-size:16px;line-height:1.5;font-weight:600;letter-spacing:0;overflow-wrap:anywhere}
+.ops-record-heading p{font-size:13px;color:var(--text-secondary);line-height:1.6;margin-top:4px;overflow-wrap:anywhere}
+.ops-record-heading>strong{font-size:16px;line-height:1.5;max-width:45%;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.inventory-available{min-width:92px;flex-shrink:0;text-align:right}
+.inventory-available>span{display:block;font-size:12px;color:var(--text-secondary);margin-bottom:3px}
+.inventory-available strong{font-size:24px;line-height:1.3;font-weight:650;font-variant-numeric:tabular-nums}
+.inventory-available small{font-size:13px;font-weight:400}
+.ops-facts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;margin:18px 0}
+.ops-facts dt{font-size:13px;line-height:1.5;color:var(--text-secondary)}
+.ops-facts dd{font-size:15px;line-height:1.6;font-weight:550;margin:5px 0 0;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.ops-record-note{font-size:14px;line-height:1.7;color:var(--text-secondary);white-space:pre-line;overflow-wrap:anywhere;margin:8px 0}
+.ops-record>.ops-row-actions{margin-top:20px}
+.ops-pagination{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:16px;padding:20px 24px;border-top:1px solid var(--line)}
+.ops-pagination>div{display:flex;flex-wrap:wrap;align-items:center;gap:12px}
+.ops-pagination p,.ops-pagination span{font-size:13px;color:var(--text-secondary);line-height:1.6}
+.ops-pagination [data-slot=button]{min-height:44px}
+.ops-empty{padding:40px 24px}
+.ops-section-stack{display:grid;gap:24px}
+.ops-asof{display:grid;grid-template-columns:minmax(180px,240px) 1fr;gap:20px;padding:24px;align-items:end}
+.ops-asof>p{grid-column:1/-1;font-size:13px;line-height:1.6;color:var(--text-secondary);margin:0}
+.ops-asof .ops-row-actions{gap:16px}
+.ops-asof .document-link{min-height:44px}
+.ops-inline-error{color:var(--destructive);font-size:14px;line-height:1.6;padding:0 24px 20px}
+.ops-disclosure>summary{cursor:pointer;padding:24px;font-size:16px;line-height:1.5;font-weight:600;min-height:44px}
+.ops-disclosure>summary:focus-visible{outline:2px solid var(--ring);outline-offset:-4px;border-radius:8px}
+.ops-disclosure[open]>summary{border-bottom:1px solid var(--line)}
+.ops-disclosure>.panel{border:0;box-shadow:none;border-radius:0;margin:0}
+.ops-disclosure>.module-note{font-size:14px;line-height:1.7;padding:20px 24px;margin:0}
+.ops-journal-lines{display:grid;gap:14px;margin-top:18px}
+.ops-journal-lines>div{display:flex;justify-content:space-between;gap:18px;font-size:14px;line-height:1.6;min-width:0}
+.ops-journal-lines span,.ops-journal-lines strong{min-width:0;overflow-wrap:anywhere}
+.ops-journal-lines strong{font-weight:550;text-align:right;font-variant-numeric:tabular-nums}
+.procurement-v6{display:grid;gap:24px;min-width:0}
+.procurement-v6>.panel{margin:0}
+.procurement-v6 .operations-empty{display:grid;gap:8px}
+.procurement-v6 .delivery-actions{flex-wrap:wrap}
+.procurement-v6 .delivery-actions [data-slot=button]{min-height:44px;white-space:normal}
+.procurement-v6 .panel-title h2{overflow-wrap:anywhere}
+@media(max-width:1100px){
+  .inventory-desktop,.reports-v6 .ops-desktop-table{display:none}
+  .inventory-mobile,.reports-v6 .ops-mobile-list{display:block}
+  .ops-filters[data-slot=field-group]{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .inventory-v6 .ops-filters>[data-slot=field]:first-child{grid-column:1/-1}
+  .ops-facts{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .ops-asof{grid-template-columns:1fr}
+  .ops-asof>[data-slot=field]{max-width:320px}
+  .ops-pagination>div{gap:10px}
+}
+@media(max-width:560px){
+  .ops-workspace,.ops-section-stack,.procurement-v6{gap:20px}
+  .ops-workspace .panel-title{align-items:flex-start;flex-direction:column;gap:16px}
+  .ops-workspace .panel-title>[data-slot=button]{width:100%;min-height:44px}
+  .inventory-v6 .ops-tabs{margin:16px 20px 0}
+  .ops-filters[data-slot=field-group]{grid-template-columns:1fr;padding:20px;gap:18px}
+  .inventory-v6 .ops-filters>[data-slot=field]:first-child{grid-column:auto}
+  .ops-filters input,.ops-filters select,.ops-asof input{font-size:16px}
+  .ops-record{padding:20px}
+  .ops-record-heading{gap:14px}
+  .ops-record-heading:has(>.status-badge){flex-direction:column}
+  .ops-facts{gap:16px}
+  .ops-results-heading{padding:16px 20px}
+  .ops-record>.ops-row-actions [data-slot=button]{min-height:44px;flex:1 1 120px}
+  .ops-pagination{padding:20px;justify-content:center}
+  .ops-pagination>p{width:100%;text-align:center}
+  .ops-pagination>div{justify-content:center;gap:10px;width:100%}
+  .ops-pagination>div>span{width:100%;text-align:center;order:-1}
+  .ops-asof{padding:20px;gap:16px}
+  .ops-asof>[data-slot=field]{max-width:none}
+  .ops-disclosure>summary{padding:20px}
+  .ops-disclosure>.module-note{padding:20px}
+  .ops-journal-lines>div{flex-direction:column;gap:4px}
+  .ops-journal-lines strong{text-align:left}
+  .ops-inline-error{padding:0 20px 20px}
+}
+@media(max-width:380px){
+  .ops-workspace .ops-tabs{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .ops-record-heading{flex-direction:column;gap:12px}
+  .inventory-available{text-align:left}
+  .ops-record-heading>strong{max-width:100%}
+  .ops-facts{grid-template-columns:1fr}
+}

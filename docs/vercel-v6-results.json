@@ -1,0 +1,860 @@
+{
+  "at": "2026-09-17T12:32:17.924Z",
+  "base": "https://unit-toko-bni.vercel.app",
+  "deployment": "dpl_6LVFXuQmHyvEoL6hXKm4BgmdQ8ch",
+  "requestPolicy": {
+    "businessDataMutations": false,
+    "businessDataAccess": "GET only",
+    "allowedPostPaths": [
+      "/api/auth/login",
+      "/api/auth/logout"
+    ],
+    "sessionLifecycleMutations": true,
+    "redirectsFollowed": false
+  },
+  "checks": [
+    {
+      "name": "Public page or asset: /",
+      "result": "pass",
+      "ms": 1243,
+      "evidence": {
+        "path": "/",
+        "status": 200,
+        "bytes": 48350,
+        "type": "text/html; charset=utf-8",
+        "headersMs": 1230,
+        "totalMs": 1243,
+        "cache": "PRERENDER"
+      }
+    },
+    {
+      "name": "Public page or asset: /login",
+      "result": "pass",
+      "ms": 830,
+      "evidence": {
+        "path": "/login",
+        "status": 200,
+        "bytes": 22955,
+        "type": "text/html; charset=utf-8",
+        "headersMs": 820,
+        "totalMs": 830,
+        "cache": "MISS"
+      }
+    },
+    {
+      "name": "Public page or asset: /images/editorial/hero-still-life-v3.png",
+      "result": "pass",
+      "ms": 2103,
+      "evidence": {
+        "path": "/images/editorial/hero-still-life-v3.png",
+        "status": 200,
+        "bytes": 2411496,
+        "type": "image/png",
+        "headersMs": 1217,
+        "totalMs": 2103,
+        "cache": "MISS"
+      }
+    },
+    {
+      "name": "Public page or asset: /images/editorial/pantry-moment-v3.png",
+      "result": "pass",
+      "ms": 1590,
+      "evidence": {
+        "path": "/images/editorial/pantry-moment-v3.png",
+        "status": 200,
+        "bytes": 2153203,
+        "type": "image/png",
+        "headersMs": 874,
+        "totalMs": 1590,
+        "cache": "MISS"
+      }
+    },
+    {
+      "name": "Public page or asset: /images/editorial/handoff-moment-v3.png",
+      "result": "pass",
+      "ms": 1192,
+      "evidence": {
+        "path": "/images/editorial/handoff-moment-v3.png",
+        "status": 200,
+        "bytes": 1966722,
+        "type": "image/png",
+        "headersMs": 632,
+        "totalMs": 1192,
+        "cache": "MISS"
+      }
+    },
+    {
+      "name": "Public page or asset: /images/og-v3.png",
+      "result": "pass",
+      "ms": 855,
+      "evidence": {
+        "path": "/images/og-v3.png",
+        "status": 200,
+        "bytes": 2038964,
+        "type": "image/png",
+        "headersMs": 533,
+        "totalMs": 855,
+        "cache": "MISS"
+      }
+    },
+    {
+      "name": "Optimized hero image and v5 byte baseline",
+      "result": "pass",
+      "ms": 413,
+      "evidence": {
+        "path": "/_next/image?url=%2Fimages%2Feditorial%2Fhero-still-life-v3.png&w=640&q=75",
+        "accept": "image/webp",
+        "type": "image/webp",
+        "bytes": 23944,
+        "headersMs": 350,
+        "totalMs": 411,
+        "baseline": {
+          "deployment": "dpl_EjKprMjbYCnNeR52bFJ9Fw1EogZ2",
+          "bytes": 23944,
+          "deltaBytes": 0,
+          "comparable": "Same hero source, width 640, quality 75, Accept image/webp; timing baseline unavailable"
+        }
+      }
+    },
+    {
+      "name": "Anonymous protected state, CSV and printable report require login",
+      "result": "pass",
+      "ms": 684,
+      "evidence": {
+        "status": 401
+      }
+    },
+    {
+      "name": "Login and protected state: pic-a",
+      "result": "pass",
+      "ms": 1644,
+      "evidence": {
+        "role": "pic",
+        "secureCookie": true,
+        "products": 36,
+        "login": 200,
+        "state": 200
+      }
+    },
+    {
+      "name": "State projection: pic-a",
+      "result": "pass",
+      "ms": 0,
+      "evidence": {
+        "role": "pic",
+        "isolated": true
+      }
+    },
+    {
+      "name": "CSV and printable report permissions: pic-a",
+      "result": "pass",
+      "ms": 415,
+      "evidence": {
+        "csv": 403,
+        "report": 403
+      }
+    },
+    {
+      "name": "Valid session continues to an allowed internal destination: pic-a",
+      "result": "pass",
+      "ms": 933,
+      "evidence": {
+        "status": 307,
+        "redirectMode": "http",
+        "destination": "/workspace?view=catalog&collection=pantry&product=air",
+        "followed": false
+      }
+    },
+    {
+      "name": "Login and protected state: pic-b",
+      "result": "pass",
+      "ms": 1001,
+      "evidence": {
+        "role": "pic",
+        "secureCookie": true,
+        "products": 36,
+        "login": 200,
+        "state": 200
+      }
+    },
+    {
+      "name": "State projection: pic-b",
+      "result": "pass",
+      "ms": 0,
+      "evidence": {
+        "role": "pic",
+        "isolated": true
+      }
+    },
+    {
+      "name": "CSV and printable report permissions: pic-b",
+      "result": "pass",
+      "ms": 420,
+      "evidence": {
+        "csv": 403,
+        "report": 403
+      }
+    },
+    {
+      "name": "Valid session continues to an allowed internal destination: pic-b",
+      "result": "pass",
+      "ms": 162,
+      "evidence": {
+        "status": 307,
+        "redirectMode": "http",
+        "destination": "/workspace?view=catalog&collection=pantry&product=air",
+        "followed": false
+      }
+    },
+    {
+      "name": "Login and protected state: kepala",
+      "result": "pass",
+      "ms": 743,
+      "evidence": {
+        "role": "kepala",
+        "secureCookie": true,
+        "products": 36,
+        "login": 200,
+        "state": 200
+      }
+    },
+    {
+      "name": "State projection: kepala",
+      "result": "pass",
+      "ms": 0,
+      "evidence": {
+        "role": "kepala",
+        "isolated": true
+      }
+    },
+    {
+      "name": "CSV and printable report permissions: kepala",
+      "result": "pass",
+      "ms": 475,
+      "evidence": {
+        "csv": 200,
+        "report": 200
+      }
+    },
+    {
+      "name": "Valid session continues to an allowed internal destination: kepala",
+      "result": "pass",
+      "ms": 172,
+      "evidence": {
+        "status": 307,
+        "redirectMode": "http",
+        "destination": "/workspace?view=catalog&collection=pantry&product=air",
+        "followed": false
+      }
+    },
+    {
+      "name": "Login and protected state: staf",
+      "result": "pass",
+      "ms": 796,
+      "evidence": {
+        "role": "staf",
+        "secureCookie": true,
+        "products": 36,
+        "login": 200,
+        "state": 200
+      }
+    },
+    {
+      "name": "State projection: staf",
+      "result": "pass",
+      "ms": 0,
+      "evidence": {
+        "role": "staf",
+        "isolated": true
+      }
+    },
+    {
+      "name": "CSV and printable report permissions: staf",
+      "result": "pass",
+      "ms": 497,
+      "evidence": {
+        "csv": 403,
+        "report": 403
+      }
+    },
+    {
+      "name": "Valid session continues to an allowed internal destination: staf",
+      "result": "pass",
+      "ms": 1858,
+      "evidence": {
+        "status": 307,
+        "redirectMode": "http",
+        "destination": "/workspace?view=stock&stockSearch=OMI-001",
+        "followed": false
+      }
+    },
+    {
+      "name": "Login and protected state: kurir",
+      "result": "pass",
+      "ms": 801,
+      "evidence": {
+        "role": "kurir",
+        "secureCookie": true,
+        "products": 5,
+        "login": 200,
+        "state": 200
+      }
+    },
+    {
+      "name": "State projection: kurir",
+      "result": "pass",
+      "ms": 0,
+      "evidence": {
+        "role": "kurir",
+        "isolated": true
+      }
+    },
+    {
+      "name": "CSV and printable report permissions: kurir",
+      "result": "pass",
+      "ms": 455,
+      "evidence": {
+        "csv": 403,
+        "report": 403
+      }
+    },
+    {
+      "name": "Valid session continues to an allowed internal destination: kurir",
+      "result": "pass",
+      "ms": 175,
+      "evidence": {
+        "status": 307,
+        "redirectMode": "http",
+        "destination": "/workspace?view=deliveries&status=active",
+        "followed": false
+      }
+    },
+    {
+      "name": "Login and protected state: laporan",
+      "result": "pass",
+      "ms": 835,
+      "evidence": {
+        "role": "laporan",
+        "secureCookie": true,
+        "products": 36,
+        "login": 200,
+        "state": 200
+      }
+    },
+    {
+      "name": "State projection: laporan",
+      "result": "pass",
+      "ms": 0,
+      "evidence": {
+        "role": "laporan",
+        "isolated": true
+      }
+    },
+    {
+      "name": "CSV and printable report permissions: laporan",
+      "result": "pass",
+      "ms": 521,
+      "evidence": {
+        "csv": 200,
+        "report": 200
+      }
+    },
+    {
+      "name": "Valid session continues to an allowed internal destination: laporan",
+      "result": "pass",
+      "ms": 187,
+      "evidence": {
+        "status": 307,
+        "redirectMode": "http",
+        "destination": "/workspace?view=reports&reportTab=sales",
+        "followed": false
+      }
+    },
+    {
+      "name": "Login and protected state: penagihan",
+      "result": "pass",
+      "ms": 2206,
+      "evidence": {
+        "role": "penagihan",
+        "secureCookie": true,
+        "products": 36,
+        "login": 200,
+        "state": 200
+      }
+    },
+    {
+      "name": "State projection: penagihan",
+      "result": "pass",
+      "ms": 0,
+      "evidence": {
+        "role": "penagihan",
+        "isolated": true
+      }
+    },
+    {
+      "name": "CSV and printable report permissions: penagihan",
+      "result": "pass",
+      "ms": 527,
+      "evidence": {
+        "csv": 200,
+        "report": 200
+      }
+    },
+    {
+      "name": "Valid session continues to an allowed internal destination: penagihan",
+      "result": "pass",
+      "ms": 176,
+      "evidence": {
+        "status": 307,
+        "redirectMode": "http",
+        "destination": "/workspace?view=reports&reportTab=sales",
+        "followed": false
+      }
+    },
+    {
+      "name": "Login and protected state: pimpinan",
+      "result": "pass",
+      "ms": 725,
+      "evidence": {
+        "role": "pimpinan",
+        "secureCookie": true,
+        "products": 36,
+        "login": 200,
+        "state": 200
+      }
+    },
+    {
+      "name": "State projection: pimpinan",
+      "result": "pass",
+      "ms": 0,
+      "evidence": {
+        "role": "pimpinan",
+        "isolated": true
+      }
+    },
+    {
+      "name": "CSV and printable report permissions: pimpinan",
+      "result": "pass",
+      "ms": 453,
+      "evidence": {
+        "csv": 200,
+        "report": 200
+      }
+    },
+    {
+      "name": "Valid session continues to an allowed internal destination: pimpinan",
+      "result": "pass",
+      "ms": 179,
+      "evidence": {
+        "status": 307,
+        "redirectMode": "http",
+        "destination": "/workspace?view=reports&reportTab=sales",
+        "followed": false
+      }
+    },
+    {
+      "name": "Login and protected state: akuntansi",
+      "result": "pass",
+      "ms": 754,
+      "evidence": {
+        "role": "akuntansi",
+        "secureCookie": true,
+        "products": 36,
+        "login": 200,
+        "state": 200
+      }
+    },
+    {
+      "name": "State projection: akuntansi",
+      "result": "pass",
+      "ms": 0,
+      "evidence": {
+        "role": "akuntansi",
+        "isolated": true
+      }
+    },
+    {
+      "name": "CSV and printable report permissions: akuntansi",
+      "result": "pass",
+      "ms": 483,
+      "evidence": {
+        "csv": 200,
+        "report": 200
+      }
+    },
+    {
+      "name": "Valid session continues to an allowed internal destination: akuntansi",
+      "result": "pass",
+      "ms": 213,
+      "evidence": {
+        "status": 307,
+        "redirectMode": "http",
+        "destination": "/workspace?view=reports&reportTab=sales",
+        "followed": false
+      }
+    },
+    {
+      "name": "Login and protected state: admin",
+      "result": "pass",
+      "ms": 767,
+      "evidence": {
+        "role": "admin",
+        "secureCookie": true,
+        "products": 0,
+        "login": 200,
+        "state": 200
+      }
+    },
+    {
+      "name": "State projection: admin",
+      "result": "pass",
+      "ms": 0,
+      "evidence": {
+        "role": "admin",
+        "isolated": true
+      }
+    },
+    {
+      "name": "CSV and printable report permissions: admin",
+      "result": "pass",
+      "ms": 397,
+      "evidence": {
+        "csv": 403,
+        "report": 403
+      }
+    },
+    {
+      "name": "Valid session continues to an allowed internal destination: admin",
+      "result": "pass",
+      "ms": 182,
+      "evidence": {
+        "status": 307,
+        "redirectMode": "http",
+        "destination": "/workspace?view=admin",
+        "followed": false
+      }
+    },
+    {
+      "name": "Two PIC snapshots contain distinct divisions and nonoverlapping orders",
+      "result": "pass",
+      "ms": 0,
+      "evidence": {
+        "twoDivisions": true,
+        "orderScopesDisjoint": true
+      }
+    },
+    {
+      "name": "External next parameter stays inside the portal",
+      "result": "pass",
+      "ms": 196,
+      "evidence": {
+        "status": 307,
+        "redirectMode": "http",
+        "destination": "/workspace",
+        "followed": false
+      }
+    },
+    {
+      "name": "Protocol-relative next parameter stays inside the portal",
+      "result": "pass",
+      "ms": 178,
+      "evidence": {
+        "status": 307,
+        "redirectMode": "http",
+        "destination": "/workspace",
+        "followed": false
+      }
+    },
+    {
+      "name": "Unavailable admin destination is rejected for a PIC",
+      "result": "pass",
+      "ms": 259,
+      "evidence": {
+        "status": 307,
+        "redirectMode": "http",
+        "destination": "/workspace",
+        "followed": false
+      }
+    },
+    {
+      "name": "Existing PIC A invoice document scope: pic-a",
+      "result": "pass",
+      "ms": 231,
+      "evidence": {
+        "status": 200,
+        "ownerOrAuthorizedRole": true
+      }
+    },
+    {
+      "name": "Existing PIC A invoice document scope: pic-b",
+      "result": "pass",
+      "ms": 301,
+      "evidence": {
+        "status": 404,
+        "ownerOrAuthorizedRole": false
+      }
+    },
+    {
+      "name": "Existing PIC A invoice document scope: kepala",
+      "result": "pass",
+      "ms": 229,
+      "evidence": {
+        "status": 200,
+        "ownerOrAuthorizedRole": true
+      }
+    },
+    {
+      "name": "Existing PIC A invoice document scope: staf",
+      "result": "pass",
+      "ms": 215,
+      "evidence": {
+        "status": 403,
+        "ownerOrAuthorizedRole": false
+      }
+    },
+    {
+      "name": "Existing PIC A invoice document scope: kurir",
+      "result": "pass",
+      "ms": 238,
+      "evidence": {
+        "status": 403,
+        "ownerOrAuthorizedRole": false
+      }
+    },
+    {
+      "name": "Existing PIC A invoice document scope: laporan",
+      "result": "pass",
+      "ms": 229,
+      "evidence": {
+        "status": 200,
+        "ownerOrAuthorizedRole": true
+      }
+    },
+    {
+      "name": "Existing PIC A invoice document scope: penagihan",
+      "result": "pass",
+      "ms": 224,
+      "evidence": {
+        "status": 200,
+        "ownerOrAuthorizedRole": true
+      }
+    },
+    {
+      "name": "Existing PIC A invoice document scope: pimpinan",
+      "result": "pass",
+      "ms": 216,
+      "evidence": {
+        "status": 200,
+        "ownerOrAuthorizedRole": true
+      }
+    },
+    {
+      "name": "Existing PIC A invoice document scope: akuntansi",
+      "result": "pass",
+      "ms": 235,
+      "evidence": {
+        "status": 200,
+        "ownerOrAuthorizedRole": true
+      }
+    },
+    {
+      "name": "Existing PIC A invoice document scope: admin",
+      "result": "pass",
+      "ms": 253,
+      "evidence": {
+        "status": 403,
+        "ownerOrAuthorizedRole": false
+      }
+    },
+    {
+      "name": "Existing shipment is readable by owner and hidden from the other PIC",
+      "result": "pass",
+      "ms": 503,
+      "evidence": {
+        "owner": 200,
+        "other": 404
+      }
+    },
+    {
+      "name": "Existing purchase document scope",
+      "result": "skip",
+      "reason": "No existing purchase fixture; this harness does not create one."
+    },
+    {
+      "name": "Logout expires cookie and invalidates the original token: pic-a",
+      "result": "pass",
+      "ms": 352,
+      "evidence": {
+        "logout": 200,
+        "originalToken": 401,
+        "expiredCookie": true
+      }
+    },
+    {
+      "name": "Logout expires cookie and invalidates the original token: pic-b",
+      "result": "pass",
+      "ms": 427,
+      "evidence": {
+        "logout": 200,
+        "originalToken": 401,
+        "expiredCookie": true
+      }
+    },
+    {
+      "name": "Logout expires cookie and invalidates the original token: kepala",
+      "result": "pass",
+      "ms": 425,
+      "evidence": {
+        "logout": 200,
+        "originalToken": 401,
+        "expiredCookie": true
+      }
+    },
+    {
+      "name": "Logout expires cookie and invalidates the original token: staf",
+      "result": "pass",
+      "ms": 390,
+      "evidence": {
+        "logout": 200,
+        "originalToken": 401,
+        "expiredCookie": true
+      }
+    },
+    {
+      "name": "Logout expires cookie and invalidates the original token: kurir",
+      "result": "pass",
+      "ms": 336,
+      "evidence": {
+        "logout": 200,
+        "originalToken": 401,
+        "expiredCookie": true
+      }
+    },
+    {
+      "name": "Logout expires cookie and invalidates the original token: laporan",
+      "result": "pass",
+      "ms": 352,
+      "evidence": {
+        "logout": 200,
+        "originalToken": 401,
+        "expiredCookie": true
+      }
+    },
+    {
+      "name": "Logout expires cookie and invalidates the original token: penagihan",
+      "result": "pass",
+      "ms": 479,
+      "evidence": {
+        "logout": 200,
+        "originalToken": 401,
+        "expiredCookie": true
+      }
+    },
+    {
+      "name": "Logout expires cookie and invalidates the original token: pimpinan",
+      "result": "pass",
+      "ms": 382,
+      "evidence": {
+        "logout": 200,
+        "originalToken": 401,
+        "expiredCookie": true
+      }
+    },
+    {
+      "name": "Logout expires cookie and invalidates the original token: akuntansi",
+      "result": "pass",
+      "ms": 330,
+      "evidence": {
+        "logout": 200,
+        "originalToken": 401,
+        "expiredCookie": true
+      }
+    },
+    {
+      "name": "Logout expires cookie and invalidates the original token: admin",
+      "result": "pass",
+      "ms": 327,
+      "evidence": {
+        "logout": 200,
+        "originalToken": 401,
+        "expiredCookie": true
+      }
+    }
+  ],
+  "assets": [
+    {
+      "path": "/",
+      "status": 200,
+      "bytes": 48350,
+      "type": "text/html; charset=utf-8",
+      "headersMs": 1230,
+      "totalMs": 1243,
+      "cache": "PRERENDER"
+    },
+    {
+      "path": "/login",
+      "status": 200,
+      "bytes": 22955,
+      "type": "text/html; charset=utf-8",
+      "headersMs": 820,
+      "totalMs": 830,
+      "cache": "MISS"
+    },
+    {
+      "path": "/images/editorial/hero-still-life-v3.png",
+      "status": 200,
+      "bytes": 2411496,
+      "type": "image/png",
+      "headersMs": 1217,
+      "totalMs": 2103,
+      "cache": "MISS"
+    },
+    {
+      "path": "/images/editorial/pantry-moment-v3.png",
+      "status": 200,
+      "bytes": 2153203,
+      "type": "image/png",
+      "headersMs": 874,
+      "totalMs": 1590,
+      "cache": "MISS"
+    },
+    {
+      "path": "/images/editorial/handoff-moment-v3.png",
+      "status": 200,
+      "bytes": 1966722,
+      "type": "image/png",
+      "headersMs": 632,
+      "totalMs": 1192,
+      "cache": "MISS"
+    },
+    {
+      "path": "/images/og-v3.png",
+      "status": 200,
+      "bytes": 2038964,
+      "type": "image/png",
+      "headersMs": 533,
+      "totalMs": 855,
+      "cache": "MISS"
+    },
+    {
+      "path": "/_next/image?url=%2Fimages%2Feditorial%2Fhero-still-life-v3.png&w=640&q=75",
+      "accept": "image/webp",
+      "type": "image/webp",
+      "bytes": 23944,
+      "headersMs": 350,
+      "totalMs": 411,
+      "baseline": {
+        "deployment": "dpl_EjKprMjbYCnNeR52bFJ9Fw1EogZ2",
+        "bytes": 23944,
+        "deltaBytes": 0,
+        "comparable": "Same hero source, width 640, quality 75, Accept image/webp; timing baseline unavailable"
+      }
+    }
+  ],
+  "performanceNote": "Single HTTP samples, including response-body transfer. Cache/network conditions vary; these are not field performance scores.",
+  "finishedAt": "2026-09-17T12:32:53.296Z",
+  "passed": 73,
+  "failed": 0,
+  "skipped": 1,
+  "success": true
+}

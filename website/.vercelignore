@@ -1,0 +1,17 @@
+node_modules
+.git
+.next
+.wrangler
+.sites-runtime
+.test
+.data
+.env*
+!.env.example
+dist
+.openai
+.agents
+.codex
+work
+outputs
+vite.config.ts
+*.tsbuildinfo
