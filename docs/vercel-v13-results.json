@@ -1,0 +1,118 @@
+{
+  "release": "v13",
+  "base": "https://unit-toko-bni.vercel.app",
+  "deployment": "dpl_3C6sG64S2WfofE3ruyv8ALSepc2L",
+  "requestPolicy": {
+    "httpPagesAndAuthenticationOnly": true,
+    "databaseConnection": false,
+    "businessApiRequests": false,
+    "businessCommandRequests": false,
+    "catalogProvisioningMayRun": true,
+    "preservationVerified": false
+  },
+  "checks": [
+    {
+      "name": "Guest landing and separate login portals",
+      "result": "pass"
+    },
+    {
+      "name": "Legacy login preserves safe context and rejects external destinations",
+      "result": "pass"
+    },
+    {
+      "name": "Internal role stays in workspace: pic-a",
+      "result": "pass"
+    },
+    {
+      "name": "Internal role stays in workspace: pic-b",
+      "result": "pass"
+    },
+    {
+      "name": "Internal role stays in workspace: kepala",
+      "result": "pass"
+    },
+    {
+      "name": "Internal role stays in workspace: staf",
+      "result": "pass"
+    },
+    {
+      "name": "Internal role stays in workspace: kurir",
+      "result": "pass"
+    },
+    {
+      "name": "Internal role stays in workspace: laporan",
+      "result": "pass"
+    },
+    {
+      "name": "Internal role stays in workspace: penagihan",
+      "result": "pass"
+    },
+    {
+      "name": "Internal role stays in workspace: pimpinan",
+      "result": "pass"
+    },
+    {
+      "name": "Internal role stays in workspace: akuntansi",
+      "result": "pass"
+    },
+    {
+      "name": "Internal role stays in workspace: admin",
+      "result": "pass"
+    },
+    {
+      "name": "Customer keeps shopping access and cannot enter the internal workspace",
+      "result": "pass"
+    },
+    {
+      "name": "Malformed portal cannot issue a session",
+      "result": "pass"
+    },
+    {
+      "name": "Logout revokes verification session: pic-a",
+      "result": "pass"
+    },
+    {
+      "name": "Logout revokes verification session: pic-b",
+      "result": "pass"
+    },
+    {
+      "name": "Logout revokes verification session: kepala",
+      "result": "pass"
+    },
+    {
+      "name": "Logout revokes verification session: staf",
+      "result": "pass"
+    },
+    {
+      "name": "Logout revokes verification session: kurir",
+      "result": "pass"
+    },
+    {
+      "name": "Logout revokes verification session: laporan",
+      "result": "pass"
+    },
+    {
+      "name": "Logout revokes verification session: penagihan",
+      "result": "pass"
+    },
+    {
+      "name": "Logout revokes verification session: pimpinan",
+      "result": "pass"
+    },
+    {
+      "name": "Logout revokes verification session: akuntansi",
+      "result": "pass"
+    },
+    {
+      "name": "Logout revokes verification session: admin",
+      "result": "pass"
+    },
+    {
+      "name": "Logout revokes verification session: customer-demo",
+      "result": "pass"
+    }
+  ],
+  "passed": 25,
+  "failed": 0,
+  "success": true
+}

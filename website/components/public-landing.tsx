@@ -5,80 +5,63 @@ import {Art} from "./art";
 import {LandingMotion} from "./public-motion";
 
 const collections = [
-  {title: "Pantry harian", collection: "pantry", description: "Kopi, teh, biskuit, dan kebutuhan bersama.", image: "coffee", alt: "Kopi sachet untuk persediaan pantry"},
-  {title: "Kebutuhan rapat", collection: "rapat", description: "Konsumsi dan perlengkapan untuk pertemuan.", image: "snack", alt: "Snack box untuk kebutuhan rapat"},
-  {title: "Merchandise", collection: "merchandise", description: "Tumbler, tas, dan pakaian untuk kegiatan tim.", image: "tumbler", alt: "Tumbler stainless pilihan merchandise"},
+  {title:"Pantry harian", collection:"pantry", heading:["Mulai hari.","Ambil jeda."], description:"Kopi untuk mengawali pagi, teh di sela pekerjaan, dan camilan untuk dinikmati bersama. Siapkan persediaan pantry sesuai kebutuhan Anda.", detail:"Kopi, teh, minuman & camilan", image:"/images/editorial/pantry-moment-v3.png", alt:"Kopi dan makanan ringan disiapkan di pantry kantor", action:"Lihat pilihan pantry"},
+  {title:"Kebutuhan rapat", collection:"rapat", heading:["Meja siap.","Ide mengalir."], description:"Lengkapi pertemuan dengan konsumsi dan perlengkapan yang dibutuhkan. Pilih barang serta kemasannya sebelum membuat pesanan.", detail:"Konsumsi & perlengkapan pertemuan", image:"/images/hero.png", alt:"Meja pertemuan dengan air minum, snack, buku catatan, dan perlengkapan", action:"Siapkan kebutuhan rapat"},
+  {title:"Merchandise", collection:"merchandise", heading:["Dibawa pergi.","Dipakai lagi."], description:"Tumbler, tas, dan pakaian untuk melengkapi kegiatan tim. Temukan pilihan yang sesuai untuk keseharian maupun acara bersama.", detail:"Tumbler, tas & pakaian", image:"/images/editorial/hero-still-life-v3.png", alt:"Tas kanvas, tumbler, dan pakaian untuk kegiatan tim", action:"Jelajahi merchandise"},
 ];
 
-export function PublicLanding() {
-  return <LandingMotion>
-    <a href="#home-main" className="home-skip">Lewati navigasi</a>
-    <div className="home-topline"><div><span>Studi kasus Unit Toko · Divisi BNI</span><span>Demo capstone</span></div></div>
-    <header className="home-header">
-      <Brand/>
-      <nav aria-label="Navigasi beranda"><a href="#kebutuhan">Pilihan kebutuhan</a><a href="#layanan">Layanan toko</a></nav>
-      <a className="home-header-access" href="#akses">Pilih akses <ArrowUpRight size={18} aria-hidden="true"/></a>
-    </header>
-    <main id="home-main">
-      <section className="home-hero" aria-labelledby="home-title">
-        <div className="home-hero-copy">
-          <p className="home-eyebrow">UNIT TOKO / KEBUTUHAN HARIAN</p>
-          <h1 id="home-title"><span className="home-title-mask"><span className="home-title-line">Dari kopi pagi,</span></span>{" "}<span className="home-title-mask"><span className="home-title-line">sampai</span></span>{" "}<span className="home-title-mask"><span className="home-title-line"><em>agenda sore.</em></span></span></h1>
-          <p className="home-intro">Isi pantry, siapkan pertemuan, lengkapi kebutuhan tim. Pilihan harian Anda ada di Unit Toko.</p>
-          <div className="home-hero-actions"><a href="#akses" className="home-button">Pilih akses Anda <ArrowRight size={18} aria-hidden="true"/></a><a href="#kebutuhan" className="home-text-link">Kenali pilihan toko</a></div>
-          <div className="home-hero-note"><p>Belanja pelanggan dan operasional toko<br/><strong>memiliki pintu masuk masing-masing.</strong></p></div>
-        </div>
-        <div className="home-visual-stage">
-        <figure className="home-hero-visual">
-          <div className="home-hero-photo"><Art src="/images/editorial/hero-still-life-v3.png" alt="Tumbler, tas kanvas, kaos polo, kopi, dan snack pilihan Unit Toko" fetchPriority="high" loading="eager" sizes="(max-width: 800px) 100vw, 55vw"/></div>
-          <figcaption><span>Pilihan untuk hari kerja Anda.</span><span>Pantry / Rapat / Merchandise</span></figcaption>
-        </figure>
-        <div className="home-product-strip" aria-label="Jelajahi pilihan barang">
-          <Link href="/shop?collection=pantry" className="home-product-preview"><Art src="/images/products/generated/demo-001.webp" alt="" sizes="80px"/><span>Untuk pantry<strong>Kopi & teman rehat</strong></span><ArrowUpRight size={18} aria-hidden="true"/></Link>
-          <Link href="/shop?collection=merchandise" className="home-product-preview"><Art src="/images/products/generated/demo-141.webp" alt="" sizes="80px"/><span>Untuk kegiatan<strong>Perlengkapan tim</strong></span><ArrowUpRight size={18} aria-hidden="true"/></Link>
-        </div>
-        </div>
-      </section>
+function CtaArrow(){return <span className="home13-cta-arrow" aria-hidden="true"><ArrowUpRight size={21}/></span>;}
 
-      <nav className="home-category-band" aria-label="Koleksi kebutuhan"><div className="home-category-track">{collections.map(item=><Link href={`/shop?collection=${item.collection}`} key={item.collection}>{item.title}<ArrowUpRight size={22} aria-hidden="true"/></Link>)}</div></nav>
+export function PublicLanding(){
+ return <LandingMotion>
+  <a href="#home-main" className="home-skip">Lewati navigasi</a>
+  <div className="home-topline"><div><span>Studi kasus Unit Toko · Divisi BNI</span><span>Demo capstone</span></div></div>
+  <header className="home-header">
+   <Brand/>
+   <nav aria-label="Navigasi beranda"><a href="#kebutuhan">Koleksi toko</a><a href="#layanan">Cara berbelanja</a><Link href="/staff/login">Portal internal</Link></nav>
+   <a className="home13-cta home13-cta-small" href="#akses"><span>Pilih akses</span><CtaArrow/></a>
+  </header>
+  <main id="home-main">
+   <section className="home13-cover" aria-labelledby="home-title">
+    <p className="home13-kicker">UNIT TOKO / PANTRY, RAPAT & MERCHANDISE</p>
+    <div className="home13-cover-heading">
+     <h1 id="home-title"><span className="home13-title-mask"><span className="home13-title-line">Pilihan baik,</span></span><span className="home13-title-mask"><span className="home13-title-line">untuk <em>hari Anda.</em></span></span></h1>
+     <div className="home13-cover-intro"><p>Dari kopi pertama hingga agenda terakhir. Temukan kebutuhan harian, pertemuan, dan kegiatan tim di Unit Toko.</p><Link href="/shop" className="home13-cta"><span>Belanja pelanggan</span><CtaArrow/></Link><Link href="/staff/login" className="home13-line-link">Portal divisi & petugas<ArrowRight size={17} aria-hidden="true"/></Link></div>
+    </div>
+    <figure className="home13-cover-figure">
+     <div className="home13-cover-photo"><Art src="/images/editorial/hero-still-life-v3.png" alt="Pilihan Unit Toko: tas kanvas, tumbler, pakaian, kopi, dan camilan" fetchPriority="high" loading="eager" sizes="(max-width: 800px) 100vw, 92vw"/><span className="home13-cover-curtain" aria-hidden="true"/></div>
+     <figcaption><span>Barang yang menemani keseharian.</span><a href="#kebutuhan">Temukan koleksi<ArrowRight size={17} aria-hidden="true"/></a></figcaption>
+    </figure>
+   </section>
 
-      <section className="home-access" id="akses" aria-labelledby="access-title">
-        <div className="home-section-heading"><div><p className="home-eyebrow">Akses Unit Toko</p><h2 id="access-title">Lanjutkan sesuai kebutuhan Anda.</h2></div><p>Pilih toko pelanggan untuk belanja pribadi, atau portal internal untuk pemesanan divisi dan pekerjaan toko.</p></div>
-        <div className="home-access-grid">
-          <article className="home-access-card home-access-customer">
-            <div className="home-access-heading"><span className="home-access-icon"><ShoppingBag size={25} aria-hidden="true"/></span><span>Untuk pelanggan</span></div>
-            <h3>Temukan barang.<br/>Kelola pesanan Anda.</h3>
-            <p>Jelajahi katalog, pilih kemasan, dan simpan barang di keranjang. Masuk ke akun pelanggan untuk membuat serta memantau pesanan.</p>
-            <div className="home-access-actions"><Link href="/shop" className="home-button home-button-customer">Belanja pelanggan <ArrowRight size={18} aria-hidden="true"/></Link><Link href="/customer/login" className="home-text-link">Masuk akun pelanggan</Link></div>
-          </article>
-          <article className="home-access-card home-access-staff">
-            <div className="home-access-heading"><span className="home-access-icon"><Building2 size={25} aria-hidden="true"/></span><span>Untuk divisi & petugas</span></div>
-            <h3>Ruang kerja<br/>operasional toko.</h3>
-            <p>PIC divisi, admin, petugas toko, kurir, dan tim keuangan masuk ke ruang kerja sesuai tugas dan kewenangannya.</p>
-            <div className="home-access-actions"><Link href="/staff/login" className="home-button home-button-staff">Portal divisi & petugas <ArrowUpRight size={18} aria-hidden="true"/></Link><span className="home-access-hint">Gunakan akun internal Anda.</span></div>
-          </article>
-        </div>
-      </section>
+   <section className="home13-collections" id="kebutuhan" aria-labelledby="collections-title">
+    <div className="home13-section-intro"><p className="home13-kicker">KOLEKSI TOKO</p><h2 id="collections-title">Ada di setiap<br/>bagian hari Anda.</h2><p>Tiga pilihan kebutuhan.<br/>Jelajahi sesuai rencana Anda.</p></div>
+    <nav className="home13-collection-nav" aria-label="Jelajahi bagian koleksi">{collections.map(item=><a key={item.collection} href={`#koleksi-${item.collection}`}><span>{item.title}</span><ArrowUpRight size={18} aria-hidden="true"/></a>)}</nav>
+    <div className="home13-chapters">{collections.map(item=><article className={`home13-chapter home13-chapter-${item.collection}`} key={item.collection} id={`koleksi-${item.collection}`} aria-labelledby={`title-${item.collection}`}>
+     <div className="home13-chapter-rule" aria-hidden="true"><span/></div>
+     <div className="home13-chapter-copy"><p className="home13-kicker">{item.title}</p><h3 id={`title-${item.collection}`}>{item.heading.map(line=><span key={line}>{line}</span>)}</h3><p className="home13-chapter-description">{item.description}</p><Link href={`/shop?collection=${item.collection}`} className="home13-cta"><span>{item.action}</span><CtaArrow/></Link><p className="home13-chapter-detail">{item.detail}</p></div>
+     <figure className="home13-chapter-photo"><Art src={item.image} alt={item.alt} loading="lazy" sizes="(max-width: 800px) 100vw, 52vw"/></figure>
+    </article>)}</div>
+   </section>
 
-      <section className="home-collections" id="kebutuhan" aria-labelledby="collections-title">
-        <div className="home-section-heading"><div><p className="home-eyebrow">Pilihan kebutuhan</p><h2 id="collections-title">Ada untuk keseharian Anda.</h2></div><p>Pilihan barang untuk pantry, pertemuan, dan kegiatan bersama.</p></div>
-        <div className="home-collection-grid">{collections.map(item => <article className="home-collection" key={item.title}>
-          <div className="home-collection-image"><Art src={`/images/products/${item.image}.png`} alt={item.alt} loading="lazy" sizes="(max-width: 640px) 90vw, 33vw"/></div>
-          <div className="home-collection-copy"><h3><Link href={`/shop?collection=${item.collection}`}>{item.title}<ArrowUpRight size={22} aria-hidden="true"/></Link></h3><p>{item.description}</p></div>
-        </article>)}</div>
-      </section>
+   <section className="home13-service" id="layanan" aria-labelledby="service-title">
+    <div className="home13-service-intro"><p className="home13-kicker">CARA BERBELANJA</p><h2 id="service-title">Dari pilihan Anda,<br/>sampai di tujuan.</h2><p>Pesanan, pengiriman, dan penerimaan terhubung. Ikuti perkembangannya dari akun Anda.</p></div>
+    <ol className="home13-service-steps">{[
+     {Icon:ShoppingBag,title:"Pilih kebutuhan",text:"Jelajahi koleksi, pilih kemasan, dan tambahkan barang ke keranjang."},
+     {Icon:PackageCheck,title:"Toko menyiapkan",text:"Barang dan jumlah ditinjau sebelum pesanan disiapkan."},
+     {Icon:Truck,title:"Pantau & terima",text:"Ikuti status kiriman, lalu konfirmasikan barang yang diterima."},
+     {Icon:ReceiptText,title:"Lihat tagihan",text:"Invoice diterbitkan setelah penerimaan pesanan diselesaikan."},
+    ].map(({Icon,title,text})=><li key={title}><Icon size={24} aria-hidden="true"/><h3>{title}</h3><p>{text}</p></li>)}</ol>
+   </section>
 
-      <section className="home-service" id="layanan" aria-labelledby="service-title">
-        <div className="home-service-photo"><Art src="/images/editorial/handoff-moment-v3.png" alt="Ilustrasi petugas menyerahkan paket kepada penerima di kantor" loading="lazy" sizes="(max-width: 800px) 100vw, 45vw"/></div>
-        <div className="home-service-copy"><p className="home-eyebrow">Layanan toko</p><h2 id="service-title">Tercatat sejak dipesan,<br/>hingga diterima.</h2><p>Setiap tahap terhubung dengan proses kerja toko. Pelanggan dan divisi dapat mengikuti perkembangan pesanannya.</p>
-          <ul>{[
-            {Icon: PackageCheck, title: "Pesanan ditinjau toko", text: "Barang dan jumlah diperiksa sebelum disiapkan."},
-            {Icon: Truck, title: "Pengiriman dapat dipantau", text: "Status kiriman dan jumlah penerimaan dicatat."},
-            {Icon: ReceiptText, title: "Tagihan sesuai penerimaan", text: "Invoice diterbitkan setelah penerimaan diselesaikan."},
-          ].map(({Icon, title, text}) => <li key={title}><Icon size={22} aria-hidden="true"/><div><h3>{title}</h3><p>{text}</p></div></li>)}</ul>
-        </div>
-      </section>
-    </main>
-    <footer className="home-footer"><div className="home-footer-main"><div><Brand inverse/><p>Pantry, perlengkapan rapat,<br/>dan kebutuhan kegiatan tim.</p></div><nav aria-label="Akses dan informasi"><a href="#akses">Pilih akses</a><Link href="/customer/login">Masuk pelanggan</Link><Link href="/staff/login">Portal divisi & petugas</Link></nav></div><div className="home-footer-bottom"><p>Demo capstone · Studi kasus divisi BNI. Bukan situs resmi BNI.</p><p>Data, foto, pengiriman, dan pembayaran adalah simulasi.</p></div></footer>
-  </LandingMotion>;
+   <section className="home13-access" id="akses" aria-labelledby="access-title">
+    <div className="home13-section-intro"><p className="home13-kicker">AKSES UNIT TOKO</p><h2 id="access-title">Pintu masuk yang tepat<br/>untuk kebutuhan Anda.</h2><p>Akun belanja pelanggan dan ruang kerja internal memiliki akses masing-masing.</p></div>
+    <div className="home13-access-grid">
+     <article className="home13-access-card home13-access-customer"><ShoppingBag size={29} aria-hidden="true"/><p className="home13-kicker">PELANGGAN</p><h3>Pilih barang.<br/>Kelola pesanan.</h3><p>Belanja dari katalog dan ikuti perkembangan pesanan pribadi Anda.</p><Link href="/shop" className="home13-cta"><span>Mulai belanja</span><CtaArrow/></Link><Link href="/customer/login" className="home13-line-link">Sudah punya akun? Masuk<ArrowRight size={17} aria-hidden="true"/></Link></article>
+     <article className="home13-access-card home13-access-internal"><Building2 size={29} aria-hidden="true"/><p className="home13-kicker">DIVISI & PETUGAS</p><h3>Satu ruang kerja.<br/>Peran yang jelas.</h3><p>Untuk PIC divisi, admin, petugas toko, kurir, dan tim keuangan.</p><Link href="/staff/login" className="home13-cta"><span>Masuk portal internal</span><CtaArrow/></Link><span className="home13-access-note">Gunakan akun internal sesuai tugas Anda.</span></article>
+    </div>
+   </section>
+  </main>
+  <footer className="home-footer"><div className="home-footer-main"><div><Brand inverse/><p>Pantry, perlengkapan rapat,<br/>dan kebutuhan kegiatan tim.</p></div><nav aria-label="Akses dan informasi"><a href="#kebutuhan">Koleksi toko</a><Link href="/customer/login">Masuk pelanggan</Link><Link href="/staff/login">Portal divisi & petugas</Link></nav></div><div className="home-footer-bottom"><p>Demo capstone · Studi kasus divisi BNI. Bukan situs resmi BNI.</p><p>Data, foto, pengiriman, dan pembayaran adalah simulasi.</p></div></footer>
+ </LandingMotion>;
 }

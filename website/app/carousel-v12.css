@@ -32,17 +32,23 @@
   background: #fff;
   color: var(--collection-ink);
   cursor: pointer;
-  border-radius: 50%;
+  border-radius: 7px;
   padding: 0;
 }
 .collection-carousel-controls .collection-carousel-rotation {
-  gap: 7px;
-  min-width: 88px;
-  padding: 0 15px;
-  border-radius: 24px;
+  width: 44px;
+  min-width: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  border-radius: 7px;
   font: 600 13px/1 var(--font-body), sans-serif;
 }
 .collection-carousel-arrow { width: 44px; }
+.collection-carousel-progress { height: 2px; margin-bottom: 14px; background: #d7e1e4; overflow: hidden; }
+.collection-carousel-progress > span { display: block; width: 100%; height: 100%; background: var(--collection-ink); transform: scaleX(0); transform-origin: left; }
+.collection-carousel[data-rotating="true"] .collection-carousel-progress > span { animation: collection-progress linear forwards; }
+@keyframes collection-progress { to { transform: scaleX(1); } }
 .collection-carousel-controls button:hover:not(:disabled) { background: var(--collection-ink); border-color: var(--collection-ink); color: #fff; }
 .collection-carousel-controls button:disabled { cursor: default; color: #7b898d; background: #edf1f3; }
 .collection-carousel-controls button:focus-visible,
@@ -122,7 +128,7 @@
   .collection-carousel-toolbar { gap: 10px; margin-bottom: 12px; }
   .collection-carousel-label { width: 100%; font-size: 11px; }
   .collection-carousel-controls { width: 100%; }
-  .collection-carousel-rotation { margin-right: auto; }
+  .collection-carousel-count { margin-right: auto; }
   .collection-carousel-count { min-width: 62px; }
   .collection-carousel-viewport { border-radius: 16px; }
   .collection-carousel-card { grid-template-columns: minmax(0, 1fr); grid-template-rows: 190px 1fr; }

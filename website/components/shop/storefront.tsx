@@ -16,6 +16,8 @@ import {
   ReceiptText,
   Search,
   SlidersHorizontal,
+  ChevronDown,
+  ArrowDownWideNarrow,
   Truck,
   Users,
   X,
@@ -354,6 +356,8 @@ function CatalogContent() {
   const { products, loading, error } = useShop();
   const location = useShopLocation();
   const query = readQuery(location);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const activeFilterCount = Number(query.category !== "Semua") + Number(query.stock === "available");
   const pendingNavigation = useRef(false);
   useEffect(() => {
     if (loading) return;
@@ -448,11 +452,24 @@ function CatalogContent() {
           {loading ? "Memuat…" : `${families.length} produk`}
         </span>
       </div>
-      <div className="shop-filter-panel">
-        <div className="shop-filter-label">
-          <SlidersHorizontal size={18} />
-          <span>Filter & urutkan</span>
-        </div>
+      <div className="shop-filter-toolbar">
+        <button type="button" className="shop-filter-toggle" aria-expanded={filtersOpen} aria-controls="shop-filter-options" onClick={() => setFiltersOpen(open => !open)}>
+          <SlidersHorizontal size={18} aria-hidden="true" /><span>Filter produk</span>
+          {activeFilterCount > 0 && <><span className="shop-filter-count" aria-hidden="true">{activeFilterCount}</span><span className="sr-only">{activeFilterCount} filter aktif</span></>}
+          <ChevronDown size={16} aria-hidden="true" />
+        </button>
+        <label className="shop-sort-control">
+          <ArrowDownWideNarrow size={17} aria-hidden="true" />
+          <span>Urutkan</span>
+          <select aria-label="Urutkan" value={query.sort} onChange={(event) => update({ sort: event.target.value })}>
+            <option value="name">Nama A–Z</option>
+            <option value="price-low">Harga terendah</option>
+            <option value="price-high">Harga tertinggi</option>
+          </select>
+          <ChevronDown size={14} aria-hidden="true" />
+        </label>
+      </div>
+      <div className="shop-filter-panel" id="shop-filter-options" hidden={!filtersOpen}>
         <label>
           Kategori
           <select
@@ -472,17 +489,6 @@ function CatalogContent() {
           >
             <option value="all">Semua stok</option>
             <option value="available">Stok tersedia</option>
-          </select>
-        </label>
-        <label>
-          Urutkan
-          <select
-            value={query.sort}
-            onChange={(event) => update({ sort: event.target.value })}
-          >
-            <option value="name">Nama A–Z</option>
-            <option value="price-low">Harga terendah</option>
-            <option value="price-high">Harga tertinggi</option>
           </select>
         </label>
       </div>

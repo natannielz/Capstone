@@ -135,6 +135,7 @@ export function CollectionCarousel({
               className="collection-carousel-rotation"
               disabled={!api || reducedMotion}
               aria-label={requestedRotation && !reducedMotion ? "Jeda pergantian koleksi otomatis" : "Mulai pergantian koleksi otomatis"}
+              title={requestedRotation && !reducedMotion ? "Jeda pergantian otomatis" : "Lanjutkan pergantian otomatis"}
               aria-describedby={reducedMotion ? motionNoteId : undefined}
               aria-controls={viewportId}
               onPointerDown={() => { pointerRotationIntent.current = !requestedRotation; }}
@@ -146,7 +147,6 @@ export function CollectionCarousel({
               }}
             >
               {requestedRotation && !reducedMotion ? <Pause size={15} aria-hidden="true" /> : <Play size={15} aria-hidden="true" />}
-              <span>{requestedRotation && !reducedMotion ? "Jeda" : "Mulai"}</span>
             </button>
             <span className="collection-carousel-count" aria-hidden="true">{String(current + 1).padStart(2, "0")} <span>/ {String(slides.length).padStart(2, "0")}</span></span>
             <button type="button" className="collection-carousel-arrow" disabled={!api} aria-label="Koleksi sebelumnya" aria-controls={viewportId} onClick={() => { stopRotation(); move(-1); }}><ArrowLeft size={18} aria-hidden="true" /></button>
@@ -154,6 +154,7 @@ export function CollectionCarousel({
           </div>
         )}
       </div>
+      <div className="collection-carousel-progress" aria-hidden="true"><span key={`${current}-${rotating}`} style={{animationDuration: `${AUTOPLAY_DELAY}ms`}} /></div>
       {reducedMotion && <span id={motionNoteId} className="collection-carousel-sr">Pergantian otomatis dinonaktifkan sesuai pengaturan kurangi gerakan. Gunakan tombol koleksi sebelumnya atau berikutnya.</span>}
       <div ref={viewportRef} id={viewportId} className="collection-carousel-viewport">
         <div className="collection-carousel-track" aria-live={rotating ? "off" : "polite"} aria-atomic="false">
