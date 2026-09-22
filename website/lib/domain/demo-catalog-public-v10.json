@@ -1,0 +1,1402 @@
+[
+  {
+    "id": "demo-001",
+    "image": "/images/products/generated/demo-001.webp",
+    "description": "Kopi arabika bubuk dikemas dalam pouch kraft isi 200 g. Siapkan takaran sesuai kebutuhan seduhan di pantry kantor.",
+    "group": "Minuman",
+    "collection": "pantry"
+  },
+  {
+    "id": "demo-002",
+    "image": "/images/products/generated/demo-002.webp",
+    "description": "Biji kopi robusta isi 250 g tersedia dalam stoples kaca bertutup logam. Giling seperlunya sebelum diseduh untuk persediaan meja kopi.",
+    "group": "Minuman",
+    "collection": "pantry"
+  },
+  {
+    "id": "demo-003",
+    "image": "/images/products/generated/demo-003.webp",
+    "description": "Teh hitam berisi 25 kantong celup dalam kotak karton. Kemasan ini mudah disimpan di rak minuman untuk sajian harian.",
+    "group": "Minuman",
+    "collection": "pantry"
+  },
+  {
+    "id": "demo-004",
+    "image": "/images/products/generated/demo-004.webp",
+    "description": "Daun teh hijau isi 100 g ditempatkan dalam kaleng silinder. Gunakan saringan teh saat menyiapkan minuman untuk satu teko.",
+    "group": "Minuman",
+    "collection": "pantry"
+  },
+  {
+    "id": "demo-005",
+    "image": "/images/products/generated/demo-005.webp",
+    "description": "Bunga kamomil kering dikemas dalam botol kaca isi 40 g. Bentuk bunga tetap terlihat sebelum diseduh memakai penyaring.",
+    "group": "Minuman",
+    "collection": "pantry"
+  },
+  {
+    "id": "demo-006",
+    "image": "/images/products/generated/demo-006.webp",
+    "description": "Kelopak rosela kering isi 75 g disimpan dalam tabung kertas. Pilihan seduhan ini dapat disajikan hangat atau bersama es.",
+    "group": "Minuman",
+    "collection": "pantry"
+  },
+  {
+    "id": "demo-007",
+    "image": "/images/products/generated/demo-007.webp",
+    "description": "Paket ini memuat 10 sachet seduhan jahe dan serai. Tiap sachet berisi potongan bahan kering untuk satu sajian.",
+    "group": "Minuman",
+    "collection": "pantry"
+  },
+  {
+    "id": "demo-008",
+    "image": "/images/products/generated/demo-008.webp",
+    "description": "Cokelat bubuk isi 250 g hadir dalam kaleng bertutup rapat. Aduk bersama susu atau air sesuai selera penyajian.",
+    "group": "Minuman",
+    "collection": "pantry"
+  },
+  {
+    "id": "demo-009",
+    "image": "/images/products/generated/demo-009.webp",
+    "description": "Bubuk matcha isi 50 g dikemas dalam kaleng kecil. Gunakan pengocok untuk mencampurnya dengan air sebelum menambahkan susu.",
+    "group": "Minuman",
+    "collection": "pantry"
+  },
+  {
+    "id": "demo-010",
+    "image": "/images/products/generated/demo-010.webp",
+    "description": "Krimer bubuk isi 200 g menggunakan kotak dengan bukaan tuang. Tambahkan sedikit demi sedikit ke kopi atau teh yang sudah diseduh.",
+    "group": "Minuman",
+    "collection": "pantry"
+  },
+  {
+    "id": "demo-011",
+    "image": "/images/products/generated/demo-011.webp",
+    "description": "Susu plain 1 L dikemas dalam karton dengan tutup ulir. Ukuran ini praktis untuk beberapa cangkir minuman di pantry.",
+    "group": "Minuman",
+    "collection": "pantry"
+  },
+  {
+    "id": "demo-012",
+    "image": "/images/products/generated/demo-012.webp",
+    "description": "Minuman kedelai isi 330 ml tersedia dalam botol kaca. Sajikan sebagai pilihan minuman per orang saat pertemuan.",
+    "group": "Minuman",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-013",
+    "image": "/images/products/generated/demo-013.webp",
+    "description": "Minuman oat 750 ml menggunakan kemasan karton bertutup. Tuangkan sesuai kebutuhan untuk campuran kopi maupun sajian dalam gelas.",
+    "group": "Minuman",
+    "collection": "pantry"
+  },
+  {
+    "id": "demo-014",
+    "image": "/images/products/generated/demo-014.webp",
+    "description": "Minuman almond isi 250 ml dikemas dalam botol berbentuk persegi. Ukurannya cocok ditempatkan bersama konsumsi rapat individual.",
+    "group": "Minuman",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-015",
+    "image": "/images/products/generated/demo-015.webp",
+    "description": "Air kelapa isi 350 ml tersedia dalam botol transparan. Tutup ulir membantu membuka sajian saat diperlukan.",
+    "group": "Minuman",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-016",
+    "image": "/images/products/generated/demo-016.webp",
+    "description": "Jus jeruk isi 300 ml dikemas dalam botol berleher pendek. Sajikan dingin sebagai pelengkap makanan ringan saat rapat.",
+    "group": "Minuman",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-017",
+    "image": "/images/products/generated/demo-017.webp",
+    "description": "Jus apel isi 250 ml memakai kotak minuman berbentuk balok. Kemasan porsi tunggal memudahkan pembagian ke peserta kegiatan.",
+    "group": "Minuman",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-018",
+    "image": "/images/products/generated/demo-018.webp",
+    "description": "Jus jambu merah isi 330 ml ditempatkan dalam botol berlekuk. Warna minuman terlihat melalui kemasan beningnya.",
+    "group": "Minuman",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-019",
+    "image": "/images/products/generated/demo-019.webp",
+    "description": "Jus mangga isi 300 ml menggunakan botol berbentuk silinder pendek. Pilihan ini disiapkan sebagai minuman satu porsi.",
+    "group": "Minuman",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-020",
+    "image": "/images/products/generated/demo-020.webp",
+    "description": "Jus nanas isi 250 ml dikemas dalam kaleng ramping. Bentuknya mudah ditata berjajar pada meja konsumsi.",
+    "group": "Minuman",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-021",
+    "image": "/images/products/generated/demo-021.webp",
+    "description": "Jus tomat isi 200 ml hadir dalam botol kaca kecil. Sajikan per botol untuk menyediakan variasi minuman acara.",
+    "group": "Minuman",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-022",
+    "image": "/images/products/generated/demo-022.webp",
+    "description": "Jus wortel isi 280 ml dikemas dalam botol kaca beralur. Kemasan porsi tunggal melengkapi pilihan minuman di meja rapat.",
+    "group": "Minuman",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-023",
+    "image": "/images/products/generated/demo-023.webp",
+    "description": "Sari lemon isi 200 ml disimpan dalam botol dengan leher tuang. Tambahkan secukupnya untuk meracik minuman sesuai selera.",
+    "group": "Minuman",
+    "collection": "pantry"
+  },
+  {
+    "id": "demo-024",
+    "image": "/images/products/generated/demo-024.webp",
+    "description": "Sirup leci isi 500 ml memakai botol kaca tinggi. Takaran sirup dapat disesuaikan ketika menyiapkan minuman satu teko.",
+    "group": "Minuman",
+    "collection": "pantry"
+  },
+  {
+    "id": "demo-025",
+    "image": "/images/products/generated/demo-025.webp",
+    "description": "Sirup pandan isi 600 ml dikemas dalam botol berpenampang oval. Gunakan sebagai campuran minuman yang disajikan pada acara kantor.",
+    "group": "Minuman",
+    "collection": "pantry"
+  },
+  {
+    "id": "demo-026",
+    "image": "/images/products/generated/demo-026.webp",
+    "description": "Sirup gula aren isi 250 ml tersedia dalam botol tekan. Mulut kemasan membantu mengatur tuangan untuk campuran kopi susu.",
+    "group": "Minuman",
+    "collection": "pantry"
+  },
+  {
+    "id": "demo-027",
+    "image": "/images/products/generated/demo-027.webp",
+    "description": "Konsentrat kopi isi 500 ml memakai botol kaca berwarna gelap. Campurkan dengan air atau susu sesuai kekuatan rasa yang diinginkan.",
+    "group": "Minuman",
+    "collection": "pantry"
+  },
+  {
+    "id": "demo-028",
+    "image": "/images/products/generated/demo-028.webp",
+    "description": "Kopi susu isi 250 ml dikemas dalam botol dengan tutup ulir. Satu botol dapat dibagikan bersama paket konsumsi pertemuan.",
+    "group": "Minuman",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-029",
+    "image": "/images/products/generated/demo-029.webp",
+    "description": "Teh melati isi 350 ml tersedia dalam botol bening ramping. Kemasan ini cocok untuk sajian individual dalam kegiatan kantor.",
+    "group": "Minuman",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-030",
+    "image": "/images/products/generated/demo-030.webp",
+    "description": "Teh oolong isi 450 ml memakai botol dengan sisi berbidang. Bentuk kemasan mudah digenggam saat berpindah ruang kegiatan.",
+    "group": "Minuman",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-031",
+    "image": "/images/products/generated/demo-031.webp",
+    "description": "Air mineral isi 330 ml dikemas dalam botol kecil beralur. Ukurannya pas untuk satu tempat duduk di meja rapat.",
+    "group": "Minuman",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-032",
+    "image": "/images/products/generated/demo-032.webp",
+    "description": "Air mineral isi 1,5 L memakai botol tinggi dengan lekukan pegangan. Siapkan di pantry untuk dituangkan ke beberapa gelas.",
+    "group": "Minuman",
+    "collection": "pantry"
+  },
+  {
+    "id": "demo-033",
+    "image": "/images/products/generated/demo-033.webp",
+    "description": "Air soda isi 330 ml tersedia dalam kaleng pendek. Gunakan sebagai minuman tunggal atau bahan campuran sajian.",
+    "group": "Minuman",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-034",
+    "image": "/images/products/generated/demo-034.webp",
+    "description": "Minuman isotonik isi 500 ml menggunakan botol plastik bersudut. Kemasan satu porsi dapat disediakan untuk kegiatan tim.",
+    "group": "Minuman",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-035",
+    "image": "/images/products/generated/demo-035.webp",
+    "description": "Minuman cincau isi 300 ml dikemas dalam gelas bertutup. Potongan cincau tampak di antara cairan berwarna cokelat muda.",
+    "group": "Minuman",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-036",
+    "image": "/images/products/generated/demo-036.webp",
+    "description": "Sari kacang hijau isi 250 ml hadir dalam botol pendek. Sajian ini menambah pilihan minuman dalam pembagian konsumsi.",
+    "group": "Minuman",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-037",
+    "image": "/images/products/generated/demo-037.webp",
+    "description": "Minuman jahe merah isi 200 ml dikemas dalam botol kaca mungil. Bentuk kemasannya sesuai untuk sajian satu porsi.",
+    "group": "Minuman",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-038",
+    "image": "/images/products/generated/demo-038.webp",
+    "description": "Madu cair isi 350 g tersedia dalam botol berbentuk sarang lebah. Bukaan tuang memudahkan penambahan madu ke minuman.",
+    "group": "Minuman",
+    "collection": "pantry"
+  },
+  {
+    "id": "demo-039",
+    "image": "/images/products/generated/demo-039.webp",
+    "description": "Gula batu isi 250 g dikemas dalam stoples transparan. Butir berukuran tidak seragam dapat ditambahkan ketika menyeduh teh.",
+    "group": "Minuman",
+    "collection": "pantry"
+  },
+  {
+    "id": "demo-040",
+    "image": "/images/products/generated/demo-040.webp",
+    "description": "Campuran buah kering untuk seduhan berisi 80 g dalam stoples kaca. Irisan buah terlihat jelas saat memilih takaran satu teko.",
+    "group": "Minuman",
+    "collection": "pantry"
+  },
+  {
+    "id": "demo-041",
+    "image": "/images/products/generated/demo-041.webp",
+    "description": "Biskuit gandum isi 250 g ditempatkan dalam kaleng bundar. Bentuk kepingnya mudah disajikan pada wadah camilan bersama.",
+    "group": "Pantry & konsumsi",
+    "collection": "pantry"
+  },
+  {
+    "id": "demo-042",
+    "image": "/images/products/generated/demo-042.webp",
+    "description": "Kukis cokelat chip isi 180 g memakai stoples bening bertutup. Potongan cokelat tampak pada permukaan setiap kukis.",
+    "group": "Pantry & konsumsi",
+    "collection": "pantry"
+  },
+  {
+    "id": "demo-043",
+    "image": "/images/products/generated/demo-043.webp",
+    "description": "Wafer vanila isi 150 g dikemas dalam baki berbungkus transparan. Lapisan wafer dapat dipotong atau dibagikan sesuai kebutuhan.",
+    "group": "Pantry & konsumsi",
+    "collection": "pantry"
+  },
+  {
+    "id": "demo-044",
+    "image": "/images/products/generated/demo-044.webp",
+    "description": "Wafer cokelat gulung isi 200 g menggunakan kemasan tabung. Bentuk batangnya sesuai untuk pelengkap minuman saat rapat.",
+    "group": "Pantry & konsumsi",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-045",
+    "image": "/images/products/generated/demo-045.webp",
+    "description": "Crackers keju isi 200 g tersedia dalam kotak berjendela. Sajikan beberapa keping sebagai camilan di sela pekerjaan.",
+    "group": "Pantry & konsumsi",
+    "collection": "pantry"
+  },
+  {
+    "id": "demo-046",
+    "image": "/images/products/generated/demo-046.webp",
+    "description": "Kue nastar isi 300 g ditata dalam stoples berbentuk segi delapan. Permukaan kue berwarna keemasan terlihat dari sisi kemasan.",
+    "group": "Pantry & konsumsi",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-047",
+    "image": "/images/products/generated/demo-047.webp",
+    "description": "Kue kastengel isi 250 g dikemas dalam stoples persegi panjang. Taburan keju pada batang kue melengkapi tampilan sajian.",
+    "group": "Pantry & konsumsi",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-048",
+    "image": "/images/products/generated/demo-048.webp",
+    "description": "Kue putri salju isi 250 g memakai stoples bundar pipih. Lapisan gula bubuk menutupi kue berbentuk bulan sabit.",
+    "group": "Pantry & konsumsi",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-049",
+    "image": "/images/products/generated/demo-049.webp",
+    "description": "Granola panggang isi 300 g disimpan dalam stoples kaca tinggi. Campurkan dengan susu atau sajikan sebagai topping makanan.",
+    "group": "Pantry & konsumsi",
+    "collection": "pantry"
+  },
+  {
+    "id": "demo-050",
+    "image": "/images/products/generated/demo-050.webp",
+    "description": "Oat instan isi 500 g tersedia dalam tabung karton. Siapkan per porsi menggunakan mangkuk dan cairan sesuai selera.",
+    "group": "Pantry & konsumsi",
+    "collection": "pantry"
+  },
+  {
+    "id": "demo-051",
+    "image": "/images/products/generated/demo-051.webp",
+    "description": "Sereal jagung isi 250 g menggunakan kotak karton dengan jendela. Keping sereal dapat dibagikan untuk pelengkap sarapan tim.",
+    "group": "Pantry & konsumsi",
+    "collection": "pantry"
+  },
+  {
+    "id": "demo-052",
+    "image": "/images/products/generated/demo-052.webp",
+    "description": "Roti tawar kupas berisi 10 lembar dalam kantong transparan. Bentuk persegi memudahkan penyusunan roti isi untuk konsumsi.",
+    "group": "Pantry & konsumsi",
+    "collection": "pantry"
+  },
+  {
+    "id": "demo-053",
+    "image": "/images/products/generated/demo-053.webp",
+    "description": "Roti gandum berisi delapan lembar dengan pinggiran cokelat. Kemasan bening memudahkan pengecekan bentuk dan jumlah potongannya.",
+    "group": "Pantry & konsumsi",
+    "collection": "pantry"
+  },
+  {
+    "id": "demo-054",
+    "image": "/images/products/generated/demo-054.webp",
+    "description": "Kotak ini berisi dua croissant dengan lipatan berlapis. Gunakan sebagai pilihan konsumsi individual saat pertemuan pagi.",
+    "group": "Pantry & konsumsi",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-055",
+    "image": "/images/products/generated/demo-055.webp",
+    "description": "Empat roti isi cokelat ditata dalam kotak karton berjendela. Ukuran roti sesuai untuk dibagikan pada kelompok kecil.",
+    "group": "Pantry & konsumsi",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-056",
+    "image": "/images/products/generated/demo-056.webp",
+    "description": "Dua muffin pisang hadir dalam kotak dengan pembatas. Cup kertas menjaga tiap muffin terpisah saat dibawa.",
+    "group": "Pantry & konsumsi",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-057",
+    "image": "/images/products/generated/demo-057.webp",
+    "description": "Brownies dipotong menjadi enam bagian dalam kotak pipih. Permukaan cokelatnya sesuai untuk sajian penutup pertemuan.",
+    "group": "Pantry & konsumsi",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-058",
+    "image": "/images/products/generated/demo-058.webp",
+    "description": "Bolu marmer berisi empat potong dengan motif dua warna. Potongan disusun berderet untuk memudahkan pembagian konsumsi.",
+    "group": "Pantry & konsumsi",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-059",
+    "image": "/images/products/generated/demo-059.webp",
+    "description": "Enam donat bertabur gula disajikan dalam kotak bakery. Bentuk cincin memberi tampilan yang mudah dikenali di meja konsumsi.",
+    "group": "Pantry & konsumsi",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-060",
+    "image": "/images/products/generated/demo-060.webp",
+    "description": "Paket pastel sayur berisi lima buah dalam baki kertas. Pinggiran berpilin membedakan tiap potong sajian goreng ini.",
+    "group": "Pantry & konsumsi",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-061",
+    "image": "/images/products/generated/demo-061.webp",
+    "description": "Lima risoles ragout ditata dalam kotak makanan. Lapisan remah pada bagian luar membuat bentuk tiap risoles terlihat jelas.",
+    "group": "Pantry & konsumsi",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-062",
+    "image": "/images/products/generated/demo-062.webp",
+    "description": "Empat lemper ayam dibungkus daun dan disusun dalam kotak. Bungkus per buah membantu pembagian konsumsi saat kegiatan.",
+    "group": "Pantry & konsumsi",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-063",
+    "image": "/images/products/generated/demo-063.webp",
+    "description": "Puding cokelat isi 150 ml memakai cup transparan bertutup. Sajikan per cup sebagai makanan penutup konsumsi rapat.",
+    "group": "Pantry & konsumsi",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-064",
+    "image": "/images/products/generated/demo-064.webp",
+    "description": "Puding mangga isi 150 ml ditempatkan dalam cup berlekuk. Lapisan kuningnya terlihat dari sisi kemasan bening.",
+    "group": "Pantry & konsumsi",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-065",
+    "image": "/images/products/generated/demo-065.webp",
+    "description": "Yogurt plain isi 125 g dikemas dalam cup dengan tutup foil. Ukuran satu porsi memudahkan penataan persediaan di lemari pendingin.",
+    "group": "Pantry & konsumsi",
+    "collection": "pantry"
+  },
+  {
+    "id": "demo-066",
+    "image": "/images/products/generated/demo-066.webp",
+    "description": "Yogurt stroberi isi 180 ml menggunakan botol kecil berlekuk. Warna merah muda tampak melalui bagian bening kemasan.",
+    "group": "Pantry & konsumsi",
+    "collection": "pantry"
+  },
+  {
+    "id": "demo-067",
+    "image": "/images/products/generated/demo-067.webp",
+    "description": "Keju cheddar blok isi 170 g dibungkus dalam kemasan rapat. Potong sesuai kebutuhan untuk roti atau persiapan sajian.",
+    "group": "Pantry & konsumsi",
+    "collection": "pantry"
+  },
+  {
+    "id": "demo-068",
+    "image": "/images/products/generated/demo-068.webp",
+    "description": "Mentega isi 200 g berbentuk balok dalam pembungkus foil. Takaran dapat dipotong untuk olesan atau bahan konsumsi kantor.",
+    "group": "Pantry & konsumsi",
+    "collection": "pantry"
+  },
+  {
+    "id": "demo-069",
+    "image": "/images/products/generated/demo-069.webp",
+    "description": "Selai stroberi isi 250 g disimpan dalam stoples kaca. Bukaan lebar memudahkan pengambilan untuk olesan roti.",
+    "group": "Pantry & konsumsi",
+    "collection": "pantry"
+  },
+  {
+    "id": "demo-070",
+    "image": "/images/products/generated/demo-070.webp",
+    "description": "Selai kacang isi 200 g dikemas dalam stoples bersisi lurus. Gunakan sendok bersih untuk mengambil olesan sesuai porsi.",
+    "group": "Pantry & konsumsi",
+    "collection": "pantry"
+  },
+  {
+    "id": "demo-071",
+    "image": "/images/products/generated/demo-071.webp",
+    "description": "Selai cokelat hazelnut isi 200 g hadir dalam stoples pendek. Teksturnya dapat diratakan sebagai isian roti konsumsi.",
+    "group": "Pantry & konsumsi",
+    "collection": "pantry"
+  },
+  {
+    "id": "demo-072",
+    "image": "/images/products/generated/demo-072.webp",
+    "description": "Kotak madu ini memuat 20 sachet berbentuk stik. Kemasan individual membantu menyiapkan takaran untuk minuman atau roti.",
+    "group": "Pantry & konsumsi",
+    "collection": "pantry"
+  },
+  {
+    "id": "demo-073",
+    "image": "/images/products/generated/demo-073.webp",
+    "description": "Gula pasir isi 1 kg menggunakan kemasan bening beralas datar. Tuangkan ke wadah pantry untuk kebutuhan minuman bersama.",
+    "group": "Pantry & konsumsi",
+    "collection": "pantry"
+  },
+  {
+    "id": "demo-074",
+    "image": "/images/products/generated/demo-074.webp",
+    "description": "Gula aren bubuk isi 250 g disimpan dalam stoples pendek. Butirnya dapat ditakar untuk campuran minuman maupun makanan.",
+    "group": "Pantry & konsumsi",
+    "collection": "pantry"
+  },
+  {
+    "id": "demo-075",
+    "image": "/images/products/generated/demo-075.webp",
+    "description": "Susu kental manis isi 370 g dikemas dalam kaleng silinder. Gunakan sebagai tambahan rasa untuk sajian minuman sesuai takaran.",
+    "group": "Pantry & konsumsi",
+    "collection": "pantry"
+  },
+  {
+    "id": "demo-076",
+    "image": "/images/products/generated/demo-076.webp",
+    "description": "Saus tomat isi 340 g tersedia dalam botol tekan terbalik. Tutup lebar membantu kemasan berdiri pada rak konsumsi.",
+    "group": "Pantry & konsumsi",
+    "collection": "pantry"
+  },
+  {
+    "id": "demo-077",
+    "image": "/images/products/generated/demo-077.webp",
+    "description": "Saus sambal isi 275 ml memakai botol dengan ujung tuang. Sediakan sebagai pelengkap makanan pada acara kantor.",
+    "group": "Pantry & konsumsi",
+    "collection": "pantry"
+  },
+  {
+    "id": "demo-078",
+    "image": "/images/products/generated/demo-078.webp",
+    "description": "Mayones isi 250 g dikemas dalam botol lunak berbentuk oval. Tekan perlahan untuk menambahkan saus pada roti atau salad.",
+    "group": "Pantry & konsumsi",
+    "collection": "pantry"
+  },
+  {
+    "id": "demo-079",
+    "image": "/images/products/generated/demo-079.webp",
+    "description": "Kecap manis isi 300 ml menggunakan botol kaca ramping. Mulut botol membantu mengatur tuangan saat menyiapkan konsumsi.",
+    "group": "Pantry & konsumsi",
+    "collection": "pantry"
+  },
+  {
+    "id": "demo-080",
+    "image": "/images/products/generated/demo-080.webp",
+    "description": "Garam meja isi 250 g ditempatkan dalam botol penabur. Lubang pada tutup digunakan untuk mengatur jumlah taburan.",
+    "group": "Pantry & konsumsi",
+    "collection": "pantry"
+  },
+  {
+    "id": "demo-081",
+    "image": "/images/products/generated/demo-081.webp",
+    "description": "Kacang almond panggang isi 150 g memakai stoples bening. Bentuk kacang utuh cocok untuk ditata sebagai camilan rapat.",
+    "group": "Pantry & konsumsi",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-082",
+    "image": "/images/products/generated/demo-082.webp",
+    "description": "Kacang mede panggang isi 150 g disimpan dalam stoples persegi. Camilan berbentuk lengkung ini mudah dibagi dalam mangkuk kecil.",
+    "group": "Pantry & konsumsi",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-083",
+    "image": "/images/products/generated/demo-083.webp",
+    "description": "Kacang tanah kupas isi 250 g tersedia dalam kantong transparan. Porsi dapat dipindahkan ke wadah camilan untuk kebutuhan bersama.",
+    "group": "Pantry & konsumsi",
+    "collection": "pantry"
+  },
+  {
+    "id": "demo-084",
+    "image": "/images/products/generated/demo-084.webp",
+    "description": "Kuaci isi 150 g dikemas dalam kantong dengan bagian depan bening. Corak biji tampak jelas sebelum camilan dibagikan.",
+    "group": "Pantry & konsumsi",
+    "collection": "pantry"
+  },
+  {
+    "id": "demo-085",
+    "image": "/images/products/generated/demo-085.webp",
+    "description": "Kismis isi 200 g menggunakan stoples bermulut lebar. Sajikan tersendiri atau campurkan dengan granola dan sereal.",
+    "group": "Pantry & konsumsi",
+    "collection": "pantry"
+  },
+  {
+    "id": "demo-086",
+    "image": "/images/products/generated/demo-086.webp",
+    "description": "Kurma isi 250 g disusun dalam kotak pipih bersekat. Sekat membantu menjaga susunan buah ketika dibawa ke ruang acara.",
+    "group": "Pantry & konsumsi",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-087",
+    "image": "/images/products/generated/demo-087.webp",
+    "description": "Aprikot kering isi 150 g tersedia dalam kotak transparan. Potongan buah berwarna jingga melengkapi variasi camilan rapat.",
+    "group": "Pantry & konsumsi",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-088",
+    "image": "/images/products/generated/demo-088.webp",
+    "description": "Keripik kentang isi 100 g dikemas dalam tabung tinggi. Bentuk keping tersusun membantu penyajian pada wadah bersama.",
+    "group": "Pantry & konsumsi",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-089",
+    "image": "/images/products/generated/demo-089.webp",
+    "description": "Keripik singkong isi 150 g memakai kantong transparan berdiri. Irisan tipisnya dapat dibagikan sebagai camilan pantry.",
+    "group": "Pantry & konsumsi",
+    "collection": "pantry"
+  },
+  {
+    "id": "demo-090",
+    "image": "/images/products/generated/demo-090.webp",
+    "description": "Keripik pisang isi 150 g disimpan dalam kantong berjendela lebar. Potongan memanjang memberi bentuk yang berbeda dari camilan lainnya.",
+    "group": "Pantry & konsumsi",
+    "collection": "pantry"
+  },
+  {
+    "id": "demo-091",
+    "image": "/images/products/generated/demo-091.webp",
+    "description": "Keripik tempe isi 120 g tersedia dalam kantong segel. Pola kedelai terlihat pada tiap irisan tipisnya.",
+    "group": "Pantry & konsumsi",
+    "collection": "pantry"
+  },
+  {
+    "id": "demo-092",
+    "image": "/images/products/generated/demo-092.webp",
+    "description": "Popcorn karamel isi 120 g dikemas dalam cup kertas bertutup. Bentuk cup memudahkan pembagian satu porsi per peserta.",
+    "group": "Pantry & konsumsi",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-093",
+    "image": "/images/products/generated/demo-093.webp",
+    "description": "Pretzel mini isi 150 g ditempatkan dalam stoples transparan tinggi. Bentuk simpul kecil sesuai untuk camilan meja bersama.",
+    "group": "Pantry & konsumsi",
+    "collection": "pantry"
+  },
+  {
+    "id": "demo-094",
+    "image": "/images/products/generated/demo-094.webp",
+    "description": "Rice crackers isi 150 g memakai kemasan plastik bening. Keping bulat bertekstur dapat disajikan bersama teh atau kopi.",
+    "group": "Pantry & konsumsi",
+    "collection": "pantry"
+  },
+  {
+    "id": "demo-095",
+    "image": "/images/products/generated/demo-095.webp",
+    "description": "Cokelat batang isi 100 g dibagi menjadi petak-petak kecil. Pembungkus foil menjaga bentuk sajian sampai dibuka.",
+    "group": "Pantry & konsumsi",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-096",
+    "image": "/images/products/generated/demo-096.webp",
+    "description": "Permen mint isi 50 g menggunakan kaleng kecil bertutup geser. Bentuk kemasan ringkas untuk ditempatkan pada meja layanan.",
+    "group": "Pantry & konsumsi",
+    "collection": "pantry"
+  },
+  {
+    "id": "demo-097",
+    "image": "/images/products/generated/demo-097.webp",
+    "description": "Permen jahe isi 100 g dikemas dalam kotak karton kecil. Setiap permen dibungkus sendiri agar mudah dibagikan.",
+    "group": "Pantry & konsumsi",
+    "collection": "pantry"
+  },
+  {
+    "id": "demo-098",
+    "image": "/images/products/generated/demo-098.webp",
+    "description": "Marshmallow mini isi 100 g tersedia dalam kantong transparan. Potongan kecil dapat menjadi topping cokelat hangat atau sajian camilan.",
+    "group": "Pantry & konsumsi",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-099",
+    "image": "/images/products/generated/demo-099.webp",
+    "description": "Snack box ini berisi satu roti, satu pastel, dan satu potong bolu. Ketiganya ditata terpisah dalam kotak kraft untuk satu peserta.",
+    "group": "Pantry & konsumsi",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-100",
+    "image": "/images/products/generated/demo-100.webp",
+    "description": "Buah potong isi 250 g disusun dalam kotak makanan transparan. Campuran melon, semangka, dan nanas melengkapi konsumsi pertemuan.",
+    "group": "Pantry & konsumsi",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-101",
+    "image": "/images/products/generated/demo-101.webp",
+    "description": "Kertas A4 berbobot 80 gsm berisi 500 lembar per rim. Siapkan untuk mencetak agenda, formulir, dan bahan rapat.",
+    "group": "Kebutuhan kantor",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-102",
+    "image": "/images/products/generated/demo-102.webp",
+    "description": "Buku A5 ini memuat 80 lembar kertas bermotif kotak. Sampul lenturnya sesuai untuk catatan pertemuan dan sketsa sederhana.",
+    "group": "Kebutuhan kantor",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-103",
+    "image": "/images/products/generated/demo-103.webp",
+    "description": "Buku spiral B5 berisi 100 lembar untuk pencatatan. Pengikat logam memungkinkan halaman dibuka mendatar di meja.",
+    "group": "Kebutuhan kantor",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-104",
+    "image": "/images/products/generated/demo-104.webp",
+    "description": "Buku saku A6 memuat 64 lembar kertas bergaris. Ukurannya ringkas untuk mencatat tugas saat berpindah ruang.",
+    "group": "Kebutuhan kantor",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-105",
+    "image": "/images/products/generated/demo-105.webp",
+    "description": "Pad catatan tempel ini berisi 100 lembar berukuran 76 × 76 mm. Bentuk persegi membantu menandai tugas pendek pada meja kerja.",
+    "group": "Kebutuhan kantor",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-106",
+    "image": "/images/products/generated/demo-106.webp",
+    "description": "Set penanda halaman berisi lima warna dalam dudukan tipis. Bagian transparan membantu menandai lokasi tanpa menutup seluruh tulisan.",
+    "group": "Kebutuhan kantor",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-107",
+    "image": "/images/products/generated/demo-107.webp",
+    "description": "Pulpen gel berujung 0,5 mm memakai bodi transparan dengan grip karet. Gunakan untuk menulis catatan dan mengisi formulir.",
+    "group": "Kebutuhan kantor",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-108",
+    "image": "/images/products/generated/demo-108.webp",
+    "description": "Kotak ini memuat 12 pensil kayu HB tanpa penghapus. Bentuk heksagonal membantu pensil tetap berada di meja.",
+    "group": "Kebutuhan kantor",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-109",
+    "image": "/images/products/generated/demo-109.webp",
+    "description": "Pensil mekanik 0,7 mm memiliki bodi logam dan klip saku. Tekan bagian atas untuk mengeluarkan isi ketika membuat catatan.",
+    "group": "Kebutuhan kantor",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-110",
+    "image": "/images/products/generated/demo-110.webp",
+    "description": "Set highlighter berisi empat warna dengan ujung pahat. Gunakan sisi lebar atau tipis untuk menandai bahan rapat.",
+    "group": "Kebutuhan kantor",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-111",
+    "image": "/images/products/generated/demo-111.webp",
+    "description": "Spidol papan tulis ini menggunakan ujung bulat dan bodi tebal. Sediakan untuk menulis poin pembahasan pada whiteboard.",
+    "group": "Kebutuhan kantor",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-112",
+    "image": "/images/products/generated/demo-112.webp",
+    "description": "Spidol permanen memiliki dua ujung dengan ukuran berbeda. Pilih ujung yang sesuai untuk penandaan map atau kemasan.",
+    "group": "Kebutuhan kantor",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-113",
+    "image": "/images/products/generated/demo-113.webp",
+    "description": "Penghapus pensil berbentuk balok memakai selubung kertas. Ukurannya pas untuk perlengkapan meja maupun kotak alat tulis.",
+    "group": "Kebutuhan kantor",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-114",
+    "image": "/images/products/generated/demo-114.webp",
+    "description": "Rautan logam memiliki dua lubang untuk ukuran pensil berbeda. Bentuk ringkasnya mudah disimpan dalam laci alat tulis.",
+    "group": "Kebutuhan kantor",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-115",
+    "image": "/images/products/generated/demo-115.webp",
+    "description": "Penggaris baja panjang 30 cm memiliki lubang gantung pada ujungnya. Gunakan sisi lurus sebagai panduan garis atau pemotongan kertas.",
+    "group": "Kebutuhan kantor",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-116",
+    "image": "/images/products/generated/demo-116.webp",
+    "description": "Gunting kantor panjang 20 cm memakai bilah baja dan gagang plastik. Dua ukuran lubang pegangan membantu posisi jari saat memotong.",
+    "group": "Kebutuhan kantor",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-117",
+    "image": "/images/products/generated/demo-117.webp",
+    "description": "Cutter menggunakan bilah geser selebar 18 mm. Simpan bilah dalam bodi saat tidak dipakai untuk membuka kemasan.",
+    "group": "Kebutuhan kantor",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-118",
+    "image": "/images/products/generated/demo-118.webp",
+    "description": "Stapler mini panjang 10 cm memakai dasar logam. Ukurannya sesuai untuk merapikan beberapa lembar dokumen pada meja kerja.",
+    "group": "Kebutuhan kantor",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-119",
+    "image": "/images/products/generated/demo-119.webp",
+    "description": "Stapler berlengan panjang mencapai bagian tengah lembar dokumen. Gunakan sebagai alat penyusunan booklet atau materi presentasi.",
+    "group": "Kebutuhan kantor",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-120",
+    "image": "/images/products/generated/demo-120.webp",
+    "description": "Pembuka staples memiliki dua rahang logam dengan pegangan plastik. Tekan pegangan untuk melepaskan pengikat dari tumpukan kertas.",
+    "group": "Kebutuhan kantor",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-121",
+    "image": "/images/products/generated/demo-121.webp",
+    "description": "Kotak berisi 12 binder clip berukuran 32 mm. Kawat penjepit dapat dilipat setelah dokumen disatukan.",
+    "group": "Kebutuhan kantor",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-122",
+    "image": "/images/products/generated/demo-122.webp",
+    "description": "Penjepit kertas berisi 100 buah dalam kotak kecil. Bentuk kawat oval dipakai untuk menyatukan lembaran sementara.",
+    "group": "Kebutuhan kantor",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-123",
+    "image": "/images/products/generated/demo-123.webp",
+    "description": "Map A4 berbahan plastik lentur memakai penutup kancing. Simpan dokumen rapat agar tersusun dalam satu tempat.",
+    "group": "Kebutuhan kantor",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-124",
+    "image": "/images/products/generated/demo-124.webp",
+    "description": "Map akordeon mempunyai 12 sekat dengan bukaan melebar. Pisahkan berkas sesuai kegiatan sebelum dibawa ke pertemuan.",
+    "group": "Kebutuhan kantor",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-125",
+    "image": "/images/products/generated/demo-125.webp",
+    "description": "Ordner A4 berpunggung 7 cm menggunakan pengunci tuas logam. Kapasitas ruangnya sesuai untuk mengelompokkan dokumen rutin.",
+    "group": "Kebutuhan kantor",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-126",
+    "image": "/images/products/generated/demo-126.webp",
+    "description": "Clipboard A4 memakai papan serat kayu dan klip logam. Permukaan keras menjadi alas menulis saat meja tidak tersedia.",
+    "group": "Kebutuhan kantor",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-127",
+    "image": "/images/products/generated/demo-127.webp",
+    "description": "Papan tulis meja berukuran 30 × 20 cm memiliki penyangga lipat. Tempatkan di meja untuk catatan agenda yang dapat diganti.",
+    "group": "Kebutuhan kantor",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-128",
+    "image": "/images/products/generated/demo-128.webp",
+    "description": "Penghapus papan tulis memakai bantalan felt dan punggung magnetik. Bentuk ovalnya mudah digenggam ketika merapikan papan.",
+    "group": "Kebutuhan kantor",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-129",
+    "image": "/images/products/generated/demo-129.webp",
+    "description": "Dispenser selotip memiliki dasar berbobot dan mata potong logam. Dudukan gulungan membantu pemakaian selotip di satu tempat.",
+    "group": "Kebutuhan kantor",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-130",
+    "image": "/images/products/generated/demo-130.webp",
+    "description": "Selotip bening selebar 48 mm berbentuk gulungan pada inti karton. Gunakan untuk menutup paket atau mengikat perlengkapan kegiatan.",
+    "group": "Kebutuhan kantor",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-131",
+    "image": "/images/products/generated/demo-131.webp",
+    "description": "Lem stik isi 21 g memakai tabung putar. Bukaan kecil membantu pengolesan pada kertas dan label kegiatan.",
+    "group": "Kebutuhan kantor",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-132",
+    "image": "/images/products/generated/demo-132.webp",
+    "description": "Lem cair isi 100 ml tersedia dalam botol berujung runcing. Ujung tuang membantu mengarahkan lem ke bagian kertas yang dibutuhkan.",
+    "group": "Kebutuhan kantor",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-133",
+    "image": "/images/products/generated/demo-133.webp",
+    "description": "Pita koreksi selebar 5 mm tersimpan dalam bodi transparan. Gulungan 8 m digunakan untuk menutup tulisan pada kertas.",
+    "group": "Kebutuhan kantor",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-134",
+    "image": "/images/products/generated/demo-134.webp",
+    "description": "Kotak meja memiliki tiga sekat dengan ketinggian berbeda. Pisahkan pulpen, gunting, dan alat tulis kecil agar mudah dijangkau.",
+    "group": "Kebutuhan kantor",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-135",
+    "image": "/images/products/generated/demo-135.webp",
+    "description": "Rak dokumen dua tingkat dibuat dari jaring logam. Baki bertumpuk memberi tempat terpisah untuk berkas masuk dan keluar.",
+    "group": "Kebutuhan kantor",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-136",
+    "image": "/images/products/generated/demo-136.webp",
+    "description": "Alas meja felt berukuran 80 × 30 cm memiliki sisi lurus. Letakkan di bawah papan ketik dan mouse untuk menyatukan area kerja.",
+    "group": "Kebutuhan kantor",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-137",
+    "image": "/images/products/generated/demo-137.webp",
+    "description": "Penyangga laptop memakai rangka aluminium dengan engsel lipat. Sudut tumpu dapat disesuaikan untuk penataan meja kerja.",
+    "group": "Kebutuhan kantor",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-138",
+    "image": "/images/products/generated/demo-138.webp",
+    "description": "Kalkulator meja memiliki layar miring dan susunan tombol lebar. Gunakan untuk membantu perhitungan administrasi sehari-hari.",
+    "group": "Kebutuhan kantor",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-139",
+    "image": "/images/products/generated/demo-139.webp",
+    "description": "Keranjang sampah kapasitas 3 L dibuat dari jaring baja. Bentuk silinder kecil sesuai untuk sudut meja atau ruang kerja.",
+    "group": "Kebutuhan kantor",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-140",
+    "image": "/images/products/generated/demo-140.webp",
+    "description": "Lampu meja memakai lengan lipat dan bidang cahaya memanjang. Alas bundar menyediakan dudukan untuk penataan di sudut meja.",
+    "group": "Kebutuhan kantor",
+    "collection": "rapat"
+  },
+  {
+    "id": "demo-141",
+    "image": "/images/products/generated/demo-141.webp",
+    "description": "Tumbler baja kapasitas 450 ml memiliki tutup geser. Bentuk silinder ringkas sesuai untuk perlengkapan meja atau hadiah kegiatan.",
+    "group": "Merchandise",
+    "collection": "merchandise"
+  },
+  {
+    "id": "demo-142",
+    "image": "/images/products/generated/demo-142.webp",
+    "description": "Botol Tritan kapasitas 600 ml dilengkapi tali jinjing pendek. Bodi bening memudahkan melihat sisa minuman di dalamnya.",
+    "group": "Merchandise",
+    "collection": "merchandise"
+  },
+  {
+    "id": "demo-143",
+    "image": "/images/products/generated/demo-143.webp",
+    "description": "Termos minum kapasitas 750 ml memakai tutup berbentuk cangkir. Bodi baja memanjang dapat dibawa sebagai perlengkapan perjalanan.",
+    "group": "Merchandise",
+    "collection": "merchandise"
+  },
+  {
+    "id": "demo-144",
+    "image": "/images/products/generated/demo-144.webp",
+    "description": "Mug enamel kapasitas 350 ml memiliki gagang melengkung. Bibir berwarna gelap membingkai permukaan cangkir yang terang.",
+    "group": "Merchandise",
+    "collection": "merchandise"
+  },
+  {
+    "id": "demo-145",
+    "image": "/images/products/generated/demo-145.webp",
+    "description": "Mug keramik kapasitas 300 ml menggunakan gagang berbentuk siku. Permukaan matte memberi bidang polos untuk paket hadiah kantor.",
+    "group": "Merchandise",
+    "collection": "merchandise"
+  },
+  {
+    "id": "demo-146",
+    "image": "/images/products/generated/demo-146.webp",
+    "description": "Gelas kaca kapasitas 250 ml memiliki dua lapis dinding. Bentuk transparannya memperlihatkan ruang di antara kedua lapisan kaca.",
+    "group": "Merchandise",
+    "collection": "merchandise"
+  },
+  {
+    "id": "demo-147",
+    "image": "/images/products/generated/demo-147.webp",
+    "description": "Cangkir silikon kapasitas 350 ml dapat dilipat pada bagian bodinya. Cincin pegangan menjaga bentuk bagian atas saat digunakan.",
+    "group": "Merchandise",
+    "collection": "merchandise"
+  },
+  {
+    "id": "demo-148",
+    "image": "/images/products/generated/demo-148.webp",
+    "description": "Wadah makanan kapasitas 500 ml memakai bodi baja dan mulut lebar. Tutup ulirnya dapat dilepas untuk mengambil makanan dari atas.",
+    "group": "Merchandise",
+    "collection": "merchandise"
+  },
+  {
+    "id": "demo-149",
+    "image": "/images/products/generated/demo-149.webp",
+    "description": "Kotak makan kapasitas 900 ml dibuat dari baja dengan pengunci samping. Sudut membulat memudahkan penataan makanan dalam satu ruang.",
+    "group": "Merchandise",
+    "collection": "merchandise"
+  },
+  {
+    "id": "demo-150",
+    "image": "/images/products/generated/demo-150.webp",
+    "description": "Kotak bento kapasitas 1 L mempunyai dua ruang dan tutup bambu. Pita elastis menahan tutup ketika kotak dibawa.",
+    "group": "Merchandise",
+    "collection": "merchandise"
+  },
+  {
+    "id": "demo-151",
+    "image": "/images/products/generated/demo-151.webp",
+    "description": "Tas tote kanvas berukuran 35 × 40 cm menggunakan dua tali bahu. Ruang utama tanpa sekat cocok untuk perlengkapan acara atau belanja ringan.",
+    "group": "Merchandise",
+    "collection": "merchandise"
+  },
+  {
+    "id": "demo-152",
+    "image": "/images/products/generated/demo-152.webp",
+    "description": "Tas goni berukuran 25 × 30 cm ditutup dengan tali serut. Tekstur anyaman menjadi ciri kemasan untuk paket hadiah kecil.",
+    "group": "Merchandise",
+    "collection": "merchandise"
+  },
+  {
+    "id": "demo-153",
+    "image": "/images/products/generated/demo-153.webp",
+    "description": "Tas belanja nilon dapat dilipat ke kantong kecil yang menyatu. Bentuk ringan dan lentur memudahkan penyimpanan saat tidak dipakai.",
+    "group": "Merchandise",
+    "collection": "merchandise"
+  },
+  {
+    "id": "demo-154",
+    "image": "/images/products/generated/demo-154.webp",
+    "description": "Ransel ini menyediakan ruang untuk laptop berukuran 14 inci. Kantong depan beritsleting memisahkan aksesori kecil dari ruang utama.",
+    "group": "Merchandise",
+    "collection": "merchandise"
+  },
+  {
+    "id": "demo-155",
+    "image": "/images/products/generated/demo-155.webp",
+    "description": "Tas selempang felt memuat perangkat hingga 13 inci. Penutup lipat dan tali panjang melengkapi bentuknya yang ramping.",
+    "group": "Merchandise",
+    "collection": "merchandise"
+  },
+  {
+    "id": "demo-156",
+    "image": "/images/products/generated/demo-156.webp",
+    "description": "Waist bag kapasitas 3 L memakai kanvas dengan sabuk yang dapat diatur. Ruang beritsleting menyimpan barang kecil saat kegiatan luar ruang.",
+    "group": "Merchandise",
+    "collection": "merchandise"
+  },
+  {
+    "id": "demo-157",
+    "image": "/images/products/generated/demo-157.webp",
+    "description": "Pouch berukuran 20 × 12 cm dibuat dari kain berlapis. Bukaan ritsleting menyimpan alat tulis atau barang pribadi kecil.",
+    "group": "Merchandise",
+    "collection": "merchandise"
+  },
+  {
+    "id": "demo-158",
+    "image": "/images/products/generated/demo-158.webp",
+    "description": "Organizer kabel panjang 18 cm memakai cangkang berbentuk oval. Jaring dan tali penahan di bagian dalam memisahkan aksesori perangkat.",
+    "group": "Merchandise",
+    "collection": "merchandise"
+  },
+  {
+    "id": "demo-159",
+    "image": "/images/products/generated/demo-159.webp",
+    "description": "Tas bekal kapasitas 5 L memiliki lapisan dalam berwarna perak. Dua pegangan pendek dan bukaan atas membantu penataan kotak makan.",
+    "group": "Merchandise",
+    "collection": "merchandise"
+  },
+  {
+    "id": "demo-160",
+    "image": "/images/products/generated/demo-160.webp",
+    "description": "Tas duffel kapasitas 25 L memakai bukaan ritsleting memanjang. Pegangan ganda dan tali bahu mendukung cara bawa yang berbeda.",
+    "group": "Merchandise",
+    "collection": "merchandise"
+  },
+  {
+    "id": "demo-161",
+    "image": "/images/products/generated/demo-161.webp",
+    "description": "Polo ukuran M dibuat dari kain katun pique bertekstur. Kerah lipat dan tiga kancing melengkapi model lengan pendeknya.",
+    "group": "Merchandise",
+    "collection": "merchandise"
+  },
+  {
+    "id": "demo-162",
+    "image": "/images/products/generated/demo-162.webp",
+    "description": "Kaos crewneck ukuran L menggunakan kain katun dengan potongan lurus. Leher bundar dan lengan pendek sesuai untuk seragam kegiatan santai.",
+    "group": "Merchandise",
+    "collection": "merchandise"
+  },
+  {
+    "id": "demo-163",
+    "image": "/images/products/generated/demo-163.webp",
+    "description": "Apron kanvas memiliki saku depan lebar dan tali leher. Gunakan sebagai perlengkapan demonstrasi, pantry, atau kegiatan kelompok.",
+    "group": "Merchandise",
+    "collection": "merchandise"
+  },
+  {
+    "id": "demo-164",
+    "image": "/images/products/generated/demo-164.webp",
+    "description": "Topi bucket katun memiliki tepi melingkar dengan jahitan bertingkat. Bentuknya dapat dilipat untuk disimpan bersama perlengkapan kegiatan.",
+    "group": "Merchandise",
+    "collection": "merchandise"
+  },
+  {
+    "id": "demo-165",
+    "image": "/images/products/generated/demo-165.webp",
+    "description": "Topi baseball berbahan twill dilengkapi pengatur ukuran belakang. Panel berjahit dan visor melengkung membentuk tampilan utamanya.",
+    "group": "Merchandise",
+    "collection": "merchandise"
+  },
+  {
+    "id": "demo-166",
+    "image": "/images/products/generated/demo-166.webp",
+    "description": "Syal tenun berukuran 160 × 30 cm memiliki rumbai pendek. Kain dapat dilipat memanjang sebagai bagian dari paket hadiah.",
+    "group": "Merchandise",
+    "collection": "merchandise"
+  },
+  {
+    "id": "demo-167",
+    "image": "/images/products/generated/demo-167.webp",
+    "description": "Sepasang kaos kaki katun cocok untuk ukuran kaki 39–43. Bagian pergelangan memakai rajut beralur dan ujung tertutup.",
+    "group": "Merchandise",
+    "collection": "merchandise"
+  },
+  {
+    "id": "demo-168",
+    "image": "/images/products/generated/demo-168.webp",
+    "description": "Dasi tenun polos memiliki lebar ujung 7 cm. Jahitan belakang menjaga bentuknya saat dilipat untuk penyimpanan.",
+    "group": "Merchandise",
+    "collection": "merchandise"
+  },
+  {
+    "id": "demo-169",
+    "image": "/images/products/generated/demo-169.webp",
+    "description": "Handuk tangan berukuran 30 × 50 cm memakai kain terry. Lipatannya ringkas untuk paket kegiatan atau perlengkapan pantry.",
+    "group": "Merchandise",
+    "collection": "merchandise"
+  },
+  {
+    "id": "demo-170",
+    "image": "/images/products/generated/demo-170.webp",
+    "description": "Payung lipat tiga memiliki bentang kanopi sekitar 95 cm. Pegangan lurus dan sarung kain melengkapi perlengkapan perjalanan ini.",
+    "group": "Merchandise",
+    "collection": "merchandise"
+  },
+  {
+    "id": "demo-171",
+    "image": "/images/products/generated/demo-171.webp",
+    "description": "Payung golf mempunyai kanopi berdiameter sekitar 120 cm. Gagang melengkung memberi bentuk pegangan yang mudah dikenali.",
+    "group": "Merchandise",
+    "collection": "merchandise"
+  },
+  {
+    "id": "demo-172",
+    "image": "/images/products/generated/demo-172.webp",
+    "description": "Dompet kartu memakai kulit sintetis dengan empat slot terbuka. Bentuk pipih memisahkan kartu tanpa ruang uang berukuran besar.",
+    "group": "Merchandise",
+    "collection": "merchandise"
+  },
+  {
+    "id": "demo-173",
+    "image": "/images/products/generated/demo-173.webp",
+    "description": "Tempat kartu identitas vertikal menggunakan kulit sintetis dan jendela bening. Lubang di bagian atas dapat dipasangkan dengan tali kartu.",
+    "group": "Merchandise",
+    "collection": "merchandise"
+  },
+  {
+    "id": "demo-174",
+    "image": "/images/products/generated/demo-174.webp",
+    "description": "Lanyard berbahan tenun memiliki lebar 2 cm dan kait logam. Tali ini dapat digunakan untuk membawa kartu identitas kegiatan.",
+    "group": "Merchandise",
+    "collection": "merchandise"
+  },
+  {
+    "id": "demo-175",
+    "image": "/images/products/generated/demo-175.webp",
+    "description": "Gantungan kunci berbentuk persegi memakai pelat logam polos. Cincin baja menyatukan kunci atau pengait tas kecil.",
+    "group": "Merchandise",
+    "collection": "merchandise"
+  },
+  {
+    "id": "demo-176",
+    "image": "/images/products/generated/demo-176.webp",
+    "description": "Gantungan pembuka botol dibuat dari aluminium dengan lubang kait. Sisi terbukanya dibentuk untuk mengangkat tutup botol logam.",
+    "group": "Merchandise",
+    "collection": "merchandise"
+  },
+  {
+    "id": "demo-177",
+    "image": "/images/products/generated/demo-177.webp",
+    "description": "Badge reel menyediakan tali tarik sepanjang 60 cm. Klip belakang dapat dijepit pada pakaian atau tepi tas.",
+    "group": "Merchandise",
+    "collection": "merchandise"
+  },
+  {
+    "id": "demo-178",
+    "image": "/images/products/generated/demo-178.webp",
+    "description": "Label koper berbahan silikon memakai pengikat lentur. Bagian belakang menyediakan tempat untuk lembar identitas pemilik.",
+    "group": "Merchandise",
+    "collection": "merchandise"
+  },
+  {
+    "id": "demo-179",
+    "image": "/images/products/generated/demo-179.webp",
+    "description": "Sampul paspor menggunakan lembar gabus dengan jahitan tepi. Dua sisi bagian dalam menahan dokumen saat sampul ditutup.",
+    "group": "Merchandise",
+    "collection": "merchandise"
+  },
+  {
+    "id": "demo-180",
+    "image": "/images/products/generated/demo-180.webp",
+    "description": "Sabuk koper panjang 180 cm memakai anyaman dengan gesper plastik. Panjang tali dapat disesuaikan untuk mengelilingi koper.",
+    "group": "Merchandise",
+    "collection": "merchandise"
+  },
+  {
+    "id": "demo-181",
+    "image": "/images/products/generated/demo-181.webp",
+    "description": "Jam meja berdiameter 12 cm memiliki rumah bambu dengan kaki pendek. Penunjuk jarum menampilkan waktu pada muka jam yang sederhana.",
+    "group": "Merchandise",
+    "collection": "merchandise"
+  },
+  {
+    "id": "demo-182",
+    "image": "/images/products/generated/demo-182.webp",
+    "description": "Bingkai kayu ini memuat foto berukuran 10 × 15 cm. Penyangga belakang memungkinkan bingkai berdiri di meja kerja.",
+    "group": "Merchandise",
+    "collection": "merchandise"
+  },
+  {
+    "id": "demo-183",
+    "image": "/images/products/generated/demo-183.webp",
+    "description": "Pot meja keramik berdiameter 10 cm menggunakan permukaan bergalur. Wadah tanpa tanaman ini dapat dipadukan dengan dekorasi meja.",
+    "group": "Merchandise",
+    "collection": "merchandise"
+  },
+  {
+    "id": "demo-184",
+    "image": "/images/products/generated/demo-184.webp",
+    "description": "Lilin isi 120 g ditempatkan dalam wadah kaca berwarna amber. Tutup logam menutup permukaan lilin ketika tidak digunakan.",
+    "group": "Merchandise",
+    "collection": "merchandise"
+  },
+  {
+    "id": "demo-185",
+    "image": "/images/products/generated/demo-185.webp",
+    "description": "Diffuser isi 100 ml menggunakan botol kaca dan batang rotan. Letakkan sebagai perlengkapan ruangan dalam paket hadiah kegiatan.",
+    "group": "Merchandise",
+    "collection": "merchandise"
+  },
+  {
+    "id": "demo-186",
+    "image": "/images/products/generated/demo-186.webp",
+    "description": "Kipas genggam mempunyai gagang yang dapat dilipat menjadi dudukan. Kisi melingkar melindungi baling-baling pada bagian kepala.",
+    "group": "Merchandise",
+    "collection": "merchandise"
+  },
+  {
+    "id": "demo-187",
+    "image": "/images/products/generated/demo-187.webp",
+    "description": "Tikar piknik berukuran 150 × 180 cm dapat dilipat menjadi paket jinjing. Pegangan kain membantu membawanya ke kegiatan kelompok.",
+    "group": "Merchandise",
+    "collection": "merchandise"
+  },
+  {
+    "id": "demo-188",
+    "image": "/images/products/generated/demo-188.webp",
+    "description": "Bantal leher perjalanan berbentuk huruf U dengan sarung kain. Tali kecil di bagian depan membantu menjaga posisi kedua ujungnya.",
+    "group": "Merchandise",
+    "collection": "merchandise"
+  },
+  {
+    "id": "demo-189",
+    "image": "/images/products/generated/demo-189.webp",
+    "description": "Penutup mata satin memiliki bantalan tipis dan tali elastis. Bentuk cekung mengikuti area hidung ketika dipakai saat perjalanan.",
+    "group": "Merchandise",
+    "collection": "merchandise"
+  },
+  {
+    "id": "demo-190",
+    "image": "/images/products/generated/demo-190.webp",
+    "description": "Set ini memuat satu sedotan baja dan sikat pembersih dalam kotak. Wadah memanjang membantu menyimpan perlengkapan minum secara terpisah.",
+    "group": "Merchandise",
+    "collection": "merchandise"
+  },
+  {
+    "id": "demo-191",
+    "image": "/images/products/generated/demo-191.webp",
+    "description": "Set tatakan gelas terdiri dari empat keping gabus bundar. Ukuran seragam membantu menata minuman pada meja bersama.",
+    "group": "Merchandise",
+    "collection": "merchandise"
+  },
+  {
+    "id": "demo-192",
+    "image": "/images/products/generated/demo-192.webp",
+    "description": "Enam tatakan gelas persegi disimpan dalam dudukan bambu. Set ini sesuai untuk melengkapi meja pertemuan kecil.",
+    "group": "Merchandise",
+    "collection": "merchandise"
+  },
+  {
+    "id": "demo-193",
+    "image": "/images/products/generated/demo-193.webp",
+    "description": "Papan saji bambu berukuran 30 × 20 cm memiliki pegangan pendek. Lubang pada gagang dapat dipakai untuk menggantung papan.",
+    "group": "Merchandise",
+    "collection": "merchandise"
+  },
+  {
+    "id": "demo-194",
+    "image": "/images/products/generated/demo-194.webp",
+    "description": "Alas panci silikon berdiameter 18 cm memiliki pola sarang lebah. Bentuk pipihnya mudah disimpan dalam laci perlengkapan pantry.",
+    "group": "Merchandise",
+    "collection": "merchandise"
+  },
+  {
+    "id": "demo-195",
+    "image": "/images/products/generated/demo-195.webp",
+    "description": "Cetakan es silikon mempunyai 12 ruang berbentuk kubus. Tutup datar menyatu dengan ukuran baki untuk penataan dalam freezer.",
+    "group": "Merchandise",
+    "collection": "merchandise"
+  },
+  {
+    "id": "demo-196",
+    "image": "/images/products/generated/demo-196.webp",
+    "description": "Set alat makan berisi sendok, garpu, dan sumpit baja. Pouch kain beritsleting menjaga perlengkapan tersusun saat dibawa.",
+    "group": "Merchandise",
+    "collection": "merchandise"
+  },
+  {
+    "id": "demo-197",
+    "image": "/images/products/generated/demo-197.webp",
+    "description": "Tas sepatu berbahan nilon memiliki panel jaring pada satu sisi. Bentuk memanjang memisahkan alas kaki dari barang lain di dalam tas.",
+    "group": "Merchandise",
+    "collection": "merchandise"
+  },
+  {
+    "id": "demo-198",
+    "image": "/images/products/generated/demo-198.webp",
+    "description": "Penyangga ponsel bambu memakai dua bagian yang saling mengunci. Celah di bagian bawah menyediakan ruang untuk jalur kabel.",
+    "group": "Merchandise",
+    "collection": "merchandise"
+  },
+  {
+    "id": "demo-199",
+    "image": "/images/products/generated/demo-199.webp",
+    "description": "Dompet tempel berbahan kulit sintetis memiliki dua slot kartu. Bentuk tipis disiapkan sebagai aksesori pada bagian belakang ponsel.",
+    "group": "Merchandise",
+    "collection": "merchandise"
+  },
+  {
+    "id": "demo-200",
+    "image": "/images/products/generated/demo-200.webp",
+    "description": "Power bank berkapasitas 10000 mAh memakai bodi persegi panjang. Port pada sisi pendek disediakan untuk pengisian perangkat dan daya unit.",
+    "group": "Merchandise",
+    "collection": "merchandise"
+  }
+]

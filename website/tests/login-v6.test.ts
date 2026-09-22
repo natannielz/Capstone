@@ -25,6 +25,9 @@ function loadLogin(react: unknown): LoginComponent {
     if (id === "lucide-react") return new Proxy({}, {get: () => "svg"});
     if (id === "./art") return {Art: () => null};
     if (id === "./brand") return {Brand: () => null};
+    // Animation has no role in the credential contract. The real Login still
+    // creates its motion ref, so the mock React hook cursor includes that slot.
+    if (id === "./public-motion") return {usePublicMotion: () => undefined};
     if (id === "@/components/ui/button") return {Button: "button"};
     if (id === "@/components/ui/field") return {Field: "div", FieldError: "p", FieldGroup: "div", FieldLabel: "label"};
     if (id === "@/components/ui/input-group") return {InputGroup: "div", InputGroupAddon: "div", InputGroupButton: "button", InputGroupInput: "input"};

@@ -1,4 +1,7 @@
 import type { Product } from "./model";
+import demoMetadata from "./demo-catalog-public-v10.json";
+
+const demoById = new Map(demoMetadata.map((item) => [item.id, item]));
 
 const photos: Record<string, string> = {
   air: "water",
@@ -43,11 +46,15 @@ export function productFamilyId(product: Product) {
 }
 
 export function productImage(product: Product) {
+  const demo = demoById.get(productFamilyId(product));
+  if (demo) return demo.image;
   return `/images/products/${photos[productFamilyId(product)] || "tote"}.png`;
 }
 
 export function productGroup(product: Product) {
   const id = productFamilyId(product);
+  const demo = demoById.get(id);
+  if (demo) return demo.group;
   if (["air", "teh", "kopi", "galon"].includes(id)) return "Minuman";
   if (["gula", "biskuit", "snack"].includes(id)) return "Pantry & konsumsi";
   if (["tisu", "cup"].includes(id)) return "Kebutuhan kantor";
@@ -64,6 +71,8 @@ export function productPackaging(product: Product) {
 
 export function productDescription(product: Product) {
   const family = productFamilyId(product);
+  const demo = demoById.get(family);
+  if (demo) return demo.description;
   const missingContents =
     family === "air"
       ? "Jumlah botol per dus belum dicantumkan."
@@ -75,11 +84,21 @@ export function productDescription(product: Product) {
     .join(" ");
 }
 
+export function productCollections(product: Product): CatalogCollection[] {
+  const id = productFamilyId(product);
+  const demo = demoById.get(id);
+  if (demo && isCatalogCollection(demo.collection)) return [demo.collection];
+  return (Object.keys(CATALOG_COLLECTIONS) as CatalogCollection[]).filter(
+    (key) => (CATALOG_COLLECTIONS[key].products as readonly string[]).includes(id),
+  );
+}
+
 export function productFamilies(products: Product[]): ProductFamily[] {
   const families = new Map<string, ProductFamily>();
+  const byId = new Map(products.map((product) => [product.id, product]));
   for (const product of products.filter((item) => item.active)) {
     const id = productFamilyId(product);
-    const base = products.find((item) => item.id === id);
+    const base = byId.get(id);
     const family = families.get(id) || {
       id,
       name: base?.name || product.name.replace(/ · paket \d+ .+$/, ""),

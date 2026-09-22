@@ -62,7 +62,7 @@ Untuk pengujian customer API gunakan `scripts/smoke-customer.mjs` bersama fixtur
 
 ## Urutan presentasi divisi
 
-1. PIC Operasional memilih katalog 36 SKU, mencari nama/SKU atau kategori, memasukkan barang ke keranjang, lalu mengajukan pesanan. Katalog berisi 12 produk dasar dan varian paket 3/6 dengan harga/satuan masing-masing; 12 foto produk dipakai bersama variannya. Keranjang tersimpan per akun di perangkat.
+1. PIC Operasional memilih katalog 236 SKU, mencari nama/SKU, kelompok atau koleksi, memasukkan barang ke keranjang, lalu mengajukan pesanan. Sebanyak 36 SKU lama (12 produk dasar dengan varian paket 3/6) tetap ada; 200 SKU tambahan memiliki deskripsi dan jalur foto WebP tersendiri. Katalog staf dan etalase pelanggan menampilkan 24 keluarga produk per halaman. Keranjang tersimpan per akun di perangkat. Data tambahan dipasang sekali secara atomik dengan jurnal persediaan/modal awal; data transaksi, akun, kata sandi dan produk lama dipertahankan. Rincian terdapat pada `../docs/implementation-v10-catalog.md`.
 2. Kepala Toko membuka pesanan dan memilih Tinjau & setujui.
 3. Staf mencadangkan stok tersedia dan membuat Surat Jalan. Sisa pesanan tetap tercatat untuk kiriman susulan. Pengganti memerlukan persetujuan PIC.
 4. Kurir mengirim barang, mencatat penerima/bukti, atau mencatat gagal kirim.

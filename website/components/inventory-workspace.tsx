@@ -28,7 +28,7 @@ function InventoryTable({ heads, children }: { heads: string[]; children: ReactN
 }
 
 function ProductConditions({ row }: { row: InventoryProduct }) {
-  return <div className="ops-status-list">{row.available <= row.product.minimum && <Badge variant="outline">Perlu restok</Badge>}{row.expired > 0 && <Badge variant="outline">Ada kedaluwarsa</Badge>}{row.expiring > 0 && <Badge variant="outline">Menjelang kedaluwarsa</Badge>}{row.held > 0 && <Badge variant="outline">Ada barang ditahan</Badge>}{row.available > row.product.minimum && !row.expired && !row.expiring && !row.held && <span className="muted">Stok cukup</span>}</div>;
+  return <div className="ops-status-list">{!row.product.active && <Badge variant="outline">Tidak dijual</Badge>}{row.product.active && row.available <= row.product.minimum && <Badge variant="outline">Perlu restok</Badge>}{row.expired > 0 && <Badge variant="outline">Ada kedaluwarsa</Badge>}{row.expiring > 0 && <Badge variant="outline">Menjelang kedaluwarsa</Badge>}{row.held > 0 && <Badge variant="outline">Ada barang ditahan</Badge>}{row.product.active && row.available > row.product.minimum && !row.expired && !row.expiring && !row.held && <span className="muted">Stok cukup</span>}</div>;
 }
 
 function BatchConditions({ row }: { row: InventoryBatch }) {
@@ -36,11 +36,12 @@ function BatchConditions({ row }: { row: InventoryBatch }) {
 }
 
 function editProduct(ctx: WorkspaceContext, product: Product) {
-  ctx.ask({ title: "Pengaturan barang", description: "Harga baru berlaku untuk transaksi berikutnya. Stok minimum dan pengingat retur membantu pemeriksaan persediaan.", type: "product.update", data: { id: product.id }, fields: [
+  ctx.ask({ title: "Pengaturan barang", description: "Barang yang dinonaktifkan tidak menerima pesanan baru. Pesanan sebelumnya tetap dapat diselesaikan dengan harga yang sudah disepakati.", type: "product.update", data: { id: product.id }, fields: [
     { key: "price", label: "Harga jual (Rp)", type: "number", value: product.price },
     { key: "minimum", label: "Stok minimum", type: "number", min: 0, value: product.minimum },
     { key: "returnMonths", label: "Pengingat sebelum kedaluwarsa (bulan)", type: "number", min: 0, max: 36, value: product.returnMonths },
-  ] });
+    { key: "active", label: "Status penjualan", type: "select", value: String(product.active), options: [{ value: "true", label: "Aktif — dapat dipesan" }, { value: "false", label: "Nonaktif — tidak dijual" }] },
+  ], map: values => ({ price: Number(values.price), minimum: Number(values.minimum), returnMonths: Number(values.returnMonths), active: values.active === "true" }) });
 }
 
 function createStocktake(ctx: WorkspaceContext, batch: Batch, replacesId?: string) {

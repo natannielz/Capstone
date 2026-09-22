@@ -7,9 +7,10 @@ import {Badge} from "@/components/ui/badge";
 import {Field, FieldGroup, FieldLabel} from "@/components/ui/field";
 import {InputGroup, InputGroupAddon, InputGroupInput} from "@/components/ui/input-group";
 import type {Order, OrderLine, Shipment, State} from "@/lib/domain/model";
-import {get, invoiceStatus, lineProgress, money, productAvailable, sum} from "@/lib/domain/selectors";
+import {get, invoiceStatus, lineProgress, money, productAvailable, sum, today} from "@/lib/domain/selectors";
 import {matchesOrderQueue, ORDER_QUEUES, orderFulfillmentLabel, orderValue, readOrderQuery, relatedOrderInvoices, substitutionNeedsDecision} from "@/lib/domain/order-views";
 import type {WorkspaceContext} from "./workspace";
+import {Attachments} from "./operations";
 
 type QueryProps = {
   query: URLSearchParams;
@@ -156,6 +157,22 @@ export function OrderDetail(ctx: WorkspaceContext & {id: string}) {
       fields: [{key: "productId", label: "Produk pengganti", type: "select", options: s.products.filter(product => product.id !== line.productId && product.active).map(product => ({value: product.id, label: `${product.name} · ${money(product.price)}`}))}, {key: "reason", label: "Alasan", type: "textarea"}], label: "Kirim usulan"});
   }
 
+  function releaseStock(line: OrderLine) {
+    const product = get(s.products, line.productId);
+    const batches = s.batches.filter(batch => batch.productId === line.productId).map(batch => {
+      const reserved = sum(s.reservations.filter(reservation => reservation.orderLineId === line.id && reservation.batchId === batch.id).map(reservation => reservation.qty));
+      const staged = sum(s.shipmentLines.filter(item => item.orderLineId === line.id && item.batchId === batch.id && get(s.shipments, item.shipmentId).status === "ready").map(item => item.qty));
+      return {batch, free: reserved - staged};
+    }).filter(item => item.free > 0).sort((a, b) => (a.batch.expiry || "9999").localeCompare(b.batch.expiry || "9999"));
+    if (!batches.length) return;
+    ask({title: "Lepas cadangan stok", description: "Lepas cadangan pada satu batch agar stok dapat dipilih ulang. Barang pada Surat Jalan siap kirim harus dibatalkan Surat Jalannya terlebih dahulu. Pesanan tetap diproses.", type: "stock.release", data: {orderLineId: line.id},
+      fields: [
+        {key: "batchId", label: "Batch yang dicadangkan", type: "select", value: batches[0].batch.id, options: batches.map(({batch, free}) => ({value: batch.id, label: `${batch.code} · maksimal ${free} ${product.unit}${batch.expiry ? ` · kedaluwarsa ${dateLabel(batch.expiry)}` : ""}`}))},
+        {key: "qty", label: `Jumlah yang dilepas (${product.unit})`, type: "number", min: 1, value: 1, max: Math.max(...batches.map(item => item.free))},
+        {key: "reason", label: "Alasan pelepasan cadangan", type: "textarea"},
+      ], label: "Lepas cadangan"});
+  }
+
   return <div className="order-detail-v5">
     <button className="back-link" onClick={() => go("orders")}><ArrowLeft size={16} aria-hidden="true"/>Kembali ke daftar pesanan</button>
     <section className="panel order-v5-summary">
@@ -168,6 +185,7 @@ export function OrderDetail(ctx: WorkspaceContext & {id: string}) {
         {actor.role === "staf" && reserved.length > 0 && <Button onClick={createShipment}><Truck data-icon="inline-start"/>Buat Surat Jalan</Button>}
       </div>
     </section>
+    <section className="panel"><div className="panel-title"><div><h2>Lampiran pesanan</h2><p>{order.status === "submitted" ? "Desain atau spesifikasi barang dapat ditambahkan oleh PIC atau Kepala Toko sebelum pesanan ditinjau." : "Pesanan sudah ditinjau atau dibatalkan. Lampiran tersimpan sebagai acuan dan tidak dapat ditambah."}</p></div></div><Attachments ctx={ctx} scope="order" targetId={order.id}/>{!s.attachments.some(attachment => attachment.scope === "order" && attachment.targetId === order.id) && <p className="module-note">Belum ada lampiran pesanan.</p>}</section>
     <div className="order-v5-statuses">
       <section className="panel"><h3>Pemenuhan barang</h3><StateBadge>{orderFulfillmentLabel(s, order)}</StateBadge><p>{shipments.length} Surat Jalan · {lines.filter(line => line.qty > line.cancelled).length} jenis barang aktif</p></section>
       {canSeeBilling && <section className="panel"><h3>Penagihan</h3><StateBadge>{paymentLabel}</StateBadge><p>{invoices.length ? `${invoices.length} invoice terkait · sisa piutang invoice ${money(balance)}` : "Invoice diterbitkan setelah penerimaan difinalisasi."}</p></section>}
@@ -182,12 +200,16 @@ export function OrderDetail(ctx: WorkspaceContext & {id: string}) {
         const product = get(s.products, line.productId), progress = lineProgress(s, line);
         const pending = pendingSubstitutions.some(sub => sub.orderLineId === line.id);
         const canReserve = actor.role === "staf" && order.status === "approved" && progress.remaining > progress.reserved;
+        const canRelease = actor.role === "staf" && order.status === "approved" && progress.reserved > progress.staged;
+        const expiredReservation = actor.role === "staf" && s.reservations.some(reservation => reservation.orderLineId === line.id && reservation.qty > 0 && s.batches.some(batch => batch.id === reservation.batchId && batch.expiry && batch.expiry <= today()));
         const canSubstitute = ["kepala", "staf"].includes(actor.role) && order.status === "approved" && progress.remaining > 0 && progress.staged === 0;
         return <article className="order-v5-line" key={line.id}>
           <div className="order-v5-line-heading"><div><h3>{product.name}</h3><p>{money(line.price)} / {product.unit}{line.requestedProductId !== product.id ? " · Barang pengganti" : ""}</p>{line.cancelled > 0 && <small>{line.cancelled} {product.unit} dibatalkan atau diganti</small>}</div><span>{product.sku}</span></div>
           <dl className="order-v5-quantities">{[["Dipesan", line.qty - line.cancelled], ["Dicadangkan", progress.reserved], ["Dikirim", progress.shipped], ["Diterima", progress.accepted]].map(([label, value]) => <div key={String(label)}><dt>{label}</dt><dd>{value} <span>{product.unit}</span></dd></div>)}</dl>
-          {(canReserve || canSubstitute) && <div className="order-v5-line-actions">
+          {expiredReservation && <p className="module-note">Cadangan mencakup batch kedaluwarsa. Batalkan Surat Jalan yang masih siap kirim bila ada, lalu lepas cadangan dan cadangkan batch yang layak.</p>}
+          {(canReserve || canRelease || canSubstitute) && <div className="order-v5-line-actions">
             {canReserve && <Button size="sm" variant="outline" disabled={pending || productAvailable(s, product.id) <= 0} onClick={() => reserveStock(line)}>Cadangkan stok</Button>}
+            {canRelease && <Button size="sm" variant="outline" onClick={() => releaseStock(line)}>Lepas cadangan</Button>}
             {canSubstitute && <Button size="sm" variant="ghost" disabled={pending} onClick={() => proposeSubstitution(line)}>Usulkan pengganti</Button>}
             <p>{pending ? "Menunggu keputusan PIC atas barang pengganti." : `${Math.max(0, productAvailable(s, product.id))} ${product.unit} tersedia di toko.`}</p>
           </div>}

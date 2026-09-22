@@ -26,6 +26,11 @@ export function loadProjectModule(relative) {
   const path = resolve(project, relative);
   if (!path.startsWith(project + "/") && !path.startsWith(project + "\\")) throw new Error("QA module must remain inside the website.");
   if (cache.has(path)) return cache.get(path).exports;
+  if (path.endsWith(".json")) {
+    const value = JSON.parse(readFileSync(path, "utf8"));
+    cache.set(path, {exports: value});
+    return value;
+  }
   const ts = runtimeRequire("typescript");
   const evaluatedModule = { exports: {} };
   cache.set(path, evaluatedModule);
@@ -36,7 +41,7 @@ export function loadProjectModule(relative) {
   const localRequire = specifier => {
     if (!specifier.startsWith(".") && !specifier.startsWith("@/")) return runtimeRequire(specifier);
     const base = specifier.startsWith("@/") ? resolve(project, specifier.slice(2)) : resolve(dirname(path), specifier);
-    const candidate = [base, base + ".ts", base + ".tsx", resolve(base, "index.ts")].find(file => existsSync(file) && /\.[cm]?[jt]sx?$/.test(file));
+    const candidate = [base, base + ".ts", base + ".tsx", base + ".json", resolve(base, "index.ts")].find(file => existsSync(file) && /(?:\.[cm]?[jt]sx?|\.json)$/.test(file));
     if (!candidate) throw new Error("QA could not resolve a local source module.");
     return loadProjectModule(candidate);
   };

@@ -95,9 +95,9 @@ async function main() {
   assert.ok(catalog.products.some(p => p.id === fixture.products.full), "Server must read the same isolated QA database before HTTP mutations");
   await check("public catalog has an exact merchandise allowlist and no HPP/private graph", async () => {
     assert.deepEqual(Object.keys(catalog).sort(), ["products", "revision"]);
-    const allowed = ["id", "familyId", "sku", "name", "unit", "price", "active", "category", "image", "description", "packaging", "available"].sort();
+    const allowed = ["id", "familyId", "sku", "name", "unit", "price", "active", "category", "group", "collections", "image", "description", "packaging", "available"].sort();
     for (const p of catalog.products) { assert.deepEqual(Object.keys(p).sort(), allowed); assert.equal(p.active, true); assert.ok(Number.isFinite(p.available) && p.available >= 0); }
-    assert.ok(!/"(?:cost|supplierId|customerId|divisionId|email|journalLines|password|hash|salt)"/.test(JSON.stringify(catalog)));
+    assert.ok(!/"(?:cost|supplierId|customerId|divisionId|email|journalLines|password|hash|salt|imagePrompt)"/.test(JSON.stringify(catalog)));
   });
   await check("unauthenticated protected endpoints reject access", async () => {
     for (const [path, options] of [["/api/state", {}], ["/api/commands", jsonOptions({})], ["/api/profile", jsonOptions({}, "PATCH")], ["/api/profile", jsonOptions({})], ["/api/profile/avatar", {}], ["/api/profile/avatar", { method: "POST" }], ["/api/attachments", { method: "POST" }], ["/api/attachments/known-qa-id", {}], ["/api/documents/invoice/known-qa-id", {}], ["/api/reports", {}]]) await expectStatus(await request(null, path, options), 401, path);

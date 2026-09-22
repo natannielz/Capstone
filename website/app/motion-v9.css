@@ -1,0 +1,20 @@
+/* Motion is progressive: no opacity/visibility gate is needed for page content. */
+.public-home .home-hero h1 .home-title-line{display:block;color:inherit}
+.public-home .home-title-line em{font-style:normal;color:#ad3d14}
+.public-home .home-hero-visual{isolation:isolate}
+.public-home .home-hero-visual figcaption{position:relative;z-index:1}
+.public-home .home-service-photo{overflow:hidden}
+
+@media(prefers-reduced-motion:no-preference){
+ .public-motion :is(.home-button,.home-header-access,.login-home,.login-submit){transition:background-color .2s ease,border-color .2s ease,color .2s ease}
+ .public-motion :is(.home-button,.home-header-access,.login-home,.login-submit)>svg{transition:transform .22s ease}
+ .public-motion :is(.home-button,.home-header-access,.login-submit):is(:hover,:focus-visible)>svg{transform:translateX(3px)}
+ .public-motion .login-home:is(:hover,:focus-visible)>svg{transform:translateX(-3px)}
+ .public-home .home-access-card{transition:border-color .22s ease}
+ .public-home .home-access-staff:focus-within{border-color:#073b45}
+}
+
+@media(prefers-reduced-motion:reduce){
+ .public-motion :is(.home-title-line,.home-hero-copy>.home-eyebrow,.home-intro,.home-hero-note,.home-section-heading,.home-access-card,.home-collection,.home-service-copy>p,.home-service-copy>h2,.home-service li,.login-story>span,.login-story>h1,.login-story>p,.login-form-header){transform:none!important;opacity:1!important}
+ .public-motion :is(.home-hero-visual>img,.home-service-photo>img,.login-scene){transform:none!important}
+}

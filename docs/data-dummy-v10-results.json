@@ -1,0 +1,15 @@
+{
+  "requested": 200,
+  "completed": 200,
+  "uniqueFiles": 200,
+  "totalDeliveryBytes": 11395138,
+  "categories": {
+    "Minuman": 40,
+    "Pantry & konsumsi": 60,
+    "Kebutuhan kantor": 40,
+    "Merchandise": 60
+  },
+  "missing": [],
+  "method": "200 separate built-in image generation calls; original PNGs preserved locally; delivery WebP files",
+  "allDescriptionsUnique": true
+}

@@ -5,6 +5,7 @@ import Link from "next/link";
 import {ArrowLeft,ArrowRight,Eye,EyeOff,LockKeyhole,Mail} from "lucide-react";
 import {Art} from "./art";
 import {Brand} from "./brand";
+import {usePublicMotion} from "./public-motion";
 import {Button} from "@/components/ui/button";
 import {Field,FieldError,FieldGroup,FieldLabel} from "@/components/ui/field";
 import {InputGroup,InputGroupAddon,InputGroupButton,InputGroupInput} from "@/components/ui/input-group";
@@ -17,6 +18,8 @@ const clientReady=()=>true;
 const serverReady=()=>false;
 
 export function Login({initialError="",portal="staff"}:{initialError?:string;portal?:LoginPortal}){
+ const motionRoot=useRef<HTMLElement>(null);
+ usePublicMotion(motionRoot,"login",portal);
  const customer=portal==="customer";
  const[email,setEmail]=useState(""),[password,setPassword]=useState(""),[show,setShow]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState(initialError),[credentialsInvalid,setCredentialsInvalid]=useState(false);
  const ready=useSyncExternalStore(subscribeToHydration,clientReady,serverReady);
@@ -28,7 +31,7 @@ export function Login({initialError="",portal="staff"}:{initialError?:string;por
    window.location.assign(safeLoginDestination(new URLSearchParams(window.location.search).get("next"),data.user?.role||"pic"));
   }catch(e){setCredentialsInvalid(e instanceof ApiError&&e.status===401);setError(e instanceof Error?e.message:"Koneksi bermasalah. Coba kembali.");pending.current=false;setBusy(false);}
  }
- return <main className={`login-page login-page-${portal}`}>
+ return <main ref={motionRoot} className={`login-page login-page-${portal} public-motion`}>
   <section className="login-visual" aria-labelledby="login-portal-title">
    <Art loading="eager" className="login-scene" src="/images/editorial/pantry-moment-v3.png" alt="Persiapan kopi dan makanan rapat di pantry kantor"/>
    <Link href="/" className="login-home"><ArrowLeft size={16} aria-hidden="true"/>Kembali ke beranda</Link>

@@ -18,7 +18,7 @@ export function stocktakeStatus(s:State,stocktake:Stocktake):Stocktake["status"]
 export function lineProgress(s:State,l:OrderLine){const lines=s.shipmentLines.filter(x=>x.orderLineId===l.id&&get(s.shipments,x.shipmentId).status!=="cancelled"); const sent=lines.filter(x=>get(s.shipments,x.shipmentId).status!=="ready");const staged=sum(lines.filter(x=>get(s.shipments,x.shipmentId).status==="ready").map(x=>x.qty));const shipped=sum(sent.map(x=>x.qty-x.returned)); const accepted=sum(lines.map(x=>x.accepted));return {reserved:l.reservedQty??sum(s.reservations.filter(r=>r.orderLineId===l.id).map(r=>r.qty)),staged,shipped,accepted,remaining:l.qty-l.cancelled-shipped,finalized:sum(lines.filter(x=>x.finalized).map(x=>x.accepted))};}
 export function invoiceTotal(s:State,id:string){return sum(s.invoiceLines.filter(x=>x.invoiceId===id).map(x=>x.subtotal+x.tax));}
 export function invoiceBalance(s:State,id:string){return Math.max(0,invoiceTotal(s,id)-sum(s.allocations.filter(a=>a.invoiceId===id).map(a=>a.amount))-sum(s.credits.filter(c=>c.invoiceId===id&&c.status==="approved").map(c=>c.amount)));}
-export function paymentAvailable(s:State,id:string){const p=get(s.payments,id);return p.status!=="verified"?0:p.amount-sum(s.allocations.filter(a=>a.paymentId===id).map(a=>a.amount))-sum(s.refunds.filter(a=>a.paymentId===id&&a.status!=="requested").map(a=>a.amount));}
+export function paymentAvailable(s:State,id:string){const p=get(s.payments,id);return p.status!=="verified"?0:p.amount-sum(s.allocations.filter(a=>a.paymentId===id).map(a=>a.amount))-sum(s.refunds.filter(a=>a.paymentId===id&&["approved","paid"].includes(a.status)).map(a=>a.amount));}
 export function invoiceStatus(s:State,i:Invoice){const balance=invoiceBalance(s,i.id);return balance===0?"Lunas":balance<invoiceTotal(s,i.id)?"Dibayar sebagian":i.dueDate<today()?"Lewat jatuh tempo":"Belum dibayar";}
 export function financialReport(s:State,endDate:string){const journals=s.journals.filter(j=>j.date<=endDate);const ids=new Set(journals.map(j=>j.id));const lines=s.journalLines.filter(l=>ids.has(l.journalId));const accounts=Object.entries(ACCOUNTS).map(([code,name])=>({code,name,debit:sum(lines.filter(l=>l.account===code).map(l=>l.debit)),credit:sum(lines.filter(l=>l.account===code).map(l=>l.credit))}));return {endDate,accounts,debit:sum(accounts.map(a=>a.debit)),credit:sum(accounts.map(a=>a.credit)),journals};}
 export function scopeState(s:State,actor:Actor):State {
@@ -56,7 +56,7 @@ export function scopeState(s:State,actor:Actor):State {
   copy.orderLines=copy.orderLines.map(l=>({...l,reservedQty:sum(s.reservations.filter(r=>r.orderLineId===l.id).map(r=>r.qty))}));copy.reservations=[];copy.shipmentLines=copy.shipmentLines.map(l=>({...l,cost:0}));
   if(actor.role==="customer"){
     copy.expenses=[];
-    const historyProducts=new Set(copy.orderLines.map(line=>line.productId));
+    const historyProducts=new Set([...copy.orderLines.map(line=>line.productId),...copy.substitutions.map(substitution=>substitution.productId)]);
     copy.products=copy.products.filter(product=>product.active||historyProducts.has(product.id)).map(product=>({...product,minimum:0,returnMonths:0}));
     const products=new Set(copy.products.map(product=>product.id));
     copy.batches=copy.batches.filter(batch=>products.has(batch.productId)).map(batch=>({id:batch.id,productId:batch.productId,code:"Tersedia",qty:batch.qty,held:0,cost:0,expiry:"",location:""}));
@@ -73,6 +73,12 @@ export function canReadAttachment(s:State,actor:Actor,id:string){
  const a=s.attachments.find(x=>x.id===id);if(!a||!actor.active||!isRole(actor.role))return false;
  if(actor.role==="admin")return false;
  if(actor.role==="pic"&&!actor.divisionId)return false;
+ if(a.scope==="order"){
+  const order=s.orders.find(order=>order.id===a.targetId);
+  if(!order||a.shipmentId!==null||!sameBuyer(a,order))return false;
+  if(actor.role==="pic"||actor.role==="customer")return sameBuyer(order,buyerRefForActor(actor));
+  return ["kepala","staf","laporan"].includes(actor.role);
+ }
  if(actor.role==="pic"||actor.role==="customer")return sameBuyer(a,buyerRefForActor(actor))&&["payment","receipt","complaint","order"].includes(a.scope);
  if(actor.role==="kurir")return (a.scope==="expense"&&a.ownerId===actor.id)||(a.scope==="receipt"&&!!a.shipmentId&&s.shipments.some(sh=>sh.id===a.shipmentId&&sh.courierId===actor.id));
  if(a.scope==="payment")return ["penagihan","pimpinan","akuntansi"].includes(actor.role);
@@ -80,8 +86,9 @@ export function canReadAttachment(s:State,actor:Actor,id:string){
  return ["receipt","complaint","order"].includes(a.scope)&&["staf","kepala","laporan","penagihan","pimpinan","akuntansi"].includes(actor.role);
 }
 export function attachmentContext(s:State,actor:Actor,scope:string,targetId:string){
- if(scope==="payment"){allowed(actor,["pic","penagihan","customer"]);const p=get(s.payments,targetId);assertBuyerAccess(actor,p);return {divisionId:p.divisionId,...(p.customerId?{customerId:p.customerId}:{}),shipmentId:null};}
+ if(scope==="order"){allowed(actor,["pic","kepala","customer"]);const order=get(s.orders,targetId);assertBuyerAccess(actor,order);if(order.status!=="submitted")throw new DomainError("Pesanan sudah ditinjau atau dibatalkan. Lampiran hanya dapat dibaca.",409);return {divisionId:order.divisionId,...(order.customerId?{customerId:order.customerId}:{}),shipmentId:null};}
+ if(scope==="payment"){allowed(actor,["pic","penagihan","customer"]);const p=get(s.payments,targetId);assertBuyerAccess(actor,p);if(p.status==="rejected")throw new DomainError("Pembayaran ditolak; unggah bukti pada catatan pembayaran baru.",409);return {divisionId:p.divisionId,...(p.customerId?{customerId:p.customerId}:{}),shipmentId:null};}
  if(scope==="receipt"){allowed(actor,["pic","staf","kurir","customer"]);const sh=get(s.shipments,targetId),o=get(s.orders,sh.orderId);assertBuyerAccess(actor,o);if(actor.role==="kurir"&&sh.courierId!==actor.id)throw new DomainError("Bukan tugas pengiriman Anda.",403);if(!["dispatched","received"].includes(sh.status))throw new DomainError("Bukti diunggah setelah pengiriman berangkat.");return {divisionId:o.divisionId,...(o.customerId?{customerId:o.customerId}:{}),shipmentId:sh.id};}
- if(scope==="expense"){allowed(actor,["staf","kurir","kepala"]);const e=get(s.expenses,targetId);if(["kurir","staf"].includes(actor.role)&&e.createdBy!==actor.id)throw new DomainError("Bukan pengajuan biaya Anda.",403);return {divisionId:null,shipmentId:e.shipmentId};}
+ if(scope==="expense"){allowed(actor,["staf","kurir","kepala"]);const e=get(s.expenses,targetId);if(["kurir","staf"].includes(actor.role)&&e.createdBy!==actor.id)throw new DomainError("Bukan pengajuan biaya Anda.",403);if(e.status==="rejected")throw new DomainError("Pengajuan biaya ditolak; unggah bukti pada pengajuan baru.",409);return {divisionId:null,shipmentId:e.shipmentId};}
  throw new DomainError("Jenis lampiran tidak didukung.");
 }

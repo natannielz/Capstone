@@ -11,6 +11,7 @@ import "./storefront-v7.css";
 import "./account-v7.css";
 import "./brand-v8.css";
 import "./landing-v8.css";
+import "./motion-v9.css";
 
 const bodyFont = localFont({src:"../public/fonts/dm-sans-variable.ttf",variable:"--font-body",display:"swap",weight:"100 1000"});
 const displayFont = localFont({src:"../public/fonts/archivo-black.ttf",variable:"--font-display",display:"swap",weight:"400"});

@@ -7,6 +7,8 @@ export type PublicProduct = {
   price: number;
   active: boolean;
   category: string;
+  group?: string;
+  collections?: string[];
   image: string;
   description: string;
   packaging: string;
@@ -54,12 +56,17 @@ export const rupiah = (value: number) =>
     maximumFractionDigits: 0,
   }).format(value);
 export function shopCategory(product: PublicProduct) {
+  if (product.group && SHOP_CATEGORIES.includes(product.group)) return product.group;
   if (["air", "teh", "kopi", "galon"].includes(product.familyId))
     return "Minuman";
   if (["gula", "biskuit", "snack"].includes(product.familyId))
     return "Pantry & konsumsi";
   if (["tisu", "cup"].includes(product.familyId)) return "Kebutuhan kantor";
   return "Merchandise";
+}
+export function inShopCollection(product: PublicProduct, collectionId: string) {
+  if (product.collections) return product.collections.includes(collectionId);
+  return SHOP_COLLECTIONS.find((collection) => collection.id === collectionId)?.products.includes(product.familyId) ?? false;
 }
 export function shopFamilies(products: PublicProduct[]): PublicFamily[] {
   const groups = new Map<string, PublicFamily>();

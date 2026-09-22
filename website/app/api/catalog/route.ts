@@ -1,4 +1,4 @@
-import { productDescription, productFamilyId, productImage, productPackaging } from "@/lib/domain/catalog";
+import { productCollections, productDescription, productFamilyId, productGroup, productImage, productPackaging } from "@/lib/domain/catalog";
 import { productAvailable } from "@/lib/domain/selectors";
 import { errorResponse, json } from "@/lib/server/http";
 import { loadState } from "@/lib/server/repository";
@@ -16,6 +16,8 @@ export async function GET() {
       price: product.price,
       active: product.active,
       category: product.category,
+      group: productGroup(product),
+      collections: productCollections(product),
       image: productImage(product),
       description: productDescription(product),
       packaging: productPackaging(product),

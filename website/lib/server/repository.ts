@@ -6,6 +6,7 @@ import { DomainError, type State, type Collection, type Command, type CommandRes
 import { emptyState, seedState } from "../domain/seed";
 import { runCommand } from "../domain/engine";
 import { hashPassword, digest } from "./security";
+import { provisionDemoCatalog } from "./demo-catalog";
 
 
 // Explicit relational keys and constraints are stored alongside versioned domain records.
@@ -34,6 +35,7 @@ export async function ensureSeed() {
     }
     await provisionCustomerDemo(db);
     await upgradeProfiles(db);
+    await provisionDemoCatalog(db);
   })();
   try { await initializing; }
   catch (error) { initializing = undefined; throw error; }

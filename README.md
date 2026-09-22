@@ -3,6 +3,7 @@
 Website demo dengan etalase pelanggan dan pemesanan divisi, persediaan, pengadaan, pengiriman, penerimaan, penagihan, pembayaran simulasi, laporan, dan tutup periode.
 
 - Website: [unit-toko-bni.vercel.app](https://unit-toko-bni.vercel.app)
+- **v10 — 200 produk tambahan**, foto dan deskripsi unik, stok simulasi, serta katalog dengan pagination. Rilis ini juga menyertakan logo U–T baru, animasi landing/login, dan penyelesaian alur akun, stok, serta keuangan dari v9. Lihat [catatan rilis](docs/rilis-v10.md) dan [data katalog](docs/data-dummy-v10.md).
 - **v8 — beranda dan akses terpisah**: landing page publik, [toko pelanggan](https://unit-toko-bni.vercel.app/shop), [login pelanggan](https://unit-toko-bni.vercel.app/customer/login), dan [portal divisi/staf](https://unit-toko-bni.vercel.app/staff/login). Logo UT, warna, kontras, dan tampilan responsif diperbarui. Lihat [catatan rilis](docs/rilis-v8.md).
 - **v7 — etalase dan akun pelanggan**, dengan katalog publik, keranjang, checkout, pesanan pribadi, dan profil. Lihat [catatan rilis](docs/rilis-v7.md), [rencana dan cakupan](docs/plan-customer-marketplace-v7.md), serta [hasil pengujian customer](docs/testing-customer-v7.md).
 - Alur staf dan divisi v6 tetap tersedia. [Catatan rilis v6](docs/rilis-v6.md) menjadi baseline regresi.
@@ -44,7 +45,7 @@ npm test
 npm run build
 ```
 
-`npm run test:api` memerlukan server lokal dan menambahkan skenario pada database demo lokal. Gunakan database terisolasi untuk pengujian mutasi. Rilis v8 lulus **157 tes regresi**, **14 kelompok pemeriksaan HTTP pemisahan akses**, dan **22 kelompok pemeriksaan HTTP customer**. Reproduksi pengujian customer tersedia pada [bukti v7](docs/testing-customer-v7.md); hasil pemeriksaan terbaru tercatat pada [rilis v8](docs/rilis-v8.md).
+`npm run test:api` memerlukan server lokal dan menambahkan skenario pada database demo lokal. Gunakan database terisolasi untuk pengujian mutasi. Validasi v10 lulus **209 tes regresi**, **14 kelompok pemeriksaan HTTP pemisahan akses**, dan **22 kelompok pemeriksaan HTTP customer**. Reproduksi pengujian customer tersedia pada [bukti v7](docs/testing-customer-v7.md); hasil pemeriksaan terbaru tercatat pada [rilis v10](docs/rilis-v10.md).
 
 ## Deployment
 

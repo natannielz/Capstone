@@ -2,6 +2,7 @@ import Link from "next/link";
 import {ArrowRight, ArrowUpRight, Building2, ShoppingBag, PackageCheck, Truck, ReceiptText} from "lucide-react";
 import {Brand} from "./brand";
 import {Art} from "./art";
+import {LandingMotion} from "./public-motion";
 
 const collections = [
   {title: "Pantry harian", description: "Kopi, teh, biskuit, dan kebutuhan bersama.", image: "coffee", alt: "Kopi sachet untuk persediaan pantry"},
@@ -10,7 +11,7 @@ const collections = [
 ];
 
 export function PublicLanding() {
-  return <div className="public-home">
+  return <LandingMotion>
     <a href="#home-main" className="home-skip">Lewati navigasi</a>
     <div className="home-topline"><div><span>Studi kasus Unit Toko · Divisi BNI</span><span>Demo capstone</span></div></div>
     <header className="home-header">
@@ -22,7 +23,7 @@ export function PublicLanding() {
       <section className="home-hero" aria-labelledby="home-title">
         <div className="home-hero-copy">
           <p className="home-eyebrow">Selamat datang di Unit Toko</p>
-          <h1 id="home-title">Pantry, rapat,<br/>dan kebutuhan <span>tim.</span></h1>
+          <h1 id="home-title"><span className="home-title-line">Pantry, rapat,</span>{" "}<span className="home-title-line">dan kebutuhan <em>tim.</em></span></h1>
           <p className="home-intro">Dari persediaan harian hingga merchandise kegiatan. Temukan barang yang dibutuhkan, dengan pesanan dan pengiriman yang tercatat.</p>
           <div className="home-hero-actions"><a href="#akses" className="home-button">Pilih akses Anda <ArrowRight size={18} aria-hidden="true"/></a><a href="#kebutuhan" className="home-text-link">Kenali pilihan toko</a></div>
           <div className="home-hero-note"><span className="home-note-line" aria-hidden="true"/><p>Belanja pelanggan dan operasional toko<br/><strong>memiliki pintu masuk masing-masing.</strong></p></div>
@@ -71,5 +72,5 @@ export function PublicLanding() {
       </section>
     </main>
     <footer className="home-footer"><div className="home-footer-main"><div><Brand inverse/><p>Pantry, perlengkapan rapat,<br/>dan kebutuhan kegiatan tim.</p></div><nav aria-label="Akses dan informasi"><a href="#akses">Pilih akses</a><Link href="/customer/login">Masuk pelanggan</Link><Link href="/staff/login">Portal divisi & petugas</Link></nav></div><div className="home-footer-bottom"><p>Demo capstone · Studi kasus divisi BNI. Bukan situs resmi BNI.</p><p>Data, foto, pengiriman, dan pembayaran adalah simulasi.</p></div></footer>
-  </div>;
+  </LandingMotion>;
 }

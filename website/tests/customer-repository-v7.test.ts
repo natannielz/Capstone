@@ -172,7 +172,7 @@ test("fresh repository keeps customer buyer keys consistent, authenticates expli
     assert.equal(response.headers.get("cache-control"),"no-store");
     const catalog=await response.json() as {products:Record<string,unknown>[];revision:number};
     assert.ok(catalog.products.length>0);
-    const keys=["id","familyId","sku","name","unit","price","active","category","image","description","packaging","available"].sort();
+    const keys=["id","familyId","sku","name","unit","price","active","category","group","collections","image","description","packaging","available"].sort();
     for(const product of catalog.products){assert.deepEqual(Object.keys(product).sort(),keys);assert.equal(product.active,true);assert.ok(Number(product.available)>=0);}
   } finally { client.close(); if(oldSeed===undefined)delete process.env.DEMO_PASSWORD_SEED;else process.env.DEMO_PASSWORD_SEED=oldSeed; }
 });

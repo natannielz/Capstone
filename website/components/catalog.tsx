@@ -53,6 +53,7 @@ import {
   chooseCatalogProduct,
   isCatalogCollection,
   productDescription,
+  productCollections,
   productFamilies,
   productFamilyId,
   productGroup,
@@ -64,6 +65,9 @@ import {
   type ProductFamily,
 } from "@/lib/domain/catalog";
 import { money, productAvailable, sum, today } from "@/lib/domain/selectors";
+import {catalogBasket, type CatalogBasketLine} from "@/lib/domain/catalog-basket";
+import { catalogPage, paginateCatalog } from "@/lib/domain/catalog-pagination";
+import { CatalogPagination } from "./catalog-pagination";
 import type { CommandResult, Product, State } from "@/lib/domain/model";
 import type { WorkspaceContext } from "./workspace";
 import {
@@ -78,18 +82,20 @@ import {
   type CheckoutValues,
 } from "@/lib/client/cart-storage";
 
-type BasketLine = { product: Product; qty: number };
+type BasketLine = CatalogBasketLine;
 type CatalogQuery = {
   q: string;
   category: string;
   collection: CatalogCollection | "";
   product: string;
+  page: string;
 };
 const EMPTY_QUERY: CatalogQuery = {
   q: "",
   category: "Semua",
   collection: "",
   product: "",
+  page: "1",
 };
 
 function readQuery(products: Product[]): CatalogQuery {
@@ -103,13 +109,14 @@ function readQuery(products: Product[]): CatalogQuery {
       : "Semua",
     collection: isCatalogCollection(collection) ? collection : "",
     product: resolveCatalogProduct(products, query.get("product"))?.id || "",
+    page: String(catalogPage(query.get("page"))),
   };
 }
 
 function writeQuery(query: CatalogQuery) {
   const url = new URL(window.location.href);
   for (const [key, value] of Object.entries(query)) {
-    if (value && !(key === "category" && value === "Semua"))
+    if (value && !(key === "category" && value === "Semua") && !(key === "page" && value === "1"))
       url.searchParams.set(key, value);
     else url.searchParams.delete(key);
   }
@@ -336,20 +343,16 @@ function CatalogContent({ s, actor, go, refresh }: WorkspaceContext) {
     (family) =>
       (query.category === "Semua" ||
         productGroup(family.products[0]) === query.category) &&
-      (!query.collection ||
-        (
-          CATALOG_COLLECTIONS[query.collection].products as readonly string[]
-        ).includes(family.id)) &&
+      (!query.collection || productCollections(family.products[0]).includes(query.collection)) &&
       family.products.some((product) =>
         `${product.name} ${product.sku}`
           .toLocaleLowerCase("id-ID")
           .includes(search),
       ),
   );
-  const entries: BasketLine[] = Object.entries(cart).flatMap(([id, qty]) => {
-    const product = s.products.find((item) => item.id === id && item.active);
-    return product && validCatalogQuantity(qty) ? [{ product, qty }] : [];
-  });
+  const pagination = paginateCatalog(items, query.page);
+  const {lines: entries, unavailable, canCheckout} = catalogBasket(s.products, cart);
+  const basketCount = entries.length + unavailable.length;
   const invalidQuantity = entries.some(
     ({ product, qty }) => !validCatalogQuantity(drafts[product.id] ?? qty),
   );
@@ -359,7 +362,8 @@ function CatalogContent({ s, actor, go, refresh }: WorkspaceContext) {
     detail && families.find((family) => family.id === productFamilyId(detail));
 
   function updateQuery(changes: Partial<CatalogQuery>) {
-    const next = { ...query, ...changes };
+    const filtering = ["q", "category", "collection"].some((key) => key in changes);
+    const next = { ...query, ...(filtering ? {page: "1"} : {}), ...changes };
     setQuery(next);
     writeQuery(next);
   }
@@ -557,7 +561,7 @@ function CatalogContent({ s, actor, go, refresh }: WorkspaceContext) {
       <div className="catalog-layout">
         <div>
           <div className="catalog-grid">
-            {items.map((family, index) => {
+            {pagination.items.map((family, index) => {
               const product = chosenProduct(family);
               return (
                 <article className="product-card" key={family.id}>
@@ -614,6 +618,7 @@ function CatalogContent({ s, actor, go, refresh }: WorkspaceContext) {
               );
             })}
           </div>
+          <CatalogPagination {...pagination} onChange={(page) => updateQuery({page: String(page)})} />
           {!items.length && (
             <Empty>
               <EmptyHeader>
@@ -645,11 +650,17 @@ function CatalogContent({ s, actor, go, refresh }: WorkspaceContext) {
         >
           <div className="panel-title">
             <h2>Keranjang divisi</h2>
-            <Badge variant="secondary">{entries.length}</Badge>
+            <Badge variant="secondary">{basketCount}</Badge>
           </div>
-          {entries.length ? (
+          {basketCount ? (
             <>
+              {unavailable.length > 0 && <Alert variant="destructive"><AlertCircle/><AlertTitle>Ada barang yang tidak tersedia</AlertTitle><AlertDescription>Pilihan Anda tetap disimpan. Hapus barang yang tidak tersedia sebelum melanjutkan pesanan.</AlertDescription></Alert>}
               <ul className="catalog-basket-lines">
+                {unavailable.map(({id, product, qty}) => <li key={id} className="catalog-basket-line">
+                  {product ? <Art className="basket-thumb" src={productImage(product)} alt=""/> : <AlertCircle className="basket-thumb" aria-hidden="true"/>}
+                  <div className="catalog-basket-item"><strong>{product?.name || "Barang tidak lagi tersedia"}</strong><span>{product?.sku || id} · {qty} {product?.unit || "unit"} tersimpan</span><p className="catalog-stock catalog-stock-pending">{product && !product.active ? "Barang tidak dijual saat ini." : "Barang tidak tersedia untuk dipesan."}</p></div>
+                  <Button className="catalog-remove" variant="ghost" size="icon" disabled={cartBusy > 0} aria-label={`Hapus ${product?.name || id}`} onClick={() => remove(id)}><X/></Button>
+                </li>)}
                 {entries.map(({ product, qty }) => {
                   const value = drafts[product.id] ?? String(qty);
                   const valid = validCatalogQuantity(value);
@@ -709,12 +720,12 @@ function CatalogContent({ s, actor, go, refresh }: WorkspaceContext) {
               <div className="basket-total">
                 <span>Total estimasi</span>
                 <strong>
-                  {invalidQuantity ? "Periksa jumlah" : money(total)}
+                  {unavailable.length ? "Periksa barang" : invalidQuantity ? "Periksa jumlah" : money(total)}
                 </strong>
               </div>
               <div className="basket-action">
                 <Button
-                  disabled={invalidQuantity || cartBusy > 0}
+                  disabled={!canCheckout || invalidQuantity || cartBusy > 0}
                   onClick={() => {
                     saveCheckoutDraft(actor.id, checkoutDraft);
                     setCheckoutOpen(true);
@@ -744,11 +755,11 @@ function CatalogContent({ s, actor, go, refresh }: WorkspaceContext) {
         </aside>
       </div>
 
-      {entries.length > 0 && (
+      {basketCount > 0 && (
         <div className="mobile-cart-summary">
           <div>
-            <strong>{invalidQuantity ? "Periksa jumlah" : money(total)}</strong>
-            <span>{entries.length} pilihan barang</span>
+            <strong>{unavailable.length ? "Periksa barang" : invalidQuantity ? "Periksa jumlah" : money(total)}</strong>
+            <span>{basketCount} pilihan barang</span>
           </div>
           <Button
             onClick={() => {
@@ -875,12 +886,14 @@ function CatalogContent({ s, actor, go, refresh }: WorkspaceContext) {
           s={s}
           actor={actor}
           lines={entries}
+          unavailableCount={unavailable.length}
           draft={checkoutDraft}
           onDraftChange={updateCheckoutDraft}
           cartRevision={snapshot.revision}
-          commitCheckout={(revision, submit) =>
-            store.checkout(revision, submit)
-          }
+          commitCheckout={(revision, submit) => store.checkout(revision, async () => {
+            if (!catalogBasket(stateRef.current.products, store.read().items).canCheckout) throw new Error("Ada barang yang tidak tersedia. Kembali ke keranjang dan hapus barang tersebut sebelum melanjutkan.");
+            return submit();
+          })}
           close={() => setCheckoutOpen(false)}
           onSuccess={orderCreated}
         />
@@ -932,6 +945,7 @@ function CheckoutDialog({
   s,
   actor,
   lines,
+  unavailableCount,
   close,
   onSuccess,
   draft,
@@ -940,6 +954,7 @@ function CheckoutDialog({
   commitCheckout,
 }: Pick<WorkspaceContext, "s" | "actor"> & {
   lines: BasketLine[];
+  unavailableCount: number;
   close: () => void;
   onSuccess: (result: CommandResult) => Promise<void>;
   draft: CheckoutDraft;
@@ -985,6 +1000,7 @@ function CheckoutDialog({
 
   function review(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (unavailableCount) {setError("Ada barang yang tidak tersedia. Kembali ke keranjang dan hapus barang tersebut."); return;}
     if (!values.address.trim()) {
       setError("Isi titik pengiriman untuk pesanan ini.");
       return;
@@ -995,6 +1011,7 @@ function CheckoutDialog({
   }
 
   async function submit() {
+    if (unavailableCount || !lines.length) {setError("Periksa kembali barang yang tersedia di keranjang sebelum mengajukan pesanan."); return;}
     if (submitting.current) return;
     submitting.current = true;
     setBusy(true);
@@ -1067,6 +1084,7 @@ function CheckoutDialog({
               : "Pastikan kemasan, jumlah, dan tujuan pengiriman sudah sesuai."}
           </DialogDescription>
         </DialogHeader>
+        {unavailableCount > 0 && <Alert variant="destructive"><AlertCircle/><AlertTitle>Barang dalam keranjang berubah</AlertTitle><AlertDescription>{unavailableCount} pilihan tidak tersedia. Isian pengiriman tetap disimpan.<Button type="button" variant="link" disabled={busy} onClick={close}>Kembali ke keranjang</Button></AlertDescription></Alert>}
         {step === "details" ? (
           <form className="catalog-checkout-form" onSubmit={review}>
             <div className="catalog-checkout-body">
@@ -1155,7 +1173,7 @@ function CheckoutDialog({
               <Button type="button" variant="outline" onClick={close}>
                 Kembali ke keranjang
               </Button>
-              <Button type="submit">
+              <Button type="submit" disabled={unavailableCount > 0}>
                 Periksa pesanan
                 <ChevronRight data-icon="inline-end" />
               </Button>
@@ -1246,7 +1264,7 @@ function CheckoutDialog({
               <Button
                 type="button"
                 disabled={
-                  busy || !lines.length || reviewRevision !== cartRevision
+                  busy || !lines.length || unavailableCount > 0 || reviewRevision !== cartRevision
                 }
                 onClick={submit}
               >

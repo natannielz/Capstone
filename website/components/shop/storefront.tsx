@@ -20,6 +20,8 @@ import {
 } from "lucide-react";
 import { Art } from "../art";
 import { Button } from "../ui/button";
+import { catalogPage, paginateCatalog } from "@/lib/domain/catalog-pagination";
+import { CatalogPagination } from "../catalog-pagination";
 import {
   CatalogError,
   ShopEmpty,
@@ -31,6 +33,7 @@ import {
   SHOP_CATEGORIES,
   SHOP_COLLECTIONS,
   familyProduct,
+  inShopCollection,
   rupiah,
   shopCategory,
   shopFamilies,
@@ -267,6 +270,7 @@ type ShopQuery = {
   collection: string;
   stock: string;
   sort: string;
+  page: string;
 };
 const INITIAL_QUERY: ShopQuery = {
   q: "",
@@ -274,6 +278,7 @@ const INITIAL_QUERY: ShopQuery = {
   collection: "",
   stock: "all",
   sort: "name",
+  page: "1",
 };
 function readQuery(location: string): ShopQuery {
   const params = new URLSearchParams(location.split("?")[1] || "");
@@ -288,6 +293,7 @@ function readQuery(location: string): ShopQuery {
       ? params.get("collection")!
       : "",
     stock: params.get("stock") === "available" ? "available" : "all",
+    page: String(catalogPage(params.get("page"))),
     sort: ["price-low", "price-high", "name"].includes(params.get("sort") || "")
       ? params.get("sort")!
       : "name",
@@ -321,7 +327,8 @@ function CatalogContent() {
     }
   }, [loading, location]);
   function update(changes: Partial<ShopQuery>) {
-    const next = { ...query, ...changes };
+    const filtering = ["q", "category", "collection", "stock", "sort"].some((key) => key in changes);
+    const next = { ...query, ...(filtering ? {page: "1"} : {}), ...changes };
     const params = new URLSearchParams();
     Object.entries(next).forEach(([key, value]) => {
       if (value && value !== INITIAL_QUERY[key as keyof ShopQuery])
@@ -340,7 +347,7 @@ function CatalogContent() {
   );
   const families = shopFamilies(products).filter(
     (family) =>
-      (!collection || collection.products.includes(family.id)) &&
+      (!collection || inShopCollection(family.products[0], collection.id)) &&
       (query.category === "Semua" ||
         shopCategory(family.products[0]) === query.category) &&
       family.products.some((product) =>
@@ -357,6 +364,7 @@ function CatalogContent() {
       : (familyProduct(a, search).price - familyProduct(b, search).price) *
         (query.sort === "price-high" ? -1 : 1),
   );
+  const pagination = paginateCatalog(families, query.page);
   const params = new URLSearchParams();
   Object.entries(query).forEach(([key, value]) => {
     if (value && value !== INITIAL_QUERY[key as keyof ShopQuery])
@@ -455,8 +463,8 @@ function CatalogContent() {
           action="Hapus filter & lihat produk"
         />
       ) : (
-        <div className="shop-product-grid">
-          {families.map((family) => (
+        <><div className="shop-product-grid">
+          {pagination.items.map((family) => (
             <ProductCard
               key={family.id}
               family={family}
@@ -464,7 +472,7 @@ function CatalogContent() {
               back={back}
             />
           ))}
-        </div>
+        </div><CatalogPagination {...pagination} onChange={(page) => update({page: String(page)})} /></>
       )}
     </div>
   );
