@@ -8,6 +8,7 @@ import {
   useContext,
   useEffect,
   useState,
+  useRef,
   useSyncExternalStore,
   type ReactNode,
 } from "react";
@@ -37,6 +38,7 @@ import {
 } from "@/lib/client/customer-cart";
 import type { PublicProduct } from "./shop-data";
 import { useShopLocation } from "./use-shop-location";
+import { useShopShellMotion } from "./shop-motion";
 
 async function fetchCatalogProducts() {
   const response = await fetch("/api/catalog", {
@@ -152,9 +154,11 @@ function ShopShellContent({
     ? JSON.parse(cartJson)
     : emptyCustomerCart();
   const store = cartJson ? getCustomerCartStore() : null;
+  const shellRef = useRef<HTMLDivElement>(null);
   const cartReady = Boolean(
     store && (actor?.role !== "customer" || importedOwner === owner),
   );
+  useShopShellMotion(shellRef, locationPath, Object.values(cart.items).reduce((total, qty) => total + qty, 0), cartReady, Boolean(cart.pending));
   const refreshCatalog = useCallback(async () => {
     setLoading(true);
     setError("");
@@ -308,7 +312,7 @@ function ShopShellContent({
   }
   return (
     <ShopContext.Provider value={context}>
-      <div className={`shop-v7${actionBar ? " shop-has-action" : ""}`}>
+      <div ref={shellRef} className={`shop-v7 shop-app${actionBar ? " shop-has-action" : ""}`}>
         <a className="shop-skip" href="#shop-main">
           Lewati navigasi
         </a>
@@ -358,7 +362,7 @@ function ShopShellContent({
                 aria-label={`Keranjang, ${count} jenis barang`}
               >
                 <ShoppingCart size={24} />
-                <span className="shop-cart-count">{count}</span>
+                <span className="shop-cart-count" data-cart-feedback>{count}</span>
                 <span className="shop-header-label">Keranjang</span>
               </Link>
               <Link
@@ -491,7 +495,7 @@ function ShopShellContent({
                 href={item.href}
                 aria-current={active === item.id ? "page" : undefined}
               >
-                <item.icon size={21} />
+                <item.icon size={21} data-cart-feedback={item.id === "cart" ? "" : undefined} />
                 <span>
                   {item.label}
                   {item.id === "cart" && count > 0 ? ` (${count})` : ""}
@@ -527,17 +531,20 @@ export function ShopEmpty({
   href = "/shop",
   action = "Jelajahi produk",
   onAction,
+  heading = "h1",
 }: {
   title: string;
   description: string;
   href?: string;
   action?: string;
   onAction?: () => void;
+  heading?: "h1" | "h2";
 }) {
+  const Heading = heading;
   return (
     <div className="shop-empty">
       <ShoppingBag size={36} />
-      <h1>{title}</h1>
+      <Heading>{title}</Heading>
       <p>{description}</p>
       {onAction ? (
         <Button onClick={onAction}>{action}</Button>
@@ -549,12 +556,13 @@ export function ShopEmpty({
     </div>
   );
 }
-export function CatalogError() {
+export function CatalogError({ heading = "h1" }: { heading?: "h1" | "h2" } = {}) {
   const { error, refreshCatalog } = useShop();
+  const Heading = heading;
   return (
     <div className="shop-empty" role="alert">
       <CircleAlert size={32} />
-      <h2>Katalog belum tersedia</h2>
+      <Heading>Katalog belum tersedia</Heading>
       <p>{error}</p>
       <Button onClick={() => void refreshCatalog().catch(() => undefined)}>
         Muat ulang katalog

@@ -35,6 +35,7 @@ export function Login({initialError="",portal="staff"}:{initialError?:string;por
   <section className="login-visual" aria-labelledby="login-portal-title">
    <Art loading="eager" className="login-scene" src="/images/editorial/pantry-moment-v3.png" alt="Persiapan kopi dan makanan rapat di pantry kantor"/>
    <Link href="/" className="login-home"><ArrowLeft size={16} aria-hidden="true"/>Kembali ke beranda</Link>
+   <div className="login-product-shelf" aria-hidden="true">{[{image:"001",label:"Pantry"},{image:"102",label:"Rapat"},{image:"141",label:"Merchandise"}].map(item=><div className="login-product-tile" key={item.image}><Art src={`/images/products/generated/demo-${item.image}.webp`} alt="" sizes="160px"/><span>{item.label}</span></div>)}</div>
    <div className="login-story">
     <span>{customer?"AKUN PELANGGAN":"RUANG KERJA INTERNAL"}</span>
     <h1 id="login-portal-title">{customer?"Belanja dengan lebih mudah.":"Satu ruang untuk operasional toko."}</h1>

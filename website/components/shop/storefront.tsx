@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
+import { ShopMotion } from "./shop-motion";
 import { useShopLocation } from "./use-shop-location";
 import {
   ArrowRight,
@@ -38,6 +39,7 @@ import {
   shopCategory,
   shopFamilies,
   type PublicFamily,
+  type PublicProduct,
 } from "./shop-data";
 
 function rememberScroll(back: string) {
@@ -58,9 +60,15 @@ export function ProductCard({
 }) {
   const product = familyProduct(family, query);
   const { actor, owner, cart, cartReady, busy, act } = useShop();
+  const [added, setAdded] = useState(false);
+  useEffect(() => {
+    if (!added) return;
+    const timer = window.setTimeout(() => setAdded(false), 1800);
+    return () => window.clearTimeout(timer);
+  }, [added]);
   const href = `/shop/${encodeURIComponent(product.id)}?${new URLSearchParams({ from: back })}`;
   return (
-    <article className="shop-product-card">
+    <article className={`shop-product-card${added ? " is-added" : ""}`}>
       <Link
         href={href}
         className="shop-product-photo"
@@ -72,6 +80,8 @@ export function ProductCard({
           loading="lazy"
           sizes="(max-width: 600px) 45vw, (max-width: 1000px) 30vw, 22vw"
         />
+        <span className="shop-photo-arrow" aria-hidden="true"><ArrowUpRight size={18} /></span>
+        {added && <span className="shop-photo-added" role="status"><Check size={14} /> Di keranjang</span>}
       </Link>
       <div className="shop-product-copy">
         <span className="shop-product-category">{shopCategory(product)}</span>
@@ -85,7 +95,7 @@ export function ProductCard({
           <span>/ {product.unit}</span>
         </p>
         <p className="shop-packaging">
-          {product.packaging} <span>· {family.products.length} kemasan</span>
+          {product.packaging}{family.products.length > 1 && <span> · {family.products.length} pilihan kemasan</span>}
         </p>
         <div className="shop-card-bottom">
           <span
@@ -107,8 +117,8 @@ export function ProductCard({
               product.available <= (cart.items[product.id] || 0) ||
               Boolean(actor && actor.role !== "customer")
             }
-            onClick={() =>
-              void act(
+            onClick={async () => {
+              const committed = await act(
                 (store) =>
                   store.mutate(owner, {
                     type: "add",
@@ -116,10 +126,12 @@ export function ProductCard({
                     qty: 1,
                   }),
                 `${product.packaging} ${family.name.toLowerCase()} ditambahkan.`,
-              )
-            }
+              );
+              if (committed) setAdded(true);
+            }}
           >
-            <Plus size={19} />
+            {added ? <Check size={19} /> : <Plus size={19} />}
+            <span>{added ? "Ditambah" : "Tambah"}</span>
           </button>
         </div>
       </div>
@@ -229,7 +241,7 @@ function HomeContent() {
           </Link>
         </div>
         {error ? (
-          <CatalogError />
+          <CatalogError heading="h2" />
         ) : loading && !products.length ? (
           <ShopLoading />
         ) : (
@@ -280,6 +292,43 @@ const INITIAL_QUERY: ShopQuery = {
   sort: "name",
   page: "1",
 };
+
+function CatalogEditorial({ products, back }: { products: PublicProduct[]; back: string }) {
+  const featured = ["demo-141", "demo-001", "demo-151"].flatMap(id => {
+    const product = products.find(item => item.id === id && item.active);
+    return product ? [product] : [];
+  });
+  return <ShopMotion refreshKey={featured.map(item => item.id).join(",")} className="shop-editorial-motion">
+    <section className="shop-editorial" aria-labelledby="shop-editorial-title">
+      <div className="shop-editorial-copy">
+        <p className="shop-editorial-eyebrow"><span /> UNIT TOKO / ETALASE PELANGGAN</p>
+        <h1 id="shop-editorial-title"><span data-shop-headline>Isi pantry.</span><span data-shop-headline>Siapkan hari.</span></h1>
+        <p className="shop-editorial-description">Kopi untuk pagi. Perlengkapan untuk rapat.<br />Pilihan untuk kegiatan Anda.</p>
+        <a href="#shop-products" className="shop-editorial-cta">Jelajahi etalase <ArrowRight size={18} /></a>
+      </div>
+      <div className="shop-editorial-shelf" aria-label="Pilihan produk dari etalase">
+        <span className="shop-shelf-caption">Dari meja kerja, untuk keseharian.</span>
+        {featured.map((product, index) => <Link key={product.id} data-shop-object href={`/shop/${encodeURIComponent(product.id)}?${new URLSearchParams({ from: back })}`} onClick={() => rememberScroll(back)} className={`shop-shelf-product shop-shelf-product-${index}`}>
+          <Art src={product.image} alt={product.name} loading="eager" sizes="(max-width: 700px) 35vw, 22vw" />
+          <span><strong>{product.name}</strong><ArrowUpRight size={15} /></span>
+        </Link>)}
+      </div>
+    </section>
+  </ShopMotion>;
+}
+
+function CategoryBrowse({ products, category, update }: { products: PublicProduct[]; category: string; update: (changes: Partial<ShopQuery>) => void }) {
+  const preferred = ["demo-001", "demo-041", "demo-101", "demo-145"];
+  return <nav className="shop-category-browse" aria-label="Jelajahi jenis produk">
+    {SHOP_CATEGORIES.slice(1).map((name, index) => {
+      const product = products.find(item => item.id === preferred[index] && item.active) || products.find(item => item.active && shopCategory(item) === name);
+      return <button key={name} type="button" aria-pressed={category === name} onClick={() => update({ category: category === name ? "Semua" : name })}>
+        {product && <Art src={product.image} alt="" sizes="64px" />}
+        <span>{name}</span><ArrowUpRight size={16} aria-hidden="true" />
+      </button>;
+    })}
+  </nav>;
+}
 function readQuery(location: string): ShopQuery {
   const params = new URLSearchParams(location.split("?")[1] || "");
   return {
@@ -310,8 +359,14 @@ function CatalogContent() {
   const { products, loading, error } = useShop();
   const location = useShopLocation();
   const query = readQuery(location);
+  const pendingNavigation = useRef(false);
   useEffect(() => {
     if (loading) return;
+    if (pendingNavigation.current) {
+      pendingNavigation.current = false;
+      const frame = requestAnimationFrame(() => document.getElementById("shop-products")?.scrollIntoView({ behavior: "instant", block: "start" }));
+      return () => cancelAnimationFrame(frame);
+    }
     try {
       const y = sessionStorage.getItem(
         `shop-scroll:${window.location.pathname}${window.location.search}`,
@@ -320,7 +375,8 @@ function CatalogContent() {
         sessionStorage.removeItem(
           `shop-scroll:${window.location.pathname}${window.location.search}`,
         );
-        requestAnimationFrame(() => window.scrollTo(0, Number(y)));
+        const frame = requestAnimationFrame(() => window.scrollTo({ top: Number(y), behavior: "instant" }));
+        return () => cancelAnimationFrame(frame);
       }
     } catch {
       /* Default browser scroll remains available. */
@@ -335,6 +391,7 @@ function CatalogContent() {
         params.set(key, value);
     });
     // Next copies its router state; passing history.state skips search-param updates.
+    pendingNavigation.current = true;
     window.history.pushState(
       null,
       "",
@@ -374,6 +431,7 @@ function CatalogContent() {
   const filtered = Boolean(
     search || collection || query.category !== "Semua" || query.stock !== "all",
   );
+  const showEditorial = !filtered && query.page === "1" && query.sort === "name";
   return (
     <div className="shop-list-page">
       <div className="shop-breadcrumb">
@@ -381,9 +439,11 @@ function CatalogContent() {
         <span>/</span>
         <span>Belanja</span>
       </div>
-      <div className="shop-page-heading">
+      {showEditorial && <CatalogEditorial products={products} back={back} />}
+      <CategoryBrowse products={products} category={query.category} update={update} />
+      <div className="shop-page-heading shop-catalog-heading" id="shop-products">
         <div>
-          <h1>{collection?.label || "Semua produk"}</h1>
+          {showEditorial ? <h2>Temukan kebutuhan Anda.</h2> : <h1>{search ? `Hasil pencarian “${query.q}”` : collection?.label || (query.category !== "Semua" ? query.category : "Semua produk")}</h1>}
           <p>
             {collection?.description ||
               "Pilih barang dan kemasan untuk kebutuhan Anda."}
@@ -452,18 +512,19 @@ function CatalogContent() {
         </div>
       )}
       {error ? (
-        <CatalogError />
+        <CatalogError heading="h2" />
       ) : loading && !products.length ? (
         <ShopLoading />
       ) : !families.length ? (
         <ShopEmpty
+          heading="h2"
           title="Produk belum ditemukan"
           description="Coba kata kunci atau kategori lain. Anda juga dapat melihat seluruh etalase."
           href="/shop"
           action="Hapus filter & lihat produk"
         />
       ) : (
-        <><div className="shop-product-grid">
+        <><ShopMotion refreshKey={`${back}:${pagination.items.map(item => item.id).join(",")}`} className="shop-product-grid">
           {pagination.items.map((family) => (
             <ProductCard
               key={family.id}
@@ -472,7 +533,7 @@ function CatalogContent() {
               back={back}
             />
           ))}
-        </div><CatalogPagination {...pagination} onChange={(page) => update({page: String(page)})} /></>
+        </ShopMotion><CatalogPagination {...pagination} onChange={(page) => update({page: String(page)})} /></>
       )}
     </div>
   );
