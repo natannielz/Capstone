@@ -8,6 +8,8 @@ import {Input} from "@/components/ui/input";
 import {Field, FieldDescription, FieldError, FieldGroup, FieldLabel} from "@/components/ui/field";
 import {Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle} from "@/components/ui/dialog";
 import {invoiceBalance, money, paymentAvailable, sum, today} from "@/lib/domain/selectors";
+import {buyerKey, buyerLabel} from "@/lib/domain/buyers";
+import {allocationInvoices} from "@/lib/domain/invoice-selection";
 import type {Payment, State} from "@/lib/domain/model";
 import type {WorkspaceContext} from "./workspace";
 
@@ -36,11 +38,9 @@ export function PaymentAllocation({ctx, paymentId, close}: {ctx: WorkspaceContex
   const [commandId, setCommandId] = useState(() => crypto.randomUUID());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const allowed = actor.role === "penagihan" && payment?.status === "verified" && Boolean(payment.divisionId);
+  const allowed = actor.role === "penagihan" && payment?.status === "verified" && Boolean(buyerKey(payment));
   const available = payment ? paymentAvailable(s, payment.id) : 0;
-  const invoices = payment ? s.invoices.filter(invoice => invoice.divisionId === payment.divisionId
-    && (invoiceBalance(s, invoice.id) > 0 || Boolean(amounts[invoice.id])))
-    .sort((a, b) => a.dueDate.localeCompare(b.dueDate) || a.number.localeCompare(b.number)) : [];
+  const invoices = payment ? allocationInvoices(s,payment,Object.keys(amounts).filter(id=>Boolean(amounts[id]))) : [];
   const rows = invoices.map(invoice => {
     const amount = parseAmount(amounts[invoice.id]), balance = invoiceBalance(s, invoice.id);
     const problem = amount === null ? "Masukkan jumlah rupiah bulat, minimal 0."
@@ -88,10 +88,10 @@ export function PaymentAllocation({ctx, paymentId, close}: {ctx: WorkspaceContex
 
   return <Dialog open onOpenChange={open => {if (!open && !busy) close();}}>
     <DialogContent className="allocation-v5-dialog sm:max-w-2xl" onEscapeKeyDown={event => {if (busy) event.preventDefault();}}>
-      <DialogHeader><DialogTitle>Alokasikan pembayaran</DialogTitle><DialogDescription>Bagi dana ke invoice divisi yang sama. Periksa saldo akhir sebelum menyimpan.</DialogDescription></DialogHeader>
-      {!allowed ? <div className="allocation-v5-unavailable"><p>Alokasi hanya tersedia untuk Bagian Penagihan setelah dana diverifikasi dan divisi pembayar diketahui.</p><Button variant="outline" onClick={close}>Tutup</Button></div> : <form onSubmit={submit} className="allocation-v5-form" aria-busy={busy}>
+      <DialogHeader><DialogTitle>Alokasikan pembayaran</DialogTitle><DialogDescription>Bagi dana ke invoice pembeli yang sama. Periksa saldo akhir sebelum menyimpan.</DialogDescription></DialogHeader>
+      {!allowed ? <div className="allocation-v5-unavailable"><p>Alokasi hanya tersedia untuk Bagian Penagihan setelah dana diverifikasi dan pembayar diketahui.</p><Button variant="outline" onClick={close}>Tutup</Button></div> : <form onSubmit={submit} className="allocation-v5-form" aria-busy={busy}>
         <div className="allocation-v5-body">
-          <div className="allocation-v5-source"><strong>{payment!.payer}</strong><p>{s.divisions.find(division => division.id === payment!.divisionId)?.name}</p><span>Referensi: {payment!.reference || "Tanpa referensi"}</span></div>
+          <div className="allocation-v5-source"><strong>{payment!.payer}</strong><p>{buyerLabel(s,payment!)}</p><span>Referensi: {payment!.reference || "Tanpa referensi"}</span></div>
           <FieldGroup>
             <Field><FieldLabel htmlFor="allocation-date">Tanggal pencatatan</FieldLabel><Input id="allocation-date" type="date" required value={date} disabled={busy} onChange={event => {setDate(event.target.value); setCommandId(crypto.randomUUID()); setError("");}}/></Field>
             <div className="allocation-v5-invoices">
@@ -109,12 +109,12 @@ export function PaymentAllocation({ctx, paymentId, close}: {ctx: WorkspaceContex
                 </Field>
                 <dl className="allocation-v5-row-summary"><div><dt>Sisa sebelum alokasi</dt><dd>{money(balance)}</dd></div><div><dt>Sisa sesudah alokasi</dt><dd data-invalid={Boolean(problem)}>{amount === null ? "Periksa jumlah" : money(balance - amount)}</dd></div></dl>
               </section>)}
-              {!rows.length && <p className="allocation-v5-empty">Tidak ada invoice belum lunas untuk divisi ini. Dana tetap tercatat sebagai saldo belum dialokasikan.</p>}
+              {!rows.length && <p className="allocation-v5-empty">Tidak ada invoice belum lunas untuk pembeli ini. Dana tetap tercatat sebagai saldo belum dialokasikan.</p>}
             </div>
           </FieldGroup>
           <div className="allocation-v5-preview" aria-live="polite"><h3>Ringkasan alokasi</h3><dl>
             <div><dt>Dana tersedia</dt><dd>{money(available)}</dd></div><div><dt>Total alokasi</dt><dd>{money(total)}</dd></div><div><dt>Dana tersisa</dt><dd data-invalid={remaining < 0}>{money(remaining)}</dd></div>
-          </dl><p>Dana tersisa tetap menjadi saldo divisi dan dapat digunakan untuk invoice berikutnya.</p></div>
+          </dl><p>Dana tersisa tetap menjadi saldo pembeli dan dapat digunakan untuk invoice berikutnya.</p></div>
           {remaining < 0 && <FieldError>Total alokasi melebihi dana tersedia sebesar {money(-remaining)}. Kurangi jumlah alokasi.</FieldError>}
           {selectedCount > 100 && <FieldError>Maksimal 100 invoice dalam satu alokasi. Kosongkan sebagian pilihan; sisa dana dapat dialokasikan berikutnya.</FieldError>}
           {unavailableSelection && <FieldError>Invoice yang dipilih sudah tidak tersedia. Tutup formulir, muat ulang pembayaran, lalu periksa kembali.</FieldError>}

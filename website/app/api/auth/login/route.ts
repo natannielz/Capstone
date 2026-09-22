@@ -2,6 +2,7 @@ import { body,errorResponse,json,sessionCookie } from "@/lib/server/http";
 import { database,ensureSeed } from "@/lib/server/repository";
 import { digest,hashPassword,timingEqual } from "@/lib/server/security";
 import { DomainError } from "@/lib/domain/model";
+import { ROLE_LABELS } from "@/lib/domain/accounts";
 export async function POST(request:Request){try{
  const input=await body(request);
  if(typeof input.email!=="string"||typeof input.password!=="string"||input.email.length>180||input.password.length>128)throw new DomainError("Email atau kata sandi tidak sesuai.",401);
@@ -11,8 +12,9 @@ export async function POST(request:Request){try{
  if((attempt?.attempts||0)>8)throw new DomainError("Terlalu banyak percobaan. Silakan coba lagi dalam 15 menit.",429);
  const row=await db.prepare("SELECT c.user_id,c.salt,c.hash,u.payload FROM user_emails e JOIN credentials c ON c.user_id=e.user_id JOIN users u ON u.id=c.user_id WHERE e.email=?").bind(email).first<{user_id:string;salt:string;hash:string;payload:string}>();
  const candidate=await hashPassword(input.password,row?.salt||"unknown-account-constant-salt");
- if(!row||!timingEqual(candidate,row.hash)||!JSON.parse(row.payload).active)throw new DomainError("Email atau kata sandi tidak sesuai.",401);
+ const user=row ? JSON.parse(row.payload) : null;
+ if(!row||!timingEqual(candidate,row.hash)||!user?.active||!Object.hasOwn(ROLE_LABELS,user.role))throw new DomainError("Email atau kata sandi tidak sesuai.",401);
  const raw=crypto.randomUUID()+crypto.randomUUID();await db.batch([db.prepare("DELETE FROM login_attempts WHERE key=?").bind(key),db.prepare("DELETE FROM sessions WHERE expires_at<?").bind(now),db.prepare("INSERT INTO sessions(id,user_id,expires_at) SELECT ?,user_id,? FROM credentials WHERE user_id=? AND hash=? AND salt=?").bind(await digest(raw),now+8*60*60*1000,row.user_id,row.hash,row.salt)]);
  if(!await db.prepare("SELECT id FROM sessions WHERE id=?").bind(await digest(raw)).first())throw new DomainError("Kredensial berubah. Silakan masuk kembali.",401);
- return json({user:JSON.parse(row.payload)},200,{"Set-Cookie":sessionCookie(raw,request)});
+ return json({user},200,{"Set-Cookie":sessionCookie(raw,request)});
  }catch(err){return errorResponse(err);}}

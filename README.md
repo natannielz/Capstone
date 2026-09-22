@@ -1,10 +1,10 @@
 # Unit Toko — Demo Capstone BNI
 
-Website demo untuk pemesanan divisi, persediaan, pengadaan, pengiriman, penerimaan, penagihan, pembayaran simulasi, laporan, dan tutup periode.
+Website demo dengan etalase pelanggan dan pemesanan divisi, persediaan, pengadaan, pengiriman, penerimaan, penagihan, pembayaran simulasi, laporan, dan tutup periode.
 
 - Website: [unit-toko-bni.vercel.app](https://unit-toko-bni.vercel.app)
-- Versi aplikasi yang selesai: **v6**, diverifikasi pada 17 September 2026. Lihat [catatan rilis dan hasil pengujian](docs/rilis-v6.md).
-- Tahap berikutnya: **v7 — etalase dan akun pelanggan**, masih direncanakan. Lihat [rencana implementasi](docs/plan-customer-marketplace-v7.md).
+- **v7 — etalase dan akun pelanggan**, dengan katalog publik, keranjang, checkout, pesanan pribadi, dan profil. Lihat [catatan rilis](docs/rilis-v7.md), [rencana dan cakupan](docs/plan-customer-marketplace-v7.md), serta [hasil pengujian customer](docs/testing-customer-v7.md).
+- Alur staf dan divisi v6 tetap tersedia. [Catatan rilis v6](docs/rilis-v6.md) menjadi baseline regresi.
 
 ## Struktur
 
@@ -43,7 +43,7 @@ npm test
 npm run build
 ```
 
-`npm run test:api` memerlukan server lokal dan menambahkan skenario pada database demo lokal. Gunakan database terisolasi untuk pengujian mutasi. Hasil v6 yang dicatat sebelumnya: 86 tes regresi, 65 pemeriksaan HTTP lokal, dan 73 pemeriksaan publik lulus; satu pemeriksaan publik dilewati. Rincian, tanggal, serta keterbatasannya tersedia dalam [catatan rilis](docs/rilis-v6.md).
+`npm run test:api` memerlukan server lokal dan menambahkan skenario pada database demo lokal. Gunakan database terisolasi untuk pengujian mutasi. Rilis v7 lulus **154 tes regresi** dan **22 kelompok pemeriksaan HTTP customer**; TypeScript dan build lulus, lint tidak memiliki error dengan 9 warning yang dicatat. Reproduksi dan batas pemeriksaan tersedia pada [hasil pengujian customer](docs/testing-customer-v7.md); hasil produksi tercatat pada [catatan rilis v7](docs/rilis-v7.md).
 
 ## Deployment
 
@@ -51,6 +51,6 @@ Untuk Vercel, pilih root directory **`website`**, build `npm run build`, dan Nod
 
 ## Cakupan demo
 
-Data orang, foto ilustrasi, produk, transaksi, pembayaran, dan jurnal bersifat simulasi. Aplikasi tidak melakukan transfer bank atau integrasi operasional resmi BNI. Rilis v6 memiliki 10 akun untuk 9 peran, dengan pemeriksaan akses pada server. Akun customer tambahan baru termasuk rencana v7.
+Data orang, foto ilustrasi, produk, transaksi, pembayaran, dan jurnal bersifat simulasi. Aplikasi tidak melakukan transfer bank atau integrasi operasional resmi BNI. Rilis v7 memiliki 11 akun untuk 10 peran, termasuk pelanggan demo khusus dengan email `customer@unit-toko.demo`. Hak akses dan kepemilikan transaksi diperiksa di server. Password dibuat dari seed privat; tidak disertakan dalam repositori.
 
 Arsip studi kasus, kredensial, database, unggahan privat, dan log tidak disertakan dalam repositori ini.

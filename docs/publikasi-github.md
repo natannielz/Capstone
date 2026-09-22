@@ -4,7 +4,7 @@ Tanggal persiapan: 21 September 2026. Repositori tujuan: [natannielz/Capstone](h
 
 ## Isi repositori
 
-Publikasi awal memakai snapshot source v6 yang saat ini berjalan, termasuk berkas baru yang belum berada dalam riwayat Git lokal lama. Aplikasi berada di `website/`, dokumentasi terpilih di `docs/`, dan panduan utama di root. Rencana v7 tersedia pada [plan-customer-marketplace-v7.md](plan-customer-marketplace-v7.md); publikasi rencana tidak berarti fitur customer telah dibuat.
+Publikasi awal menyimpan snapshot v6 dan rencana v7. Pembaruan v7 menambahkan etalase, akun pelanggan, alur pesanan, migrasi identitas pembeli, dan pengujian terkait. Aplikasi berada di `website/`, dokumentasi terpilih di `docs/`, dan panduan utama di root. Cakupan serta bukti rilis tersedia pada [rilis-v7.md](rilis-v7.md).
 
 Hanya source, migrasi, tes, aset publik, lisensi font, contoh environment tanpa nilai rahasia, serta dokumen terpilih yang disertakan. Arsip referensi, database/unggahan lokal, `.env` asli, daftar password, log, metadata akun hosting, dan riwayat Git lama tidak masuk snapshot publik.
 
@@ -18,9 +18,9 @@ Clone baru dari GitHub dapat digunakan langsung sebagai workspace pengembangan; 
 
 ## Vercel
 
-Project aplikasi yang sudah ada adalah `unit-toko-bni`; URL publik [unit-toko-bni.vercel.app](https://unit-toko-bni.vercel.app). Rilis v6 dan batas verifikasi dicatat pada [rilis-v6.md](rilis-v6.md).
+Project aplikasi yang sudah ada adalah `unit-toko-bni`; URL publik [unit-toko-bni.vercel.app](https://unit-toko-bni.vercel.app). Deployment final v7 `dpl_CS5rq8MVbegyMRUy7ax9EGr97Z7C` dibangun dari source kanonis `website/` dan dipromosikan ke URL publik tersebut pada 22 September 2026. Hasil verifikasi tersedia pada [rilis-v7.md](rilis-v7.md) dan [vercel-v7-results.json](vercel-v7-results.json).
 
-Pengaturan untuk struktur repositori ini:
+Pengaturan bila menghubungkan atau mengimpor struktur repositori ini melalui integrasi Git:
 
 | Pengaturan | Nilai |
 | --- | --- |
@@ -31,6 +31,8 @@ Pengaturan untuk struktur repositori ini:
 | Build | `npm run build` |
 | Output | Default Next.js |
 
+Deployment CLI existing dijalankan langsung dari direktori `website/`, sehingga Root Directory project existing tetap `.`. Jangan mengubahnya menjadi `website` ketika mengunggah hanya isi direktori aplikasi melalui CLI. Tabel di atas berlaku untuk checkout monorepo melalui integrasi Git.
+
 Environment privat: `DEMO_PASSWORD_SEED`, `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`, dan `BLOB_READ_WRITE_TOKEN`. `NEXT_PUBLIC_APP_URL` berisi URL publik aplikasi. Gunakan database Turso remote dan Blob privat untuk Vercel; jangan mengunggah `.data` atau `.env.local`.
 
-Push ke GitHub tidak dengan sendirinya membuktikan deployment baru atau koneksi Git otomatis. Publikasi awal ini menyimpan source dan rencana; deployment v7 dilakukan sesudah implementasi, pengujian, dan migrasi yang terverifikasi. Gunakan project Vercel existing dan hindari membuat layanan duplikat. Preview yang memakai database production bersama tidak boleh digunakan untuk uji mutasi/migrasi.
+Push ke GitHub tidak dengan sendirinya membuktikan deployment baru atau koneksi Git otomatis. Rilis v7 menggunakan CLI pada project existing, build tanpa memindahkan domain terlebih dahulu, lalu promosi setelah build berhasil. Backup dan rehearsal migrasi dilakukan sebelum promosi; pemeriksaan data serta autentikasi dilakukan sesudahnya. Preview yang memakai database production bersama tidak boleh digunakan untuk uji transaksi.

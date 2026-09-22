@@ -1,6 +1,6 @@
 # Panduan demo Unit Toko — Divisi BNI
 
-Website demo capstone ini menghubungkan pemesanan Divisi/Unit BNI, persediaan, pengadaan, pengiriman, penerimaan, penagihan, pembayaran simulasi, laporan, dan tutup periode dalam satu basis data. Aplikasi saat ini adalah v6; lihat [catatan rilis dan validasi 17 September 2026](../docs/rilis-v6.md). [Etalase dan akun pelanggan v7](../docs/plan-customer-marketplace-v7.md) masih dalam tahap rencana.
+Website demo capstone ini menghubungkan pemesanan Divisi/Unit BNI, persediaan, pengadaan, pengiriman, penerimaan, penagihan, pembayaran simulasi, laporan, dan tutup periode dalam satu basis data. Rilis v7 menambahkan etalase dan akun pelanggan tanpa memisahkan basis data operasional. Lihat [cakupan v7](../docs/plan-customer-marketplace-v7.md), [hasil pengujian customer](../docs/testing-customer-v7.md), dan [baseline v6](../docs/rilis-v6.md).
 
 ## Membuka dan menjalankan lokal
 
@@ -25,10 +25,11 @@ Pengujian domain/SQL memakai basis data terisolasi. `test:api` membutuhkan serve
 
 ## Akun demo
 
-Buka landing page lalu pilih **Masuk portal**. Masukkan email dan password akun yang diinginkan. Password awal unik per akun; **lihat `website/.data/demo-accounts.json` secara privat**. Jangan menyalin daftar password ke dokumen publik. Setiap ID dalam tabel menggunakan email `ID@unit-toko.demo`, misalnya `pic-a@unit-toko.demo`.
+Buka etalase lalu pilih **Masuk** untuk pelanggan atau **Portal divisi & petugas** untuk akun internal. Masukkan email dan password akun yang diinginkan. Password awal unik per akun; **lihat `website/.data/demo-accounts.json` secara privat**. Jangan menyalin daftar password ke dokumen publik. ID staf/PIC menggunakan email `ID@unit-toko.demo`, misalnya `pic-a@unit-toko.demo`. Akun `customer-demo` menggunakan email khusus `customer@unit-toko.demo`.
 
 | Akun | Peran | Kegiatan utama |
 | --- | --- | --- |
+| `customer-demo` — Pelanggan Demo | Pelanggan | Etalase, checkout, pesanan sendiri, penerimaan, komplain, pembayaran invoice |
 | `pic-a` — Nadia Putri | PIC Operasional | Pesanan, pengganti, penerimaan, komplain, bukti transfer |
 | `pic-b` — Raka Pratama | PIC Teknologi | Alur yang sama, hanya data divisinya |
 | `kepala` — Dewi Lestari | Kepala Toko | Tinjauan pesanan, pengadaan, harga, persetujuan opname |
@@ -40,11 +41,24 @@ Buka landing page lalu pilih **Masuk portal**. Masukkan email dan password akun 
 | `akuntansi` — Laras Wulandari | Akuntansi | Laporan, posting, tutup periode |
 | `admin` — Admin Demo | Administrator | Akun/peran, divisi, pemasok |
 
-Terdapat 10 akun untuk 9 peran. Peran ditetapkan administrator dan tidak dapat dipilih melalui form login. Pergantian peran presentasi dilakukan dengan **Keluar akun**, lalu masuk menggunakan email/password akun berikutnya. Jika password telah diubah melalui profil, gunakan password terbaru; daftar seed awal tidak otomatis ikut berubah.
+Terdapat 11 akun untuk 10 peran. Peran ditetapkan administrator dan tidak dapat dipilih melalui form login. Pergantian peran presentasi dilakukan dengan **Keluar akun**, lalu masuk menggunakan email/password akun berikutnya. Jika password telah diubah melalui profil, gunakan password terbaru; daftar seed awal tidak otomatis ikut berubah.
 
 Menu **Profil saya** menyediakan nama, kontak, jabatan, foto PNG/JPG maksimal 2 MiB, serta penggantian password 12–128 karakter. Penggantian password mengakhiri seluruh sesi akun dan mengharuskan login ulang. Foto awal bersifat fiktif. Email/divisi/peran tidak dapat diubah melalui profil.
 
-## Urutan presentasi
+## Alur pelanggan
+
+1. Jelajahi `/shop`, cari nama/SKU, pilih kemasan dan jumlah, lalu tambah ke keranjang atau **Beli sekarang**.
+2. Pilih barang yang ingin dipesan. Checkout membawa pilihan pengunjung melalui login; barang lain tetap di keranjang.
+3. Periksa penerima, kontak, dan alamat, lalu **Buat pesanan**. Tidak ada pembayaran saat checkout.
+4. Pesanan masuk ke petugas yang sama. Customer dapat memantau pengiriman, menerima barang, dan mengajukan komplain melalui `/account/orders`.
+5. Setelah penerimaan final, Penagihan menerbitkan invoice. Customer mencatat pembayaran simulasi untuk invoice sendiri; petugas memverifikasi dan mengalokasikan dana.
+6. Kelola nama, foto, kontak, alamat bawaan, dan kata sandi di `/account`. Alamat pesanan lama tetap berupa snapshot.
+
+Pelanggan hanya melihat transaksi miliknya. Tidak ada signup publik, marketplace multivendor, rating, diskon rekaan, atau pembayaran bank nyata. Satu akun demo tambahan diprovisikan secara idempotent pada database lama maupun baru tanpa mereset password/profil/status akun yang sudah ada.
+
+Untuk pengujian customer API gunakan `scripts/smoke-customer.mjs` bersama fixture/database yang dijelaskan dalam [bukti uji v7](../docs/testing-customer-v7.md). Script menolak target selain lingkungan QA lokal yang ditentukan.
+
+## Urutan presentasi divisi
 
 1. PIC Operasional memilih katalog 36 SKU, mencari nama/SKU atau kategori, memasukkan barang ke keranjang, lalu mengajukan pesanan. Katalog berisi 12 produk dasar dan varian paket 3/6 dengan harga/satuan masing-masing; 12 foto produk dipakai bersama variannya. Keranjang tersimpan per akun di perangkat.
 2. Kepala Toko membuka pesanan dan memilih Tinjau & setujui.

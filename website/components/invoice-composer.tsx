@@ -7,7 +7,8 @@ import {Checkbox} from "@/components/ui/checkbox";
 import {Input} from "@/components/ui/input";
 import {Field, FieldDescription, FieldGroup, FieldLabel, FieldSet, FieldLegend} from "@/components/ui/field";
 import {Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle} from "@/components/ui/dialog";
-import {billableRows, invoiceSelection, MAX_INVOICE_LINES, suggestedInvoiceDates} from "@/lib/domain/invoice-selection";
+import {billableRows, invoiceBuyerOptions, invoiceSelection, MAX_INVOICE_LINES, suggestedInvoiceDates} from "@/lib/domain/invoice-selection";
+import {sameBuyer} from "@/lib/domain/buyers";
 import {money} from "@/lib/domain/selectors";
 import {requestJson} from "@/lib/client/requests";
 import type {CommandResult} from "@/lib/domain/model";
@@ -16,7 +17,9 @@ import type {WorkspaceContext} from "./workspace";
 export function InvoiceComposer({ctx,close}: {ctx:WorkspaceContext;close:()=>void}) {
   const {s,actor,refresh,go}=ctx;
   const rows=billableRows(s);
-  const [division,setDivision]=useState("");
+  const buyers=invoiceBuyerOptions(s);
+  const [buyerId,setBuyerId]=useState("");
+  const buyer=buyers.find(option=>option.key===buyerId)?.buyer || null;
   const [ids,setIds]=useState<string[]>([]);
   const [query,setQuery]=useState("");
   const [page,setPage]=useState(1);
@@ -27,9 +30,9 @@ export function InvoiceComposer({ctx,close}: {ctx:WorkspaceContext;close:()=>voi
   const [busy,setBusy]=useState(false),[error,setError]=useState("");
   const errorRef=useRef<HTMLParagraphElement>(null);
   const submitting=useRef(false);
-  const result=invoiceSelection(s,division,ids);
+  const result=invoiceSelection(s,buyer,ids);
   const search=query.trim().toLocaleLowerCase("id-ID");
-  const filtered=rows.filter(row=>row.divisionId===division && (!search || `${row.product} ${row.sku} ${row.shipmentNumber} ${row.orderNumber}`.toLocaleLowerCase("id-ID").includes(search)));
+  const filtered=rows.filter(row=>buyer && sameBuyer(row,buyer) && (!search || `${row.product} ${row.sku} ${row.shipmentNumber} ${row.orderNumber}`.toLocaleLowerCase("id-ID").includes(search)));
   const pages=Math.max(1,Math.ceil(filtered.length/25)), current=Math.min(page,pages);
   const visible=filtered.slice((current-1)*25,current*25);
   const newVisible=visible.filter(row=>!ids.includes(row.id));
@@ -44,21 +47,21 @@ export function InvoiceComposer({ctx,close}: {ctx:WorkspaceContext;close:()=>voi
     if(problem){setError(problem);return;}
     submitting.current=true;setBusy(true);setError("");
     try{
-      const response=await requestJson<CommandResult>("/api/commands",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:commandId,type:"invoice.issue",date,data:{divisionId:division,dueDate:due,taxBps:0,lines:ids.map(shipmentLineId=>({shipmentLineId}))}})});
+      const response=await requestJson<CommandResult>("/api/commands",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:commandId,type:"invoice.issue",date,data:{...buyer,dueDate:due,taxBps:0,lines:ids.map(shipmentLineId=>({shipmentLineId}))}})});
       await refresh();toast.success(response.message);close();go("billing",response.id,{balance:null});
     }catch(cause){setError(cause instanceof Error?cause.message:"Invoice belum diterbitkan. Pilihan tetap tersimpan.");await refresh();}
     finally{submitting.current=false;setBusy(false);}
   }
   return <Dialog open onOpenChange={open=>{if(!open&&!busy)close();}}><DialogContent className="invoice-composer sm:max-w-3xl" onEscapeKeyDown={event=>{if(busy)event.preventDefault();}}>
-    <DialogHeader><DialogTitle>Terbitkan invoice divisi</DialogTitle><DialogDescription>Pilih penerimaan final yang akan ditagih. Satu invoice dapat memuat maksimal {MAX_INVOICE_LINES} baris.</DialogDescription></DialogHeader>
+    <DialogHeader><DialogTitle>Terbitkan invoice</DialogTitle><DialogDescription>Pilih pembeli dan penerimaan final yang akan ditagih. Satu invoice dapat memuat maksimal {MAX_INVOICE_LINES} baris.</DialogDescription></DialogHeader>
     {actor.role!=="penagihan"?<p>Hanya Bagian Penagihan dapat menerbitkan invoice.</p>:<form onSubmit={submit} aria-busy={busy}>
       <div className="invoice-composer-body">
         <FieldGroup className="invoice-composer-fields">
-          <Field><FieldLabel htmlFor="invoice-division">Divisi pemesan</FieldLabel><select id="invoice-division" className="native-select" required value={division} disabled={busy} onChange={event=>{setDivision(event.target.value);setIds([]);setPage(1);changed();}}><option value="">Pilih divisi…</option>{s.divisions.filter(item=>rows.some(row=>row.divisionId===item.id)).map(item=><option value={item.id} key={item.id}>{item.name}</option>)}</select></Field>
+          <Field><FieldLabel htmlFor="invoice-buyer">Pembeli</FieldLabel><select id="invoice-buyer" className="native-select" required value={buyerId} disabled={busy} onChange={event=>{setBuyerId(event.target.value);setIds([]);setQuery("");setPage(1);changed();}}><option value="">Pilih pembeli…</option>{buyers.map(option=><option value={option.key} key={option.key}>{option.buyer.customerId?"Pelanggan":"Divisi"} · {option.label} · {option.count} penerimaan</option>)}</select>{!buyers.length&&<FieldDescription>Belum ada penerimaan final yang belum ditagih.</FieldDescription>}</Field>
           <Field><FieldLabel htmlFor="invoice-date">Tanggal invoice</FieldLabel><Input id="invoice-date" type="date" required value={date} min={result.minimumDate||undefined} disabled={busy} onChange={event=>{setDate(event.target.value);changed();}}/>{result.minimumDate&&<FieldDescription>Tanggal minimal {new Date(`${result.minimumDate}T12:00:00`).toLocaleDateString("id-ID",{day:"numeric",month:"short",year:"numeric"})}, mengikuti periode terbuka dan penerimaan final.</FieldDescription>}</Field>
           <Field><FieldLabel htmlFor="invoice-due">Jatuh tempo</FieldLabel><Input id="invoice-due" type="date" required value={due} min={date} disabled={busy} onChange={event=>{setDue(event.target.value);changed();}}/></Field>
         </FieldGroup>
-        {division&&<FieldSet className="invoice-selection"><FieldLegend>Penerimaan yang akan ditagih</FieldLegend>
+        {buyer&&<FieldSet className="invoice-selection"><FieldLegend>Penerimaan yang akan ditagih</FieldLegend>
           <Field><FieldLabel htmlFor="invoice-search">Cari barang, SKU, atau dokumen</FieldLabel><Input id="invoice-search" type="search" value={query} disabled={busy} onChange={event=>{setQuery(event.target.value);setPage(1);}}/><FieldDescription>{filtered.length} baris sesuai pencarian. Pilihan dari halaman lain tetap disimpan.</FieldDescription></Field>
           <div className="invoice-selection-tools"><Button type="button" variant="outline" size="sm" disabled={busy||!canSelectPage} onClick={()=>{setIds(previous=>[...previous,...newVisible.map(row=>row.id)]);changed();}}>{newVisible.length ? `Pilih ${newVisible.length} baris di halaman ini` : visible.length ? "Semua baris di halaman ini dipilih" : "Tidak ada baris untuk dipilih"}</Button><Button type="button" variant="ghost" size="sm" disabled={busy||!ids.length} onClick={()=>{setIds([]);changed();}}>Hapus semua pilihan</Button></div>
           {!canSelectPage&&newVisible.length>0&&<p className="muted">{ids.length>=MAX_INVOICE_LINES?"Batas 100 baris tercapai. Terbitkan invoice ini, lalu buat invoice berikutnya untuk sisa penerimaan.":`Pilih baris satu per satu untuk mengisi sisa ${MAX_INVOICE_LINES-ids.length} tempat pada invoice.`}</p>}

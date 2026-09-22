@@ -4,7 +4,9 @@ import { DomainError } from "@/lib/domain/model";
 import { hashPassword,timingEqual } from "@/lib/server/security";
 export async function PATCH(request:Request){try{
  const actor=await currentActor(request),input=await body(request);
- if(Object.keys(input).some(k=>!["name","phone","position"].includes(k)))throw new DomainError("Hanya nama, nomor kontak, dan jabatan yang dapat diubah.",403);
+ if(!input||typeof input!=="object"||Array.isArray(input))throw new DomainError("Format profil tidak valid.");
+ if(Object.keys(input).some(k=>!["name","phone","position","address"].includes(k)))throw new DomainError("Hanya nama, nomor kontak, jabatan, dan alamat yang dapat diubah.",403);
+ if(input.address!==undefined){if(typeof input.address!=="string"||input.address.trim().length>500)throw new DomainError("Alamat maksimal 500 karakter.");input.address=input.address.trim();}
  return json(await execute(actor,{id:crypto.randomUUID(),type:"profile.update",data:input}));
  }catch(err){return errorResponse(err);}}
 export async function POST(request:Request){try{

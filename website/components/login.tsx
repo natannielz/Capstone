@@ -33,8 +33,8 @@ export function Login({initialError=""}:{initialError?:string}){
    <Link href="/" className="login-home"><ArrowLeft size={16} aria-hidden="true"/>Kembali ke beranda</Link>
    <div className="login-story">
     <span>UNIT TOKO</span>
-    <h1 id="login-portal-title">Portal Divisi BNI</h1>
-    <p>Pesanan, pengiriman, dan tagihan Unit Toko.</p>
+    <h1 id="login-portal-title">Selamat datang di Unit Toko.</h1>
+    <p>Masuk untuk melanjutkan belanja dan melihat pesanan Anda.</p>
    </div>
   </section>
   <section className="login-form-side" aria-labelledby="login-title">

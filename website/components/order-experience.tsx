@@ -1,4 +1,5 @@
 "use client";
+import {buyerLabel} from "@/lib/domain/buyers";
 
 import {ArrowLeft, ArrowRight, Check, FileText, Package, Search, Truck, X} from "lucide-react";
 import {Button} from "@/components/ui/button";
@@ -43,16 +44,16 @@ export function OrderList({s, orders, onSelect, actionLabel = () => "Lihat pesan
   if (!orders.length) return <p className="order-v5-empty-note">Belum ada pesanan dalam daftar ini.</p>;
   return <>
     <div className="orders-v5-table"><table className="data-table"><thead><tr>
-      <th>Pesanan / divisi</th><th>Dibutuhkan</th><th className="numeric">Nilai pesanan</th><th>Status</th><th><span className="sr-only">Tindakan</span></th>
+      <th>Pesanan / pembeli</th><th>Dibutuhkan</th><th className="numeric">Nilai pesanan</th><th>Status</th><th><span className="sr-only">Tindakan</span></th>
     </tr></thead><tbody>{orders.map(order => <tr key={order.id}>
-      <td><button className="table-link" onClick={() => onSelect(order.id)}>{order.number}</button><small>{get(s.divisions, order.divisionId).name}</small></td>
+      <td><button className="table-link" onClick={() => onSelect(order.id)}>{order.number}</button><small>{buyerLabel(s, order)}</small></td>
       <td>{dateLabel(order.neededAt)}</td><td className="numeric">{money(orderValue(s, order.id))}</td>
       <td><StateBadge>{orderFulfillmentLabel(s, order)}</StateBadge></td>
       <td><Button size="sm" variant="outline" onClick={() => onSelect(order.id)}>{actionLabel(order)}<ArrowRight data-icon="inline-end"/></Button></td>
     </tr>)}</tbody></table></div>
     <div className="orders-v5-mobile">{orders.map(order => <article className="order-list-card" key={order.id}>
       <div className="order-list-card-top"><h3>{order.number}</h3><StateBadge>{orderFulfillmentLabel(s, order)}</StateBadge></div>
-      <p>{get(s.divisions, order.divisionId).name}</p>
+      <p>{buyerLabel(s, order)}</p>
       <dl><div><dt>Dibutuhkan</dt><dd>{dateLabel(order.neededAt)}</dd></div><div><dt>Nilai pesanan</dt><dd>{money(orderValue(s, order.id))}</dd></div></dl>
       <Button variant="outline" onClick={() => onSelect(order.id)}>{actionLabel(order)}<ArrowRight data-icon="inline-end"/></Button>
     </article>)}</div>
@@ -62,7 +63,7 @@ export function OrderList({s, orders, onSelect, actionLabel = () => "Lihat pesan
 export function Orders({s, actor, go, query, onQueryChange}: WorkspaceContext & QueryProps) {
   const filter = readOrderQuery(query);
   const filtered = s.orders.filter(order => matchesOrderQueue(s, order, filter.queue))
-    .filter(order => `${order.number} ${s.divisions.find(division => division.id === order.divisionId)?.name || ""}`
+    .filter(order => `${order.number} ${buyerLabel(s, order)}`
       .toLocaleLowerCase("id-ID").includes(filter.q.trim().toLocaleLowerCase("id-ID")))
     .sort((a, b) => filter.sort === "needed"
       ? a.neededAt.localeCompare(b.neededAt) || b.createdAt.localeCompare(a.createdAt)
@@ -85,7 +86,7 @@ export function Orders({s, actor, go, query, onQueryChange}: WorkspaceContext & 
     <FieldGroup className="orders-v5-filters">
       <Field><FieldLabel htmlFor="orders-search">Cari pesanan</FieldLabel>
         <InputGroup><InputGroupAddon><Search aria-hidden="true"/></InputGroupAddon>
-          <InputGroupInput id="orders-search" type="search" placeholder="Nomor pesanan atau divisi" value={filter.q}
+          <InputGroupInput id="orders-search" type="search" placeholder="Nomor pesanan atau pembeli" value={filter.q}
             onChange={event => onQueryChange({q: event.target.value || null, orderPage: null})}/>
         </InputGroup>
       </Field>
@@ -104,7 +105,7 @@ export function Orders({s, actor, go, query, onQueryChange}: WorkspaceContext & 
     </FieldGroup>
     {!!visible.length && <OrderList s={s} orders={visible} onSelect={id => go("orders", id)} actionLabel={actionLabel}/>}
     {!visible.length && <div className="orders-v5-empty"><Package aria-hidden="true"/><h3>{isFiltered ? "Tidak ada pesanan yang cocok" : "Belum ada pesanan"}</h3>
-      <p>{isFiltered ? "Ubah pencarian atau status pekerjaan untuk melihat pesanan lainnya." : "Pesanan divisi akan muncul di sini setelah diajukan."}</p>
+      <p>{isFiltered ? "Ubah pencarian atau status pekerjaan untuk melihat pesanan lainnya." : "Pesanan pembeli akan muncul di sini setelah diajukan."}</p>
       {isFiltered && <Button variant="outline" onClick={clear}>Tampilkan semua pesanan</Button>}
     </div>}
     {pages > 1 && <nav className="orders-v5-pagination" aria-label="Halaman daftar pesanan">
@@ -120,7 +121,7 @@ export function OrderDetail(ctx: WorkspaceContext & {id: string}) {
   const order = s.orders.find(item => item.id === id);
   if (!order) return <section className="panel orders-v5-empty"><Package aria-hidden="true"/><h2>Pesanan tidak tersedia</h2><p>Pesanan tidak ditemukan atau tidak dapat diakses oleh akun Anda.</p><Button variant="outline" onClick={() => go("orders")}>Kembali ke pesanan</Button></section>;
   const lines = s.orderLines.filter(line => line.orderId === id);
-  const division = get(s.divisions, order.divisionId);
+  const division = {name: buyerLabel(s, order)};
   const shipments = s.shipments.filter(shipment => shipment.orderId === id);
   const substitutions = s.substitutions.filter(sub => lines.some(line => line.id === sub.orderLineId));
   const pendingSubstitutions = substitutions.filter(sub => substitutionNeedsDecision(s, sub));
@@ -214,7 +215,7 @@ export function OrderDetail(ctx: WorkspaceContext & {id: string}) {
       {invoices.length ? <div className="order-v5-related">{invoices.map(item => <article key={item.invoice.id} className="order-v5-invoice">
         <div className="order-v5-invoice-heading"><div><h3>{item.invoice.number}</h3><p>Jatuh tempo {dateLabel(item.invoice.dueDate)}</p></div><StateBadge>{invoiceStatus(s, item.invoice)}</StateBadge></div>
         <dl><div><dt>Nilai pesanan ini</dt><dd>{money(item.orderAmount)}</dd></div><div><dt>Total seluruh invoice</dt><dd>{money(item.total)}</dd></div><div><dt>Sudah dialokasikan</dt><dd>{money(item.allocated)}</dd></div>{item.credited > 0 && <div><dt>Nota kredit disetujui</dt><dd>{money(item.credited)}</dd></div>}<div><dt>Sisa seluruh invoice</dt><dd>{money(item.balance)}</dd></div></dl>
-        {item.shared && <p className="order-v5-shared-note">Invoice ini juga memuat pesanan lain dari divisi yang sama. Pembayaran dan nota kredit berlaku pada seluruh invoice.</p>}
+        {item.shared && <p className="order-v5-shared-note">Invoice ini juga memuat pesanan lain dari pembeli yang sama. Pembayaran dan nota kredit berlaku pada seluruh invoice.</p>}
         <div className="order-v5-actions"><Button variant="outline" size="sm" onClick={() => go("billing", item.invoice.id)}>Buka tagihan<ArrowRight data-icon="inline-end"/></Button><Document kind="invoice" id={item.invoice.id}>Dokumen invoice</Document></div>
       </article>)}</div> : <p className="order-v5-empty-note">Belum ada invoice untuk pesanan ini. Bagian Penagihan menerbitkannya setelah penerimaan difinalisasi.</p>}
     </section>}

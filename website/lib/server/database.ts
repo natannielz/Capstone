@@ -20,22 +20,26 @@ function connection(){
   if(url.startsWith("file:"))mkdirSync(".data",{recursive:true});
   return client=createClient({url,authToken:process.env.TURSO_AUTH_TOKEN});
 }
-export async function initializeDatabase(){
-  if(testDatabase)return;
-  if(!initialized)initialized=(async()=>{
-    const db=connection();
+/** Exposed for isolated migration tests; callers must never point tests at a live database. */
+export async function migrateDatabase(db:Client){
     await db.execute("CREATE TABLE IF NOT EXISTS app_migrations (id TEXT PRIMARY KEY)");
-    for(const id of ["0000_common_wallflower.sql","0001_auth.sql"]){
+    for(const id of ["0000_common_wallflower.sql","0001_auth.sql","0002_customer_buyers.sql"]){
       if((await db.execute({sql:"SELECT id FROM app_migrations WHERE id=?",args:[id]})).rows.length)continue;
       if(id==="0000_common_wallflower.sql"&&(await db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='system_version'")).rows.length){
         await db.execute("INSERT OR IGNORE INTO app_migrations(id) VALUES('0000_common_wallflower.sql')");continue;
       }
       const sql=await readFile(join(process.cwd(),"drizzle",id),"utf8");
       const statements=sql.split(";").map(s=>s.trim()).filter(Boolean).map(sql=>({sql,args:[]}));
-      try {await db.batch([...statements,{sql:"INSERT INTO app_migrations(id) VALUES(?)",args:[id]}],"write");}
+      const migration=[...statements,{sql:"INSERT INTO app_migrations(id) VALUES(?)",args:[id]}];
+      // libSQL migrate toggles foreign keys on the same connection around an atomic
+      // transaction. Ordinary batch cannot safely rebuild referenced parent tables.
+      try {if(id==="0002_customer_buyers.sql")await db.migrate(migration);else await db.batch(migration,"write");}
       catch(error){if(!(await db.execute({sql:"SELECT id FROM app_migrations WHERE id=?",args:[id]})).rows.length)throw error;}
     }
-  })().catch(error=>{initialized=undefined;throw error;});
+}
+export async function initializeDatabase(){
+  if(testDatabase)return;
+  if(!initialized)initialized=migrateDatabase(connection()).catch(error=>{initialized=undefined;throw error;});
   return initialized;
 }
 class Query implements Statement {

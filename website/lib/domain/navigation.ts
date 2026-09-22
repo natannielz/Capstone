@@ -21,16 +21,28 @@ export function canOpenPage(role: Role, page: string): page is WorkspacePage {
   return Object.hasOwn(PAGE_ROLES, page) && (PAGE_ROLES[page as WorkspacePage] as Role[]).includes(role);
 }
 
-/** A login continuation may only point into this portal and a page available to the actor. */
+export function defaultDestination(role: Role): string {
+  return role === "customer" ? "/shop" : "/workspace";
+}
+
+/** Customer and staff continuations are separate, same-origin allowlists. */
 export function safeLoginDestination(raw: string | null, role: Role): string {
-  if (!raw || raw.length > 2048 || !raw.startsWith("/workspace")) return "/workspace";
+  const fallback = defaultDestination(role);
+  if (!raw || raw.length > 2048 || !raw.startsWith("/") || raw.startsWith("//") || /[\\\u0000-\u001f]/.test(raw)) return fallback;
   try {
     const url = new URL(raw, "https://unit-toko.invalid");
-    if (url.origin !== "https://unit-toko.invalid" || url.pathname !== "/workspace") return "/workspace";
+    if (url.origin !== "https://unit-toko.invalid") return fallback;
+    if (role === "customer") {
+      const permitted = ["/", "/shop", "/cart", "/checkout", "/account", "/account/orders"].includes(url.pathname)
+        || /^\/shop\/[a-zA-Z0-9_-]+$/.test(url.pathname)
+        || /^\/account\/orders\/[a-zA-Z0-9_-]+$/.test(url.pathname);
+      return permitted ? url.pathname + url.search : fallback;
+    }
+    if (url.pathname !== "/workspace") return fallback;
     const view = url.searchParams.get("view") || "dashboard";
-    if (!canOpenPage(role, view)) return "/workspace";
+    if (!canOpenPage(role, view)) return fallback;
     return url.pathname + url.search;
   } catch {
-    return "/workspace";
+    return fallback;
   }
 }

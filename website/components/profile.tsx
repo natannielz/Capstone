@@ -7,11 +7,14 @@ import { Art } from "./art";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { clearCustomerCart } from "@/lib/client/customer-cart";
+import { clearCartForAccount } from "@/lib/client/cart-storage";
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { ROLE_LABELS } from "@/lib/domain/accounts";
 import type { WorkspaceContext } from "./workspace";
 
-type ProfileValues = { name: string; phone: string; position: string };
+type ProfileValues = { name: string; phone: string; position: string; address: string };
 type PasswordValues = { current: string; password: string; confirm: string };
 type Errors<T> = Partial<Record<keyof T, string>>;
 type ProfileProps = WorkspaceContext & { onDirtyChange?: (dirty: boolean) => void };
@@ -44,6 +47,7 @@ export function Profile({ actor, s, refresh, onDirtyChange }: ProfileProps) {
     name: actor.name,
     phone: actor.phone || "",
     position: actor.position || "",
+    address: actor.address || "",
   });
   const [savedValues, setSavedValues] = useState(values);
   const [passwords, setPasswords] = useState<PasswordValues>(EMPTY_PASSWORDS);
@@ -91,12 +95,14 @@ export function Profile({ actor, s, refresh, onDirtyChange }: ProfileProps) {
       name: values.name.trim(),
       phone: values.phone.trim(),
       position: values.position.trim(),
+      address: values.address.trim(),
     };
     const errors: Errors<ProfileValues> = {};
     if (!next.name) errors.name = "Masukkan nama lengkap.";
     else if (next.name.length > 100) errors.name = "Nama lengkap maksimal 100 karakter.";
     if (next.phone.length > 30) errors.phone = "Nomor kontak maksimal 30 karakter.";
     if (next.position.length > 100) errors.position = "Jabatan maksimal 100 karakter.";
+    if (next.address.length > 500) errors.address = "Alamat maksimal 500 karakter.";
     setProfileErrors(errors);
     setSaveError("");
     setSavedMessage("");
@@ -110,7 +116,7 @@ export function Profile({ actor, s, refresh, onDirtyChange }: ProfileProps) {
       await request("/api/profile", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(next),
+        body: JSON.stringify(actor.role === "customer" ? next : {name: next.name, phone: next.phone, position: next.position}),
       });
       setValues(next);
       setSavedValues(next);
@@ -179,7 +185,9 @@ export function Profile({ actor, s, refresh, onDirtyChange }: ProfileProps) {
         body: JSON.stringify({ currentPassword: passwords.current, newPassword: passwords.password }),
       });
       onDirtyChange?.(false);
-      window.location.assign("/login");
+      clearCartForAccount(actor.id);
+      await clearCustomerCart(actor.id);
+      window.location.assign(actor.role === "customer" ? "/login?next=%2Faccount" : "/login");
     } catch (error) {
       const message = errorMessage(error);
       if (message === "Kata sandi saat ini tidak sesuai.") {
@@ -196,7 +204,7 @@ export function Profile({ actor, s, refresh, onDirtyChange }: ProfileProps) {
   return (
     <div className="profile-layout">
       <aside className="panel profile-card">
-        <Art className="profile-photo" src={actor.avatar || "/images/avatars/" + (actor.role === "pic" ? "pic-a" : actor.role) + ".png"} alt={"Foto profil " + actor.name} />
+        <Art className="profile-photo" src={actor.avatar || "/images/avatars/" + (actor.role === "pic" ? "pic-a" : actor.role === "customer" ? "pic-b" : actor.role) + ".png"} alt={"Foto profil " + actor.name} />
         <h2>{actor.name}</h2>
         <p>{ROLE_LABELS[actor.role]}</p>
         <label className="upload-label" htmlFor="profile-avatar">
@@ -235,11 +243,17 @@ export function Profile({ actor, s, refresh, onDirtyChange }: ProfileProps) {
                 <Input id="profile-phone" type="tel" autoComplete="tel" placeholder="Contoh: 081234567890" value={values.phone} onChange={(event) => editProfile("phone", event.target.value)} maxLength={30} disabled={busy} aria-invalid={Boolean(profileErrors.phone)} aria-describedby={profileErrors.phone ? "profile-phone-error" : undefined} />
                 {profileErrors.phone && <FieldError id="profile-phone-error">{profileErrors.phone}</FieldError>}
               </Field>
-              <Field data-disabled={busy} data-invalid={Boolean(profileErrors.position)}>
+              {actor.role !== "customer" && <Field data-disabled={busy} data-invalid={Boolean(profileErrors.position)}>
                 <FieldLabel htmlFor="profile-position">Jabatan (opsional)</FieldLabel>
                 <Input id="profile-position" autoComplete="organization-title" value={values.position} onChange={(event) => editProfile("position", event.target.value)} maxLength={100} disabled={busy} aria-invalid={Boolean(profileErrors.position)} aria-describedby={profileErrors.position ? "profile-position-error" : undefined} />
                 {profileErrors.position && <FieldError id="profile-position-error">{profileErrors.position}</FieldError>}
-              </Field>
+              </Field>}
+              {actor.role === "customer" && <Field data-disabled={busy} data-invalid={Boolean(profileErrors.address)}>
+                <FieldLabel htmlFor="profile-address">Alamat pengiriman bawaan (opsional)</FieldLabel>
+                <Textarea id="profile-address" autoComplete="street-address" value={values.address} onChange={event => editProfile("address", event.target.value)} maxLength={500} disabled={busy} aria-invalid={Boolean(profileErrors.address)}/>
+                <FieldDescription>Dipakai untuk pesanan baru. Alamat pada pesanan sebelumnya tetap tersimpan.</FieldDescription>
+                {profileErrors.address && <FieldError>{profileErrors.address}</FieldError>}
+              </Field>}
             </FieldGroup>
             <div className="profile-form-actions">
               <Button disabled={busy || !profileDirty} type="submit"><Save data-icon="inline-start" aria-hidden="true" />{pending === "profile" ? "Menyimpan…" : "Simpan perubahan"}</Button>
@@ -252,7 +266,7 @@ export function Profile({ actor, s, refresh, onDirtyChange }: ProfileProps) {
           <header className="panel-title profile-section-header"><div><h2 id="profile-account-title">Detail akun</h2><p>Hubungi administrator untuk mengubah informasi ini.</p></div></header>
           <dl className="profile-account-details">
             <div className="profile-account-item"><dt>Email akun</dt><dd>{actor.email}</dd></div>
-            <div className="profile-account-item"><dt>Divisi / unit</dt><dd>{s.divisions.find((division) => division.id === actor.divisionId)?.name || "Unit Toko & Koperasi"}</dd></div>
+            <div className="profile-account-item"><dt>{actor.role === "customer" ? "Jenis akun" : "Divisi / unit"}</dt><dd>{actor.role === "customer" ? "Pelanggan Unit Toko" : s.divisions.find((division) => division.id === actor.divisionId)?.name || "Unit Toko & Koperasi"}</dd></div>
             <div className="profile-account-item"><dt>Hak akses</dt><dd>{ROLE_LABELS[actor.role]}</dd></div>
           </dl>
         </section>

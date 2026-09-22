@@ -1,6 +1,6 @@
 # Rencana v7 — Etalase dan akun pelanggan
 
-Tanggal: 21 September 2026. Status: rencana implementasi, belum diterapkan.
+Tanggal rencana: 21 September 2026. Status pelaksanaan: implementasi, pengujian, dan rilis v7 selesai pada 22 September 2026. Hasil aktual tersedia pada [testing-customer-v7.md](testing-customer-v7.md) dan [rilis-v7.md](rilis-v7.md). Keputusan di bawah merupakan baseline rencana.
 
 Permintaan pengguna: publikasikan kode yang sudah selesai ke `natannielz/Capstone`, lalu rencanakan satu akun pelanggan demo tambahan dan halaman belanja dengan pola marketplace seperti Shopee. Pengguna memilih **pelanggan demo khusus**, terpisah dari PIC divisi. Dasar implementasi adalah rilis v6; studi kasus tetap Unit Toko dengan operasional penjualan kepada divisi BNI, ditambah kanal pelanggan demo.
 
@@ -8,7 +8,7 @@ Permintaan pengguna: publikasikan kode yang sudah selesai ke `natannielz/Capston
 
 Pelanggan dapat menemukan barang, memilih kemasan, memasukkan barang ke keranjang, membuat pesanan, memantau pengiriman, mengonfirmasi penerimaan, dan membayar tagihan secara simulasi. Pesanan tersebut masuk ke proses toko yang sama dan dibatasi berdasarkan pemiliknya di server.
 
-Tambahkan satu akun: ID `customer-demo`, nama **Pelanggan Demo**, email **customer@unit-toko.demo**, role `customer`. Akun ini belum dibuat pada tahap perencanaan. Sesudah implementasi, total menjadi 11 akun demo dan 10 role. Password awal unik disimpan dalam berkas privat dan disampaikan secara privat; tidak ditulis dalam repositori publik.
+Tambahkan satu akun: ID `customer-demo`, nama **Pelanggan Demo**, email **customer@unit-toko.demo**, role `customer`. Akun ini belum dibuat pada tahap perencanaan dan telah diprovisikan pada pelaksanaan rilis. Total akhir 11 akun demo dan 10 role. Password awal unik disimpan dalam berkas privat dan disampaikan secara privat; tidak ditulis dalam repositori publik.
 
 Tiga review terpisah memeriksa pengalaman belanja, model transaksi/otorisasi, dan kelayakan publikasi kode. Temuan utama: antarmuka belanja saat ini masih berada dalam workspace; hak baca selain PIC/kurir belum memiliki cabang pelanggan; identitas pembeli pada invoice dan transaksi masih bergantung pada divisi. Halaman customer memerlukan perubahan model pembeli dan izin, bukan hanya menu baru.
 
@@ -115,4 +115,4 @@ Berkas utama: `lib/domain/accounts.ts`, `model.ts`, `selectors.ts`, `engine.ts`,
 
 Satu toko, satu akun pelanggan demo tambahan, barang ilustrasi, pengiriman internal, dan pembayaran simulasi. Multi-vendor, signup publik, chat penjual, review/rating, program promo, payment gateway, dan integrasi bank/kurir nyata tidak masuk rilis ini.
 
-Kode v6 dan rencana ini dipublikasikan ke `https://github.com/natannielz/Capstone` dengan aplikasi di `website/` dan dokumentasi di `docs/`. Arsip sumber, data lokal, kredensial, log, dan konfigurasi akun layanan tetap privat. Pekerjaan customer dimulai melalui goal setelah rencana tersedia; dokumen ini tidak menyatakan akun/halaman customer sudah dibuat.
+Kode dipublikasikan ke `https://github.com/natannielz/Capstone` dengan aplikasi di `website/` dan dokumentasi di `docs/`. Arsip sumber, data lokal, kredensial, log, dan konfigurasi akun layanan tetap privat. Pekerjaan customer dijalankan melalui goal setelah rencana tersedia; catatan rilis dan hasil pengujian merekam hasil pelaksanaannya.

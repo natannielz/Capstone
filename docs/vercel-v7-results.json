@@ -1,0 +1,897 @@
+{
+  "at": "2026-09-22T01:57:50.170Z",
+  "base": "https://unit-toko-bni.vercel.app",
+  "deployment": "dpl_CS5rq8MVbegyMRUy7ax9EGr97Z7C",
+  "requestPolicy": {
+    "businessDataMutations": false,
+    "databaseReads": "read transaction only",
+    "allowedPostPaths": [
+      "/api/auth/login",
+      "/api/auth/logout"
+    ],
+    "sessionLifecycleMutations": true,
+    "redirectsFollowed": false,
+    "preservationCheckedBeforeLogin": true
+  },
+  "checks": [
+    {
+      "name": "Public catalog allowlist and deployed initialization",
+      "result": "pass",
+      "ms": 1877,
+      "evidence": {
+        "status": 200,
+        "products": 36,
+        "operationalFieldsExcluded": true
+      }
+    },
+    {
+      "name": "Strict production preservation before any login",
+      "result": "pass",
+      "ms": 2278,
+      "evidence": {
+        "existingRecordsCompared": 239,
+        "credentialsPreserved": 10,
+        "sessionsPreserved": 0,
+        "expiredSessionsRemoved": 1,
+        "pinnedPreVerifierSessionCount": 1,
+        "closedPeriodSnapshotsCompared": 0,
+        "revisionBefore": 34,
+        "revisionAfter": 35,
+        "addedIdentityCount": 1,
+        "allowedAdditionalMigration": "0002_customer_buyers.sql",
+        "businessRowsPreserved": true,
+        "payloadsPreserved": true
+      }
+    },
+    {
+      "name": "Anonymous account data requires a session",
+      "result": "pass",
+      "ms": 668,
+      "evidence": {
+        "state": 401,
+        "reports": 401,
+        "printable": 401,
+        "actor": null
+      }
+    },
+    {
+      "name": "Unknown public and API routes return 404",
+      "result": "pass",
+      "ms": 426,
+      "evidence": {
+        "status": 404
+      }
+    },
+    {
+      "name": "Public storefront page: /",
+      "result": "pass",
+      "ms": 80,
+      "evidence": {
+        "status": 200
+      }
+    },
+    {
+      "name": "Public storefront page: /shop",
+      "result": "pass",
+      "ms": 360,
+      "evidence": {
+        "status": 200
+      }
+    },
+    {
+      "name": "Public storefront page: /cart",
+      "result": "pass",
+      "ms": 351,
+      "evidence": {
+        "status": 200
+      }
+    },
+    {
+      "name": "Public storefront page: /login",
+      "result": "pass",
+      "ms": 218,
+      "evidence": {
+        "status": 200
+      }
+    },
+    {
+      "name": "Existing or new account login: pic-a",
+      "result": "pass",
+      "ms": 1329,
+      "evidence": {
+        "role": "pic",
+        "login": 200,
+        "state": 200,
+        "sessionProfile": 200,
+        "secureCookie": true
+      }
+    },
+    {
+      "name": "State projection: pic-a",
+      "result": "pass",
+      "ms": 1,
+      "evidence": {
+        "isolated": true,
+        "role": "pic"
+      }
+    },
+    {
+      "name": "Report permissions: pic-a",
+      "result": "pass",
+      "ms": 419,
+      "evidence": {
+        "csv": 403,
+        "printable": 403
+      }
+    },
+    {
+      "name": "Allowed login continuation: pic-a",
+      "result": "pass",
+      "ms": 1164,
+      "evidence": {
+        "status": 307,
+        "mode": "http",
+        "destination": "/workspace?view=profile",
+        "followed": false
+      }
+    },
+    {
+      "name": "Existing or new account login: pic-b",
+      "result": "pass",
+      "ms": 1119,
+      "evidence": {
+        "role": "pic",
+        "login": 200,
+        "state": 200,
+        "sessionProfile": 200,
+        "secureCookie": true
+      }
+    },
+    {
+      "name": "State projection: pic-b",
+      "result": "pass",
+      "ms": 0,
+      "evidence": {
+        "isolated": true,
+        "role": "pic"
+      }
+    },
+    {
+      "name": "Report permissions: pic-b",
+      "result": "pass",
+      "ms": 479,
+      "evidence": {
+        "csv": 403,
+        "printable": 403
+      }
+    },
+    {
+      "name": "Allowed login continuation: pic-b",
+      "result": "pass",
+      "ms": 196,
+      "evidence": {
+        "status": 307,
+        "mode": "http",
+        "destination": "/workspace?view=profile",
+        "followed": false
+      }
+    },
+    {
+      "name": "Existing or new account login: kepala",
+      "result": "pass",
+      "ms": 943,
+      "evidence": {
+        "role": "kepala",
+        "login": 200,
+        "state": 200,
+        "sessionProfile": 200,
+        "secureCookie": true
+      }
+    },
+    {
+      "name": "State projection: kepala",
+      "result": "pass",
+      "ms": 0,
+      "evidence": {
+        "isolated": true,
+        "role": "kepala"
+      }
+    },
+    {
+      "name": "Report permissions: kepala",
+      "result": "pass",
+      "ms": 512,
+      "evidence": {
+        "csv": 200,
+        "printable": 200
+      }
+    },
+    {
+      "name": "Allowed login continuation: kepala",
+      "result": "pass",
+      "ms": 191,
+      "evidence": {
+        "status": 307,
+        "mode": "http",
+        "destination": "/workspace?view=profile",
+        "followed": false
+      }
+    },
+    {
+      "name": "Existing or new account login: staf",
+      "result": "pass",
+      "ms": 1043,
+      "evidence": {
+        "role": "staf",
+        "login": 200,
+        "state": 200,
+        "sessionProfile": 200,
+        "secureCookie": true
+      }
+    },
+    {
+      "name": "State projection: staf",
+      "result": "pass",
+      "ms": 0,
+      "evidence": {
+        "isolated": true,
+        "role": "staf"
+      }
+    },
+    {
+      "name": "Report permissions: staf",
+      "result": "pass",
+      "ms": 462,
+      "evidence": {
+        "csv": 403,
+        "printable": 403
+      }
+    },
+    {
+      "name": "Allowed login continuation: staf",
+      "result": "pass",
+      "ms": 217,
+      "evidence": {
+        "status": 307,
+        "mode": "http",
+        "destination": "/workspace?view=profile",
+        "followed": false
+      }
+    },
+    {
+      "name": "Existing or new account login: kurir",
+      "result": "pass",
+      "ms": 1016,
+      "evidence": {
+        "role": "kurir",
+        "login": 200,
+        "state": 200,
+        "sessionProfile": 200,
+        "secureCookie": true
+      }
+    },
+    {
+      "name": "State projection: kurir",
+      "result": "pass",
+      "ms": 0,
+      "evidence": {
+        "isolated": true,
+        "role": "kurir"
+      }
+    },
+    {
+      "name": "Report permissions: kurir",
+      "result": "pass",
+      "ms": 2180,
+      "evidence": {
+        "csv": 403,
+        "printable": 403
+      }
+    },
+    {
+      "name": "Allowed login continuation: kurir",
+      "result": "pass",
+      "ms": 427,
+      "evidence": {
+        "status": 307,
+        "mode": "http",
+        "destination": "/workspace?view=profile",
+        "followed": false
+      }
+    },
+    {
+      "name": "Existing or new account login: laporan",
+      "result": "pass",
+      "ms": 1066,
+      "evidence": {
+        "role": "laporan",
+        "login": 200,
+        "state": 200,
+        "sessionProfile": 200,
+        "secureCookie": true
+      }
+    },
+    {
+      "name": "State projection: laporan",
+      "result": "pass",
+      "ms": 0,
+      "evidence": {
+        "isolated": true,
+        "role": "laporan"
+      }
+    },
+    {
+      "name": "Report permissions: laporan",
+      "result": "pass",
+      "ms": 505,
+      "evidence": {
+        "csv": 200,
+        "printable": 200
+      }
+    },
+    {
+      "name": "Allowed login continuation: laporan",
+      "result": "pass",
+      "ms": 183,
+      "evidence": {
+        "status": 307,
+        "mode": "http",
+        "destination": "/workspace?view=profile",
+        "followed": false
+      }
+    },
+    {
+      "name": "Existing or new account login: penagihan",
+      "result": "pass",
+      "ms": 1103,
+      "evidence": {
+        "role": "penagihan",
+        "login": 200,
+        "state": 200,
+        "sessionProfile": 200,
+        "secureCookie": true
+      }
+    },
+    {
+      "name": "State projection: penagihan",
+      "result": "pass",
+      "ms": 0,
+      "evidence": {
+        "isolated": true,
+        "role": "penagihan"
+      }
+    },
+    {
+      "name": "Report permissions: penagihan",
+      "result": "pass",
+      "ms": 497,
+      "evidence": {
+        "csv": 200,
+        "printable": 200
+      }
+    },
+    {
+      "name": "Allowed login continuation: penagihan",
+      "result": "pass",
+      "ms": 199,
+      "evidence": {
+        "status": 307,
+        "mode": "http",
+        "destination": "/workspace?view=profile",
+        "followed": false
+      }
+    },
+    {
+      "name": "Existing or new account login: pimpinan",
+      "result": "pass",
+      "ms": 1108,
+      "evidence": {
+        "role": "pimpinan",
+        "login": 200,
+        "state": 200,
+        "sessionProfile": 200,
+        "secureCookie": true
+      }
+    },
+    {
+      "name": "State projection: pimpinan",
+      "result": "pass",
+      "ms": 0,
+      "evidence": {
+        "isolated": true,
+        "role": "pimpinan"
+      }
+    },
+    {
+      "name": "Report permissions: pimpinan",
+      "result": "pass",
+      "ms": 598,
+      "evidence": {
+        "csv": 200,
+        "printable": 200
+      }
+    },
+    {
+      "name": "Allowed login continuation: pimpinan",
+      "result": "pass",
+      "ms": 168,
+      "evidence": {
+        "status": 307,
+        "mode": "http",
+        "destination": "/workspace?view=profile",
+        "followed": false
+      }
+    },
+    {
+      "name": "Existing or new account login: akuntansi",
+      "result": "pass",
+      "ms": 1245,
+      "evidence": {
+        "role": "akuntansi",
+        "login": 200,
+        "state": 200,
+        "sessionProfile": 200,
+        "secureCookie": true
+      }
+    },
+    {
+      "name": "State projection: akuntansi",
+      "result": "pass",
+      "ms": 0,
+      "evidence": {
+        "isolated": true,
+        "role": "akuntansi"
+      }
+    },
+    {
+      "name": "Report permissions: akuntansi",
+      "result": "pass",
+      "ms": 666,
+      "evidence": {
+        "csv": 200,
+        "printable": 200
+      }
+    },
+    {
+      "name": "Allowed login continuation: akuntansi",
+      "result": "pass",
+      "ms": 270,
+      "evidence": {
+        "status": 307,
+        "mode": "http",
+        "destination": "/workspace?view=profile",
+        "followed": false
+      }
+    },
+    {
+      "name": "Existing or new account login: admin",
+      "result": "pass",
+      "ms": 1265,
+      "evidence": {
+        "role": "admin",
+        "login": 200,
+        "state": 200,
+        "sessionProfile": 200,
+        "secureCookie": true
+      }
+    },
+    {
+      "name": "State projection: admin",
+      "result": "pass",
+      "ms": 0,
+      "evidence": {
+        "isolated": true,
+        "role": "admin"
+      }
+    },
+    {
+      "name": "Report permissions: admin",
+      "result": "pass",
+      "ms": 569,
+      "evidence": {
+        "csv": 403,
+        "printable": 403
+      }
+    },
+    {
+      "name": "Allowed login continuation: admin",
+      "result": "pass",
+      "ms": 249,
+      "evidence": {
+        "status": 307,
+        "mode": "http",
+        "destination": "/workspace?view=profile",
+        "followed": false
+      }
+    },
+    {
+      "name": "Existing or new account login: customer-demo",
+      "result": "pass",
+      "ms": 1154,
+      "evidence": {
+        "role": "customer",
+        "login": 200,
+        "state": 200,
+        "sessionProfile": 200,
+        "secureCookie": true
+      }
+    },
+    {
+      "name": "State projection: customer-demo",
+      "result": "pass",
+      "ms": 0,
+      "evidence": {
+        "isolated": true,
+        "role": "customer"
+      }
+    },
+    {
+      "name": "Report permissions: customer-demo",
+      "result": "pass",
+      "ms": 557,
+      "evidence": {
+        "csv": 403,
+        "printable": 403
+      }
+    },
+    {
+      "name": "Allowed login continuation: customer-demo",
+      "result": "pass",
+      "ms": 295,
+      "evidence": {
+        "status": 307,
+        "mode": "http",
+        "destination": "/account/orders?status=all",
+        "followed": false
+      }
+    },
+    {
+      "name": "Untrusted login destination rejected: customer-demo external",
+      "result": "pass",
+      "ms": 300,
+      "evidence": {
+        "status": 307,
+        "mode": "http",
+        "destination": "/shop",
+        "followed": false
+      }
+    },
+    {
+      "name": "Untrusted login destination rejected: customer-demo path",
+      "result": "pass",
+      "ms": 460,
+      "evidence": {
+        "status": 307,
+        "mode": "http",
+        "destination": "/shop",
+        "followed": false
+      }
+    },
+    {
+      "name": "Untrusted login destination rejected: customer-demo path",
+      "result": "pass",
+      "ms": 275,
+      "evidence": {
+        "status": 307,
+        "mode": "http",
+        "destination": "/shop",
+        "followed": false
+      }
+    },
+    {
+      "name": "Untrusted login destination rejected: customer-demo path",
+      "result": "pass",
+      "ms": 166,
+      "evidence": {
+        "status": 307,
+        "mode": "http",
+        "destination": "/shop",
+        "followed": false
+      }
+    },
+    {
+      "name": "Untrusted login destination rejected: staf external",
+      "result": "pass",
+      "ms": 282,
+      "evidence": {
+        "status": 307,
+        "mode": "http",
+        "destination": "/workspace",
+        "followed": false
+      }
+    },
+    {
+      "name": "Untrusted login destination rejected: staf path",
+      "result": "pass",
+      "ms": 313,
+      "evidence": {
+        "status": 307,
+        "mode": "http",
+        "destination": "/workspace",
+        "followed": false
+      }
+    },
+    {
+      "name": "Untrusted login destination rejected: staf path",
+      "result": "pass",
+      "ms": 256,
+      "evidence": {
+        "status": 307,
+        "mode": "http",
+        "destination": "/workspace",
+        "followed": false
+      }
+    },
+    {
+      "name": "Untrusted login destination rejected: staf path",
+      "result": "pass",
+      "ms": 302,
+      "evidence": {
+        "status": 307,
+        "mode": "http",
+        "destination": "/workspace",
+        "followed": false
+      }
+    },
+    {
+      "name": "Customer cannot enter internal workspace",
+      "result": "pass",
+      "ms": 277,
+      "evidence": {
+        "status": 307,
+        "mode": "http",
+        "destination": "/account/orders",
+        "followed": false
+      }
+    },
+    {
+      "name": "Customer account page GET: /account",
+      "result": "pass",
+      "ms": 308,
+      "evidence": {
+        "status": 200,
+        "pageShellRendered": true,
+        "clientFormInteractionTested": false
+      }
+    },
+    {
+      "name": "Customer account page GET: /account/orders",
+      "result": "pass",
+      "ms": 297,
+      "evidence": {
+        "status": 200,
+        "pageShellRendered": true,
+        "clientFormInteractionTested": false
+      }
+    },
+    {
+      "name": "Staff cannot enter customer account: /account",
+      "result": "pass",
+      "ms": 235,
+      "evidence": {
+        "status": 307,
+        "mode": "http",
+        "destination": "/workspace",
+        "followed": false
+      }
+    },
+    {
+      "name": "Staff cannot enter customer account: /account/orders",
+      "result": "pass",
+      "ms": 258,
+      "evidence": {
+        "status": 307,
+        "mode": "http",
+        "destination": "/workspace",
+        "followed": false
+      }
+    },
+    {
+      "name": "PIC division isolation remains intact",
+      "result": "pass",
+      "ms": 0,
+      "evidence": {
+        "separateDivisions": true,
+        "disjointOrders": true
+      }
+    },
+    {
+      "name": "Existing division invoice document access: pic-a",
+      "result": "pass",
+      "ms": 690,
+      "evidence": {
+        "status": 200
+      }
+    },
+    {
+      "name": "Existing division invoice document access: pic-b",
+      "result": "pass",
+      "ms": 330,
+      "evidence": {
+        "status": 404
+      }
+    },
+    {
+      "name": "Existing division invoice document access: customer-demo",
+      "result": "pass",
+      "ms": 336,
+      "evidence": {
+        "status": 404
+      }
+    },
+    {
+      "name": "Existing division invoice document access: staf",
+      "result": "pass",
+      "ms": 381,
+      "evidence": {
+        "status": 403
+      }
+    },
+    {
+      "name": "Existing division invoice document access: penagihan",
+      "result": "pass",
+      "ms": 327,
+      "evidence": {
+        "status": 200
+      }
+    },
+    {
+      "name": "Existing division attachment is not readable by customer",
+      "result": "pass",
+      "ms": 423,
+      "evidence": {
+        "status": 404,
+        "uploadAttempted": false
+      }
+    },
+    {
+      "name": "Logout and token invalidation: pic-a",
+      "result": "pass",
+      "ms": 525,
+      "evidence": {
+        "logout": 200,
+        "revokedToken": 401
+      }
+    },
+    {
+      "name": "Logout and token invalidation: pic-b",
+      "result": "pass",
+      "ms": 441,
+      "evidence": {
+        "logout": 200,
+        "revokedToken": 401
+      }
+    },
+    {
+      "name": "Logout and token invalidation: kepala",
+      "result": "pass",
+      "ms": 623,
+      "evidence": {
+        "logout": 200,
+        "revokedToken": 401
+      }
+    },
+    {
+      "name": "Logout and token invalidation: staf",
+      "result": "pass",
+      "ms": 620,
+      "evidence": {
+        "logout": 200,
+        "revokedToken": 401
+      }
+    },
+    {
+      "name": "Logout and token invalidation: kurir",
+      "result": "pass",
+      "ms": 535,
+      "evidence": {
+        "logout": 200,
+        "revokedToken": 401
+      }
+    },
+    {
+      "name": "Logout and token invalidation: laporan",
+      "result": "pass",
+      "ms": 459,
+      "evidence": {
+        "logout": 200,
+        "revokedToken": 401
+      }
+    },
+    {
+      "name": "Logout and token invalidation: penagihan",
+      "result": "pass",
+      "ms": 333,
+      "evidence": {
+        "logout": 200,
+        "revokedToken": 401
+      }
+    },
+    {
+      "name": "Logout and token invalidation: pimpinan",
+      "result": "pass",
+      "ms": 538,
+      "evidence": {
+        "logout": 200,
+        "revokedToken": 401
+      }
+    },
+    {
+      "name": "Logout and token invalidation: akuntansi",
+      "result": "pass",
+      "ms": 478,
+      "evidence": {
+        "logout": 200,
+        "revokedToken": 401
+      }
+    },
+    {
+      "name": "Logout and token invalidation: admin",
+      "result": "pass",
+      "ms": 443,
+      "evidence": {
+        "logout": 200,
+        "revokedToken": 401
+      }
+    },
+    {
+      "name": "Logout and token invalidation: customer-demo",
+      "result": "pass",
+      "ms": 529,
+      "evidence": {
+        "logout": 200,
+        "revokedToken": 401
+      }
+    },
+    {
+      "name": "Business data and credentials still preserved after session verification",
+      "result": "pass",
+      "ms": 2071,
+      "evidence": {
+        "existingRecordsCompared": 239,
+        "credentialsPreserved": 10,
+        "sessionsPreserved": 0,
+        "expiredSessionsRemoved": 1,
+        "pinnedPreVerifierSessionCount": 1,
+        "closedPeriodSnapshotsCompared": 0,
+        "revisionBefore": 34,
+        "revisionAfter": 35,
+        "addedIdentityCount": 1,
+        "allowedAdditionalMigration": "0002_customer_buyers.sql",
+        "businessRowsPreserved": true,
+        "payloadsPreserved": true
+      }
+    }
+  ],
+  "databaseReads": [
+    {
+      "result": "pass",
+      "attempt": 1,
+      "ms": 2206,
+      "tables": 38
+    },
+    {
+      "result": "pass",
+      "attempt": 1,
+      "ms": 2014,
+      "tables": 38
+    }
+  ],
+  "baselineDrift": {
+    "initialVerificationStartedAt": "2026-09-21T14:03:37.152Z",
+    "initialResult": "Stopped before login because one additional session existed since the backup.",
+    "resolution": "Read-only diagnosis found all original records intact, with only the expected migration/customer additions plus one PIC session predating the verifier. Only that exact private session key and fingerprint are allowed; no session was removed or reset.",
+    "sessions": [
+      {
+        "role": "pic",
+        "estimatedCreatedAt": "2026-09-21T14:01:30.879Z",
+        "expiresAt": "2026-09-21T22:01:30.879Z"
+      }
+    ],
+    "credentialsAndBusinessPreservationUnchanged": true
+  },
+  "finishedAt": "2026-09-22T01:58:33.977Z",
+  "passed": 84,
+  "failed": 0,
+  "success": true
+}

@@ -16,6 +16,19 @@ import type { Actor } from "../lib/domain/accounts";
 const path=join(mkdtempSync(join(tmpdir(),"unit-toko-test-")),"database.sqlite");let connection=new DatabaseSync(path);connection.exec(readFileSync("drizzle/0000_common_wallflower.sql","utf8"));
 class Query implements Statement{values:unknown[]=[];constructor(public sql:string){}bind(...values:unknown[]){this.values=values;return this;}async first<T=Record<string,unknown>>(){await Promise.resolve();return (connection.prepare(this.sql).get(...this.values as [])||null) as T|null;}async run(){return connection.prepare(this.sql).run(...this.values as []);}allSync(){const stmt=connection.prepare(this.sql);return {results:stmt.all(...this.values as [])};}}
 connection.exec(readFileSync("drizzle/0001_auth.sql","utf8"));
+// Mirror libSQL Client.migrate(): disable FK enforcement outside the transaction
+// while rebuilding referenced tables, then restore it whether commit succeeds or not.
+connection.exec("PRAGMA foreign_keys=OFF; BEGIN");
+try {
+ connection.exec(readFileSync("drizzle/0002_customer_buyers.sql","utf8"));
+ connection.exec("COMMIT");
+} catch(error) {
+ connection.exec("ROLLBACK");
+ throw error;
+} finally {
+ connection.exec("PRAGMA foreign_keys=ON");
+}
+assert.equal(connection.prepare("PRAGMA foreign_key_check").all().length,0);
 setTestDatabase({prepare:(sql:string)=>new Query(sql),async batch(queries:Statement[]){await Promise.resolve();connection.exec("BEGIN");try{const result=queries.map(q=>{if(!(q instanceof Query))throw new Error("Unsupported test statement");return q.allSync();});connection.exec("COMMIT");return result;}catch(e){connection.exec("ROLLBACK");throw e;}}});
 let actors:Actor[]=[];const actor=(id:string)=>actors.find(a=>a.id===id)!;const command=(type:string,data:Record<string,unknown>)=>({id:crypto.randomUUID(),type,data});const act=(who:string,type:string,data:Record<string,unknown>)=>execute(actor(who),command(type,data));
 test("U05/U06/U11/U13/U15 repository SQL atomik, idempotensi, sesi data dan dokumen",async()=>{

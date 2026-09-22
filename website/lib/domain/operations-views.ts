@@ -1,5 +1,7 @@
 import type { Batch, Product, State } from "./model";
 import { today } from "./selectors";
+import {buyerLabel} from "./buyers";
+import {buyerFilterValue, buyerOptions} from "./buyer-views";
 
 export type InventoryTab = "products" | "batches" | "returns" | "stocktakes";
 export type InventoryCondition = "all" | "low" | "expired" | "expiring" | "held";
@@ -75,20 +77,20 @@ export function salesRows(s: State, filter: SalesFilter) {
     const shipment = shipments.get(line.shipmentId), order = shipment && orders.get(shipment.orderId), product = products.get(orderLines.get(line.orderLineId)?.productId || "");
     if (!shipment || !order || !product) return [];
     const date = line.finalizedDate || shipment.receivedDate || shipment.date;
-    if (date < filter.start || date > filter.end || (filter.category !== "all" && product.category !== filter.category) || (filter.division !== "all" && order.divisionId !== filter.division)) return [];
+    if (date < filter.start || date > filter.end || (filter.category !== "all" && product.category !== filter.category) || (filter.division !== "all" && buyerFilterValue(order) !== filter.division)) return [];
     return [{ line, shipment, order, product, date }];
   }).sort((a, b) => b.date.localeCompare(a.date) || a.shipment.number.localeCompare(b.shipment.number));
 }
 
 /** Spreadsheet-safe CSV; export shares the exact filtered rows shown by the register. */
 export function salesCSV(s: State, filter: SalesFilter) {
-  const rows = salesRows(s, filter), divisions = new Map(s.divisions.map(d => [d.id, d.name]));
+  const rows = salesRows(s, filter), buyers = new Map(buyerOptions(s).map(buyer => [buyer.value, buyer.label]));
   const cells: (string | number)[][] = [
     ["Penjualan final Unit Toko — data simulasi"], ["Tanggal finalisasi", filter.start, filter.end],
-    ["Sumber", filter.category === "all" ? "OMI & Smart" : filter.category], ["Divisi", filter.division === "all" ? "Semua divisi" : divisions.get(filter.division) || "Tidak ditemukan"],
+    ["Sumber", filter.category === "all" ? "OMI & Smart" : filter.category], ["Pembeli", filter.division === "all" ? "Semua pembeli" : buyers.get(filter.division) || "Tidak ditemukan"],
     ["Nilai sebelum nota kredit; tidak termasuk pajak invoice"],
-    ["Tanggal finalisasi", "Surat Jalan", "Divisi", "SKU", "Barang", "Sumber", "Jumlah final", "Satuan", "Nilai sebelum nota kredit"],
-    ...rows.map(({ line, shipment, order, product, date }) => [date, shipment.number, divisions.get(order.divisionId) || "", product.sku, product.name, product.category, line.accepted, product.unit, line.accepted * line.price]),
+    ["Tanggal finalisasi", "Surat Jalan", "Pembeli", "SKU", "Barang", "Sumber", "Jumlah final", "Satuan", "Nilai sebelum nota kredit"],
+    ...rows.map(({ line, shipment, order, product, date }) => [date, shipment.number, buyerLabel(s, order), product.sku, product.name, product.category, line.accepted, product.unit, line.accepted * line.price]),
     ["Total", "", "", "", "", "", "", "", rows.reduce((total, { line }) => total + line.accepted * line.price, 0)],
   ];
   return "\uFEFF" + cells.map(row => row.map(value => {
