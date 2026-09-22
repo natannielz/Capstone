@@ -20,12 +20,10 @@ export function ShopMotion({ children, refreshKey, className = "" }: {
       const root = scope.current;
       if (!root) return;
       const headline = root.querySelectorAll("[data-shop-headline]");
-      const objects = root.querySelectorAll("[data-shop-object]");
       const photos = root.querySelectorAll(".shop-product-photo img");
       const timeline = gsap.timeline({ defaults: { ease: "power3.out" } });
-      if (headline.length) timeline.from(headline, { y: 32, opacity: 0.3, duration: 0.72, stagger: 0.09, clearProps: "transform,opacity" }, 0);
-      if (objects.length) timeline.from(objects, { y: 38, rotation: 3, scale: 0.95, duration: 0.85, stagger: 0.1, clearProps: "transform" }, 0.06);
-      if (photos.length) timeline.from(photos, { y: 14, scale: 0.96, duration: 0.5, stagger: { each: 0.025, amount: 0.2 }, clearProps: "transform" }, 0);
+      if (headline.length) timeline.from(headline, { y: 16, opacity: 0.3, duration: 0.55, clearProps: "transform,opacity" }, 0);
+      if (photos.length) timeline.from(photos, { opacity: 0.45, duration: 0.28, stagger: { each: 0.01, amount: 0.1 }, clearProps: "opacity" }, 0);
       const settle = () => { timeline.progress(1); };
       root.addEventListener("focusin", settle);
       return () => root.removeEventListener("focusin", settle);
@@ -66,7 +64,7 @@ export function useShopShellMotion(scope: RefObject<HTMLDivElement | null>, path
     const media = gsap.matchMedia();
     media.add(motionQuery, () => {
       const badges = scope.current?.querySelectorAll("[data-cart-feedback]");
-      if (badges?.length) gsap.fromTo(badges, { scale: 1.3 }, { scale: 1, duration: 0.55, ease: "back.out(2)", clearProps: "transform" });
+      if (badges?.length) gsap.fromTo(badges, { scale: 1.16 }, { scale: 1, duration: 0.35, ease: "power2.out", clearProps: "transform" });
     }, scope);
     return () => media.revert();
   }, { scope, dependencies: [quantity, ready, pending], revertOnUpdate: true });

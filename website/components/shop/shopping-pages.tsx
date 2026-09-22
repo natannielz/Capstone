@@ -215,7 +215,7 @@ function ProductContent({ productId }: { productId: string }) {
         <div className="shop-detail-copy">
           <p className="shop-kicker">{shopCategory(product)}</p>
           <h1>{family.name}</h1>
-          <p className="shop-detail-sku">SKU {product.sku}</p>
+          <p className="shop-detail-introduction">{product.description}</p>
           <div className="shop-detail-price">
             <strong>{rupiah(product.price)}</strong>
             <span>/ {product.unit}</span>
@@ -223,7 +223,7 @@ function ProductContent({ productId }: { productId: string }) {
           <div
             className={`shop-detail-stock${product.available <= 0 ? " is-empty" : ""}`}
           >
-            <span />
+            {product.available > 0 ? <Check size={15} aria-hidden="true" /> : <CircleAlert size={15} aria-hidden="true" />}
             {product.available > 0
               ? `${product.available} ${product.unit} tersedia`
               : "Stok kemasan ini habis"}
@@ -329,7 +329,6 @@ function ProductContent({ productId }: { productId: string }) {
       </div>
       <section className="shop-product-description">
         <h2>Rincian produk</h2>
-        <p>{product.description}</p>
         <dl>
           <div>
             <dt>Kemasan dipilih</dt>

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { ShopMotion } from "./shop-motion";
+import { CollectionCarousel } from "../collection-carousel";
 import { useShopLocation } from "./use-shop-location";
 import {
   ArrowRight,
@@ -293,26 +294,20 @@ const INITIAL_QUERY: ShopQuery = {
   page: "1",
 };
 
-function CatalogEditorial({ products, back }: { products: PublicProduct[]; back: string }) {
-  const featured = ["demo-141", "demo-001", "demo-151"].flatMap(id => {
-    const product = products.find(item => item.id === id && item.active);
-    return product ? [product] : [];
-  });
-  return <ShopMotion refreshKey={featured.map(item => item.id).join(",")} className="shop-editorial-motion">
+function CatalogEditorial() {
+  return <ShopMotion refreshKey="collections-v12" className="shop-editorial-motion">
     <section className="shop-editorial" aria-labelledby="shop-editorial-title">
       <div className="shop-editorial-copy">
-        <p className="shop-editorial-eyebrow"><span /> UNIT TOKO / ETALASE PELANGGAN</p>
-        <h1 id="shop-editorial-title"><span data-shop-headline>Isi pantry.</span><span data-shop-headline>Siapkan hari.</span></h1>
-        <p className="shop-editorial-description">Kopi untuk pagi. Perlengkapan untuk rapat.<br />Pilihan untuk kegiatan Anda.</p>
-        <a href="#shop-products" className="shop-editorial-cta">Jelajahi etalase <ArrowRight size={18} /></a>
+        <div>
+          <p className="shop-editorial-eyebrow">UNIT TOKO / ETALASE PELANGGAN</p>
+          <h1 id="shop-editorial-title" data-shop-headline>Kebutuhan sehari-hari,<br />tersedia di sini.</h1>
+        </div>
+        <div className="shop-editorial-aside">
+          <p className="shop-editorial-description">Dari persediaan pantry hingga perlengkapan kegiatan. Pilih barang dan kemasan yang Anda perlukan.</p>
+          <a href="#shop-products" className="shop-editorial-cta">Lihat semua produk <ArrowRight size={18} /></a>
+        </div>
       </div>
-      <div className="shop-editorial-shelf" aria-label="Pilihan produk dari etalase">
-        <span className="shop-shelf-caption">Dari meja kerja, untuk keseharian.</span>
-        {featured.map((product, index) => <Link key={product.id} data-shop-object href={`/shop/${encodeURIComponent(product.id)}?${new URLSearchParams({ from: back })}`} onClick={() => rememberScroll(back)} className={`shop-shelf-product shop-shelf-product-${index}`}>
-          <Art src={product.image} alt={product.name} loading="eager" sizes="(max-width: 700px) 35vw, 22vw" />
-          <span><strong>{product.name}</strong><ArrowUpRight size={15} /></span>
-        </Link>)}
-      </div>
+      <CollectionCarousel ariaLabel="Pilihan kebutuhan" />
     </section>
   </ShopMotion>;
 }
@@ -439,7 +434,7 @@ function CatalogContent() {
         <span>/</span>
         <span>Belanja</span>
       </div>
-      {showEditorial && <CatalogEditorial products={products} back={back} />}
+      {showEditorial && <CatalogEditorial />}
       <CategoryBrowse products={products} category={query.category} update={update} />
       <div className="shop-page-heading shop-catalog-heading" id="shop-products">
         <div>

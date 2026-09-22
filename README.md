@@ -3,6 +3,7 @@
 Website demo dengan etalase pelanggan dan pemesanan divisi, persediaan, pengadaan, pengiriman, penerimaan, penagihan, pembayaran simulasi, laporan, dan tutup periode.
 
 - Website: [unit-toko-bni.vercel.app](https://unit-toko-bni.vercel.app)
+- **v12 — desain dan animasi yang terarah**: carousel koleksi otomatis dengan kontrol jeda, penghapusan titik dekoratif, komposisi baru beranda/login, dan detail produk yang lebih rapi. Lihat [catatan rilis](docs/rilis-v12.md) dan [riset sumber primer](docs/research-experience-v12.md).
 - **v11 — pengalaman belanja dan audit proses**: etalase bergambar, komposisi baru beranda/login, animasi yang mengikuti preferensi gerakan, serta kontrol bukti penerimaan dan penutupan sisa pengadaan. Lihat [catatan rilis](docs/rilis-v11.md), [audit penjualan](docs/gap-sales-v11.md), dan [audit pengadaan](docs/gap-operations-v11.md).
 - **v10 — 200 produk tambahan**, foto dan deskripsi unik, stok simulasi, serta katalog dengan pagination. Rilis ini juga menyertakan logo U–T baru, animasi landing/login, dan penyelesaian alur akun, stok, serta keuangan dari v9. Lihat [catatan rilis](docs/rilis-v10.md) dan [data katalog](docs/data-dummy-v10.md).
 - **v8 — beranda dan akses terpisah**: landing page publik, [toko pelanggan](https://unit-toko-bni.vercel.app/shop), [login pelanggan](https://unit-toko-bni.vercel.app/customer/login), dan [portal divisi/staf](https://unit-toko-bni.vercel.app/staff/login). Logo UT, warna, kontras, dan tampilan responsif diperbarui. Lihat [catatan rilis](docs/rilis-v8.md).

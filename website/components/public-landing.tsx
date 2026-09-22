@@ -22,24 +22,25 @@ export function PublicLanding() {
     <main id="home-main">
       <section className="home-hero" aria-labelledby="home-title">
         <div className="home-hero-copy">
-          <p className="home-eyebrow"><span className="home-eyebrow-rule"/>Kebutuhan sehari-hari, dipilih dengan baik.</p>
+          <p className="home-eyebrow">UNIT TOKO / KEBUTUHAN HARIAN</p>
           <h1 id="home-title"><span className="home-title-mask"><span className="home-title-line">Dari kopi pagi,</span></span>{" "}<span className="home-title-mask"><span className="home-title-line">sampai</span></span>{" "}<span className="home-title-mask"><span className="home-title-line"><em>agenda sore.</em></span></span></h1>
           <p className="home-intro">Isi pantry, siapkan pertemuan, lengkapi kebutuhan tim. Pilihan harian Anda ada di Unit Toko.</p>
           <div className="home-hero-actions"><a href="#akses" className="home-button">Pilih akses Anda <ArrowRight size={18} aria-hidden="true"/></a><a href="#kebutuhan" className="home-text-link">Kenali pilihan toko</a></div>
-          <div className="home-hero-note"><span className="home-note-line" aria-hidden="true"/><p>Belanja pelanggan dan operasional toko<br/><strong>memiliki pintu masuk masing-masing.</strong></p></div>
+          <div className="home-hero-note"><p>Belanja pelanggan dan operasional toko<br/><strong>memiliki pintu masuk masing-masing.</strong></p></div>
         </div>
         <div className="home-visual-stage">
-        <span className="home-stage-caption">UNTUK KESEHARIAN ANDA</span>
         <figure className="home-hero-visual">
-          <Art src="/images/editorial/hero-still-life-v3.png" alt="Tumbler, tas kanvas, kaos polo, kopi, dan snack pilihan Unit Toko" fetchPriority="high" loading="eager" sizes="(max-width: 800px) 100vw, 55vw"/>
-          <figcaption><span>Barang pilihan. Kebutuhan terpenuhi.</span><ArrowUpRight size={21} aria-hidden="true"/></figcaption>
+          <div className="home-hero-photo"><Art src="/images/editorial/hero-still-life-v3.png" alt="Tumbler, tas kanvas, kaos polo, kopi, dan snack pilihan Unit Toko" fetchPriority="high" loading="eager" sizes="(max-width: 800px) 100vw, 55vw"/></div>
+          <figcaption><span>Pilihan untuk hari kerja Anda.</span><span>Pantry / Rapat / Merchandise</span></figcaption>
         </figure>
-        <div className="home-floating-card home-floating-coffee" aria-hidden="true"><Art src="/images/products/generated/demo-001.webp" alt="" sizes="140px"/><span>Mulai dari<br/><strong>kopi favorit.</strong></span></div>
-        <div className="home-floating-card home-floating-tumbler" aria-hidden="true"><Art src="/images/products/generated/demo-141.webp" alt="" sizes="120px"/><span>Teman<br/><strong>setiap agenda.</strong></span></div>
+        <div className="home-product-strip" aria-label="Jelajahi pilihan barang">
+          <Link href="/shop?collection=pantry" className="home-product-preview"><Art src="/images/products/generated/demo-001.webp" alt="" sizes="80px"/><span>Untuk pantry<strong>Kopi & teman rehat</strong></span><ArrowUpRight size={18} aria-hidden="true"/></Link>
+          <Link href="/shop?collection=merchandise" className="home-product-preview"><Art src="/images/products/generated/demo-141.webp" alt="" sizes="80px"/><span>Untuk kegiatan<strong>Perlengkapan tim</strong></span><ArrowUpRight size={18} aria-hidden="true"/></Link>
+        </div>
         </div>
       </section>
 
-      <div className="home-category-band" aria-label="Koleksi kebutuhan"><div className="home-category-track"><span>Pantry harian</span><span aria-hidden="true">/</span><span>Kebutuhan rapat</span><span aria-hidden="true">/</span><span>Merchandise</span></div></div>
+      <nav className="home-category-band" aria-label="Koleksi kebutuhan"><div className="home-category-track">{collections.map(item=><Link href={`/shop?collection=${item.collection}`} key={item.collection}>{item.title}<ArrowUpRight size={22} aria-hidden="true"/></Link>)}</div></nav>
 
       <section className="home-access" id="akses" aria-labelledby="access-title">
         <div className="home-section-heading"><div><p className="home-eyebrow">Akses Unit Toko</p><h2 id="access-title">Lanjutkan sesuai kebutuhan Anda.</h2></div><p>Pilih toko pelanggan untuk belanja pribadi, atau portal internal untuk pemesanan divisi dan pekerjaan toko.</p></div>
