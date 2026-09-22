@@ -8,22 +8,10 @@ import {
   PackageCheck,
   Truck,
   ReceiptText,
-  Store,
 } from "lucide-react";
+import {Brand} from "./brand";
+export {Brand} from "./brand";
 
-export function Brand() {
-  return (
-    <Link href="/" className="site-brand" aria-label="Unit Toko — beranda">
-      <span className="site-brand-icon">
-        <Store size={24} aria-hidden="true" />
-      </span>
-      <span>
-        unit<span className="brand-light">toko</span>
-        <small>Portal divisi BNI</small>
-      </span>
-    </Link>
-  );
-}
 const picks = [
   {
     id: "kopi",

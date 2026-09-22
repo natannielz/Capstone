@@ -71,7 +71,7 @@ function CheckoutContent() {
       <ShopEmpty
         title="Masuk untuk melanjutkan"
         description="Gunakan akun pelanggan. Pilihan barang tetap tersedia setelah Anda masuk."
-        href="/login?next=%2Fcheckout"
+        href="/customer/login?next=%2Fcheckout"
         action="Masuk sebagai pelanggan"
       />
     );

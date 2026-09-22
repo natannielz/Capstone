@@ -4,7 +4,7 @@ Tanggal persiapan: 21 September 2026. Repositori tujuan: [natannielz/Capstone](h
 
 ## Isi repositori
 
-Publikasi awal menyimpan snapshot v6 dan rencana v7. Pembaruan v7 menambahkan etalase, akun pelanggan, alur pesanan, migrasi identitas pembeli, dan pengujian terkait. Aplikasi berada di `website/`, dokumentasi terpilih di `docs/`, dan panduan utama di root. Cakupan serta bukti rilis tersedia pada [rilis-v7.md](rilis-v7.md).
+Publikasi awal menyimpan snapshot v6 dan rencana v7. Pembaruan v7 menambahkan etalase, akun pelanggan, alur pesanan, migrasi identitas pembeli, dan pengujian terkait. Rilis v8 mengembalikan landing page publik, memisahkan akses pelanggan/staf, dan memperbarui identitas toko. Aplikasi berada di `website/`, dokumentasi terpilih di `docs/`, dan panduan utama di root. Cakupan serta bukti terbaru tersedia pada [rilis-v8.md](rilis-v8.md).
 
 Hanya source, migrasi, tes, aset publik, lisensi font, contoh environment tanpa nilai rahasia, serta dokumen terpilih yang disertakan. Arsip referensi, database/unggahan lokal, `.env` asli, daftar password, log, metadata akun hosting, dan riwayat Git lama tidak masuk snapshot publik.
 
@@ -18,7 +18,7 @@ Clone baru dari GitHub dapat digunakan langsung sebagai workspace pengembangan; 
 
 ## Vercel
 
-Project aplikasi yang sudah ada adalah `unit-toko-bni`; URL publik [unit-toko-bni.vercel.app](https://unit-toko-bni.vercel.app). Deployment final v7 `dpl_CS5rq8MVbegyMRUy7ax9EGr97Z7C` dibangun dari source kanonis `website/` dan dipromosikan ke URL publik tersebut pada 22 September 2026. Hasil verifikasi tersedia pada [rilis-v7.md](rilis-v7.md) dan [vercel-v7-results.json](vercel-v7-results.json).
+Project aplikasi yang sudah ada adalah `unit-toko-bni`; URL publik [unit-toko-bni.vercel.app](https://unit-toko-bni.vercel.app). Deployment v8 `dpl_Cog7DZH6vniHnTJFzJRxTtxk9J8w` dibangun dari source kanonis `website/`, berstatus READY, dan dipromosikan ke URL publik tersebut pada 22 September 2026. Inspect pada domain publik mengonfirmasi deployment yang sama. Hasil verifikasi tersedia pada [rilis-v8.md](rilis-v8.md) dan [vercel-v8-results.json](vercel-v8-results.json).
 
 Pengaturan bila menghubungkan atau mengimpor struktur repositori ini melalui integrasi Git:
 

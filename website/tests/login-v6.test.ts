@@ -10,7 +10,7 @@ import * as requests from "../lib/client/requests";
 import * as navigation from "../lib/domain/navigation";
 
 type Node = {type: unknown; props: Record<string, unknown>};
-type LoginComponent = (props: {initialError?: string}) => React.ReactElement;
+type LoginComponent = (props: {initialError?: string;portal?: "customer" | "staff"}) => React.ReactElement;
 const runtimeRequire = createRequire(resolve("package.json"));
 
 /** Execute the real Login component; decorative children do not participate in these form contracts. */
@@ -24,7 +24,7 @@ function loadLogin(react: unknown): LoginComponent {
     if (id === "next/link") return {__esModule: true, default: "a"};
     if (id === "lucide-react") return new Proxy({}, {get: () => "svg"});
     if (id === "./art") return {Art: () => null};
-    if (id === "./landing") return {Brand: () => null};
+    if (id === "./brand") return {Brand: () => null};
     if (id === "@/components/ui/button") return {Button: "button"};
     if (id === "@/components/ui/field") return {Field: "div", FieldError: "p", FieldGroup: "div", FieldLabel: "label"};
     if (id === "@/components/ui/input-group") return {InputGroup: "div", InputGroupAddon: "div", InputGroupButton: "button", InputGroupInput: "input"};
@@ -110,7 +110,7 @@ test("v6 Login hydration, duplicate guard and failed request retries preserve a 
   assert.equal(calls.length, 1);
   assert.equal(calls[0].url, "/api/auth/login");
   assert.equal(calls[0].init?.method, "POST");
-  assert.deepEqual(JSON.parse(String(calls[0].init?.body)), {email, password});
+  assert.deepEqual(JSON.parse(String(calls[0].init?.body)), {email, password, portal: "staff"});
   assert.ok(calls[0].init?.signal);
   assert.equal(find(render(), node => node.props.type === "submit").props.disabled, true);
   rejectRequest(new TypeError("Simulated offline")); await Promise.all([first, duplicate]); tree = render();

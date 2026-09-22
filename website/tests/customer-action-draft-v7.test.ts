@@ -119,7 +119,7 @@ test("v7 expired customer session redirects safely and retains unresolved comman
   t.after(() => {globalThis.fetch = originalFetch; if (descriptor) Object.defineProperty(globalThis, "window", descriptor); else Reflect.deleteProperty(globalThis, "window");});
   globalThis.fetch = async () => Response.json({error: "Sesi berakhir"}, {status: 401});
   await submit(harness(props())());
-  assert.deepEqual(redirects, ["/login?next=%2Faccount%2Forders%2Forder-a%3Fcreated%3D1"]);
+  assert.deepEqual(redirects, ["/customer/login?next=%2Faccount%2Forders%2Forder-a%3Fcreated%3D1"]);
   assert.ok(drafts.findPendingCustomerAction("customer-a", "/account/orders/order-a", storage));
   assert.equal(drafts.findPendingCustomerAction("customer-b", "/account/orders/order-a", storage), undefined);
 });

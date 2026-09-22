@@ -53,7 +53,7 @@ export function CustomerAccount({initialActor, view, orderId}: {initialActor: Ac
       if (draft) setAction(current => current || restoreCustomerAction(draft));
     } catch (cause) {
       if (cause instanceof ApiError && [401, 403].includes(cause.status)) {
-        window.location.assign(`/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`); return;
+        window.location.assign(`/customer/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`); return;
       }
       setError(cause instanceof Error ? cause.message : "Data belum dapat dimuat. Coba kembali.");
     } finally { setLoading(false); }
@@ -81,7 +81,7 @@ export function CustomerAccount({initialActor, view, orderId}: {initialActor: Ac
     try {
       await logoutSession();
       clearCartForAccount(actor.id); await clearCustomerCart(actor.id);
-      navigationAllowed.current = true; setDirty(false); window.location.assign("/login?next=%2Fshop");
+      navigationAllowed.current = true; setDirty(false); window.location.assign("/customer/login?next=%2Fshop");
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Belum berhasil keluar."); }
     finally { logoutPending.current = false; setLogoutBusy(false); }
   }
@@ -242,7 +242,7 @@ function CustomerActionDialog({actorId, action, close, complete}: {actorId: stri
         clearCustomerActionDraft(actorId, target, sent.command.id); setDraft(undefined);
       }
       if (cause instanceof ApiError && cause.status === 401) {
-        window.location.assign(`/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`); return;
+        window.location.assign(`/customer/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`); return;
       }
       setError(cause instanceof Error ? cause.message : "Tindakan belum berhasil. Isian Anda tetap tersimpan.");
     }

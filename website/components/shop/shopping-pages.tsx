@@ -145,8 +145,9 @@ function ProductContent({ productId }: { productId: string }) {
     (!actor || actor.role === "customer");
   function packaging(id: string) {
     setQty("1");
+    // Let Next preserve router state and notify usePathname about the SKU URL.
     window.history.replaceState(
-      window.history.state,
+      null,
       "",
       `/shop/${encodeURIComponent(id)}?${new URLSearchParams({ from: back })}`,
     );
@@ -169,7 +170,7 @@ function ProductContent({ productId }: { productId: string }) {
         ),
       );
       router.push(
-        actor?.role === "customer" ? "/checkout" : "/login?next=%2Fcheckout",
+        actor?.role === "customer" ? "/checkout" : "/customer/login?next=%2Fcheckout",
       );
     } catch (cause) {
       setProblem(
@@ -442,7 +443,7 @@ function CartContent() {
         ),
       );
       router.push(
-        actor?.role === "customer" ? "/checkout" : "/login?next=%2Fcheckout",
+        actor?.role === "customer" ? "/checkout" : "/customer/login?next=%2Fcheckout",
       );
     } catch (cause) {
       setProblem(

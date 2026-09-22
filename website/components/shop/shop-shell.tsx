@@ -16,15 +16,14 @@ import {
   Check,
   CircleAlert,
   ClipboardList,
-  Package,
   Search,
   ShoppingBag,
   ShoppingCart,
-  Store,
   UserRound,
 } from "lucide-react";
 import type { Actor } from "@/lib/domain/accounts";
 import { Art } from "../art";
+import { Brand } from "../brand";
 import { Button } from "../ui/button";
 import { Toaster } from "../ui/sonner";
 import {
@@ -127,6 +126,12 @@ function ShopShellContent({
   const [message, setMessage] = useState("");
   const [problem, setProblem] = useState("");
   const location = useShopLocation();
+  const locationPath = location.split("?")[0];
+  const collection = new URLSearchParams(location.split("?")[1] || "").get("collection");
+  const internalActor = Boolean(actor && actor.role !== "customer");
+  useEffect(() => {
+    if (internalActor) window.location.replace("/workspace");
+  }, [internalActor]);
   const [searchDraft, setSearchDraft] = useState({ location: "", value: "" });
   const search =
     searchDraft.location === location
@@ -274,13 +279,8 @@ function ShopShellContent({
   }
   const count = cartCount ?? Object.keys(cart.items).length;
   const customer = actor?.role === "customer";
-  const accountHref = actor
-    ? customer
-      ? "/account"
-      : "/workspace"
-    : "/login?next=%2Faccount";
-  const ordersHref =
-    actor && !customer ? "/workspace?view=orders" : "/account/orders";
+  const accountHref = customer ? "/account" : "/customer/login?next=%2Faccount";
+  const ordersHref = "/account/orders";
   const context: ShopContextValue = {
     actor,
     sessionLoading,
@@ -299,6 +299,13 @@ function ShopShellContent({
     setProblem,
     act,
   };
+  if (internalActor) {
+    return (
+      <div className="shop-v7">
+        <p className="shop-routing" role="status">Membuka ruang kerja…</p>
+      </div>
+    );
+  }
   return (
     <ShopContext.Provider value={context}>
       <div className={`shop-v7${actionBar ? " shop-has-action" : ""}`}>
@@ -307,26 +314,19 @@ function ShopShellContent({
         </a>
         <div className="shop-utility">
           <div>
-            <span>Unit Toko · Demo capstone</span>
-            <Link href="/workspace">
-              Portal divisi & petugas <ArrowUpRight size={13} />
+            <span>Toko pelanggan · Demo capstone</span>
+            <Link href="/">
+              Tentang Unit Toko <ArrowUpRight size={13} />
             </Link>
           </div>
         </div>
         <header className="shop-header">
           <div className="shop-header-inner">
-            <Link
+            <Brand
               className="shop-brand"
-              href="/"
-              aria-label="Unit Toko, beranda"
-            >
-              <span>
-                <Store size={26} />
-              </span>
-              <div>
-                Unit Toko<small>Kebutuhan kerja & harian</small>
-              </div>
-            </Link>
+              href="/shop"
+              context="Toko pelanggan"
+            />
             <form
               action="/shop"
               method="get"
@@ -364,7 +364,7 @@ function ShopShellContent({
               <Link
                 href={accountHref}
                 className="shop-account-link"
-                aria-label={actor ? "Akun saya" : "Masuk"}
+                aria-label={actor ? "Akun saya" : "Masuk sebagai pelanggan"}
               >
                 {actor?.avatar ? (
                   <Art src={actor.avatar} alt="" />
@@ -372,11 +372,7 @@ function ShopShellContent({
                   <UserRound size={23} />
                 )}
                 <span>
-                  {actor
-                    ? customer
-                      ? actor.name.split(" ")[0]
-                      : "Portal saya"
-                    : "Masuk"}
+                  {actor ? actor.name.split(" ")[0] : "Masuk"}
                 </span>
               </Link>
             </div>
@@ -384,10 +380,20 @@ function ShopShellContent({
         </header>
         <nav className="shop-category-nav" aria-label="Kategori produk">
           <div>
-            <Link href="/shop">Semua produk</Link>
-            <Link href="/shop?collection=pantry">Pantry</Link>
-            <Link href="/shop?collection=rapat">Kebutuhan rapat</Link>
-            <Link href="/shop?collection=merchandise">Merchandise</Link>
+            {[
+              { label: "Semua produk", value: null },
+              { label: "Pantry", value: "pantry" },
+              { label: "Kebutuhan rapat", value: "rapat" },
+              { label: "Merchandise", value: "merchandise" },
+            ].map((item) => (
+              <Link
+                key={item.label}
+                href={item.value ? `/shop?collection=${item.value}` : "/shop"}
+                aria-current={locationPath === "/shop" && collection === item.value ? "page" : undefined}
+              >
+                {item.label}
+              </Link>
+            ))}
           </div>
         </nav>
         <main id="shop-main" className="shop-main" tabIndex={-1}>
@@ -430,32 +436,18 @@ function ShopShellContent({
               </span>
             </div>
           )}
-          {actor && !customer && (
-            <div className="shop-portal-note">
-              <Package size={19} />
-              <span>
-                Anda masuk sebagai petugas atau PIC. Pesanan divisi dibuat
-                melalui portal.
-              </span>
-              <Link href="/workspace?view=catalog">
-                Buka portal <ArrowUpRight size={15} />
-              </Link>
-            </div>
-          )}
           {children}
         </main>
         <Toaster position="top-center" richColors />
         <footer className="shop-footer">
           <div>
-            <Link href="/" className="shop-footer-brand">
-              Unit Toko
-            </Link>
+            <Brand href="/shop" compact context="Toko pelanggan" className="shop-footer-brand" />
             <p>Pantry, perlengkapan rapat, dan merchandise.</p>
           </div>
           <div>
             <Link href="/shop">Jelajahi produk</Link>
             <Link href={ordersHref}>Pesanan saya</Link>
-            <Link href="/workspace">Portal divisi & petugas</Link>
+            <Link href="/">Tentang Unit Toko</Link>
           </div>
           <p className="shop-demo-note">
             Demo capstone. Data, foto, pengiriman, dan pembayaran adalah

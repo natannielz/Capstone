@@ -187,7 +187,7 @@ export function Profile({ actor, s, refresh, onDirtyChange }: ProfileProps) {
       onDirtyChange?.(false);
       clearCartForAccount(actor.id);
       await clearCustomerCart(actor.id);
-      window.location.assign(actor.role === "customer" ? "/login?next=%2Faccount" : "/login");
+      window.location.assign(actor.role === "customer" ? "/customer/login?next=%2Faccount" : "/staff/login");
     } catch (error) {
       const message = errorMessage(error);
       if (message === "Kata sandi saat ini tidak sesuai.") {

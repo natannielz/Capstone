@@ -1,0 +1,24 @@
+/* One identity across the public site, customer shop, login, and staff portal. */
+:root{--brand-petrol:#073b45;--brand-deep:#062f36;--brand-ink:#142d33;--brand-muted:#51646b;--brand-canvas:#f4f7f7;--brand-orange:#c84513;--brand-accent:#f47b49}
+.unit-brand{display:inline-flex;align-items:center;gap:11px;color:var(--brand-petrol);flex-shrink:0;line-height:1.15;text-decoration:none;white-space:nowrap}
+.unit-brand-mark{display:block;width:44px;height:44px;flex-shrink:0}
+.unit-brand-copy{display:flex;flex-direction:column;gap:5px;min-width:0}
+.unit-brand-name{font-family:var(--font-body),sans-serif;font-size:25px;font-weight:800;letter-spacing:-1px;line-height:1}
+.unit-brand-name>span{color:var(--brand-orange)}
+.unit-brand-context{font-size:11px;line-height:1.35;letter-spacing:.025em;font-weight:500;color:var(--brand-muted)}
+.unit-brand--inverse{color:#fff}.unit-brand--inverse .unit-brand-context{color:#c8dfe1}.unit-brand--inverse .unit-brand-name>span{color:var(--brand-accent)}
+.unit-brand--inverse .unit-brand-mark{outline:1px solid #47717a;border-radius:10px}
+.unit-brand--compact .unit-brand-mark{width:36px;height:36px}.unit-brand--compact .unit-brand-name{font-size:21px}.unit-brand--compact .unit-brand-context{font-size:10px}
+.sidebar .brand-mark{background:transparent;border-radius:0}.sidebar .brand-mark .unit-brand-mark{width:40px;height:40px}
+.sidebar .brand{align-items:center}.sidebar .brand small{letter-spacing:.03em;color:#d3e5e7}
+.login-page{--primary:#073b45;--primary-foreground:#fff;--text-secondary:#51646b;--ring:#c84513}
+.login-page .login-submit{background:#073b45;color:#fff}.login-page .login-submit:hover{background:#062f36}
+.login-page .login-home{background:#062f36eb;border-color:#94afb3}
+.login-page .login-input-group{border-color:#81979d}
+.login-page .login-input-group [data-slot=input-group-control]::placeholder{color:#607179}
+.login-page .login-form-header p{max-width:42ch}
+.login-switch{margin:22px 0 0;color:var(--brand-muted);font-size:14px;line-height:1.7}
+.login-switch a{display:inline-flex;align-items:center;min-height:44px;color:var(--brand-petrol);text-decoration:underline;text-underline-offset:4px;font-weight:700}
+.login-switch a:hover{color:var(--brand-orange)}
+.login-switch a:focus-visible{outline:2px solid var(--brand-orange);outline-offset:4px;border-radius:2px}
+@media(max-width:520px){.unit-brand{gap:9px}.unit-brand-mark{width:38px;height:38px}.unit-brand-name{font-size:22px}.unit-brand-context{font-size:10px}}

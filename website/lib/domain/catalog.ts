@@ -136,7 +136,7 @@ export function catalogLoginHref(
   const query = new URLSearchParams({ view: "catalog" });
   if (intent.collection) query.set("collection", intent.collection);
   if (intent.product) query.set("product", intent.product);
-  return `/login?${new URLSearchParams({ next: `/workspace?${query.toString()}` })}`;
+  return `/staff/login?${new URLSearchParams({ next: `/workspace?${query.toString()}` })}`;
 }
 
 export function validCatalogQuantity(value: string | number) {

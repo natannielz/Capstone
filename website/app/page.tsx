@@ -1,9 +1,9 @@
-import { StorefrontHome } from "@/components/shop/storefront";
+import { PublicLanding } from "@/components/public-landing";
 export const metadata = {
-  title: "Unit Toko | Belanja kebutuhan kerja & harian",
+  title: "Unit Toko | Pantry, rapat, dan kebutuhan tim",
   description:
-    "Jelajahi kebutuhan pantry, rapat, dan merchandise di Unit Toko. Etalase demo capstone dengan pemesanan dan pembayaran simulasi.",
+    "Kenali Unit Toko dan pilih akses pelanggan atau portal divisi dan petugas. Studi kasus capstone dengan data simulasi.",
 };
 export default function Home() {
-  return <StorefrontHome />;
+  return <PublicLanding />;
 }

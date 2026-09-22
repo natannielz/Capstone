@@ -2,6 +2,7 @@
 import {buyerKey, buyerLabel} from "@/lib/domain/buyers";
 import {buyerOptions} from "@/lib/domain/buyer-views";
 import {Art} from "./art";
+import {BrandMark} from "./brand";
 import { Profile } from "./profile";
 import { Dashboard } from "./dashboard";
 import { Catalog } from "./catalog";
@@ -109,7 +110,7 @@ export function Workspace(){
    setState(data.state);setActor(data.actor);setRefreshNotice("Data sudah diperbarui.");
   } catch(err) {
    setRefreshNotice("");
-   if(err instanceof ApiError&&err.status===401){window.location.assign(`/login?next=${encodeURIComponent(window.location.pathname+window.location.search)}`);return;}
+   if(err instanceof ApiError&&err.status===401){window.location.assign(`/staff/login?next=${encodeURIComponent(window.location.pathname+window.location.search)}`);return;}
    setError(err instanceof Error?err.message:"Data belum dapat dimuat. Coba kembali.");
   } finally {setLoading(false);}
  }),[]);
@@ -120,13 +121,13 @@ export function Workspace(){
  async function logout(){
   if(logoutPending.current)return;
   logoutPending.current=true;setLogoutBusy(true);setLogoutError("");
-  try{await logoutSession();if(actor)await clearCartForAccount(actor.id).catch(()=>{});window.location.assign("/login");}
+  try{await logoutSession();if(actor)await clearCartForAccount(actor.id).catch(()=>{});window.location.assign("/staff/login");}
   catch(err){setLogoutError(err instanceof Error?err.message:"Belum berhasil keluar. Coba kembali.");setLogoutBusy(false);}
   finally{logoutPending.current=false;}
  }
  if(!state||!actor)return <main className="loading-page" aria-busy={loading}><Store size={36}/><h1>{loading?"Menyiapkan ruang kerja…":"Data belum tersedia"}</h1><p role={error?"alert":"status"}>{error||"Mengambil pesanan dan aktivitas terakhir."}</p>{!loading&&<Button onClick={()=>void refresh()}>Coba kembali</Button>}</main>;
  const ctx:WorkspaceContext={s:state,actor,go,ask:setAction,refresh};const nav=NAV.filter(n=>(PAGE_ROLES[n.id] as Role[]).includes(actor.role));const active=nav.find(n=>n.id===page);const pending=state.orders.filter(o=>o.status==="submitted").length;
- const sidebarContent=<><a href="/workspace" className="brand" onClick={event=>{event.preventDefault();go("dashboard");}}><span className="brand-mark"><Store size={24}/></span><span>Unit Toko<small>PORTAL DIVISI BNI</small></span></a><nav aria-label="Navigasi utama">{nav.map(n=><button key={n.id} aria-current={page===n.id?"page":undefined} className={`nav-item ${page===n.id?"active":""}`} onClick={()=>go(n.id)}><n.icon size={18}/><span>{n.label}</span>{n.id==="orders"&&pending>0&&<small>{pending}</small>}</button>)}</nav><div className="sidebar-bottom"><a className="sidebar-note" href="/panduan.html" target="_blank" rel="noreferrer"><CircleHelp size={17}/><p>Panduan demo<small>Alur presentasi capstone</small></p></a><button className="nav-item" disabled={logoutBusy} onClick={()=>requestLeave(()=>void logout())}><LogOut size={18}/><span>{logoutBusy?"Keluar akun…":"Keluar akun"}</span></button></div></>;
+ const sidebarContent=<><a href="/workspace" className="brand" onClick={event=>{event.preventDefault();go("dashboard");}}><span className="brand-mark"><BrandMark/></span><span>Unit Toko<small>PORTAL DIVISI BNI</small></span></a><nav aria-label="Navigasi utama">{nav.map(n=><button key={n.id} aria-current={page===n.id?"page":undefined} className={`nav-item ${page===n.id?"active":""}`} onClick={()=>go(n.id)}><n.icon size={18}/><span>{n.label}</span>{n.id==="orders"&&pending>0&&<small>{pending}</small>}</button>)}</nav><div className="sidebar-bottom"><a className="sidebar-note" href="/panduan.html" target="_blank" rel="noreferrer"><CircleHelp size={17}/><p>Panduan demo<small>Alur presentasi capstone</small></p></a><button className="nav-item" disabled={logoutBusy} onClick={()=>requestLeave(()=>void logout())}><LogOut size={18}/><span>{logoutBusy?"Keluar akun…":"Keluar akun"}</span></button></div></>;
  return <div className="workspace"><Toaster richColors position="top-right"/>
   {compact?<MobileNavigation open={mobile} onOpenChange={setMobile}>{sidebarContent}</MobileNavigation>:<aside className="sidebar">{sidebarContent}</aside>}
   <div className="workspace-main"><header className="topbar"><button className="mobile-toggle" aria-label="Buka navigasi" aria-expanded={mobile} aria-controls="mobile-navigation" onClick={()=>setMobile(true)}><Menu size={22}/></button><div className="breadcrumb">Ruang kerja<ChevronRight size={14}/><strong>{active?.label||"Ringkasan"}</strong></div><div className="topbar-right"><span className="demo-chip">DEMO</span><button className="account-mini" onClick={()=>go("profile")} aria-label="Buka profil saya"><Art src={actor.avatar||`/images/avatars/${actor.role==='pic'?'pic-a':actor.role}.png`} alt={`Foto ${actor.name}`}/><div><strong>{actor.name}</strong><small>{ROLE_LABELS[actor.role]}</small></div></button></div></header>

@@ -327,8 +327,9 @@ function CatalogContent() {
       if (value && value !== INITIAL_QUERY[key as keyof ShopQuery])
         params.set(key, value);
     });
+    // Next copies its router state; passing history.state skips search-param updates.
     window.history.pushState(
-      window.history.state,
+      null,
       "",
       `/shop${params.size ? `?${params}` : ""}`,
     );

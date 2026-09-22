@@ -25,7 +25,9 @@ Pengujian domain/SQL memakai basis data terisolasi. `test:api` membutuhkan serve
 
 ## Akun demo
 
-Buka etalase lalu pilih **Masuk** untuk pelanggan atau **Portal divisi & petugas** untuk akun internal. Masukkan email dan password akun yang diinginkan. Password awal unik per akun; **lihat `website/.data/demo-accounts.json` secara privat**. Jangan menyalin daftar password ke dokumen publik. ID staf/PIC menggunakan email `ID@unit-toko.demo`, misalnya `pic-a@unit-toko.demo`. Akun `customer-demo` menggunakan email khusus `customer@unit-toko.demo`.
+Buka beranda `/` lalu pilih akses yang sesuai. Pelanggan berbelanja melalui `/shop` dan masuk melalui `/customer/login`. PIC divisi, admin, serta seluruh petugas masuk melalui `/staff/login` menuju `/workspace`. Akun internal yang membuka halaman toko, keranjang, checkout, atau akun pelanggan otomatis diarahkan ke ruang kerja oleh server. Form login menolak akun dari portal yang tidak sesuai setelah kredensial diperiksa; pilihan portal tidak mengubah peran akun.
+
+Masukkan email dan password akun yang diinginkan. Password awal unik per akun; **lihat `website/.data/demo-accounts.json` secara privat**. Jangan menyalin daftar password ke dokumen publik. ID staf/PIC menggunakan email `ID@unit-toko.demo`, misalnya `pic-a@unit-toko.demo`. Akun `customer-demo` menggunakan email khusus `customer@unit-toko.demo`.
 
 | Akun | Peran | Kegiatan utama |
 | --- | --- | --- |
