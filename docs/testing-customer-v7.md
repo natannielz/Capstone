@@ -11,9 +11,12 @@ Pengujian API lokal terakhir pada 22 September 2026: **22 kelompok lulus, 0 gaga
 - Dari direktori `website`, jalankan `node --env-file=../.tools/v7-qa.env scripts/smoke-customer.mjs`.
 - Skrip menolak URL database selain nama QA persis, alamat server selain port lokal 3007, mode produksi, serta credential remote database/blob. Produk penanda unik harus muncul di katalog server sebelum mutasi HTTP dilakukan, sehingga server terbukti membaca database QA yang sama.
 - Fixture pelanggan kedua `customer-qa-b` hanya dibuat melalui helper lokal dengan hash kata sandi menggunakan kode keamanan aplikasi. Tidak ada fitur publik untuk membuat akun ini. Pengadaan dan stok fixture dibuat melalui repository/engine asli.
+- Produk fixture dinonaktifkan melalui `product.update` dalam blok `finally` setelah tes, termasuk jika tes gagal. Sebelum tes berikutnya, helper juga membersihkan sisa proses yang terhenti. Pencocokan dibatasi ke SKU `QA-V7-<8 hex>-(full|partial|isolation)` dan nama, kategori, serta satuan fixture yang sesuai; 200 produk `DEMO` tetap aktif. Tidak ada penghapusan stok atau riwayat transaksi. Perintah domain mencatat audit dan menaikkan revisi periode terbuka seperti pembaruan produk biasa.
 - Kata sandi dibentuk di memori dari seed privat. Keluaran skrip tidak mencetak kata sandi, token, atau cookie. Pengujian pergantian kata sandi mengembalikan kata sandi awal, termasuk melalui blok pemulihan. Mutasi role QA juga dikembalikan dalam blok pemulihan.
 
 Rangkaian penuh menambah transaksi QA dan mengubah profil/foto pelanggan QA untuk pengujian. Jangan menjalankannya bersamaan dengan pemeriksaan browser akun pelanggan yang sama. Tidak ada penghapusan/reset database dalam skrip.
+
+Pembersihan katalog pada 22 September 2026 menonaktifkan 18 produk sisa pengujian lokal. Pengulangan 22 kelompok tes kemudian lulus dan otomatis menonaktifkan ketiga produk fixture barunya. Pemeriksaan katalog setelah tes menemukan 236 SKU aktif, termasuk seluruh 200 produk bergambar baru, dan **0 produk QA aktif**. Pemanggilan ulang helper tanpa fixture aktif tidak mengubah data. Katalog produksi juga diperiksa dan tidak memuat produk QA.
 
 ## Cakupan dan hasil API
 

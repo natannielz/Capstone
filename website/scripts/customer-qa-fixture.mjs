@@ -54,11 +54,61 @@ export function qaPassword(id) {
   return loadProjectModule("lib/server/demo-credentials.ts").demoPassword(id);
 }
 
+function qaProductMatch(product, run) {
+  if (/^demo-\d{3}$/.test(product.id)) return false;
+  const match = /^QA-V7-([0-9a-f]{8})-(full|partial|isolation)$/.exec(product.sku);
+  return Boolean(match && (!run || match[1] === run) &&
+    product.name === `Barang QA ${match[1]} ${match[2]}` &&
+    product.category === "OMI" && product.unit === "pcs");
+}
+
+function openQaDate(state) {
+  let date = loadProjectModule("lib/domain/selectors.ts").today();
+  const lastClosed = state.periods.filter(period => period.status === "closed").map(period => period.id).sort().at(-1);
+  if (lastClosed && date.slice(0, 7) <= lastClosed) {
+    const [year, month] = lastClosed.split("-").map(Number);
+    date = new Date(Date.UTC(year, month, 1)).toISOString().slice(0, 10);
+  }
+  return date;
+}
+
+/** Hide only exact local smoke fixtures. Referenced products, stock and all transaction history remain. */
+export async function retireCustomerQaProducts({run} = {}) {
+  assertLocalQaEnvironment();
+  if (run !== undefined && (typeof run !== "string" || !/^[0-9a-f]{8}$/.test(run))) throw new Error("Invalid QA run identifier.");
+  const repository = loadProjectModule("lib/server/repository.ts");
+  const initial = await repository.loadState();
+  const candidates = initial.products.filter(product => qaProductMatch(product, run));
+  const result = {matched: candidates.length, retired: 0, alreadyInactive: 0, productIds: []};
+  const errors = [];
+  for (const candidate of candidates) {
+    try {
+      // Read again so a fixture price changed during a failed test is preserved.
+      const state = await repository.loadState();
+      const product = state.products.find(item => item.id === candidate.id);
+      if (!product || !qaProductMatch(product, run)) throw new Error("QA product identity changed; left untouched.");
+      if (!product.active) { result.alreadyInactive++; continue; }
+      const kepala = state.users.find(actor => actor.id === "kepala");
+      if (!kepala?.active || kepala.role !== "kepala") throw new Error("QA cleanup requires the active Kepala Toko account.");
+      await repository.execute(kepala, {
+        id: crypto.randomUUID(), type: "product.update", date: openQaDate(state),
+        data: {id: product.id, price: product.price, minimum: product.minimum, returnMonths: product.returnMonths, active: false},
+      });
+      result.retired++; result.productIds.push(product.id);
+    } catch (error) { errors.push(error); }
+  }
+  if (errors.length) throw new AggregateError(errors, `QA cleanup failed for ${errors.length} product(s); retry the guarded cleanup helper.`);
+  return result;
+}
+
 export async function prepareCustomerQaFixture() {
   assertLocalQaEnvironment();
   const repository = loadProjectModule("lib/server/repository.ts");
   const security = loadProjectModule("lib/server/security.ts");
   await repository.ensureSeed();
+  // Smoke runs share one isolated database and run serially. This recovers fixtures
+  // left behind by a killed process, which cannot execute its final cleanup.
+  await retireCustomerQaProducts();
   const db = repository.database();
   const existing = await db.prepare("SELECT payload FROM users WHERE id=?").bind(QA_CUSTOMER_ID).first();
   const emailOwner = await db.prepare("SELECT user_id FROM user_emails WHERE email=?").bind(QA_CUSTOMER_EMAIL).first();
@@ -78,11 +128,7 @@ export async function prepareCustomerQaFixture() {
   }
   const run = crypto.randomUUID().slice(0, 8);
   const initial = await repository.loadState();
-  let date = loadProjectModule("lib/domain/selectors.ts").today();
-  const lastClosed = initial.periods.filter(p => p.status === "closed").map(p => p.id).sort().at(-1);
-  if (lastClosed && date.slice(0, 7) <= lastClosed) {
-    const next = new Date(lastClosed + "-01T12:00:00Z"); next.setUTCMonth(next.getUTCMonth() + 1); date = next.toISOString().slice(0, 10);
-  }
+  const date = openQaDate(initial);
   const act = (id, type, data) => repository.execute(initial.users.find(u => u.id === id), { id: crypto.randomUUID(), type, date, data });
   const products = {};
   for (const [name, qty] of [["full", 10], ["partial", 10], ["isolation", 50]]) {

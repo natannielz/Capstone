@@ -2,7 +2,7 @@
 // This script mutates only the explicitly isolated local QA database. No secrets are logged.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { assertLocalQaEnvironment, prepareCustomerQaFixture, qaPassword, setQaCustomerRole, QA_CUSTOMER_ID, QA_CUSTOMER_EMAIL } from "./customer-qa-fixture.mjs";
+import { assertLocalQaEnvironment, prepareCustomerQaFixture, retireCustomerQaProducts, qaPassword, setQaCustomerRole, QA_CUSTOMER_ID, QA_CUSTOMER_EMAIL } from "./customer-qa-fixture.mjs";
 
 const base = assertLocalQaEnvironment();
 const sessions = new Map();
@@ -319,10 +319,21 @@ async function main() {
     await expectStatus(await request(A, "/api/state"), 401, "logout session revoked");
     await login(A); assert.ok((await state(A)).orders.some(o => o.id === full?.order.id));
   });
-  console.log(JSON.stringify({ passed: failures.length === 0, checks: checks.length, failures, reconciliation: { fullInvoice: full ? 30000 : null, fullBalance: full ? Math.max(0, invoiceBalance(await state(A), full.invoice.id)) : null, partialInvoice: partial ? 20000 : null, partialReturnedUnits: partial ? 1 : null }, review: { fullOrderId: full?.order.id, fullInvoiceId: full?.invoice.id, partialOrderId: partial?.order.id, partialInvoiceId: partial?.invoice.id }, fixtureRun: fixture.run }, null, 2));
   if (failures.length) process.exitCode = 1;
+  return { passed: failures.length === 0, checks: checks.length, failures, reconciliation: { fullInvoice: full ? 30000 : null, fullBalance: full ? Math.max(0, invoiceBalance(await state(A), full.invoice.id)) : null, partialInvoice: partial ? 20000 : null, partialReturnedUnits: partial ? 1 : null }, review: { fullOrderId: full?.order.id, fullInvoiceId: full?.invoice.id, partialOrderId: partial?.order.id, partialInvoiceId: partial?.invoice.id }, fixtureRun: fixture.run };
+}
+
+async function runWithCleanup() {
+  let report, cleanup;
+  try { report = await main(); }
+  finally {
+    // A failed prepare may have created only part of a fixture before returning
+    // its run ID. In that case retire all exact QA fixtures, never normal SKUs.
+    cleanup = await retireCustomerQaProducts({run: fixture?.run});
+  }
+  console.log(JSON.stringify({...report, fixtureCleanup: cleanup}, null, 2));
 }
 
 // The local libSQL driver keeps a worker alive; all writes above have completed
-// before explicitly ending this one-shot QA process.
-main().then(() => process.exit(process.exitCode || 0)).catch(error => { console.error(`QA stopped: ${safeMessage(error)}`); process.exit(1); });
+// and cleanup has finished before explicitly ending this one-shot QA process.
+runWithCleanup().then(() => process.exit(process.exitCode || 0)).catch(error => { console.error(`QA stopped: ${safeMessage(error)}`); process.exit(1); });
