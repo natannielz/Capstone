@@ -1,0 +1,149 @@
+/* Account tasks and forms share the store's quiet, legible work surfaces. */
+.customer-account.account-v14 { gap: 32px; color: #103f47; }
+.account-v14 .customer-account-main { gap: 24px; }
+.account-v14 .customer-page-heading { align-items: flex-start; margin-bottom: 4px; }
+.account-v14 .customer-page-heading h1 { font-size: clamp(26px, 2.5vw, 34px); letter-spacing: -.035em; }
+.account-v14 .customer-page-heading > button { flex-shrink: 0; min-width: 44px; min-height: 44px; }
+.account-v14 .customer-account-nav { padding: 20px 12px; background: #f3f5f3; border: 1px solid #dbe3df; border-radius: 12px; }
+.account-v14 .customer-account-nav nav a { min-height: 44px; }
+.account-v14 .customer-account-nav nav a[aria-current=page] { background: #103f47; color: white; }
+.account-v14 .customer-refresh-status { margin: 0; color: #52656a; font-size: 13px; }
+.account-v14 .customer-section, .account-v14 .customer-order-card { border-color: #dbe3df; border-radius: 12px; background: #fff; }
+.account-v14 .customer-section { padding: 28px; }
+.account-v14 .customer-section p { font-size: 14px; line-height: 1.65; }
+.account-v14 .customer-section h2 { font-size: 18px; line-height: 1.4; }
+.account-v14 .customer-section[id], .account-v14 .customer-invoice[id], .account-v14 .customer-payment[id] { scroll-margin-top: 144px; }
+.account-v14 :is(.customer-section,.customer-invoice,.customer-payment)[tabindex="-1"]:focus-visible { outline: 2px solid #2b6972; outline-offset: 5px; }
+.account-v14 .customer-task-banner { display: flex; align-items: center; gap: 16px; padding: 20px 24px; border: 1px solid #bfcec9; border-radius: 12px; background: #e7eeeb; }
+.account-v14 .customer-task-banner > svg { width: 22px; height: 22px; flex-shrink: 0; }
+.account-v14 .customer-task-banner > svg:last-child { margin-left: auto; width: 18px; }
+.account-v14 .customer-task-banner > span { display: grid; gap: 5px; min-width: 0; }
+.account-v14 .customer-task-banner strong { font-size: 15px; line-height: 1.4; }
+.account-v14 .customer-task-banner span span { font-size: 13px; line-height: 1.6; color: #52656a; }
+.account-v14 .customer-status-links { gap: 2px; }
+.account-v14 .customer-status-links a { gap: 8px; font-size: 13px; }
+.account-v14 .customer-filter-count { display: inline-flex; align-items: center; justify-content: center; padding: 1px 6px; min-width: 22px; border-radius: 5px; background: #e7eeeb; color: #103f47; font-size: 11px; font-variant-numeric: tabular-nums; }
+.account-v14 .customer-order-search { max-width: none; gap: 12px; }
+.account-v14 .customer-order-search > [data-slot=field] { min-width: 0; }
+.account-v14 .customer-order-search input, .account-v14 .customer-order-search button { min-height: 44px; }
+.account-v14 .customer-order-card > header { align-items: flex-start; padding: 20px 24px; }
+.account-v14 .customer-order-card > header > div { align-items: flex-start; flex-direction: column; gap: 6px; min-width: 0; }
+.account-v14 .customer-order-card > header .customer-card-status { align-items: flex-end; gap: 8px; text-align: right; }
+.account-v14 .customer-order-card > header .customer-action-count { font-size: 12px; color: #945020; font-weight: 650; }
+.account-v14 .customer-order-card > header strong { font-size: 15px; overflow-wrap: anywhere; }
+.account-v14 .customer-order-card > footer { background: #f7f8f6; padding: 18px 24px; }
+.account-v14 .customer-order-card > footer > div { flex-direction: column; gap: 5px; min-width: 0; }
+.account-v14 .customer-order-card > footer strong { font-size: 20px; overflow-wrap: anywhere; }
+.account-v14 .customer-order-card > footer a { min-height: 44px; }
+.account-v14 .customer-product-row p { line-height: 1.65; }
+.account-v14 .customer-product-row > div { min-width: 0; overflow-wrap: anywhere; }
+.account-v14 .customer-product-row img { border: 1px solid #e5e9e4; }
+.account-v14 .customer-order-overview { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 16px; }
+.account-v14 .customer-order-overview h2 { margin: 0; font-size: clamp(21px, 2.3vw, 28px); letter-spacing: -.025em; overflow-wrap: anywhere; }
+.account-v14 .customer-order-overview p { margin: 7px 0 0; font-size: 13px; color: #52656a; }
+.account-v14 .customer-next-actions { border: 1px solid #b9ceca; background: #f1f5f2; border-radius: 12px; padding: 24px; }
+.account-v14 .customer-next-actions > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
+.account-v14 .customer-next-actions h2 { margin: 0; font-size: 18px; font-weight: 700; letter-spacing: -.02em; }
+.account-v14 .customer-next-actions header p { margin: 7px 0 0; font-size: 13px; line-height: 1.6; color: #52656a; }
+.account-v14 .customer-next-actions header > span { font-size: 12px; white-space: nowrap; padding-top: 4px; }
+.account-v14 .customer-next-actions ul { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; margin: 0; padding: 0; list-style: none; }
+.account-v14 .customer-next-actions li { min-width: 0; }
+.account-v14 .customer-next-actions li a { display: flex; align-items: center; gap: 12px; height: 100%; padding: 16px; background: #fff; border: 1px solid #d2dfd9; border-radius: 8px; transition: border-color 160ms ease, background-color 160ms ease; }
+.account-v14 .customer-next-actions li a:hover { border-color: #6f9696; background: #fbfcfa; }
+.account-v14 .customer-next-actions li a > span:nth-child(2) { display: grid; gap: 5px; min-width: 0; }
+.account-v14 .customer-next-actions strong { font-size: 13px; line-height: 1.45; }
+.account-v14 .customer-next-actions li span span { font-size: 12px; line-height: 1.5; color: #52656a; overflow-wrap: anywhere; }
+.account-v14 .customer-next-actions a > svg { width: 16px; height: 16px; margin-left: auto; flex-shrink: 0; }
+.account-v14 .customer-next-icon { display: grid; place-items: center; flex-shrink: 0; width: 34px; height: 38px; }
+.account-v14 .customer-next-icon svg { width: 21px; height: 21px; }
+.account-v14 .customer-amounts { padding: 20px; background: #f7f8f6; border-radius: 8px; gap: 20px; }
+.account-v14 .customer-amounts dd { font-size: clamp(18px, 2vw, 24px); line-height: 1.35; overflow-wrap: anywhere; }
+.account-v14 .customer-amounts dt { line-height: 1.5; }
+.account-v14 .customer-invoice-share { border-left: 3px solid #70958f; padding-left: 14px; }
+.account-v14 .customer-invoice-share strong { color: #103f47; }
+.account-v14 .customer-order-total { align-items: baseline; flex-wrap: wrap; }
+.account-v14 .customer-order-total strong { white-space: normal; overflow-wrap: anywhere; }
+.account-v14 .customer-document { min-height: 44px; min-width: 0; line-height: 1.5; }
+.account-v14 .customer-document > svg { align-self: flex-start; margin-top: 13px; }
+.account-v14 .customer-attachments { max-width: none; }
+.account-v14 .customer-attachments input { min-height: 44px; font-size: 13px; }
+.account-v14 .customer-upload-status { margin: 0; color: #285d4c; overflow-wrap: anywhere; }
+.account-v14 .customer-actions [data-slot=button], .account-v14 .customer-pagination [data-slot=button] { min-height: 44px; }
+.account-v14 .customer-pagination { flex-wrap: wrap; gap: 12px; }
+
+.profile-v14 .profile-details { min-width: 0; }
+.profile-v14 .profile-section-header { padding: 24px 28px 20px; }
+.profile-v14 .profile-section-header h2 { font-size: 18px; font-weight: 700; line-height: 1.4; }
+.profile-v14 .profile-section-header p { font-size: 13px; line-height: 1.65; margin-top: 6px; }
+.profile-v14 .profile-form, .profile-v14 .profile-account-details { padding: 24px 28px; }
+.profile-v14 .profile-form [data-slot=field], .profile-v14 .profile-account-item { min-width: 0; }
+.profile-v14 .profile-form input:not([type=file]) { min-height: 44px; }
+.profile-v14 .profile-form label { line-height: 1.5; }
+.profile-v14 .profile-account-item dd { overflow-wrap: anywhere; line-height: 1.6; }
+.profile-v14 .profile-password-control { position: relative; min-width: 0; }
+.profile-v14 .profile-password-control input { width: 100%; padding-right: 48px; }
+.profile-v14 .profile-password-toggle { position: absolute; right: 2px; top: 50%; transform: translateY(-50%); width: 40px; height: 40px; min-height: 40px; padding: 0; }
+.profile-v14 .profile-form-actions { flex-wrap: wrap; gap: 12px; }
+.profile-v14 .profile-form-actions button { min-height: 44px; white-space: normal; height: auto; }
+.profile-v14 .profile-session-notice p { margin: 8px 0 12px; line-height: 1.6; }
+.account-v14 .profile-v14 .profile-card { background: #f3f5f3; border-color: #dbe3df; padding: 24px; }
+.account-v14 .profile-v14 .profile-section { padding: 0; overflow: hidden; }
+.account-v14 .profile-v14 .profile-card .upload-label { margin: 12px 0 8px; }
+.account-v14 .profile-v14 .profile-photo-help { line-height: 1.6; }
+
+.customer-receipt-review h3 { margin: 0 0 12px; font-size: 18px; font-weight: 700; }
+.customer-receipt-review > p { margin: 8px 0; font-size: 14px; line-height: 1.6; }
+.customer-receipt-review ul { list-style: none; margin: 20px 0 0; padding: 0; }
+.customer-receipt-review li { padding: 16px 0; border-top: 1px solid #dbe3df; }
+.customer-receipt-review li > strong { display: block; font-size: 14px; line-height: 1.5; }
+.customer-receipt-review dl { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 12px; margin: 12px 0 0; }
+.customer-receipt-review dt { color: #52656a; font-size: 12px; }
+.customer-receipt-review dd { margin: 4px 0 0; font-size: 19px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.customer-receipt-review li > p { font-size: 13px; margin: 12px 0 0; overflow-wrap: anywhere; }
+.customer-action-dialog [data-slot=dialog-footer] [data-slot=button] { min-height: 44px; white-space: normal; height: auto; }
+
+@media(max-width:1100px) {
+  .account-v14 .customer-next-actions ul { grid-template-columns: minmax(0,1fr); }
+  .profile-v14 .profile-fields { grid-template-columns: minmax(0,1fr); }
+}
+@media(max-width:760px) {
+  .customer-account.account-v14 { gap: 28px; }
+  .account-v14 .customer-account-main { gap: 20px; }
+  .account-v14 .customer-account-nav { padding: 16px; gap: 14px; }
+  .account-v14 .customer-account-nav nav { gap: 8px; padding-bottom: 0; border: 0; }
+  .account-v14 .customer-account-nav nav a { flex: 1; padding: 12px; font-size: 12px; gap: 8px; }
+  .account-v14 .customer-identity img { width: 40px; height: 40px; }
+  .account-v14 .customer-identity { gap: 10px; }
+  .account-v14 .customer-identity strong { font-size: 13px; }
+  .account-v14 .customer-identity span { font-size: 11px; }
+  .account-v14 .customer-account-nav > button { font-size: 12px; padding-inline: 8px; }
+  .account-v14 .customer-section { padding: 20px; }
+  .account-v14 .customer-section-heading { flex-wrap: wrap; }
+  .account-v14 .customer-section-heading h2 { overflow-wrap: anywhere; }
+  .account-v14 .customer-task-banner { padding: 18px; gap: 12px; }
+  .account-v14 .customer-next-actions { padding: 20px; }
+  .account-v14 .customer-next-actions > header { flex-direction: column; gap: 4px; }
+  .account-v14 .customer-next-actions li a { padding: 14px 12px; gap: 8px; }
+  .account-v14 .customer-next-icon { width: 28px; }
+  .account-v14 .customer-order-card > header, .account-v14 .customer-order-card > footer { padding: 18px; gap: 12px; }
+  .account-v14 .customer-order-card > header { flex-wrap: wrap; }
+  .account-v14 .customer-order-card > footer { flex-wrap: wrap; }
+  .account-v14 .customer-order-card > header .customer-card-status { flex-direction: row; align-items: center; flex-wrap: wrap; }
+  .account-v14 .customer-amounts { padding: 16px; gap: 20px; grid-template-columns: minmax(0,1fr); }
+  .account-v14 .customer-actions { align-items: stretch; }
+  .account-v14 .customer-actions [data-slot=button] { white-space: normal; height: auto; }
+  .profile-v14 .profile-section-header { padding: 20px 20px 16px; }
+  .profile-v14 .profile-form, .profile-v14 .profile-account-details { padding: 20px; }
+}
+@media(max-width:380px) {
+  .account-v14 .customer-account-nav { padding: 12px; grid-template-columns: minmax(0,1fr); }
+  .account-v14 .customer-account-nav > button { grid-column: 1; grid-row: 3; }
+  .account-v14 .customer-account-nav nav a { padding: 10px 8px; }
+  .account-v14 .customer-section, .account-v14 .customer-next-actions { padding: 16px; }
+  .account-v14 .customer-order-search { flex-wrap: wrap; }
+  .account-v14 .customer-order-search > [data-slot=field] { flex-basis: 100%; }
+  .account-v14 .customer-order-search > button { width: 100%; }
+}
+@media(prefers-reduced-motion:reduce) {
+  .account-v14 *, .profile-v14 * { scroll-behavior: auto; transition: none; }
+}

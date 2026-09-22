@@ -45,17 +45,24 @@ export function CollectionCarousel({
   className?: string;
 }) {
   const root = useRef<HTMLElement>(null);
+  const viewportElement = useRef<HTMLDivElement>(null);
   const settleTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const pointerRotationIntent = useRef<boolean | undefined>(undefined);
+  const gestureStart = useRef<{x: number; y: number; id: number; dragged: boolean} | null>(null);
   const labelId = useId();
   const viewportId = useId();
   const motionNoteId = useId();
   const reducedMotion = useSyncExternalStore(subscribeMotion, () => window.matchMedia(MOTION_QUERY).matches, () => true);
   const documentVisible = useSyncExternalStore(subscribeVisibility, () => document.visibilityState === "visible", () => false);
   const [inView, setInView] = useState(false);
-  const [hovered, setHovered] = useState(false);
+  const [controlHovered, setControlHovered] = useState(false);
+  const [resumeOverControl, setResumeOverControl] = useState(false);
+  const [pointerHeld, setPointerHeld] = useState(false);
   const [requestedRotation, setRequestedRotation] = useState(true);
   const [selected, setSelected] = useState(0);
+  const [snapCount, setSnapCount] = useState(0);
+  const [engineRevision, setEngineRevision] = useState(0);
+  const [cycle, setCycle] = useState(0);
   const [viewportRef, api] = useEmblaCarousel({
     align: "start",
     loop: slides.length > 1,
@@ -63,8 +70,15 @@ export function CollectionCarousel({
     watchDrag: slides.length > 1 && !reducedMotion,
     watchFocus: false,
   });
+  const attachViewport = useCallback((element: HTMLDivElement | null) => {
+    viewportElement.current = element;
+    viewportRef(element);
+  }, [viewportRef]);
   const current = Math.min(selected, Math.max(0, slides.length - 1));
-  const rotating = Boolean(api && slides.length > 1 && requestedRotation && !reducedMotion && documentVisible && inView && !hovered);
+  const ready = Boolean(api && snapCount > 1);
+  const hovering = controlHovered && !resumeOverControl;
+  const rotating = ready && requestedRotation && !reducedMotion && documentVisible && inView && !hovering && !pointerHeld;
+  const rotationStatus = !ready ? "Menyiapkan koleksi" : reducedMotion ? "Gerakan dikurangi" : !requestedRotation ? "Dijeda" : hovering || pointerHeld ? "Jeda saat memilih" : !documentVisible || !inView ? "Otomatis saat terlihat" : "Bergeser otomatis";
 
   const stopRotation = useCallback(() => setRequestedRotation(false), []);
   const clearSettleTimer = useCallback(() => {
@@ -73,40 +87,72 @@ export function CollectionCarousel({
   }, []);
 
   useEffect(() => {
-    const element = root.current;
+    const release = () => { gestureStart.current = null; setPointerHeld(false); };
+    const finish = (event: PointerEvent) => { if (gestureStart.current?.id === event.pointerId) release(); };
+    const track = (event: PointerEvent) => {
+      const start = gestureStart.current;
+      if (!start || start.id !== event.pointerId || start.dragged) return;
+      const dx = Math.abs(event.clientX - start.x), dy = Math.abs(event.clientY - start.y);
+      if (dx > 10 && dx > dy) { start.dragged = true; stopRotation(); clearSettleTimer(); }
+    };
+    window.addEventListener("pointermove", track, true);
+    window.addEventListener("pointerup", finish, true);
+    window.addEventListener("pointercancel", finish, true);
+    window.addEventListener("blur", release);
+    return () => {
+      window.removeEventListener("pointermove", track, true);
+      window.removeEventListener("pointerup", finish, true);
+      window.removeEventListener("pointercancel", finish, true);
+      window.removeEventListener("blur", release);
+    };
+  }, [stopRotation, clearSettleTimer]);
+
+  useEffect(() => {
+    const element = viewportElement.current;
     if (!element || !slides.length) return;
-    const observer = new IntersectionObserver(([entry]) => setInView(entry.isIntersecting && entry.intersectionRatio >= 0.4), { threshold: [0, 0.4] });
+    const observer = new IntersectionObserver((entries) => {
+      const entry = entries[entries.length - 1];
+      setInView(entry.isIntersecting && entry.intersectionRatio >= 0.05);
+    }, { threshold: [0, 0.05] });
     observer.observe(element);
     return () => observer.disconnect();
   }, [slides.length]);
 
   useEffect(() => {
     if (!api) return;
-    const sync = () => setSelected(api.selectedScrollSnap());
-    const cancelForDrag = () => { clearSettleTimer(); stopRotation(); };
-    api.on("select", sync).on("reInit", sync).on("pointerDown", cancelForDrag).on("settle", clearSettleTimer);
-    const initialSync = requestAnimationFrame(sync);
+    const sync = () => { setSelected(api.selectedScrollSnap()); setSnapCount(api.scrollSnapList().length); };
+    const reinitialize = () => { clearSettleTimer(); sync(); setEngineRevision(value => value + 1); };
+    api.on("select", sync).on("reInit", reinitialize).on("settle", clearSettleTimer);
+    const initialSync = requestAnimationFrame(reinitialize);
     return () => {
       cancelAnimationFrame(initialSync);
       clearSettleTimer();
-      api.off("select", sync).off("reInit", sync).off("pointerDown", cancelForDrag).off("settle", clearSettleTimer);
+      api.off("select", sync).off("reInit", reinitialize).off("settle", clearSettleTimer);
     };
-  }, [api, clearSettleTimer, stopRotation]);
+  }, [api, clearSettleTimer]);
 
   const move = useCallback((direction: -1 | 1) => {
-    if (!api || slides.length < 2) return;
+    if (!api || api.scrollSnapList().length < 2) return;
     clearSettleTimer();
-    const target = (api.selectedScrollSnap() + direction + slides.length) % slides.length;
+    const count = api.scrollSnapList().length;
+    const target = (api.selectedScrollSnap() + direction + count) % count;
     // Embla's duration is physics-based, not milliseconds; cap programmatic settling.
     api.scrollTo(target, reducedMotion);
     if (!reducedMotion) settleTimer.current = setTimeout(() => { api.scrollTo(target, true); settleTimer.current = undefined; }, MAX_TRANSITION);
-  }, [api, clearSettleTimer, reducedMotion, slides.length]);
+  }, [api, clearSettleTimer, reducedMotion]);
 
   useEffect(() => {
     if (!rotating) return;
-    const timer = setTimeout(() => move(1), AUTOPLAY_DELAY);
+    // Re-arm even if a resize temporarily prevents the selected snap changing.
+    let timer: ReturnType<typeof setTimeout>;
+    const advance = () => {
+      move(1);
+      setCycle(value => value + 1);
+      timer = setTimeout(advance, AUTOPLAY_DELAY);
+    };
+    timer = setTimeout(advance, AUTOPLAY_DELAY);
     return () => clearTimeout(timer);
-  }, [rotating, current, move]);
+  }, [rotating, engineRevision, move]);
 
   if (slides.length === 0) return null;
 
@@ -123,17 +169,28 @@ export function CollectionCarousel({
         // A newly focused link must not continue moving under the user's focus.
         api?.scrollTo(api.selectedScrollSnap(), true);
       }}
-      onPointerEnter={(event) => { if (event.pointerType === "mouse" || event.pointerType === "pen") setHovered(true); }}
-      onPointerLeave={() => setHovered(false)}
+      onPointerOver={(event) => {
+        if (event.pointerType !== "mouse" && event.pointerType !== "pen") return;
+        const interactive = event.target instanceof Element && Boolean(event.target.closest("a,button"));
+        setControlHovered(interactive);
+        if (!interactive) setResumeOverControl(false);
+      }}
+      onPointerLeave={() => { setControlHovered(false); setResumeOverControl(false); }}
+      onPointerDownCapture={(event) => {
+        if (!event.isPrimary || event.button !== 0 || !(event.target instanceof Element) || !viewportElement.current?.contains(event.target)) return;
+        gestureStart.current = {x: event.clientX, y: event.clientY, id: event.pointerId, dragged: false};
+        setPointerHeld(true);
+        clearSettleTimer();
+      }}
     >
       <div className="collection-carousel-toolbar">
-        <p id={labelId} className="collection-carousel-label">{ariaLabel}</p>
+        <div className="collection-carousel-heading"><p id={labelId} className="collection-carousel-label">{ariaLabel}</p>{slides.length > 1 && <span className="collection-carousel-status">{rotationStatus}</span>}</div>
         {slides.length > 1 && (
           <div className="collection-carousel-controls">
             <button
               type="button"
               className="collection-carousel-rotation"
-              disabled={!api || reducedMotion}
+              disabled={!ready || reducedMotion}
               aria-label={requestedRotation && !reducedMotion ? "Jeda pergantian koleksi otomatis" : "Mulai pergantian koleksi otomatis"}
               title={requestedRotation && !reducedMotion ? "Jeda pergantian otomatis" : "Lanjutkan pergantian otomatis"}
               aria-describedby={reducedMotion ? motionNoteId : undefined}
@@ -142,7 +199,9 @@ export function CollectionCarousel({
               onPointerCancel={() => { pointerRotationIntent.current = undefined; }}
               onKeyDown={() => { pointerRotationIntent.current = undefined; }}
               onClick={() => {
-                setRequestedRotation(pointerRotationIntent.current ?? !requestedRotation);
+                const resume = pointerRotationIntent.current ?? !requestedRotation;
+                setRequestedRotation(resume);
+                setResumeOverControl(resume);
                 pointerRotationIntent.current = undefined;
               }}
             >
@@ -154,9 +213,9 @@ export function CollectionCarousel({
           </div>
         )}
       </div>
-      <div className="collection-carousel-progress" aria-hidden="true"><span key={`${current}-${rotating}`} style={{animationDuration: `${AUTOPLAY_DELAY}ms`}} /></div>
+      <div className="collection-carousel-progress" aria-hidden="true"><span key={`${cycle}-${engineRevision}-${rotating}`} style={{animationDuration: `${AUTOPLAY_DELAY}ms`}} /></div>
       {reducedMotion && <span id={motionNoteId} className="collection-carousel-sr">Pergantian otomatis dinonaktifkan sesuai pengaturan kurangi gerakan. Gunakan tombol koleksi sebelumnya atau berikutnya.</span>}
-      <div ref={viewportRef} id={viewportId} className="collection-carousel-viewport">
+      <div ref={attachViewport} id={viewportId} className="collection-carousel-viewport">
         <div className="collection-carousel-track" aria-live={rotating ? "off" : "polite"} aria-atomic="false">
           {slides.map((slide, index) => (
             <div key={slide.id} className="collection-carousel-slide" role="group" aria-roledescription="slide" aria-label={`${index + 1} dari ${slides.length}: ${slide.title}`} aria-hidden={index !== current} inert={index !== current}>

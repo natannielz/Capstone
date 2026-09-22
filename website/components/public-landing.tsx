@@ -3,11 +3,12 @@ import {ArrowRight, ArrowUpRight, Building2, ShoppingBag, PackageCheck, Truck, R
 import {Brand} from "./brand";
 import {Art} from "./art";
 import {LandingMotion} from "./public-motion";
+import {SiteFooter} from "./site-footer";
 
 const collections = [
-  {title:"Pantry harian", collection:"pantry", heading:["Mulai hari.","Ambil jeda."], description:"Kopi untuk mengawali pagi, teh di sela pekerjaan, dan camilan untuk dinikmati bersama. Siapkan persediaan pantry sesuai kebutuhan Anda.", detail:"Kopi, teh, minuman & camilan", image:"/images/editorial/pantry-moment-v3.png", alt:"Kopi dan makanan ringan disiapkan di pantry kantor", action:"Lihat pilihan pantry"},
-  {title:"Kebutuhan rapat", collection:"rapat", heading:["Meja siap.","Ide mengalir."], description:"Lengkapi pertemuan dengan konsumsi dan perlengkapan yang dibutuhkan. Pilih barang serta kemasannya sebelum membuat pesanan.", detail:"Konsumsi & perlengkapan pertemuan", image:"/images/hero.png", alt:"Meja pertemuan dengan air minum, snack, buku catatan, dan perlengkapan", action:"Siapkan kebutuhan rapat"},
-  {title:"Merchandise", collection:"merchandise", heading:["Dibawa pergi.","Dipakai lagi."], description:"Tumbler, tas, dan pakaian untuk melengkapi kegiatan tim. Temukan pilihan yang sesuai untuk keseharian maupun acara bersama.", detail:"Tumbler, tas & pakaian", image:"/images/editorial/hero-still-life-v3.png", alt:"Tas kanvas, tumbler, dan pakaian untuk kegiatan tim", action:"Jelajahi merchandise"},
+  {title:"Pantry harian", collection:"pantry", heading:["Mulai hari.","Ambil jeda."], description:"Kopi, teh, dan camilan untuk persediaan bersama dan waktu rehat.", image:"/images/editorial/pantry-moment-v3.png", alt:"Kopi dan makanan ringan disiapkan di pantry kantor", action:"Lihat pilihan pantry"},
+  {title:"Kebutuhan rapat", collection:"rapat", heading:["Meja siap.","Ide mengalir."], description:"Konsumsi dan perlengkapan pertemuan, dengan pilihan kemasan sesuai kebutuhan.", image:"/images/hero.png", alt:"Meja pertemuan dengan air minum, snack, buku catatan, dan perlengkapan", action:"Siapkan kebutuhan rapat"},
+  {title:"Merchandise", collection:"merchandise", heading:["Dibawa pergi.","Dipakai lagi."], description:"Tumbler, tas, dan pakaian untuk keseharian serta kegiatan tim.", image:"/images/products/tote.png", alt:"Tas kanvas polos untuk membawa kebutuhan sehari-hari", action:"Jelajahi merchandise"},
 ];
 
 function CtaArrow(){return <span className="home13-cta-arrow" aria-hidden="true"><ArrowUpRight size={21}/></span>;}
@@ -39,7 +40,7 @@ export function PublicLanding(){
     <nav className="home13-collection-nav" aria-label="Jelajahi bagian koleksi">{collections.map(item=><a key={item.collection} href={`#koleksi-${item.collection}`}><span>{item.title}</span><ArrowUpRight size={18} aria-hidden="true"/></a>)}</nav>
     <div className="home13-chapters">{collections.map(item=><article className={`home13-chapter home13-chapter-${item.collection}`} key={item.collection} id={`koleksi-${item.collection}`} aria-labelledby={`title-${item.collection}`}>
      <div className="home13-chapter-rule" aria-hidden="true"><span/></div>
-     <div className="home13-chapter-copy"><p className="home13-kicker">{item.title}</p><h3 id={`title-${item.collection}`}>{item.heading.map(line=><span key={line}>{line}</span>)}</h3><p className="home13-chapter-description">{item.description}</p><Link href={`/shop?collection=${item.collection}`} className="home13-cta"><span>{item.action}</span><CtaArrow/></Link><p className="home13-chapter-detail">{item.detail}</p></div>
+     <div className="home13-chapter-copy"><p className="home13-kicker">{item.title}</p><h3 id={`title-${item.collection}`}>{item.heading.map(line=><span key={line}>{line}</span>)}</h3><p className="home13-chapter-description">{item.description}</p><Link href={`/shop?collection=${item.collection}`} className="home13-cta"><span>{item.action}</span><CtaArrow/></Link></div>
      <figure className="home13-chapter-photo"><Art src={item.image} alt={item.alt} loading="lazy" sizes="(max-width: 800px) 100vw, 52vw"/></figure>
     </article>)}</div>
    </section>
@@ -62,6 +63,6 @@ export function PublicLanding(){
     </div>
    </section>
   </main>
-  <footer className="home-footer"><div className="home-footer-main"><div><Brand inverse/><p>Pantry, perlengkapan rapat,<br/>dan kebutuhan kegiatan tim.</p></div><nav aria-label="Akses dan informasi"><a href="#kebutuhan">Koleksi toko</a><Link href="/customer/login">Masuk pelanggan</Link><Link href="/staff/login">Portal divisi & petugas</Link></nav></div><div className="home-footer-bottom"><p>Demo capstone · Studi kasus divisi BNI. Bukan situs resmi BNI.</p><p>Data, foto, pengiriman, dan pembayaran adalah simulasi.</p></div></footer>
+  <SiteFooter/>
  </LandingMotion>;
 }

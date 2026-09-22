@@ -1,20 +1,56 @@
 "use client";
-import {buyerLabel} from "@/lib/domain/buyers";
-import {ArrowUpRight,ShoppingBag,ClipboardList,Truck,WalletCards,Package,CalendarCheck,Users,ShieldCheck,ArrowRight} from "lucide-react";
-import type {WorkspaceContext,Page} from "./workspace";
-import {invoiceBalance,money,sum} from "@/lib/domain/selectors";
-import {OrderList} from "./order-experience";
-import {matchesOrderQueue} from "@/lib/domain/order-views";
-import {Button} from "@/components/ui/button";
-export function Dashboard({s,actor,go}:WorkspaceContext){const role=actor.role,pending=s.orders.filter(o=>o.status==="submitted").length,ready=s.shipments.filter(sh=>sh.status==="ready").length,transit=s.shipments.filter(sh=>sh.status==="dispatched").length,openInvoices=s.invoices.filter(i=>invoiceBalance(s,i.id)>0),approval=s.credits.filter(x=>x.status==="requested").length+s.refunds.filter(x=>x.status==="requested").length+s.expenses.filter(x=>x.status==="requested").length;
- const awaitingPreparation=s.orders.filter(o=>matchesOrderQueue(s,o,"preparation")).length;
- const finance=["laporan","penagihan","pimpinan","akuntansi"].includes(role);
- type Queue={label:string;value:string|number;page:Page;icon:typeof Package;query?:Record<string,string|null>};
- const queues:Queue[]=role==="admin"?[{label:"Pengguna aktif",value:s.users.filter(u=>u.active).length,page:"admin",icon:Users},{label:"Divisi terdaftar",value:s.divisions.length,page:"admin",icon:ClipboardList},{label:"Aktivitas pengaturan",value:s.audits.length,page:"admin",icon:ShieldCheck}]:role==="kurir"?[{label:"Siap diberangkatkan",value:ready,page:"deliveries",icon:Package,query:{status:"ready"}},{label:"Dalam pengiriman",value:transit,page:"deliveries",icon:Truck,query:{status:"dispatched"}},{label:"Pengiriman selesai",value:s.shipments.filter(x=>x.status==="received").length,page:"deliveries",icon:ClipboardList,query:{status:"received"}}]:finance?[{label:role==="pimpinan"?"Pengajuan perlu persetujuan":"Invoice belum lunas",value:role==="pimpinan"?approval:openInvoices.length,page:role==="pimpinan"?"payments":"billing",icon:ClipboardList,query:role==="pimpinan"?undefined:{balance:"open"}},{label:"Piutang pembeli",value:money(sum(openInvoices.map(i=>invoiceBalance(s,i.id)))),page:"billing",icon:WalletCards,query:{balance:"open"}},{label:"Periode belum ditutup",value:s.periods.filter(p=>p.status!=="closed").length,page:"periods",icon:CalendarCheck}]:[{label:role==="pic"?"Pesanan Anda":role==="staf"?"Perlu disiapkan":"Menunggu tinjauan",value:role==="pic"?s.orders.length:role==="staf"?awaitingPreparation:pending,page:"orders",icon:ShoppingBag,query:{queue:role==="kepala"?"review":role==="staf"?"preparation":null,q:null,orderPage:null}},{label:"Pengiriman aktif",value:ready+transit,page:"deliveries",icon:Truck,query:{status:"active"}},{label:role==="staf"?"Jenis barang":"Invoice belum lunas",value:role==="staf"?s.products.length:openInvoices.length,page:role==="staf"?"stock":"billing",icon:role==="staf"?Package:WalletCards,query:role==="staf"?undefined:{balance:"open"}}];
- return <><div className="dashboard-queues">{queues.map(q=><button className="queue-card" key={q.label} onClick={()=>go(q.page,undefined,q.query)}><div className="queue-label"><span>{q.label}</span><q.icon size={20}/></div><strong>{q.value}</strong><span className="queue-link">Lihat rincian<ArrowUpRight size={16}/></span></button>)}</div>
- {!["admin","kurir"].includes(role)&&!finance&&<section className="panel"><div className="panel-title"><div><h2>Pesanan terbaru</h2><p>Lima pesanan terakhir beserta status pemenuhan.</p></div><button className="text-link" onClick={()=>go("orders",undefined,{queue:null,q:null,orderPage:null})}>Semua pesanan<ArrowUpRight size={14}/></button></div><OrderList s={s} orders={[...s.orders].reverse().slice(0,5)} onSelect={id=>go("orders",id)}/></section>}
- {finance&&<section className="panel"><div className="panel-title"><div><h2>Tagihan yang perlu ditindaklanjuti</h2><p>Saldo berdasarkan penerimaan dan pembayaran terverifikasi.</p></div><button className="text-link" onClick={()=>go("billing")}>Lihat invoice<ArrowUpRight size={14}/></button></div><div className="table-scroll"><table className="data-table"><thead><tr><th>Invoice</th><th>Pembeli</th><th>Jatuh tempo</th><th className="numeric">Sisa tagihan</th></tr></thead><tbody>{openInvoices.slice(0,5).map(i=><tr key={i.id}><td>{i.number}</td><td>{buyerLabel(s,i)}</td><td style={{whiteSpace:"nowrap"}}>{new Date(i.dueDate+"T12:00:00").toLocaleDateString("id-ID",{day:"numeric",month:"short",year:"numeric"})}</td><td className="numeric">{money(invoiceBalance(s,i.id))}</td></tr>)}</tbody></table></div>{!openInvoices.length&&<p className="module-note">{s.invoices.length?"Seluruh invoice sudah lunas.":"Belum ada invoice."}</p>}</section>}
- {role==="kurir"&&<section className="panel"><div className="panel-title"><div><h2>Penugasan pengiriman</h2><p>Hanya pengiriman yang ditugaskan kepada Anda.</p></div><Button variant="outline" onClick={()=>go("deliveries")}>Buka tugas<ArrowRight size={15}/></Button></div>{s.shipments.filter(x=>["ready","dispatched"].includes(x.status)).map(sh=><div key={sh.id} className="module-note"><strong>{sh.number}</strong> · {s.orders.find(o=>o.id===sh.orderId)?.address}</div>)}</section>}
 
- </>;
+import { ArrowUpRight, ShoppingBag, ClipboardList, Truck, WalletCards, Package, CalendarCheck, Users, Building2, ArrowRight, CheckCheck } from "lucide-react";
+import { buyerLabel } from "@/lib/domain/buyers";
+import { canOpenPage } from "@/lib/domain/navigation";
+import { invoiceBalance, money, today } from "@/lib/domain/selectors";
+import { dashboardView, type DashboardDestination } from "@/lib/domain/dashboard-views";
+import { ROLE_LABELS } from "@/lib/domain/accounts";
+import type { WorkspaceContext } from "./workspace";
+import { OrderList } from "./order-experience";
+import { Button } from "@/components/ui/button";
+
+const queueIcons = { users: Users, building: Building2, package: Package, truck: Truck, check: CheckCheck, orders: ClipboardList, wallet: WalletCards, calendar: CalendarCheck, shopping: ShoppingBag };
+const orderQuery = (queue: string | null) => ({ queue, q: null, orderPage: null });
+const dateLabel = (date: string) => new Date(date + "T12:00:00+07:00").toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Jakarta" });
+
+export function Dashboard(ctx: WorkspaceContext) {
+  const { s, actor, go } = ctx;
+  const view = dashboardView(ctx);
+  if (!view || !canOpenPage(actor.role, view.priority.page)) return null;
+  const { priority, queues, finance, openInvoices, activeShipments } = view;
+  const open = (destination: DashboardDestination) => go(destination.page, destination.id, destination.query);
+  return <div className="dashboard-v14">
+    <section className="work-priority" aria-labelledby="work-priority-title" data-waiting={priority.waiting}>
+      <div className="work-priority-copy">
+        <p className="work-priority-label">{ROLE_LABELS[actor.role]} <span>/</span> Pekerjaan berikutnya</p>
+        <h2 id="work-priority-title">{priority.title}</h2>
+        <p>{priority.description}</p>
+        <Button className="work-priority-action" onClick={() => open(priority)}>{priority.action}<ArrowRight data-icon="inline-end" aria-hidden="true"/></Button>
+      </div>
+      <div className="work-priority-total"><strong>{priority.count}</strong><span>{priority.unit}</span></div>
+    </section>
+    <section className="dashboard-overview" aria-labelledby="dashboard-overview-title">
+      <div className="dashboard-section-heading"><h2 id="dashboard-overview-title">Sekilas aktivitas</h2><span>Data sesuai akses Anda</span></div>
+      <div className="dashboard-queues">{queues.map(queue => { const Icon = queueIcons[queue.icon]; return <button className="queue-card" key={queue.label} onClick={() => open(queue)}>
+        <div className="queue-label"><span>{queue.label}</span><Icon size={19} aria-hidden="true"/></div><strong>{queue.value}</strong><span className="queue-link">{queue.link}<ArrowUpRight size={15} aria-hidden="true"/></span>
+      </button>;})}</div>
+    </section>
+    {!["admin", "kurir"].includes(actor.role) && !finance && <section className="panel">
+      <div className="panel-title"><div><h2>Pesanan terbaru</h2><p>Lima pesanan terakhir, termasuk riwayat penyelesaiannya.</p></div><button className="text-link" onClick={() => go("orders", undefined, orderQuery(null))}>Semua pesanan<ArrowUpRight size={15} aria-hidden="true"/></button></div>
+      <OrderList s={s} orders={[...s.orders].reverse().slice(0, 5)} onSelect={id => go("orders", id)}/>
+    </section>}
+    {finance && <section className="panel dashboard-invoices">
+      <div className="panel-title"><div><h2>Tagihan yang perlu ditindaklanjuti</h2><p>Invoice belum lunas, diurutkan dari jatuh tempo paling awal.</p></div><button className="text-link" onClick={() => go("billing", undefined, { balance: "open" })}>Semua invoice<ArrowUpRight size={15} aria-hidden="true"/></button></div>
+      {!!openInvoices.length && <div className="table-scroll"><table className="data-table"><caption className="sr-only">Lima invoice belum lunas dengan jatuh tempo paling awal</caption><thead><tr><th scope="col">Invoice / pembeli</th><th scope="col">Jatuh tempo</th><th scope="col" className="numeric">Sisa tagihan</th><th scope="col"><span className="sr-only">Tindakan</span></th></tr></thead><tbody>{openInvoices.slice(0, 5).map(invoice => <tr key={invoice.id}>
+        <td><strong>{invoice.number}</strong><small>{buyerLabel(s, invoice)}</small></td><td><span className="dashboard-due-date">{dateLabel(invoice.dueDate)}</span>{invoice.dueDate < today() && <small className="dashboard-overdue">Lewat jatuh tempo</small>}</td><td className="numeric">{money(invoiceBalance(s, invoice.id))}</td><td><Button variant="outline" size="sm" aria-label={`Buka invoice ${invoice.number}`} onClick={() => go("billing", invoice.id)}>Buka invoice<ArrowRight data-icon="inline-end" aria-hidden="true"/></Button></td>
+      </tr>)}</tbody></table></div>}
+      {!openInvoices.length && <div className="dashboard-empty"><CheckCheck size={24} aria-hidden="true"/><div><h3>{s.invoices.length ? "Seluruh invoice sudah lunas" : "Belum ada invoice tercatat"}</h3><p>{s.invoices.length ? "Tagihan baru akan tampil setelah invoice diterbitkan." : "Invoice akan tampil setelah penerimaan barang difinalisasi dan ditagihkan."}</p></div></div>}
+    </section>}
+    {actor.role === "kurir" && <section className="panel dashboard-deliveries">
+      <div className="panel-title"><div><h2>Penugasan pengiriman</h2><p>Pengiriman dalam perjalanan ditampilkan lebih dahulu.</p></div><button className="text-link" onClick={() => go("deliveries", undefined, { status: "active" })}>Semua tugas<ArrowUpRight size={15} aria-hidden="true"/></button></div>
+      {activeShipments.length ? <ul className="dashboard-task-list">{activeShipments.map(shipment => <li key={shipment.id}><span className="dashboard-task-icon"><Truck size={21} aria-hidden="true"/></span><div><h3>{shipment.number}</h3><p>{s.orders.find(order => order.id === shipment.orderId)?.address || "Alamat tersedia pada surat jalan"}</p><span className="dashboard-task-status">{shipment.status === "dispatched" ? "Dalam perjalanan" : "Siap diberangkatkan"}</span></div><Button variant="outline" size="sm" aria-label={`Buka tugas ${shipment.number}`} onClick={() => go("deliveries", shipment.id)}>Buka tugas<ArrowRight data-icon="inline-end" aria-hidden="true"/></Button></li>)}</ul>
+        : <div className="dashboard-empty"><CheckCheck size={24} aria-hidden="true"/><div><h3>Tidak ada pengiriman aktif</h3><p>Staf Toko akan menugaskan surat jalan baru. Pengiriman terdahulu tetap tersedia di riwayat.</p></div></div>}
+    </section>}
+  </div>;
 }

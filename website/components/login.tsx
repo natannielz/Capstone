@@ -1,6 +1,6 @@
 "use client";
 
-import {useRef,useState,useSyncExternalStore} from "react";
+import {useEffect,useRef,useState,useSyncExternalStore} from "react";
 import Link from "next/link";
 import {ArrowLeft,ArrowRight,ClipboardList,Eye,EyeOff,LockKeyhole,Mail,Package,ReceiptText,ShieldCheck,Truck} from "lucide-react";
 import {Art} from "./art";
@@ -22,14 +22,19 @@ export function Login({initialError="",portal="staff"}:{initialError?:string;por
  useLoginMotion(motionRoot,portal);
  const customer=portal==="customer";
  const[email,setEmail]=useState(""),[password,setPassword]=useState(""),[show,setShow]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState(initialError),[credentialsInvalid,setCredentialsInvalid]=useState(false);
+ const[wrongPortal,setWrongPortal]=useState(false);
+ const errorRef=useRef<HTMLDivElement>(null);
  const ready=useSyncExternalStore(subscribeToHydration,clientReady,serverReady);
+ const notice=ready?new URLSearchParams(window.location.search).get("notice"):null;
+ const noticeText=notice==="password-changed"?"Kata sandi diperbarui. Masuk kembali dengan kata sandi baru.":notice==="session-expired"?"Sesi Anda telah berakhir. Masuk kembali untuk melanjutkan.":"";
+ useEffect(()=>{if(error)errorRef.current?.focus();},[error]);
  const pending=useRef(false);
  async function submit(e:React.FormEvent){
-  e.preventDefault();if(!ready||pending.current)return;pending.current=true;setBusy(true);setError("");setCredentialsInvalid(false);
+  e.preventDefault();if(!ready||pending.current)return;pending.current=true;setBusy(true);setError("");setCredentialsInvalid(false);setWrongPortal(false);
   try{
    const data=await requestJson<{user:{role:Role}}>("/api/auth/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email,password,portal})});
    window.location.assign(safeLoginDestination(new URLSearchParams(window.location.search).get("next"),data.user?.role||"pic"));
-  }catch(e){setCredentialsInvalid(e instanceof ApiError&&e.status===401);setError(e instanceof Error?e.message:"Koneksi bermasalah. Coba kembali.");pending.current=false;setBusy(false);}
+  }catch(e){setCredentialsInvalid(e instanceof ApiError&&e.status===401);setWrongPortal(e instanceof ApiError&&e.status===403);setError(e instanceof Error?e.message:"Koneksi bermasalah. Coba kembali.");pending.current=false;setBusy(false);}
  }
  return <main ref={motionRoot} className={`login-v13 login-portal-${portal}`}>
   <header className="login-v13-nav">
@@ -71,6 +76,7 @@ export function Login({initialError="",portal="staff"}:{initialError?:string;por
      <h2 id="login-title">{customer?"Masuk pelanggan":"Masuk staf & admin"}</h2>
      <p>{customer?"Gunakan akun pelanggan untuk melanjutkan belanja.":"Untuk PIC divisi, staf toko, dan administrator."}</p>
     </header>
+    {noticeText&&<p className="login-v14-notice" role="status">{noticeText}</p>}
     <form method="post" onSubmit={submit} aria-busy={busy||!ready}>
      <FieldGroup className="login-fields">
       <Field data-disabled={busy} data-invalid={credentialsInvalid}>
@@ -91,7 +97,7 @@ export function Login({initialError="",portal="staff"}:{initialError?:string;por
        </InputGroup>
       </Field>
      </FieldGroup>
-     {error&&<FieldError id="login-error" className="error-message">{error}</FieldError>}
+     {error&&<div ref={errorRef} tabIndex={-1} className="login-v14-error"><FieldError id="login-error" className="error-message">{error}</FieldError>{wrongPortal&&<Link href={customer?"/staff/login":"/customer/login"}>{customer?"Buka portal staf & admin":"Buka portal pelanggan"}<ArrowRight size={15} aria-hidden="true"/></Link>}</div>}
      <Button type="submit" disabled={busy||!ready} className="login-submit">{!ready?"Menyiapkan halaman…":busy?"Memeriksa akun…":customer?"Masuk untuk belanja":"Masuk ke ruang kerja"}<ArrowRight data-icon="inline-end" aria-hidden="true"/></Button>
     </form>
     <p className="login-v13-switch">{customer?"Anda staf atau admin? ":"Ingin berbelanja? "}<Link href={customer?"/staff/login":"/customer/login"}>{customer?"Masuk staf & admin":"Masuk pelanggan"}<ArrowRight size={14} aria-hidden="true"/></Link></p>

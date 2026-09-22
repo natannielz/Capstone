@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useShopLocation } from "./use-shop-location";
+import { ShoppingProgress } from "./shopping-progress";
 import {
   ArrowLeft,
   ArrowRight,
@@ -50,10 +51,13 @@ export function ShopQuantity({
   disabled?: boolean;
   id: string;
 }) {
-  const valid = validCatalogQuantity(value) && Number(value) <= max;
+  const validNumber = validCatalogQuantity(value);
+  const valid = validNumber && Number(value) <= max;
+  const unavailable = max < 1;
   function adjust(delta: number) {
+    if (unavailable) return;
     const next = String(
-      Math.min(max, Math.max(1, (valid ? Number(value) : 1) + delta)),
+      Math.min(max, Math.max(1, validNumber ? Number(value) + delta : 1)),
     );
     onChange(next);
     onCommit?.(next);
@@ -65,7 +69,7 @@ export function ShopQuantity({
         <button
           type="button"
           aria-label={`Kurangi ${label.toLowerCase()}`}
-          disabled={disabled || (valid && Number(value) <= 1)}
+          disabled={disabled || unavailable || (validNumber && Number(value) <= 1)}
           onClick={() => adjust(-1)}
         >
           <Minus size={16} />
@@ -76,8 +80,8 @@ export function ShopQuantity({
           inputMode="numeric"
           pattern="[0-9]+"
           value={value}
-          disabled={disabled}
-          aria-invalid={!valid}
+          disabled={disabled || unavailable}
+          aria-invalid={!valid && !unavailable}
           aria-describedby={!valid ? `${id}-error` : undefined}
           onChange={(event) => onChange(event.target.value)}
           onBlur={() => onCommit?.(value)}
@@ -85,7 +89,7 @@ export function ShopQuantity({
         <button
           type="button"
           aria-label={`Tambah ${label.toLowerCase()}`}
-          disabled={disabled || (valid && Number(value) >= max)}
+          disabled={disabled || unavailable || (validNumber && Number(value) >= max)}
           onClick={() => adjust(1)}
         >
           <Plus size={16} />
@@ -93,7 +97,7 @@ export function ShopQuantity({
       </div>
       {!valid && (
         <p className="shop-field-error" id={`${id}-error`}>
-          Isi bilangan bulat 1–{Math.max(1, max).toLocaleString("id-ID")}.
+          {unavailable ? "Stok kemasan ini habis." : `Isi bilangan bulat 1–${max.toLocaleString("id-ID")}.`}
         </p>
       )}
     </div>
@@ -210,7 +214,7 @@ function ProductContent({ productId }: { productId: string }) {
             fetchPriority="high"
             sizes="(max-width: 700px) 100vw, 50vw"
           />
-          <p>Foto ilustrasi produk. Kemasan pesanan mengikuti pilihan SKU.</p>
+          <p>Foto ilustrasi. Isi pesanan mengikuti kemasan yang dipilih.</p>
         </div>
         <div className="shop-detail-copy">
           <p className="shop-kicker">{shopCategory(product)}</p>
@@ -239,8 +243,9 @@ function ProductContent({ productId }: { productId: string }) {
                   onClick={() => packaging(variant.id)}
                   className={product.id === variant.id ? "is-selected" : ""}
                 >
-                  {variant.packaging}
-                  {product.id === variant.id && <Check size={14} />}
+                  <span className="shop-package-name">{variant.packaging}{product.id === variant.id && <Check size={15} aria-hidden="true" />}</span>
+                  <span className="shop-package-price">{rupiah(variant.price)}<span> / {variant.unit}</span></span>
+                  <span className={`shop-package-stock${variant.available <= 0 ? " is-empty" : ""}`}>{variant.available > 0 ? `${variant.available} ${variant.unit} tersedia` : "Stok habis"}</span>
                 </button>
               ))}
             </div>
@@ -251,13 +256,13 @@ function ProductContent({ productId }: { productId: string }) {
               value={qty}
               onChange={setQty}
               label={`Jumlah (${product.unit})`}
-              max={Math.max(1, Math.min(10000, product.available))}
-              disabled={busy || Boolean(cart.pending)}
+              max={Math.max(0, Math.min(10000, product.available))}
+              disabled={busy || Boolean(cart.pending) || product.available <= 0}
             />
             <div>
               <span>Subtotal</span>
               <strong>
-                {qtyValid
+                {product.available <= 0 ? "Stok habis" : qtyValid
                   ? rupiah(Number(qty) * product.price)
                   : "Periksa jumlah"}
               </strong>
@@ -489,6 +494,7 @@ function CartContent() {
           </p>
         </div>
       </div>
+      <ShoppingProgress stage="cart" />
       {!actor && (
         <div className="shop-notice">
           <ShoppingCart size={19} />
@@ -608,6 +614,7 @@ function CartContent() {
                         }
                         onCommit={(value) => void commitQty(id, value)}
                         label={`Jumlah ${product.unit}`}
+                        max={Math.max(0, Math.min(10000, product.available))}
                         disabled={busy || Boolean(cart.pending)}
                       />
                       <button

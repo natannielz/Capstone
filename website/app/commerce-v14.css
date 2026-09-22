@@ -1,0 +1,163 @@
+/* The purchasing flow uses the same product labels and order-sheet rhythm. */
+.shop-app .shop-filter-chips { gap: 8px; align-items: center; margin-bottom: 24px; }
+.shop-app .shop-filter-chips > .shop-filter-chip {
+  display: inline-flex; align-items: center; gap: 8px; min-height: 44px;
+  max-width: 100%; padding: 9px 12px; border: 1px solid #c7d7d9;
+  border-radius: 7px; background: #e7eeeb; color: #103f47; text-align: left;
+}
+.shop-app .shop-filter-chip > span { min-width: 0; overflow-wrap: anywhere; }
+.shop-app .shop-filter-chip > svg { flex-shrink: 0; }
+.shop-app .shop-filter-chips > .shop-filter-chip:hover { background: #dce8e5; border-color: #70928f; }
+.shop-app .shop-filter-chips > .shop-filter-reset { min-height: 44px; border-color: transparent; background: transparent; color: #ad431e; text-decoration: underline; text-underline-offset: 4px; }
+.shop-app .shop-filter-chips > .shop-filter-reset:hover { border-color: transparent; background: #f6eae4; }
+
+.shop-app .shop-product-copy { padding: 18px 18px 16px; }
+.shop-app .shop-product-copy h3 { line-height: 1.5; letter-spacing: -.01em; }
+.shop-app .shop-product-price { display: flex; flex-wrap: wrap; align-items: baseline; gap: 5px; font-size: 24px; font-variant-numeric: tabular-nums; letter-spacing: -.035em; }
+.shop-app .shop-product-price > span { margin-left: 0; }
+.shop-app .shop-packaging { min-height: 34px; color: #52656a; }
+.shop-app .shop-card-bottom { min-height: 58px; gap: 10px; }
+.shop-app .shop-card-bottom .shop-stock { flex: 1; min-width: 0; max-width: 145px; font-size: 11px; line-height: 1.55; }
+.shop-app .shop-quick-add { flex-shrink: 0; min-height: 44px; height: 44px; }
+.shop-app .shop-quick-add:disabled { opacity: 1; border-color: #d4dfe0; background: #edf2f3; color: #52656a; }
+.shop-app .shop-product-card.is-added .shop-quick-add:disabled { border-color: #b7ccc5; background: #e7eeeb; }
+
+.shop-app .shopping-progress { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px 24px; padding: 14px 0; margin: -2px 0 28px; border-block: 1px solid #cfdadf; }
+.shop-app .shopping-progress ol { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; list-style: none; padding: 0; margin: 0; }
+.shop-app .shopping-progress li { display: flex; color: #687b7e; font-size: 13px; }
+.shop-app .shopping-progress li > a,
+.shop-app .shopping-progress-stage { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 8px 10px; border-radius: 6px; }
+.shop-app .shopping-progress li[aria-current="step"] { color: #103f47; font-weight: 750; }
+.shop-app .shopping-progress li[aria-current="step"] > a,
+.shop-app .shopping-progress li[aria-current="step"] > span { background: #e7eeeb; }
+.shop-app .shopping-progress li > a:hover { background: #e7eeeb; }
+.shop-app .shopping-progress-history { display: inline-flex; align-items: center; gap: 12px; min-height: 44px; color: #103f47; font-size: 13px; font-weight: 650; text-underline-offset: 4px; }
+.shop-app .shopping-progress-history:hover { text-decoration: underline; }
+
+.shop-app .shop-detail-copy h1 { font-size: clamp(28px, 3vw, 42px); line-height: 1.15; max-width: 18ch; }
+.shop-app .shop-detail-introduction { max-width: 55ch; margin-top: 16px; }
+.shop-app .shop-detail-price { flex-wrap: wrap; padding-top: 24px; margin-top: 24px; border-top: 1px solid #cfdadf; }
+.shop-app .shop-detail-price strong { font-size: clamp(30px, 3vw, 40px); line-height: 1.2; letter-spacing: -.035em; }
+.shop-app .shop-detail-stock { margin-top: 12px; }
+.shop-app .shop-variant-picker { margin-block: 24px; padding-top: 0; border-top: 0; }
+.shop-app .shop-variant-picker > div { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 175px), 1fr)); gap: 10px; }
+.shop-app .shop-variant-picker button { display: grid; justify-content: stretch; align-content: start; gap: 8px; padding: 15px; text-align: left; border-color: #b8c9cc; border-radius: 8px; background: #fff; transition: background-color 180ms, border-color 180ms; }
+.shop-app .shop-variant-picker button:hover { border-color: #477a7d; background: #f2f6f5; }
+.shop-app .shop-variant-picker button[aria-pressed="true"] { border-color: #103f47; background: #e7eeeb; box-shadow: inset 3px 0 0 #103f47; }
+.shop-app .shop-package-name { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 13px; font-weight: 750; }
+.shop-app .shop-package-name svg { flex-shrink: 0; }
+.shop-app .shop-package-price { font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+.shop-app .shop-package-price > span { font-size: 11px; font-weight: 450; color: #52656a; letter-spacing: 0; }
+.shop-app .shop-package-stock { font-size: 11px; font-weight: 450; color: #42675b; }
+.shop-app .shop-package-stock.is-empty { color: #954123; }
+.shop-app .shop-detail-quantity { padding: 20px; border-radius: 8px; align-items: start; }
+.shop-app .shop-detail-quantity > div:last-child { padding-top: 0; }
+.shop-app .shop-detail-quantity > div:last-child > strong { font-size: 24px; letter-spacing: -.035em; overflow-wrap: anywhere; }
+.shop-app .shop-quantity { min-height: 44px; border-radius: 6px; }
+.shop-app .shop-quantity > button { min-width: 42px; }
+.shop-app .shop-quantity-wrap .shop-field-error { max-width: 30ch; }
+.shop-app .shop-product-actions { gap: 12px; }
+.shop-app .shop-product-actions [data-slot="button"] { min-height: 52px; }
+.shop-app .shop-product-description dl { gap: 24px; }
+.shop-app .shop-product-description dd { overflow-wrap: anywhere; }
+
+.shop-app .shop-cart-layout,
+.shop-app .shop-checkout-layout { gap: 32px; }
+.shop-app .shop-cart-items,
+.shop-app .shop-form-section { border: 1px solid #cfdadf; border-radius: 10px; }
+.shop-app .shop-select-all { padding: 14px 22px; background: #f6f8f7; }
+.shop-app .shop-cart-row { grid-template-columns: 24px 96px minmax(0,1fr) auto; padding: 26px 22px; align-items: start; }
+.shop-app .shop-item-select { min-height: 44px; width: 24px; margin-top: 0; }
+.shop-app .shop-cart-copy { min-width: 0; }
+.shop-app .shop-cart-copy h2 { font-weight: 700; }
+.shop-app .shop-cart-packaging { display: grid; gap: 6px; margin-block: 12px; }
+.shop-app .shop-cart-packaging select { width: 100%; max-width: 280px; min-height: 44px; font-size: 12px; border-radius: 6px; }
+.shop-app .shop-cart-row-controls { flex-wrap: wrap; gap: 10px 16px; }
+.shop-app .shop-cart-row-controls .shop-quantity { min-height: 44px; width: 142px; }
+.shop-app .shop-cart-row-controls .shop-quantity button { min-width: 42px; }
+.shop-app .shop-remove-item { min-height: 44px; padding-inline: 8px; border-radius: 5px; color: #8e3e24; }
+.shop-app .shop-remove-item:hover { background: #f7ebe6; }
+.shop-app .shop-cart-row-total { font-size: 17px; font-weight: 750; letter-spacing: -.02em; }
+.shop-app .shop-order-summary { border: 1px solid #becfd0; border-top: 4px solid #103f47; border-radius: 4px 4px 10px 10px; padding: 25px 24px; }
+.shop-app .shop-order-summary > h2 { font-size: 18px; letter-spacing: -.02em; }
+.shop-app .shop-order-summary dl { gap: 18px; margin-top: 24px; }
+.shop-app .shop-order-summary dl > .shop-summary-total { padding-block: 20px 4px; border-top-style: dashed; }
+.shop-app .shop-order-summary .shop-summary-total dd { font-size: 27px; letter-spacing: -.035em; overflow-wrap: anywhere; text-align: right; }
+.shop-app .shop-order-summary > p { line-height: 1.75; }
+.shop-app .shop-cart-checkout > [data-slot="button"],
+.shop-app .shop-checkout-submit > [data-slot="button"] { min-height: 50px; }
+.shop-app .shop-form-section { padding: 28px; }
+.shop-app .shop-form-section > h2 { padding-bottom: 18px; border-bottom: 1px solid #e0e7e7; margin-bottom: 24px; }
+.shop-app .shop-checkout-lines > li { gap: 14px; padding-block: 18px; }
+.shop-app .shop-checkout-lines > li > div { min-width: 0; }
+.shop-app .shop-checkout-lines > li > strong { font-variant-numeric: tabular-nums; }
+.shop-app .shop-checkout-payment { padding: 18px 16px; border-radius: 7px; }
+.shop-app .shop-form-field :is(input, textarea) { scroll-margin-block: 30px 120px; }
+
+@media (max-width: 1050px) and (min-width: 701px) {
+  .shop-app .shop-cart-layout,
+  .shop-app .shop-checkout-layout { grid-template-columns: minmax(0,1fr) 300px; gap: 20px; }
+  .shop-app .shop-cart-row { grid-template-columns: 24px 72px minmax(0,1fr); gap: 12px; padding: 20px 16px; }
+  .shop-app .shop-cart-row-total { grid-column: 3; padding-top: 0; }
+  .shop-app .shop-order-summary { padding: 22px 18px; }
+  .shop-app .shop-form-section { padding: 22px 20px; }
+  .shop-app .shop-recipient-grid { grid-template-columns: 1fr; gap: 0; }
+}
+@media (max-width: 700px) {
+  html:has(.shop-app) { scroll-padding-bottom: calc(112px + env(safe-area-inset-bottom)); }
+  .shop-app .shop-product-copy { padding: 13px 12px 12px; }
+  .shop-app .shop-product-price { font-size: 20px; gap: 4px; }
+  .shop-app .shop-card-bottom { gap: 6px; min-height: 55px; flex-wrap: nowrap; align-items: center; }
+  .shop-app .shop-card-bottom .shop-stock { width: auto; font-size: 10px; }
+  .shop-app .shop-quick-add { width: 44px; min-height: 44px; min-width: 44px; padding-inline: 6px; }
+  .shop-app .shop-quick-add > span { display: none; }
+  .shop-app .shopping-progress { margin-bottom: 22px; gap: 4px 12px; padding-block: 10px; }
+  .shop-app .shopping-progress ol { gap: 7px; }
+  .shop-app .shopping-progress li { font-size: 12px; }
+  .shop-app .shopping-progress li > a,
+  .shop-app .shopping-progress-stage { padding-inline: 8px; min-height: 44px; gap: 6px; }
+  .shop-app .shopping-progress-history { margin-left: 8px; font-size: 12px; }
+  .shop-app .shop-detail-copy h1 { max-width: none; font-size: 29px; }
+  .shop-app .shop-detail-price { margin-top: 20px; padding-top: 20px; }
+  .shop-app .shop-detail-price strong { font-size: 32px; }
+  .shop-app .shop-variant-picker > div { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .shop-app .shop-variant-picker button { padding: 13px 11px; }
+  .shop-app .shop-package-price { font-size: 15px; }
+  .shop-app .shop-detail-quantity { padding: 16px 14px; gap: 14px; }
+  .shop-app .shop-detail-quantity > div:last-child > strong { font-size: 21px; }
+  .shop-app .shop-product-actions { gap: 8px; }
+  .shop-app .shop-product-actions [data-slot="button"] { min-height: 48px; }
+  .shop-app .shop-cart-layout,
+  .shop-app .shop-checkout-layout { grid-template-columns: 1fr; gap: 22px; }
+  .shop-app .shop-cart-row { grid-template-columns: 24px 72px minmax(0,1fr); padding: 20px 14px; gap: 12px; }
+  .shop-app .shop-cart-copy { grid-column: 3; }
+  .shop-app .shop-cart-row-total { grid-column: 3; font-size: 17px; }
+  .shop-app .shop-cart-packaging select { max-width: 100%; }
+  .shop-app .shop-cart-row-controls { gap: 4px 8px; }
+  .shop-app .shop-order-summary { padding: 24px 20px; }
+  .shop-app .shop-order-summary .shop-summary-total dd { font-size: 25px; }
+  .shop-app .shop-form-section { padding: 22px 18px; }
+  .shop-app .shop-form-section > h2 { font-size: 17px; }
+  .shop-app .shop-checkout-lines > li { gap: 12px; }
+  .shop-app .shop-checkout-lines > li > strong { overflow-wrap: anywhere; }
+}
+@media (max-width: 370px) {
+  .shop-app .shopping-progress ol { gap: 4px; }
+  .shop-app .shopping-progress li > a,
+  .shop-app .shopping-progress-stage { padding-inline: 6px; gap: 5px; }
+  .shop-app .shopping-progress li > a > svg,
+  .shop-app .shopping-progress-stage > svg { display: none; }
+  .shop-app .shop-product-price { font-size: 18px; }
+  .shop-app .shop-product-copy { padding-inline: 10px; }
+  .shop-app .shop-cart-row { grid-template-columns: 24px 64px minmax(0,1fr); padding-inline: 12px; gap: 10px; }
+  .shop-app .shop-cart-copy { grid-column: 2 / -1; }
+  .shop-app .shop-cart-photo { grid-column: 2; }
+  .shop-app .shop-cart-row-total { grid-column: 2 / -1; }
+  .shop-app .shop-package-name { font-size: 12px; gap: 6px; }
+  .shop-app .shop-package-price { font-size: 14px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .shop-app .shop-variant-picker button { transition: none; }
+}
+/* Button links keep their action contrast instead of inheriting shop link ink. */
+.shop-app a[data-slot="button"][data-variant="default"] { color: #fff; }

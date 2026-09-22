@@ -18,6 +18,10 @@ import "./carousel-v12.css";
 import "./controls-v13.css";
 import "./landing-v13.css";
 import "./login-v13.css";
+import "./footer-v14.css";
+import "./commerce-v14.css";
+import "./workspace-v14.css";
+import "./account-v14.css";
 
 const bodyFont = localFont({src:"../public/fonts/dm-sans-variable.ttf",variable:"--font-body",display:"swap",weight:"100 1000"});
 const displayFont = localFont({src:"../public/fonts/archivo-black.ttf",variable:"--font-display",display:"swap",weight:"400"});

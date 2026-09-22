@@ -25,6 +25,7 @@ import {
 import type { Actor } from "@/lib/domain/accounts";
 import { Art } from "../art";
 import { Brand } from "../brand";
+import { SiteFooter } from "../site-footer";
 import { Button } from "../ui/button";
 import { Toaster } from "../ui/sonner";
 import {
@@ -443,21 +444,7 @@ function ShopShellContent({
           {children}
         </main>
         <Toaster position="top-center" richColors />
-        <footer className="shop-footer">
-          <div>
-            <Brand href="/shop" compact context="Toko pelanggan" className="shop-footer-brand" />
-            <p>Pantry, perlengkapan rapat, dan merchandise.</p>
-          </div>
-          <div>
-            <Link href="/shop">Jelajahi produk</Link>
-            <Link href={ordersHref}>Pesanan saya</Link>
-            <Link href="/">Tentang Unit Toko</Link>
-          </div>
-          <p className="shop-demo-note">
-            Demo capstone. Data, foto, pengiriman, dan pembayaran adalah
-            simulasi. Bukan situs resmi BNI.
-          </p>
-        </footer>
+        <SiteFooter customer accountHref={accountHref}/>
         {actionBar ? (
           <div className="shop-mobile-action">{actionBar}</div>
         ) : (

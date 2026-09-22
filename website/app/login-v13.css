@@ -138,3 +138,7 @@
   .login-v13 [data-login-art],.login-v13 [data-login-copy],.login-v13 [data-login-step],.login-v13 [data-login-path] { transform: none !important; opacity: 1 !important; }
   .login-v13 a,.login-v13 button,.login-v13 a > svg,.login-v13 button > svg { transition: none !important; }
 }
+.login-v13 .login-v14-notice { margin: 0 0 22px; padding: 14px 16px; border: 1px solid #c5d7d1; border-radius: 8px; background: #edf4ef; color: #214e42; font-size: 13px; line-height: 1.65; }
+.login-v13 .login-v14-error { margin: 18px 0 0; border-radius: 6px; }
+.login-v13 .login-v14-error:focus-visible { outline: 2px solid #a34830; outline-offset: 5px; }
+.login-v13 .login-v14-error a { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; font-size: 13px; font-weight: 650; text-decoration: underline; text-underline-offset: 4px; }

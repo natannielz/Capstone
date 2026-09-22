@@ -21,6 +21,8 @@
   letter-spacing: .06em;
   text-transform: uppercase;
 }
+.collection-carousel-heading { min-width: 0; display: grid; gap: 5px; }
+.collection-carousel-status { font-size: 12px; line-height: 1.5; color: var(--collection-muted); }
 .collection-carousel-controls { display: flex; align-items: center; gap: 8px; }
 .collection-carousel-controls button {
   display: inline-flex;

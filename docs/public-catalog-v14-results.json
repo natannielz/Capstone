@@ -1,0 +1,11 @@
+{
+  "base": "https://unit-toko-bni.vercel.app",
+  "passed": true,
+  "products": 200,
+  "uniqueImagePaths": 200,
+  "uniqueDescriptions": 200,
+  "imageSamples": 5,
+  "privateDataRead": false,
+  "businessCommandRequests": false,
+  "catalogProvisioningMayRun": true
+}

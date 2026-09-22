@@ -16,6 +16,7 @@ import { Art } from "../art";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Textarea } from "../ui/textarea";
+import { ShoppingProgress } from "./shopping-progress";
 import {
   CheckoutRejected,
   clearCustomerDraft,
@@ -344,6 +345,7 @@ function CheckoutForm() {
           Akun {actor?.name}
         </span>
       </div>
+      <ShoppingProgress stage="checkout" productHref={draft.intent.mode === "buy" ? `/shop/${encodeURIComponent(draft.intent.lines[0].productId)}` : undefined} />
       {error && (
         <div
           className="shop-notice shop-notice-error"

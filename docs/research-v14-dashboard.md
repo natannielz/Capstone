@@ -1,0 +1,77 @@
+# Riset v14 — ruang kerja, dashboard, dan seluruh modul internal
+
+Tanggal: 23 September 2026. Metode: audit sumber aktual, pemeriksaan aturan navigasi/peran, dan pembacaan tujuh referensi primer. Tidak ada mutasi data, perubahan aplikasi, pengujian browser, atau klaim studi pengguna dalam laporan ini. Temuan tampilan dari root dicatat terpisah dari temuan kode.
+
+## Kesimpulan desain
+
+Ruang kerja memerlukan hierarki pekerjaan, bukan penambahan dekorasi atau animasi pada angka keuangan. Arah yang diusulkan adalah **meja operasi Unit Toko**: bagian utama menampilkan pekerjaan berikutnya yang memang dapat dilakukan akun tersebut; ringkasan tetap terlihat sebagai konteks; tabel mempertahankan ruang untuk pembanding angka. Identitas petrol Unit Toko dipakai pada satu area utama, permukaan data putih, aksen jingga pada tindakan utama. Login/etalase dapat lebih ekspresif tanpa membawa efek scroll atau autoplay ke tugas finansial.
+
+Kode saat ini sudah memiliki 12 modul, state yang difilter server, navigasi berbasis `PAGE_ROLES`, filter URL di banyak daftar, formulir transaksi, bukti lampiran, status, dan sejumlah tampilan khusus seluler. Fondasi ini dipertahankan. Tidak ditemukan tujuan kartu dashboard yang melanggar izin halaman dari audit statis; label dan tujuan beberapa kartu masih terlalu umum.
+
+## Referensi primer dan penerapannya
+
+1. [IBM Carbon: data table](https://carbondesignsystem.com/components/data-table/usage/) — menempatkan pencarian, filter, dan tindakan pada toolbar; memberi tabel ruang cukup; menyediakan hover baris, pagination, serta tindakan yang terpisah. Penerapan: satu ritme toolbar dan tabel, angka mudah dibandingkan, bukan tabel dalam kartu kecil. Ini pedoman fungsi, bukan instruksi untuk menyalin komponen Carbon atau fitur AI-nya.
+2. [GOV.UK: table](https://design-system.service.gov.uk/components/table/) — caption membantu identifikasi tabel; header semantik dan kolom numerik membantu pemindaian. Penerapan: caption atau label tabel yang jelas, `scope="col"`, perataan kanan konsisten untuk mata uang, tabular numerals. Jangan mengubah perhitungan uang.
+3. [GOV.UK: service navigation](https://design-system.service.gov.uk/components/service-navigation/) — membedakan halaman saat ini dengan kelompok halaman aktif. Penerapan desain yang disimpulkan untuk aplikasi ini: kelompok navigasi operasional/keuangan/akun, tetap mempertahankan `aria-current` pada halaman aktif dan hanya menampilkan grup yang mempunyai halaman diizinkan.
+4. [GOV.UK: task list](https://design-system.service.gov.uk/components/task-list/) — cocok untuk pekerjaan yang dapat dipilih urutannya, bukan proses yang wajib berurutan. Penerapan: daftar antrean kerja per peran yang bisa dibuka; jangan menggambar semua proses transaksi sebagai checklist bebas karena pengiriman/finalisasi/penagihan punya prasyarat.
+5. [GOV.UK: tag](https://design-system.service.gov.uk/components/tag/) — tag menerangkan status dan bukan tombol. Penerapan: badge status tetap tidak interaktif, teks status tetap hadir, tindakan ditempatkan terpisah dan berlabel kata kerja.
+6. [Atlassian: empty state](https://atlassian.design/components/empty-state/examples) — judul, penjelasan berguna, dan tindakan pemulihan yang sesuai. Penerapan: bedakan belum ada data, tidak ada hasil filter, dan tidak ada pekerjaan yang menunggu. Jangan menawarkan tindakan yang tidak dimiliki peran tersebut.
+7. [IBM Carbon: notification](https://carbondesignsystem.com/components/notification/usage/) — error dan langkah pemulihan perlu dekat dengan konteksnya; callout dipakai hemat. Penerapan: pertahankan error permanen dan fokus formulir; gunakan toast untuk konfirmasi ringan, bukan satu-satunya tempat kegagalan lampiran/transaksi ditampilkan.
+
+Dokumentasi lokal Next.js yang dibaca: `website/AGENTS.md` dan `website/node_modules/next/dist/docs/03-architecture/accessibility.md`. Panduan route announcement mendukung judul halaman deskriptif dan fokus yang sudah ditangani `use-workspace-navigation.ts`. Skill `frontend-design` dibaca untuk arah visual dan hierarki; rekomendasi konkret tetap berasal dari konten toko, audit sumber, dan pedoman primer di atas.
+
+## Cakupan halaman dan gap nyata
+
+Semua daftar peran di bawah mengikuti `website/lib/domain/navigation.ts`. Customer tidak masuk workspace; alur pelanggan diteliti aliran lain.
+
+| Halaman / sumber | Peran | Yang sudah berfungsi | Gap yang teramati pada kode | Rencana |
+|---|---|---|---|---|
+| Shell / `components/workspace.tsx` | Semua peran internal | Menu difilter `PAGE_ROLES`, active state, drawer seluler, profil, refresh, error, guard perubahan belum disimpan | Satu daftar menu tanpa kelompok; header dashboard generik; kartu dan modul memakai perlakuan visual sangat seragam | Grup Ringkasan, Operasional, Keuangan, Akun; heading dan deskripsi sesuai tugas; fokus/guard tetap sama |
+| Ringkasan / `components/dashboard.tsx` | Semua internal | Tiga kartu berbeda data menurut peran, daftar lima pesanan, ringkasan tagihan, tugas kurir | Ketiga kartu sama dominannya. Admin tiga kartu menuju halaman yang sama tanpa target spesifik; “Aktivitas pengaturan” memakai `s.audits` yang sudah difilter server untuk admin/profil, tetapi halaman tujuan admin tidak menampilkan log tersebut. Invoice terbuka diambil lima awal tanpa sortir jatuh tempo dan tanpa aksi per baris. Tugas kurir tidak mempunyai empty state eksplisit atau tautan per tugas | Satu prioritas utama yang berbasis data dan legal bagi peran; metrik pendamping ringkas; admin gunakan angka yang benar-benar sesuai halaman (mis. pemasok), bukan janji log palsu; invoice diurutkan jatuh tempo; tugas dapat dibuka |
+| Katalog divisi / `components/catalog.tsx` | PIC, kepala | Filter, koleksi, pagination, pilihan kemasan, basket, dialog checkout, empty state | Filter dan keranjang cukup padat; drawer/ringkasan bawah perlu QA terhadap shell baru | Perbaikan melalui token shell terukur; pastikan CTA checkout terlihat dan tidak tertutup; jangan menyamakan alur divisi dengan pelanggan |
+| Pesanan / `components/order-experience.tsx` | PIC, kepala, staf, laporan | Queue/search/sort/pagination, tindakan sesuai tahap, detail, bukti, mobile cards, empty filter reset | Daftar “terbaru” pada dashboard memberi prioritas sama kepada pesanan dibatalkan dan pekerjaan aktif; format daftar sudah baik | Pisahkan antrean pekerjaan aktif di bagian atas dashboard; pertahankan riwayat lengkap dan filter pada modul |
+| Pengiriman / `components/workspace.tsx` Deliveries | PIC, kepala, staf, kurir | Filter status, surat jalan, data penerimaan/retur, bukti, tindakan per peran | Empty text selalu “Belum ada tugas pengiriman”, termasuk hasil filter kosong; tabel angka jumlah tidak diberi semantik numerik konsisten; setiap kartu besar menambah panjang halaman | Empty state membedakan status/filter, tombol reset bila relevan; angka rata kanan; rincian tidak dihilangkan; dasar action hierarchy dari shell |
+| Persediaan / `components/inventory-workspace.tsx` | Kepala, staf, laporan | Tab produk/batch/retur/opname, filter kondisi/sumber/search, pagination, mobile cards, empty state | Kepadatan filter/tabs di layar sedang; kondisi dan angka tersedia bersaing dengan metadata; empty product menyuruh “Tambahkan barang” juga pada peran tanpa izin | Kelompok toolbar, penekanan tersedia dan kondisi; helper text tergantung peran; jangan mengubah arti fisik/reservasi/ditahan |
+| Invoice & piutang / `components/workspace.tsx` Billing; `invoice-composer.tsx` | PIC, kepala, penagihan, pimpinan, akuntansi, laporan | Filter lunas/terbuka, invoice mobile, komposer penagihan, cetak | Header Total/Sisa piutang belum `numeric` meski isi sel sudah numerik; kosong hasil filter tak memberi reset langsung; pengurutan terbaru tidak mengedepankan jatuh tempo | Header/isi sejajar; jump dari dashboard menuju invoice tertentu; reset filter saat hasil kosong; jangan mengubah aturan penggabungan invoice |
+| Pembayaran / `components/workspace.tsx` Payments; `payment-allocation.tsx` | PIC, penagihan, pimpinan, akuntansi | Catat, verifikasi, identifikasi, penolakan dengan alasan, alokasi; role actions | Beberapa tabel tambahan ditempel berurutan (nota kredit/refund/biaya). Tabel payment belum punya filter/status/search/pagination; kolom “Belum dialokasikan” tidak `numeric` | Bedakan seksi dengan heading/keterangan lebih jelas dan konsisten; perbaiki angka; toolbar status/search sebagai tahap berikutnya, tanpa menyembunyikan permintaan persetujuan |
+| Pengadaan / `components/operations.tsx` Procurement; `purchase-editor.tsx` | Kepala, staf, penagihan, pimpinan, akuntansi | Filter status, penerimaan parsial, uang muka, pendanaan, penutupan sisa dengan alasan | Filter lokal hilang saat meninggalkan halaman; setiap pengadaan terbuka sebagai panel panjang, tanpa pencarian/pagination; tindakan finansial dan cetak berkelompok sama | Toolbar dan card hierarchy; bedakan primary stage action, secondary dokumen, destructive close. Berikutnya URL filter/search/pagination teruji |
+| Laporan / `components/operations.tsx` Reports; `sales-register.tsx` | Kepala, laporan, penagihan, pimpinan, akuntansi | Tab penjualan/keuangan/jurnal/aktivitas; as-of berbeda dari rentang finalisasi; ekspor filter; mobile cards; pagination | Semua metrik keuangan sama dominannya; angka laporan membutuhkan ritme lebih kuat; helper text panjang tetapi penting secara semantik | Format numerik konsisten; kelompok tanggal+ekspor; perkuat judul/cakupan tanpa menghapus penjelasan as-of dan finalisasi; hindari grafik dekoratif |
+| Tutup periode / `components/operations.tsx` Periods | Laporan, penagihan, pimpinan, akuntansi | Versi, status, alasan dikembalikan, approve/return/close, snapshot | Bila `s.periods` kosong hanya header tabel; istilah YYYY-MM di dialog administratif; belum ada gambaran status proses pada satu baris | Empty state sesuai peran; deskripsi tahap Ajukan → Tinjau → Tutup yang tidak dapat diklik untuk melewati aturan; input bulan terkontrol jika diimplementasikan terpisah |
+| Pengaturan akun / `components/operations.tsx` AccountSettings | Admin | Akun/hak akses, reset password, divisi, pemasok; self-edit diblokir dengan penjelasan | Tiga daftar panjang tanpa navigasi seksi, search/filter status/peran atau pagination; kartu admin dashboard tidak membuka bagian spesifik | Permukaan indeks admin yang jujur; section anchors atau tab teruji di tahap selanjutnya; jangan menambahkan hak edit terhadap akun sendiri |
+| Profil / `components/profile.tsx` | Semua internal | Avatar, field validation, simpan/batal, detail immutable, password, unsaved guard | Prioritas visual avatar/detail/password dapat lebih tenang; kolom identitas perlu penanganan email panjang; avatar bukan data kerja utama | Lebar form nyaman, spacing seragam, overflow-wrap pada metadata, hierarki heading yang konsisten; password/error/fokus tetap tidak dianimasikan |
+
+## Prioritas implementasi
+
+### P1 — perubahan paling terasa, terbatas dan dapat diverifikasi
+
+1. **Dashboard berbasis tugas** — `components/dashboard.tsx`: tambahkan panel prioritas per peran, tujuan halaman yang sah, nilai aktual, helper text tahap kerja. Tidak memasukkan pertumbuhan palsu atau statistik dekoratif. Bagi PIC arahkan penerimaan/pergantian barang/pesanan sesuai data; kepala ke tinjauan; staf ke persiapan/pengiriman; kurir ke tugas; keuangan ke tindakan yang diizinkan; admin ke pengaturan.
+2. **Kartu admin jujur** — ganti “Aktivitas pengaturan” yang tidak tersedia sebagai log di halaman tujuan dengan “Pemasok terdaftar” atau ringkasan yang memang tersedia. Jangan menghubungkan admin ke laporan karena admin tidak punya akses laporan.
+3. **Prioritas finansial dan kurir** — urut invoice terbuka berdasarkan tanggal jatuh tempo dengan id pembanding stabil, sediakan tombol invoice; pada tugas kurir buat tautan per surat jalan dan empty state eksplisit. Gunakan data tersaring server; tidak memperluas akses.
+4. **Navigasi berkelompok** — `components/workspace.tsx`: kelompok menu berdasarkan pekerjaan, sembunyikan grup kosong, pertahankan query/history, aria-current, mobile drawer, guard form.
+5. **Satu stylesheet internal** — `app/workspace-v14.css`, import akhir di `app/layout.tsx`: seluruh selector berada di `.workspace`; token warna/ruang; tabel, header, actionbar, formulir, status, profil, tabs. Hindari global override toko/login. Topbar dan tombol tugas tidak bergeser saat hover.
+
+### P2 — penyempurnaan per modul setelah fondasi diuji
+
+- Empty filter pada pengiriman/invoice, empty periods, teks stok sesuai peran.
+- Caption/header tabel dan numeric consistency pada Billing/Payments/Deliveries serta Table helper, tanpa perubahan data.
+- Toolbar filter pembayaran; pencarian/status/peran admin; pengadaan URL filter + pagination. Perubahan ini perlu unit test query/selection karena bukan sekadar skin.
+- Jangan sekaligus mengganti dialog transaksi, auth, domain engine, dan RBAC hanya untuk kebutuhan visual.
+
+## Proposal visual spesifik
+
+- Warna: petroleum `#103F49`, ink `#173941`, canvas `#F2F5F6`, surface `#FFFFFF`, border `#D5E1E5`, action copper `#B94C25`. Status memakai token status sekarang; tidak diganti seluruhnya menjadi warna brand.
+- Tipografi: gunakan font app yang sudah diunduh (Manrope/body yang tersedia) dan tabular numerals. H1 30–38px, h2 18–22px, body 14–15px, metadata 12–13px. Jangan menambah font ketiga untuk data.
+- Signature: satu **panel pekerjaan berikutnya** lebar dengan angka/cakupan kiri dan tindakan konkret kanan; kartu metrik pendamping lebih kecil. Identitas berasal dari real workflow, bukan dekorasi AI.
+- Sidebar: kelompok berlabel 11–12px; active state terang dengan penanda tepi; logo dan akun tidak bersaing dengan daftar kerja. Jangan menambah tinggi baris untuk menghasilkan sidebar lebih panjang.
+- Tabel: permukaan putih, satu garis horizontal antarbaris, header rendah kontras, angka kanan; hover lembut; baris aksi tampak jelas. Pada seluler gunakan alternatif kartu yang sudah ada; tabel lain tetap scroll di dalam kontainer, bukan seluruh halaman.
+- Tombol: primary fill untuk lanjut tahap; outline untuk aksi pendamping; text+arrow untuk navigasi; tombol dokumen ikon cetak dengan label; destructive memiliki label eksplisit. “Unik” berarti berbeda fungsi, bukan setiap tombol acak bentuk.
+- Motion: hanya 160–240ms fade/translate 4–8px pada panel ringkasan saat awal; warna/border pada hover, tidak menggeser tabel atau field. Hilangkan motion melalui prefers-reduced-motion. Tidak ada looping, autoplay, count-up uang, atau fake loading pada workspace.
+
+## Acceptance checks sebelum publikasi
+
+- 12 modul tetap terjangkau oleh peran yang benar; semua kartu/tautan baru diperiksa terhadap `canOpenPage`/`PAGE_ROLES`.
+- Ukuran 320, 390, 768, 1280: tidak ada overflow dokumen; sidebar dapat digulir; dialog dapat dipakai; data tabel tidak terpotong; sticky cart tidak tertutup.
+- Setidaknya kepala, staf, kurir, penagihan, pimpinan, akuntansi, admin diperiksa untuk perbedaan tugas. Halaman kosong dan filter kosong dicek menggunakan fixture lokal, tanpa mutasi produksi.
+- Pembayaran/penagihan/tutup periode tetap sama perilakunya; label/penampilan tidak mengubah otorisasi ataupun accounting.
+- Uji keyboard drawer/menu/dialog, fokus heading saat pindah halaman, mode gerak dikurangi, feedback error. Jalankan lint/TypeScript dan suite navigasi/RBAC/domain yang relevan.
+- Laporan ini merupakan audit kode dan sintesis referensi, bukan bukti semua perubahan telah diterapkan atau penghargaan desain telah diperoleh.

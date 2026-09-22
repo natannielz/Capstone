@@ -37,6 +37,7 @@ import {
   SHOP_CATEGORIES,
   SHOP_COLLECTIONS,
   familyProduct,
+  matchingFamilyProducts,
   inShopCollection,
   rupiah,
   shopCategory,
@@ -56,13 +57,17 @@ export function ProductCard({
   family,
   query = "",
   back = "/shop",
+  availableOnly = false,
 }: {
   family: PublicFamily;
   query?: string;
   back?: string;
+  availableOnly?: boolean;
 }) {
-  const product = familyProduct(family, query);
+  const product = familyProduct(family, query, availableOnly);
   const { actor, owner, cart, cartReady, busy, act } = useShop();
+  const inCart = cart.items[product.id] || 0;
+  const stockInCart = product.available > 0 && inCart >= product.available;
   const [added, setAdded] = useState(false);
   useEffect(() => {
     if (!added) return;
@@ -102,17 +107,21 @@ export function ProductCard({
         </p>
         <div className="shop-card-bottom">
           <span
+            id={`stock-${product.id}`}
             className={
               product.available > 0 ? "shop-stock" : "shop-stock is-empty"
             }
           >
-            {product.available > 0
+            {stockInCart
+              ? "Stok sudah di keranjang"
+              : product.available > 0
               ? `${product.available} ${product.unit} tersedia`
               : "Stok habis"}
           </span>
           <button
             className="shop-quick-add"
             aria-label={`Tambah ${product.name}, ${product.packaging} ke keranjang`}
+            aria-describedby={`stock-${product.id}`}
             disabled={
               !cartReady ||
               busy ||
@@ -133,8 +142,8 @@ export function ProductCard({
               if (committed) setAdded(true);
             }}
           >
-            {added ? <Check size={19} /> : <Plus size={19} />}
-            <span>{added ? "Ditambah" : "Tambah"}</span>
+            {added || stockInCart ? <Check size={19} /> : <Plus size={19} />}
+            <span>{stockInCart ? "Penuh" : added ? "Ditambah" : "Tambah"}</span>
           </button>
         </div>
       </div>
@@ -406,18 +415,14 @@ function CatalogContent() {
       (!collection || inShopCollection(family.products[0], collection.id)) &&
       (query.category === "Semua" ||
         shopCategory(family.products[0]) === query.category) &&
-      family.products.some((product) =>
-        `${product.name} ${product.sku}`
-          .toLocaleLowerCase("id-ID")
-          .includes(search),
-      ) &&
-      (query.stock !== "available" ||
-        familyProduct(family, search).available > 0),
+      matchingFamilyProducts(family, search).some((product) =>
+        query.stock !== "available" || product.available > 0,
+      ),
   );
   families.sort((a, b) =>
     query.sort === "name"
       ? a.name.localeCompare(b.name, "id")
-      : (familyProduct(a, search).price - familyProduct(b, search).price) *
+      : (familyProduct(a, search, query.stock === "available").price - familyProduct(b, search, query.stock === "available").price) *
         (query.sort === "price-high" ? -1 : 1),
   );
   const pagination = paginateCatalog(families, query.page);
@@ -495,20 +500,19 @@ function CatalogContent() {
       {filtered && (
         <div className="shop-filter-chips">
           {search && (
-            <span>
-              <Search size={14} />“{query.q}”
-            </span>
+            <button type="button" className="shop-filter-chip" aria-label={`Hapus pencarian ${query.q}`} onClick={() => update({ q: "" })}>
+              <Search size={14} aria-hidden="true" /><span>“{query.q}”</span><X size={14} aria-hidden="true" />
+            </button>
           )}
-          {collection && <span>{collection.label}</span>}
-          {query.category !== "Semua" && <span>{query.category}</span>}
+          {collection && <button type="button" className="shop-filter-chip" aria-label={`Hapus koleksi ${collection.label}`} onClick={() => update({ collection: "" })}><span>{collection.label}</span><X size={14} aria-hidden="true" /></button>}
+          {query.category !== "Semua" && <button type="button" className="shop-filter-chip" aria-label={`Hapus kategori ${query.category}`} onClick={() => update({ category: "Semua" })}><span>{query.category}</span><X size={14} aria-hidden="true" /></button>}
           {query.stock === "available" && (
-            <span>
-              <Check size={14} />
-              Stok tersedia
-            </span>
+            <button type="button" className="shop-filter-chip" aria-label="Hapus filter stok tersedia" onClick={() => update({ stock: "all" })}>
+              <Check size={14} aria-hidden="true" /><span>Stok tersedia</span><X size={14} aria-hidden="true" />
+            </button>
           )}
-          <button onClick={() => update(INITIAL_QUERY)}>
-            <X size={15} /> Hapus filter
+          <button type="button" className="shop-filter-reset" onClick={() => update(INITIAL_QUERY)}>
+            Hapus semua
           </button>
         </div>
       )}
@@ -532,6 +536,7 @@ function CatalogContent() {
               family={family}
               query={search}
               back={back}
+              availableOnly={query.stock === "available"}
             />
           ))}
         </ShopMotion><CatalogPagination {...pagination} onChange={(page) => update({page: String(page)})} /></>

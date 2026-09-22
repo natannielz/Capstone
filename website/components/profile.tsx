@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
-import { Camera, Save } from "lucide-react";
+import Link from "next/link";
+import { Camera, Eye, EyeOff, Save } from "lucide-react";
 import { toast } from "sonner";
 import { Art } from "./art";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -10,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { clearCustomerCart } from "@/lib/client/customer-cart";
 import { clearCartForAccount } from "@/lib/client/cart-storage";
+import { ApiError, requestJson as request } from "@/lib/client/requests";
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { ROLE_LABELS } from "@/lib/domain/accounts";
 import type { WorkspaceContext } from "./workspace";
@@ -30,18 +32,6 @@ function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Permintaan belum berhasil. Coba kembali.";
 }
 
-async function request(url: string, init: RequestInit) {
-  let response: Response;
-  try {
-    response = await fetch(url, init);
-  } catch {
-    throw new Error("Koneksi bermasalah. Periksa jaringan, lalu coba kembali.");
-  }
-  const data = await response.json().catch(() => null) as { error?: string; message?: string } | null;
-  if (!response.ok) throw new Error(data?.error || "Permintaan belum berhasil. Coba kembali.");
-  return data;
-}
-
 export function Profile({ actor, s, refresh, onDirtyChange }: ProfileProps) {
   const [values, setValues] = useState<ProfileValues>({
     name: actor.name,
@@ -51,6 +41,8 @@ export function Profile({ actor, s, refresh, onDirtyChange }: ProfileProps) {
   });
   const [savedValues, setSavedValues] = useState(values);
   const [passwords, setPasswords] = useState<PasswordValues>(EMPTY_PASSWORDS);
+  const [visiblePasswords, setVisiblePasswords] = useState({current: false, password: false, confirm: false});
+  const [sessionExpired, setSessionExpired] = useState(false);
   const [profileErrors, setProfileErrors] = useState<Errors<ProfileValues>>({});
   const [passwordErrors, setPasswordErrors] = useState<Errors<PasswordValues>>({});
   const [saveError, setSaveError] = useState("");
@@ -64,6 +56,15 @@ export function Profile({ actor, s, refresh, onDirtyChange }: ProfileProps) {
     .some((key) => values[key] !== savedValues[key]);
   const passwordDirty = Object.values(passwords).some(Boolean);
   const dirty = profileDirty || passwordDirty;
+  const loginHref = `${actor.role === "customer" ? "/customer/login" : "/staff/login"}?notice=session-expired&next=${encodeURIComponent(actor.role === "customer" ? "/account" : "/workspace?view=profile")}`;
+
+  function checkSession(error: unknown) {
+    if (error instanceof ApiError && error.status === 401) setSessionExpired(true);
+  }
+
+  function passwordToggle(key: keyof PasswordValues, label: string) {
+    return <Button className="profile-password-toggle" type="button" variant="ghost" size="icon" disabled={busy} aria-label={`${visiblePasswords[key] ? "Sembunyikan" : "Tampilkan"} ${label}`} aria-pressed={visiblePasswords[key]} aria-controls={PASSWORD_FIELDS[key]} onClick={() => setVisiblePasswords(previous => ({...previous, [key]: !previous[key]}))}>{visiblePasswords[key] ? <EyeOff aria-hidden="true"/> : <Eye aria-hidden="true"/>}</Button>;
+  }
 
   useEffect(() => {
     onDirtyChange?.(dirty);
@@ -123,6 +124,7 @@ export function Profile({ actor, s, refresh, onDirtyChange }: ProfileProps) {
       setSavedMessage("Perubahan profil telah disimpan.");
       await refresh();
     } catch (error) {
+      checkSession(error);
       setSaveError(errorMessage(error));
       focusField("profile-save-error");
     } finally {
@@ -148,6 +150,7 @@ export function Profile({ actor, s, refresh, onDirtyChange }: ProfileProps) {
       await refresh();
       toast.success("Foto profil diperbarui.");
     } catch (error) {
+      checkSession(error);
       setAvatarError(errorMessage(error));
       focusField("profile-photo-error");
     } finally {
@@ -184,11 +187,14 @@ export function Profile({ actor, s, refresh, onDirtyChange }: ProfileProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ currentPassword: passwords.current, newPassword: passwords.password }),
       });
+      setPasswords(EMPTY_PASSWORDS);
+      setVisiblePasswords({current: false, password: false, confirm: false});
       onDirtyChange?.(false);
       clearCartForAccount(actor.id);
       await clearCustomerCart(actor.id);
-      window.location.assign(actor.role === "customer" ? "/customer/login?next=%2Faccount" : "/staff/login");
+      window.location.assign(actor.role === "customer" ? "/customer/login?notice=password-changed&next=%2Faccount" : "/staff/login?notice=password-changed");
     } catch (error) {
+      checkSession(error);
       const message = errorMessage(error);
       if (message === "Kata sandi saat ini tidak sesuai.") {
         setPasswordErrors({ current: message });
@@ -202,7 +208,7 @@ export function Profile({ actor, s, refresh, onDirtyChange }: ProfileProps) {
   }
 
   return (
-    <div className="profile-layout">
+    <div className="profile-layout profile-v14">
       <aside className="panel profile-card">
         <Art className="profile-photo" src={actor.avatar || "/images/avatars/" + (actor.role === "pic" ? "pic-a" : actor.role === "customer" ? "pic-b" : actor.role) + ".png"} alt={"Foto profil " + actor.name} />
         <h2>{actor.name}</h2>
@@ -228,6 +234,7 @@ export function Profile({ actor, s, refresh, onDirtyChange }: ProfileProps) {
         {avatarError && <FieldError id="profile-photo-error" tabIndex={-1}>{avatarError}</FieldError>}
       </aside>
       <div className="profile-details">
+        {sessionExpired && <Alert className="profile-session-notice"><AlertDescription><strong>Sesi Anda telah berakhir.</strong><p>Masuk kembali sebelum menyimpan perubahan. Kata sandi yang Anda ketik tidak disimpan sebagai draf.</p><Button asChild variant="outline"><Link href={loginHref}>Masuk kembali</Link></Button></AlertDescription></Alert>}
         <section className="panel profile-section" aria-labelledby="profile-personal-title">
           <header className="panel-title profile-section-header"><div><h2 id="profile-personal-title">Data pribadi</h2><p>Perbarui nama dan informasi kontak.</p></div></header>
           <form className="profile-form" onSubmit={save} aria-busy={pending === "profile"} noValidate>
@@ -250,9 +257,9 @@ export function Profile({ actor, s, refresh, onDirtyChange }: ProfileProps) {
               </Field>}
               {actor.role === "customer" && <Field data-disabled={busy} data-invalid={Boolean(profileErrors.address)}>
                 <FieldLabel htmlFor="profile-address">Alamat pengiriman bawaan (opsional)</FieldLabel>
-                <Textarea id="profile-address" autoComplete="street-address" value={values.address} onChange={event => editProfile("address", event.target.value)} maxLength={500} disabled={busy} aria-invalid={Boolean(profileErrors.address)}/>
-                <FieldDescription>Dipakai untuk pesanan baru. Alamat pada pesanan sebelumnya tetap tersimpan.</FieldDescription>
-                {profileErrors.address && <FieldError>{profileErrors.address}</FieldError>}
+                <Textarea id="profile-address" autoComplete="street-address" value={values.address} onChange={event => editProfile("address", event.target.value)} maxLength={500} disabled={busy} aria-invalid={Boolean(profileErrors.address)} aria-describedby={`profile-address-help${profileErrors.address ? " profile-address-error" : ""}`}/>
+                <FieldDescription id="profile-address-help">Dipakai untuk pesanan baru. Alamat pada pesanan sebelumnya tetap tersimpan.</FieldDescription>
+                {profileErrors.address && <FieldError id="profile-address-error">{profileErrors.address}</FieldError>}
               </Field>}
             </FieldGroup>
             <div className="profile-form-actions">
@@ -277,19 +284,19 @@ export function Profile({ actor, s, refresh, onDirtyChange }: ProfileProps) {
             <FieldGroup>
               <Field data-disabled={busy} data-invalid={Boolean(passwordErrors.current)}>
                 <FieldLabel htmlFor="old-password">Kata sandi saat ini</FieldLabel>
-                <Input id="old-password" type="password" autoComplete="current-password" value={passwords.current} onChange={(event) => editPassword("current", event.target.value)} required disabled={busy} aria-invalid={Boolean(passwordErrors.current)} aria-describedby={passwordErrors.current ? "old-password-error" : undefined} />
+                <div className="profile-password-control"><Input id="old-password" type={visiblePasswords.current ? "text" : "password"} autoComplete="current-password" value={passwords.current} onChange={(event) => editPassword("current", event.target.value)} required disabled={busy} aria-invalid={Boolean(passwordErrors.current)} aria-describedby={passwordErrors.current ? "old-password-error" : undefined} />{passwordToggle("current", "kata sandi saat ini")}</div>
                 {passwordErrors.current && <FieldError id="old-password-error">{passwordErrors.current}</FieldError>}
               </Field>
               <FieldGroup className="profile-fields">
                 <Field data-disabled={busy} data-invalid={Boolean(passwordErrors.password)}>
                   <FieldLabel htmlFor="new-password">Kata sandi baru</FieldLabel>
-                  <Input id="new-password" type="password" minLength={12} maxLength={128} autoComplete="new-password" value={passwords.password} onChange={(event) => editPassword("password", event.target.value)} required disabled={busy} aria-invalid={Boolean(passwordErrors.password)} aria-describedby={"new-password-help" + (passwordErrors.password ? " new-password-error" : "")} />
+                  <div className="profile-password-control"><Input id="new-password" type={visiblePasswords.password ? "text" : "password"} minLength={12} maxLength={128} autoComplete="new-password" value={passwords.password} onChange={(event) => editPassword("password", event.target.value)} required disabled={busy} aria-invalid={Boolean(passwordErrors.password)} aria-describedby={"new-password-help" + (passwordErrors.password ? " new-password-error" : "")} />{passwordToggle("password", "kata sandi baru")}</div>
                   <FieldDescription id="new-password-help">Gunakan 12–128 karakter.</FieldDescription>
                   {passwordErrors.password && <FieldError id="new-password-error">{passwordErrors.password}</FieldError>}
                 </Field>
                 <Field data-disabled={busy} data-invalid={Boolean(passwordErrors.confirm)}>
                   <FieldLabel htmlFor="confirm-password">Ulangi kata sandi baru</FieldLabel>
-                  <Input id="confirm-password" type="password" autoComplete="new-password" value={passwords.confirm} onChange={(event) => editPassword("confirm", event.target.value)} required disabled={busy} aria-invalid={Boolean(passwordErrors.confirm)} aria-describedby={passwordErrors.confirm ? "confirm-password-error" : undefined} />
+                  <div className="profile-password-control"><Input id="confirm-password" type={visiblePasswords.confirm ? "text" : "password"} autoComplete="new-password" value={passwords.confirm} onChange={(event) => editPassword("confirm", event.target.value)} required disabled={busy} aria-invalid={Boolean(passwordErrors.confirm)} aria-describedby={passwordErrors.confirm ? "confirm-password-error" : undefined} />{passwordToggle("confirm", "ulangan kata sandi baru")}</div>
                   {passwordErrors.confirm && <FieldError id="confirm-password-error">{passwordErrors.confirm}</FieldError>}
                 </Field>
               </FieldGroup>

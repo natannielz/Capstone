@@ -27,7 +27,7 @@ function loadLogin(react: unknown): LoginComponent {
     if (id === "./brand") return {Brand: () => null};
     // Animation has no role in the credential contract. The real Login still
     // creates its motion ref, so the mock React hook cursor includes that slot.
-    if (id === "./public-motion") return {usePublicMotion: () => undefined};
+    if (id === "./login-motion") return {useLoginMotion: () => undefined};
     if (id === "@/components/ui/button") return {Button: "button"};
     if (id === "@/components/ui/field") return {Field: "div", FieldError: "p", FieldGroup: "div", FieldLabel: "label"};
     if (id === "@/components/ui/input-group") return {InputGroup: "div", InputGroupAddon: "div", InputGroupButton: "button", InputGroupInput: "input"};
@@ -78,6 +78,8 @@ test("v6 Login server output uses POST and disables credential submission before
 test("v6 Login hydration, duplicate guard and failed request retries preserve a POST-only credential flow", async t => {
   const hooks: unknown[] = [];
   let position = 0, hydrated = false;
+  const effects: (() => void)[] = [];
+  let focused: Node | undefined;
   const mockReact = {...React,
     useState(initial: unknown) {
       const index = position++;
@@ -85,10 +87,26 @@ test("v6 Login hydration, duplicate guard and failed request retries preserve a 
       return [hooks[index], (value: unknown) => {hooks[index] = typeof value === "function" ? value(hooks[index]) : value;}];
     },
     useRef(initial: unknown) {const index = position++; return hooks[index] ??= {current: initial};},
+    useEffect(effect: () => void, dependencies?: readonly unknown[]) {
+      const index = position++;
+      const previous = hooks[index] as readonly unknown[] | undefined;
+      if (!dependencies || !previous || dependencies.some((value, item) => !Object.is(value, previous[item]))) effects.push(effect);
+      hooks[index] = dependencies;
+    },
     useSyncExternalStore(_subscribe: unknown, client: () => boolean, server: () => boolean) {return hydrated ? client() : server();},
   };
   const Login = loadLogin(mockReact);
-  const render = () => {position = 0; return Login({});};
+  const render = () => {
+    position = 0;
+    const tree = Login({});
+    // Commit refs before passive effects, matching the order used by React.
+    for (const node of nodes(tree)) {
+      const ref = node.props.ref;
+      if (ref && typeof ref === "object" && "current" in ref) ref.current = {focus: () => {focused = node;}};
+    }
+    for (const effect of effects.splice(0)) effect();
+    return tree;
+  };
   const event = {preventDefault() {}};
   const submit = (tree: unknown) => (find(tree, node => node.type === "form").props.onSubmit as (input: typeof event) => Promise<void>)(event);
   const change = (tree: unknown, id: string, value: string) => (find(tree, node => node.props.id === id).props.onChange as (event: {target: {value: string}}) => void)({target: {value}});
@@ -119,6 +137,7 @@ test("v6 Login hydration, duplicate guard and failed request retries preserve a 
   rejectRequest(new TypeError("Simulated offline")); await Promise.all([first, duplicate]); tree = render();
   assert.equal(redirects.length, 0);
   assert.match(text(tree), /Koneksi terputus atau terlalu lama/);
+  assert.ok(nodes(focused).some(node => node.props.id === "login-error"), "A failed request focuses the visible error, after refs have committed");
   assert.equal(find(tree, node => node.props.type === "submit").props.disabled, false);
   assert.equal(find(tree, node => node.props.id === "password").props.value, password);
   globalThis.fetch = async (input, init) => {calls.push({url: String(input), init}); return Response.json({error: "Email atau kata sandi tidak benar."}, {status: 401});};

@@ -82,19 +82,22 @@ export function shopFamilies(products: PublicProduct[]): PublicFamily[] {
   }
   return [...groups.values()];
 }
-export function familyProduct(family: PublicFamily, search = "") {
+export function matchingFamilyProducts(family: PublicFamily, search = "") {
   const query = search.trim().toLocaleLowerCase("id-ID");
-  return (
-    family.products.find(
-      (product) => query && product.sku.toLocaleLowerCase("id-ID") === query,
-    ) ||
-    family.products.find((product) =>
+  const products = family.products.filter((product) => product.active);
+  const exact = products.find(
+    (product) => query && product.sku.toLocaleLowerCase("id-ID") === query,
+  );
+  return exact ? [exact] : products.filter((product) =>
       `${product.name} ${product.sku}`
         .toLocaleLowerCase("id-ID")
         .includes(query),
-    ) ||
-    family.products[0]
   );
+}
+export function familyProduct(family: PublicFamily, search = "", availableOnly = false) {
+  const matches = matchingFamilyProducts(family, search);
+  return (availableOnly ? matches.find((product) => product.available > 0) : undefined)
+    || matches[0] || family.products[0];
 }
 export function safeShopBack(value: string | null) {
   if (!value) return "/shop";
