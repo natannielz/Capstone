@@ -86,6 +86,11 @@
 .profile-v14 .profile-form-actions { flex-wrap: wrap; gap: 12px; }
 .profile-v14 .profile-form-actions button { min-height: 44px; white-space: normal; height: auto; }
 .profile-v14 .profile-session-notice p { margin: 8px 0 12px; line-height: 1.6; }
+.profile-v14 .profile-draft-notice p { margin: 8px 0 12px; line-height: 1.65; }
+.profile-v14 .profile-draft-notice button { min-height: 44px; height: auto; white-space: normal; text-align: left; }
+.profile-v14 .profile-draft-status { padding: 14px 16px; border: 1px solid #d6e2dc; border-radius: 8px; background: #f2f6f3; color: #285b48; font-size: 13px; line-height: 1.6; }
+.profile-v14 .profile-draft-status p { margin: 5px 0 0; font-size: 12px; }
+.profile-v14 .profile-draft-unavailable { border-color: #e6c2a5; background: #fcf5ed; color: #85451d; }
 .account-v14 .profile-v14 .profile-card { background: #f3f5f3; border-color: #dbe3df; padding: 24px; }
 .account-v14 .profile-v14 .profile-section { padding: 0; overflow: hidden; }
 .account-v14 .profile-v14 .profile-card .upload-label { margin: 12px 0 8px; }

@@ -1,0 +1,46 @@
+/* List refinements are restricted to the internal workspace. */
+/* Keep absolutely positioned accessible labels inside their table scrollport. */
+.workspace :is(.table-scroll,.inventory-desktop,.ops-desktop-table,.orders-v5-table) { position: relative; }
+.workspace .workspace-list-controls-v15[data-slot=field-group] {
+  display: grid;
+  grid-template-columns: minmax(0,1.7fr) minmax(180px,1fr);
+  gap: 20px;
+  padding: 24px;
+  align-items: end;
+}
+.workspace .workspace-list-controls-v15 [data-slot=field] { min-width: 0; }
+.workspace .workspace-list-controls-v15 :is(input,select) { min-width: 0; width: 100%; min-height: 44px; }
+.workspace .workspace-list-results-v15 {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 24px;
+  border-block: 1px solid var(--work-line,#d5e1e5);
+  background: #f8faf9;
+}
+.workspace .workspace-list-results-v15 p { font-size: 13px; line-height: 1.6; color: var(--work-muted,#52656a); font-variant-numeric: tabular-nums; }
+.workspace .workspace-list-results-v15 [data-slot=button] { min-height: 40px; }
+.workspace .workspace-empty-v15 { padding: 36px 24px; gap: 12px; color: #607e82; }
+.workspace .workspace-empty-v15 h3 { color: var(--work-ink,#173941); font-size: 17px; line-height: 1.45; font-weight: 650; margin: 0; }
+.workspace .workspace-empty-v15 p { max-width: 52ch; margin: 0; color: var(--work-muted,#52656a); font-size: 14px; line-height: 1.7; }
+.workspace .workspace-empty-v15 [data-slot=button] { margin-top: 4px; min-height: 44px; }
+.workspace .workspace-pagination-v15 { background: #fbfcfc; }
+.workspace .workspace-pagination-v15 span { font-variant-numeric: tabular-nums; }
+.workspace .payments-v15 .table-scroll:focus-visible { outline: 2px solid #227077; outline-offset: -3px; }
+.workspace .payments-v15 .data-table td:nth-child(4) { min-width: 160px; }
+.workspace .payments-v15 .data-table .module-note { margin: 10px 0 0; padding: 0; font-size: 12px; line-height: 1.65; }
+.workspace .payments-v15 .attachment-list { min-width: 0; }
+.workspace .payments-v15 .row-actions { min-width: 144px; }
+@media(max-width: 760px) {
+  .workspace .workspace-list-controls-v15[data-slot=field-group] { grid-template-columns: minmax(0,1fr); gap: 18px; padding: 20px; }
+  .workspace .workspace-list-controls-v15 :is(input,select) { font-size: 16px; }
+  .workspace .workspace-list-results-v15 { padding-inline: 20px; }
+  .workspace .workspace-empty-v15 { padding: 30px 20px; }
+  .workspace .payments-v15 .data-table { min-width: 690px; }
+  .workspace .workspace-pagination-v15 { padding: 20px; justify-content: center; }
+  .workspace .workspace-pagination-v15 > p { width: 100%; text-align: center; }
+  .workspace .workspace-pagination-v15 > div { justify-content: center; flex-wrap: wrap; width: 100%; }
+  .workspace .workspace-pagination-v15 > div > span { width: 100%; order: -1; text-align: center; }
+}

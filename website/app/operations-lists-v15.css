@@ -1,0 +1,53 @@
+/* Operational registers: a readable search strip, explicit counts, quiet section navigation. */
+.operations-list-controls { min-width: 0; padding: 20px 24px; }
+.operations-list-toolbar { display: grid; grid-template-columns: minmax(0, 1fr) minmax(190px, .42fr); align-items: end; gap: 16px; }
+.operations-list-toolbar > form, .operations-list-toolbar > [data-slot="field"] { min-width: 0; }
+.operations-list-search { display: flex; align-items: stretch; gap: 8px; min-width: 0; }
+.operations-list-search input { flex: 1 1 auto; min-width: 0; width: 100%; }
+.operations-list-search button { flex: 0 0 auto; }
+.operations-list-controls button, .operations-list-controls input { min-height: 44px; }
+.operations-list-controls .native-select { min-height: 44px; background: #fff; color: #103f47; max-width: 100%; }
+.operations-list-controls [data-slot="field-label"] { color: #103f47; font-size: 13px; font-weight: 650; }
+.operations-list-toolbar-accounts { grid-template-columns: minmax(230px, 1fr) minmax(170px, .5fr) minmax(150px, .4fr); }
+.operations-list-summary { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 16px; margin-top: 16px; min-height: 32px; }
+.operations-list-summary p { margin: 0; color: #52656a; font-size: 13px; font-variant-numeric: tabular-nums; }
+.operations-list-summary p:focus-visible, .admin-section-heading:focus-visible { outline: 2px solid #ad431e; outline-offset: 5px; }
+.operations-list-summary p, .admin-section-heading { scroll-margin-top: 110px; }
+.operations-list-pagination { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding: 16px 24px; color: #52656a; font-size: 13px; font-variant-numeric: tabular-nums; }
+.operations-list-pagination > div { display: flex; flex-wrap: wrap; gap: 8px; }
+.operations-list-pagination button { min-height: 44px; cursor: pointer; }
+.operations-list-pagination button:disabled { cursor: default; }
+.operations-list-pagination svg { width: 15px; height: 15px; }
+.admin-lists-v15 { display: grid; gap: 20px; min-width: 0; }
+.admin-lists-v15 > .panel { min-width: 0; margin: 0; }
+.admin-section-nav { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border: 1px solid #cfdadf; border-radius: 10px; overflow: visible; background: #fff; }
+.admin-section-nav a { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px 12px; min-width: 0; min-height: 54px; padding: 13px 18px; color: #52656a; font-size: 14px; }
+.admin-section-nav a + a { border-left: 1px solid #cfdadf; }
+.admin-section-nav a:first-child { border-radius: 9px 0 0 9px; }
+.admin-section-nav a:last-child { border-radius: 0 9px 9px 0; }
+.admin-section-nav a[aria-current="location"] { background: #e7eeeb; color: #103f47; box-shadow: inset 0 -3px 0 #103f47; }
+.admin-section-nav a:hover { background: #f1f5f3; color: #103f47; }
+.admin-section-nav a:focus-visible { outline: 3px solid #ad431e; outline-offset: 3px; position: relative; z-index: 1; }
+.admin-section-nav strong { font-size: 13px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.admin-lists-v15 .operations-list-controls { border-top: 1px solid #e7eeeb; border-bottom: 1px solid #e7eeeb; }
+.admin-lists-v15 .data-table td:first-child { overflow-wrap: anywhere; }
+.admin-lists-v15 .data-table .row-actions { min-width: 155px; }
+.admin-lists-v15 .data-table td.operations-table-empty { padding: 24px; color: #52656a; text-align: center; white-space: normal; }
+
+@media (max-width: 1050px) {
+  .operations-list-toolbar-accounts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .operations-list-toolbar-accounts > form { grid-column: 1 / -1; }
+}
+@media (max-width: 600px) {
+  .operations-list-controls { padding: 16px; }
+  .operations-list-toolbar { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  .operations-list-toolbar-accounts > form { grid-column: auto; }
+  .operations-list-pagination { padding: 14px 16px; }
+  .operations-list-pagination > div { width: 100%; }
+  .operations-list-pagination button { flex: 1 1 auto; }
+  .admin-section-nav a { padding: 12px; font-size: 13px; }
+  .admin-lists-v15 { gap: 16px; }
+}
+@media (max-width: 480px) {
+  .admin-section-nav a { flex-direction: column; align-items: flex-start; justify-content: center; gap: 4px; min-height: 72px; }
+}

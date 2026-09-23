@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, type FormEvent } from "react";
 import Link from "next/link";
 import { Camera, Eye, EyeOff, Save } from "lucide-react";
 import { toast } from "sonner";
@@ -12,17 +12,20 @@ import { Textarea } from "@/components/ui/textarea";
 import { clearCustomerCart } from "@/lib/client/customer-cart";
 import { clearCartForAccount } from "@/lib/client/cart-storage";
 import { ApiError, requestJson as request } from "@/lib/client/requests";
+import {captureCustomerProfileDraft, clearCustomerProfileDraft, clearCustomerProfileDraftSnapshot, loadCustomerProfileDraft, profileValues, reconcileProfileValues, sameProfileValues, saveCustomerProfileDraft, type ProfileValues} from "@/lib/client/customer-profile-draft";
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { ROLE_LABELS } from "@/lib/domain/accounts";
 import type { WorkspaceContext } from "./workspace";
 
-type ProfileValues = { name: string; phone: string; position: string; address: string };
 type PasswordValues = { current: string; password: string; confirm: string };
 type Errors<T> = Partial<Record<keyof T, string>>;
 type ProfileProps = WorkspaceContext & { onDirtyChange?: (dirty: boolean) => void };
 
 const EMPTY_PASSWORDS: PasswordValues = { current: "", password: "", confirm: "" };
 const PASSWORD_FIELDS = { current: "old-password", password: "new-password", confirm: "confirm-password" };
+const subscribeToHydration = () => () => {};
+const clientReady = () => true;
+const serverReady = () => false;
 
 function focusField(id: string) {
   requestAnimationFrame(() => document.getElementById(id)?.focus());
@@ -32,14 +35,30 @@ function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Permintaan belum berhasil. Coba kembali.";
 }
 
-export function Profile({ actor, s, refresh, onDirtyChange }: ProfileProps) {
-  const [values, setValues] = useState<ProfileValues>({
-    name: actor.name,
-    phone: actor.phone || "",
-    position: actor.position || "",
-    address: actor.address || "",
+export function Profile(props: ProfileProps) {
+  const ready = useSyncExternalStore(subscribeToHydration, clientReady, serverReady);
+  // Never hydrate a server-rendered form with another tab/actor's browser draft.
+  // Keying the entire editor also resets passwords immediately on actor changes.
+  return ready ? <ProfileEditor key={`${props.actor.role}:${props.actor.id}`} {...props}/> : <p role="status">Menyiapkan profil…</p>;
+}
+
+function ProfileEditor({ actor, s, refresh, onDirtyChange }: ProfileProps) {
+  const [initial] = useState(() => {
+    const baseline = profileValues(actor);
+    const {draft, available} = actor.role === "customer" ? loadCustomerProfileDraft(actor.id) : {draft: undefined, available: true};
+    const merged = draft ? reconcileProfileValues(draft.baseline, draft.values, baseline, true) : {values: baseline, changedOnServer: []};
+    const restored = Boolean(draft && !sameProfileValues(merged.values, baseline));
+    return {baseline, values: merged.values, restored, available, serverChanged: restored && merged.changedOnServer.length > 0, snapshot: actor.role === "customer" ? captureCustomerProfileDraft(actor.id) : undefined};
   });
-  const [savedValues, setSavedValues] = useState(values);
+  const [values, setValues] = useState<ProfileValues>(initial.values);
+  const [savedValues, setSavedValues] = useState(initial.baseline);
+  const [observedServer, setObservedServer] = useState(initial.baseline);
+  const [restoredDraft, setRestoredDraft] = useState(initial.restored);
+  const [draftAvailable, setDraftAvailable] = useState(initial.available);
+  const [serverChanged, setServerChanged] = useState(initial.serverChanged);
+  const [cleanupWarning, setCleanupWarning] = useState("");
+  const [draftSnapshot, setDraftSnapshot] = useState(initial.snapshot);
+  const mounted = useRef(true);
   const [passwords, setPasswords] = useState<PasswordValues>(EMPTY_PASSWORDS);
   const [visiblePasswords, setVisiblePasswords] = useState({current: false, password: false, confirm: false});
   const [sessionExpired, setSessionExpired] = useState(false);
@@ -57,6 +76,14 @@ export function Profile({ actor, s, refresh, onDirtyChange }: ProfileProps) {
   const passwordDirty = Object.values(passwords).some(Boolean);
   const dirty = profileDirty || passwordDirty;
   const loginHref = `${actor.role === "customer" ? "/customer/login" : "/staff/login"}?notice=session-expired&next=${encodeURIComponent(actor.role === "customer" ? "/account" : "/workspace?view=profile")}`;
+  const incoming = profileValues(actor);
+  if (!sameProfileValues(incoming, observedServer)) {
+    const merged = reconcileProfileValues(savedValues, values, incoming);
+    setObservedServer(incoming);
+    setSavedValues(incoming);
+    setValues(merged.values);
+    setServerChanged(!sameProfileValues(merged.values, incoming) && merged.changedOnServer.length > 0);
+  }
 
   function checkSession(error: unknown) {
     if (error instanceof ApiError && error.status === 401) setSessionExpired(true);
@@ -71,9 +98,27 @@ export function Profile({ actor, s, refresh, onDirtyChange }: ProfileProps) {
   }, [dirty, onDirtyChange]);
 
   useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
+  useEffect(() => {mounted.current = true; return () => {mounted.current = false;};}, []);
+  useEffect(() => {
+    if (actor.role === "customer" && !profileDirty) clearCustomerProfileDraftSnapshot(actor.id, draftSnapshot);
+  }, [actor.id, actor.role, profileDirty, draftSnapshot]);
+
+  function discardProfile(useServer = false) {
+    const cleared = actor.role !== "customer" || clearCustomerProfileDraft(actor.id);
+    setCleanupWarning(cleared ? "" : "Isian di halaman ini telah dibatalkan. Pembersihan draf di penyimpanan browser belum dapat dipastikan; draf lama mungkin muncul lagi setelah halaman dimuat ulang.");
+    setValues(savedValues); setProfileErrors({}); setSaveError(""); setRestoredDraft(false); setServerChanged(false);
+    setSavedMessage(useServer ? "Data terbaru dari server digunakan." : "Perubahan data pribadi dibatalkan.");
+  }
 
   function editProfile(key: keyof ProfileValues, value: string) {
-    setValues((previous) => ({ ...previous, [key]: value }));
+    const next = {...values, [key]: value};
+    // A storage write happens inside the input event, not in a delayed effect.
+    if (actor.role === "customer") {
+      const saved = saveCustomerProfileDraft(actor.id, savedValues, next);
+      setDraftAvailable(saved);
+      setDraftSnapshot(saved ? captureCustomerProfileDraft(actor.id) : undefined);
+    }
+    setValues(next);
     setProfileErrors((previous) => ({ ...previous, [key]: undefined }));
     setSaveError("");
     setSavedMessage("");
@@ -112,6 +157,8 @@ export function Profile({ actor, s, refresh, onDirtyChange }: ProfileProps) {
       focusField("profile-" + invalid);
       return;
     }
+    const submittedValues = {...values};
+    const submittedDraft = draftSnapshot;
     setPending("profile");
     try {
       await request("/api/profile", {
@@ -119,16 +166,21 @@ export function Profile({ actor, s, refresh, onDirtyChange }: ProfileProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(actor.role === "customer" ? next : {name: next.name, phone: next.phone, position: next.position}),
       });
-      setValues(next);
+      if (!mounted.current) return;
+      setValues(current => reconcileProfileValues(submittedValues, current, next).values);
       setSavedValues(next);
+      const cleanup = actor.role === "customer" ? clearCustomerProfileDraftSnapshot(actor.id, submittedDraft) : "cleared";
+      setCleanupWarning(cleanup === "unavailable" ? "Profil berhasil disimpan di server. Pembersihan draf lokal belum dapat dipastikan karena penyimpanan browser tidak tersedia." : "");
+      setRestoredDraft(false); setServerChanged(false);
       setSavedMessage("Perubahan profil telah disimpan.");
       await refresh();
     } catch (error) {
+      if (!mounted.current) return;
       checkSession(error);
       setSaveError(errorMessage(error));
       focusField("profile-save-error");
     } finally {
-      setPending(null);
+      if (mounted.current) setPending(null);
     }
   }
 
@@ -189,6 +241,7 @@ export function Profile({ actor, s, refresh, onDirtyChange }: ProfileProps) {
       });
       setPasswords(EMPTY_PASSWORDS);
       setVisiblePasswords({current: false, password: false, confirm: false});
+      if (actor.role === "customer") clearCustomerProfileDraft(actor.id);
       onDirtyChange?.(false);
       clearCartForAccount(actor.id);
       await clearCustomerCart(actor.id);
@@ -239,6 +292,9 @@ export function Profile({ actor, s, refresh, onDirtyChange }: ProfileProps) {
           <header className="panel-title profile-section-header"><div><h2 id="profile-personal-title">Data pribadi</h2><p>Perbarui nama dan informasi kontak.</p></div></header>
           <form className="profile-form" onSubmit={save} aria-busy={pending === "profile"} noValidate>
             {saveError && <Alert id="profile-save-error" variant="destructive" tabIndex={-1}><AlertDescription>{saveError}</AlertDescription></Alert>}
+            {cleanupWarning && <Alert className="profile-draft-notice"><AlertDescription>{cleanupWarning}</AlertDescription></Alert>}
+            {profileDirty && serverChanged && <Alert className="profile-draft-notice"><AlertDescription><strong>Data profil di server telah berubah.</strong><p>Isian yang Anda ubah tetap dipertahankan. Kolom lainnya sudah memakai data terbaru. Periksa kembali sebelum menyimpan.</p><Button variant="outline" type="button" disabled={busy} onClick={() => discardProfile(true)}>Buang perubahan & gunakan data terbaru</Button></AlertDescription></Alert>}
+            {actor.role === "customer" && profileDirty && <div className={`profile-draft-status${draftAvailable ? "" : " profile-draft-unavailable"}`} role="status"><strong>{!draftAvailable ? "Draf tidak dapat disimpan di tab ini." : restoredDraft ? "Draf data pribadi dipulihkan." : "Draf data pribadi tersimpan di tab ini."}</strong><p>{draftAvailable ? "Anda dapat kembali ke profil melalui Back/Forward tanpa kehilangan isian ini. Simpan perubahan untuk memperbarui akun." : "Simpan perubahan sebelum memakai Back/Forward atau meninggalkan halaman. Periksa izin dan ruang penyimpanan browser."} Kata sandi tidak disimpan dalam draf.</p></div>}
             <FieldGroup className="profile-fields profile-personal-fields">
               <Field data-disabled={busy} data-invalid={Boolean(profileErrors.name)}>
                 <FieldLabel htmlFor="profile-name">Nama lengkap</FieldLabel>
@@ -264,7 +320,7 @@ export function Profile({ actor, s, refresh, onDirtyChange }: ProfileProps) {
             </FieldGroup>
             <div className="profile-form-actions">
               <Button disabled={busy || !profileDirty} type="submit"><Save data-icon="inline-start" aria-hidden="true" />{pending === "profile" ? "Menyimpan…" : "Simpan perubahan"}</Button>
-              {profileDirty && <Button variant="ghost" type="button" disabled={busy} onClick={() => { setValues(savedValues); setProfileErrors({}); setSaveError(""); setSavedMessage(""); }}>Batalkan perubahan</Button>}
+              {profileDirty && <Button variant="ghost" type="button" disabled={busy} onClick={() => discardProfile()}>Batalkan perubahan</Button>}
             </div>
             <p className="profile-save-state" role="status">{profileDirty ? "Ada perubahan yang belum disimpan." : savedMessage}</p>
           </form>

@@ -44,8 +44,8 @@ export function OrderList({s, orders, onSelect, actionLabel = () => "Lihat pesan
 }) {
   if (!orders.length) return <p className="order-v5-empty-note">Belum ada pesanan dalam daftar ini.</p>;
   return <>
-    <div className="orders-v5-table"><table className="data-table"><thead><tr>
-      <th>Pesanan / pembeli</th><th>Dibutuhkan</th><th className="numeric">Nilai pesanan</th><th>Status</th><th><span className="sr-only">Tindakan</span></th>
+    <div className="orders-v5-table"><table className="data-table"><caption className="sr-only">Daftar pesanan dan status pemenuhan</caption><thead><tr>
+      <th scope="col">Pesanan / pembeli</th><th scope="col">Dibutuhkan</th><th scope="col" className="numeric">Nilai pesanan</th><th scope="col">Status</th><th scope="col"><span className="sr-only">Tindakan</span></th>
     </tr></thead><tbody>{orders.map(order => <tr key={order.id}>
       <td><button className="table-link" onClick={() => onSelect(order.id)}>{order.number}</button><small>{buyerLabel(s, order)}</small></td>
       <td>{dateLabel(order.neededAt)}</td><td className="numeric">{money(orderValue(s, order.id))}</td>

@@ -49,7 +49,7 @@ export function dashboardView({ s, actor }: { s: State; actor: Actor }) {
       break;
     }
     case "penagihan":
-      priority = recordedPayments ? { title: "Dana masuk menunggu pemeriksaan", description: "Cocokkan bukti dan identitas pembayar sebelum mengalokasikan dana ke invoice.", action: "Periksa pembayaran", count: recordedPayments, unit: "transfer menunggu verifikasi", waiting: true, page: "payments" }
+      priority = recordedPayments ? { title: "Dana masuk menunggu pemeriksaan", description: "Cocokkan bukti dan identitas pembayar sebelum mengalokasikan dana ke invoice.", action: "Periksa pembayaran", count: recordedPayments, unit: "transfer menunggu verifikasi", waiting: true, page: "payments", query: { paymentStatus: "recorded", paymentSearch: null, paymentPage: null } }
         : billable ? { title: "Penerimaan barang siap ditagih", description: "Pilih penerimaan yang sudah final untuk digabungkan menjadi invoice pembeli.", action: "Siapkan invoice", count: billable, unit: "baris penerimaan siap ditagih", waiting: true, page: "billing" }
           : { title: "Tinjau saldo tagihan pembeli", description: "Periksa jatuh tempo dan sisa piutang setelah pembayaran terverifikasi.", action: "Buka invoice belum lunas", count: openInvoices.length, unit: "invoice belum lunas", waiting: openInvoices.length > 0, page: "billing", query: { balance: "open" } };
       break;
@@ -65,16 +65,16 @@ export function dashboardView({ s, actor }: { s: State; actor: Actor }) {
       priority = { title: openPeriods ? "Siapkan laporan untuk ditinjau" : "Rekap transaksi yang sudah final", description: openPeriods ? "Tinjau transaksi dan catatan perbaikan sebelum mengajukan versi laporan bulanan." : "Telusuri penjualan berdasarkan tanggal finalisasi atau buka posisi keuangan pada tanggal pilihan.", action: openPeriods ? "Buka laporan bulanan" : "Buka rekap penjualan", count: openPeriods, unit: "periode masih terbuka", waiting: openPeriods > 0, page: openPeriods ? "periods" : "reports", query: openPeriods ? undefined : { reportTab: "sales" } };
       break;
     case "admin":
-      priority = { title: "Kelola akses dan data organisasi", description: "Atur akun, divisi, dan pemasok. Hak akses operasional mengikuti peran masing-masing akun.", action: "Buka pengaturan akun", count: s.users.filter(user => user.active).length, unit: "akun mempunyai akses aktif", waiting: false, page: "admin" };
+      priority = { title: "Kelola akses dan data organisasi", description: "Atur akun, divisi, dan pemasok. Hak akses operasional mengikuti peran masing-masing akun.", action: "Buka pengaturan akun", count: s.users.filter(user => user.active).length, unit: "akun mempunyai akses aktif", waiting: false, page: "admin", query: { adminSection: "users", accountQ: null, accountRole: null, accountStatus: null, accountPage: null } };
       break;
     default:
       return null;
   }
 
   const queues: Queue[] = role === "admin" ? [
-    { label: "Pengguna aktif", value: s.users.filter(user => user.active).length, page: "admin", icon: "users", link: "Kelola akun" },
-    { label: "Divisi terdaftar", value: s.divisions.length, page: "admin", icon: "building", link: "Lihat pengaturan divisi" },
-    { label: "Pemasok terdaftar", value: s.suppliers.length, page: "admin", icon: "package", link: "Lihat pengaturan pemasok" },
+    { label: "Pengguna aktif", value: s.users.filter(user => user.active).length, page: "admin", query: { adminSection: "users", accountQ: null, accountRole: null, accountStatus: null, accountPage: null }, icon: "users", link: "Kelola akun" },
+    { label: "Divisi terdaftar", value: s.divisions.length, page: "admin", query: { adminSection: "divisions" }, icon: "building", link: "Lihat pengaturan divisi" },
+    { label: "Pemasok terdaftar", value: s.suppliers.length, page: "admin", query: { adminSection: "suppliers" }, icon: "package", link: "Lihat pengaturan pemasok" },
   ] : role === "kurir" ? [
     { label: "Siap diberangkatkan", value: ready.length, page: "deliveries", icon: "package", query: { status: "ready" }, link: "Lihat surat jalan" },
     { label: "Dalam perjalanan", value: transit.length, page: "deliveries", icon: "truck", query: { status: "dispatched" }, link: "Lihat pengantaran" },

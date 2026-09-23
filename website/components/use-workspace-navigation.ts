@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { Actor } from "@/lib/domain/accounts";
 import { canOpenPage, PAGE_ROLES, type WorkspacePage } from "@/lib/domain/navigation";
+import { applicationHistoryState, workspaceHistoryIndex } from "@/lib/client/native-history";
 
 export type QueryPatch = Record<string, string | null>;
 const routeEvent = "workspace:navigate";
@@ -28,19 +29,19 @@ export function useWorkspaceNavigation(actor: Actor | null, closeMobile: () => v
   const selected = query.get("id") || undefined;
 
   const sync = useCallback(() => {
-    current.current = { href: window.location.pathname + window.location.search, search: window.location.search, index: Number(window.history.state?.unitTokoIndex || 0) };
+    current.current = { href: window.location.pathname + window.location.search, search: window.location.search, index: workspaceHistoryIndex(window.history.state) };
     emit();
   }, []);
 
   useEffect(() => {
-    window.history.replaceState({ ...window.history.state, unitTokoIndex: Number(window.history.state?.unitTokoIndex || 0) }, "");
+    window.history.replaceState(applicationHistoryState(null, workspaceHistoryIndex(window.history.state)), "");
     sync();
     const previousRestoration = window.history.scrollRestoration;
     window.history.scrollRestoration = "manual";
     const onPop = () => {
       if (restoring.current) { restoring.current = false; return; }
       if (dirty.current && !permittedPop.current) {
-        const delta = current.current.index - Number(window.history.state?.unitTokoIndex || 0);
+        const delta = current.current.index - workspaceHistoryIndex(window.history.state);
         if (delta) {
           restoring.current = true;
           window.history.go(delta);
@@ -95,7 +96,7 @@ export function useWorkspaceNavigation(actor: Actor | null, closeMobile: () => v
       for (const [key, value] of Object.entries(patch || {})) {
         if (value === null || value === "") destination.delete(key); else destination.set(key, value);
       }
-      window.history.pushState({ ...window.history.state, unitTokoIndex: current.current.index + 1 }, "", `/workspace?${destination}`);
+      window.history.pushState(applicationHistoryState(null, current.current.index + 1), "", `/workspace?${destination}`);
       sync(); closeMobile();
       requestAnimationFrame(() => requestAnimationFrame(() => {
         document.getElementById("workspace-title")?.focus({ preventScroll: true });
@@ -108,7 +109,7 @@ export function useWorkspaceNavigation(actor: Actor | null, closeMobile: () => v
     for (const [key, value] of Object.entries(patch)) {
       if (value === null || value === "") next.delete(key); else next.set(key, value);
     }
-    window.history.replaceState(window.history.state, "", `/workspace?${next}`);
+    window.history.replaceState(applicationHistoryState(window.history.state), "", `/workspace?${next}`);
     sync();
   }
   return { page, selected, query, go, updateQuery, onDirtyChange, requestLeave, pendingLeave, confirmLeave, cancelLeave: () => setPendingLeave(null) };

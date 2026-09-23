@@ -25,6 +25,7 @@ import {productImage} from "@/lib/domain/catalog";
 import {ApiError, logoutSession, requestJson, singleFlight} from "@/lib/client/requests";
 import {clearCustomerCart} from "@/lib/client/customer-cart";
 import {clearCartForAccount} from "@/lib/client/cart-storage";
+import {clearCustomerProfileDraft, logoutWithProfileCleanup} from "@/lib/client/customer-profile-draft";
 import {ambiguousCustomerActionError, clearCustomerActionDraft, customerActionTarget, customerActionValues, findPendingCustomerAction, readCustomerActionDraft, saveCustomerActionDraft, type CustomerActionDraft, type CustomerActionField} from "@/lib/client/customer-action-draft";
 
 type ActionField = CustomerActionField;
@@ -81,8 +82,9 @@ export function CustomerAccount({initialActor, view, orderId}: {initialActor: Ac
     if (dirty && !window.confirm("Ada perubahan profil yang belum disimpan. Keluar tanpa menyimpannya?")) return;
     logoutPending.current = true; setLogoutBusy(true); setError("");
     try {
-      await logoutSession();
-      clearCartForAccount(actor.id); await clearCustomerCart(actor.id);
+      const {draftCleared} = await logoutWithProfileCleanup(actor.id, logoutSession);
+      const localCleanup = await Promise.allSettled([clearCartForAccount(actor.id), clearCustomerCart(actor.id)]);
+      if (!draftCleared || localCleanup.some(result => result.status === "rejected")) window.alert("Anda telah keluar dari akun. Pembersihan data lokal di penyimpanan browser belum dapat dipastikan. Draf lama mungkin masih tersimpan di tab ini.");
       navigationAllowed.current = true; setDirty(false); window.location.assign("/customer/login?next=%2Fshop");
     } catch (cause) { setErrorSource("logout"); setError(cause instanceof Error ? cause.message : "Belum berhasil keluar."); }
     finally { logoutPending.current = false; setLogoutBusy(false); }
@@ -106,7 +108,7 @@ export function CustomerAccount({initialActor, view, orderId}: {initialActor: Ac
       </section>
     </div>
     {action && <CustomerActionDialog key={actor.id + action.type + JSON.stringify(action.data)} actorId={actor.id} action={action} close={() => setAction(null)} complete={async result => {setAction(null); setMessage(result.message); await refresh();}}/>}
-    <Dialog open={Boolean(leaveTo)} onOpenChange={open => {if (!open) setLeaveTo(null);}}><DialogContent><DialogHeader><DialogTitle>Perubahan belum disimpan</DialogTitle><DialogDescription>Data yang Anda ubah akan hilang jika meninggalkan halaman ini.</DialogDescription></DialogHeader><DialogFooter><Button variant="outline" onClick={() => setLeaveTo(null)}>Tetap di halaman</Button><Button onClick={() => {if (!leaveTo) return; navigationAllowed.current = true; setDirty(false); window.location.assign(leaveTo);}}>Tinggalkan halaman</Button></DialogFooter></DialogContent></Dialog>
+    <Dialog open={Boolean(leaveTo)} onOpenChange={open => {if (!open) setLeaveTo(null);}}><DialogContent><DialogHeader><DialogTitle>Buang perubahan dan tinggalkan profil?</DialogTitle><DialogDescription>Perubahan data pribadi dan draf di tab ini akan dihapus. Isian kata sandi tidak dapat dipulihkan.</DialogDescription></DialogHeader><DialogFooter><Button variant="outline" onClick={() => setLeaveTo(null)}>Tetap di halaman</Button><Button onClick={() => {if (!leaveTo) return; if (!clearCustomerProfileDraft(actor.id)) window.alert("Isian di halaman ini dibatalkan. Pembersihan draf di penyimpanan browser belum dapat dipastikan; draf lama mungkin muncul lagi setelah halaman dimuat ulang."); navigationAllowed.current = true; setDirty(false); window.location.assign(leaveTo);}}>Buang perubahan & tinggalkan</Button></DialogFooter></DialogContent></Dialog>
   </ShopShell>;
 }
 

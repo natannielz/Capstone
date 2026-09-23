@@ -68,6 +68,7 @@ import { money, productAvailable, sum, today } from "@/lib/domain/selectors";
 import {catalogBasket, type CatalogBasketLine} from "@/lib/domain/catalog-basket";
 import { catalogPage, paginateCatalog } from "@/lib/domain/catalog-pagination";
 import { CatalogPagination } from "./catalog-pagination";
+import { applicationHistoryState } from "@/lib/client/native-history";
 import type { CommandResult, Product, State } from "@/lib/domain/model";
 import type { WorkspaceContext } from "./workspace";
 import {
@@ -121,7 +122,7 @@ function writeQuery(query: CatalogQuery) {
     else url.searchParams.delete(key);
   }
   window.history.replaceState(
-    window.history.state,
+    applicationHistoryState(window.history.state),
     "",
     `${url.pathname}${url.search}${url.hash}`,
   );

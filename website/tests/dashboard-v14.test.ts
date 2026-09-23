@@ -84,6 +84,10 @@ test("admin totals describe actual settings data rather than an unavailable acti
   const s = scopeState(source, account);
   const view = dashboardView({ s, actor: account });
   assert.equal(view?.priority.page, "admin");
+  assert.equal(view?.priority.query?.adminSection, "users");
+  assert.equal(view?.queues.find(queue => queue.label === "Pengguna aktif")?.query?.adminSection, "users");
+  assert.equal(view?.queues.find(queue => queue.label === "Divisi terdaftar")?.query?.adminSection, "divisions");
+  assert.equal(view?.queues.find(queue => queue.label === "Pemasok terdaftar")?.query?.adminSection, "suppliers");
   assert.equal(view?.queues.find(queue => queue.label === "Pemasok terdaftar")?.value, s.suppliers.length);
   assert.equal(view?.queues.some(queue => /aktivitas/i.test(queue.label)), false);
 });
@@ -93,6 +97,7 @@ test("finance priorities distinguish payment verification, report approval, and 
   const collection = actor("penagihan");
   const collectionView = dashboardView({ s: scopeState(source, collection), actor: collection });
   assert.equal(collectionView?.priority.page, "payments");
+  assert.deepEqual(collectionView?.priority.query, { paymentStatus: "recorded", paymentSearch: null, paymentPage: null });
   assert.equal(collectionView?.priority.count, source.payments.filter(payment => payment.status === "recorded").length);
   source.credits = []; source.refunds = []; source.expenses = []; source.purchases = [];
   source.periods = [{ id: "2026-09", revision: 1, status: "review", approvedRevision: null, approvedBy: null, submittedBy: "laporan", closedBy: null, closedAt: "", snapshot: null }];
