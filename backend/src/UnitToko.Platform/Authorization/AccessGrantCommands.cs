@@ -11,8 +11,8 @@ namespace UnitToko.Platform.Authorization;
 
 public sealed partial class AccessAdministrationService
 {
-    public Task<GrantPreview> PreviewGrantAsync(ActorContext actor, GrantChangeRequest request, CancellationToken cancellationToken = default) =>
-        store.ReadAsync(actor, async (snapshot, session, token) =>
+    public Task<GrantPreview> PreviewGrantAsync(ActorContext actor, GrantChangeRequest request, CancellationToken cancellationToken = default, AuthorizationReadMetadata? audit = null) =>
+        AuditedReadAsync(actor, "access.grant.preview", audit, new("subjectId", request.UserId), async (snapshot, session, token) =>
         {
             DemandAdministrative(actor, snapshot, Permissions.AccessPropose);
             var candidate = Materialize(actor, request, 1, "Preview");
@@ -20,8 +20,8 @@ public sealed partial class AccessAdministrationService
             var current = await Collection("authorizationGrants").Find(session, F.Eq("userId", request.UserId)).ToListAsync(token);
             var existing = current.Select(AuthorizationBson.Grant).Where(grant => ScopePolicy.IsGrantActive(grant, request.UserId, clock.UtcNow) &&
                 grant.MembershipId == request.MembershipId && grant.Scope == request.Scope).SelectMany(grant => grant.Permissions).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToImmutableArray();
-            return new GrantPreview(request.UserId, request.MembershipId, candidate.TemplateId, candidate.TemplateVersion, candidate.Permissions, existing, request.Scope, true,
-                candidate.DelegablePermissions.IsDefault ? [] : candidate.DelegablePermissions, candidate.EffectiveAt, candidate.ExpiresAt);
+            return new AuditedValue<GrantPreview>(new(request.UserId, request.MembershipId, candidate.TemplateId, candidate.TemplateVersion, candidate.Permissions, existing, request.Scope, true,
+                candidate.DelegablePermissions.IsDefault ? [] : candidate.DelegablePermissions, candidate.EffectiveAt, candidate.ExpiresAt), 1, [new(GrantScopeKind.System)]);
         }, cancellationToken);
 
     public async Task<AccessProposalResult> ProposeGrantAsync(ActorContext actor, GrantChangeRequest request, AuthorizationCommandMetadata metadata, CancellationToken cancellationToken = default)

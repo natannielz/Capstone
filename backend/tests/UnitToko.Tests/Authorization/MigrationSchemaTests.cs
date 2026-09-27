@@ -62,7 +62,7 @@ public sealed class MigrationSchemaTests(MongoFixture fixture)
     }
 
     [Fact]
-    public async Task Fresh_database_has_both_history_steps_named_auth_indexes_and_no_seeded_accounts()
+    public async Task Fresh_database_has_all_history_steps_named_auth_indexes_and_no_seeded_accounts()
     {
         var name = "ut_auth_fresh_" + Guid.NewGuid().ToString("N");
         var database = fixture.Client.GetDatabase(name);
@@ -71,12 +71,13 @@ public sealed class MigrationSchemaTests(MongoFixture fixture)
             var migrations = new CollectionMigrations(database, new SystemClock());
             await migrations.ApplyAsync();
             Assert.True(await migrations.IsCurrentAsync());
-            Assert.Equal(2, await database.GetCollection<BsonDocument>("schemaMigrations")
+            Assert.Equal(CollectionMigrations.CurrentVersion, await database.GetCollection<BsonDocument>("schemaMigrations")
                 .CountDocumentsAsync(new BsonDocument("state", "applied")));
             foreach (var collection in new[]
             {
                 "identities", "memberships", "authorizationGrants", "authorizationScopes",
-                "authorizationProposals", "authorizationHistory"
+                "authorizationProposals", "authorizationHistory", "organizationProfiles", "organizationProposals",
+                "authorizationReadEvents"
             })
                 Assert.Equal(0, await database.GetCollection<BsonDocument>(collection)
                     .CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty));

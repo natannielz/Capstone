@@ -31,7 +31,7 @@ public sealed class MigrationUpgradeTests(MongoFixture fixture)
             await AssertOrdersStillProtectedAsync(database);
             var history = await database.GetCollection<BsonDocument>("schemaMigrations")
                 .Find(FilterDefinition<BsonDocument>.Empty).Sort(new BsonDocument("_id", 1)).ToListAsync();
-            Assert.Equal(new[] { 1, 2 }, history.Select(item => item["_id"].AsInt32));
+            Assert.Equal(Enumerable.Range(1, CollectionMigrations.CurrentVersion), history.Select(item => item["_id"].AsInt32));
             Assert.All(history, item => Assert.Equal("applied", item["state"].AsString));
 
             // The old deployment refuses this database even though v1 aggregate formats stay valid.
@@ -235,7 +235,7 @@ public sealed class MigrationUpgradeTests(MongoFixture fixture)
                     new BsonDocument { { "_id", 1 }, { "state", "applying" }, { "owner", "lost" },
                         { "leaseUntil", clock.UtcNow.UtcDateTime.AddMinutes(-1) } }, Applied(2)
                 ],
-                "unknown-newer" => [Applied(1), Applied(2), Applied(3)],
+                "unknown-newer" => Enumerable.Range(1, CollectionMigrations.CurrentVersion + 1).Select(id => Applied(id)).ToArray(),
                 "untyped-id" => [Applied("1")],
                 _ => [new BsonDocument { { "_id", 1 }, { "state", "applied" } }]
             };

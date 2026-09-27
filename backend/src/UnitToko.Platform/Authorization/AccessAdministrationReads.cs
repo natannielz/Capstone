@@ -9,8 +9,8 @@ namespace UnitToko.Platform.Authorization;
 
 public sealed partial class AccessAdministrationService
 {
-    public Task<AccessSubjectSummary> ReadSubjectAsync(ActorContext actor, long userId, CancellationToken cancellationToken = default) =>
-        store.ReadAsync(actor, async (snapshot, session, token) =>
+    public Task<AccessSubjectSummary> ReadSubjectAsync(ActorContext actor, long userId, CancellationToken cancellationToken = default, AuthorizationReadMetadata? audit = null) =>
+        AuditedReadAsync(actor, "access.subject.read", audit, new("subjectId", userId), async (snapshot, session, token) =>
         {
             var all = AdministrativeRead(actor, snapshot);
             var authorities = AdministrationScopes(actor, snapshot);
@@ -23,18 +23,19 @@ public sealed partial class AccessAdministrationService
                 .Select(AuthorizationBson.Grant).Where(grant => all || authorities.Any(scope => ScopePolicy.ContainsScope(scope, grant.Scope))).ToArray();
             bool Revoke(GrantScope scope) => ScopePolicy.Compile(actor, snapshot, Permissions.AccessRevoke, clock.UtcNow)
                 .Clauses.Any(clause => ScopePolicy.ContainsScope(clause.Scope, scope));
-            return new AccessSubjectSummary(userId, identity["status"].AsString, identity["grantVersion"].AsInt64,
+            var result = new AccessSubjectSummary(userId, identity["status"].AsString, identity["grantVersion"].AsInt64,
                 memberships.Select(membership => new MembershipSummary(membership.Id, membership.Scope, AuthorizationBson.Name(membership.Status), membership.Version,
                     membership.Status == AuthorizationStatus.Active && Revoke(membership.Scope) ? ["suspend"] : [], membership.EffectiveAt, membership.ExpiresAt)).ToImmutableArray(),
                 grants.Select(grant => new GrantSummary(grant.Id, grant.MembershipId, grant.TemplateId, grant.TemplateVersion, grant.Permissions,
                     grant.Scope, AuthorizationBson.Name(grant.Status), grant.Version, grant.Status != AuthorizationStatus.Revoked && Revoke(grant.Scope) ? ["revoke"] : [],
                     grant.DelegablePermissions.IsDefault ? [] : grant.DelegablePermissions, grant.EffectiveAt, grant.ExpiresAt)).ToImmutableArray());
+            return new AuditedValue<AccessSubjectSummary>(result, 1, ReadAuthorityScopes(actor, snapshot));
         }, cancellationToken);
 
-    public Task<IReadOnlyList<AccessProposalSummary>> ListProposalsAsync(ActorContext actor, int offset, int limit, CancellationToken cancellationToken = default)
+    public Task<IReadOnlyList<AccessProposalSummary>> ListProposalsAsync(ActorContext actor, int offset, int limit, CancellationToken cancellationToken = default, AuthorizationReadMetadata? audit = null)
     {
         AuthorizationStore.ValidatePage(offset, limit);
-        return store.ReadAsync<IReadOnlyList<AccessProposalSummary>>(actor, async (snapshot, session, token) =>
+        return AuditedReadAsync<IReadOnlyList<AccessProposalSummary>>(actor, "access.proposals.read", audit, new() { { "offset", offset }, { "limit", limit } }, async (snapshot, session, token) =>
         {
             var all = AdministrativeRead(actor, snapshot);
             var scopes = AdministrationScopes(actor, snapshot);
@@ -67,14 +68,21 @@ public sealed partial class AccessAdministrationService
                     catch (AuthorizationDeniedException) { }
                     catch (UnitToko.Modules.Contracts.DomainValidationException) { }
                 }
+                var actions = ImmutableArray.CreateBuilder<string>();
+                if (proposal["status"].AsString == "pending")
+                {
+                    if (allowed) actions.Add("approve");
+                    if (MayResolve(actor, snapshot, proposal, false)) actions.Add("reject");
+                    if (MayResolve(actor, snapshot, proposal, true)) actions.Add("withdraw");
+                }
                 result.Add(new(proposal["_id"].AsInt64, kind, proposal["subjectId"].AsInt64, AuthorizationBson.Scope(proposal["scope"].AsBsonDocument),
-                    proposal["requestedBy"].AsInt64, proposal["reason"].AsString, proposal["status"].AsString, proposal["version"].AsInt64,
-                    new(proposal["createdAt"].ToUniversalTime(), TimeSpan.Zero), candidate?.TemplateId, candidate?.Permissions ?? [], allowed ? ["approve"] : [],
+                    proposal["requestedBy"].AsInt64, proposal["reason"].AsString, ProposalStatus(proposal), proposal["version"].AsInt64,
+                    new(proposal["createdAt"].ToUniversalTime(), TimeSpan.Zero), candidate?.TemplateId, candidate?.Permissions ?? [], actions.ToImmutable(),
                     candidate?.DelegablePermissions ?? [], new(proposal["request"]["effectiveAt"].ToUniversalTime(), TimeSpan.Zero),
                     proposal["request"].AsBsonDocument.TryGetValue("expiresAt", out var expiry) ? new DateTimeOffset(expiry.ToUniversalTime(), TimeSpan.Zero) : null,
                     candidate?.MembershipId, candidate?.TemplateVersion));
             }
-            return result;
+            return new(result, result.Count, ReadAuthorityScopes(actor, snapshot));
         }, cancellationToken);
     }
     private bool AdministrativeRead(ActorContext actor, AuthorizationSnapshot snapshot) =>

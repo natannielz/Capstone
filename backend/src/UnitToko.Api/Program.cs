@@ -14,6 +14,7 @@ using UnitToko.Platform.Mongo;
 using UnitToko.Platform.Authorization;
 using UnitToko.Api.Authorization;
 using UnitToko.Modules.Organizations;
+using UnitToko.Platform.Organizations;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.ConfigureHttpJsonOptions(options =>
@@ -21,6 +22,7 @@ builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow;
     options.SerializerOptions.Converters.Add(new JsonStringEnumConverter<GrantScopeKind>(JsonNamingPolicy.CamelCase, false));
     options.SerializerOptions.Converters.Add(new JsonStringEnumConverter<ScopeNodeKind>(JsonNamingPolicy.CamelCase, false));
+    options.SerializerOptions.Converters.Add(new JsonStringEnumConverter<OrganizationChangeKind>(JsonNamingPolicy.CamelCase, false));
 });
 builder.Services.AddSingleton<IClock, UnitToko.Platform.SystemClock>();
 builder.Services.AddSingleton<ISystemStatusProvider, ClockSystemStatusProvider>();
@@ -36,6 +38,7 @@ builder.Services.AddSingleton<OutboxStore>();
 builder.Services.AddSingleton<CollectionMigrations>();
 builder.Services.AddSingleton<AuthorizationStore>();
 builder.Services.AddSingleton<AccessAdministrationService>();
+builder.Services.AddSingleton<OrganizationMasterDataService>();
 builder.Services.AddSingleton<IRequestActorResolver, UnavailableRequestActorResolver>();
 builder.Services.AddAuthentication("Unavailable")
     .AddScheme<AuthenticationSchemeOptions, UnavailableAuthenticationHandler>("Unavailable", _ => { });
@@ -58,8 +61,20 @@ builder.Services.AddOpenApi("v1", options =>
             }
         };
         foreach (var path in document.Paths.Where(p => p.Key.StartsWith("/api/v1/", StringComparison.Ordinal)))
-            foreach (var operation in (IEnumerable<OpenApiOperation>?)path.Value.Operations?.Values ?? Enumerable.Empty<OpenApiOperation>())
+            foreach (var pair in path.Value.Operations ?? [])
             {
+                var operation = pair.Value;
+                if ((path.Key.StartsWith("/api/v1/access", StringComparison.Ordinal) || path.Key.StartsWith("/api/v1/organizations", StringComparison.Ordinal)) &&
+                    path.Key != "/api/v1/access/current")
+                {
+                    operation.Parameters ??= [];
+                    operation.Parameters.Add(new OpenApiParameter
+                    {
+                        Name = "X-Expected-Actor-Id", In = ParameterLocation.Header, Required = ActorRequiredFilter.NeedsExpectedActor(pair.Key.ToString(), path.Key),
+                        Description = "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+                        Schema = new OpenApiSchema { Type = JsonSchemaType.String, MinLength = 1, MaxLength = 19, Pattern = "^[1-9][0-9]{0,18}$(?![\\s\\S])" }
+                    });
+                }
                 foreach (var parameter in operation.Parameters?.OfType<OpenApiParameter>() ?? [])
                 {
                     if (parameter.In != ParameterLocation.Header) continue;
@@ -94,7 +109,7 @@ if (string.IsNullOrWhiteSpace(mongoUri) || string.IsNullOrWhiteSpace(mongoDataba
 app.Use(async (context, next) =>
 {
     // Cover binding/authentication failures too, before endpoint filters can run.
-    if (context.Request.Path.StartsWithSegments("/api/v1/access"))
+    if (context.Request.Path.StartsWithSegments("/api/v1/access") || context.Request.Path.StartsWithSegments("/api/v1/organizations"))
         context.Response.Headers.CacheControl = "no-store";
     var candidate = context.Request.Headers["X-Correlation-Id"].ToString();
     var correlation = candidate.Length is > 0 and <= 64 && candidate.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_')
@@ -202,6 +217,7 @@ app.UseStatusCodePages(async statusContext =>
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapAccessEndpoints();
+app.MapOrganizationEndpoints();
 app.MapGet("/health/live", () => TypedResults.Ok(new HealthStatus("live"))).AllowAnonymous().WithName("Liveness");
 app.MapGet("/health/ready", async (HttpContext context, MongoConnection mongo,
     CollectionMigrations migrations, CancellationToken cancellationToken) =>

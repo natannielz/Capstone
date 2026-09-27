@@ -78,10 +78,11 @@ public sealed partial class AccessAdministrationService(IMongoDatabase database,
         {
             { "_id", id }, { "schemaVersion", AuthorizationBson.SchemaVersion }, { "actorId", actor.UserId }, { "subjectId", subjectId },
             { "operation", operation }, { "reason", metadata.Reason }, { "correlationId", metadata.CorrelationId }, { "createdAt", clock.UtcNow.UtcDateTime },
-            { "actorGrantVersion", actor.GrantVersion }, { "before", before }, { "after", after }
+            { "actorGrantVersion", actor.GrantVersion }, { "before", before }, { "after", after },
+            { "scope", AuthorizationBson.Scope(HistoryScope(new BsonDocument { { "before", before }, { "after", after } })) }
         }, cancellationToken: token);
     private static BsonDocument ProposalResult(BsonDocument value) => new()
-        { { "id", value["_id"] }, { "kind", value["kind"] }, { "subjectId", value["subjectId"] }, { "status", value["status"] }, { "version", value["version"] } };
+        { { "id", value["_id"] }, { "kind", value["kind"] }, { "subjectId", value["subjectId"] }, { "status", ProposalStatus(value) }, { "version", value["version"] } };
     private static AccessProposalResult ParseProposalResult(BsonDocument value) => new(value["id"].AsInt64, value["kind"].AsString, value["subjectId"].AsInt64, value["status"].AsString, value["version"].AsInt64);
     private static BsonDocument ChangeResult(long id, long userId, long version, long grantVersion, string status) => new()
         { { "id", id }, { "subjectId", userId }, { "version", version }, { "grantVersion", grantVersion }, { "status", status } };

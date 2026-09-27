@@ -57,6 +57,24 @@ Possessing a permission does not allow giving it to someone else. Grant approval
 
 Immediate revocation/suspension is separately permissioned and audited. Reactivation cannot be a generic status toggle that bypasses review. Initial named business approvers and any emergency recovery procedure require a reviewed operational process before launch; there is no production test-login or automatic superuser.
 
+## Organization lifecycle
+
+Organization display metadata lives in `organizationProfiles`, keyed by its existing `authorizationScopes` ID. A missing profile is shown as missing metadata, never filled with a guessed company, branch or account name. Parent and node kind remain immutable; correcting an incorrect hierarchy requires a separately reviewed migration rather than editing a display form.
+
+Creation, profile updates and reactivation are proposals. They carry the intended kind/parent/code/name, expected scope/profile versions, requester and reason. Pending creation does not create an active scope. `organization.approve` is a separate explicit permission; submitting a proposal does not confer approval authority. Another eligible approver must review the current proposal and state. Rejection and requester withdrawal are terminal, versioned decisions with actor, reason and time.
+
+Reactivation includes a reviewed impact snapshot: affected scopes/accounts, active-status memberships/grants, and a revision of the underlying records. Impact includes permissions that cover the reopened scope from an ancestor, such as organization-wide access when a branch reopens. These counts describe potential impact, not a claim that every account can immediately sign in. An approver must differ from the requester and every affected beneficiary. Approval recomputes the revision and rejects stale impact; it must update affected identity versions/fences so an earlier session cannot resume business access merely because an ancestor was reopened. Approval, scope/profile state, proposal resolution, audit and idempotency result belong to the same transaction.
+
+## Decision recovery and access-read audit
+
+Access proposals distinguish rejection from withdrawal while preserving the existing storage status contract. Withdrawal is stored as rejected with an explicit withdrawal resolution. Decision metadata is written together, and current authority and expected revision are checked even when the requester closes their own proposal.
+
+Sensitive access reads carry a bounded purpose such as access review, account support, security investigation or operation recovery. Query scoping applies before count/order/page selection. Read audit records contain the actor/version, operation, purpose, correlation ID, safe selection identifiers, returned count and relevant scopes. They do not store a repeated command body, raw idempotency key or financial contents. The read-audit collection has no public reader endpoint, avoiding recursive audit exposure.
+
+Historical access events use an explicit typed scope when available. Legacy immutable history stays unchanged; a reader may derive scope only from recognized server-owned grant/membership snapshots and must fail closed for unrecognized scope. Access audit permission never grants unrelated business-document visibility.
+
+Uncertain mutations can be checked using a purpose-limited receipt reference bound to actor, operation and key. The browser stores only that reference and time, not a stale access payload or reason. A missing receipt cannot simply be labelled safe to retry: closing it must atomically occupy the same idempotency identity as the original command. This ensures either the command or the closure wins, with no delayed execution after a successful closure. Receipt lookup/replay still enforces current authorization and does not expose another actor's result.
+
 ## Enforcement boundary
 
 `ActorContext` carries a positive immutable user ID, verified provider issuer/subject, current grant version and verified factor/authentication time. Database resolution binds all identity fields. Roles, emails, arbitrary headers and legacy cookies do not supply this actor. MFA is always required by the catalog; sensitive access/recovery/refund actions require a recent verified factor event. T03 must supply and test that assurance through the actual session and origin arrangement.
@@ -71,12 +89,12 @@ Idempotency replay also reevaluates current authorization before returning a pri
 
 `/api/v1/access` contains current access, the template catalog, subject access, proposals, server permission preview and approved grant/membership changes. All responses, including authentication/binding failures, use `Cache-Control: no-store`. IDs are positive decimal Int64 strings; versions remain strings. Scope kinds are named strings. Unknown JSON fields and numeric IDs/enum values are rejected.
 
-Mutation requests require `Idempotency-Key`; commands against an existing version also require one canonical quoted `If-Match`. The generated API contract declares these headers. The browser retains a key for an unchanged uncertain request and refreshes/reviews stale state. Per-resource allowed actions come from the server and are only display hints: every command is reevaluated authoritatively.
+Mutation requests require `Idempotency-Key`; commands against an existing version also require one canonical quoted `If-Match`. Mutations and receipt recovery require `X-Expected-Actor-Id`, which is checked against the verified actor to reject stale tabs after an account switch; this header never authenticates a user. The generated API contract declares these headers. The browser retains a key for an unchanged uncertain request and refreshes/reviews stale state. Per-resource allowed actions come from the server and are only display hints: every command is reevaluated authoritatively.
 
 Administration forms show scope, role/finance packs, effective dates, permission preview and audit reason. Proposal approval is a separate action by an eligible person. T03 supplies invitations and human profile/directory context; current access references must never be replaced with invented names. T14 retains the final complete-workflow accessibility and browser acceptance gate.
 
 ## Persistence and remaining gates
 
-Migration history advances sequentially from v1 to v2 while foundation and authorization document formats remain at schema version 1. The authorization upgrade preserves stronger existing validators, checks incompatible records before applying stricter schemas and never invents approved memberships. Migration requires an exclusive deployment window; Mongo DDL is not part of the business transaction.
+Migration history advances sequentially through v3 while foundation and authorization document formats remain at schema version 1. Applied v1/v2 steps are frozen. Lifecycle additions preserve stronger existing validators, check incompatible rows and duplicate scoped codes before stricter schemas, and never invent approved memberships or named scopes. Organization profiles use a unique kind/parent/normalized-code key. Migration raises relevant ID sequence high-water marks without lowering larger counters or backfilling display names. Migration requires an exclusive deployment window; Mongo DDL is not part of the business transaction.
 
 Evidence and unresolved work are recorded in `docs/quality/production-progress.md` and `production-acceptance.md`. T04 acceptance does not imply production identity, migrated users, ported business workflows, live integrations or an accepted pilot. Required later checks include provider/CSRF/session behavior (T03), each module's scoped routes/files/events, real migration/import mapping (T15), and named operational approvers plus pilot approval (T16).

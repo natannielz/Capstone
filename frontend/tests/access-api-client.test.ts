@@ -33,6 +33,7 @@ test("approval sends exact Int64 strings and required version and retry headers"
       assert.equal(input.method, "POST");
       assert.equal(input.headers.get("If-Match"), `"${version}"`);
       assert.equal(input.headers.get("Idempotency-Key"), "review-once");
+      assert.equal(input.headers.get("X-Expected-Actor-Id"), "1002");
       assert.equal(input.credentials, "same-origin");
       assert.equal(input.cache, "no-store");
       assert.equal(input.headers.has("Authorization"), false);
@@ -40,10 +41,23 @@ test("approval sends exact Int64 strings and required version and retry headers"
       return Response.json({ id: "9007199254740997", subjectId: "9007199254740999", version: "1", grantVersion: "2", status: "active" });
     },
   }));
-  const result = await gateway.change("approveGrant", id, version, "Lingkup dan tugas telah diperiksa", "review-once");
+  const result = await gateway.change("approveGrant", id, version, "Lingkup dan tugas telah diperiksa", "review-once", "1002");
   assert.equal(result.id, "9007199254740997");
   assert.equal(result.subjectId, "9007199254740999");
   assert.equal(calls, 1);
+});
+
+test("receipt recovery keeps the original actor and retry key when a session has changed", async () => {
+  const requests: Request[] = [];
+  const gateway = createAccessGateway(createUnitTokoClient({ baseUrl: "https://unit-toko.test", fetch: async input => {
+    assert.ok(input instanceof Request); requests.push(input);
+    assert.equal(input.headers.get("X-Expected-Actor-Id"), "9007199254740993");
+    return Response.json({ code: "actor_changed", status: 409, traceId: "actor-switch" }, { status: 409 });
+  } }));
+  await assert.rejects(gateway.receipt("access.grant.propose", "original-key", "9007199254740993"), error => error instanceof AccessFailure && error.code === "actor_changed");
+  await assert.rejects(gateway.resolve("access.grant.propose", "original-key", "Interrupted request", "9007199254740993"), error => error instanceof AccessFailure && error.code === "actor_changed");
+  assert.equal(requests.length, 2);
+  assert.equal(requests[1].headers.get("Idempotency-Key"), "original-key");
 });
 
 test("access gateway preserves uncertain response and trace without automatic mutation retry", async () => {
@@ -56,7 +70,7 @@ test("access gateway preserves uncertain response and trace without automatic mu
         code: "commit_outcome_unknown", traceId: "review-trace" }, { status: 503 });
     },
   }));
-  await assert.rejects(gateway.change("approveMembership", "12", "1", "Sudah diperiksa", "same-key"),
+  await assert.rejects(gateway.change("approveMembership", "12", "1", "Sudah diperiksa", "same-key", "1002"),
     error => error instanceof AccessFailure && error.status === 503 && error.code === "commit_outcome_unknown" && error.traceId === "review-trace");
   assert.equal(calls, 1);
 });

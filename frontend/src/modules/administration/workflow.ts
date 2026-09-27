@@ -77,6 +77,7 @@ export class MutationLedger {
     }
   }
   isUncertain(operation: string) { return this.attempts.get(operation)?.state === "uncertain"; }
+  resetAfterReconciliation() { this.attempts.clear(); }
 }
 
 export async function submitLogicalRequest<T>(ledger: MutationLedger, operation: string, payload: unknown,
@@ -94,6 +95,12 @@ export async function submitLogicalRequest<T>(ledger: MutationLedger, operation:
 
 export function accessMessage(error: unknown): string {
   if (!(error instanceof AccessFailure)) return "Koneksi terputus. Hasil belum dapat dipastikan. Coba lagi dengan permintaan yang sama.";
+  if (error.code === "recovery_storage_unavailable")
+    return "Penyimpanan referensi pemulihan di perangkat tidak tersedia. Perubahan baru belum dikirim. Aktifkan penyimpanan situs; jangan hapus referensi permintaan yang belum terkonfirmasi.";
+  if (error.code === "actor_changed")
+    return "Akun yang sedang masuk telah berubah. Masuk kembali dengan akun pemilik permintaan untuk memeriksa hasilnya.";
+  if (error.code === "recovery_cleanup_failed")
+    return "Hasil server sudah terkonfirmasi, tetapi referensi pada perangkat belum dapat dibersihkan. Periksa hasil sekali lagi setelah penyimpanan situs tersedia; jangan kirim perubahan yang sama sebagai permintaan baru.";
   if (error.code === "commit_outcome_unknown" || error.code === "resolve_previous_attempt")
     return "Hasil perubahan belum dapat dipastikan. Coba lagi tanpa mengubah isian; permintaan yang sama akan diperiksa kembali.";
   if (error.status === 401) return "Sesi terverifikasi belum tersedia. Masuk melalui layanan akun yang disetujui saat layanan tersebut tersedia.";

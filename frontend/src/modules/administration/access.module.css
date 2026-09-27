@@ -80,6 +80,16 @@
 .facts dt { color: #526c76; font-size: 14px; }
 .facts dd { margin: 3px 0 0; font-weight: 600; overflow-wrap: anywhere; }
 .preserve { white-space: pre-wrap; overflow-wrap: anywhere; }
+.administrationNav { display: flex; flex-wrap: wrap; gap: 10px 22px; margin: -8px 0 26px; padding: 15px 0; border-block: 1px solid #c5d7dc; }
+.administrationNav a { color: #126a74; min-height: 44px; display: inline-flex; align-items: center; }
+.administrationNav a[aria-current="page"] { font-weight: 700; text-decoration: underline; text-underline-offset: 6px; }
+.recoveryList { list-style: none; padding: 0; display: grid; gap: 14px; margin: 18px 0; }
+.recoveryList li { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 18px; border-top: 1px solid #d7e3e7; padding-top: 15px; }
+.recoveryList code { overflow-wrap: anywhere; }
+.historyList { list-style: none; padding: 0; display: grid; gap: 22px; }
+.historyList > li { border-top: 1px solid #c5d7dc; padding: 20px 0 0; }
+.historyHeading { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 8px 20px; }
+.historyHeading time, .historyList small { color: #526c76; font-size: 14px; }
 .srOnly { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 @media (max-width: 940px) { .desk { grid-template-columns: minmax(230px, .8fr) minmax(0, 1.2fr); gap: 18px; } .form { padding: 21px; } .twoFields { grid-template-columns: 1fr; } .accessLists { grid-template-columns: 1fr; gap: 18px; } }
 @media (max-width: 700px) { .page { padding: 23px 16px 40px; } .header { flex-wrap: wrap; gap: 16px; } .desk { grid-template-columns: 1fr; } .accountSection { padding: 20px; } .lookup { flex-wrap: wrap; } .lookup label { width: 100%; } .form { padding: 20px; } .queueList { max-height: 360px; overflow: auto; } .facts { grid-template-columns: 1fr; } .accessLists li { flex-wrap: wrap; } }

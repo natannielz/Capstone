@@ -25,3 +25,10 @@ public sealed record MembershipSummary(long Id, GrantScope Scope, string Status,
 public sealed record GrantSummary(long Id, long MembershipId, string TemplateId, int TemplateVersion,
     ImmutableArray<string> Permissions, GrantScope Scope, string Status, long Version, ImmutableArray<string> AllowedActions,
     ImmutableArray<string> DelegablePermissions, DateTimeOffset EffectiveAt, DateTimeOffset? ExpiresAt);
+
+public sealed record AuthorizationReadMetadata(string Purpose, string CorrelationId);
+public sealed record AccessHistoryPage(long Total, ImmutableArray<AccessHistoryEntry> Items);
+public sealed record AccessHistoryEntry(long Id, string Operation, long ActorId, long SubjectId, GrantScope? Scope,
+    DateTimeOffset CreatedAt, string Reason, long? ResourceId, long? BeforeVersion, long? AfterVersion, string? Status);
+public sealed record OperationReceipt(string Operation, string State, OperationReceiptResult? Result, DateTimeOffset? RecordedAt);
+public sealed record OperationReceiptResult(long Id, long SubjectId, long Version, string Status, string? Kind, long? GrantVersion);

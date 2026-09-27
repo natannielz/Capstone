@@ -1,4 +1,6 @@
 using UnitToko.Modules.Identity.Contracts;
+using UnitToko.Modules.Contracts;
+using UnitToko.Platform.Mongo;
 
 namespace UnitToko.Api.Authorization;
 
@@ -28,8 +30,20 @@ public sealed class ActorRequiredFilter : IEndpointFilter
             return Results.Json(Problems.Create(http, 401, "unauthenticated", "Authentication required"),
                 statusCode: 401, contentType: "application/problem+json");
         http.Features.Set(new ResolvedActor(actor.Validate()));
+        // This is a stale-tab consistency guard, never an authentication source.
+        if (NeedsExpectedActor(http.Request.Method, http.Request.Path.Value ?? "") || http.Request.Headers.ContainsKey("X-Expected-Actor-Id"))
+        {
+            var expected = http.Request.Headers["X-Expected-Actor-Id"];
+            if (expected.Count != 1 || string.IsNullOrEmpty(expected[0]))
+                throw new DomainValidationException("expected_actor_required", "The reviewed account reference is required");
+            if (LongId.Parse(expected[0]!).Value != actor.UserId)
+                throw new PersistenceConflictException("actor_changed", "The authenticated account changed; reload before continuing");
+        }
         return await next(context);
     }
+    internal static bool NeedsExpectedActor(string method, string path) => HttpMethods.IsPost(method) &&
+        (path.StartsWith("/api/v1/access/", StringComparison.Ordinal) || path.StartsWith("/api/v1/organizations", StringComparison.Ordinal)) &&
+        !path.EndsWith("/preview", StringComparison.Ordinal) && !path.EndsWith("/query", StringComparison.Ordinal);
 }
 
 public sealed record ResolvedActor(ActorContext Actor);

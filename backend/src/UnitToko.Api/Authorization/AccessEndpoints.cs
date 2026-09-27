@@ -8,11 +8,12 @@ using UnitToko.Platform.Authorization;
 
 namespace UnitToko.Api.Authorization;
 
-public static class AccessEndpoints
+public static partial class AccessEndpoints
 {
     private static readonly string[] AdministrativeActions =
     [Permissions.AccessPropose, Permissions.AccessApprove, Permissions.AccessRevoke,
-        Permissions.MembershipPropose, Permissions.MembershipApprove, Permissions.AccessAuditRead];
+        Permissions.MembershipPropose, Permissions.MembershipApprove, Permissions.AccessAuditRead,
+        Permissions.TechnicalConfigure, Permissions.OrganizationApprove];
 
     public static void MapAccessEndpoints(this WebApplication app)
     {
@@ -58,7 +59,8 @@ public static class AccessEndpoints
 
         group.MapGet("/subjects/{userId}", async (string userId, HttpContext http, AccessAdministrationService service, CancellationToken ct) =>
         {
-            var result = await service.ReadSubjectAsync(Actor(http), LongId.Parse(userId).Value, ct);
+            var result = await service.ReadSubjectAsync(Actor(http), LongId.Parse(userId).Value, ct,
+                audit: new("access-review", http.TraceIdentifier));
             http.Response.Headers.ETag = AccessRequestMetadata.VersionTag(result.GrantVersion);
             return TypedResults.Ok(AccessResponses.From(result));
         }).WithName("AccessSubject");
@@ -68,13 +70,15 @@ public static class AccessEndpoints
         {
             if (offset < 0 || offset > 10_000 || limit is < 1 or > 100)
                 throw new DomainValidationException("invalid_pagination", "Use a bounded page size and offset");
-            return TypedResults.Ok((await service.ListProposalsAsync(Actor(http), offset, limit, ct))
+            return TypedResults.Ok((await service.ListProposalsAsync(Actor(http), offset, limit, ct,
+                audit: new("access-review", http.TraceIdentifier)))
                 .Select(AccessResponses.From).ToArray());
         }).WithName("AccessProposals");
 
         group.MapPost("/grants/preview", async (GrantRequestDto request, HttpContext http,
             AccessAdministrationService service, CancellationToken ct) =>
-            TypedResults.Ok(AccessResponses.From(await service.PreviewGrantAsync(Actor(http), request.ToDomain(), ct))))
+            TypedResults.Ok(AccessResponses.From(await service.PreviewGrantAsync(Actor(http), request.ToDomain(), ct,
+                audit: new("access-review", http.TraceIdentifier)))))
             .WithName("PreviewAccessGrant");
 
         group.MapPost("/grants/proposals", async (GrantProposalDto request, HttpContext http,
@@ -107,6 +111,7 @@ public static class AccessEndpoints
             (service, actor, id, version, metadata, ct) => service.SuspendIdentityAsync(actor, id, version, metadata, ct));
         MapChange(group, "/scopes/{id}/suspend", "SuspendAccessScope",
             (service, actor, id, version, metadata, ct) => service.SuspendScopeAsync(actor, id, version, metadata, ct));
+        MapLifecycle(group);
     }
 
     private static void MapChange(RouteGroupBuilder group, string path, string name,

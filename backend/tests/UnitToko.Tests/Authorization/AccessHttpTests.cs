@@ -25,7 +25,7 @@ using UnitToko.Platform;
 namespace UnitToko.Tests.Authorization;
 
 [Collection("Mongo")]
-public sealed class AccessHttpTests(MongoFixture fixture)
+public sealed partial class AccessHttpTests(MongoFixture fixture)
 {
     private static WebApplicationFactory<Program> Factory(StoreTestData data, ActorContext? actor = null,
         bool authenticated = true) => new WebApplicationFactory<Program>().WithWebHostBuilder(web =>
@@ -176,7 +176,7 @@ public sealed class AccessHttpTests(MongoFixture fixture)
         Assert.Equal(data.Clock.UtcNow, review["effectiveAt"]!.GetValue<DateTimeOffset>());
         Assert.Equal(data.Clock.UtcNow.AddDays(1), review["expiresAt"]!.GetValue<DateTimeOffset>());
         Assert.Equal(Permissions.OrderSubmit, Assert.Single(review["delegablePermissions"]!.AsArray())!.GetValue<string>());
-        Assert.Empty(review["allowedActions"]!.AsArray());
+        Assert.Equal("withdraw", Assert.Single(review["allowedActions"]!.AsArray())!.GetValue<string>());
         var reason = new JsonObject { ["reason"] = "Kewenangan dan lingkup telah diperiksa" };
         Assert.Equal(HttpStatusCode.Forbidden,
             (await Send(maker, $"/api/v1/access/grants/proposals/{id}/approve", reason, "self-approve", "1")).StatusCode);
@@ -184,7 +184,8 @@ public sealed class AccessHttpTests(MongoFixture fixture)
         using var approverFactory = Factory(data, approver);
         using var checker = approverFactory.CreateClient();
         var checkerQueue = await Body(await checker.GetAsync("/api/v1/access/proposals"));
-        Assert.Equal("approve", Assert.Single(Assert.Single(checkerQueue.AsArray())!["allowedActions"]!.AsArray())!.GetValue<string>());
+        Assert.Equal(new[] { "approve", "reject" }, Assert.Single(checkerQueue.AsArray())!["allowedActions"]!.AsArray()
+            .Select(action => action!.GetValue<string>()).Order());
         Assert.Equal(HttpStatusCode.BadRequest,
             (await Send(checker, $"/api/v1/access/grants/proposals/{id}/approve", reason, "no-version")).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict,
@@ -213,10 +214,12 @@ public sealed class AccessHttpTests(MongoFixture fixture)
             Assert.False(string.IsNullOrEmpty(field["pattern"]!.GetValue<string>()));
         }
         var paths = schema["paths"]!.AsObject();
-        foreach (var path in paths.Where(item => item.Key.StartsWith("/api/v1/access/", StringComparison.Ordinal)))
+        foreach (var path in paths.Where(item => item.Key.StartsWith("/api/v1/access/", StringComparison.Ordinal) ||
+            item.Key.StartsWith("/api/v1/organizations", StringComparison.Ordinal)))
         {
             var operation = path.Value?["post"];
-            if (operation is null || path.Key.EndsWith("/preview", StringComparison.Ordinal)) continue;
+            if (operation is null || path.Key.EndsWith("/preview", StringComparison.Ordinal) ||
+                path.Key.EndsWith("/query", StringComparison.Ordinal) || path.Key.EndsWith("/lookup", StringComparison.Ordinal)) continue;
             var parameters = operation["parameters"]!.AsArray();
             var key = parameters.Single(item => item?["name"]?.GetValue<string>() == "Idempotency-Key")!;
             Assert.Equal("header", key["in"]!.GetValue<string>());
@@ -239,6 +242,8 @@ public sealed class AccessHttpTests(MongoFixture fixture)
     private static async Task<HttpResponseMessage> Send(HttpClient client, string path, JsonObject body, string key, string? version = null)
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, path) { Content = Json(body) };
+        var current = await Body(await client.GetAsync("/api/v1/access/current"));
+        request.Headers.Add("X-Expected-Actor-Id", current["userId"]!.GetValue<string>());
         request.Headers.Add("Idempotency-Key", key);
         if (version is not null) request.Headers.TryAddWithoutValidation("If-Match", $"\"{version}\"");
         return await client.SendAsync(request);

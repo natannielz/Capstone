@@ -87,6 +87,19 @@
           "UnitToko.Api"
         ],
         "operationId": "AccessCatalog",
+        "parameters": [
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "400": {
             "description": "Bad Request",
@@ -168,6 +181,17 @@
             "in": "path",
             "required": true,
             "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
               "type": "string"
             }
           }
@@ -273,6 +297,17 @@
               "format": "int32",
               "default": 25
             }
+          },
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -353,6 +388,19 @@
           "UnitToko.Api"
         ],
         "operationId": "PreviewAccessGrant",
+        "parameters": [
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -448,6 +496,18 @@
               "maxLength": 128,
               "minLength": 1,
               "pattern": "^[A-Za-z0-9._:-]+$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "required": true,
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
               "type": "string"
             }
           }
@@ -547,6 +607,18 @@
               "maxLength": 128,
               "minLength": 1,
               "pattern": "^[A-Za-z0-9._:-]+$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "required": true,
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
               "type": "string"
             }
           }
@@ -667,6 +739,18 @@
               "minLength": 3,
               "type": "string"
             }
+          },
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "required": true,
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
@@ -783,6 +867,18 @@
             "schema": {
               "maxLength": 21,
               "minLength": 3,
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "required": true,
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
               "type": "string"
             }
           }
@@ -903,6 +999,18 @@
               "minLength": 3,
               "type": "string"
             }
+          },
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "required": true,
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
@@ -1019,6 +1127,18 @@
             "schema": {
               "maxLength": 21,
               "minLength": 3,
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "required": true,
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
               "type": "string"
             }
           }
@@ -1139,6 +1259,18 @@
               "minLength": 3,
               "type": "string"
             }
+          },
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "required": true,
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
@@ -1257,6 +1389,18 @@
               "minLength": 3,
               "type": "string"
             }
+          },
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "required": true,
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
@@ -1326,6 +1470,1493 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/AccessChangeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
+    "/api/v1/access/proposals/{id}/reject": {
+      "post": {
+        "tags": [
+          "UnitToko.Api"
+        ],
+        "operationId": "RejectAccessProposal",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "Reuse this key only for an unchanged logical command, including after an uncertain response.",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "description": "One quoted nonnegative Int64 resource version from the latest response; never a JavaScript number.",
+            "required": true,
+            "schema": {
+              "maxLength": 21,
+              "minLength": 3,
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "required": true,
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccessReasonDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessProposalResultDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
+    "/api/v1/access/proposals/{id}/withdraw": {
+      "post": {
+        "tags": [
+          "UnitToko.Api"
+        ],
+        "operationId": "WithdrawAccessProposal",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "Reuse this key only for an unchanged logical command, including after an uncertain response.",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "description": "One quoted nonnegative Int64 resource version from the latest response; never a JavaScript number.",
+            "required": true,
+            "schema": {
+              "maxLength": 21,
+              "minLength": 3,
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "required": true,
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccessReasonDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessProposalResultDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
+    "/api/v1/access/history/query": {
+      "post": {
+        "tags": [
+          "UnitToko.Api"
+        ],
+        "operationId": "AccessHistory",
+        "parameters": [
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccessHistoryQueryDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessHistoryPageDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
+    "/api/v1/access/operations/lookup": {
+      "post": {
+        "tags": [
+          "UnitToko.Api"
+        ],
+        "operationId": "LookupAccessOperation",
+        "parameters": [
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "required": true,
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OperationLookupDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationReceiptDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
+    "/api/v1/access/operations/resolve": {
+      "post": {
+        "tags": [
+          "UnitToko.Api"
+        ],
+        "operationId": "ResolveAccessOperation",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "Reuse this key only for an unchanged logical command, including after an uncertain response.",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "required": true,
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OperationResolveDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationReceiptDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
+    "/api/v1/organizations": {
+      "get": {
+        "tags": [
+          "UnitToko.Api"
+        ],
+        "operationId": "Organizations",
+        "parameters": [
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32",
+              "default": 0
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32",
+              "default": 25
+            }
+          },
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganizationPageDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
+    "/api/v1/organizations/{id}": {
+      "get": {
+        "tags": [
+          "UnitToko.Api"
+        ],
+        "operationId": "Organization",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganizationDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
+    "/api/v1/organizations/proposals": {
+      "get": {
+        "tags": [
+          "UnitToko.Api"
+        ],
+        "operationId": "OrganizationProposals",
+        "parameters": [
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32",
+              "default": 0
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32",
+              "default": 25
+            }
+          },
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganizationProposalPageDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "UnitToko.Api"
+        ],
+        "operationId": "ProposeOrganization",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "Reuse this key only for an unchanged logical command, including after an uncertain response.",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "required": true,
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrganizationProposalRequestDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganizationProposalResultDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
+    "/api/v1/organizations/proposals/{id}": {
+      "get": {
+        "tags": [
+          "UnitToko.Api"
+        ],
+        "operationId": "OrganizationProposal",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganizationProposalDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
+    "/api/v1/organizations/proposals/{id}/approve": {
+      "post": {
+        "tags": [
+          "UnitToko.Api"
+        ],
+        "operationId": "ApproveOrganization",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "Reuse this key only for an unchanged logical command, including after an uncertain response.",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "description": "One quoted nonnegative Int64 resource version from the latest response; never a JavaScript number.",
+            "required": true,
+            "schema": {
+              "maxLength": 21,
+              "minLength": 3,
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "required": true,
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccessReasonDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganizationChangeResultDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
+    "/api/v1/organizations/proposals/{id}/reject": {
+      "post": {
+        "tags": [
+          "UnitToko.Api"
+        ],
+        "operationId": "RejectOrganization",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "Reuse this key only for an unchanged logical command, including after an uncertain response.",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "description": "One quoted nonnegative Int64 resource version from the latest response; never a JavaScript number.",
+            "required": true,
+            "schema": {
+              "maxLength": 21,
+              "minLength": 3,
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "required": true,
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccessReasonDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganizationChangeResultDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
+    "/api/v1/organizations/proposals/{id}/withdraw": {
+      "post": {
+        "tags": [
+          "UnitToko.Api"
+        ],
+        "operationId": "WithdrawOrganization",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "Reuse this key only for an unchanged logical command, including after an uncertain response.",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "description": "One quoted nonnegative Int64 resource version from the latest response; never a JavaScript number.",
+            "required": true,
+            "schema": {
+              "maxLength": 21,
+              "minLength": 3,
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "required": true,
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccessReasonDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganizationChangeResultDto"
                 }
               }
             }
@@ -1591,6 +3222,140 @@
               "string"
             ],
             "format": "date-time"
+          }
+        },
+        "additionalProperties": false
+      },
+      "AccessHistoryEntryDto": {
+        "required": [
+          "id",
+          "operation",
+          "actorId",
+          "subjectId",
+          "scope",
+          "createdAt",
+          "reason",
+          "resourceId",
+          "beforeVersion",
+          "afterVersion",
+          "status"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "operation": {
+            "type": "string"
+          },
+          "actorId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "subjectId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "scope": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AccessScopeDto"
+              }
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "resourceId": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LongId"
+              }
+            ]
+          },
+          "beforeVersion": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "afterVersion": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "status": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "AccessHistoryPageDto": {
+        "required": [
+          "total",
+          "items"
+        ],
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "string"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AccessHistoryEntryDto"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "AccessHistoryQueryDto": {
+        "required": [
+          "purpose"
+        ],
+        "type": "object",
+        "properties": {
+          "purpose": {
+            "type": "string"
+          },
+          "offset": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32",
+            "default": 0
+          },
+          "limit": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32",
+            "default": 25
+          },
+          "subjectId": {
+            "maxLength": 19,
+            "pattern": "^(?:[1-9][0-9]{0,17}|[1-8][0-9]{18}|9[0-1][0-9]{17}|92[0-1][0-9]{16}|922[0-2][0-9]{15}|9223[0-2][0-9]{14}|92233[0-6][0-9]{13}|922337[0-1][0-9]{12}|92233720[0-2][0-9]{10}|922337203[0-5][0-9]{9}|9223372036[0-7][0-9]{8}|92233720368[0-4][0-9]{7}|922337203685[0-3][0-9]{6}|9223372036854[0-6][0-9]{5}|92233720368547[0-6][0-9]{4}|922337203685477[0-4][0-9]{3}|9223372036854775[0-7][0-9]{2}|922337203685477580[0-6]|9223372036854775807)$(?![\\s\\S])",
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Positive decimal Int64 string, from 1 through 9223372036854775807. JSON numbers are invalid."
           }
         },
         "additionalProperties": false
@@ -2300,6 +4065,545 @@
               "string"
             ],
             "format": "date-time"
+          }
+        },
+        "additionalProperties": false
+      },
+      "OperationLookupDto": {
+        "required": [
+          "operation",
+          "key",
+          "purpose"
+        ],
+        "type": "object",
+        "properties": {
+          "operation": {
+            "type": "string"
+          },
+          "key": {
+            "type": "string"
+          },
+          "purpose": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "OperationReceiptDto": {
+        "required": [
+          "operation",
+          "state",
+          "result",
+          "recordedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "operation": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "result": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/OperationReceiptResultDto"
+              }
+            ]
+          },
+          "recordedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false
+      },
+      "OperationReceiptResultDto": {
+        "required": [
+          "id",
+          "subjectId",
+          "version",
+          "status",
+          "kind",
+          "grantVersion"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "subjectId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "version": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "kind": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "grantVersion": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "OperationResolveDto": {
+        "required": [
+          "operation",
+          "reason"
+        ],
+        "type": "object",
+        "properties": {
+          "operation": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "OrganizationBeforeDto": {
+        "required": [
+          "code",
+          "name",
+          "status",
+          "scopeVersion",
+          "profileVersion"
+        ],
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "status": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "scopeVersion": {
+            "type": "string"
+          },
+          "profileVersion": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "OrganizationChangeKind": {
+        "enum": [
+          "create",
+          "updateProfile",
+          "reactivate"
+        ]
+      },
+      "OrganizationChangeResultDto": {
+        "required": [
+          "proposalId",
+          "scopeId",
+          "status",
+          "proposalVersion",
+          "scopeVersion",
+          "profileVersion",
+          "affectedAccounts"
+        ],
+        "type": "object",
+        "properties": {
+          "proposalId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "scopeId": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LongId"
+              }
+            ]
+          },
+          "status": {
+            "type": "string"
+          },
+          "proposalVersion": {
+            "type": "string"
+          },
+          "scopeVersion": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "profileVersion": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "affectedAccounts": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "OrganizationDto": {
+        "required": [
+          "id",
+          "kind",
+          "parentId",
+          "status",
+          "scopeVersion",
+          "code",
+          "name",
+          "profileVersion",
+          "allowedActions"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ScopeNodeKind"
+          },
+          "parentId": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LongId"
+              }
+            ]
+          },
+          "status": {
+            "type": "string"
+          },
+          "scopeVersion": {
+            "type": "string"
+          },
+          "code": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "profileVersion": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "allowedActions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "OrganizationImpactDto": {
+        "required": [
+          "affectedScopes",
+          "activeMemberships",
+          "activeGrants",
+          "affectedAccounts",
+          "revision"
+        ],
+        "type": "object",
+        "properties": {
+          "affectedScopes": {
+            "type": "string"
+          },
+          "activeMemberships": {
+            "type": "string"
+          },
+          "activeGrants": {
+            "type": "string"
+          },
+          "affectedAccounts": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "OrganizationPageDto": {
+        "required": [
+          "total",
+          "items",
+          "allowedActions"
+        ],
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "string"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OrganizationDto"
+            }
+          },
+          "allowedActions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "OrganizationProposalDto": {
+        "required": [
+          "id",
+          "request",
+          "impact",
+          "before",
+          "requestedBy",
+          "reason",
+          "status",
+          "version",
+          "createdAt",
+          "approvedBy",
+          "approvedAt",
+          "decisionBy",
+          "decisionAt",
+          "decisionReason",
+          "resultScopeId",
+          "allowedActions"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "request": {
+            "$ref": "#/components/schemas/OrganizationRequestDto"
+          },
+          "impact": {
+            "$ref": "#/components/schemas/OrganizationImpactDto"
+          },
+          "before": {
+            "$ref": "#/components/schemas/OrganizationBeforeDto"
+          },
+          "requestedBy": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "approvedBy": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LongId"
+              }
+            ]
+          },
+          "approvedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "decisionBy": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LongId"
+              }
+            ]
+          },
+          "decisionAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "decisionReason": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "resultScopeId": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LongId"
+              }
+            ]
+          },
+          "allowedActions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "OrganizationProposalPageDto": {
+        "required": [
+          "total",
+          "items",
+          "allowedActions"
+        ],
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "string"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OrganizationProposalDto"
+            }
+          },
+          "allowedActions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "OrganizationProposalRequestDto": {
+        "required": [
+          "change",
+          "reason"
+        ],
+        "type": "object",
+        "properties": {
+          "change": {
+            "$ref": "#/components/schemas/OrganizationRequestDto"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "OrganizationProposalResultDto": {
+        "required": [
+          "id",
+          "status",
+          "version"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "status": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "OrganizationRequestDto": {
+        "required": [
+          "changeKind",
+          "kind",
+          "code",
+          "name"
+        ],
+        "type": "object",
+        "properties": {
+          "changeKind": {
+            "$ref": "#/components/schemas/OrganizationChangeKind"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ScopeNodeKind"
+          },
+          "code": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "parentId": {
+            "maxLength": 19,
+            "pattern": "^(?:[1-9][0-9]{0,17}|[1-8][0-9]{18}|9[0-1][0-9]{17}|92[0-1][0-9]{16}|922[0-2][0-9]{15}|9223[0-2][0-9]{14}|92233[0-6][0-9]{13}|922337[0-1][0-9]{12}|92233720[0-2][0-9]{10}|922337203[0-5][0-9]{9}|9223372036[0-7][0-9]{8}|92233720368[0-4][0-9]{7}|922337203685[0-3][0-9]{6}|9223372036854[0-6][0-9]{5}|92233720368547[0-6][0-9]{4}|922337203685477[0-4][0-9]{3}|9223372036854775[0-7][0-9]{2}|922337203685477580[0-6]|9223372036854775807)$(?![\\s\\S])",
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Positive decimal Int64 string, from 1 through 9223372036854775807. JSON numbers are invalid."
+          },
+          "scopeId": {
+            "maxLength": 19,
+            "pattern": "^(?:[1-9][0-9]{0,17}|[1-8][0-9]{18}|9[0-1][0-9]{17}|92[0-1][0-9]{16}|922[0-2][0-9]{15}|9223[0-2][0-9]{14}|92233[0-6][0-9]{13}|922337[0-1][0-9]{12}|92233720[0-2][0-9]{10}|922337203[0-5][0-9]{9}|9223372036[0-7][0-9]{8}|92233720368[0-4][0-9]{7}|922337203685[0-3][0-9]{6}|9223372036854[0-6][0-9]{5}|92233720368547[0-6][0-9]{4}|922337203685477[0-4][0-9]{3}|9223372036854775[0-7][0-9]{2}|922337203685477580[0-6]|9223372036854775807)$(?![\\s\\S])",
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Positive decimal Int64 string, from 1 through 9223372036854775807. JSON numbers are invalid."
+          },
+          "expectedScopeVersion": {
+            "type": "string",
+            "default": "0"
+          },
+          "expectedProfileVersion": {
+            "type": "string",
+            "default": "0"
           }
         },
         "additionalProperties": false

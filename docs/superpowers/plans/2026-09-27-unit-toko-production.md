@@ -6,7 +6,7 @@
 
 **Architecture:** Keep the Next.js frontend and build a C# modular backend with one API and a worker. Modules own scoped collections and expose explicit interfaces; stock/money changes remain transactional, with durable jobs after commit. Migrate through a temporary legacy adapter and one authoritative writer per domain.
 
-**Tech Stack:** Next.js/React/TypeScript; C#/ASP.NET Core .NET 10 LTS; official MongoDB C# driver with a replica set; managed OIDC identity (Auth0 candidate); private object storage; OpenAPI-generated frontend contracts; xUnit, real Mongo integration tests, Playwright and accessibility/load checks.
+**Tech Stack:** Next.js/React/TypeScript; C#/ASP.NET Core .NET 10 LTS; official MongoDB C# driver with a replica set; managed OIDC identity (Auth0 integration preparation selected by the user on 28 September 2026); private object storage; OpenAPI-generated frontend contracts; xUnit, real Mongo integration tests, Playwright and accessibility/load checks.
 
 **Spec:** [Unit Toko production specification](../../requirements/unit-toko-production.md). Read this together with the [three-agent review](../../quality/production-readiness-2026-09-27.md).
 

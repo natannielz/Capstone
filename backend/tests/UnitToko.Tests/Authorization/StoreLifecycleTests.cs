@@ -39,7 +39,7 @@ public sealed class StoreLifecycleTests(MongoFixture fixture)
         var proposal = await data.Administration.ProposeMembershipAsync(technical, request, Metadata("propose"));
         await Assert.ThrowsAsync<AuthorizationDeniedException>(() => data.Administration.ApproveMembershipAsync(technical, proposal.Id, 1, Metadata("self")));
         var pending = Assert.Single(await data.Administration.ListProposalsAsync(owner, 0, 10));
-        Assert.Equal(new[] { "approve" }, pending.AllowedActions.ToArray());
+        Assert.Contains("approve", pending.AllowedActions);
         Assert.Equal(request.ExpiresAt, pending.ExpiresAt);
         var membership = await data.Administration.ApproveMembershipAsync(owner, proposal.Id, 1, Metadata("approve"));
         Assert.Equal(2, membership.GrantVersion);
@@ -73,8 +73,8 @@ public sealed class StoreLifecycleTests(MongoFixture fixture)
         Assert.Equal(request.DelegablePermissions.ToArray(), review.DelegablePermissions.ToArray());
         Assert.Equal(request.ExpiresAt, review.ExpiresAt);
         Assert.Equal(request.MembershipId, review.MembershipId);
-        Assert.Equal(new[] { "approve" }, review.AllowedActions.ToArray());
-        Assert.Empty(Assert.Single(await data.Administration.ListProposalsAsync(technical, 0, 10)).AllowedActions);
+        Assert.Contains("approve", review.AllowedActions);
+        Assert.Equal(new[] { "withdraw" }, Assert.Single(await data.Administration.ListProposalsAsync(technical, 0, 10)).AllowedActions.ToArray());
         var result = await data.Administration.ApproveGrantAsync(approver, proposal.Id, 1, Metadata("approve"));
         var current = await data.Store.ReadCurrentAsync(subject with { GrantVersion = result.GrantVersion });
         Assert.False(ScopePolicy.Compile(subject with { GrantVersion = result.GrantVersion }, current, Permissions.OrderRead, data.Clock.UtcNow).IsAllowed);

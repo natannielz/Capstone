@@ -21,6 +21,7 @@ public static class Permissions
     public const string FundingRequest = "funding.request", FundingApprove = "funding.approve", ExpenseRequest = "expense.request", ExpenseApprove = "expense.approve";
     public const string ReconciliationVerify = "reconciliation.verify", JournalPost = "journal.post", JournalReverse = "journal.reverse";
     public const string InviteManage = "invite.manage", MembershipPropose = "membership.propose", MembershipApprove = "membership.approve", AccessPropose = "access.propose", AccessApprove = "access.approve", AccessRevoke = "access.revoke", RecoveryInitiate = "recovery.initiate", TechnicalConfigure = "technical.configure", AccessAuditRead = "access.audit.read";
+    public const string OrganizationApprove = "organization.approve";
 
     private static readonly ImmutableArray<GrantScopeKind> Buying = [GrantScopeKind.BuyerOwned, GrantScopeKind.BuyingDivision, GrantScopeKind.BuyingBranch, GrantScopeKind.BuyingOrganization];
     private static readonly ImmutableArray<GrantScopeKind> Operations = [GrantScopeKind.FulfillmentShop, GrantScopeKind.FulfillmentWarehouse];
@@ -53,6 +54,7 @@ public static class Permissions
         Add(DeliveryReturn, Courier);
         foreach (var name in new[] { InviteManage, MembershipPropose, AccessPropose, TechnicalConfigure, AccessAuditRead }) Add(name, Administrative);
         Add(RecoveryInitiate, Administrative, true);
+        Add(OrganizationApprove, Administrative, true);
         foreach (var name in new[] { MembershipApprove, AccessApprove, AccessRevoke }) Add(name, Delegation, true);
         return result.ToImmutable();
     }

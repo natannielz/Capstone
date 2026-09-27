@@ -143,6 +143,23 @@ public sealed class AuthorizationStore(IMongoDatabase database, MongoUnitOfWork 
             if (changed.ModifiedCount != 1) throw new AuthorizationDeniedException("scope_unavailable");
         }
     }
+
+    /// <summary>Call after the owning read policy succeeds, in the same session as its read. The caller supplies only safe selection metadata.</summary>
+    internal async Task RecordPrivilegedReadAsync(long id, ActorContext actor, AuthorizationSnapshot snapshot, string operation,
+        AuthorizationReadMetadata audit, BsonDocument selection, int resultCount, ImmutableArray<GrantScope> scopes,
+        IClientSessionHandle session, CancellationToken token)
+    {
+        AccessAdministrationService.ValidateReadMetadata(audit);
+        var distinct = scopes.Distinct().ToArray();
+        if (distinct.Length is 0 or > 256 || id <= 0 || resultCount is < 0 or > 100) throw new AuthorizationDeniedException("invalid_audit_scope");
+        await FenceAsync(actor, distinct.SelectMany(scope => ScopePolicy.RequiredNodes(scope, snapshot.Directory)).Distinct(), session, token);
+        await database.GetCollection<BsonDocument>("authorizationReadEvents").InsertOneAsync(session, new BsonDocument
+        {
+            { "_id", id }, { "schemaVersion", AuthorizationBson.SchemaVersion }, { "actorId", actor.UserId }, { "actorGrantVersion", actor.GrantVersion },
+            { "operation", operation }, { "purpose", audit.Purpose }, { "correlationId", audit.CorrelationId }, { "createdAt", clock.UtcNow.UtcDateTime },
+            { "selection", selection }, { "resultCount", resultCount }, { "scopes", new BsonArray(distinct.Select(AuthorizationBson.Scope)) }
+        }, cancellationToken: token);
+    }
     internal static void Require(AuthorizationQuery query) { if (!query.IsAllowed) throw new AuthorizationDeniedException(query.DenialCode ?? "permission_denied"); }
     internal static void ValidatePage(int offset, int limit)
     {
