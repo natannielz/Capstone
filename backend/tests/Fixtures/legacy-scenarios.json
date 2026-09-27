@@ -1,99 +1,1247 @@
 {
-  "schemaVersion": 1,
-  "kind": "descriptive-acceptance-manifest",
-  "executable": false,
-  "clock": "2026-09-17T05:00:00Z",
+  "schemaVersion": 2,
+  "kind": "legacy-command-golden",
+  "clock": "2026-09-17T05:00:00.000Z",
+  "businessDate": "2026-09-17",
   "timezone": "Asia/Jakarta",
-  "amountUnit": "IDR",
-  "normalization": "References beginning with $ bind command results. Compare status and balances by reference, ignoring generated IDs, document numbers, and array order.",
+  "amountUnit": "IDR integer",
+  "referenceSyntax": "$name binds a prior result or captured state ID; collection[field=value,...].property selects exactly one record independently of array order",
+  "initialState": {
+    "revision": 0,
+    "users": [
+      {
+        "id": "pic-a",
+        "name": "pic-a",
+        "role": "pic",
+        "divisionId": "div-ops",
+        "active": true
+      },
+      {
+        "id": "kepala",
+        "name": "kepala",
+        "role": "kepala",
+        "divisionId": null,
+        "active": true
+      },
+      {
+        "id": "staf",
+        "name": "staf",
+        "role": "staf",
+        "divisionId": null,
+        "active": true
+      },
+      {
+        "id": "kurir",
+        "name": "kurir",
+        "role": "kurir",
+        "divisionId": null,
+        "active": true
+      },
+      {
+        "id": "penagihan",
+        "name": "penagihan",
+        "role": "penagihan",
+        "divisionId": null,
+        "active": true
+      },
+      {
+        "id": "penagihan-checker",
+        "name": "penagihan-checker",
+        "role": "penagihan",
+        "divisionId": null,
+        "active": true
+      },
+      {
+        "id": "laporan",
+        "name": "laporan",
+        "role": "laporan",
+        "divisionId": null,
+        "active": true
+      },
+      {
+        "id": "pimpinan",
+        "name": "pimpinan",
+        "role": "pimpinan",
+        "divisionId": null,
+        "active": true
+      },
+      {
+        "id": "akuntansi",
+        "name": "akuntansi",
+        "role": "akuntansi",
+        "divisionId": null,
+        "active": true
+      }
+    ],
+    "divisions": [
+      {
+        "id": "div-ops",
+        "name": "Ops",
+        "code": "OPS",
+        "address": "Jakarta"
+      }
+    ],
+    "products": [
+      {
+        "id": "p",
+        "name": "Produk uji",
+        "sku": "TEST",
+        "category": "OMI",
+        "unit": "pcs",
+        "price": 10000,
+        "minimum": 5,
+        "returnMonths": 1,
+        "active": true
+      }
+    ],
+    "suppliers": [
+      {
+        "id": "supplier",
+        "name": "Pemasok uji",
+        "category": "OMI"
+      }
+    ],
+    "batches": [
+      {
+        "id": "b",
+        "productId": "p",
+        "code": "BATCH",
+        "qty": 20,
+        "held": 0,
+        "cost": 6000,
+        "expiry": "2028-01-01",
+        "location": "Toko"
+      }
+    ],
+    "orders": [],
+    "orderLines": [],
+    "reservations": [],
+    "substitutions": [],
+    "shipments": [],
+    "shipmentLines": [],
+    "complaints": [],
+    "invoices": [],
+    "invoiceLines": [],
+    "payments": [],
+    "allocations": [],
+    "credits": [],
+    "refunds": [],
+    "purchases": [],
+    "purchaseLines": [],
+    "supplierPayments": [],
+    "stockReturns": [],
+    "stocktakes": [],
+    "expenses": [],
+    "movements": [],
+    "journals": [
+      {
+        "id": "opening",
+        "date": "2026-09-01",
+        "sourceId": "opening",
+        "description": "Saldo awal"
+      }
+    ],
+    "journalLines": [
+      {
+        "id": "opening-debit",
+        "journalId": "opening",
+        "account": "inventory",
+        "debit": 120000,
+        "credit": 0
+      },
+      {
+        "id": "opening-credit",
+        "journalId": "opening",
+        "account": "capital",
+        "debit": 0,
+        "credit": 120000
+      }
+    ],
+    "periods": [
+      {
+        "id": "2026-09",
+        "revision": 0,
+        "status": "open",
+        "approvedRevision": null,
+        "approvedBy": null,
+        "submittedBy": null,
+        "closedBy": null,
+        "closedAt": "",
+        "snapshot": null
+      }
+    ],
+    "attachments": [],
+    "audits": []
+  },
   "scenarios": [
     {
       "key": "partial-delivery",
-      "sourceTest": "website/tests/domain.test.ts U02",
-      "initial": {"orderQuantity": 10, "stockQuantity": 8, "unitPrice": 10000},
+      "sourceTest": "U02",
+      "initialOverrides": {
+        "batches[id=b].qty": 8,
+        "journalLines[id=opening-debit].debit": 48000,
+        "journalLines[id=opening-credit].credit": 48000
+      },
       "commands": [
-        {"actor": "pic-a", "type": "order.create", "quantity": 10},
-        {"actor": "kepala", "type": "order.review", "approve": true},
-        {"actor": "staf", "type": "stock.reserve", "quantity": 8},
-        {"actor": "staf", "type": "shipment.dispatch", "quantity": 8},
-        {"actor": "pic-a", "type": "shipment.receive", "accepted": 8},
-        {"actor": "staf", "type": "sale.finalize"},
-        {"actor": "penagihan", "type": "invoice.issue"},
-        {"actor": "staf", "type": "purchase.receive", "quantity": 2},
-        {"actor": "staf", "type": "shipment.dispatch", "quantity": 2},
-        {"actor": "pic-a", "type": "shipment.receive", "accepted": 2},
-        {"actor": "staf", "type": "sale.finalize"},
-        {"actor": "penagihan", "type": "invoice.issue"}
+        {
+          "actor": "pic-a",
+          "type": "order.create",
+          "data": {
+            "neededAt": "2026-09-17",
+            "lines": [
+              {
+                "productId": "p",
+                "qty": 10
+              }
+            ]
+          },
+          "bind": "order",
+          "capture": {
+            "line": "orderLines[orderId=$order,productId=p].id"
+          }
+        },
+        {
+          "actor": "kepala",
+          "type": "order.review",
+          "data": {
+            "id": "$order",
+            "approve": true
+          }
+        },
+        {
+          "actor": "staf",
+          "type": "stock.reserve",
+          "data": {
+            "orderLineId": "$line",
+            "qty": 8
+          }
+        },
+        {
+          "actor": "staf",
+          "type": "shipment.create",
+          "data": {
+            "orderId": "$order",
+            "courierId": "kurir",
+            "lines": [
+              {
+                "orderLineId": "$line",
+                "qty": 8
+              }
+            ]
+          },
+          "bind": "shipment1",
+          "capture": {
+            "shipmentLine1": "shipmentLines[shipmentId=$shipment1,orderLineId=$line].id"
+          }
+        },
+        {
+          "actor": "kurir",
+          "type": "shipment.dispatch",
+          "data": {
+            "id": "$shipment1"
+          }
+        },
+        {
+          "actor": "pic-a",
+          "type": "shipment.receive",
+          "data": {
+            "id": "$shipment1",
+            "lines": [
+              {
+                "id": "$shipmentLine1",
+                "accepted": 8
+              }
+            ]
+          }
+        },
+        {
+          "actor": "staf",
+          "type": "sale.finalize",
+          "data": {
+            "id": "$shipment1"
+          }
+        },
+        {
+          "actor": "penagihan",
+          "type": "invoice.issue",
+          "data": {
+            "divisionId": "div-ops",
+            "dueDate": "2026-10-17",
+            "lines": [
+              {
+                "shipmentLineId": "$shipmentLine1"
+              }
+            ]
+          },
+          "bind": "invoice1"
+        },
+        {
+          "actor": "staf",
+          "type": "purchase.create",
+          "data": {
+            "kind": "DDO",
+            "supplierId": "supplier",
+            "lines": [
+              {
+                "productId": "p",
+                "qty": 10,
+                "cost": 6000
+              }
+            ]
+          },
+          "bind": "purchase",
+          "capture": {
+            "purchaseLine": "purchaseLines[purchaseId=$purchase,productId=p].id"
+          }
+        },
+        {
+          "actor": "staf",
+          "type": "purchase.confirm",
+          "data": {
+            "id": "$purchase"
+          }
+        },
+        {
+          "actor": "staf",
+          "type": "purchase.receive",
+          "data": {
+            "id": "$purchase",
+            "lines": [
+              {
+                "purchaseLineId": "$purchaseLine",
+                "qty": 2
+              }
+            ]
+          }
+        },
+        {
+          "actor": "staf",
+          "type": "stock.reserve",
+          "data": {
+            "orderLineId": "$line",
+            "qty": 2
+          }
+        },
+        {
+          "actor": "staf",
+          "type": "shipment.create",
+          "data": {
+            "orderId": "$order",
+            "courierId": "kurir",
+            "lines": [
+              {
+                "orderLineId": "$line",
+                "qty": 2
+              }
+            ]
+          },
+          "bind": "shipment2",
+          "capture": {
+            "shipmentLine2": "shipmentLines[shipmentId=$shipment2,orderLineId=$line].id"
+          }
+        },
+        {
+          "actor": "kurir",
+          "type": "shipment.dispatch",
+          "data": {
+            "id": "$shipment2"
+          }
+        },
+        {
+          "actor": "pic-a",
+          "type": "shipment.receive",
+          "data": {
+            "id": "$shipment2",
+            "lines": [
+              {
+                "id": "$shipmentLine2",
+                "accepted": 2
+              }
+            ]
+          }
+        },
+        {
+          "actor": "staf",
+          "type": "sale.finalize",
+          "data": {
+            "id": "$shipment2"
+          }
+        },
+        {
+          "actor": "penagihan",
+          "type": "invoice.issue",
+          "data": {
+            "divisionId": "div-ops",
+            "dueDate": "2026-10-17",
+            "lines": [
+              {
+                "shipmentLineId": "$shipmentLine2"
+              }
+            ]
+          },
+          "bind": "invoice2"
+        }
       ],
-      "expected": {"acceptedQuantity": 10, "remainingQuantity": 0, "invoiceCount": 2, "invoiceTotal": 100000}
+      "expected": {
+        "orders.length": 1,
+        "shipments.length": 2,
+        "invoices.length": 2,
+        "orderRemaining:$line": 0,
+        "invoiceTotal:$invoice1": 80000,
+        "invoiceTotal:$invoice2": 20000,
+        "invoiceBalance:$invoice1": 80000,
+        "invoiceBalance:$invoice2": 20000,
+        "shipmentLines[id=$shipmentLine1].accepted": 8,
+        "shipmentLines[id=$shipmentLine2].accepted": 2,
+        "accountNet:inventory": 0,
+        "accountNet:receivable": 100000,
+        "journalBalanced": true
+      }
     },
     {
       "key": "substitution-consent",
-      "sourceTest": "website/tests/domain.test.ts U03",
-      "initial": {"originalUnitPrice": 10000, "replacementUnitPrice": 12000, "orderQuantity": 10, "originalShipped": 8},
+      "sourceTest": "U03",
+      "initialAdds": {
+        "products": [
+          {
+            "id": "q",
+            "name": "Produk uji",
+            "sku": "Q",
+            "category": "OMI",
+            "unit": "pcs",
+            "price": 12000,
+            "minimum": 5,
+            "returnMonths": 1,
+            "active": true
+          }
+        ]
+      },
       "commands": [
-        {"actor": "staf", "type": "substitution.propose", "quantity": 2},
-        {"actor": "staf", "type": "stock.reserve", "quantity": 2, "expectError": "buyer confirmation required"},
-        {"actor": "pic-a", "type": "substitution.decide", "approve": true}
+        {
+          "actor": "pic-a",
+          "type": "order.create",
+          "data": {
+            "neededAt": "2026-09-17",
+            "lines": [
+              {
+                "productId": "p",
+                "qty": 10
+              }
+            ]
+          },
+          "bind": "order",
+          "capture": {
+            "line": "orderLines[orderId=$order,productId=p].id"
+          }
+        },
+        {
+          "actor": "kepala",
+          "type": "order.review",
+          "data": {
+            "id": "$order",
+            "approve": true
+          }
+        },
+        {
+          "actor": "staf",
+          "type": "stock.reserve",
+          "data": {
+            "orderLineId": "$line",
+            "qty": 8
+          }
+        },
+        {
+          "actor": "staf",
+          "type": "shipment.create",
+          "data": {
+            "orderId": "$order",
+            "courierId": "kurir",
+            "lines": [
+              {
+                "orderLineId": "$line",
+                "qty": 8
+              }
+            ]
+          },
+          "bind": "shipment",
+          "capture": {
+            "shipmentLine": "shipmentLines[shipmentId=$shipment,orderLineId=$line].id"
+          }
+        },
+        {
+          "actor": "kurir",
+          "type": "shipment.dispatch",
+          "data": {
+            "id": "$shipment"
+          }
+        },
+        {
+          "actor": "staf",
+          "type": "substitution.propose",
+          "data": {
+            "orderLineId": "$line",
+            "productId": "q",
+            "reason": "Sisa stok kosong"
+          },
+          "capture": {
+            "substitution": "substitutions[orderLineId=$line].id"
+          }
+        },
+        {
+          "actor": "staf",
+          "type": "stock.reserve",
+          "data": {
+            "orderLineId": "$line",
+            "qty": 2
+          },
+          "reject": "konfirmasi"
+        },
+        {
+          "actor": "pic-a",
+          "type": "substitution.decide",
+          "data": {
+            "id": "$substitution",
+            "approve": true
+          },
+          "capture": {
+            "replacementLine": "substitutions[id=$substitution].replacementLineId"
+          }
+        }
       ],
-      "expected": {"originalShippedUnitPrice": 10000, "originalCancelledQuantity": 2, "replacementQuantity": 2, "replacementUnitPrice": 12000}
+      "expected": {
+        "orderLines.length": 2,
+        "orderLines[id=$line].productId": "p",
+        "orderLines[id=$line].cancelled": 2,
+        "orderLines[id=$replacementLine].productId": "q",
+        "orderLines[id=$replacementLine].qty": 2,
+        "orderLines[id=$replacementLine].price": 12000,
+        "shipmentLines[id=$shipmentLine].price": 10000,
+        "journalBalanced": true
+      }
     },
     {
       "key": "unique-invoice-source",
-      "sourceTest": "website/tests/repository.test.ts concurrent invoice.issue",
-      "initial": {"acceptedShipmentLine": "$line"},
+      "sourceTest": "duplicate invoice",
       "commands": [
-        {"actor": "penagihan", "type": "invoice.issue", "source": "$line", "idempotencyKey": "same-command"},
-        {"actor": "penagihan", "type": "invoice.issue", "source": "$line", "idempotencyKey": "same-command"}
+        {
+          "actor": "pic-a",
+          "type": "order.create",
+          "data": {
+            "neededAt": "2026-09-17",
+            "lines": [
+              {
+                "productId": "p",
+                "qty": 8
+              }
+            ]
+          },
+          "bind": "order",
+          "capture": {
+            "line": "orderLines[orderId=$order,productId=p].id"
+          }
+        },
+        {
+          "actor": "kepala",
+          "type": "order.review",
+          "data": {
+            "id": "$order",
+            "approve": true
+          }
+        },
+        {
+          "actor": "staf",
+          "type": "stock.reserve",
+          "data": {
+            "orderLineId": "$line",
+            "qty": 8
+          }
+        },
+        {
+          "actor": "staf",
+          "type": "shipment.create",
+          "data": {
+            "orderId": "$order",
+            "courierId": "kurir",
+            "lines": [
+              {
+                "orderLineId": "$line",
+                "qty": 8
+              }
+            ]
+          },
+          "bind": "shipment1",
+          "capture": {
+            "shipmentLine1": "shipmentLines[shipmentId=$shipment1,orderLineId=$line].id"
+          }
+        },
+        {
+          "actor": "kurir",
+          "type": "shipment.dispatch",
+          "data": {
+            "id": "$shipment1"
+          }
+        },
+        {
+          "actor": "pic-a",
+          "type": "shipment.receive",
+          "data": {
+            "id": "$shipment1",
+            "lines": [
+              {
+                "id": "$shipmentLine1",
+                "accepted": 8
+              }
+            ]
+          }
+        },
+        {
+          "actor": "staf",
+          "type": "sale.finalize",
+          "data": {
+            "id": "$shipment1"
+          }
+        },
+        {
+          "actor": "penagihan",
+          "type": "invoice.issue",
+          "data": {
+            "divisionId": "div-ops",
+            "dueDate": "2026-10-17",
+            "lines": [
+              {
+                "shipmentLineId": "$shipmentLine1"
+              }
+            ]
+          },
+          "bind": "invoice1"
+        },
+        {
+          "actor": "penagihan",
+          "type": "invoice.issue",
+          "data": {
+            "divisionId": "div-ops",
+            "dueDate": "2026-10-17",
+            "lines": [
+              {
+                "shipmentLineId": "$shipmentLine1"
+              }
+            ]
+          },
+          "reject": "sudah ditagih"
+        }
       ],
-      "expected": {"invoiceCountForSource": 1, "sameResultForReplay": true}
+      "expected": {
+        "invoices.length": 1,
+        "invoiceLines.length": 1,
+        "invoiceTotal:$invoice1": 80000,
+        "invoiceBalance:$invoice1": 80000,
+        "accountNet:receivable": 80000,
+        "journalBalanced": true
+      }
     },
     {
       "key": "payment-allocation",
-      "sourceTest": "website/tests/domain.test.ts U08; website/tests/repository.test.ts",
-      "initial": {"invoiceBalances": [80000, 40000], "verifiedPayment": 125000},
-      "commands": [{"actor": "penagihan", "type": "payment.allocate", "amounts": [80000, 40000]}],
-      "expected": {"invoiceBalances": [0, 0], "paymentAvailable": 5000, "cashPostingsForPayment": 1}
+      "sourceTest": "U08",
+      "commands": [
+        {
+          "actor": "pic-a",
+          "type": "order.create",
+          "data": {
+            "neededAt": "2026-09-17",
+            "lines": [
+              {
+                "productId": "p",
+                "qty": 12
+              }
+            ]
+          },
+          "bind": "order",
+          "capture": {
+            "line": "orderLines[orderId=$order,productId=p].id"
+          }
+        },
+        {
+          "actor": "kepala",
+          "type": "order.review",
+          "data": {
+            "id": "$order",
+            "approve": true
+          }
+        },
+        {
+          "actor": "staf",
+          "type": "stock.reserve",
+          "data": {
+            "orderLineId": "$line",
+            "qty": 12
+          }
+        },
+        {
+          "actor": "staf",
+          "type": "shipment.create",
+          "data": {
+            "orderId": "$order",
+            "courierId": "kurir",
+            "lines": [
+              {
+                "orderLineId": "$line",
+                "qty": 8
+              }
+            ]
+          },
+          "bind": "shipment1",
+          "capture": {
+            "shipmentLine1": "shipmentLines[shipmentId=$shipment1,orderLineId=$line].id"
+          }
+        },
+        {
+          "actor": "kurir",
+          "type": "shipment.dispatch",
+          "data": {
+            "id": "$shipment1"
+          }
+        },
+        {
+          "actor": "pic-a",
+          "type": "shipment.receive",
+          "data": {
+            "id": "$shipment1",
+            "lines": [
+              {
+                "id": "$shipmentLine1",
+                "accepted": 8
+              }
+            ]
+          }
+        },
+        {
+          "actor": "staf",
+          "type": "sale.finalize",
+          "data": {
+            "id": "$shipment1"
+          }
+        },
+        {
+          "actor": "penagihan",
+          "type": "invoice.issue",
+          "data": {
+            "divisionId": "div-ops",
+            "dueDate": "2026-10-17",
+            "lines": [
+              {
+                "shipmentLineId": "$shipmentLine1"
+              }
+            ]
+          },
+          "bind": "invoice1"
+        },
+        {
+          "actor": "staf",
+          "type": "shipment.create",
+          "data": {
+            "orderId": "$order",
+            "courierId": "kurir",
+            "lines": [
+              {
+                "orderLineId": "$line",
+                "qty": 4
+              }
+            ]
+          },
+          "bind": "shipment2",
+          "capture": {
+            "shipmentLine2": "shipmentLines[shipmentId=$shipment2,orderLineId=$line].id"
+          }
+        },
+        {
+          "actor": "kurir",
+          "type": "shipment.dispatch",
+          "data": {
+            "id": "$shipment2"
+          }
+        },
+        {
+          "actor": "pic-a",
+          "type": "shipment.receive",
+          "data": {
+            "id": "$shipment2",
+            "lines": [
+              {
+                "id": "$shipmentLine2",
+                "accepted": 4
+              }
+            ]
+          }
+        },
+        {
+          "actor": "staf",
+          "type": "sale.finalize",
+          "data": {
+            "id": "$shipment2"
+          }
+        },
+        {
+          "actor": "penagihan",
+          "type": "invoice.issue",
+          "data": {
+            "divisionId": "div-ops",
+            "dueDate": "2026-10-17",
+            "lines": [
+              {
+                "shipmentLineId": "$shipmentLine2"
+              }
+            ]
+          },
+          "bind": "invoice2"
+        },
+        {
+          "actor": "penagihan",
+          "type": "payment.record",
+          "data": {
+            "divisionId": "div-ops",
+            "amount": 125000,
+            "payer": "OPS"
+          },
+          "bind": "payment"
+        },
+        {
+          "actor": "penagihan-checker",
+          "type": "payment.verify",
+          "data": {
+            "id": "$payment"
+          }
+        },
+        {
+          "actor": "penagihan",
+          "type": "payment.allocate",
+          "data": {
+            "paymentId": "$payment",
+            "lines": [
+              {
+                "invoiceId": "$invoice1",
+                "amount": 80000
+              },
+              {
+                "invoiceId": "$invoice2",
+                "amount": 40000
+              }
+            ]
+          }
+        },
+        {
+          "actor": "penagihan",
+          "type": "payment.allocate",
+          "data": {
+            "paymentId": "$payment",
+            "lines": [
+              {
+                "invoiceId": "$invoice1",
+                "amount": 80000
+              }
+            ]
+          },
+          "reject": "melebihi"
+        }
+      ],
+      "expected": {
+        "invoices.length": 2,
+        "allocations.length": 2,
+        "invoiceBalance:$invoice1": 0,
+        "invoiceBalance:$invoice2": 0,
+        "paymentAvailable:$payment": 5000,
+        "payments[id=$payment].status": "verified",
+        "payments[id=$payment].verifiedBy": "penagihan-checker",
+        "accountNet:cash": 125000,
+        "accountNet:receivable": 0,
+        "accountNet:unallocated": -5000,
+        "journalSourceCount:$payment": 1,
+        "journalBalanced": true
+      }
     },
     {
       "key": "damaged-return",
-      "sourceTest": "website/tests/domain.test.ts U04",
-      "initial": {"batchQuantity": 20, "shippedQuantity": 8, "acceptedQuantity": 8, "unitPrice": 10000},
+      "sourceTest": "U04",
       "commands": [
-        {"actor": "pic-a", "type": "complaint.create", "quantity": 1},
-        {"actor": "staf", "type": "shipment.return", "quantity": 1, "good": false},
-        {"actor": "staf", "type": "stock.returnCreate", "quantity": 1, "fromHeld": true},
-        {"actor": "staf", "type": "stock.returnResolve", "accept": true},
-        {"actor": "staf", "type": "complaint.resolve"},
-        {"actor": "staf", "type": "sale.finalize"},
-        {"actor": "penagihan", "type": "invoice.issue"}
+        {
+          "actor": "pic-a",
+          "type": "order.create",
+          "data": {
+            "neededAt": "2026-09-17",
+            "lines": [
+              {
+                "productId": "p",
+                "qty": 10
+              }
+            ]
+          },
+          "bind": "order",
+          "capture": {
+            "line": "orderLines[orderId=$order,productId=p].id"
+          }
+        },
+        {
+          "actor": "kepala",
+          "type": "order.review",
+          "data": {
+            "id": "$order",
+            "approve": true
+          }
+        },
+        {
+          "actor": "staf",
+          "type": "stock.reserve",
+          "data": {
+            "orderLineId": "$line",
+            "qty": 8
+          }
+        },
+        {
+          "actor": "staf",
+          "type": "shipment.create",
+          "data": {
+            "orderId": "$order",
+            "courierId": "kurir",
+            "lines": [
+              {
+                "orderLineId": "$line",
+                "qty": 8
+              }
+            ]
+          },
+          "bind": "shipment",
+          "capture": {
+            "shipmentLine": "shipmentLines[shipmentId=$shipment,orderLineId=$line].id"
+          }
+        },
+        {
+          "actor": "kurir",
+          "type": "shipment.dispatch",
+          "data": {
+            "id": "$shipment"
+          }
+        },
+        {
+          "actor": "pic-a",
+          "type": "shipment.receive",
+          "data": {
+            "id": "$shipment",
+            "lines": [
+              {
+                "id": "$shipmentLine",
+                "accepted": 8
+              }
+            ]
+          }
+        },
+        {
+          "actor": "pic-a",
+          "type": "complaint.create",
+          "data": {
+            "shipmentLineId": "$shipmentLine",
+            "qty": 1,
+            "reason": "Rusak"
+          },
+          "bind": "complaint"
+        },
+        {
+          "actor": "staf",
+          "type": "sale.finalize",
+          "data": {
+            "id": "$shipment"
+          },
+          "reject": "komplain"
+        },
+        {
+          "actor": "staf",
+          "type": "shipment.return",
+          "data": {
+            "shipmentLineId": "$shipmentLine",
+            "qty": 1,
+            "good": false,
+            "reason": "Rusak"
+          }
+        },
+        {
+          "actor": "staf",
+          "type": "stock.returnCreate",
+          "data": {
+            "batchId": "b",
+            "qty": 1,
+            "fromHeld": true,
+            "reason": "Barang rusak dari divisi"
+          },
+          "bind": "return"
+        },
+        {
+          "actor": "staf",
+          "type": "stock.returnResolve",
+          "data": {
+            "id": "$return",
+            "accept": true,
+            "note": "Diterima pemasok"
+          }
+        },
+        {
+          "actor": "staf",
+          "type": "complaint.resolve",
+          "data": {
+            "id": "$complaint",
+            "resolution": "Dikembalikan"
+          }
+        },
+        {
+          "actor": "staf",
+          "type": "sale.finalize",
+          "data": {
+            "id": "$shipment"
+          }
+        },
+        {
+          "actor": "penagihan",
+          "type": "invoice.issue",
+          "data": {
+            "divisionId": "div-ops",
+            "dueDate": "2026-10-17",
+            "lines": [
+              {
+                "shipmentLineId": "$shipmentLine"
+              }
+            ]
+          },
+          "bind": "invoice"
+        }
       ],
-      "expected": {"acceptedQuantity": 7, "invoiceTotal": 70000, "batchQuantity": 12, "batchHeld": 0}
+      "expected": {
+        "shipmentLines[id=$shipmentLine].accepted": 7,
+        "batches[id=b].qty": 12,
+        "batches[id=b].held": 0,
+        "invoiceTotal:$invoice": 70000,
+        "invoiceBalance:$invoice": 70000,
+        "accountNet:inventory": 72000,
+        "accountNet:cogs": 42000,
+        "accountNet:supplierReceivable": 6000,
+        "accountNet:receivable": 70000,
+        "journalBalanced": true
+      }
     },
     {
       "key": "stocktake-approval",
-      "sourceTest": "website/tests/domain.test.ts U10",
-      "initial": {"batchQuantity": 20, "expired": true},
+      "sourceTest": "U10",
+      "initialOverrides": {
+        "batches[id=b].expiry": "2026-09-01"
+      },
       "commands": [
-        {"actor": "staf", "type": "stock.returnCreate", "quantity": 2},
-        {"actor": "staf", "type": "stock.returnResolve", "accept": false},
-        {"actor": "staf", "type": "stocktake.create", "counted": 19},
-        {"actor": "staf", "type": "stocktake.approve", "expectError": "forbidden"},
-        {"actor": "kepala", "type": "stocktake.approve"}
+        {
+          "actor": "staf",
+          "type": "stock.returnCreate",
+          "data": {
+            "batchId": "b",
+            "qty": 2,
+            "reason": "Kedaluwarsa"
+          },
+          "bind": "return"
+        },
+        {
+          "actor": "staf",
+          "type": "stock.returnResolve",
+          "data": {
+            "id": "$return",
+            "accept": false,
+            "note": "Di luar kebijakan"
+          }
+        },
+        {
+          "actor": "kepala",
+          "type": "stock.holdRelease",
+          "data": {
+            "id": "$return",
+            "reason": "Layak"
+          },
+          "reject": "kedaluwarsa"
+        },
+        {
+          "actor": "staf",
+          "type": "stocktake.create",
+          "data": {
+            "batchId": "b",
+            "counted": 19,
+            "reason": "Sudah hitung ulang"
+          },
+          "bind": "stocktake"
+        },
+        {
+          "actor": "staf",
+          "type": "stocktake.approve",
+          "data": {
+            "id": "$stocktake"
+          },
+          "reject": "akses"
+        },
+        {
+          "actor": "kepala",
+          "type": "stocktake.approve",
+          "data": {
+            "id": "$stocktake"
+          }
+        },
+        {
+          "actor": "kepala",
+          "type": "stocktake.approve",
+          "data": {
+            "id": "$stocktake"
+          },
+          "reject": "berubah|diproses"
+        }
       ],
-      "expected": {"batchQuantity": 19, "batchHeld": 2, "sellableQuantity": 0, "approvedExactlyOnce": true}
+      "expected": {
+        "batches[id=b].qty": 19,
+        "batches[id=b].held": 2,
+        "stocktakes[id=$stocktake].status": "approved",
+        "stocktakes.length": 1,
+        "sellable:p": 0,
+        "journalBalanced": true
+      }
     },
     {
       "key": "period-close-lock",
-      "sourceTest": "website/tests/domain.test.ts U12",
-      "initial": {"month": "2026-09", "journalBalanced": true},
+      "sourceTest": "U12",
       "commands": [
-        {"actor": "laporan", "type": "period.submit", "month": "2026-09"},
-        {"actor": "pimpinan", "type": "period.approve", "month": "2026-09"},
-        {"actor": "akuntansi", "type": "period.close", "month": "2026-09"},
-        {"actor": "penagihan", "type": "payment.record", "date": "2026-08-01", "amount": 1000, "expectError": "closed period"}
+        {
+          "actor": "pic-a",
+          "type": "order.create",
+          "data": {
+            "neededAt": "2026-09-17",
+            "lines": [
+              {
+                "productId": "p",
+                "qty": 8
+              }
+            ]
+          },
+          "bind": "order",
+          "capture": {
+            "line": "orderLines[orderId=$order,productId=p].id"
+          }
+        },
+        {
+          "actor": "kepala",
+          "type": "order.review",
+          "data": {
+            "id": "$order",
+            "approve": true
+          }
+        },
+        {
+          "actor": "staf",
+          "type": "stock.reserve",
+          "data": {
+            "orderLineId": "$line",
+            "qty": 8
+          }
+        },
+        {
+          "actor": "staf",
+          "type": "shipment.create",
+          "data": {
+            "orderId": "$order",
+            "courierId": "kurir",
+            "lines": [
+              {
+                "orderLineId": "$line",
+                "qty": 8
+              }
+            ]
+          },
+          "bind": "shipment1",
+          "capture": {
+            "shipmentLine1": "shipmentLines[shipmentId=$shipment1,orderLineId=$line].id"
+          }
+        },
+        {
+          "actor": "kurir",
+          "type": "shipment.dispatch",
+          "data": {
+            "id": "$shipment1"
+          }
+        },
+        {
+          "actor": "pic-a",
+          "type": "shipment.receive",
+          "data": {
+            "id": "$shipment1",
+            "lines": [
+              {
+                "id": "$shipmentLine1",
+                "accepted": 8
+              }
+            ]
+          }
+        },
+        {
+          "actor": "staf",
+          "type": "sale.finalize",
+          "data": {
+            "id": "$shipment1"
+          }
+        },
+        {
+          "actor": "penagihan",
+          "type": "invoice.issue",
+          "data": {
+            "divisionId": "div-ops",
+            "dueDate": "2026-10-17",
+            "lines": [
+              {
+                "shipmentLineId": "$shipmentLine1"
+              }
+            ]
+          },
+          "bind": "invoice1"
+        },
+        {
+          "actor": "laporan",
+          "type": "period.submit",
+          "data": {
+            "month": "2026-09"
+          }
+        },
+        {
+          "actor": "pimpinan",
+          "type": "period.approve",
+          "data": {
+            "id": "2026-09"
+          }
+        },
+        {
+          "actor": "akuntansi",
+          "type": "period.close",
+          "data": {
+            "id": "2026-09"
+          }
+        },
+        {
+          "actor": "penagihan",
+          "type": "payment.record",
+          "data": {
+            "amount": 1000,
+            "payer": "X"
+          },
+          "date": "2026-08-01",
+          "reject": "Periode sudah ditutup"
+        }
       ],
-      "expected": {"periodStatus": "closed", "historicalJournalUnchanged": true, "debitEqualsCredit": true}
+      "expected": {
+        "periods[id=2026-09].status": "closed",
+        "periods[id=2026-09].submittedBy": "laporan",
+        "periods[id=2026-09].approvedBy": "pimpinan",
+        "periods[id=2026-09].closedBy": "akuntansi",
+        "periods[id=2026-09].snapshot.debit": 328000,
+        "periods[id=2026-09].snapshot.credit": 328000,
+        "snapshotAccountNet:2026-09:receivable": 80000,
+        "invoiceBalance:$invoice1": 80000,
+        "payments.length": 0,
+        "journalBalanced": true
+      }
     }
   ]
 }

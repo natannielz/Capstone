@@ -10,6 +10,11 @@ output/
 .vercel/
 .next/
 .test/
+.test-data/
+.superpowers/
+**/bin/
+**/obj/
+**/TestResults/
 *.tsbuildinfo
 *.db
 *.db-shm

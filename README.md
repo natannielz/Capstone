@@ -17,7 +17,8 @@ Website demo dengan etalase pelanggan dan pemesanan divisi, persediaan, pengadaa
 
 | Direktori | Isi |
 | --- | --- |
-| `website/` | Aplikasi Next.js/React/TypeScript, komponen, aturan bisnis, migrasi libSQL, aset dan tes |
+| `frontend/` | Aplikasi Next.js/React/TypeScript, komponen, aset dan tes kompatibilitas |
+| `backend/` | Layanan C# yang sedang dibangun dan backend TypeScript lama di `backend/legacy/` |
 | `docs/` | Rencana, catatan implementasi, hasil validasi, dan panduan publikasi |
 
 ## Menjalankan lokal
@@ -25,7 +26,8 @@ Website demo dengan etalase pelanggan dan pemesanan divisi, persediaan, pengadaa
 Gunakan Node.js 24. Dari direktori repositori:
 
 ```powershell
-cd website
+npm ci --prefix backend/legacy
+cd frontend
 npm ci
 Copy-Item .env.example .env.local
 ```
@@ -37,11 +39,11 @@ npm run demo:accounts
 npm run dev
 ```
 
-Akun awal disimpan privat di `website/.data/demo-accounts.json`. Database dan berkas unggahan lokal berada di `.data/` dan tidak masuk Git. Skema serta data demo dibuat otomatis pada akses pertama. [Panduan aplikasi](website/README.md) menjelaskan peran dan alur presentasi.
+Akun awal disimpan privat di `frontend/.data/demo-accounts.json`. Database dan berkas unggahan lokal berada di `.data/` dan tidak masuk Git. Skema serta data demo dibuat otomatis pada akses pertama. [Panduan aplikasi](frontend/README.md) menjelaskan peran dan alur presentasi.
 
 ## Pemeriksaan
 
-Jalankan dari `website/`:
+Jalankan dari `frontend/`:
 
 ```powershell
 npm run typecheck
@@ -54,7 +56,9 @@ npm run build
 
 ## Deployment
 
-Untuk Vercel, pilih root directory **`website`**, build `npm run build`, dan Node.js 24. Aplikasi memakai Turso remote dan Vercel Blob privat; konfigurasi lokal tidak menjadi penyimpanan production. Lihat [panduan publikasi](docs/publikasi-github.md).
+Untuk Vercel, pilih root directory **`frontend`**, install `npm ci && npm ci --prefix ../backend/legacy`, build `npm run build`, dan Node.js 24. Aplikasi memakai Turso remote dan Vercel Blob privat; konfigurasi lokal tidak menjadi penyimpanan production. Lihat [panduan publikasi](docs/publikasi-github.md).
+
+Lihat [batas modul selama transisi](docs/architecture/module-boundaries.md). Backend TypeScript di `backend/legacy/` masih menjadi satu-satunya penulis data demo selama layanan C# dipersiapkan.
 
 ## Cakupan demo
 
