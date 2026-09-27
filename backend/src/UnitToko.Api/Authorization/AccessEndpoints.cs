@@ -49,7 +49,8 @@ public static partial class AccessEndpoints
             if (actions.Length == 0) throw new AuthorizationDeniedException("permission_denied");
             return TypedResults.Ok(new AccessCatalogDto(
                 RoleTemplates.Templates.Values.OrderBy(role => role.Id).Select(role => new AccessRoleDto(
-                    role.Id, RoleLabel(role.Id), role.Version, [.. role.Permissions])).ToArray(),
+                    role.Id, RoleLabel(role.Id), role.Version, [.. role.Permissions],
+                    RoleTemplates.Suggestions.TryGetValue(role.Id, out var suggestions) ? [.. suggestions] : [])).ToArray(),
                 RoleTemplates.FinancePacks.OrderBy(pack => pack.Key).Select(pack => new AccessPackDto(pack.Key,
                     PackLabel(pack.Key), [.. pack.Value])).ToArray(),
                 Permissions.Catalog.Values.OrderBy(permission => permission.Name).Select(permission => new AccessPermissionDto(

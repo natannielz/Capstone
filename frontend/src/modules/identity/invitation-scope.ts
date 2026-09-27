@@ -42,17 +42,18 @@ export function invitationScopeOptions(current:Schemas["CurrentAccessDto"], labe
   return options;
 }
 
-export function invitationRole(catalog:Schemas["AccessCatalogDto"],scope:Scope,templateId:string,financePacks:readonly string[]){
+export function invitationRole(catalog:Schemas["AccessCatalogDto"],scope:Scope,templateId:string,financePacks:readonly string[],additionalPermissions:readonly string[]=[]){
   const template=catalog.roles.find(role=>role.id===templateId);
   if(!template||financePacks.length>4||financePacks.length>0&&templateId!=="finance"||new Set(financePacks).size!==financePacks.length)return null;
+  if(additionalPermissions.length>catalog.permissions.length||new Set(additionalPermissions).size!==additionalPermissions.length)return null;
   const packs=financePacks.map(id=>catalog.financePacks.find(pack=>pack.id===id));
   if(packs.some(pack=>!pack))return null;
-  const permissions=[...template.permissions,...packs.flatMap(pack=>pack?.permissions??[])];
+  const permissions=[...template.permissions,...packs.flatMap(pack=>pack?.permissions??[]),...additionalPermissions];
   if(permissions.some(id=>!catalog.permissions.find(permission=>permission.id===id)?.allowedScopes.includes(scope.kind)))return null;
   const business=permissions.some(id=>id!=="access.approve"&&id!=="access.revoke"&&id!=="membership.approve");
   if(business&&((scope.kind==="buyingBranch"||scope.kind==="buyingDivision")&&!permissions.includes("branch.pic")||
     scope.kind==="buyingOrganization"&&!permissions.includes("organization.wide")))return null;
-  return {templateId,financePacks:[...financePacks].sort(),additionalPermissions:[],delegablePermissions:[]};
+  return {templateId,financePacks:[...financePacks].sort(),additionalPermissions:[...additionalPermissions].sort(),delegablePermissions:[]};
 }
 
 export function invitationDates(inviteLocal:string,accessLocal:string,now=new Date()){

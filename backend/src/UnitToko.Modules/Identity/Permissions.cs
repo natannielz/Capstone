@@ -10,11 +10,16 @@ public static class Permissions
 {
     public const string CatalogRead = "catalog.read", CatalogManage = "catalog.manage", PricingManage = "pricing.manage";
     public const string OrderRead = "order.read", OrderSubmit = "order.submit", OrderApprove = "order.approve", OrderSubstitute = "order.substitute", OrderCancel = "order.cancel";
+    public const string OrderSpendApprove = "order.spend.approve", OrderAccept = "order.accept";
+    public const string SubstitutionPropose = "substitution.propose", SubstitutionAccept = "substitution.accept";
     public const string BranchPic = "branch.pic", OrganizationWide = "organization.wide";
     public const string StockRead = "stock.read", StockReceive = "stock.receive", StockCount = "stock.count", StockAdjustPropose = "stock.adjust.propose", StockAdjustApprove = "stock.adjust.approve";
+    public const string StockConvert = "stock.convert", ReservationRelease = "reservation.release";
     public const string ShipmentRead = "shipment.read", ShipmentPrepare = "shipment.prepare", ShipmentDispatch = "shipment.dispatch", ShipmentAssign = "shipment.assign", DeliveryAttempt = "delivery.attempt", DeliveryEvidence = "delivery.evidence", DeliveryReturn = "delivery.return", ReceiptAccept = "receipt.accept";
     public const string CaseRead = "case.read", CaseRequest = "case.request", CaseManage = "case.manage";
     public const string ProcurementRead = "procurement.read", ProcurementPrepare = "procurement.prepare", ProcurementApprove = "procurement.approve", SupplierClaim = "supplier.claim";
+    public const string SupplierChangePropose = "supplier.change.propose", SupplierChangeApprove = "supplier.change.approve";
+    public const string HistoryRead = "history.read", ReportRead = "report.read";
     public const string SourcePrepare = "source.prepare", SourceReconcile = "source.reconcile", ReportPrepare = "report.prepare", PeriodSubmit = "period.submit", PeriodApprove = "period.approve", PeriodClose = "period.close", PeriodReopenRequest = "period.reopen.request", PeriodReopenApprove = "period.reopen.approve";
     public const string InvoiceRead = "invoice.read", InvoiceIssue = "invoice.issue", PaymentEvidence = "payment.evidence", PaymentRecord = "payment.record", PaymentAllocate = "payment.allocate", PaymentVerify = "payment.verify";
     public const string CreditRequest = "credit.request", CreditApprove = "credit.approve", RefundRequest = "refund.request", RefundApprove = "refund.approve", DisbursementRecord = "disbursement.record", DisbursementVerify = "disbursement.verify";
@@ -38,8 +43,11 @@ public static class Permissions
         void Add(string name, ImmutableArray<GrantScopeKind> scopes, bool fresh = false) =>
             result.Add(name, new(name, name.Replace('.', ' '), scopes, new(true, fresh ? TimeSpan.FromMinutes(5) : null)));
         foreach (var name in new[] { CatalogRead, OrderRead, ShipmentRead, CaseRead, InvoiceRead }) Add(name, [.. Buying, .. Operations]);
+        foreach (var name in new[] { HistoryRead, ReportRead }) Add(name, [.. Buying, .. Operations]);
         result[ShipmentRead] = result[ShipmentRead] with { AllowedScopes = [.. Buying, .. Operations, .. Courier] };
         foreach (var name in new[] { OrderSubmit, OrderApprove, OrderSubstitute, OrderCancel, ReceiptAccept, CaseRequest, PaymentEvidence }) Add(name, Buying);
+        Add(OrderSpendApprove, [GrantScopeKind.BuyingDivision, GrantScopeKind.BuyingBranch, GrantScopeKind.BuyingOrganization], true);
+        Add(SubstitutionAccept, Buying);
         Add(BranchPic, [GrantScopeKind.BuyingBranch, GrantScopeKind.BuyingDivision]);
         Add(OrganizationWide, [GrantScopeKind.BuyingOrganization]);
         foreach (var name in new[] { CatalogManage, PricingManage, StockRead, StockReceive, StockCount, StockAdjustPropose, StockAdjustApprove,
@@ -47,6 +55,8 @@ public static class Permissions
             SourcePrepare, SourceReconcile, ReportPrepare, PeriodSubmit, PeriodApprove, PeriodClose, PeriodReopenRequest, PeriodReopenApprove,
             InvoiceIssue, PaymentRecord, PaymentAllocate, PaymentVerify, CreditRequest, CreditApprove, RefundRequest, DisbursementRecord,
             DisbursementVerify, FundingRequest, FundingApprove, ExpenseApprove, ReconciliationVerify, JournalPost, JournalReverse }) Add(name, Operations);
+        foreach (var name in new[] { OrderAccept, SubstitutionPropose, StockConvert, ReservationRelease, SupplierChangePropose }) Add(name, Operations);
+        Add(SupplierChangeApprove, Operations, true);
         Add(RefundApprove, Operations, true);
         Add(ExpenseRequest, [.. Operations, .. Courier]);
         Add(DeliveryAttempt, Courier);

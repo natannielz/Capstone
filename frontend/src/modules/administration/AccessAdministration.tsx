@@ -10,6 +10,7 @@ import { submitTrackedRequest } from "./operation-journal";
 import { OperationRecovery, useOperationRecovery } from "./OperationRecovery";
 import { AdministrationNavigation } from "./AdministrationNavigation";
 import { permissionLabel } from "./permission-labels";
+import { rolePermissionSuggestions } from "./role-permission-suggestions";
 import styles from "./access.module.css";
 
 type Schemas = components["schemas"];
@@ -109,6 +110,7 @@ export function AccessAdministration() {
   useEffect(() => { if (pendingAction) decisionInput.current?.focus(); }, [pendingAction]);
 
   const membership = subject?.memberships.find(item => item.id === membershipId && item.status === "active");
+  const suggestedIds = new Set(catalog ? rolePermissionSuggestions(catalog, templateId, membership?.scope.kind).map(permission => permission.id) : []);
   const grant = useMemo<GrantRequest | null>(() => {
     const effectiveAt = toIsoDate(effective);
     const expiresAt = toIsoDate(expiry);
@@ -132,7 +134,8 @@ export function AccessAdministration() {
     try {
       const result = await gateway.subject(subjectReference, current?.userId);
       setSubject(result); setMembershipId(result.memberships.find(item => item.status === "active")?.id ?? "");
-      setSelected(null); setPendingAction(null);
+      setSelected(null); setPendingAction(null); setPacks([]); setExtras([]); setDelegable([]);
+      previewSession.invalidate(); setPreview(null); setPreviewDraft("");
     } catch (failure) { setSubject(null); setError(failure); }
     finally { setBusy(false); }
   }
@@ -246,7 +249,7 @@ export function AccessAdministration() {
       <section className={styles.accountSection} aria-labelledby="account-heading">
         <h2 id="account-heading">Akun yang dikelola</h2>
         <form onSubmit={loadSubject} className={styles.lookup}>
-          <label>Referensi akun<input value={subjectReference} onChange={event => { setSubjectReference(event.target.value); setSubject(null); previewSession.invalidate(); setPreview(null); }}
+          <label>Referensi akun<input value={subjectReference} onChange={event => { setSubjectReference(event.target.value); setSubject(null); setMembershipId(""); setPacks([]); setExtras([]); setDelegable([]); previewSession.invalidate(); setPreview(null); setPreviewDraft(""); }}
             inputMode="numeric" autoComplete="off" placeholder="Contoh: 1032" maxLength={19} required disabled={locked} aria-describedby="account-help" /></label>
           <button className={styles.secondary} disabled={locked || !validReference(subjectReference)}>Tampilkan akun</button>
         </form>
@@ -307,18 +310,18 @@ export function AccessAdministration() {
               <fieldset disabled={locked || (mode === "grant" ? !canProposeGrant : !canProposeMembership)} className={styles.fields}>
                 <legend className={styles.srOnly}>Rincian pengajuan</legend>
                 {mode === "grant" ? <>
-                  <label>Keanggotaan aktif<select required value={membershipId} onChange={event => setMembershipId(event.target.value)}><option value="">Pilih keanggotaan</option>
+                  <label>Keanggotaan aktif<select required value={membershipId} onChange={event => { setMembershipId(event.target.value); setPacks([]); setExtras([]); setDelegable([]); previewSession.invalidate(); setPreview(null); setPreviewDraft(""); }}><option value="">Pilih keanggotaan</option>
                     {subject.memberships.filter(item => item.status === "active").map(item => <option key={item.id} value={item.id}>{item.id}: {describeScope(item.scope)}</option>)}
                   </select></label>
                   {membership ? <p className={styles.scopeSummary}>{describeScope(membership.scope)}</p> : <p className={styles.help}>Izin hanya dapat diajukan untuk keanggotaan yang telah disetujui.</p>}
-                  <label>Peran awal<select value={templateId} onChange={event => { setTemplateId(event.target.value); setPacks([]); setExtras([]); setDelegable([]); }}>
+                  <label>Peran awal<select value={templateId} onChange={event => { setTemplateId(event.target.value); setPacks([]); setExtras([]); setDelegable([]); previewSession.invalidate(); setPreview(null); setPreviewDraft(""); }}>
                     {catalog.roles.map(role => <option key={role.id} value={role.id}>{role.label}</option>)}
                   </select></label>
                   {templateId === "finance" && <fieldset className={styles.choiceGroup}><legend>Paket tugas keuangan</legend><p className={styles.help}>Peran Keuangan tanpa paket tidak memberikan izin transaksi. Pilih hanya tugas yang diperlukan.</p>
                     {catalog.financePacks.map(pack => <label className={styles.checkbox} key={pack.id}><input type="checkbox" checked={packs.includes(pack.id)} onChange={() => toggle(pack.id, packs, setPacks)} /><span>{pack.label}</span></label>)}
                   </fieldset>}
-                  <details className={styles.permissions}><summary>Izin tambahan yang diminta</summary><p className={styles.help}>Termasuk PIC dan verifikasi pembayaran jika diperlukan. Cakupan dan penunjukan tetap harus disetujui secara terpisah.</p>
-                    {catalog.permissions.map(permission => <label className={styles.checkbox} key={permission.id}><input type="checkbox" checked={extras.includes(permission.id)} onChange={() => toggle(permission.id, extras, setExtras)} /><span>{permissionLabel(permission.id, permission.label)}{permission.requiresFreshMfa && <small>Memerlukan verifikasi dua langkah terbaru</small>}</span></label>)}
+                  <details className={styles.permissions}><summary>Izin tambahan yang diminta</summary><p className={styles.help}>Termasuk PIC dan verifikasi pembayaran jika diperlukan. Saran peran tidak dicentang otomatis. Cakupan dan penunjukan tetap harus disetujui secara terpisah.</p>
+                    {catalog.permissions.map(permission => <label className={styles.checkbox} key={permission.id}><input type="checkbox" checked={extras.includes(permission.id)} onChange={() => toggle(permission.id, extras, setExtras)} /><span>{permissionLabel(permission.id, permission.label)}{suggestedIds.has(permission.id) && <small>Disarankan untuk peran ini</small>}{permission.requiresFreshMfa && <small>Memerlukan verifikasi dua langkah terbaru</small>}</span></label>)}
                   </details>
                   <details className={styles.permissions}><summary>Wewenang pemberian izin</summary><p className={styles.help}>Isi hanya untuk petugas pemberi persetujuan yang ditunjuk. Memiliki izin transaksi tidak otomatis memberikan wewenang ini.</p>
                     {catalog.permissions.map(permission => <label className={styles.checkbox} key={permission.id}><input type="checkbox" checked={delegable.includes(permission.id)} onChange={() => toggle(permission.id, delegable, setDelegable)} /><span>{permissionLabel(permission.id, permission.label)}</span></label>)}

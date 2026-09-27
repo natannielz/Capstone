@@ -5523,6 +5523,15 @@
             "items": {
               "type": "string"
             }
+          },
+          "suggestedPermissions": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
           }
         },
         "additionalProperties": false

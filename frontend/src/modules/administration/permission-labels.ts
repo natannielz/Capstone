@@ -1,6 +1,11 @@
 const labels: Record<string, string> = {
   "catalog.read": "Lihat katalog", "catalog.manage": "Kelola katalog", "pricing.manage": "Kelola harga",
   "order.read": "Lihat pesanan", "order.submit": "Ajukan pesanan", "order.approve": "Setujui pesanan", "order.substitute": "Tanggapi penggantian barang", "order.cancel": "Batalkan pesanan",
+  "order.spend.approve": "Setujui belanja pembeli", "order.accept": "Terima pesanan di toko",
+  "substitution.propose": "Ajukan penggantian barang", "substitution.accept": "Setujui penggantian barang",
+  "stock.convert": "Konversi kemasan stok", "reservation.release": "Lepaskan reservasi stok",
+  "supplier.change.propose": "Ajukan perubahan pemasok", "supplier.change.approve": "Setujui perubahan pemasok",
+  "history.read": "Lihat riwayat sesuai lingkup", "report.read": "Lihat laporan sesuai lingkup",
   "branch.pic": "PIC cabang atau divisi", "organization.wide": "Akses seluruh organisasi pembeli",
   "stock.read": "Lihat stok", "stock.receive": "Terima persediaan", "stock.count": "Hitung persediaan", "stock.adjust.propose": "Ajukan penyesuaian stok", "stock.adjust.approve": "Setujui penyesuaian stok",
   "shipment.read": "Lihat pengiriman", "shipment.prepare": "Siapkan pengiriman", "shipment.dispatch": "Kirim barang", "shipment.assign": "Tugaskan pengiriman",

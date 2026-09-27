@@ -61,7 +61,7 @@ public sealed record GrantProposalDto([property: JsonRequired] GrantRequestDto G
 public sealed record MembershipProposalDto([property: JsonRequired] MembershipRequestDto Membership,
     [property: JsonRequired] string Reason);
 public sealed record AccessReasonDto([property: JsonRequired] string Reason);
-public sealed record AccessRoleDto(string Id, string Label, int Version, string[] Permissions);
+public sealed record AccessRoleDto(string Id, string Label, int Version, string[] Permissions, string[]? SuggestedPermissions = null);
 public sealed record AccessPackDto(string Id, string Label, string[] Permissions);
 public sealed record AccessPermissionDto(string Id, string Label, GrantScopeKind[] AllowedScopes, bool RequiresFreshMfa);
 public sealed record AccessCatalogDto(AccessRoleDto[] Roles, AccessPackDto[] FinancePacks,

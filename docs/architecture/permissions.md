@@ -1,6 +1,6 @@
 # Unit Toko access model
 
-Status: T04 implementation and integration review in progress, 28 September 2026. The production API still rejects unverified actors. Provider login, invitations and sessions belong to T03; the existing demo roles cannot authenticate to this API.
+Status: local T03/T04 runtime and administration foundations are implemented; ACC02 adds explicit business permissions and optional role suggestions. Production identity/provider/business acceptance remains open. The API requires verified actors; existing demo roles do not authenticate to it.
 
 ## Six role templates
 
@@ -45,7 +45,7 @@ Commands load the resource's immutable actor IDs and current revision from serve
 | Approve stock adjustment | Approver differs from both counter and proposer |
 | Record disbursement | Recorder differs from the prior approver |
 | Approve accounting period | Approver differs from submitter |
-| Close accounting period | Submitter, approver and closer are three distinct people |
+| Close accounting period | Submitter, approver and closer have three distinct immutable account IDs; trusted person-level equivalence remains ACC03 |
 | Approve reopening | Approver differs from requester and original closer; revision advances |
 | Approve access/membership | Approver differs from proposer and beneficiary |
 
@@ -95,6 +95,10 @@ Administration forms show scope, role/finance packs, effective dates, permission
 
 ## Persistence and remaining gates
 
-Migration history advances sequentially through v3 while foundation and authorization document formats remain at schema version 1. Applied v1/v2 steps are frozen. Lifecycle additions preserve stronger existing validators, check incompatible rows and duplicate scoped codes before stricter schemas, and never invent approved memberships or named scopes. Organization profiles use a unique kind/parent/normalized-code key. Migration raises relevant ID sequence high-water marks without lowering larger counters or backfilling display names. Migration requires an exclusive deployment window; Mongo DDL is not part of the business transaction.
+Migration history currently advances sequentially through v5 while foundation and authorization document formats remain at schema version 1; v4/v5 add identity and provider-lifecycle collections. Applied v1/v2 steps are frozen. Lifecycle additions preserve stronger existing validators, check incompatible rows and duplicate scoped codes before stricter schemas, and never invent approved memberships or named scopes. Organization profiles use a unique kind/parent/normalized-code key. Migration raises relevant ID sequence high-water marks without lowering larger counters or backfilling display names. Migration requires an exclusive deployment window; Mongo DDL is not part of the business transaction.
 
 Evidence and unresolved work are recorded in `docs/quality/production-progress.md` and `production-acceptance.md`. T04 acceptance does not imply production identity, migrated users, ported business workflows, live integrations or an accepted pilot. Required later checks include provider/CSRF/session behavior (T03), each module's scoped routes/files/events, real migration/import mapping (T15), and named operational approvers plus pilot approval (T16).
+
+## Explicit business permission additions
+
+Buyer spending approval, store operational acceptance, substitution proposal/consent, stock conversion, reservation release and supplier change approval have distinct permission names. They are available for explicit reviewed additions; v1 role snapshots retain their materialized powers. The server publishes role suggestions separately, and the forms require a deliberate selection before including one in the reviewed request. Read-only history/report names do not introduce inactive-resource or confidential-field exceptions. Exact scopes, immutable evidence, role suggestions and remaining catalog/history contracts are recorded in [business access contracts](business-access-contracts.md).

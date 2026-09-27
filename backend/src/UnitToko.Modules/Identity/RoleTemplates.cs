@@ -35,6 +35,19 @@ public static class RoleTemplates
         ["accounting"] = [Permissions.ReconciliationVerify, Permissions.JournalPost, Permissions.JournalReverse, Permissions.PeriodClose, Permissions.DisbursementVerify]
     }.ToImmutableDictionary(StringComparer.Ordinal);
 
+    /// <summary>Optional grant-review hints. They never enter a materialized v1 role unless selected explicitly.</summary>
+    public static ImmutableDictionary<string, ImmutableArray<string>> Suggestions { get; } =
+        new Dictionary<string, ImmutableArray<string>>(StringComparer.Ordinal)
+        {
+            ["buyer"] = [Permissions.SubstitutionAccept],
+            ["store-staff"] = [Permissions.SubstitutionPropose, Permissions.StockConvert,
+                Permissions.ReservationRelease, Permissions.SupplierChangePropose],
+            ["store-head"] = [Permissions.OrderAccept, Permissions.SupplierChangeApprove],
+            ["courier"] = [],
+            ["finance"] = [],
+            ["system-admin"] = []
+        }.ToImmutableDictionary(StringComparer.Ordinal);
+
     public static RoleTemplateSnapshot Materialize(string templateId, IEnumerable<string> financePacks, IEnumerable<string> additionalPermissions)
     {
         if (!Templates.TryGetValue(templateId, out var template))

@@ -854,6 +854,7 @@ export interface components {
             id: string;
             label: string;
             permissions: string[];
+            suggestedPermissions?: null | string[];
             /** Format: int32 */
             version: number | string;
         };

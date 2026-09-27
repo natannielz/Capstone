@@ -19,14 +19,26 @@ const checks=[];
 const current={userId:actor,grantVersion:'1',status:'active',memberships:[],grants:[],allowedActions:['invite.manage','membership.propose','membership.approve','access.approve','access.audit.read','recovery.initiate'],scopes:[
 {id:'10',kind:'buyingOrganization',parentId:null,status:'active',version:'1'},
 {id:'11',kind:'branch',parentId:'10',status:'active',version:'1'},
-{id:'12',kind:'division',parentId:'11',status:'active',version:'1'}]};
-const catalog={allowedActions:current.allowedActions,roles:[],financePacks:[],permissions:[]};
+{id:'12',kind:'division',parentId:'11',status:'active',version:'1'},
+{id:'100',kind:'fulfillmentOrganization',parentId:null,status:'active',version:'1'},
+{id:'101',kind:'shop',parentId:'100',status:'active',version:'1'},
+{id:'103',kind:'channel',parentId:'100',status:'active',version:'1'}]};
+const catalog={allowedActions:current.allowedActions,roles:[
+ {id:'buyer',label:'Pembeli',version:1,permissions:['catalog.read','order.read'],suggestedPermissions:['substitution.accept']},
+ {id:'store-staff',label:'Staf toko',version:1,permissions:['catalog.read','stock.read'],suggestedPermissions:['substitution.propose','stock.convert','reservation.release','supplier.change.propose']}
+],financePacks:[],permissions:[
+ {id:'catalog.read',label:'Lihat katalog',allowedScopes:['buyerOwned','fulfillmentShop'],requiresFreshMfa:false},
+ {id:'order.read',label:'Lihat pesanan',allowedScopes:['buyerOwned'],requiresFreshMfa:false},
+ {id:'stock.read',label:'Lihat stok',allowedScopes:['fulfillmentShop'],requiresFreshMfa:false},
+ {id:'substitution.accept',label:'substitution.accept',allowedScopes:['buyerOwned'],requiresFreshMfa:false},
+ ...['substitution.propose','stock.convert','reservation.release','supplier.change.propose'].map(id=>({id,label:id,allowedScopes:['fulfillmentShop'],requiresFreshMfa:false}))
+]};
 const invitation={id:'9007199254740995',userId:target,intendedEmail:'invite@example.test',scope:{kind:'buyerOwned',organizationId:'10',branchId:'11'},role:null,requestedBy:'80',approvedBy:null,reason:'Account for approved BNI branch',expiresAt:new Date(Date.now()+86400000).toISOString(),accessExpiresAt:null,version:'9007199254740996',status:'pending',allowedActions:['approve','reject']};
 const profile={userId:target,displayName:'Operator Cabang',verifiedEmail:'operator@example.test',verifiedAt:new Date().toISOString(),status:'active',securityVersion:'9007199254740997',grantVersion:'1'};
 async function setup(width=1365,height=1000){
  const context=await browser.newContext({viewport:{width,height},locale:'id-ID',timezoneId:'Asia/Jakarta',serviceWorkers:'block'});
  const page=await context.newPage(); page.setDefaultTimeout(10000);
- const state={mode:'ok',decision:'ok',proposal:'ok',receipt:'committed',calls:[],errors:[],reads:0};
+ const state={mode:'ok',decision:'ok',proposal:'ok',receipt:'committed',actorId:actor,calls:[],errors:[],reads:0};
  page.on('pageerror',e=>state.errors.push(e.message));
  page.on('dialog',dialog=>dialog.accept());
  await page.route('**/*',async route=>{
@@ -37,9 +49,9 @@ async function setup(width=1365,height=1000){
   if(url.pathname==='/api/v1/identity/csrf')return answer({requestToken:'fixture-csrf'});
   if(url.pathname==='/api/v1/access/current'){
    if(state.mode==='unauthenticated')return answer({code:'unauthenticated'},401);
-   return answer(state.mode==='forbidden'?{...current,allowedActions:[]}:current);
+   return answer({...current,userId:state.actorId,...(state.mode==='forbidden'?{allowedActions:[]}: {})});
   }
-  assert.equal(request.headers()['x-expected-actor-id'],actor);
+  assert.equal(request.headers()['x-expected-actor-id'],state.actorId);
   if(url.pathname==='/api/v1/access/catalog')return answer(catalog);
   assert.equal(request.method(),'POST');
   assert.equal(request.headers()['x-csrf-token'],'fixture-csrf');
@@ -90,6 +102,7 @@ async function run(name,action){
  catch(error){checks.push({name,passed:false,error:error.message});console.log('FAIL '+name+': '+error.message);}
 }
 try{
+ if(!process.argv.includes('--acc02')){
  if(!process.argv.includes('--regressions')){
  for(const [name,w,h] of [['desktop',1365,1000],['mobile',390,844]])await run(name+' administration flow',async()=>{
   const {page,context,state}=await setup(w,h);
@@ -198,7 +211,72 @@ try{
   finally{await context.close();}
  });
  }
+ }
+ if(!process.argv.includes('--regressions')){
+ for(const [label,width,height] of [['desktop',1365,1000],['mobile',390,844]])await run('ACC02 explicit suggestions and draft reset '+label,async()=>{
+  const {page,context,state}=await setup(width,height);
+  try{
+   await proposal(page);
+   await page.getByRole('radio',{name:'Pembeli',exact:true}).check();
+   const accept=page.getByRole('checkbox',{name:'Setujui penggantian barang',exact:true});
+   assert.equal(await accept.isChecked(),false,'a suggestion must never be preselected');
+   await page.getByRole('button',{name:'Tinjau usulan',exact:true}).click();
+   const review=page.getByRole('region',{name:'Tinjauan undangan'});
+   assert.equal(await review.getByText('Setujui penggantian barang',{exact:false}).count(),0);
+   await accept.check();
+   assert.equal(await page.getByRole('button',{name:'Kirim usulan undangan',exact:true}).count(),0,'permission edit invalidates review');
+   await page.getByRole('button',{name:'Tinjau usulan',exact:true}).click();
+   await review.getByText('Setujui penggantian barang',{exact:false}).waitFor();
+   await page.getByLabel('Alamat email penerima',{exact:true}).fill('other.recipient@example.test');
+   assert.equal(await accept.isChecked(),false,'recipient change clears selected extras');
+   assert.equal(await page.getByRole('button',{name:'Kirim usulan undangan',exact:true}).count(),0);
+   await accept.check();
+   const scopeSelect=page.getByRole('combobox',{name:/Organisasi dan unit yang dituju/});
+   await scopeSelect.selectOption({index:1});
+   await page.getByRole('radio',{name:'Pembeli',exact:true}).check();
+   assert.equal(await accept.isChecked(),false,'scope change clears selected extras');
+   await page.getByRole('combobox',{name:/Jenis lingkup/}).selectOption('fulfillmentShop');
+   await scopeSelect.selectOption({index:1});
+   await page.getByRole('radio',{name:'Staf toko',exact:true}).check();
+   assert.equal(await accept.count(),0,'buyer consent is not offered on a fulfillment scope');
+   const convert=page.getByRole('checkbox',{name:'Konversi kemasan stok',exact:true});
+   const release=page.getByRole('checkbox',{name:'Lepaskan reservasi stok',exact:true});
+   assert.equal(await convert.isChecked(),false);
+   await convert.check();
+   await page.getByRole('radio',{name:'Keanggotaan saja, tanpa peran',exact:true}).check();
+   await page.getByRole('radio',{name:'Staf toko',exact:true}).check();
+   assert.equal(await convert.isChecked(),false,'role change clears selected extras');
+   await convert.check();await release.check();
+   await page.getByRole('button',{name:'Tinjau usulan',exact:true}).click();
+   await review.getByText('Konversi kemasan stok',{exact:false}).waitFor();
+   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'suggestions fit viewport');
+   await page.screenshot({path:outputFile('accounts-acc02-'+label+'.png'),fullPage:true});
+   await page.getByRole('button',{name:'Kirim usulan undangan',exact:true}).click();
+   await page.getByRole('status').filter({hasText:'Pengajuan undangan tersimpan'}).waitFor();
+   assert.equal(state.calls.length,1);
+   assert.deepEqual(state.calls[0].body.role,{templateId:'store-staff',financePacks:[],additionalPermissions:['reservation.release','stock.convert'],delegablePermissions:[]});
+   assert.equal(state.calls[0].body.email,'other.recipient@example.test');
+   assert.deepEqual(state.errors,[]);
+  }finally{await context.close();}
+ });
+ await run('ACC02 account change clears selected suggestions and review',async()=>{
+  const {page,context,state}=await setup();
+  try{
+   await proposal(page);
+   await page.getByRole('radio',{name:'Pembeli',exact:true}).check();
+   await page.getByRole('checkbox',{name:'Setujui penggantian barang',exact:true}).check();
+   await page.getByRole('button',{name:'Tinjau usulan',exact:true}).click();
+   state.actorId='9007199254740998';
+   await page.getByRole('button',{name:'Muat ulang akses',exact:true}).click();
+   await page.getByText('Akun yang memeriksa: '+state.actorId,{exact:true}).waitFor();
+   assert.equal(await page.getByLabel('Alamat email penerima',{exact:true}).inputValue(),'');
+   assert.equal(await page.getByRole('checkbox',{name:'Setujui penggantian barang',exact:true}).count(),0);
+   assert.equal(await page.getByRole('button',{name:'Kirim usulan undangan',exact:true}).count(),0);
+   assert.equal(state.calls.length,0);
+  }finally{await context.close();}
+ });
+ }
 }finally{await browser.close();}
 const report={at:new Date().toISOString(),scope:'Real browser UI with synthetic API responses only, not full stack or Auth0 acceptance',checks};
-await writeFile(outputFile(process.argv.includes('--regressions')?'accounts-browser-regressions.json':'accounts-browser-result.json'),JSON.stringify(report,null,2));
+await writeFile(outputFile(process.argv.includes('--acc02')?'accounts-browser-acc02.json':process.argv.includes('--regressions')?'accounts-browser-regressions.json':'accounts-browser-result.json'),JSON.stringify(report,null,2));
 if(checks.some(check=>!check.passed))process.exitCode=1;

@@ -53,3 +53,42 @@ test("ACC01 expiry uses Jakarta wall time and rejects expired or reversed period
  assert.equal(invitationDates("2026-09-28T08:00","",now),null);
  assert.equal(invitationDates("2026-09-29T09:00","2026-09-29T08:00",now),null);
 });
+
+const businessCatalog = {
+ ...catalog,
+ roles:[{id:"buyer",label:"Pembeli",version:1,permissions:["order.read"],suggestedPermissions:["substitution.accept"]},
+  {id:"store-staff",label:"Staf toko",version:1,permissions:["stock.read"],suggestedPermissions:["stock.convert","reservation.release"]}],
+ permissions:[
+  ...catalog.permissions.filter(permission=>permission.id!=="order.read"),
+  {id:"order.read",label:"Baca pesanan",allowedScopes:["buyerOwned","buyingBranch"] as Schemas["GrantScopeKind"][],requiresFreshMfa:false},
+  {id:"substitution.accept",label:"substitution.accept",allowedScopes:["buyerOwned","buyingBranch"] as Schemas["GrantScopeKind"][],requiresFreshMfa:false},
+  {id:"stock.read",label:"Baca stok",allowedScopes:["fulfillmentShop"] as Schemas["GrantScopeKind"][],requiresFreshMfa:false},
+  {id:"stock.convert",label:"Konversi stok",allowedScopes:["fulfillmentShop"] as Schemas["GrantScopeKind"][],requiresFreshMfa:false},
+  {id:"reservation.release",label:"Lepas reservasi",allowedScopes:["fulfillmentShop"] as Schemas["GrantScopeKind"][],requiresFreshMfa:false},
+ ]
+};
+
+test("ACC02 suggested invitation permissions are never included without an explicit selection",()=>{
+ assert.deepEqual(invitationRole(businessCatalog,{kind:"buyerOwned"},"buyer",[]),{
+  templateId:"buyer",financePacks:[],additionalPermissions:[],delegablePermissions:[]
+ });
+});
+
+test("ACC02 invitation includes exactly the selected compatible permissions without changing base template",()=>{
+ assert.deepEqual(invitationRole(businessCatalog,{kind:"fulfillmentShop"},"store-staff",[],["stock.convert","reservation.release"]),{
+  templateId:"store-staff",financePacks:[],additionalPermissions:["reservation.release","stock.convert"],delegablePermissions:[]
+ });
+ assert.deepEqual(businessCatalog.roles[1].permissions,["stock.read"]);
+ assert.deepEqual(invitationRole(businessCatalog,{kind:"buyerOwned"},"buyer",[],["substitution.accept"])?.additionalPermissions,["substitution.accept"]);
+});
+
+test("ACC02 invitation rejects unknown, duplicate and scope-incompatible permission selections",()=>{
+ for(const extras of [["unknown.permission"],["stock.convert"],["substitution.accept","substitution.accept"]])
+  assert.equal(invitationRole(businessCatalog,{kind:"buyerOwned"},"buyer",[],extras),null);
+});
+
+test("ACC02 added business permission still requires explicit branch designation",()=>{
+ assert.equal(invitationRole(businessCatalog,{kind:"buyingBranch"},"buyer",[],["substitution.accept"]),null);
+ assert.deepEqual(invitationRole(businessCatalog,{kind:"buyingBranch"},"buyer",[],["substitution.accept","branch.pic"])?.additionalPermissions,
+  ["branch.pic","substitution.accept"]);
+});
