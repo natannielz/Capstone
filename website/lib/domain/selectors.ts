@@ -1,8 +1,9 @@
 import { ACCOUNTS, DomainError, type State, type OrderLine, type Invoice, type Batch, type Stocktake } from "./model";
 import {ROLES, isRole, type Actor, type Role} from "./accounts";
 import {assertBuyerAccess, buyerKey, buyerRefForActor, sameBuyer} from "./buyers";
+import { now } from "./clock";
 export const sum=(values:number[])=>values.reduce((a,b)=>a+b,0);
-export const today=()=>new Date().toLocaleDateString("en-CA",{timeZone:"Asia/Jakarta"});
+export const today=()=>now().toLocaleDateString("en-CA",{timeZone:"Asia/Jakarta"});
 export const money=(v:number)=>new Intl.NumberFormat("id-ID",{style:"currency",currency:"IDR",maximumFractionDigits:0}).format(v);
 export const get=<T extends {id:string}>(items:T[],id:unknown):T=>{const item=items.find(x=>x.id===id);if(!item)throw new DomainError("Data tidak ditemukan.",404);return item;};
 export function allowed(actor:Actor,roles:readonly Role[]){if(!actor.active||!isRole(actor.role)||!roles.includes(actor.role))throw new DomainError("Peran Anda tidak memiliki akses untuk tindakan ini.",403);}

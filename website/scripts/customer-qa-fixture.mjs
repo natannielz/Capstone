@@ -12,7 +12,8 @@ export const QA_CUSTOMER_EMAIL = "customer-qa-b@unit-toko.demo";
 /** This helper is intentionally incapable of targeting the ordinary demo or a remote database. */
 export function assertLocalQaEnvironment() {
   if (resolve(process.cwd()) !== project) throw new Error("Run QA from the website directory.");
-  if (process.env.TURSO_DATABASE_URL !== "file:.data/unit-toko-v7-qa.db") throw new Error("QA requires the exact isolated v7 database URL.");
+  const runId = process.env.TOKO_TEST_RUN_ID;
+  if (!runId || !/^[a-zA-Z0-9_-]{16,80}$/.test(runId) || process.env.TOKO_TEST_MODE !== "isolated" || process.env.TURSO_DATABASE_URL !== `file:.test-data/${runId}.db`) throw new Error("QA requires an explicit isolated run and its exact disposable database URL.");
   if (process.env.VERCEL || process.env.TURSO_AUTH_TOKEN || process.env.BLOB_READ_WRITE_TOKEN || process.env.NODE_ENV === "production") throw new Error("QA refuses production, remote database, or blob credentials.");
   if (!process.env.DEMO_PASSWORD_SEED || process.env.DEMO_PASSWORD_SEED.length < 32) throw new Error("QA requires its private demo seed.");
   const base = process.env.TOKO_TEST_URL || "http://127.0.0.1:3007";

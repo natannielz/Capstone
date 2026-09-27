@@ -4,7 +4,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { assertLocalQaEnvironment, prepareCustomerQaFixture, retireCustomerQaProducts, qaPassword, setQaCustomerRole, QA_CUSTOMER_ID, QA_CUSTOMER_EMAIL } from "./customer-qa-fixture.mjs";
 
-const base = assertLocalQaEnvironment();
+import {assertIsolatedSmokeServer} from "./smoke-environment.mjs";
+const base = await assertIsolatedSmokeServer(assertLocalQaEnvironment());
 const sessions = new Map();
 const checks = [], failures = [];
 let fixture;

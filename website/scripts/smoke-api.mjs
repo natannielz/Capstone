@@ -1,8 +1,8 @@
 import {readFileSync} from "node:fs";
-const accounts=JSON.parse(readFileSync(".data/demo-accounts.json","utf8"));
 import assert from "node:assert/strict";
-const base=process.env.TOKO_TEST_URL||"http://127.0.0.1:3000";
-if(new URL(base).hostname!=="localhost"&&new URL(base).hostname!=="127.0.0.1")throw new Error("Smoke mutasi hanya untuk demo lokal.");
+import {assertIsolatedSmokeServer} from "./smoke-environment.mjs";
+const base=await assertIsolatedSmokeServer(process.env.TOKO_TEST_URL||"http://127.0.0.1:3000");
+const accounts=JSON.parse(readFileSync(".data/demo-accounts.json","utf8"));
 const sessions=new Map();
 async function request(who,path,options={}){const headers={...options.headers,...(sessions.has(who)?{cookie:sessions.get(who)}:{})};return fetch(base+path,{...options,headers});}
 async function login(who){const r=await fetch(base+"/api/auth/login",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(accounts.find(a=>a.email===who+"@unit-toko.demo"))});assert.equal(r.status,200,await r.clone().text());sessions.set(who,r.headers.get("set-cookie").split(";")[0]);}

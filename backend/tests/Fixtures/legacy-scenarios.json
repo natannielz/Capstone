@@ -1,0 +1,99 @@
+{
+  "schemaVersion": 1,
+  "kind": "descriptive-acceptance-manifest",
+  "executable": false,
+  "clock": "2026-09-17T05:00:00Z",
+  "timezone": "Asia/Jakarta",
+  "amountUnit": "IDR",
+  "normalization": "References beginning with $ bind command results. Compare status and balances by reference, ignoring generated IDs, document numbers, and array order.",
+  "scenarios": [
+    {
+      "key": "partial-delivery",
+      "sourceTest": "website/tests/domain.test.ts U02",
+      "initial": {"orderQuantity": 10, "stockQuantity": 8, "unitPrice": 10000},
+      "commands": [
+        {"actor": "pic-a", "type": "order.create", "quantity": 10},
+        {"actor": "kepala", "type": "order.review", "approve": true},
+        {"actor": "staf", "type": "stock.reserve", "quantity": 8},
+        {"actor": "staf", "type": "shipment.dispatch", "quantity": 8},
+        {"actor": "pic-a", "type": "shipment.receive", "accepted": 8},
+        {"actor": "staf", "type": "sale.finalize"},
+        {"actor": "penagihan", "type": "invoice.issue"},
+        {"actor": "staf", "type": "purchase.receive", "quantity": 2},
+        {"actor": "staf", "type": "shipment.dispatch", "quantity": 2},
+        {"actor": "pic-a", "type": "shipment.receive", "accepted": 2},
+        {"actor": "staf", "type": "sale.finalize"},
+        {"actor": "penagihan", "type": "invoice.issue"}
+      ],
+      "expected": {"acceptedQuantity": 10, "remainingQuantity": 0, "invoiceCount": 2, "invoiceTotal": 100000}
+    },
+    {
+      "key": "substitution-consent",
+      "sourceTest": "website/tests/domain.test.ts U03",
+      "initial": {"originalUnitPrice": 10000, "replacementUnitPrice": 12000, "orderQuantity": 10, "originalShipped": 8},
+      "commands": [
+        {"actor": "staf", "type": "substitution.propose", "quantity": 2},
+        {"actor": "staf", "type": "stock.reserve", "quantity": 2, "expectError": "buyer confirmation required"},
+        {"actor": "pic-a", "type": "substitution.decide", "approve": true}
+      ],
+      "expected": {"originalShippedUnitPrice": 10000, "originalCancelledQuantity": 2, "replacementQuantity": 2, "replacementUnitPrice": 12000}
+    },
+    {
+      "key": "unique-invoice-source",
+      "sourceTest": "website/tests/repository.test.ts concurrent invoice.issue",
+      "initial": {"acceptedShipmentLine": "$line"},
+      "commands": [
+        {"actor": "penagihan", "type": "invoice.issue", "source": "$line", "idempotencyKey": "same-command"},
+        {"actor": "penagihan", "type": "invoice.issue", "source": "$line", "idempotencyKey": "same-command"}
+      ],
+      "expected": {"invoiceCountForSource": 1, "sameResultForReplay": true}
+    },
+    {
+      "key": "payment-allocation",
+      "sourceTest": "website/tests/domain.test.ts U08; website/tests/repository.test.ts",
+      "initial": {"invoiceBalances": [80000, 40000], "verifiedPayment": 125000},
+      "commands": [{"actor": "penagihan", "type": "payment.allocate", "amounts": [80000, 40000]}],
+      "expected": {"invoiceBalances": [0, 0], "paymentAvailable": 5000, "cashPostingsForPayment": 1}
+    },
+    {
+      "key": "damaged-return",
+      "sourceTest": "website/tests/domain.test.ts U04",
+      "initial": {"batchQuantity": 20, "shippedQuantity": 8, "acceptedQuantity": 8, "unitPrice": 10000},
+      "commands": [
+        {"actor": "pic-a", "type": "complaint.create", "quantity": 1},
+        {"actor": "staf", "type": "shipment.return", "quantity": 1, "good": false},
+        {"actor": "staf", "type": "stock.returnCreate", "quantity": 1, "fromHeld": true},
+        {"actor": "staf", "type": "stock.returnResolve", "accept": true},
+        {"actor": "staf", "type": "complaint.resolve"},
+        {"actor": "staf", "type": "sale.finalize"},
+        {"actor": "penagihan", "type": "invoice.issue"}
+      ],
+      "expected": {"acceptedQuantity": 7, "invoiceTotal": 70000, "batchQuantity": 12, "batchHeld": 0}
+    },
+    {
+      "key": "stocktake-approval",
+      "sourceTest": "website/tests/domain.test.ts U10",
+      "initial": {"batchQuantity": 20, "expired": true},
+      "commands": [
+        {"actor": "staf", "type": "stock.returnCreate", "quantity": 2},
+        {"actor": "staf", "type": "stock.returnResolve", "accept": false},
+        {"actor": "staf", "type": "stocktake.create", "counted": 19},
+        {"actor": "staf", "type": "stocktake.approve", "expectError": "forbidden"},
+        {"actor": "kepala", "type": "stocktake.approve"}
+      ],
+      "expected": {"batchQuantity": 19, "batchHeld": 2, "sellableQuantity": 0, "approvedExactlyOnce": true}
+    },
+    {
+      "key": "period-close-lock",
+      "sourceTest": "website/tests/domain.test.ts U12",
+      "initial": {"month": "2026-09", "journalBalanced": true},
+      "commands": [
+        {"actor": "laporan", "type": "period.submit", "month": "2026-09"},
+        {"actor": "pimpinan", "type": "period.approve", "month": "2026-09"},
+        {"actor": "akuntansi", "type": "period.close", "month": "2026-09"},
+        {"actor": "penagihan", "type": "payment.record", "date": "2026-08-01", "amount": 1000, "expectError": "closed period"}
+      ],
+      "expected": {"periodStatus": "closed", "historicalJournalUnchanged": true, "debitEqualsCredit": true}
+    }
+  ]
+}

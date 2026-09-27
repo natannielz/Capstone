@@ -3,7 +3,8 @@
 import assert from "node:assert/strict";
 import {assertLocalQaEnvironment, qaPassword} from "./customer-qa-fixture.mjs";
 
-const base = assertLocalQaEnvironment();
+import {assertIsolatedSmokeServer} from "./smoke-environment.mjs";
+const base = await assertIsolatedSmokeServer(assertLocalQaEnvironment());
 const checks = [];
 const sessions = [];
 const customers = ["/shop", "/shop/kopi", "/cart", "/checkout", "/account", "/account/orders"];
