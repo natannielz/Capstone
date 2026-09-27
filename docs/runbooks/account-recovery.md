@@ -30,3 +30,7 @@ After activation, support should use the audited account directory and current s
 Provider-specific constraints and source links are recorded in [Auth0 integration research](../research/2026-09-28-auth0-integration.md). General key handling, migration, backup/restore and deployment acceptance remain required.
 
 Provider completion and admission-hold constraints: [Auth0 lifecycle research](../research/2026-09-28-auth0-lifecycle.md). Do not activate factor removal until legitimate owner verification is bound to the exact recovery intent; fresh enrollment alone is insufficient.
+
+## Local provider-event restriction
+
+The separately authenticated [provider-event receiver](provider-security-events.md) now applies transactional session revocation and persistent provider-subject restrictions. Password/factor changes require newer verified sign-in and factor evidence. Provider block, deletion or factor removal prevents ordinary admission until a reviewed release flow exists. These effects are local implementation work, not proof of complete or immediate delivery from an actual tenant. They do not dispatch or complete a blocked recovery intention, and old intentions are not backfilled into admission holds.

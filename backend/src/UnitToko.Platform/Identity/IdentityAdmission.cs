@@ -30,6 +30,8 @@ public sealed partial class IdentityOnboardingService
         InvitationRedemptionBinding? invitationBinding, CancellationToken cancellationToken = default)
     {
         if (!session.IsInTransaction || !policy.Accepts(proof, clock.UtcNow)) throw new AuthorizationDeniedException("identity_admission_denied");
+        await IdentityAdmissionHolds.RequireSubjectClearAsync(database, session, proof,
+            clock, "identity_admission_denied", cancellationToken);
         var email = OnboardingPolicy.NormalizeEmail(proof.Email);
         var identity = await Collection("identities").Find(session, F.Eq("issuer", proof.Issuer) & F.Eq("subject", proof.Subject)).FirstOrDefaultAsync(cancellationToken);
         if (identity is not null)
@@ -45,6 +47,18 @@ public sealed partial class IdentityOnboardingService
                 if (initialized.ModifiedCount != 1) throw new AuthorizationDeniedException("identity_admission_denied");
                 identity["securityVersion"] = 1L;
             }
+            else
+            {
+                var currentSecurityVersion = SecurityVersion(identity);
+                var fenced = await Collection("identities").UpdateOneAsync(session,
+                    F.Eq("_id", identity["_id"]) & F.Eq("issuer", proof.Issuer) & F.Eq("subject", proof.Subject) &
+                    F.Eq("status", "active") & F.Eq("grantVersion", identity["grantVersion"]) &
+                    F.Eq("securityVersion", currentSecurityVersion),
+                    Builders<BsonDocument>.Update.Inc("fence", 1L), cancellationToken: cancellationToken);
+                if (fenced.ModifiedCount != 1) throw new AuthorizationDeniedException("identity_admission_denied");
+            }
+            await IdentityAdmissionHolds.RequireClearAsync(database, session, identity["_id"].AsInt64,
+                "identity_admission_denied", cancellationToken);
             await UpdateProfileAsync(identity["_id"].AsInt64, proof.DisplayName, email, session, cancellationToken);
             return new(identity["_id"].AsInt64, SecurityVersion(identity), identity["grantVersion"].AsInt64, proof.Issuer, proof.Subject);
         }

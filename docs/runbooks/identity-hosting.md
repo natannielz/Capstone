@@ -41,10 +41,14 @@ Environment variable nesting uses double underscores, for example `Identity__Key
 - `GET /api/v1/identity/csrf` returns a request token kept only in browser memory and sets the matching secure host-only HttpOnly anti-forgery cookie. Fetch anew before an unsafe operation; identity changes invalidate prior subject-bound evidence.
 - Native URL-encoded `POST /auth/login` starts a maintained code/PKCE challenge. Optional invitation ID/code are posted in the body and converted to a hashed server-side binding; they are not query parameters.
 - Native `POST /auth/step-up` and `/auth/logout` carry the reviewed `expectedActorId`; it checks stale-page consistency and cannot authenticate anyone. Step-up eligibility does not grant business authority or refresh existing evidence.
-- Every unsafe `/api/v1` or `/auth` request requires exact `Origin` and a valid `X-CSRF-Token` header or `__RequestVerificationToken` form field. The browser client obtains the token before dispatch, without retrying a business write. A failed preflight is a known unsent request; an earlier uncertain request remains uncertain.
+- Every unsafe browser `/api/v1` or `/auth` request requires exact `Origin` and a valid `X-CSRF-Token` header or `__RequestVerificationToken` form field. The browser client obtains the token before dispatch, without retrying a business write. A failed preflight is a known unsent request; an earlier uncertain request remains uncertain.
 - Callback and signed-out paths accept only GET; the maintained handler validates state/nonce/correlation/signature/protocol before local completion. Arbitrary POST callbacks are rejected. Local logout revokes the stored session family before clearing the cookie and does not claim a global Auth0 logout.
 
 Local per-IP fixed-window controls allow 20 login/step-up attempts per five minutes and 240 other API/auth requests per minute per host, without a queue. These are initial operational settings, not measured capacity or complete abuse protection; provider/account throttling, shared edge limits and realistic load require deployment acceptance. The private backend/proxy topology must prevent IP-header spoofing.
+
+## Provider machine callbacks
+
+The two mapped POST receivers use separate rotating bearer credentials, the same trusted HTTPS origin, bounded raw payloads and transactional revocation. Browser cookies cannot authenticate or refresh a session on those endpoints. Their metadata-based Origin/anti-forgery exemption does not apply to other paths or methods. Both transports remain disabled by default. See [provider security-event operations](provider-security-events.md) for exact configuration, accepted native schemas, v5 migration, permanent admission holds and external coverage gates.
 
 ## Remaining activation gates
 

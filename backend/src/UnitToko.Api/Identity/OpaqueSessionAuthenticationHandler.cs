@@ -19,6 +19,7 @@ public sealed class OpaqueSessionAuthenticationHandler(IOptionsMonitor<Authentic
 {
     protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
     {
+        if (ProviderSecurityEventEndpoints.IsReceiver(Context)) return AuthenticateResult.NoResult();
         var token = Request.Cookies[OpaqueSessionCookie.Name];
         if (string.IsNullOrEmpty(token)) return AuthenticateResult.NoResult();
         var session = await sessions.ReadAsync(token, Context.RequestAborted);

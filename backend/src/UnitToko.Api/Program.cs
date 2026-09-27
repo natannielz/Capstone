@@ -51,6 +51,11 @@ builder.Services.AddOpenApi("v1", options =>
         document.Components ??= new OpenApiComponents();
         document.Components.SecuritySchemes = new Dictionary<string, IOpenApiSecurityScheme>
         {
+            ["providerEvents"] = new OpenApiSecurityScheme
+            {
+                Type = SecuritySchemeType.Http, Scheme = "bearer",
+                Description = "Dedicated rotating machine credential for this Auth0 stream; never a browser session or API access token."
+            },
             ["session"] = new OpenApiSecurityScheme
             {
                 Type = SecuritySchemeType.ApiKey,
@@ -63,6 +68,15 @@ builder.Services.AddOpenApi("v1", options =>
             foreach (var pair in path.Value.Operations ?? [])
             {
                 var operation = pair.Value;
+                if (pair.Key.ToString().Equals("POST", StringComparison.OrdinalIgnoreCase) &&
+                    path.Key is ProviderSecurityEventEndpoints.EventsPath or ProviderSecurityEventEndpoints.LogsPath)
+                {
+                    operation.Security = [new OpenApiSecurityRequirement
+                    {
+                        [new OpenApiSecuritySchemeReference("providerEvents", document)] = []
+                    }];
+                    continue;
+                }
                 if ((path.Key.StartsWith("/api/v1/access", StringComparison.Ordinal) || path.Key.StartsWith("/api/v1/organizations", StringComparison.Ordinal) ||
                      path.Key.StartsWith("/api/v1/identity/administration/", StringComparison.Ordinal)) &&
                     path.Key != "/api/v1/access/current")
@@ -118,11 +132,13 @@ var mongoDatabase = app.Configuration["Mongo:Database"];
 if (string.IsNullOrWhiteSpace(mongoUri) || string.IsNullOrWhiteSpace(mongoDatabase) ||
     mongoDatabase is "admin" or "local" or "config" || mongoDatabase.Contains(' '))
     throw new InvalidOperationException("Mongo:Uri and a dedicated Mongo:Database are required.");
+// Resolve concrete endpoint metadata before any browser/machine security decisions.
+app.UseRouting();
 app.Use(async (context, next) =>
 {
     // Cover binding/authentication failures too, before endpoint filters can run.
-    if (context.Request.Path.StartsWithSegments("/api/v1/access") || context.Request.Path.StartsWithSegments("/api/v1/organizations"))
-        context.Response.Headers.CacheControl = "no-store";
+    if (IdentityBrowserSecurity.IsProtectedPath(context.Request.Path))
+        IdentityBrowserSecurity.ApplyResponseHeaders(context);
     var candidate = context.Request.Headers["X-Correlation-Id"].ToString();
     var correlation = candidate.Length is > 0 and <= 64 && candidate.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_')
         ? candidate : Guid.NewGuid().ToString("N");
@@ -157,7 +173,7 @@ app.Use(async (context, next) =>
                 await Problems.WriteAsync(context, 400, "invalid_request", "Invalid request body");
                 return;
             }
-            if (buffer.Length > 0 && context.Request.ContentType?.StartsWith("application/json", StringComparison.OrdinalIgnoreCase) == true)
+            if (!ProviderSecurityEventEndpoints.IsReceiver(context) && buffer.Length > 0 && context.Request.ContentType?.StartsWith("application/json", StringComparison.OrdinalIgnoreCase) == true)
             {
                 buffer.Position = 0;
                 try { using var _ = await JsonDocument.ParseAsync(buffer, cancellationToken: context.RequestAborted); }
@@ -233,6 +249,7 @@ app.UseAuthentication();
 app.UseIdentityAntiforgery(identityEnabled);
 app.UseAuthorization();
 app.MapIdentitySecurityEndpoints();
+app.MapProviderSecurityEventEndpoints();
 app.MapIdentityEndpoints();
 app.MapIdentityAdministrationEndpoints();
 app.MapAccessEndpoints();

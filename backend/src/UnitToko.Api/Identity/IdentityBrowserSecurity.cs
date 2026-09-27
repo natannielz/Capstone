@@ -8,14 +8,19 @@ public static class IdentityBrowserSecurity
     public static bool IsProtectedPath(PathString path) => path.StartsWithSegments("/api/v1") || path.StartsWithSegments("/auth");
     public static bool IsIdentityPath(PathString path) => path.StartsWithSegments("/api/v1/identity") || path.StartsWithSegments("/auth");
 
-    public static IApplicationBuilder UseIdentityTransport(this IApplicationBuilder app, bool enabled) => app.Use(async (context, next) =>
+    internal static void ApplyResponseHeaders(HttpContext context)
     {
-        if (!IsProtectedPath(context.Request.Path)) { await next(context); return; }
         context.Response.Headers.CacheControl = "no-store";
         context.Response.Headers["Referrer-Policy"] = "no-referrer";
         context.Response.Headers["X-Content-Type-Options"] = "nosniff";
         context.Response.Headers["X-Frame-Options"] = "DENY";
         context.Response.Headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'; base-uri 'none'";
+    }
+
+    public static IApplicationBuilder UseIdentityTransport(this IApplicationBuilder app, bool enabled) => app.Use(async (context, next) =>
+    {
+        if (!IsProtectedPath(context.Request.Path)) { await next(context); return; }
+        ApplyResponseHeaders(context);
         if (!enabled)
         {
             if (IsIdentityPath(context.Request.Path))
@@ -32,7 +37,7 @@ public static class IdentityBrowserSecurity
             await Problems.WriteAsync(context, 403, "untrusted_origin", "Request origin is not allowed");
             return;
         }
-        if (!HasTrustedBrowserContext(context, origin))
+        if (!ProviderSecurityEventEndpoints.IsReceiver(context) && !HasTrustedBrowserContext(context, origin))
         {
             await Problems.WriteAsync(context, 403, "untrusted_origin", "Request origin is not allowed"); return;
         }
@@ -50,7 +55,7 @@ public static class IdentityBrowserSecurity
 
     public static IApplicationBuilder UseIdentityAntiforgery(this IApplicationBuilder app, bool enabled) => app.Use(async (context, next) =>
     {
-        if (!enabled || !IsProtectedPath(context.Request.Path)) { await next(context); return; }
+        if (!enabled || !IsProtectedPath(context.Request.Path) || ProviderSecurityEventEndpoints.IsReceiver(context)) { await next(context); return; }
         var safe = HttpMethods.IsGet(context.Request.Method) || HttpMethods.IsHead(context.Request.Method) || HttpMethods.IsOptions(context.Request.Method);
         if (!safe)
         {

@@ -35,7 +35,7 @@ public sealed partial class MongoIdentitySessionStore
         RequireTransaction(tx); ValidateNewProof(proof, providerPayload);
         if (admission.UserId <= 0 || admission.GrantVersion <= 0 || admission.SecurityVersion <= 0 ||
             admission.Issuer != proof.Issuer || admission.Subject != proof.Subject) throw Denied();
-        await FenceIdentityAsync(tx, admission, cancellationToken);
+        await FenceIdentityAsync(tx, admission, proof, cancellationToken);
         var token = SessionPersistence.NewToken(); var id = SessionPersistence.TokenHash(token)!;
         var now = Milliseconds(clock.UtcNow);
         var envelope = new Envelope(admission.UserId, admission.GrantVersion, admission.SecurityVersion, id,
@@ -57,7 +57,7 @@ public sealed partial class MongoIdentitySessionStore
                     F.Gt("idleExpiresAt", clock.UtcNow.UtcDateTime) & F.Gt("absoluteExpiresAt", clock.UtcNow.UtcDateTime)).FirstOrDefaultAsync(ct);
                 if (row is null) return null;
                 var envelope = Decode(row);
-                await FenceIdentityAsync(tx, Admission(envelope), ct);
+                await FenceIdentityAsync(tx, Admission(envelope), envelope.Proof, ct);
                 var now = Milliseconds(clock.UtcNow);
                 var idle = Earlier(now + SessionPolicy.IdleTimeout, envelope.AbsoluteExpiresAt);
                 var updated = await Sessions.FindOneAndUpdateAsync(tx, Live(row, now),
@@ -111,7 +111,7 @@ public sealed partial class MongoIdentitySessionStore
         var old = Decode(row);
         if (proof.Issuer != old.Proof.Issuer || proof.Subject != old.Proof.Subject ||
             challengeStartedAt < old.CreatedAt - SessionPolicy.ProviderClockSkew) throw Denied();
-        await FenceIdentityAsync(tx, Admission(old), cancellationToken);
+        await FenceIdentityAsync(tx, Admission(old), proof, cancellationToken);
         var changed = await Sessions.UpdateOneAsync(tx, Live(row, now),
             U.Set("status", "rotated").Set("revokedAt", now.UtcDateTime).Set("revocationReason", "step_up_rotation")
                 .Inc("version", 1L).Inc("fence", 1L), cancellationToken: cancellationToken);
@@ -123,12 +123,16 @@ public sealed partial class MongoIdentitySessionStore
         return new(token, Snapshot(replacement, envelope));
     }
 
-    private async Task FenceIdentityAsync(IClientSessionHandle tx, IdentityAdmission admission, CancellationToken ct)
+    private async Task FenceIdentityAsync(IClientSessionHandle tx, IdentityAdmission admission,
+        ProviderIdentityProof proof, CancellationToken ct)
     {
         var changed = await database.GetCollection<BsonDocument>("identities").UpdateOneAsync(tx,
             F.Eq("_id", admission.UserId) & F.Eq("issuer", admission.Issuer) & F.Eq("subject", admission.Subject) &
             F.Eq("status", "active") & F.Eq("grantVersion", admission.GrantVersion) & F.Eq("securityVersion", admission.SecurityVersion),
             U.Inc("fence", 1L), cancellationToken: ct);
         if (changed.ModifiedCount != 1) throw Denied();
+        await IdentityAdmissionHolds.RequireSubjectClearAsync(database, tx, proof,
+            clock, "session_unavailable", ct);
+        await IdentityAdmissionHolds.RequireClearAsync(database, tx, admission.UserId, "session_unavailable", ct);
     }
 }

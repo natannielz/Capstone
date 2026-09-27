@@ -16,6 +16,11 @@ public static class IdentityRuntime
     {
         services.AddUnitTokoAuth0(configuration);
         var settings = configuration.GetSection(Auth0Options.SectionName).Get<Auth0Options>() ?? new();
+        var events = configuration.GetSection(Auth0SecurityEventOptions.SectionName).Get<Auth0SecurityEventOptions>() ?? new();
+        events.Validate();
+        if ((events.EventsEnabled || events.LogsEnabled) && (!settings.Enabled || events.Issuer != settings.Issuer))
+            throw new InvalidOperationException("Provider event issuer must match the enabled sign-in provider.");
+        services.AddSingleton(events);
         if (!settings.Enabled)
         {
             services.AddSingleton<IRequestActorResolver, UnavailableRequestActorResolver>();
@@ -53,6 +58,8 @@ public static class IdentityRuntime
         services.AddSingleton<OidcTransactionStore>();
         services.AddSingleton<IdentityOnboardingService>();
         services.AddSingleton<AccountRecoveryService>();
+        services.AddSingleton<ProviderSecurityEventVerifier>();
+        services.AddSingleton<ProviderSecurityEventService>();
         services.AddScoped<IOidcSignInCompletion, VerifiedOidcSignInCompletion>();
         services.AddSingleton<IRequestActorResolver, VerifiedSessionActorResolver>();
         services.AddAuthentication(options =>
