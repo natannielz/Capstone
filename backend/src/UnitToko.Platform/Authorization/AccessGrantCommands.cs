@@ -59,6 +59,11 @@ public sealed partial class AccessAdministrationService
             {
                 proposal = await FindProposalAsync(proposalId, "grant", session, token);
                 candidate = AuthorizationBson.Grant(proposal["request"].AsBsonDocument, true);
+                if (candidate.TemplateId == HistoricalReadPolicy.TemplateId)
+                {
+                    ValidateHistoricalProposal(proposal, candidate);
+                    return await AuthorizeHistoricalGrantApprovalAsync(actor, snapshot, candidate, session, token);
+                }
                 await ValidateBeneficiaryAsync(candidate, snapshot.Directory, session, token);
                 return new(AccessGrantPolicy.CanApprove(actor, snapshot, candidate, clock.UtcNow), ScopePolicy.RequiredNodes(candidate.Scope, snapshot.Directory));
             }, async (session, token) =>
@@ -70,6 +75,8 @@ public sealed partial class AccessAdministrationService
                 var grantVersion = await BumpIdentityAsync(approved.UserId, session, token);
                 await ApproveProposalAsync(proposal!, expectedVersion, actor.UserId, grantId, session, token);
                 await AuditAsync(historyId, actor, approved.UserId, "access.grant.approved", metadata, proposal!, document, session, token);
+                if (candidate!.TemplateId == HistoricalReadPolicy.TemplateId)
+                    await AuthorizeHistoricalGrantApprovalAsync(actor, await store.LoadAsync(actor, session, token), candidate, session, token);
                 return ChangeResult(grantId, approved.UserId, 1, grantVersion, "active");
             }, cancellationToken);
         return ParseChangeResult(result);

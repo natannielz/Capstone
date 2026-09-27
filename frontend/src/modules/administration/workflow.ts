@@ -23,12 +23,12 @@ export function stableContent(value: unknown): string {
 }
 
 /** A late preview can never validate a draft that changed while the request was running. */
-export class PreviewSession {
+export class PreviewSession<T = GrantRequest> {
   private content = "";
   private generation = 0;
   private accepted: GrantPreview | null = null;
 
-  replace(request: GrantRequest | null) {
+  replace(request: T | null) {
     const next = stableContent(request);
     if (next !== this.content) {
       this.content = next;
@@ -36,7 +36,7 @@ export class PreviewSession {
       this.accepted = null;
     }
   }
-  begin(request: GrantRequest) {
+  begin(request: T) {
     this.replace(request);
     this.accepted = null;
     return { generation: ++this.generation, content: this.content };

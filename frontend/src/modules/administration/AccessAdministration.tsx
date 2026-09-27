@@ -9,7 +9,8 @@ import { AccessFailure, accessMessage, MutationLedger, PreviewSession, stableCon
 import { submitTrackedRequest } from "./operation-journal";
 import { OperationRecovery, useOperationRecovery } from "./OperationRecovery";
 import { AdministrationNavigation } from "./AdministrationNavigation";
-import { permissionLabel } from "./permission-labels";
+import { grantProfileLabel, historicalGrantLabel, permissionLabel } from "./permission-labels";
+import { buildHistoricalGrant, historicalBranches, historicalDivisions, historicalNodeLabel, historicalParentMemberships, historicalPermissions, historicalReviewedBody, historicalScopeLabel, type HistoricalDirectoryNode, type HistoricalGrantProposal } from "./historical-grant";
 import { rolePermissionSuggestions } from "./role-permission-suggestions";
 import styles from "./access.module.css";
 
@@ -24,7 +25,7 @@ const emptyScope: Scope = { kind: "buyerOwned", organizationId: null, branchId: 
 export function AccessAdministration() {
   const [gateway] = useState(() => createAccessGateway());
   const [ledger] = useState(() => new MutationLedger());
-  const [previewSession] = useState(() => new PreviewSession());
+  const [previewSession] = useState(() => new PreviewSession<unknown>());
   const generation = useRef(0);
   const loadedActor = useRef<string | null>(null);
   const decisionInput = useRef<HTMLTextAreaElement>(null);
@@ -44,7 +45,15 @@ export function AccessAdministration() {
   const [effective, setEffective] = useState(() => localDateTime());
   const [expiry, setExpiry] = useState("");
   const [reason, setReason] = useState("");
-  const [mode, setMode] = useState<"grant" | "membership">("grant");
+  const [mode, setMode] = useState<"grant" | "historical" | "membership">("grant");
+  const [historicalKind, setHistoricalKind] = useState<"buyingBranch" | "buyingDivision">("buyingBranch");
+  const [historicalBranch, setHistoricalBranch] = useState("");
+  const [historicalDivision, setHistoricalDivision] = useState("");
+  const [historicalSelectedPermissions, setHistoricalSelectedPermissions] = useState<string[]>([]);
+  const [historicalDirectory, setHistoricalDirectory] = useState<{ key: string; items: HistoricalDirectoryNode[] } | null>(null);
+  const [historicalDirectoryError, setHistoricalDirectoryError] = useState<{ key: string; error: unknown } | null>(null);
+  const [directoryReload, setDirectoryReload] = useState(0);
+  const [reviewedHistorical, setReviewedHistorical] = useState<HistoricalGrantProposal | null>(null);
   const [membershipScope, setMembershipScope] = useState<Scope>(emptyScope);
   const [preview, setPreview] = useState<Schemas["AccessPreviewDto"] | null>(null);
   const [previewDraft, setPreviewDraft] = useState("");
@@ -66,6 +75,8 @@ export function AccessAdministration() {
     setSubject(null); setSubjectReference(""); setMembershipId(""); setSelected(null); setPendingAction(null);
     setReason(""); setDecisionReason(""); setPacks([]); setExtras([]); setDelegable([]); setTemplateId("buyer");
     setMembershipScope(emptyScope); setRetry(null); setPreview(null); setPreviewDraft("");
+    setMode("grant"); setHistoricalKind("buyingBranch"); setHistoricalBranch(""); setHistoricalDivision("");
+    setHistoricalSelectedPermissions([]); setHistoricalDirectory(null); setHistoricalDirectoryError(null); setReviewedHistorical(null);
     previewSession.invalidate(); ledger.resetAfterReconciliation();
   }, [previewSession, ledger]);
   const applyLoaded = useCallback(([actor, definitions, queue]: Awaited<ReturnType<typeof loadPage>>) => {
@@ -81,6 +92,7 @@ export function AccessAdministration() {
   }, [clearActorData]);
   const refresh = useCallback(async () => {
     const sequence = ++generation.current;
+    previewSession.invalidate(); setPreview(null); setReviewedHistorical(null); setDirectoryReload(value => value + 1);
     setPageState("loading");
     try {
       const result = await loadPage();
@@ -90,7 +102,7 @@ export function AccessAdministration() {
       if (sequence !== generation.current) return;
       applyFailure(failure);
     }
-  }, [loadPage, applyLoaded, applyFailure]);
+  }, [loadPage, applyLoaded, applyFailure, previewSession]);
 
   useEffect(() => {
     let active = true;
@@ -110,6 +122,37 @@ export function AccessAdministration() {
   useEffect(() => { if (pendingAction) decisionInput.current?.focus(); }, [pendingAction]);
 
   const membership = subject?.memberships.find(item => item.id === membershipId && item.status === "active");
+  const historicalMemberships = historicalParentMemberships(subject?.memberships ?? []);
+  const historicalMembership = historicalMemberships.find(item => item.id === membershipId);
+  const historicalDirectoryKey = stableContent([current?.userId, subject?.userId, historicalMembership?.id, directoryReload]);
+  const historicalNodes = historicalDirectory?.key === historicalDirectoryKey ? historicalDirectory.items : [];
+  const directoryFailure = historicalDirectoryError?.key === historicalDirectoryKey ? historicalDirectoryError.error : null;
+  const directoryLoading = mode === "historical" && !!historicalMembership && !directoryFailure && historicalDirectory?.key !== historicalDirectoryKey;
+
+  useEffect(() => {
+    if (mode !== "historical" || !current || !subject || !historicalMembership) return;
+    let active = true;
+    const actorId = current.userId, userId = subject.userId, parentMembershipId = historicalMembership.id;
+    void (async () => {
+      const items: HistoricalDirectoryNode[] = [];
+      for (let pageOffset = 0; pageOffset <= 10000; pageOffset += 100) {
+        const page = await gateway.historicalTargets({ userId, membershipId: parentMembershipId, offset: pageOffset, limit: 100 }, actorId);
+        if (!active) return;
+        items.push(...page.items);
+        if (BigInt(items.length) >= BigInt(page.total)) {
+          setHistoricalDirectory({ key: historicalDirectoryKey, items }); setHistoricalDirectoryError(null); return;
+        }
+        if (!page.items.length) break;
+      }
+      throw new AccessFailure(400, "historical_directory_incomplete");
+    })().catch(failure => {
+      if (!active) return;
+      setHistoricalDirectoryError({ key: historicalDirectoryKey, error: failure });
+      previewSession.invalidate(); setPreview(null); setReviewedHistorical(null);
+    });
+    return () => { active = false; };
+  }, [gateway, mode, current, subject, historicalMembership, historicalDirectoryKey, previewSession]);
+
   const suggestedIds = new Set(catalog ? rolePermissionSuggestions(catalog, templateId, membership?.scope.kind).map(permission => permission.id) : []);
   const grant = useMemo<GrantRequest | null>(() => {
     const effectiveAt = toIsoDate(effective);
@@ -120,8 +163,13 @@ export function AccessAdministration() {
       scope: membership.scope, effectiveAt, expiresAt };
   }, [subject, membership, effective, expiry, templateId, packs, extras, delegable]);
 
-  useEffect(() => { previewSession.replace(grant); }, [grant, previewSession]);
-  const activePreview = previewDraft === stableContent(grant) ? preview : null;
+  const historicalGrant = buildHistoricalGrant({ userId: subject?.userId ?? "", membership: historicalMembership, directory: historicalNodes,
+    kind: historicalKind, branchId: historicalBranch, divisionId: historicalDivision, permissions: historicalSelectedPermissions, effective, expiry });
+  const historicalBody = historicalGrant ? historicalReviewedBody(historicalGrant, reason) : null;
+  const previewRequest = mode === "historical" ? historicalBody && { actorId: current?.userId, body: historicalBody } : grant;
+  const previewContent = stableContent(previewRequest);
+  useEffect(() => { previewSession.replace(previewContent); }, [previewContent, previewSession]);
+  const activePreview = previewDraft === previewContent ? preview : null;
 
   const selectedProposal = proposals.find(proposal => proposal.id === selected);
   const canProposeGrant = current?.allowedActions.includes("access.propose") ?? false;
@@ -135,18 +183,23 @@ export function AccessAdministration() {
       const result = await gateway.subject(subjectReference, current?.userId);
       setSubject(result); setMembershipId(result.memberships.find(item => item.status === "active")?.id ?? "");
       setSelected(null); setPendingAction(null); setPacks([]); setExtras([]); setDelegable([]);
+      if (mode === "historical") setMembershipId(historicalParentMemberships(result.memberships)[0]?.id ?? "");
+      setHistoricalBranch(""); setHistoricalDivision(""); setHistoricalSelectedPermissions([]); setHistoricalDirectory(null); setReviewedHistorical(null);
       previewSession.invalidate(); setPreview(null); setPreviewDraft("");
     } catch (failure) { setSubject(null); setError(failure); }
     finally { setBusy(false); }
   }
 
   async function previewGrant() {
-    if (!grant) return;
-    const ticket = previewSession.begin(grant);
+    if (!current || (mode === "historical" ? !historicalBody : !grant)) return;
+    const ticket = previewSession.begin(previewContent);
     setPreview(null); setBusy(true); setError(null);
     try {
-      const result = await gateway.preview(grant, current?.userId);
-      if (previewSession.accept(ticket, result)) { setPreview(result); setPreviewDraft(stableContent(grant)); }
+      const result = mode === "historical" && historicalBody ? await gateway.previewHistoricalGrant(historicalBody.grant, current.userId)
+        : await gateway.preview(grant!, current?.userId);
+      if (previewSession.accept(ticket, result)) {
+        setPreview(result); setPreviewDraft(previewContent); setReviewedHistorical(mode === "historical" ? historicalBody : null);
+      }
     } catch (failure) { setError(failure); }
     finally { setBusy(false); }
   }
@@ -186,8 +239,13 @@ export function AccessAdministration() {
   async function submitProposal(event: FormEvent) {
     event.preventDefault();
     if (!current) return;
-    if (mode === "grant") {
-      previewSession.replace(grant);
+    if (mode === "historical") {
+      previewSession.replace(previewContent);
+      if (!historicalBody || !reviewedHistorical || !activePreview || !previewSession.value || !canProposeGrant) return;
+      const body = reviewedHistorical;
+      await perform("historical-grant-proposal", body, "Pengajuan akses baca riwayat disimpan. Persetujuan petugas lain masih diperlukan.", key => gateway.proposeHistoricalGrant(body, key, current.userId));
+    } else if (mode === "grant") {
+      previewSession.replace(previewContent);
       if (!grant || !previewSession.value || !reason.trim() || !canProposeGrant) return;
       const body = { grant, reason: reason.trim() };
       await perform("grant-proposal", body, "Pengajuan akses disimpan. Persetujuan petugas lain masih diperlukan.", key => gateway.proposeGrant(body, key, current.userId));
@@ -208,8 +266,18 @@ export function AccessAdministration() {
       key => gateway.change(action.action, action.id, action.version, payload.reason, key, current.userId));
   }
 
-  function startNew(nextMode: "grant" | "membership") {
+  function invalidateDraftPreview() {
+    previewSession.invalidate(); setPreview(null); setPreviewDraft(""); setReviewedHistorical(null);
+  }
+
+  function startNew(nextMode: "grant" | "historical" | "membership") {
     setSelected(null); setPendingAction(null); setMode(nextMode); setError(null); setMessage("");
+    previewSession.invalidate(); setPreview(null); setPreviewDraft(""); setReviewedHistorical(null);
+    if (nextMode === "historical") {
+      setMembershipId(historicalMemberships[0]?.id ?? ""); setHistoricalBranch(""); setHistoricalDivision("");
+      setPacks([]); setExtras([]); setDelegable([]);
+      setHistoricalSelectedPermissions([]); setDirectoryReload(value => value + 1);
+    }
   }
 
   return <main className={styles.page}>
@@ -249,7 +317,7 @@ export function AccessAdministration() {
       <section className={styles.accountSection} aria-labelledby="account-heading">
         <h2 id="account-heading">Akun yang dikelola</h2>
         <form onSubmit={loadSubject} className={styles.lookup}>
-          <label>Referensi akun<input value={subjectReference} onChange={event => { setSubjectReference(event.target.value); setSubject(null); setMembershipId(""); setPacks([]); setExtras([]); setDelegable([]); previewSession.invalidate(); setPreview(null); setPreviewDraft(""); }}
+          <label>Referensi akun<input value={subjectReference} onChange={event => { setSubjectReference(event.target.value); setSubject(null); setMembershipId(""); setPacks([]); setExtras([]); setDelegable([]); setHistoricalBranch(""); setHistoricalDivision(""); setHistoricalSelectedPermissions([]); setHistoricalDirectory(null); setReviewedHistorical(null); previewSession.invalidate(); setPreview(null); setPreviewDraft(""); }}
             inputMode="numeric" autoComplete="off" placeholder="Contoh: 1032" maxLength={19} required disabled={locked} aria-describedby="account-help" /></label>
           <button className={styles.secondary} disabled={locked || !validReference(subjectReference)}>Tampilkan akun</button>
         </form>
@@ -263,9 +331,9 @@ export function AccessAdministration() {
               </li>)}</ul>
             </section>
             <section><h3>Izin yang tercatat</h3>{subject.grants.length === 0 && <p>Belum ada izin akses yang dapat ditampilkan.</p>}
-              <ul>{subject.grants.map(item => <li key={item.id}><div><strong>{catalog.roles.find(role => role.id === item.templateId)?.label ?? item.templateId}</strong><p>{describeScope(item.scope)}</p><small>{statusLabel(item.status)} · Izin {item.id}</small><Validity effectiveAt={item.effectiveAt} expiresAt={item.expiresAt} />
-                <details className={styles.recordedPermissions}><summary>Lihat izin dan wewenang</summary><PermissionList permissions={item.permissions} /><h3>Wewenang pemberian izin</h3><DelegationList permissions={item.delegablePermissions} /></details></div>
-                {item.allowedActions.includes("revoke") && <button className={styles.danger} disabled={locked} onClick={() => { setPendingAction({ action: "revokeGrant", id: item.id, version: item.version, label: `Cabut izin ${item.id}` }); setSelected(null); }}>Cabut izin</button>}
+              <ul>{subject.grants.map(item => <li key={item.id}><div><strong>{grantProfileLabel(item.templateId, catalog.roles)}</strong><p>{item.templateId === "historical-read" ? historicalScopeLabel(item.scope) : describeScope(item.scope)}</p><small>{statusLabel(item.status)} · Izin {item.id}</small><Validity effectiveAt={item.effectiveAt} expiresAt={item.expiresAt} />
+                <details className={styles.recordedPermissions}><summary>Lihat izin dan wewenang</summary><PermissionList permissions={item.permissions} />{item.templateId === "historical-read" ? <HistoricalReadNotice scope={item.scope} /> : <><h3>Wewenang pemberian izin</h3><DelegationList permissions={item.delegablePermissions} /></>}</details></div>
+                {item.allowedActions.includes("revoke") && <button className={styles.danger} disabled={locked} onClick={() => { setPendingAction({ action: "revokeGrant", id: item.id, version: item.version, label: `Cabut ${item.templateId === "historical-read" ? "akses baca riwayat" : "izin"} ${item.id}` }); setSelected(null); }}>Cabut izin</button>}
               </li>)}</ul>
             </section>
           </div>
@@ -277,13 +345,14 @@ export function AccessAdministration() {
           <div className={styles.queueHeader}><h2 id="queue-heading">Antrian pengajuan</h2><span>{proposals.length} pada halaman ini</span></div>
           <div className={styles.newActions}>
             {canProposeGrant && <button className={styles.secondary} disabled={locked} onClick={() => startNew("grant")}>Ajukan izin</button>}
+            {canProposeGrant && <button className={styles.secondary} disabled={locked} onClick={() => startNew("historical")}>Ajukan akses baca riwayat</button>}
             {canProposeMembership && <button className={styles.secondary} disabled={locked} onClick={() => startNew("membership")}>Ajukan keanggotaan</button>}
           </div>
           {proposals.length === 0 ? <p className={styles.empty}>Tidak ada pengajuan dalam cakupan Anda pada halaman ini.</p> : <ul className={styles.queueList}>
             {proposals.map(item => <li key={item.id}><button disabled={locked} className={selected === item.id ? styles.selectedRow : styles.queueRow}
               aria-pressed={selected === item.id} onClick={() => { setSelected(item.id); setPendingAction(null); setError(null); }}>
-              <strong>{item.kind === "membership" ? "Keanggotaan" : "Izin akses"} untuk akun {item.subjectId}</strong>
-              <span>{describeScope(item.scope)}</span><small>{statusLabel(item.status)} · Pengajuan {item.id}</small>
+              <strong>{item.kind === "membership" ? "Keanggotaan" : item.templateId === "historical-read" ? historicalGrantLabel : "Izin akses"} untuk akun {item.subjectId}</strong>
+              <span>{item.templateId === "historical-read" ? historicalScopeLabel(item.scope) : describeScope(item.scope)}</span><small>{statusLabel(item.status)} · Pengajuan {item.id}</small>
             </button></li>)}
           </ul>}
           <nav className={styles.pagination} aria-label="Halaman pengajuan">
@@ -304,10 +373,10 @@ export function AccessAdministration() {
             setDecisionReason(""); setPendingAction({ action, id: selectedProposal.id, version: selectedProposal.version,
               label: `${action === "rejectProposal" ? "Tolak" : "Tarik"} pengajuan ${selectedProposal.id}` });
           }} /> : <form onSubmit={submitProposal} className={styles.form}>
-            <h2>{mode === "grant" ? "Ajukan izin akses" : "Ajukan keanggotaan"}</h2>
+            <h2>{mode === "grant" ? "Ajukan izin akses" : mode === "historical" ? "Ajukan akses baca riwayat" : "Ajukan keanggotaan"}</h2>
             {!subject ? <p className={styles.empty}>Tampilkan akun terlebih dahulu untuk memeriksa keanggotaan dan cakupan yang disetujui.</p> : <>
               <p>Akun <strong>{subject.userId}</strong>. Setiap izin baru memerlukan persetujuan petugas lain yang ditunjuk.</p>
-              <fieldset disabled={locked || (mode === "grant" ? !canProposeGrant : !canProposeMembership)} className={styles.fields}>
+              <fieldset disabled={locked || (mode !== "membership" ? !canProposeGrant : !canProposeMembership)} onChangeCapture={invalidateDraftPreview} className={styles.fields}>
                 <legend className={styles.srOnly}>Rincian pengajuan</legend>
                 {mode === "grant" ? <>
                   <label>Keanggotaan aktif<select required value={membershipId} onChange={event => { setMembershipId(event.target.value); setPacks([]); setExtras([]); setDelegable([]); previewSession.invalidate(); setPreview(null); setPreviewDraft(""); }}><option value="">Pilih keanggotaan</option>
@@ -326,18 +395,43 @@ export function AccessAdministration() {
                   <details className={styles.permissions}><summary>Wewenang pemberian izin</summary><p className={styles.help}>Isi hanya untuk petugas pemberi persetujuan yang ditunjuk. Memiliki izin transaksi tidak otomatis memberikan wewenang ini.</p>
                     {catalog.permissions.map(permission => <label className={styles.checkbox} key={permission.id}><input type="checkbox" checked={delegable.includes(permission.id)} onChange={() => toggle(permission.id, delegable, setDelegable)} /><span>{permissionLabel(permission.id, permission.label)}</span></label>)}
                   </details>
+                </> : mode === "historical" ? <>
+                  <p className={styles.scopeSummary}>Pilih izin membaca riwayat atau laporan secara eksplisit. Akses ini hanya untuk membaca, termasuk unit yang ditangguhkan; tidak mengizinkan transaksi baru atau pemberian izin kepada orang lain.</p>
+                  <label>Keanggotaan organisasi pembeli aktif<select required value={membershipId} onChange={event => {
+                    setMembershipId(event.target.value); setHistoricalBranch(""); setHistoricalDivision(""); setHistoricalDirectory(null);
+                    setPacks([]); setExtras([]); setDelegable([]);
+                    previewSession.invalidate(); setPreview(null); setPreviewDraft(""); setReviewedHistorical(null);
+                  }}><option value="">Pilih keanggotaan organisasi</option>{historicalMemberships.map(item => <option key={item.id} value={item.id}>Keanggotaan {item.id} · Organisasi {item.scope.organizationId}</option>)}</select></label>
+                  {!historicalMemberships.length && <p className={styles.help}>Akun memerlukan keanggotaan seluruh organisasi pembeli yang telah disetujui dan sedang aktif.</p>}
+                  {directoryLoading && <p role="status">Memuat cabang dan divisi yang tersedia…</p>}
+                  {directoryFailure !== null && <div role="alert"><p>Daftar unit belum dapat dimuat. {accessMessage(directoryFailure)}</p><button type="button" className={styles.secondary} onClick={() => setDirectoryReload(value => value + 1)}>Periksa daftar unit kembali</button></div>}
+                  {historicalMembership && !directoryLoading && directoryFailure === null && historicalNodes.length === 0 && <p className={styles.help}>Tidak ada cabang atau divisi yang dapat dipilih dalam organisasi ini.</p>}
+                  <label>Cakupan akses baca<select value={historicalKind} onChange={event => {
+                    setHistoricalKind(event.target.value as "buyingBranch" | "buyingDivision"); setHistoricalDivision("");
+                  }}><option value="buyingBranch">Cabang beserta divisinya</option><option value="buyingDivision">Satu divisi</option></select></label>
+                  <label>Cabang yang dituju<select required disabled={directoryLoading || !historicalMembership || directoryFailure !== null} value={historicalBranch} onChange={event => { setHistoricalBranch(event.target.value); setHistoricalDivision(""); }}>
+                    <option value="">Pilih cabang</option>{historicalBranches(historicalNodes, historicalMembership?.scope.organizationId).map(node => <option key={node.id} value={node.id}>{historicalNodeLabel(node)}</option>)}
+                  </select></label>
+                  {historicalKind === "buyingDivision" && <label>Divisi yang dituju<select required disabled={!historicalBranch || directoryLoading} value={historicalDivision} onChange={event => setHistoricalDivision(event.target.value)}>
+                    <option value="">Pilih divisi</option>{historicalDivisions(historicalNodes, historicalBranch).map(node => <option key={node.id} value={node.id}>{historicalNodeLabel(node)}</option>)}
+                  </select></label>}
+                  <HistoricalReadNotice scope={{ kind: historicalKind }} />
+                  <fieldset className={styles.choiceGroup}><legend>Izin baca yang diminta</legend><p className={styles.help}>Pilih sedikitnya satu izin. Tidak ada izin yang dipilih otomatis.</p>
+                    {historicalPermissions.map(permission => <label className={styles.checkbox} key={permission}><input type="checkbox" checked={historicalSelectedPermissions.includes(permission)} onChange={() => toggle(permission, historicalSelectedPermissions, setHistoricalSelectedPermissions)} /><span>{permissionLabel(permission)}</span></label>)}
+                  </fieldset>
                 </> : <ScopeFields value={membershipScope} onChange={setMembershipScope} />}
                 <div className={styles.twoFields}><label>Mulai berlaku<input type="datetime-local" value={effective} onChange={event => setEffective(event.target.value)} required /></label>
                   <label>Berakhir <span className={styles.optional}>(opsional)</span><input type="datetime-local" value={expiry} onChange={event => setExpiry(event.target.value)} min={effective} /></label></div>
                 <p className={styles.help}>Waktu mengikuti zona waktu perangkat Anda. Cakupan organisasi, toko, dan kanal diperiksa kembali oleh server.</p>
-                <label><span id="access-proposal-reason-label">Alasan pengajuan</span><textarea aria-labelledby="access-proposal-reason-label" value={reason} onChange={event => setReason(event.target.value)} required maxLength={1000} rows={3} placeholder="Jelaskan tugas dan kebutuhan akses akun ini." /></label>
-                {mode === "grant" && <button type="button" className={styles.secondary} disabled={!grant} onClick={() => void previewGrant()}>Periksa pratinjau izin</button>}
-                {mode === "grant" && activePreview && <section className={styles.preview} aria-live="polite"><h3>Pratinjau dari server</h3><p>{describeScope(activePreview.scope)}</p>
-                  <p>Keanggotaan {activePreview.membershipId}; versi peran {activePreview.templateVersion}.</p><Validity effectiveAt={activePreview.effectiveAt} expiresAt={activePreview.expiresAt} />
-                  <PermissionList permissions={activePreview.permissions} /><h3>Wewenang pemberian izin</h3><DelegationList permissions={activePreview.delegablePermissions} />
+                <label><span id="access-proposal-reason-label">Alasan pengajuan</span><textarea aria-labelledby="access-proposal-reason-label" value={reason} onChange={event => setReason(event.target.value)} required maxLength={mode === "historical" ? 500 : 1000} rows={3} placeholder="Jelaskan tugas dan kebutuhan akses akun ini." /></label>
+                {mode === "historical" && <p className={styles.help}>Maksimal 500 karakter. Perubahan isian memerlukan pratinjau ulang.</p>}
+                {mode !== "membership" && <button type="button" className={styles.secondary} disabled={mode === "historical" ? !historicalBody : !grant} onClick={() => void previewGrant()}>Periksa pratinjau izin</button>}
+                {mode !== "membership" && activePreview && <section className={styles.preview} aria-live="polite"><h3>Pratinjau dari server</h3>{mode === "historical" && <strong>{historicalGrantLabel}</strong>}<p>{mode === "historical" ? historicalScopeLabel(activePreview.scope, historicalNodes) : describeScope(activePreview.scope)}</p>
+                  <p>Keanggotaan {activePreview.membershipId}{mode === "grant" ? `; versi peran ${activePreview.templateVersion}` : ""}.</p><Validity effectiveAt={activePreview.effectiveAt} expiresAt={activePreview.expiresAt} />
+                  <PermissionList permissions={activePreview.permissions} />{mode === "historical" ? <><HistoricalReadNotice scope={activePreview.scope} /><p className={styles.preserve}>Alasan: {reviewedHistorical?.reason}</p></> : <><h3>Wewenang pemberian izin</h3><DelegationList permissions={activePreview.delegablePermissions} /></>}
                   <p className={styles.help}>{activePreview.existingPermissions.length} izin sudah tercatat pada cakupan ini. Pengajuan tetap menunggu persetujuan independen.</p>
                 </section>}
-                <button className={styles.primary} disabled={!reason.trim() || !toIsoDate(effective) || mode === "grant" && (!grant || !activePreview)}>Ajukan untuk persetujuan</button>
+                <button className={styles.primary} disabled={!reason.trim() || !toIsoDate(effective) || mode === "grant" && (!grant || !activePreview) || mode === "historical" && (!historicalBody || !activePreview || !reviewedHistorical)}>Ajukan untuk persetujuan</button>
               </fieldset>
             </>}
           </form>}
@@ -351,7 +445,7 @@ function ProposalDetails({ proposal, catalog, disabled, onApprove, onDecision }:
   return <div className={styles.form}><h2>Pengajuan {proposal.id}</h2><dl className={styles.facts}>
     <div><dt>Akun penerima</dt><dd>{proposal.subjectId}</dd></div><div><dt>Diajukan oleh</dt><dd>Akun {proposal.requestedBy}</dd></div>
     <div><dt>Status</dt><dd>{statusLabel(proposal.status)}</dd></div><div><dt>Diajukan pada</dt><dd>{new Date(proposal.createdAt).toLocaleString("id-ID")}</dd></div>
-    {proposal.templateId && <div><dt>Peran awal</dt><dd>{catalog.roles.find(role => role.id === proposal.templateId)?.label ?? proposal.templateId}</dd></div>}
+    {proposal.templateId && <div><dt>{proposal.templateId === "historical-read" ? "Profil izin" : "Peran awal"}</dt><dd>{grantProfileLabel(proposal.templateId, catalog.roles)}</dd></div>}
   </dl><ProposalReview proposal={proposal} />
     {proposal.allowedActions.includes("approve") ? <><p className={styles.help}>Persetujuan hanya berlaku untuk cakupan dan izin pada pengajuan ini. Izin terbaru serta independensi akun diperiksa saat disimpan.</p><button className={styles.primary} disabled={disabled} onClick={onApprove}>Tinjau dan setujui</button></>
       : <p className={styles.help}>Tidak ada tindakan persetujuan yang tersedia untuk akun Anda pada pengajuan ini.</p>}
@@ -363,13 +457,18 @@ function ProposalDetails({ proposal, catalog, disabled, onApprove, onDecision }:
 }
 
 function ProposalReview({ proposal }: { proposal: Proposal }) {
-  return <div className={styles.review}><section><h3>Akun dan cakupan yang ditinjau</h3><p>Akun {proposal.subjectId}; diajukan oleh akun {proposal.requestedBy}.</p><p>{describeScope(proposal.scope)}</p>
-    <p>{proposal.membershipId ? `Keanggotaan ${proposal.membershipId}` : "Pengajuan keanggotaan baru"}{proposal.templateVersion !== null ? `; versi peran ${proposal.templateVersion}` : ""}.</p>
+  const historical = proposal.templateId === "historical-read";
+  return <div className={styles.review}><section><h3>Akun dan cakupan yang ditinjau</h3>{historical && <strong>{historicalGrantLabel}</strong>}<p>Akun {proposal.subjectId}; diajukan oleh akun {proposal.requestedBy}.</p><p>{historical ? historicalScopeLabel(proposal.scope) : describeScope(proposal.scope)}</p>
+    <p>{proposal.membershipId ? `Keanggotaan ${proposal.membershipId}` : "Pengajuan keanggotaan baru"}{!historical && proposal.templateVersion !== null ? `; versi peran ${proposal.templateVersion}` : ""}.</p>
     <Validity effectiveAt={proposal.effectiveAt} expiresAt={proposal.expiresAt} />
   </section><section><h3>Alasan pengajuan</h3><p className={styles.preserve}>{proposal.reason}</p></section>
     {proposal.kind !== "membership" && <section><h3>Izin yang diajukan</h3><PermissionList permissions={proposal.permissions} /></section>}
-    <section><h3>Wewenang pemberian izin</h3><DelegationList permissions={proposal.delegablePermissions} /></section>
+    {historical ? <HistoricalReadNotice scope={proposal.scope} /> : <section><h3>Wewenang pemberian izin</h3><DelegationList permissions={proposal.delegablePermissions} /></section>}
   </div>;
+}
+
+function HistoricalReadNotice({ scope }: { scope: Scope }) {
+  return <p className={styles.help}>{scope.kind === "buyingBranch" ? "Akses cabang mencakup divisi yang sah di bawah cabang tersebut, termasuk unit yang ditangguhkan. " : "Akses hanya berlaku untuk divisi yang dipilih, termasuk saat unit ditangguhkan. "}Hanya membaca riwayat atau laporan yang dipilih. Tidak mengizinkan transaksi baru atau pemberian izin.</p>;
 }
 
 function Validity({ effectiveAt, expiresAt }: { effectiveAt: string; expiresAt: string | null }) {

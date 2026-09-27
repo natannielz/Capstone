@@ -54,8 +54,16 @@ public sealed partial class AccessAdministrationService
                     {
                         if (candidate is not null)
                         {
-                            await ValidateBeneficiaryAsync(candidate, snapshot.Directory, session, token);
-                            allowed = AccessGrantPolicy.CanApprove(actor, snapshot, candidate, clock.UtcNow).Allowed;
+                            if (candidate.TemplateId == HistoricalReadPolicy.TemplateId)
+                            {
+                                ValidateHistoricalProposal(proposal, candidate);
+                                allowed = (await AuthorizeHistoricalGrantApprovalAsync(actor, snapshot, candidate, session, token)).Decision.Allowed;
+                            }
+                            else
+                            {
+                                await ValidateBeneficiaryAsync(candidate, snapshot.Directory, session, token);
+                                allowed = AccessGrantPolicy.CanApprove(actor, snapshot, candidate, clock.UtcNow).Allowed;
+                            }
                         }
                         else if (kind == "membership")
                         {

@@ -202,9 +202,9 @@ public sealed class ProviderLifecycleMigrationTests(MongoFixture fixture)
             Assert.All(ddl, command =>
             {
                 Assert.Equal("majority", command["writeConcern"]["w"].AsString);
-                // Resuming the registered chain also applies the following v6 catalog migration.
+                // Resuming the registered chain also applies the following catalog and historical-read migrations.
                 Assert.Contains(command.GetElement(0).Value.AsString, new[] { "identitySecurityEvents", "identityAdmissionHolds",
-                    "identityProviderSubjects", "catalogEntitlements", "catalogAssortments" });
+                    "identityProviderSubjects", "catalogEntitlements", "catalogAssortments", "businessReadEvents" });
             });
             Assert.Contains(await (await db.GetCollection<BsonDocument>("identitySecurityEvents").Indexes.ListAsync()).ToListAsync(),
                 index => index["name"] == "reviewed_provider_event_identity");

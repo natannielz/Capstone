@@ -113,6 +113,7 @@ public static partial class AccessEndpoints
         MapChange(group, "/scopes/{id}/suspend", "SuspendAccessScope",
             (service, actor, id, version, metadata, ct) => service.SuspendScopeAsync(actor, id, version, metadata, ct));
         MapLifecycle(group);
+        MapHistoricalGrants(group);
     }
 
     private static void MapChange(RouteGroupBuilder group, string path, string name,

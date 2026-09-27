@@ -69,10 +69,20 @@ internal static class AuthorizationBson
         return value;
     }
     public static PermissionGrant Grant(BsonDocument value) => Grant(value, false);
-    public static PermissionGrant Grant(BsonDocument value, bool pending) => new(Id(value, "_id"), Id(value, "userId"), Id(value, "membershipId"),
+    public static PermissionGrant Grant(BsonDocument value, bool pending)
+    {
+        if (value.TryGetValue("templateId", out var template) && template.IsString && template.AsString == HistoricalReadPolicy.TemplateId)
+        {
+            if (!value.TryGetValue("delegablePermissions", out var delegated) || !delegated.IsBsonArray || delegated.AsBsonArray.Count != 0 ||
+                !value.TryGetValue("scope", out var scope) || !scope.IsBsonDocument ||
+                scope.AsBsonDocument.Names.Any(name => name is not ("kind" or "organizationId" or "branchId" or "divisionId")))
+                throw new AuthorizationDeniedException("invalid_authorization_data");
+        }
+        return new(Id(value, "_id"), Id(value, "userId"), Id(value, "membershipId"),
         Text(value, "templateId"), value["templateVersion"].AsInt32, Strings(value, "permissions"), Scope(value["scope"].AsBsonDocument),
         EnumValue<AuthorizationStatus>(value, "status"), Id(value, "requestedBy"), pending && value["approvedBy"].IsInt64 && value["approvedBy"].AsInt64 == 0 ? 0 : Id(value, "approvedBy"), Text(value, "reason"),
         At(value, "effectiveAt"), OptionalAt(value, "expiresAt"), OptionalAt(value, "revokedAt"), Id(value, "version"), Strings(value, "delegablePermissions"));
+    }
     public static ResourceScope Resource(BsonDocument value)
     {
         ImmutableArray<long> assignedIds = [];

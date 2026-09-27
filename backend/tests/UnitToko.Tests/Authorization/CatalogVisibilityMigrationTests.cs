@@ -23,10 +23,9 @@ public sealed class CatalogVisibilityMigrationTests(MongoFixture fixture)
         {
             var migrations = new CollectionMigrations(db, clock);
             await migrations.ApplyAsync();
-            Assert.Equal(6, CollectionMigrations.CurrentVersion);
             Assert.True(await migrations.IsCurrentAsync());
             var before = await History(db);
-            Assert.Equal(Enumerable.Range(1, 6), before.Select(row => row["_id"].AsInt32));
+            Assert.Equal(Enumerable.Range(1, CollectionMigrations.CurrentVersion), before.Select(row => row["_id"].AsInt32));
             var definitions = new Dictionary<string, BsonDocument>();
             var indexes = new Dictionary<string, List<BsonDocument>>();
             foreach (var name in new[] { Entitlements, Assortments })
@@ -336,7 +335,7 @@ public sealed class CatalogVisibilityMigrationTests(MongoFixture fixture)
     }
 
     [Fact]
-    public async Task Interrupted_v6_retains_stronger_rules_and_alternate_indexes_then_resumes_only_v6_with_majority_ddl()
+    public async Task Interrupted_v6_retains_stronger_rules_and_alternate_indexes_then_resumes_registered_chain_with_majority_ddl()
     {
         await InDatabase(async db =>
         {
@@ -376,7 +375,7 @@ public sealed class CatalogVisibilityMigrationTests(MongoFixture fixture)
             Assert.All(ddl, command =>
             {
                 Assert.Equal("majority", command["writeConcern"]["w"].AsString);
-                Assert.Contains(command.GetElement(0).Value.AsString, new[] { Entitlements, Assortments });
+                Assert.Contains(command.GetElement(0).Value.AsString, new[] { Entitlements, Assortments, "businessReadEvents" });
             });
         });
     }

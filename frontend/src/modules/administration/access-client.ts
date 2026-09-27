@@ -6,7 +6,7 @@ type Schemas = components["schemas"];
 type Client = ReturnType<typeof createUnitTokoClient>;
 export type ChangeAction = "approveGrant" | "approveMembership" | "revokeGrant" | "suspendMembership" | "rejectProposal" | "withdrawProposal";
 export const commandOperations = {
-  "grant-proposal": "access.grant.propose", "membership-proposal": "access.membership.propose",
+  "grant-proposal": "access.grant.propose", "historical-grant-proposal": "access.grant.propose", "membership-proposal": "access.membership.propose",
   approveGrant: "access.grant.approve", approveMembership: "access.membership.approve",
   revokeGrant: "access.grant.revoke", suspendMembership: "access.membership.suspend",
   rejectProposal: "access.proposal.reject", withdrawProposal: "access.proposal.withdraw",
@@ -40,6 +40,15 @@ export function createAccessGateway(client: Client = createUnitTokoClient()) {
     },
     async proposeGrant(body: Schemas["GrantProposalDto"], key: string, actorId: string) {
       return value(await client.POST("/api/v1/access/grants/proposals", { body, params: { header: { "Idempotency-Key": key, "X-Expected-Actor-Id": actorId } } }));
+    },
+    async previewHistoricalGrant(body: Schemas["HistoricalGrantRequestDto"], actorId: string) {
+      return value(await client.POST("/api/v1/access/historical-grants/preview", { body, params: { header: { "X-Expected-Actor-Id": actorId } } }));
+    },
+    async historicalTargets(body: Schemas["HistoricalTargetQueryDto"], actorId: string) {
+      return value(await client.POST("/api/v1/access/historical-targets/query", { body, params: { header: { "X-Expected-Actor-Id": actorId } } }));
+    },
+    async proposeHistoricalGrant(body: Schemas["HistoricalGrantProposalDto"], key: string, actorId: string) {
+      return value(await client.POST("/api/v1/access/historical-grants/proposals", { body, params: { header: { "Idempotency-Key": key, "X-Expected-Actor-Id": actorId } } }));
     },
     async proposeMembership(body: Schemas["MembershipProposalDto"], key: string, actorId: string) {
       return value(await client.POST("/api/v1/access/memberships/proposals", { body, params: { header: { "Idempotency-Key": key, "X-Expected-Actor-Id": actorId } } }));

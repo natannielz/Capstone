@@ -1,6 +1,6 @@
 # Business access contracts
 
-Status: ACC02.1–.2 permission and optional-role-suggestion implementation; ACC02.3 catalog producer boundary locally accepted with [verification evidence](../quality/catalog-visibility-acceptance-2026-09-28.md). Product/delivery integration, historical-read adapters, trusted person independence and production business ports remain separate acceptance gates. These are producer contracts, not evidence that the legacy routes already enforce the new model.
+Status: ACC02.1–.2 permission and optional-role-suggestion implementation; ACC02.3 catalog producer boundary locally accepted with [verification evidence](../quality/catalog-visibility-acceptance-2026-09-28.md). Governed historical-read producer and administration adapters are implemented; actual business/delivery integration, trusted person independence and production business ports remain separate acceptance gates. These are producer contracts, not evidence that the legacy routes already enforce the new model.
 
 ## Explicit business permissions
 
@@ -45,15 +45,11 @@ Migration v6 adds strict entitlement/assortment collections without seeds or cha
 
 Image/export/event methods currently return metadata references only. They are not file capabilities or delivery adapters. Actual product endpoints/screens, governed entitlement issuance, pricing policies, product indexes and delivery-time document authorization remain CAT01/PAY01 integration gates. The legacy catalog has not adopted this model. See the [catalog visibility and publication contract](catalog-visibility.md) for exact shapes and limits, and [report decisions](../quality/report-decisions.md) for pending business authority choices.
 
-## Historical reads: mapped next implementation
+## Historical reads: implemented producer and administration boundary
 
-Use a dedicated historical request naming the exact target scope and bounded purpose, and a separate compiled evidence type. An explicit read-only grant may name a suspended branch while an approved parent membership remains fully active. Keep reader/session/approval/expiry/grant checks current; a suspended membership receives no exception. Start with explicit branch/division requests under an active organization, not an inferred all-organization query.
+Explicit historical grants retain active organization membership and current reader/session authority while allowing a named active/suspended branch or division. They reuse independently reviewed grant lifecycle and never enter the ordinary role/write policy. A branch read includes its valid descendants. One canonical filter precedes all metadata count/search/page/ID lookups; v7 persists a minimal transaction-bound business-read audit.
 
-Preserve canonical hierarchy/type validation and complete alternatives. In the same snapshot transaction as the read, fence current actor/session/active authority, separately fence historical target nodes by exact kind/parent/status/version, and write minimal business-read audit. Use safe module-owned projections; history/report permission alone does not reveal bank evidence or margins. Deferred file/export/event delivery must recheck current authority, and historical events must not expose new business data.
-
-Existing access-history filtering is a useful structural pattern but does not implement business-history grants. Current grant materialization, beneficiary checks, approval checks, proposal actions and active-only target fencing reject a suspended target. Implement an explicit historical-only proposal/approval path backed by active parent membership; do not globally relax `ScopePolicy`, `ScopeQuery` or `FenceAsync`. Preserve independent approval and exact delegable permission checks. A new strict `businessReadEvents` collection in a later migration is preferable to mislabeling business reads with frozen access-history audit operations. No backfilled grant or administrative authority is inferred.
-
-Required evidence: scoped grant approval before and after branch suspension, all ordinary write denials, sibling/mixed-parent/malformed-BSON rejection, identical pre-page filtering on every read surface, redaction, and real-Mongo paused reads racing reader/session/membership/grant/ancestor/target changes. Aborted reads must not return data or leave an audit row.
+The scoped target selector and reviewed Indonesian administration flow expose proposal, approval and revocation through the existing actor/version/idempotency rules. Metadata references remain distinct from actual file/export/event delivery. Exact interfaces, limits, ownership invariants and remaining integration gates are in [governed historical reads](historical-reads.md). Verification is tracked in the access plan and production progress; these contracts do not claim real business routes or launch acceptance.
 
 ## Business and release gates
 

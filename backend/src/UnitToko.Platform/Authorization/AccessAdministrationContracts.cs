@@ -7,6 +7,8 @@ public sealed record AuthorizationCommandMetadata(string IdempotencyKey, string 
 public sealed record GrantChangeRequest(long UserId, long MembershipId, string TemplateId,
     ImmutableArray<string> FinancePacks, ImmutableArray<string> AdditionalPermissions, GrantScope Scope,
     DateTimeOffset EffectiveAt, DateTimeOffset? ExpiresAt = null, ImmutableArray<string> DelegablePermissions = default);
+public sealed record HistoricalGrantChangeRequest(long UserId, long MembershipId, ImmutableArray<string> Permissions,
+    GrantScope Scope, DateTimeOffset EffectiveAt, DateTimeOffset? ExpiresAt = null);
 public sealed record MembershipChangeRequest(long UserId, GrantScope Scope, DateTimeOffset EffectiveAt,
     DateTimeOffset? ExpiresAt = null);
 public sealed record GrantPreview(long UserId, long MembershipId, string TemplateId, int TemplateVersion,

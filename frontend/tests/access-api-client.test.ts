@@ -74,3 +74,27 @@ test("access gateway preserves uncertain response and trace without automatic mu
     error => error instanceof AccessFailure && error.status === 503 && error.code === "commit_outcome_unknown" && error.traceId === "review-trace");
   assert.equal(calls, 1);
 });
+
+test("historical target query, preview and proposal use explicit routes with actor-bound exact bodies", async () => {
+  const actorId = "9007199254740993";
+  const grant = { userId: "9007199254740994", membershipId: "9007199254740995", permissions: ["history.read"],
+    scope: { kind: "buyingBranch" as const, organizationId: "10", branchId: "11" }, effectiveAt: "2026-09-28T00:00:00Z", expiresAt: null };
+  const query = { userId: grant.userId, membershipId: grant.membershipId, offset: 0, limit: 100 };
+  const proposal = { grant, reason: "Review branch history" };
+  const calls: { path: string; body: unknown; key: string | null }[] = [];
+  const gateway = createAccessGateway(createUnitTokoClient({ baseUrl: "https://unit-toko.test", fetch: async input => {
+    assert.ok(input instanceof Request); assert.equal(input.method, "POST");
+    assert.equal(input.headers.get("X-Expected-Actor-Id"), actorId);
+    assert.equal(input.credentials, "same-origin"); assert.equal(input.cache, "no-store");
+    calls.push({ path: new URL(input.url).pathname, body: await input.json(), key: input.headers.get("Idempotency-Key") });
+    return Response.json({});
+  } }));
+  await gateway.historicalTargets(query, actorId);
+  await gateway.previewHistoricalGrant(grant, actorId);
+  await gateway.proposeHistoricalGrant(proposal, "one-reviewed-request", actorId);
+  assert.deepEqual(calls, [
+    { path: "/api/v1/access/historical-targets/query", body: query, key: null },
+    { path: "/api/v1/access/historical-grants/preview", body: grant, key: null },
+    { path: "/api/v1/access/historical-grants/proposals", body: proposal, key: "one-reviewed-request" },
+  ]);
+});

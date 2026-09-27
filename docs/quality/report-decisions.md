@@ -8,6 +8,12 @@ This ledger records actual decisions and pending inputs; source documents and pr
 - The November dates are references; production readiness governs launch.
 - No existing identity provider; prepare the planned Auth0 integration. Actual tenant configuration, costs, delivery and owner recovery acceptance remain separate gates.
 
+## D01 trusted staff identity source
+
+Asked on 28 September 2026; answer pending: which official source can establish that different finance accounts belong to different people? Options presented were keeping the decision pending while preparing controls, an independently reviewed HR/staff roster, or an existing HR system/employee directory.
+
+No source or named verification/equivalence adjudicator has been approved. Continue local ACC03 contracts and synthetic fixtures. Unknown or disputed person identity must not authorize the new production financial approval path; provider subject or matching email/name is not independent-person proof. Real activation also requires the source's actual evidence/validity rules and independent reviewers.
+
 ## D02 catalog audience and approval ownership
 
 Asked on 28 September 2026; answers pending:

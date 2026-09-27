@@ -23,3 +23,8 @@ const labels: Record<string, string> = {
   "recovery.initiate": "Mulai pemulihan akun", "technical.configure": "Kelola pengaturan sistem", "access.audit.read": "Lihat riwayat akses",
 };
 export function permissionLabel(permission: string, fallback?: string) { return labels[permission] ?? fallback ?? permission; }
+
+export const historicalGrantLabel = "Akses baca riwayat";
+export function grantProfileLabel(templateId: string, roles: readonly { id: string; label: string }[]) {
+  return templateId === "historical-read" ? historicalGrantLabel : roles.find(role => role.id === templateId)?.label ?? templateId;
+}

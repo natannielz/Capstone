@@ -40,6 +40,7 @@ builder.Services.AddSingleton<OutboxStore>();
 builder.Services.AddSingleton<CollectionMigrations>();
 builder.Services.AddSingleton<AuthorizationStore>();
 builder.Services.AddSingleton<CatalogVisibilityStore>();
+builder.Services.AddSingleton<HistoricalReadStore>();
 builder.Services.AddSingleton<AccessAdministrationService>();
 builder.Services.AddSingleton<OrganizationMasterDataService>();
 var identityEnabled = builder.Services.AddUnitTokoIdentityRuntime(builder.Configuration);
