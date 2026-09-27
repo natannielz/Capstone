@@ -26,7 +26,7 @@
 .lookup { display: flex; align-items: end; gap: 12px; margin: 16px 0 10px; }
 .lookup label { width: min(360px, 100%); }
 .page label { display: grid; gap: 7px; font-size: 15px; font-weight: 600; }
-.page input:not([type="checkbox"]), .page select, .page textarea { width: 100%; min-height: 44px; border: 1px solid #aebfc6; border-radius: 5px; background: #fff; color: #1d3640; padding: 9px 11px; font-weight: 400; }
+.page input:not([type="checkbox"]):not([type="radio"]), .page select, .page textarea { width: 100%; min-height: 44px; border: 1px solid #aebfc6; border-radius: 5px; background: #fff; color: #1d3640; padding: 9px 11px; font-weight: 400; }
 .page input:disabled, .page select:disabled, .page textarea:disabled { background: #f2f6f7; color: #526c76; }
 .page textarea { resize: vertical; }
 .help { font-size: 14px; line-height: 1.6; }

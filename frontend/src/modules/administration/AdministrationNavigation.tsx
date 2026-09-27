@@ -1,11 +1,13 @@
 import Link from "next/link";
+import { canManageAccounts } from "../identity/identity-workflow";
 import styles from "./access.module.css";
 
 export function AdministrationNavigation({ current, actions, locked = false }: {
-  current: "access" | "organizations" | "history"; actions: readonly string[]; locked?: boolean;
+  current: "access" | "organizations" | "history" | "accounts"; actions: readonly string[]; locked?: boolean;
 }) {
   const links = [
     { id: "account", href: "/identity/account", label: "Akun saya", available: true },
+    { id: "accounts", href: "/administration/accounts", label: "Akun dan undangan", available: canManageAccounts(actions) },
     { id: "access", href: "/administration/access", label: "Akses dan keanggotaan", available: actions.some(action => action.startsWith("access.") || action.startsWith("membership.")) },
     { id: "organizations", href: "/administration/organizations", label: "Organisasi dan unit", available: actions.some(action => ["technical.configure", "organization.approve", "access.audit.read"].includes(action)) },
     { id: "history", href: "/administration/history", label: "Riwayat perubahan", available: actions.some(action => ["access.audit.read", "access.approve", "membership.approve", "access.revoke", "technical.configure", "organization.approve"].includes(action)) },

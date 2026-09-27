@@ -62,8 +62,11 @@ export function sessionTiming(session: IdentitySession, elapsedMs: number) {
   return { expired, fresh: !expired && session.freshFactorUntil !== null && now < Date.parse(session.freshFactorUntil) };
 }
 
+export function canManageAccounts(actions: readonly string[]) { return actions.some(action => ["invite.manage", "recovery.initiate", "membership.approve", "access.approve", "access.audit.read"].includes(action)); }
+
 export function identityDestinations(actions: readonly string[]) {
   return [
+    { href: "/administration/accounts", label: "Akun dan undangan", description: "Tinjau undangan dan akun sesuai lingkup tugas.", visible: canManageAccounts(actions) },
     { href: "/administration/access", label: "Akses dan keanggotaan", description: "Ajukan atau tinjau izin sesuai cakupan tugas.", visible: actions.some(action => action.startsWith("access.") || action.startsWith("membership.")) },
     { href: "/administration/organizations", label: "Organisasi dan unit", description: "Kelola struktur organisasi melalui persetujuan.", visible: actions.some(action => ["technical.configure", "organization.approve", "access.audit.read"].includes(action)) },
     { href: "/administration/history", label: "Riwayat perubahan", description: "Periksa jejak pengajuan dan keputusan akses.", visible: actions.some(action => ["access.audit.read", "access.approve", "membership.approve", "access.revoke", "technical.configure", "organization.approve"].includes(action)) },

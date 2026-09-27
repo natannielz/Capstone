@@ -49,6 +49,10 @@ public sealed partial class IdentityOnboardingService
 
     public async Task<AccountDirectoryPage> ListProfilesAsync(ActorContext actor, int offset, int limit,
         AuthorizationReadMetadata audit, long? userId = null, CancellationToken cancellationToken = default)
+        => await ListProfilesCoreAsync(actor, offset, limit, audit, userId, null, cancellationToken);
+
+    private async Task<AccountDirectoryPage> ListProfilesCoreAsync(ActorContext actor, int offset, int limit,
+        AuthorizationReadMetadata audit, long? userId, string? searchTerm, CancellationToken cancellationToken)
     {
         AuthorizationStore.ValidatePage(offset, limit); ValidateIdentityRead(audit);
         if (userId is <= 0) throw new AuthorizationDeniedException("resource_unavailable");
@@ -86,6 +90,7 @@ public sealed partial class IdentityOnboardingService
                 { "_id", 1 }, { "displayName", "$profile.displayName" }, { "verifiedEmail", "$profile.verifiedEmail" }, { "verifiedAt", "$profile.verifiedAt" },
                 { "status", "$identity.status" }, { "securityVersion", "$identity.securityVersion" }, { "grantVersion", "$identity.grantVersion" }
             }));
+            if (searchTerm is not null) pipeline.Add(SearchMatch(searchTerm));
             pipeline.Add(new("$facet", new BsonDocument
             {
                 { "total", new BsonArray { new BsonDocument("$count", "count") } },
@@ -94,7 +99,8 @@ public sealed partial class IdentityOnboardingService
             var page = await source.Aggregate<BsonDocument>(session, pipeline).SingleAsync(token);
             var total = page["total"].AsBsonArray.Count == 0 ? 0 : page["total"][0]["count"].ToInt64();
             var items = page["items"].AsBsonArray.Select(value => Profile(value.AsBsonDocument)).ToImmutableArray();
-            await AuditReadAsync(readId, actor, snapshot, "identity.directory.read", audit, offset, limit, userId, items.Length, authority.Scopes, session, token);
+            await AuditReadAsync(readId, actor, snapshot, "identity.directory.read", audit,
+                offset, limit, userId, items.Length, authority.Scopes, session, token);
             return new AccountDirectoryPage(total, items);
         }, cancellationToken);
     }

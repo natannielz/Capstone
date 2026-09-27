@@ -59,3 +59,8 @@ The [97-item acceptance register](../requirements/unit-toko-report-2026-09-28.md
 | Report coverage and business activation | All report tasks | All 97 rows have implementation/evidence or an explicit valid conditional disposition; D01–D08 resolved before affected activation |
 
 These planning additions do not change the prior test counts or constitute new runtime test results. No production-ready declaration is made.
+## Local report implementation checkpoint — 28 September 2026
+
+ACC01 administration now has protected HTTP/search contracts, reviewed invitation/recovery-intent screens and durable request reconciliation. [Bounded acceptance](identity-administration-acceptance-2026-09-28.md) records 277 backend tests, 315 frontend tests and nine synthetic browser groups. Provider event/owner recovery/delivery and actual connected/live acceptance are still open; this does not close the identity release gate.
+
+The still-active legacy Q08 conflict exhaustion bug is corrected in 1b000bd with distinct unknown-outcome handling and [regression evidence](legacy-conflict-acceptance-2026-09-28.md). New business-module concurrency/recovery and deployed operating gates remain with their owning tasks.

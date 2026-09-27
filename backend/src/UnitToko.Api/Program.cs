@@ -63,7 +63,8 @@ builder.Services.AddOpenApi("v1", options =>
             foreach (var pair in path.Value.Operations ?? [])
             {
                 var operation = pair.Value;
-                if ((path.Key.StartsWith("/api/v1/access", StringComparison.Ordinal) || path.Key.StartsWith("/api/v1/organizations", StringComparison.Ordinal)) &&
+                if ((path.Key.StartsWith("/api/v1/access", StringComparison.Ordinal) || path.Key.StartsWith("/api/v1/organizations", StringComparison.Ordinal) ||
+                     path.Key.StartsWith("/api/v1/identity/administration/", StringComparison.Ordinal)) &&
                     path.Key != "/api/v1/access/current")
                 {
                     operation.Parameters ??= [];
@@ -233,6 +234,7 @@ app.UseIdentityAntiforgery(identityEnabled);
 app.UseAuthorization();
 app.MapIdentitySecurityEndpoints();
 app.MapIdentityEndpoints();
+app.MapIdentityAdministrationEndpoints();
 app.MapAccessEndpoints();
 app.MapOrganizationEndpoints();
 app.MapGet("/health/live", () => TypedResults.Ok(new HealthStatus("live"))).AllowAnonymous().WithName("Liveness");

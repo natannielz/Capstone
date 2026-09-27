@@ -26,8 +26,8 @@ export function useOperationRecovery(actorId?: string) {
     locked: !ready || snapshot.entries.length > 0 || snapshot.error !== null };
 }
 
-export function OperationRecovery({ entries, journal, disabled, onResolved }: {
-  entries: readonly OperationReference[]; journal: OperationJournal; disabled: boolean; onResolved: () => void;
+export function OperationRecovery({ entries, journal, disabled, onResolved, onFailure }: {
+  entries: readonly OperationReference[]; journal: OperationJournal; disabled: boolean; onResolved: () => void; onFailure?: (failure: unknown) => void;
 }) {
   const [gateway] = useState(() => createAccessGateway());
   const [busy, setBusy] = useState(false);
@@ -51,7 +51,7 @@ export function OperationRecovery({ entries, journal, disabled, onResolved }: {
       } else {
         setMessage("Hasil belum terkonfirmasi. Ini belum berarti permintaan gagal. Periksa kembali, atau selesaikan dan tutup permintaan ini sebelum membuat perubahan baru.");
       }
-    } catch (failure) { setError(failure); }
+    } catch (failure) { setError(failure); onFailure?.(failure); }
     finally { setBusy(false); }
   }
 
