@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/UnitToko.Api/UnitToko.Api.csproj" />
+    <Project Path="src/UnitToko.Modules/UnitToko.Modules.csproj" />
+    <Project Path="src/UnitToko.Platform/UnitToko.Platform.csproj" />
+    <Project Path="src/UnitToko.Worker/UnitToko.Worker.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/UnitToko.Tests/UnitToko.Tests.csproj" />
+  </Folder>
+</Solution>

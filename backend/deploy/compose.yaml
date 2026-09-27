@@ -1,0 +1,15 @@
+services:
+  mongo:
+    image: mongo:8.2.12
+    command: ["mongod", "--replSet", "rs0", "--bind_ip_all", "--port", "27028"]
+    ports:
+      - "127.0.0.1:27028:27028"
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--port", "27028", "--quiet", "--eval", "db.adminCommand({ping:1}).ok"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+volumes:
+  mongo_data: {}

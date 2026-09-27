@@ -1,0 +1,14 @@
+{
+  "name": "unit-toko-api-contracts",
+  "private": true,
+  "type": "module",
+  "engines": { "node": "24.x" },
+  "scripts": {
+    "generate": "node generate-client.mjs",
+    "check": "node generate-client.mjs --check"
+  },
+  "devDependencies": {
+    "openapi-typescript": "7.13.0",
+    "typescript": "5.9.3"
+  }
+}
