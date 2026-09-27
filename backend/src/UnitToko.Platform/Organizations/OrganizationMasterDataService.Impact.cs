@@ -50,7 +50,7 @@ public sealed partial class OrganizationMasterDataService
         var revisionDocument = new BsonDocument
         {
             { "nodes", new BsonArray(nodes.Select(AuthorizationBson.Node)) },
-            { "memberships", new BsonArray(memberships) }, { "grants", new BsonArray(grants) },
+            { "memberships", new BsonArray(memberships.Select(AccessImpactRecord)) }, { "grants", new BsonArray(grants.Select(AccessImpactRecord)) },
             { "identities", new BsonArray(identities.Select(value => new BsonDocument
                 { { "_id", value["_id"] }, { "status", value["status"] }, { "grantVersion", value["grantVersion"] } })) }
         };
@@ -58,6 +58,11 @@ public sealed partial class OrganizationMasterDataService
         return new(new(nodes.Length, memberships.LongCount(value => value["status"] == "active"),
             grants.LongCount(value => value["status"] == "active"), identities.Count, revision), nodes, identities.ToImmutableArray());
     }
+    // Read serialization counters do not change reviewed access. Retain every authority field,
+    // including status, scope, versions, approval provenance and effective/revocation times.
+    private static BsonDocument AccessImpactRecord(BsonDocument record) =>
+        new(record.Elements.Where(field => field.Name != "fence"));
+
     private async Task InvalidateAffectedAccountsAsync(ImpactState impact, IClientSessionHandle session, CancellationToken token)
     {
         foreach (var identity in impact.Identities)

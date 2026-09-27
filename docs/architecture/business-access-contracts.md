@@ -1,6 +1,6 @@
 # Business access contracts
 
-Status: ACC02.1–.2 permission and optional-role-suggestion implementation. Catalog entitlement, historical-read adapters, trusted person independence and production business ports remain separate acceptance gates. These are producer contracts, not evidence that the legacy routes already enforce the new model.
+Status: ACC02.1–.2 permission and optional-role-suggestion implementation; ACC02.3 catalog producer boundary locally accepted with [verification evidence](../quality/catalog-visibility-acceptance-2026-09-28.md). Product/delivery integration, historical-read adapters, trusted person independence and production business ports remain separate acceptance gates. These are producer contracts, not evidence that the legacy routes already enforce the new model.
 
 ## Explicit business permissions
 
@@ -33,18 +33,17 @@ The catalog exposes suggestions separately from a role's materialized permission
 
 Buyer spending approval is never a suggested/default addition. A named authorized approver receives it through the existing explicit request, preview, independent approval and delegation checks. Every new grant preserves the reviewed scope, validity and exact permission snapshot. Editing suggestions never changes that snapshot; the six v1 base templates remain unchanged. ACC03 supplies future reviewed template migrations.
 
-## Catalog visibility: mapped next implementation
+## Catalog visibility: implemented producer boundary
 
-Ordinary BuyerOwned resource matching remains appropriate for orders. It must not be applied to shared SKUs or widened to solve catalog access. The separate visibility compiler needs:
+Ordinary BuyerOwned matching remains appropriate for orders and is unchanged. The catalog compiler joins current `catalog.read` authority to an explicitly approved entitlement for the same actor and membership. The entitlement audience must fit the same eligible grant. Active assortment ownership and all required hierarchy nodes remain part of the complete evidence; an assortment ID alone is not authorization.
 
-- Current approved actor, session, catalog-read grant and active membership.
-- Explicit entitlement bound to that same actor/membership and contained audience scope; active/effective/unrevoked status, version and immutable approval provenance.
-- Active server-owned assortment, its version and authoritative fulfillment owner scope.
-- Complete alternatives carrying entitlement, grant, membership, assortment and scope-node evidence. Assortment IDs are a projection of this evidence, not its replacement.
+Buying audiences may share assortments across buyer organizations. Explicit fulfillment shop/warehouse audiences must additionally contain the assortment owner. No role, owner, system scope or courier scope receives implicit catalog access. Entitlement records preserve immutable requester/approver/reference/version/time provenance; person-level independence still belongs to ACC03.
 
-The plan's initial entitlement sketch lacks status/revocation/approval facts. Extend it before persistence. Reuse `ScopePolicy.Compile(catalog.read)` for current eligibility, then join complete matching evidence; never apply BuyerOwned resource matching to the SKU. Apply the canonical assortment/owner query before search, count, page and detail lookup; multi-assortment products must not duplicate totals. Public UUID, image, export and event lookup consume the same authorization. Fence entitlement/assortment versions alongside identity/session/ancestor nodes, and reload authorization at deferred delivery.
+The platform service applies one canonical assortment/owner-pair filter before search, count, pagination and internal/public lookup. Multi-assortment products return once, hidden products do not affect totals, malformed publication data stays unavailable, and ambiguous eligible UUIDs deny. Its projection contains only ID, public ID and display name. Identity/session, grant, membership, entitlement, assortment and hierarchy fences protect reads against concurrent changes.
 
-CAT01 must define assortment ownership, approval authority, audience/pricing boundaries, SKU publication and channel-to-scope mapping. `catalog.manage`, technical administration and membership approval do not imply entitlement issuance authority. No C# catalog/file/export/event adapters exist yet, and the legacy catalog has not adopted this model. Required tests include shared X/hidden Y, private order OA, mismatched memberships, malformed scalar/array references, hidden counts, every delivery surface and paused reads racing revocation.
+Migration v6 adds strict entitlement/assortment collections without seeds or changes to existing SKU records. SKU publication uses complete `catalogListings` tuples. CAT01 must atomically bump every affected assortment version when publishing, withdrawing or moving a SKU; metadata and price versioning require their own owning-module rules. Read counters do not invalidate organization reactivation reviews, while semantic access changes still do.
+
+Image/export/event methods currently return metadata references only. They are not file capabilities or delivery adapters. Actual product endpoints/screens, governed entitlement issuance, pricing policies, product indexes and delivery-time document authorization remain CAT01/PAY01 integration gates. The legacy catalog has not adopted this model. See the [catalog visibility and publication contract](catalog-visibility.md) for exact shapes and limits, and [report decisions](../quality/report-decisions.md) for pending business authority choices.
 
 ## Historical reads: mapped next implementation
 

@@ -32,7 +32,8 @@ public sealed class ProviderLifecycleMigrationTests(MongoFixture fixture)
             var before = await History(db);
             var counters = await db.GetCollection<BsonDocument>("idCounters").Find(FilterDefinition<BsonDocument>.Empty).ToListAsync();
             await new CollectionMigrations(db, clock).ApplyAsync();
-            Assert.Equal(5, CollectionMigrations.CurrentVersion);
+            Assert.Equal(Enumerable.Range(1, CollectionMigrations.CurrentVersion),
+                (await History(db)).Select(row => row["_id"].AsInt32));
             Assert.True(await new CollectionMigrations(db, clock).IsCurrentAsync());
             Assert.Equal(before, (await History(db)).Take(4));
             foreach (var (name, row) in rows)
@@ -201,7 +202,9 @@ public sealed class ProviderLifecycleMigrationTests(MongoFixture fixture)
             Assert.All(ddl, command =>
             {
                 Assert.Equal("majority", command["writeConcern"]["w"].AsString);
-                Assert.Contains(command.GetElement(0).Value.AsString, new[] { "identitySecurityEvents", "identityAdmissionHolds", "identityProviderSubjects" });
+                // Resuming the registered chain also applies the following v6 catalog migration.
+                Assert.Contains(command.GetElement(0).Value.AsString, new[] { "identitySecurityEvents", "identityAdmissionHolds",
+                    "identityProviderSubjects", "catalogEntitlements", "catalogAssortments" });
             });
             Assert.Contains(await (await db.GetCollection<BsonDocument>("identitySecurityEvents").Indexes.ListAsync()).ToListAsync(),
                 index => index["name"] == "reviewed_provider_event_identity");

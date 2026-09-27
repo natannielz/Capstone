@@ -219,4 +219,45 @@ public sealed class OrganizationServiceTests(MongoFixture fixture)
         await Assert.ThrowsAsync<AuthorizationDeniedException>(() => data.Store.ReadCurrentAsync(beneficiaryChecker));
         Assert.Equal(1, (await data.Store.ReadCurrentAsync(unrelatedBuyer)).GrantVersion);
     }
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Catalog_read_fences_preserve_review_but_access_revision_changes_invalidate_it(bool changeAccess)
+    {
+        await using var data = await DataAsync(fixture); var service = Service(data);
+        var maker = await data.AddActorAsync(1, SystemScope, Permissions.TechnicalConfigure);
+        var checker = await data.AddActorAsync(2, SystemScope, Permissions.OrganizationApprove);
+        await data.AddActorAsync(3, new(GrantScopeKind.BuyingOrganization, 10),
+            Permissions.CatalogRead, Permissions.OrganizationWide);
+        await data.Database.GetCollection<BsonDocument>("authorizationScopes").UpdateOneAsync(
+            new BsonDocument("_id", 11L), Builders<BsonDocument>.Update.Set("status", "suspended").Inc("version", 1L));
+        var proposal = await service.ProposeAsync(maker,
+            new(OrganizationChangeKind.Reactivate, ScopeNodeKind.Branch, 10, "TEBET", "Reviewed branch", 11, 2),
+            Metadata("catalog-fence-proposal"));
+        var before = await service.ReadProposalAsync(checker, proposal.Id, ReadAudit);
+        foreach (var collection in new[] { "memberships", "authorizationGrants" })
+            await data.Database.GetCollection<BsonDocument>(collection).UpdateOneAsync(
+                new BsonDocument("_id", 3L), Builders<BsonDocument>.Update.Inc("fence", 1L));
+        if (changeAccess)
+            await data.Database.GetCollection<BsonDocument>("authorizationGrants").UpdateOneAsync(
+                new BsonDocument("_id", 3L), Builders<BsonDocument>.Update.Inc("version", 1L));
+        var after = await service.ReadProposalAsync(checker, proposal.Id, ReadAudit);
+        if (changeAccess)
+        {
+            // The UI retains the reviewed impact snapshot; allowed actions re-evaluate current impact.
+            Assert.Equal(before.Impact.Revision, after.Impact.Revision);
+            Assert.DoesNotContain("approve", after.AllowedActions);
+            Assert.Equal("organization_impact_changed",
+                (await Assert.ThrowsAsync<PersistenceConflictException>(() =>
+                    service.ApproveAsync(checker, proposal.Id, 1, Metadata("catalog-fence-approve")))).Code);
+        }
+        else
+        {
+            Assert.Equal(before.Impact.Revision, after.Impact.Revision);
+            Assert.Contains("approve", after.AllowedActions);
+            await service.ApproveAsync(checker, proposal.Id, 1, Metadata("catalog-fence-approve"));
+            Assert.Equal("active", (await service.ReadAsync(maker, 11, ReadAudit)).Status);
+        }
+    }
+
 }

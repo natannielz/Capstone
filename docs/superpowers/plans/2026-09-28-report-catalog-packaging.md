@@ -53,6 +53,14 @@ Requirements owned here: **V01–V10, I01–I10, F01**, Catalog/Inventory portio
 
 ## Shared data and integration contract
 
+### Catalog visibility producer handoff
+
+ACC02.3 supplies the policy, strict v6 entitlement/assortment persistence and metadata-read service described in [catalog visibility](../../architecture/catalog-visibility.md). Reuse those contracts; do not rebuild them or widen BuyerOwned order authority. Current acceptance is recorded separately from this still-open Catalog module.
+
+CAT01 must publish SKUs using bounded `catalogListings` tuples of assortment ID and canonical fulfillment owner scope. **Every addition, removal or move must atomically increment all affected assortment versions in the same transaction as the SKU change.** Add real writer/read races proving withdrawn or moved publications cannot leak through list/count/detail, and preserve SKU identity when one SKU is listed in multiple assortments.
+
+Implement governed entitlement issuance only after the D02 audience/approver decisions are resolved. Extend the metadata service through explicit product-definition/price projections with their own authorization and version rules; no current metadata reference grants a price tier or file capability. Establish immutable public UUID database uniqueness and needed query indexes without altering applied migrations. Product-image/export/event delivery must reauthorize at delivery and enforce PAY01's immutable document eligibility.
+
 ### Identity, definition and price boundaries
 
 Implement the following records in the named domain files under `UnitToko.Modules.Catalog`; use immutable collections for stored attributes. `LongId` and `ActorContext` already exist. Domain `long` revisions receive strict string DTO adapters; the DTO layer must not change domain types into floating point.
