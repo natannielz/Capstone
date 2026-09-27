@@ -15,7 +15,9 @@ public static class DomainValues
 
     public static long ParseId(string value)
     {
-        if (!long.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var id) || id <= 0)
+        if (string.IsNullOrEmpty(value) || value.Length > 19 || value[0] is < '1' or > '9' ||
+            value.Any(character => character is < '0' or > '9') ||
+            !long.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var id) || id <= 0)
             throw new DomainValidationException("invalid_id", "ID must be a positive Int64 decimal string");
         return id;
     }

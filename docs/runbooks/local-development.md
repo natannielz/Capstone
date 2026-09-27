@@ -29,6 +29,8 @@ try {
 
 Docker is one supported local option. The implementation workspace also has checksum-verified project-local .NET and MongoDB binaries under ignored `.tools/`; those machine-specific downloads are not repository dependencies. MongoDB listens only on `127.0.0.1:27028`. The test fixture initializes `rs0`, creates a unique `unittoko_test_*` database, and drops only that database when finished. It refuses a remote address or a supplied database in the connection URI. It fails when MongoDB is absent instead of skipping transaction tests. Do not run another MongoDB process on the same port.
 
+The disposable server must use `--setParameter enableTestCommands=1`; compose and CI set this explicitly. Commit-failure tests use MongoDB's [app-name-scoped failCommand hook](https://github.com/mongodb/mongo/wiki/The-failCommand-fail-point) and remove the fault in `finally`. They inject uncertain commit replies after the database writes have executed. This tests recovery with the original idempotency key, alongside ordinary rollback and concurrent-write tests. Never reuse this test server configuration for production. Run one backend test suite at a time against this port because failpoint configuration belongs to the server.
+
 ## Run the new API foundation
 
 ```powershell
@@ -37,11 +39,12 @@ $env:Mongo__Database = 'unittoko_development'
 $env:ASPNETCORE_ENVIRONMENT = 'Development'
 Push-Location backend
 try {
+    dotnet run --project src/UnitToko.Worker -- --migrate
     dotnet run --project src/UnitToko.Api --no-launch-profile --urls http://127.0.0.1:5388
 } finally { Pop-Location }
 ```
 
-`/health/live` checks that the process is running. `/health/ready` additionally checks MongoDB is a writable replica-set member. The protected `/api/v1/system/status` currently returns 401: production identity is a later implementation gate. The test authentication adapter exists only in the test assembly. Do not turn it into a development or production login bypass. The worker foundation deliberately has no external message processors yet.
+The explicit worker migration command creates validators/indexes and records its schema version. API startup never applies migrations or seeds business data. `/health/live` checks that the process is running. `/health/ready` additionally checks that MongoDB is a writable replica-set member and has the current completed schema migration. The protected `/api/v1/system/status` currently returns 401: production identity is a later implementation gate. The test authentication adapter exists only in the test assembly. Do not turn it into a development or production login bypass. The worker foundation deliberately has no external message processors yet.
 
 The existing frontend continues through its legacy adapters during migration. It is not connected to the new service's stock or finance writes. Keep one authoritative writer until the coordinated migration gate passes.
 

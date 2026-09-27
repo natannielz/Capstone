@@ -6,6 +6,7 @@ using Microsoft.OpenApi;
 using System.Security.Claims;
 using System.Text.Encodings.Web;
 using System.Text.Json;
+using MongoDB.Driver;
 using UnitToko.Modules.Contracts;
 using UnitToko.Platform;
 using UnitToko.Platform.Mongo;
@@ -16,34 +17,45 @@ builder.Services.AddSingleton<ISystemStatusProvider, ClockSystemStatusProvider>(
 builder.Services.AddSingleton(sp => new MongoConnection(
     sp.GetRequiredService<IConfiguration>()["Mongo:Uri"]!,
     sp.GetRequiredService<IConfiguration>()["Mongo:Database"]!));
+builder.Services.AddSingleton(sp => sp.GetRequiredService<MongoConnection>().Client);
+builder.Services.AddSingleton(sp => sp.GetRequiredService<MongoConnection>().Database);
+builder.Services.AddSingleton<MongoUnitOfWork>();
+builder.Services.AddSingleton<IdAllocator>();
+builder.Services.AddSingleton<IdempotencyStore>();
+builder.Services.AddSingleton<OutboxStore>();
+builder.Services.AddSingleton<CollectionMigrations>();
 builder.Services.AddAuthentication("Unavailable")
     .AddScheme<AuthenticationSchemeOptions, UnavailableAuthenticationHandler>("Unavailable", _ => { });
 builder.Services.AddAuthorization(options =>
     options.FallbackPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
-builder.Services.AddOpenApi("v1", options => options.AddDocumentTransformer((document, _, _) =>
+builder.Services.AddOpenApi("v1", options =>
 {
-    document.Components ??= new OpenApiComponents();
-    document.Components.SecuritySchemes = new Dictionary<string, IOpenApiSecurityScheme>
+    options.AddSchemaTransformer<NumericStringSchemaTransformer>();
+    options.AddDocumentTransformer((document, _, _) =>
     {
-        ["session"] = new OpenApiSecurityScheme
+        document.Components ??= new OpenApiComponents();
+        document.Components.SecuritySchemes = new Dictionary<string, IOpenApiSecurityScheme>
         {
-            Type = SecuritySchemeType.ApiKey,
-            In = ParameterLocation.Cookie,
-            Name = "__Host-ut_session",
-            Description = "Opaque application session after managed OIDC login."
-        }
-    };
-    foreach (var path in document.Paths.Where(p => p.Key.StartsWith("/api/v1/", StringComparison.Ordinal)))
-        foreach (var operation in (IEnumerable<OpenApiOperation>?)path.Value.Operations?.Values ?? Enumerable.Empty<OpenApiOperation>())
-        {
-            operation.Security ??= [];
-            operation.Security.Add(new OpenApiSecurityRequirement
+            ["session"] = new OpenApiSecurityScheme
             {
-                [new OpenApiSecuritySchemeReference("session", document)] = []
-            });
-        }
-    return Task.CompletedTask;
-}));
+                Type = SecuritySchemeType.ApiKey,
+                In = ParameterLocation.Cookie,
+                Name = "__Host-ut_session",
+                Description = "Opaque application session after managed OIDC login."
+            }
+        };
+        foreach (var path in document.Paths.Where(p => p.Key.StartsWith("/api/v1/", StringComparison.Ordinal)))
+            foreach (var operation in (IEnumerable<OpenApiOperation>?)path.Value.Operations?.Values ?? Enumerable.Empty<OpenApiOperation>())
+            {
+                operation.Security ??= [];
+                operation.Security.Add(new OpenApiSecurityRequirement
+                {
+                    [new OpenApiSecuritySchemeReference("session", document)] = []
+                });
+            }
+        return Task.CompletedTask;
+    });
+});
 
 var app = builder.Build();
 var mongoUri = app.Configuration["Mongo:Uri"];
@@ -107,6 +119,21 @@ app.Use(async (context, next) =>
         if (!context.Response.HasStarted)
             await Problems.WriteAsync(context, 400, exception.Code, exception.SafeTitle);
     }
+    catch (PersistenceConflictException exception)
+    {
+        if (!context.Response.HasStarted)
+            await Problems.WriteAsync(context, 409, exception.Code, "Persistence conflict");
+    }
+    catch (UncertainCommitException exception)
+    {
+        app.Logger.LogError(exception, "Commit outcome unknown, trace {TraceId}", correlation);
+        if (!context.Response.HasStarted)
+        {
+            context.Response.Headers.RetryAfter = "1";
+            await Problems.WriteAsync(context, 503, "commit_outcome_unknown",
+                "Commit outcome unknown; retry with the same idempotency key");
+        }
+    }
     catch (BadHttpRequestException exception)
     {
         if (!context.Response.HasStarted)
@@ -139,11 +166,12 @@ app.UseStatusCodePages(async statusContext =>
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapGet("/health/live", () => TypedResults.Ok(new HealthStatus("live"))).AllowAnonymous().WithName("Liveness");
-app.MapGet("/health/ready", async (HttpContext context, MongoConnection mongo, CancellationToken cancellationToken) =>
+app.MapGet("/health/ready", async (HttpContext context, MongoConnection mongo,
+    CollectionMigrations migrations, CancellationToken cancellationToken) =>
 {
     try
     {
-        if (await mongo.IsReadyAsync(cancellationToken))
+        if (await mongo.IsReadyAsync(cancellationToken) && await migrations.IsCurrentAsync(cancellationToken))
             return Results.Ok(new HealthStatus("ready"));
     }
     catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }

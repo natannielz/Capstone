@@ -70,7 +70,7 @@ jobs:
         run: |
           docker run --detach --name unit-toko-mongo \
             --publish 127.0.0.1:27028:27028 \
-            mongo:8.2.12 --replSet rs0 --bind_ip_all --port 27028
+            mongo:8.2.12 --replSet rs0 --bind_ip_all --port 27028 --setParameter enableTestCommands=1
           for attempt in $(seq 1 30); do
             if docker exec unit-toko-mongo mongosh --quiet --port 27028 --eval 'quit(db.adminCommand({ping:1}).ok === 1 ? 0 : 1)'; then
               exit 0

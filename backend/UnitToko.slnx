@@ -6,6 +6,7 @@
     <Project Path="src/UnitToko.Worker/UnitToko.Worker.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/UnitToko.PersistenceProbe/UnitToko.PersistenceProbe.csproj" />
     <Project Path="tests/UnitToko.Tests/UnitToko.Tests.csproj" />
   </Folder>
 </Solution>

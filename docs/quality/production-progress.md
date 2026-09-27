@@ -29,8 +29,8 @@ Starting commit: `09265cc65b47f26ce3bec8c652fde380dcdcce86`
 | --- | --- | --- |
 | T00 | Baseline and golden slices reviewed; overall partial | Seven scenarios/84 commands/65 assertions pass both normal and reordered replay; independent reviewer accepted the legacy fixture. C# parity and defect red tests remain open |
 | T01 | Accepted and committed | `86f0fc5`: clean Node 24 install/build, transitive browser boundary, typecheck/lint, regression/golden tests, native/SQL tracing, production boot and all three isolated HTTP smoke suites pass |
-| T02 | Accepted foundation | SDK 10.0.401/MongoDB 8.2.12 verified. Backend review fixes, typed client, generated schema checks and CI integration accepted; no production identity or business migration claimed |
-| T05 | Independent primitive implementation in progress | Worker owns new Mongo unit-of-work/idempotency/outbox/ID/migration files, Money/LongId and persistence tests; does not change API or T02 files |
+| T02 | Accepted and committed foundation | `fecbd85`: SDK 10.0.401/MongoDB 8.2.12 verified. Backend review fixes, typed client, generated schema checks and CI integration accepted; no production identity or business migration claimed |
+| T05 | Persistence foundation accepted; business parity remains with module ports | Clean backend build and 52 tests pass with no skips; independent final review accepts migration, numeric, durability and recovery fixes; no production business writer enabled |
 | T04, T03, T05A–T16 | Not started | Follow dependency order after foundation and persistence acceptance |
 
 ## Dependency review
@@ -68,3 +68,27 @@ All temporary dependency junctions at root, `website/`, and `frontend/` were rem
 T05 work may prepare independent primitives alongside the final T01/T02 integration gate. No new business writer or production route is enabled by this parallel work, and persistence acceptance waits for the foundation gate. Root keeps `tmp/production/t02-owned-files.json` to prevent new T05 files or unrelated UI work from entering the foundation commit.
 
 Commit `86f0fc5` preserves tracked renames and adds the executable golden baseline. User changes remain unstaged: `.gitignore`'s npm-cache entry, the relocated layout's development-only capture script, and mentor mockup files. T02's API dependency/client changes were deliberately held out of this structural commit.
+
+Commit `fecbd85` records the reviewed API/worker foundation, real Mongo fixture, generated client/contracts and CI gates. No business writes or provider identity were enabled.
+
+## Persistence foundation acceptance
+
+The initial 24 backend cases passed (14 foundation and 10 persistence), but independent review found blockers in migration replay, decimal round trips, expired outbox acknowledgements and invalid default values. These were not accepted as production-ready primitives. Fixes now add explicit migration history/leases and read-only readiness, consistent numeric boundaries and lease checks. The API maps known conflicts to 409 and uncertain commits to a safe same-key recovery response; a worker command explicitly applies migrations.
+
+Root-owned checks inject actual Mongo commit reply failures and transient errors, including cancellation after an uncertain reply. Another worker added an owned test process that is killed after a simulated downstream acknowledgement, then restarted to recover its expired lease. The simulated downstream uses durable idempotency; these checks do not claim that the production notification worker or any external provider exists. The disposable loopback-only Mongo server enables test commands, and CI/compose match that setup.
+
+Final result: clean solution build with zero warnings/errors; 52 backend cases pass, zero skipped. This includes the real Worker `--migrate` process, repeated migration without reseeding or history changes, storage/HTTP numeric contracts, concurrent writes, uncertain commits, bounded abort cleanup and actual process death/recovery. Abort fault coverage verifies a server-side hit and a roughly five-second cleanup deadline against a ten-second blocked response, preserving the original business rejection. Explicit majority writes override a deliberately weak client configuration for counters, migration history and outbox lease transitions; this is command-monitor evidence, not a multi-node failover rehearsal. Idempotency actor IDs persist as BSON Int64. Independent final review found no unresolved issue in this foundation. API export drift and generated frontend contract checks pass; the production OpenAPI file is unchanged because numeric business DTOs are not exposed yet.
+
+The v1 collection registry establishes common numeric/version constraints and planned unique/query indexes. Full aggregate schemas, query explain/load evidence and C# replay of the seven legacy business scenarios remain tied to the business modules that will introduce those writes. Do not infer stock, accounting or production data migration from foundation acceptance.
+
+T04 may now consume the reviewed persistence boundary. Its policy infrastructure can precede provider login, while all production routes remain fail-closed until T03. T05's legacy parity requirement stays open per owning business port; accepting primitives does not waive that gate or move the authoritative writer.
+
+## Next: scoped authorization preparation
+
+A read-only T04 map confirms that the legacy single-role actor and broad staff state cannot supply the new authorization boundary. Implement the fixed six templates, four explicit finance packs and separate `payment.verify`; keep public demo customers outside approved B2B migration. Preserve original actor identity across role changes through a durable import mapping.
+
+Policy contracts must evaluate OR across complete grants and AND within one grant, avoiding accidental branch/channel combinations. Ordinary buyers remain self/assigned; `branch.pic` names one branch; organization-wide access requires a separate explicit grant. A null scope never means all. Courier shipment assignment, active hierarchy relationships, immutable maker/checker actor IDs and record revisions remain mandatory.
+
+The transaction boundary must write an actor authorization fence matching active status and current grant version; revocation/suspension writes the same fence. Scope deactivation needs its own coordinated invalidation/fence. Queries apply authorized scope before pagination/counts, and detail/file/export/event access uses the same semantics. Keep Mongo session types out of domain contracts, version template definitions, and snapshot effective grants so a template edit cannot silently widen existing access.
+
+Suggested ownership after shared contracts are agreed: policy/domain and matrix tests; Mongo/API/query/fence concurrency integration; frontend forms and permission documentation. Parent owns composition and generated-contract refresh. New administration remains protected by the fail-closed API until T03 supplies verified identity; no legacy-cookie bridge or test login may enable it. Named live approvers, business memberships and scope assignments remain later operational inputs, not invented seed data.

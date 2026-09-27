@@ -1,7 +1,8 @@
 services:
   mongo:
     image: mongo:8.2.12
-    command: ["mongod", "--replSet", "rs0", "--bind_ip_all", "--port", "27028"]
+    # Disposable local tests only; failure injection must never be enabled in production.
+    command: ["mongod", "--replSet", "rs0", "--bind_ip_all", "--port", "27028", "--setParameter", "enableTestCommands=1"]
     ports:
       - "127.0.0.1:27028:27028"
     volumes:

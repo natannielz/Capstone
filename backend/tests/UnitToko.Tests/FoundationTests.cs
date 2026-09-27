@@ -18,6 +18,7 @@ using MongoDB.Bson;
 using MongoDB.Driver;
 using UnitToko.Modules.Contracts;
 using UnitToko.Platform;
+using UnitToko.Platform.Mongo;
 
 namespace UnitToko.Tests;
 
@@ -35,6 +36,8 @@ public sealed class FoundationTests(MongoFixture mongo)
     [Fact]
     public async Task Health_is_public_but_system_endpoint_fails_closed()
     {
+        await new CollectionMigrations(mongo.Client.GetDatabase(mongo.DatabaseName),
+            new FixedClock(DateTimeOffset.UtcNow)).ApplyAsync();
         using var factory = Factory();
         using var client = factory.CreateClient();
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/health/live")).StatusCode);
