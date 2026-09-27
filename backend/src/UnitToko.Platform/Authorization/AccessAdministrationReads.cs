@@ -93,7 +93,7 @@ public sealed partial class AccessAdministrationService
         new[] { Permissions.AccessApprove, Permissions.MembershipApprove, Permissions.AccessRevoke }.SelectMany(permission =>
             ScopePolicy.Compile(actor, snapshot, permission, clock.UtcNow).Clauses.Select(clause => clause.Scope)).Distinct().ToImmutableArray();
 
-    private static FilterDefinition<BsonDocument> ScopeContainmentFilter(GrantScope scope, string prefix)
+    internal static FilterDefinition<BsonDocument> ScopeContainmentFilter(GrantScope scope, string prefix)
     {
         var sameOrganization = F.Eq(prefix + ".organizationId", scope.OrganizationId);
         var kind = prefix + ".kind";

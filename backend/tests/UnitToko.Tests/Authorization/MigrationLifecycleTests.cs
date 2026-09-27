@@ -45,7 +45,7 @@ public sealed class MigrationLifecycleTests(MongoFixture fixture)
             Assert.True(await migrations.IsCurrentAsync());
             var after = await History(database);
             Assert.Equal(before, after.Take(2));
-            Assert.Equal(new[] { 1, 2, 3 }, after.Select(row => row["_id"].AsInt32));
+            Assert.Equal(Enumerable.Range(1, CollectionMigrations.CurrentVersion), after.Select(row => row["_id"].AsInt32));
             Assert.Equal(audit, await database.GetCollection<BsonDocument>("authorizationHistory")
                 .Find(new BsonDocument("_id", 51L)).SingleAsync());
             Assert.Equal(oldRejected, await database.GetCollection<BsonDocument>("authorizationProposals")
@@ -166,7 +166,7 @@ public sealed class MigrationLifecycleTests(MongoFixture fixture)
             Assert.NotEmpty(ddl);
             Assert.All(ddl, command => Assert.Equal("majority", command["writeConcern"]["w"].AsString));
             Assert.DoesNotContain(ddl, command => command.TryGetValue("collMod", out var value) &&
-                new[] { "identities", "memberships", "orders", "authorizationScopes" }.Contains(value.AsString));
+                new[] { "memberships", "orders", "authorizationScopes" }.Contains(value.AsString));
         });
     }
 

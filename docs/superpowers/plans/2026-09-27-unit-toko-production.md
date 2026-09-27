@@ -128,7 +128,7 @@ dotnet test backend/UnitToko.slnx
 
 **Files:** Create `backend/src/UnitToko.Modules/Identity/{OidcEndpoints,SessionService,InvitationService,RecoveryService,AuthorizationFence}.cs`, provider adapter under `UnitToko.Platform/Identity/`, `frontend/src/modules/identity/`, `backend/tests/UnitToko.Tests/Identity/`; create `docs/runbooks/account-recovery.md`.
 
-**Interfaces:** `ActorContext` contains immutable user ID, provider issuer/subject, current grant version, authenticated-at time and validated factor assurance. Invitation binds intended email, organization and grants approved by an authorized administrator; membership approval is separate from provider login.
+**Interfaces:** `ActorContext` contains immutable user ID, provider issuer/subject, current grant version, actual second-factor completion time and validated factor assurance. Production actors also carry the persistent session hash/version and identity security version. Provider primary-authentication time is stored separately and never substitutes for fresh MFA. Invitation binds intended email, organization and grants approved by an authorized administrator; membership approval is separate from provider login.
 
 - [ ] Verify the managed provider can meet required MFA, region, recovery and cost constraints; configure a development tenant only after its access is available. Keep provider credentials outside source.
 - [ ] Implement OIDC code+PKCE login and server-held tokens/opaque cookie, callback validation, logout and revocation. Test through the actual planned frontend/API origin arrangement.
@@ -136,6 +136,8 @@ dotnet test backend/UnitToko.slnx
 - [ ] Implement session limits, fresh-MFA step-up, owner-controlled recovery and safe factor recovery. Remove permanent-password-setting UI from the production flow.
 - [ ] Authenticate/deduplicate provider events and fence sensitive business writes against concurrent suspension/grant changes. Log recovery/privilege events without tokens.
 - [ ] Run allow/deny identity cases and commit.
+
+Local foundation implementation is recorded in `docs/quality/production-progress.md`. Prepared provider/session/onboarding libraries do not activate production sign-in. Keep the task open until origin/CSRF/API/frontend integration, provider event coverage, owner recovery and actual tenant acceptance are complete.
 
 Required fixture matrix:
 

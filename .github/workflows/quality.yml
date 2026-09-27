@@ -85,6 +85,8 @@ jobs:
       - name: Unit and real replica-set integration tests
         working-directory: backend
         run: dotnet test UnitToko.slnx --no-build --nologo
+      - name: Auth0 Action policy fixtures
+        run: node --test backend/integrations/auth0/v1/actions.test.cjs
       - name: Check server OpenAPI contract
         shell: pwsh
         run: ./backend/contracts/export-openapi.ps1 -Check

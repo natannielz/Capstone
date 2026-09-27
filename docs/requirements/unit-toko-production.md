@@ -124,7 +124,7 @@ Payment verification is a separately granted `payment.verify` permission, normal
 
 ## 4. Identity and application security
 
-Recommended identity implementation: a managed OpenID Connect identity provider, with Auth0 as the initial implementation candidate. Keep organizational authorization in MongoDB and credentials/factor secrets in the provider. Validate provider region, MFA entitlement, organizational policy and operating cost before selecting a paid plan; no claim is made that every feature is free. If BNI/Koperasi already provides an approved enterprise identity provider, use that through the same OIDC boundary. Do not assume an official BNI SSO connection exists.
+Selected identity implementation: Auth0 through a managed OpenID Connect boundary. On 28 September 2026 the user confirmed no existing approved provider and requested the planned Auth0 integration. Keep organizational authorization in MongoDB and credentials/factor secrets in the provider. Validate provider region, MFA entitlement, organizational policy and operating cost before selecting a paid plan; no claim is made that every feature is free. A future approved enterprise provider may use the same boundary after its own acceptance review. Do not assume an official BNI SSO connection exists.
 
 This avoids inventing a password/MFA platform or assuming ASP.NET Core's default relational Identity stores work with MongoDB without an adapter. Auth0 documents [email verification](https://auth0.com/docs/manage-users/user-accounts/verify-emails) and [organization invitations](https://auth0.com/docs/manage-users/organizations/configure-organizations/invite-members). Provider login does not itself authorize branch access.
 

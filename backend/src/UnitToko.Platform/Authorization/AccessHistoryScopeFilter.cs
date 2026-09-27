@@ -6,7 +6,7 @@ namespace UnitToko.Platform.Authorization;
 
 public sealed partial class AccessAdministrationService
 {
-    private static FilterDefinition<BsonDocument> CanonicalHistoryScope(string path, ScopeDirectory directory)
+    internal static FilterDefinition<BsonDocument> CanonicalHistoryScope(string path, ScopeDirectory directory)
     {
         var fields = new[] { "organizationId", "branchId", "divisionId", "shopId", "warehouseId", "channelId" };
         var properties = new BsonDocument("kind", new BsonDocument("enum", new BsonArray

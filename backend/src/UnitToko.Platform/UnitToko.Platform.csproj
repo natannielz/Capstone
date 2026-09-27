@@ -7,6 +7,7 @@
 </PropertyGroup>
 
   <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <PackageReference Include="MongoDB.Driver" Version="3.12.0" />
     <ProjectReference Include="../UnitToko.Modules/UnitToko.Modules.csproj" />
   </ItemGroup>

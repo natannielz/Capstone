@@ -9,6 +9,7 @@ using UnitToko.Modules.Identity;
 using UnitToko.Modules.Identity.Contracts;
 using UnitToko.Modules.Organizations;
 using UnitToko.Platform.Mongo;
+using UnitToko.Platform.Identity;
 
 namespace UnitToko.Platform.Authorization;
 
@@ -35,6 +36,10 @@ public sealed class AuthorizationStore(IMongoDatabase database, MongoUnitOfWork 
         try { actor.Validate(); } catch (ArgumentException) { throw new AuthorizationDeniedException("invalid_actor"); }
         var identity = await database.GetCollection<BsonDocument>("identities").Find(session, IdentityFilter(actor)).FirstOrDefaultAsync(token);
         if (identity is null) throw new AuthorizationDeniedException("stale_or_inactive_actor");
+        if (actor.Session is { } reference && !await database.GetCollection<BsonDocument>("identitySessions")
+                .Find(session, SessionPersistence.LiveFilter(reference, actor.UserId, actor.ProviderIssuer,
+                    actor.ProviderSubject, actor.GrantVersion, clock.UtcNow)).AnyAsync(token))
+            throw new AuthorizationDeniedException("stale_or_inactive_session");
         var grants = await database.GetCollection<BsonDocument>("authorizationGrants").Find(session, F.Eq("userId", actor.UserId)).ToListAsync(token);
         var memberships = await database.GetCollection<BsonDocument>("memberships").Find(session, F.Eq("userId", actor.UserId)).ToListAsync(token);
         var nodes = await database.GetCollection<BsonDocument>("authorizationScopes").Find(session, F.Empty).ToListAsync(token);
@@ -135,6 +140,13 @@ public sealed class AuthorizationStore(IMongoDatabase database, MongoUnitOfWork 
         var updated = await database.GetCollection<BsonDocument>("identities").UpdateOneAsync(session, IdentityFilter(actor),
             Builders<BsonDocument>.Update.Inc("fence", 1L), cancellationToken: token);
         if (updated.ModifiedCount != 1) throw new AuthorizationDeniedException("stale_or_inactive_actor");
+        if (actor.Session is { } reference)
+        {
+            var sessionChanged = await database.GetCollection<BsonDocument>("identitySessions").UpdateOneAsync(session,
+                SessionPersistence.LiveFilter(reference, actor.UserId, actor.ProviderIssuer, actor.ProviderSubject, actor.GrantVersion, clock.UtcNow),
+                Builders<BsonDocument>.Update.Inc("fence", 1L), cancellationToken: token);
+            if (sessionChanged.ModifiedCount != 1) throw new AuthorizationDeniedException("stale_or_inactive_session");
+        }
         foreach (var node in nodes.OrderBy(node => node.Id))
         {
             var filter = F.Eq("_id", node.Id) & F.Eq("kind", AuthorizationBson.Name(node.Kind)) & F.Eq("version", node.Version) & F.Eq("status", "active");
@@ -173,7 +185,8 @@ public sealed class AuthorizationStore(IMongoDatabase database, MongoUnitOfWork 
             throw new DomainValidationException("invalid_access_request", "Request key, bounded audit reason and correlation ID are required");
     }
     private static FilterDefinition<BsonDocument> IdentityFilter(ActorContext actor) => F.Eq("_id", actor.UserId) &
-        F.Eq("issuer", actor.ProviderIssuer) & F.Eq("subject", actor.ProviderSubject) & F.Eq("status", "active") & F.Eq("grantVersion", actor.GrantVersion);
+        F.Eq("issuer", actor.ProviderIssuer) & F.Eq("subject", actor.ProviderSubject) & F.Eq("status", "active") & F.Eq("grantVersion", actor.GrantVersion) &
+        (actor.Session is { } session ? F.Eq("securityVersion", session.SecurityVersion) : F.Empty);
     private void ValidateCollection(IMongoCollection<BsonDocument> collection)
     {
         if (collection.Database.DatabaseNamespace != database.DatabaseNamespace) throw new ArgumentException("Resource collection must use the same application database");
