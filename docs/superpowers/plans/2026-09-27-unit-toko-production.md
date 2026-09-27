@@ -10,6 +10,10 @@
 
 **Spec:** [Unit Toko production specification](../../requirements/unit-toko-production.md). Read this together with the [three-agent review](../../quality/production-readiness-2026-09-27.md).
 
+## Report completion addendum — 28 September 2026
+
+The active production goal also includes the [97-item report acceptance map](../../requirements/unit-toko-report-2026-09-28.md) and [executable report completion plan](2026-09-28-report-completion.md), with dedicated access, catalog/packaging and payment/OCR subplans. These refine the existing T tasks; they do not reset completed foundations. Mandatory payment images, local OCR assistance, independent bank review, explicit package selection, governed identifiers and the remaining report controls are required acceptance scope. Follow the addendum's dependency refinements (early permission contracts, restricted worker/evidence processing and stock-source authority) alongside the original sequence.
+
 ## Global Constraints
 
 - Launch audience: BNI branches and approved business accounts only. No public self-registration or retail checkout in the first launch.
@@ -400,4 +404,4 @@ Consider public retail ordering, full replacement POS/cash-drawer hardware, rout
 
 ## Handoff
 
-This plan, the specification and audit are the planning deliverables. No application refactor, database migration, production account creation or deployment has been performed. Recommended execution method is module-by-module subagent implementation with independent review at the gates above. The first implementation action is T00's baseline preservation followed by the reversible structure change in T01.
+Execution is underway in the managed production worktree. Read the current production-progress ledger and the 28 September report completion addendum before selecting work; substantial foundation and local identity/access work is already implemented. Continue the next unmet dependency with module ownership and independent review. Do not restart T00/T01 or treat local foundation evidence as a completed production rollout. The active production goal remains open until original and report acceptance gates are satisfied.

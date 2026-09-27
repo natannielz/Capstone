@@ -43,3 +43,19 @@ Every requirement in the production specification must be linked to its relevant
 T03 local identity foundation now passes 234 backend cases (66 identity cases) without skips and five Auth0 Action fixtures. The prepared OIDC/session/admission/recovery code and migration v4 are independently reviewed. Atomic callback rollback, one-use state, encrypted payloads, explicit session expiry, scoped invitation/profile reads and actual Mongo in-flight revocation cases pass. API/client contract checks pass. This does not close T03: normal startup still denies authentication; identity routes, origin/CSRF/proxy protections, operator/UI integration, real provider event/delivery/owner-recovery behavior and actual tenant acceptance remain open. No provider resource or external message was created. See `docs/architecture/identity.md` and `docs/runbooks/account-recovery.md`.
 
 T03 runtime/account integration now passes 275 backend cases with no skips, five Action fixtures, 300 frontend cases, two date guards and seven golden cases. Clean backend build, frontend typecheck/production build, contract drift and lint (nine unchanged warnings, zero errors) pass. The configured API uses persistent keys, exact origin/anti-forgery/trusted-proxy controls and verified session actors. Full-host OIDC/callback/step-up/logout is tested with an isolated provider and actual MongoDB; desktop/mobile identity browser fixtures verify native form Origin and user flows separately. Invitation/recovery operation reconciliation retains current authority and honest blocked delivery state. T03 remains open for account administration UI/routes, owner recovery/provider events/delivery, combined real-origin browser acceptance and actual tenant behavior; the deployment and full production release gates remain unchanged. See the latest production-progress entry and `docs/runbooks/identity-hosting.md`.
+## Consolidated report acceptance — 28 September 2026
+
+The [97-item acceptance register](../requirements/unit-toko-report-2026-09-28.md) and [execution plan](../superpowers/plans/2026-09-28-report-completion.md) extend these gates. Every row remains open for production acceptance until linked implementation/test/operator evidence is recorded. Existing foundation passes remain valid within their recorded scope.
+
+| Added/refined gate | Owning work | Required evidence |
+| --- | --- | --- |
+| Eligible image and reviewed version | PAY01/PAY03 | No-image/quarantined submission denial, stale-review replacement conflict, immutable verified evidence history |
+| Local OCR without financial authority | PAY02/PAY03 | Representative field-level evaluation; restricted worker; unknown digits/outage path; no approval or balance change from OCR |
+| One canonical receipt | PAY04 | Concurrent statement import and declaration recognize cash once; partial/multi-invoice/unapplied balances reconcile |
+| Explicit package selection | CAT01–CAT03 | Every entry point; close adds nothing; two packs of 12 show 24; stale pack/price requires review |
+| Product identity and physical conversion | CAT01/CAT02/CAT04 | SKU/public-reference uniqueness, legitimate GTIN handling, exact atomic conversion, scans and historic-reference reconciliation |
+| Person-level independent decisions | ACC02–ACC04 | Distinct accounts belonging to one maker denied; separate buyer/store/substitution/auditor authority; governed template upgrades |
+| Connected deployment and recovery | OPS05/OPS06 | Real browser/API/Mongo/provider/proxy acceptance, object+key restore and no external-ack replay |
+| Report coverage and business activation | All report tasks | All 97 rows have implementation/evidence or an explicit valid conditional disposition; D01–D08 resolved before affected activation |
+
+These planning additions do not change the prior test counts or constitute new runtime test results. No production-ready declaration is made.

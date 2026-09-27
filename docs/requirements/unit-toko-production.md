@@ -267,3 +267,9 @@ These are bounded business gates, not reasons to stop planning or the structural
 | Existing real data and document retention | Inventory first; never seed over it; opening balances reviewed | Operations/accounting, before migration |
 
 No credentials, subscription purchases, vendor contacts, transfers or production changes occurred during this planning task.
+
+## 10. Consolidated report requirements — 28 September 2026
+
+The [97-item report requirements and acceptance map](unit-toko-report-2026-09-28.md) is an authoritative addendum to this specification. Execute it through the [report completion plan](../superpowers/plans/2026-09-28-report-completion.md) alongside the original plan. It makes payment image evidence/local OCR/human bank verification, explicit package selection, immutable versions and remaining access/workflow/quality controls concrete while preserving completed foundations and conditional advanced-ML applicability. Its bounded decision gates extend §9 without supplying unapproved business policies.
+
+The active production goal includes this scope through its referenced specification and master plan. Completion requires evidence for both original requirements and applicable report rows, not only a passing build or local provider simulation.
