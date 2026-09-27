@@ -7,7 +7,16 @@ namespace UnitToko.Modules.Organizations;
 public static class ScopePolicy
 {
     public static AuthorizationQuery Compile(ActorContext actor, AuthorizationSnapshot snapshot, string permission,
-        DateTimeOffset now)
+        DateTimeOffset now) => CompileCore(actor, snapshot, permission, now, requestingStepUp: false);
+
+    /// <summary>Only permits starting a new factor challenge for an existing sensitive permission.
+    /// It never returns a query or business authorization and never changes the actor's factor evidence.</summary>
+    public static bool CanRequestStepUp(ActorContext actor, AuthorizationSnapshot snapshot, string permission,
+        DateTimeOffset now) => Permissions.Find(permission)?.Assurance.MaximumAge is not null &&
+        CompileCore(actor, snapshot, permission, now, requestingStepUp: true).IsAllowed;
+
+    private static AuthorizationQuery CompileCore(ActorContext actor, AuthorizationSnapshot snapshot, string permission,
+        DateTimeOffset now, bool requestingStepUp)
     {
         var definition = Permissions.Find(permission);
         var requirement = definition?.Assurance ?? new AssuranceRequirement(true);
@@ -17,7 +26,8 @@ public static class ScopePolicy
             snapshot.UserId != actor.UserId || snapshot.Status != AuthorizationStatus.Active || snapshot.GrantVersion != actor.GrantVersion)
             return Deny("stale_or_inactive_actor");
         if (definition is null) return Deny("unknown_permission");
-        if (!AssurancePolicy.Satisfies(actor, requirement, now)) return Deny("step_up_required");
+        var requiredEvidence = requestingStepUp ? requirement with { MaximumAge = null } : requirement;
+        if (!AssurancePolicy.Satisfies(actor, requiredEvidence, now)) return Deny("step_up_required");
         if (snapshot.Grants.IsDefaultOrEmpty || snapshot.Memberships.IsDefaultOrEmpty) return Deny("permission_denied");
         if (snapshot.Grants.Select(grant => grant.Id).Distinct().Count() != snapshot.Grants.Length) return Deny("invalid_authorization_snapshot");
         var clauses = ImmutableArray.CreateBuilder<ScopeClause>();

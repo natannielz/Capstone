@@ -1,3 +1,4 @@
+import { RequestNotSentError } from "../../api/client";
 import type { components } from "../../api/generated/schema";
 
 export type GrantRequest = components["schemas"]["GrantRequestDto"];
@@ -72,7 +73,7 @@ export class MutationLedger {
   fail(operation: string, error: unknown) {
     const attempt = this.attempts.get(operation);
     if (attempt) {
-      attempt.unresolved ||= !(error instanceof AccessFailure) || error.status === 0 || error.status >= 500;
+      attempt.unresolved ||= !(error instanceof RequestNotSentError) && (!(error instanceof AccessFailure) || error.status === 0 || error.status >= 500);
       attempt.state = attempt.unresolved ? "uncertain" : "failed";
     }
   }
@@ -94,6 +95,7 @@ export async function submitLogicalRequest<T>(ledger: MutationLedger, operation:
 }
 
 export function accessMessage(error: unknown): string {
+  if (error instanceof RequestNotSentError) return "Permintaan belum dikirim. Perlindungan sesi belum dapat disiapkan. Periksa koneksi, lalu coba kembali.";
   if (!(error instanceof AccessFailure)) return "Koneksi terputus. Hasil belum dapat dipastikan. Coba lagi dengan permintaan yang sama.";
   if (error.code === "recovery_storage_unavailable")
     return "Penyimpanan referensi pemulihan di perangkat tidak tersedia. Perubahan baru belum dikirim. Aktifkan penyimpanan situs; jangan hapus referensi permintaan yang belum terkonfirmasi.";
@@ -103,7 +105,7 @@ export function accessMessage(error: unknown): string {
     return "Hasil server sudah terkonfirmasi, tetapi referensi pada perangkat belum dapat dibersihkan. Periksa hasil sekali lagi setelah penyimpanan situs tersedia; jangan kirim perubahan yang sama sebagai permintaan baru.";
   if (error.code === "commit_outcome_unknown" || error.code === "resolve_previous_attempt")
     return "Hasil perubahan belum dapat dipastikan. Coba lagi tanpa mengubah isian; permintaan yang sama akan diperiksa kembali.";
-  if (error.status === 401) return "Sesi terverifikasi belum tersedia. Masuk melalui layanan akun yang disetujui saat layanan tersebut tersedia.";
+  if (error.status === 401) return "Sesi terverifikasi belum tersedia atau telah berakhir. Masuk kembali dengan akun organisasi Anda.";
   if (error.code === "step_up_required") return "Verifikasi dua langkah terbaru diperlukan sebelum melanjutkan. Muat ulang setelah verifikasi akun.";
   if (error.status === 403) return "Akses untuk tindakan ini tidak tersedia. Muat ulang untuk memeriksa izin terbaru.";
   if (error.status === 409) return "Data atau izin telah berubah. Data terbaru dimuat; periksa dan pratinjau kembali sebelum mengajukan.";

@@ -31,4 +31,4 @@ public sealed record AccessHistoryPage(long Total, ImmutableArray<AccessHistoryE
 public sealed record AccessHistoryEntry(long Id, string Operation, long ActorId, long SubjectId, GrantScope? Scope,
     DateTimeOffset CreatedAt, string Reason, long? ResourceId, long? BeforeVersion, long? AfterVersion, string? Status);
 public sealed record OperationReceipt(string Operation, string State, OperationReceiptResult? Result, DateTimeOffset? RecordedAt);
-public sealed record OperationReceiptResult(long Id, long SubjectId, long Version, string Status, string? Kind, long? GrantVersion);
+public sealed record OperationReceiptResult(long Id, long SubjectId, long Version, string Status, string? Kind, long? GrantVersion, long? SecurityVersion = null);

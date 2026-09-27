@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createUnitTokoClient } from "../src/api/client";
+import { createUnitTokoClient } from "./helpers/api-client";
 import { createOrganizationGateway } from "../src/modules/organizations/organization-client";
 import { editOrganizationRequest, newOrganizationRequest, validOrganizationDraft } from "../src/modules/organizations/organization-workflow";
 import { AccessFailure, MutationLedger } from "../src/modules/administration/workflow";

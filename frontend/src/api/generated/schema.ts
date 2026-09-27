@@ -289,6 +289,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/identity/csrf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["IdentityCsrf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/identity/session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["IdentitySession"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/organizations": {
         parameters: {
             query?: never;
@@ -411,6 +443,54 @@ export interface paths {
         get: operations["SystemStatus"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["BeginIdentityLogin"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["IdentityLogout"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/step-up": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["BeginIdentityStepUp"];
         delete?: never;
         options?: never;
         head?: never;
@@ -631,6 +711,9 @@ export interface components {
             traceId: string;
             type: string;
         };
+        CsrfTokenResponse: {
+            requestToken: string;
+        };
         CurrentAccessDto: {
             allowedActions: string[];
             grants: components["schemas"]["AccessGrantDto"][];
@@ -662,6 +745,42 @@ export interface components {
         HealthStatus: {
             status: string;
         };
+        IdentityAccountDto: {
+            displayName: null | string;
+            userId: components["schemas"]["LongId"];
+            verifiedEmail: string;
+        };
+        IdentityLoginForm: {
+            __RequestVerificationToken: string;
+            invitationId: null | string;
+            invitationSecret: null | string;
+            returnPath: null | string;
+        };
+        IdentityLogoutForm: {
+            __RequestVerificationToken: string;
+            expectedActorId: string;
+        };
+        IdentitySessionDto: {
+            /** Format: date-time */
+            absoluteExpiresAt: null | string;
+            account: null | components["schemas"]["IdentityAccountDto"];
+            authenticated: boolean;
+            /** Format: date-time */
+            factorCompletedAt: null | string;
+            /** Format: date-time */
+            freshFactorUntil: null | string;
+            /** Format: date-time */
+            idleExpiresAt: null | string;
+            /** Format: date-time */
+            serverTime: string;
+            stepUpOperations: string[];
+        };
+        IdentityStepUpForm: {
+            __RequestVerificationToken: string;
+            expectedActorId: string;
+            operation: string;
+            returnPath: null | string;
+        };
         /** @description Positive decimal Int64 string, from 1 through 9223372036854775807. JSON numbers are invalid. */
         LongId: string;
         MembershipProposalDto: {
@@ -692,6 +811,7 @@ export interface components {
             grantVersion: null | string;
             id: components["schemas"]["LongId"];
             kind: null | string;
+            securityVersion: null | string;
             status: string;
             subjectId: components["schemas"]["LongId"];
             version: string;
@@ -947,6 +1067,8 @@ export interface operations {
                 "Idempotency-Key": string;
                 /** @description One quoted nonnegative Int64 resource version from the latest response; never a JavaScript number. */
                 "If-Match": string;
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
                 /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
                 "X-Expected-Actor-Id": string;
             };
@@ -1020,7 +1142,9 @@ export interface operations {
     PreviewAccessGrant: {
         parameters: {
             query?: never;
-            header?: {
+            header: {
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
                 /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
                 "X-Expected-Actor-Id"?: string;
             };
@@ -1095,6 +1219,8 @@ export interface operations {
             header: {
                 /** @description Reuse this key only for an unchanged logical command, including after an uncertain response. */
                 "Idempotency-Key": string;
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
                 /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
                 "X-Expected-Actor-Id": string;
             };
@@ -1171,6 +1297,8 @@ export interface operations {
                 "Idempotency-Key": string;
                 /** @description One quoted nonnegative Int64 resource version from the latest response; never a JavaScript number. */
                 "If-Match": string;
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
                 /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
                 "X-Expected-Actor-Id": string;
             };
@@ -1244,7 +1372,9 @@ export interface operations {
     AccessHistory: {
         parameters: {
             query?: never;
-            header?: {
+            header: {
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
                 /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
                 "X-Expected-Actor-Id"?: string;
             };
@@ -1321,6 +1451,8 @@ export interface operations {
                 "Idempotency-Key": string;
                 /** @description One quoted nonnegative Int64 resource version from the latest response; never a JavaScript number. */
                 "If-Match": string;
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
                 /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
                 "X-Expected-Actor-Id": string;
             };
@@ -1397,6 +1529,8 @@ export interface operations {
             header: {
                 /** @description Reuse this key only for an unchanged logical command, including after an uncertain response. */
                 "Idempotency-Key": string;
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
                 /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
                 "X-Expected-Actor-Id": string;
             };
@@ -1473,6 +1607,8 @@ export interface operations {
                 "Idempotency-Key": string;
                 /** @description One quoted nonnegative Int64 resource version from the latest response; never a JavaScript number. */
                 "If-Match": string;
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
                 /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
                 "X-Expected-Actor-Id": string;
             };
@@ -1547,6 +1683,8 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
                 /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
                 "X-Expected-Actor-Id": string;
             };
@@ -1621,6 +1759,8 @@ export interface operations {
             header: {
                 /** @description Reuse this key only for an unchanged logical command, including after an uncertain response. */
                 "Idempotency-Key": string;
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
                 /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
                 "X-Expected-Actor-Id": string;
             };
@@ -1768,6 +1908,8 @@ export interface operations {
                 "Idempotency-Key": string;
                 /** @description One quoted nonnegative Int64 resource version from the latest response; never a JavaScript number. */
                 "If-Match": string;
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
                 /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
                 "X-Expected-Actor-Id": string;
             };
@@ -1846,6 +1988,8 @@ export interface operations {
                 "Idempotency-Key": string;
                 /** @description One quoted nonnegative Int64 resource version from the latest response; never a JavaScript number. */
                 "If-Match": string;
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
                 /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
                 "X-Expected-Actor-Id": string;
             };
@@ -1924,6 +2068,8 @@ export interface operations {
                 "Idempotency-Key": string;
                 /** @description One quoted nonnegative Int64 resource version from the latest response; never a JavaScript number. */
                 "If-Match": string;
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
                 /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
                 "X-Expected-Actor-Id": string;
             };
@@ -2002,6 +2148,8 @@ export interface operations {
                 "Idempotency-Key": string;
                 /** @description One quoted nonnegative Int64 resource version from the latest response; never a JavaScript number. */
                 "If-Match": string;
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
                 /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
                 "X-Expected-Actor-Id": string;
             };
@@ -2124,6 +2272,82 @@ export interface operations {
             };
             /** @description Conflict */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    IdentityCsrf: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CsrfTokenResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    IdentitySession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IdentitySessionDto"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2360,6 +2584,8 @@ export interface operations {
             header: {
                 /** @description Reuse this key only for an unchanged logical command, including after an uncertain response. */
                 "Idempotency-Key": string;
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
                 /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
                 "X-Expected-Actor-Id": string;
             };
@@ -2506,6 +2732,8 @@ export interface operations {
                 "Idempotency-Key": string;
                 /** @description One quoted nonnegative Int64 resource version from the latest response; never a JavaScript number. */
                 "If-Match": string;
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
                 /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
                 "X-Expected-Actor-Id": string;
             };
@@ -2584,6 +2812,8 @@ export interface operations {
                 "Idempotency-Key": string;
                 /** @description One quoted nonnegative Int64 resource version from the latest response; never a JavaScript number. */
                 "If-Match": string;
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
                 /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
                 "X-Expected-Actor-Id": string;
             };
@@ -2662,6 +2892,8 @@ export interface operations {
                 "Idempotency-Key": string;
                 /** @description One quoted nonnegative Int64 resource version from the latest response; never a JavaScript number. */
                 "If-Match": string;
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
                 /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
                 "X-Expected-Actor-Id": string;
             };
@@ -2779,6 +3011,207 @@ export interface operations {
             };
             /** @description Internal Server Error */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    BeginIdentityLogin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/x-www-form-urlencoded": components["schemas"]["IdentityLoginForm"];
+            };
+        };
+        responses: {
+            /** @description Found */
+            302: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    IdentityLogout: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/x-www-form-urlencoded": components["schemas"]["IdentityLogoutForm"];
+            };
+        };
+        responses: {
+            /** @description Found */
+            302: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    BeginIdentityStepUp: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/x-www-form-urlencoded": components["schemas"]["IdentityStepUpForm"];
+            };
+        };
+        responses: {
+            /** @description Found */
+            302: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

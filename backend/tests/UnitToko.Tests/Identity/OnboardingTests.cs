@@ -163,7 +163,7 @@ public sealed class OnboardingTests(MongoFixture fixture)
         Assert.Equal(1, await data.Rows("identityProviderIntents").CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty));
     }
 
-    private sealed class Data : IAsyncDisposable
+    internal sealed class Data : IAsyncDisposable
     {
         public required StoreTestData Store { get; init; }
         public required MongoUnitOfWork Unit { get; init; }

@@ -61,7 +61,8 @@ public sealed class AccountRecoveryService(IMongoDatabase database, Authorizatio
                     { "before", new BsonDocument { { "_id", userId }, { "version", expectedSecurityVersion } } },
                     { "after", new BsonDocument { { "_id", userId }, { "version", expectedSecurityVersion + 1 }, { "status", identity["status"] } } }
                 }, cancellationToken: token);
-                return new BsonDocument { { "id", intentId }, { "userId", userId }, { "securityVersion", expectedSecurityVersion + 1 }, { "status", "blocked" } };
+                return new BsonDocument { { "id", intentId }, { "userId", userId }, { "subjectId", userId }, { "kind", "recovery" },
+                    { "version", 1L }, { "securityVersion", expectedSecurityVersion + 1 }, { "status", "blocked" } };
             }, cancellationToken);
         return new(result["id"].AsInt64, result["userId"].AsInt64, result["securityVersion"].AsInt64, result["status"].AsString);
     }

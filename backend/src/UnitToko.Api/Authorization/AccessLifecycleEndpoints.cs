@@ -16,7 +16,7 @@ public sealed record OperationLookupDto([property: JsonRequired] string Operatio
     [property: JsonRequired] string Key, [property: JsonRequired] string Purpose);
 public sealed record OperationResolveDto([property: JsonRequired] string Operation, [property: JsonRequired] string Reason);
 public sealed record OperationReceiptDto(string Operation, string State, OperationReceiptResultDto? Result, DateTimeOffset? RecordedAt);
-public sealed record OperationReceiptResultDto(LongId Id, LongId SubjectId, string Version, string Status, string? Kind, string? GrantVersion);
+public sealed record OperationReceiptResultDto(LongId Id, LongId SubjectId, string Version, string Status, string? Kind, string? GrantVersion, string? SecurityVersion);
 
 public static partial class AccessEndpoints
 {
@@ -76,6 +76,6 @@ public static partial class AccessEndpoints
     }
     private static OperationReceiptDto Receipt(OperationReceipt receipt) => new(receipt.Operation, receipt.State,
         receipt.Result is { } result ? new(new(result.Id), new(result.SubjectId), AccessResponses.Version(result.Version),
-            result.Status, result.Kind, result.GrantVersion.HasValue ? AccessResponses.Version(result.GrantVersion.Value) : null) : null,
+            result.Status, result.Kind, result.GrantVersion.HasValue ? AccessResponses.Version(result.GrantVersion.Value) : null, result.SecurityVersion.HasValue ? AccessResponses.Version(result.SecurityVersion.Value) : null) : null,
         receipt.RecordedAt);
 }

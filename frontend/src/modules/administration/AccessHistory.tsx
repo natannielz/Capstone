@@ -7,7 +7,7 @@ import { describeScope, validReference } from "../organizations/access-scope";
 import { createAccessGateway } from "./access-client";
 import { AdministrationNavigation } from "./AdministrationNavigation";
 import { OperationRecovery, useOperationRecovery } from "./OperationRecovery";
-import { accessMessage } from "./workflow";
+import { AccessFailure, accessMessage } from "./workflow";
 import styles from "./access.module.css";
 
 type Schemas = components["schemas"];
@@ -38,13 +38,14 @@ export function AccessHistory() {
   }
 
   return <main className={styles.page}>
-    <header className={styles.header}><div><Link href="/" className={styles.brand}>Unit Toko</Link><h1>Riwayat perubahan akses</h1>
+    <header className={styles.header}><div><Link href="/identity/account" className={styles.brand}>Unit Toko</Link><h1>Riwayat perubahan akses</h1>
       <p>Periksa keputusan yang tersimpan sesuai cakupan tugas Anda. Tujuan pemeriksaan dicatat setiap kali riwayat dibuka.</p></div></header>
     {current && <AdministrationNavigation current="history" actions={current.allowedActions} />}
     {error !== null && <p className={styles.alert} role="alert">{accessMessage(error)}</p>}
     {recovery.error !== null && <p className={styles.alert} role="alert">{accessMessage(recovery.error)}</p>}
     {current && <OperationRecovery key={current.userId} entries={recovery.entries} journal={recovery.journal} disabled={busy} onResolved={recovery.refresh} />}
-    {!current ? <section className={styles.state} aria-busy={busy}><h2>{busy ? "Memeriksa sesi" : "Sesi terverifikasi diperlukan"}</h2><p>Riwayat hanya tersedia untuk akun dengan kewenangan pemeriksaan yang berlaku.</p></section> : <>
+    {!current ? <section className={styles.state} aria-busy={busy}><h2>{busy ? "Memeriksa sesi" : error instanceof AccessFailure && error.status === 401 ? "Sesi terverifikasi diperlukan" : "Layanan riwayat belum tersedia"}</h2><p>Riwayat hanya tersedia untuk akun dengan kewenangan pemeriksaan yang berlaku.</p>
+      {!busy && error instanceof AccessFailure && error.status === 401 && <Link className={styles.primary} href="/identity/login?returnPath=%2Fadministration%2Fhistory">Masuk ke Unit Toko</Link>}</section> : <>
       <form className={styles.accountSection} onSubmit={event => void read(0, event)}>
         <h2>Tujuan pemeriksaan</h2><div className={styles.twoFields}>
           <label>Tujuan<select value={purpose} disabled={busy} onChange={event => { setPurpose(event.target.value); setPage(null); }}>

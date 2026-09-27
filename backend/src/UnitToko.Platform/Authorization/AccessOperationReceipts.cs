@@ -22,7 +22,13 @@ public sealed partial class AccessAdministrationService
         ["access.proposal.reject"] = [Permissions.AccessApprove, Permissions.MembershipApprove],
         ["access.proposal.withdraw"] = [Permissions.AccessPropose, Permissions.MembershipPropose],
         ["organization.propose"] = [Permissions.TechnicalConfigure], ["organization.withdraw"] = [Permissions.TechnicalConfigure],
-        ["organization.approve"] = ["organization.approve"], ["organization.reject"] = ["organization.approve"]
+        ["organization.approve"] = ["organization.approve"], ["organization.reject"] = ["organization.approve"],
+        ["identity.invitation.propose"] = [Permissions.InviteManage, Permissions.MembershipPropose, Permissions.AccessPropose],
+        ["identity.invitation.approve"] = [Permissions.MembershipApprove, Permissions.AccessApprove],
+        ["identity.invitation.rejected"] = [Permissions.MembershipApprove],
+        ["identity.invitation.withdrawn"] = [Permissions.InviteManage],
+        ["identity.invitation.revoked"] = [Permissions.InviteManage, Permissions.AccessRevoke],
+        ["identity.recovery.request"] = [Permissions.RecoveryInitiate]
     };
     private static readonly string ClosedReceiptHash = Hash("unit-toko/authorization-receipt-closed/v1");
 
@@ -72,6 +78,7 @@ public sealed partial class AccessAdministrationService
 
     private ImmutableArray<AuthorizationQuery> ReceiptAuthority(ActorContext actor, AuthorizationSnapshot snapshot, string operation)
     {
+        if (IsIdentityReceiptOperation(operation)) return IdentityReceiptAuthority(actor, snapshot, operation);
         var queries = ReceiptPermissions[operation].Select(permission => ScopePolicy.Compile(actor, snapshot, permission, clock.UtcNow)).Where(query => query.IsAllowed).ToImmutableArray();
         if (queries.IsEmpty) throw new AuthorizationDeniedException("permission_denied");
         if (operation is "access.identity.suspend" or "access.scope.suspend" || operation.StartsWith("organization.", StringComparison.Ordinal))
@@ -82,9 +89,11 @@ public sealed partial class AccessAdministrationService
     private async Task<ImmutableArray<GrantScope>> ReceiptScopesAsync(ActorContext actor, AuthorizationSnapshot snapshot, string operation,
         BsonDocument? record, ImmutableArray<AuthorizationQuery> queries, IClientSessionHandle session, CancellationToken token)
     {
+        if (IsIdentityReceiptOperation(operation))
+            return await IdentityReceiptScopesAsync(actor, snapshot, operation, record, queries, session, token);
         var scopes = queries.SelectMany(query => query.Clauses.Select(clause => clause.Scope)).Distinct().ToImmutableArray();
         if (record is null || IsClosedReceipt(record)) return scopes;
-        var result = SafeReceiptResult(record["result"].AsBsonDocument);
+        var result = SafeReceiptResult(operation, record["result"].AsBsonDocument);
         if (operation.StartsWith("organization.", StringComparison.Ordinal) || operation is "access.identity.suspend" or "access.scope.suspend")
             return scopes;
         string collection;
@@ -111,10 +120,11 @@ public sealed partial class AccessAdministrationService
     }
     private static OperationReceipt Receipt(string operation, BsonDocument? record) => record is null
         ? new(operation, "not_confirmed", null, null)
-        : new(operation, IsClosedReceipt(record) ? "closed" : "committed", IsClosedReceipt(record) ? null : SafeReceiptResult(record["result"].AsBsonDocument),
+        : new(operation, IsClosedReceipt(record) ? "closed" : "committed", IsClosedReceipt(record) ? null : SafeReceiptResult(operation, record["result"].AsBsonDocument),
             new(record["createdAt"].ToUniversalTime(), TimeSpan.Zero));
-    private static OperationReceiptResult SafeReceiptResult(BsonDocument result)
+    private static OperationReceiptResult SafeReceiptResult(string operation, BsonDocument result)
     {
+        if (IsIdentityReceiptOperation(operation)) return SafeIdentityReceiptResult(operation, result);
         if (!result.TryGetValue("id", out var id) || !id.IsInt64 || id.AsInt64 <= 0 ||
             !result.TryGetValue("subjectId", out var subject) || !subject.IsInt64 || subject.AsInt64 <= 0 ||
             !result.TryGetValue("version", out var version) || !version.IsInt64 || version.AsInt64 <= 0 ||

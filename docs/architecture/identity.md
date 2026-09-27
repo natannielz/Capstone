@@ -1,6 +1,6 @@
 # Identity foundation
 
-Status: local T03 foundation; prepared services are not registered in normal API startup.
+Status: T03 integration in progress. API startup registers the concrete identity runtime when explicitly enabled with validated provider settings and persistent protected keys; the default remains unavailable.
 
 ## Boundaries
 
@@ -20,7 +20,7 @@ flowchart LR
     W --> D[Scoped business transaction]
 ```
 
-This diagram describes the prepared integration. `Program.cs` currently uses the unavailable authentication adapter; the diagram is not a deployed-flow claim.
+This diagram describes the integrated local flow. Full-host tests exercise it with an isolated provider and real MongoDB. Actual Auth0 deployment, complete browser/proxy rehearsal and release acceptance remain separate gates.
 
 ## Source ownership
 
@@ -28,13 +28,13 @@ This diagram describes the prepared integration. `Program.cs` currently uses the
 | --- | --- |
 | `UnitToko.Modules/Identity/Contracts` | Provider proof, admission, session reference, timeout policy and actor assurance |
 | `UnitToko.Modules/Identity/OnboardingPolicy.cs` | Email comparison, bounded invitation period, explicit role materialization and approval revalidation |
-| `UnitToko.Api/Identity` | OIDC options/claims/events, exact returns, prepared opaque handler/resolver and atomic completion |
+| `UnitToko.Api/Identity` | OIDC options/claims/events, exact returns, configured opaque handler/resolver, atomic completion, native identity routes and browser request protections |
 | `UnitToko.Platform/Identity` | Mongo sessions/state/admission/invitations/profiles/recovery and protected payloads |
 | `UnitToko.Platform/Authorization/AuthorizationStore.cs` | Current identity, optional persistent-session validation and transaction fences |
 | `UnitToko.Platform/Mongo/Migrations/IdentityMigration.cs` | Explicit v4 schema/index/counter upgrade |
 | `backend/integrations/auth0/v1` | Unapplied tenant policy draft and ordered OTP Action fixtures |
 
-Production actors must carry `SessionReference`. Its omission is retained for trusted in-process domain tests, not an HTTP fallback. The prepared resolver obtains it only from the handler's verified request feature; submitted role/user headers and the old demo cookie cannot create that feature.
+Production actors must carry `SessionReference`. Its omission is retained for trusted in-process domain tests, not an HTTP fallback. The configured resolver obtains it only from the handler's verified request feature; submitted role/user headers and the old demo cookie cannot create that feature.
 
 ## Persistent records
 
@@ -63,6 +63,12 @@ Recovery revokes local sessions and increments the security epoch before recordi
 
 ## Configuration and acceptance
 
-Shared protected key construction requires an existing absolute key directory, a stable application discriminator, a current private RSA certificate and retained prior decryption certificates as needed. The library does not prove actual mount sharing, ACL isolation, secret-manager integration or backup/restore. These must be wired and tested before activation.
+Shared protected key construction requires an existing absolute key directory, a stable application discriminator, a current private RSA certificate and retained prior decryption certificates as needed. The library does not prove actual mount sharing, ACL isolation, secret-manager integration or backup/restore. The API wiring is implemented and tested across separate local host instances. Actual infrastructure controls and restore must still be accepted before deployment.
 
 The Auth0 adapter is disabled by default. The tenant draft contains no actual issuer, client, connection, region, callbacks or secrets. Local synthetic provider tests exercise maintained middleware and real Mongo transactions; they do not establish tenant entitlement, actual Action event semantics, email delivery, external factor-change revocation or production-origin behavior. The [research record](../research/2026-09-28-auth0-integration.md) and [acceptance register](../quality/production-acceptance.md) retain those gates.
+
+## Connected API and screens
+
+The configured API exposes session/CSRF reads and strict URL-encoded login, step-up and local logout forms. Every unsafe browser API/auth request requires exact origin and real anti-forgery validation. Explicit trusted proxies are processed before canonical HTTPS origin validation, and only the maintained query callback is exempt from unsafe-request token checks. Identity documents are available at `/identity/login` and `/identity/account`, with current-account and permitted administration navigation. Existing legacy commerce remains its own migration baseline; these screens do not port its business writers.
+
+Identity invitation/recovery command outcomes now participate in the existing actor-owned durable operation reconciliation. Results disclose only typed references, status and relevant revisions; local recovery remains `blocked`, never a claim of provider completion. Historical result formats normalize without rewriting recorded outcomes. Current scope/delegation and fresh owner recovery evidence are rechecked. See [hosting and browser boundary](../runbooks/identity-hosting.md) for configuration and remaining acceptance gates.

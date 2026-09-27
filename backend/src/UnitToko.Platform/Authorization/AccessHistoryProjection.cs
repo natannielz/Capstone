@@ -55,7 +55,8 @@ public sealed partial class AccessAdministrationService
             }
         }
         var status = after.TryGetValue("status", out var rawStatus) && rawStatus.IsString &&
-            rawStatus.AsString is "pending" or "active" or "approved" or "rejected" or "withdrawn" or "revoked" or "suspended"
+            (rawStatus.AsString is "pending" or "active" or "approved" or "rejected" or "withdrawn" or "revoked" or "suspended" ||
+             document["operation"] == "identity.invitation.redeemed" && rawStatus.AsString == "redeemed")
             ? ProposalStatus(after) : null;
         return (HistoricalLong(after, "_id") ?? HistoricalLong(before, "_id"), HistoricalLong(before, "version"), HistoricalLong(after, "version"), status);
     }

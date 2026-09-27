@@ -13,6 +13,7 @@ using UnitToko.Platform;
 using UnitToko.Platform.Mongo;
 using UnitToko.Platform.Authorization;
 using UnitToko.Api.Authorization;
+using UnitToko.Api.Identity;
 using UnitToko.Modules.Organizations;
 using UnitToko.Platform.Organizations;
 
@@ -39,9 +40,7 @@ builder.Services.AddSingleton<CollectionMigrations>();
 builder.Services.AddSingleton<AuthorizationStore>();
 builder.Services.AddSingleton<AccessAdministrationService>();
 builder.Services.AddSingleton<OrganizationMasterDataService>();
-builder.Services.AddSingleton<IRequestActorResolver, UnavailableRequestActorResolver>();
-builder.Services.AddAuthentication("Unavailable")
-    .AddScheme<AuthenticationSchemeOptions, UnavailableAuthenticationHandler>("Unavailable", _ => { });
+var identityEnabled = builder.Services.AddUnitTokoIdentityRuntime(builder.Configuration);
 builder.Services.AddAuthorization(options =>
     options.FallbackPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
 builder.Services.AddOpenApi("v1", options =>
@@ -90,6 +89,17 @@ builder.Services.AddOpenApi("v1", options =>
                         parameter.Schema = new OpenApiSchema { Type = JsonSchemaType.String, MinLength = 3, MaxLength = 21 };
                     }
                 }
+                if (path.Key is "/api/v1/identity/csrf" or "/api/v1/identity/session") continue;
+                if (pair.Key.ToString().ToUpperInvariant() is "POST" or "PUT" or "PATCH" or "DELETE")
+                {
+                    operation.Parameters ??= [];
+                    operation.Parameters.Add(new OpenApiParameter
+                    {
+                        Name = "X-CSRF-Token", In = ParameterLocation.Header, Required = true,
+                        Description = "Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled.",
+                        Schema = new OpenApiSchema { Type = JsonSchemaType.String }
+                    });
+                }
                 operation.Security ??= [];
                 operation.Security.Add(new OpenApiSecurityRequirement
                 {
@@ -101,6 +111,7 @@ builder.Services.AddOpenApi("v1", options =>
 });
 
 var app = builder.Build();
+if (identityEnabled) _ = app.Services.GetRequiredService<IdentityKeyMaterial>();
 var mongoUri = app.Configuration["Mongo:Uri"];
 var mongoDatabase = app.Configuration["Mongo:Database"];
 if (string.IsNullOrWhiteSpace(mongoUri) || string.IsNullOrWhiteSpace(mongoDatabase) ||
@@ -214,8 +225,14 @@ app.UseStatusCodePages(async statusContext =>
     };
     await Problems.WriteAsync(statusContext.HttpContext, response.StatusCode, code, title);
 });
+if (identityEnabled) app.UseForwardedHeaders();
+app.UseIdentityTransport(identityEnabled);
+if (identityEnabled) app.UseRateLimiter();
 app.UseAuthentication();
+app.UseIdentityAntiforgery(identityEnabled);
 app.UseAuthorization();
+app.MapIdentitySecurityEndpoints();
+app.MapIdentityEndpoints();
 app.MapAccessEndpoints();
 app.MapOrganizationEndpoints();
 app.MapGet("/health/live", () => TypedResults.Ok(new HealthStatus("live"))).AllowAnonymous().WithName("Liveness");

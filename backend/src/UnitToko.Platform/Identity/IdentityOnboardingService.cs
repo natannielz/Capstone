@@ -52,7 +52,8 @@ public sealed partial class IdentityOnboardingService(IMongoDatabase database, A
         invitation["role"]["delegablePermissions"].AsBsonArray.Select(value => value.AsString).ToImmutableArray());
     private static BsonDocument Result(BsonDocument invitation) => new()
     {
-        { "id", invitation["_id"] }, { "userId", invitation["userId"] }, { "version", invitation["version"] }, { "status", invitation["status"] }
+        { "id", invitation["_id"] }, { "userId", invitation["userId"] }, { "subjectId", invitation["userId"] }, { "kind", "invitation" },
+        { "version", invitation["version"] }, { "status", invitation["status"] }
     };
     private static InvitationResult ParseResult(BsonDocument result) => new(result["id"].AsInt64, result["userId"].AsInt64, result["version"].AsInt64, result["status"].AsString);
     private static readonly HashSet<string> AuditFields = new(StringComparer.Ordinal)

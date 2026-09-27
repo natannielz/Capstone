@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createUnitTokoClient } from "../src/api/client";
+import { createUnitTokoClient } from "./helpers/api-client";
 import { createAccessGateway } from "../src/modules/administration/access-client";
 import { AccessFailure } from "../src/modules/administration/workflow";
 

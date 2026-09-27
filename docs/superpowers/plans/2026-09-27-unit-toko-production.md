@@ -137,7 +137,7 @@ dotnet test backend/UnitToko.slnx
 - [ ] Authenticate/deduplicate provider events and fence sensitive business writes against concurrent suspension/grant changes. Log recovery/privilege events without tokens.
 - [ ] Run allow/deny identity cases and commit.
 
-Local foundation implementation is recorded in `docs/quality/production-progress.md`. Prepared provider/session/onboarding libraries do not activate production sign-in. Keep the task open until origin/CSRF/API/frontend integration, provider event coverage, owner recovery and actual tenant acceptance are complete.
+Local foundation and configured runtime/account-screen integration are recorded in `docs/quality/production-progress.md`. Explicit validated configuration connects provider/session/onboarding services to API login, step-up and logout; default identity remains unavailable. Keep the task open until complete account administration, combined origin/CSRF/API/browser acceptance, provider event/delivery coverage, owner recovery and actual tenant acceptance are complete.
 
 Required fixture matrix:
 

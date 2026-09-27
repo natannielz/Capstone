@@ -162,7 +162,7 @@ public sealed class ProviderHandlerTests(MongoFixture fixture)
             http.Response.Cookies.Append("__Host-ut_session", "opaque-test-reference", new() { HttpOnly = true, Secure = true, SameSite = SameSiteMode.Lax, Path = "/" });
         }
     }
-    private sealed class FakeProvider(Auth0Options settings, IClock clock) : HttpMessageHandler
+    internal sealed class FakeProvider(Auth0Options settings, IClock clock) : HttpMessageHandler
     {
         private readonly RSA rsa = RSA.Create(2048);
         private readonly RSA wrongRsa = RSA.Create(2048);

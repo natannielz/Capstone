@@ -1,0 +1,83 @@
+import type { components } from "../../api/generated/schema";
+import { RequestNotSentError } from "../../api/client";
+
+export type IdentitySession = components["schemas"]["IdentitySessionDto"];
+
+export class IdentityFailure extends Error {
+  constructor(readonly status: number, readonly code: string, readonly traceId?: string) {
+    super(code); this.name = "IdentityFailure";
+  }
+}
+
+const returnPaths = ["/identity/account", "/administration/access", "/administration/organizations", "/administration/history"];
+export const identityReturnPath = (value?: string | null) => value && returnPaths.includes(value) ? value : "/identity/account";
+const validId = (value: string) => /^[1-9][0-9]{0,18}$/.test(value) && (value.length < 19 || value <= "9223372036854775807");
+const validTime = (value: unknown): value is string => typeof value === "string" && value.length <= 40 && /^\d{4}-\d\d-\d\dT/.test(value) && Number.isFinite(Date.parse(value));
+const record = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === "object" && !Array.isArray(value);
+
+/** This is a display contract, never a source of authorization. Invalid responses clear the account view. */
+export function parseIdentitySession(value: unknown): IdentitySession {
+  const invalid = () => { throw new IdentityFailure(502, "invalid_session_response"); };
+  if (!record(value) || typeof value.authenticated !== "boolean" || !validTime(value.serverTime) || !Array.isArray(value.stepUpOperations) || value.stepUpOperations.length > 200 ||
+    !value.stepUpOperations.every(item => typeof item === "string" && /^[a-z]+(?:\.[a-z]+){1,4}$/.test(item))) return invalid();
+  const timeFields = ["factorCompletedAt", "freshFactorUntil", "idleExpiresAt", "absoluteExpiresAt"] as const;
+  if (!value.authenticated) {
+    if (value.account !== null || timeFields.some(field => value[field] !== null) || value.stepUpOperations.length !== 0) return invalid();
+  } else {
+    if (!record(value.account) || typeof value.account.userId !== "string" || !validId(value.account.userId) ||
+      !(value.account.displayName === null || typeof value.account.displayName === "string" && value.account.displayName.length <= 200) ||
+      typeof value.account.verifiedEmail !== "string" || value.account.verifiedEmail.length < 3 || value.account.verifiedEmail.length > 320 ||
+      timeFields.some(field => !validTime(value[field]))) return invalid();
+    if (Date.parse(value.idleExpiresAt as string) > Date.parse(value.absoluteExpiresAt as string) ||
+      Date.parse(value.factorCompletedAt as string) > Date.parse(value.freshFactorUntil as string)) return invalid();
+  }
+  // Pick only display fields; unexpected provider or session secrets are never retained in UI state.
+  return { authenticated: value.authenticated, account: value.account === null ? null : {
+    userId: (value.account as Record<string, string>).userId,
+    displayName: (value.account as Record<string, string | null>).displayName,
+    verifiedEmail: (value.account as Record<string, string>).verifiedEmail,
+  }, factorCompletedAt: value.factorCompletedAt as string | null, freshFactorUntil: value.freshFactorUntil as string | null,
+    idleExpiresAt: value.idleExpiresAt as string | null, absoluteExpiresAt: value.absoluteExpiresAt as string | null,
+    serverTime: value.serverTime, stepUpOperations: [...value.stepUpOperations] as string[] };
+}
+
+export function loginFields(returnPath: string, invitationId: string, invitationSecret: string, invitationRequired = false): Record<string, string> {
+  if (!returnPaths.includes(returnPath)) throw new IdentityFailure(400, "invalid_return_path");
+  if (!invitationRequired && !invitationId && !invitationSecret) return { returnPath };
+  if (!validId(invitationId) || !/^[a-f0-9]{64}$/.test(invitationSecret)) throw new IdentityFailure(400, "invalid_invitation");
+  return { returnPath, invitationId, invitationSecret };
+}
+
+export function stepUpFields(session: IdentitySession, operation: string, returnPath: string): Record<string, string> {
+  if (!session.authenticated || !session.account) throw new IdentityFailure(401, "unauthenticated");
+  if (!session.stepUpOperations.includes(operation)) throw new IdentityFailure(403, "step_up_not_allowed");
+  if (!returnPaths.includes(returnPath)) throw new IdentityFailure(400, "invalid_return_path");
+  return { expectedActorId: session.account.userId, operation, returnPath };
+}
+
+export function sessionTiming(session: IdentitySession, elapsedMs: number) {
+  const now = Date.parse(session.serverTime) + Math.max(0, elapsedMs);
+  const expired = !session.authenticated || session.idleExpiresAt === null || session.absoluteExpiresAt === null ||
+    now >= Math.min(Date.parse(session.idleExpiresAt), Date.parse(session.absoluteExpiresAt));
+  return { expired, fresh: !expired && session.freshFactorUntil !== null && now < Date.parse(session.freshFactorUntil) };
+}
+
+export function identityDestinations(actions: readonly string[]) {
+  return [
+    { href: "/administration/access", label: "Akses dan keanggotaan", description: "Ajukan atau tinjau izin sesuai cakupan tugas.", visible: actions.some(action => action.startsWith("access.") || action.startsWith("membership.")) },
+    { href: "/administration/organizations", label: "Organisasi dan unit", description: "Kelola struktur organisasi melalui persetujuan.", visible: actions.some(action => ["technical.configure", "organization.approve", "access.audit.read"].includes(action)) },
+    { href: "/administration/history", label: "Riwayat perubahan", description: "Periksa jejak pengajuan dan keputusan akses.", visible: actions.some(action => ["access.audit.read", "access.approve", "membership.approve", "access.revoke", "technical.configure", "organization.approve"].includes(action)) },
+  ].filter(item => item.visible);
+}
+
+export function identityMessage(error: unknown): string {
+  if (error instanceof RequestNotSentError) return "Permintaan belum dikirim. Perlindungan sesi belum dapat disiapkan. Periksa koneksi, lalu coba lagi.";
+  if (!(error instanceof IdentityFailure)) return "Koneksi belum tersedia. Periksa koneksi, lalu coba lagi. Tidak ada perubahan akun yang dikirim.";
+  if (error.code === "invalid_invitation") return "Masukkan nomor dan kode undangan lengkap dari pengelola. Gunakan alamat email yang menerima undangan.";
+  if (error.code === "actor_changed") return "Akun di peramban telah berubah. Muat ulang sebelum melanjutkan.";
+  if (error.status === 401) return "Sesi Anda telah berakhir. Masuk kembali untuk melanjutkan.";
+  if (error.status === 403) return "Akun atau tindakan ini belum memiliki akses yang disetujui. Hubungi pengelola organisasi Anda.";
+  if (error.status === 429) return "Terlalu banyak percobaan. Tunggu sebentar sebelum mencoba kembali.";
+  if (error.status >= 500) return "Layanan akun belum tersedia. Coba lagi nanti atau hubungi pengelola organisasi Anda.";
+  return "Permintaan belum dapat dilanjutkan. Periksa isian dan status akun Anda.";
+}
