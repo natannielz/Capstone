@@ -41,6 +41,9 @@ public sealed class MajorityWriteConcernTests(MongoFixture fixture)
             AssertMajority(observed, "findAndModify", "idCounters");
             AssertMajority(observed, "findAndModify", "outboxEvents");
             AssertMajority(observed, "update", "outboxEvents");
+            AssertMajority(observed, "create", "identities");
+            AssertMajority(observed, "collMod", "identities");
+            AssertMajority(observed, "createIndexes", "authorizationGrants");
         }
         finally { await client.DropDatabaseAsync(name); }
     }

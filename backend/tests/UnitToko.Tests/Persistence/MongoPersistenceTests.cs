@@ -190,11 +190,16 @@ public sealed class MongoPersistenceTests(MongoFixture fixture)
         await new CollectionMigrations(database, clock).ApplyAsync();
         var identities = database.GetCollection<BsonDocument>("identities");
         var suffix = Guid.NewGuid().ToString("N");
+        var allocator = new IdAllocator(database);
+        var firstId = await allocator.NextAsync("identities");
+        var secondId = await allocator.NextAsync("identities");
         await Assert.ThrowsAsync<MongoWriteException>(() => identities.InsertOneAsync(new BsonDocument("issuer", suffix)));
         await identities.InsertOneAsync(new BsonDocument
-        { { "schemaVersion", 1 }, { "issuer", suffix }, { "subject", "subject" } });
+        { { "_id", firstId.Value }, { "schemaVersion", 1 }, { "issuer", suffix }, { "subject", "subject" },
+          { "status", "active" }, { "grantVersion", 1L }, { "fence", 0L } });
         await Assert.ThrowsAsync<MongoWriteException>(() => identities.InsertOneAsync(new BsonDocument
-        { { "schemaVersion", 1 }, { "issuer", suffix }, { "subject", "subject" } }));
+        { { "_id", secondId.Value }, { "schemaVersion", 1 }, { "issuer", suffix }, { "subject", "subject" },
+          { "status", "active" }, { "grantVersion", 1L }, { "fence", 0L } }));
     }
 }
 

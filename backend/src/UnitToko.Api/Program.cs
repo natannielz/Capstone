@@ -6,12 +6,22 @@ using Microsoft.OpenApi;
 using System.Security.Claims;
 using System.Text.Encodings.Web;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using MongoDB.Driver;
 using UnitToko.Modules.Contracts;
 using UnitToko.Platform;
 using UnitToko.Platform.Mongo;
+using UnitToko.Platform.Authorization;
+using UnitToko.Api.Authorization;
+using UnitToko.Modules.Organizations;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Services.ConfigureHttpJsonOptions(options =>
+{
+    options.SerializerOptions.UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow;
+    options.SerializerOptions.Converters.Add(new JsonStringEnumConverter<GrantScopeKind>(JsonNamingPolicy.CamelCase, false));
+    options.SerializerOptions.Converters.Add(new JsonStringEnumConverter<ScopeNodeKind>(JsonNamingPolicy.CamelCase, false));
+});
 builder.Services.AddSingleton<IClock, UnitToko.Platform.SystemClock>();
 builder.Services.AddSingleton<ISystemStatusProvider, ClockSystemStatusProvider>();
 builder.Services.AddSingleton(sp => new MongoConnection(
@@ -24,6 +34,9 @@ builder.Services.AddSingleton<IdAllocator>();
 builder.Services.AddSingleton<IdempotencyStore>();
 builder.Services.AddSingleton<OutboxStore>();
 builder.Services.AddSingleton<CollectionMigrations>();
+builder.Services.AddSingleton<AuthorizationStore>();
+builder.Services.AddSingleton<AccessAdministrationService>();
+builder.Services.AddSingleton<IRequestActorResolver, UnavailableRequestActorResolver>();
 builder.Services.AddAuthentication("Unavailable")
     .AddScheme<AuthenticationSchemeOptions, UnavailableAuthenticationHandler>("Unavailable", _ => { });
 builder.Services.AddAuthorization(options =>
@@ -47,6 +60,21 @@ builder.Services.AddOpenApi("v1", options =>
         foreach (var path in document.Paths.Where(p => p.Key.StartsWith("/api/v1/", StringComparison.Ordinal)))
             foreach (var operation in (IEnumerable<OpenApiOperation>?)path.Value.Operations?.Values ?? Enumerable.Empty<OpenApiOperation>())
             {
+                foreach (var parameter in operation.Parameters?.OfType<OpenApiParameter>() ?? [])
+                {
+                    if (parameter.In != ParameterLocation.Header) continue;
+                    if (parameter.Name == "Idempotency-Key")
+                    {
+                        parameter.Description = "Reuse this key only for an unchanged logical command, including after an uncertain response.";
+                        parameter.Schema = new OpenApiSchema { Type = JsonSchemaType.String, MinLength = 1, MaxLength = 128,
+                            Pattern = @"^[A-Za-z0-9._:-]+$(?![\s\S])" };
+                    }
+                    else if (parameter.Name == "If-Match")
+                    {
+                        parameter.Description = "One quoted nonnegative Int64 resource version from the latest response; never a JavaScript number.";
+                        parameter.Schema = new OpenApiSchema { Type = JsonSchemaType.String, MinLength = 3, MaxLength = 21 };
+                    }
+                }
                 operation.Security ??= [];
                 operation.Security.Add(new OpenApiSecurityRequirement
                 {
@@ -65,6 +93,9 @@ if (string.IsNullOrWhiteSpace(mongoUri) || string.IsNullOrWhiteSpace(mongoDataba
     throw new InvalidOperationException("Mongo:Uri and a dedicated Mongo:Database are required.");
 app.Use(async (context, next) =>
 {
+    // Cover binding/authentication failures too, before endpoint filters can run.
+    if (context.Request.Path.StartsWithSegments("/api/v1/access"))
+        context.Response.Headers.CacheControl = "no-store";
     var candidate = context.Request.Headers["X-Correlation-Id"].ToString();
     var correlation = candidate.Length is > 0 and <= 64 && candidate.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_')
         ? candidate : Guid.NewGuid().ToString("N");
@@ -119,6 +150,11 @@ app.Use(async (context, next) =>
         if (!context.Response.HasStarted)
             await Problems.WriteAsync(context, 400, exception.Code, exception.SafeTitle);
     }
+    catch (AuthorizationDeniedException exception)
+    {
+        if (!context.Response.HasStarted)
+            await Problems.WriteAsync(context, 403, exception.Code, "Access denied");
+    }
     catch (PersistenceConflictException exception)
     {
         if (!context.Response.HasStarted)
@@ -165,6 +201,7 @@ app.UseStatusCodePages(async statusContext =>
 });
 app.UseAuthentication();
 app.UseAuthorization();
+app.MapAccessEndpoints();
 app.MapGet("/health/live", () => TypedResults.Ok(new HealthStatus("live"))).AllowAnonymous().WithName("Liveness");
 app.MapGet("/health/ready", async (HttpContext context, MongoConnection mongo,
     CollectionMigrations migrations, CancellationToken cancellationToken) =>

@@ -18,7 +18,7 @@ public sealed class OutboxStore(IMongoDatabase database, IClock clock)
             throw new DomainValidationException("invalid_outbox", "Outbox event is invalid or too large");
         await events.InsertOneAsync(session, new BsonDocument
         {
-            { "schemaVersion", CollectionMigrations.CurrentVersion }, { "sourceKey", sourceKey }, { "kind", kind }, { "payload", payload },
+            { "schemaVersion", CollectionMigrations.FoundationDocumentSchemaVersion }, { "sourceKey", sourceKey }, { "kind", kind }, { "payload", payload },
             { "status", "pending" }, { "attempts", 0 },
             { "dueAt", clock.UtcNow.UtcDateTime }, { "createdAt", clock.UtcNow.UtcDateTime }
         }, cancellationToken: cancellationToken);

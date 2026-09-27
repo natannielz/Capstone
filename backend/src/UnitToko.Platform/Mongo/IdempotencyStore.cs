@@ -48,7 +48,7 @@ public sealed class IdempotencyStore(IMongoDatabase database, MongoUnitOfWork un
             }
             var record = new BsonDocument
             {
-                { "schemaVersion", CollectionMigrations.CurrentVersion }, { "actorId", new BsonInt64(scope.ActorIdValue) }, { "operation", scope.Operation }, { "key", scope.Key },
+                { "schemaVersion", CollectionMigrations.FoundationDocumentSchemaVersion }, { "actorId", new BsonInt64(scope.ActorIdValue) }, { "operation", scope.Operation }, { "key", scope.Key },
                 { "bodyHash", scope.BodyHash.ToLowerInvariant() },
                 { "createdAt", clock.UtcNow.UtcDateTime }, { "result", new BsonDocument() }
             };

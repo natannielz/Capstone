@@ -12,7 +12,8 @@ public sealed class NumericStringSchemaTransformer : IOpenApiSchemaTransformer
     public Task TransformAsync(OpenApiSchema schema, OpenApiSchemaTransformerContext context,
         CancellationToken cancellationToken)
     {
-        var type = context.JsonTypeInfo.Type;
+        var nullableType = Nullable.GetUnderlyingType(context.JsonTypeInfo.Type);
+        var type = nullableType ?? context.JsonTypeInfo.Type;
         if (type == typeof(LongId))
             SetString(schema, LongIdPattern, 19,
                 "Positive decimal Int64 string, from 1 through 9223372036854775807. JSON numbers are invalid.");
@@ -22,6 +23,8 @@ public sealed class NumericStringSchemaTransformer : IOpenApiSchemaTransformer
         else if (type == typeof(SignedMoney))
             SetString(schema, @"^-?(?:0|[1-9][0-9]{0,14})(?:\.[0-9]{1,2})?$(?![\s\S])", 19,
                 "Signed decimal string from -999999999999999.99 through 999999999999999.99, with at most two fractional digits; responses use exactly two. JSON numbers are invalid.");
+        if (nullableType is not null && (type == typeof(LongId) || type == typeof(Money) || type == typeof(SignedMoney)))
+            schema.Type = JsonSchemaType.String | JsonSchemaType.Null;
         return Task.CompletedTask;
     }
 

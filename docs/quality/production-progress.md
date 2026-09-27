@@ -17,6 +17,7 @@ Starting commit: `09265cc65b47f26ce3bec8c652fde380dcdcce86`
 ## Execution rulings
 
 - Use the explicit dependency order: T00, T01, T02, T05, T04, T03, T05A, T06–T16.
+- On 28 September 2026 the user confirmed there is no existing approved identity provider and selected preparation of the planned Auth0 integration. Continue local T03 implementation against Auth0's OIDC boundary; do not infer tenant credentials, paid provisioning, regional-policy approval or successful provider acceptance.
 - Independent preparation may run concurrently. Ownership boundaries prevent conflicting edits. The user's approved parallel-agent execution takes precedence over the skill's blanket serial-implementer guidance.
 - Native managed worktree provides isolation. Sandbox-approved commands may operate in it; original source remains untouched.
 - No artificial implementation approvals are needed for authorized local fixes. Provider credentials, business policy and production cutover remain actual external gates.
@@ -31,7 +32,9 @@ Starting commit: `09265cc65b47f26ce3bec8c652fde380dcdcce86`
 | T01 | Accepted and committed | `86f0fc5`: clean Node 24 install/build, transitive browser boundary, typecheck/lint, regression/golden tests, native/SQL tracing, production boot and all three isolated HTTP smoke suites pass |
 | T02 | Accepted and committed foundation | `fecbd85`: SDK 10.0.401/MongoDB 8.2.12 verified. Backend review fixes, typed client, generated schema checks and CI integration accepted; no production identity or business migration claimed |
 | T05 | Persistence foundation accepted; business parity remains with module ports | Clean backend build and 52 tests pass with no skips; independent final review accepts migration, numeric, durability and recovery fixes; no production business writer enabled |
-| T04, T03, T05A–T16 | Not started | Follow dependency order after foundation and persistence acceptance |
+| T04 | Core authorization and administration implemented; lifecycle completion remains open | Six templates/explicit packs, scoped Mongo queries, revocation fences, independent grant/membership proposals and protected admin UI; verification below |
+| T03 | Auth0 preparation researched; implementation not started | User selected Auth0 preparation; verified-factor evidence and external-change revocation require actual tenant acceptance |
+| T05A–T16 | Not started | Follow dependency order after authorization and identity |
 
 ## Dependency review
 
@@ -85,6 +88,8 @@ T04 may now consume the reviewed persistence boundary. Its policy infrastructure
 
 ## Next: scoped authorization preparation
 
+Previous goal turn made verified progress: commit `3f03f7b` records the accepted persistence foundation, 52 passing backend cases and final independent review. The next goal turn revalidated that commit and the unchanged unrelated user files before starting T04. New authorization migration history version 2 must preserve version 1 business-document formats and must not replay its validators over stronger later rules.
+
 A read-only T04 map confirms that the legacy single-role actor and broad staff state cannot supply the new authorization boundary. Implement the fixed six templates, four explicit finance packs and separate `payment.verify`; keep public demo customers outside approved B2B migration. Preserve original actor identity across role changes through a durable import mapping.
 
 Policy contracts must evaluate OR across complete grants and AND within one grant, avoiding accidental branch/channel combinations. Ordinary buyers remain self/assigned; `branch.pic` names one branch; organization-wide access requires a separate explicit grant. A null scope never means all. Courier shipment assignment, active hierarchy relationships, immutable maker/checker actor IDs and record revisions remain mandatory.
@@ -92,3 +97,30 @@ Policy contracts must evaluate OR across complete grants and AND within one gran
 The transaction boundary must write an actor authorization fence matching active status and current grant version; revocation/suspension writes the same fence. Scope deactivation needs its own coordinated invalidation/fence. Queries apply authorized scope before pagination/counts, and detail/file/export/event access uses the same semantics. Keep Mongo session types out of domain contracts, version template definitions, and snapshot effective grants so a template edit cannot silently widen existing access.
 
 Suggested ownership after shared contracts are agreed: policy/domain and matrix tests; Mongo/API/query/fence concurrency integration; frontend forms and permission documentation. Parent owns composition and generated-contract refresh. New administration remains protected by the fail-closed API until T03 supplies verified identity; no legacy-cookie bridge or test login may enable it. Named live approvers, business memberships and scope assignments remain later operational inputs, not invented seed data.
+
+## T04 core implementation and review
+
+Three independent work streams delivered pure domain policies, sequential Mongo migrations and transactional authorization persistence. Parent integrated versioned HTTP endpoints, generated contracts and regression checks; a worker then built the standalone Indonesian administration page. Independent source reviews covered policy boundaries, query/fence/replay behavior, access lifecycle and API metadata. Production authentication and actor resolution still return no authenticated actor until T03.
+
+Implemented behavior:
+
+- Six materialized role templates, four individually selected finance packs, explicit `payment.verify`, approved scope membership, exact grant alternatives, self/assignment visibility and named branch/organization breadth. Maker/checker compares immutable actors and revisions. No production MFA bypass is configurable.
+- Mongo migration v2 preserves v1 history and stronger validators, preflights incompatible records, recovers interrupted upgrades, uses explicit majority writes and seeds no accounts. Authorization documents remain schema version 1.
+- Scoped list/count/direct-ID reads, canonical BSON shape checks and active hierarchy checks. Authorized commands fence both actor/grant version and the concrete resource's ancestors; concurrent grant, membership, identity or branch removal invalidates stale work. Trusted same-key results still require current access; new work also requires current revision and immutable approval evidence.
+- Independent grant/membership proposals, designated approval, revocation/suspension, bounded delegation and transactional change history. Suspended identities/scopes can still have authority removed. Approvers see delegated powers, membership, template version and effective/expiry dates, not only ordinary permissions.
+- Strict HTTP DTOs, nullable Int64 string schemas, declared retry/version headers, server-derived command hashes and `no-store` on both success and rejection. Generated-client arrays use the generator's mutable wire types because the installed openapi-fetch helper cannot infer readonly array methods correctly; UI views still use readonly types where appropriate.
+- Administration forms consume server previews and per-resource action hints. Editing invalidates stale previews; uncertain outcomes lock the exact request and retain its retry key. Approval confirmation repeats the complete authority and validity details. The page uses scoped styling, a mobile layout, noindex metadata and stable accessible reason labels.
+
+Verification: full backend run passed 135 cases without skips, followed by one additional organization-wide descendant-fence race and the affected nine query/fence tests after tightening resource projections. There are now 136 distinct backend cases. Frontend full regression passed 281 cases plus two future-date repository cases and seven golden scenarios. TypeScript, production build, import boundaries and lint passed (zero errors, nine unchanged legacy warnings). Server OpenAPI export/check and generated-client drift check passed. The final reason-label accessibility correction passed a fresh production build and both browser viewport workflows. Independent rereview accepts canonical resource projections and the new descendant-fence regression.
+
+Local Edge browser checks used fully intercepted synthetic API responses against a production frontend build at loopback, with desktop 1365px and mobile 390px widths. They exercised server preview, same-key retry after unknown commit, locked uncertain forms, complete review/confirmation, versioned approval, action removal after completion, 401/403 refusal, no page errors and no horizontal overflow. This is UI evidence only; it does not claim a working Auth0 session or real frontend-to-C# origin routing. Screenshots and the disposable runner are under ignored `tmp/production/access-*`.
+
+Remaining T04 work before the full task can be accepted:
+
+1. Reviewed organization/branch/shop/warehouse/channel creation, changes and reactivation; no direct database or unchecked status-toggle administration.
+2. Proposal rejection/withdrawal and an authorized operation/history view for reconciling uncertain outcomes after a forced browser close. Current in-page retries and unload warnings do not persist a closed-tab command.
+3. Purpose-limited privileged-read/export audit and complete organization/access administration navigation. T03 supplies verified directory/profile context and account recovery; reference-based forms are not the final human directory.
+4. Each later business module must bind server-owned resource/history plus target/version to this transaction boundary for queries, details, commands, exports, files and events. Raw BSON store results are internal; every endpoint needs its own purpose-limited DTO and allow/deny cases.
+5. Named initial approvers and approved real business scopes remain operational inputs. Nothing in the local fixture creates live BNI accounts or grants.
+
+The goal remains active. T04's core can be committed as a reviewable foundation while these lifecycle items stay open; it does not replace legacy authority or authorize rollout. Auth0 research is in `docs/research/2026-09-28-auth0-integration.md`; paid entitlements, closed signup, actual factor timestamps and externally initiated security-change coverage are explicit later acceptance gates.

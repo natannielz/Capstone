@@ -80,7 +80,7 @@ public sealed class PersistenceHttpTests(MongoFixture mongo)
                 .Find(Builders<BsonDocument>.Filter.Eq("_id", CollectionMigrations.CurrentVersion))
                 .SingleAsync();
             Assert.Equal(appliedAt, repeated["appliedAt"].AsBsonDateTime.MillisecondsSinceEpoch);
-            Assert.Equal(1, await database.GetCollection<BsonDocument>("schemaMigrations")
+            Assert.Equal(CollectionMigrations.CurrentVersion, await database.GetCollection<BsonDocument>("schemaMigrations")
                 .CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty));
         }
         finally

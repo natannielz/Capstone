@@ -52,7 +52,7 @@ public sealed class MigrationReviewTests(MongoFixture fixture)
         {
             var history = db.GetCollection<BsonDocument>("schemaMigrations");
             await history.InsertOneAsync(new BsonDocument
-            { { "_id", 2 }, { "state", "applied" }, { "appliedAt", clock.UtcNow.UtcDateTime } });
+            { { "_id", CollectionMigrations.CurrentVersion + 1 }, { "state", "applied" }, { "appliedAt", clock.UtcNow.UtcDateTime } });
             var migrations = new CollectionMigrations(db, clock);
             Assert.False(await migrations.IsCurrentAsync());
             await Assert.ThrowsAsync<InvalidOperationException>(() => migrations.ApplyAsync());

@@ -12,7 +12,10 @@ const schema = JSON.parse(await readFile(input, "utf8"));
 if (!schema.openapi?.startsWith("3.") || !schema.paths) {
   throw new Error("Expected the server-generated OpenAPI 3 contract.");
 }
-const ast = await openapiTS(schema, { alphabetize: true, immutable: true });
+// openapi-fetch 0.17's Readable<T> recognizes mutable arrays only; readonly
+// generated arrays otherwise lose their array methods in inferred responses.
+// View models can still expose readonly arrays independently of the wire type.
+const ast = await openapiTS(schema, { alphabetize: true });
 const text = [
   "// Generated from backend/contracts/openapi.json. Do not edit manually.",
   "// Regenerate: npm run generate --prefix backend/contracts",

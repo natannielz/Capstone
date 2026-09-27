@@ -1,0 +1,358 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import Link from "next/link";
+import type { components } from "../../api/generated/schema";
+import { describeScope, localDateTime, scopeKindLabels, toIsoDate, validReference, type ScopeKind } from "../organizations/access-scope";
+import { createAccessGateway, type ChangeAction } from "./access-client";
+import { AccessFailure, accessMessage, MutationLedger, PreviewSession, stableContent, submitLogicalRequest, type GrantRequest, type Scope } from "./workflow";
+import { permissionLabel } from "./permission-labels";
+import styles from "./access.module.css";
+
+type Schemas = components["schemas"];
+type Proposal = Schemas["AccessProposalDto"];
+type PageState = "loading" | "ready" | "unauthenticated" | "denied" | "unavailable";
+type PendingAction = { action: ChangeAction; id: string; version: string; label: string };
+type Retry = { label: string; run: () => Promise<void> };
+
+const emptyScope: Scope = { kind: "buyerOwned", organizationId: null, branchId: null, divisionId: null, shopId: null, warehouseId: null, channelId: null };
+
+export function AccessAdministration() {
+  const [gateway] = useState(() => createAccessGateway());
+  const [ledger] = useState(() => new MutationLedger());
+  const [previewSession] = useState(() => new PreviewSession());
+  const generation = useRef(0);
+  const decisionInput = useRef<HTMLTextAreaElement>(null);
+  const [pageState, setPageState] = useState<PageState>("loading");
+  const [current, setCurrent] = useState<Schemas["CurrentAccessDto"] | null>(null);
+  const [catalog, setCatalog] = useState<Schemas["AccessCatalogDto"] | null>(null);
+  const [proposals, setProposals] = useState<readonly Proposal[]>([]);
+  const [offset, setOffset] = useState(0);
+  const [selected, setSelected] = useState<string | null>(null);
+  const [subjectReference, setSubjectReference] = useState("");
+  const [subject, setSubject] = useState<Schemas["AccessSubjectDto"] | null>(null);
+  const [membershipId, setMembershipId] = useState("");
+  const [templateId, setTemplateId] = useState("buyer");
+  const [packs, setPacks] = useState<string[]>([]);
+  const [extras, setExtras] = useState<string[]>([]);
+  const [delegable, setDelegable] = useState<string[]>([]);
+  const [effective, setEffective] = useState(() => localDateTime());
+  const [expiry, setExpiry] = useState("");
+  const [reason, setReason] = useState("");
+  const [mode, setMode] = useState<"grant" | "membership">("grant");
+  const [membershipScope, setMembershipScope] = useState<Scope>(emptyScope);
+  const [preview, setPreview] = useState<Schemas["AccessPreviewDto"] | null>(null);
+  const [previewDraft, setPreviewDraft] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<unknown>(null);
+  const [message, setMessage] = useState("");
+  const [retry, setRetry] = useState<Retry | null>(null);
+  const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
+  const [decisionReason, setDecisionReason] = useState("");
+  const locked = busy || retry !== null;
+
+  const loadPage = useCallback(() => Promise.all([gateway.current(), gateway.catalog(), gateway.proposals(offset)]), [gateway, offset]);
+  const applyLoaded = useCallback(([actor, definitions, queue]: Awaited<ReturnType<typeof loadPage>>) => {
+    setCurrent(actor); setCatalog(definitions); setProposals(queue); setPageState("ready");
+  }, []);
+  const applyFailure = useCallback((failure: unknown) => {
+    setCurrent(null); setCatalog(null); setProposals([]); setError(failure);
+    setPageState(failure instanceof AccessFailure && failure.status === 401 ? "unauthenticated"
+      : failure instanceof AccessFailure && failure.status === 403 ? "denied" : "unavailable");
+  }, []);
+  const refresh = useCallback(async () => {
+    const sequence = ++generation.current;
+    setPageState("loading");
+    try {
+      const result = await loadPage();
+      if (sequence !== generation.current) return;
+      applyLoaded(result);
+    } catch (failure) {
+      if (sequence !== generation.current) return;
+      applyFailure(failure);
+    }
+  }, [loadPage, applyLoaded, applyFailure]);
+
+  useEffect(() => {
+    let active = true;
+    const sequence = ++generation.current;
+    void loadPage().then(result => { if (active && sequence === generation.current) applyLoaded(result); },
+      failure => { if (active && sequence === generation.current) applyFailure(failure); });
+    return () => { active = false; };
+  }, [loadPage, applyLoaded, applyFailure]);
+
+  useEffect(() => {
+    if (!retry) return;
+    const warnBeforeLeaving = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
+    window.addEventListener("beforeunload", warnBeforeLeaving);
+    return () => window.removeEventListener("beforeunload", warnBeforeLeaving);
+  }, [retry]);
+
+  useEffect(() => { if (pendingAction) decisionInput.current?.focus(); }, [pendingAction]);
+
+  const membership = subject?.memberships.find(item => item.id === membershipId && item.status === "active");
+  const grant = useMemo<GrantRequest | null>(() => {
+    const effectiveAt = toIsoDate(effective);
+    const expiresAt = toIsoDate(expiry);
+    if (!subject || !membership || !effectiveAt || expiry && !expiresAt) return null;
+    return { userId: subject.userId, membershipId: membership.id, templateId,
+      financePacks: [...packs].sort(), additionalPermissions: [...extras].sort(), delegablePermissions: [...delegable].sort(),
+      scope: membership.scope, effectiveAt, expiresAt };
+  }, [subject, membership, effective, expiry, templateId, packs, extras, delegable]);
+
+  useEffect(() => { previewSession.replace(grant); }, [grant, previewSession]);
+  const activePreview = previewDraft === stableContent(grant) ? preview : null;
+
+  const selectedProposal = proposals.find(proposal => proposal.id === selected);
+  const canProposeGrant = current?.allowedActions.includes("access.propose") ?? false;
+  const canProposeMembership = current?.allowedActions.includes("membership.propose") ?? false;
+
+  async function loadSubject(event: FormEvent) {
+    event.preventDefault();
+    if (!validReference(subjectReference)) { setError(new AccessFailure(400, "invalid_id")); return; }
+    setBusy(true); setError(null); setMessage("");
+    try {
+      const result = await gateway.subject(subjectReference);
+      setSubject(result); setMembershipId(result.memberships.find(item => item.status === "active")?.id ?? "");
+      setSelected(null); setPendingAction(null);
+    } catch (failure) { setSubject(null); setError(failure); }
+    finally { setBusy(false); }
+  }
+
+  async function previewGrant() {
+    if (!grant) return;
+    const ticket = previewSession.begin(grant);
+    setPreview(null); setBusy(true); setError(null);
+    try {
+      const result = await gateway.preview(grant);
+      if (previewSession.accept(ticket, result)) { setPreview(result); setPreviewDraft(stableContent(grant)); }
+    } catch (failure) { setError(failure); }
+    finally { setBusy(false); }
+  }
+
+  async function perform(operation: string, payload: unknown, label: string, send: (key: string) => Promise<unknown>) {
+    setBusy(true); setError(null); setMessage("");
+    try {
+      await submitLogicalRequest(ledger, operation, payload, send);
+      setRetry(null); setPendingAction(null); setDecisionReason("");
+      previewSession.invalidate(); setPreview(null);
+      setMessage(label);
+      await refresh();
+      if (subject) {
+        try { setSubject(await gateway.subject(subject.userId)); }
+        catch { setSubject(null); setMessage(`${label} Muat ulang akun untuk memeriksa akses terbaru.`); }
+      }
+    } catch (failure) {
+      setError(failure);
+      if (ledger.isUncertain(operation)) {
+        setRetry({ label: "Periksa kembali permintaan yang sama", run: () => perform(operation, payload, label, send) });
+      } else if (failure instanceof AccessFailure && failure.status === 409) {
+        previewSession.invalidate(); setPreview(null); setPendingAction(null);
+        await refresh();
+        if (subject) {
+          try { setSubject(await gateway.subject(subject.userId)); } catch { setSubject(null); }
+        }
+      } else if (failure instanceof AccessFailure && failure.status === 403) {
+        previewSession.invalidate(); setPreview(null); await refresh();
+      }
+    } finally { setBusy(false); }
+  }
+
+  async function submitProposal(event: FormEvent) {
+    event.preventDefault();
+    if (mode === "grant") {
+      previewSession.replace(grant);
+      if (!grant || !previewSession.value || !reason.trim() || !canProposeGrant) return;
+      const body = { grant, reason: reason.trim() };
+      await perform("grant-proposal", body, "Pengajuan akses disimpan. Persetujuan petugas lain masih diperlukan.", key => gateway.proposeGrant(body, key));
+    } else {
+      const effectiveAt = toIsoDate(effective);
+      if (!subject || !effectiveAt || !reason.trim() || !canProposeMembership) return;
+      const body = { membership: { userId: subject.userId, scope: membershipScope, effectiveAt, expiresAt: toIsoDate(expiry) }, reason: reason.trim() };
+      await perform("membership-proposal", body, "Pengajuan keanggotaan disimpan. Pemilik cakupan harus menyetujuinya.", key => gateway.proposeMembership(body, key));
+    }
+  }
+
+  async function confirmAction(event: FormEvent) {
+    event.preventDefault();
+    if (!pendingAction || !decisionReason.trim()) return;
+    const action = pendingAction;
+    const payload = { action: action.action, id: action.id, version: action.version, reason: decisionReason.trim() };
+    await perform(`${action.action}:${action.id}`, payload, "Perubahan akses telah disimpan.",
+      key => gateway.change(action.action, action.id, action.version, payload.reason, key));
+  }
+
+  function startNew(nextMode: "grant" | "membership") {
+    setSelected(null); setPendingAction(null); setMode(nextMode); setError(null); setMessage("");
+  }
+
+  return <main className={styles.page}>
+    <header className={styles.header}>
+      <div><Link className={styles.brand} href="/" onClick={event => { if (retry) event.preventDefault(); }} aria-disabled={retry !== null}>Unit Toko</Link><h1>Kelola akses</h1>
+        <p>Ajukan tugas yang sesuai, periksa cakupannya, lalu minta persetujuan independen.</p></div>
+      <button className={styles.secondary} onClick={() => { setError(null); void refresh(); }} disabled={locked || pageState === "loading"}>Muat ulang</button>
+    </header>
+
+    {message && <p className={styles.success} role="status">{message}</p>}
+    {error !== null && <div className={styles.alert} role="alert"><p>{accessMessage(retry ? new AccessFailure(503, "commit_outcome_unknown") : error)}</p>
+      {retry && <p>Tetap di halaman ini sampai hasil permintaan yang sama terkonfirmasi.</p>}
+      {error instanceof AccessFailure && error.traceId && <small>Referensi bantuan: {error.traceId}</small>}
+      {retry && <button className={styles.primary} onClick={() => void retry.run()} disabled={busy}>{retry.label}</button>}
+    </div>}
+
+    {pageState === "loading" && <section className={styles.state} aria-live="polite" aria-busy="true"><h2>Memeriksa akses</h2><p>Memuat keanggotaan, izin, dan pengajuan terbaru.</p></section>}
+    {pageState !== "loading" && pageState !== "ready" && <section className={styles.state}>
+      <h2>{pageState === "unauthenticated" ? "Sesi terverifikasi diperlukan" : pageState === "denied" ? "Halaman ini memerlukan izin pengelolaan akses" : "Layanan akses belum tersedia"}</h2>
+      <p>{pageState === "unauthenticated" ? "Akun demo tidak membuka halaman ini. Gunakan layanan akun resmi setelah diaktifkan oleh pengelola." : pageState === "denied" ? "Pengelola atau pemberi persetujuan yang ditunjuk dapat meninjau pengajuan sesuai cakupan tugasnya." : "Data belum dapat dimuat. Pengajuan dan perubahan akses tetap dinonaktifkan."}</p>
+      <button className={styles.secondary} onClick={() => void refresh()} disabled={locked}>Periksa kembali</button>
+    </section>}
+
+    {pageState === "ready" && current && catalog && <>
+      <section className={styles.accountSection} aria-labelledby="account-heading">
+        <h2 id="account-heading">Akun yang dikelola</h2>
+        <form onSubmit={loadSubject} className={styles.lookup}>
+          <label>Referensi akun<input value={subjectReference} onChange={event => { setSubjectReference(event.target.value); setSubject(null); previewSession.invalidate(); setPreview(null); }}
+            inputMode="numeric" autoComplete="off" placeholder="Contoh: 1032" maxLength={19} required disabled={locked} aria-describedby="account-help" /></label>
+          <button className={styles.secondary} disabled={locked || !validReference(subjectReference)}>Tampilkan akun</button>
+        </form>
+        <p id="account-help" className={styles.help}>Gunakan referensi akun yang diberikan pengelola.</p>
+        {subject && <div className={styles.subjectSummary}>
+          <p><strong>Akun {subject.userId}</strong> <span className={styles.status}>{statusLabel(subject.status)}</span></p>
+          <div className={styles.accessLists}>
+            <section><h3>Keanggotaan</h3>{subject.memberships.length === 0 && <p>Belum ada keanggotaan yang dapat ditampilkan.</p>}
+              <ul>{subject.memberships.map(item => <li key={item.id}><div><strong>Keanggotaan {item.id}</strong><p>{describeScope(item.scope)}</p><small>{statusLabel(item.status)}</small><Validity effectiveAt={item.effectiveAt} expiresAt={item.expiresAt} /></div>
+                {item.allowedActions.includes("suspend") && <button className={styles.danger} disabled={locked} onClick={() => { setPendingAction({ action: "suspendMembership", id: item.id, version: item.version, label: `Tangguhkan keanggotaan ${item.id}` }); setSelected(null); }}>Tangguhkan</button>}
+              </li>)}</ul>
+            </section>
+            <section><h3>Izin yang tercatat</h3>{subject.grants.length === 0 && <p>Belum ada izin akses yang dapat ditampilkan.</p>}
+              <ul>{subject.grants.map(item => <li key={item.id}><div><strong>{catalog.roles.find(role => role.id === item.templateId)?.label ?? item.templateId}</strong><p>{describeScope(item.scope)}</p><small>{statusLabel(item.status)} · Izin {item.id}</small><Validity effectiveAt={item.effectiveAt} expiresAt={item.expiresAt} />
+                <details className={styles.recordedPermissions}><summary>Lihat izin dan wewenang</summary><PermissionList permissions={item.permissions} /><h3>Wewenang pemberian izin</h3><DelegationList permissions={item.delegablePermissions} /></details></div>
+                {item.allowedActions.includes("revoke") && <button className={styles.danger} disabled={locked} onClick={() => { setPendingAction({ action: "revokeGrant", id: item.id, version: item.version, label: `Cabut izin ${item.id}` }); setSelected(null); }}>Cabut izin</button>}
+              </li>)}</ul>
+            </section>
+          </div>
+        </div>}
+      </section>
+
+      <div className={styles.desk}>
+        <aside className={styles.queue} aria-labelledby="queue-heading">
+          <div className={styles.queueHeader}><h2 id="queue-heading">Antrian pengajuan</h2><span>{proposals.length} pada halaman ini</span></div>
+          <div className={styles.newActions}>
+            {canProposeGrant && <button className={styles.secondary} disabled={locked} onClick={() => startNew("grant")}>Ajukan izin</button>}
+            {canProposeMembership && <button className={styles.secondary} disabled={locked} onClick={() => startNew("membership")}>Ajukan keanggotaan</button>}
+          </div>
+          {proposals.length === 0 ? <p className={styles.empty}>Tidak ada pengajuan dalam cakupan Anda pada halaman ini.</p> : <ul className={styles.queueList}>
+            {proposals.map(item => <li key={item.id}><button disabled={locked} className={selected === item.id ? styles.selectedRow : styles.queueRow}
+              aria-pressed={selected === item.id} onClick={() => { setSelected(item.id); setPendingAction(null); setError(null); }}>
+              <strong>{item.kind === "membership" ? "Keanggotaan" : "Izin akses"} untuk akun {item.subjectId}</strong>
+              <span>{describeScope(item.scope)}</span><small>{statusLabel(item.status)} · Pengajuan {item.id}</small>
+            </button></li>)}
+          </ul>}
+          <nav className={styles.pagination} aria-label="Halaman pengajuan">
+            <button className={styles.secondary} disabled={locked || offset === 0} onClick={() => { setSelected(null); setPageState("loading"); setOffset(value => Math.max(0, value - 25)); }}>Sebelumnya</button>
+            <button className={styles.secondary} disabled={locked || proposals.length < 25 || offset >= 9975} onClick={() => { setSelected(null); setPageState("loading"); setOffset(value => value + 25); }}>Berikutnya</button>
+          </nav>
+        </aside>
+
+        <section className={styles.detail} aria-label="Rincian dan pengajuan akses">
+          {pendingAction ? <form onSubmit={confirmAction} className={styles.form}>
+            <h2>{pendingAction.label}</h2><p>Perubahan ini dicatat bersama akun pelaksana dan alasan. Server memeriksa kembali izin dan versi terbaru.</p>
+            {selectedProposal && pendingAction.id === selectedProposal.id && <ProposalReview proposal={selectedProposal} />}
+            <label><span id="access-decision-reason-label">Alasan keputusan</span><textarea aria-labelledby="access-decision-reason-label" ref={decisionInput} required maxLength={1000} value={decisionReason} onChange={event => setDecisionReason(event.target.value)} disabled={locked} rows={4} /></label>
+            <div className={styles.actions}><button className={styles.primary} disabled={locked || !decisionReason.trim()}>Simpan keputusan</button><button type="button" className={styles.secondary} disabled={locked} onClick={() => setPendingAction(null)}>Batal</button></div>
+          </form> : selectedProposal ? <ProposalDetails proposal={selectedProposal} catalog={catalog} disabled={locked} onApprove={() => {
+            setDecisionReason(""); setPendingAction({ action: selectedProposal.kind === "membership" ? "approveMembership" : "approveGrant", id: selectedProposal.id, version: selectedProposal.version, label: `Setujui pengajuan ${selectedProposal.id}` });
+          }} /> : <form onSubmit={submitProposal} className={styles.form}>
+            <h2>{mode === "grant" ? "Ajukan izin akses" : "Ajukan keanggotaan"}</h2>
+            {!subject ? <p className={styles.empty}>Tampilkan akun terlebih dahulu untuk memeriksa keanggotaan dan cakupan yang disetujui.</p> : <>
+              <p>Akun <strong>{subject.userId}</strong>. Setiap izin baru memerlukan persetujuan petugas lain yang ditunjuk.</p>
+              <fieldset disabled={locked || (mode === "grant" ? !canProposeGrant : !canProposeMembership)} className={styles.fields}>
+                <legend className={styles.srOnly}>Rincian pengajuan</legend>
+                {mode === "grant" ? <>
+                  <label>Keanggotaan aktif<select required value={membershipId} onChange={event => setMembershipId(event.target.value)}><option value="">Pilih keanggotaan</option>
+                    {subject.memberships.filter(item => item.status === "active").map(item => <option key={item.id} value={item.id}>{item.id}: {describeScope(item.scope)}</option>)}
+                  </select></label>
+                  {membership ? <p className={styles.scopeSummary}>{describeScope(membership.scope)}</p> : <p className={styles.help}>Izin hanya dapat diajukan untuk keanggotaan yang telah disetujui.</p>}
+                  <label>Peran awal<select value={templateId} onChange={event => { setTemplateId(event.target.value); setPacks([]); setExtras([]); setDelegable([]); }}>
+                    {catalog.roles.map(role => <option key={role.id} value={role.id}>{role.label}</option>)}
+                  </select></label>
+                  {templateId === "finance" && <fieldset className={styles.choiceGroup}><legend>Paket tugas keuangan</legend><p className={styles.help}>Peran Keuangan tanpa paket tidak memberikan izin transaksi. Pilih hanya tugas yang diperlukan.</p>
+                    {catalog.financePacks.map(pack => <label className={styles.checkbox} key={pack.id}><input type="checkbox" checked={packs.includes(pack.id)} onChange={() => toggle(pack.id, packs, setPacks)} /><span>{pack.label}</span></label>)}
+                  </fieldset>}
+                  <details className={styles.permissions}><summary>Izin tambahan yang diminta</summary><p className={styles.help}>Termasuk PIC dan verifikasi pembayaran jika diperlukan. Cakupan dan penunjukan tetap harus disetujui secara terpisah.</p>
+                    {catalog.permissions.map(permission => <label className={styles.checkbox} key={permission.id}><input type="checkbox" checked={extras.includes(permission.id)} onChange={() => toggle(permission.id, extras, setExtras)} /><span>{permissionLabel(permission.id, permission.label)}{permission.requiresFreshMfa && <small>Memerlukan verifikasi dua langkah terbaru</small>}</span></label>)}
+                  </details>
+                  <details className={styles.permissions}><summary>Wewenang pemberian izin</summary><p className={styles.help}>Isi hanya untuk petugas pemberi persetujuan yang ditunjuk. Memiliki izin transaksi tidak otomatis memberikan wewenang ini.</p>
+                    {catalog.permissions.map(permission => <label className={styles.checkbox} key={permission.id}><input type="checkbox" checked={delegable.includes(permission.id)} onChange={() => toggle(permission.id, delegable, setDelegable)} /><span>{permissionLabel(permission.id, permission.label)}</span></label>)}
+                  </details>
+                </> : <ScopeFields value={membershipScope} onChange={setMembershipScope} />}
+                <div className={styles.twoFields}><label>Mulai berlaku<input type="datetime-local" value={effective} onChange={event => setEffective(event.target.value)} required /></label>
+                  <label>Berakhir <span className={styles.optional}>(opsional)</span><input type="datetime-local" value={expiry} onChange={event => setExpiry(event.target.value)} min={effective} /></label></div>
+                <p className={styles.help}>Waktu mengikuti zona waktu perangkat Anda. Cakupan organisasi, toko, dan kanal diperiksa kembali oleh server.</p>
+                <label><span id="access-proposal-reason-label">Alasan pengajuan</span><textarea aria-labelledby="access-proposal-reason-label" value={reason} onChange={event => setReason(event.target.value)} required maxLength={1000} rows={3} placeholder="Jelaskan tugas dan kebutuhan akses akun ini." /></label>
+                {mode === "grant" && <button type="button" className={styles.secondary} disabled={!grant} onClick={() => void previewGrant()}>Periksa pratinjau izin</button>}
+                {mode === "grant" && activePreview && <section className={styles.preview} aria-live="polite"><h3>Pratinjau dari server</h3><p>{describeScope(activePreview.scope)}</p>
+                  <p>Keanggotaan {activePreview.membershipId}; versi peran {activePreview.templateVersion}.</p><Validity effectiveAt={activePreview.effectiveAt} expiresAt={activePreview.expiresAt} />
+                  <PermissionList permissions={activePreview.permissions} /><h3>Wewenang pemberian izin</h3><DelegationList permissions={activePreview.delegablePermissions} />
+                  <p className={styles.help}>{activePreview.existingPermissions.length} izin sudah tercatat pada cakupan ini. Pengajuan tetap menunggu persetujuan independen.</p>
+                </section>}
+                <button className={styles.primary} disabled={!reason.trim() || !toIsoDate(effective) || mode === "grant" && (!grant || !activePreview)}>Ajukan untuk persetujuan</button>
+              </fieldset>
+            </>}
+          </form>}
+        </section>
+      </div>
+    </>}
+  </main>;
+}
+
+function ProposalDetails({ proposal, catalog, disabled, onApprove }: { proposal: Proposal; catalog: Schemas["AccessCatalogDto"]; disabled: boolean; onApprove: () => void }) {
+  return <div className={styles.form}><h2>Pengajuan {proposal.id}</h2><dl className={styles.facts}>
+    <div><dt>Akun penerima</dt><dd>{proposal.subjectId}</dd></div><div><dt>Diajukan oleh</dt><dd>Akun {proposal.requestedBy}</dd></div>
+    <div><dt>Status</dt><dd>{statusLabel(proposal.status)}</dd></div><div><dt>Diajukan pada</dt><dd>{new Date(proposal.createdAt).toLocaleString("id-ID")}</dd></div>
+    {proposal.templateId && <div><dt>Peran awal</dt><dd>{catalog.roles.find(role => role.id === proposal.templateId)?.label ?? proposal.templateId}</dd></div>}
+  </dl><ProposalReview proposal={proposal} />
+    {proposal.allowedActions.includes("approve") ? <><p className={styles.help}>Persetujuan hanya berlaku untuk cakupan dan izin pada pengajuan ini. Izin terbaru serta independensi akun diperiksa saat disimpan.</p><button className={styles.primary} disabled={disabled} onClick={onApprove}>Tinjau dan setujui</button></>
+      : <p className={styles.help}>Tidak ada tindakan persetujuan yang tersedia untuk akun Anda pada pengajuan ini.</p>}
+  </div>;
+}
+
+function ProposalReview({ proposal }: { proposal: Proposal }) {
+  return <div className={styles.review}><section><h3>Akun dan cakupan yang ditinjau</h3><p>Akun {proposal.subjectId}; diajukan oleh akun {proposal.requestedBy}.</p><p>{describeScope(proposal.scope)}</p>
+    <p>{proposal.membershipId ? `Keanggotaan ${proposal.membershipId}` : "Pengajuan keanggotaan baru"}{proposal.templateVersion !== null ? `; versi peran ${proposal.templateVersion}` : ""}.</p>
+    <Validity effectiveAt={proposal.effectiveAt} expiresAt={proposal.expiresAt} />
+  </section><section><h3>Alasan pengajuan</h3><p className={styles.preserve}>{proposal.reason}</p></section>
+    {proposal.kind !== "membership" && <section><h3>Izin yang diajukan</h3><PermissionList permissions={proposal.permissions} /></section>}
+    <section><h3>Wewenang pemberian izin</h3><DelegationList permissions={proposal.delegablePermissions} /></section>
+  </div>;
+}
+
+function Validity({ effectiveAt, expiresAt }: { effectiveAt: string; expiresAt: string | null }) {
+  return <p className={styles.help}>Mulai: {new Date(effectiveAt).toLocaleString("id-ID")}. Berakhir: {expiresAt ? new Date(expiresAt).toLocaleString("id-ID") : "tanpa tanggal akhir"}.</p>;
+}
+
+function DelegationList({ permissions }: { permissions: readonly string[] }) {
+  return permissions.length === 0 ? <p>Tidak ada wewenang pemberian izin yang diminta.</p> : <PermissionList permissions={permissions} />;
+}
+
+function PermissionList({ permissions }: { permissions: readonly string[] }) {
+  return permissions.length === 0 ? <p>Tidak ada izin transaksi dalam pilihan ini.</p>
+    : <ul className={styles.permissionList}>{permissions.map(permission => <li key={permission}>{permissionLabel(permission)}</li>)}</ul>;
+}
+
+function ScopeFields({ value, onChange }: { value: Scope; onChange: (scope: Scope) => void }) {
+  const fields = value.kind === "system" ? [] : value.kind.startsWith("buy")
+    ? [["organizationId", "Referensi organisasi pembeli"], ...(value.kind === "buyingOrganization" ? [] : [["branchId", "Referensi cabang"], ...(value.kind === "buyingBranch" ? [] : [["divisionId", "Referensi divisi"]])])]
+    : [["organizationId", "Referensi organisasi pemenuhan"], ["shopId", "Referensi toko"], ["channelId", "Referensi kanal"], ...(value.kind === "fulfillmentShop" ? [] : [["warehouseId", "Referensi gudang"]])];
+  return <><label>Cakupan keanggotaan<select value={value.kind} onChange={event => onChange({ ...emptyScope, kind: event.target.value as ScopeKind })}>
+    {Object.entries(scopeKindLabels).map(([kind, label]) => <option key={kind} value={kind}>{label}</option>)}
+  </select></label><p className={styles.help}>Gunakan referensi unit yang disetujui pemilik organisasi. Keanggotaan baru tidak aktif sebelum mendapat persetujuan independen.</p>
+    <div className={styles.twoFields}>{fields.map(([field, label]) => <label key={field}>{label}<input inputMode="numeric" autoComplete="off" maxLength={19}
+      value={typeof value[field as keyof Scope] === "string" ? String(value[field as keyof Scope]) : ""}
+      onChange={event => onChange({ ...value, [field]: event.target.value || null })}
+      required={field === "organizationId" || field === "shopId" || field === "channelId" || value.kind === "buyingDivision" || value.kind === "buyingBranch" || value.kind === "fulfillmentWarehouse"}
+      pattern="[1-9][0-9]{0,18}" /></label>)}</div></>;
+}
+
+function toggle(value: string, values: string[], update: (values: string[]) => void) { update(values.includes(value) ? values.filter(item => item !== value) : [...values, value]); }
+function statusLabel(value: string) { return ({ active: "Aktif", pending: "Menunggu persetujuan", approved: "Disetujui", suspended: "Ditangguhkan", revoked: "Dicabut", rejected: "Ditolak" } as Record<string, string>)[value] ?? value; }
