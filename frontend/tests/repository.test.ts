@@ -4,7 +4,7 @@ import { DatabaseSync } from "node:sqlite";
 import { readFileSync,mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { setTestDatabase } from "../../backend/legacy/server/database";
+import { setTestDatabase, type Database } from "../../backend/legacy/server/database";
 import { setTestClock } from "../../backend/legacy/domain/clock";
 import type { Statement } from "../../backend/legacy/server/database";
 process.env.DEMO_PASSWORD_SEED="repository-test-only-not-a-production-secret";
@@ -43,8 +43,70 @@ try {
  connection.exec("PRAGMA foreign_keys=ON");
 }
 assert.equal(connection.prepare("PRAGMA foreign_key_check").all().length,0);
-setTestDatabase({prepare:(sql:string)=>new Query(sql),async batch(queries:Statement[]){await Promise.resolve();connection.exec("BEGIN");try{const result=queries.map(q=>{if(!(q instanceof Query))throw new Error("Unsupported test statement");return q.allSync();});connection.exec("COMMIT");return result;}catch(e){connection.exec("ROLLBACK");throw e;}}});
+const sqliteDatabase:Database={prepare:(sql:string)=>new Query(sql),async batch(queries:Statement[]){await Promise.resolve();connection.exec("BEGIN");try{const result=queries.map(q=>{if(!(q instanceof Query))throw new Error("Unsupported test statement");return q.allSync();});connection.exec("COMMIT");return result;}catch(e){connection.exec("ROLLBACK");throw e;}}};
+setTestDatabase(sqliteDatabase);
 let actors:Actor[]=[];const actor=(id:string)=>actors.find(a=>a.id===id)!;const command=(type:string,data:Record<string,unknown>)=>({id:crypto.randomUUID(),type,data});const act=(who:string,type:string,data:Record<string,unknown>)=>execute(actor(who),command(type,data));
+
+const profileCommand=()=>command("profile.update",{name:"Known conflict probe",phone:"",position:""});
+const commandCount=(id:string)=>Number((connection.prepare("SELECT count(*) AS count FROM commands WHERE id=?").get(id) as {count:number}).count);
+test("Q08 final recognized conflict returns typed 409 after four atomic attempts",async()=>{
+ await ensureSeed();actors=(await loadState()).users;
+ const operation=profileCommand(),before=await loadState();let attempts=0;
+ setTestDatabase({...sqliteDatabase,async batch(queries){
+  if(queries.some(q=>q instanceof Query&&q.sql.includes("INSERT INTO mutation_guards"))){attempts++;throw new Error("CHECK constraint failed: concurrent_write_guard");}
+  return sqliteDatabase.batch(queries);
+ }});
+ try{
+  await assert.rejects(execute(actor("pic-a"),operation),error=>error instanceof Error&&"status" in error&&error.status===409&&/Coba kembali/.test(error.message));
+  assert.equal(attempts,4);assert.equal(commandCount(operation.id),0);assert.deepEqual(await loadState(),before);
+ }finally{setTestDatabase(sqliteDatabase);}
+});
+
+test("Q08 ambiguous commit preserves unknown outcome and same-key retry reads one receipt",async()=>{
+ const operation=profileCommand();let batches=0;const before=(await loadState()).revision;
+ setTestDatabase({...sqliteDatabase,async batch(queries){
+  if(queries.some(q=>q instanceof Query&&q.sql.includes("INSERT INTO mutation_guards"))){batches++;await sqliteDatabase.batch(queries);throw new Error("connection lost after commit acknowledgement was lost while writing mutation_guards");}
+  return sqliteDatabase.batch(queries);
+ }});
+ try{
+  await assert.rejects(execute(actor("pic-a"),operation),/connection lost after commit/);
+  assert.equal(batches,1);assert.equal(commandCount(operation.id),1);
+  const repeated=await execute(actor("pic-a"),operation);
+  assert.equal(repeated.id,"pic-a");assert.equal(batches,1);assert.equal((await loadState()).revision,before+1);
+ }finally{setTestDatabase(sqliteDatabase);}
+});
+
+test("Q08 recognized conflict safely retries the same operation without duplicate mutation",async()=>{
+ const operation=profileCommand();let batches=0;const before=(await loadState()).revision;
+ setTestDatabase({...sqliteDatabase,async batch(queries){
+  if(queries.some(q=>q instanceof Query&&q.sql.includes("INSERT INTO mutation_guards"))&&++batches===1)throw new Error("CHECK constraint failed: concurrent_write_guard");
+  return sqliteDatabase.batch(queries);
+ }});
+ try{
+  const result=await execute(actor("pic-a"),operation);assert.equal(batches,2);
+  assert.deepEqual(await execute(actor("pic-a"),operation),result);
+  assert.equal(batches,2);assert.equal(commandCount(operation.id),1);assert.equal((await loadState()).revision,before+1);
+ }finally{setTestDatabase(sqliteDatabase);}
+});
+
+test("Q08 final command-key collision resolves the persisted receipt",async()=>{
+ const operation=profileCommand();let batches=0;const before=(await loadState()).revision;
+ setTestDatabase({...sqliteDatabase,async batch(queries){
+  if(queries.some(q=>q instanceof Query&&q.sql.includes("INSERT INTO mutation_guards"))){
+   batches++;
+   if(batches<4)throw new Error("CHECK constraint failed: concurrent_write_guard");
+   await sqliteDatabase.batch(queries);
+   throw new Error("UNIQUE constraint failed: commands.id");
+  }
+  return sqliteDatabase.batch(queries);
+ }});
+ try{
+  const result=await execute(actor("pic-a"),operation);
+  assert.equal(result.id,"pic-a");assert.equal(batches,4);
+  assert.deepEqual(await execute(actor("pic-a"),operation),result);
+  assert.equal(commandCount(operation.id),1);assert.equal((await loadState()).revision,before+1);
+ }finally{setTestDatabase(sqliteDatabase);}
+});
 test("U05/U06/U11/U13/U15 repository SQL atomik, idempotensi, sesi data dan dokumen",async()=>{
  await ensureSeed();let s=await loadState();actors=s.users;
  const product=s.products.find(p=>p.id==="kopi")||s.products[0],available=s.batches.filter(b=>b.productId===product.id).reduce((n,b)=>n+b.qty-b.held,0)-s.reservations.filter(r=>s.batches.find(b=>b.id===r.batchId)?.productId===product.id).reduce((n,r)=>n+r.qty,0);

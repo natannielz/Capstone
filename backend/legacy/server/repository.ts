@@ -50,7 +50,16 @@ export async function execute(actor:Actor,command:Command):Promise<CommandResult
     const queries=[db.prepare("INSERT INTO mutation_guards(id,valid) SELECT ?, CASE WHEN version=? THEN 1 ELSE 0 END FROM system_version WHERE id='global'").bind(command.id,old.revision)];
     for(const [key,table,keys] of TABLES){const previous=new Map(old[key].map(x=>[x.id,JSON.stringify(x)]));for(const item of s[key])if(previous.get(item.id)!==JSON.stringify(item))queries.push(writeRecord(db,table,keys,item));}
     queries.push(db.prepare("UPDATE system_version SET version=? WHERE id='global'").bind(s.revision),db.prepare("INSERT INTO commands(id,actor_id,fingerprint,result) VALUES(?,?,?,?)").bind(command.id,actor.id,fingerprint,JSON.stringify(result)),db.prepare("DELETE FROM mutation_guards WHERE id=?").bind(command.id));
-    try{await db.batch(queries);return result;}catch(err){const msg=String(err);if(/concurrent_write_guard|UNIQUE constraint failed: commands|mutation_guards/.test(msg)&&attempt<3)continue;throw err;}
+    try{await db.batch(queries);return result;}catch(err){
+      if(!/CHECK constraint failed: concurrent_write_guard|UNIQUE constraint failed: (?:commands|mutation_guards)(?:\.|$)/.test(String(err)))throw err;
+      if(attempt<3)continue;
+      const recorded=await db.prepare("SELECT actor_id,fingerprint,result FROM commands WHERE id=?").bind(command.id).first<{actor_id:string;fingerprint:string;result:string}>();
+      if(recorded){
+        if(recorded.actor_id!==actor.id||recorded.fingerprint!==fingerprint)throw new DomainError("Identitas tindakan sudah digunakan untuk permintaan berbeda.",409);
+        return JSON.parse(recorded.result);
+      }
+      throw new DomainError("Data sedang diperbarui petugas lain. Coba kembali.",409);
+    }
   }
   throw new DomainError("Data sedang diperbarui petugas lain. Coba kembali.",409);
 }
