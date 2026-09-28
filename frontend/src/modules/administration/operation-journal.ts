@@ -5,7 +5,7 @@ export type OperationReference = Readonly<{ actorId: string; operation: string; 
 type JournalStorage = Pick<Storage, "length" | "key" | "getItem" | "setItem" | "removeItem">;
 const prefix = "unit-toko:pending:v1:";
 const keyPattern = /^[A-Za-z0-9._:-]{1,128}$/;
-const operationPattern = /^(?:(access|organization)\.[a-z.]{1,100}|identity\.(?:invitation\.(?:propose|approve|rejected|withdrawn|revoked)|recovery\.request)|person\.review\.(?:propose|approve|reject|withdraw)|catalog\.(?:category\.save|family\.(?:create|edit)|sku\.(?:create|revise|replace|retire|publish)))$(?![\s\S])/;
+const operationPattern = /^(?:(access|organization)\.[a-z.]{1,100}|identity\.(?:invitation\.(?:propose|approve|rejected|withdrawn|revoked)|recovery\.request)|person\.review\.(?:propose|approve|reject|withdraw)|catalog\.(?:category\.save|family\.(?:create|edit)|sku\.(?:create|revise|replace|retire|publish))|inventory\.stock-count\.record)$(?![\s\S])/;
 const storageKey = (entry: OperationReference) => `${prefix}${entry.actorId}:${entry.operation}:${entry.key}`;
 
 /** Only recovery references are stored. Requests, reasons, grants and credentials never enter this journal. */
@@ -89,6 +89,7 @@ export async function submitTrackedRequest<T>(ledger: MutationLedger, journal: O
 export type CommittedRecoveryReceipt = Readonly<{ state: "committed"; result?: Readonly<{ id: string; version: string }> | null }>;
 export type PersonRecoveryReceipt = Readonly<{ state: "committed"; result: Readonly<{ id: string; version: string }>; recordedAt: string }> | Readonly<{ state: "closed"; result: null; recordedAt: string }>;
 export type CatalogRecoveryReceipt = Extract<PersonRecoveryReceipt, { state: "committed" }>;
+export type StockCountRecoveryReceipt = Readonly<{ state: "committed"; result: Readonly<{ id: string; version: "1" }>; recordedAt: string }>;
 export type RecoveryOutcome = CommittedRecoveryReceipt | Readonly<{ state: "closed" | "unconfirmed" }>;
 type LookupReceipt = Readonly<{ state: string; result?: Readonly<{ id: string; version: string }> | null }>;
 export type LegacyRecoveryAdapter = Readonly<{
@@ -99,14 +100,16 @@ export type LegacyRecoveryAdapter = Readonly<{
 /** Supply this only from the owning client screen. A missing receipt is never a failed or closed request. */
 export type OperationRecoveryAdapters = Readonly<{
   catalog?: Readonly<{ lookup: (entry: OperationReference) => Promise<CatalogRecoveryReceipt | null> }>;
+  "inventory.stock-count"?: Readonly<{ lookup: (entry: OperationReference) => Promise<StockCountRecoveryReceipt | null> }>;
   "person.review"?: Readonly<{
     lookup: (entry: OperationReference) => Promise<PersonRecoveryReceipt | null>;
     close?: Readonly<{ allowed: (operation: string) => boolean; resolve: (entry: OperationReference, reason: string) => Promise<PersonRecoveryReceipt | null> }>;
   }>;
 }>;
 
-function recoveryNamespace(operation: string): "access" | "organization" | "identity" | "person.review" | "catalog" | null {
+function recoveryNamespace(operation: string): "access" | "organization" | "identity" | "person.review" | "catalog" | "inventory.stock-count" | null {
   if (!operationPattern.test(operation)) return null;
+  if (operation === "inventory.stock-count.record") return "inventory.stock-count";
   if (operation.startsWith("catalog.")) return "catalog";
   if (operation.startsWith("person.review.")) return "person.review";
   if (operation.startsWith("organization.")) return "organization";
@@ -119,7 +122,7 @@ export function operationRecoveryCapabilities(operation: string, adapters: Opera
   Readonly<{ canCheck: boolean; canClose: boolean; unavailable: "adapter" | "operation" | null }> {
   const namespace = recoveryNamespace(operation);
   if (!namespace) return { canCheck: false, canClose: false, unavailable: "operation" };
-  if (namespace === "catalog") return typeof adapters.catalog?.lookup === "function"
+  if (namespace === "catalog" || namespace === "inventory.stock-count") return typeof adapters[namespace]?.lookup === "function"
     ? { canCheck: true, canClose: false, unavailable: null } : { canCheck: false, canClose: false, unavailable: "adapter" };
   if (namespace === "person.review") return typeof adapters[namespace]?.lookup === "function"
     ? { canCheck: true, canClose: typeof adapters[namespace]?.close?.resolve === "function" && adapters[namespace]?.close?.allowed(operation) === true, unavailable: null }
@@ -137,17 +140,19 @@ export async function reconcileOperationRecovery(entry: OperationReference, jour
   const requireCurrent = () => { if (!isCurrent()) throw new AccessFailure(409, "recovery_request_stale"); };
   requireCurrent();
   let receipt: LookupReceipt | null;
-  if (namespace === "catalog") {
+  if (namespace === "catalog" || namespace === "inventory.stock-count") {
     if (closeReason !== undefined) throw new AccessFailure(400, "recovery_close_unsupported");
-    if (typeof adapters.catalog?.lookup !== "function") throw new AccessFailure(503, "recovery_adapter_unavailable");
-    const catalogReceipt = await adapters.catalog.lookup(reference);
+    const adapter = adapters[namespace];
+    if (typeof adapter?.lookup !== "function") throw new AccessFailure(503, "recovery_adapter_unavailable");
+    const committedReceipt = await adapter.lookup(reference);
     requireCurrent();
-    if (catalogReceipt !== null && (!catalogReceipt || catalogReceipt.state !== "committed" ||
-      typeof catalogReceipt.recordedAt !== "string" || catalogReceipt.recordedAt.length > 40 || !/^\d{4}-\d\d-\d\dT/.test(catalogReceipt.recordedAt) || !Number.isFinite(Date.parse(catalogReceipt.recordedAt)) ||
-      !catalogReceipt.result || typeof catalogReceipt.result.id !== "string" || typeof catalogReceipt.result.version !== "string" ||
-      !validReference(catalogReceipt.result.id) || !validReference(catalogReceipt.result.version)))
+    if (committedReceipt !== null && (!committedReceipt || committedReceipt.state !== "committed" ||
+      typeof committedReceipt.recordedAt !== "string" || committedReceipt.recordedAt.length > 40 || !/^\d{4}-\d\d-\d\dT/.test(committedReceipt.recordedAt) || !Number.isFinite(Date.parse(committedReceipt.recordedAt)) ||
+      !committedReceipt.result || typeof committedReceipt.result.id !== "string" || typeof committedReceipt.result.version !== "string" ||
+      !validReference(committedReceipt.result.id) || !validReference(committedReceipt.result.version) ||
+      namespace === "inventory.stock-count" && committedReceipt.result.version !== "1"))
       throw new AccessFailure(502, "recovery_receipt_invalid");
-    receipt = catalogReceipt;
+    receipt = committedReceipt;
   } else if (namespace === "person.review") {
     const adapter = adapters[namespace];
     if (closeReason !== undefined && typeof adapter?.close?.resolve !== "function") throw new AccessFailure(400, "recovery_close_unsupported");

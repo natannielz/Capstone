@@ -186,6 +186,10 @@ public sealed class EvidenceAdmissionGraphTests(MongoFixture fixture)
         await Assert.ThrowsAsync<InvalidOperationException>(() => new CollectionMigrations(data.DB, data.Catalog.Clock).ApplyAsync());
         Assert.Equal(before, await EvidenceAdmissionMigrationTests.OptionsAsync(data.DB, "evidenceUploadAttempts"));
     }
-    private static Task Reset(EvidenceAdmissionTestData data) =>
-        data.Rows("schemaMigrations").DeleteOneAsync(new BsonDocument("_id", 13));
+    private static async Task Reset(EvidenceAdmissionTestData data)
+    {
+        // Remove only the later migration's shared index when deliberately replaying frozen v13.
+        await data.Rows("auditEvents").Indexes.DropOneAsync("ux_stock_count_audit_observation");
+        await data.Rows("schemaMigrations").DeleteManyAsync(new BsonDocument("_id", new BsonDocument("$gte", 13)));
+    }
 }

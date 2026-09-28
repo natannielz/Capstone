@@ -17,7 +17,10 @@ public sealed class EvidenceAdmissionMigrationTests(MongoFixture fixture)
         try
         {
             await new CollectionMigrations(db, new SystemClock()).ApplyAsync();
-            Assert.Equal(13, CollectionMigrations.CurrentVersion);
+            var appliedV13 = await db.GetCollection<BsonDocument>("schemaMigrations")
+                .Find(new BsonDocument("_id", 13)).SingleAsync();
+            Assert.Equal("applied", appliedV13["state"].AsString);
+            Assert.True(appliedV13["appliedAt"].IsBsonDateTime);
             foreach (var name in EvidenceSchemas.Collections.Take(5))
             {
                 var info = await (await db.ListCollectionsAsync(new ListCollectionsOptions { Filter = new BsonDocument("name", name) })).SingleAsync();

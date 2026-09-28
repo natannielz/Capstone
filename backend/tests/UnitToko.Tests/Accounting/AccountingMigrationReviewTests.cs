@@ -94,7 +94,12 @@ public sealed class AccountingMigrationReviewTests(MongoFixture fixture)
         Assert.True(index.Contains("partialFilterExpression"));
     }
 
-    internal static Task ResetMigrationAsync(IMongoDatabase db) => db.GetCollection<BsonDocument>("schemaMigrations").DeleteManyAsync(new BsonDocument("_id", new BsonDocument("$gte", 12)));
+    internal static async Task ResetMigrationAsync(IMongoDatabase db)
+    {
+        // The test replays v12 and v13, which cannot recognize a later v14-only shared index.
+        await db.GetCollection<BsonDocument>("auditEvents").Indexes.DropOneAsync("ux_stock_count_audit_observation");
+        await db.GetCollection<BsonDocument>("schemaMigrations").DeleteManyAsync(new BsonDocument("_id", new BsonDocument("$gte", 12)));
+    }
     private static async Task<string> TargetSnapshotAsync(IMongoDatabase db)
     {
         var definitions = await (await db.ListCollectionsAsync()).ToListAsync();
