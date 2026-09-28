@@ -13,7 +13,8 @@ public static partial class AccessEndpoints
     private static readonly string[] AdministrativeActions =
     [Permissions.AccessPropose, Permissions.AccessApprove, Permissions.AccessRevoke,
         Permissions.MembershipPropose, Permissions.MembershipApprove, Permissions.AccessAuditRead,
-        Permissions.TechnicalConfigure, Permissions.OrganizationApprove];
+        Permissions.TechnicalConfigure, Permissions.OrganizationApprove,
+        Permissions.PersonReviewPropose, Permissions.PersonReviewApprove, Permissions.PersonReviewRead];
 
     public static void MapAccessEndpoints(this WebApplication app)
     {

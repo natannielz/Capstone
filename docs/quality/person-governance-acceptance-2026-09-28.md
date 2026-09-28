@@ -34,7 +34,7 @@ The prior full 715-case backend result remains baseline evidence. It is not a ne
 
 ## Open work
 
-PG05 still needs policy-scoped discovery, names/consequence previews, API registration, DTOs, UI and explicit operation-recovery routing. The plan records exact integration files and tests. Current detail/receipt methods are private service capabilities, not delivered review screens.
+Subsequent PG05 work now locally delivers policy-scoped discovery, named consequence previews, private API/DTOs, review UI and operation-specific receipt recovery. [The workflow checkpoint](person-review-workflow-acceptance-2026-09-28.md) records 298 backend tests, frontend/browser verification and its remaining limits. Explicit permanent no-effect resolution after reload is the separate open PG05R task; live reviewer/source authority remains unconfigured. The service-only evidence above remains historical evidence for its original checkpoint.
 
 PG06–PG07 still cover authority-establishing source/binding/renewal/merge operations, reviewed bootstrap, invitation admission, specialized administration, finance conflicts and template migration. Staff-source validity, named reviewer appointments and bootstrap authorization remain D01; catalog/business policy remains D02. Direct uncoordinated database mutations are not a supported writer protocol.
 

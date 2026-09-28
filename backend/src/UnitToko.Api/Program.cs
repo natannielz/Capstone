@@ -255,6 +255,7 @@ app.MapIdentitySecurityEndpoints();
 app.MapProviderSecurityEventEndpoints();
 app.MapIdentityEndpoints();
 app.MapIdentityAdministrationEndpoints();
+app.MapPersonReviewEndpoints();
 app.MapAccessEndpoints();
 app.MapOrganizationEndpoints();
 app.MapGet("/health/live", () => TypedResults.Ok(new HealthStatus("live"))).AllowAnonymous().WithName("Liveness");

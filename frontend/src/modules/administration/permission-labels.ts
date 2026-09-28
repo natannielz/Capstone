@@ -1,4 +1,5 @@
 const labels: Record<string, string> = {
+  "person.review.read": "Lihat peninjauan keterkaitan akun", "person.review.propose": "Ajukan penangguhan keterkaitan akun", "person.review.approve": "Putuskan penangguhan keterkaitan akun",
   "catalog.read": "Lihat katalog", "catalog.manage": "Kelola katalog", "pricing.manage": "Kelola harga",
   "order.read": "Lihat pesanan", "order.submit": "Ajukan pesanan", "order.approve": "Setujui pesanan", "order.substitute": "Tanggapi penggantian barang", "order.cancel": "Batalkan pesanan",
   "order.spend.approve": "Setujui belanja pembeli", "order.accept": "Terima pesanan di toko",

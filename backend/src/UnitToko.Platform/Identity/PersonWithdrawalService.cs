@@ -21,15 +21,17 @@ public sealed partial class PersonWithdrawalService
     private readonly AuthorizationStore authorization;
     private readonly PersonAccountInvalidation invalidation;
     private readonly IPersonWithdrawalTrust trust;
+    private readonly IPersonReviewSelectionTrust selectionTrust;
     private static readonly FilterDefinitionBuilder<BsonDocument> F = Builders<BsonDocument>.Filter;
     private static readonly UpdateDefinitionBuilder<BsonDocument> U = Builders<BsonDocument>.Update;
     private static readonly ResourceScope Administrative = new(IsAdministrative: true);
     public PersonWithdrawalService(IMongoDatabase database, MongoUnitOfWork unit, IdAllocator ids,
         IClock clock, MongoIdentitySessionStore sessions) : this(database, unit, ids, clock, sessions, new UnavailablePersonWithdrawalTrust()) { }
     internal PersonWithdrawalService(IMongoDatabase database, MongoUnitOfWork unit, IdAllocator ids,
-        IClock clock, MongoIdentitySessionStore sessions, IPersonWithdrawalTrust trust)
+        IClock clock, MongoIdentitySessionStore sessions, IPersonWithdrawalTrust trust, IPersonReviewSelectionTrust? selectionTrust = null)
     {
         this.database = database; this.unit = unit; this.ids = ids; this.clock = clock; this.trust = trust;
+        this.selectionTrust = selectionTrust ?? new UnavailablePersonReviewSelectionTrust();
         authorization = new(database, unit, clock); invalidation = new(database, sessions);
     }
     private IMongoCollection<BsonDocument> Collection(string name) => database.GetCollection<BsonDocument>(name);

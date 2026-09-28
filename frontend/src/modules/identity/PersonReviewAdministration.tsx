@@ -1,0 +1,181 @@
+"use client";
+
+import Link from "next/link";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { components } from "../../api/generated/schema";
+import { createAccessGateway } from "../administration/access-client";
+import { AdministrationNavigation } from "../administration/AdministrationNavigation";
+import { OperationRecovery, useOperationRecovery } from "../administration/OperationRecovery";
+import { submitTrackedRequest } from "../administration/operation-journal";
+import { AccessFailure, MutationLedger } from "../administration/workflow";
+import { createIdentityGateway } from "./identity-client";
+import { IdentityFailure, sessionTiming, stepUpFields, type IdentitySession } from "./identity-workflow";
+import { ProtectedNavigationForm } from "./ProtectedNavigationForm";
+import { createPersonReviewGateway } from "./person-review-client";
+import { PersonReviewQueue, PersonReviewTargetSearch, PersonReviewEditor, type PersonReviewSelection } from "./PersonReviewPanels";
+import { LatestPersonReviewRead, personReviewMessage, personReviewNeedsRefresh, personReviewOperations, personReviewPath, personReviewPermission,
+  type PersonReviewCommand, type PersonReviewSummary } from "./person-review-workflow";
+import styles from "../administration/access.module.css";
+
+type Loaded = { current: components["schemas"]["CurrentAccessDto"]; session: IdentitySession; observedAt: number };
+const unavailable = (failure: unknown) => failure instanceof AccessFailure && ["person_governance_unavailable", "person_selection_unavailable"].includes(failure.code);
+const profileUnavailable = (failure: unknown) => failure instanceof AccessFailure && failure.code === "person_profile_unavailable";
+const loginHref = "/identity/login?returnPath=" + encodeURIComponent(personReviewPath);
+
+export function PersonReviewAdministration() {
+  const [access] = useState(() => createAccessGateway());
+  const [identity] = useState(() => createIdentityGateway());
+  const [reads] = useState(() => new LatestPersonReviewRead());
+  const [loaded, setLoaded] = useState<Loaded | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<unknown>(null);
+  const [revision, setRevision] = useState(0);
+  const refresh = useCallback(async () => {
+    const request = reads.begin();
+    setLoaded(null); setLoading(true); setError(null);
+    try {
+      const session = await identity.session(request.signal), observedAt = performance.now();
+      if (!request.current()) return;
+      if (!session.authenticated || !session.account) throw new IdentityFailure(401, "unauthenticated");
+      const current = await access.current();
+      if (!request.current()) return;
+      if (current.userId !== session.account.userId) throw new AccessFailure(409, "actor_changed");
+      if (!current.allowedActions.includes("person.review.read")) throw new AccessFailure(403, "permission_denied");
+      setLoaded({ current, session, observedAt }); setRevision(value => value + 1);
+    } catch (failure) { if (request.current()) setError(failure); }
+    finally { if (request.current()) setLoading(false); }
+  }, [access, identity, reads]);
+  useEffect(() => {
+    let active = true;
+    void Promise.resolve().then(() => { if (active) void refresh(); });
+    const restore = (event: PageTransitionEvent) => { if (event.persisted) window.location.reload(); };
+    window.addEventListener("pageshow", restore);
+    return () => { active = false; reads.cancel(); window.removeEventListener("pageshow", restore); };
+  }, [refresh, reads]);
+  const onFailure = useCallback((failure: unknown) => {
+    if ((failure instanceof AccessFailure || failure instanceof IdentityFailure) &&
+      (failure.status === 401 || failure.code === "actor_changed" || failure.status === 403 && failure.code !== "step_up_required" || unavailable(failure) || profileUnavailable(failure))) {
+      reads.cancel(); setLoaded(null); setLoading(false); setError(failure);
+    }
+  }, [reads]);
+  const requiresLogin = (error instanceof AccessFailure || error instanceof IdentityFailure) && (error.status === 401 || error.code === "actor_changed");
+  return <main className={styles.page}>
+    <header className={styles.header}><div><Link className={styles.brand} href="/identity/account">Unit Toko</Link><h1>Peninjauan keterkaitan akun</h1>
+      <p>Periksa pengajuan penangguhan, akun yang terdampak, dan keputusan petugas yang berwenang.</p></div></header>
+    {loaded ? <PersonReviewBody key={`${loaded.current.userId}:${revision}`} {...loaded} onFailure={onFailure} onRefresh={refresh} />
+      : <section className={styles.state} aria-busy={loading}><h2>{loading ? "Memeriksa sesi dan penugasan" : profileUnavailable(error) ? "Data akun belum dapat ditinjau" : unavailable(error) ? "Peninjauan belum diaktifkan" : requiresLogin ? "Sesi terverifikasi diperlukan" : personReviewNeedsRefresh(error) ? "Data peninjauan perlu dimuat ulang" : error instanceof AccessFailure && error.status === 403 ? "Akses peninjauan belum disetujui" : "Peninjauan belum dapat dimuat"}</h2>
+        {error !== null && <p role="alert" className={styles.alert}>{personReviewMessage(error)}</p>}
+        {requiresLogin && <Link className={styles.primary} href={loginHref}>Masuk kembali</Link>}
+        <div className={styles.actions}><button type="button" className={styles.secondary} disabled={loading} onClick={() => void refresh()}>Periksa kembali</button><Link href="/identity/account">Kembali ke akun saya</Link></div></section>}
+  </main>;
+}
+
+function PersonReviewBody({ current, session, observedAt, onFailure, onRefresh }: Loaded & { onFailure: (failure: unknown) => void; onRefresh: () => Promise<void> }) {
+  const [gateway] = useState(() => createPersonReviewGateway());
+  const [ledger] = useState(() => new MutationLedger());
+  const [detailReads] = useState(() => new LatestPersonReviewRead());
+  const recovery = useOperationRecovery(current.userId);
+  const [selection, setSelection] = useState<PersonReviewSelection | null>(null);
+  const [mode, setMode] = useState<"queue" | "propose">("queue");
+  const [revision, setRevision] = useState(0);
+  const [busy, setBusy] = useState(false);
+  const [detailBusy, setDetailBusy] = useState(false);
+  const [privateHidden, setPrivateHidden] = useState(false);
+  const [retry, setRetry] = useState<PersonReviewCommand | null>(null);
+  const [error, setError] = useState<unknown>(null);
+  const [message, setMessage] = useState("");
+  const [elapsed, setElapsed] = useState(0);
+  const [factorOperation, setFactorOperation] = useState(session.stepUpOperations.includes("person.review.propose") ? "person.review.propose" : "person.review.approve");
+  const mounted = useRef(true), pending = useRef(false);
+  const operationReference = useRef<{ operation: string; key: string } | null>(null);
+  const locked = busy || retry !== null || recovery.locked;
+  const timing = sessionTiming(session, elapsed);
+  const now = () => Date.parse(session.serverTime) + Math.max(0, performance.now() - observedAt);
+  useEffect(() => {
+    mounted.current = true;
+    const timer = window.setInterval(() => setElapsed(performance.now() - observedAt), 1000);
+    return () => { mounted.current = false; detailReads.cancel(); window.clearInterval(timer); };
+  }, [observedAt, detailReads]);
+  useEffect(() => {
+    if (!locked) return;
+    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
+    window.addEventListener("beforeunload", warn); return () => window.removeEventListener("beforeunload", warn);
+  }, [locked]);
+  const resetSelection = useCallback(() => { detailReads.cancel(); setSelection(null); setDetailBusy(false); }, [detailReads]);
+  const failedRead = useCallback((failure: unknown) => {
+    setError(failure);
+    if (personReviewNeedsRefresh(failure)) { detailReads.cancel(); setSelection(null); setDetailBusy(false); setPrivateHidden(true); }
+    onFailure(failure);
+  }, [onFailure, detailReads]);
+  async function choose(summary: PersonReviewSummary) {
+    if (locked) return;
+    const request = detailReads.begin(); setSelection(null); setDetailBusy(true); setError(null);
+    try { const detail = await gateway.detail(current.userId, summary.result.proposalId, request.signal); if (request.current()) setSelection({ kind: "proposal", detail }); }
+    catch (failure) { if (request.current()) failedRead(failure); }
+    finally { if (request.current()) setDetailBusy(false); }
+  }
+  async function run(command: PersonReviewCommand) {
+    if (pending.current) return;
+    if (command.actorId !== current.userId) throw new AccessFailure(409, "actor_changed");
+    pending.current = true; setBusy(true); setError(null); setMessage("");
+    const operation = personReviewOperations[command.action];
+    try {
+      await submitTrackedRequest(ledger, recovery.journal, current.userId, "person-review", operation, command, key => {
+        operationReference.current = { operation, key }; return gateway.submit(command, key);
+      });
+      if (mounted.current) {
+        operationReference.current = null; setRetry(null); resetSelection(); setMode("queue"); setRevision(value => value + 1);
+        setMessage(command.action === "propose" ? "Pengajuan tersimpan dan menunggu keputusan petugas lain." : command.action === "approve" ? "Penangguhan disetujui. Sesi akun yang terdampak telah dicabut." : "Keputusan tersimpan. Periksa status terbaru di daftar pengajuan.");
+      }
+    } catch (failure) {
+      if (mounted.current) {
+        setError(failure);
+        const uncertain = ledger.isUncertain("person-review");
+        if (uncertain) { setRetry(command); if (personReviewNeedsRefresh(failure)) { resetSelection(); setPrivateHidden(true); } }
+        else { setRetry(null); if (personReviewNeedsRefresh(failure)) { resetSelection(); setPrivateHidden(true); } }
+        if (!uncertain || !personReviewNeedsRefresh(failure)) onFailure(failure);
+      }
+      throw failure;
+    } finally { pending.current = false; if (mounted.current) { setBusy(false); recovery.refresh(); } }
+  }
+  function resolved() {
+    const active = operationReference.current;
+    const retained = active && recovery.journal.list(current.userId).some(item => item.operation === active.operation && item.key === active.key);
+    if (!retained) { ledger.resetAfterReconciliation(); operationReference.current = null; setRetry(null); resetSelection(); setPrivateHidden(false); setError(null); setRevision(value => value + 1); }
+    recovery.refresh();
+  }
+  const factors = session.stepUpOperations.filter(item => ["person.review.propose", "person.review.approve"].includes(item) && current.allowedActions.includes(item));
+  let fields: Record<string, string> | null = null;
+  try { if (factors.includes(factorOperation)) fields = stepUpFields(session, factorOperation, personReviewPath); } catch { /* A stale session cannot prepare navigation. */ }
+  const retryFactorHref = "/identity/account?operation=" + encodeURIComponent(retry ? personReviewPermission(retry.action) : factorOperation) + "&returnPath=" + encodeURIComponent(personReviewPath);
+  if (timing.expired) return <section className={styles.state}><h2>Sesi perlu diperiksa kembali</h2><p>Data pribadi disembunyikan setelah batas sesi tercapai. Referensi permintaan yang belum terkonfirmasi tetap disimpan untuk akun Anda.</p>
+    <button type="button" className={styles.primary} disabled={busy} onClick={() => void onRefresh()}>Periksa sesi terbaru</button><Link href={loginHref}>Masuk kembali</Link></section>;
+  return <>
+    <AdministrationNavigation current="person-reviews" actions={current.allowedActions} locked={locked} />
+    <section className={styles.accountSection} aria-labelledby="person-session-title"><h2 id="person-session-title">Sesi peninjauan</h2><p className={styles.preserve}>Anda masuk sebagai <strong>{session.account?.displayName ?? session.account?.verifiedEmail}</strong>.</p>
+      <p className={styles.help}>{timing.fresh ? "Verifikasi dua langkah masih baru. Setiap tindakan tetap diperiksa terhadap izin dan penugasan terbaru." : "Verifikasi dua langkah terbaru diperlukan sebelum mengirim keputusan."}</p>
+      <div className={styles.actions}><button type="button" className={styles.secondary} disabled={locked} onClick={() => void onRefresh()}>Muat ulang sesi dan akses</button>
+        <button type="button" className={mode === "queue" ? styles.primary : styles.secondary} disabled={locked} onClick={() => { resetSelection(); setMode("queue"); }}>Daftar pengajuan</button>
+        {current.allowedActions.includes("person.review.propose") && <button type="button" className={mode === "propose" ? styles.primary : styles.secondary} disabled={locked} onClick={() => { resetSelection(); setMode("propose"); }}>Ajukan penangguhan baru</button>}</div>
+      {factors.length > 0 && !retry && <div className={styles.review}><label>Tindakan untuk verifikasi<select value={factorOperation} disabled={locked} onChange={event => setFactorOperation(event.target.value)}>
+        {factors.map(operation => <option key={operation} value={operation}>{operation === "person.review.propose" ? "Pengajuan atau penarikan" : "Persetujuan atau penolakan"}</option>)}</select></label>
+        <ProtectedNavigationForm action="/auth/step-up" fields={fields ?? {}} disabled={locked || !fields} label="Verifikasi dua langkah" secondary />
+        <p className={styles.help}>Verifikasi membuka layanan akun. Setelah kembali, pilih dan periksa pengajuan kembali. Verifikasi tidak mengaktifkan peninjauan yang belum disetujui.</p></div>}
+    </section>
+    {message && <p role="status" className={styles.success}>{message}</p>}
+    {error !== null && <div role="alert" className={styles.alert}><p>{personReviewMessage(error)}</p>{retry && <><p>Hasil belum pasti. Isian dan referensi pengajuan yang sama tetap tersimpan hanya di tab ini.</p>
+      <button type="button" className={styles.secondary} disabled={busy} onClick={() => void run(retry).catch(() => undefined)}>Periksa ulang permintaan yang sama</button>
+      <p><Link href={retryFactorHref} target="_blank" rel="noopener noreferrer">Periksa sesi atau verifikasi dua langkah di tab baru</Link>. Setelah selesai, kembali ke tab ini untuk memeriksa hasil. Jangan membuat pengajuan pengganti.</p></>}</div>}
+    {recovery.error !== null && <p role="alert" className={styles.alert}>{personReviewMessage(recovery.error)}</p>}
+    <OperationRecovery key={current.userId} entries={recovery.entries} journal={recovery.journal} disabled={busy} onResolved={resolved} onFailure={failedRead}
+      recoveryAdapters={{ "person.review": { lookup: entry => gateway.receipt(entry, retry && operationReference.current?.operation === entry.operation && operationReference.current.key === entry.key ? retry : undefined) } }} />
+    {privateHidden ? <section className={styles.state}><h2>Data peninjauan perlu diperiksa kembali</h2><p>Data sebelumnya disembunyikan setelah perubahan izin atau pratinjau. {retry || recovery.entries.length > 0 ? "Selesaikan pemulihan permintaan yang belum pasti, lalu muat ulang sesi dan akses." : "Muat ulang sesi dan akses untuk memeriksa data terbaru."}</p></section> : <div className={styles.desk}>
+      {mode === "queue" ? <PersonReviewQueue gateway={gateway} actorId={current.userId} revision={revision} locked={locked} onReset={resetSelection} onFailure={failedRead} onSelect={summary => void choose(summary)} />
+        : <PersonReviewTargetSearch gateway={gateway} actorId={current.userId} revision={revision} locked={locked} onReset={resetSelection} onFailure={failedRead} onSelect={target => { resetSelection(); setSelection({ kind: "target", target }); }} />}
+      {selection ? <PersonReviewEditor key={selection.kind === "target" ? `target:${selection.target.groupId}:${selection.target.version}` : `proposal:${selection.detail.summary.result.proposalId}:${selection.detail.summary.result.version}`}
+        selection={selection} actorId={current.userId} permissions={current.allowedActions} gateway={gateway} locked={locked} fresh={timing.fresh} now={now} onFailure={failedRead} onSubmit={run} onCancel={resetSelection} />
+        : <section className={styles.detail} aria-busy={detailBusy}><div className={styles.form}><h2>{detailBusy ? "Memuat rincian pengajuan" : "Pilih untuk memeriksa"}</h2>
+          <p role={detailBusy ? "status" : undefined}>{detailBusy ? "Memeriksa data dalam lingkup penugasan Anda…" : mode === "queue" ? "Buka pengajuan dari daftar untuk melihat alasan, akun terdampak, dan keputusan yang tersedia." : "Cari dan pilih keterkaitan akun, lalu periksa dampaknya sebelum mengajukan."}</p></div></section>}
+    </div>}
+  </>;
+}

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { createAccessGateway } from "./access-client";
-import { OperationJournal, type OperationReference } from "./operation-journal";
+import { OperationJournal, operationRecoveryCapabilities, reconcileOperationRecovery, type OperationReference, type OperationRecoveryAdapters } from "./operation-journal";
 import { AccessFailure, accessMessage } from "./workflow";
 import styles from "./access.module.css";
 
@@ -26,8 +26,9 @@ export function useOperationRecovery(actorId?: string) {
     locked: !ready || snapshot.entries.length > 0 || snapshot.error !== null };
 }
 
-export function OperationRecovery({ entries, journal, disabled, onResolved, onFailure }: {
+export function OperationRecovery({ entries, journal, disabled, onResolved, onFailure, recoveryAdapters }: {
   entries: readonly OperationReference[]; journal: OperationJournal; disabled: boolean; onResolved: () => void; onFailure?: (failure: unknown) => void;
+  recoveryAdapters?: OperationRecoveryAdapters;
 }) {
   const [gateway] = useState(() => createAccessGateway());
   const [busy, setBusy] = useState(false);
@@ -39,17 +40,20 @@ export function OperationRecovery({ entries, journal, disabled, onResolved, onFa
   async function check(entry: OperationReference, close = false) {
     setBusy(true); setError(null); setMessage("");
     try {
-      const receipt = close ? await gateway.resolve(entry.operation, entry.key, reason.trim(), entry.actorId) : await gateway.receipt(entry.operation, entry.key, entry.actorId);
+      const receipt = await reconcileOperationRecovery(entry, journal, {
+        lookup: reference => gateway.receipt(reference.operation, reference.key, reference.actorId),
+        close: (reference, closeReason) => gateway.resolve(reference.operation, reference.key, closeReason, reference.actorId),
+      }, recoveryAdapters, close ? reason : undefined);
       if (receipt.state === "committed" || receipt.state === "closed") {
         setClosing(null); setReason("");
         setMessage(receipt.state === "committed"
           ? `Permintaan telah tersimpan${receipt.result ? `; referensi hasil ${receipt.result.id}, versi ${receipt.result.version}` : ""}. Periksa data terbaru sebelum mengajukan perubahan lain.`
           : "Permintaan telah ditutup tanpa menerapkan perubahan. Anda dapat memeriksa data terbaru dan membuat pengajuan baru.");
-        try { journal.confirmed(entry); }
-        catch { setError(new AccessFailure(400, "recovery_cleanup_failed")); return; }
         onResolved();
       } else {
-        setMessage("Hasil belum terkonfirmasi. Ini belum berarti permintaan gagal. Periksa kembali, atau selesaikan dan tutup permintaan ini sebelum membuat perubahan baru.");
+        setMessage(operationRecoveryCapabilities(entry.operation, recoveryAdapters).canClose
+          ? "Hasil belum terkonfirmasi. Ini belum berarti permintaan gagal. Periksa kembali, atau selesaikan dan tutup permintaan ini sebelum membuat perubahan baru."
+          : "Hasil belum terkonfirmasi. Ini belum berarti permintaan gagal. Periksa kembali dari halaman peninjauan orang. Referensi tetap disimpan dan perubahan baru masih ditahan.");
       }
     } catch (failure) { setError(failure); onFailure?.(failure); }
     finally { setBusy(false); }
@@ -59,15 +63,19 @@ export function OperationRecovery({ entries, journal, disabled, onResolved, onFa
   return <section className={styles.accountSection} aria-labelledby="recovery-heading">
     <h2 id="recovery-heading">Pemulihan permintaan</h2>
     {message && <p role="status" className={styles.help}>{message}</p>}
-    {error !== null && <p role="alert" className={styles.alert}>{accessMessage(error)}</p>}
+    {error !== null && <p role="alert" className={styles.alert}>{recoveryMessage(error)}</p>}
     {entries.length > 0 && <><p>Perangkat ini menyimpan {entries.length} referensi permintaan akun Anda yang perlu diperiksa. Perubahan baru ditahan sampai hasilnya jelas.</p>
-      <ul className={styles.recoveryList}>{entries.map(entry => <li key={`${entry.operation}:${entry.key}`}>
+      <ul className={styles.recoveryList}>{entries.map(entry => {
+        const capabilities = operationRecoveryCapabilities(entry.operation, recoveryAdapters);
+        return <li key={`${entry.operation}:${entry.key}`}>
         <div><strong>{operationLabel(entry.operation)}</strong><p>{new Date(entry.createdAt).toLocaleString("id-ID")}</p>
           <details><summary>Referensi bantuan</summary><code>{entry.key}</code></details></div>
-        <div className={styles.actions}><button className={styles.secondary} disabled={disabled || busy} onClick={() => void check(entry)}>Periksa hasil</button>
-          <button className={styles.secondary} disabled={disabled || busy} onClick={() => { setClosing(entry); setReason(""); setError(null); }}>Selesaikan dan tutup</button></div>
-      </li>)}</ul></>}
-    {closing && <form className={styles.review} onSubmit={event => { event.preventDefault(); if (reason.trim()) void check(closing, true); }}>
+        <div className={styles.actions}><button className={styles.secondary} disabled={disabled || busy || !capabilities.canCheck} onClick={() => void check(entry)}>Periksa hasil</button>
+          {capabilities.canClose && <button className={styles.secondary} disabled={disabled || busy} onClick={() => { setClosing(entry); setReason(""); setError(null); }}>Selesaikan dan tutup</button>}</div>
+        {capabilities.unavailable === "adapter" && <p className={styles.help}>Pemeriksaan hasil tersedia di <a href="/administration/person-reviews">halaman peninjauan orang</a>. Jika layanan belum tersedia, referensi tetap disimpan dan perubahan baru masih ditahan.</p>}
+        {capabilities.unavailable === "operation" && <p className={styles.help}>Jenis permintaan ini belum didukung untuk pemulihan. Simpan referensi bantuan dan hubungi administrator; perubahan baru masih ditahan.</p>}
+      </li>; })}</ul></>}
+    {closing && operationRecoveryCapabilities(closing.operation, recoveryAdapters).canClose && <form className={styles.review} onSubmit={event => { event.preventDefault(); if (reason.trim()) void check(closing, true); }}>
       <h3>Tutup permintaan yang belum selesai</h3>
       <p>Jika perubahan sudah tersimpan, hasilnya akan ditampilkan. Jika belum tersimpan, server menutup referensi ini agar permintaan lama tidak dapat menerapkan perubahan belakangan. Tindakan ini tidak membatalkan perubahan yang sudah tersimpan.</p>
       <label><span id="recovery-reason-label">Alasan penyelesaian</span><textarea aria-labelledby="recovery-reason-label" required rows={3} maxLength={1000} disabled={disabled || busy} value={reason} onChange={event => setReason(event.target.value)} /></label>
@@ -78,9 +86,21 @@ export function OperationRecovery({ entries, journal, disabled, onResolved, onFa
 }
 
 function operationLabel(operation: string) {
+  if (operation.startsWith("person.review.")) return "Peninjauan keterkaitan akun";
   if (operation.startsWith("organization.")) return "Perubahan struktur organisasi";
   if (operation.includes("membership")) return "Perubahan keanggotaan";
   if (operation.includes("scope")) return "Perubahan status unit";
   if (operation.includes("identity")) return "Perubahan status akun";
   return "Perubahan akses";
+}
+
+
+function recoveryMessage(error: unknown): string {
+  if (error instanceof AccessFailure) {
+    if (error.code === "recovery_adapter_unavailable") return "Pemeriksaan hasil belum tersedia di halaman ini. Buka halaman peninjauan orang; referensi tetap disimpan dan perubahan baru masih ditahan.";
+    if (error.code === "recovery_operation_unsupported") return "Jenis permintaan ini belum didukung untuk pemulihan. Simpan referensi bantuan dan hubungi administrator; perubahan baru masih ditahan.";
+    if (error.code === "recovery_close_unsupported") return "Permintaan peninjauan orang belum dapat ditutup melalui pemulihan. Periksa hasilnya kembali; referensi tetap disimpan.";
+    if (error.code === "recovery_reference_invalid" || error.code === "recovery_receipt_invalid") return "Hasil belum dapat dipastikan karena referensi atau respons tidak sesuai. Simpan referensi bantuan dan hubungi administrator; perubahan baru masih ditahan.";
+  }
+  return accessMessage(error);
 }

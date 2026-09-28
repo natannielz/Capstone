@@ -58,6 +58,7 @@ public static class IdentityRuntime
         services.AddSingleton<OidcTransactionStore>();
         services.AddSingleton<IdentityOnboardingService>();
         services.AddSingleton<AccountRecoveryService>();
+        services.AddSingleton<PersonWithdrawalService>();
         services.AddSingleton<ProviderSecurityEventVerifier>();
         services.AddSingleton<ProviderSecurityEventService>();
         services.AddScoped<IOidcSignInCompletion, VerifiedOidcSignInCompletion>();

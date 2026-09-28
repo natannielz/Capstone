@@ -9,7 +9,7 @@ export class IdentityFailure extends Error {
   }
 }
 
-const returnPaths = ["/identity/account", "/administration/access", "/administration/organizations", "/administration/history"];
+const returnPaths = ["/identity/account", "/administration/access", "/administration/organizations", "/administration/history", "/administration/person-reviews"];
 export const identityReturnPath = (value?: string | null) => value && returnPaths.includes(value) ? value : "/identity/account";
 const validId = (value: string) => /^[1-9][0-9]{0,18}$/.test(value) && (value.length < 19 || value <= "9223372036854775807");
 const validTime = (value: unknown): value is string => typeof value === "string" && value.length <= 40 && /^\d{4}-\d\d-\d\dT/.test(value) && Number.isFinite(Date.parse(value));
@@ -64,8 +64,11 @@ export function sessionTiming(session: IdentitySession, elapsedMs: number) {
 
 export function canManageAccounts(actions: readonly string[]) { return actions.some(action => ["invite.manage", "recovery.initiate", "membership.approve", "access.approve", "access.audit.read"].includes(action)); }
 
+export function canReviewPeople(actions: readonly string[]) { return actions.some(action => ["person.review.read", "person.review.propose", "person.review.approve"].includes(action)); }
+
 export function identityDestinations(actions: readonly string[]) {
   return [
+    { href: "/administration/person-reviews", label: "Keterkaitan akun", description: "Tinjau pengajuan penangguhan keterkaitan akun sesuai penugasan.", visible: canReviewPeople(actions) },
     { href: "/administration/accounts", label: "Akun dan undangan", description: "Tinjau undangan dan akun sesuai lingkup tugas.", visible: canManageAccounts(actions) },
     { href: "/administration/access", label: "Akses dan keanggotaan", description: "Ajukan atau tinjau izin sesuai cakupan tugas.", visible: actions.some(action => action.startsWith("access.") || action.startsWith("membership.")) },
     { href: "/administration/organizations", label: "Organisasi dan unit", description: "Kelola struktur organisasi melalui persetujuan.", visible: actions.some(action => ["technical.configure", "organization.approve", "access.audit.read"].includes(action)) },

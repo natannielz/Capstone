@@ -11,15 +11,27 @@ namespace UnitToko.Platform.Identity;
 
 public sealed partial class PersonWithdrawalService
 {
-    public async Task<PersonWithdrawalResult> ProposeAsync(ActorContext actor, long groupId, long expectedGroupVersion,
-        AuthorizationCommandMetadata metadata, CancellationToken cancellationToken = default)
+    public Task<PersonWithdrawalResult> ProposeAsync(ActorContext actor, long groupId, long expectedGroupVersion,
+        AuthorizationCommandMetadata metadata, CancellationToken cancellationToken = default) =>
+        ProposeCoreAsync(actor, groupId, expectedGroupVersion, metadata, cancellationToken);
+
+    private async Task<PersonWithdrawalResult> ProposeCoreAsync(ActorContext actor, long groupId, long expectedGroupVersion,
+        AuthorizationCommandMetadata metadata, CancellationToken cancellationToken, string? previewReference = null)
     {
-        Version(groupId, expectedGroupVersion); AuthorizationStore.ValidateMetadata(metadata);
+        if (previewReference is null) Version(groupId, expectedGroupVersion);
+        AuthorizationStore.ValidateMetadata(metadata);
         var proposalId = (await ids.NextAsync("personReviewProposals", cancellationToken)).Value;
         var historyId = (await ids.NextAsync("personReviewHistory", cancellationToken)).Value;
-        return await ExecuteAsync(actor, "propose", metadata, new { groupId, expectedGroupVersion },
+        return await ExecuteAsync(actor, "propose", metadata, previewReference is null ? (object)new { groupId, expectedGroupVersion } : new { previewReference },
             async (tx, guards, ct) =>
             {
+                var preview = previewReference is null ? null :
+                    await ReviewedPreviewAsync(actor, "propose", previewReference, null, null, tx, guards, ct);
+                if (preview is not null)
+                {
+                    groupId = preview["target"]["groupId"].AsInt64;
+                    expectedGroupVersion = preview["target"]["groupVersion"].AsInt64;
+                }
                 var target = await new PersonWithdrawalTargetLoader(database).LoadAsync(tx, groupId, ct);
                 if (target.GroupVersion != expectedGroupVersion) throw Conflict();
                 var person = await PersonAsync(tx, actor.UserId, guards, ct);
@@ -38,6 +50,7 @@ public sealed partial class PersonWithdrawalService
                 Require("personReviewProposals", proposal);
                 await Collection("personReviewProposals").InsertOneAsync(tx, proposal, cancellationToken: ct);
                 await WriteHistoryAsync(historyId, proposal, ct, tx);
+                if (preview is not null) await ConsumeReviewPreviewAsync(preview, proposal, historyId, metadata, permit.Pin, tx, ct);
                 return new(proposal, historyId);
             }, cancellationToken);
     }
@@ -53,13 +66,15 @@ public sealed partial class PersonWithdrawalService
         DecideAsync(actor, proposalId, expectedVersion, "withdraw", metadata, cancellationToken);
 
     private async Task<PersonWithdrawalResult> DecideAsync(ActorContext actor, long proposalId, long expectedVersion,
-        string action, AuthorizationCommandMetadata metadata, CancellationToken cancellationToken)
+        string action, AuthorizationCommandMetadata metadata, CancellationToken cancellationToken, string? previewReference = null)
     {
         Version(proposalId, expectedVersion); AuthorizationStore.ValidateMetadata(metadata);
         var historyId = (await ids.NextAsync("personReviewHistory", cancellationToken)).Value;
-        return await ExecuteAsync(actor, action, metadata, new { proposalId, expectedVersion },
+        return await ExecuteAsync(actor, action, metadata, previewReference is null ? (object)new { proposalId, expectedVersion } : new { proposalId, expectedVersion, previewReference },
             async (tx, guards, ct) =>
             {
+                var preview = previewReference is null ? null :
+                    await ReviewedPreviewAsync(actor, "approve", previewReference, proposalId, expectedVersion, tx, guards, ct);
                 var proposal = await ProposalAsync(tx, proposalId, ct);
                 if (proposal["status"] != "pending" || proposal["version"] != expectedVersion) throw Conflict();
                 var requesterId = proposal["requestedBy"].AsInt64;
@@ -115,6 +130,7 @@ public sealed partial class PersonWithdrawalService
                     F.Eq("requestDigest", proposal["requestDigest"]), next, cancellationToken: ct);
                 if (replaced.ModifiedCount != 1) throw Conflict();
                 await WriteHistoryAsync(historyId, next, ct, tx);
+                if (preview is not null) await ConsumeReviewPreviewAsync(preview, next, historyId, metadata, reviewerPermit.Pin, tx, ct);
                 return new(next, historyId);
             }, cancellationToken);
     }

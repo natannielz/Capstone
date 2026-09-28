@@ -13,8 +13,9 @@ using UnitToko.Platform.Mongo;
 namespace UnitToko.Tests.Authorization;
 
 [Collection("Mongo")]
-public sealed class PersonWithdrawalServiceTests(MongoFixture fixture)
+public sealed partial class PersonWithdrawalServiceTests(MongoFixture fixture)
 {
+    private MongoFixture workflowFixture => fixture;
     private const long MakerId = 3000, CheckerId = 4000, TargetId = 5000, AliasId = 6000, OtherId = 7000;
     private const long PolicyId = 100, TargetSourceId = 810001;
     private static readonly UpdateDefinitionBuilder<BsonDocument> U = Builders<BsonDocument>.Update;
@@ -638,20 +639,20 @@ public sealed class PersonWithdrawalServiceTests(MongoFixture fixture)
             PersonWithdrawalIntent intent, CancellationToken ct)
         {
             if (!tx.IsInTransaction || !appointments.Users.Contains(userId) ||
-                action is not ("propose" or "approve" or "reject" or "withdraw" or "read" or "receiptRead"))
+                action is not ("previewPropose" or "propose" or "approve" or "reject" or "withdraw" or "read" or "receiptRead"))
                 throw new AuthorizationDeniedException("synthetic_appointment_unavailable");
             if (intent.Target.ElementCount == 0 && action is "read" or "receiptRead")
             {
                 // Appointed lookup permission precedes record lookup; actual stored targets
                 // are separately checked below when the service asks for their permit.
             }
-            else if (intent.ProposalId > 0)
+            else if (intent.ProposalId > 0 || action == "previewPropose")
             {
                 if (!intent.Target.TryGetValue("groupId", out var group) || !group.IsInt64 || group.AsInt64 != targetGroupId ||
                     intent.RequestDigest.Length != 64 || intent.RequestDigest.Any(character => !char.IsAsciiHexDigitLower(character)))
                     throw new AuthorizationDeniedException("synthetic_target_unavailable");
                 var affected = intent.Target["userIds"].AsBsonArray.Any(id => id.IsInt64 && id.AsInt64 == userId);
-                if (affected && (action == "propose" && !appointments.AllowSelfPropose ||
+                if (affected && (action is "previewPropose" or "propose" && !appointments.AllowSelfPropose ||
                     action is "approve" or "reject" && !appointments.AllowAffectedReview))
                     throw new AuthorizationDeniedException("synthetic_target_conflict");
             }
@@ -686,13 +687,13 @@ public sealed class PersonWithdrawalServiceTests(MongoFixture fixture)
             Sessions = new(Database, Unit, Clock, SessionPolicy, Protector);
             Service = NewService();
         }
-        internal PersonWithdrawalService NewService(MongoClient? selected = null, bool production = false)
+        internal PersonWithdrawalService NewService(MongoClient? selected = null, bool production = false, Func<IMongoDatabase, IPersonReviewSelectionTrust>? selection = null)
         {
             var database = (selected ?? client).GetDatabase(Database.DatabaseNamespace.DatabaseName);
             var unit = new MongoUnitOfWork(selected ?? client);
             var sessions = new MongoIdentitySessionStore(database, unit, Clock, SessionPolicy, Protector);
             return production ? new(database, unit, new(database), Clock, sessions) :
-                new(database, unit, new(database), Clock, sessions, new SyntheticTrust(database, Appointments, GroupId));
+                new(database, unit, new(database), Clock, sessions, new SyntheticTrust(database, Appointments, GroupId), selection?.Invoke(database));
         }
         internal static async Task<Data> CreateAsync(MongoFixture fixture)
         {

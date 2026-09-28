@@ -5,6 +5,8 @@ using UnitToko.Platform.Mongo.Migrations;
 
 namespace UnitToko.Platform.Identity;
 
+// previewPropose uses ProposalId zero and a selection digest before a request exists.
+// Its permit is action-bound and cannot authorize submitting or deciding a proposal.
 internal sealed record PersonWithdrawalIntent(long ProposalId, string RequestDigest, BsonDocument Target);
 internal interface IPersonWithdrawalTrust
 {
@@ -34,8 +36,9 @@ internal sealed class PersonWithdrawalPermit
         PersonWithdrawalIntent intent, BsonDocument policy)
     {
         if (!tx.IsInTransaction || userId <= 0 || intent.ProposalId < 0 ||
-            intent.ProposalId == 0 && action != "receiptRead" ||
-            action is not ("propose" or "approve" or "reject" or "withdraw" or "read" or "receiptRead") ||
+            intent.ProposalId == 0 && action is not ("receiptRead" or "previewPropose") ||
+            action == "previewPropose" && intent.ProposalId != 0 ||
+            action is not ("previewPropose" or "propose" or "approve" or "reject" or "withdraw" or "read" or "receiptRead") ||
             !PersonGovernanceSchemas.IsValid("personGovernancePolicies", policy)) throw Denied();
         client = database.Client; databaseName = database.DatabaseNamespace.DatabaseName;
         owner = tx; transactionNumber = tx.WrappedCoreSession.CurrentTransaction.TransactionNumber;
