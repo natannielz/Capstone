@@ -127,7 +127,7 @@ internal sealed class InventoryRepository(IMongoDatabase database)
             throw Invalid("inventory_storage_unavailable");
         var indexes = await (await database.GetCollection<BsonDocument>(collection).Indexes.ListAsync(ct)).ToListAsync(ct);
         bool Required(BsonDocument index) => index["key"].AsBsonDocument.Equals(requiredKey) &&
-            index.GetValue("unique", false).AsBoolean && !Unsafe(index);
+            (index.GetValue("unique", false).AsBoolean || index["name"] == "_id_" && requiredKey.Equals(new BsonDocument("_id", 1))) && !Unsafe(index);
         if (!indexes.Any(index => index["key"].AsBsonDocument.Equals(new BsonDocument("_id", 1)) && !Unsafe(index)) ||
             !indexes.Any(Required) || indexes.Any(index => index.Contains("expireAfterSeconds") ||
                 index.GetValue("unique", false).AsBoolean && index["name"] != "_id_" && !Required(index)))

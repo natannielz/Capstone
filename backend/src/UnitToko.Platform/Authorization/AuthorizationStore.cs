@@ -99,9 +99,12 @@ public sealed class AuthorizationStore(IMongoDatabase database, MongoUnitOfWork 
                 return await businessWrite(session, token);
             }, cancellationToken);
 
+    // An owning workflow can fence its full captured authority and time constraints after receipt persistence.
+    // This hook also runs on replay; throwing aborts the transaction before a result can be returned.
     internal Task<BsonDocument> ExecuteCommandAsync(ActorContext actor, string operation, AuthorizationCommandMetadata metadata,
         object requestBody, Func<AuthorizationSnapshot, IClientSessionHandle, CancellationToken, Task<CommandAuthorization>> authorize,
-        Func<IClientSessionHandle, CancellationToken, Task<BsonDocument>> businessWrite, CancellationToken cancellationToken)
+        Func<IClientSessionHandle, CancellationToken, Task<BsonDocument>> businessWrite, CancellationToken cancellationToken,
+        Func<AuthorizationSnapshot, IClientSessionHandle, CancellationToken, Task>? complete = null)
     {
         ValidateMetadata(metadata);
         var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new { Request = requestBody, metadata.Reason })))).ToLowerInvariant();
@@ -126,6 +129,7 @@ public sealed class AuthorizationStore(IMongoDatabase database, MongoUnitOfWork 
                 // authority and the caller's current permission/session must still be valid.
                 var replayProof = await RequirePersonAuthorityAsync(actor, authorization, existing, session, token);
                 await CompletePersonAuthorizationAsync(actor, snapshot, authorization, replayProof, session, token);
+                if (complete is not null) await complete(snapshot, session, token);
                 return existing["result"].AsBsonDocument.DeepClone().AsBsonDocument;
             }
             var personProof = await RequirePersonAuthorityAsync(actor, authorization, null, session, token);
@@ -141,6 +145,7 @@ public sealed class AuthorizationStore(IMongoDatabase database, MongoUnitOfWork 
             var result = await businessWrite(session, token);
             await records.UpdateOneAsync(session, filter, Builders<BsonDocument>.Update.Set("result", result), cancellationToken: token);
             await CompletePersonAuthorizationAsync(actor, snapshot, authorization, personProof, session, token);
+            if (complete is not null) await complete(snapshot, session, token);
             return result.DeepClone().AsBsonDocument;
         }, cancellationToken);
     }

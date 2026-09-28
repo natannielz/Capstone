@@ -8,7 +8,7 @@ namespace UnitToko.Modules.Identity;
 public static class PersonApprovalPolicy
 {
     public static bool RequiresEvidence(string permission) => permission is
-        Permissions.OrderSpendApprove or Permissions.SupplierChangeApprove or
+        Permissions.OrderSpendApprove or Permissions.SupplierChangeApprove or Permissions.StockSourceApprove or
         Permissions.PaymentVerify or Permissions.DisbursementVerify or Permissions.ReconciliationVerify or
         Permissions.CreditApprove or Permissions.RefundApprove or Permissions.FundingApprove or
         Permissions.ExpenseApprove or Permissions.StockAdjustApprove or Permissions.DisbursementRecord or
@@ -28,7 +28,7 @@ public static class PersonApprovalPolicy
         {
             Permissions.OrderSpendApprove or Permissions.CreditApprove or Permissions.RefundApprove or
                 Permissions.FundingApprove or Permissions.ExpenseApprove => [evidence!.RequestedBy],
-            Permissions.SupplierChangeApprove => [evidence!.ProposedBy],
+            Permissions.SupplierChangeApprove or Permissions.StockSourceApprove => [evidence!.ProposedBy],
             Permissions.PaymentVerify or Permissions.DisbursementVerify or
                 Permissions.ReconciliationVerify => [evidence!.RecordedBy],
             Permissions.StockAdjustApprove => [evidence!.CountedBy, evidence.ProposedBy],

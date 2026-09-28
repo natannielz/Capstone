@@ -15,7 +15,7 @@ public static class ApprovalPolicy
 {
     public static bool RequiresEvidence(string permission) => permission is
         Permissions.OrderSpendApprove or Permissions.OrderAccept or Permissions.SubstitutionAccept or
-        Permissions.SupplierChangeApprove or
+        Permissions.SupplierChangeApprove or Permissions.StockSourceApprove or
         Permissions.PaymentVerify or Permissions.CreditApprove or Permissions.RefundApprove or
         Permissions.FundingApprove or Permissions.ExpenseApprove or Permissions.StockAdjustApprove or
         Permissions.DisbursementRecord or Permissions.DisbursementVerify or Permissions.PeriodApprove or
@@ -31,7 +31,7 @@ public static class ApprovalPolicy
         var valid = permission switch
         {
             Permissions.OrderSpendApprove => Independent(evidence.RequestedBy),
-            Permissions.SupplierChangeApprove => Independent(evidence.ProposedBy),
+            Permissions.SupplierChangeApprove or Permissions.StockSourceApprove => Independent(evidence.ProposedBy),
             Permissions.OrderAccept => evidence.RequestedBy is > 0,
             Permissions.SubstitutionAccept => evidence.RequestedBy is > 0 && evidence.ProposedBy is > 0,
             Permissions.PaymentVerify or Permissions.DisbursementVerify or Permissions.ReconciliationVerify => Independent(evidence.RecordedBy),
