@@ -455,3 +455,11 @@ Seven browser groups passed in Edge and pinned Chromium; C# verifies two observa
 The original report/production goal remains active. Independent review, actual provider/hosting/Vercel access, the remaining module work, operations and the branch pilot remain open.
 
 Screen commit d8566dbc69071a44bf9c1e0b079e94e7547148c2 subsequently passed [workflow 36437605314](https://github.com/natannielz/Capstone/actions/runs/36437605314): 1,663 backend passes, zero failures, 71 explicit Windows-only method skips, frontend 491+6+7, Auth0 Action fixtures, both contracts and builds. The later browser integration change requires its own exact-commit workflow.
+
+### Inventory quantity and source-authority domain rules
+
+[The inventory contract](../architecture/stock-authority-contract.md) now defines exact package balance partitions, versioned transitions, physical-item-aware directed conversion with historical definitions, and scoped reviewed stock-source preconditions. Fresh external data alone never grants a stock promise; the external path still requires an actual acknowledgment.
+
+[Local verification](inventory-policy-verification-2026-09-28.md) records 123 passing affected tests, zero failures/skips, preceded by the missing-implementation and derived-quantity regression failures. Valid box-opening requests can produce more than one million loose pieces; internal totals remain exact Int64 values while command steps retain their existing bound.
+
+These rules are not yet a persisted inventory workflow. CAT02 still requires pool/lot/source governance, forward migrations, transactional movements/reservations/conversion and valuation, API/UI, independent review and source/operations acceptance. No actual stock policy, balance, cost, provider or second writer was activated. The full production/report goal stays active.

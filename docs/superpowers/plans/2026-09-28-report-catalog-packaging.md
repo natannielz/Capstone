@@ -234,6 +234,8 @@ public void Incorrect_check_digit_is_rejected() =>
 
 ## CAT02 — Make package inventory, conversion and availability authoritative
 
+**Domain checkpoint, 28 September 2026:** Exact quantity transitions, physical/historical conversion rules and source-authority preconditions pass 123 affected tests; see [the implemented contract](../../architecture/stock-authority-contract.md) and [verification](../../quality/inventory-policy-verification-2026-09-28.md). The conversion signature now includes SKU/current/stored definition facts, and location uses the existing numeric channel identity. Derived ledger quantities are Int64; user-entered steps remain bounded. Persistence, costs, API/UI and source/pilot acceptance are not completed by these pure rules; the encompassing tasks below remain open.
+
 **Requirements:** V05/V09; F03/F04 Inventory boundary; M08 baseline. **Depends on for implementation:** CAT01; T05A valuation/rounding; ACC02 explicit conversion/release/count-adjustment permissions. Prepare the source-authority policy/contract jointly with the OPS02 owner before integration; CAT02 can implement and test unconfirmed/accepted policy states without waiting for all of OPS02. Actual order promises remain disabled for an affected pool until its authority/reconciliation decision is accepted. This is an activation gate, not a circular completion dependency.
 
 **Files to create:**
