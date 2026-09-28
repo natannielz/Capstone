@@ -1105,6 +1105,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/inventory/sources/pools/{poolId}/query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["StockSourceCurrentRead"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/inventory/sources/pools/{poolId}/revisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ProposeStockSourceRevision"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/inventory/sources/pools/query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["StockSourceCurrentList"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/inventory/sources/query": {
         parameters: {
             query?: never;
@@ -1115,6 +1163,102 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["StockSourceSetupHistory"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/inventory/sources/revision-operations/query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["StockSourceRevisionReceipt"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/inventory/sources/revisions/{id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ApproveStockSourceRevision"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/inventory/sources/revisions/{id}/query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["StockSourceRevisionRead"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/inventory/sources/revisions/{id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["RejectStockSourceRevision"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/inventory/sources/revisions/{id}/withdraw": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["WithdrawStockSourceRevision"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/inventory/sources/revisions/query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["StockSourceRevisionHistory"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2448,6 +2592,126 @@ export interface components {
         };
         StockCountWarehouseOptionsDto: {
             items: components["schemas"]["StockCountWarehouseOptionDto"][];
+        };
+        StockSourceCurrentDto: {
+            /** Format: date-time */
+            approvedAt: string;
+            creationProposalId: components["schemas"]["LongId"];
+            physicalPoolId: components["schemas"]["LongId"];
+            /** @enum {string} */
+            poolState: "inactive" | "active";
+            /** @description Exact decimal Int64 string; runtime range and workflow version rules also apply. */
+            poolVersion: string;
+            revisionProposalId: null | components["schemas"]["LongId"];
+            settings: components["schemas"]["StockSourceSettingsDto"];
+        };
+        StockSourceCurrentPageDto: {
+            items: components["schemas"]["StockSourceCurrentDto"][];
+            /** @description Exact decimal Int64 string; runtime range and workflow version rules also apply. */
+            total: string;
+        };
+        StockSourceCurrentQueryDto: {
+            /**
+             * Format: int32
+             * @default 25
+             */
+            limit: number;
+            location: components["schemas"]["AccessScopeDto"];
+            /**
+             * Format: int32
+             * @default 0
+             */
+            offset: number;
+            /** @enum {string} */
+            purpose: "inventory-source-current";
+        };
+        StockSourceRevisionCommandDto: {
+            /** @description Exact decimal Int64 string; runtime range and workflow version rules also apply. */
+            appliedPoolVersion: null | string;
+            /** @description Exact decimal Int64 string; runtime range and workflow version rules also apply. */
+            basePoolVersion: null | string;
+            decisionId: null | components["schemas"]["LongId"];
+            physicalPoolId: components["schemas"]["LongId"];
+            proposalId: components["schemas"]["LongId"];
+            /** @enum {string} */
+            proposalVersion: "1";
+            /** @enum {string} */
+            status: "proposed" | "approved" | "rejected" | "withdrawn";
+        };
+        StockSourceRevisionDetailDto: {
+            /** @description Exact decimal Int64 string; runtime range and workflow version rules also apply. */
+            appliedPoolVersion: null | string;
+            /** @description Exact decimal Int64 string; runtime range and workflow version rules also apply. */
+            basePoolVersion: string;
+            baseSettings: components["schemas"]["StockSourceSettingsDto"];
+            decision: null | components["schemas"]["StockSourceSetupDecisionDto"];
+            id: components["schemas"]["LongId"];
+            physicalPoolId: components["schemas"]["LongId"];
+            /** @enum {string} */
+            proposalVersion: "1";
+            /** Format: date-time */
+            proposedAt: string;
+            proposedSettings: components["schemas"]["StockSourceSettingsDto"];
+            reason: string;
+            /** @enum {string} */
+            status: "proposed" | "approved" | "rejected" | "withdrawn";
+        };
+        StockSourceRevisionPageDto: {
+            items: components["schemas"]["StockSourceRevisionDetailDto"][];
+            /** @description Exact decimal Int64 string; runtime range and workflow version rules also apply. */
+            total: string;
+        };
+        StockSourceRevisionQueryDto: {
+            /**
+             * Format: int32
+             * @default 25
+             */
+            limit: number;
+            location: components["schemas"]["AccessScopeDto"];
+            /**
+             * Format: int32
+             * @default 0
+             */
+            offset: number;
+            /** @description Positive decimal Int64 string, from 1 through 9223372036854775807. JSON numbers are invalid. */
+            physicalPoolId?: null | string;
+            /** @enum {string} */
+            purpose: "inventory-source-revisions";
+        };
+        StockSourceRevisionReadDto: {
+            location: components["schemas"]["AccessScopeDto"];
+            /** @enum {string} */
+            purpose: "inventory-source-revisions";
+        };
+        StockSourceRevisionReceiptDto: {
+            result: null | components["schemas"]["StockSourceRevisionCommandDto"];
+            /** @enum {string} */
+            state: "not_confirmed" | "committed";
+        };
+        StockSourceRevisionRecoveryDto: {
+            key: string;
+            location: components["schemas"]["AccessScopeDto"];
+            /** @enum {string} */
+            operation: "stock.source.revision.propose" | "stock.source.revision.approve" | "stock.source.revision.reject" | "stock.source.revision.withdraw";
+            /** @enum {string} */
+            purpose: "operation-recovery";
+        };
+        StockSourceSettingsDto: {
+            /** @enum {string} */
+            control: "exclusiveWebAllocation" | "sharedWebLedger" | "externalHold";
+            discrepancyOwnerReference: string;
+            externalNamespace: null | string;
+            handoffReference: string;
+            label: string;
+            location: components["schemas"]["AccessScopeDto"];
+            /** @description Exact decimal Int64 string; runtime range and workflow version rules also apply. */
+            maximumAgeMilliseconds: string;
+            /** @enum {string} */
+            mode: "webLedger" | "externalLedger";
+            physicalKey: string;
+            reservationProtocolReference: null | string;
+            /** @description Exact decimal Int64 string; runtime range and workflow version rules also apply. */
+            safetyBufferBaseUnits: string;
         };
         StockSourceSetupCommandDto: {
             decisionId: null | components["schemas"]["LongId"];
@@ -7805,6 +8069,236 @@ export interface operations {
             };
         };
     };
+    StockSourceCurrentRead: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
+                /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
+                "X-Expected-Actor-Id": string;
+            };
+            path: {
+                poolId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StockSourceCurrentQueryDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StockSourceCurrentDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    ProposeStockSourceRevision: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Reuse this key only for an unchanged logical command, including after an uncertain response. */
+                "Idempotency-Key": string;
+                /** @description One quoted nonnegative Int64 resource version from the latest response; never a JavaScript number. */
+                "If-Match": string;
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
+                /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
+                "X-Expected-Actor-Id": string;
+            };
+            path: {
+                poolId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StockSourceSetupProposeDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StockSourceRevisionCommandDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    StockSourceCurrentList: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
+                /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
+                "X-Expected-Actor-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StockSourceCurrentQueryDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StockSourceCurrentPageDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
     StockSourceSetupHistory: {
         parameters: {
             query?: never;
@@ -7830,6 +8324,470 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StockSourceSetupPageDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    StockSourceRevisionReceipt: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
+                /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
+                "X-Expected-Actor-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StockSourceRevisionRecoveryDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StockSourceRevisionReceiptDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    ApproveStockSourceRevision: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Reuse this key only for an unchanged logical command, including after an uncertain response. */
+                "Idempotency-Key": string;
+                /** @description One quoted nonnegative Int64 resource version from the latest response; never a JavaScript number. */
+                "If-Match": string;
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
+                /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
+                "X-Expected-Actor-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StockSourceSetupDecideDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StockSourceRevisionCommandDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    StockSourceRevisionRead: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
+                /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
+                "X-Expected-Actor-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StockSourceRevisionReadDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StockSourceRevisionDetailDto"] | null;
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    RejectStockSourceRevision: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Reuse this key only for an unchanged logical command, including after an uncertain response. */
+                "Idempotency-Key": string;
+                /** @description One quoted nonnegative Int64 resource version from the latest response; never a JavaScript number. */
+                "If-Match": string;
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
+                /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
+                "X-Expected-Actor-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StockSourceSetupDecideDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StockSourceRevisionCommandDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    WithdrawStockSourceRevision: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Reuse this key only for an unchanged logical command, including after an uncertain response. */
+                "Idempotency-Key": string;
+                /** @description One quoted nonnegative Int64 resource version from the latest response; never a JavaScript number. */
+                "If-Match": string;
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
+                /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
+                "X-Expected-Actor-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StockSourceSetupDecideDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StockSourceRevisionCommandDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    StockSourceRevisionHistory: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
+                /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
+                "X-Expected-Actor-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StockSourceRevisionQueryDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StockSourceRevisionPageDto"];
                 };
             };
             /** @description Bad Request */

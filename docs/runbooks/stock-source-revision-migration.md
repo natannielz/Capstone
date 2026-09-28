@@ -20,7 +20,7 @@ Before any target collection/index/counter changes, version 16 checks old and ne
 
 The migration installs strict/error validators for stockSourceRevisionProposals, stockSourceRevisionDecisions and stockSourceRevisions, retaining stronger existing validation. It enforces one decision per proposal and one settings snapshot per pool/version, installs scoped query indexes and advances allocation counters above existing IDs. It does not replace the original source-setup schemas. Schema/index/counter writes use majority acknowledgement.
 
-After success, verify that migrations 1–15 retain their prior records, version 16 is applied and readiness passes. Compare business rows/counts with the baseline; only new schema/index definitions, required allocation high-water marks and migration bookkeeping may change. Rerunning the completed command must not replay business work or rewrite completed history. Staff revision routes/UI are a separate integration step.
+After success, verify that migrations 1–15 retain their prior records, version 16 is applied and readiness passes. Compare business rows/counts with the baseline; only new schema/index definitions, required allocation high-water marks and migration bookkeeping may change. Rerunning the completed command must not replay business work or rewrite completed history. The protected revision API and typed client have separate integration evidence; staff revision screens and their browser acceptance remain a separate step.
 
 ## Failure and recovery
 

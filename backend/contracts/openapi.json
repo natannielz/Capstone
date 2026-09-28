@@ -10419,6 +10419,1125 @@
           }
         ]
       }
+    },
+    "/api/v1/inventory/sources/pools/query": {
+      "post": {
+        "tags": [
+          "UnitToko.Api"
+        ],
+        "operationId": "StockSourceCurrentList",
+        "parameters": [
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "required": true,
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StockSourceCurrentQueryDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StockSourceCurrentPageDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
+    "/api/v1/inventory/sources/pools/{poolId}/query": {
+      "post": {
+        "tags": [
+          "UnitToko.Api"
+        ],
+        "operationId": "StockSourceCurrentRead",
+        "parameters": [
+          {
+            "name": "poolId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "required": true,
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StockSourceCurrentQueryDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StockSourceCurrentDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
+    "/api/v1/inventory/sources/pools/{poolId}/revisions": {
+      "post": {
+        "tags": [
+          "UnitToko.Api"
+        ],
+        "operationId": "ProposeStockSourceRevision",
+        "parameters": [
+          {
+            "name": "poolId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "Reuse this key only for an unchanged logical command, including after an uncertain response.",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "description": "One quoted nonnegative Int64 resource version from the latest response; never a JavaScript number.",
+            "required": true,
+            "schema": {
+              "maxLength": 21,
+              "minLength": 3,
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "required": true,
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StockSourceSetupProposeDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StockSourceRevisionCommandDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
+    "/api/v1/inventory/sources/revisions/query": {
+      "post": {
+        "tags": [
+          "UnitToko.Api"
+        ],
+        "operationId": "StockSourceRevisionHistory",
+        "parameters": [
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "required": true,
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StockSourceRevisionQueryDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StockSourceRevisionPageDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
+    "/api/v1/inventory/sources/revisions/{id}/query": {
+      "post": {
+        "tags": [
+          "UnitToko.Api"
+        ],
+        "operationId": "StockSourceRevisionRead",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "required": true,
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StockSourceRevisionReadDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/StockSourceRevisionDetailDto"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
+    "/api/v1/inventory/sources/revisions/{id}/approve": {
+      "post": {
+        "tags": [
+          "UnitToko.Api"
+        ],
+        "operationId": "ApproveStockSourceRevision",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "Reuse this key only for an unchanged logical command, including after an uncertain response.",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "description": "One quoted nonnegative Int64 resource version from the latest response; never a JavaScript number.",
+            "required": true,
+            "schema": {
+              "maxLength": 21,
+              "minLength": 3,
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "required": true,
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StockSourceSetupDecideDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StockSourceRevisionCommandDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
+    "/api/v1/inventory/sources/revisions/{id}/reject": {
+      "post": {
+        "tags": [
+          "UnitToko.Api"
+        ],
+        "operationId": "RejectStockSourceRevision",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "Reuse this key only for an unchanged logical command, including after an uncertain response.",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "description": "One quoted nonnegative Int64 resource version from the latest response; never a JavaScript number.",
+            "required": true,
+            "schema": {
+              "maxLength": 21,
+              "minLength": 3,
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "required": true,
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StockSourceSetupDecideDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StockSourceRevisionCommandDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
+    "/api/v1/inventory/sources/revisions/{id}/withdraw": {
+      "post": {
+        "tags": [
+          "UnitToko.Api"
+        ],
+        "operationId": "WithdrawStockSourceRevision",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "Reuse this key only for an unchanged logical command, including after an uncertain response.",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "description": "One quoted nonnegative Int64 resource version from the latest response; never a JavaScript number.",
+            "required": true,
+            "schema": {
+              "maxLength": 21,
+              "minLength": 3,
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "required": true,
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StockSourceSetupDecideDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StockSourceRevisionCommandDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
+    "/api/v1/inventory/sources/revision-operations/query": {
+      "post": {
+        "tags": [
+          "UnitToko.Api"
+        ],
+        "operationId": "StockSourceRevisionReceipt",
+        "parameters": [
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "required": true,
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StockSourceRevisionRecoveryDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StockSourceRevisionReceiptDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -14496,6 +15615,462 @@
             "items": {
               "$ref": "#/components/schemas/StockCountWarehouseOptionDto"
             }
+          }
+        },
+        "additionalProperties": false
+      },
+      "StockSourceCurrentDto": {
+        "required": [
+          "physicalPoolId",
+          "poolVersion",
+          "poolState",
+          "settings",
+          "approvedAt",
+          "creationProposalId",
+          "revisionProposalId"
+        ],
+        "type": "object",
+        "properties": {
+          "physicalPoolId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "poolVersion": {
+            "maxLength": 19,
+            "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+            "type": "string",
+            "description": "Exact decimal Int64 string; runtime range and workflow version rules also apply."
+          },
+          "poolState": {
+            "enum": [
+              "inactive",
+              "active"
+            ],
+            "type": "string"
+          },
+          "settings": {
+            "$ref": "#/components/schemas/StockSourceSettingsDto"
+          },
+          "approvedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "creationProposalId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "revisionProposalId": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LongId"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "StockSourceCurrentPageDto": {
+        "required": [
+          "total",
+          "items"
+        ],
+        "type": "object",
+        "properties": {
+          "total": {
+            "maxLength": 19,
+            "pattern": "^(0|[1-9][0-9]{0,18})$(?![\\s\\S])",
+            "type": "string",
+            "description": "Exact decimal Int64 string; runtime range and workflow version rules also apply."
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StockSourceCurrentDto"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "StockSourceCurrentQueryDto": {
+        "required": [
+          "purpose",
+          "location"
+        ],
+        "type": "object",
+        "properties": {
+          "purpose": {
+            "enum": [
+              "inventory-source-current"
+            ],
+            "type": "string"
+          },
+          "location": {
+            "$ref": "#/components/schemas/AccessScopeDto"
+          },
+          "offset": {
+            "type": "integer",
+            "format": "int32",
+            "default": 0
+          },
+          "limit": {
+            "type": "integer",
+            "format": "int32",
+            "default": 25
+          }
+        },
+        "additionalProperties": false
+      },
+      "StockSourceRevisionCommandDto": {
+        "required": [
+          "proposalId",
+          "proposalVersion",
+          "status",
+          "physicalPoolId",
+          "basePoolVersion",
+          "appliedPoolVersion",
+          "decisionId"
+        ],
+        "type": "object",
+        "properties": {
+          "proposalId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "proposalVersion": {
+            "enum": [
+              "1"
+            ],
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "proposed",
+              "approved",
+              "rejected",
+              "withdrawn"
+            ],
+            "type": "string"
+          },
+          "physicalPoolId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "basePoolVersion": {
+            "maxLength": 19,
+            "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Exact decimal Int64 string; runtime range and workflow version rules also apply."
+          },
+          "appliedPoolVersion": {
+            "maxLength": 19,
+            "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Exact decimal Int64 string; runtime range and workflow version rules also apply."
+          },
+          "decisionId": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LongId"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "StockSourceRevisionDetailDto": {
+        "required": [
+          "id",
+          "proposalVersion",
+          "status",
+          "physicalPoolId",
+          "basePoolVersion",
+          "baseSettings",
+          "proposedSettings",
+          "proposedAt",
+          "reason",
+          "decision",
+          "appliedPoolVersion"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "proposalVersion": {
+            "enum": [
+              "1"
+            ],
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "proposed",
+              "approved",
+              "rejected",
+              "withdrawn"
+            ],
+            "type": "string"
+          },
+          "physicalPoolId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "basePoolVersion": {
+            "maxLength": 19,
+            "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+            "type": "string",
+            "description": "Exact decimal Int64 string; runtime range and workflow version rules also apply."
+          },
+          "baseSettings": {
+            "$ref": "#/components/schemas/StockSourceSettingsDto"
+          },
+          "proposedSettings": {
+            "$ref": "#/components/schemas/StockSourceSettingsDto"
+          },
+          "proposedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "decision": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/StockSourceSetupDecisionDto"
+              }
+            ]
+          },
+          "appliedPoolVersion": {
+            "maxLength": 19,
+            "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Exact decimal Int64 string; runtime range and workflow version rules also apply."
+          }
+        },
+        "additionalProperties": false
+      },
+      "StockSourceRevisionPageDto": {
+        "required": [
+          "total",
+          "items"
+        ],
+        "type": "object",
+        "properties": {
+          "total": {
+            "maxLength": 19,
+            "pattern": "^(0|[1-9][0-9]{0,18})$(?![\\s\\S])",
+            "type": "string",
+            "description": "Exact decimal Int64 string; runtime range and workflow version rules also apply."
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StockSourceRevisionDetailDto"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "StockSourceRevisionQueryDto": {
+        "required": [
+          "purpose",
+          "location"
+        ],
+        "type": "object",
+        "properties": {
+          "purpose": {
+            "enum": [
+              "inventory-source-revisions"
+            ],
+            "type": "string"
+          },
+          "location": {
+            "$ref": "#/components/schemas/AccessScopeDto"
+          },
+          "physicalPoolId": {
+            "maxLength": 19,
+            "pattern": "^(?:[1-9][0-9]{0,17}|[1-8][0-9]{18}|9[0-1][0-9]{17}|92[0-1][0-9]{16}|922[0-2][0-9]{15}|9223[0-2][0-9]{14}|92233[0-6][0-9]{13}|922337[0-1][0-9]{12}|92233720[0-2][0-9]{10}|922337203[0-5][0-9]{9}|9223372036[0-7][0-9]{8}|92233720368[0-4][0-9]{7}|922337203685[0-3][0-9]{6}|9223372036854[0-6][0-9]{5}|92233720368547[0-6][0-9]{4}|922337203685477[0-4][0-9]{3}|9223372036854775[0-7][0-9]{2}|922337203685477580[0-6]|9223372036854775807)$(?![\\s\\S])",
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Positive decimal Int64 string, from 1 through 9223372036854775807. JSON numbers are invalid."
+          },
+          "offset": {
+            "type": "integer",
+            "format": "int32",
+            "default": 0
+          },
+          "limit": {
+            "type": "integer",
+            "format": "int32",
+            "default": 25
+          }
+        },
+        "additionalProperties": false
+      },
+      "StockSourceRevisionReadDto": {
+        "required": [
+          "purpose",
+          "location"
+        ],
+        "type": "object",
+        "properties": {
+          "purpose": {
+            "enum": [
+              "inventory-source-revisions"
+            ],
+            "type": "string"
+          },
+          "location": {
+            "$ref": "#/components/schemas/AccessScopeDto"
+          }
+        },
+        "additionalProperties": false
+      },
+      "StockSourceRevisionReceiptDto": {
+        "required": [
+          "state",
+          "result"
+        ],
+        "type": "object",
+        "properties": {
+          "state": {
+            "enum": [
+              "not_confirmed",
+              "committed"
+            ],
+            "type": "string"
+          },
+          "result": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/StockSourceRevisionCommandDto"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "StockSourceRevisionRecoveryDto": {
+        "required": [
+          "purpose",
+          "location",
+          "operation",
+          "key"
+        ],
+        "type": "object",
+        "properties": {
+          "purpose": {
+            "enum": [
+              "operation-recovery"
+            ],
+            "type": "string"
+          },
+          "location": {
+            "$ref": "#/components/schemas/AccessScopeDto"
+          },
+          "operation": {
+            "enum": [
+              "stock.source.revision.propose",
+              "stock.source.revision.approve",
+              "stock.source.revision.reject",
+              "stock.source.revision.withdraw"
+            ],
+            "type": "string"
+          },
+          "key": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "StockSourceSettingsDto": {
+        "required": [
+          "location",
+          "physicalKey",
+          "label",
+          "mode",
+          "control",
+          "maximumAgeMilliseconds",
+          "safetyBufferBaseUnits",
+          "externalNamespace",
+          "reservationProtocolReference",
+          "discrepancyOwnerReference",
+          "handoffReference"
+        ],
+        "type": "object",
+        "properties": {
+          "location": {
+            "$ref": "#/components/schemas/AccessScopeDto"
+          },
+          "physicalKey": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "mode": {
+            "enum": [
+              "webLedger",
+              "externalLedger"
+            ],
+            "type": "string"
+          },
+          "control": {
+            "enum": [
+              "exclusiveWebAllocation",
+              "sharedWebLedger",
+              "externalHold"
+            ],
+            "type": "string"
+          },
+          "maximumAgeMilliseconds": {
+            "maxLength": 19,
+            "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+            "type": "string",
+            "description": "Exact decimal Int64 string; runtime range and workflow version rules also apply."
+          },
+          "safetyBufferBaseUnits": {
+            "maxLength": 19,
+            "pattern": "^(0|[1-9][0-9]{0,18})$(?![\\s\\S])",
+            "type": "string",
+            "description": "Exact decimal Int64 string; runtime range and workflow version rules also apply."
+          },
+          "externalNamespace": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "reservationProtocolReference": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "discrepancyOwnerReference": {
+            "type": "string"
+          },
+          "handoffReference": {
+            "type": "string"
           }
         },
         "additionalProperties": false

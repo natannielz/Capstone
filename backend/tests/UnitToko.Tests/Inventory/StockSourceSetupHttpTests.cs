@@ -25,7 +25,7 @@ using UnitToko.Tests.Identity;
 namespace UnitToko.Tests.Inventory;
 
 [Collection("Mongo")]
-public sealed class StockSourceSetupHttpTests(MongoFixture fixture)
+public sealed partial class StockSourceSetupHttpTests(MongoFixture fixture)
 {
     private const string Api = "/api/v1/inventory/sources", Origin = "https://portal.unit-toko.co.id";
     private const long Maker = 47001, Reviewer = 47002, Reader = 47003;

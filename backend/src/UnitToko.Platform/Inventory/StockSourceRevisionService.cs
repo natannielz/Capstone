@@ -11,8 +11,14 @@ namespace UnitToko.Platform.Inventory;
 
 public sealed partial class StockSourceSetupService
 {
-    public async Task<BsonDocument> ProposeRevisionAsync(ActorContext actor, long poolId, long expectedPoolRevision,
-        StockSourceSetupInput input, AuthorizationCommandMetadata metadata, CancellationToken ct = default)
+    public Task<BsonDocument> ProposeRevisionAsync(ActorContext actor, long poolId, long expectedPoolRevision,
+        StockSourceSetupInput input, AuthorizationCommandMetadata metadata, CancellationToken ct = default) =>
+        ProposeRevisionCoreAsync(actor, poolId, expectedPoolRevision, input, metadata, false, ct);
+    public Task<BsonDocument> DecideRevisionAsync(ActorContext actor, long proposalId, long expectedRevision,
+        StockSourceSetupDecision decision, string reviewReference, AuthorizationCommandMetadata metadata, CancellationToken ct = default) =>
+        DecideRevisionCoreAsync(actor, proposalId, expectedRevision, decision, reviewReference, metadata, false, ct);
+    private async Task<BsonDocument> ProposeRevisionCoreAsync(ActorContext actor, long poolId, long expectedPoolRevision,
+        StockSourceSetupInput input, AuthorizationCommandMetadata metadata, bool recoveryOnly, CancellationToken ct)
     {
         StockSourceSetupPolicy.Validate(input); Metadata(metadata);
         if (poolId <= 0 || expectedPoolRevision <= 0 || expectedPoolRevision == long.MaxValue) throw StockSourceRevisionBson.Invalid();
@@ -39,11 +45,11 @@ public sealed partial class StockSourceSetupService
                 await Rows("stockSourceRevisionProposals").InsertOneAsync(tx, row, cancellationToken: token);
                 await Rows("auditEvents").InsertOneAsync(tx, StockSourceRevisionBson.Audit(row, actor, "stock.source.revision.propose", now), cancellationToken: token);
                 return new BsonDocument { { "proposalId", id }, { "revision", 1L }, { "poolId", poolId }, { "basePoolRevision", expectedPoolRevision } };
-            }, ct);
+            }, ct, recoveryOnly);
     }
 
-    public async Task<BsonDocument> DecideRevisionAsync(ActorContext actor, long proposalId, long expectedRevision,
-        StockSourceSetupDecision decision, string reviewReference, AuthorizationCommandMetadata metadata, CancellationToken ct = default)
+    private async Task<BsonDocument> DecideRevisionCoreAsync(ActorContext actor, long proposalId, long expectedRevision,
+        StockSourceSetupDecision decision, string reviewReference, AuthorizationCommandMetadata metadata, bool recoveryOnly, CancellationToken ct)
     {
         if (proposalId <= 0 || expectedRevision <= 0 || !Enum.IsDefined(decision) || !StockSourceSetupPolicy.Text(reviewReference, 160))
             throw StockSourceRevisionBson.Invalid();
@@ -99,7 +105,7 @@ public sealed partial class StockSourceSetupService
                 await Rows("auditEvents").InsertOneAsync(tx, StockSourceRevisionBson.Audit(row, actor, operation, now), cancellationToken: token);
                 return new BsonDocument { { "proposalId", proposalId }, { "decisionId", id }, { "poolId", proposal["poolId"] },
                     { "poolRevision", row["poolRevision"] }, { "status", name } };
-            }, ct);
+            }, ct, recoveryOnly);
     }
 
     public async Task<BsonDocument> ReadCurrentSourceAsync(ActorContext actor, StockLocation location, long poolId, CancellationToken ct = default)

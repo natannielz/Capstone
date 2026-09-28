@@ -44,7 +44,7 @@ function freeze<T>(value: T): T {
   if (value && typeof value === "object") { Object.values(value).forEach(freeze); Object.freeze(value); }
   return value;
 }
-function settings(value: unknown): components["schemas"]["StockSourceSetupProposeDto"] {
+export function parseSourceSettings(value: unknown): components["schemas"]["StockSourceSettingsDto"] {
   const v = record(value), mode = v.mode, control = v.control;
   if (mode !== "webLedger" && mode !== "externalLedger") return invalid();
   if (control !== "exclusiveWebAllocation" && control !== "sharedWebLedger" && control !== "externalHold") return invalid();
@@ -56,9 +56,13 @@ function settings(value: unknown): components["schemas"]["StockSourceSetupPropos
     safetyBufferBaseUnits: integer(v.safetyBufferBaseUnits, true),
     externalNamespace: v.externalNamespace === null ? null : key(v.externalNamespace),
     reservationProtocolReference: v.reservationProtocolReference === null ? null : text(v.reservationProtocolReference, 160),
-    discrepancyOwnerReference: text(v.discrepancyOwnerReference, 160), handoffReference: text(v.handoffReference, 160), reason: text(v.reason, 1000),
+    discrepancyOwnerReference: text(v.discrepancyOwnerReference, 160), handoffReference: text(v.handoffReference, 160),
   };
 }
+function settings(value: unknown): components["schemas"]["StockSourceSetupProposeDto"] {
+  return { ...parseSourceSettings(value), reason: text(record(value).reason, 1000) };
+}
+export { integer as sourceNumber, text as sourceText, time as sourceTime, freeze as freezeSource };
 export function sourceActor(value: unknown): string { try { return id(value); } catch { return inputInvalid(); } }
 export function sourceKey(value: unknown): string {
   if (typeof value !== "string" || !/^[A-Za-z0-9._:-]{1,128}$(?![\s\S])/.test(value)) return inputInvalid();
