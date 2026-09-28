@@ -100,3 +100,7 @@ Required read-race acceptance: pause integrity verification, revoke the actor/en
 | Pin release, shared assets and retention | No release/reuse/delete authorization API in the first slice. Keep pins and deletion disabled without the relevant explicit policy/adapter. Implement later without altering original references. |
 
 The full PAY01 plan still owns independent review and real adversarial integration acceptance. This proposal does not freeze deferred payment, OCR, business retention, production privileges or immutable-storage operational acceptance.
+
+## Frozen first admission slice
+
+The [admission implementation contract](private-evidence-admission.md) freezes the concrete v13 fields, independent identifiers, capacity charges, uploader-bound claims, canonical receipts, exact validation-request payload and database/filesystem sequencing for existing Catalog targets through quarantine. It is an implementation specification, not an acceptance result. Later association, current-authority byte delivery, scanner/decoder processing, replacements and cleanup remain part of this full contract.

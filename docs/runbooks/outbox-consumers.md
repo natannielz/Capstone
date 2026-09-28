@@ -1,0 +1,15 @@
+# Bounded outbox consumers
+
+The durable queue now requires an explicit server-side consumer policy: an immutable list of 1–32 exact event kinds, a maximum of 1–1,000 delivery attempts, a lease of 1 second–1 hour and a fixed processing interval no shorter than the lease and no longer than 1 hour. These are accepted configuration bounds, not selected production values. There is no unrestricted claim overload. No processor is registered by this change.
+
+A claim atomically selects a due pending/retry event or an expired lease of an allowed kind. It stores the lower of its prior attempt limit and the configured limit, then either issues a new owner/token or marks exhausted work dead. Increasing a later consumer policy does not silently resurrect the event or expand its stored retry budget. Lowering the policy applies when the event is next claimable. A claim call terminalizes at most 16 exhausted candidates, then yields; a null result can mean more work remains for the next poll.
+
+A soft lease may be reclaimed after expiry while attempts and the processing deadline permit. An expired hard processing deadline is terminal. Renewal uses the stored deadline, cannot shorten the existing lease and cannot extend the hard interval. Stale tokens, the wrong owner/kind, expired leases and expired processing intervals cannot renew, complete or retry. The final permitted attempt can complete successfully; another retry becomes dead.
+
+Failures store only a fixed safe reason code. A permanent failure is terminal; a transient failure schedules an explicitly bounded retry delay of up to one day, subject to the stored attempt limit. Normal logs and queue metadata must not contain raw OCR, account details, bytes or exception text. Queue state writes explicitly use majority write concern even when a client has weaker defaults. Unknown database outcomes propagate; a caller must not assume the claim or acknowledgement failed.
+
+A claim is work coordination, not application authorization or proof of a valid document. The future validation worker must recheck its exact evidence generation and processing claim, enforce actual process time/memory/egress limits, and persist an idempotent validation result before acknowledging the event. A repeated delivery after a crash must read that result and avoid a second business effect. Completion of the outbox row alone does not mark evidence clean or funds received.
+
+The existing process-kill test still proves at-least-once delivery: kill after a simulated downstream acknowledgement, restart after soft lease expiry, deliver again and record exactly one downstream effect. This is a test service, not a real integration or exactly-once transport claim.
+
+Remaining production work includes strict migration constraints/indexes for the additional lease fields as the worker contract stabilizes, kind-specific service credentials, actual processors, bounded host isolation, alerts for dead/overdue jobs and an audited operator recovery workflow. No automatic reset of attempts, dead-event replay, deletion or retention policy is supplied.
