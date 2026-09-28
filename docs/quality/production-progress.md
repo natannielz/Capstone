@@ -539,3 +539,9 @@ Staff can now compare and propose existing-source settings, independently decide
 Final verification passed 45 affected backend/browser cases (including all three actual browser workflows, no skips) and 587 frontend executions, plus type checking, lint and the production build. Browser coverage includes two approved versions, competing stale review, two lost committed responses/reload recovery, keyboard/mobile review, MFA expiry and revoked access. See [the staff evidence](stock-source-revision-workspace-verification-2026-09-29.md).
 
 Staff revision integration is implemented. Source activation/handoff, aliases, accepted observations/lots, operational inventory/cost and wider business/operations/pilot gates remain open. Independent review and Vercel owning-account access are still pending. The full original plan and all 97 report requirements remain active.
+
+## Channel mapping service checkpoint — 29 September 2026
+
+Added governed same-warehouse channel aliases within the existing source service: immutable proposal/decision/version history, enable/disable/reapproval, exact source settings binding and independent authorization on requested and canonical scopes. New approvals remain inactive-source configuration only, with no pool settings revision, physical quantity or accounting effect.
+
+The expanded regression passed 277 source/inventory checks, and the final 48-case alias/recovery suite passed after recovery implementation: 289 distinct passing tests, zero skips. Verification is recorded in [the alias evidence](stock-source-alias-verification-2026-09-29.md). Draft storage remains unregistered. CAT02 still needs full alias migration/preflight, protected API/client/staff UI/browser coverage, canonical inventory consumption and all operational source/lot/cost/owning-workflow gates. Independent review and actual D04 acceptance remain outstanding.
