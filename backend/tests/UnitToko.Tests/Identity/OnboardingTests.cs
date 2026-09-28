@@ -200,10 +200,10 @@ public sealed class OnboardingTests(MongoFixture fixture)
             var admission = await Service.AdmitAsync(tx, proof, binding, token);
             return await Sessions.CreateAsync(tx, admission, proof, "{}", token);
         });
-        public static async Task<Data> CreateAsync(MongoFixture fixture)
+        public static async Task<Data> CreateAsync(MongoFixture fixture, DateTimeOffset? now = null)
         {
             var store = await StoreTestData.CreateAsync(fixture);
-            store.Clock.UtcNow = DateTimeOffset.UtcNow > store.Clock.UtcNow ? DateTimeOffset.UtcNow : store.Clock.UtcNow;
+            store.Clock.UtcNow = now ?? (DateTimeOffset.UtcNow > store.Clock.UtcNow ? DateTimeOffset.UtcNow : store.Clock.UtcNow);
             var unit = new MongoUnitOfWork(fixture.Client);
             var protector = SessionPayloadProtector.FromTestProvider(new EphemeralDataProtectionProvider());
             var policy = new SessionPolicy("https://approved.example/", "approved-db", "v1");

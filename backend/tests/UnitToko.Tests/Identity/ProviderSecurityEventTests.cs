@@ -167,8 +167,13 @@ public sealed class ProviderSecurityEventTests(MongoFixture fixture)
     [InlineData(true)]
     public async Task Unknown_change_racing_a_paused_first_invitation_callback_rejects_stale_proof(bool passwordChange)
     {
-        await using var data = await OnboardingTests.Data.CreateAsync(fixture);
-        data.Store.Clock.UtcNow = ProviderSecurityFixtures.Now;
+        // Set the event clock before seeding memberships/grants; rewinding after setup makes
+        // their effectiveAt future-dated once the real CI clock has passed this fixture time.
+        await using var data = await OnboardingTests.Data.CreateAsync(fixture, ProviderSecurityFixtures.Now);
+        Assert.Equal(ProviderSecurityFixtures.Now, data.Store.Clock.UtcNow);
+        foreach (var collection in new[] { "memberships", "authorizationGrants" })
+            Assert.Equal(0, await data.Rows(collection).CountDocumentsAsync(
+                new BsonDocument("effectiveAt", new BsonDocument("$gt", data.Store.Clock.UtcNow.UtcDateTime))));
         var options = ProviderSecurityFixtures.Options();
         var policy = new SessionPolicy(options.Issuer, "fixture-connection", "fixture-policy");
         var onboarding = new IdentityOnboardingService(data.Store.Database, data.Store.Store,

@@ -77,7 +77,7 @@ jobs:
             fi
             sleep 1
           done
-          docker logs unit-toko-mongo
+          docker logs --tail 2000 unit-toko-mongo
           exit 1
       - name: Build pinned SDK solution
         working-directory: backend
@@ -94,7 +94,7 @@ jobs:
         run: npm run check --prefix backend/contracts
       - name: Mongo diagnostics on failure
         if: failure()
-        run: docker logs unit-toko-mongo
+        run: docker logs --tail 2000 unit-toko-mongo
       - name: Stop disposable database
         if: always()
         run: docker rm --force unit-toko-mongo
