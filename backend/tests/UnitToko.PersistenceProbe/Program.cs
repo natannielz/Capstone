@@ -21,7 +21,7 @@ using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(45));
 var client = new MongoClient("mongodb://127.0.0.1:27028/?replicaSet=rs0&serverSelectionTimeoutMS=5000&connectTimeoutMS=5000&appName=UnitToko.PersistenceProbe");
 var database = client.GetDatabase(args[0]);
 var outbox = new OutboxStore(database, new ProbeClock(now));
-var claim = await outbox.ClaimAsync("probe-" + Environment.ProcessId, TimeSpan.FromSeconds(30), timeout.Token);
+var claim = await outbox.ClaimAsync("probe-" + Environment.ProcessId, new OutboxClaimPolicy(["order.confirmed"], 3, TimeSpan.FromSeconds(30), TimeSpan.FromMinutes(2)), timeout.Token);
 if (claim is null) throw new InvalidOperationException("The expected test event was not claimable.");
 
 // A durable, simulated downstream service: sourceKey is its idempotency key.

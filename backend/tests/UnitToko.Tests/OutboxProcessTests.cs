@@ -74,7 +74,7 @@ public sealed class OutboxProcessTests(MongoFixture fixture)
             Assert.Equal(2, finalReceipt["deliveryAttempts"].AsInt32);
             Assert.Equal(9007199254740993L, finalReceipt["payload"]["orderId"].AsInt64);
             Assert.Null(await new OutboxStore(database, new TestClock(now.AddHours(1)))
-                .ClaimAsync("after-restart", TimeSpan.FromSeconds(30), timeout.Token));
+                .ClaimAsync("after-restart", new OutboxClaimPolicy(["order.confirmed"], 3, TimeSpan.FromSeconds(30), TimeSpan.FromMinutes(2)), timeout.Token));
         }
         finally
         {

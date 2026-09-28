@@ -117,19 +117,19 @@ public sealed class MongoPersistenceTests(MongoFixture fixture)
             await outbox.EnqueueAsync(session, key, "test", new BsonDocument("value", 1), token);
             return 0;
         });
-        var first = await outbox.ClaimAsync("worker-a", TimeSpan.FromSeconds(5));
+        var first = await outbox.ClaimAsync("worker-a", new OutboxClaimPolicy(["test"], 3, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(30)));
         Assert.NotNull(first);
-        Assert.Null(await outbox.ClaimAsync("worker-b", TimeSpan.FromSeconds(5)));
+        Assert.Null(await outbox.ClaimAsync("worker-b", new OutboxClaimPolicy(["test"], 3, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(30))));
         clock.Advance(TimeSpan.FromSeconds(6));
         Assert.False(await outbox.CompleteAsync(first!));
         Assert.False(await outbox.RetryAsync(first!, TimeSpan.Zero));
         var restarted = new OutboxStore(database, clock);
-        var second = await restarted.ClaimAsync("worker-b", TimeSpan.FromSeconds(5));
+        var second = await restarted.ClaimAsync("worker-b", new OutboxClaimPolicy(["test"], 3, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(30)));
         Assert.NotNull(second);
         Assert.False(await outbox.CompleteAsync(first!));
         Assert.True(await restarted.CompleteAsync(second!));
         Assert.False(await restarted.CompleteAsync(second!));
-        Assert.Null(await restarted.ClaimAsync("worker-c", TimeSpan.FromSeconds(5)));
+        Assert.Null(await restarted.ClaimAsync("worker-c", new OutboxClaimPolicy(["test"], 3, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(30))));
     }
 
     [Fact]

@@ -32,7 +32,12 @@ public sealed class MajorityWriteConcernTests(MongoFixture fixture)
                 await outbox.EnqueueAsync(session, "source-1", "test", new BsonDocument("value", 1), token);
                 return 0;
             });
-            var claim = await outbox.ClaimAsync("worker", TimeSpan.FromMinutes(1));
+            var claim = await outbox.ClaimAsync("worker", new OutboxClaimPolicy(["test"], 3, TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(2)));
+            Assert.NotNull(claim);
+            claim = await outbox.RenewAsync(claim!, TimeSpan.FromMinutes(1));
+            Assert.NotNull(claim);
+            Assert.True(await outbox.FailAsync(claim!, "processing_error", true, TimeSpan.Zero));
+            claim = await outbox.ClaimAsync("worker", new OutboxClaimPolicy(["test"], 3, TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(2)));
             Assert.NotNull(claim);
             Assert.True(await outbox.CompleteAsync(claim!));
 
