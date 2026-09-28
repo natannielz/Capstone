@@ -154,7 +154,7 @@ jobs:
           export UNITTOKO_BROWSER_NODE="$(command -v node)"
           export UNITTOKO_BROWSER_PLAYWRIGHT_PACKAGE="$GITHUB_WORKSPACE/frontend/tests/browser/node_modules/playwright/package.json"
           dotnet test tests/UnitToko.Tests/UnitToko.Tests.csproj --nologo \
-            --filter 'FullyQualifiedName~StockCountBrowserTests|FullyQualifiedName~StockSourceBrowserTests' \
+            --filter 'FullyQualifiedName~StockCountBrowserTests|FullyQualifiedName~StockSourceBrowserTests|FullyQualifiedName~StockSourceRevisionBrowserTests' \
             --logger 'console;verbosity=normal' \
             --logger 'trx;LogFileName=stock-browser.trx' \
             --results-directory ../tmp/production/stock-browser-ci
@@ -163,9 +163,9 @@ jobs:
           root = ET.parse("../tmp/production/stock-browser-ci/stock-browser.trx").getroot()
           counters = root.find(".//{http://microsoft.com/schemas/VisualStudio/TeamTest/2010}Counters")
           assert counters is not None, "Missing browser test counters"
-          for name, expected in {"total": "2", "executed": "2", "passed": "2", "failed": "0", "notExecuted": "0"}.items():
+          for name, expected in {"total": "3", "executed": "3", "passed": "3", "failed": "0", "notExecuted": "0"}.items():
               assert counters.get(name) == expected, f"Browser rehearsal did not execute successfully: {name}"
-          print("Both real browser rehearsals executed and passed; no skipped or missing test.")
+          print("All three real browser rehearsals executed and passed; no skipped or missing test.")
           PY
       - name: Mongo diagnostics on failure
         if: failure()

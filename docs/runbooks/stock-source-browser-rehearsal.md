@@ -2,11 +2,11 @@
 
 Run this only against disposable local replica-set databases. It uses synthetic people, organization names, approved fixture grants and source settings; it does not establish real source acceptance or production access.
 
-Follow [the shared stock browser setup](stock-count-browser-rehearsal.md) to install the pinned Node 24 / Playwright 1.62.1 runtime and build the frontend. Use the same UNITTOKO_STOCK_BROWSER, UNITTOKO_BROWSER_NODE, UNITTOKO_BROWSER_PLAYWRIGHT_PACKAGE, UNITTOKO_BROWSER_CHANNEL, PLAYWRIGHT_BROWSERS_PATH and guarded UNITTOKO_TEST_MONGO_URI environment variables. Run the two fixtures together with the filter:
+Follow [the shared stock browser setup](stock-count-browser-rehearsal.md) to install the pinned Node 24 / Playwright 1.62.1 runtime and build the frontend. Use the same UNITTOKO_STOCK_BROWSER, UNITTOKO_BROWSER_NODE, UNITTOKO_BROWSER_PLAYWRIGHT_PACKAGE, UNITTOKO_BROWSER_CHANNEL, PLAYWRIGHT_BROWSERS_PATH and guarded UNITTOKO_TEST_MONGO_URI environment variables. Run all three fixtures together with the filter:
 
-    FullyQualifiedName~StockCountBrowserTests|FullyQualifiedName~StockSourceBrowserTests
+    FullyQualifiedName~StockCountBrowserTests|FullyQualifiedName~StockSourceBrowserTests|FullyQualifiedName~StockSourceRevisionBrowserTests
 
-Both must execute and pass; an opt-in skip is not evidence. The GitHub browser job checks that its TRX contains two executed passes and zero skipped tests.
+All three must execute and pass; an opt-in skip is not evidence. The GitHub browser job checks that its TRX contains three executed passes and zero skipped tests.
 
 The source fixture starts the built Next.js application and actual production-mode ASP.NET API behind a local HTTPS proxy. It signs in two distinct synthetic people through signed provider responses, state, nonce, PKCE, verified email and factor evidence. Only the provider front/back channel is synthetic; source requests, opaque cookies, CSRF, grants, person separation, transactions and persistence use application code.
 
@@ -25,3 +25,15 @@ Database assertions require three immutable proposals, three terminal decisions 
 Screenshots are written under tmp/production/stock-source-ui-results/browser/ and contain synthetic fixture information only. Inspect the desktop review and mobile history images before claiming visual verification. Bounded failure diagnostics include source-screen text and response statuses, never cookie/token bodies.
 
 The fixture does not approve actual D01/D04 decisions, verify a live Auth0 tenant, accept OMI/S-Mart integration, deploy the .NET API, test full load/restore, or complete the overall production goal.
+
+## Revision workspace rehearsal
+
+The separate StockSourceRevisionBrowserTests fixture opens /inventory/sources/revisions. It uses two separately authenticated synthetic people, real signed-provider MFA return, opaque cookies, CSRF, the production API, and real Mongo transactions. Its Node script is frontend/scripts/verify-stock-source-revision-browser.mjs. Synthetic controls exist only in the test assembly, require a private random nonce passed through the child process pipe, and are never added to the application or exposed to browser JavaScript.
+
+The sequence proposes precise settings (60.001 seconds and a quantity above JavaScript's safe integer boundary), loses a committed proposal response, reloads, and recovers without resubmitting. A competing proposal and a withdrawn proposal remain in history. The independent reviewer completes MFA, approves the first change, and recovers a separately lost approval response. The stale proposal is visibly blocked, its direct API approval is rejected, and a reviewed rejection records its terminal state. A second approval advances the same pool to version three without rewriting the earlier decision. Mobile comparison/history must fit a 390-pixel viewport. Expiry after frozen review rejects a subsequent approval; current grant revocation conceals previously loaded details.
+
+Assertions require five revision proposals, two applied versions, four decisions (two approvals, one rejection, one withdrawal), nine revision audit events and receipts, unchanged original creation and physical registration, and unchanged lots, balances, movements, reservations and accounting. The last proposal remains pending after MFA denial. Both browser sessions are signed out; encrypted key material remains protected. A skipped test does not establish any of these outcomes.
+
+Screenshots and logs are written under tmp/production/stock-source-revision-ui-results/. Inspect focused desktop review and mobile history screenshots as well as the full-page layout. For a disabled option, inspect the native HTMLOptionElement.disabled property; this pinned browser automation runtime can return false from locator.isDisabled() on an option inside a label even when its native disabled property is true. The fixture also verifies that rejection, rather than approval, is selected for stale history.
+
+The new page is an exact allowlisted return path in the frontend and default Auth0 options. Deployments overriding Identity:Auth0:AllowedReturnPaths must include /inventory/sources/revisions while retaining their other reviewed paths. This does not require adding a second OAuth callback or permitting wildcard redirects. Approval still leaves the source inactive; this rehearsal does not establish genuine source ownership, accepted operational handoff or live stock authority.

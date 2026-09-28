@@ -162,3 +162,11 @@ The revision service now has receipt-only recovery and bounded exact-location cu
 Nine protected routes and eleven new schemas expose current/base/proposed settings and independent decisions through exact numeric strings. Proposal If-Match binds the current pool version; review If-Match binds the proposal version. Original setup contracts remain semantically unchanged. Frontend parsers/client freeze reviewed settings, validate identity/location/version/status relationships and preserve uncertain outcomes without automatic retry.
 
 See [the integration verification](../quality/stock-source-revision-api-verification-2026-09-29.md). This supersedes the earlier no-revision-API/client/recovery status. Staff revision comparison/history, journal integration and their real browser coverage are next. No active authority, quantity or financial writer is enabled; operational handoff/acceptance and the wider CAT02 work remain required.
+
+## Settings revision staff workspace checkpoint — 29 September 2026
+
+The revision service/API/client now has a staff workspace at /inventory/sources/revisions, scoped physical-source selection, current/base/proposed comparison, immutable history, explicit frozen command review and current-version warnings. Exact values and immutable physical ownership are retained. Approval of stale or active settings is visibly blocked; the server continues to enforce current authority, independent person review and fresh MFA.
+
+Four revision operations have their own allowlisted reference-only journal adapter, separate from initial setup. Unknown commands have receipt lookup only, survive reload and cannot be closed or submitted again. Command-only actors can recover their own request without gaining history access. Login/MFA return paths and scoped navigation include the exact new page.
+
+This supersedes the preceding missing-screen/journal/browser status. The final 45-case affected backend run includes three executed real browser rehearsals; all 587 frontend checks and the production build passed. See [staff workspace verification](../quality/stock-source-revision-workspace-verification-2026-09-29.md). Active-source handoff/reactivation, aliases, accepted authority/observations, lot authoring, operational migration and inventory/cost workflows remain open; configuration approval still causes no quantity or finance effect.
