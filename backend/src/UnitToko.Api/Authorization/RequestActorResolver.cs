@@ -43,6 +43,7 @@ public sealed class ActorRequiredFilter : IEndpointFilter
     }
     internal static bool NeedsExpectedActor(string method, string path) => HttpMethods.IsPost(method) &&
         (path.StartsWith("/api/v1/catalog/", StringComparison.OrdinalIgnoreCase) ||
+         path.StartsWith("/api/v1/inventory/", StringComparison.OrdinalIgnoreCase) ||
          path.StartsWith("/api/v1/identity/administration/", StringComparison.OrdinalIgnoreCase) ||
          ((path.StartsWith("/api/v1/access/", StringComparison.OrdinalIgnoreCase) || path.StartsWith("/api/v1/organizations", StringComparison.OrdinalIgnoreCase)) &&
           !path.EndsWith("/preview", StringComparison.OrdinalIgnoreCase) && !path.EndsWith("/query", StringComparison.OrdinalIgnoreCase)));

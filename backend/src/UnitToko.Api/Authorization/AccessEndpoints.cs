@@ -37,7 +37,7 @@ public static partial class AccessEndpoints
                     grant.TemplateVersion, [.. grant.Permissions], AccessScopeDto.From(grant.Scope),
                     grant.Status.ToString().ToLowerInvariant(), AccessResponses.Version(grant.Version), [],
                     grant.DelegablePermissions.IsDefault ? [] : [.. grant.DelegablePermissions], grant.EffectiveAt, grant.ExpiresAt)).ToArray(), scopes,
-                AvailableActions(actor, snapshot, clock.UtcNow));
+                CurrentActions(actor, snapshot, clock.UtcNow));
             http.Response.Headers.ETag = AccessRequestMetadata.VersionTag(snapshot.GrantVersion);
             return TypedResults.Ok(result);
         }).WithName("CurrentAccess");
@@ -140,6 +140,10 @@ public static partial class AccessEndpoints
         return new(AccessRequestMetadata.IdempotencyKey(http.Request), reason.Trim(), http.TraceIdentifier);
     }
 
+    // UI capabilities are broader than the administrative permission-catalog admission guard.
+    private static string[] CurrentActions(ActorContext actor, AuthorizationSnapshot snapshot, DateTimeOffset now) =>
+        AvailableActions(actor, snapshot, now).Concat(new[] { Permissions.StockRead, Permissions.StockCount }
+            .Where(permission => ScopePolicy.Compile(actor, snapshot, permission, now).IsAllowed)).ToArray();
     private static string[] AvailableActions(ActorContext actor, AuthorizationSnapshot snapshot, DateTimeOffset now) =>
         AdministrativeActions.Where(permission => ScopePolicy.Compile(actor, snapshot, permission, now).IsAllowed).ToArray();
 

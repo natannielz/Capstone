@@ -1,0 +1,6 @@
+export const actorId = "9007199254740995";
+export const location = { kind: "fulfillmentWarehouse" as const, organizationId: "100", branchId: null, divisionId: null, shopId: "101", warehouseId: "9007199254740993", channelId: "103" };
+export const warehouse = { location, organizationName: "Koperasi", shopName: "Toko Tebet", warehouseName: "Gudang utama", channelName: "OMI" };
+export const choice = { skuId: "9007199254740997", skuRevision: "9007199254740999", definitionId: "9007199254741001", definitionVersion: "1", skuCode: "PENA-12", familyName: "Pena biru", packageLabel: "Dus", packageKind: "sealed" as const, baseUnitCode: "PCS", baseUnitsPerPackage: 12 };
+export const observation = { id: "9007199254741003", version: "1" as const, location, recordedAt: "2026-09-28T01:00:00Z", skuId: choice.skuId, skuCode: choice.skuCode, definitionId: choice.definitionId, definitionVersion: choice.definitionVersion, packageLabel: choice.packageLabel, packageKind: choice.packageKind, baseUnitCode: choice.baseUnitCode, baseUnitsPerPackage: choice.baseUnitsPerPackage, packages: 0, baseUnits: "0", observedLotLabel: null, reason: "Physical count", baseline: "unavailable" as const, coverage: "single-observation" as const };
+export const reference = { actorId, operation: "inventory.stock-count.record", key: "count-once", createdAt: "2026-09-28T00:59:00Z" };

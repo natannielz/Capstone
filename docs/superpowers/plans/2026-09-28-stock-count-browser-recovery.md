@@ -56,7 +56,7 @@
 - [x] Run node scripts/test-domain.mjs with pinned Node 24 to include the real frontend suite, future-date repository regression and preserved behavior.
 - [x] Run frontend typecheck and lint; record preexisting warnings separately.
 - [x] Have the independent reviewer inspect the exact source/test diff, including preservation of non-Inventory paths.
-- [ ] Publish the reviewed change with its test evidence alongside the next completed feature boundary. Keep overall stock-count API/UI and production goal open.
+- [x] Publish the reviewed change with its test evidence alongside the next completed feature boundary. Keep overall stock-count API/UI and production goal open.
 
 The staff screen still needs scoped named warehouse/package choices, safe HTTP projections, explicit zero-inclusive package entry, expected-actor/CSRF enforcement, protected login returns and browser verification. Those are the next implementation boundary; this recovery component must not create links to an unimplemented screen.
 
@@ -68,3 +68,5 @@ The staff screen still needs scoped named warehouse/package choices, safe HTTP p
 - Typecheck and import boundaries passed. Lint passed with the existing nine warnings in unrelated legacy components/tests.
 - Independent source review found no actionable issues. API/screen integration remains separate under docs/requirements/stock-count-staff-workflow.md.
 - A first implementation edit had a syntax error caused by multiline replacement construction; repaired before the successful focused/full verification. An initial lint invocation used a nonexistent path; the actual package-script commands subsequently passed.
+
+Published in 2068905dc48b7e5d63837c693696e80e6b082604. Its later full GitHub workflow exposed a separate bounded-retry assumption in the Inventory concurrency test; see the staff API acceptance record. The browser recovery component is not the completed staff screen.

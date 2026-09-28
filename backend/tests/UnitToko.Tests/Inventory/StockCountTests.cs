@@ -54,10 +54,28 @@ public sealed partial class StockCountTests(MongoFixture fixture)
     {
         await using var data = await Setup();
         var input = Input(data);
-        var results = await Task.WhenAll(Enumerable.Range(0, 4).Select(_ => Service(data).RecordCountAsync(data.WarehouseActor, input, Metadata("race"))));
-        Assert.Single(results.Select(row => row.Id).Distinct());
+        var before = await Physical(data);
+        // Four simultaneous callers may exhaust the bounded transaction retry budget.
+        // A typed conflict is safe only if the unchanged key later resolves to the one original observation.
+        async Task<StockCountObservation?> Submit()
+        {
+            try { return await Service(data).RecordCountAsync(data.WarehouseActor, input, Metadata("race")); }
+            catch (PersistenceConflictException error) when (error.Code == "version_conflict") { return null; }
+        }
+        var attempts = await Task.WhenAll(Enumerable.Range(0, 4).Select(_ => Submit()));
+        var committed = attempts.OfType<StockCountObservation>().ToArray();
+        Assert.NotEmpty(committed);
+        Assert.Single(committed.Select(row => row.Id).Distinct());
+        var original = committed[0];
+        foreach (var result in attempts)
+        {
+            Assert.Equal(original, result ?? await Service(data).RecordCountAsync(data.WarehouseActor, input, Metadata("race")));
+            Assert.Equal(original, await Service(data).RecoverAsync(data.WarehouseActor, "race"));
+        }
         Assert.Equal(1, await data.CountAsync("stockCountObservations"));
         Assert.Equal(1, await data.Rows("auditEvents").CountDocumentsAsync(new BsonDocument("kind", "inventory.stock-count.recorded")));
+        Assert.Equal(1, await data.Rows("idempotencyRecords").CountDocumentsAsync(new BsonDocument("operation", "inventory.stock-count.record")));
+        Assert.Equal(before, await Physical(data));
     }
 
     [Fact]
