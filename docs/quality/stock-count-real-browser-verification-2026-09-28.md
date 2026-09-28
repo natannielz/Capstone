@@ -57,3 +57,7 @@ Paths below are relative to tmp/production/stock-count-results unless prefixed w
 | source: backend/tests/UnitToko.Tests/Inventory/StockCountBrowserTests.cs | e95fed0f9cf402ce7fb7257372e3b1ebf05610eac9f251286447e3c8fbaa2e43 |
 | source: frontend/scripts/verify-stock-count-browser.mjs | 966b8c9422516e11b6fe5d88f96703e4066127acef1509e18e2b7248af1fbd09 |
 | source: frontend/tests/browser/package-lock.json | c293897c6c3d7a94fc08999b580bb7cda14e62c11998d66fc65805a7363f131f |
+
+## Subsequent exact-commit CI
+
+Browser integration commit 2e6b6727090c4c5a7930746338be71ce1a032527 subsequently passed workflow 36442542166. The Linux browser job actually executed one rehearsal and passed its TRX no-skip guard; the ordinary backend job passed 1,663 with 72 explicit skips (including the separately executed browser case). Frontend, Auth0 Actions, contracts and builds passed. See inventory-storage-verification-2026-09-28.md for the full-log hash. Independent and actual provider/hosting acceptance remain open.

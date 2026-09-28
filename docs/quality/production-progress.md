@@ -463,3 +463,11 @@ Screen commit d8566dbc69071a44bf9c1e0b079e94e7547148c2 subsequently passed [work
 [Local verification](inventory-policy-verification-2026-09-28.md) records 123 passing affected tests, zero failures/skips, preceded by the missing-implementation and derived-quantity regression failures. Valid box-opening requests can produce more than one million loose pieces; internal totals remain exact Int64 values while command steps retain their existing bound.
 
 These rules are not yet a persisted inventory workflow. CAT02 still requires pool/lot/source governance, forward migrations, transactional movements/reservations/conversion and valuation, API/UI, independent review and source/operations acceptance. No actual stock policy, balance, cost, provider or second writer was activated. The full production/report goal stays active.
+
+### Transactional inventory balance storage
+
+The private Mongo balance repository now requires an active same-client transaction, a strict storage contract and physical-pool uniqueness. It loads actual rows, fences the exact expected state and aborts the caller's entire transaction on any boundary failure. It is not an API or an activated stock writer; registry 14 remains unchanged pending complete forward migration/graph acceptance.
+
+[Storage verification](inventory-storage-verification-2026-09-28.md) records 96 passing checks: 22 real-Mongo scenarios, 15 strict-codec cases and 59 existing inventory policy cases. Explicit rollback, cancellation, stale later batch entry, two concurrent snapshots of the final package, cross-channel duplicate prevention and malformed schema/record/index rejection passed.
+
+The full browser predecessor 2e6b672 passed workflow 36442542166 with 1,663 backend passes, 72 explicit skips plus a separately executed successful browser rehearsal; all other jobs passed. Domain commit 6e7d227 is published and its own workflow is running. Full inventory source/lot ownership, movements, source deduplication, cost/accounting, authorization, receipts, forward migration, UI and independent review remain required.
