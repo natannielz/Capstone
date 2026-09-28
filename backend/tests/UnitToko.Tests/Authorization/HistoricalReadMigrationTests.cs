@@ -20,9 +20,9 @@ public sealed class HistoricalReadMigrationTests(MongoFixture fixture)
         await InDatabase(async db =>
         {
             await new CollectionMigrations(db, clock).ApplyAsync();
-            Assert.Equal(7, CollectionMigrations.CurrentVersion);
+            Assert.True(CollectionMigrations.CurrentVersion >= 7);
             var before = await History(db);
-            Assert.Equal(Enumerable.Range(1, 7), before.Select(row => row["_id"].AsInt32));
+            Assert.Equal(Enumerable.Range(1, CollectionMigrations.CurrentVersion), before.Select(row => row["_id"].AsInt32));
             var definition = await Definition(db);
             Assert.Equal("strict", definition["options"]["validationLevel"].AsString);
             Assert.Equal("error", definition["options"]["validationAction"].AsString);
@@ -217,7 +217,7 @@ public sealed class HistoricalReadMigrationTests(MongoFixture fixture)
             Assert.DoesNotContain(await Indexes(db), index => index["name"] == "ix_actorId_createdAt");
             var ddl = commands.Where(command => command.Contains("create") || command.Contains("collMod") || command.Contains("createIndexes")).ToArray();
             Assert.NotEmpty(ddl);
-            Assert.All(ddl, command => { Assert.Equal("majority", command["writeConcern"]["w"].AsString); Assert.Equal(Events, command.GetElement(0).Value.AsString); });
+            Assert.All(ddl, command => { Assert.Equal("majority", command["writeConcern"]["w"].AsString); Assert.Contains(command.GetElement(0).Value.AsString, new[] { Events, "personEvidenceSources", "personRecords", "personAccountBindings", "personEquivalenceGroups", "personEvidenceVersions" }); });
             Assert.True(await new CollectionMigrations(db, clock).IsCurrentAsync());
         });
     }

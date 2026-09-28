@@ -19,7 +19,8 @@ public sealed class AuthorizationDeniedException(string code) : Exception("Acces
 }
 public sealed record AuthorizedPage(long Total, IReadOnlyList<BsonDocument> Items);
 public sealed record AuthorizationTarget(ResourceScope Resource, ApprovalRequest? Approval = null);
-internal sealed record CommandAuthorization(AuthorizationDecision Decision, ImmutableArray<ScopeNode> RequiredNodes);
+internal sealed record CommandAuthorization(AuthorizationDecision Decision, ImmutableArray<ScopeNode> RequiredNodes,
+    string? Permission = null, AuthorizationTarget? Target = null);
 
 public sealed class AuthorizationStore(IMongoDatabase database, MongoUnitOfWork unitOfWork, IClock clock)
 {
@@ -86,7 +87,7 @@ public sealed class AuthorizationStore(IMongoDatabase database, MongoUnitOfWork 
                 var decision = query.Matches(target.Resource)
                     ? new AuthorizationDecision(true, "allowed", query.Clauses.Where(clause => clause.Matches(target.Resource)).Select(clause => clause.GrantId).ToImmutableArray())
                     : AuthorizationDecision.Deny(query.DenialCode ?? "scope_denied");
-                return new(decision, ScopePolicy.RequiredNodes(target.Resource, snapshot.Directory));
+                return new(decision, ScopePolicy.RequiredNodes(target.Resource, snapshot.Directory), permission, target);
             }, async (session, token) =>
             {
                 // A trusted same-body result has already passed current access checks. Only new work
@@ -121,18 +122,83 @@ public sealed class AuthorizationStore(IMongoDatabase database, MongoUnitOfWork 
             if (existing is not null)
             {
                 if (existing["bodyHash"].AsString != hash) throw new PersistenceConflictException("idempotency_key_reused", "Idempotency key was used with a different request");
+                // Replay retains the originally approved participants, but their current person
+                // authority and the caller's current permission/session must still be valid.
+                var replayProof = await RequirePersonAuthorityAsync(actor, authorization, existing, session, token);
+                await CompletePersonAuthorizationAsync(actor, snapshot, authorization, replayProof, session, token);
                 return existing["result"].AsBsonDocument.DeepClone().AsBsonDocument;
             }
-            await records.InsertOneAsync(session, new BsonDocument
+            var personProof = await RequirePersonAuthorityAsync(actor, authorization, null, session, token);
+            var receipt = new BsonDocument
             {
                 { "schemaVersion", CollectionMigrations.FoundationDocumentSchemaVersion }, { "actorId", actor.UserId },
                 { "operation", operation }, { "key", metadata.IdempotencyKey }, { "bodyHash", hash },
                 { "createdAt", clock.UtcNow.UtcDateTime }, { "result", new BsonDocument() }
-            }, cancellationToken: token);
+            };
+            if (personProof is not null)
+                receipt.Add(PersonApprovalReceipt.Field, PersonApprovalReceipt.Create(authorization.Permission!, authorization.Target!.Approval!));
+            await records.InsertOneAsync(session, receipt, cancellationToken: token);
             var result = await businessWrite(session, token);
             await records.UpdateOneAsync(session, filter, Builders<BsonDocument>.Update.Set("result", result), cancellationToken: token);
+            await CompletePersonAuthorizationAsync(actor, snapshot, authorization, personProof, session, token);
             return result.DeepClone().AsBsonDocument;
         }, cancellationToken);
+    }
+
+
+    private async Task<PersonAuthorityProof?> RequirePersonAuthorityAsync(ActorContext actor,
+        CommandAuthorization authorization, BsonDocument? receipt, IClientSessionHandle session, CancellationToken token)
+    {
+        var permission = authorization.Permission;
+        if (permission is null || !PersonApprovalPolicy.RequiresEvidence(permission))
+        {
+            if (receipt?.Contains(PersonApprovalReceipt.Field) == true)
+                throw new AuthorizationDeniedException("person_receipt_invalid");
+            return null;
+        }
+        var approval = receipt is null ? authorization.Target?.Approval : PersonApprovalReceipt.Read(receipt, permission);
+        if (approval is null) throw new AuthorizationDeniedException("approval_evidence_required");
+        var accountDecision = ApprovalPolicy.Evaluate(actor.UserId, permission, approval);
+        if (!accountDecision.Allowed) throw new AuthorizationDeniedException(accountDecision.Code);
+        // Validate the exact private receipt format before allowing a new effect.
+        if (receipt is null) PersonApprovalReceipt.Read(new BsonDocument(PersonApprovalReceipt.Field,
+            PersonApprovalReceipt.Create(permission, approval)), permission);
+        var accounts = PersonApprovalPolicy.RequiredAccounts(actor.UserId, permission, approval);
+        if (accounts.IsDefaultOrEmpty) throw new AuthorizationDeniedException("person_evidence_invalid");
+        var proof = await new PersonRegistryService(database, clock).ResolveProofsAsync(session, accounts, token);
+        var decision = PersonApprovalPolicy.Evaluate(actor.UserId, permission, approval, proof.Evidence);
+        if (!decision.Allowed) throw new AuthorizationDeniedException(decision.Code);
+        await new PersonAuthorizationFence(database, clock).TouchAsync(session, proof, token);
+        return proof;
+    }
+
+    private async Task CompletePersonAuthorizationAsync(ActorContext actor, AuthorizationSnapshot snapshot,
+        CommandAuthorization authorization, PersonAuthorityProof? proof, IClientSessionHandle session, CancellationToken token)
+    {
+        if (proof is null) return;
+        void RequireCurrent()
+        {
+            proof.RequireCurrent(session, clock.UtcNow);
+            var query = ScopePolicy.Compile(actor, snapshot, authorization.Permission!, clock.UtcNow);
+            Require(query);
+            if (authorization.Target is null || !query.Matches(authorization.Target.Resource))
+                throw new AuthorizationDeniedException("scope_denied");
+        }
+        RequireCurrent();
+        // Refresh the session's time predicate after business and receipt persistence.
+        await FenceAsync(actor, [], session, token);
+        if (actor.Session is { } reference)
+        {
+            var live = await database.GetCollection<BsonDocument>("identitySessions").Find(session,
+                SessionPersistence.LiveFilter(reference, actor.UserId, actor.ProviderIssuer, actor.ProviderSubject, actor.GrantVersion, clock.UtcNow))
+                .Project(new BsonDocument { { "idleExpiresAt", 1 }, { "absoluteExpiresAt", 1 } }).FirstOrDefaultAsync(token);
+            var nowMilliseconds = new BsonDateTime(clock.UtcNow.UtcDateTime).MillisecondsSinceEpoch;
+            if (live is null || !live.TryGetValue("idleExpiresAt", out var idle) || !idle.IsBsonDateTime ||
+                !live.TryGetValue("absoluteExpiresAt", out var absolute) || !absolute.IsBsonDateTime ||
+                idle.AsBsonDateTime.MillisecondsSinceEpoch <= nowMilliseconds || absolute.AsBsonDateTime.MillisecondsSinceEpoch <= nowMilliseconds)
+                throw new AuthorizationDeniedException("stale_or_inactive_session");
+        }
+        RequireCurrent();
     }
 
     internal async Task FenceAsync(ActorContext actor, IEnumerable<ScopeNode> nodes, IClientSessionHandle session, CancellationToken token)

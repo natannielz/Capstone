@@ -109,6 +109,7 @@ public sealed class FenceTests(MongoFixture fixture)
         var scope = new GrantScope(GrantScopeKind.FulfillmentShop, 100, ShopId: 101, ChannelId: 103);
         var verifier = await data.AddActorAsync(1000, scope, Permissions.PaymentVerify);
         var revoker = await data.AddActorAsync(1001, scope, Permissions.AccessRevoke);
+        await PersonTestData.SeedDistinctPeopleAsync(data.Database, data.Clock, verifier.UserId, 2000);
         var payments = data.Database.GetCollection<BsonDocument>("payments");
         await payments.InsertOneAsync(new BsonDocument
         {
