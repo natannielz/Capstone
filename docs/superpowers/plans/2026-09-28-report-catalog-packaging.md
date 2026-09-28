@@ -136,6 +136,9 @@ For partial loose returns from a sealed package, the return command refers to th
 
 ## CAT01 — Persist catalog masters, stable variant identity and versioned definitions
 
+> CAT01.1 pure SKU/immutable package-definition rules are now locally accepted with94/94 domain tests and independent source review. [Evidence and exact limits](../../quality/report-catalog-acceptance.md) distinguish this prerequisite from persistence, authorization, identifier reservation, pricing, images, UI and full CAT01 acceptance, which remain open.
+
+
 **Requirements:** F01; I01–I07/I09; V03–V05/V08; M06 baseline. **Depends on:** T05 foundation and ACC02's catalog entitlement contract; reuse T05A/PAY01's approved image-asset contract.
 
 **Files to create:**
