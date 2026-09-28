@@ -104,10 +104,10 @@ public sealed class AuthorizationStore(IMongoDatabase database, MongoUnitOfWork 
     internal Task<BsonDocument> ExecuteCommandAsync(ActorContext actor, string operation, AuthorizationCommandMetadata metadata,
         object requestBody, Func<AuthorizationSnapshot, IClientSessionHandle, CancellationToken, Task<CommandAuthorization>> authorize,
         Func<IClientSessionHandle, CancellationToken, Task<BsonDocument>> businessWrite, CancellationToken cancellationToken,
-        Func<AuthorizationSnapshot, IClientSessionHandle, CancellationToken, Task>? complete = null)
+        Func<AuthorizationSnapshot, IClientSessionHandle, CancellationToken, Task>? complete = null, bool requireReceipt = false)
     {
         ValidateMetadata(metadata);
-        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new { Request = requestBody, metadata.Reason })))).ToLowerInvariant();
+        var hash = CommandHash(requestBody, metadata.Reason);
         var scope = IdempotencyScope.ForActor(actor, operation, metadata.IdempotencyKey, hash); scope.Validate();
         return unitOfWork.ExecuteAsync(async (session, token) =>
         {
@@ -132,6 +132,7 @@ public sealed class AuthorizationStore(IMongoDatabase database, MongoUnitOfWork 
                 if (complete is not null) await complete(snapshot, session, token);
                 return existing["result"].AsBsonDocument.DeepClone().AsBsonDocument;
             }
+            if (requireReceipt) throw new PersistenceConflictException("operation_receipt_unavailable", "The recorded operation receipt is unavailable");
             var personProof = await RequirePersonAuthorityAsync(actor, authorization, null, session, token);
             var receipt = new BsonDocument
             {
@@ -248,6 +249,9 @@ public sealed class AuthorizationStore(IMongoDatabase database, MongoUnitOfWork 
     {
         if (offset is < 0 or > 10000 || limit is < 1 or > 100) throw new DomainValidationException("invalid_page", "Page offset or size is outside the supported range");
     }
+    internal static string CommandHash(object requestBody, string reason) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new { Request = requestBody, Reason = reason })))).ToLowerInvariant();
+
     internal static void ValidateMetadata(AuthorizationCommandMetadata metadata)
     {
         if (metadata is null || string.IsNullOrWhiteSpace(metadata.IdempotencyKey) || metadata.IdempotencyKey.Length > 200 ||

@@ -1,6 +1,7 @@
 using UnitToko.Modules.Organizations;
 using MongoDB.Bson;
 using MongoDB.Driver;
+using MongoDB.Driver.Core.Events;
 using UnitToko.Modules.Contracts;
 using UnitToko.Modules.Identity;
 using UnitToko.Modules.Identity.Contracts;
@@ -40,7 +41,7 @@ public sealed class StockSourceSetupTests(MongoFixture fixture)
     private async Task<StoreTestData> Data()
     {
         var data = await StoreTestData.CreateAsync(fixture);
-        try { await InstallAsync(data); return data; } catch { await data.DisposeAsync(); throw; }
+        return data; // The registered forward migration installs the production storage contract.
     }
     private static async Task<(ActorContext Maker, ActorContext Reviewer)> Actors(StoreTestData data)
     {
@@ -218,7 +219,7 @@ public sealed class StockSourceSetupTests(MongoFixture fixture)
         if (fault == "missing") await data.Database.DropCollectionAsync("inventoryPools");
         if (fault == "validator") await data.Database.RunCommandAsync<BsonDocument>(new BsonDocument
             { { "collMod", "stockSourceProposals" }, { "validationAction", "warn" } });
-        if (fault == "unique-index") await Rows(data, "inventoryPoolRegistrations").Indexes.DropOneAsync("ux_setup_business_key");
+        if (fault == "unique-index") await Rows(data, "inventoryPoolRegistrations").Indexes.DropOneAsync("ux_inventory_physical_key");
         await Assert.ThrowsAsync<DomainValidationException>(() => Service(data).ProposeAsync(maker, Input(), Meta("propose")));
         Assert.Equal(0, await Count(data, "stockSourceProposals")); Assert.Equal(0, await Count(data, "idempotencyRecords"));
     }
@@ -314,6 +315,60 @@ public sealed class StockSourceSetupTests(MongoFixture fixture)
         shouldFail = false; Assert.Equal(result, await Execute());
         Assert.Equal(2, writes); Assert.Equal(4, checks);
         Assert.Equal(1, await Count(data, "orders")); Assert.Equal(1, await Count(data, "idempotencyRecords"));
+    }
+    [Fact]
+    public async Task Receipt_disappearing_after_recovery_lookup_never_resubmits_the_command()
+    {
+        await using var data = await Data(); var (maker, _) = await Actors(data);
+        var original = await Service(data).ProposeAsync(maker, Input(), Meta("lost-receipt"));
+        var removed = 0;
+        var settings = fixture.Client.Settings.Clone();
+        settings.ApplicationName = "StockSourceRecovery-" + Guid.NewGuid().ToString("N");
+        settings.ClusterConfigurator = builder => builder.Subscribe<CommandStartedEvent>(command =>
+        {
+            // The next ID allocation is after recovery's committed read and before its replay transaction.
+            if (command.CommandName == "findAndModify" && command.Command.GetValue("findAndModify", "") == "idCounters" &&
+                command.Command["query"].AsBsonDocument.GetValue("_id", "") == "stockSourceProposals" &&
+                Interlocked.CompareExchange(ref removed, 1, 0) == 0)
+                Rows(data, "idempotencyRecords").DeleteOne(new BsonDocument { { "actorId", maker.UserId },
+                    { "operation", "stock.source.propose" }, { "key", "lost-receipt" } });
+        });
+        var client = new MongoClient(settings);
+        var database = client.GetDatabase(data.Database.DatabaseNamespace.DatabaseName);
+        var service = new StockSourceSetupService(database, new(client), new(database), data.Clock);
+        var error = await Assert.ThrowsAsync<PersistenceConflictException>(() =>
+            service.RecoverAsync(maker, Location, "stock.source.propose", "lost-receipt", "recovery"));
+        Assert.Equal("operation_receipt_unavailable", error.Code);
+        Assert.Equal(1, removed); Assert.Equal(1, await Count(data, "stockSourceProposals"));
+        Assert.Equal(1, await Count(data, "auditEvents")); Assert.Equal(0, await Count(data, "idempotencyRecords"));
+        Assert.Equal(original["proposalId"], (await Rows(data, "stockSourceProposals").Find(new BsonDocument()).SingleAsync())["_id"]);
+    }
+
+    [Fact]
+    public async Task Receipt_only_execution_does_not_invoke_writer_and_still_rechecks_current_authority_on_replay()
+    {
+        await using var data = await Data();
+        var actor = await data.AddActorAsync(1000, Location.ToScope(), Permissions.StockSourcePropose);
+        var writes = 0; var checks = 0;
+        Task<BsonDocument> Execute(bool receiptOnly, int body = 1) =>
+            data.Store.ExecuteCommandAsync(actor, "synthetic.receipt-only", Meta("receipt-only"), new { Id = body },
+                (snapshot, tx, token) =>
+                {
+                    AuthorizationStore.Require(ScopePolicy.Compile(actor, snapshot, Permissions.StockSourcePropose, data.Clock.UtcNow));
+                    return Task.FromResult(new CommandAuthorization(new(true, "allowed", [1000]), []));
+                }, (_, _) => { writes++; return Task.FromResult(new BsonDocument("ok", true)); }, default,
+                (_, _, _) => { checks++; return Task.CompletedTask; }, requireReceipt: receiptOnly);
+        var missing = await Assert.ThrowsAsync<PersistenceConflictException>(() => Execute(true));
+        Assert.Equal("operation_receipt_unavailable", missing.Code); Assert.Equal(0, writes); Assert.Equal(0, checks);
+        Assert.Equal(0, await Count(data, "idempotencyRecords"));
+        var original = await Execute(false);
+        Assert.Equal(original, await Execute(true)); Assert.Equal(1, writes); Assert.Equal(2, checks);
+        var changed = await Assert.ThrowsAsync<PersistenceConflictException>(() => Execute(true, 2));
+        Assert.Equal("idempotency_key_reused", changed.Code);
+        await Rows(data, "authorizationGrants").UpdateOneAsync(new BsonDocument("_id", 1000L),
+            Builders<BsonDocument>.Update.Set("status", "revoked"));
+        await Assert.ThrowsAsync<AuthorizationDeniedException>(() => Execute(true));
+        Assert.Equal(1, writes); Assert.Equal(2, checks);
     }
     private static async Task LinkPeople(StoreTestData data)
     {

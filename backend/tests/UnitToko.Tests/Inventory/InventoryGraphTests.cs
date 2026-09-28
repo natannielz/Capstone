@@ -73,7 +73,7 @@ public sealed class InventoryGraphTests(MongoFixture fixture)
             case "malformed-lot": lot["expiresOn"] = "2027-02-31"; break;
             case "fractional-id": lot["definitionId"] = 201.5; break;
         }
-        if (fault != "missing-pool") await data.Database.GetCollection<BsonDocument>("inventoryPools").ReplaceOneAsync(new BsonDocument("_id", 400L), pool);
+        if (fault != "missing-pool") await data.Database.GetCollection<BsonDocument>("inventoryPools").ReplaceOneAsync(new BsonDocument("_id", 400L), pool, new ReplaceOptions { BypassDocumentValidation = true }); // Deliberately corrupt a guarded local fixture.
         if (fault != "missing-lot") await data.Database.GetCollection<BsonDocument>("lots").ReplaceOneAsync(new BsonDocument("_id", 202L), lot);
         using var tx = await fixture.Client.StartSessionAsync(); tx.StartTransaction();
         await data.Database.GetCollection<BsonDocument>("orders").InsertOneAsync(tx, new BsonDocument { { "_id", 99000L }, { "schemaVersion", 1 } });

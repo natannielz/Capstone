@@ -26,10 +26,12 @@ internal sealed class StoreTestData : IAsyncDisposable
     }
     public static Task<StoreTestData> CreateAsync(MongoFixture fixture) => CreateAsync(fixture, false);
     internal static Task<StoreTestData> CreateForLegacyCatalogAsync(MongoFixture fixture) => CreateAsync(fixture, true);
-    private static async Task<StoreTestData> CreateAsync(MongoFixture fixture, bool legacyCatalog)
+    internal static Task<StoreTestData> CreateForStockSourceSetupMigrationAsync(MongoFixture fixture) => CreateAsync(fixture, false, true);
+    private static async Task<StoreTestData> CreateAsync(MongoFixture fixture, bool legacyCatalog, bool sourceSetupMigration = false)
     {
         var data = new StoreTestData(fixture);
-        if (legacyCatalog) await LegacyCatalogTestSchema.ApplyV6Async(data.Database, data.Clock);
+        if (sourceSetupMigration) await LegacyStockSourceSetupTestSchema.ApplyV14Async(data.Database, data.Clock);
+        else if (legacyCatalog) await LegacyCatalogTestSchema.ApplyV6Async(data.Database, data.Clock);
         else await new CollectionMigrations(data.Database, data.Clock).ApplyAsync();
         foreach (var node in new[]
         {

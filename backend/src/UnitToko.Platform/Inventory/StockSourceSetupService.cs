@@ -14,22 +14,24 @@ using UnitToko.Platform.Mongo.Migrations;
 
 namespace UnitToko.Platform.Inventory;
 
-/// <summary>Private candidate workflow. Approval creates an inactive pool; no runtime route,
+/// <summary>Governed configuration workflow. Approval creates an inactive pool; no
 /// writer authority, source observation or external reservation capability is activated.</summary>
-internal sealed class StockSourceSetupService(IMongoDatabase database, MongoUnitOfWork unit, IdAllocator ids, IClock clock)
+public sealed class StockSourceSetupService(IMongoDatabase database, MongoUnitOfWork unit, IdAllocator ids, IClock clock)
 {
     private readonly AuthorizationStore authorization = new(database, unit, clock);
     private IMongoCollection<BsonDocument> Rows(string name) => database.GetCollection<BsonDocument>(name);
     private static readonly FilterDefinitionBuilder<BsonDocument> F = Builders<BsonDocument>.Filter;
-    internal async Task<BsonDocument> ProposeAsync(ActorContext actor, StockSourceSetupInput input,
-        AuthorizationCommandMetadata metadata, CancellationToken ct = default)
+    public Task<BsonDocument> ProposeAsync(ActorContext actor, StockSourceSetupInput input,
+        AuthorizationCommandMetadata metadata, CancellationToken ct = default) => ProposeCoreAsync(actor, input, metadata, false, ct);
+    private async Task<BsonDocument> ProposeCoreAsync(ActorContext actor, StockSourceSetupInput input,
+        AuthorizationCommandMetadata metadata, bool recoveryOnly, CancellationToken ct)
     {
         StockSourceSetupPolicy.Validate(input); Metadata(metadata);
         await StorageAsync(ct);
         var id = (await ids.NextAsync("stockSourceProposals", ct)).Value;
         var auditId = (await ids.NextAsync("auditEvents", ct)).Value;
         return await CommandAsync(actor, "stock.source.propose", Permissions.StockSourcePropose, metadata, input,
-            (_, _) => Task.FromResult(new AuthorizationTarget(Resource(input.Location))),
+            (_, _, _) => Task.FromResult(new AuthorizationTarget(Resource(input.Location))),
             async (tx, token) =>
             {
                 var now = Now();
@@ -41,11 +43,14 @@ internal sealed class StockSourceSetupService(IMongoDatabase database, MongoUnit
                 await Rows("stockSourceProposals").InsertOneAsync(tx, row, cancellationToken: token);
                 await Rows("auditEvents").InsertOneAsync(tx, StockSourceSetupBson.Audit(row, actor, "stock.source.propose", now), cancellationToken: token);
                 return new BsonDocument { { "proposalId", id }, { "revision", 1L } };
-            }, ct);
+            }, ct, recoveryOnly);
     }
 
-    internal async Task<BsonDocument> DecideAsync(ActorContext actor, long proposalId, long expectedRevision,
-        StockSourceSetupDecision decision, string reviewReference, AuthorizationCommandMetadata metadata, CancellationToken ct = default)
+    public Task<BsonDocument> DecideAsync(ActorContext actor, long proposalId, long expectedRevision,
+        StockSourceSetupDecision decision, string reviewReference, AuthorizationCommandMetadata metadata, CancellationToken ct = default) =>
+        DecideCoreAsync(actor, proposalId, expectedRevision, decision, reviewReference, metadata, false, ct);
+    private async Task<BsonDocument> DecideCoreAsync(ActorContext actor, long proposalId, long expectedRevision,
+        StockSourceSetupDecision decision, string reviewReference, AuthorizationCommandMetadata metadata, bool recoveryOnly, CancellationToken ct)
     {
         if (proposalId <= 0 || expectedRevision <= 0 || !Enum.IsDefined(decision) || !StockSourceSetupPolicy.Text(reviewReference, 160))
             throw StockSourceSetupBson.Invalid();
@@ -57,8 +62,15 @@ internal sealed class StockSourceSetupService(IMongoDatabase database, MongoUnit
         var permission = decision == StockSourceSetupDecision.Withdraw ? Permissions.StockSourcePropose : Permissions.StockSourceApprove;
         return await CommandAsync(actor, "stock.source." + name, permission, metadata,
             new { proposalId, expectedRevision, decision, reviewReference },
-            async (tx, token) =>
+            async (snapshot, tx, token) =>
             {
+                // Read only the scope first. Missing and inaccessible IDs have the same response,
+                // and private history is loaded only after authorization for its stored location.
+                var scoped = await Rows("stockSourceProposals").Find(tx, F.Eq("_id", proposalId))
+                    .Project(new BsonDocument("input.location", 1)).SingleOrDefaultAsync(token);
+                if (scoped is null) throw new AuthorizationDeniedException("scope_denied");
+                var location = InventoryGraph.Location(scoped["input"]["location"].AsBsonDocument);
+                Require(actor, snapshot, permission, Resource(location));
                 var proposal = await ProposalAsync(tx, proposalId, token);
                 if (decision == StockSourceSetupDecision.Withdraw && proposal["proposedBy"].AsInt64 != actor.UserId)
                     throw new AuthorizationDeniedException("stock_source_proposer_required");
@@ -98,10 +110,10 @@ internal sealed class StockSourceSetupService(IMongoDatabase database, MongoUnit
                 await Rows("auditEvents").InsertOneAsync(tx, StockSourceSetupBson.Audit(row, actor, "stock.source." + name, now), cancellationToken: token);
                 return new BsonDocument { { "proposalId", proposalId }, { "decisionId", decisionId },
                     { "poolId", poolId.HasValue ? new BsonInt64(poolId.Value) : BsonNull.Value }, { "status", name } };
-            }, ct);
+            }, ct, recoveryOnly);
     }
 
-    internal async Task<BsonDocument?> ReadAsync(ActorContext actor, StockLocation location, long proposalId, CancellationToken ct = default)
+    public async Task<BsonDocument?> ReadAsync(ActorContext actor, StockLocation location, long proposalId, CancellationToken ct = default)
     {
         location.Validate(); if (proposalId <= 0) throw StockSourceSetupBson.Invalid(); await StorageAsync(ct);
         return await authorization.ReadAsync<BsonDocument?>(actor, async (snapshot, tx, token) =>
@@ -115,7 +127,7 @@ internal sealed class StockSourceSetupService(IMongoDatabase database, MongoUnit
         }, ct);
     }
 
-    internal async Task<AuthorizedPage> ListAsync(ActorContext actor, StockLocation location, int offset, int limit, CancellationToken ct = default)
+    public async Task<AuthorizedPage> ListAsync(ActorContext actor, StockLocation location, int offset, int limit, CancellationToken ct = default)
     {
         location.Validate(); AuthorizationStore.ValidatePage(offset, limit); await StorageAsync(ct);
         return await authorization.ReadAsync(actor, async (snapshot, tx, token) =>
@@ -132,21 +144,94 @@ internal sealed class StockSourceSetupService(IMongoDatabase database, MongoUnit
     }
     private static readonly BsonDocument FSort = new("_id", 1);
 
+    /// <summary>Receipt-only lookup followed by current-authority replay of server-reconstructed facts.
+    /// A missing receipt never submits new work and does not require the separate history-read grant.</summary>
+    public async Task<BsonDocument?> RecoverAsync(ActorContext actor, StockLocation location, string operation, string key,
+        string correlationId, CancellationToken ct = default)
+    {
+        location.Validate();
+        if (!StockSourceSetupPolicy.Text(key, 200) || !StockSourceSetupPolicy.Text(correlationId, 128) ||
+            operation is not ("stock.source.propose" or "stock.source.approve" or "stock.source.reject" or "stock.source.withdraw"))
+            throw StockSourceSetupBson.Invalid();
+        await StorageAsync(ct);
+        var permission = operation is "stock.source.approve" or "stock.source.reject" ? Permissions.StockSourceApprove : Permissions.StockSourcePropose;
+        var recovery = await authorization.ReadAsync<BsonDocument?>(actor, async (snapshot, tx, token) =>
+        {
+            Require(actor, snapshot, permission, Resource(location));
+            var receipt = await Rows("idempotencyRecords").Find(tx,
+                F.Eq("actorId", actor.UserId) & F.Eq("operation", operation) & F.Eq("key", key)).SingleOrDefaultAsync(token);
+            BsonDocument? result = null;
+            if (receipt is not null)
+            {
+                if (!receipt["actorId"].IsInt64 || !receipt["result"].IsBsonDocument ||
+                    !receipt["result"]["proposalId"].IsInt64 || receipt["result"]["proposalId"].AsInt64 <= 0)
+                    throw StockSourceSetupBson.Invalid();
+                var proposal = await ProposalAsync(tx, receipt["result"]["proposalId"].AsInt64, token);
+                if (StockSourceSetupBson.ReadInput(proposal["input"].AsBsonDocument).Location != location)
+                    throw new AuthorizationDeniedException("scope_denied");
+                BsonDocument? decision = null;
+                BsonDocument expected;
+                if (operation == "stock.source.propose")
+                {
+                    if (proposal["proposedBy"].AsInt64 != actor.UserId) throw StockSourceSetupBson.Invalid();
+                    expected = new() { { "proposalId", proposal["_id"] }, { "revision", 1L } };
+                }
+                else
+                {
+                    decision = await Rows("stockSourceDecisions").Find(tx, F.Eq("proposalId", proposal["_id"])).SingleOrDefaultAsync(token);
+                    if (decision is null) throw StockSourceSetupBson.Invalid();
+                    StockSourceSetupBson.RequireDecision(decision, proposal);
+                    if (decision["decidedBy"].AsInt64 != actor.UserId || operation != "stock.source." + decision["decision"].AsString)
+                        throw StockSourceSetupBson.Invalid();
+                    await AuditAsync(tx, decision, operation, actor.UserId, decision["decidedAt"], token);
+                    expected = new() { { "proposalId", proposal["_id"] }, { "decisionId", decision["_id"] },
+                        { "poolId", decision["poolId"] }, { "status", decision["decision"] } };
+                }
+                if (!receipt["result"].Equals(expected)) throw StockSourceSetupBson.Invalid();
+                result = new() { { "proposal", proposal }, { "decision", (BsonValue?)decision ?? BsonNull.Value }, { "expected", expected } };
+            }
+            await CompleteAsync(actor, snapshot, permission, Resource(location), tx, token);
+            return result;
+        }, ct);
+        if (recovery is null) return null;
+        BsonDocument replayed;
+        if (operation == "stock.source.propose")
+        {
+            var proposal = recovery["proposal"].AsBsonDocument;
+            replayed = await ProposeCoreAsync(actor, StockSourceSetupBson.ReadInput(proposal["input"].AsBsonDocument),
+                new(key, proposal["reason"].AsString, correlationId), true, ct);
+        }
+        else
+        {
+            var decision = recovery["decision"].AsBsonDocument;
+            var outcome = operation switch
+            {
+                "stock.source.approve" => StockSourceSetupDecision.Approve,
+                "stock.source.reject" => StockSourceSetupDecision.Reject,
+                _ => StockSourceSetupDecision.Withdraw
+            };
+            replayed = await DecideCoreAsync(actor, decision["proposalId"].AsInt64, decision["revision"].AsInt64, outcome,
+                decision["reviewReference"].AsString, new(key, decision["reason"].AsString, correlationId), true, ct);
+        }
+        if (!replayed.Equals(recovery["expected"])) throw StockSourceSetupBson.Invalid();
+        return replayed;
+    }
     private Task<BsonDocument> CommandAsync(ActorContext actor, string operation, string permission,
         AuthorizationCommandMetadata metadata, object body,
-        Func<IClientSessionHandle, CancellationToken, Task<AuthorizationTarget>> targetLoader,
-        Func<IClientSessionHandle, CancellationToken, Task<BsonDocument>> write, CancellationToken ct)
+        Func<AuthorizationSnapshot, IClientSessionHandle, CancellationToken, Task<AuthorizationTarget>> targetLoader,
+        Func<IClientSessionHandle, CancellationToken, Task<BsonDocument>> write, CancellationToken ct, bool recoveryOnly = false)
     {
         ResourceScope? resource = null;
         return authorization.ExecuteCommandAsync(actor, operation, metadata, body,
             async (snapshot, tx, token) =>
             {
-                var target = await targetLoader(tx, token); resource = target.Resource;
+                AuthorizationStore.Require(ScopePolicy.Compile(actor, snapshot, permission, Now()));
+                var target = await targetLoader(snapshot, tx, token); resource = target.Resource;
                 var query = Require(actor, snapshot, permission, resource);
                 var grantIds = query.Clauses.Where(clause => clause.Matches(resource)).Select(clause => clause.GrantId).ToImmutableArray();
                 return new(new(true, "allowed", grantIds), ScopePolicy.RequiredNodes(resource, snapshot.Directory), permission, target);
             }, write, ct, async (snapshot, tx, token) =>
-                await CompleteAsync(actor, snapshot, permission, resource ?? throw StockSourceSetupBson.Invalid(), tx, token));
+                await CompleteAsync(actor, snapshot, permission, resource ?? throw StockSourceSetupBson.Invalid(), tx, token), requireReceipt: recoveryOnly);
     }
     private async Task<BsonDocument> ProposalAsync(IClientSessionHandle tx, long id, CancellationToken ct)
     {

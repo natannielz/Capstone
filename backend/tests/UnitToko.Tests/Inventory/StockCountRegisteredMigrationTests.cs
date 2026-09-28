@@ -27,13 +27,13 @@ public sealed class StockCountRegisteredMigrationTests(MongoFixture fixture)
             var sharedBefore = await SharedStateAsync(database);
             await AssertEvidenceConstraintsAsync(database);
 
-            Assert.Equal(14, CollectionMigrations.CurrentVersion);
+            Assert.True(CollectionMigrations.CurrentVersion >= 14);
             var registered = new CollectionMigrations(database, clock);
             Assert.False(await registered.IsCurrentAsync());
             await registered.ApplyAsync();
             Assert.True(await registered.IsCurrentAsync());
             var completed = await HistoryAsync(database);
-            Assert.Equal(Enumerable.Range(1, 14), completed.Select(row => row["_id"].AsInt32));
+            Assert.Equal(Enumerable.Range(1, CollectionMigrations.CurrentVersion), completed.Select(row => row["_id"].AsInt32));
             Assert.Equal(earlierHistory, new BsonArray(completed.Take(13)));
             Assert.Equal("applied", completed[13]["state"].AsString);
             Assert.True(completed[13]["appliedAt"].IsBsonDateTime);

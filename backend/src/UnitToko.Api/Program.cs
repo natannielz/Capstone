@@ -46,6 +46,7 @@ builder.Services.AddSingleton<CatalogVisibilityStore>();
 builder.Services.AddSingleton<CatalogAuthoringService>();
 builder.Services.AddSingleton<CatalogDefinitionQueryService>();
 builder.Services.AddSingleton<StockCountService>();
+builder.Services.AddSingleton<StockSourceSetupService>();
 builder.Services.AddSingleton<HistoricalReadStore>();
 builder.Services.AddSingleton<AccessAdministrationService>();
 builder.Services.AddSingleton<OrganizationMasterDataService>();
@@ -60,6 +61,7 @@ builder.Services.AddOpenApi("v1", options =>
         document.Components ??= new OpenApiComponents();
         CatalogOpenApi.Configure(document);
         StockCountOpenApi.Configure(document);
+        StockSourceSetupOpenApi.Configure(document);
         document.Components.SecuritySchemes = new Dictionary<string, IOpenApiSecurityScheme>
         {
             ["providerEvents"] = new OpenApiSecurityScheme
@@ -270,6 +272,7 @@ app.MapAccessEndpoints();
 app.MapOrganizationEndpoints();
 app.MapCatalogEndpoints();
 app.MapStockCountEndpoints();
+app.MapStockSourceSetupEndpoints();
 app.MapGet("/health/live", () => TypedResults.Ok(new HealthStatus("live"))).AllowAnonymous().WithName("Liveness");
 app.MapGet("/health/ready", async (HttpContext context, MongoConnection mongo,
     CollectionMigrations migrations, CancellationToken cancellationToken) =>

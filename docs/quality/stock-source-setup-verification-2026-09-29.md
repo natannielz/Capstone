@@ -1,5 +1,7 @@
 # Stock-source setup verification — 29 September 2026
 
+Historical preparation checkpoint; superseded for API/migration status by [the API and migration verification](stock-source-api-verification-2026-09-29.md).
+
 Status: local final regression passed; independent review and activation acceptance remain open. Source base: d233148cc67d9311e5fe5944744feef348dc1002.
 
 ## Result and boundary
