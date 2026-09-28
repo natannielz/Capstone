@@ -197,6 +197,8 @@ The command-specific quantity policy may allow zero for a recorded discrepancy, 
 
 ## T05A — Shared accounting and private evidence foundations
 
+Implementation continuation (28 September): use the [transactional accounting foundation plan](2026-09-28-accounting-foundation.md) for the persisted journal/book-fence substage and [PAY01](2026-09-28-report-payments-ocr.md) for private evidence. Their local checkpoints do not close the complete T05A acceptance or the later T12 reconciliation workflow.
+
 **Dependencies:** T05 persistence, T04 policies and T03 authenticated actors. Complete before procurement, fulfillment or financial workflows.
 
 **Files:** Create `backend/src/UnitToko.Modules/Accounting/{JournalEntry,PostJournal,PeriodGuard}.cs`, `Documents/{EvidenceService,EvidenceMetadata}.cs`, object-storage/scanner adapters in `UnitToko.Platform/Storage/`, and backend accounting/evidence integration tests. T09 extends this evidence service; T12 extends these journal foundations.
