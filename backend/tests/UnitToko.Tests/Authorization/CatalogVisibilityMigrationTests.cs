@@ -375,7 +375,7 @@ public sealed class CatalogVisibilityMigrationTests(MongoFixture fixture)
             Assert.All(ddl, command =>
             {
                 Assert.Equal("majority", command["writeConcern"]["w"].AsString);
-                Assert.Contains(command.GetElement(0).Value.AsString, new[] { Entitlements, Assortments, "businessReadEvents", "personEvidenceSources", "personRecords", "personAccountBindings", "personEquivalenceGroups", "personEvidenceVersions" });
+                Assert.Contains(command.GetElement(0).Value.AsString, new[] { Entitlements, Assortments, "businessReadEvents", "personEvidenceSources", "personRecords", "personAccountBindings", "personEquivalenceGroups", "personEvidenceVersions", "personGovernancePolicies", "personReviewProposals", "personReviewHistory" });
             });
         });
     }

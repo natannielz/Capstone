@@ -217,7 +217,7 @@ public sealed class HistoricalReadMigrationTests(MongoFixture fixture)
             Assert.DoesNotContain(await Indexes(db), index => index["name"] == "ix_actorId_createdAt");
             var ddl = commands.Where(command => command.Contains("create") || command.Contains("collMod") || command.Contains("createIndexes")).ToArray();
             Assert.NotEmpty(ddl);
-            Assert.All(ddl, command => { Assert.Equal("majority", command["writeConcern"]["w"].AsString); Assert.Contains(command.GetElement(0).Value.AsString, new[] { Events, "personEvidenceSources", "personRecords", "personAccountBindings", "personEquivalenceGroups", "personEvidenceVersions" }); });
+            Assert.All(ddl, command => { Assert.Equal("majority", command["writeConcern"]["w"].AsString); Assert.Contains(command.GetElement(0).Value.AsString, new[] { Events, "personEvidenceSources", "personRecords", "personAccountBindings", "personEquivalenceGroups", "personEvidenceVersions", "personGovernancePolicies", "personReviewProposals", "personReviewHistory" }); });
             Assert.True(await new CollectionMigrations(db, clock).IsCurrentAsync());
         });
     }

@@ -4,6 +4,8 @@ This executable continuation belongs to [the report access plan](2026-09-28-repo
 
 The accepted baseline is e586380: current person resolution, v8 storage and shared approval checks passed 715 backend tests. This plan covers the next governed writer boundary. Real staff source, named reviewers, bootstrap authorization and evidence-validity rules remain [D01 decisions](../../quality/report-decisions.md). No ordinary administrator, provider profile, matching email or test fixture supplies that authority.
 
+Local service checkpoint: PG02–PG04 now have unavailable-by-default trust, v9 review storage, complete structural target loading and independently reviewed suspension/replay behavior. [Verification and remaining boundaries](../../quality/person-governance-acceptance-2026-09-28.md) distinguish this service work from PG05 API/UI delivery and live authority. PG06–PG07 and the complete parent goal remain open.
+
 ## Deliverables and order
 
 | Step | Concrete output | Acceptance |
@@ -75,6 +77,21 @@ Add review list/detail, explicit propose/approve/reject/withdraw operations and 
 Review UI shows original request, exact reviewed revision, independent decision, reason and account/session consequences. Preserve Indonesian wording, keyboard focus, mobile layout and distinct pending, denied, stale and uncertain outcomes. All writes retain existing origin/CSRF/expected-actor/MFA protections.
 
 Run real Mongo and non-intercepted API tests, generated-contract checks, browser/accessibility acceptance and independent review. Record synthetic source/policy fixtures separately from live acceptance. Do not enable real source/reviewer authority or claim ACC03 complete from these tests.
+
+
+### PG05 implementation map and prerequisites
+
+Current commands and exact detail reads do not yet provide a usable selection workflow. Implement authorized discovery before a screen would require raw numeric references.
+
+1. Extend Modules/Identity/PersonWithdrawalContracts.cs and Platform/Identity/PersonWithdrawalReads.cs with a bounded proposal queue, named target search, consequence preview and safe detail/action projections. Add a private server-owned selection proof in PersonWithdrawalTrust.cs. It must resolve approved visibility before any search/count/page or profile join, bind the exact actor/query/current policy, and retain transaction/lifetime fences through the final read. Ordinary directory permission is not staff-governance visibility. Do not invent system-wide reviewer appointments while D01 is unresolved.
+2. Keep structural target inspection separate from positive person authority, so expired/disputed targets remain inspectable. Preview includes all affected aliases and their permitted names, account/session consequences and exact reviewed revisions. Actor, query, policy, closure or semantic changes invalidate the selection. Extend proposal creation to consume a server-held preview reference bound to those exact semantics and expiry inside the same transaction; the existing private groupId/version command alone cannot prove the user saw changed source, account or profile details. Bind that reference into the idempotency request. Raw source references, subjects and hashes stay private.
+3. Add Api/Identity/PersonReviewEndpoints.cs and safe DTOs under /api/v1/identity/administration/person-reviews; map them in Program.cs and register the service beside enabled identity services in IdentityRuntime.cs. Preserve the unavailable public trust constructor. Follow IdentityAdministrationEndpoints.cs and AccessRequestMetadata for current actor, origin/CSRF, fresh MFA, reason, quoted If-Match and idempotency. Browser IDs and revisions use string contracts, never unwrapped domain long values.
+4. Add the three person.review permission definitions to AccessEndpoints.cs AdministrativeActions projection only; do not add grants, role powers or adjudicator appointments. Add the page to Auth0Options.AllowedReturnPaths and frontend identity-workflow.ts return paths. The server already derives step-up operations from the permission catalog.
+5. Add /administration/person-reviews/page.tsx, a focused screen and typed client under frontend/src/modules/identity; extend AdministrationNavigation.tsx, permission labels and identityDestinations(). Display original request, decision metadata, consequences and currently permitted actions. Clear prior data on actor/policy/selection changes. When trust is unavailable, explain in Indonesian that staff identity review has not been activated; successful sign-in/MFA does not activate it.
+6. Update operation-journal.ts and OperationRecovery.tsx together. Recovery currently sends every entry to access receipt/resolve, so allowing person.review names alone would misroute it. Dispatch by operation namespace; preserve the original actor, key and exact request. A missing receipt means unconfirmed, not failed, and cannot clear an uncertain entry. Define and test any explicit resolution contract before enabling a corresponding clear/retry action.
+7. Generate OpenAPI/client contracts with the existing exporter and generator. Add real HTTP/Mongo cases for visibility before totals, hidden targets, safe joins, stale preview, policy/session expiry, CSRF/expected actor, large IDs and repeated commands. Browser tests cover actor switches, stale responses, unavailable versus denied states, exact retry bodies, recovery routing and missing-receipt retention. Inspect desktop/mobile/keyboard use and label mocked browser evidence separately.
+
+Only the approved trust adapter can supply visibility and appointments. Default production discovery must remain unavailable; synthetic fixtures may exercise the local contracts without inventing D01 policy or granting real users authority.
 
 ## PG06–PG07 — Preserve the remaining parent obligations
 
