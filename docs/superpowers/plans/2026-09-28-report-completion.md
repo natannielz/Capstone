@@ -115,8 +115,8 @@ Existing check commands include `dotnet test backend/UnitToko.slnx`, `npm --pref
 
 - [ ] Test cross-branch queue counts/events, stale owner delegation, duplicated jobs and worker crash after acknowledged external delivery.
 - [ ] Build shared queue/timeline queries with scoped paging, next-action/aging, assignment/handover, reminder/escalation and notification failure visibility.
-- [ ] Add unbilled/overdue/source-stock age/OCR failure/backlog/audit failure/database/backup alerts with named responder and remediation link.
-- [ ] Implement explainable M07 anomaly rules for exceptional prices, adjustments and refunds with policy version, explanation and human disposition; no auto-rejection/posting. Keep M08 replenishment baseline in CAT02.
+- [ ] Add unbilled/overdue/source-stock age/OCR failure/backlog/audit failure/suspicious-access/database/backup alerts with named responder and remediation link. For suspicious access, use reviewed versioned rules and restricted alert payloads; include successful but unusual authorized activity. Acceptance includes an unusual-access fixture that alerts the named responder without disclosing private records, and normal permitted activity that does not trigger the rule.
+- [ ] Implement explainable M07 anomaly rules for exceptional prices, quantities, adjustments and refunds with policy version, explanation and human disposition; no auto-rejection/posting. Include a quantity-anomaly acceptance case: the same request under two versioned synthetic review policies produces the correct flag and explanation; a reviewer can disposition it, and the signal alone never changes an order, stock, funds or permissions. Actual thresholds require the business policy. Keep M08 replenishment baseline in CAT02.
 - [ ] Verify authorized live updates/reconnect/bounded polling and worker recovery without duplicate send; test stale-state labels and existing proposed convergence target.
 - [ ] Review, record F12/U05/Q10/M07 baseline evidence and commit. Configure real outbound delivery only with authorized sender/access.
 

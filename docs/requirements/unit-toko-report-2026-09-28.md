@@ -107,7 +107,7 @@ All rows are **open for production acceptance**. `Extend` means usable foundatio
 | S06 | Originals, thumbnails, OCR text, sensitive fields, exports and keys obey access, retention and log-redaction policy. | PAY01/PAY02/OPS06 | Build |
 | S07 | Supplier/receiving-bank changes are versioned and independently verified through a trusted channel. | PAY03/OPS02 | Gate |
 | S08 | OCR worker can read assigned eligible evidence and write suggestions, never verify/allocate/post cash. | PAY02 | Build |
-| S09 | Durable immutable decision audit, restricted reads and actionable audit/security failure alerts. | PAY01/OPS03 | Extend |
+| S09 | Durable immutable decision audit, restricted reads and actionable audit/security failure and suspicious-access alerts. | PAY01/OPS03 | Extend |
 
 ### Business workflow completeness
 
@@ -166,7 +166,7 @@ All rows are **open for production acceptance**. `Extend` means usable foundatio
 | M04 | Hash/reference/similarity signals support duplicate review; ambiguous match does not approve or reject money automatically. | PAY02/PAY04 | Build |
 | M05 | Blur/rotation/clipping/type quality flags guide re-upload and retain original evidence. | PAY02/PAY05 | Build |
 | M06 | Code and fuzzy product suggestions require confirmation and never guess contents; embeddings require later measured benefit. | CAT04/OPS07 | Conditional |
-| M07 | Explainable price/adjustment/refund anomaly rules first; trained model only after validated improvement. | OPS03/OPS07 | Conditional |
+| M07 | Explainable price/quantity/adjustment/refund anomaly rules first; trained model only after validated improvement. | OPS03/OPS07 | Conditional |
 | M08 | Lead-time-aware low-stock/replenishment baseline first; forecasting waits for sufficient clean history. | CAT02/OPS07 | Conditional |
 | M09 | Original image, field positions, confidence, uncertain digits and human correction history remain reviewable. | PAY02/PAY05 | Build |
 | M10 | Pin model/license/checksum/runtime, bound resource/network use and measure field accuracy, false matches, review effort, latency and memory. | PAY02/OPS05/OPS07 | Build |
