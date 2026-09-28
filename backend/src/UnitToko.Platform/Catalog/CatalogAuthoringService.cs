@@ -38,10 +38,10 @@ public sealed partial class CatalogAuthoringService
         internal Dictionary<(string Collection, long Id), BsonDocument> Heads { get; } = [];
         internal void Head(string collection, BsonDocument row) => Heads[(collection, row["_id"].AsInt64)] = row.DeepClone().AsBsonDocument;
     }
-    private async Task<Context> BeginAsync(ActorContext actor, IClientSessionHandle tx, CancellationToken ct)
+    private async Task<Context> BeginAsync(ActorContext actor, IClientSessionHandle tx, CancellationToken ct, string permission = Permissions.CatalogManage)
     {
         var snapshot = await authorization.LoadAsync(actor, tx, ct);
-        AuthorizationStore.Require(ScopePolicy.Compile(actor, snapshot, Permissions.CatalogManage, clock.UtcNow));
+        AuthorizationStore.Require(ScopePolicy.Compile(actor, snapshot, permission, clock.UtcNow));
         var identity = await repository.Rows("identities").Find(tx, F.Eq("_id", actor.UserId)).FirstOrDefaultAsync(ct);
         if (actor.GrantVersion <= 0 || identity is null || !identity.TryGetValue("schemaVersion", out var schema) || !schema.IsInt32 || schema.AsInt32 != 1 ||
             !identity.TryGetValue("status", out var status) || !status.IsString || status.AsString != "active" ||
