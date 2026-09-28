@@ -77,6 +77,22 @@ The braces above enumerate files, not a single literal filename. New internal C#
 
 PAY01 and CAT01 share the CatalogImage association contract: Documents owns the immutable eligible asset; Catalog owns its association with a family/definition and current publication authority. Neither an asset ID nor the existing catalog metadata-only image reference grants file access. Freeze the exact target/pin interfaces with those owners before PAY01 implementation; this refinement does not implement or activate Documents, storage, scanning or catalog images.
 
+## PAY01 implementation sequence and existing boundaries
+
+Code inspection at `0119a74`, with accounting v12 in progress, resolves the following implementation order. Allocate the evidence migration number after accounting integration; do not reuse v12.
+
+1. Freeze the Catalog-owned target adapter, then implement durable reservations, immutable references, lifecycle fences/pins, receipts/audit and isolated create-only local storage. Start from an existing image-free family/SKU root; unavailable owning-purpose adapters reject.
+2. Add bounded JSON reservation/status/recovery endpoints and a separate authenticated raw binary upload ending in quarantine. Only the dedicated upload metadata bypasses the existing 64 KiB JSON buffering. Require the CSRF header; avoid multipart/IFormFile and its early form parsing. Never reuse the provider machine-callback exemption.
+3. Add kind-specific validation claims, bounded real JPEG/PNG decoding, explicit unavailable/scanner outcomes, stale-claim protection and idempotent verdict persistence. Commit the result before acknowledging the outbox job; a crash between these steps must replay safely.
+4. Complete Catalog image association across API, domain/service, repository and current schema, then authorized original/derivative delivery. Bind/pin the image to the new immutable definition inside the existing authoring transaction.
+5. Finish tombstone cleanup, generation reconciliation, read/processing leases, holds/retention, integrity checks and real object/Mongo race/recovery acceptance. Missing retention keeps deletion disabled.
+
+Reuse the verified actor resolver and `ActorRequiredFilter`, adding evidence mutations to expected-actor checks and their OpenAPI coverage. Reuse `AccessRequestMetadata` and `AuthorizationStore.ExecuteAuthorizedAsync` for current-authority command replay. `AuthorizationStore.LoadAsync`, scope compilation, exact resource reads and final grant/membership/session fences remain necessary; generic idempotency replay alone does not reauthorize.
+
+Catalog authoring graph/receipt helpers are private: add a narrow same-session Catalog adapter instead of copying a weaker ownership check into Documents. Buyer delivery can compose inside `CatalogVisibilityStore.ReadCurrentAsync<T>`; it already owns the authorization transaction, so put association validation and evidence pins/read leases inside its callback. Never nest a second transaction. The current Image-purpose catalog result is metadata only.
+
+`OutboxStore.EnqueueAsync` already accepts the caller session. Its current claim selects every event kind; completion/retry are separate majority writes with token/expiry checks, and renewal/dead-letter/retry ceilings are absent. Resolve those bounded consumer contracts before activating an evidence worker. Object writes, decoding and external side effects stay outside retried Mongo callbacks; the approved existing monotonic ID allocator may reserve IDs outside the transaction and leave gaps.
+
 ## PAY01 — Immutable private evidence and security eligibility
 
 **Requirements:** S05/S06/S09, P02/P07/P12 foundations.
