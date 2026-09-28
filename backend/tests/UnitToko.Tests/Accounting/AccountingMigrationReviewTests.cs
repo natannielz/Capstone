@@ -94,7 +94,7 @@ public sealed class AccountingMigrationReviewTests(MongoFixture fixture)
         Assert.True(index.Contains("partialFilterExpression"));
     }
 
-    internal static Task ResetMigrationAsync(IMongoDatabase db) => db.GetCollection<BsonDocument>("schemaMigrations").DeleteOneAsync(new BsonDocument("_id", 12));
+    internal static Task ResetMigrationAsync(IMongoDatabase db) => db.GetCollection<BsonDocument>("schemaMigrations").DeleteManyAsync(new BsonDocument("_id", new BsonDocument("$gte", 12)));
     private static async Task<string> TargetSnapshotAsync(IMongoDatabase db)
     {
         var definitions = await (await db.ListCollectionsAsync()).ToListAsync();

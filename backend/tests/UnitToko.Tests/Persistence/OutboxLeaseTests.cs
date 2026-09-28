@@ -9,7 +9,7 @@ namespace UnitToko.Tests.Persistence;
 [Collection("Mongo")]
 public sealed class OutboxLeaseTests(MongoFixture fixture)
 {
-    private const string Kind = "evidence.validation.requested";
+    private const string Kind = "unit-toko.test.validation.requested";
     private static OutboxClaimPolicy Policy(int attempts = 3, int leaseSeconds = 5, int maximumSeconds = 15) =>
         new([Kind], attempts, TimeSpan.FromSeconds(leaseSeconds), TimeSpan.FromSeconds(maximumSeconds));
 

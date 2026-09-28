@@ -24,7 +24,9 @@ Untrusted content access or namespace mutation rejects. Directory traversal is d
 
 Do not place evidence under web/static assets, source control, shared/synchronized directories or an unverified network/mount location. The production root, filesystem, service identity, permissions, backup/restore behavior and required durability must be separately accepted before runtime activation. No configured path or boolean alone grants that acceptance.
 
-## Caller responsibilities still being implemented
+## Caller lifecycle and remaining responsibilities
+
+The internal CatalogImage admission service now implements items 1–4; combined integration verification is recorded in the [admission acceptance](../quality/private-evidence-admission-acceptance-2026-09-28.md). It is not registered as a production endpoint. Items 5–6 remain unimplemented. See the [admission operations guide](private-evidence-admission.md) for interrupted outcomes.
 
 1. Commit the authorized reservation, independent lineage/version-row/attempt IDs, uploader binding and capacity before any external I/O. Account for part, ready and original copies, including every failed or unresolved attempt.
 2. Require a known successful commit of the complete-EOF expected tuple before publication. A lost staging result cannot be reconstructed as successful input EOF from a partial file.
