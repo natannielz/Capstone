@@ -87,6 +87,7 @@ export async function submitTrackedRequest<T>(ledger: MutationLedger, journal: O
 
 
 export type CommittedRecoveryReceipt = Readonly<{ state: "committed"; result?: Readonly<{ id: string; version: string }> | null }>;
+export type PersonRecoveryReceipt = Readonly<{ state: "committed"; result: Readonly<{ id: string; version: string }>; recordedAt: string }> | Readonly<{ state: "closed"; result: null; recordedAt: string }>;
 export type RecoveryOutcome = CommittedRecoveryReceipt | Readonly<{ state: "closed" | "unconfirmed" }>;
 type LookupReceipt = Readonly<{ state: string; result?: Readonly<{ id: string; version: string }> | null }>;
 export type LegacyRecoveryAdapter = Readonly<{
@@ -96,7 +97,10 @@ export type LegacyRecoveryAdapter = Readonly<{
 
 /** Supply this only from the owning client screen. A missing receipt is never a failed or closed request. */
 export type OperationRecoveryAdapters = Readonly<{
-  "person.review"?: Readonly<{ lookup: (entry: OperationReference) => Promise<CommittedRecoveryReceipt | null> }>;
+  "person.review"?: Readonly<{
+    lookup: (entry: OperationReference) => Promise<PersonRecoveryReceipt | null>;
+    close?: Readonly<{ allowed: (operation: string) => boolean; resolve: (entry: OperationReference, reason: string) => Promise<PersonRecoveryReceipt | null> }>;
+  }>;
 }>;
 
 function recoveryNamespace(operation: string): "access" | "organization" | "identity" | "person.review" | null {
@@ -113,29 +117,42 @@ export function operationRecoveryCapabilities(operation: string, adapters: Opera
   const namespace = recoveryNamespace(operation);
   if (!namespace) return { canCheck: false, canClose: false, unavailable: "operation" };
   if (namespace === "person.review") return typeof adapters[namespace]?.lookup === "function"
-    ? { canCheck: true, canClose: false, unavailable: null }
+    ? { canCheck: true, canClose: typeof adapters[namespace]?.close?.resolve === "function" && adapters[namespace]?.close?.allowed(operation) === true, unavailable: null }
     : { canCheck: false, canClose: false, unavailable: "adapter" };
   return { canCheck: true, canClose: true, unavailable: null };
 }
 
 /** Reconcile one immutable reference; never rebuild or retry its original command from persisted metadata. */
 export async function reconcileOperationRecovery(entry: OperationReference, journal: OperationJournal,
-  legacy: LegacyRecoveryAdapter, adapters: OperationRecoveryAdapters = {}, closeReason?: string): Promise<RecoveryOutcome> {
+  legacy: LegacyRecoveryAdapter, adapters: OperationRecoveryAdapters = {}, closeReason?: string, isCurrent: () => boolean = () => true): Promise<RecoveryOutcome> {
   const namespace = recoveryNamespace(entry.operation);
   if (!namespace) throw new AccessFailure(400, "recovery_operation_unsupported");
   if (!validEntry(entry)) throw new AccessFailure(400, "recovery_reference_invalid");
   const reference = Object.freeze({ ...entry });
+  const requireCurrent = () => { if (!isCurrent()) throw new AccessFailure(409, "recovery_request_stale"); };
+  requireCurrent();
   let receipt: LookupReceipt | null;
   if (namespace === "person.review") {
-    // No close contract exists for person review, even if a caller accidentally supplies a legacy resolver.
-    if (closeReason !== undefined) throw new AccessFailure(400, "recovery_close_unsupported");
     const adapter = adapters[namespace];
+    if (closeReason !== undefined && typeof adapter?.close?.resolve !== "function") throw new AccessFailure(400, "recovery_close_unsupported");
     if (typeof adapter?.lookup !== "function") throw new AccessFailure(503, "recovery_adapter_unavailable");
-    receipt = await adapter.lookup(reference);
-    if (receipt !== null && receipt?.state !== "committed") throw new AccessFailure(502, "recovery_receipt_invalid");
+    let personReceipt: PersonRecoveryReceipt | null;
+    if (closeReason === undefined) personReceipt = await adapter.lookup(reference);
+    else {
+      if (adapter.close?.allowed(reference.operation) !== true) throw new AccessFailure(403, "recovery_close_unavailable");
+      if (!closeReason.trim() || closeReason.trim().length > 1000) throw new AccessFailure(400, "recovery_reason_invalid");
+      personReceipt = await adapter.close.resolve(reference, closeReason.trim());
+    }
+    requireCurrent();
+    if (personReceipt !== null && (!personReceipt || !["committed", "closed"].includes(personReceipt.state) ||
+      typeof personReceipt.recordedAt !== "string" || personReceipt.recordedAt.length > 40 || !/^\d{4}-\d\d-\d\dT/.test(personReceipt.recordedAt) || !Number.isFinite(Date.parse(personReceipt.recordedAt)) ||
+      (personReceipt.state === "closed" ? personReceipt.result !== null : !personReceipt.result || typeof personReceipt.result.id !== "string" || typeof personReceipt.result.version !== "string" || !validReference(personReceipt.result.id) || !validReference(personReceipt.result.version))))
+      throw new AccessFailure(502, "recovery_receipt_invalid");
+    receipt = personReceipt;
   } else {
     receipt = closeReason === undefined ? await legacy.lookup(reference) : await legacy.close(reference, closeReason.trim());
   }
+  requireCurrent();
   if (receipt?.state !== "committed" && receipt?.state !== "closed") return { state: "unconfirmed" };
   try { journal.confirmed(reference); }
   catch { throw new AccessFailure(400, "recovery_cleanup_failed"); }

@@ -13,3 +13,4 @@ public sealed record PersonReviewDetail(PersonReviewSummary Summary, ImmutableAr
     PersonReviewDecision? Decision);
 public sealed record PersonReviewPreview(string Reference, string Kind, DateTimeOffset ExpiresAt,
     PersonReviewTarget Target, PersonReviewSummary? Proposal);
+public sealed record PersonReviewOperationOutcome(string State, PersonWithdrawalResult? Result, DateTimeOffset? RecordedAt);

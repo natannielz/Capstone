@@ -79,11 +79,21 @@ public static class PersonReviewEndpoints
             if (string.IsNullOrEmpty(request.Key) || request.Key.Length > 128 ||
                 request.Key.Any(character => !char.IsAsciiLetterOrDigit(character) && character is not ('-' or '_' or '.' or ':')))
                 throw new DomainValidationException("invalid_idempotency_key", "A bounded request key is required");
-            var result = await service.ReadOperationReceiptAsync(Actor(http), request.Operation, request.Key,
+            var result = await service.ReadOperationOutcomeAsync(Actor(http), request.Operation, request.Key,
                 ReadMetadata(http, request.Purpose, "operation-recovery"), ct);
-            if (result is not null) http.Response.Headers.ETag = AccessRequestMetadata.VersionTag(result.Version);
-            return TypedResults.Ok(new PersonReviewReceiptDto(result is not null, result is null ? null : PersonReviewResponses.From(result)));
+            if (result.Result is { } committed) http.Response.Headers.ETag = AccessRequestMetadata.VersionTag(committed.Version);
+            return TypedResults.Ok(PersonReviewResponses.From(result));
         }).WithName("PersonReviewReceiptQuery");
+        group.MapPost("/operations/resolve", async (PersonReviewResolutionDto request, HttpContext http,
+            [FromServices] PersonWithdrawalService service, [FromHeader(Name = "Idempotency-Key")] string idempotencyKey,
+            CancellationToken ct) =>
+        {
+            if (request.Operation is not ("person.review.propose" or "person.review.approve" or "person.review.reject" or "person.review.withdraw"))
+                throw new DomainValidationException("invalid_operation", "Choose a person review operation");
+            var result = await service.ResolveOperationAsync(Actor(http), request.Operation, Metadata(http, request.Reason), ct);
+            if (result.Result is { } committed) http.Response.Headers.ETag = AccessRequestMetadata.VersionTag(committed.Version);
+            return TypedResults.Ok(PersonReviewResponses.From(result));
+        }).WithName("PersonReviewReceiptResolve");
     }
 
     private static void MapPreview(RouteGroupBuilder group, string path, string name,

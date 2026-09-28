@@ -3,8 +3,8 @@ import assert from "node:assert/strict";
 import { createUnitTokoClient } from "../src/api/client";
 import { createPersonReviewGateway } from "../src/modules/identity/person-review-client";
 import { personReviewCommand, type PersonReviewDraft } from "../src/modules/identity/person-review-workflow";
-import { AccessFailure } from "../src/modules/administration/workflow";
-import { OperationJournal, reconcileOperationRecovery } from "../src/modules/administration/operation-journal";
+import { AccessFailure, MutationLedger } from "../src/modules/administration/workflow";
+import { OperationJournal, reconcileOperationRecovery, submitTrackedRequest } from "../src/modules/administration/operation-journal";
 
 const actorId = "9007199254740993", groupId = "9007199254740995", version = "9007199254740997", proposalId = "9007199254741001";
 const account = { userId: "21", displayName: "Petugas Tebet", verifiedEmail: "tebet@example.test", status: "active" };
@@ -97,7 +97,7 @@ test("person receipt recovery uses only the private namespace route and null ret
   const client = gateway(async request => {
     assert.equal(request.url, base + "/operations/query");
     assert.deepEqual(await request.json(), { purpose: "operation-recovery", operation: entry.operation, key: entry.key });
-    return Response.json({ confirmed, result: confirmed ? result : null });
+    return Response.json({ state: confirmed ? "committed" : "not_confirmed", recordedAt: confirmed ? result.recordedAt : null, result: confirmed ? result : null });
   });
   const legacy = { async lookup() { assert.fail("access fallback forbidden"); }, async close() { assert.fail("close unsupported"); } };
   const adapters = { "person.review": { lookup: client.receipt } };
@@ -117,4 +117,50 @@ test("read cancellation reaches the private business request", async () => {
   });
   await assert.rejects(client.list(actorId, "pending", 0, controller.signal));
   assert.ok(observed?.aborted);
+});
+
+for (const [operation, status] of Object.entries({ "person.review.propose": "pending", "person.review.approve": "approved", "person.review.reject": "rejected", "person.review.withdraw": "withdrawn" })) {
+  test(operation + " permanent resolution sends original key with only operation and reason", async () => {
+    const entry = { actorId, operation, key: "original-reloaded-key", createdAt: result.recordedAt };
+    let calls = 0;
+    const client = gateway(async request => {
+      calls++; assert.equal(request.url, base + "/operations/resolve"); assert.equal(request.headers.get("Idempotency-Key"), entry.key);
+      assert.equal(request.headers.has("If-Match"), false);
+      assert.deepEqual(await request.json(), { operation, reason: "Selesaikan referensi lama" });
+      return Response.json({ state: "committed", result: { ...result, status }, recordedAt: result.recordedAt });
+    });
+    assert.deepEqual(await client.resolve(entry, "  Selesaikan referensi lama  "), { state: "committed", result: { id: proposalId, version: "1" }, recordedAt: result.recordedAt });
+    assert.equal(calls, 1);
+  });
+}
+
+test("closed lookup and resolve return confirmed permanent closure without inventing a business result", async () => {
+  const entry = { actorId, operation: "person.review.propose", key: "original-reloaded-key", createdAt: result.recordedAt };
+  const response = { state: "closed_no_effect", result: null, recordedAt: result.recordedAt };
+  const client = gateway(async () => Response.json(response));
+  assert.deepEqual(await client.receipt(entry), { state: "closed", result: null, recordedAt: result.recordedAt });
+  assert.deepEqual(await client.resolve(entry, "Reason"), { state: "closed", result: null, recordedAt: result.recordedAt });
+});
+
+test("resolution denial, unavailable, malformed and unknown results never clear the original reference", async () => {
+  for (const response of [() => Response.json({ code: "permission_denied" }, { status: 403 }), () => Response.json({ code: "person_governance_unavailable" }, { status: 503 }),
+    () => Response.json({ state: "closed_no_effect", result, recordedAt: result.recordedAt }), () => Response.json({ state: "not_confirmed", result: null, recordedAt: null }),
+    () => { throw new TypeError("network lost"); }]) {
+    const values = new Map<string, string>();
+    const journal = new OperationJournal(() => ({ get length() { return values.size; }, key(index) { return [...values.keys()][index] ?? null; }, getItem(key) { return values.get(key) ?? null; }, setItem(key, value) { values.set(key, value); }, removeItem(key) { values.delete(key); } }));
+    const entry = journal.remember(actorId, "person.review.propose", "original-key"); let attempts = 0;
+    const client = gateway(async () => { attempts++; return response(); });
+    const legacy = { async lookup() { assert.fail("person lookup must be private"); }, async close() { assert.fail("person close must be private"); } };
+    try { const outcome = await reconcileOperationRecovery(entry, journal, legacy, { "person.review": { lookup: client.receipt, close: { allowed: () => true, resolve: client.resolve } } }, "Close request"); assert.deepEqual(outcome, { state: "unconfirmed" }); } catch (error) { assert.ok(error instanceof Error); }
+    assert.equal(attempts, 1); assert.deepEqual(journal.list(actorId), [entry]);
+  }
+});
+
+
+test("a late original submission retains the journal and exact retry when its owning actor view was replaced", async () => {
+  const values=new Map<string,string>();const journal=new OperationJournal(()=>({get length(){return values.size;},key(i){return [...values.keys()][i]??null;},getItem(k){return values.get(k)??null;},setItem(k,v){values.set(k,v);},removeItem(k){values.delete(k);}}));
+  const ledger=new MutationLedger(()=>"original-actor-key"),command=personReviewCommand({actorId,action:"propose",groupId,groupVersion:version,reason:"Original reason"},preview,now);
+  let current=true;const client=gateway(async()=>{current=false;return Response.json(result);});
+  await assert.rejects(submitTrackedRequest(ledger,journal,actorId,"person-review","person.review.propose",command,key=>client.submit(command,key,()=>current)),/commit_outcome_unknown/);
+  assert.equal(ledger.isUncertain("person-review"),true);assert.equal(journal.list(actorId)[0].key,"original-actor-key");assert.equal(values.size,1);
 });

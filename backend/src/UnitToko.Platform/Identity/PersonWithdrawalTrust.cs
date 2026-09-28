@@ -36,9 +36,10 @@ internal sealed class PersonWithdrawalPermit
         PersonWithdrawalIntent intent, BsonDocument policy)
     {
         if (!tx.IsInTransaction || userId <= 0 || intent.ProposalId < 0 ||
-            intent.ProposalId == 0 && action is not ("receiptRead" or "previewPropose") ||
+            intent.ProposalId == 0 && action is not ("receiptRead" or "receiptResolve" or "previewPropose") ||
             action == "previewPropose" && intent.ProposalId != 0 ||
-            action is not ("previewPropose" or "propose" or "approve" or "reject" or "withdraw" or "read" or "receiptRead") ||
+            action == "receiptResolve" && (intent.ProposalId != 0 || intent.Target.ElementCount != 0) ||
+            action is not ("previewPropose" or "propose" or "approve" or "reject" or "withdraw" or "read" or "receiptRead" or "receiptResolve") ||
             !PersonGovernanceSchemas.IsValid("personGovernancePolicies", policy)) throw Denied();
         client = database.Client; databaseName = database.DatabaseNamespace.DatabaseName;
         owner = tx; transactionNumber = tx.WrappedCoreSession.CurrentTransaction.TransactionNumber;

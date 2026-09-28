@@ -187,11 +187,14 @@ public sealed partial class PersonWithdrawalServiceTests
         Assert.Equal(approved.GetRawText(), (await OkPersonBody(await checker.PostAsync("/proposals/" + id + "/approve", approvalBody, "http-approve", "1"))).GetRawText());
         var receiptRequest = new { purpose = "operation-recovery", operation = "person.review.approve", key = "http-approve" };
         var receipt = await OkPersonBody(await checker.PostAsync("/operations/query", receiptRequest));
-        Assert.True(receipt.GetProperty("confirmed").GetBoolean()); Assert.Equal(approved.GetRawText(), receipt.GetProperty("result").GetRawText());
+        Assert.Equal("committed", receipt.GetProperty("state").GetString()); Assert.Equal(approved.GetRawText(), receipt.GetProperty("result").GetRawText());
+        Assert.Equal(approved.GetProperty("recordedAt").GetString(), receipt.GetProperty("recordedAt").GetString());
         var anotherActor = await OkPersonBody(await maker.PostAsync("/operations/query", receiptRequest));
-        Assert.False(anotherActor.GetProperty("confirmed").GetBoolean()); Assert.Equal(JsonValueKind.Null, anotherActor.GetProperty("result").ValueKind);
+        Assert.Equal("not_confirmed", anotherActor.GetProperty("state").GetString()); Assert.Equal(JsonValueKind.Null, anotherActor.GetProperty("result").ValueKind);
+        Assert.Equal(JsonValueKind.Null, anotherActor.GetProperty("recordedAt").ValueKind);
         var missing = await OkPersonBody(await checker.PostAsync("/operations/query", new { purpose = "operation-recovery", operation = "person.review.approve", key = "never-received" }));
-        Assert.False(missing.GetProperty("confirmed").GetBoolean()); Assert.Equal(JsonValueKind.Null, missing.GetProperty("result").ValueKind);
+        Assert.Equal("not_confirmed", missing.GetProperty("state").GetString()); Assert.Equal(JsonValueKind.Null, missing.GetProperty("result").ValueKind);
+        Assert.Equal(JsonValueKind.Null, missing.GetProperty("recordedAt").ValueKind);
         Assert.Equal(2, await data.CountAsync("personReviewHistory")); Assert.Equal(2, await data.CountAsync("idempotencyRecords"));
         foreach (var user in new[] { TargetId, AliasId }) Assert.Equal(2L, (await data.RowAsync("identities", user))["securityVersion"].AsInt64);
     }
@@ -252,13 +255,15 @@ public sealed partial class PersonWithdrawalServiceTests
         await using var data = await Data.CreateAsync(workflowFixture);
         using var host = new PersonHttpHost(data, await PreviewServiceAsync(data)); using var browser = await host.OpenAsync(MakerId);
         using var schema = JsonDocument.Parse(await browser.Client.GetStringAsync("/openapi/v1.json"));
-        foreach (var suffix in new[] { "/proposals/query", "/targets/search", "/proposals/{id}/query", "/targets/{id}/preview", "/proposals/{id}/preview", "/proposals", "/proposals/{id}/approve", "/proposals/{id}/reject", "/proposals/{id}/withdraw", "/operations/query" })
+        foreach (var suffix in new[] { "/proposals/query", "/targets/search", "/proposals/{id}/query", "/targets/{id}/preview", "/proposals/{id}/preview", "/proposals", "/proposals/{id}/approve", "/proposals/{id}/reject", "/proposals/{id}/withdraw", "/operations/query", "/operations/resolve" })
         {
             var operation = schema.RootElement.GetProperty("paths").GetProperty(PersonApi + suffix).GetProperty("post");
             foreach (var header in new[] { "X-Expected-Actor-Id", "X-CSRF-Token" })
                 Assert.True(Assert.Single(operation.GetProperty("parameters").EnumerateArray(), item => item.GetProperty("name").GetString() == header).GetProperty("required").GetBoolean());
             if (suffix.EndsWith("/preview", StringComparison.Ordinal) || suffix.EndsWith("/approve", StringComparison.Ordinal) || suffix.EndsWith("/reject", StringComparison.Ordinal) || suffix.EndsWith("/withdraw", StringComparison.Ordinal))
                 Assert.True(Assert.Single(operation.GetProperty("parameters").EnumerateArray(), item => item.GetProperty("name").GetString() == "If-Match").GetProperty("required").GetBoolean());
+            if (suffix == "/operations/resolve")
+                Assert.True(Assert.Single(operation.GetProperty("parameters").EnumerateArray(), item => item.GetProperty("name").GetString() == "Idempotency-Key").GetProperty("required").GetBoolean());
         }
         var current = await browser.Client.GetFromJsonAsync<JsonElement>("/api/v1/access/current");
         var actions = current.GetProperty("allowedActions").EnumerateArray().Select(item => item.GetString()).ToArray();
@@ -302,6 +307,111 @@ public sealed partial class PersonWithdrawalServiceTests
         var response = await browser.PostAsync("/targets/" + data.GroupId + "/preview", new { purpose = "access-review" }, version: "1");
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
         Assert.Equal(0, await data.CountAsync("personReviewPreviews"));
+    }
+
+    [Fact]
+    public async Task Http_person_operation_reload_can_close_only_original_actor_operation_key_without_a_private_body()
+    {
+        await using var data = await Data.CreateAsync(workflowFixture);
+        data.Appointments.ResolveUsers.Add(MakerId);
+        using var host = new PersonHttpHost(data, data.Service);
+        const string operation = "person.review.propose", key = "lost-original-body-after-reload";
+        using (var browser = await host.OpenAsync(MakerId))
+        {
+            var before = await OkPersonBody(await browser.PostAsync("/operations/query", new { operation, key, purpose = "operation-recovery" }));
+            Assert.Equal("not_confirmed", before.GetProperty("state").GetString());
+            Assert.Equal(JsonValueKind.Null, before.GetProperty("recordedAt").ValueKind);
+        }
+        await data.Sessions.RevokeAsync(data.Issued[MakerId].OpaqueToken, "synthetic_recovery_sign_out");
+        data.Clock.UtcNow += TimeSpan.FromMinutes(6);
+        var proof = new UnitToko.Modules.Identity.Contracts.ProviderIdentityProof(data.Maker.ProviderIssuer, data.Maker.ProviderSubject,
+            "fixture@example.invalid", true, "fixture-connection", data.Clock.UtcNow, data.Clock.UtcNow, "otp", "fixture-policy");
+        data.Issued[MakerId] = await data.Unit.ExecuteAsync((tx, ct) => data.Sessions.CreateAsync(tx,
+            new(MakerId, 1, 1, data.Maker.ProviderIssuer, data.Maker.ProviderSubject), proof, "synthetic-renewed-session", ct));
+        using var reloaded = await host.OpenAsync(MakerId);
+        var closed = await OkPersonBody(await reloaded.PostAsync("/operations/resolve", new { operation, reason = "Original body lost after reload" }, key));
+        Assert.Equal("closed_no_effect", closed.GetProperty("state").GetString());
+        Assert.Equal(JsonValueKind.Null, closed.GetProperty("result").ValueKind);
+        Assert.Equal(data.Clock.UtcNow, closed.GetProperty("recordedAt").GetDateTimeOffset());
+        var lookup = await OkPersonBody(await reloaded.PostAsync("/operations/query", new { operation, key, purpose = "operation-recovery" }));
+        Assert.Equal(closed.GetRawText(), lookup.GetRawText());
+        var repeated = await OkPersonBody(await reloaded.PostAsync("/operations/resolve", new { operation, reason = "Repeated resolution" }, key));
+        Assert.Equal(closed.GetRawText(), repeated.GetRawText());
+        Assert.Equal(1, await data.CountAsync("idempotencyRecords"));
+        Assert.Equal(0, await data.CountAsync("personReviewProposals")); Assert.Equal(0, await data.CountAsync("personReviewHistory"));
+        var receipt = await RecoveryReceiptAsync(data, MakerId, operation, key);
+        Assert.Equal("Original body lost after reload", receipt["personReviewClosure"]["reason"].AsString);
+        Assert.Equal(HttpStatusCode.Forbidden, (await reloaded.PostAsync("/proposals/query", new { purpose = "access-review" })).StatusCode);
+        using var other = await host.OpenAsync(OtherId);
+        var hidden = await OkPersonBody(await other.PostAsync("/operations/query", new { operation, key, purpose = "operation-recovery" }));
+        Assert.Equal("not_confirmed", hidden.GetProperty("state").GetString());
+        Assert.Equal(HttpStatusCode.Forbidden, (await other.PostAsync("/operations/resolve", new { operation, reason = "Unappointed actor" }, key)).StatusCode);
+        Assert.Equal(1, await data.CountAsync("idempotencyRecords"));
+    }
+
+    [Fact]
+    public async Task Http_person_operation_resolution_preserves_origin_csrf_expected_actor_and_authenticated_session_guards()
+    {
+        await using var data = await Data.CreateAsync(workflowFixture);
+        data.Appointments.ResolveUsers.Add(MakerId);
+        using var host = new PersonHttpHost(data, data.Service); using var browser = await host.OpenAsync(MakerId);
+        foreach (var fault in new[] { "origin-missing", "origin-foreign", "csrf-missing", "csrf-wrong", "actor-missing", "actor-wrong", "actor-leading-zero" })
+        {
+            using var request = browser.Request("/operations/resolve", new { operation = "person.review.propose", reason = "Resolve original request" }, "guarded-key");
+            var expected = HttpStatusCode.Forbidden;
+            if (fault == "origin-missing") request.Headers.Remove("Origin");
+            if (fault == "origin-foreign") { request.Headers.Remove("Origin"); request.Headers.Add("Origin", "https://foreign.example"); }
+            if (fault == "csrf-missing") request.Headers.Remove("X-CSRF-Token");
+            if (fault == "csrf-wrong") { request.Headers.Remove("X-CSRF-Token"); request.Headers.Add("X-CSRF-Token", "forged"); }
+            if (fault.StartsWith("actor", StringComparison.Ordinal))
+            {
+                request.Headers.Remove("X-Expected-Actor-Id"); expected = fault == "actor-wrong" ? HttpStatusCode.Conflict : HttpStatusCode.BadRequest;
+                if (fault == "actor-wrong") request.Headers.Add("X-Expected-Actor-Id", CheckerId.ToString(CultureInfo.InvariantCulture));
+                if (fault == "actor-leading-zero") request.Headers.Add("X-Expected-Actor-Id", "03000");
+            }
+            var response = await browser.Client.SendAsync(request);
+            Assert.Equal(expected, response.StatusCode); Assert.True(response.Headers.CacheControl?.NoStore);
+        }
+        using var anonymous = await host.OpenAsync(null);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.PostAsync("/operations/resolve",
+            new { operation = "person.review.propose", reason = "Anonymous resolution" }, "guarded-key")).StatusCode);
+        Assert.Equal(0, await data.CountAsync("idempotencyRecords")); Assert.Equal(0, await data.CountAsync("authorizationReadEvents"));
+    }
+
+    [Fact]
+    public async Task Http_person_operation_resolution_rejects_injected_authority_unknown_operations_and_invalid_metadata()
+    {
+        await using var data = await Data.CreateAsync(workflowFixture);
+        data.Appointments.ResolveUsers.Add(MakerId);
+        using var host = new PersonHttpHost(data, data.Service); using var browser = await host.OpenAsync(MakerId);
+        foreach (var payload in new[]
+        {
+            "{}", "{\"operation\":null,\"reason\":\"Resolve original request\"}",
+            "{\"operation\":\"person.review.propose\",\"reason\":null}",
+            "{\"operation\":\"person.review.propose\",\"reason\":123}",
+            "{\"operation\":\"access.grant.propose\",\"reason\":\"Wrong namespace\"}",
+            "{\"operation\":\"person.review.resolve\",\"reason\":\"Wrong operation\"}"
+        })
+        {
+            using var request = browser.Request("/operations/resolve", new { }, "malformed-key");
+            request.Content = new StringContent(payload, Encoding.UTF8, "application/json");
+            var response = await browser.Client.SendAsync(request);
+            Assert.True(response.StatusCode == HttpStatusCode.BadRequest, payload + ": " + await response.Content.ReadAsStringAsync());
+        }
+        foreach (var field in new[] { "actorId", "groupId", "proposalId", "key", "previewReference", "bodyHash", "originalBody" })
+        {
+            var payload = new Dictionary<string, object> { ["operation"] = "person.review.propose", ["reason"] = "Injected private authority", [field] = "3000" };
+            Assert.Equal(HttpStatusCode.BadRequest, (await browser.PostAsync("/operations/resolve", payload, "malformed-key")).StatusCode);
+        }
+        foreach (var key in new string?[] { null, "wrong key", new string('a', 129) })
+            Assert.Equal(HttpStatusCode.BadRequest, (await browser.PostAsync("/operations/resolve",
+                new { operation = "person.review.propose", reason = "Resolve original request" }, key)).StatusCode);
+        foreach (var reason in new[] { "", " ", new string('a', 1001), "unsafe\nreason" })
+            Assert.Equal(HttpStatusCode.BadRequest, (await browser.PostAsync("/operations/resolve",
+                new { operation = "person.review.propose", reason }, "malformed-key")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await browser.PostAsync("/operations/query",
+            new { operation = "person.review.propose", key = "malformed-key", purpose = "access-review" })).StatusCode);
+        Assert.Equal(0, await data.CountAsync("idempotencyRecords")); Assert.Equal(0, await data.CountAsync("authorizationReadEvents"));
     }
 
     private static async Task<JsonElement> PersonBody(HttpResponseMessage response) => await response.Content.ReadFromJsonAsync<JsonElement>();

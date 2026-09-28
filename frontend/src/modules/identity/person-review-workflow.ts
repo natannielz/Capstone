@@ -2,7 +2,7 @@ import type { components } from "../../api/generated/schema";
 import { validReference } from "../organizations/access-scope";
 import { AccessFailure, accessMessage, stableContent } from "../administration/workflow";
 import { IdentityFailure, identityMessage } from "./identity-workflow";
-import type { OperationReference, CommittedRecoveryReceipt } from "../administration/operation-journal";
+import type { OperationReference, PersonRecoveryReceipt } from "../administration/operation-journal";
 
 type Schemas = components["schemas"];
 export type PersonReviewAccount = Schemas["PersonReviewAccountDto"];
@@ -146,12 +146,16 @@ export function validatePersonReviewOutcome(value: unknown, action: PersonReview
     (expected?.groupId !== undefined && result.groupId !== expected.groupId)) return invalid();
   return result;
 }
-export function personReviewReceipt(value: unknown, entry: OperationReference, expected?: Pick<PersonReviewCommand, "proposalId" | "groupId">): CommittedRecoveryReceipt | null {
+export function personReviewReceipt(value: unknown, entry: OperationReference, expected?: Pick<PersonReviewCommand, "proposalId" | "groupId">): PersonRecoveryReceipt | null {
   const action = (Object.keys(personReviewOperations) as PersonReviewAction[]).find(item => personReviewOperations[item] === entry.operation);
-  if (!action || !record(value) || typeof value.confirmed !== "boolean") return invalid();
-  if (!value.confirmed) { if (value.result !== null) return invalid(); return null; }
+  if (!action || !record(value) || Object.keys(value).sort().join(",") !== "recordedAt,result,state") return invalid();
+  if (value.state === "not_confirmed") { if (value.result !== null || value.recordedAt !== null) return invalid(); return null; }
+  if (!time(value.recordedAt)) return invalid();
+  if (value.state === "closed_no_effect") { if (value.result !== null) return invalid(); return { state: "closed", result: null, recordedAt: value.recordedAt }; }
+  if (value.state !== "committed") return invalid();
   const result = validatePersonReviewOutcome(value.result, action, expected);
-  return { state: "committed", result: { id: result.proposalId, version: result.version } };
+  if (Date.parse(value.recordedAt) !== Date.parse(result.recordedAt)) return invalid();
+  return { state: "committed", result: { id: result.proposalId, version: result.version }, recordedAt: value.recordedAt };
 }
 
 export function personReviewNeedsRefresh(error: unknown) {

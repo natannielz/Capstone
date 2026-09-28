@@ -195,6 +195,7 @@ public sealed partial class PersonWithdrawalService
     {
         AuthorizationStore.ValidateMetadata(metadata);
         var operation = "person.review." + action;
+        _ = ReceiptSelection(operation, metadata.IdempotencyKey);
         var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
             System.Text.Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new { Request = requestBody, metadata.Reason })))).ToLowerInvariant();
         var idempotency = IdempotencyScope.ForActor(actor, operation, metadata.IdempotencyKey, hash); idempotency.Validate();
@@ -206,7 +207,11 @@ public sealed partial class PersonWithdrawalService
             BsonDocument proposal;
             if (old is not null)
             {
-                RequireReceiptOwner(old, actor.UserId, operation, metadata.IdempotencyKey);
+                if (PersonReviewReceiptRules.ClosedAt(old, actor.UserId, operation, metadata.IdempotencyKey, clock.UtcNow) is not null)
+                {
+                    await CompleteAsync(actor, tx, guards, token);
+                    throw new PersistenceConflictException("operation_closed", "This original request key is permanently closed without an effect");
+                }
                 if (old.GetValue("bodyHash", BsonNull.Value) != hash)
                     throw new PersistenceConflictException("idempotency_key_reused", "Request key was used with different details");
                 proposal = await ReceiptProposalAsync(tx, actor.UserId, action, old, token);

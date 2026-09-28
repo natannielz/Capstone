@@ -34,41 +34,8 @@ public sealed partial class PersonWithdrawalService
                 target["personIds"].AsBsonArray.Select(value => value.AsInt64).ToImmutableArray());
         }, cancellationToken);
     }
+    // Private compatibility result only. The UI uses the typed outcome to distinguish closed from unknown.
     public async Task<PersonWithdrawalResult?> ReadOperationReceiptAsync(ActorContext actor, string operation, string key,
-        AuthorizationReadMetadata audit, CancellationToken cancellationToken = default)
-    {
-        AccessAdministrationService.ValidateReadMetadata(audit);
-        if (operation is not ("person.review.propose" or "person.review.approve" or "person.review.reject" or "person.review.withdraw") ||
-            string.IsNullOrWhiteSpace(key) || key.Length > 200 || key.Any(char.IsControl)) throw Denied();
-        var action = operation["person.review.".Length..];
-        var keyHash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(key))).ToLowerInvariant();
-        var selection = new BsonDocument { { "operation", operation }, { "keyHash", keyHash } };
-        var auditId = (await ids.NextAsync("authorizationReadEvents", cancellationToken)).Value;
-        return await unit.ExecuteAsync<PersonWithdrawalResult?>(async (tx, ct) =>
-        {
-            var guards = new Guards();
-            var snapshot = await AuthorizeAsync(actor, "receiptRead", tx, guards, ct);
-            await PermitAsync(tx, actor.UserId, "receiptRead", new(0, PersonWithdrawalTarget.Digest(selection, false), new()), guards, ct);
-            var receipt = await Collection("idempotencyRecords").Find(tx,
-                F.Eq("actorId", actor.UserId) & F.Eq("operation", operation) & F.Eq("key", key)).FirstOrDefaultAsync(ct);
-            BsonDocument? proposal = null;
-            if (receipt is not null)
-            {
-                RequireReceiptOwner(receipt, actor.UserId, operation, key);
-                proposal = await ReceiptProposalAsync(tx, actor.UserId, action, receipt, ct);
-                await PermitAsync(tx, actor.UserId, "receiptRead", Intent(proposal), guards, ct);
-            }
-            await authorization.RecordPrivilegedReadAsync(auditId, actor, snapshot, "access.receipt.read", audit,
-                selection, proposal is null ? 0 : 1, [new(GrantScopeKind.System)], tx, ct);
-            await CompleteAsync(actor, tx, guards, ct);
-            return proposal is null ? null : Result(proposal);
-        }, cancellationToken);
-    }
-    private static void RequireReceiptOwner(BsonDocument receipt, long actorId, string operation, string key)
-    {
-        if (!receipt.TryGetValue("actorId", out var actor) || !actor.IsInt64 || actor.AsInt64 != actorId ||
-            !receipt.TryGetValue("operation", out var op) || !op.IsString || op.AsString != operation ||
-            !receipt.TryGetValue("key", out var storedKey) || !storedKey.IsString || storedKey.AsString != key)
-            throw Denied("person_receipt_invalid");
-    }
+        AuthorizationReadMetadata audit, CancellationToken cancellationToken = default) =>
+        (await ReadOperationOutcomeAsync(actor, operation, key, audit, cancellationToken)).Result;
 }

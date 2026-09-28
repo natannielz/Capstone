@@ -71,11 +71,11 @@ test("decision controls require both server allowed actions and the explicit per
 
 test("receipts confirm only the matching action status and strict string identities", () => {
   for (const [action, status] of Object.entries({ propose: "pending", approve: "approved", reject: "rejected", withdraw: "withdrawn" })) {
-    assert.equal(personReviewReceipt({ confirmed: true, result: { ...result, status } }, { ...entry, operation: "person.review." + action })?.result?.id, result.proposalId);
-    assert.throws(() => personReviewReceipt({ confirmed: true, result: { ...result, status: "unknown" } }, { ...entry, operation: "person.review." + action }));
+    assert.equal(personReviewReceipt({ state: "committed", recordedAt: result.recordedAt, result: { ...result, status } }, { ...entry, operation: "person.review." + action })?.result?.id, result.proposalId);
+    assert.throws(() => personReviewReceipt({ state: "committed", recordedAt: result.recordedAt, result: { ...result, status: "unknown" } }, { ...entry, operation: "person.review." + action }));
   }
-  assert.equal(personReviewReceipt({ confirmed: false, result: null }, entry), null);
-  for (const value of [{ confirmed: true, result: null }, { confirmed: false, result }, { confirmed: true, result: { ...result, version: 1 } }, { confirmed: true, result: { ...result, status: "approved" } }])
+  assert.equal(personReviewReceipt({ state: "not_confirmed", recordedAt: null, result: null }, entry), null);
+  for (const value of [{ state: "committed", recordedAt: result.recordedAt, result: null }, { state: "not_confirmed", recordedAt: null, result }, { state: "committed", recordedAt: result.recordedAt, result: { ...result, version: 1 } }, { state: "committed", recordedAt: result.recordedAt, result: { ...result, status: "approved" } }])
     assert.throws(() => personReviewReceipt(value, entry), /person_response_invalid/);
   assert.throws(() => validatePersonReviewOutcome(result, "propose", { groupId: "11" }));
   assert.throws(() => validatePersonReviewOutcome({ ...result, status: "approved" }, "approve", { proposalId: "12", groupId: target.groupId }));
@@ -115,7 +115,7 @@ test("preview expiry and policy changes require refresh even when returned outsi
 
 test("recovery checks any proposal and group identity retained by an in-memory request", () => {
   const approval = { ...entry, operation: "person.review.approve" };
-  const receipt = { confirmed: true, result: { ...result, status: "approved", version: "2" } };
+  const receipt = { state: "committed", recordedAt: result.recordedAt, result: { ...result, status: "approved", version: "2" } };
   assert.equal(personReviewReceipt(receipt, approval, { proposalId: result.proposalId, groupId: target.groupId })?.state, "committed");
   assert.throws(() => personReviewReceipt(receipt, approval, { proposalId: "93", groupId: target.groupId }), /person_response_invalid/);
   assert.throws(() => personReviewReceipt(receipt, approval, { proposalId: result.proposalId, groupId: "94" }), /person_response_invalid/);
@@ -133,4 +133,16 @@ test("changed actors are a session failure rather than a retryable stale preview
   const failure = new AccessFailure(409, "actor_changed");
   assert.equal(personReviewNeedsRefresh(failure), false);
   assert.match(personReviewMessage(failure), /Akun yang sedang masuk telah berubah/);
+});
+
+
+test("permanent recovery distinguishes strict terminal and unconfirmed envelopes", () => {
+  assert.deepEqual(personReviewReceipt({ state: "closed_no_effect", result: null, recordedAt: result.recordedAt }, entry), { state: "closed", result: null, recordedAt: result.recordedAt });
+  const malformed = [null, {}, { confirmed: true, result },
+    { state: "closed_no_effect", result, recordedAt: result.recordedAt }, { state: "closed_no_effect", result: null, recordedAt: null },
+    { state: "closed_no_effect", result: null, recordedAt: "invalid" }, { state: "not_confirmed", result: null, recordedAt: result.recordedAt },
+    { state: "committed", result, recordedAt: null }, { state: "committed", result, recordedAt: "2026-09-28T02:00:00Z" },
+    { state: "committed", result, recordedAt: result.recordedAt, confirmed: true }, { state: "closed", result: null, recordedAt: result.recordedAt }];
+  for (const value of malformed) assert.throws(() => personReviewReceipt(value, entry), /person_response_invalid/);
+  assert.equal(personReviewReceipt({ state: "committed", result, recordedAt: "2026-09-28T08:30:00+07:00" }, entry)?.state, "committed");
 });

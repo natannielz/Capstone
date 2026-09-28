@@ -628,6 +628,9 @@ public sealed partial class PersonWithdrawalServiceTests(MongoFixture fixture)
     private sealed class Appointments
     {
         internal HashSet<long> Users { get; } = [MakerId, CheckerId, TargetId, AliasId, OtherId];
+        internal HashSet<long> ResolveUsers { get; } = [];
+        internal HashSet<string>? RecoveryIntentDigests { get; set; }
+        internal bool DenyTargetReceiptReads { get; set; }
         internal bool AllowSelfPropose { get; set; }
         internal bool AllowAffectedReview { get; set; }
     }
@@ -639,8 +642,16 @@ public sealed partial class PersonWithdrawalServiceTests(MongoFixture fixture)
             PersonWithdrawalIntent intent, CancellationToken ct)
         {
             if (!tx.IsInTransaction || !appointments.Users.Contains(userId) ||
-                action is not ("previewPropose" or "propose" or "approve" or "reject" or "withdraw" or "read" or "receiptRead"))
+                action is not ("previewPropose" or "propose" or "approve" or "reject" or "withdraw" or "read" or "receiptRead" or "receiptResolve"))
                 throw new AuthorizationDeniedException("synthetic_appointment_unavailable");
+            if (action == "receiptResolve" && (!appointments.ResolveUsers.Contains(userId) ||
+                intent.ProposalId != 0 || intent.Target.ElementCount != 0))
+                throw new AuthorizationDeniedException("synthetic_resolution_unavailable");
+            if (action is "receiptRead" or "receiptResolve" && intent.ProposalId == 0 &&
+                appointments.RecoveryIntentDigests is { } allowed && !allowed.Contains(intent.RequestDigest))
+                throw new AuthorizationDeniedException("synthetic_recovery_intent_unavailable");
+            if (action == "receiptRead" && intent.ProposalId > 0 && appointments.DenyTargetReceiptReads)
+                throw new AuthorizationDeniedException("synthetic_target_receipt_unavailable");
             if (intent.Target.ElementCount == 0 && action is "read" or "receiptRead")
             {
                 // Appointed lookup permission precedes record lookup; actual stored targets
@@ -656,7 +667,7 @@ public sealed partial class PersonWithdrawalServiceTests(MongoFixture fixture)
                     action is "approve" or "reject" && !appointments.AllowAffectedReview))
                     throw new AuthorizationDeniedException("synthetic_target_conflict");
             }
-            else if (action != "receiptRead") throw new AuthorizationDeniedException("synthetic_target_unavailable");
+            else if (action is not ("receiptRead" or "receiptResolve")) throw new AuthorizationDeniedException("synthetic_target_unavailable");
             var policy = await database.GetCollection<BsonDocument>("personGovernancePolicies").Find(tx, Id(PolicyId)).SingleOrDefaultAsync(ct)
                 ?? throw new AuthorizationDeniedException("synthetic_policy_unavailable");
             return new(database, tx, userId, action, intent, policy);

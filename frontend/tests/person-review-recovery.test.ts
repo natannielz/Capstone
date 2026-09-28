@@ -50,7 +50,7 @@ const noLegacy: LegacyRecoveryAdapter = {
   async close() { assert.fail("person requests must never use access resolution"); },
 };
 const result = { id: "9007199254740995", version: "9007199254740997" };
-const committed = { state: "committed" as const, result };
+const committed = { state: "committed" as const, result, recordedAt: entry.createdAt };
 
 function pending(operation = entry.operation) {
   const storage = new MemoryStorage();
@@ -68,7 +68,7 @@ for (const operation of operations) test(operation + " uses only its adapter and
     assert.deepEqual(actual, reference);
     return committed;
   } } };
-  assert.deepEqual(await reconcileOperationRecovery(reference, journal, noLegacy, adapters), committed);
+  assert.deepEqual(await reconcileOperationRecovery(reference, journal, noLegacy, adapters), { state: "committed", result });
   assert.equal(lookups, 1);
   assert.deepEqual(journal.list(actorId).map(item => item.key), ["other-pending-key"]);
   assert.equal(journal.list("7").length, 1);
@@ -167,7 +167,7 @@ for (const operation of ["access.grant.propose", "organization.branch.update", "
 test("a confirmed built-in receipt still clears the matching reference", async () => {
   const { journal, reference } = pending("access.grant.approve");
   const receipt = await reconcileOperationRecovery(reference, journal, { async lookup() { return committed; }, close: noLegacy.close });
-  assert.deepEqual(receipt, committed);
+  assert.deepEqual(receipt, { state: "committed", result });
   assert.deepEqual(journal.list(actorId), []);
 });
 
@@ -195,4 +195,68 @@ test("existing recovery keeps its close control while an unknown namespace stays
   assert.doesNotMatch(unknown, /Selesaikan dan tutup/);
   assert.match(unknown, /belum didukung/);
   assert.match(unknown, /<button[^>]*disabled[^>]*>Periksa hasil/);
+});
+
+
+for (const operation of operations) test(operation + " resolves using its original metadata and explicit person adapter only", async () => {
+  const { journal, reference, storage } = pending(operation);
+  let closes = 0;
+  const adapters: OperationRecoveryAdapters = { "person.review": { async lookup() { assert.fail("close must use explicit resolver"); },
+    close: { allowed: candidate => candidate === operation, async resolve(actual, reason) {
+      closes++; assert.ok(Object.isFrozen(actual)); assert.deepEqual(actual, reference); assert.equal(reason, "Periksa permintaan belum pasti");
+      assert.deepEqual(Object.keys(JSON.parse([...storage.values.values()][0])).sort(), ["actorId", "createdAt", "key", "operation"]);
+      return { state: "closed", result: null, recordedAt: entry.createdAt };
+    } } } };
+  assert.equal(operationRecoveryCapabilities(operation, adapters).canClose, true);
+  assert.deepEqual(await reconcileOperationRecovery(reference, journal, noLegacy, adapters, "  Periksa permintaan belum pasti  "), { state: "closed" });
+  assert.equal(closes, 1); assert.deepEqual(journal.list(actorId), []);
+});
+
+test("person closure requires explicit eligibility and a bounded nonblank reason before sending", async () => {
+  const { journal, reference } = pending();
+  const adapters: OperationRecoveryAdapters = { "person.review": { async lookup() { assert.fail("no lookup fallback"); }, close: {
+    allowed: () => false, async resolve() { assert.fail("ineligible close must not send"); },
+  } } };
+  assert.equal(operationRecoveryCapabilities(reference.operation, adapters).canClose, false);
+  await assert.rejects(reconcileOperationRecovery(reference, journal, noLegacy, adapters, "Reason"), /recovery_close_unavailable/);
+  const eligible = { "person.review": { ...adapters["person.review"]!, close: { ...adapters["person.review"]!.close!, allowed: () => true } } };
+  for (const reason of ["", " ", "x".repeat(1001)]) await assert.rejects(reconcileOperationRecovery(reference, journal, noLegacy, eligible, reason), /recovery_reason_invalid/);
+  assert.deepEqual(journal.list(actorId), [reference]);
+});
+
+for (const state of ["committed", "closed"] as const) test("late " + state + " recovery replies cannot clear an old actor journal", async () => {
+  const { journal, reference } = pending(); let current = true; let release!: () => void;
+  const ready = new Promise<void>(resolve => { release = resolve; });
+  const check = reconcileOperationRecovery(reference, journal, noLegacy, { "person.review": { async lookup() { await ready; return state === "committed" ? committed : { state: "closed", result: null, recordedAt: entry.createdAt }; } } }, undefined, () => current);
+  current = false; release(); await assert.rejects(check, /recovery_request_stale/); assert.deepEqual(journal.list(actorId), [reference]);
+});
+
+test("closed person lookup unlocks while unconfirmed closure and malformed terminals remain retained", async () => {
+  const { journal, reference } = pending();
+  const unconfirmed: OperationRecoveryAdapters = { "person.review": { async lookup() { return null; }, close: { allowed: () => true, async resolve() { return null; } } } };
+  assert.deepEqual(await reconcileOperationRecovery(reference, journal, noLegacy, unconfirmed, "Unknown outcome"), { state: "unconfirmed" });
+  assert.deepEqual(journal.list(actorId), [reference]);
+  for (const receipt of [{ state: "closed", result }, { state: "closed", result: null }, { state: "closed", result: null, recordedAt: "bad" }, { state: "committed", result: null, recordedAt: entry.createdAt }, { state: "committed", result: { id: 12, version: "1" }, recordedAt: entry.createdAt }, { state: "committed", result: { id: "12", version: 1 }, recordedAt: entry.createdAt }]) {
+    const adapters = { "person.review": { async lookup() { return receipt; } } } as unknown as OperationRecoveryAdapters;
+    await assert.rejects(reconcileOperationRecovery(reference, journal, noLegacy, adapters), /recovery_receipt_invalid/);
+    assert.deepEqual(journal.list(actorId), [reference]);
+  }
+  assert.deepEqual(await reconcileOperationRecovery(reference, journal, noLegacy, { "person.review": { async lookup() { return { state: "closed", result: null, recordedAt: entry.createdAt }; } } }), { state: "closed" });
+  assert.deepEqual(journal.list(actorId), []);
+});
+
+test("an explicit eligible person resolver offers closure while lookup remains available without MFA", () => {
+  const { journal, reference } = pending(); const lookup = async () => null;
+  const render = (allowed: boolean) => renderToStaticMarkup(createElement(OperationRecovery, { entries: [reference], journal, disabled: false, onResolved() {},
+    recoveryAdapters: { "person.review": { lookup, close: { allowed: () => allowed, async resolve() { assert.fail("render cannot resolve"); } } } } }));
+  assert.match(render(true), /Selesaikan dan tutup/);
+  assert.doesNotMatch(render(false), /Selesaikan dan tutup/);
+  assert.match(render(false), /Periksa hasil/);
+});
+
+
+test("a replaced recovery scope sends no request and retains its reference", async () => {
+  const {journal,reference}=pending();
+  await assert.rejects(reconcileOperationRecovery(reference,journal,noLegacy,{ "person.review": {async lookup(){assert.fail("stale scope cannot contact server");}}},undefined,()=>false),/recovery_request_stale/);
+  assert.deepEqual(journal.list(actorId),[reference]);
 });

@@ -33,10 +33,14 @@ public sealed record PersonReviewDetailDto(PersonReviewSummaryDto Summary, Perso
     PersonReviewDecisionDto? Decision);
 public sealed record PersonReviewPreviewDto(string Reference, string Kind, DateTimeOffset ExpiresAt,
     PersonReviewTargetDto Target, PersonReviewSummaryDto? Proposal);
-public sealed record PersonReviewReceiptDto(bool Confirmed, PersonReviewResultDto? Result);
+public sealed record PersonReviewReceiptDto(string State, PersonReviewResultDto? Result, DateTimeOffset? RecordedAt);
+
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record PersonReviewResolutionDto([property: JsonRequired] string Operation, [property: JsonRequired] string Reason);
 
 internal static class PersonReviewResponses
 {
+    internal static PersonReviewReceiptDto From(PersonReviewOperationOutcome item) => new(item.State, item.Result is null ? null : From(item.Result), item.RecordedAt);
     private static string Number(long value) => value.ToString(CultureInfo.InvariantCulture);
     internal static PersonReviewResultDto From(PersonWithdrawalResult item) => new(new(item.ProposalId), Number(item.Version),
         item.Status, new(item.GroupId), Number(item.GroupVersion), item.RecordedAt);

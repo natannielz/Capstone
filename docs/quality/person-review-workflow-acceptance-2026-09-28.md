@@ -14,6 +14,8 @@ The private API exposes scoped queue/search/detail, propose/approve previews and
 
 The Indonesian screen uses named selection, original request/decision, all affected accounts and explicit consequence confirmation. Actor/selection/reason changes invalidate pending previews; stale, denied, inactive service, incomplete profile, offline and uncertain outcomes are distinct. Recovery dispatches person operations to their own validated receipt route, preserves actor/operation/key and keeps only recovery metadata in storage. Exact retry bodies remain in memory. A missing receipt stays unconfirmed; no generic access-resolution or unsafe clear is exposed. After a reload, only retained-reference receipt lookup is available; a future explicit no-effect resolution contract is needed before offering a safe close/replacement action for unresolved requests without an in-memory body.
 
+Subsequent checkpoint: [PG05R recovery acceptance](person-review-recovery-acceptance-2026-09-28.md) now supplies the explicit permanent no-effect resolution described above. The PG05 evidence below remains historical and does not include those later tests.
+
 ## Verification
 
 Environment: pinned local .NET 10.0.401, disposable GUID-named Mongo replica-set databases at 127.0.0.1:27028, existing frontend runtime. Person/source/appointment fixtures and provider proofs are synthetic. HTTP cases use the actual opaque-cookie handler, verified-session resolver, browser protections and Mongo transactions; they do not represent live Auth0 or an approved personnel source.

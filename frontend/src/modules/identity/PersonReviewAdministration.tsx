@@ -79,6 +79,7 @@ function PersonReviewBody({ current, session, observedAt, onFailure, onRefresh }
   const [mode, setMode] = useState<"queue" | "propose">("queue");
   const [revision, setRevision] = useState(0);
   const [busy, setBusy] = useState(false);
+  const [recoveryBusy, setRecoveryBusy] = useState(false);
   const [detailBusy, setDetailBusy] = useState(false);
   const [privateHidden, setPrivateHidden] = useState(false);
   const [retry, setRetry] = useState<PersonReviewCommand | null>(null);
@@ -88,7 +89,7 @@ function PersonReviewBody({ current, session, observedAt, onFailure, onRefresh }
   const [factorOperation, setFactorOperation] = useState(session.stepUpOperations.includes("person.review.propose") ? "person.review.propose" : "person.review.approve");
   const mounted = useRef(true), pending = useRef(false);
   const operationReference = useRef<{ operation: string; key: string } | null>(null);
-  const locked = busy || retry !== null || recovery.locked;
+  const locked = busy || recoveryBusy || retry !== null || recovery.locked;
   const timing = sessionTiming(session, elapsed);
   const now = () => Date.parse(session.serverTime) + Math.max(0, performance.now() - observedAt);
   useEffect(() => {
@@ -105,7 +106,9 @@ function PersonReviewBody({ current, session, observedAt, onFailure, onRefresh }
   const failedRead = useCallback((failure: unknown) => {
     setError(failure);
     if (personReviewNeedsRefresh(failure)) { detailReads.cancel(); setSelection(null); setDetailBusy(false); setPrivateHidden(true); }
-    onFailure(failure);
+    const privateUnavailable = failure instanceof AccessFailure && (failure.status === 403 && failure.code !== "step_up_required" || unavailable(failure) || profileUnavailable(failure));
+    if (privateUnavailable) { detailReads.cancel(); setSelection(null); setDetailBusy(false); setPrivateHidden(true); }
+    else onFailure(failure);
   }, [onFailure, detailReads]);
   async function choose(summary: PersonReviewSummary) {
     if (locked) return;
@@ -115,13 +118,13 @@ function PersonReviewBody({ current, session, observedAt, onFailure, onRefresh }
     finally { if (request.current()) setDetailBusy(false); }
   }
   async function run(command: PersonReviewCommand) {
-    if (pending.current) return;
+    if (pending.current || recoveryBusy) return;
     if (command.actorId !== current.userId) throw new AccessFailure(409, "actor_changed");
     pending.current = true; setBusy(true); setError(null); setMessage("");
     const operation = personReviewOperations[command.action];
     try {
       await submitTrackedRequest(ledger, recovery.journal, current.userId, "person-review", operation, command, key => {
-        operationReference.current = { operation, key }; return gateway.submit(command, key);
+        operationReference.current = { operation, key }; return gateway.submit(command, key, () => mounted.current);
       });
       if (mounted.current) {
         operationReference.current = null; setRetry(null); resetSelection(); setMode("queue"); setRevision(value => value + 1);
@@ -157,19 +160,26 @@ function PersonReviewBody({ current, session, observedAt, onFailure, onRefresh }
       <div className={styles.actions}><button type="button" className={styles.secondary} disabled={locked} onClick={() => void onRefresh()}>Muat ulang sesi dan akses</button>
         <button type="button" className={mode === "queue" ? styles.primary : styles.secondary} disabled={locked} onClick={() => { resetSelection(); setMode("queue"); }}>Daftar pengajuan</button>
         {current.allowedActions.includes("person.review.propose") && <button type="button" className={mode === "propose" ? styles.primary : styles.secondary} disabled={locked} onClick={() => { resetSelection(); setMode("propose"); }}>Ajukan penangguhan baru</button>}</div>
-      {factors.length > 0 && !retry && <div className={styles.review}><label>Tindakan untuk verifikasi<select value={factorOperation} disabled={locked} onChange={event => setFactorOperation(event.target.value)}>
+      {factors.length > 0 && !retry && <div className={styles.review}><label>Tindakan untuk verifikasi<select value={factorOperation} disabled={busy || recoveryBusy} onChange={event => setFactorOperation(event.target.value)}>
         {factors.map(operation => <option key={operation} value={operation}>{operation === "person.review.propose" ? "Pengajuan atau penarikan" : "Persetujuan atau penolakan"}</option>)}</select></label>
-        <ProtectedNavigationForm action="/auth/step-up" fields={fields ?? {}} disabled={locked || !fields} label="Verifikasi dua langkah" secondary />
+        <ProtectedNavigationForm action="/auth/step-up" fields={fields ?? {}} disabled={busy || recoveryBusy || !fields} label="Verifikasi dua langkah" secondary />
         <p className={styles.help}>Verifikasi membuka layanan akun. Setelah kembali, pilih dan periksa pengajuan kembali. Verifikasi tidak mengaktifkan peninjauan yang belum disetujui.</p></div>}
     </section>
     {message && <p role="status" className={styles.success}>{message}</p>}
     {error !== null && <div role="alert" className={styles.alert}><p>{personReviewMessage(error)}</p>{retry && <><p>Hasil belum pasti. Isian dan referensi pengajuan yang sama tetap tersimpan hanya di tab ini.</p>
-      <button type="button" className={styles.secondary} disabled={busy} onClick={() => void run(retry).catch(() => undefined)}>Periksa ulang permintaan yang sama</button>
+      <button type="button" className={styles.secondary} disabled={busy || recoveryBusy} onClick={() => void run(retry).catch(() => undefined)}>Periksa ulang permintaan yang sama</button>
       <p><Link href={retryFactorHref} target="_blank" rel="noopener noreferrer">Periksa sesi atau verifikasi dua langkah di tab baru</Link>. Setelah selesai, kembali ke tab ini untuk memeriksa hasil. Jangan membuat pengajuan pengganti.</p></>}</div>}
     {recovery.error !== null && <p role="alert" className={styles.alert}>{personReviewMessage(recovery.error)}</p>}
-    <OperationRecovery key={current.userId} entries={recovery.entries} journal={recovery.journal} disabled={busy} onResolved={resolved} onFailure={failedRead}
-      recoveryAdapters={{ "person.review": { lookup: entry => gateway.receipt(entry, retry && operationReference.current?.operation === entry.operation && operationReference.current.key === entry.key ? retry : undefined) } }} />
-    {privateHidden ? <section className={styles.state}><h2>Data peninjauan perlu diperiksa kembali</h2><p>Data sebelumnya disembunyikan setelah perubahan izin atau pratinjau. {retry || recovery.entries.length > 0 ? "Selesaikan pemulihan permintaan yang belum pasti, lalu muat ulang sesi dan akses." : "Muat ulang sesi dan akses untuk memeriksa data terbaru."}</p></section> : <div className={styles.desk}>
+    <OperationRecovery key={current.userId} entries={recovery.entries} journal={recovery.journal} disabled={busy} onResolved={resolved} onFailure={failedRead} onBusyChange={setRecoveryBusy}
+      recoveryAdapters={{ "person.review": {
+        lookup: entry => gateway.receipt(entry, retry && operationReference.current?.operation === entry.operation && operationReference.current.key === entry.key ? retry : undefined),
+        close: {
+          allowed: operation => current.allowedActions.includes("person.review.read") && current.allowedActions.includes(operation === "person.review.approve" || operation === "person.review.reject" ? "person.review.approve" : "person.review.propose") && sessionTiming(session, performance.now() - observedAt).fresh,
+          resolve: (entry, reason) => gateway.resolve(entry, reason, retry && operationReference.current?.operation === entry.operation && operationReference.current.key === entry.key ? retry : undefined),
+        },
+      } }} />
+    {recovery.entries.some(entry => entry.operation.startsWith("person.review.")) && <p className={styles.help}>Penutupan menggunakan referensi asli, tanpa mengirim ulang isian pengajuan. Izin tindakan semula, verifikasi dua langkah terbaru, dan penugasan khusus tetap diperiksa server. Hasil yang sudah tersimpan tidak dibatalkan.</p>}
+    {privateHidden ? <section className={styles.state}><h2>{profileUnavailable(error) ? "Data akun belum dapat ditinjau" : unavailable(error) ? "Peninjauan belum diaktifkan" : personReviewNeedsRefresh(error) ? "Data peninjauan perlu diperiksa kembali" : error instanceof AccessFailure && error.status === 403 && error.code !== "step_up_required" ? "Akses peninjauan belum disetujui" : "Data peninjauan perlu diperiksa kembali"}</h2><p>Data sebelumnya disembunyikan setelah perubahan izin, ketersediaan data, atau pratinjau. {retry || recovery.entries.length > 0 ? "Selesaikan pemulihan permintaan yang belum pasti, lalu muat ulang sesi dan akses." : "Muat ulang sesi dan akses untuk memeriksa data terbaru."}</p></section> : <div className={styles.desk}>
       {mode === "queue" ? <PersonReviewQueue gateway={gateway} actorId={current.userId} revision={revision} locked={locked} onReset={resetSelection} onFailure={failedRead} onSelect={summary => void choose(summary)} />
         : <PersonReviewTargetSearch gateway={gateway} actorId={current.userId} revision={revision} locked={locked} onReset={resetSelection} onFailure={failedRead} onSelect={target => { resetSelection(); setSelection({ kind: "target", target }); }} />}
       {selection ? <PersonReviewEditor key={selection.kind === "target" ? `target:${selection.target.groupId}:${selection.target.version}` : `proposal:${selection.detail.summary.result.proposalId}:${selection.detail.summary.result.version}`}

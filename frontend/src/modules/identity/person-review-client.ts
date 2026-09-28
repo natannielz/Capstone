@@ -42,7 +42,7 @@ export function createPersonReviewGateway(client: Client = createUnitTokoClient(
         ? await client.POST("/api/v1/identity/administration/person-reviews/targets/{id}/preview", options)
         : await client.POST("/api/v1/identity/administration/person-reviews/proposals/{id}/preview", options)));
     },
-    async submit(command: PersonReviewCommand, key: string) {
+    async submit(command: PersonReviewCommand, key: string, isCurrent: () => boolean = () => true) {
       const headers = { "X-Expected-Actor-Id": command.actorId, "Idempotency-Key": key };
       const decision = { params: { path: { id: command.proposalId! }, header: { ...headers, "If-Match": `"${command.proposalVersion}"` } }, body: { reason: command.reason } };
       let result: unknown;
@@ -56,7 +56,13 @@ export function createPersonReviewGateway(client: Client = createUnitTokoClient(
         case "reject": result = value(await client.POST("/api/v1/identity/administration/person-reviews/proposals/{id}/reject", decision)); break;
         case "withdraw": result = value(await client.POST("/api/v1/identity/administration/person-reviews/proposals/{id}/withdraw", decision)); break;
       }
+      if (!isCurrent()) throw new AccessFailure(503, "commit_outcome_unknown");
       return validatePersonReviewOutcome(result, command.action, command);
+    },
+    async resolve(entry: OperationReference, reason: string, expected?: Pick<PersonReviewCommand, "proposalId" | "groupId">) {
+      return personReviewReceipt(value(await client.POST("/api/v1/identity/administration/person-reviews/operations/resolve", {
+        body: { operation: entry.operation, reason: reason.trim() }, params: { header: { "X-Expected-Actor-Id": entry.actorId, "Idempotency-Key": entry.key } },
+      })), entry, expected);
     },
     async receipt(entry: OperationReference, expected?: Pick<PersonReviewCommand, "proposalId" | "groupId">) {
       return personReviewReceipt(value(await client.POST("/api/v1/identity/administration/person-reviews/operations/query", {

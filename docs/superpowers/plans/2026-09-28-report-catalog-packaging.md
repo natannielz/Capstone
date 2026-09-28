@@ -139,6 +139,19 @@ For partial loose returns from a sealed package, the return command refers to th
 > CAT01.1 pure SKU/immutable package-definition rules are now locally accepted with94/94 domain tests and independent source review. [Evidence and exact limits](../../quality/report-catalog-acceptance.md) distinguish this prerequisite from persistence, authorization, identifier reservation, pricing, images, UI and full CAT01 acceptance, which remain open.
 
 
+### CAT01.2 — Next complete authoring workflow (open)
+
+Deliver a real staff page backed by Mongo: choose a currently permitted shop/channel or warehouse/channel, create category and family, explicitly enter 12-unit and 24-unit variants, reload/edit them, and review replacement or retirement. These quantities are test examples, never defaults inferred from a package label. Keep all full CAT01 obligations below; a saved draft is not buyer publication or purchase availability.
+
+- Persist one canonical immutable authoring owner on category/family/SKU aggregates, separate from publication tuples. Resolve its current hierarchy and catalog.manage permission on the server. A SKU inherits its family's owner; changing category or definition cannot transfer it. Reuse existing shop-to-warehouse scope containment without widening a warehouse grant.
+- Add permitted-owner selectors and owner-scoped authoring queries before count/page/joins. Draft editing must work with zero buyer entitlements/assortments. Existing directory presentation options are not authority; compile the current complete permission clauses and recheck lifetimes after final awaited work.
+- Preserve publicId as the existing canonical UUID string and add matching standard BSON UUID bytes with global uniqueness and exact equality checks. Keep the existing organization/SKU uniqueness index and permanent primary-code reservations shared with future identifier corrections. Applied migrations remain unchanged; reject incomplete legacy masters before any new DDL rather than infer contents or ownership.
+- Make publication explicit. Load every old/new assortment and canonical owner inside one transaction; require management permission on the master and all affected owners, then atomically change listings and every affected assortment epoch. Retirement must withdraw all listings under the same authorization because existing metadata reads do not rely on the active flag alone. Define and test any family-wide deactivation before exposing it.
+- Ship protected API, generated client and responsive editor together, including exact revisions, actor checks, same-key retry and scoped receipt lookup. Do not copy person-governance closure powers into catalog. Buyer definition joins require current entitlement/assortment access in the same transaction and never turn metadata references into image/price capabilities.
+- Prove the persisted staff flow, simultaneous identity/code creation, scope isolation and final-await rollback, publication/read races, immutable revisions/replacement, strict migration rejection/resume, and desktop/mobile/keyboard use. Preserve legacy reader-defense fixtures at their explicit schema version and add complete current-schema fixtures; do not weaken production uniqueness to accommodate old synthetic duplicates.
+
+Images remain unavailable until PAY01 eligibility; reject supplied image IDs/URLs in this boundary. Price/availability remain absent until their own policies and authorities exist. D02 still gates real buyer audiences, pricing and entitlement issuance. The authoring slice seeds no role grants, assortments, entitlements or product data. Root owns shared composition/contracts/fixture changes; separate storage, service and UI/API owners coordinate the schema and build windows.
+
 **Requirements:** F01; I01–I07/I09; V03–V05/V08; M06 baseline. **Depends on:** T05 foundation and ACC02's catalog entitlement contract; reuse T05A/PAY01's approved image-asset contract.
 
 **Files to create:**
