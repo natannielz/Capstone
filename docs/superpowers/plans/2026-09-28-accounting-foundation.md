@@ -1,6 +1,6 @@
 # Transactional accounting foundation
 
-Status: execution plan at baseline `0119a74`; part of T05A, not completion of T05A or T12.
+Status: local implementation and scoped independent review accepted; publication pending. See [recorded verification](../../quality/accounting-foundation-acceptance-2026-09-28.md). Part of T05A, not completion of T05A or T12.
 
 ## Goal and binding scope
 
@@ -28,35 +28,35 @@ Binding references: [production requirements](../../requirements/unit-toko-produ
 
 Files: new bounded files under `backend/src/UnitToko.Modules/Accounting/`; tests under `backend/tests/UnitToko.Tests/Accounting/`.
 
-- [ ] Write behavior tests first for line shape, balance, aggregate bounds, exact precision, malformed/default values, immutable copies, source identities, currency, book canonicalization and Jakarta month boundaries.
-- [ ] Capture the expected missing-behavior failure, then implement pure contracts/policies.
-- [ ] Define exact posting, reversal, period and chart snapshot interfaces before persistence. Use actual server-owned accounts, never silently accept arbitrary browser account codes.
+- [x] Write behavior tests first for line shape, balance, aggregate bounds, exact precision, malformed/default values, immutable copies, source identities, currency, book canonicalization and Jakarta month boundaries.
+- [x] Capture the expected missing-behavior failure, then implement pure contracts/policies.
+- [x] Define exact posting, reversal, period and chart snapshot interfaces before persistence. Use actual server-owned accounts, never silently accept arbitrary browser account codes.
 
 ## Task 2 — Strict persisted schema and migration
 
 Files: new `AccountingSchemas.cs`, `AccountingMigration.cs` in Platform/Mongo/Migrations; register next version in CollectionMigrations; migration/accounting tests.
 
-- [ ] Add immutable chart versions, canonical books, strict periods and journals with required source, nested line precision/bounds/balance, date/month parity, scope and revision validation; enforce unique canonical book/month/source/reversal identities and lookup indexes.
-- [ ] Preflight existing journal/period/configuration data and exact supported indexes/validators before any target DDL; malformed ambiguous records fail without silent backfill or policy invention. Preserve unrelated restrictions and the existing source uniqueness index when its semantics remain equivalent. Applied v1–v11 remain unchanged.
-- [ ] Handle interrupted/resumed migration and allocator high-water marks. Preserve historically scoped fixture tests at their intended migration version; do not weaken financial assertions.
+- [x] Add immutable chart versions, canonical books, strict periods and journals with required source, nested line precision/bounds/balance, date/month parity, scope and revision validation; enforce unique canonical book/month/source/reversal identities and lookup indexes.
+- [x] Preflight existing journal/period/configuration data and exact supported indexes/validators before any target DDL; malformed ambiguous records fail without silent backfill or policy invention. Preserve unrelated restrictions and the existing source uniqueness index when its semantics remain equivalent. Applied v1–v11 remain unchanged.
+- [x] Handle interrupted/resumed migration and allocator high-water marks. Preserve historically scoped fixture tests at their intended migration version; do not weaken financial assertions.
 
 ## Task 3 — Real transactional posting and period protection
 
 Files: Platform/Accounting session-taking writer/repository/period guard and accounting audit support; integration tests.
 
-- [ ] Load the book, current chart and exact source/resource inside the caller session; require active supplied transaction and matching database/session ownership.
-- [ ] Validate/re-resolve account lines and source fingerprint before writes; fence the canonical book and period, reject locked dates, append immutable journal, invalidate affected later period snapshots and persist audit/outbox together.
-- [ ] Implement linked exact reversal and duplicate prevention without mutating original entries.
-- [ ] Implement the internal period transition/fence boundary required to prove close/post concurrency, retaining immutable history. Do not expose operational approval until T12's real reconciliation/person-authority workflow exists.
-- [ ] Exercise the writer inside an actual AuthorizationStore outer command with synthetic current actor/grants and a controlled business mutation. Show accounting/audit failure rolls all effects back, including receipt/outbox. This proves composition but is explicitly not a real supplier-receipt acceptance claim.
+- [x] Load the book, current chart and exact source/resource inside the caller session; require active supplied transaction and matching database/session ownership.
+- [x] Validate/re-resolve account lines and source fingerprint before writes; fence the canonical book and period, reject locked dates, append immutable journal, invalidate affected later period snapshots and persist audit/outbox together.
+- [x] Implement linked exact reversal and duplicate prevention without mutating original entries.
+- [x] Implement the internal period transition/fence boundary required to prove close/post concurrency, retaining immutable history. Do not expose operational approval until T12's real reconciliation/person-authority workflow exists.
+- [x] Exercise the writer inside an actual AuthorizationStore outer command with synthetic current actor/grants and a controlled business mutation. Show accounting/audit failure rolls all effects back, including receipt/outbox. This proves composition but is explicitly not a real supplier-receipt acceptance claim.
 
 ## Task 4 — Verification, review and recorded handoff
 
-- [ ] Run focused domain tests and real local replica-set integration tests: duplicate source across keys/actors, changed-source fingerprint, exact request replay, uncertain commits, downstream failures, missing chart/book, wrong source scope, reversal duplicate, absent/closed periods, late/backdated posting and both deterministic close/post orderings.
-- [ ] Include authorization revocation/final-session expiry coverage for any new outer command wrapper; do not introduce an unauthenticated production caller to make tests easier.
-- [ ] Test strict nested BSON numeric validation and migration preflight/resumption. Verify applied migrations and prior numeric constraints remain compatible.
-- [ ] Run appropriate existing persistence/numeric/authorization regressions once; record failed fixtures separately before corrections. Do not claim the whole suite passed from filtered results.
-- [ ] Obtain independent review of transaction composition, source replay, cumulative periods, authority boundary and migration. Resolve material findings with regression evidence.
+- [x] Run focused domain tests and real local replica-set integration tests: duplicate source across keys/actors, changed-source fingerprint, exact request replay, uncertain commits, downstream failures, missing chart/book, wrong source scope, reversal duplicate, absent/closed periods, late/backdated posting and both deterministic close/post orderings.
+- [x] Include authorization revocation/final-session expiry coverage for any new outer command wrapper; do not introduce an unauthenticated production caller to make tests easier.
+- [x] Test strict nested BSON numeric validation and migration preflight/resumption. Verify applied migrations and prior numeric constraints remain compatible.
+- [x] Run appropriate existing persistence/numeric/authorization regressions once; record failed fixtures separately before corrections. Do not claim the whole suite passed from filtered results.
+- [x] Obtain independent review of transaction composition, source replay, cumulative periods, authority boundary and migration. Resolve material findings with regression evidence.
 - [ ] Commit only owned files and publish the verified checkpoint to the existing GitHub branch. Vercel remains separately pending authorized account access and does not host the new .NET runtime.
 
 ## Completion evidence and remaining gates
@@ -68,7 +68,7 @@ This substage requires callable persisted accounting primitives and real transac
 - Trusted namespace-specific `IAccountingSourceReader` resolves source revision, canonical book, exact stored resource dimensions, explicit business date and immutable mapping-key lines in the supplied session. Unknown source adapters deny; no generic browser source/lines adapter is registered. Synthetic persisted source fixtures prove composition without claiming procurement exists.
 - Ordinary posts load the active book's current immutable chart version and active accounts. Entries retain chart version, stable account IDs and historical account snapshots. Configuration activation/chart-pointer changes must share the book fence; missing posting periods deny rather than silently provisioning production periods.
 - Exact reversals swap original debit/credit lines and retain original immutable chart/account snapshots even after an account is retired. They still need an active book, permitted current date, trusted source and unique original-entry reversal link. No remapping through today's chart.
-- A duplicate-source path aborts the supplied transaction before throwing the typed `source_already_posted` or `source_content_conflict` error. Test an owner that catches the exception: its earlier business effect must not be committable. Posting/audit failures must fail closed with the same atomicity; preserve driver transient labels for the outer bounded retry mechanism.
+- A duplicate-source path aborts the supplied transaction before throwing the typed `journal_source_duplicate` or `journal_source_conflict` error. Test an owner that catches the exception: its earlier business effect must not be committable. Posting/audit failures must fail closed with the same atomicity; preserve driver transient labels for the outer bounded retry mechanism.
 - Period closure storage transition is internal, loads approved revision/stage history from stored records, and verifies a deterministic journal-only cumulative snapshot/digest inside the fenced transaction. The digest is a storage snapshot, not evidence of complete reconciliation or person approval. T12 supplies those real outer gates.
 - ID reservation uses the existing monotonic IdAllocator outside the business transaction (caller preallocation is also valid). This is the explicit permitted retry-side-effect exception: aborted attempts may leave gaps, but allocated IDs are never rolled back/reused. No financial state, notification or object side effect receives that exception; results expose IDs only after commit.
 - Trusted source resolution must pin the authoritative source revision with a conditional write in the same session, or require an equivalent existing caller-owned version write. A read-only snapshot of the source cannot establish that later concurrent edits are compatible. Include a deterministic source-change race; adapters must preserve this contract before activation.

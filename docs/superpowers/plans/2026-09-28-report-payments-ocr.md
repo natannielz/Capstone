@@ -79,6 +79,8 @@ PAY01 and CAT01 share the CatalogImage association contract: Documents owns the 
 
 ## PAY01 implementation sequence and existing boundaries
 
+The [reviewed private-evidence contracts](../../requirements/private-evidence-contracts.md) specify lineage/version-row identity, uploader-bound reservations, same-session pins, abort-on-failure, immutable storage recovery and current authorization after slow integrity inspection. Their initial slice boundaries do not close any PAY01 requirement; full association, replacement/supplement history, cleanup and operational acceptance remain required.
+
 Code inspection at `0119a74`, with accounting v12 in progress, resolves the following implementation order. Allocate the evidence migration number after accounting integration; do not reuse v12.
 
 1. Freeze the Catalog-owned target adapter, then implement durable reservations, immutable references, lifecycle fences/pins, receipts/audit and isolated create-only local storage. Start from an existing image-free family/SKU root; unavailable owning-purpose adapters reject.
