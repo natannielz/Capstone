@@ -513,3 +513,9 @@ The complete frontend regression passed 534 checks. Two real HTTPS/browser/API/M
 The source setup screen remains preparatory: approval creates an inactive pool. CAT02 and the full production/report goal remain open. Independent review and Vercel owning-account access are still pending.
 
 Final affected regression: 80 passed, no failures/skips, 6m17s. Together with migration/provider/navigation and real-browser verification, 96 distinct backend/browser cases passed across 98 executions; frontend passed 534. The verification document records exact overlap and hashes.
+
+### Existing stock-source revisions — 29 September 2026
+
+A new transactional service handles proposed changes to an existing stock source, independent review and immutable revision history. Approval checks actual base settings/version, preserves physical ownership and applies only to inactive pools. Competing reviews, stale/revoked authority, broken history and failed audit writes cannot leave a partial new version.
+
+The new 48-case suite and all 104 affected setup/migration/ownership/permission cases passed, totaling 152 distinct tests with no failures/skips; see [the revision evidence](stock-source-revision-verification-2026-09-29.md). The service has no new route or UI yet and its three collection contracts remain draft-only. Full-chain migration, recovery/API/staff integration, active-source handoff, aliases, observations/lots and downstream inventory/cost acceptance remain open.
