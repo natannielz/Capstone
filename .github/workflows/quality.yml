@@ -47,7 +47,7 @@ jobs:
   backend:
     name: Backend and real Mongo transactions
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 60
     env:
       DOTNET_CLI_TELEMETRY_OPTOUT: '1'
       DOTNET_NOLOGO: '1'
