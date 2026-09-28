@@ -69,27 +69,7 @@ public sealed partial class StockSourceRevisionTests(MongoFixture fixture)
         Assert.Equal(0, await Count(data, "movements"));
     }
 
-    private async Task<StoreTestData> Data()
-    {
-        var data = await StoreTestData.CreateAsync(fixture);
-        try
-        {
-            foreach (var name in StockSourceRevisionSchemas.Collections)
-            {
-                await data.Database.CreateCollectionAsync(name, new CreateCollectionOptions<BsonDocument>
-                {
-                    Validator = StockSourceRevisionSchemas.Validator(name), ValidationAction = DocumentValidationAction.Error,
-                    ValidationLevel = DocumentValidationLevel.Strict
-                });
-                var key = StockSourceRevisionSchemas.Key(name);
-                if (!key.Equals(new BsonDocument("_id", 1)))
-                    await Rows(data, name).Indexes.CreateOneAsync(new CreateIndexModel<BsonDocument>(key,
-                        new CreateIndexOptions { Unique = true, Name = "ux_revision_business_key" }));
-            }
-            return data;
-        }
-        catch { await data.DisposeAsync(); throw; }
-    }
+    private Task<StoreTestData> Data() => StoreTestData.CreateAsync(fixture);
     private static StockSourceSetupInput Changed() => Input() with { Label = "Changed source settings" };
     private static Task<BsonDocument> Propose(StockSourceSetupService service, ActorContext maker, long pool, string key = "revision") =>
         service.ProposeRevisionAsync(maker, pool, 1, Changed(), Meta(key));
@@ -223,7 +203,7 @@ public sealed partial class StockSourceRevisionTests(MongoFixture fixture)
         if (fault == "missing") await data.Database.DropCollectionAsync("stockSourceRevisions");
         if (fault == "warn") await data.Database.RunCommandAsync<BsonDocument>(new BsonDocument
             { { "collMod", "stockSourceRevisionProposals" }, { "validationAction", "warn" } });
-        if (fault == "unique") await Rows(data, "stockSourceRevisions").Indexes.DropOneAsync("ux_revision_business_key");
+        if (fault == "unique") await Rows(data, "stockSourceRevisions").Indexes.DropOneAsync("ux_stock_source_revision_version");
         await Assert.ThrowsAsync<DomainValidationException>(() => Propose(service, maker, pool));
         Assert.Equal(0, await Count(data, "stockSourceRevisionProposals")); Assert.Equal(2, await Count(data, "idempotencyRecords"));
     }

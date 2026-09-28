@@ -31,7 +31,7 @@ public sealed class StockSourceSetupMigrationTests(MongoFixture fixture)
         await migration.ApplyAsync();
         Assert.True(await migration.IsCurrentAsync());
         var after = await History(data);
-        Assert.Equal(15, after.Count);
+        Assert.Equal(CollectionMigrations.CurrentVersion, after.Count);
         Assert.Equal(before, new BsonArray(after.Take(14)));
         foreach (var name in StockSourceSetupSchemas.Collections)
             await InventoryRepository.RequireStorageAsync(data.Database, name, StockSourceSetupSchemas.Validator(name), StockSourceSetupSchemas.Key(name), default);
