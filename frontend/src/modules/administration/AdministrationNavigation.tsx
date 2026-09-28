@@ -1,11 +1,12 @@
 import Link from "next/link";
-import { canManageAccounts, canReviewPeople, canUseStockCounts } from "../identity/identity-workflow";
+import { canManageAccounts, canReviewPeople, canUseStockCounts, canUseStockSources } from "../identity/identity-workflow";
 import styles from "./access.module.css";
 
 export function AdministrationNavigation({ current, actions, locked = false }: {
-  current: "access" | "organizations" | "history" | "accounts" | "person-reviews" | "catalog" | "counts"; actions: readonly string[]; locked?: boolean;
+  current: "access" | "organizations" | "history" | "accounts" | "person-reviews" | "catalog" | "counts" | "sources"; actions: readonly string[]; locked?: boolean;
 }) {
   const links = [
+    { id: "sources", href: "/inventory/sources", label: "Sumber stok", available: canUseStockSources(actions) },
     { id: "counts", href: "/inventory/counts", label: "Hitung barang", available: canUseStockCounts(actions) },
     { id: "catalog", href: "/administration/catalog", label: "Katalog toko", available: actions.includes("catalog.manage") },
     { id: "account", href: "/identity/account", label: "Akun saya", available: true },

@@ -126,3 +126,13 @@ Receipt recovery uses server-owned history and requires the receipt to exist ins
 Migration 15 preflights existing source data, unique keys, counter ranges and the full immutable provenance graph before target DDL/counter changes. It installs strict source/pool setup storage and query indexes, preserves stronger rules, raises counters only as needed and resumes interrupted DDL under the existing deployment lease. Pause/drain writers and verify a coordinated backup before any actual deployment. No lot, balance, movement or source-activation migration is supplied here.
 
 The approved pool remains inactive. Operational source acceptance, staff UI, authorized warehouse choices, existing-pool governance, live source observations/lots, costs and owning workflows remain required. Verification and unresolved gates are recorded in [the API/migration evidence](../quality/stock-source-api-verification-2026-09-29.md).
+
+## Source-setup staff and warehouse-choice checkpoint — 29 September 2026
+
+The source workflow now has eight protected API routes and a usable staff page at /inventory/sources. The additional warehouse query maps explicit propose/history/review purposes to their separate permissions, expands active shop assignments into exact warehouse/channel resources, loads canonical reviewed organization names and fences scope/grant/membership/session/time before returning its audited result. Organization profile changes advance their matching scope version in the same transaction; the choices fence those captured nodes and retry or deny after a concurrent change.
+
+The frontend keeps source configuration explicit, preserves exact numeric strings, freezes review before submission and clearly displays that approval leaves the pool inactive. Read permission is separate from proposal/approval. Source reviewers may discover their MFA verification entry after freshness expires, but all actual operations still enforce the relevant assurance.
+
+Recovery stores references only, never request settings/reasons or person evidence. The owning source adapter checks the original actor/operation/key under a deliberately selected current location. Unknown outcome retains its reference; neither missing receipts nor a reload create a fresh request or close an old one. Navigation, stale response/session guards and independent-person decisions are exercised through real application/API/Mongo browser flows.
+
+This supersedes the preceding no-staff-UI/no-choice status, without changing activation or business acceptance gates. See [the workspace evidence](../quality/stock-source-workspace-verification-2026-09-29.md). Existing-pool governance, observations/lots, operational migration, costs and owning workflows remain required.

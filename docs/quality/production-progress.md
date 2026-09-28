@@ -501,3 +501,15 @@ The migration preflights canonical source records, full provenance, safe indexes
 The published base bfb79c3 passed all jobs in GitHub workflow 36464417066: 1,891 backend passes, 72 explicit skips plus separately executed successful browser/HTTPS/Mongo coverage. New migration/API local checks and exact final artifacts are tracked in [the current verification](stock-source-api-verification-2026-09-29.md). Independent review and Vercel owning-account access remain unavailable; the full goal stays active.
 
 Final candidate evidence: 250 affected cases passed, followed by nine HTTP/contract cases including one added history-isolation case; 251 distinct passing tests, zero failures/skips. Server/frontend contract drift and frontend type checking passed. See the linked verification for artifact hashes and exact overlap.
+
+## Stock-source staff workspace — 29 September 2026
+
+The new /inventory/sources workspace supplies the staff proposal, independent review, withdrawal and history flow with explicit source settings and inactive-pool status. Authorized warehouse choices use actual reviewed names and fenced current grants/hierarchy. Source task discovery is distinct from administrative catalog admission; stale MFA preserves a verification entry without allowing review commands.
+
+Uncertain source requests keep only actor/operation/key/time in the existing journal. The original reviewed input/key survives in memory for deliberate retry; after reload, recovery requires the original location and checks the existing server receipt without resubmission or a close action. Frozen reviews, duplicate dispatch, late reads, changed sessions, malformed responses and unavailable storage have focused coverage.
+
+The complete frontend regression passed 534 checks. Two real HTTPS/browser/API/Mongo fixtures passed, including keyboard confirmation, 390-pixel layout, distinct-person decisions and lost-response recovery. The predecessor GitHub run 36470752275 failed three outdated migration-chain collection assertions despite 1,917 backend passes; all three assertions were corrected without removing their majority-write or preservation checks and passed locally. Detailed counts, artifacts and remaining gates are recorded in [the workspace verification](stock-source-workspace-verification-2026-09-29.md).
+
+The source setup screen remains preparatory: approval creates an inactive pool. CAT02 and the full production/report goal remain open. Independent review and Vercel owning-account access are still pending.
+
+Final affected regression: 80 passed, no failures/skips, 6m17s. Together with migration/provider/navigation and real-browser verification, 96 distinct backend/browser cases passed across 98 executions; frontend passed 534. The verification document records exact overlap and hashes.

@@ -17,6 +17,7 @@ internal static class StockSourceSetupOpenApi
             Set(name, "mode", Choice("webLedger", "externalLedger"));
             Set(name, "control", Choice("exclusiveWebAllocation", "sharedWebLedger", "externalHold"));
         }
+        Set(nameof(StockSourceWarehouseQueryDto), "purpose", Choice("inventory-source-propose", "inventory-source-review", "inventory-source-history"));
         Set(nameof(StockSourceSetupRecoveryDto), "operation", Choice("stock.source.propose", "stock.source.approve", "stock.source.reject", "stock.source.withdraw"));
         foreach (var name in new[] { nameof(StockSourceSetupCommandDto), nameof(StockSourceSetupDetailDto) })
             Set(name, "status", Choice("proposed", "approved", "rejected", "withdrawn"));

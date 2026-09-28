@@ -251,6 +251,71 @@ public sealed class StockSourceSetupHttpTests(MongoFixture fixture)
             Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
         }
     }
+    [Fact]
+    public async Task Warehouse_choices_use_exact_source_permission_and_current_reviewed_names()
+    {
+        await using var data = await HttpData.CreateAsync(fixture);
+        await data.AddProfilesAsync();
+        using var maker = await data.OpenAsync(Maker); using var reviewer = await data.OpenAsync(Reviewer); using var reader = await data.OpenAsync(Reader);
+        foreach (var (actor, purpose) in new[] { (maker, "inventory-source-propose"), (reviewer, "inventory-source-review"), (reader, "inventory-source-history") })
+        {
+            var result = await Ok(await actor.Post("/warehouses/query", new { purpose }));
+            var item = Assert.Single(result.GetProperty("items").EnumerateArray());
+            Assert.Equal("102", item.GetProperty("location").GetProperty("warehouseId").GetString());
+            Assert.Equal("Synthetic node 102", item.GetProperty("warehouseName").GetString());
+            Assert.Equal(5, item.EnumerateObject().Count());
+        }
+        foreach (var (actor, purpose) in new[] { (maker, "inventory-source-review"), (reviewer, "inventory-source-history"), (reader, "inventory-source-propose") })
+        {
+            using var denied = await actor.Post("/warehouses/query", new { purpose });
+            Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
+        }
+        await data.AddActorAsync(47004, Location, Permissions.StockCount, Permissions.StockRead);
+        using var counter = await data.OpenAsync(47004);
+        using var wrongCapability = await counter.Post("/warehouses/query", new { purpose = "inventory-source-propose" });
+        Assert.Equal(HttpStatusCode.Forbidden, wrongCapability.StatusCode);
+        using var invented = await maker.Post("/warehouses/query", new { purpose = "stock.source.propose", location = LocationBody });
+        Assert.Equal(HttpStatusCode.BadRequest, invented.StatusCode);
+        Assert.Equal(0, await data.Rows("stockSourceProposals").CountDocumentsAsync(new BsonDocument()));
+    }
+
+    [Fact]
+    public async Task Warehouse_choices_hide_inactive_scope_and_reject_missing_or_incompatible_profiles()
+    {
+        await using var data = await HttpData.CreateAsync(fixture);
+        using var maker = await data.OpenAsync(Maker);
+        using var absent = await maker.Post("/warehouses/query", new { purpose = "inventory-source-propose" });
+        Assert.Equal(HttpStatusCode.Conflict, absent.StatusCode);
+        await data.AddProfilesAsync();
+        await data.Rows("organizationProfiles").UpdateOneAsync(new BsonDocument("_id", 102L),
+            Builders<BsonDocument>.Update.Set("name", " leading space"));
+        using var malformed = await maker.Post("/warehouses/query", new { purpose = "inventory-source-propose" });
+        Assert.Equal(HttpStatusCode.Conflict, malformed.StatusCode);
+        await data.Rows("organizationProfiles").UpdateOneAsync(new BsonDocument("_id", 102L),
+            Builders<BsonDocument>.Update.Set("name", "Synthetic node 102"));
+        await data.Rows("authorizationScopes").UpdateOneAsync(new BsonDocument("_id", 102L),
+            Builders<BsonDocument>.Update.Set("status", "suspended").Inc("version", 1L));
+        using var suspended = await maker.Post("/warehouses/query", new { purpose = "inventory-source-propose" });
+        Assert.Equal(HttpStatusCode.Forbidden, suspended.StatusCode);
+    }
+
+    [Fact]
+    public async Task Shop_choice_expansion_keeps_channel_and_excludes_suspended_warehouses()
+    {
+        await using var data = await HttpData.CreateAsync(fixture);
+        await data.Rows("authorizationScopes").InsertManyAsync([
+            AuthorizationBson.Node(new ScopeNode(104, ScopeNodeKind.Warehouse, 101, AuthorizationStatus.Active, 1)),
+            AuthorizationBson.Node(new ScopeNode(105, ScopeNodeKind.Warehouse, 101, AuthorizationStatus.Suspended, 1)),
+            AuthorizationBson.Node(new ScopeNode(106, ScopeNodeKind.Channel, 100, AuthorizationStatus.Active, 1))]);
+        await data.Base.AddGrantAsync(await data.ActorAsync(Maker), 49999,
+            new(GrantScopeKind.FulfillmentShop, 100, ShopId: 101, ChannelId: 103), [Permissions.StockSourcePropose]);
+        await data.AddProfilesAsync();
+        using var maker = await data.OpenAsync(Maker);
+        var result = await Ok(await maker.Post("/warehouses/query", new { purpose = "inventory-source-propose" }));
+        var items = result.GetProperty("items").EnumerateArray().ToArray();
+        Assert.Equal(new[] { "102", "104" }, items.Select(item => item.GetProperty("location").GetProperty("warehouseId").GetString()));
+        Assert.All(items, item => Assert.Equal("103", item.GetProperty("location").GetProperty("channelId").GetString()));
+    }
     private static async Task<string?> Code(HttpResponseMessage response)
     {
         using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
@@ -265,6 +330,29 @@ public sealed class StockSourceSetupHttpTests(MongoFixture fixture)
             Assert.True(response.Headers.CacheControl?.NoStore);
             using var document = JsonDocument.Parse(text); return document.RootElement.Clone();
         }
+    }
+    [Fact]
+    public async Task Current_account_discovers_source_tasks_without_granting_administration_and_keeps_MFA_entry_visible()
+    {
+        await using var data = await HttpData.CreateAsync(fixture);
+        foreach (var (id, permission) in new[] { (Maker, Permissions.StockSourcePropose), (Reviewer, Permissions.StockSourceApprove), (Reader, Permissions.StockSourceRead) })
+        {
+            using var browser = await data.OpenAsync(id);
+            var current = await browser.Client.GetFromJsonAsync<JsonElement>("/api/v1/access/current");
+            Assert.Equal(new[] { permission }, current.GetProperty("allowedActions").EnumerateArray().Select(item => item.GetString()).ToArray());
+            using var catalog = await browser.Client.GetAsync("/api/v1/access/catalog");
+            Assert.Equal(HttpStatusCode.Forbidden, catalog.StatusCode);
+        }
+        using var reviewer = await data.OpenAsync(Reviewer);
+        data.Base.Clock.UtcNow = data.Base.Clock.UtcNow.AddMinutes(5).AddSeconds(1);
+        var stale = await reviewer.Client.GetFromJsonAsync<JsonElement>("/api/v1/access/current");
+        Assert.Contains(Permissions.StockSourceApprove, stale.GetProperty("allowedActions").EnumerateArray().Select(item => item.GetString()));
+        using var denied = await reviewer.Post("/warehouses/query", new { purpose = "inventory-source-review" });
+        Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
+        await data.Rows("authorizationGrants").UpdateOneAsync(new BsonDocument("_id", Reviewer),
+            Builders<BsonDocument>.Update.Set("status", "revoked").Inc("version", 1L));
+        var revoked = await reviewer.Client.GetFromJsonAsync<JsonElement>("/api/v1/access/current");
+        Assert.Empty(revoked.GetProperty("allowedActions").EnumerateArray());
     }
     private sealed class HttpData : IAsyncDisposable
     {
@@ -300,6 +388,21 @@ public sealed class StockSourceSetupHttpTests(MongoFixture fixture)
                 return data;
             }
             catch { await data.DisposeAsync(); throw; }
+        }
+        internal Task<ActorContext> ActorAsync(long id) => Task.FromResult(actors[id]);
+        internal async Task AddProfilesAsync()
+        {
+            foreach (var node in await Rows("authorizationScopes").Find(new BsonDocument("_id", new BsonDocument("$gte", 100L))).ToListAsync())
+            {
+                var id = node["_id"].AsInt64;
+                await Rows("organizationProfiles").InsertOneAsync(new BsonDocument
+                {
+                    { "_id", id }, { "schemaVersion", 1 }, { "kind", node["kind"] }, { "parentId", node.GetValue("parentId", BsonNull.Value) },
+                    { "code", "NODE-" + id }, { "normalizedCode", "NODE-" + id }, { "name", "Synthetic node " + id }, { "version", 1L },
+                    { "createdBy", 998L }, { "updatedBy", 999L }, { "createdAt", Base.Clock.UtcNow.UtcDateTime },
+                    { "updatedAt", Base.Clock.UtcNow.UtcDateTime }, { "approvedProposalId", id + 10000 }
+                });
+            }
         }
         internal async Task AddActorAsync(long id, StockLocation location, params string[] permissions)
         {

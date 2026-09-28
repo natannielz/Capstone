@@ -51,6 +51,14 @@ public static class StockSourceSetupEndpoints
             }).WithName(name);
         }
 
+        group.MapPost("/warehouses/query", async (StockSourceWarehouseQueryDto request, HttpContext http,
+            [FromServices] StockSourceSetupService service, CancellationToken ct) =>
+        {
+            var choices = await service.WarehousesAsync(Actor(http), request.Purpose, http.TraceIdentifier, ct);
+            return TypedResults.Ok(new StockSourceWarehousePageDto([.. choices.Select(choice =>
+                new StockSourceWarehouseDto(AccessScopeDto.From(choice.Location.ToScope()), choice.OrganizationName, choice.ShopName,
+                    choice.WarehouseName, choice.ChannelName))]));
+        }).WithName("StockSourceWarehouseChoices");
         group.MapPost("/query", async (StockSourceSetupQueryDto request, HttpContext http,
             [FromServices] StockSourceSetupService service, CancellationToken ct) =>
         {

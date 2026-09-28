@@ -51,7 +51,7 @@ For PowerShell, from the repository root:
 
 Set UNITTOKO_BROWSER_CHANNEL to msedge to use an installed Edge browser on Windows. Chromium uses the driver pinned by frontend/tests/browser/package-lock.json (Playwright 1.62.1). PLAYWRIGHT_BROWSERS_PATH may point to an isolated local runtime cache; use the same value for installation and execution. No real credentials are required.
 
-The normal backend test run explicitly skips this opt-in browser case. GitHub's separate Browser, HTTPS and real Mongo job installs its pinned tools, builds the frontend, starts its own replica set and enables the case. It parses the result file and requires exactly one executed/passed test, zero failures and zero unexecuted cases, preventing a missing filter or disabled opt-in from reporting success. The CI step runs from backend so global.json selects the intended SDK.
+The normal backend test run explicitly skips this opt-in browser case. GitHub's separate Browser, HTTPS and real Mongo job installs its pinned tools, builds the frontend, starts its own replica set and enables the case. It parses the result file and requires exactly two executed/passed tests (stock count plus the source-setup rehearsal), zero failures and zero unexecuted cases, preventing a missing filter or disabled opt-in from reporting success. The CI step runs from backend so global.json selects the intended SDK.
 
 ## Limits
 

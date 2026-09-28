@@ -1,0 +1,21 @@
+.desk { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, .9fr); align-items: start; gap: 26px; }
+.headingRow { display: flex; align-items: start; justify-content: space-between; flex-wrap: wrap; gap: 16px; }
+.headingRow h2 { margin: 0; }
+.modeChoices { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0 24px; }
+.eyebrow { font-size: 12px; letter-spacing: .12em; font-weight: 750; color: #44646d; margin: 16px 0 4px; }
+.notice { border-left: 4px solid #087f8c; background: #eaf4f5; padding: 18px 22px; margin-bottom: 26px; }
+.notice p { margin: 6px 0 0; color: #345963; }
+.guide { padding: 28px; border-top: 3px solid #087f8c; background: #e7f0f1; }
+.guide ol { padding-left: 22px; display: grid; gap: 18px; }
+.guide p { color: #345963; }
+.verification { border-top: 1px solid #d7e3e7; padding-top: 12px; margin-top: 22px; }
+.verification a { display: inline-flex; align-items: center; min-height: 44px; color: #126a74; font-weight: 650; }
+.review { margin-top: 28px; padding: 28px; border: 1px solid #a8c8ce; border-top: 4px solid #087f8c; background: #fff; }
+.review:focus { outline: 3px solid #ed7829; outline-offset: 3px; }
+.review form { display: grid; gap: 18px; }
+.review h2, .review h3, .review p { margin: 0; }
+.legend { font-size: 18px; font-weight: 650; padding: 0 0 18px; }
+.badge { justify-self: start; margin: 0; padding: 5px 9px; color: #295d68; background: #eaf4f5; font-size: 14px; }
+.skip { position: absolute; left: -10000px; top: 10px; padding: 12px; background: #fff; color: #126a74; z-index: 10; }
+.skip:focus { left: 16px; }
+@media (max-width: 820px) { .desk { grid-template-columns: minmax(0, 1fr); } .guide, .review { padding: 20px; } }

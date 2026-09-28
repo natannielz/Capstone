@@ -168,6 +168,8 @@ public sealed class ProviderHandlerTests(MongoFixture fixture)
         private readonly RSA wrongRsa = RSA.Create(2048);
         public Dictionary<string, string> Challenge { get; set; } = [];
         public string? Variation { get; set; }
+        public string Subject { get; set; } = "auth0|fixture-user";
+        public string Email { get; set; } = "approved@company.co.id";
         public bool SawValidPkce { get; private set; }
         public int TokenRequests { get; private set; }
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
@@ -197,8 +199,8 @@ public sealed class ProviderHandlerTests(MongoFixture fixture)
                 Variation == "audience" ? "wrong-client" : settings.ClientId, [], now.AddMinutes(-10).UtcDateTime,
                 (Variation == "expired" ? now.AddMinutes(-5) : now.AddMinutes(5)).UtcDateTime, now.UtcDateTime)
             {
-                ["sub"] = "auth0|fixture-user", ["nonce"] = Variation == "nonce" ? "wrong-nonce" : Challenge["nonce"],
-                ["email"] = "approved@company.co.id", ["email_verified"] = Variation != "email", ["auth_time"] = now.AddSeconds(-10).ToUnixTimeSeconds(),
+                ["sub"] = Subject, ["nonce"] = Variation == "nonce" ? "wrong-nonce" : Challenge["nonce"],
+                ["email"] = Email, ["email_verified"] = Variation != "email", ["auth_time"] = now.AddSeconds(-10).ToUnixTimeSeconds(),
                 [settings.ClaimsNamespace + "assurance"] = new Dictionary<string, object>
                 {
                     ["policyVersion"] = settings.AssurancePolicyVersion, ["connectionId"] = settings.ConnectionId, ["method"] = "otp",

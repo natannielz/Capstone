@@ -100,3 +100,8 @@ internal static class StockSourceSetupResponses
             decision is not null && !decision["poolId"].IsBsonNull ? new(decision["poolId"].AsInt64) : null);
     }
 }
+
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record StockSourceWarehouseQueryDto([property: JsonRequired] string Purpose);
+public sealed record StockSourceWarehouseDto(AccessScopeDto Location, string OrganizationName, string ShopName, string WarehouseName, string ChannelName);
+public sealed record StockSourceWarehousePageDto(StockSourceWarehouseDto[] Items);

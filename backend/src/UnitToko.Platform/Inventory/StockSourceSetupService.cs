@@ -16,7 +16,7 @@ namespace UnitToko.Platform.Inventory;
 
 /// <summary>Governed configuration workflow. Approval creates an inactive pool; no
 /// writer authority, source observation or external reservation capability is activated.</summary>
-public sealed class StockSourceSetupService(IMongoDatabase database, MongoUnitOfWork unit, IdAllocator ids, IClock clock)
+public sealed partial class StockSourceSetupService(IMongoDatabase database, MongoUnitOfWork unit, IdAllocator ids, IClock clock)
 {
     private readonly AuthorizationStore authorization = new(database, unit, clock);
     private IMongoCollection<BsonDocument> Rows(string name) => database.GetCollection<BsonDocument>(name);
@@ -273,13 +273,17 @@ public sealed class StockSourceSetupService(IMongoDatabase database, MongoUnitOf
         }
         return new() { { "proposal", proposal }, { "decision", (BsonValue?)decision ?? BsonNull.Value }, { "pool", (BsonValue?)pool ?? BsonNull.Value } };
     }
-    private async Task CompleteAsync(ActorContext actor, AuthorizationSnapshot snapshot, string permission, ResourceScope resource,
+    private Task CompleteAsync(ActorContext actor, AuthorizationSnapshot snapshot, string permission, ResourceScope resource,
+        IClientSessionHandle tx, CancellationToken ct) => CompleteAuthorityAsync(actor, snapshot, permission, [resource], tx, ct);
+
+    private async Task CompleteAuthorityAsync(ActorContext actor, AuthorizationSnapshot snapshot, string permission, ResourceScope[] resources,
         IClientSessionHandle tx, CancellationToken ct)
     {
-        var query = Require(actor, snapshot, permission, resource);
-        var clauses = query.Clauses.Where(clause => clause.Matches(resource)).ToArray();
+        var query = ScopePolicy.Compile(actor, snapshot, permission, Now()); AuthorizationStore.Require(query);
+        foreach (var resource in resources) _ = Require(actor, snapshot, permission, resource);
+        var clauses = query.Clauses.Where(clause => resources.Length == 0 || resources.Any(clause.Matches)).ToArray();
         await new HistoricalAuthorizationFence(database, authorization).FenceAsync(actor,
-            clauses.SelectMany(clause => clause.RequiredNodes).Concat(ScopePolicy.RequiredNodes(resource, snapshot.Directory)).Distinct(),
+            clauses.SelectMany(clause => clause.RequiredNodes).Concat(resources.SelectMany(resource => ScopePolicy.RequiredNodes(resource, snapshot.Directory))).Distinct(),
             [], snapshot.Grants.Where(grant => clauses.Any(clause => clause.GrantId == grant.Id)),
             snapshot.Memberships.Where(member => clauses.Any(clause => clause.MembershipId == member.Id)), tx, ct);
         if (actor.Session is { } reference)
@@ -293,7 +297,9 @@ public sealed class StockSourceSetupService(IMongoDatabase database, MongoUnitOf
                 idle.AsBsonDateTime.MillisecondsSinceEpoch <= now || absolute.AsBsonDateTime.MillisecondsSinceEpoch <= now)
                 throw new AuthorizationDeniedException("stale_or_inactive_session");
         }
-        _ = Require(actor, snapshot, permission, resource); ct.ThrowIfCancellationRequested();
+        AuthorizationStore.Require(ScopePolicy.Compile(actor, snapshot, permission, Now()));
+        foreach (var resource in resources) _ = Require(actor, snapshot, permission, resource);
+        ct.ThrowIfCancellationRequested();
     }
     private AuthorizationQuery Require(ActorContext actor, AuthorizationSnapshot snapshot, string permission, ResourceScope resource)
     {
