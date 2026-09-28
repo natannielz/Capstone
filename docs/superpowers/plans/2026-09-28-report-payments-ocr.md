@@ -95,6 +95,8 @@ Catalog authoring graph/receipt helpers are private: add a narrow same-session C
 
 `OutboxStore.EnqueueAsync` already accepts the caller session. Its current claim selects every event kind; completion/retry are separate majority writes with token/expiry checks, and renewal/dead-letter/retry ceilings are absent. Resolve those bounded consumer contracts before activating an evidence worker. Object writes, decoding and external side effects stay outside retried Mongo callbacks; the approved existing monotonic ID allocator may reserve IDs outside the transaction and leave gaps.
 
+The initial pure prerequisite is implemented in EvidenceContractTests (35 cases including the exact policy rows below), with expected missing-behavior RED and integrated GREEN evidence in [private evidence acceptance](../../quality/private-evidence-acceptance-2026-09-28.md). PAY01.3 and later work remain open; pure eligibility does not establish real upload versions or trusted bytes.
+
 ## PAY01 — Immutable private evidence and security eligibility
 
 **Requirements:** S05/S06/S09, P02/P07/P12 foundations.
@@ -118,7 +120,7 @@ Catalog authoring graph/receipt helpers are private: add a narrow same-session C
 
 Buyer delivery must join the association inside the current authorization transaction, reusing `UnitToko.Platform/Catalog/CatalogVisibilityStore.cs` entitlement/publication fences. Its existing Image-purpose result is metadata only, not a storage capability. Coordinate the new migration, API composition and generated contracts with their owners; never edit applied migration history.
 
-- [ ] **PAY01.1 — Write an eligibility test before implementation.** Add EvidencePolicyTests with this exact contract:
+- [x] **PAY01.1 — Write an eligibility test before implementation.** Add EvidencePolicyTests with this exact contract:
 
 ```csharp
 [Theory]
@@ -135,7 +137,7 @@ public void Payment_requires_present_validated_clean_image(
 }
 ```
 
-- [ ] **PAY01.2 — Run the test and record its expected failure.** `dotnet test backend/tests/UnitToko.Tests/UnitToko.Tests.csproj --filter FullyQualifiedName~EvidencePolicyTests`. Record the actual missing-behavior diagnostic.
+- [x] **PAY01.2 — Run the test and record its expected failure.** `dotnet test backend/tests/UnitToko.Tests/UnitToko.Tests.csproj --filter FullyQualifiedName~EvidencePolicyTests`. Record the actual missing-behavior diagnostic.
 - [ ] **PAY01.3 — Implement eligibility and upload versions.** Use the policy core below; JPEG/PNG retain the existing initial format contract. Additional formats require tested decoders/policy; PDFs can supplement but cannot replace PaymentImage.
 
 ```csharp

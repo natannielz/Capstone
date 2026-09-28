@@ -1,6 +1,6 @@
 # Accounting foundation — local verification, 28 September 2026
 
-Status: local accounting verification and independent source review passed. The complete backend run passed 1,346 cases and exposed three outdated migration allowlists; their precise corrections then passed. A new complete green publication workflow is still required. This is the accounting substage of T05A. Full T05A, PAY01 and T12 remain open.
+Status: local accounting verification and independent source review passed. The complete backend run passed 1,346 cases and exposed three outdated migration allowlists; their precise corrections then passed. The complete publication workflow at 172e5d5 subsequently passed, including all 1,384 combined backend cases. This is the accounting substage of T05A. Full T05A, PAY01 and T12 remain open.
 
 ## Delivered behavior
 
@@ -44,3 +44,4 @@ The earlier GitHub workflow at 6ddf1e6 passed 1,287 baseline backend tests, but 
 No production source adapter, public accounting route, chart/period provisioning, finance grant, real-person approval, live data migration or production activation was added. Genuine procurement composition, private evidence/OCR, invoice/payment integration, source reconciliation, manual correction/reopen, reporting/UI, capacity and restore rehearsals, hosting and the real branch pilot remain required. All 97 report production acceptance rows and the complete goal remain open.
 
 References: [accounting execution plan](../superpowers/plans/2026-09-28-accounting-foundation.md), [production plan](../superpowers/plans/2026-09-27-unit-toko-production.md), [report requirements](../requirements/unit-toko-report-2026-09-28.md), [private evidence contracts](../requirements/private-evidence-contracts.md).
+Publication acceptance: [GitHub run 36387677756](https://github.com/natannielz/Capstone/actions/runs/36387677756) passed at 172e5d5feb3a5e555dafca209f6df8ebb0fd98b1. Backend 1,384/1,384 passed, zero failures/skips, 20m47s; build zero warnings/errors; Auth0 Action 5/5; both compiled/generated contract checks passed. Frontend 453+6+7 passed; types, lint and production build passed (nine existing lint warnings, zero errors). Exact full log is tmp/production/github-publication-results/run-36387677756-full.log. This covers accounting and the 35-case evidence prerequisite, not subsequent Catalog upload/store changes.

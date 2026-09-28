@@ -1,6 +1,6 @@
 # Transactional accounting foundation
 
-Status: local implementation and scoped independent review accepted; publication pending. See [recorded verification](../../quality/accounting-foundation-acceptance-2026-09-28.md). Part of T05A, not completion of T05A or T12.
+Status: local implementation and scoped independent review accepted; published in GitHub checkpoint 172e5d5. Complete workflow verification passed with all 1,384 backend cases and frontend/contract/build checks green. See [recorded verification](../../quality/accounting-foundation-acceptance-2026-09-28.md). Part of T05A, not completion of T05A or T12.
 
 ## Goal and binding scope
 
@@ -57,7 +57,7 @@ Files: Platform/Accounting session-taking writer/repository/period guard and acc
 - [x] Test strict nested BSON numeric validation and migration preflight/resumption. Verify applied migrations and prior numeric constraints remain compatible.
 - [x] Run appropriate existing persistence/numeric/authorization regressions once; record failed fixtures separately before corrections. Do not claim the whole suite passed from filtered results.
 - [x] Obtain independent review of transaction composition, source replay, cumulative periods, authority boundary and migration. Resolve material findings with regression evidence.
-- [ ] Commit only owned files and publish the verified checkpoint to the existing GitHub branch. Vercel remains separately pending authorized account access and does not host the new .NET runtime.
+- [x] Commit only owned files and publish the verified checkpoint to the existing GitHub branch. Vercel remains separately pending authorized account access and does not host the new .NET runtime.
 
 ## Completion evidence and remaining gates
 
