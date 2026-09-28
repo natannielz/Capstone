@@ -31,6 +31,8 @@ public sealed class InventoryRepositoryTests(MongoFixture fixture)
         });
         await data.Database.GetCollection<BsonDocument>("stockBalances").Indexes.CreateOneAsync(
             new CreateIndexModel<BsonDocument>(InventorySchemas.BalanceKey(), new CreateIndexOptions { Name = "ux_inventory_pool_balance", Unique = true }));
+        await data.Database.GetCollection<BsonDocument>("inventoryPools").InsertOneAsync(InventoryGraphTests.Pool());
+        await data.Database.GetCollection<BsonDocument>("lots").InsertManyAsync([InventoryGraphTests.Lot(), InventoryGraphTests.Lot(302, 300, 301)]);
         return data;
     }
     private Task Seed(InventoryRepository repository, params InventoryBalanceDocument[] rows) => Unit.ExecuteAsync(async (tx, ct) =>
@@ -150,7 +152,10 @@ public sealed class InventoryRepositoryTests(MongoFixture fixture)
         var repository = new InventoryRepository(data.Database); var row = Balance();
         await Seed(repository, row);
         using var tx = await fixture.Client.StartSessionAsync(); Begin(tx); await EarlierWrite(data, tx);
-        await Assert.ThrowsAnyAsync<MongoException>(() => repository.CreateAsync(tx, Balance(1001, channel: 104), default));
+        await Assert.ThrowsAsync<DomainValidationException>(() => repository.CreateAsync(tx, Balance(1001, channel: 104), default));
+        // The graph rejects forged ownership, and the database independently rejects a second copy.
+        await Assert.ThrowsAsync<MongoWriteException>(() => data.Database.GetCollection<BsonDocument>("stockBalances")
+            .InsertOneAsync(InventoryBson.Balance(Balance(1001, channel: 104))));
         Assert.False(tx.IsInTransaction); Assert.Equal(0, await EarlierCount(data));
         Assert.Equal(1, await data.Database.GetCollection<BsonDocument>("stockBalances").CountDocumentsAsync(new BsonDocument()));
     }

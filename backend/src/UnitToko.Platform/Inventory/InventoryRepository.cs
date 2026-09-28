@@ -27,6 +27,7 @@ internal sealed class InventoryRepository(IMongoDatabase database)
             var document = InventoryBson.Balance(row);
             if (row.Balance.Revision != 1) throw Invalid("invalid_inventory_balance");
             await RequireStorageAsync(ct);
+            await new InventoryGraph(database).RequireAsync(tx, row, true, ct);
             await Rows.InsertOneAsync(tx, document, cancellationToken: ct);
             ct.ThrowIfCancellationRequested();
             return row;
@@ -42,6 +43,7 @@ internal sealed class InventoryRepository(IMongoDatabase database)
             if (id <= 0) throw InventoryBson.Invalid();
             await RequireStorageAsync(ct);
             var result = InventoryBson.ReadBalance(await Rows.Find(tx, new BsonDocument("_id", id)).SingleOrDefaultAsync(ct));
+            await new InventoryGraph(database).RequireAsync(tx, result, false, ct);
             ct.ThrowIfCancellationRequested();
             return result;
         }
@@ -74,6 +76,7 @@ internal sealed class InventoryRepository(IMongoDatabase database)
                     throw Invalid("inventory_balance_unavailable");
                 if (current.Balance.Revision != change.ExpectedRevision)
                     throw new PersistenceConflictException("stock_revision_conflict", "Stock changed; reload its current revision");
+                await new InventoryGraph(database).RequireAsync(tx, current, true, ct);
                 var state = Transition(current.Balance, change);
                 var next = current with { Balance = state };
                 // Compare the complete server-loaded image, not caller-provided quantities or a floating-point version.
