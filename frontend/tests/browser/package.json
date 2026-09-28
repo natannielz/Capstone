@@ -1,0 +1,11 @@
+{
+  "name": "unit-toko-browser-verification",
+  "private": true,
+  "version": "1.0.0",
+  "engines": {
+    "node": "24.x"
+  },
+  "devDependencies": {
+    "playwright": "1.62.1"
+  }
+}

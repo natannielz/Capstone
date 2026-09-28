@@ -445,3 +445,13 @@ The actual /inventory/counts page now provides named warehouse/channel selection
 The prior 2dc0b9c foundation is now fully green in [workflow 36432695309](https://github.com/natannielz/Capstone/actions/runs/36432695309): 1,657 backend passes, zero failures, 71 explicit Windows-only method skips, five Auth0 Action cases, both contracts and all frontend/build stages. This result covers that commit only; the later screen requires its own workflow.
 
 Vercel remains undeployed pending owning-account access. The source release excludes unrelated user layout/mentor changes and does not activate .NET/Mongo/Auth0. The original report, operational and pilot gates remain active.
+
+### Real stock-count browser/API/Mongo integration
+
+The stock-count screen now passes a real local browser rehearsal through HTTPS to the actual .NET API and Mongo replica set. [Integration verification](stock-count-real-browser-verification-2026-09-28.md) records real sign-in callback/cookie handling, CSRF/actor/warehouse guards, rejection of a different origin despite a sent session cookie, trusted forwarding, persisted zero counts, interrupted-response recovery and logout. The provider and TLS certificate remain synthetic; this is not actual Auth0 or deployed-host acceptance.
+
+Seven browser groups passed in Edge and pinned Chromium; C# verifies two observations/audits/receipts, exact quantities and large references, unchanged physical stock/accounting state and revoked sessions. Thirteen related provider/full-host cases passed, followed by focused checks of the final different-origin and nonempty-key assertions. A new isolated Playwright lockfile and Browser, HTTPS and real Mongo CI job make the rehearsal repeatable; CI also rejects skipped/missing browser execution.
+
+The original report/production goal remains active. Independent review, actual provider/hosting/Vercel access, the remaining module work, operations and the branch pilot remain open.
+
+Screen commit d8566dbc69071a44bf9c1e0b079e94e7547148c2 subsequently passed [workflow 36437605314](https://github.com/natannielz/Capstone/actions/runs/36437605314): 1,663 backend passes, zero failures, 71 explicit Windows-only method skips, frontend 491+6+7, Auth0 Action fixtures, both contracts and builds. The later browser integration change requires its own exact-commit workflow.

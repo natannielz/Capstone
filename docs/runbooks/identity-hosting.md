@@ -10,7 +10,7 @@ A reverse proxy must overwrite incoming forwarded headers, not append untrusted 
 
 The API checks the resulting scheme and host against the exact configured origin before reading sessions. It rejects path-base rewriting. Health probes remain independent of browser origin. API responses do not enable cross-origin credential sharing. Identity pages use a same-origin referrer policy for native forms; callback/API responses suppress referrers so authorization codes and state are not passed onward.
 
-The complete public proxy/TLS/Next/browser/provider arrangement still requires a rehearsal. Full-host HTTP tests prove the API middleware and trusted-forwarder behavior; they are not a browser cookie-policy or production routing acceptance claim.
+The local [real browser rehearsal](stock-count-browser-rehearsal.md) now exercises Next.js, HTTPS proxying, the actual API/Mongo/session middleware, browser cookies, anti-forgery, stock-count recovery and logout with a synthetic provider. Actual Auth0, trusted public TLS, deployed routing/network isolation and operations acceptance remain open. Local browser evidence is not a production hosting claim.
 
 ## Configuration
 

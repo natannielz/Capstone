@@ -48,11 +48,11 @@ Modify the existing AdministrationNavigation, OperationRecovery and identity-wor
 ## Task 4: Verify the real browser boundary and publish accurately
 
 - [x] Run the new state/client tests and the full frontend regression suite, typecheck, import boundaries, lint and production build. Run only affected backend sign-in/contract checks after those edits.
-- [ ] Exercise the actual rendered page with an isolated API and real local Mongo/session fixtures, using only synthetic accounts and data. Verify the existing same-origin API routing arrangement before claiming integration.
-- [x] Exercise keyboard and narrow-screen workflows (actual production build with synthetic API responses; real API rehearsal remains above): count zero, review explicit packaging, recover a lost response, expire/replace an account, switch warehouses during a read and fail local storage. Keep known outcomes distinct from unknown commits.
+- [x] Exercise the actual rendered page with an isolated API and real local Mongo/session fixtures, using only synthetic accounts and data. Verify the existing same-origin API routing arrangement before claiming integration.
+- [x] Exercise keyboard and narrow-screen workflows (actual production build with synthetic API responses; the separate real API rehearsal is recorded above): count zero, review explicit packaging, recover a lost response, expire/replace an account, switch warehouses during a read and fail local storage. Keep known outcomes distinct from unknown commits.
 - [ ] Obtain independent source review when review agents are available. Their current usage-limit errors are an outstanding gate, not a completed review.
 - [x] Update evidence and progress docs with exact tested sources and limitations; preserve unrelated user changes.
-- [ ] Push the verified work to codex/unit-toko-production and track the exact GitHub workflow.
+- [x] Push the verified work to codex/unit-toko-production and track the exact GitHub workflow. Screen commit d8566dbc69071a44bf9c1e0b079e94e7547148c2 is published; each later substantive commit requires its own checks.
 - [ ] Prepare a clean committed-source Vercel release. Deploy to the authorized unit-toko-bni project when owning-account access is available. Do not equate frontend hosting with .NET/Mongo/Auth0 activation.
 
 The full report, finance/payment evidence/OCR, roles, inventory ledger, operational readiness, hosting and one-branch pilot remain part of the active goal.
@@ -75,4 +75,6 @@ Review against the brief: inventory counting needs clear unit/packaging distinct
 
 ## Verification checkpoint
 
-See ../../quality/stock-count-staff-screen-verification-2026-09-28.md for 491+6+7 frontend passes, 41 affected identity passes, the production build and eleven actual rendered browser groups using synthetic API responses. The real single-origin API/Mongo/browser rehearsal and independent review remain unchecked. Publication/deployment are recorded separately.
+See ../../quality/stock-count-staff-screen-verification-2026-09-28.md for 491+6+7 frontend passes, 41 affected identity passes, the production build and eleven actual rendered browser groups using synthetic API responses. At that checkpoint the real single-origin API/Mongo/browser rehearsal and independent review remained unchecked. The later integration result is recorded below; publication/deployment remain separate.
+
+The real local browser/API/Mongo rehearsal now passes with the actual sign-in callback, cookie/CSRF protections, immutable observations, interrupted-response recovery and logout; see ../../runbooks/stock-count-browser-rehearsal.md. Its provider and TLS certificate are synthetic. Independent implementation review and deployed/provider acceptance remain open.
