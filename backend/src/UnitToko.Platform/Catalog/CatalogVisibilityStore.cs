@@ -7,6 +7,7 @@ using UnitToko.Modules.Contracts;
 using UnitToko.Modules.Identity;
 using UnitToko.Modules.Identity.Contracts;
 using UnitToko.Platform.Authorization;
+using UnitToko.Platform.Identity;
 using MongoQuery = UnitToko.Platform.Authorization.CatalogVisibilityQuery;
 using DomainQuery = UnitToko.Modules.Catalog.CatalogVisibilityQuery;
 
@@ -93,7 +94,7 @@ public sealed class CatalogVisibilityStore
             return rows.Count == 0 ? null : Metadata(rows[0]);
         }, token);
 
-    private Task<T> ReadCurrentAsync<T>(ActorContext actor, FilterDefinition<BsonDocument> selector,
+    internal Task<T> ReadCurrentAsync<T>(ActorContext actor, FilterDefinition<BsonDocument> selector,
         Func<IClientSessionHandle, FilterDefinition<BsonDocument>, CancellationToken, Task<T>> read, CancellationToken cancellationToken) =>
         authorization.ReadAsync(actor, async (snapshot, session, token) =>
         {
@@ -113,10 +114,23 @@ public sealed class CatalogVisibilityStore
             if (afterRead is not null) await afterRead(token);
             RequireStillEffective(actor, snapshot, entitlements, assortments, query);
             await FenceAsync(actor, query, session, token);
+            await RequireLiveSessionAsync(actor, session, token);
             RequireStillEffective(actor, snapshot, entitlements, assortments, query);
             return result;
         }, cancellationToken);
 
+    private async Task RequireLiveSessionAsync(ActorContext actor, IClientSessionHandle session, CancellationToken token)
+    {
+        if (actor.Session is not { } reference) return;
+        var live = await database.GetCollection<BsonDocument>("identitySessions").Find(session,
+            SessionPersistence.LiveFilter(reference, actor.UserId, actor.ProviderIssuer, actor.ProviderSubject, actor.GrantVersion, clock.UtcNow))
+            .Project(new BsonDocument { { "idleExpiresAt", 1 }, { "absoluteExpiresAt", 1 } }).FirstOrDefaultAsync(token);
+        var now = new BsonDateTime(clock.UtcNow.UtcDateTime).MillisecondsSinceEpoch;
+        if (live is null || !live.TryGetValue("idleExpiresAt", out var idle) || !idle.IsBsonDateTime ||
+            !live.TryGetValue("absoluteExpiresAt", out var absolute) || !absolute.IsBsonDateTime ||
+            idle.AsBsonDateTime.MillisecondsSinceEpoch <= now || absolute.AsBsonDateTime.MillisecondsSinceEpoch <= now)
+            throw new AuthorizationDeniedException("stale_or_inactive_session");
+    }
     private void RequireStillEffective(ActorContext actor, AuthorizationSnapshot snapshot,
         ImmutableArray<CatalogEntitlement> entitlements, ImmutableArray<CatalogAssortment> assortments, DomainQuery original)
     {

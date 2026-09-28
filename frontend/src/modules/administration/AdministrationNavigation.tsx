@@ -3,9 +3,10 @@ import { canManageAccounts, canReviewPeople } from "../identity/identity-workflo
 import styles from "./access.module.css";
 
 export function AdministrationNavigation({ current, actions, locked = false }: {
-  current: "access" | "organizations" | "history" | "accounts" | "person-reviews"; actions: readonly string[]; locked?: boolean;
+  current: "access" | "organizations" | "history" | "accounts" | "person-reviews" | "catalog"; actions: readonly string[]; locked?: boolean;
 }) {
   const links = [
+    { id: "catalog", href: "/administration/catalog", label: "Katalog toko", available: actions.includes("catalog.manage") },
     { id: "account", href: "/identity/account", label: "Akun saya", available: true },
     { id: "accounts", href: "/administration/accounts", label: "Akun dan undangan", available: canManageAccounts(actions) },
     { id: "person-reviews", href: "/administration/person-reviews", label: "Keterkaitan akun", available: canReviewPeople(actions) },

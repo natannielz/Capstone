@@ -60,7 +60,7 @@ export function OperationRecovery({ entries, journal, disabled, onResolved, onFa
       } else {
         setMessage(operationRecoveryCapabilities(entry.operation, recoveryAdapters).canClose
           ? "Hasil belum terkonfirmasi. Ini belum berarti permintaan gagal. Periksa kembali, atau selesaikan dan tutup permintaan ini sebelum membuat perubahan baru."
-          : "Hasil belum terkonfirmasi. Ini belum berarti permintaan gagal. Periksa kembali dari halaman peninjauan orang. Referensi tetap disimpan dan perubahan baru masih ditahan.");
+          : `Hasil belum terkonfirmasi. Ini belum berarti permintaan gagal. Periksa kembali dari ${recoveryPage(entry.operation).label}. Referensi tetap disimpan dan perubahan baru masih ditahan.`);
       }
     } catch (failure) { if (isCurrent()) { setError(failure); onFailure?.(failure); } }
     finally { pending.current = false; if (isCurrent()) { setBusy(false); onBusyChange?.(false); } }
@@ -79,7 +79,7 @@ export function OperationRecovery({ entries, journal, disabled, onResolved, onFa
           <details><summary>Referensi bantuan</summary><code>{entry.key}</code></details></div>
         <div className={styles.actions}><button className={styles.secondary} disabled={disabled || busy || !capabilities.canCheck} onClick={() => void check(entry)}>Periksa hasil</button>
           {capabilities.canClose && <button className={styles.secondary} disabled={disabled || busy} onClick={() => { setClosing(entry); setReason(""); setConfirmed(false); setError(null); }}>Selesaikan dan tutup</button>}</div>
-        {capabilities.unavailable === "adapter" && <p className={styles.help}>Pemeriksaan hasil tersedia di <a href="/administration/person-reviews">halaman peninjauan orang</a>. Jika layanan belum tersedia, referensi tetap disimpan dan perubahan baru masih ditahan.</p>}
+        {capabilities.unavailable === "adapter" && <p className={styles.help}>Pemeriksaan hasil tersedia di <a href={recoveryPage(entry.operation).href}>{recoveryPage(entry.operation).label}</a>. Jika layanan belum tersedia, referensi tetap disimpan dan perubahan baru masih ditahan.</p>}
         {capabilities.unavailable === "operation" && <p className={styles.help}>Jenis permintaan ini belum didukung untuk pemulihan. Simpan referensi bantuan dan hubungi administrator; perubahan baru masih ditahan.</p>}
       </li>; })}</ul></>}
     {closing && operationRecoveryCapabilities(closing.operation, recoveryAdapters).canClose && <form className={styles.review} onSubmit={event => { event.preventDefault(); if (reason.trim() && (!closing.operation.startsWith("person.review.") || confirmed)) void check(closing, true); }}>
@@ -93,7 +93,13 @@ export function OperationRecovery({ entries, journal, disabled, onResolved, onFa
   </section>;
 }
 
+function recoveryPage(operation: string) {
+  return operation.startsWith("catalog.") ? { href: "/administration/catalog", label: "halaman katalog" }
+    : { href: "/administration/person-reviews", label: "halaman peninjauan orang" };
+}
+
 function operationLabel(operation: string) {
+  if (operation.startsWith("catalog.")) return "Perubahan katalog";
   if (operation.startsWith("person.review.")) return "Peninjauan keterkaitan akun";
   if (operation.startsWith("organization.")) return "Perubahan struktur organisasi";
   if (operation.includes("membership")) return "Perubahan keanggotaan";
@@ -105,12 +111,12 @@ function operationLabel(operation: string) {
 
 function recoveryMessage(error: unknown): string {
   if (error instanceof AccessFailure) {
-    if (error.code === "recovery_adapter_unavailable") return "Pemeriksaan hasil belum tersedia di halaman ini. Buka halaman peninjauan orang; referensi tetap disimpan dan perubahan baru masih ditahan.";
+    if (error.code === "recovery_adapter_unavailable") return "Pemeriksaan hasil belum tersedia di halaman ini. Buka halaman asal permintaan; referensi tetap disimpan dan perubahan baru masih ditahan.";
     if (error.code === "recovery_operation_unsupported") return "Jenis permintaan ini belum didukung untuk pemulihan. Simpan referensi bantuan dan hubungi administrator; perubahan baru masih ditahan.";
     if (error.code === "recovery_close_unavailable") return "Penutupan memerlukan izin tindakan semula dan verifikasi dua langkah terbaru. Hasil tetap dapat diperiksa; referensi tetap disimpan.";
     if (error.code === "recovery_reason_invalid") return "Isi alasan penyelesaian hingga 1.000 karakter.";
     if (error.code === "recovery_request_stale") return "Sesi atau halaman berubah sebelum hasil dapat diperiksa. Referensi tetap disimpan untuk akun semula.";
-    if (error.code === "recovery_close_unsupported") return "Permintaan peninjauan orang belum dapat ditutup melalui pemulihan. Periksa hasilnya kembali; referensi tetap disimpan.";
+    if (error.code === "recovery_close_unsupported") return "Permintaan ini belum dapat ditutup melalui pemulihan. Periksa hasilnya kembali; referensi tetap disimpan.";
     if (error.code === "recovery_reference_invalid" || error.code === "recovery_receipt_invalid") return "Hasil belum dapat dipastikan karena referensi atau respons tidak sesuai. Simpan referensi bantuan dan hubungi administrator; perubahan baru masih ditahan.";
   }
   return accessMessage(error);

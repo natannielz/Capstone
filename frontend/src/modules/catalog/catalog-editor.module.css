@@ -1,0 +1,12 @@
+.legend {font-size:18px;font-weight:700;margin-bottom:16px;}
+.twoFields {display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px;}
+.packageFacts {display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:16px;background:#edf6f7;border-left:4px solid #087f8c;padding:20px;}
+.packageFacts p {grid-column:1/-1;margin:0;font-size:14px;color:#365a65;}
+.attributeFields {border:1px solid #d7e3e7;padding:18px;min-width:0;display:grid;gap:14px;}
+.attributeFields legend {font-weight:650;padding:0 6px;}
+.attributeFields>button {justify-self:start;}
+.attributeRow {display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto;align-items:end;gap:12px;}
+.notice {border-left:4px solid #a66b16;background:#fff7e9;padding:16px;color:#644719;}
+@media(max-width:760px){.twoFields,.packageFacts,.attributeRow {grid-template-columns:1fr;}.attributeRow {padding-bottom:16px;border-bottom:1px solid #d7e3e7;}.attributeRow>button {justify-self:start;}.packageFacts {padding:16px;}}
+
+.sectionHeading {display:flex;align-items:start;justify-content:space-between;gap:16px;flex-wrap:wrap;}.sectionHeading h2,.sectionHeading h3 {margin-top:0;}.sectionHeading>button {flex-shrink:0;}.sectionHeading>div {min-width:0;}.eyebrow {font-size:13px;color:#526c76;font-weight:700;letter-spacing:.05em;margin:0 0 7px;}.categoryList,.variantList {list-style:none;margin:0;padding:0;display:grid;gap:18px;}.categoryList li {display:flex;justify-content:space-between;align-items:center;gap:14px;border-top:1px solid #d7e3e7;padding-top:18px;}.categoryList span {display:block;font-size:14px;color:#526c76;}.variantList>li {border:1px solid #d7e3e7;border-top:3px solid #087f8c;padding:20px;overflow-wrap:anywhere;}.contents {font-size:18px;margin:18px 0 10px;}.contents strong {font-size:30px;line-height:1;}.contents span {display:block;font-size:14px;color:#526c76;margin-top:7px;}.reviewFocus {margin-bottom:26px;outline:none;}.reviewFocus:focus-visible {outline:3px solid #ed7829;outline-offset:3px;}@media(max-width:760px){.categoryList li {align-items:start;flex-direction:column;}.variantList>li {padding:16px;}}

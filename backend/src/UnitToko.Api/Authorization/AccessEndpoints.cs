@@ -14,7 +14,7 @@ public static partial class AccessEndpoints
     [Permissions.AccessPropose, Permissions.AccessApprove, Permissions.AccessRevoke,
         Permissions.MembershipPropose, Permissions.MembershipApprove, Permissions.AccessAuditRead,
         Permissions.TechnicalConfigure, Permissions.OrganizationApprove,
-        Permissions.PersonReviewPropose, Permissions.PersonReviewApprove, Permissions.PersonReviewRead];
+        Permissions.PersonReviewPropose, Permissions.PersonReviewApprove, Permissions.PersonReviewRead, Permissions.CatalogManage];
 
     public static void MapAccessEndpoints(this WebApplication app)
     {

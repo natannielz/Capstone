@@ -89,7 +89,7 @@ public sealed class CatalogVisibilityStoreTests(MongoFixture fixture)
     [InlineData("too-many-listings")]
     public async Task Malformed_or_mixed_publication_metadata_is_excluded_before_counts_and_all_lookups(string malformed)
     {
-        await using var data = await CatalogStoreTestData.CreateAsync(fixture);
+        await using var data = await CatalogStoreTestData.CreateLegacyAsync(fixture);
         var row = data.Sku(30, [new(501, CatalogStoreTestData.ShopOwner)], "Malformed coffee");
         var listing = row["catalogListings"][0].AsBsonDocument;
         switch (malformed)
@@ -142,7 +142,7 @@ public sealed class CatalogVisibilityStoreTests(MongoFixture fixture)
     [Fact]
     public async Task Same_sku_in_multiple_entitled_assortments_is_counted_once_and_public_identifiers_fail_closed_only_for_visible_duplicates()
     {
-        await using var data = await CatalogStoreTestData.CreateAsync(fixture);
+        await using var data = await CatalogStoreTestData.CreateLegacyAsync(fixture);
         Assert.Equal(1, (await data.Catalog.QueryAsync(data.BuyerA, search: "second")).Total);
         var duplicate = data.Sku(40, [new(502, CatalogStoreTestData.ShopOwner)], "Hidden duplicate");
         duplicate["publicId"] = data.PublicId(1);
@@ -157,7 +157,7 @@ public sealed class CatalogVisibilityStoreTests(MongoFixture fixture)
     [Fact]
     public async Task Optional_product_metadata_is_not_required_before_the_catalog_product_module_supplies_it()
     {
-        await using var data = await CatalogStoreTestData.CreateAsync(fixture);
+        await using var data = await CatalogStoreTestData.CreateLegacyAsync(fixture);
         var row = data.Sku(50, [new(501, CatalogStoreTestData.ShopOwner)], "Temporary name");
         row.Remove("publicId"); row.Remove("displayName");
         await data.Base.Database.GetCollection<BsonDocument>("skus").InsertOneAsync(row);
@@ -394,14 +394,22 @@ internal sealed class CatalogStoreTestData : IAsyncDisposable
     internal ActorContext BuyerA { get; private set; } = null!;
     internal ActorContext BuyerB { get; private set; } = null!;
     internal CatalogVisibilityStore Catalog { get; }
-    private CatalogStoreTestData(StoreTestData data)
+    private readonly MongoClient client;
+    private readonly bool legacy;
+    private readonly Dictionary<long, string> publicIds = [];
+    private ActorContext manager = null!;
+    private CatalogAuthoringService authoring = null!;
+    private LongId familyId;
+    private CatalogStoreTestData(StoreTestData data, MongoClient client, bool legacy)
     {
-        Base = data;
+        Base = data; this.client = client; this.legacy = legacy;
         Catalog = new(data.Database, data.Store, data.Clock);
     }
-    internal static async Task<CatalogStoreTestData> CreateAsync(MongoFixture fixture)
+    internal static Task<CatalogStoreTestData> CreateAsync(MongoFixture fixture) => CreateAsync(fixture, false);
+    internal static Task<CatalogStoreTestData> CreateLegacyAsync(MongoFixture fixture) => CreateAsync(fixture, true);
+    private static async Task<CatalogStoreTestData> CreateAsync(MongoFixture fixture, bool legacy)
     {
-        var data = new CatalogStoreTestData(await StoreTestData.CreateAsync(fixture));
+        var data = new CatalogStoreTestData(legacy ? await StoreTestData.CreateForLegacyCatalogAsync(fixture) : await StoreTestData.CreateAsync(fixture), fixture.Client, legacy);
         // Session creation requires a current provider proof rather than a hard-coded date from another test fixture.
         data.Base.Clock.UtcNow = DateTimeOffset.FromUnixTimeMilliseconds(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
         data.BuyerA = await data.Base.AddActorAsync(1000, Audience, Permissions.CatalogRead, Permissions.OrderRead);
@@ -417,6 +425,14 @@ internal sealed class CatalogStoreTestData : IAsyncDisposable
             data.Entitlement(10001, data.BuyerA, 501), data.Entitlement(10002, data.BuyerB, 501),
             data.Entitlement(10003, data.BuyerA, 503), data.Entitlement(10004, data.BuyerB, 503)
         }.Select(CatalogVisibilityBson.Entitlement));
+        if (!legacy)
+        {
+            data.manager = await data.Base.AddActorAsync(99001, ShopOwner, Permissions.CatalogManage);
+            data.authoring = new(data.Base.Database, new(data.client), new(data.Base.Database), data.Base.Clock);
+            var category = await data.authoring.SaveCategoryAsync(data.manager, new(ShopOwner, null, 0, "FIXTURE", "Catalog fixture"), Meta("fixture-category"));
+            var family = await data.authoring.CreateFamilyAsync(data.manager, new(ShopOwner, category.Id, "Fixture family", "Synthetic current-schema catalog", []), Meta("fixture-family"));
+            data.familyId = family.Id;
+        }
         await data.AddSkuAsync(1, [new(501, ShopOwner)], "Coffee .*");
         await data.AddSkuAsync(2, [new(502, ShopOwner)], "Hidden coffee");
         await data.AddSkuAsync(3, [new(501, ShopOwner), new(503, WarehouseOwner)], "Coffee second");
@@ -426,7 +442,7 @@ internal sealed class CatalogStoreTestData : IAsyncDisposable
     }
     internal CatalogEntitlement Entitlement(long id, ActorContext actor, long assortment) => new(id, actor.UserId, actor.UserId,
         assortment, Audience, AuthorizationStatus.Active, Base.Clock.UtcNow, null, null, 1, 998, 999, id + 100000, 1, Base.Clock.UtcNow);
-    internal string PublicId(long id) => $"00000000-0000-4000-8000-{id:000000000000}";
+    internal string PublicId(long id) => publicIds.TryGetValue(id, out var value) ? value : $"00000000-0000-4000-8000-{id:000000000000}";
     internal static BsonDocument Listing(CatalogListing listing) => new()
         { { "assortmentId", listing.AssortmentId }, { "ownerScope", AuthorizationBson.Scope(listing.OwnerScope) } };
     internal BsonDocument Sku(long id, ImmutableArray<CatalogListing> listings, string displayName) => new()
@@ -435,7 +451,26 @@ internal sealed class CatalogStoreTestData : IAsyncDisposable
         { "catalogListings", new BsonArray(listings.Select(Listing)) }, { "publicId", PublicId(id) }, { "displayName", displayName },
         { "cost", "secret cost" }, { "price", "secret price" }, { "bankEvidence", "secret bank" }
     };
-    internal Task AddSkuAsync(long id, ImmutableArray<CatalogListing> listings, string displayName) =>
-        Base.Database.GetCollection<BsonDocument>("skus").InsertOneAsync(Sku(id, listings, displayName));
+    private static AuthorizationCommandMetadata Meta(string key) => new(key, "Explicit synthetic catalog fixture", "catalog-fixture");
+    internal async Task AddSkuAsync(long id, ImmutableArray<CatalogListing> listings, string displayName)
+    {
+        if (legacy) { await Base.Database.GetCollection<BsonDocument>("skus").InsertOneAsync(Sku(id, listings, displayName)); return; }
+        await Base.Database.GetCollection<BsonDocument>("idCounters").UpdateOneAsync(new BsonDocument("_id", "skus"),
+            Builders<BsonDocument>.Update.Set("value", id - 1), new UpdateOptions { IsUpsert = true });
+        var definition = new DefinitionInput(displayName, "other", "EA", 1,
+            ImmutableSortedDictionary.Create<string, string>(StringComparer.Ordinal), [], 1, 1);
+        var created = await authoring.CreateSkuAsync(manager, new(familyId, 1, "FIXTURE-" + id, "fixture-physical-" + id, definition), Meta("fixture-sku-" + id));
+        Assert.Equal(id, created.Id.Value);
+        var row = await Base.Database.GetCollection<BsonDocument>("skus").Find(new BsonDocument("_id", id)).SingleAsync();
+        publicIds[id] = row["publicId"].AsString;
+        var versions = ImmutableArray.CreateBuilder<CatalogAssortmentVersion>();
+        foreach (var listing in listings)
+        {
+            var assortment = await Base.Database.GetCollection<BsonDocument>("catalogAssortments").Find(new BsonDocument("_id", listing.AssortmentId)).SingleAsync();
+            versions.Add(new(new(listing.AssortmentId), assortment["version"].AsInt64));
+        }
+        await authoring.SetPublicationsAsync(manager, new(created.Id, created.Version,
+            listings.Select(item => new LongId(item.AssortmentId)).ToImmutableArray(), versions.ToImmutable()), Meta("fixture-publish-" + id));
+    }
     public ValueTask DisposeAsync() => Base.DisposeAsync();
 }

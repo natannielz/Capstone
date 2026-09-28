@@ -63,7 +63,7 @@ public sealed class CatalogVisibilityMigrationTests(MongoFixture fixture)
             foreach (var name in names.Where(name => name != "schemaMigrations")) definitions[name] = await Definition(db, name);
             var history = await History(db);
             var counters = await db.GetCollection<BsonDocument>("idCounters").Find(FilterDefinition<BsonDocument>.Empty).ToListAsync();
-            await new CollectionMigrations(db, clock).ApplyAsync();
+            await LegacyCatalogTestSchema.ApplyV6Async(db, clock);
             Assert.Equal(history, (await History(db)).Take(5));
             foreach (var (name, definition) in definitions) Assert.Equal(definition, await Definition(db, name));
             Assert.Equal(legacy.ToBson(), (await db.GetCollection<BsonDocument>("skus").Find(new BsonDocument("_id", 901L)).SingleAsync()).ToBson());
@@ -71,6 +71,7 @@ public sealed class CatalogVisibilityMigrationTests(MongoFixture fixture)
             Assert.Equal(0, await db.GetCollection<BsonDocument>(Entitlements).CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty));
             Assert.Equal(0, await db.GetCollection<BsonDocument>(Assortments).CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty));
             Assert.False(await new MigrationGate(db, clock, 5).IsCurrentAsync(CancellationToken.None));
+            Assert.True(await new MigrationGate(db, clock, 6).IsCurrentAsync(CancellationToken.None));
         });
     }
 
@@ -375,7 +376,7 @@ public sealed class CatalogVisibilityMigrationTests(MongoFixture fixture)
             Assert.All(ddl, command =>
             {
                 Assert.Equal("majority", command["writeConcern"]["w"].AsString);
-                Assert.Contains(command.GetElement(0).Value.AsString, new[] { Entitlements, Assortments, "businessReadEvents", "personEvidenceSources", "personRecords", "personAccountBindings", "personEquivalenceGroups", "personEvidenceVersions", "personGovernancePolicies", "personReviewProposals", "personReviewHistory", "personReviewPreviews" });
+                Assert.Contains(command.GetElement(0).Value.AsString, new[] { Entitlements, Assortments, "businessReadEvents", "personEvidenceSources", "personRecords", "personAccountBindings", "personEquivalenceGroups", "personEvidenceVersions", "personGovernancePolicies", "personReviewProposals", "personReviewHistory", "personReviewPreviews", "catalogCategories", "productFamilies", "skus", "variantDefinitions", "catalogIdentifiers", "catalogIdentifierHistory" });
             });
         });
     }

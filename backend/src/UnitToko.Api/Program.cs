@@ -15,6 +15,7 @@ using UnitToko.Platform.Authorization;
 using UnitToko.Platform.Catalog;
 using UnitToko.Api.Authorization;
 using UnitToko.Api.Identity;
+using UnitToko.Api.Catalog;
 using UnitToko.Modules.Organizations;
 using UnitToko.Platform.Organizations;
 
@@ -40,6 +41,8 @@ builder.Services.AddSingleton<OutboxStore>();
 builder.Services.AddSingleton<CollectionMigrations>();
 builder.Services.AddSingleton<AuthorizationStore>();
 builder.Services.AddSingleton<CatalogVisibilityStore>();
+builder.Services.AddSingleton<CatalogAuthoringService>();
+builder.Services.AddSingleton<CatalogDefinitionQueryService>();
 builder.Services.AddSingleton<HistoricalReadStore>();
 builder.Services.AddSingleton<AccessAdministrationService>();
 builder.Services.AddSingleton<OrganizationMasterDataService>();
@@ -52,6 +55,7 @@ builder.Services.AddOpenApi("v1", options =>
     options.AddDocumentTransformer((document, _, _) =>
     {
         document.Components ??= new OpenApiComponents();
+        CatalogOpenApi.Configure(document);
         document.Components.SecuritySchemes = new Dictionary<string, IOpenApiSecurityScheme>
         {
             ["providerEvents"] = new OpenApiSecurityScheme
@@ -81,7 +85,8 @@ builder.Services.AddOpenApi("v1", options =>
                     continue;
                 }
                 if ((path.Key.StartsWith("/api/v1/access", StringComparison.Ordinal) || path.Key.StartsWith("/api/v1/organizations", StringComparison.Ordinal) ||
-                     path.Key.StartsWith("/api/v1/identity/administration/", StringComparison.Ordinal)) &&
+                     path.Key.StartsWith("/api/v1/identity/administration/", StringComparison.Ordinal) ||
+                     path.Key.StartsWith("/api/v1/catalog/", StringComparison.Ordinal)) &&
                     path.Key != "/api/v1/access/current")
                 {
                     operation.Parameters ??= [];
@@ -258,6 +263,7 @@ app.MapIdentityAdministrationEndpoints();
 app.MapPersonReviewEndpoints();
 app.MapAccessEndpoints();
 app.MapOrganizationEndpoints();
+app.MapCatalogEndpoints();
 app.MapGet("/health/live", () => TypedResults.Ok(new HealthStatus("live"))).AllowAnonymous().WithName("Liveness");
 app.MapGet("/health/ready", async (HttpContext context, MongoConnection mongo,
     CollectionMigrations migrations, CancellationToken cancellationToken) =>

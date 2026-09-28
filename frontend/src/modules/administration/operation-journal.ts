@@ -5,7 +5,7 @@ export type OperationReference = Readonly<{ actorId: string; operation: string; 
 type JournalStorage = Pick<Storage, "length" | "key" | "getItem" | "setItem" | "removeItem">;
 const prefix = "unit-toko:pending:v1:";
 const keyPattern = /^[A-Za-z0-9._:-]{1,128}$/;
-const operationPattern = /^(?:(access|organization)\.[a-z.]{1,100}|identity\.(?:invitation\.(?:propose|approve|rejected|withdrawn|revoked)|recovery\.request)|person\.review\.(?:propose|approve|reject|withdraw))$/;
+const operationPattern = /^(?:(access|organization)\.[a-z.]{1,100}|identity\.(?:invitation\.(?:propose|approve|rejected|withdrawn|revoked)|recovery\.request)|person\.review\.(?:propose|approve|reject|withdraw)|catalog\.(?:category\.save|family\.(?:create|edit)|sku\.(?:create|revise|replace|retire|publish)))$(?![\s\S])/;
 const storageKey = (entry: OperationReference) => `${prefix}${entry.actorId}:${entry.operation}:${entry.key}`;
 
 /** Only recovery references are stored. Requests, reasons, grants and credentials never enter this journal. */
@@ -88,6 +88,7 @@ export async function submitTrackedRequest<T>(ledger: MutationLedger, journal: O
 
 export type CommittedRecoveryReceipt = Readonly<{ state: "committed"; result?: Readonly<{ id: string; version: string }> | null }>;
 export type PersonRecoveryReceipt = Readonly<{ state: "committed"; result: Readonly<{ id: string; version: string }>; recordedAt: string }> | Readonly<{ state: "closed"; result: null; recordedAt: string }>;
+export type CatalogRecoveryReceipt = Extract<PersonRecoveryReceipt, { state: "committed" }>;
 export type RecoveryOutcome = CommittedRecoveryReceipt | Readonly<{ state: "closed" | "unconfirmed" }>;
 type LookupReceipt = Readonly<{ state: string; result?: Readonly<{ id: string; version: string }> | null }>;
 export type LegacyRecoveryAdapter = Readonly<{
@@ -97,14 +98,16 @@ export type LegacyRecoveryAdapter = Readonly<{
 
 /** Supply this only from the owning client screen. A missing receipt is never a failed or closed request. */
 export type OperationRecoveryAdapters = Readonly<{
+  catalog?: Readonly<{ lookup: (entry: OperationReference) => Promise<CatalogRecoveryReceipt | null> }>;
   "person.review"?: Readonly<{
     lookup: (entry: OperationReference) => Promise<PersonRecoveryReceipt | null>;
     close?: Readonly<{ allowed: (operation: string) => boolean; resolve: (entry: OperationReference, reason: string) => Promise<PersonRecoveryReceipt | null> }>;
   }>;
 }>;
 
-function recoveryNamespace(operation: string): "access" | "organization" | "identity" | "person.review" | null {
+function recoveryNamespace(operation: string): "access" | "organization" | "identity" | "person.review" | "catalog" | null {
   if (!operationPattern.test(operation)) return null;
+  if (operation.startsWith("catalog.")) return "catalog";
   if (operation.startsWith("person.review.")) return "person.review";
   if (operation.startsWith("organization.")) return "organization";
   if (operation.startsWith("identity.")) return "identity";
@@ -116,6 +119,8 @@ export function operationRecoveryCapabilities(operation: string, adapters: Opera
   Readonly<{ canCheck: boolean; canClose: boolean; unavailable: "adapter" | "operation" | null }> {
   const namespace = recoveryNamespace(operation);
   if (!namespace) return { canCheck: false, canClose: false, unavailable: "operation" };
+  if (namespace === "catalog") return typeof adapters.catalog?.lookup === "function"
+    ? { canCheck: true, canClose: false, unavailable: null } : { canCheck: false, canClose: false, unavailable: "adapter" };
   if (namespace === "person.review") return typeof adapters[namespace]?.lookup === "function"
     ? { canCheck: true, canClose: typeof adapters[namespace]?.close?.resolve === "function" && adapters[namespace]?.close?.allowed(operation) === true, unavailable: null }
     : { canCheck: false, canClose: false, unavailable: "adapter" };
@@ -132,7 +137,18 @@ export async function reconcileOperationRecovery(entry: OperationReference, jour
   const requireCurrent = () => { if (!isCurrent()) throw new AccessFailure(409, "recovery_request_stale"); };
   requireCurrent();
   let receipt: LookupReceipt | null;
-  if (namespace === "person.review") {
+  if (namespace === "catalog") {
+    if (closeReason !== undefined) throw new AccessFailure(400, "recovery_close_unsupported");
+    if (typeof adapters.catalog?.lookup !== "function") throw new AccessFailure(503, "recovery_adapter_unavailable");
+    const catalogReceipt = await adapters.catalog.lookup(reference);
+    requireCurrent();
+    if (catalogReceipt !== null && (!catalogReceipt || catalogReceipt.state !== "committed" ||
+      typeof catalogReceipt.recordedAt !== "string" || catalogReceipt.recordedAt.length > 40 || !/^\d{4}-\d\d-\d\dT/.test(catalogReceipt.recordedAt) || !Number.isFinite(Date.parse(catalogReceipt.recordedAt)) ||
+      !catalogReceipt.result || typeof catalogReceipt.result.id !== "string" || typeof catalogReceipt.result.version !== "string" ||
+      !validReference(catalogReceipt.result.id) || !validReference(catalogReceipt.result.version)))
+      throw new AccessFailure(502, "recovery_receipt_invalid");
+    receipt = catalogReceipt;
+  } else if (namespace === "person.review") {
     const adapter = adapters[namespace];
     if (closeReason !== undefined && typeof adapter?.close?.resolve !== "function") throw new AccessFailure(400, "recovery_close_unsupported");
     if (typeof adapter?.lookup !== "function") throw new AccessFailure(503, "recovery_adapter_unavailable");

@@ -52,7 +52,11 @@ public sealed class HistoricalReadMigrationTests(MongoFixture fixture)
             await db.GetCollection<BsonDocument>("orders").InsertOneAsync(legacy);
             await db.GetCollection<BsonDocument>(Events).InsertOneAsync(Event(900));
             await db.GetCollection<BsonDocument>("idCounters").InsertOneAsync(new BsonDocument { { "_id", Events }, { "value", 500L } });
-            await new CollectionMigrations(db, clock).ApplyAsync();
+            // This contract concerns v6 -> v7; later catalog migrations intentionally strengthen catalog masters.
+            var gate = new MigrationGate(db, clock, 7);
+            var lease = await gate.AcquireAsync(7, CancellationToken.None);
+            await new HistoricalReadMigration(db.WithWriteConcern(WriteConcern.WMajority)).ApplyAsync(lease!, CancellationToken.None);
+            await lease!.CompleteAsync(CancellationToken.None);
             Assert.Equal(history, (await History(db)).Take(6));
             foreach (var collection in collections)
             {
@@ -62,7 +66,7 @@ public sealed class HistoricalReadMigrationTests(MongoFixture fixture)
             }
             Assert.Equal(legacy.ToBson(), (await db.GetCollection<BsonDocument>("orders").Find(new BsonDocument("_id", 19L)).SingleAsync()).ToBson());
             Assert.Equal(901, (await new IdAllocator(db).NextAsync(Events)).Value);
-            Assert.True(await new CollectionMigrations(db, clock).IsCurrentAsync());
+            Assert.True(await gate.IsCurrentAsync(CancellationToken.None));
         });
     }
 
@@ -217,7 +221,7 @@ public sealed class HistoricalReadMigrationTests(MongoFixture fixture)
             Assert.DoesNotContain(await Indexes(db), index => index["name"] == "ix_actorId_createdAt");
             var ddl = commands.Where(command => command.Contains("create") || command.Contains("collMod") || command.Contains("createIndexes")).ToArray();
             Assert.NotEmpty(ddl);
-            Assert.All(ddl, command => { Assert.Equal("majority", command["writeConcern"]["w"].AsString); Assert.Contains(command.GetElement(0).Value.AsString, new[] { Events, "personEvidenceSources", "personRecords", "personAccountBindings", "personEquivalenceGroups", "personEvidenceVersions", "personGovernancePolicies", "personReviewProposals", "personReviewHistory", "personReviewPreviews" }); });
+            Assert.All(ddl, command => { Assert.Equal("majority", command["writeConcern"]["w"].AsString); Assert.Contains(command.GetElement(0).Value.AsString, new[] { Events, "personEvidenceSources", "personRecords", "personAccountBindings", "personEquivalenceGroups", "personEvidenceVersions", "personGovernancePolicies", "personReviewProposals", "personReviewHistory", "personReviewPreviews", "catalogCategories", "productFamilies", "skus", "variantDefinitions", "catalogIdentifiers", "catalogIdentifierHistory" }); });
             Assert.True(await new CollectionMigrations(db, clock).IsCurrentAsync());
         });
     }
