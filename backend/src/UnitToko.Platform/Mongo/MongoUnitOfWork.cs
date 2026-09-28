@@ -93,9 +93,9 @@ public sealed class MongoUnitOfWork(MongoClient client)
 
     private static async Task AbortIfActiveAsync(IClientSessionHandle session)
     {
-        if (!session.IsInTransaction) return;
         using var cleanup = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-        try { await session.AbortTransactionAsync(cleanup.Token); }
+        try { if (session.IsInTransaction) await session.AbortTransactionAsync(cleanup.Token); }
+        catch (ObjectDisposedException) { /* An inner fail-closed boundary already invalidated this handle. */ }
         catch (OperationCanceledException) { /* Preserve the original operation error. */ }
         catch (MongoException) { /* Preserve the original operation error. */ }
     }
