@@ -238,6 +238,8 @@ public void Incorrect_check_digit_is_rejected() =>
 
 **Storage/provenance checkpoint, 28 September 2026:** The private Mongo balance layer and persisted pool/lot graph checks now pass127 focused cases with real-Mongo rollback/concurrency coverage; see [verification](../../quality/inventory-provenance-verification-2026-09-28.md). This adds canonical pool ownership, lot-to-package binding, bounded ancestry/expiry validation and a pool revision fence. Governed source/lot creation, final schema/preflight, movements/costs and API/UI remain open; no migration or stock writer is activated.
 
+**Movement transaction checkpoint, 29 September 2026:** The private source-owned ledger now records exact before/after effects atomically and rejects duplicate source events;175 focused tests pass, including real-Mongo approval races, semantic storage constraints and downstream accounting rollback. See [verification](../../quality/inventory-movement-verification-2026-09-29.md). Genuine source services, valuation/cost conservation, full migration and usable command/UI acceptance remain open; the encompassing tasks below are not closed by this component.
+
 **Requirements:** V05/V09; F03/F04 Inventory boundary; M08 baseline. **Depends on for implementation:** CAT01; T05A valuation/rounding; ACC02 explicit conversion/release/count-adjustment permissions. Prepare the source-authority policy/contract jointly with the OPS02 owner before integration; CAT02 can implement and test unconfirmed/accepted policy states without waiting for all of OPS02. Actual order promises remain disabled for an affected pool until its authority/reconciliation decision is accepted. This is an activation gate, not a circular completion dependency.
 
 **Files to create:**

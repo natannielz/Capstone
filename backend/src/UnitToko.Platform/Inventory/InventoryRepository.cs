@@ -104,27 +104,29 @@ internal sealed class InventoryRepository(IMongoDatabase database)
         _ => throw Invalid("invalid_inventory_change")
     };
 
-    private void RequireSession(IClientSessionHandle? tx)
+    internal void RequireSession(IClientSessionHandle? tx)
     {
         if (tx is null || !tx.IsInTransaction || !ReferenceEquals(tx.Client, database.Client))
             throw Invalid("inventory_transaction_required");
     }
 
-    private async Task RequireStorageAsync(CancellationToken ct)
+    private Task RequireStorageAsync(CancellationToken ct) => RequireStorageAsync(database, "stockBalances", InventorySchemas.BalanceValidator(), InventorySchemas.BalanceKey(), ct);
+
+    internal static async Task RequireStorageAsync(IMongoDatabase database, string collection, BsonDocument requiredValidator, BsonDocument requiredKey, CancellationToken ct)
     {
         // Read-only metadata checks. A reviewed deployment migration owns DDL and quiesces writers.
         var definition = await (await database.ListCollectionsAsync(
-            new ListCollectionsOptions { Filter = new BsonDocument("name", "stockBalances") }, ct)).SingleOrDefaultAsync(ct);
+            new ListCollectionsOptions { Filter = new BsonDocument("name", collection) }, ct)).SingleOrDefaultAsync(ct);
         if (definition is null || definition.GetValue("type", "") != "collection") throw Invalid("inventory_storage_unavailable");
         var options = definition.GetValue("options", new BsonDocument()).AsBsonDocument;
         if (options.GetValue("capped", false).AsBoolean || options.Contains("timeseries") || options.Contains("expireAfterSeconds") ||
             options.GetValue("validationLevel", "strict") != "strict" || options.GetValue("validationAction", "error") != "error" ||
             options.TryGetValue("collation", out var collation) && !Simple(collation) ||
             !options.TryGetValue("validator", out var validator) || !validator.IsBsonDocument ||
-            !InventorySchemas.Contains(validator.AsBsonDocument, InventorySchemas.BalanceValidator()))
+            !InventorySchemas.Contains(validator.AsBsonDocument, requiredValidator))
             throw Invalid("inventory_storage_unavailable");
-        var indexes = await (await Rows.Indexes.ListAsync(ct)).ToListAsync(ct);
-        bool Required(BsonDocument index) => index["key"].AsBsonDocument.Equals(InventorySchemas.BalanceKey()) &&
+        var indexes = await (await database.GetCollection<BsonDocument>(collection).Indexes.ListAsync(ct)).ToListAsync(ct);
+        bool Required(BsonDocument index) => index["key"].AsBsonDocument.Equals(requiredKey) &&
             index.GetValue("unique", false).AsBoolean && !Unsafe(index);
         if (!indexes.Any(index => index["key"].AsBsonDocument.Equals(new BsonDocument("_id", 1)) && !Unsafe(index)) ||
             !indexes.Any(Required) || indexes.Any(index => index.Contains("expireAfterSeconds") ||
@@ -136,7 +138,7 @@ internal sealed class InventoryRepository(IMongoDatabase database)
     private static bool Unsafe(BsonDocument index) => index.GetValue("sparse", false).AsBoolean || index.GetValue("hidden", false).AsBoolean ||
         index.Contains("partialFilterExpression") || index.Contains("expireAfterSeconds") ||
         index.TryGetValue("collation", out var collation) && !Simple(collation);
-    private static async Task AbortAsync(IClientSessionHandle? tx)
+    internal static async Task AbortAsync(IClientSessionHandle? tx)
     {
         if (tx is null) return;
         using var cleanup = new CancellationTokenSource(TimeSpan.FromSeconds(5));

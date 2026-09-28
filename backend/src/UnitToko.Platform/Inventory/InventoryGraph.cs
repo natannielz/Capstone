@@ -53,7 +53,7 @@ internal sealed class InventoryGraph(IMongoDatabase database)
             throw Invalid();
         _ = Location(row["location"].AsBsonDocument);
     }
-    private static StockLocation Location(BsonDocument row)
+    internal static StockLocation Location(BsonDocument row)
     {
         if (!Exact(row, ["organizationId", "shopId", "warehouseId", "channelId"]) ||
             !row.Names.All(field => Positive(row, field))) throw Invalid();
