@@ -5,6 +5,7 @@ import { createAccessGateway } from "./access-client";
 import { OperationJournal, operationRecoveryCapabilities, reconcileOperationRecovery, type OperationReference, type OperationRecoveryAdapters } from "./operation-journal";
 import { AccessFailure, accessMessage } from "./workflow";
 import styles from "./access.module.css";
+import { recoveryPage, operationLabel } from "./operation-recovery-navigation";
 
 export function useOperationRecovery(actorId?: string) {
   const [journal] = useState(() => new OperationJournal(() => window.localStorage));
@@ -92,22 +93,6 @@ export function OperationRecovery({ entries, journal, disabled, onResolved, onFa
     </form>}
   </section>;
 }
-
-function recoveryPage(operation: string) {
-  return operation.startsWith("catalog.") ? { href: "/administration/catalog", label: "halaman katalog" }
-    : { href: "/administration/person-reviews", label: "halaman peninjauan orang" };
-}
-
-function operationLabel(operation: string) {
-  if (operation.startsWith("catalog.")) return "Perubahan katalog";
-  if (operation.startsWith("person.review.")) return "Peninjauan keterkaitan akun";
-  if (operation.startsWith("organization.")) return "Perubahan struktur organisasi";
-  if (operation.includes("membership")) return "Perubahan keanggotaan";
-  if (operation.includes("scope")) return "Perubahan status unit";
-  if (operation.includes("identity")) return "Perubahan status akun";
-  return "Perubahan akses";
-}
-
 
 function recoveryMessage(error: unknown): string {
   if (error instanceof AccessFailure) {

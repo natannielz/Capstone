@@ -110,8 +110,16 @@ public sealed class Auth0ClaimsTests
     [InlineData("/administration/../auth/logout")]
     [InlineData("/administration/access?next=https://outside.co.id")]
     [InlineData("/auth/logout")]
+    [InlineData("/inventory/counts/")]
+    [InlineData("/inventory/counts?warehouse=1")]
+    [InlineData("/inventory/counts#other")]
+    [InlineData("//inventory/counts")]
+    [InlineData("/inventory/%63ounts")]
     public void Return_paths_are_exact_allowlisted_destinations(string path) =>
         Assert.Throws<DomainValidationException>(() => ReturnPathPolicy.Require(path, Settings()));
+    [Fact]
+    public void Stock_count_return_path_is_explicitly_allowlisted() =>
+        Assert.Equal("/inventory/counts", ReturnPathPolicy.Require("/inventory/counts", Settings()));
     [Fact]
     public void Handler_configuration_requires_code_PKCE_validation_and_never_saves_tokens_to_a_browser_ticket()
     {

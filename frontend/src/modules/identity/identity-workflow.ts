@@ -9,7 +9,7 @@ export class IdentityFailure extends Error {
   }
 }
 
-const returnPaths = ["/identity/account", "/administration/access", "/administration/organizations", "/administration/history", "/administration/person-reviews", "/administration/catalog"];
+const returnPaths = ["/identity/account", "/administration/access", "/administration/organizations", "/administration/history", "/administration/person-reviews", "/administration/catalog", "/inventory/counts"];
 export const identityReturnPath = (value?: string | null) => value && returnPaths.includes(value) ? value : "/identity/account";
 const validId = (value: string) => /^[1-9][0-9]{0,18}$/.test(value) && (value.length < 19 || value <= "9223372036854775807");
 const validTime = (value: unknown): value is string => typeof value === "string" && value.length <= 40 && /^\d{4}-\d\d-\d\dT/.test(value) && Number.isFinite(Date.parse(value));
@@ -66,8 +66,11 @@ export function canManageAccounts(actions: readonly string[]) { return actions.s
 
 export function canReviewPeople(actions: readonly string[]) { return actions.some(action => ["person.review.read", "person.review.propose", "person.review.approve"].includes(action)); }
 
+export function canUseStockCounts(actions: readonly string[]) { return actions.includes("stock.count") || actions.includes("stock.read"); }
+
 export function identityDestinations(actions: readonly string[]) {
   return [
+    { href: "/inventory/counts", label: "Hitung barang", description: "Catat hitungan fisik atau lihat pengamatan sesuai penugasan.", visible: canUseStockCounts(actions) },
     { href: "/administration/catalog", label: "Katalog toko", description: "Kelola keluarga produk dan kemasan dalam lingkup toko Anda.", visible: actions.includes("catalog.manage") },
     { href: "/administration/person-reviews", label: "Keterkaitan akun", description: "Tinjau pengajuan penangguhan keterkaitan akun sesuai penugasan.", visible: canReviewPeople(actions) },
     { href: "/administration/accounts", label: "Akun dan undangan", description: "Tinjau undangan dan akun sesuai lingkup tugas.", visible: canManageAccounts(actions) },
