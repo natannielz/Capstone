@@ -17,12 +17,14 @@ namespace UnitToko.Api.Ordering;
 public sealed record OrderCheckoutDto([property: JsonRequired] string Purpose, [property: JsonRequired] OrderDraftInputDto Input);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record OrderSubmitDto([property: JsonRequired] OrderDraftInputDto Input, [property: JsonRequired] string Review, [property: JsonRequired] string Reason);
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record OwnOrderListDto([property: JsonRequired] string Purpose, OrderContextDto? Context = null, LongId? BeforeId = null, int Limit = 25);
 public sealed record OrderCheckoutReviewDto(OrderDraftInputDto Input, string Review, DateTimeOffset CalculatedAt, string Currency, Money CatalogSubtotal,
     Money Tax, Money Charges, Money Total, string SpendingState, OrderQuoteLineDto[] Lines);
 public sealed record OrderSubmitResultDto(LongId OrderId, string Revision, LongId[] SuborderIds, DateTimeOffset RecordedAt, string SpendingState);
 public sealed record OrderSubmitRecoveryDto(string Status, OrderSubmitResultDto? Result);
 public sealed record SubmittedOrderDto(OrderSubmitResultDto Submission, OrderDraftInputDto Input, string Currency,
-    Money CatalogSubtotal, Money Tax, Money Charges, Money Total, OrderQuoteLineDto[] Lines, OrderApprovalProgressDto Progress);
+    Money CatalogSubtotal, Money Tax, Money Charges, Money Total, OrderQuoteLineDto[] Lines, OrderApprovalProgressDto Progress, string BuyerName);
 public sealed record OrderApprovalProgressDto(string Revision, string SpendingState, LongId[] AcceptedSuborders, LongId[] RejectedSuborders, bool Cancelled);
 public sealed record SubmittedOrderPageDto(SubmittedOrderDto[] Items, bool HasMore);
 
@@ -53,9 +55,9 @@ public static class OrderSubmissionEndpoints
         group.MapPost("/{id}/query", async (string id, OrderReadDto request, HttpContext http, [FromServices] OrderSubmissionService service, CancellationToken ct) => {
             Purpose(request.Purpose); return TypedResults.Ok(From(await service.ReadOwnAsync(http.Features.Get<ResolvedActor>()!.Actor, LongId.Parse(id).Value, ct)));
         }).WithName("ReadOwnBranchOrder");
-        group.MapPost("/query", async (OrderDraftListDto request, HttpContext http, [FromServices] OrderSubmissionService service, CancellationToken ct) => {
-            Purpose(request.Purpose); if (request.Context is null || request.Limit != 25) throw Invalid();
-            var result = await service.ListOwnAsync(http.Features.Get<ResolvedActor>()!.Actor, request.Context.Domain(), request.BeforeId?.Value, ct);
+        group.MapPost("/query", async (OwnOrderListDto request, HttpContext http, [FromServices] OrderSubmissionService service, CancellationToken ct) => {
+            Purpose(request.Purpose); if (request.Limit != 25) throw Invalid();
+            var result = await service.ListOwnAsync(http.Features.Get<ResolvedActor>()!.Actor, request.Context?.Domain(), request.BeforeId?.Value, ct);
             return TypedResults.Ok(new SubmittedOrderPageDto([.. result.Items.Select(From)], result.HasMore));
         }).WithName("ListOwnBranchOrders");
     }
@@ -69,7 +71,7 @@ public static class OrderSubmissionEndpoints
         line.BaseUnits.ToString(CultureInfo.InvariantCulture), line.CatalogSubtotal))];
     private static SubmittedOrderDto From(SubmittedOrderView row) => new(new(row.Id, OrderDraftInputDto.Number(row.Revision), [.. row.SuborderIds], row.RecordedAt, row.InitialSpendingState),
         OrderDraftInputDto.From(row.Input), row.Catalog.Currency, row.Catalog.CatalogSubtotal, row.Tax, row.Charges, row.Total, Lines(row.Catalog),
-        new(OrderDraftInputDto.Number(row.Progress.Revision), row.Progress.SpendingState.ToString(), [.. row.Progress.AcceptedSuborders], [.. row.Progress.RejectedSuborders], row.Progress.Cancelled));
+        new(OrderDraftInputDto.Number(row.Progress.Revision), row.Progress.SpendingState.ToString(), [.. row.Progress.AcceptedSuborders], [.. row.Progress.RejectedSuborders], row.Progress.Cancelled), row.BuyerName);
     private static OrderSubmitResultDto Result(BsonDocument row) => new(new(row["orderId"].AsInt64), OrderDraftInputDto.Number(row["revision"].AsInt64),
         [.. row["suborderIds"].AsBsonArray.Select(value => new LongId(value.AsInt64))], DateTimeOffset.FromUnixTimeMilliseconds(row["recordedAt"].AsBsonDateTime.MillisecondsSinceEpoch), row["spendingState"].AsString);
     private static void Purpose(string value) { if (value != "order-preparation") throw Invalid(); }

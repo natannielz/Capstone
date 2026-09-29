@@ -89,8 +89,11 @@ public sealed class OrderSubmissionHttpTests(MongoFixture fixture)
         var recovered = await Ok(await Request("/operations/query", new { purpose = "operation-recovery", key = "http-submit" }));
         Assert.Equal("committed", recovered.GetProperty("status").GetString()); Assert.Equal(saved.GetRawText(), recovered.GetProperty("result").GetRawText());
         await data.Rows("authorizationGrants").UpdateOneAsync(new BsonDocument("_id", 6200L), Builders<BsonDocument>.Update.Set("status", "revoked"));
-        Assert.Equal(HttpStatusCode.Forbidden, (await Request("/" + id + "/query", new { purpose = "order-preparation" })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Request("/" + id + "/query", new { purpose = "order-preparation" })).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await Request("/operations/query", new { purpose = "operation-recovery", key = "http-submit" })).StatusCode);
+        await data.Rows("authorizationGrants").UpdateOneAsync(new BsonDocument("_id", 6250L), Builders<BsonDocument>.Update.Set("status", "revoked"));
+        Assert.Equal(HttpStatusCode.Forbidden, (await Request("/" + id + "/query", new { purpose = "order-preparation" })).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await Request("/query", new { purpose = "order-preparation", limit = 25 })).StatusCode);
         Assert.Equal(1, await data.Rows("orders").CountDocumentsAsync(new BsonDocument()));
     }
 }

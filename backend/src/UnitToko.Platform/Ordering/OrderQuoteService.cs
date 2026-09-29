@@ -66,19 +66,20 @@ public sealed class OrderQuoteService
             return new OrderQuotePreview(context, DateTimeOffset.FromUnixTimeMilliseconds(clock.UtcNow.ToUnixTimeMilliseconds()), quote);
         }, ct);
     }
-    private AuthorizationQuery Query(ActorContext actor, AuthorizationSnapshot snapshot)
+    private AuthorizationQuery Query(ActorContext actor, AuthorizationSnapshot snapshot, string permission = Permissions.OrderSubmit)
     {
-        var query = ScopePolicy.Compile(actor, snapshot, Permissions.OrderSubmit, clock.UtcNow);
+        if (permission is not (Permissions.OrderSubmit or Permissions.OrderRead)) throw new ArgumentException("Unknown ordering authority", nameof(permission));
+        var query = ScopePolicy.Compile(actor, snapshot, permission, clock.UtcNow);
         AuthorizationStore.Require(query); return query;
     }
-    internal void Require(ActorContext actor, AuthorizationSnapshot snapshot, OrderBuyingContext context)
+    internal void Require(ActorContext actor, AuthorizationSnapshot snapshot, OrderBuyingContext context, string permission = Permissions.OrderSubmit)
     {
-        if (!Query(actor, snapshot).Matches(context.Resource(actor.UserId))) throw new AuthorizationDeniedException("scope_denied");
+        if (!Query(actor, snapshot, permission).Matches(context.Resource(actor.UserId))) throw new AuthorizationDeniedException("scope_denied");
     }
     internal async Task FenceAsync(ActorContext actor, AuthorizationSnapshot snapshot, IClientSessionHandle tx,
-        IReadOnlyCollection<OrderBuyingContext> contexts, CancellationToken ct)
+        IReadOnlyCollection<OrderBuyingContext> contexts, CancellationToken ct, string permission = Permissions.OrderSubmit)
     {
-        var clauses = Query(actor, snapshot).Clauses.Where(clause => contexts.Count == 0 || contexts.Any(context => clause.Matches(context.Resource(actor.UserId)))).ToArray();
+        var clauses = Query(actor, snapshot, permission).Clauses.Where(clause => contexts.Count == 0 || contexts.Any(context => clause.Matches(context.Resource(actor.UserId)))).ToArray();
         var nodes = clauses.SelectMany(clause => clause.RequiredNodes).Concat(contexts.SelectMany(context => ScopePolicy.RequiredNodes(context.Resource(actor.UserId), snapshot.Directory))).Distinct();
         await new HistoricalAuthorizationFence(database, authorization).FenceAsync(actor, nodes, [],
             snapshot.Grants.Where(grant => clauses.Any(clause => clause.GrantId == grant.Id)),
@@ -93,8 +94,8 @@ public sealed class OrderQuoteService
                 idle.AsBsonDateTime.MillisecondsSinceEpoch <= now || absolute.AsBsonDateTime.MillisecondsSinceEpoch <= now)
                 throw new AuthorizationDeniedException("stale_or_inactive_session");
         }
-        _ = Query(actor, snapshot);
-        foreach (var context in contexts) Require(actor, snapshot, context);
+        _ = Query(actor, snapshot, permission);
+        foreach (var context in contexts) Require(actor, snapshot, context, permission);
         ct.ThrowIfCancellationRequested();
     }
 }

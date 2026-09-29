@@ -17,7 +17,7 @@ public sealed class Auth0Options
     public string ConnectionName { get; set; } = "";
     public string ClaimsNamespace { get; set; } = "";
     public string AssurancePolicyVersion { get; set; } = "unit-toko-otp-v1";
-    public string[] AllowedReturnPaths { get; set; } = ["/", "/identity/account", "/administration/access", "/administration/organizations", "/administration/history", "/administration/person-reviews", "/administration/catalog", "/catalog/prices", "/catalog/browse", "/ordering/drafts", "/ordering/checkout", "/ordering/reviews", "/inventory/counts", "/inventory/sources", "/inventory/sources/revisions", "/inventory/sources/aliases", "/inventory/sources/suspensions", "/inventory/sources/policies"];
+    public string[] AllowedReturnPaths { get; set; } = ["/", "/identity/account", "/administration/access", "/administration/organizations", "/administration/history", "/administration/person-reviews", "/administration/catalog", "/catalog/prices", "/catalog/browse", "/ordering/drafts", "/ordering/checkout", "/ordering/reviews", "/ordering/orders", "/inventory/counts", "/inventory/sources", "/inventory/sources/revisions", "/inventory/sources/aliases", "/inventory/sources/suspensions", "/inventory/sources/policies"];
 }
 
 public sealed class Auth0OptionsValidator : IValidateOptions<Auth0Options>

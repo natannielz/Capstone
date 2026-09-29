@@ -9,7 +9,7 @@ export class IdentityFailure extends Error {
   }
 }
 
-const returnPaths = ["/identity/account", "/administration/access", "/administration/organizations", "/administration/history", "/administration/person-reviews", "/administration/catalog", "/catalog/prices", "/catalog/browse", "/ordering/drafts", "/ordering/checkout", "/ordering/reviews", "/inventory/counts", "/inventory/sources", "/inventory/sources/revisions", "/inventory/sources/aliases", "/inventory/sources/suspensions", "/inventory/sources/policies"];
+const returnPaths = ["/identity/account", "/administration/access", "/administration/organizations", "/administration/history", "/administration/person-reviews", "/administration/catalog", "/catalog/prices", "/catalog/browse", "/ordering/drafts", "/ordering/checkout", "/ordering/reviews", "/ordering/orders", "/inventory/counts", "/inventory/sources", "/inventory/sources/revisions", "/inventory/sources/aliases", "/inventory/sources/suspensions", "/inventory/sources/policies"];
 export const identityReturnPath = (value?: string | null) => value && returnPaths.includes(value) ? value : "/identity/account";
 const validId = (value: string) => /^[1-9][0-9]{0,18}$/.test(value) && (value.length < 19 || value <= "9223372036854775807");
 const validTime = (value: unknown): value is string => typeof value === "string" && value.length <= 40 && /^\d{4}-\d\d-\d\dT/.test(value) && Number.isFinite(Date.parse(value));
@@ -77,6 +77,7 @@ export function canUseStockCounts(actions: readonly string[]) { return actions.i
 export function identityDestinations(actions: readonly string[]) {
   return [
     { href: "/ordering/drafts", label: "Draf pesanan", description: "Lanjutkan kebutuhan barang dan rencana pengiriman cabang Anda.", visible: actions.includes("order.submit") },
+    { href: "/ordering/orders", label: "Pesanan saya", description: "Lihat kemasan, tujuan, biaya dan perkembangan pesanan yang telah diajukan.", visible: actions.includes("order.read") },
     { href: "/ordering/reviews", label: "Peninjauan pesanan", description: "Tinjau persetujuan belanja cabang atau penerimaan toko sesuai penugasan.", visible: actions.some(action => ["order.spend.approve", "order.accept", "order.cancel"].includes(action)) },
     { href: "/catalog/browse", label: "Katalog kemasan", description: "Lihat isi dan harga kemasan dalam katalog akun Anda.", visible: actions.includes("catalog.read") },
     { href: "/catalog/prices", label: "Harga kemasan", description: "Ajukan harga per kemasan dan tinjau secara independen.", visible: actions.some(action => ["pricing.manage", "pricing.approve"].includes(action)) },

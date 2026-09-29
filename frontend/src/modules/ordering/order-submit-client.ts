@@ -32,7 +32,7 @@ export function parseCheckoutReview(value: unknown, expected: DraftInput) {
 export type CheckoutReview = ReturnType<typeof parseCheckoutReview>;
 export function parseSubmittedOrder(value: unknown) {
   const row = record(value), submission = parseOrderSubmitResult(row.submission), input = parseDraftInput(row.input);
-  if (input.delivery === null) return invalid();
+  if (input.delivery === null || typeof row.buyerName !== 'string' || row.buyerName.trim().length === 0 || row.buyerName.length > 200) return invalid();
   const progress = record(row.progress), revision = priceId(progress.revision);
   if (!['Pending', 'NotRequired', 'Approved', 'Rejected'].includes(String(progress.spendingState)) || !Array.isArray(progress.acceptedSuborders) || !Array.isArray(progress.rejectedSuborders) || typeof progress.cancelled !== 'boolean') return invalid();
   const acceptedSuborders = progress.acceptedSuborders.map(priceId);
@@ -41,9 +41,16 @@ export function parseSubmittedOrder(value: unknown) {
     progress.spendingState === 'NotRequired' && submission.spendingState !== 'NotRequired' || ['Approved', 'Rejected'].includes(String(progress.spendingState)) && submission.spendingState !== 'Pending' ||
     progress.spendingState === 'Pending' && (decided.length > 0 || submission.spendingState !== 'Pending') || progress.spendingState === 'Rejected' && (decided.length > 0 || progress.cancelled) ||
     BigInt(revision) !== BigInt(1 + decided.length + (['Approved', 'Rejected'].includes(String(progress.spendingState)) ? 1 : 0) + (progress.cancelled ? 1 : 0))) return invalid();
-  return { input, submission, progress: { revision, spendingState: progress.spendingState as 'Pending' | 'NotRequired' | 'Approved' | 'Rejected', acceptedSuborders, rejectedSuborders, cancelled: progress.cancelled }, ...amounts(row, input, submission.recordedAt) };
+  return { input, submission, buyerName: row.buyerName, progress: { revision, spendingState: progress.spendingState as 'Pending' | 'NotRequired' | 'Approved' | 'Rejected', acceptedSuborders, rejectedSuborders, cancelled: progress.cancelled }, ...amounts(row, input, submission.recordedAt) };
 }
 export type SubmittedOrder = ReturnType<typeof parseSubmittedOrder>;
+export function parseOrderPage(value: unknown, beforeId: string | null = null) {
+  const row = record(value);
+  if (!Array.isArray(row.items) || row.items.length > 25 || typeof row.hasMore !== 'boolean' || row.hasMore && row.items.length !== 25) return invalid();
+  const items = row.items.map(parseSubmittedOrder); let cursor = beforeId === null ? null : BigInt(priceId(beforeId));
+  for (const item of items) { const id = BigInt(item.submission.orderId); if (cursor !== null && id >= cursor) return invalid(); cursor = id; }
+  return { items, hasMore: row.hasMore };
+}
 function data<T>(result: { data?: T; error?: unknown; response: Response }): T {
   if (!result.response.ok || result.data === undefined) {
     const error = result.error && typeof result.error === 'object' ? result.error as Record<string, unknown> : {};
@@ -54,6 +61,10 @@ function key(value: string) { if (!/^[A-Za-z0-9_.:-]{1,128}$(?![\s\S])/.test(val
 const headers = (actorId: string) => ({ 'X-Expected-Actor-Id': priceId(actorId) });
 export function createOrderSubmitGateway(client: ReturnType<typeof createUnitTokoClient> = createUnitTokoClient()) {
   return {
+    async list(actorId: string, beforeId: string | null = null, signal?: AbortSignal) {
+      const cursor = beforeId === null ? null : priceId(beforeId);
+      return parseOrderPage(data(await client.POST('/api/v1/ordering/orders/query', { body: { purpose: 'order-preparation', context: null, beforeId: cursor, limit: 25 }, params: { header: headers(actorId) }, signal })), cursor);
+    },
     async preview(actorId: string, input: DraftInput, signal?: AbortSignal) {
       const frozen = parseDraftInput(input);
       return parseCheckoutReview(data(await client.POST('/api/v1/ordering/orders/preview/query', { body: { purpose: 'order-preparation', input: frozen }, params: { header: headers(actorId) }, signal })), frozen);

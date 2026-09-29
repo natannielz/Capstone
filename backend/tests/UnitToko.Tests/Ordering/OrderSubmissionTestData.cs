@@ -33,6 +33,7 @@ internal sealed class OrderSubmissionTestData(CatalogPriceTestData prices) : IAs
         try {
             var prices = data.Prices; var catalog = prices.Catalog;
             await catalog.Base.AddGrantAsync(catalog.Buyer, 6200, CatalogAuthoringTestData.Audience, [Permissions.OrderSubmit]);
+            await catalog.Base.AddGrantAsync(catalog.Buyer, 6250, CatalogAuthoringTestData.Audience, [Permissions.OrderRead]);
             await catalog.AssortmentsAsync();
             await catalog.Service.SetPublicationsAsync(prices.Maker, new(new(prices.SkuId), 1, [new(501)], [new(new(501), 1)]), CatalogPriceTestData.Meta("order-publish"));
             await prices.ApproveAsync(await prices.ProposeAsync());

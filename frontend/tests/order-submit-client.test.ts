@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createUnitTokoClient } from '../src/api/client';
-import { createOrderSubmitGateway, parseCheckoutReview, parseSubmittedOrder } from '../src/modules/ordering/order-submit-client';
+import { createOrderSubmitGateway, parseCheckoutReview, parseSubmittedOrder, parseOrderPage } from '../src/modules/ordering/order-submit-client';
 import { OperationJournal, operationRecoveryCapabilities, reconcileOperationRecovery } from '../src/modules/administration/operation-journal';
 import { recoveryPage } from '../src/modules/administration/operation-recovery-navigation';
 import { identityReturnPath } from '../src/modules/identity/identity-workflow';
@@ -18,15 +18,27 @@ function gateway(handler: (request: Request) => Promise<Response>) { return crea
   assert.ok(request instanceof Request); if (request.url.endsWith('/identity/csrf')) return Response.json({ requestToken: 'csrf' });
   assert.equal(request.headers.get('X-Expected-Actor-Id'), actorId); assert.equal(request.headers.get('X-CSRF-Token'), 'csrf'); return handler(request);
 } })); }
+test('order history keeps exact accepted snapshots and rejects malformed, repeated or out-of-order pages', async () => {
+  const row = { ...review, buyerName: 'Cabang fixture', submission: result, progress: { revision: '1', spendingState: 'Pending', acceptedSuborders: [], rejectedSuborders: [], cancelled: false } };
+  const older = { ...row, submission: { ...result, orderId: '9007199254741000' } };
+  assert.equal(identityReturnPath('/ordering/orders'), '/ordering/orders');
+  assert.deepEqual(parseOrderPage({ items: [row, older], hasMore: false }).items.map(item => item.submission.orderId), [result.orderId, older.submission.orderId]);
+  for (const page of [{ items: [row, row], hasMore: false }, { items: [older, row], hasMore: false }, { items: [row], hasMore: true },
+    { items: [{ ...row, buyerName: '' }], hasMore: false }]) assert.throws(() => parseOrderPage(page));
+  assert.throws(() => parseOrderPage({ items: [row], hasMore: false }, result.orderId));
+  const saved = await gateway(async request => { assert.ok(request.url.endsWith('/orders/query'));
+    assert.deepEqual(await request.json(), { purpose: 'order-preparation', context: null, beforeId: result.orderId, limit: 25 }); return Response.json({ items: [older], hasMore: false }); }).list(actorId, result.orderId);
+  assert.equal(saved.items[0].total, '25500.50');
+});
 test('checkout review binds exact branch, delivery, packaging, approved prices and checked decimal total', () => {
   const parsed = parseCheckoutReview(review, input); assert.equal(parsed.total, '25500.50'); assert.equal(parsed.quote.lines[0].baseUnits, '24');
   for (const change of [ { ...review, input: { ...input, context: { ...input.context, branchId: '12' } } },
     { ...review, input: { ...input, delivery: { ...input.delivery, address: 'Another address' } } }, { ...review, total: '0.00' }, { ...review, tax: null },
     { ...review, review: 'a'.repeat(63) }, { ...review, spendingState: 'Approved' }, { ...review, lines: [{ ...review.lines[0], packages: 3 }] } ])
     assert.throws(() => parseCheckoutReview(change, input));
-  assert.equal(parseSubmittedOrder({ ...review, submission: result, progress: { revision: '1', spendingState: 'Pending', acceptedSuborders: [], rejectedSuborders: [], cancelled: false } }).submission.orderId, result.orderId);
-  assert.equal(parseSubmittedOrder({ ...review, submission: result, progress: { revision: '2', spendingState: 'Rejected', acceptedSuborders: [], rejectedSuborders: [], cancelled: false } }).progress.spendingState, 'Rejected');
-  assert.throws(() => parseSubmittedOrder({ ...review, submission: result, progress: { revision: '3', spendingState: 'Rejected', acceptedSuborders: [], rejectedSuborders: [], cancelled: true } }));
+  assert.equal(parseSubmittedOrder({ ...review, buyerName: 'Cabang fixture', submission: result, progress: { revision: '1', spendingState: 'Pending', acceptedSuborders: [], rejectedSuborders: [], cancelled: false } }).submission.orderId, result.orderId);
+  assert.equal(parseSubmittedOrder({ ...review, buyerName: 'Cabang fixture', submission: result, progress: { revision: '2', spendingState: 'Rejected', acceptedSuborders: [], rejectedSuborders: [], cancelled: false } }).progress.spendingState, 'Rejected');
+  assert.throws(() => parseSubmittedOrder({ ...review, buyerName: 'Cabang fixture', submission: result, progress: { revision: '3', spendingState: 'Rejected', acceptedSuborders: [], rejectedSuborders: [], cancelled: true } }));
 });
 test('order transport sends only accepted references and never retries a lost submission or sends from a stale view', async () => {
   let calls = 0; const checked = parseCheckoutReview(review, input);
@@ -35,7 +47,7 @@ test('order transport sends only accepted references and never retries a lost su
     throw new Error('Lost response'); });
   await assert.rejects(() => client.submit(actorId, checked, 'original', () => false)); assert.equal(calls, 0);
   await assert.rejects(() => client.submit(actorId, checked, 'original', () => true)); assert.equal(calls, 1);
-  await assert.rejects(() => gateway(async () => Response.json({ ...review, submission: result })).read(actorId, '7'));
+  await assert.rejects(() => gateway(async () => Response.json({ ...review, buyerName: 'Cabang fixture', submission: result })).read(actorId, '7'));
 });
 test('order recovery is lookup-only, preserves unknown outcomes and rejects an incomplete receipt', async () => {
   assert.equal(identityReturnPath('/ordering/checkout'), '/ordering/checkout'); assert.equal(recoveryPage('ordering.order.submit').href, '/ordering/checkout');

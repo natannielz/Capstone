@@ -3534,6 +3534,17 @@ export interface components {
             /** @description Positive decimal Int64 string, from 1 through 9223372036854775807. JSON numbers are invalid. */
             scopeId?: null | string;
         };
+        OwnOrderListDto: {
+            /** @description Positive decimal Int64 string, from 1 through 9223372036854775807. JSON numbers are invalid. */
+            beforeId?: null | string;
+            context?: null | components["schemas"]["OrderContextDto"];
+            /**
+             * Format: int32
+             * @default 25
+             */
+            limit: number | string;
+            purpose: string;
+        };
         PersonReviewAccountDto: {
             displayName: null | string;
             status: string;
@@ -4300,6 +4311,7 @@ export interface components {
             purpose: "inventory-source-propose" | "inventory-source-review" | "inventory-source-history";
         };
         SubmittedOrderDto: {
+            buyerName: string;
             catalogSubtotal: components["schemas"]["Money"];
             charges: components["schemas"]["Money"];
             currency: string;
@@ -14334,7 +14346,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["OrderDraftListDto"];
+                "application/json": components["schemas"]["OwnOrderListDto"];
             };
         };
         responses: {

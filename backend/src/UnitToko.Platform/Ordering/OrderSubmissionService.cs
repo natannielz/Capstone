@@ -19,7 +19,7 @@ namespace UnitToko.Platform.Ordering;
 public sealed record OrderCheckoutReview(OrderDraftInput Input, OrderCatalogQuote Catalog, string Review, DateTimeOffset CalculatedAt,
     Money Tax, Money Charges, Money Total, OrderSpendingState SpendingState);
 public sealed record SubmittedOrderView(LongId Id, long Revision, ImmutableArray<LongId> SuborderIds, DateTimeOffset RecordedAt,
-    string InitialSpendingState, OrderDraftInput Input, OrderCatalogQuote Catalog, Money Tax, Money Charges, Money Total, OrderApprovalProgress Progress);
+    string InitialSpendingState, OrderDraftInput Input, OrderCatalogQuote Catalog, Money Tax, Money Charges, Money Total, OrderApprovalProgress Progress, string BuyerName);
 
 /// <summary>Ordering owns one atomic submission and invokes the Inventory writer. No default commercial
 /// or stock authority exists; production construction stays closed until the owning adapter is supplied.</summary>
@@ -168,22 +168,30 @@ public sealed partial class OrderSubmissionService
     public async Task<SubmittedOrderView> ReadOwnAsync(ActorContext actor, long id, CancellationToken ct = default) {
         await StorageAsync(ct);
         return await authorization.ReadAsync(actor, async (snapshot, tx, token) => {
+            var query = ScopePolicy.Compile(actor, snapshot, Permissions.OrderRead, clock.UtcNow); AuthorizationStore.Require(query);
+            if (!await Rows(B.Orders).Find(tx, ScopeQuery.Create(query) & F.Eq("_id", id) & F.Eq("createdBy", actor.UserId)).AnyAsync(token)) throw Invalid();
             var row = await GraphAsync(tx, actor, id, token); await TouchAsync(tx, row, token);
             var progress = await DecisionGraphAsync(tx, row, token);
-            await authority.FenceAsync(actor, snapshot, tx, [OrderDraftBson.Context(row["input"]["context"].AsBsonDocument)], token); return View(row, progress);
+            await authority.FenceAsync(actor, snapshot, tx, [OrderDraftBson.Context(row["input"]["context"].AsBsonDocument)], token, Permissions.OrderRead); return View(row, progress);
         }, ct);
     }
-    public async Task<(ImmutableArray<SubmittedOrderView> Items, bool HasMore)> ListOwnAsync(ActorContext actor, OrderBuyingContext context, long? beforeId = null, CancellationToken ct = default) {
-        context.Validate(); if (beforeId is <= 0) throw OrderAdmissionPolicy.Invalid("invalid_order_page"); await StorageAsync(ct);
+    public async Task<(ImmutableArray<SubmittedOrderView> Items, bool HasMore)> ListOwnAsync(ActorContext actor, OrderBuyingContext? context = null, long? beforeId = null, CancellationToken ct = default) {
+        context?.Validate(); if (beforeId is <= 0) throw OrderAdmissionPolicy.Invalid("invalid_order_page"); await StorageAsync(ct);
         return await authorization.ReadAsync(actor, async (snapshot, tx, token) => {
-            authority.Require(actor, snapshot, context);
-            var filter = F.Eq("createdBy", actor.UserId) & F.Eq("buyingOrganizationId", context.OrganizationId.Value) & F.Eq("branchId", context.BranchId.Value) &
-                F.Eq<BsonValue>("divisionId", context.DivisionId.HasValue ? new BsonInt64(context.DivisionId.Value.Value) : BsonNull.Value);
+            var query = ScopePolicy.Compile(actor, snapshot, Permissions.OrderRead, clock.UtcNow); AuthorizationStore.Require(query);
+            var filter = ScopeQuery.Create(query) & F.Eq("createdBy", actor.UserId);
+            if (context is not null) {
+                authority.Require(actor, snapshot, context, Permissions.OrderRead);
+                filter &= F.Eq("buyingOrganizationId", context.OrganizationId.Value) & F.Eq("branchId", context.BranchId.Value) &
+                    F.Eq<BsonValue>("divisionId", context.DivisionId.HasValue ? new BsonInt64(context.DivisionId.Value.Value) : BsonNull.Value);
+            }
             if (beforeId.HasValue) filter &= F.Lt("_id", beforeId.Value);
             var rows = await Rows(B.Orders).Find(tx, filter).Sort(new BsonDocument("_id", -1)).Limit(26).ToListAsync(token);
             var result = ImmutableArray.CreateBuilder<SubmittedOrderView>();
             foreach (var row in rows.Take(25)) { var valid = await GraphAsync(tx, actor, row["_id"].AsInt64, token); await TouchAsync(tx, valid, token); result.Add(View(valid, await DecisionGraphAsync(tx, valid, token))); }
-            await authority.FenceAsync(actor, snapshot, tx, [context], token); return (result.ToImmutable(), rows.Count > 25);
+            // The extra row influences HasMore, so its authority must be fenced too.
+            var contexts = rows.Select(row => OrderDraftBson.Context(row["input"]["context"].AsBsonDocument)).Concat(context is null ? [] : new[] { context }).Distinct().ToArray();
+            await authority.FenceAsync(actor, snapshot, tx, contexts, token, Permissions.OrderRead); return (result.ToImmutable(), rows.Count > 25);
         }, ct);
     }
     private Task<BsonDocument?> ReceiptAsync(ActorContext actor, string key, IClientSessionHandle tx, CancellationToken ct) =>
@@ -253,6 +261,6 @@ public sealed partial class OrderSubmissionService
     private static SubmittedOrderView View(BsonDocument row, OrderApprovalProgress progress) => new(new(row["_id"].AsInt64), row["revision"].AsInt64,
         [.. row["suborderIds"].AsBsonArray.Select(value => new LongId(value.AsInt64))], OrderDraftBson.Time(row["orderedAt"]), row["initialSpendingState"].AsString,
         OrderDraftBson.Input(row["input"].AsBsonDocument), B.Quote(row["quote"].AsBsonDocument), new(Decimal128.ToDecimal(row["terms"]["tax"].AsDecimal128)),
-        new(Decimal128.ToDecimal(row["terms"]["charges"].AsDecimal128)), new(Decimal128.ToDecimal(row["terms"]["total"].AsDecimal128)), progress);
+        new(Decimal128.ToDecimal(row["terms"]["charges"].AsDecimal128)), new(Decimal128.ToDecimal(row["terms"]["total"].AsDecimal128)), progress, row["terms"]["buyer"]["name"].AsString);
     private static AuthorizationDeniedException Invalid() => new("order_unavailable");
 }

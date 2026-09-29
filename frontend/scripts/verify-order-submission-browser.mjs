@@ -161,8 +161,24 @@ try {
   await page.getByRole('button', { name: 'Muat kembali pesanan', exact: true }).click();
   await confirmed.getByText('Belanja cabang ditolak. Cadangan pesanan telah dilepas.', { exact: true }).waitFor();
   assert.equal(decisionWrites.length, 4); assert.equal(writes.length, 2); assert.equal(droppedDecisions, 2);
+  await page.goto(origin.origin + '/identity/account');
+  await page.getByRole('link', { name: /^Pesanan saya/ }).click();
+  await page.getByRole('heading', { name: 'Pesanan saya', exact: true }).waitFor();
+  const history = page.getByRole('region', { name: 'Daftar pesanan saya', exact: true });
+  await history.getByRole('button', { name: 'Lihat pesanan ' + rejectedOrderId, exact: true }).waitFor();
+  assert.deepEqual(await history.getByRole('button', { name: /^Lihat pesanan / }).allTextContents(), ['Lihat pesanan ' + rejectedOrderId, 'Lihat pesanan ' + orderId]);
+  await history.getByRole('button', { name: 'Lihat pesanan ' + rejectedOrderId, exact: true }).click();
+  const details = page.getByRole('region', { name: 'Rincian pesanan', exact: true });
+  await details.getByText('Belanja cabang ditolak', { exact: true }).waitFor();
+  assert.match(await details.innerText(), /12 piece per kemasan · total 24 piece/);
+  assert.equal(await details.evaluate(element => element === document.activeElement), true);
+  await history.getByRole('button', { name: 'Lihat pesanan ' + orderId, exact: true }).click();
+  await details.getByText('Sisa pesanan dibatalkan', { exact: true }).waitFor();
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
+  await page.screenshot({ path: resolve(directory, 'order-history-mobile.png'), fullPage: true });
+  await page.reload(); await history.getByRole('button', { name: 'Lihat pesanan ' + orderId, exact: true }).waitFor();
   assert.deepEqual(errors, []); console.log('REAL_ORDER_BROWSER_PASS ' + JSON.stringify({ droppedCommittedResponses: dropped, submitAttempts: writes.length,
-    decisionAttempts: decisionWrites.length, recoveredApprovals: droppedDecisions, mobile: true, unauthorizedDetail: status }));
+    decisionAttempts: decisionWrites.length, recoveredApprovals: droppedDecisions, mobile: true, ownHistory: true, unauthorizedDetail: status }));
 } catch (error) {
   for (const [index, page] of pages.entries()) if (!page.isClosed()) {
     console.error('FIXTURE PAGE ' + index + ': ' + (await page.locator('main').innerText().catch(() => 'unavailable')).slice(0, 5000));
