@@ -4,42 +4,60 @@ import { priceId } from '../catalog/catalog-price-workflow';
 import { parseDraftInput } from './order-draft-client';
 import { parseOrderQuote } from './order-quote-client';
 
-export type ReviewStage = 'Spending' | 'Store';
+export type ReviewStage = 'Spending' | 'Store' | 'Cancellation';
+export type ReviewAction = 'Approve' | 'Reject' | 'CancelRemainder';
 const invalid = (): never => { throw new AccessFailure(502, 'order_review_response_invalid'); };
 function record(value: unknown): Record<string, unknown> { return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : invalid(); }
-function stage(value: unknown): ReviewStage { return value === 'Spending' || value === 'Store' ? value : invalid(); }
+function stage(value: unknown): ReviewStage { return value === 'Spending' || value === 'Store' || value === 'Cancellation' ? value : invalid(); }
+function action(value: unknown): ReviewAction { return value === 'Approve' || value === 'Reject' || value === 'CancelRemainder' ? value : invalid(); }
 function money(value: unknown) { return typeof value === 'string' && /^(0|[1-9][0-9]{0,14})\.[0-9]{2}$(?![\s\S])/.test(value) ? value : invalid(); }
 function hash(value: unknown) { return typeof value === 'string' && /^[a-f0-9]{64}$(?![\s\S])/.test(value) ? value : invalid(); }
 function time(value: unknown) { return typeof value === 'string' && value.length < 65 && Number.isFinite(Date.parse(value)) ? value : invalid(); }
 const cents = (value: string) => BigInt(value.replace('.', ''));
-export const orderDecisionOperation = (value: ReviewStage) => value === 'Spending' ? 'ordering.order.spending.approve' : 'ordering.order.store.accept';
-export function orderDecisionStage(operation: string): ReviewStage { return operation === 'ordering.order.spending.approve' ? 'Spending' : operation === 'ordering.order.store.accept' ? 'Store' : invalid(); }
+export function orderDecisionOperation(value: ReviewStage, selected: ReviewAction = value === 'Cancellation' ? 'CancelRemainder' : 'Approve') {
+  if (value === 'Cancellation') return selected === 'CancelRemainder' ? 'ordering.order.cancel' : invalid();
+  if (selected === 'CancelRemainder') return invalid();
+  return value === 'Spending' ? 'ordering.order.spending.' + (selected === 'Reject' ? 'reject' : 'approve') : 'ordering.order.store.' + (selected === 'Reject' ? 'reject' : 'accept');
+}
+export function orderDecisionSelection(operation: string): { stage: ReviewStage; action: ReviewAction } {
+  const values: Readonly<Record<string, { stage: ReviewStage; action: ReviewAction }>> = {
+    'ordering.order.spending.approve': { stage: 'Spending', action: 'Approve' }, 'ordering.order.spending.reject': { stage: 'Spending', action: 'Reject' },
+    'ordering.order.store.accept': { stage: 'Store', action: 'Approve' }, 'ordering.order.store.reject': { stage: 'Store', action: 'Reject' },
+    'ordering.order.cancel': { stage: 'Cancellation', action: 'CancelRemainder' },
+  }; return Object.hasOwn(values, operation) ? values[operation] : invalid();
+}
+export function orderDecisionStage(operation: string): ReviewStage { return orderDecisionSelection(operation).stage; }
 export function parseOrderReview(value: unknown, expectedStage: ReviewStage) {
   const row = record(value), reviewStage = stage(row.stage), orderId = priceId(row.orderId), suborderId = row.suborderId === null ? null : priceId(row.suborderId), revision = priceId(row.revision);
-  if (reviewStage !== expectedStage || (reviewStage === 'Spending') !== (suborderId === null) || BigInt(revision) > BigInt(102) ||
+  if (reviewStage !== expectedStage || (reviewStage !== 'Store') !== (suborderId === null) || BigInt(revision) > BigInt(103) ||
     typeof row.buyerName !== 'string' || row.buyerName.length < 1 || row.buyerName.length > 200 || typeof row.canDecide !== 'boolean' ||
-    !['Pending', 'NotRequired', 'Approved'].includes(String(row.spendingState)) || !Array.isArray(row.lines)) return invalid();
+    typeof row.cancelled !== 'boolean' || !['Pending', 'NotRequired', 'Approved', 'Rejected'].includes(String(row.spendingState)) || !Array.isArray(row.lines)) return invalid();
   const input = parseDraftInput({ context: row.context, delivery: row.delivery, purchaseReference: null, selections: row.lines.map(item => {
     const line = record(item), definition = record(line.definition), price = record(line.price);
     return { skuId: definition.skuId, definitionId: definition.id, definitionVersion: definition.version, priceId: price.id, priceVersion: price.version, packages: line.packages };
   }) });
   if (!input.delivery) return invalid();
   const orderedAt = time(row.orderedAt), quote = parseOrderQuote({ ...row, calculatedAt: orderedAt }, input.context, input.selections);
-  const spendingState = row.spendingState as 'Pending' | 'NotRequired' | 'Approved';
+  const spendingState = row.spendingState as 'Pending' | 'NotRequired' | 'Approved' | 'Rejected';
   const tax = row.tax === null ? null : money(row.tax), charges = row.charges === null ? null : money(row.charges), total = row.total === null ? null : money(row.total);
-  if (reviewStage === 'Spending') {
+  if (reviewStage !== 'Store') {
     if (row.storeState !== null || tax === null || charges === null || total === null || cents(total) !== cents(quote.catalogSubtotal) + cents(tax) + cents(charges) ||
-      row.canDecide !== (spendingState === 'Pending')) return invalid();
-  } else if (tax !== null || charges !== null || total !== null || !['awaitingSpending', 'awaitingAcceptance', 'accepted'].includes(String(row.storeState)) ||
-    row.canDecide !== (row.storeState === 'awaitingAcceptance') || (spendingState === 'Pending') !== (row.storeState === 'awaitingSpending')) return invalid();
+      reviewStage === 'Spending' && row.canDecide !== (!row.cancelled && spendingState === 'Pending') || row.cancelled && row.canDecide || spendingState === 'Rejected' && row.canDecide) return invalid();
+  } else if (tax !== null || charges !== null || total !== null || !['awaitingSpending', 'awaitingAcceptance', 'accepted', 'rejected', 'cancelled', 'spendingRejected'].includes(String(row.storeState)) ||
+    row.canDecide !== (row.storeState === 'awaitingAcceptance' && !row.cancelled) || row.storeState === 'awaitingSpending' && (spendingState !== 'Pending' || row.cancelled) ||
+    ['awaitingAcceptance', 'accepted'].includes(String(row.storeState)) && (spendingState === 'Pending' || spendingState === 'Rejected' || row.cancelled) ||
+    row.storeState === 'rejected' && ['Pending', 'Rejected'].includes(spendingState) ||
+    row.storeState === 'spendingRejected' && (spendingState !== 'Rejected' || row.cancelled) || row.storeState === 'cancelled' && (!row.cancelled || spendingState === 'Rejected')) return invalid();
   return { orderId, suborderId, stage: reviewStage, revision, review: hash(row.review), buyerName: row.buyerName, input, quote, tax, charges, total,
-    spendingState, storeState: row.storeState as string | null, canDecide: row.canDecide, orderedAt };
+    spendingState, storeState: row.storeState as string | null, canDecide: row.canDecide, cancelled: row.cancelled, orderedAt };
 }
 export type OrderReview = ReturnType<typeof parseOrderReview>;
 export function parseOrderDecisionResult(value: unknown) {
-  const row = record(value), selected = stage(row.stage), suborderId = row.suborderId === null ? null : priceId(row.suborderId), revision = priceId(row.revision);
-  if ((selected === 'Spending') !== (suborderId === null) || BigInt(revision) < BigInt(2) || BigInt(revision) > BigInt(102) || row.state !== (selected === 'Spending' ? 'approved' : 'accepted')) return invalid();
-  return { decisionId: priceId(row.decisionId), orderId: priceId(row.orderId), suborderId, stage: selected, revision, state: row.state as 'approved' | 'accepted', recordedAt: time(row.recordedAt) };
+  const row = record(value), selected = stage(row.stage), selectedAction = action(row.action), suborderId = row.suborderId === null ? null : priceId(row.suborderId), revision = priceId(row.revision);
+  orderDecisionOperation(selected, selectedAction);
+  if ((selected !== 'Store') !== (suborderId === null) || BigInt(revision) < BigInt(2) || BigInt(revision) > BigInt(103) ||
+    row.state !== (selectedAction === 'Reject' ? 'rejected' : selectedAction === 'CancelRemainder' ? 'cancelled' : selected === 'Spending' ? 'approved' : 'accepted')) return invalid();
+  return { decisionId: priceId(row.decisionId), orderId: priceId(row.orderId), suborderId, stage: selected, action: selectedAction, revision, state: row.state as 'approved' | 'accepted' | 'rejected' | 'cancelled', recordedAt: time(row.recordedAt) };
 }
 export type OrderDecisionResult = ReturnType<typeof parseOrderDecisionResult>;
 function data<T>(result: { data?: T; error?: unknown; response: Response }): T {
@@ -62,21 +80,23 @@ export function createOrderReviewGateway(client: ReturnType<typeof createUnitTok
         params: { path: { id: priceId(orderId) }, header: headers(actor) }, signal })), selected);
       if (value.orderId !== orderId || value.suborderId !== suborderId) return invalid(); return value;
     },
-    async decide(actor: string, review: OrderReview, reason: string, requestKey: string, isCurrent: () => boolean) {
+    async decide(actor: string, review: OrderReview, reason: string, requestKey: string, isCurrent: () => boolean, selectedAction: ReviewAction = 'Approve') {
+      orderDecisionOperation(review.stage, selectedAction);
       if (reason.trim() !== reason || reason.length < 1 || reason.length > 1000 || /[\u0000-\u001f\u007f]/.test(reason)) throw new RequestNotSentError(400, 'invalid_reason');
       if (!isCurrent()) throw new RequestNotSentError(409, 'order_view_stale');
       const result = parseOrderDecisionResult(data(await client.POST('/api/v1/ordering/reviews/{id}/decisions', {
-        body: { stage: review.stage, suborderId: review.suborderId, review: hash(review.review), reason },
+        body: { stage: review.stage, suborderId: review.suborderId, action: selectedAction, review: hash(review.review), reason },
         params: { path: { id: priceId(review.orderId) }, header: { ...headers(actor), 'If-Match': '"' + priceId(review.revision) + '"', 'Idempotency-Key': key(requestKey) } } })));
       if (!isCurrent()) throw new AccessFailure(503, 'commit_outcome_unknown');
-      if (result.orderId !== review.orderId || result.suborderId !== review.suborderId || result.stage !== review.stage || BigInt(result.revision) !== BigInt(review.revision) + BigInt(1)) return invalid();
+      if (result.orderId !== review.orderId || result.suborderId !== review.suborderId || result.stage !== review.stage || result.action !== selectedAction || BigInt(result.revision) !== BigInt(review.revision) + BigInt(1)) return invalid();
       return result;
     },
-    async recover(actor: string, selected: ReviewStage, requestKey: string, signal?: AbortSignal) {
-      const row = record(data(await client.POST('/api/v1/ordering/reviews/operations/query', { body: { purpose: 'operation-recovery', stage: selected, key: key(requestKey) }, params: { header: headers(actor) }, signal })));
+    async recover(actor: string, selected: ReviewStage, requestKey: string, signal?: AbortSignal, selectedAction: ReviewAction = 'Approve') {
+      orderDecisionOperation(selected, selectedAction);
+      const row = record(data(await client.POST('/api/v1/ordering/reviews/operations/query', { body: { purpose: 'operation-recovery', stage: selected, action: selectedAction, key: key(requestKey) }, params: { header: headers(actor) }, signal })));
       if (row.status === 'not_confirmed' && row.result === null) return null;
       if (row.status !== 'committed') return invalid(); const result = parseOrderDecisionResult(row.result);
-      if (result.stage !== selected) return invalid(); return { state: 'committed' as const, result };
+      if (result.stage !== selected || result.action !== selectedAction) return invalid(); return { state: 'committed' as const, result };
     },
   };
 }

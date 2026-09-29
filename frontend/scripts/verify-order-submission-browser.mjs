@@ -131,6 +131,36 @@ try {
   await store.page.screenshot({ path: resolve(directory, 'store-acceptance-mobile.png'), fullPage: true });
   await page.getByRole('button', { name: 'Muat kembali pesanan', exact: true }).click();
   await confirmed.getByText('1 dari 1 kelompok pemenuhan telah diterima toko.', { exact: true }).waitFor();
+  const cancellationPage = await buyer.context.newPage(); pages.push(cancellationPage); cancellationPage.setDefaultTimeout(15000); cancellationPage.on('pageerror', error => errors.push(error.message));
+  await cancellationPage.goto(origin.origin + '/ordering/reviews');
+  await cancellationPage.getByRole('button', { name: 'Tinjau pesanan ' + orderId, exact: true }).click();
+  const cancellation = cancellationPage.getByRole('region', { name: 'Tinjauan keputusan', exact: true });
+  await cancellation.getByLabel('Catatan peninjauan').fill('Sisa kebutuhan fixture dibatalkan sebelum dikirim');
+  await cancellation.getByRole('button', { name: 'Batalkan sisa pesanan', exact: true }).click();
+  assert.equal(await cancellationPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  await cancellationPage.screenshot({ path: resolve(directory, 'cancel-review-mobile.png'), fullPage: true });
+  dropNextDecision = true; await cancellation.getByRole('button', { name: 'Konfirmasi pembatalan sisa', exact: true }).click();
+  await cancellationPage.getByRole('button', { name: 'Periksa hasil', exact: true }).waitFor();
+  await cancellationPage.reload(); await cancellationPage.getByRole('button', { name: 'Periksa hasil', exact: true }).click();
+  await cancellationPage.getByText('Pembatalan ditemukan dan tercatat. Cadangan sisa pesanan telah dilepas.', { exact: true }).waitFor();
+  await cancellation.getByText('Sisa pesanan sudah dibatalkan.', { exact: true }).waitFor();
+  assert.equal(decisionWrites.length, 3); assert.equal(droppedDecisions, 2);
+  await page.getByRole('button', { name: 'Muat kembali pesanan', exact: true }).click();
+  await confirmed.getByText('Sisa pesanan dibatalkan. Cadangan barang yang belum dikirim telah dilepas.', { exact: true }).waitFor();
+  // A deliberate new order may now use the released stock. Reject it through the branch screen.
+  await page.goto(origin.origin + '/ordering/checkout?draft=' + config.draftId);
+  await page.getByRole('button', { name: 'Tinjau pesanan dan biaya', exact: true }).click();
+  await page.getByRole('button', { name: 'Konfirmasi ajukan pesanan', exact: true }).click();
+  await confirmed.waitFor(); await page.getByRole('heading', { name: 'Rincian pesanan tersimpan', exact: true }).waitFor();
+  const rejectedOrderId = (await confirmed.getByRole('heading').innerText()).match(/[0-9]+/)[0]; assert.notEqual(rejectedOrderId, orderId);
+  await approver.page.reload(); await approver.page.getByRole('button', { name: 'Tinjau pesanan ' + rejectedOrderId, exact: true }).click();
+  await branchReview.getByLabel('Catatan peninjauan').fill('Kebutuhan kedua fixture ditolak cabang');
+  await branchReview.getByRole('button', { name: 'Tolak belanja', exact: true }).click();
+  await branchReview.getByRole('button', { name: 'Konfirmasi penolakan', exact: true }).click();
+  await branchReview.getByText('Belanja cabang sudah ditolak.', { exact: true }).waitFor();
+  await page.getByRole('button', { name: 'Muat kembali pesanan', exact: true }).click();
+  await confirmed.getByText('Belanja cabang ditolak. Cadangan pesanan telah dilepas.', { exact: true }).waitFor();
+  assert.equal(decisionWrites.length, 4); assert.equal(writes.length, 2); assert.equal(droppedDecisions, 2);
   assert.deepEqual(errors, []); console.log('REAL_ORDER_BROWSER_PASS ' + JSON.stringify({ droppedCommittedResponses: dropped, submitAttempts: writes.length,
     decisionAttempts: decisionWrites.length, recoveredApprovals: droppedDecisions, mobile: true, unauthorizedDetail: status }));
 } catch (error) {

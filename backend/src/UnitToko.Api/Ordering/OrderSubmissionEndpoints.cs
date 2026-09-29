@@ -23,7 +23,7 @@ public sealed record OrderSubmitResultDto(LongId OrderId, string Revision, LongI
 public sealed record OrderSubmitRecoveryDto(string Status, OrderSubmitResultDto? Result);
 public sealed record SubmittedOrderDto(OrderSubmitResultDto Submission, OrderDraftInputDto Input, string Currency,
     Money CatalogSubtotal, Money Tax, Money Charges, Money Total, OrderQuoteLineDto[] Lines, OrderApprovalProgressDto Progress);
-public sealed record OrderApprovalProgressDto(string Revision, string SpendingState, LongId[] AcceptedSuborders);
+public sealed record OrderApprovalProgressDto(string Revision, string SpendingState, LongId[] AcceptedSuborders, LongId[] RejectedSuborders, bool Cancelled);
 public sealed record SubmittedOrderPageDto(SubmittedOrderDto[] Items, bool HasMore);
 
 public static class OrderSubmissionEndpoints
@@ -69,7 +69,7 @@ public static class OrderSubmissionEndpoints
         line.BaseUnits.ToString(CultureInfo.InvariantCulture), line.CatalogSubtotal))];
     private static SubmittedOrderDto From(SubmittedOrderView row) => new(new(row.Id, OrderDraftInputDto.Number(row.Revision), [.. row.SuborderIds], row.RecordedAt, row.InitialSpendingState),
         OrderDraftInputDto.From(row.Input), row.Catalog.Currency, row.Catalog.CatalogSubtotal, row.Tax, row.Charges, row.Total, Lines(row.Catalog),
-        new(OrderDraftInputDto.Number(row.Progress.Revision), row.Progress.SpendingState.ToString(), [.. row.Progress.AcceptedSuborders]));
+        new(OrderDraftInputDto.Number(row.Progress.Revision), row.Progress.SpendingState.ToString(), [.. row.Progress.AcceptedSuborders], [.. row.Progress.RejectedSuborders], row.Progress.Cancelled));
     private static OrderSubmitResultDto Result(BsonDocument row) => new(new(row["orderId"].AsInt64), OrderDraftInputDto.Number(row["revision"].AsInt64),
         [.. row["suborderIds"].AsBsonArray.Select(value => new LongId(value.AsInt64))], DateTimeOffset.FromUnixTimeMilliseconds(row["recordedAt"].AsBsonDateTime.MillisecondsSinceEpoch), row["spendingState"].AsString);
     private static void Purpose(string value) { if (value != "order-preparation") throw Invalid(); }

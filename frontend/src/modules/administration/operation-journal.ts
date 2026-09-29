@@ -4,13 +4,13 @@ import { priceAction, priceOutcome, type PriceResult } from "../catalog/catalog-
 import { priceRecoverySku } from "../catalog/catalog-price-recovery";
 import { parseDraftResult, type DraftResult } from "../ordering/order-draft-client";
 import { parseOrderSubmitResult, type OrderSubmitResult } from "../ordering/order-submit-client";
-import { orderDecisionStage, parseOrderDecisionResult, type OrderDecisionResult } from "../ordering/order-review-client";
+import { orderDecisionSelection, parseOrderDecisionResult, type OrderDecisionResult } from "../ordering/order-review-client";
 
 export type OperationReference = Readonly<{ actorId: string; operation: string; key: string; createdAt: string }>;
 type JournalStorage = Pick<Storage, "length" | "key" | "getItem" | "setItem" | "removeItem">;
 const prefix = "unit-toko:pending:v1:";
 const keyPattern = /^[A-Za-z0-9._:-]{1,128}$/;
-const operationPattern = /^(?:(access|organization)\.[a-z.]{1,100}|identity\.(?:invitation\.(?:propose|approve|rejected|withdrawn|revoked)|recovery\.request)|person\.review\.(?:propose|approve|reject|withdraw)|ordering\.(?:draft\.save|order\.(?:submit|spending\.approve|store\.accept))|catalog\.(?:price\.(?:propose|approve|reject|withdraw)|category\.save|family\.(?:create|edit)|sku\.(?:create|revise|replace|retire|publish))|inventory\.stock-count\.record|stock\.source\.(?:suspend|(?:(?:revision|alias|policy)\.)?(?:propose|approve|reject|withdraw)))$(?![\s\S])/;
+const operationPattern = /^(?:(access|organization)\.[a-z.]{1,100}|identity\.(?:invitation\.(?:propose|approve|rejected|withdrawn|revoked)|recovery\.request)|person\.review\.(?:propose|approve|reject|withdraw)|ordering\.(?:draft\.save|order\.(?:submit|cancel|spending\.(?:approve|reject)|store\.(?:accept|reject)))|catalog\.(?:price\.(?:propose|approve|reject|withdraw)|category\.save|family\.(?:create|edit)|sku\.(?:create|revise|replace|retire|publish))|inventory\.stock-count\.record|stock\.source\.(?:suspend|(?:(?:revision|alias|policy)\.)?(?:propose|approve|reject|withdraw)))$(?![\s\S])/;
 const storageKey = (entry: OperationReference) => `${prefix}${entry.actorId}:${entry.operation}:${entry.key}`;
 
 /** Only recovery references are stored. Requests, reasons, grants and credentials never enter this journal. */
@@ -143,7 +143,7 @@ function recoveryNamespace(operation: string): "access" | "organization" | "iden
   if (!operationPattern.test(operation)) return null;
   if (operation === "ordering.draft.save") return "ordering.draft";
   if (operation === "ordering.order.submit") return "ordering.order";
-  if (operation === "ordering.order.spending.approve" || operation === "ordering.order.store.accept") return "ordering.decision";
+  if (operation.startsWith("ordering.order.")) return "ordering.decision";
   if (operation.startsWith("catalog.price.")) return "catalog.price";
   if (operation.startsWith("stock.source.policy.")) return "stock.source.policy";
   if (operation === "stock.source.suspend") return "stock.source.suspend";
@@ -189,9 +189,10 @@ export async function reconcileOperationRecovery(entry: OperationReference, jour
     if (recovered === null) receipt = null;
     else {
       if (!recovered || recovered.state !== "committed" || Object.keys(recovered).sort().join(",") !== "result,state" ||
-        !recovered.result || Object.keys(recovered.result).sort().join(",") !== "decisionId,orderId,recordedAt,revision,stage,state,suborderId") throw new AccessFailure(502, "recovery_receipt_invalid");
+        !recovered.result || Object.keys(recovered.result).sort().join(",") !== "action,decisionId,orderId,recordedAt,revision,stage,state,suborderId") throw new AccessFailure(502, "recovery_receipt_invalid");
       const result = parseOrderDecisionResult(recovered.result);
-      if (result.stage !== orderDecisionStage(entry.operation)) throw new AccessFailure(502, "recovery_receipt_invalid");
+      const selected = orderDecisionSelection(entry.operation);
+      if (result.stage !== selected.stage || result.action !== selected.action) throw new AccessFailure(502, "recovery_receipt_invalid");
       receipt = { state: "committed", result: { id: result.orderId, version: result.revision } };
     }
   } else if (namespace === "ordering.order") {

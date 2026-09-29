@@ -33,8 +33,8 @@ public sealed class OrderDecisionTests(MongoFixture fixture)
         var progress = (await data.Service.ReadOwnAsync(data.Buyer, id)).Progress;
         Assert.Equal(4L, progress.Revision); Assert.Equal(2, progress.AcceptedSuborders.Length); Assert.Equal(2, await data.Rows("movements").CountDocumentsAsync(new BsonDocument()));
     }
-    [Fact]
-    public async Task Factor_expiry_after_the_decision_write_aborts_decision_audit_receipt_and_outbox() {
+    [Theory] [InlineData(OrderReviewAction.Approve)] [InlineData(OrderReviewAction.Reject)]
+    public async Task Factor_expiry_after_the_decision_write_aborts_decision_audit_receipt_and_outbox(OrderReviewAction action) {
         await using var data = await OrderSubmissionTestData.CreateAsync(fixture); var actors = await Actors(data); var id = await Submit(data);
         var review = await data.Service.ReviewOrderAsync(actors.Approver, id, null, OrderReviewStage.Spending); var fired = 0;
         var settings = fixture.Client.Settings.Clone();
@@ -46,11 +46,13 @@ public sealed class OrderDecisionTests(MongoFixture fixture)
         using var client = new MongoClient(settings); var db = client.GetDatabase(data.Database.DatabaseNamespace.DatabaseName);
         var service = new OrderSubmissionService(db, new(client), new(db), data.Prices.Catalog.Clock);
         Assert.Equal("step_up_required", (await Assert.ThrowsAsync<AuthorizationDeniedException>(() => service.DecideOrderAsync(actors.Approver, id, null,
-            OrderReviewStage.Spending, review.Revision, review.Review, CatalogPriceTestData.Meta("expires-final")))).Code);
+            OrderReviewStage.Spending, review.Revision, review.Review, CatalogPriceTestData.Meta("expires-final"), action: action))).Code);
         Assert.Equal(1, fired); Assert.Equal(0, await data.Rows("orderDecisions").CountDocumentsAsync(new BsonDocument()));
         Assert.Equal(0, await data.Rows("outboxEvents").CountDocumentsAsync(new BsonDocument("kind", "ordering.order.decided")));
         Assert.Equal(0, await data.Rows("auditEvents").CountDocumentsAsync(new BsonDocument("kind", "ordering.order.decided")));
         Assert.Equal(0, await data.Rows("idempotencyRecords").CountDocumentsAsync(new BsonDocument("key", "expires-final")));
+        Assert.Equal(1, await data.Rows("movements").CountDocumentsAsync(new BsonDocument()));
+        Assert.Equal(2L, (await data.Rows("stockBalances").Find(new BsonDocument()).SingleAsync())["reserved"].AsInt64);
     }
     [Theory] [InlineData("receipt")] [InlineData("audit")] [InlineData("changed-review")] [InlineData("extra-child")]
     public async Task Damaged_decision_history_cannot_serve_read_recovery_or_a_replacement_approval(string fault) {
@@ -89,14 +91,14 @@ public sealed class OrderDecisionTests(MongoFixture fixture)
         Assert.Equal("independent_person_required", (await Assert.ThrowsAsync<AuthorizationDeniedException>(() => data.Service.DecideOrderAsync(actors.Approver, secondId, null,
             OrderReviewStage.Spending, next.Revision, next.Review, CatalogPriceTestData.Meta("same-person")))).Code);
     }
-    private static async Task<(ActorContext Approver, ActorContext Store)> Actors(OrderSubmissionTestData data) {
+    internal static async Task<(ActorContext Approver, ActorContext Store)> Actors(OrderSubmissionTestData data) {
         var catalog = data.Prices.Catalog;
         var approver = await catalog.ActorAsync(8100, new(GrantScopeKind.BuyingBranch, 10, 11), Permissions.OrderSpendApprove, Permissions.BranchPic);
         var store = await catalog.ActorAsync(8200, CatalogAuthoringTestData.Shop, Permissions.OrderAccept);
         await PersonTestData.SeedDistinctPeopleAsync(data.Database, catalog.Clock, data.Buyer.UserId, approver.UserId);
         return (approver, store);
     }
-    private static async Task<long> Submit(OrderSubmissionTestData data) {
+    internal static async Task<long> Submit(OrderSubmissionTestData data) {
         var review = await data.Service.PreviewAsync(data.Buyer, data.Input);
         return (await data.Service.SubmitAsync(data.Buyer, data.Input, review.Review, CatalogPriceTestData.Meta("order")))["orderId"].AsInt64;
     }

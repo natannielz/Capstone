@@ -35,6 +35,7 @@ public sealed class OrderSubmissionBrowserTests(MongoFixture fixture, ITestOutpu
         Assert.True(Path.IsPathFullyQualified(node ?? "") && File.Exists(node)); Assert.True(Path.IsPathFullyQualified(playwright ?? "") && File.Exists(playwright));
         Assert.True(File.Exists(Path.Combine(root, "frontend", ".next", "BUILD_ID")));
         await using var data = await OrderSubmissionTestData.CreateAsync(fixture, 2);
+        await data.Prices.Catalog.Base.AddGrantAsync(data.Buyer, 6500, CatalogAuthoringTestData.Audience, [Permissions.OrderCancel]);
         var approver = await data.Prices.Catalog.ActorAsync(8100, new(GrantScopeKind.BuyingBranch, 10, 11), Permissions.OrderSpendApprove, Permissions.BranchPic);
         var store = await data.Prices.Catalog.ActorAsync(8200, CatalogAuthoringTestData.Shop, Permissions.OrderAccept);
         await PersonTestData.SeedDistinctPeopleAsync(data.Database, data.Prices.Catalog.Clock, data.Buyer.UserId, approver.UserId);
@@ -71,15 +72,17 @@ public sealed class OrderSubmissionBrowserTests(MongoFixture fixture, ITestOutpu
             await process.WaitForExitAsync().WaitAsync(TimeSpan.FromMinutes(3)); output.WriteLine(await stdout); output.WriteLine(await stderr);
             Assert.True(process.ExitCode == 0, await stdout + await stderr); Assert.Contains("REAL_ORDER_BROWSER_PASS", await stdout);
         } finally { if (!process.HasExited) { process.Kill(true); await process.WaitForExitAsync(); } }
-        var order = Assert.Single(await data.Rows("orders").Find(new BsonDocument()).ToListAsync());
+        var orders = await data.Rows("orders").Find(new BsonDocument()).Sort(new BsonDocument("_id", 1)).ToListAsync(); Assert.Equal(2, orders.Count); var order = orders[0];
         Assert.Equal(data.Buyer.UserId, order["createdBy"].AsInt64); Assert.Equal("Pending", order["initialSpendingState"].AsString);
         Assert.Equal(25500.50m, Decimal128.ToDecimal(order["terms"]["total"].AsDecimal128));
-        foreach (var name in new[] { "reservations", "movements", "orderSuborders" }) Assert.Equal(1, await data.Rows(name).CountDocumentsAsync(new BsonDocument()));
-        Assert.Equal(2L, (await data.Rows("stockBalances").Find(new BsonDocument()).SingleAsync())["reserved"].AsInt64);
-        Assert.Equal(1, await data.Rows("idempotencyRecords").CountDocumentsAsync(new BsonDocument("operation", OrderSubmissionBson.Operation)));
-        Assert.Equal(2, await data.Rows("orderDecisions").CountDocumentsAsync(new BsonDocument()));
+        foreach (var name in new[] { "reservations", "orderSuborders" }) Assert.Equal(2, await data.Rows(name).CountDocumentsAsync(new BsonDocument()));
+        Assert.Equal(4, await data.Rows("movements").CountDocumentsAsync(new BsonDocument()));
+        var balance = await data.Rows("stockBalances").Find(new BsonDocument()).SingleAsync(); Assert.Equal(0L, balance["reserved"].AsInt64); Assert.Equal(2L, balance["onHand"].AsInt64);
+        Assert.Equal(2, await data.Rows("idempotencyRecords").CountDocumentsAsync(new BsonDocument("operation", OrderSubmissionBson.Operation)));
+        Assert.Equal(4, await data.Rows("orderDecisions").CountDocumentsAsync(new BsonDocument()));
         var progress = (await data.Service.ReadOwnAsync(data.Buyer, order["_id"].AsInt64)).Progress;
-        Assert.Equal(UnitToko.Modules.Ordering.OrderSpendingState.Approved, progress.SpendingState); Assert.Single(progress.AcceptedSuborders);
+        Assert.Equal(UnitToko.Modules.Ordering.OrderSpendingState.Approved, progress.SpendingState); Assert.Single(progress.AcceptedSuborders); Assert.True(progress.Cancelled);
+        Assert.Equal(UnitToko.Modules.Ordering.OrderSpendingState.Rejected, (await data.Service.ReadOwnAsync(data.Buyer, orders[1]["_id"].AsInt64)).Progress.SpendingState);
         Assert.Equal(0, await data.Rows("journalEntries").CountDocumentsAsync(new BsonDocument()));
     }
     private static string Root() {

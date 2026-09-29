@@ -15,14 +15,14 @@ public sealed record OrderReviewListDto([property: JsonRequired] string Purpose,
 public sealed record OrderReviewReadDto([property: JsonRequired] string Purpose, [property: JsonRequired] string Stage, [property: JsonRequired] LongId? SuborderId);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record OrderDecisionDto([property: JsonRequired] string Stage, [property: JsonRequired] LongId? SuborderId,
-    [property: JsonRequired] string Review, [property: JsonRequired] string Reason);
+    [property: JsonRequired] string Action, [property: JsonRequired] string Review, [property: JsonRequired] string Reason);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed record OrderDecisionRecoveryDto([property: JsonRequired] string Purpose, [property: JsonRequired] string Stage, [property: JsonRequired] string Key);
+public sealed record OrderDecisionRecoveryDto([property: JsonRequired] string Purpose, [property: JsonRequired] string Stage, [property: JsonRequired] string Action, [property: JsonRequired] string Key);
 public sealed record OrderReviewDto(LongId OrderId, LongId? SuborderId, string Stage, string Revision, string Review, OrderContextDto Context,
     string BuyerName, OrderDeliveryDto Delivery, string Currency, Money CatalogSubtotal, Money? Tax, Money? Charges, Money? Total,
-    OrderQuoteLineDto[] Lines, string SpendingState, string? StoreState, bool CanDecide, DateTimeOffset OrderedAt);
+    OrderQuoteLineDto[] Lines, string SpendingState, string? StoreState, bool CanDecide, bool Cancelled, DateTimeOffset OrderedAt);
 public sealed record OrderReviewPageDto(OrderReviewDto[] Items, bool HasMore);
-public sealed record OrderDecisionResultDto(LongId DecisionId, LongId OrderId, LongId? SuborderId, string Stage, string Revision, string State, DateTimeOffset RecordedAt);
+public sealed record OrderDecisionResultDto(LongId DecisionId, LongId OrderId, LongId? SuborderId, string Stage, string Action, string Revision, string State, DateTimeOffset RecordedAt);
 public sealed record OrderDecisionReceiptDto(string Status, OrderDecisionResultDto? Result);
 
 public static class OrderDecisionEndpoints
@@ -41,12 +41,12 @@ public static class OrderDecisionEndpoints
         group.MapPost("/{id}/decisions", async (string id, OrderDecisionDto request, HttpContext http, [FromServices] OrderSubmissionService service,
             [FromHeader(Name = "Idempotency-Key")] string key, [FromHeader(Name = "If-Match")] string expected, CancellationToken ct) => {
             var value = await service.DecideOrderAsync(http.Features.Get<ResolvedActor>()!.Actor, LongId.Parse(id).Value, request.SuborderId?.Value, Stage(request.Stage),
-                AccessRequestMetadata.ExpectedVersion(http.Request), request.Review, new(AccessRequestMetadata.IdempotencyKey(http.Request), request.Reason, http.TraceIdentifier), ct);
+                AccessRequestMetadata.ExpectedVersion(http.Request), request.Review, new(AccessRequestMetadata.IdempotencyKey(http.Request), request.Reason, http.TraceIdentifier), ct, Action(request.Action));
             var result = Result(value); http.Response.Headers.ETag = '"' + result.Revision + '"'; return TypedResults.Ok(result);
         }).WithName("RecordOrderDecision");
         group.MapPost("/operations/query", async (OrderDecisionRecoveryDto request, HttpContext http, [FromServices] OrderSubmissionService service, CancellationToken ct) => {
             if (request.Purpose != "operation-recovery") throw Invalid();
-            var row = await service.RecoverOrderDecisionAsync(http.Features.Get<ResolvedActor>()!.Actor, Stage(request.Stage), request.Key, ct);
+            var row = await service.RecoverOrderDecisionAsync(http.Features.Get<ResolvedActor>()!.Actor, Stage(request.Stage), request.Key, ct, Action(request.Action));
             return TypedResults.Ok(new OrderDecisionReceiptDto(row is null ? "not_confirmed" : "committed", row is null ? null : Result(row)));
         }).WithName("RecoverOrderDecision");
     }
@@ -54,11 +54,12 @@ public static class OrderDecisionEndpoints
         row.Stage.ToString(), OrderDraftInputDto.Number(row.Revision), row.Review, OrderContextDto.From(row.Context), row.BuyerName,
         new(row.Delivery.RecipientName, row.Delivery.Phone, row.Delivery.Address, row.Delivery.City, row.Delivery.PostalCode, row.Delivery.Instructions),
         row.Catalog.Currency, row.Catalog.CatalogSubtotal, row.Tax, row.Charges, row.Total, OrderSubmissionEndpoints.Lines(row.Catalog),
-        row.SpendingState.ToString(), row.StoreState, row.CanDecide, row.OrderedAt);
+        row.SpendingState.ToString(), row.StoreState, row.CanDecide, row.Cancelled, row.OrderedAt);
     private static OrderDecisionResultDto Result(BsonDocument row) => new(new(row["decisionId"].AsInt64), new(row["orderId"].AsInt64),
-        row["suborderId"].IsBsonNull ? null : new LongId(row["suborderId"].AsInt64), row["stage"].AsString, OrderDraftInputDto.Number(row["revision"].AsInt64),
+        row["suborderId"].IsBsonNull ? null : new LongId(row["suborderId"].AsInt64), row["stage"].AsString, row["action"].AsString, OrderDraftInputDto.Number(row["revision"].AsInt64),
         row["state"].AsString, DateTimeOffset.FromUnixTimeMilliseconds(row["recordedAt"].AsBsonDateTime.MillisecondsSinceEpoch));
-    private static OrderReviewStage Stage(string value) => value switch { "Spending" => OrderReviewStage.Spending, "Store" => OrderReviewStage.Store, _ => throw Invalid() };
+    private static OrderReviewStage Stage(string value) => value switch { "Spending" => OrderReviewStage.Spending, "Store" => OrderReviewStage.Store, "Cancellation" => OrderReviewStage.Cancellation, _ => throw Invalid() };
+    private static OrderReviewAction Action(string value) => value switch { "Approve" => OrderReviewAction.Approve, "Reject" => OrderReviewAction.Reject, "CancelRemainder" => OrderReviewAction.CancelRemainder, _ => throw Invalid() };
     private static void Purpose(string value) { if (value != "order-review") throw Invalid(); }
     private static DomainValidationException Invalid() => new("invalid_order_review", "Choose the assigned order review stage");
 }

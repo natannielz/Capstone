@@ -3231,6 +3231,8 @@ export interface components {
         };
         OrderApprovalProgressDto: {
             acceptedSuborders: unknown[];
+            cancelled: boolean;
+            rejectedSuborders: unknown[];
             revision: string;
             spendingState: string;
         };
@@ -3266,6 +3268,7 @@ export interface components {
             items: components["schemas"]["OrderContextOptionDto"][];
         };
         OrderDecisionDto: {
+            action: string;
             reason: string;
             review: string;
             stage: string;
@@ -3276,11 +3279,13 @@ export interface components {
             status: string;
         };
         OrderDecisionRecoveryDto: {
+            action: string;
             key: string;
             purpose: string;
             stage: string;
         };
         OrderDecisionResultDto: {
+            action: string;
             decisionId: components["schemas"]["LongId"];
             orderId: components["schemas"]["LongId"];
             /** Format: date-time */
@@ -3387,6 +3392,7 @@ export interface components {
         };
         OrderReviewDto: {
             buyerName: string;
+            cancelled: boolean;
             canDecide: boolean;
             catalogSubtotal: components["schemas"]["Money"];
             charges: null | components["schemas"]["Money"];

@@ -1,5 +1,5 @@
 export function recoveryPage(operation: string) {
-  if (operation === 'ordering.order.spending.approve' || operation === 'ordering.order.store.accept') return { href: '/ordering/reviews', label: 'halaman peninjauan pesanan' };
+  if (['ordering.order.spending.approve', 'ordering.order.spending.reject', 'ordering.order.store.accept', 'ordering.order.store.reject', 'ordering.order.cancel'].includes(operation)) return { href: '/ordering/reviews', label: 'halaman peninjauan pesanan' };
   if (operation === 'ordering.draft.save') return { href: '/ordering/drafts', label: 'halaman draf pesanan' };
   if (operation === 'ordering.order.submit') return { href: '/ordering/checkout', label: 'halaman pengajuan pesanan' };
   if (/^catalog\.price\.(propose|approve|reject|withdraw)$(?![\s\S])/.test(operation)) return { href: "/catalog/prices", label: "halaman harga kemasan" };
@@ -13,6 +13,9 @@ export function recoveryPage(operation: string) {
     : { href: "/administration/person-reviews", label: "halaman peninjauan orang" };
 }
 export function operationLabel(operation: string) {
+  if (operation === 'ordering.order.spending.reject') return 'Penolakan belanja cabang';
+  if (operation === 'ordering.order.store.reject') return 'Penolakan pesanan toko';
+  if (operation === 'ordering.order.cancel') return 'Pembatalan sisa pesanan';
   if (operation === 'ordering.order.spending.approve') return 'Persetujuan belanja cabang';
   if (operation === 'ordering.order.store.accept') return 'Penerimaan pesanan toko';
   if (operation === 'ordering.draft.save') return 'Penyimpanan draf pesanan';

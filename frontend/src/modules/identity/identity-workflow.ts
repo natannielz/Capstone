@@ -77,7 +77,7 @@ export function canUseStockCounts(actions: readonly string[]) { return actions.i
 export function identityDestinations(actions: readonly string[]) {
   return [
     { href: "/ordering/drafts", label: "Draf pesanan", description: "Lanjutkan kebutuhan barang dan rencana pengiriman cabang Anda.", visible: actions.includes("order.submit") },
-    { href: "/ordering/reviews", label: "Peninjauan pesanan", description: "Tinjau persetujuan belanja cabang atau penerimaan toko sesuai penugasan.", visible: actions.some(action => ["order.spend.approve", "order.accept"].includes(action)) },
+    { href: "/ordering/reviews", label: "Peninjauan pesanan", description: "Tinjau persetujuan belanja cabang atau penerimaan toko sesuai penugasan.", visible: actions.some(action => ["order.spend.approve", "order.accept", "order.cancel"].includes(action)) },
     { href: "/catalog/browse", label: "Katalog kemasan", description: "Lihat isi dan harga kemasan dalam katalog akun Anda.", visible: actions.includes("catalog.read") },
     { href: "/catalog/prices", label: "Harga kemasan", description: "Ajukan harga per kemasan dan tinjau secara independen.", visible: actions.some(action => ["pricing.manage", "pricing.approve"].includes(action)) },
     { href: "/inventory/sources/policies", label: "Kebijakan operasional stok", description: "Tetapkan pencatat stok dan prosedur pengoperasian melalui peninjauan.", visible: canUseStockSourcePolicies(actions) },

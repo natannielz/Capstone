@@ -63,9 +63,13 @@ internal static class OrderSubmissionSchemas
     private static BsonDocument Decisions() {
         var fields = new BsonDocument { { "_id", S.Number(1) }, { "schemaVersion", new BsonDocument { { "bsonType", "int" }, { "enum", new BsonArray { 1 } } } },
             { "kind", S.Choice("ordering.order.decision") }, { "orderId", S.Number(1) }, { "suborderId", Nullable(S.Number(1), "long") },
-            { "stage", S.Choice("Spending", "Store") }, { "revision", S.Number(2, 102) }, { "expectedRevision", S.Number(1, 101) },
+            { "stage", S.Choice("Spending", "Store", "Cancellation") }, { "action", S.Choice("Approve", "Reject", "CancelRemainder") },
+            { "revision", S.Number(2, 103) }, { "expectedRevision", S.Number(1, 102) },
             { "review", Hash() }, { "orderSnapshot", Hash() }, { "decidedBy", S.Number(1) }, { "decidedAt", new BsonDocument("bsonType", "date") },
-            { "actorGrantVersion", S.Number(1) }, { "requestKey", S.Text(128) }, { "bodyHash", Hash() } };
+            { "actorGrantVersion", S.Number(1) }, { "requestKey", S.Text(128) }, { "bodyHash", Hash() },
+            { "releases", Array(S.Object(new() { { "reservationId", S.Number(1) }, { "allocation", Allocation() },
+                { "before", S.Object(new() { { "revision", S.Number(1) }, { "remaining", S.Number(1, 1000000) },
+                    { "released", S.Number(0, 1000000) }, { "dispatched", S.Number(0, 1000000) } }) } }), 0) } };
         S.Metadata(fields);
         return new("$and", new BsonArray { new BsonDocument("$jsonSchema", S.Object(fields)), S.DateRange("decidedAt"),
             new BsonDocument("$expr", new BsonDocument("$eq", new BsonArray { "$revision", new BsonDocument("$add", new BsonArray { "$expectedRevision", 1L }) })) });

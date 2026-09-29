@@ -21250,7 +21250,9 @@
         "required": [
           "revision",
           "spendingState",
-          "acceptedSuborders"
+          "acceptedSuborders",
+          "rejectedSuborders",
+          "cancelled"
         ],
         "type": "object",
         "properties": {
@@ -21262,6 +21264,12 @@
           },
           "acceptedSuborders": {
             "type": "array"
+          },
+          "rejectedSuborders": {
+            "type": "array"
+          },
+          "cancelled": {
+            "type": "boolean"
           }
         },
         "additionalProperties": false
@@ -21413,6 +21421,7 @@
         "required": [
           "stage",
           "suborderId",
+          "action",
           "review",
           "reason"
         ],
@@ -21430,6 +21439,9 @@
                 "$ref": "#/components/schemas/LongId"
               }
             ]
+          },
+          "action": {
+            "type": "string"
           },
           "review": {
             "type": "string"
@@ -21467,6 +21479,7 @@
         "required": [
           "purpose",
           "stage",
+          "action",
           "key"
         ],
         "type": "object",
@@ -21475,6 +21488,9 @@
             "type": "string"
           },
           "stage": {
+            "type": "string"
+          },
+          "action": {
             "type": "string"
           },
           "key": {
@@ -21489,6 +21505,7 @@
           "orderId",
           "suborderId",
           "stage",
+          "action",
           "revision",
           "state",
           "recordedAt"
@@ -21512,6 +21529,9 @@
             ]
           },
           "stage": {
+            "type": "string"
+          },
+          "action": {
             "type": "string"
           },
           "revision": {
@@ -21940,6 +21960,7 @@
           "spendingState",
           "storeState",
           "canDecide",
+          "cancelled",
           "orderedAt"
         ],
         "type": "object",
@@ -22027,6 +22048,9 @@
             ]
           },
           "canDecide": {
+            "type": "boolean"
+          },
+          "cancelled": {
             "type": "boolean"
           },
           "orderedAt": {

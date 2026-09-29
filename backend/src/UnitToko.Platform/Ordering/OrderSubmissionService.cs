@@ -228,8 +228,7 @@ public sealed partial class OrderSubmissionService
         foreach (var allocation in allocations) {
             var reservation = reservations.SingleOrDefault(row => CatalogSchemas.SemanticEquals(row["allocation"], allocation)) ?? throw Invalid();
             var suborder = suborders.Single(row => row["skuIds"].AsBsonArray.Contains(allocation["skuId"]));
-            if (reservation["suborderId"] != suborder["_id"] || reservation["remaining"] != allocation["packages"] ||
-                reservation["dispatched"] != 0L || reservation["released"] != 0L || reservation["revision"] != 1L) throw Invalid();
+            if (reservation["suborderId"] != suborder["_id"]) throw Invalid();
         }
         foreach (var pool in allocations.GroupBy(item => item["poolId"].AsInt64)) {
             var source = new InventorySource("ordering.order", id, "reserve", pool.Key);
