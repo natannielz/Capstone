@@ -253,3 +253,12 @@ Selected-action previews use actual policy propose/approve authority without gra
 Ten protected routes and 17 generated schemas expose explicit private-safe projections, exact string IDs/versions/feed/quantities, source/mapping snapshots, mandatory inputs and four-operation receipt lookup. The immutable proposal determines its pool within the decision transaction. Frontend commands freeze the reviewed facts and validate the corresponding pool/proposal/status/applied policy version before reconciliation; missing receipts cannot create, retry or close work. Existing contracts remain semantically unchanged.
 
 See [API/client verification](../quality/stock-source-operating-policy-api-verification-2026-09-29.md). Dedicated journal handling, current-access/MFA/navigation and real staff/browser acceptance remain next. This boundary records definitions only; accepted control, writer handoff, complete producer-backed drain/reactivation, observations/holds and canonical stock/cost consumers remain required.
+## Operating-policy staff boundary — 29 September 2026
+
+The /inventory/sources/policies workspace uses separately granted policy propose/approve tasks and source history read. Action discovery preserves the MFA entry for an eligible checker without turning navigation into authorization. Exact login/step-up return paths and the policy-specific recovery route stay within the reviewed allowlists.
+
+The account-mounted editor freezes explicit confirmation, conceals invalid or revoked private views, discards late selection/session results and persists only original recovery references. Maker proposal/withdrawal does not require checker MFA. Approval/rejection and their receipt lookup do. Current history and the latest approved policy are separate reads, visibly identified as such; a pending proposal may legitimately become terminal between list and detail.
+
+The real local HTTPS/API/Mongo rehearsal covers all four lost-response recoveries, separate action-only actors and reader, verified-person independence, stopped binding changes, exact large IDs, keyboard/mobile behavior and authority/session changes. See [staff verification](../quality/stock-source-operating-policy-workspace-verification-2026-09-29.md) for exact results and limits.
+
+Policy acceptance still records a definition only. Accepted control, actual writer handoff, producer-complete drain/reactivation, observations/reconciliation/external holds and owning canonical stock/cost operations remain required. No production or pilot readiness follows from the staff page.

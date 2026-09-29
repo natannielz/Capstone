@@ -144,9 +144,9 @@ public static partial class AccessEndpoints
     // the verification entry when MFA ages; every source read or command still enforces current assurance.
     private static string[] CurrentActions(ActorContext actor, AuthorizationSnapshot snapshot, DateTimeOffset now) =>
         AvailableActions(actor, snapshot, now).Concat(new[] { Permissions.StockRead, Permissions.StockCount,
-                Permissions.StockSourceRead, Permissions.StockSourcePropose, Permissions.StockSourceApprove, Permissions.StockSourceSuspend }
+                Permissions.StockSourceRead, Permissions.StockSourcePropose, Permissions.StockSourceApprove, Permissions.StockSourceSuspend, Permissions.StockSourcePolicyPropose, Permissions.StockSourcePolicyApprove }
             .Where(permission => ScopePolicy.Compile(actor, snapshot, permission, now).IsAllowed ||
-                (permission is Permissions.StockSourceApprove or Permissions.StockSourceSuspend) && ScopePolicy.CanRequestStepUp(actor, snapshot, permission, now))).ToArray();
+                (permission is Permissions.StockSourceApprove or Permissions.StockSourceSuspend or Permissions.StockSourcePolicyApprove) && ScopePolicy.CanRequestStepUp(actor, snapshot, permission, now))).ToArray();
     private static string[] AvailableActions(ActorContext actor, AuthorizationSnapshot snapshot, DateTimeOffset now) =>
         AdministrativeActions.Where(permission => ScopePolicy.Compile(actor, snapshot, permission, now).IsAllowed).ToArray();
 

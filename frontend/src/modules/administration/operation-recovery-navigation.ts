@@ -1,4 +1,5 @@
 export function recoveryPage(operation: string) {
+  if (/^stock\.source\.policy\.(propose|approve|reject|withdraw)$(?![\s\S])/.test(operation)) return { href: "/inventory/sources/policies", label: "halaman kebijakan operasional stok" };
   if (operation === "stock.source.suspend") return { href: "/inventory/sources/suspensions", label: "halaman penghentian sumber" };
   if (/^stock\.source\.alias\.(propose|approve|reject|withdraw)$/.test(operation)) return { href: "/inventory/sources/aliases", label: "halaman pemetaan kanal" };
   if (/^stock\.source\.revision\.(propose|approve|reject|withdraw)$/.test(operation)) return { href: "/inventory/sources/revisions", label: "halaman perubahan sumber stok" };
@@ -9,6 +10,8 @@ export function recoveryPage(operation: string) {
 }
 export function operationLabel(operation: string) {
   const sources: Readonly<Record<string, string>> = {
+    "stock.source.policy.propose": "Pengajuan kebijakan operasional stok", "stock.source.policy.approve": "Persetujuan kebijakan operasional stok",
+    "stock.source.policy.reject": "Penolakan kebijakan operasional stok", "stock.source.policy.withdraw": "Penarikan kebijakan operasional stok",
     "stock.source.suspend": "Penghentian sumber stok",
     "stock.source.alias.propose": "Pengajuan pemetaan kanal", "stock.source.alias.approve": "Persetujuan pemetaan kanal",
     "stock.source.alias.reject": "Penolakan pemetaan kanal", "stock.source.alias.withdraw": "Penarikan pemetaan kanal",

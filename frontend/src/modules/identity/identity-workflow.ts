@@ -9,7 +9,7 @@ export class IdentityFailure extends Error {
   }
 }
 
-const returnPaths = ["/identity/account", "/administration/access", "/administration/organizations", "/administration/history", "/administration/person-reviews", "/administration/catalog", "/inventory/counts", "/inventory/sources", "/inventory/sources/revisions", "/inventory/sources/aliases", "/inventory/sources/suspensions"];
+const returnPaths = ["/identity/account", "/administration/access", "/administration/organizations", "/administration/history", "/administration/person-reviews", "/administration/catalog", "/inventory/counts", "/inventory/sources", "/inventory/sources/revisions", "/inventory/sources/aliases", "/inventory/sources/suspensions", "/inventory/sources/policies"];
 export const identityReturnPath = (value?: string | null) => value && returnPaths.includes(value) ? value : "/identity/account";
 const validId = (value: string) => /^[1-9][0-9]{0,18}$/.test(value) && (value.length < 19 || value <= "9223372036854775807");
 const validTime = (value: unknown): value is string => typeof value === "string" && value.length <= 40 && /^\d{4}-\d\d-\d\dT/.test(value) && Number.isFinite(Date.parse(value));
@@ -68,12 +68,15 @@ export function canReviewPeople(actions: readonly string[]) { return actions.som
 
 export function canUseStockSources(actions: readonly string[]) { return actions.some(action => ["stock.source.read", "stock.source.propose", "stock.source.approve"].includes(action)); }
 
+export function canUseStockSourcePolicies(actions: readonly string[]) { return actions.some(action => ["stock.source.read", "stock.source.policy.propose", "stock.source.policy.approve"].includes(action)); }
+
 export function canUseStockSourceSuspensions(actions: readonly string[]) { return actions.includes("stock.source.read") || actions.includes("stock.source.suspend"); }
 
 export function canUseStockCounts(actions: readonly string[]) { return actions.includes("stock.count") || actions.includes("stock.read"); }
 
 export function identityDestinations(actions: readonly string[]) {
   return [
+    { href: "/inventory/sources/policies", label: "Kebijakan operasional stok", description: "Tetapkan pencatat stok dan prosedur pengoperasian melalui peninjauan.", visible: canUseStockSourcePolicies(actions) },
     { href: "/inventory/sources/suspensions", label: "Penghentian sumber", description: "Periksa kanal terdampak dan catat penghentian sesuai penugasan.", visible: canUseStockSourceSuspensions(actions) },
     { href: "/inventory/sources/aliases", label: "Pemetaan kanal", description: "Tinjau penggunaan satu alokasi oleh kanal lain.", visible: canUseStockSources(actions) },
     { href: "/inventory/sources/revisions", label: "Perubahan sumber", description: "Bandingkan dan tinjau perubahan alokasi yang sudah terdaftar.", visible: canUseStockSources(actions) },

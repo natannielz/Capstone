@@ -2,11 +2,11 @@
 
 Run this only against disposable local replica-set databases. It uses synthetic people, organization names, approved fixture grants and source settings; it does not establish real source acceptance or production access.
 
-Follow [the shared stock browser setup](stock-count-browser-rehearsal.md) to install the pinned Node 24 / Playwright 1.62.1 runtime and build the frontend. Use the same UNITTOKO_STOCK_BROWSER, UNITTOKO_BROWSER_NODE, UNITTOKO_BROWSER_PLAYWRIGHT_PACKAGE, UNITTOKO_BROWSER_CHANNEL, PLAYWRIGHT_BROWSERS_PATH and guarded UNITTOKO_TEST_MONGO_URI environment variables. Run all four fixtures together with the filter:
+Follow [the shared stock browser setup](stock-count-browser-rehearsal.md) to install the pinned Node 24 / Playwright 1.62.1 runtime and build the frontend. Use the same UNITTOKO_STOCK_BROWSER, UNITTOKO_BROWSER_NODE, UNITTOKO_BROWSER_PLAYWRIGHT_PACKAGE, UNITTOKO_BROWSER_CHANNEL, PLAYWRIGHT_BROWSERS_PATH and guarded UNITTOKO_TEST_MONGO_URI environment variables. Run all six fixtures together with the filter:
 
-    FullyQualifiedName~StockCountBrowserTests|FullyQualifiedName~StockSourceBrowserTests|FullyQualifiedName~StockSourceRevisionBrowserTests|FullyQualifiedName~StockSourceAliasBrowserTests
+    FullyQualifiedName~StockCountBrowserTests|FullyQualifiedName~StockSourceBrowserTests|FullyQualifiedName~StockSourceRevisionBrowserTests|FullyQualifiedName~StockSourceAliasBrowserTests|FullyQualifiedName~StockSourceSuspensionBrowserTests|FullyQualifiedName~StockSourcePolicyBrowserTests
 
-All four must execute and pass; an opt-in skip is not evidence. The GitHub browser job checks that its TRX contains four executed passes and zero skipped tests.
+All six must execute and pass; an opt-in skip is not evidence. The GitHub browser job checks that its TRX contains six executed passes and zero skipped tests.
 
 The source fixture starts the built Next.js application and actual production-mode ASP.NET API behind a local HTTPS proxy. It signs in two distinct synthetic people through signed provider responses, state, nonce, PKCE, verified email and factor evidence. Only the provider front/back channel is synthetic; source requests, opaque cookies, CSRF, grants, person separation, transactions and persistence use application code.
 
@@ -51,3 +51,15 @@ The compact automated sequence shares one local IP across both accounts. Its dri
 Screenshots are under tmp/production/stock-source-alias-ui-results/browser/. Inspect the focused desktop confirmation and mobile historical detail images. Only actor, operation, original key and time persist in the recovery journal; pool and requested-channel context are selected again after reload. Command permission does not grant configuration/history access, and receipt absence is not a failed or closed request.
 
 Deployments overriding Identity:Auth0:AllowedReturnPaths must include the exact /inventory/sources/aliases path while preserving other reviewed paths. This adds no OAuth callback or wildcard redirect. The test-only settings/grant/clock controls require a private nonce passed over the child-process pipe; they are not application routes or available to browser JavaScript. These synthetic outcomes do not establish actual source acceptance, D01/D04 decisions, external reservation capability or readiness for live stock promises.
+
+## Operating-policy staff rehearsal
+
+StockSourcePolicyBrowserTests opens /inventory/sources/policies using frontend/scripts/verify-stock-source-policy-browser.mjs. The same local HTTPS/production API/replica-set boundary uses separately scoped maker, checker and reader accounts. The provider fixture supplies signed synthetic identities; it does not prove a production Auth0 tenant is configured.
+
+The rehearsal requires all four lost committed responses (proposal, approval, rejection and original-maker withdrawal) to survive reload and resolve using only the original actor/operation/key/time reference plus a deliberately selected pool. Checker-only access must not call proposer previews or history. A different account linked to the same person is refused; a real source suspension invalidates frozen approval while allowing stale rejection. Other checks cover exact IDs above JavaScript's safe integer range, keyboard confirmation, mobile history, linked-channel revocation, server MFA expiry and account suspension.
+
+Expected database effects are four policy proposals, three decisions and one accepted policy definition, with exactly seven policy audits and seven whole-command receipts. The source remains inactive; original source/mapping records and populated lots, balances, movements, reservations and journal entries must remain unchanged. The driver respects the existing production rate-limit windows. No skipped rehearsal can establish these outcomes.
+
+Screenshots are written under tmp/production/stock-source-operating-policy-staff-results/browser/. Inspect the focused proposal and approval reviews and the mobile history image. Test controls are assembly-only middleware protected by a random nonce delivered through the child process pipe, never shipped application routes.
+
+Deployments overriding Identity:Auth0:AllowedReturnPaths must explicitly include /inventory/sources/policies along with the other reviewed paths. Policy proposal/withdrawal uses stock.source.policy.propose; approval/rejection and their receipt recovery use stock.source.policy.approve with fresh MFA. History separately uses stock.source.read. Neither navigation nor policy acceptance grants source activation, stock promises, accepted operational control or writer handoff.
