@@ -30,13 +30,7 @@ public sealed partial class StockSourceSuspensionTests(MongoFixture fixture)
         new(preview["poolRevision"].AsInt64, preview["suspensionRevision"].AsInt64, preview["configurationHash"].AsString);
     private async Task<(ActorContext Maker, ActorContext Reviewer, ActorContext Operator, long Pool)> Setup(StoreTestData data, bool linked = false)
     {
-        // Draft storage only. Production schema installation requires the next reviewed forward migration.
-        await data.Database.CreateCollectionAsync(StockSourceSuspensionSchemas.Collection, new CreateCollectionOptions<BsonDocument>
-            { Validator = StockSourceSuspensionSchemas.Validator(), ValidationLevel = DocumentValidationLevel.Strict, ValidationAction = DocumentValidationAction.Error });
-        await Rows(data, StockSourceSuspensionSchemas.Collection).Indexes.CreateOneAsync(new CreateIndexModel<BsonDocument>(
-            StockSourceSuspensionSchemas.Key(), new CreateIndexOptions { Name = "ux_stock_source_suspension_revision", Unique = true }));
-        foreach (var index in StockSourceSuspensionSchemas.LookupIndexes())
-            await Rows(data, index.Collection).Indexes.CreateOneAsync(new CreateIndexModel<BsonDocument>(index.Key, new CreateIndexOptions { Name = index.Name }));
+        // Registered migration 18 supplies enforced suspension storage and lookup indexes.
         var maker = await data.AddActorAsync(1000, Owner.ToScope(), Permissions.StockSourcePropose, Permissions.StockSourceRead);
         var reviewer = await data.AddActorAsync(2000, Owner.ToScope(), Permissions.StockSourceApprove, Permissions.StockSourceRead);
         var operatorActor = await data.AddActorAsync(3000, Owner.ToScope(), SuspendPermission, Permissions.StockSourceRead);

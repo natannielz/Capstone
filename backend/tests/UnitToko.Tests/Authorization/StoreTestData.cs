@@ -29,10 +29,12 @@ internal sealed class StoreTestData : IAsyncDisposable
     internal static Task<StoreTestData> CreateForStockSourceSetupMigrationAsync(MongoFixture fixture) => CreateAsync(fixture, false, true);
     internal static Task<StoreTestData> CreateForStockSourceRevisionMigrationAsync(MongoFixture fixture) => CreateAsync(fixture, false, false, true);
     internal static Task<StoreTestData> CreateForStockSourceAliasMigrationAsync(MongoFixture fixture) => CreateAsync(fixture, false, false, false, true);
-    private static async Task<StoreTestData> CreateAsync(MongoFixture fixture, bool legacyCatalog, bool sourceSetupMigration = false, bool sourceRevisionMigration = false, bool sourceAliasMigration = false)
+    internal static Task<StoreTestData> CreateForStockSourceSuspensionMigrationAsync(MongoFixture fixture) => CreateAsync(fixture, false, false, false, false, true);
+    private static async Task<StoreTestData> CreateAsync(MongoFixture fixture, bool legacyCatalog, bool sourceSetupMigration = false, bool sourceRevisionMigration = false, bool sourceAliasMigration = false, bool sourceSuspensionMigration = false)
     {
         var data = new StoreTestData(fixture);
-        if (sourceAliasMigration) await LegacyStockSourceAliasTestSchema.ApplyV16Async(data.Database, data.Clock);
+        if (sourceSuspensionMigration) await LegacyStockSourceSuspensionTestSchema.ApplyV17Async(data.Database, data.Clock);
+        else if (sourceAliasMigration) await LegacyStockSourceAliasTestSchema.ApplyV16Async(data.Database, data.Clock);
         else if (sourceRevisionMigration) await LegacyStockSourceRevisionTestSchema.ApplyV15Async(data.Database, data.Clock);
         else if (sourceSetupMigration) await LegacyStockSourceSetupTestSchema.ApplyV14Async(data.Database, data.Clock);
         else if (legacyCatalog) await LegacyCatalogTestSchema.ApplyV6Async(data.Database, data.Clock);

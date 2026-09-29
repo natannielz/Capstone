@@ -74,7 +74,7 @@ public sealed partial class StockSourceAliasMigrationTests(MongoFixture fixture)
         var migrations = new CollectionMigrations(data.Database, data.Clock);
         Assert.False(await migrations.IsCurrentAsync());
         await migrations.ApplyAsync();
-        var after = await History(data); Assert.Equal(17, after.Count); Assert.Equal(before, new BsonArray(after.Take(16)));
+        var after = await History(data); Assert.Equal(CollectionMigrations.CurrentVersion, after.Count); Assert.Equal(before, new BsonArray(after.Take(16)));
         foreach (var name in StockSourceAliasSchemas.Collections)
             await InventoryRepository.RequireStorageAsync(data.Database, name, StockSourceAliasSchemas.Validator(name), StockSourceAliasSchemas.Key(name), default);
         Assert.True(await migrations.IsCurrentAsync()); await migrations.ApplyAsync(); Assert.Equal(after, await History(data));
@@ -88,7 +88,7 @@ public sealed partial class StockSourceAliasMigrationTests(MongoFixture fixture)
         await Rows(data, "idCounters").DeleteManyAsync(new BsonDocument("_id", new BsonDocument("$in",
             new BsonArray(StockSourceAliasSchemas.Collections.Append("auditEvents")))));
         await new CollectionMigrations(data.Database, data.Clock).ApplyAsync();
-        Assert.Equal(17, (await History(data)).Count); Assert.Equal(before, await BusinessRows(data));
+        Assert.Equal(CollectionMigrations.CurrentVersion, (await History(data)).Count); Assert.Equal(before, await BusinessRows(data));
         foreach (var name in StockSourceAliasSchemas.Collections.Append("auditEvents"))
         {
             var maximum = (await Rows(data, name).Find(new BsonDocument()).Sort(new BsonDocument("_id", -1)).FirstAsync())["_id"].AsInt64;

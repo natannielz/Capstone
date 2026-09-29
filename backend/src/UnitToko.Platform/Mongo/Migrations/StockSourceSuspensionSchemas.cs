@@ -2,7 +2,7 @@ using MongoDB.Bson;
 using S = UnitToko.Platform.Mongo.Migrations.StockSourceSetupSchemas;
 namespace UnitToko.Platform.Mongo.Migrations;
 
-/// <summary>Draft storage. Installation requires a forward migration with historical preflight.</summary>
+/// <summary>Suspension storage installed by migration 18 after complete historical preflight.</summary>
 internal static class StockSourceSuspensionSchemas
 {
     internal const string Collection = "stockSourceSuspensions";
