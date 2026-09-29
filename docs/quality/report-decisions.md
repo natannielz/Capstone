@@ -30,3 +30,7 @@ Other D02 decisions (buyer spending approvers, historical readers, any specifica
 ## D02/D03 branch spending rule
 
 Asked on 29 September 2026 while connecting branch drafts: which real-order spending rule is approved (every order independently approved, approval above a specified amount, or another rule), and which budget/credit limits are already approved? Answer pending. This is a request for business inputs, not approval of a proposed default. Buyer spending approval remains distinct from store acceptance. Continue implementation and isolated synthetic fixtures; no live rule, threshold, limit, tax treatment or credit permission has been inferred.
+
+## D03 invoice grouping and payment terms
+
+Asked on 30 September 2026 while connecting receipt-based invoicing: which Finance-approved grouping applies (per receipt, branch/period/channel, or organization/period/channel), and what event starts the due-date term, for how many calendar or working days? Answer pending. The UI and local rehearsal use explicitly synthetic terms; the meeting's concern about late invoices does not approve a 30-day contract. Live issuance remains closed until actual owner-backed approvals are available. Tax allocation/process, numbering continuity/format, seller/document template, holiday calendar and accounting mappings remain additional operational inputs; this question does not declare those gates satisfied.

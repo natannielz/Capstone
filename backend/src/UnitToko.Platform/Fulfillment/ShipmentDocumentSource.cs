@@ -16,10 +16,14 @@ public sealed partial class ShipmentQueryService
     // from the accepted order/dispatch, not current address/catalog masters or client input.
     internal async Task<ShipmentDocumentSource> DocumentSourceAsync(ActorContext actor, AuthorizationSnapshot snapshot,
         IClientSessionHandle tx, long shipmentId, string permission, CancellationToken ct) {
-        if (permission is not (Permissions.ShipmentRead or Permissions.ShipmentPrepare or Permissions.DeliveryAttempt or Permissions.DeliveryEvidence or Permissions.ReceiptAccept) || shipmentId <= 0) throw ShipmentDispatchRecords.Invalid();
+        if (permission is not (Permissions.ShipmentRead or Permissions.ShipmentPrepare or Permissions.DeliveryAttempt or Permissions.DeliveryEvidence or Permissions.ReceiptAccept or Permissions.InvoiceRead or Permissions.InvoiceIssue) || shipmentId <= 0) throw ShipmentDispatchRecords.Invalid();
         var scoped = await Rows("shipments").Find(tx, F.Eq("_id", shipmentId) & ScopeQuery.Create(Query(actor, snapshot, permission))).SingleOrDefaultAsync(ct)
             ?? throw ShipmentDispatchRecords.Invalid();
         var row = await new ShipmentDispatchRecords(database).ReadAsync(tx, shipmentId, ct);
+        return new(Resource(scoped), await DocumentFactsAsync(actor, tx, row, ct));
+    }
+    private async Task<BsonDocument> DocumentFactsAsync(ActorContext actor, IClientSessionHandle tx, BsonDocument row, CancellationToken ct) {
+        var shipmentId = row["_id"].AsInt64;
         var buyer = await orders.RequireShipmentHistoryAsync(tx, actor, row, ct);
         var source = ShipmentPreparationBson.Source(row["source"].AsBsonDocument);
         var facts = new BsonDocument { { "shipmentId", shipmentId }, { "shipmentRevision", row["revision"] }, { "dispatchHash", CatalogRepository.Digest(row) },
@@ -33,6 +37,6 @@ public sealed partial class ShipmentQueryService
                     { "definition", CatalogRepository.Definition(line.Package) }, { "packages", selected.Packages },
                     { "baseUnits", checked((long)selected.Packages * line.Package.BaseUnitsPerPackage) } };
             })) } };
-        return new(Resource(scoped), facts);
+        return facts;
     }
 }

@@ -1,0 +1,89 @@
+// Actual production Next + Kestrel + isolated Mongo. All accounts and approvals are synthetic.
+import assert from 'node:assert/strict';
+import http from 'node:http';
+import https from 'node:https';
+import net from 'node:net';
+import { createRequire } from 'node:module';
+import { mkdirSync, readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import next from 'next';
+
+const chunks = []; for await (const chunk of process.stdin) chunks.push(chunk);
+const config = JSON.parse(Buffer.concat(chunks).toString('utf8')), api = new URL(config.apiAddress), origin = new URL(config.origin);
+assert.equal(process.versions.node.split('.')[0], '24'); assert.equal(api.protocol, 'http:'); assert.equal(api.hostname, '127.0.0.1'); assert.ok(Number(api.port) > 0); assert.equal(origin.href, 'https://portal.unit-toko.co.id/');
+const load = createRequire(config.playwrightPackage), metadata = load(config.playwrightPackage); assert.equal(metadata.name, 'playwright'); assert.equal(metadata.version, '1.62.1');
+const { chromium } = load('playwright'), channel = process.env.UNITTOKO_BROWSER_CHANNEL ?? 'chromium'; assert.ok(['chromium', 'msedge'].includes(channel));
+const app = next({ dev: false, dir: process.cwd(), quiet: true }), sockets = new Set(), writes = [], errors = [], pages = [];
+const directory = resolve('../tmp/production/invoice-browser-results'); mkdirSync(directory, { recursive: true });
+let browser, frontend, edge, tunnel, dropNext = false, dropped = 0;
+function track(server) { server.on('connection', socket => { sockets.add(socket); socket.on('close', () => sockets.delete(socket)); }); return server; }
+async function listen(server) { await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); }); return server.address().port; }
+function forward(req, res, port, isApi) {
+  const headers = { ...req.headers, host: '127.0.0.1:' + port };
+  for (const name of Object.keys(headers)) if (name.startsWith('x-forwarded-') || name.startsWith('x-original-') || ['forwarded', 'connection'].includes(name)) delete headers[name];
+  if (isApi) { headers['x-forwarded-for'] = req.socket.remoteAddress; headers['x-forwarded-host'] = origin.host; headers['x-forwarded-proto'] = 'https'; }
+  const write = req.method === 'POST' && req.url === '/api/v1/billing/invoices'; if (write) writes.push({ key: req.headers['idempotency-key'], actor: req.headers['x-expected-actor-id'] });
+  const drop = write && dropNext; if (drop) dropNext = false;
+  const upstream = http.request({ hostname: '127.0.0.1', port, path: req.url, method: req.method, headers }, response => {
+    if (drop && response.statusCode === 200) { response.resume(); response.once('end', () => { dropped++; res.writeHead(200, { 'content-type': 'application/json', 'content-length': '64', 'cache-control': 'no-store' }); res.flushHeaders(); res.write('{'); setTimeout(() => res.destroy(), 25); }); return; }
+    res.writeHead(response.statusCode ?? 502, response.headers); response.pipe(res);
+  }); upstream.on('error', () => { if (!res.headersSent) res.writeHead(502); res.end(); }); req.on('aborted', () => upstream.destroy()); req.pipe(upstream);
+}
+async function user(token) {
+  const context = await browser.newContext({ ignoreHTTPSErrors: true, viewport: { width: 360, height: 800 }, locale: 'id-ID', timezoneId: 'Asia/Jakarta' });
+  await context.addCookies([{ name: '__Host-ut_session', value: token, domain: origin.hostname, path: '/', secure: true, httpOnly: true, sameSite: 'Lax' }]);
+  const page = await context.newPage(); pages.push(page); page.setDefaultTimeout(15000); page.on('pageerror', error => errors.push(error.message));
+  page.on('response', async response => { if (response.url().includes('/api/v1/') && response.status() >= 400) { const value = await response.json().catch(() => ({})); console.log('FIXTURE API ' + JSON.stringify({ path: new URL(response.url()).pathname, status: response.status(), code: value?.code })); } }); return { context, page };
+}
+try {
+  await app.prepare(); const handle = app.getRequestHandler();
+  frontend = track(http.createServer((req, res) => { void handle(req, res).catch(() => { res.statusCode = 500; res.end(); }); })); const frontendPort = await listen(frontend);
+  edge = track(https.createServer({ pfx: Buffer.from(config.pfx, 'base64'), passphrase: config.password }, (req, res) => {
+    if (req.headers.host !== origin.host) { res.writeHead(403); res.end(); return; }
+    const isApi = req.url.startsWith('/api/v1/') || req.url.startsWith('/auth/'); forward(req, res, isApi ? Number(api.port) : frontendPort, isApi);
+  })); const tlsPort = await listen(edge);
+  tunnel = track(http.createServer((_req, res) => { res.writeHead(403); res.end(); }));
+  tunnel.on('connect', (req, socket, head) => {
+    if (req.url !== origin.host + ':443') { socket.end('HTTP/1.1 403 Forbidden\r\n\r\n'); return; }
+    const upstream = net.connect(tlsPort, '127.0.0.1', () => { socket.write('HTTP/1.1 200 Connection Established\r\n\r\n'); if (head.length) upstream.write(head); socket.pipe(upstream); upstream.pipe(socket); });
+    sockets.add(upstream); upstream.on('close', () => sockets.delete(upstream)); upstream.on('error', () => socket.destroy()); socket.on('error', () => upstream.destroy()); socket.on('close', () => upstream.destroy());
+  }); const proxyPort = await listen(tunnel);
+  browser = await chromium.launch({ ...(channel === 'msedge' ? { channel: 'msedge' } : {}), headless: true, proxy: { server: 'http://127.0.0.1:' + proxyPort } });
+  const finance = await user(config.financeToken), page = finance.page;
+  await page.goto(origin.origin + '/identity/account'); await page.getByRole('link', { name: /^Tagihan\b/ }).click();
+  const candidates = page.getByRole('region', { name: 'Penerimaan untuk invoice', exact: true });
+  await candidates.getByRole('checkbox').check(); await candidates.getByLabel('Alasan penerbitan', { exact: true }).fill('Bukti penerimaan cabang diperiksa');
+  await candidates.getByRole('button', { name: 'Tinjau invoice', exact: true }).click();
+  const review = page.getByRole('region', { name: 'Tinjauan invoice', exact: true }); await review.waitFor();
+  const heading = review.getByRole('heading', { name: 'Tinjau penerbitan invoice', exact: true }); assert.equal(await heading.evaluate(element => element === document.activeElement), true);
+  await review.getByText(/Diterima: 6/).waitFor(); await review.getByRole('button', { name: 'Kembali ke pilihan penerimaan', exact: true }).click(); assert.equal(writes.length, 0);
+  await candidates.getByRole('button', { name: 'Tinjau invoice', exact: true }).click();
+  await review.waitFor();
+  await finance.context.setOffline(true); await page.getByText(/Koneksi terputus/).waitFor(); assert.equal(await review.getByRole('button', { name: 'Terbitkan invoice', exact: true }).isDisabled(), true); assert.equal(writes.length, 0);
+  await finance.context.setOffline(false); await page.getByText(/Koneksi terputus/).waitFor({ state: 'hidden' });
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true); await page.screenshot({ path: resolve(directory, 'invoice-review-mobile.png'), fullPage: true });
+  dropNext = true; await review.getByRole('button', { name: 'Terbitkan invoice', exact: true }).click(); await page.getByRole('button', { name: 'Periksa hasil', exact: true }).waitFor();
+  const references = await page.evaluate(() => Object.keys(localStorage).filter(key => key.startsWith('unit-toko:pending:v1:')).map(key => JSON.parse(localStorage[key])));
+  assert.equal(references.length, 1); assert.equal(references[0].operation, 'billing.invoice.issue'); assert.deepEqual(Object.keys(references[0]).sort(), ['actorId', 'createdAt', 'key', 'operation']);
+  await page.reload(); await page.getByRole('button', { name: 'Periksa hasil', exact: true }).click(); await page.getByText(/^Invoice tersimpan/).waitFor();
+  assert.equal(writes.length, 1); assert.equal(writes[0].actor, config.financeId); assert.equal(dropped, 1); assert.equal(await page.getByRole('button', { name: /Selesaikan dan tutup/ }).count(), 0);
+  assert.equal(await candidates.getByRole('checkbox').isDisabled(), true);
+  const buyer = await user(config.buyerToken); await buyer.page.goto(origin.origin + '/billing/invoices');
+  assert.equal(await buyer.page.getByRole('region', { name: 'Penerimaan untuk invoice', exact: true }).count(), 0);
+  await buyer.page.getByRole('button', { name: 'Buka invoice 100/103/2026/1', exact: true }).click();
+  const download = buyer.page.waitForEvent('download'); await buyer.page.getByRole('button', { name: 'Unduh invoice', exact: true }).click();
+  const file = await download, bytes = readFileSync(await file.path()); assert.match(file.suggestedFilename(), /^invoice-[1-9][0-9]*\.html$/);
+  assert.ok(bytes.includes(Buffer.from('Cabang fixture'))); assert.ok(bytes.includes(Buffer.from('Alamat badan fixture'))); assert.ok(!bytes.includes(Buffer.from('recordHash')));
+  assert.equal(await buyer.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true); await buyer.page.screenshot({ path: resolve(directory, 'invoice-buyer-mobile.png'), fullPage: true });
+  const outsider = await user(config.courierToken); await outsider.page.goto(origin.origin + '/billing/invoices'); await outsider.page.getByRole('heading', { name: 'Periksa sesi dan akses', exact: true }).waitFor();
+  assert.equal(await outsider.page.getByRole('button', { name: /^Buka invoice/ }).count(), 0);
+  assert.deepEqual(errors, []); console.log('REAL_INVOICE_BROWSER_PASS ' + JSON.stringify({ issued: writes.length, lostResponseRecovered: dropped, acceptedBaseUnits: 6, buyerDownload: true, outsiderDenied: true, offlineUnsent: true, mobile: true }));
+} catch (error) {
+  for (const [index, page] of pages.entries()) if (!page.isClosed()) { console.error('FIXTURE PAGE ' + index + ': ' + (await page.locator('main').innerText().catch(() => 'unavailable')).slice(0, 5000)); await page.screenshot({ path: resolve(directory, 'failure-' + index + '.png'), fullPage: true }).catch(() => {}); }
+  console.error(error.stack ?? String(error)); process.exitCode = 1;
+} finally {
+  let timer;
+  try { await Promise.race([(async () => { if (browser) await browser.close(); for (const socket of sockets) socket.destroy(); for (const server of [tunnel, edge, frontend]) if (server) await new Promise(resolve => server.close(resolve)); await app.close(); })(), new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Fixture cleanup exceeded 10 seconds')), 10000); })]); }
+  catch (failure) { console.error(failure); process.exitCode = 1; } finally { clearTimeout(timer); }
+}
+process.exit(process.exitCode ?? 0);

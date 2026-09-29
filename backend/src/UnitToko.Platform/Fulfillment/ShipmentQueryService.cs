@@ -78,7 +78,7 @@ public sealed partial class ShipmentQueryService
         }, ct);
     }
     internal async Task FenceAsync(ActorContext actor, AuthorizationSnapshot snapshot, IClientSessionHandle tx, ResourceScope[] resources, CancellationToken ct, string permission = Permissions.ShipmentRead) {
-        if (permission is not (Permissions.ShipmentRead or Permissions.ShipmentPrepare or Permissions.DeliveryAttempt or Permissions.DeliveryEvidence or Permissions.ReceiptAccept)) throw ShipmentDispatchRecords.Invalid();
+        if (permission is not (Permissions.ShipmentRead or Permissions.ShipmentPrepare or Permissions.DeliveryAttempt or Permissions.DeliveryEvidence or Permissions.ReceiptAccept or Permissions.InvoiceRead or Permissions.InvoiceIssue)) throw ShipmentDispatchRecords.Invalid();
         var query = Query(actor, snapshot, permission);
         if (resources.Any(resource => !query.Matches(resource) || !ScopePolicy.IsResourceActive(resource, snapshot.Directory))) throw ShipmentDispatchRecords.Invalid();
         var clauses = query.Clauses.Where(clause => resources.Length == 0 || resources.Any(clause.Matches)).ToArray();

@@ -251,9 +251,17 @@ public sealed class MongoConflictTests(MongoFixture fixture)
         await counters.InsertOneAsync(new BsonDocument { { "_id", maxEntity }, { "value", long.MaxValue } });
         var exhausted = await Assert.ThrowsAsync<PersistenceConflictException>(() => new IdAllocator(database).NextAsync(maxEntity));
         Assert.Equal("id_exhausted", exhausted.Code);
-        Assert.Equal(long.MaxValue, (await counters.Find(new BsonDocument("_id", maxEntity)).FirstAsync())["value"].AsInt64);        var invoices = database.GetCollection<BsonDocument>("invoices");
-        await invoices.InsertOneAsync(new BsonDocument { { "_id", Guid.NewGuid().ToString("N") }, { "schemaVersion", 1 } });
-        await invoices.InsertOneAsync(new BsonDocument { { "_id", Guid.NewGuid().ToString("N") }, { "schemaVersion", 1 } });
+        Assert.Equal(long.MaxValue, (await counters.Find(new BsonDocument("_id", maxEntity)).FirstAsync())["value"].AsInt64);
+        // This asserts the original prototype partial-index behavior, before migration 29
+        // made invoice source/number fields mandatory. Do not weaken the canonical writer.
+        var legacyName = "ut_prototype_invoice_" + Guid.NewGuid().ToString("N"); var legacy = fixture.Client.GetDatabase(legacyName);
+        try {
+            await UnitToko.Tests.Authorization.LegacyOrderSubmissionTestSchema.ApplyV28Async(legacy, clock);
+            var invoices = legacy.GetCollection<BsonDocument>("invoices");
+            await invoices.InsertOneAsync(new BsonDocument { { "_id", Guid.NewGuid().ToString("N") }, { "schemaVersion", 1 } });
+            await invoices.InsertOneAsync(new BsonDocument { { "_id", Guid.NewGuid().ToString("N") }, { "schemaVersion", 1 } });
+            Assert.Equal(2, await invoices.CountDocumentsAsync(new BsonDocument()));
+        } finally { await fixture.Client.DropDatabaseAsync(legacyName); }
     }
 
     [Fact]

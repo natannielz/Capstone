@@ -24,6 +24,8 @@ using UnitToko.Api.Ordering;
 using UnitToko.Platform.Ordering;
 using UnitToko.Api.Fulfillment;
 using UnitToko.Platform.Fulfillment;
+using UnitToko.Api.Billing;
+using UnitToko.Platform.Billing;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.ConfigureHttpJsonOptions(options =>
@@ -59,6 +61,7 @@ builder.Services.AddSingleton<ShipmentQueryService>();
 builder.Services.AddSingleton<ShipmentDocumentService>();
 builder.Services.AddSingleton<ShipmentReceiptService>();
 builder.Services.AddSingleton<DeliveryAttemptService>();
+builder.Services.AddSingleton<InvoiceService>();
 builder.Services.AddSingleton<StockCountService>();
 builder.Services.AddSingleton<StockSourceSetupService>();
 builder.Services.AddSingleton<HistoricalReadStore>();
@@ -303,6 +306,7 @@ app.MapShipmentDocumentEndpoints();
 app.MapShipmentReceiptEndpoints();
 app.MapShipmentReceiptProofEndpoints();
 app.MapDeliveryAttemptEndpoints();
+app.MapInvoiceEndpoints();
 app.MapStockCountEndpoints();
 app.MapStockSourceSetupEndpoints();
 app.MapStockSourceRevisionEndpoints();

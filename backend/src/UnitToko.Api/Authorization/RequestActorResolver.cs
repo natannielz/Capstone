@@ -45,6 +45,7 @@ public sealed class ActorRequiredFilter : IEndpointFilter
         (path.StartsWith("/api/v1/catalog/", StringComparison.OrdinalIgnoreCase) ||
          path.StartsWith("/api/v1/ordering/", StringComparison.OrdinalIgnoreCase) ||
          path.StartsWith("/api/v1/fulfillment/", StringComparison.OrdinalIgnoreCase) ||
+         path.StartsWith("/api/v1/billing/", StringComparison.OrdinalIgnoreCase) ||
          path.StartsWith("/api/v1/inventory/", StringComparison.OrdinalIgnoreCase) ||
          path.StartsWith("/api/v1/identity/administration/", StringComparison.OrdinalIgnoreCase) ||
          ((path.StartsWith("/api/v1/access/", StringComparison.OrdinalIgnoreCase) || path.StartsWith("/api/v1/organizations", StringComparison.OrdinalIgnoreCase)) &&

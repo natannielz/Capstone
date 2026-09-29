@@ -1,4 +1,5 @@
 export function recoveryPage(operation: string) {
+  if (operation === 'billing.invoice.issue') return { href: '/billing/invoices', label: 'halaman tagihan' };
   if (operation === 'fulfillment.delivery-attempt.record') return { href: '/fulfillment/shipments', label: 'halaman upaya pengiriman' };
   if (operation === 'fulfillment.receipt-proof.issue') return { href: '/fulfillment/receive', label: 'halaman bukti penerimaan' };
   if (operation === 'fulfillment.receipt.challenge.issue') return { href: '/fulfillment/shipments', label: 'QR penerimaan di rincian kiriman' };
@@ -20,6 +21,7 @@ export function recoveryPage(operation: string) {
     : { href: "/administration/person-reviews", label: "halaman peninjauan orang" };
 }
 export function operationLabel(operation: string) {
+  if (operation === 'billing.invoice.issue') return 'Penerbitan invoice';
   if (operation === 'fulfillment.delivery-attempt.record') return 'Pencatatan upaya pengiriman';
   if (operation === 'fulfillment.receipt-proof.issue') return 'Penerbitan bukti penerimaan';
   if (operation === 'fulfillment.receipt.challenge.issue') return 'Pembuatan QR penerimaan';
