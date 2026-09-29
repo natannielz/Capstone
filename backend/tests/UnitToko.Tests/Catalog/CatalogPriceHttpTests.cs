@@ -32,6 +32,10 @@ public sealed partial class CatalogAuthoringHttpTests
         await using var data = await HttpData.CreateAsync(fixture, pricing: true);
         using var maker = await data.OpenAsync(ManagerId); using var checker = await data.OpenAsync(PriceReviewerId);
         using var buyer = await data.OpenAsync(BuyerId);
+        var makerTasks = await Ok(await maker.Client.GetAsync("/api/v1/access/current"));
+        var checkerTasks = await Ok(await checker.Client.GetAsync("/api/v1/access/current"));
+        Assert.Contains(makerTasks.GetProperty("allowedActions").EnumerateArray(), item => item.GetString() == Permissions.PricingManage);
+        Assert.Contains(checkerTasks.GetProperty("allowedActions").EnumerateArray(), item => item.GetString() == Permissions.PricingApprove);
         var sku = await PriceSku(maker); var path = "/skus/" + sku;
         var choices = await Ok(await checker.Price("/skus/query", new { purpose = "catalog-pricing", access = "review", search = "PENCIL", limit = 25 }));
         Assert.Equal(sku, Assert.Single(choices.GetProperty("items").EnumerateArray()).GetProperty("sku").GetProperty("id").GetString());
@@ -103,5 +107,12 @@ public sealed partial class CatalogAuthoringHttpTests
         await data.Rows("authorizationGrants").UpdateManyAsync(new BsonDocument("userId", ManagerId), Builders<BsonDocument>.Update.Set("status", "revoked"));
         Assert.Equal(HttpStatusCode.Forbidden, (await maker.Price(path + "/preview/query", PriceRead())).StatusCode);
         Assert.Equal(0, await data.Count("priceVersions"));
+        data.Base.Clock.UtcNow = data.Base.Clock.UtcNow.AddMinutes(6);
+        var expiredTasks = await Ok(await checker.Client.GetAsync("/api/v1/access/current"));
+        Assert.Contains(expiredTasks.GetProperty("allowedActions").EnumerateArray(), item => item.GetString() == Permissions.PricingApprove);
+        Assert.Equal(HttpStatusCode.Forbidden, (await checker.Price(path + "/preview/query", PriceRead("review"))).StatusCode);
+        await data.Rows("authorizationGrants").UpdateManyAsync(new BsonDocument("userId", PriceReviewerId), Builders<BsonDocument>.Update.Set("status", "revoked"));
+        var revokedTasks = await Ok(await checker.Client.GetAsync("/api/v1/access/current"));
+        Assert.DoesNotContain(revokedTasks.GetProperty("allowedActions").EnumerateArray(), item => item.GetString() == Permissions.PricingApprove);
     }
 }

@@ -3,9 +3,10 @@ import { canManageAccounts, canReviewPeople, canUseStockCounts, canUseStockSourc
 import styles from "./access.module.css";
 
 export function AdministrationNavigation({ current, actions, locked = false }: {
-  current: "access" | "organizations" | "history" | "accounts" | "person-reviews" | "catalog" | "counts" | "sources" | "source-revisions" | "source-aliases" | "source-suspensions" | "source-policies"; actions: readonly string[]; locked?: boolean;
+  current: "access" | "organizations" | "history" | "accounts" | "person-reviews" | "catalog" | "prices" | "counts" | "sources" | "source-revisions" | "source-aliases" | "source-suspensions" | "source-policies"; actions: readonly string[]; locked?: boolean;
 }) {
   const links = [
+    { id: "prices", href: "/catalog/prices", label: "Harga kemasan", available: actions.some(action => ["pricing.manage", "pricing.approve"].includes(action)) },
     { id: "source-policies", href: "/inventory/sources/policies", label: "Kebijakan operasional stok", available: canUseStockSourcePolicies(actions) },
     { id: "source-suspensions", href: "/inventory/sources/suspensions", label: "Penghentian sumber", available: canUseStockSourceSuspensions(actions) },
     { id: "source-aliases", href: "/inventory/sources/aliases", label: "Pemetaan kanal", available: canUseStockSources(actions) },

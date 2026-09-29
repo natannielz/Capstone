@@ -84,7 +84,7 @@ test("catalog success after actor view replacement cannot clear another view's j
 
 test("unknown catalog operations cannot be journaled or dispatched", async () => {
   const storage = new MemoryStorage(), journal = new OperationJournal(() => storage);
-  for (const operation of ["catalog.sku.delete", "catalog.price.approve", "catalog.sku.create.extra", "catalog.category.save\n"]) {
+  for (const operation of ["catalog.sku.delete", "catalog.price.close", "catalog.sku.create.extra", "catalog.category.save\n"]) {
     assert.throws(() => journal.remember(actorId, operation, entry.key));
     await assert.rejects(reconcileOperationRecovery({ ...entry, operation }, journal, noLegacy), /recovery_operation_unsupported/);
   }

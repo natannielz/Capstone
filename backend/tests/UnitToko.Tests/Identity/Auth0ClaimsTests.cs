@@ -125,6 +125,10 @@ public sealed class Auth0ClaimsTests
     [InlineData("/inventory/sources/suspensions#other")]
     [InlineData("//inventory/sources/suspensions")]
     [InlineData("/inventory/sources/%73uspensions")]
+    [InlineData("/catalog/prices/")]
+    [InlineData("/catalog/prices?next=https://outside.co.id")]
+    [InlineData("/catalog/%70rices")]
+    [InlineData("//catalog/prices")]
     public void Return_paths_are_exact_allowlisted_destinations(string path) =>
         Assert.Throws<DomainValidationException>(() => ReturnPathPolicy.Require(path, Settings()));
     [Fact]
@@ -136,6 +140,9 @@ public sealed class Auth0ClaimsTests
     [Fact]
     public void Stock_suspension_return_path_is_explicitly_allowlisted() =>
         Assert.Equal("/inventory/sources/suspensions", ReturnPathPolicy.Require("/inventory/sources/suspensions", Settings()));
+    [Fact]
+    public void Price_return_path_is_explicitly_allowlisted() =>
+        Assert.Equal("/catalog/prices", ReturnPathPolicy.Require("/catalog/prices", Settings()));
     [Fact]
     public void Handler_configuration_requires_code_PKCE_validation_and_never_saves_tokens_to_a_browser_ticket()
     {
