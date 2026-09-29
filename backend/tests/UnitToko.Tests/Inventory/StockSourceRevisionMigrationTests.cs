@@ -26,7 +26,7 @@ public sealed partial class StockSourceRevisionMigrationTests(MongoFixture fixtu
         Assert.False(await migrations.IsCurrentAsync());
         await migrations.ApplyAsync();
         Assert.True(await migrations.IsCurrentAsync());
-        var after = await History(data); Assert.Equal(16, after.Count);
+        var after = await History(data); Assert.Equal(CollectionMigrations.CurrentVersion, after.Count);
         Assert.Equal(before, new BsonArray(after.Take(15)));
         foreach (var name in StockSourceRevisionSchemas.Collections)
             await InventoryRepository.RequireStorageAsync(data.Database, name, StockSourceRevisionSchemas.Validator(name), StockSourceRevisionSchemas.Key(name), default);
@@ -44,7 +44,7 @@ public sealed partial class StockSourceRevisionMigrationTests(MongoFixture fixtu
         await Rows(data, "idCounters").DeleteManyAsync(new BsonDocument("_id", new BsonDocument("$in",
             new BsonArray(StockSourceRevisionSchemas.Collections.Append("auditEvents")))));
         await new CollectionMigrations(data.Database, data.Clock).ApplyAsync();
-        Assert.Equal(16, (await History(data)).Count);
+        Assert.Equal(CollectionMigrations.CurrentVersion, (await History(data)).Count);
         Assert.Equal(before, await BusinessRows(data));
         foreach (var name in StockSourceRevisionSchemas.Collections.Append("auditEvents"))
         {

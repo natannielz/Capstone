@@ -4,7 +4,7 @@ using S = UnitToko.Platform.Mongo.Migrations.StockSourceSetupSchemas;
 
 namespace UnitToko.Platform.Mongo.Migrations;
 
-/// <summary>Draft storage: production installation requires a forward migration with complete historical preflight.</summary>
+/// <summary>Channel mapping storage installed by migration 17 after complete historical preflight.</summary>
 internal static class StockSourceAliasSchemas
 {
     internal static readonly string[] Collections = ["stockSourceAliasProposals", "stockSourceAliasDecisions", "stockSourceAliases"];

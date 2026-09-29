@@ -103,7 +103,7 @@ public sealed partial class StockSourceAliasTests
         await using var data = await StoreTestData.CreateAsync(fixture); var (maker, _, pool) = await Setup(data); var service = Service(data);
         if (fault == "missing") await data.Database.DropCollectionAsync("stockSourceAliases");
         if (fault == "warning") await data.Database.RunCommandAsync<BsonDocument>(new BsonDocument { { "collMod", "stockSourceAliasProposals" }, { "validationAction", "warn" } });
-        if (fault == "unique") await Rows(data, "stockSourceAliases").Indexes.DropOneAsync("ux_stockSourceAliases");
+        if (fault == "unique") await Rows(data, "stockSourceAliases").Indexes.DropOneAsync("ux_stock_source_alias_version");
         if (fault == "optional-validator") await data.Database.RunCommandAsync<BsonDocument>(new BsonDocument
         { { "collMod", "stockSourceAliasProposals" }, { "validator", new BsonDocument("$or", new BsonArray { StockSourceAliasSchemas.Validator("stockSourceAliasProposals"), new BsonDocument("_id", new BsonDocument("$gt", 0)) }) } });
         await Assert.ThrowsAsync<DomainValidationException>(() => Propose(service, maker, pool));

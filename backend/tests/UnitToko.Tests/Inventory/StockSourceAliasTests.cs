@@ -24,22 +24,9 @@ public sealed partial class StockSourceAliasTests(MongoFixture fixture)
     private StockSourceSetupService Service(StoreTestData data) => new(data.Database, new(fixture.Client), new(data.Database), data.Clock);
     private static IMongoCollection<BsonDocument> Rows(StoreTestData data, string name) => data.Database.GetCollection<BsonDocument>(name);
     private static Task<long> Count(StoreTestData data, string name) => Rows(data, name).CountDocumentsAsync(new BsonDocument());
-    private static async Task Install(StoreTestData data)
-    {
-        foreach (var name in StockSourceAliasSchemas.Collections)
-        {
-            await data.Database.CreateCollectionAsync(name, new CreateCollectionOptions<BsonDocument>
-            {
-                Validator = StockSourceAliasSchemas.Validator(name), ValidationLevel = DocumentValidationLevel.Strict, ValidationAction = DocumentValidationAction.Error
-            });
-            var key = StockSourceAliasSchemas.Key(name);
-            if (!key.Equals(new BsonDocument("_id", 1))) await Rows(data, name).Indexes.CreateOneAsync(
-                new CreateIndexModel<BsonDocument>(key, new CreateIndexOptions { Unique = true, Name = "ux_" + name }));
-        }
-    }
     private async Task<(ActorContext Maker, ActorContext Reviewer, long Pool)> Setup(StoreTestData data)
     {
-        await Install(data);
+
         await Rows(data, "authorizationScopes").InsertOneAsync(AuthorizationBson.Node(new ScopeNode(104, ScopeNodeKind.Channel, 100, AuthorizationStatus.Active, 1)));
         var maker = await data.AddActorAsync(1000, Owner.ToScope(), Permissions.StockSourcePropose, Permissions.StockSourceRead);
         var reviewer = await data.AddActorAsync(2000, Owner.ToScope(), Permissions.StockSourceApprove, Permissions.StockSourceRead);
