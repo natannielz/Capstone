@@ -506,3 +506,7 @@ Six protected routes and the typed frontend gateway now support action-only prev
 The stock.source.suspend journal adapter now precedes generic stock.source handling and supports exact receipt lookup only. It cannot close, retry or fall back into setup/revision/mapping workflows, and persists only actor/operation/key/time. Five new tests, 21 affected recovery checks and all 651 frontend executions passed with type/lint/build checks; see [evidence](../../quality/stock-source-suspension-recovery-verification-2026-09-29.md).
 
 Next connect the mounted staff editor, page, exact login/MFA navigation and actual browser workflow. The adapter alone does not make suspension usable in the staff UI. Preserve all remaining CAT02 and full production/report obligations and external acceptance gates.
+
+### CAT02 suspension staff integration — 29 September 2026
+
+The suspension editor/page, exact navigation and permission-separated preview/history/recovery are implemented. A real-browser discovery failure was fixed in the current-access task projection; no new authority is granted by navigation. Validation passed 103 backend/browser cases including all five executed browser workflows and 670 frontend executions, plus type/lint/build checks; see [staff verification](../../quality/stock-source-suspension-workspace-verification-2026-09-29.md). This does not close CAT02: accepted operational control, complete producer-backed drain/handoff/reactivation, policy/observations, canonical consumers, lots/costs and the full original/report scope remain required.

@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using MongoDB.Bson;
@@ -16,6 +17,30 @@ public sealed partial class StockSourceSetupHttpTests
     private static object SuspensionRecovery(string pool, string key) => new
         { purpose = "operation-recovery", physicalPoolId = pool, operation = "stock.source.suspend", key };
 
+    [Fact]
+    public async Task Suspension_task_discovery_keeps_MFA_entry_without_history_or_administration_and_disappears_after_revocation()
+    {
+        await using var data = await HttpData.CreateAsync(fixture);
+        await data.AddActorAsync(Stopper, Location, Permissions.StockSourceSuspend);
+        using var actor = await data.OpenAsync(Stopper);
+        using var maker = await data.OpenAsync(Maker); using var reviewer = await data.OpenAsync(Reviewer);
+        var pool = await CreatePool(maker, reviewer);
+        var fresh = await actor.Client.GetFromJsonAsync<JsonElement>("/api/v1/access/current");
+        Assert.Equal(new[] { Permissions.StockSourceSuspend }, fresh.GetProperty("allowedActions").EnumerateArray().Select(item => item.GetString()).ToArray());
+        using var catalog = await actor.Client.GetAsync("/api/v1/access/catalog");
+        Assert.Equal(HttpStatusCode.Forbidden, catalog.StatusCode);
+        using var history = await actor.Post("/pools/" + pool + "/suspensions/query", SuspensionRead);
+        Assert.Equal(HttpStatusCode.Forbidden, history.StatusCode);
+        data.Base.Clock.UtcNow = data.Base.Clock.UtcNow.AddMinutes(5).AddSeconds(1);
+        var stale = await actor.Client.GetFromJsonAsync<JsonElement>("/api/v1/access/current");
+        Assert.Equal(new[] { Permissions.StockSourceSuspend }, stale.GetProperty("allowedActions").EnumerateArray().Select(item => item.GetString()).ToArray());
+        using var preview = await actor.Post("/pools/" + pool + "/suspension-preview/query", SuspensionPreview);
+        Assert.Equal(HttpStatusCode.Forbidden, preview.StatusCode);
+        await data.Rows("authorizationGrants").UpdateOneAsync(new BsonDocument("_id", Stopper),
+            Builders<BsonDocument>.Update.Set("status", "revoked").Inc("version", 1L));
+        var revoked = await actor.Client.GetFromJsonAsync<JsonElement>("/api/v1/access/current");
+        Assert.Empty(revoked.GetProperty("allowedActions").EnumerateArray());
+    }
     [Fact]
     public async Task Suspension_HTTP_command_only_preview_exact_stop_history_and_receipt_recovery()
     {

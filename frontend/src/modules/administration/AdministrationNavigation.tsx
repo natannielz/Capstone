@@ -1,11 +1,12 @@
 import Link from "next/link";
-import { canManageAccounts, canReviewPeople, canUseStockCounts, canUseStockSources } from "../identity/identity-workflow";
+import { canManageAccounts, canReviewPeople, canUseStockCounts, canUseStockSources, canUseStockSourceSuspensions } from "../identity/identity-workflow";
 import styles from "./access.module.css";
 
 export function AdministrationNavigation({ current, actions, locked = false }: {
-  current: "access" | "organizations" | "history" | "accounts" | "person-reviews" | "catalog" | "counts" | "sources" | "source-revisions" | "source-aliases"; actions: readonly string[]; locked?: boolean;
+  current: "access" | "organizations" | "history" | "accounts" | "person-reviews" | "catalog" | "counts" | "sources" | "source-revisions" | "source-aliases" | "source-suspensions"; actions: readonly string[]; locked?: boolean;
 }) {
   const links = [
+    { id: "source-suspensions", href: "/inventory/sources/suspensions", label: "Penghentian sumber", available: canUseStockSourceSuspensions(actions) },
     { id: "source-aliases", href: "/inventory/sources/aliases", label: "Pemetaan kanal", available: canUseStockSources(actions) },
     { id: "source-revisions", href: "/inventory/sources/revisions", label: "Perubahan sumber", available: canUseStockSources(actions) },
     { id: "sources", href: "/inventory/sources", label: "Sumber stok", available: canUseStockSources(actions) },

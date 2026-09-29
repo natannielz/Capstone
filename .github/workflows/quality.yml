@@ -148,13 +148,13 @@ jobs:
           done
           docker logs --tail 2000 unit-toko-browser-mongo
           exit 1
-      - name: Real browser sign-in, stock counting, source and channel review, recovery
+      - name: Real browser sign-in, stock counting, source and channel review, suspension and recovery
         working-directory: backend
         run: |
           export UNITTOKO_BROWSER_NODE="$(command -v node)"
           export UNITTOKO_BROWSER_PLAYWRIGHT_PACKAGE="$GITHUB_WORKSPACE/frontend/tests/browser/node_modules/playwright/package.json"
           dotnet test tests/UnitToko.Tests/UnitToko.Tests.csproj --nologo \
-            --filter 'FullyQualifiedName~StockCountBrowserTests|FullyQualifiedName~StockSourceBrowserTests|FullyQualifiedName~StockSourceRevisionBrowserTests|FullyQualifiedName~StockSourceAliasBrowserTests' \
+            --filter 'FullyQualifiedName~StockCountBrowserTests|FullyQualifiedName~StockSourceBrowserTests|FullyQualifiedName~StockSourceRevisionBrowserTests|FullyQualifiedName~StockSourceAliasBrowserTests|FullyQualifiedName~StockSourceSuspensionBrowserTests' \
             --logger 'console;verbosity=normal' \
             --logger 'trx;LogFileName=stock-browser.trx' \
             --results-directory ../tmp/production/stock-browser-ci
@@ -163,9 +163,9 @@ jobs:
           root = ET.parse("../tmp/production/stock-browser-ci/stock-browser.trx").getroot()
           counters = root.find(".//{http://microsoft.com/schemas/VisualStudio/TeamTest/2010}Counters")
           assert counters is not None, "Missing browser test counters"
-          for name, expected in {"total": "4", "executed": "4", "passed": "4", "failed": "0", "notExecuted": "0"}.items():
+          for name, expected in {"total": "5", "executed": "5", "passed": "5", "failed": "0", "notExecuted": "0"}.items():
               assert counters.get(name) == expected, f"Browser rehearsal did not execute successfully: {name}"
-          print("All four real browser rehearsals executed and passed; no skipped or missing test.")
+          print("All five real browser rehearsals executed and passed; no skipped or missing test.")
           PY
       - name: Mongo diagnostics on failure
         if: failure()
