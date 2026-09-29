@@ -69,7 +69,7 @@ export function parseCurrentAlias(value: unknown) {
       BigInt(mapping.poolVersion) > BigInt(source.poolVersion) ||
       mapping.poolVersion === source.poolVersion && Date.parse(mapping.proposedAt) < Date.parse(source.approvedAt) ||
       mapping.poolVersion !== source.poolVersion && Date.parse(mapping.decision!.decidedAt) > Date.parse(source.approvedAt))) return invalid();
-    const bindingState = mapping === null ? "absent" : !mapping.enabled ? "disabled" : mapping.poolVersion === source.poolVersion ? "current" : "stale";
+    const bindingState: "absent" | "disabled" | "stale" | "current" = mapping === null ? "absent" : !mapping.enabled ? "disabled" : mapping.poolVersion === source.poolVersion ? "current" : "stale";
     if (v.bindingState !== bindingState) return invalid();
     return freezeSource({ source, requestedLocation, bindingState, mapping });
   } catch { return invalid(); }

@@ -9,7 +9,7 @@ export class IdentityFailure extends Error {
   }
 }
 
-const returnPaths = ["/identity/account", "/administration/access", "/administration/organizations", "/administration/history", "/administration/person-reviews", "/administration/catalog", "/inventory/counts", "/inventory/sources", "/inventory/sources/revisions"];
+const returnPaths = ["/identity/account", "/administration/access", "/administration/organizations", "/administration/history", "/administration/person-reviews", "/administration/catalog", "/inventory/counts", "/inventory/sources", "/inventory/sources/revisions", "/inventory/sources/aliases"];
 export const identityReturnPath = (value?: string | null) => value && returnPaths.includes(value) ? value : "/identity/account";
 const validId = (value: string) => /^[1-9][0-9]{0,18}$/.test(value) && (value.length < 19 || value <= "9223372036854775807");
 const validTime = (value: unknown): value is string => typeof value === "string" && value.length <= 40 && /^\d{4}-\d\d-\d\dT/.test(value) && Number.isFinite(Date.parse(value));
@@ -72,6 +72,7 @@ export function canUseStockCounts(actions: readonly string[]) { return actions.i
 
 export function identityDestinations(actions: readonly string[]) {
   return [
+    { href: "/inventory/sources/aliases", label: "Pemetaan kanal", description: "Tinjau penggunaan satu alokasi oleh kanal lain.", visible: canUseStockSources(actions) },
     { href: "/inventory/sources/revisions", label: "Perubahan sumber", description: "Bandingkan dan tinjau perubahan alokasi yang sudah terdaftar.", visible: canUseStockSources(actions) },
     { href: "/inventory/sources", label: "Sumber stok", description: "Ajukan dan tinjau pengaturan sumber stok sesuai penugasan.", visible: canUseStockSources(actions) },
     { href: "/inventory/counts", label: "Hitung barang", description: "Catat hitungan fisik atau lihat pengamatan sesuai penugasan.", visible: canUseStockCounts(actions) },
