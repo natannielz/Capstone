@@ -21,7 +21,7 @@ public sealed record ShipmentReadView(LongId Id, long Revision, LongId OrderId, 
 
 /// <summary>Current scoped access to accepted dispatch facts, without costs, approval bodies or stock authority.
 /// Courier assignment is compiled into the query before pagination; BuyerOwned remains creator-bound.</summary>
-public sealed class ShipmentQueryService
+public sealed partial class ShipmentQueryService
 {
     private readonly IMongoDatabase database;
     private readonly IClock clock;
@@ -36,9 +36,10 @@ public sealed class ShipmentQueryService
         this.database = database; this.clock = clock; this.orders = orders; this.preparations = preparations; authorization = new(database, unit, clock);
     }
     private IMongoCollection<BsonDocument> Rows(string name) => database.GetCollection<BsonDocument>(name);
-    private async Task StorageAsync(CancellationToken ct) { await preparations.StorageAsync(ct); await ShipmentDispatchStorage.RequireAsync(database, ct); }
-    private AuthorizationQuery Query(ActorContext actor, AuthorizationSnapshot snapshot) {
-        var query = ScopePolicy.Compile(actor, snapshot, Permissions.ShipmentRead, clock.UtcNow); AuthorizationStore.Require(query); return query;
+    internal IMongoDatabase SourceDatabase => database;
+    internal async Task StorageAsync(CancellationToken ct) { await preparations.StorageAsync(ct); await ShipmentDispatchStorage.RequireAsync(database, ct); }
+    private AuthorizationQuery Query(ActorContext actor, AuthorizationSnapshot snapshot, string permission = Permissions.ShipmentRead) {
+        var query = ScopePolicy.Compile(actor, snapshot, permission, clock.UtcNow); AuthorizationStore.Require(query); return query;
     }
     private static ResourceScope Resource(BsonDocument row) => ShipmentPreparationBson.Scope(row["scope"].AsBsonDocument) with {
         AssignedUserIds = [row["courierId"].AsInt64] };
@@ -76,8 +77,9 @@ public sealed class ShipmentQueryService
             return (items.Take(25).ToImmutableArray(), rows.Count > 25);
         }, ct);
     }
-    private async Task FenceAsync(ActorContext actor, AuthorizationSnapshot snapshot, IClientSessionHandle tx, ResourceScope[] resources, CancellationToken ct) {
-        var query = Query(actor, snapshot);
+    internal async Task FenceAsync(ActorContext actor, AuthorizationSnapshot snapshot, IClientSessionHandle tx, ResourceScope[] resources, CancellationToken ct, string permission = Permissions.ShipmentRead) {
+        if (permission is not (Permissions.ShipmentRead or Permissions.ShipmentPrepare)) throw ShipmentDispatchRecords.Invalid();
+        var query = Query(actor, snapshot, permission);
         if (resources.Any(resource => !query.Matches(resource) || !ScopePolicy.IsResourceActive(resource, snapshot.Directory))) throw ShipmentDispatchRecords.Invalid();
         var clauses = query.Clauses.Where(clause => resources.Length == 0 || resources.Any(clause.Matches)).ToArray();
         await new HistoricalAuthorizationFence(database, authorization).FenceAsync(actor,
@@ -92,7 +94,7 @@ public sealed class ShipmentQueryService
                 !live.TryGetValue("absoluteExpiresAt", out var absolute) || !absolute.IsBsonDateTime ||
                 idle.AsBsonDateTime.MillisecondsSinceEpoch <= now || absolute.AsBsonDateTime.MillisecondsSinceEpoch <= now) throw new AuthorizationDeniedException("stale_or_inactive_session");
         }
-        query = Query(actor, snapshot); if (resources.Any(resource => !query.Matches(resource))) throw ShipmentDispatchRecords.Invalid();
+        query = Query(actor, snapshot, permission); if (resources.Any(resource => !query.Matches(resource))) throw ShipmentDispatchRecords.Invalid();
         ct.ThrowIfCancellationRequested();
     }
 }

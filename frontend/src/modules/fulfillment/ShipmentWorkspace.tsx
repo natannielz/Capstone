@@ -8,6 +8,7 @@ import { createAccessGateway } from '../administration/access-client';
 import { AccessFailure, accessMessage } from '../administration/workflow';
 import { AdministrationNavigation } from '../administration/AdministrationNavigation';
 import { createShipmentGateway, type Shipment } from './shipment-client';
+import { ShipmentDocumentPanel } from './ShipmentDocumentPanel';
 import common from '../administration/access.module.css';
 import styles from '../ordering/order-draft.module.css';
 
@@ -94,6 +95,7 @@ function ShipmentList({ account, onDenied }: { account: Account; onDenied: (fail
       {selected.delivery.instructions && <p>Petunjuk: {selected.delivery.instructions}</p>}<h3>Kemasan yang diberangkatkan</h3>
       <ul>{selected.lines.map(line => <li key={line.skuId}><strong>{line.productName}</strong> · {line.skuCode}<p>{line.packages} {line.definition.packageLabel} · isi {line.definition.baseUnitsPerPackage} {line.definition.baseUnitCode} per kemasan · total {line.baseUnits} {line.definition.baseUnitCode}</p></li>)}</ul>
       <p>Keberangkatan tercatat. Penerimaan barang oleh cabang belum dicatat.</p>
+      <ShipmentDocumentPanel key={selected.id} actorId={account.actorId} shipment={selected} canIssue={account.actions.includes('shipment.prepare')} current={current} onDenied={onDenied} />
       <button className={common.secondary} disabled={busy} onClick={() => { setSelected(null); opener.current?.focus(); }}>Tutup rincian</button>
     </section>}
   </>;

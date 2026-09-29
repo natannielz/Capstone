@@ -32,6 +32,7 @@ public sealed class ShipmentDispatchBrowserTests(MongoFixture fixture, ITestOutp
         Assert.True(File.Exists(Path.Combine(root, "frontend", ".next", "BUILD_ID")));
         await using var data = await ShipmentDispatchTestData.CreateAsync(fixture); var order = data.Order;
         await order.Prices.Catalog.Base.AddGrantAsync(order.Buyer, 6510, CatalogAuthoringTestData.Audience, [UnitToko.Modules.Identity.Permissions.ShipmentRead]);
+        await order.Prices.Catalog.Base.AddGrantAsync(data.Picker, 6511, CatalogAuthoringTestData.Shop, [UnitToko.Modules.Identity.Permissions.ShipmentRead]);
         foreach (var actor in new[] { data.Dispatcher, data.Picker, order.Buyer })
             await order.Rows("accountProfiles").InsertOneAsync(new BsonDocument { { "_id", actor.UserId }, { "schemaVersion", 1 }, { "version", 1L },
                 { "displayName", "Staf fixture lokal" }, { "verifiedEmail", "dispatch-" + actor.UserId + "@example.invalid" }, { "verifiedAt", order.Prices.Catalog.Clock.UtcNow.UtcDateTime }, { "updatedAt", order.Prices.Catalog.Clock.UtcNow.UtcDateTime } });
@@ -69,6 +70,9 @@ public sealed class ShipmentDispatchBrowserTests(MongoFixture fixture, ITestOutp
         Assert.Equal(2, await order.Rows("movements").CountDocumentsAsync(new BsonDocument()));
         Assert.Equal(1, await order.Rows("idempotencyRecords").CountDocumentsAsync(new BsonDocument("operation", ShipmentDispatchBson.Operation)));
         Assert.Equal(1, await order.Rows("outboxEvents").CountDocumentsAsync(new BsonDocument("kind", "fulfillment.shipment.dispatched")));
+        Assert.Equal(1, await order.Rows("issuedDocuments").CountDocumentsAsync(new BsonDocument()));
+        Assert.Equal(1, await order.Rows("idempotencyRecords").CountDocumentsAsync(new BsonDocument("operation", ShipmentDocumentService.Operation)));
+        Assert.Equal(1, await order.Rows("outboxEvents").CountDocumentsAsync(new BsonDocument("kind", "fulfillment.surat-jalan.issued")));
         Assert.Equal(1L, (await order.Service.ReadOwnAsync(order.Buyer, data.Source.OrderId.Value)).Progress.DispatchSequence);
         Assert.Equal(0, await order.Rows("journalEntries").CountDocumentsAsync(new BsonDocument()));
     }
