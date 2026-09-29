@@ -44,7 +44,7 @@ public sealed class StockSourceSetupOpenApiTests
 
         var paths = document.RootElement.GetProperty("paths");
         var sources = paths.EnumerateObject().Where(path => path.Name.StartsWith("/api/v1/inventory/sources", StringComparison.Ordinal)).ToArray();
-        Assert.Equal(25, sources.Length);
+        Assert.Equal(31, sources.Length);
         foreach (var path in sources)
         {
             var operation = path.Value.GetProperty("post");

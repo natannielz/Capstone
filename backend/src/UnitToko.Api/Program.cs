@@ -64,6 +64,7 @@ builder.Services.AddOpenApi("v1", options =>
         StockSourceSetupOpenApi.Configure(document);
         StockSourceRevisionOpenApi.Configure(document);
         StockSourceAliasOpenApi.Configure(document);
+        StockSourceSuspensionOpenApi.Configure(document);
         document.Components.SecuritySchemes = new Dictionary<string, IOpenApiSecurityScheme>
         {
             ["providerEvents"] = new OpenApiSecurityScheme
@@ -277,6 +278,7 @@ app.MapStockCountEndpoints();
 app.MapStockSourceSetupEndpoints();
 app.MapStockSourceRevisionEndpoints();
 app.MapStockSourceAliasEndpoints();
+app.MapStockSourceSuspensionEndpoints();
 app.MapGet("/health/live", () => TypedResults.Ok(new HealthStatus("live"))).AllowAnonymous().WithName("Liveness");
 app.MapGet("/health/ready", async (HttpContext context, MongoConnection mongo,
     CollectionMigrations migrations, CancellationToken cancellationToken) =>
