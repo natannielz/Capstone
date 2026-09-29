@@ -4,10 +4,10 @@ import { priceId } from '../catalog/catalog-price-workflow';
 
 const invalid = (): never => { throw new AccessFailure(502, 'shipment_document_response_invalid'); };
 const record = (value: unknown): Record<string, unknown> => value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : invalid();
-export function parseShipmentDocument(value: unknown) {
+export function parseShipmentDocument(value: unknown, maximumBytes = 524288) {
   const row = record(value), byteLength = priceId(row.byteLength);
   if (row.version !== '1' || row.shipmentRevision !== '1' || typeof row.contentHash !== 'string' || !/^[0-9a-f]{64}$(?![\s\S])/.test(row.contentHash) ||
-    BigInt(byteLength) > BigInt(524288) || typeof row.issuedAt !== 'string' || row.issuedAt.length > 64 || !Number.isFinite(Date.parse(row.issuedAt))) return invalid();
+    BigInt(byteLength) > BigInt(maximumBytes) || typeof row.issuedAt !== 'string' || row.issuedAt.length > 64 || !Number.isFinite(Date.parse(row.issuedAt))) return invalid();
   return { id: priceId(row.id), shipmentId: priceId(row.shipmentId), shipmentRevision: '1' as const, version: '1' as const, contentHash: row.contentHash, byteLength, issuedAt: row.issuedAt };
 }
 export type ShipmentDocument = ReturnType<typeof parseShipmentDocument>;

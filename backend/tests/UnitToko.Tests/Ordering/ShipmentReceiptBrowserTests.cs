@@ -69,6 +69,8 @@ public sealed class ShipmentReceiptBrowserTests(MongoFixture fixture, ITestOutpu
         Assert.Equal(1, await order.Rows("outboxEvents").CountDocumentsAsync(new BsonDocument("kind", ShipmentReceiptRecords.Confirm)));
         Assert.Equal(2, await order.Rows("movements").CountDocumentsAsync(new BsonDocument()));
         Assert.Equal(0, await order.Rows("journalEntries").CountDocumentsAsync(new BsonDocument()));
+        Assert.Equal(1, await order.Rows("issuedReceiptProofs").CountDocumentsAsync(new BsonDocument()));
+        Assert.Equal(1, await order.Rows("idempotencyRecords").CountDocumentsAsync(new BsonDocument("operation", "fulfillment.receipt-proof.issue")));
     }
     private static string Root() {
         for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)

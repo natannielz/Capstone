@@ -98,7 +98,7 @@ function ShipmentList({ account, onDenied }: { account: Account; onDenied: (fail
       {selected.delivery.instructions && <p>Petunjuk: {selected.delivery.instructions}</p>}<h3>Kemasan yang diberangkatkan</h3>
       <ul>{selected.lines.map(line => <li key={line.skuId}><strong>{line.productName}</strong> · {line.skuCode}<p>{line.packages} {line.definition.packageLabel} · isi {line.definition.baseUnitsPerPackage} {line.definition.baseUnitCode} per kemasan · total {line.baseUnits} {line.definition.baseUnitCode}</p></li>)}</ul>
       <ShipmentDocumentPanel key={selected.id} actorId={account.actorId} shipment={selected} canIssue={account.actions.includes('shipment.prepare')} current={current} onDenied={onDenied} onLoaded={documentLoaded} />
-      {documentLoadedFor === selected.id && <ShipmentReceiptPanel key={'receipt:' + selected.id} actorId={account.actorId} shipmentId={selected.id} canChallenge={account.actions.includes('delivery.evidence') && selected.courierId === account.actorId} current={current} onDenied={onDenied} />}
+      {documentLoadedFor === selected.id && <ShipmentReceiptPanel key={'receipt:' + selected.id} actorId={account.actorId} shipmentId={selected.id} canIssueProof={account.actions.includes('shipment.prepare')} canChallenge={account.actions.includes('delivery.evidence') && selected.courierId === account.actorId} current={current} onDenied={onDenied} />}
       <button className={common.secondary} disabled={busy} onClick={() => { setSelected(null); opener.current?.focus(); }}>Tutup rincian</button>
     </section>}
   </>;

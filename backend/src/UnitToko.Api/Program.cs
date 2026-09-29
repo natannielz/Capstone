@@ -300,6 +300,7 @@ app.MapShipmentDispatchEndpoints();
 app.MapShipmentReadEndpoints();
 app.MapShipmentDocumentEndpoints();
 app.MapShipmentReceiptEndpoints();
+app.MapShipmentReceiptProofEndpoints();
 app.MapStockCountEndpoints();
 app.MapStockSourceSetupEndpoints();
 app.MapStockSourceRevisionEndpoints();

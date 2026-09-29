@@ -7,6 +7,7 @@ import { OperationRecovery, useOperationRecovery } from '../administration/Opera
 import { submitTrackedRequest } from '../administration/operation-journal';
 import { createShipmentDocumentGateway } from './shipment-document-client';
 import { createReceiptGateway, type Receipt, type ReceiptChallenge } from './receipt-client';
+import { ReceiptProofPanel } from './ReceiptProofPanel';
 import common from '../administration/access.module.css';
 
 export function ReceiptSummary({ receipt }: { receipt: Receipt }) {
@@ -30,8 +31,8 @@ function ReceiptQr({ challenge }: { challenge: ReceiptChallenge }) {
     {error && <p role="alert">QR belum dapat digambar. Gunakan tautan penerimaan.</p>}
     {link && <a href={link} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer">Buka tautan penerimaan</a>}<p>Untuk tablet bersama, gunakan sesi penerima yang terpisah. Akun kurir tidak dapat menyatakan penerimaan.</p></div>;
 }
-export function ShipmentReceiptPanel({ actorId, shipmentId, canChallenge, current, onDenied }: {
-  actorId: string; shipmentId: string; canChallenge: boolean; current: () => boolean; onDenied: (error: unknown) => void;
+export function ShipmentReceiptPanel({ actorId, shipmentId, canChallenge, canIssueProof, current, onDenied }: {
+  actorId: string; shipmentId: string; canChallenge: boolean; canIssueProof: boolean; current: () => boolean; onDenied: (error: unknown) => void;
 }) {
   const [gateway] = useState(createReceiptGateway), [documents] = useState(createShipmentDocumentGateway), [ledger] = useState(() => new MutationLedger()), recovery = useOperationRecovery(actorId);
   const [receipt, setReceipt] = useState<Receipt | null>(null), [loaded, setLoaded] = useState(false), [documentId, setDocumentId] = useState<string | null>(null);
@@ -65,7 +66,7 @@ export function ShipmentReceiptPanel({ actorId, shipmentId, canChallenge, curren
       onFailure={failure => { setError(failure); onDenied(failure); }} onResolved={() => { recovery.refresh(); ledger.resetAfterReconciliation(); }} />
     {error !== null && <p role="alert">{accessMessage(error)}</p>}{recovery.error !== null && <p role="alert">{accessMessage(recovery.error)}</p>}
     {offline && <p role="status">Belum tersambung. Penerimaan belum dikirim dari perangkat ini.</p>}{busy && <p role="status">Memeriksa penerimaan…</p>}
-    {receipt ? <ReceiptSummary receipt={receipt} /> : loaded && <><p>Keberangkatan tercatat. Penerimaan barang oleh cabang belum dicatat.</p>
+    {receipt ? <><ReceiptSummary receipt={receipt} /><ReceiptProofPanel actorId={actorId} shipmentId={shipmentId} receiptId={receipt.id} asRecipient={false} canIssue={canIssueProof} current={current} onDenied={onDenied} /></> : loaded && <><p>Keberangkatan tercatat. Penerimaan barang oleh cabang belum dicatat.</p>
       {canChallenge && (!documentId ? <p>Terbitkan Surat Jalan sebelum menyiapkan QR penerimaan.</p> : <>
         {challenge && <ReceiptQr key={challenge.id} challenge={challenge} />}
         {review ? <div><h4>Konfirmasi penerima QR</h4><p>{candidates.find(candidate => candidate.id === recipient)?.name} · {reason}</p>

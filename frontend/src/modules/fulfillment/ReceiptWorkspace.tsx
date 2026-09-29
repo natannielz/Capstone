@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { createIdentityGateway } from '../identity/identity-client';
 import { IdentityFailure, sessionTiming, type IdentitySession } from '../identity/identity-workflow';
 import { createAccessGateway } from '../administration/access-client';
@@ -10,10 +10,12 @@ import { OperationRecovery, useOperationRecovery } from '../administration/Opera
 import { submitTrackedRequest } from '../administration/operation-journal';
 import { createReceiptGateway, parseReceiptLink, prepareReceipt, type Receipt, type ReceiptReview, type ReceiptDeclaration } from './receipt-client';
 import { ReceiptSummary } from './ShipmentReceiptPanel';
+import { ReceiptProofPanel } from './ReceiptProofPanel';
+import { createReceiptProofGateway, type ReceiptProof } from './receipt-proof-client';
 import common from '../administration/access.module.css';
 import styles from '../ordering/order-draft.module.css';
 
-type Account = { actorId: string; session: IdentitySession; observedAt: number };
+type Account = { actorId: string; session: IdentitySession; observedAt: number; canReceive: boolean };
 type ReceiptLink = ReturnType<typeof parseReceiptLink>;
 function message(failure: unknown) {
   if (failure instanceof AccessFailure && ['shipment_receipt_unavailable', 'shipment_recipient_unavailable', 'independent_recipient_required'].includes(failure.code))
@@ -40,9 +42,10 @@ export function ReceiptWorkspace() {
       if (!session.authenticated || !session.account) throw new IdentityFailure(401, 'unauthenticated');
       const current = await access.current(); if (!active) return;
       if (current.userId !== session.account.userId) throw new AccessFailure(409, 'actor_changed');
-      if (!current.allowedActions.includes('receipt.accept')) throw new AccessFailure(403, 'scope_denied');
+      const canReceive = current.allowedActions.includes('receipt.accept');
+      if (!canReceive && !current.allowedActions.includes('shipment.prepare')) throw new AccessFailure(403, 'scope_denied');
       if (sessionTiming(session, performance.now() - observedAt).expired) throw new IdentityFailure(401, 'session_expired');
-      setAccount({ actorId: current.userId, session, observedAt }); setElapsed(performance.now() - observedAt);
+      setAccount({ actorId: current.userId, session, observedAt, canReceive }); setElapsed(performance.now() - observedAt);
     } catch (failure) { if (active) setError(failure); } finally { if (active) setLoading(false); }
   }); return () => { active = false; controller.abort(); }; }, [identity, access, revision]);
   useEffect(() => { const timer = window.setInterval(() => { if (account) setElapsed(performance.now() - account.observedAt); }, 1000); return () => window.clearInterval(timer); }, [account]);
@@ -65,9 +68,10 @@ function ReceiptForm({ account, link }: { account: Account; link: ReceiptLink | 
   const [review, setReview] = useState<ReceiptReview | null>(null), [observedAt, setObservedAt] = useState(0), [elapsed, setElapsed] = useState(0);
   const [entries, setEntries] = useState<Record<string, Entry>>({}), [reason, setReason] = useState(''), [consent, setConsent] = useState(false);
   const [command, setCommand] = useState<ReturnType<typeof prepareReceipt> | null>(null), [receipt, setReceipt] = useState<Receipt | null>(null);
+  const [proofs] = useState(createReceiptProofGateway), [recoveredProof, setRecoveredProof] = useState<ReceiptProof | null>(null);
   const [error, setError] = useState<unknown>(null), [busy, setBusy] = useState(false), [recovering, setRecovering] = useState(false), [offline, setOffline] = useState(false);
   const alive = useRef(false), pending = useRef(false), heading = useRef<HTMLHeadingElement>(null);
-  const current = () => alive.current && !sessionTiming(account.session, performance.now() - account.observedAt).expired;
+  const current = useCallback(() => alive.current && !sessionTiming(account.session, performance.now() - account.observedAt).expired, [account]);
   const expired = !!review && elapsed >= Math.max(0, Date.parse(review.expiresAt) - Date.parse(review.serverTime));
   const locked = busy || recovering || recovery.locked || offline || expired;
   useEffect(() => { alive.current = true; const connection = () => setOffline(!navigator.onLine); connection(); window.addEventListener('online', connection); window.addEventListener('offline', connection);
@@ -75,7 +79,7 @@ function ReceiptForm({ account, link }: { account: Account; link: ReceiptLink | 
   useEffect(() => { const timer = window.setInterval(() => setElapsed(performance.now() - observedAt), 1000); return () => window.clearInterval(timer); }, [observedAt]);
   useEffect(() => { if (command) heading.current?.focus(); }, [command]);
   async function load() {
-    if (!link || !current() || busy || pending.current || offline || recovery.locked) return; pending.current = true; setBusy(true); setError(null); setCommand(null);
+    if (!account.canReceive || !link || !current() || busy || pending.current || offline || recovery.locked) return; pending.current = true; setBusy(true); setError(null); setCommand(null);
     try { const result = await gateway.review(account.actorId, link.challengeId, link.token); if (!current()) return;
       setReview(result); setObservedAt(performance.now()); setElapsed(0); setEntries(Object.fromEntries(result.lines.map(line => [line.skuId, { accepted: ['', ''], rejected: ['', ''], missing: ['', ''], exceptionReason: '' }]))); setConsent(false);
     } catch (failure) { if (current()) { setReview(null); setError(failure); } } finally { pending.current = false; if (alive.current) setBusy(false); }
@@ -98,14 +102,16 @@ function ReceiptForm({ account, link }: { account: Account; link: ReceiptLink | 
     setEntries(previous => { const next: [string, string] = [...previous[sku][group]]; next[position] = value; return { ...previous, [sku]: { ...previous[sku], [group]: next } }; });
   }
   return <section className={common.accountSection} aria-label="Konfirmasi penerimaan" aria-busy={busy}>
-    <OperationRecovery entries={recovery.entries} journal={recovery.journal} disabled={busy || offline} onBusyChange={setRecovering}
-      recoveryAdapters={{ 'fulfillment.receipt': { lookup: async entry => { const result = await gateway.recover(entry.actorId, entry.key, entry.operation === 'fulfillment.receipt.challenge.issue'); if (current() && result && 'recordedAt' in result.result) setReceipt(result.result); return result; } } }}
+    <OperationRecovery entries={recovery.entries.filter(entry => entry.operation !== 'fulfillment.receipt-proof.issue' || !receipt && !recoveredProof)} journal={recovery.journal} disabled={busy || offline} onBusyChange={setRecovering}
+      recoveryAdapters={{ 'fulfillment.receipt-proof': { lookup: async entry => { const result = await proofs.recover(entry.actorId, entry.key); if (current() && result) setRecoveredProof(result.result); return result; } },
+        'fulfillment.receipt': { lookup: async entry => { const result = await gateway.recover(entry.actorId, entry.key, entry.operation === 'fulfillment.receipt.challenge.issue'); if (current() && result && 'recordedAt' in result.result) setReceipt(result.result); return result; } } }}
       onFailure={setError} onResolved={() => { recovery.refresh(); ledger.resetAfterReconciliation(); setCommand(null); setEntries({}); setReview(null); }} />
     {error !== null && <p role="alert" className={common.alert}>{message(error)}</p>}{recovery.error !== null && <p role="alert">{message(recovery.error)}</p>}
     {offline && <p role="status">Koneksi terputus. Isian hanya ada di halaman ini dan belum dikirim. Jangan tutup halaman sebelum tersambung.</p>}
     {expired && !receipt && <p role="status">QR kedaluwarsa. Pindai QR baru sebelum mengirim penerimaan.</p>}{busy && <p role="status">Memeriksa kiriman…</p>}
-    {receipt ? <ReceiptSummary receipt={receipt} /> : !review ? <><p>{link ? 'Buka rincian kiriman sebelum menghitung barang.' : 'Pindai QR dari kurir. Jika konfirmasi sebelumnya terputus, gunakan Periksa hasil di atas.'}</p>
-      {link && <button className={common.primary} disabled={busy || offline || recovery.locked} onClick={() => void load()}>Periksa kiriman</button>}</>
+    {receipt || recoveredProof ? <>{receipt && <ReceiptSummary receipt={receipt} />}<ReceiptProofPanel actorId={account.actorId} shipmentId={receipt?.shipmentId ?? recoveredProof!.shipmentId} receiptId={receipt?.id ?? recoveredProof!.receiptId}
+      asRecipient={receipt ? true : recoveredProof!.issuedAsRecipient} canIssue={!!receipt} current={current} onDenied={setError} /></> : !review ? <><p>{!account.canReceive ? 'Gunakan Periksa hasil untuk memulihkan bukti penerimaan yang telah Anda terbitkan.' : link ? 'Buka rincian kiriman sebelum menghitung barang.' : 'Pindai QR dari kurir. Jika konfirmasi sebelumnya terputus, gunakan Periksa hasil di atas.'}</p>
+      {link && account.canReceive && <button className={common.primary} disabled={busy || offline || recovery.locked} onClick={() => void load()}>Periksa kiriman</button>}</>
       : command ? <div className={styles.review}><h2 ref={heading} tabIndex={-1}>Tinjau jumlah penerimaan</h2><p>{review.recipientName} · Kiriman {review.shipmentId} · Surat Jalan versi {review.documentVersion}</p>
         <ul>{command.body.lines.map(line => { const source = review.lines.find(item => item.skuId === line.skuId)!; return <li key={line.skuId}><strong>{source.productName}</strong>
           {groups.map(group => <p key={group}>{labels[group]}: {line[group].packages} {source.packageLabel} + {line[group].looseUnits} {source.baseUnitCode}</p>)}{line.exceptionReason && <p>{line.exceptionReason}</p>}</li>; })}</ul>

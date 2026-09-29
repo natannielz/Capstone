@@ -4,7 +4,7 @@ import http from 'node:http';
 import https from 'node:https';
 import net from 'node:net';
 import { createRequire } from 'node:module';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import next from 'next';
 
@@ -16,8 +16,8 @@ const load = createRequire(config.playwrightPackage), metadata = load(config.pla
 const { chromium } = load('playwright'), channel = process.env.UNITTOKO_BROWSER_CHANNEL ?? 'chromium'; assert.ok(['chromium', 'msedge'].includes(channel));
 const app = next({ dev: false, dir: process.cwd(), quiet: true }), sockets = new Set(), writes = [], errors = [], pages = [];
 const directory = resolve('../tmp/production/shipment-receipt-browser-results'); mkdirSync(directory, { recursive: true });
-let browser, frontend, edge, tunnel, dropNext = false, dropped = 0, dropDocument = false;
-const documentWrites = [];
+let browser, frontend, edge, tunnel, dropNext = false, dropped = 0, dropDocument = false, dropProof = false;
+const documentWrites = [], proofWrites = [];
 function track(server) { server.on('connection', socket => { sockets.add(socket); socket.on('close', () => sockets.delete(socket)); }); return server; }
 async function listen(server) { await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); }); return server.address().port; }
 function forward(req, res, port, isApi) {
@@ -28,7 +28,9 @@ function forward(req, res, port, isApi) {
   if (write) writes.push({ key: req.headers['idempotency-key'], actor: req.headers['x-expected-actor-id'] });
   const documentWrite = req.method === 'POST' && /^\/api\/v1\/fulfillment\/receipts\/[0-9]+\/challenges$/.test(req.url);
   if (documentWrite) documentWrites.push({ key: req.headers['idempotency-key'], actor: req.headers['x-expected-actor-id'] });
-  const drop = write && dropNext || documentWrite && dropDocument; if (drop) { dropNext = false; dropDocument = false; }
+  const proofWrite = req.method === 'POST' && /^\/api\/v1\/fulfillment\/receipt-proofs\/[0-9]+$/.test(req.url);
+  if (proofWrite) proofWrites.push({ key: req.headers['idempotency-key'], actor: req.headers['x-expected-actor-id'] });
+  const drop = write && dropNext || documentWrite && dropDocument || proofWrite && dropProof; if (drop) { dropNext = false; dropDocument = false; dropProof = false; }
   const upstream = http.request({ hostname: '127.0.0.1', port, path: req.url, method: req.method, headers }, response => {
     if (drop && response.statusCode === 200) {
       response.resume(); response.once('end', () => { dropped++; res.writeHead(200, { 'content-type': 'application/json', 'content-length': '64', 'cache-control': 'no-store' });
@@ -115,11 +117,33 @@ try {
   assert.equal(await recipient.getByRole('button', { name: /Selesaikan dan tutup/ }).count(), 0);
   assert.equal(await recipient.evaluate(() => Object.keys(localStorage).filter(key => key.startsWith('unit-toko:pending:v1:')).length), 0);
   await recipient.screenshot({ path: resolve(directory, 'recipient-recovered-mobile.png'), fullPage: true });
+  await recipient.getByLabel('Catatan bukti penerimaan', { exact: true }).fill('Salinan pemeriksaan penerima cabang');
+  await recipient.getByRole('button', { name: 'Tinjau bukti penerimaan', exact: true }).click();
+  const proofHeading = recipient.getByRole('heading', { name: 'Konfirmasi penerbitan bukti', exact: true }); await proofHeading.waitFor();
+  assert.equal(await proofHeading.evaluate(element => element === document.activeElement), true);
+  await recipient.getByRole('button', { name: 'Kembali ke catatan bukti', exact: true }).click(); assert.equal(proofWrites.length, 0);
+  await recipient.getByRole('button', { name: 'Tinjau bukti penerimaan', exact: true }).click();
+  dropProof = true; await recipient.getByRole('button', { name: 'Terbitkan bukti penerimaan', exact: true }).click();
+  await recipient.getByRole('button', { name: 'Periksa hasil', exact: true }).waitFor(); await recipient.reload();
+  await recipient.getByRole('button', { name: 'Periksa hasil', exact: true }).click();
+  await recipient.getByText('Bukti penerimaan versi 1 tersimpan.', { exact: true }).waitFor();
+  assert.equal(proofWrites.length, 1); assert.equal(proofWrites[0].actor, config.buyerId); assert.equal(dropped, 2);
+  const downloadPromise = recipient.waitForEvent('download'); await recipient.getByRole('button', { name: 'Unduh bukti penerimaan', exact: true }).click();
+  const download = await downloadPromise; assert.match(download.suggestedFilename(), /^bukti-penerimaan-[0-9]+-v1-[0-9]+\.html$/);
+  const documentPath = resolve(directory, 'receipt-proof.html'); await download.saveAs(documentPath); const content = readFileSync(documentPath, 'utf8');
+  assert.match(content, /Diterima<\/dt><dd>0 kemasan \+ 6/); assert.match(content, /Belum diterima<\/dt><dd>0 kemasan \+ 2/);
+  assert.ok(!content.includes(secret)); assert.ok(!content.includes('tokenHash'));
+  const proofPage = await buyer.context.newPage(); pages.push(proofPage); await proofPage.setContent(content);
+  assert.equal(await proofPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  await proofPage.screenshot({ path: resolve(directory, 'receipt-proof-mobile.png'), fullPage: true });
+  assert.equal(await recipient.evaluate(() => Object.keys(localStorage).filter(key => key.startsWith('unit-toko:pending:v1:')).length), 0);
   await panel.getByRole('button', { name: 'Muat penerimaan', exact: true }).click();
   await panel.getByRole('heading', { name: 'Penerimaan tersimpan', exact: true }).waitFor();
   assert.match(await panel.innerText(), /diterima 6, ditolak 4, belum diterima 2/);
   assert.equal(await panel.getByRole('button', { name: 'Tinjau penerima', exact: true }).count(), 0);
-  assert.deepEqual(errors, []); console.log('REAL_SHIPMENT_RECEIPT_BROWSER_PASS ' + JSON.stringify({ confirmationAttempts: writes.length, recovered: dropped, separateRecipient: true, explicitCounts: true, offlineUnsent: true, mobile: true }));
+  await panel.getByRole('button', { name: 'Unduh bukti penerimaan', exact: true }).waitFor();
+  assert.equal(await panel.getByRole('button', { name: 'Terbitkan bukti penerimaan', exact: true }).count(), 0);
+  assert.deepEqual(errors, []); console.log('REAL_SHIPMENT_RECEIPT_BROWSER_PASS ' + JSON.stringify({ confirmationAttempts: writes.length, proofAttempts: proofWrites.length, recovered: dropped, separateRecipient: true, explicitCounts: true, offlineUnsent: true, mobile: true }));
 } catch (error) {
   for (const [index, page] of pages.entries()) if (!page.isClosed()) {
     console.error('FIXTURE PAGE ' + index + ': ' + (await page.locator('main').innerText().catch(() => 'unavailable')).slice(0, 5000));
