@@ -15,6 +15,7 @@ public static class Permissions
     public const string BranchPic = "branch.pic", OrganizationWide = "organization.wide";
     public const string StockRead = "stock.read", StockReceive = "stock.receive", StockCount = "stock.count", StockAdjustPropose = "stock.adjust.propose", StockAdjustApprove = "stock.adjust.approve";
     public const string StockSourceRead = "stock.source.read", StockSourcePropose = "stock.source.propose", StockSourceApprove = "stock.source.approve";
+    public const string StockSourceSuspend = "stock.source.suspend";
     public const string StockConvert = "stock.convert", ReservationRelease = "reservation.release";
     public const string ShipmentRead = "shipment.read", ShipmentPrepare = "shipment.prepare", ShipmentDispatch = "shipment.dispatch", ShipmentAssign = "shipment.assign", DeliveryAttempt = "delivery.attempt", DeliveryEvidence = "delivery.evidence", DeliveryReturn = "delivery.return", ReceiptAccept = "receipt.accept";
     public const string CaseRead = "case.read", CaseRequest = "case.request", CaseManage = "case.manage";
@@ -62,6 +63,7 @@ public static class Permissions
         Add(StockSourceRead, Operations);
         Add(StockSourcePropose, Operations);
         Add(StockSourceApprove, Operations, true);
+        Add(StockSourceSuspend, Operations, true);
         Add(RefundApprove, Operations, true);
         Add(ExpenseRequest, [.. Operations, .. Courier]);
         Add(DeliveryAttempt, Courier);

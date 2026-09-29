@@ -4,6 +4,7 @@ const labels: Record<string, string> = {
   "order.read": "Lihat pesanan", "order.submit": "Ajukan pesanan", "order.approve": "Setujui pesanan", "order.substitute": "Tanggapi penggantian barang", "order.cancel": "Batalkan pesanan",
   "order.spend.approve": "Setujui belanja pembeli", "order.accept": "Terima pesanan di toko",
   "substitution.propose": "Ajukan penggantian barang", "substitution.accept": "Setujui penggantian barang",
+  "stock.source.read": "Lihat sumber stok", "stock.source.propose": "Ajukan pengaturan sumber stok", "stock.source.approve": "Setujui pengaturan sumber stok", "stock.source.suspend": "Hentikan sementara sumber stok",
   "stock.convert": "Konversi kemasan stok", "reservation.release": "Lepaskan reservasi stok",
   "supplier.change.propose": "Ajukan perubahan pemasok", "supplier.change.approve": "Setujui perubahan pemasok",
   "history.read": "Lihat riwayat sesuai lingkup", "report.read": "Lihat laporan sesuai lingkup",
