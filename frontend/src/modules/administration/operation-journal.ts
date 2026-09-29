@@ -3,12 +3,13 @@ import { AccessFailure, MutationLedger } from "./workflow";
 import { priceAction, priceOutcome, type PriceResult } from "../catalog/catalog-price-workflow";
 import { priceRecoverySku } from "../catalog/catalog-price-recovery";
 import { parseDraftResult, type DraftResult } from "../ordering/order-draft-client";
+import { parseOrderSubmitResult, type OrderSubmitResult } from "../ordering/order-submit-client";
 
 export type OperationReference = Readonly<{ actorId: string; operation: string; key: string; createdAt: string }>;
 type JournalStorage = Pick<Storage, "length" | "key" | "getItem" | "setItem" | "removeItem">;
 const prefix = "unit-toko:pending:v1:";
 const keyPattern = /^[A-Za-z0-9._:-]{1,128}$/;
-const operationPattern = /^(?:(access|organization)\.[a-z.]{1,100}|identity\.(?:invitation\.(?:propose|approve|rejected|withdrawn|revoked)|recovery\.request)|person\.review\.(?:propose|approve|reject|withdraw)|ordering\.draft\.save|catalog\.(?:price\.(?:propose|approve|reject|withdraw)|category\.save|family\.(?:create|edit)|sku\.(?:create|revise|replace|retire|publish))|inventory\.stock-count\.record|stock\.source\.(?:suspend|(?:(?:revision|alias|policy)\.)?(?:propose|approve|reject|withdraw)))$(?![\s\S])/;
+const operationPattern = /^(?:(access|organization)\.[a-z.]{1,100}|identity\.(?:invitation\.(?:propose|approve|rejected|withdrawn|revoked)|recovery\.request)|person\.review\.(?:propose|approve|reject|withdraw)|ordering\.(?:draft\.save|order\.submit)|catalog\.(?:price\.(?:propose|approve|reject|withdraw)|category\.save|family\.(?:create|edit)|sku\.(?:create|revise|replace|retire|publish))|inventory\.stock-count\.record|stock\.source\.(?:suspend|(?:(?:revision|alias|policy)\.)?(?:propose|approve|reject|withdraw)))$(?![\s\S])/;
 const storageKey = (entry: OperationReference) => `${prefix}${entry.actorId}:${entry.operation}:${entry.key}`;
 
 /** Only recovery references are stored. Requests, reasons, grants and credentials never enter this journal. */
@@ -120,6 +121,7 @@ export type LegacyRecoveryAdapter = Readonly<{
 
 /** Supply this only from the owning client screen. A missing receipt is never a failed or closed request. */
 export type OperationRecoveryAdapters = Readonly<{
+  "ordering.order"?: Readonly<{ lookup: (entry: OperationReference) => Promise<Readonly<{ state: "committed"; result: OrderSubmitResult }> | null> }>;
   "ordering.draft"?: Readonly<{ lookup: (entry: OperationReference) => Promise<Readonly<{ state: "committed"; result: DraftResult }> | null> }>;
   "catalog.price"?: Readonly<{ lookup: (entry: OperationReference) => Promise<Readonly<{ state: "committed"; result: PriceResult }> | null> }>;
   "stock.source.policy"?: Readonly<{ lookup: (entry: OperationReference) => Promise<StockSourcePolicyRecoveryReceipt | null> }>;
@@ -135,9 +137,10 @@ export type OperationRecoveryAdapters = Readonly<{
   }>;
 }>;
 
-function recoveryNamespace(operation: string): "access" | "organization" | "identity" | "person.review" | "catalog" | "catalog.price" | "inventory.stock-count" | "stock.source" | "stock.source.revision" | "stock.source.alias" | "stock.source.suspend" | "stock.source.policy" | "ordering.draft" | null {
+function recoveryNamespace(operation: string): "access" | "organization" | "identity" | "person.review" | "catalog" | "catalog.price" | "inventory.stock-count" | "stock.source" | "stock.source.revision" | "stock.source.alias" | "stock.source.suspend" | "stock.source.policy" | "ordering.draft" | "ordering.order" | null {
   if (!operationPattern.test(operation)) return null;
   if (operation === "ordering.draft.save") return "ordering.draft";
+  if (operation === "ordering.order.submit") return "ordering.order";
   if (operation.startsWith("catalog.price.")) return "catalog.price";
   if (operation.startsWith("stock.source.policy.")) return "stock.source.policy";
   if (operation === "stock.source.suspend") return "stock.source.suspend";
@@ -157,7 +160,7 @@ export function operationRecoveryCapabilities(operation: string, adapters: Opera
   Readonly<{ canCheck: boolean; canClose: boolean; unavailable: "adapter" | "operation" | null }> {
   const namespace = recoveryNamespace(operation);
   if (!namespace) return { canCheck: false, canClose: false, unavailable: "operation" };
-  if (namespace === "ordering.draft" || namespace === "catalog.price" || namespace === "catalog" || namespace === "inventory.stock-count" || namespace === "stock.source" || namespace === "stock.source.revision" || namespace === "stock.source.alias" || namespace === "stock.source.suspend" || namespace === "stock.source.policy") return typeof adapters[namespace]?.lookup === "function"
+  if (namespace === "ordering.order" || namespace === "ordering.draft" || namespace === "catalog.price" || namespace === "catalog" || namespace === "inventory.stock-count" || namespace === "stock.source" || namespace === "stock.source.revision" || namespace === "stock.source.alias" || namespace === "stock.source.suspend" || namespace === "stock.source.policy") return typeof adapters[namespace]?.lookup === "function"
     ? { canCheck: true, canClose: false, unavailable: null } : { canCheck: false, canClose: false, unavailable: "adapter" };
   if (namespace === "person.review") return typeof adapters[namespace]?.lookup === "function"
     ? { canCheck: true, canClose: typeof adapters[namespace]?.close?.resolve === "function" && adapters[namespace]?.close?.allowed(operation) === true, unavailable: null }
@@ -175,7 +178,19 @@ export async function reconcileOperationRecovery(entry: OperationReference, jour
   const requireCurrent = () => { if (!isCurrent()) throw new AccessFailure(409, "recovery_request_stale"); };
   requireCurrent();
   let receipt: LookupReceipt | null;
-  if (namespace === "ordering.draft") {
+  if (namespace === "ordering.order") {
+    if (closeReason !== undefined) throw new AccessFailure(400, "recovery_close_unsupported");
+    const adapter = adapters[namespace];
+    if (typeof adapter?.lookup !== "function") throw new AccessFailure(503, "recovery_adapter_unavailable");
+    const recovered = await adapter.lookup(reference); requireCurrent();
+    if (recovered === null) receipt = null;
+    else {
+      if (!recovered || recovered.state !== "committed" || Object.keys(recovered).sort().join(",") !== "result,state" ||
+        !recovered.result || Object.keys(recovered.result).sort().join(",") !== "orderId,recordedAt,revision,spendingState,suborderIds") throw new AccessFailure(502, "recovery_receipt_invalid");
+      const result = parseOrderSubmitResult(recovered.result);
+      receipt = { state: "committed", result: { id: result.orderId, version: result.revision } };
+    }
+  } else if (namespace === "ordering.draft") {
     if (closeReason !== undefined) throw new AccessFailure(400, "recovery_close_unsupported");
     const adapter = adapters[namespace];
     if (typeof adapter?.lookup !== "function") throw new AccessFailure(503, "recovery_adapter_unavailable");

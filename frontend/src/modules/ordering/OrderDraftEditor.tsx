@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, type FormEvent } from 'react';
+import Link from 'next/link';
 import { AccessFailure } from '../administration/workflow';
 import { createBuyerCatalogGateway, type BuyerVariant } from '../catalog/catalog-buyer-client';
 import { CatalogReadGate } from '../catalog/catalog-editor-state';
@@ -80,6 +81,7 @@ export function OrderDraftEditor({ actorId, draft, initialQuote, initialIssue, l
   }
   return <section className={styles.editor} aria-label="Isi draf" aria-busy={busy || locked}>
     <h2>Draf {draft.id}</h2><p className={common.help}>Versi {draft.revision}. Perubahan baru tersimpan setelah Anda meninjau dan mengonfirmasi.</p>
+    {!locked && <p><Link href={'/ordering/checkout?draft=' + encodeURIComponent(draft.id)}>Lanjut ke pengajuan draf tersimpan</Link></p>}
     {error !== null && <p role="alert" className={common.alert}>{initialQuote === null && error === initialIssue ? 'Sebagian kemasan atau harga tidak lagi tersedia. Pilih kembali kemasan dari katalog; pilihan lama tidak diganti otomatis.' : draftMessage(error, true)}</p>}
     <form className={styles.form} onSubmit={event => void prepare(event)}>
       <ul className={styles.lines}>{selections.map((item, index) => {

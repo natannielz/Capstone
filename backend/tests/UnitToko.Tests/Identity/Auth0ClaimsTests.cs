@@ -151,6 +151,8 @@ public sealed class Auth0ClaimsTests
     [Fact]
     public void Order_draft_return_path_is_explicitly_allowlisted() =>
         Assert.Equal("/ordering/drafts", ReturnPathPolicy.Require("/ordering/drafts", Settings()));
+    [Fact] public void Checkout_return_path_is_exactly_allowed() =>
+        Assert.Equal("/ordering/checkout", ReturnPathPolicy.Require("/ordering/checkout", Settings()));
     [Fact]
     public void Handler_configuration_requires_code_PKCE_validation_and_never_saves_tokens_to_a_browser_ticket()
     {

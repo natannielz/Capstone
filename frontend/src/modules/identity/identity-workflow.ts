@@ -9,7 +9,7 @@ export class IdentityFailure extends Error {
   }
 }
 
-const returnPaths = ["/identity/account", "/administration/access", "/administration/organizations", "/administration/history", "/administration/person-reviews", "/administration/catalog", "/catalog/prices", "/catalog/browse", "/ordering/drafts", "/inventory/counts", "/inventory/sources", "/inventory/sources/revisions", "/inventory/sources/aliases", "/inventory/sources/suspensions", "/inventory/sources/policies"];
+const returnPaths = ["/identity/account", "/administration/access", "/administration/organizations", "/administration/history", "/administration/person-reviews", "/administration/catalog", "/catalog/prices", "/catalog/browse", "/ordering/drafts", "/ordering/checkout", "/inventory/counts", "/inventory/sources", "/inventory/sources/revisions", "/inventory/sources/aliases", "/inventory/sources/suspensions", "/inventory/sources/policies"];
 export const identityReturnPath = (value?: string | null) => value && returnPaths.includes(value) ? value : "/identity/account";
 const validId = (value: string) => /^[1-9][0-9]{0,18}$/.test(value) && (value.length < 19 || value <= "9223372036854775807");
 const validTime = (value: unknown): value is string => typeof value === "string" && value.length <= 40 && /^\d{4}-\d\d-\d\dT/.test(value) && Number.isFinite(Date.parse(value));

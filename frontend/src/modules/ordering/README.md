@@ -10,4 +10,10 @@ The buyer can save an explicit selection as a private Mongo-backed draft, then r
 
 Draft head, immutable version, audit, original command receipt and private-ID-only outbox event commit together. A lost response leaves only actor/operation/key/time in local storage. The dedicated recovery adapter looks up that original receipt and cannot close or resubmit the command. Its result can recover an older save after later edits or catalog changes; current creator/branch authority remains mandatory. No draft content, contact information or price is stored in the recovery journal.
 
-Migration 21 installs the draft collections; the writer remains closed until the whole migration history is current. Checkout, source-separated suborders, spending review, store acceptance and stock reservation remain M1 work. Submission must recompute and persist the accepted package/price/party/address/commercial-policy snapshot in its own transaction. Pending business policies and production source acceptance stay gated.
+Migration 21 installs the draft collections; the writer remains closed until the whole migration history is current. The conditional checkout below recomputes and persists package, price, party, address and commercial-policy snapshots with source-separated suborders and stock reservations. Spending review, store acceptance and production activation remain M1 work. Pending business policies and production source acceptance stay gated.
+
+## Conditional checkout
+
+`/ordering/checkout?draft=<id>` reloads an owned saved draft, obtains the current reviewed commercial terms and explicitly submits one order. The typed client checks exact selections and decimal totals. An unknown submission keeps only the original actor/operation/key/time reference and uses the dedicated lookup-only `ordering.order` recovery adapter. No order contents, addresses or prices are persisted in browser storage.
+
+The real local browser fixture connects Next, HTTPS, Kestrel, Mongo orders and the Inventory writer using synthetic approved policy inputs. Production admission has no default adapter and order storage has not yet been installed by a forward migration. Spending/store approvals, cancellation and fulfillment remain separate unfinished workflows. See the single [progress ledger](../../../../docs/quality/production-progress.md).
