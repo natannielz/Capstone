@@ -71,7 +71,7 @@ public sealed partial class StockSourcePolicyMigrationTests(MongoFixture fixture
         var before = await History(data); Assert.Equal(18, before.Count);
         var migration = new CollectionMigrations(data.Database, data.Clock);
         Assert.False(await migration.IsCurrentAsync()); await migration.ApplyAsync();
-        var after = await History(data); Assert.Equal(19, after.Count); Assert.Equal(before, new BsonArray(after.Take(18)));
+        var after = await History(data); Assert.Equal(CollectionMigrations.CurrentVersion, after.Count); Assert.Equal(before, new BsonArray(after.Take(18)));
         foreach (var name in StockSourcePolicySchemas.Collections)
             await InventoryRepository.RequireStorageAsync(data.Database, name, StockSourcePolicySchemas.Validator(name), StockSourcePolicySchemas.Key(name), default);
         foreach (var expected in StockSourcePolicySchemas.LookupIndexes())
@@ -89,7 +89,7 @@ public sealed partial class StockSourcePolicyMigrationTests(MongoFixture fixture
         var counters = StockSourcePolicySchemas.Collections.Concat(["auditEvents", "inventoryPools"]).ToArray();
         await Rows(data, "idCounters").DeleteManyAsync(new BsonDocument("_id", new BsonDocument("$in", new BsonArray(counters))));
         await new CollectionMigrations(data.Database, data.Clock).ApplyAsync();
-        Assert.Equal(19, (await History(data)).Count); Assert.Equal(before, await Business(data));
+        Assert.Equal(CollectionMigrations.CurrentVersion, (await History(data)).Count); Assert.Equal(before, await Business(data));
         foreach (var name in counters)
         {
             var highest = await Rows(data, name).Find(new BsonDocument()).Sort(new BsonDocument("_id", -1)).FirstOrDefaultAsync();

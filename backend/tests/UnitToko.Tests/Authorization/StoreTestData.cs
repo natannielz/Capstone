@@ -31,10 +31,12 @@ internal sealed class StoreTestData : IAsyncDisposable
     internal static Task<StoreTestData> CreateForStockSourceAliasMigrationAsync(MongoFixture fixture) => CreateAsync(fixture, false, false, false, true);
     internal static Task<StoreTestData> CreateForStockSourceSuspensionMigrationAsync(MongoFixture fixture) => CreateAsync(fixture, false, false, false, false, true);
     internal static Task<StoreTestData> CreateForStockSourcePolicyMigrationAsync(MongoFixture fixture) => CreateAsync(fixture, false, sourcePolicyMigration: true);
-    private static async Task<StoreTestData> CreateAsync(MongoFixture fixture, bool legacyCatalog, bool sourceSetupMigration = false, bool sourceRevisionMigration = false, bool sourceAliasMigration = false, bool sourceSuspensionMigration = false, bool sourcePolicyMigration = false)
+    internal static Task<StoreTestData> CreateForCatalogPriceMigrationAsync(MongoFixture fixture) => CreateAsync(fixture, false, catalogPriceMigration: true);
+    private static async Task<StoreTestData> CreateAsync(MongoFixture fixture, bool legacyCatalog, bool sourceSetupMigration = false, bool sourceRevisionMigration = false, bool sourceAliasMigration = false, bool sourceSuspensionMigration = false, bool sourcePolicyMigration = false, bool catalogPriceMigration = false)
     {
         var data = new StoreTestData(fixture);
-        if (sourcePolicyMigration) await LegacyStockSourcePolicyTestSchema.ApplyV18Async(data.Database, data.Clock);
+        if (catalogPriceMigration) await LegacyCatalogPriceTestSchema.ApplyV19Async(data.Database, data.Clock);
+        else if (sourcePolicyMigration) await LegacyStockSourcePolicyTestSchema.ApplyV18Async(data.Database, data.Clock);
         else if (sourceSuspensionMigration) await LegacyStockSourceSuspensionTestSchema.ApplyV17Async(data.Database, data.Clock);
         else if (sourceAliasMigration) await LegacyStockSourceAliasTestSchema.ApplyV16Async(data.Database, data.Clock);
         else if (sourceRevisionMigration) await LegacyStockSourceRevisionTestSchema.ApplyV15Async(data.Database, data.Clock);

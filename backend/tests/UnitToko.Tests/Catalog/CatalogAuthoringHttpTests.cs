@@ -26,7 +26,7 @@ using UnitToko.Tests.Identity;
 namespace UnitToko.Tests.Catalog;
 
 [Collection("Mongo")]
-public sealed class CatalogAuthoringHttpTests(MongoFixture fixture)
+public sealed partial class CatalogAuthoringHttpTests(MongoFixture fixture)
 {
     private const string Api = "/api/v1/catalog/administration";
     private const string Origin = "https://portal.unit-toko.co.id";
@@ -258,12 +258,17 @@ public sealed class CatalogAuthoringHttpTests(MongoFixture fixture)
                 services.RemoveAll<MongoIdentitySessionStore>(); services.AddSingleton(sessions);
             }));
         }
-        internal static async Task<HttpData> CreateAsync(MongoFixture fixture)
+        internal static async Task<HttpData> CreateAsync(MongoFixture fixture, bool pricing = false)
         {
             var data = new HttpData(await StoreTestData.CreateAsync(fixture), fixture);
             data.Base.Clock.UtcNow = DateTimeOffset.FromUnixTimeMilliseconds(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
             data.actors.Add(ManagerId, await data.Base.AddActorAsync(ManagerId, Owner, "catalog.manage"));
             data.actors.Add(BuyerId, await data.Base.AddActorAsync(BuyerId, new(GrantScopeKind.BuyerOwned, 10, 11), Permissions.CatalogRead));
+            if (pricing) {
+                await data.Base.AddGrantAsync(data.actors[ManagerId], 45010, Owner, [Permissions.PricingManage]);
+                data.actors.Add(PriceReviewerId, await data.Base.AddActorAsync(PriceReviewerId, Owner, Permissions.PricingApprove));
+                await PersonTestData.SeedDistinctPeopleAsync(data.Base.Database, data.Base.Clock, ManagerId, PriceReviewerId);
+            }
             await data.Rows("identities").UpdateManyAsync(FilterDefinition<BsonDocument>.Empty, Builders<BsonDocument>.Update.Set("securityVersion", 1L));
             return data;
         }
@@ -303,6 +308,12 @@ public sealed class CatalogAuthoringHttpTests(MongoFixture fixture)
         {
             using var request = Request("/owners/query", body);
             request.RequestUri = new Uri(Origin + "/api/v1/catalog/variants" + suffix);
+            return await client.SendAsync(request);
+        }
+        internal async Task<HttpResponseMessage> Price(string suffix, object body, string? key = null, string? version = null)
+        {
+            using var request = Request(suffix, body, key, version);
+            request.RequestUri = new Uri(Origin + "/api/v1/catalog/prices" + suffix);
             return await client.SendAsync(request);
         }
         public void Dispose() => client.Dispose();

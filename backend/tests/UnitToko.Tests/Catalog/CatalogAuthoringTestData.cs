@@ -54,9 +54,11 @@ internal sealed class CatalogAuthoringTestData : IAsyncDisposable
         var selected = client ?? Client; var db = selected.GetDatabase(Database.DatabaseNamespace.DatabaseName);
         return new(db, new(db, new(selected), Clock), Clock);
     }
-    internal static async Task<CatalogAuthoringTestData> CreateAsync(MongoFixture fixture)
+    internal static async Task<CatalogAuthoringTestData> CreateAsync(MongoFixture fixture, bool beforePriceMigration = false)
     {
-        var data = new CatalogAuthoringTestData(await StoreTestData.CreateAsync(fixture), fixture.Client);
+        var data = new CatalogAuthoringTestData(beforePriceMigration
+            ? await StoreTestData.CreateForCatalogPriceMigrationAsync(fixture)
+            : await StoreTestData.CreateAsync(fixture), fixture.Client);
         data.Clock.UtcNow = DateTimeOffset.FromUnixTimeMilliseconds(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
         foreach (var node in new[] { new ScopeNode(104, ScopeNodeKind.Warehouse, 101, AuthorizationStatus.Active, 1),
             new(201, ScopeNodeKind.Shop, 100, AuthorizationStatus.Active, 1),
@@ -69,7 +71,7 @@ internal sealed class CatalogAuthoringTestData : IAsyncDisposable
         data.Buyer = await data.ActorAsync(6000, Audience, Permissions.CatalogRead);
         return data;
     }
-    private async Task<ActorContext> ActorAsync(long id, GrantScope owner, params string[] permissions)
+    internal async Task<ActorContext> ActorAsync(long id, GrantScope owner, params string[] permissions)
     {
         var actor = await Base.AddActorAsync(id, owner, permissions);
         await Rows("identities").UpdateOneAsync(new BsonDocument("_id", id), Builders<BsonDocument>.Update.Set("securityVersion", 1L));
