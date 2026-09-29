@@ -8,7 +8,7 @@ public sealed record PermissionDefinition(string Name, string Description,
 
 public static class Permissions
 {
-    public const string CatalogRead = "catalog.read", CatalogManage = "catalog.manage", PricingManage = "pricing.manage";
+    public const string CatalogRead = "catalog.read", CatalogManage = "catalog.manage", PricingManage = "pricing.manage", PricingApprove = "pricing.approve";
     public const string OrderRead = "order.read", OrderSubmit = "order.submit", OrderApprove = "order.approve", OrderSubstitute = "order.substitute", OrderCancel = "order.cancel";
     public const string OrderSpendApprove = "order.spend.approve", OrderAccept = "order.accept";
     public const string SubstitutionPropose = "substitution.propose", SubstitutionAccept = "substitution.accept";
@@ -60,6 +60,7 @@ public static class Permissions
             InvoiceIssue, PaymentRecord, PaymentAllocate, PaymentVerify, CreditRequest, CreditApprove, RefundRequest, DisbursementRecord,
             DisbursementVerify, FundingRequest, FundingApprove, ExpenseApprove, ReconciliationVerify, JournalPost, JournalReverse }) Add(name, Operations);
         foreach (var name in new[] { OrderAccept, SubstitutionPropose, StockConvert, ReservationRelease, SupplierChangePropose }) Add(name, Operations);
+        Add(PricingApprove, Operations, true);
         Add(SupplierChangeApprove, Operations, true);
         Add(StockSourceRead, Operations);
         Add(StockSourcePropose, Operations);

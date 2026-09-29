@@ -659,3 +659,15 @@ The private source-obligation gate now refuses to treat missing operational read
 Local evidence: 172 affected cases passed, followed by 51 final gate cases after an author-review transaction-lifetime fix (174 distinct cases; not one combined run). The real-Mongo race, cancellation and downstream rollback checks pass; the server OpenAPI remains unchanged. Initial missing-type red, a corrected test-only database-name limit and both reproduced transaction-end failures are retained. See [verification](stock-source-obligation-gate-verification-2026-09-29.md) and [plan](../superpowers/plans/2026-09-29-stock-source-obligation-gate.md).
 
 Real operational reader completeness, accepted control/writer handoff and its migration/API/staff/browser lifecycle, trusted observations/holds, canonical stock/cost consumers and full original/report acceptance remain open. Independent review remains pending capacity. GitHub publication is authorized and tracked by exact commit/run; Vercel remains prepared, not deployed, until owning-account access becomes available.
+
+## 29 September — reviewed catalog price contract
+
+CAT01 pricing Task 1 is implemented and locally verified. Plan: docs/superpowers/plans/2026-09-29-catalog-pricing.md. Evidence: docs/quality/catalog-price-verification-2026-09-29.md.
+
+Immutable per-package price facts use the existing exact Money type and bind SKU/definition/base-price revisions. Explicit pricing.approve requires scoped, fresh MFA and independently verified maker/checker identities; it is added to no role automatically. Missing price is never an implicit zero.
+
+Final affected regression passed 231 cases with zero failures/skips, including 70 new cases (59 domain/person rules, 11 real-Mongo authority/replay/rollback probes). Server OpenAPI is unchanged. No new frontend/browser result is claimed. The actual price producer, forward migration, API/recovery, staff editor and entitled checkout integration remain open in Tasks 2–4; the probes are not a production price writer.
+
+This upstream gap is a dependency of CAT03 packaging quotes. Accepted stock control/handoff, the original production plan and all 97 report requirements remain required. Real commercial policy/grants, provider/hosting acceptance and independent review remain separate gates. No production readiness or Vercel deployment is claimed.
+
+Publication: push the verified checkpoint to codex/unit-toko-production; exact commit/run evidence is retained under tmp/production/catalog-price-results. Prior 1a78f63 CI has frontend/browser success and backend still running. Vercel owning-account access remains unavailable, with unchanged frontend/legacy application trees and the existing prepared archive.
