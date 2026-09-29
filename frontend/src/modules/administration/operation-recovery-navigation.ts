@@ -1,4 +1,6 @@
 export function recoveryPage(operation: string) {
+  if (operation === 'fulfillment.receipt.challenge.issue') return { href: '/fulfillment/shipments', label: 'QR penerimaan di rincian kiriman' };
+  if (operation === 'fulfillment.receipt.confirm') return { href: '/fulfillment/receive', label: 'halaman penerimaan kiriman' };
   if (operation === 'fulfillment.surat-jalan.issue') return { href: '/fulfillment/shipments', label: 'rincian kiriman dan Surat Jalan' };
   if (operation === 'fulfillment.shipment.dispatch') return { href: '/fulfillment/dispatches', label: 'halaman keberangkatan kiriman' };
   if (operation === 'fulfillment.preparation.save') return { href: '/fulfillment/preparations', label: 'halaman persiapan kiriman' };
@@ -16,6 +18,8 @@ export function recoveryPage(operation: string) {
     : { href: "/administration/person-reviews", label: "halaman peninjauan orang" };
 }
 export function operationLabel(operation: string) {
+  if (operation === 'fulfillment.receipt.challenge.issue') return 'Pembuatan QR penerimaan';
+  if (operation === 'fulfillment.receipt.confirm') return 'Konfirmasi penerimaan kiriman';
   if (operation === 'fulfillment.surat-jalan.issue') return 'Penerbitan Surat Jalan';
   if (operation === 'fulfillment.shipment.dispatch') return 'Keberangkatan kiriman';
   if (operation === 'fulfillment.preparation.save') return 'Penyimpanan persiapan kiriman';

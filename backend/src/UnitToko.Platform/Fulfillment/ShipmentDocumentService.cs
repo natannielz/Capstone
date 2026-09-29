@@ -32,6 +32,13 @@ public sealed class ShipmentDocumentService
         authorization = new(database, unit, clock); documents = new(database);
     }
     private IMongoCollection<BsonDocument> Rows(string name) => database.GetCollection<BsonDocument>(name);
+    internal IMongoDatabase SourceDatabase => database;
+    internal async Task<BsonDocument> RequireReceiptDocumentAsync(IClientSessionHandle tx, ShipmentDocumentSource source, long documentId, CancellationToken ct) {
+        await documents.StorageAsync(ct);
+        var row = await documents.FindAsync(tx, source.Snapshot["shipmentId"].AsInt64, ct) ?? throw IssuedDocumentStore.Invalid();
+        if (row["_id"] != documentId) throw IssuedDocumentStore.Invalid();
+        return await VerifiedAsync(tx, row, source, ct);
+    }
     private async Task StorageAsync(CancellationToken ct) { await shipments.StorageAsync(ct); await documents.StorageAsync(ct); }
     private static object Body(long id, long revision) => new { shipmentId = id, shipmentRevision = revision };
     private static ShipmentDocumentView View(BsonDocument row) => new(new(row["_id"].AsInt64), new(row["sourceId"].AsInt64), row["sourceRevision"].AsInt64,

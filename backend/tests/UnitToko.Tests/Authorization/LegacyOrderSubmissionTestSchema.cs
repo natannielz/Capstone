@@ -8,6 +8,14 @@ namespace UnitToko.Tests.Authorization;
 /// <summary>Actual predecessor history for forward-order upgrades and historical generic read probes.</summary>
 internal static class LegacyOrderSubmissionTestSchema
 {
+    internal static async Task ApplyV25Async(IMongoDatabase database, IClock clock) {
+        await ApplyV24Async(database, clock);
+        var durable = database.WithWriteConcern(WriteConcern.WMajority).WithReadPreference(ReadPreference.Primary);
+        var lease = await new MigrationGate(durable, clock, 25).AcquireAsync(25, default);
+        if (lease is null) return;
+        try { await new IssuedDocumentMigration(durable).ApplyAsync(lease, default); await lease.CompleteAsync(default); }
+        catch { await lease.ReleaseAsync(); throw; }
+    }
     internal static async Task ApplyV24Async(IMongoDatabase database, IClock clock) {
         await ApplyV23Async(database, clock);
         var durable = database.WithWriteConcern(WriteConcern.WMajority).WithReadPreference(ReadPreference.Primary);

@@ -121,7 +121,8 @@ try {
     const open = readPage.getByRole('button', { name: 'Lihat kiriman 100/103/2026/1', exact: true }); await open.click();
     const detail = readPage.getByRole('region', { name: 'Rincian kiriman', exact: true }); await detail.waitFor();
     assert.match(await detail.innerText(), /1 Dus · isi 12 piece per kemasan · total 12 piece/);
-    assert.match(await detail.innerText(), /Alamat cabang sintetis 1/); assert.match(await detail.innerText(), /Penerimaan barang oleh cabang belum dicatat/);
+    assert.match(await detail.innerText(), /Alamat cabang sintetis 1/);
+    await detail.getByText('Keberangkatan tercatat. Penerimaan barang oleh cabang belum dicatat.', { exact: true }).waitFor();
     assert.equal(await detail.evaluate(element => element === document.activeElement), true);
     const documents = detail.getByRole('region', { name: 'Surat Jalan', exact: true });
     await documents.getByText('Surat Jalan versi 1 tersimpan.', { exact: true }).waitFor();

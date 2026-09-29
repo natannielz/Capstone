@@ -9,6 +9,7 @@ import { AccessFailure, accessMessage } from '../administration/workflow';
 import { AdministrationNavigation } from '../administration/AdministrationNavigation';
 import { createShipmentGateway, type Shipment } from './shipment-client';
 import { ShipmentDocumentPanel } from './ShipmentDocumentPanel';
+import { ShipmentReceiptPanel } from './ShipmentReceiptPanel';
 import common from '../administration/access.module.css';
 import styles from '../ordering/order-draft.module.css';
 
@@ -59,6 +60,8 @@ function ShipmentList({ account, onDenied }: { account: Account; onDenied: (fail
   const [gateway] = useState(() => createShipmentGateway());
   const [page, setPage] = useState<{ items: Shipment[]; hasMore: boolean }>({ items: [], hasMore: false }), [before, setBefore] = useState<string | null>(null), [revision, setRevision] = useState(0);
   const [selected, setSelected] = useState<Shipment | null>(null), [busy, setBusy] = useState(false), [error, setError] = useState<unknown>(null), [offline, setOffline] = useState(false);
+  const [documentLoadedFor, setDocumentLoadedFor] = useState<string | null>(null);
+  const documentLoaded = useCallback(() => setDocumentLoadedFor(selected?.id ?? null), [selected?.id]);
   const alive = useRef(false), pending = useRef(false), detail = useRef<HTMLElement>(null), opener = useRef<HTMLButtonElement | null>(null);
   const current = useCallback(() => alive.current && !sessionTiming(account.session, performance.now() - account.observedAt).expired, [account]);
   useEffect(() => { alive.current = true; const connection = () => setOffline(!navigator.onLine); connection();
@@ -74,7 +77,7 @@ function ShipmentList({ account, onDenied }: { account: Account; onDenied: (fail
   }, [gateway, account.actorId, before, revision, current, onDenied]);
   useEffect(() => { if (selected) detail.current?.focus(); }, [selected]);
   async function open(id: string, button: HTMLButtonElement) {
-    if (!current() || busy || pending.current || offline) return; pending.current = true; opener.current = button; setBusy(true); setSelected(null); setError(null);
+    if (!current() || busy || pending.current || offline) return; pending.current = true; opener.current = button; setBusy(true); setSelected(null); setDocumentLoadedFor(null); setError(null);
     try { const item = await gateway.read(account.actorId, id); if (current()) setSelected(item); }
     catch (failure) { if (current()) { setError(failure); onDenied(failure); } } finally { pending.current = false; if (alive.current) setBusy(false); }
   }
@@ -94,8 +97,8 @@ function ShipmentList({ account, onDenied }: { account: Account; onDenied: (fail
       <h3>Tujuan</h3><p className={styles.address}>{selected.delivery.recipientName} · {selected.delivery.phone}{'\n'}{selected.delivery.address}{'\n'}{selected.delivery.city} {selected.delivery.postalCode}</p>
       {selected.delivery.instructions && <p>Petunjuk: {selected.delivery.instructions}</p>}<h3>Kemasan yang diberangkatkan</h3>
       <ul>{selected.lines.map(line => <li key={line.skuId}><strong>{line.productName}</strong> · {line.skuCode}<p>{line.packages} {line.definition.packageLabel} · isi {line.definition.baseUnitsPerPackage} {line.definition.baseUnitCode} per kemasan · total {line.baseUnits} {line.definition.baseUnitCode}</p></li>)}</ul>
-      <p>Keberangkatan tercatat. Penerimaan barang oleh cabang belum dicatat.</p>
-      <ShipmentDocumentPanel key={selected.id} actorId={account.actorId} shipment={selected} canIssue={account.actions.includes('shipment.prepare')} current={current} onDenied={onDenied} />
+      <ShipmentDocumentPanel key={selected.id} actorId={account.actorId} shipment={selected} canIssue={account.actions.includes('shipment.prepare')} current={current} onDenied={onDenied} onLoaded={documentLoaded} />
+      {documentLoadedFor === selected.id && <ShipmentReceiptPanel key={'receipt:' + selected.id} actorId={account.actorId} shipmentId={selected.id} canChallenge={account.actions.includes('delivery.evidence') && selected.courierId === account.actorId} current={current} onDenied={onDenied} />}
       <button className={common.secondary} disabled={busy} onClick={() => { setSelected(null); opener.current?.focus(); }}>Tutup rincian</button>
     </section>}
   </>;

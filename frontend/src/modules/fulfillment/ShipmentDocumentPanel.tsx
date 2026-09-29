@@ -13,8 +13,8 @@ function message(error: unknown) {
   if (error instanceof AccessFailure && error.status > 0 && error.status < 500) return accessMessage(error);
   return 'Hasil belum dapat dipastikan. Gunakan Periksa hasil untuk penerbitan yang terkirim; unduhan dapat dicoba kembali setelah tersambung.';
 }
-export function ShipmentDocumentPanel({ actorId, shipment, canIssue, current, onDenied }: {
-  actorId: string; shipment: Shipment; canIssue: boolean; current: () => boolean; onDenied: (error: unknown) => void;
+export function ShipmentDocumentPanel({ actorId, shipment, canIssue, current, onDenied, onLoaded }: {
+  actorId: string; shipment: Shipment; canIssue: boolean; current: () => boolean; onDenied: (error: unknown) => void; onLoaded?: () => void;
 }) {
   const [gateway] = useState(() => createShipmentDocumentGateway()), [ledger] = useState(() => new MutationLedger()), recovery = useOperationRecovery(actorId);
   const [document, setDocument] = useState<ShipmentDocument | null>(null), [loaded, setLoaded] = useState(false), [busy, setBusy] = useState(false), [recovering, setRecovering] = useState(false);
@@ -30,9 +30,9 @@ export function ShipmentDocumentPanel({ actorId, shipment, canIssue, current, on
     void Promise.resolve().then(async () => {
       if (!active) return; setBusy(true); setLoaded(false); setDocument(null); setError(null); setReview(false);
       try { const result = await gateway.read(actorId, shipment.id, controller.signal); if (active && current()) { setDocument(result); setLoaded(true); } }
-      catch (failure) { if (active) { setError(failure); onDenied(failure); } } finally { if (active) setBusy(false); }
+      catch (failure) { if (active) { setError(failure); onDenied(failure); } } finally { if (active) { setBusy(false); if (current()) onLoaded?.(); } }
     }); return () => { active = false; controller.abort(); };
-  }, [gateway, actorId, shipment.id, reload, current, onDenied]);
+  }, [gateway, actorId, shipment.id, reload, current, onDenied, onLoaded]);
   useEffect(() => { if (review) reviewHeading.current?.focus(); }, [review]);
   async function issue() {
     if (!alive.current || !current() || locked || pending.current || !canIssue || !review || document) return;
@@ -58,7 +58,7 @@ export function ShipmentDocumentPanel({ actorId, shipment, canIssue, current, on
     finally { pending.current = false; if (alive.current) setBusy(false); }
   }
   return <section className={common.accountSection} aria-label="Surat Jalan" aria-busy={busy}><h3>Surat Jalan</h3>
-    <OperationRecovery entries={recovery.entries} journal={recovery.journal} disabled={busy || offline} onBusyChange={setRecovering}
+    <OperationRecovery entries={recovery.entries.filter(entry => !entry.operation.startsWith('fulfillment.receipt.'))} journal={recovery.journal} disabled={busy || offline} onBusyChange={setRecovering}
       recoveryAdapters={{ 'fulfillment.surat-jalan': { lookup: async entry => { const receipt = await gateway.recover(entry.actorId, entry.key); recovered.current = receipt?.result ?? null; return receipt; } } }}
       onFailure={failure => { setError(failure); onDenied(failure); }} onResolved={() => {
         recovery.refresh(); ledger.resetAfterReconciliation(); if (alive.current && current() && recovered.current?.shipmentId === shipment.id) setDocument(recovered.current);
