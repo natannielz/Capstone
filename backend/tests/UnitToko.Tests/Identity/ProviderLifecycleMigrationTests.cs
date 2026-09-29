@@ -199,12 +199,15 @@ public sealed class ProviderLifecycleMigrationTests(MongoFixture fixture)
             await Invalid(db, "identitySecurityEvents", denied);
             var ddl = commands.Where(command => command.Contains("create") || command.Contains("collMod") || command.Contains("createIndexes")).ToArray();
             Assert.NotEmpty(ddl);
+            // Resuming an interrupted migration applies the registered chain through channel mappings.
+            foreach (var collection in new[] { "stockSourceAliasProposals", "stockSourceAliasDecisions", "stockSourceAliases" })
+                Assert.Contains(ddl, command => command.GetElement(0).Value.AsString == collection);
             Assert.All(ddl, command =>
             {
                 Assert.Equal("majority", command["writeConcern"]["w"].AsString);
-                // Resuming the registered chain also applies the following catalog and historical-read migrations.
+                // Every DDL command remains limited to the explicit collections in the registered chain.
                 Assert.Contains(command.GetElement(0).Value.AsString, new[] { "identitySecurityEvents", "identityAdmissionHolds",
-                    "identityProviderSubjects", "catalogEntitlements", "catalogAssortments", "businessReadEvents", "personEvidenceSources", "personRecords", "personAccountBindings", "personEquivalenceGroups", "personEvidenceVersions", "personGovernancePolicies", "personReviewProposals", "personReviewHistory", "personReviewPreviews", "catalogCategories", "productFamilies", "skus", "variantDefinitions", "catalogIdentifiers", "catalogIdentifierHistory", "accountingBooks", "accountingChartVersions", "journalEntries", "periods", "accountingPeriodHistory", "accountingAuditEvents", "evidenceStorePolicies", "evidenceLineages", "documentVersions", "evidenceUploadReservations", "evidenceUploadAttempts", "auditEvents", "idempotencyRecords", "outboxEvents", "stockCountObservations", "stockSourceProposals", "stockSourceDecisions", "inventoryPoolRegistrations", "inventoryPools", "stockSourceRevisionProposals", "stockSourceRevisionDecisions", "stockSourceRevisions" });
+                    "identityProviderSubjects", "catalogEntitlements", "catalogAssortments", "businessReadEvents", "personEvidenceSources", "personRecords", "personAccountBindings", "personEquivalenceGroups", "personEvidenceVersions", "personGovernancePolicies", "personReviewProposals", "personReviewHistory", "personReviewPreviews", "catalogCategories", "productFamilies", "skus", "variantDefinitions", "catalogIdentifiers", "catalogIdentifierHistory", "accountingBooks", "accountingChartVersions", "journalEntries", "periods", "accountingPeriodHistory", "accountingAuditEvents", "evidenceStorePolicies", "evidenceLineages", "documentVersions", "evidenceUploadReservations", "evidenceUploadAttempts", "auditEvents", "idempotencyRecords", "outboxEvents", "stockCountObservations", "stockSourceProposals", "stockSourceDecisions", "inventoryPoolRegistrations", "inventoryPools", "stockSourceRevisionProposals", "stockSourceRevisionDecisions", "stockSourceRevisions", "stockSourceAliasProposals", "stockSourceAliasDecisions", "stockSourceAliases" });
             });
             Assert.Contains(await (await db.GetCollection<BsonDocument>("identitySecurityEvents").Indexes.ListAsync()).ToListAsync(),
                 index => index["name"] == "reviewed_provider_event_identity");
