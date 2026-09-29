@@ -46,7 +46,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="id" data-scroll-behavior="smooth" className={`${bodyFont.variable} ${displayFont.variable}`}>
-      <body className="antialiased">{children}</body>
+      <body className="antialiased">
+        {children}
+        {process.env.NODE_ENV === "development" && process.env.FIGMA_CAPTURE === "1" && (
+          <script src="https://mcp.figma.com/mcp/html-to-design/capture.js" async />
+        )}
+      </body>
     </html>
   );
 }

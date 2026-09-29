@@ -1,5 +1,9 @@
 # Unit Toko — Demo Capstone BNI
 
+Pengembangan produksi dilanjutkan dari `main` pada `C:/Users/User/Documents/Capstone`, mengikuti [rencana M0–M6](docs/superpowers/plans/2026-09-29-accelerated-completion.md) dan [ledger kemajuan](docs/quality/production-progress.md). Persyaratan asli dan seluruh 97 butir laporan tetap berlaku. Situs demo di bawah belum menjadi bukti penerimaan sistem produksi baru.
+
+CI push menjalankan pemeriksaan terfokus sesuai sumber yang berubah. Seluruh suite lama tetap tersedia melalui workflow manual **Release validation** untuk kandidat rilis M6. Push GitHub belum berarti deployment: deployment Git otomatis dinonaktifkan sementara dalam `frontend/vercel.json` sampai kandidat dan layanan sebenarnya siap divalidasi. Rilis harus memverifikasi Vercel, API/worker .NET, MongoDB, Auth0 dan penyimpanan privat.
+
 Website demo dengan etalase pelanggan dan pemesanan divisi, persediaan, pengadaan, pengiriman, penerimaan, penagihan, pembayaran simulasi, laporan, dan tutup periode.
 
 - Website: [unit-toko-bni.vercel.app](https://unit-toko-bni.vercel.app)

@@ -1,0 +1,29 @@
+Continue the existing Unit Toko production goal using this replacement execution plan:
+
+C:/Users/User/Documents/Capstone/docs/superpowers/plans/2026-09-29-accelerated-completion.md
+
+I am stopping the previous execution approach. Keep all original requirements, the meeting image/manual outcomes and all 97 report items. This replaces the work sequence and testing cadence; it does not remove scope. Preserve completed work and continue from the actual current source.
+
+Start with M0. After confirming the previous executor is stopped, preserve tracked edits, untracked files and unfinished work in BOTH:
+- C:/Users/User/Documents/Capstone
+- C:/Users/User/.codex/worktrees/unit-toko-production/Capstone
+
+Safely merge the latest coherent verified production branch checkpoint into main and push main to GitHub. Reconcile my original local edits and the renamed frontend/backend/docs layout. Preserve incomplete pricing work for resumption; do not merge broken WIP just to clear the tree. Respect actual branch protection and required checks. Use one authoritative checkout in C:/Users/User/Documents/Capstone. Remove obsolete task branches/worktrees only after proving their work is preserved and integrated. Do not force-push, reset away edits or broadly delete files.
+
+Keep the existing Next.js/TypeScript frontend, C#/.NET 10 backend, MongoDB, Auth0 and private evidence architecture. Do not restart the language decision, repeat the completed three-agent audit, or write another plan for every helper. Execute natively and avoid repeated agent/review gates.
+
+Prioritize complete browser-to-API-to-Mongo workflows:
+1. Real catalog, explicit packaging and branch ordering.
+2. Delivery, recipient QR/tablet proof and invoices.
+3. Mandatory payment evidence, local OCR, independent bank review, allocation and after-sales/refunds.
+4. All procurement routes, source/stock reconciliation and accounting close.
+5. Complete role lifecycle, professional workspaces, notifications, monitoring and required assistance baselines.
+6. Full release validation, actual provider/deployment acceptance, migration/restore and branch pilot.
+
+Run focused local checks while building. Stop waiting for full unrelated CI after every small change. Preserve full CI and move its main execution to integrated release validation before real launch, subject to current required merge checks. Keep permissions, stock/money races and retry safety tested as their code changes. Never replace real checks with fake green results.
+
+Commit and push coherent reviewed progress promptly to main, using a short PR only if repository rules require it. Keep one accurate progress ledger showing implemented, connected locally, staging-validated and production-accepted states. Do not claim progress from file counts or test counts.
+
+At release, publish the verified build to GitHub and Vercel and verify its actual .NET API/worker, MongoDB, Auth0 and private storage connections. A source push or archive is not a deployed working site. Preserve one-writer cutover, real operator/business-policy gates and all integrity controls. Do not spend money, execute financial transfers, send real external messages or cut over real data without the applicable existing authorization/approved operational inputs.
+
+Proceed autonomously through authorized implementation, checks, merge and publication. Ask only for genuinely missing decisions/access when dependent work is ready; continue independent work meanwhile. Do not end the goal early or label local fixtures as production acceptance.

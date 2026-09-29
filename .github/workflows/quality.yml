@@ -1,4 +1,4 @@
-name: Quality
+name: Focused quality
 
 on:
   pull_request:
@@ -10,16 +10,56 @@ permissions:
   contents: read
 
 concurrency:
-  group: quality-${{ github.workflow }}-${{ github.ref }}
-  # Preserve the full production-branch regression while newer checkpoints queue.
-  # Other branches and pull requests retain their existing cancellation behavior.
-  cancel-in-progress: ${{ github.ref != 'refs/heads/codex/unit-toko-production' }}
+  group: focused-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  frontend:
-    name: Frontend and preserved behavior
+  changes:
+    name: Identify affected source
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    outputs:
+      frontend: ${{ steps.paths.outputs.frontend }}
+      backend: ${{ steps.paths.outputs.backend }}
+      security: ${{ steps.paths.outputs.security }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - id: paths
+        name: Select honest source checks
+        shell: python
+        run: |
+          import json, os, subprocess
+          event = json.load(open(os.environ["GITHUB_EVENT_PATH"]))
+          base = event.get("pull_request", {}).get("base", {}).get("sha") or event.get("before")
+          manual = os.environ["GITHUB_EVENT_NAME"] == "workflow_dispatch"
+          if manual or not base or set(base) == {"0"}:
+              files = [".github/workflows/quality.yml"]
+          else:
+              comparison = [base, "HEAD"] if "pull_request" not in event else [base + "...HEAD"]
+              files = subprocess.check_output(["git", "diff", "--name-only", "-z", *comparison]).decode().split("\0")
+          infrastructure = any(p.startswith(".github/") for p in files)
+          backend = infrastructure or any(p.startswith("backend/") for p in files)
+          frontend = infrastructure or any(p.startswith(("frontend/", "backend/legacy/", "backend/contracts/")) for p in files)
+          security = infrastructure or any(p.startswith((
+              "backend/src/UnitToko.Platform/Authorization/", "backend/src/UnitToko.Platform/Identity/",
+              "backend/src/UnitToko.Modules/Identity/", "backend/src/UnitToko.Platform/Mongo/",
+              "backend/src/UnitToko.Platform/Sessions/", "backend/src/UnitToko.Api/Identity/",
+              "backend/tests/UnitToko.Tests/Authorization/", "backend/tests/UnitToko.Tests/Identity/"
+          )) for p in files)
+          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+              for name, value in {"frontend": frontend, "backend": backend, "security": security}.items():
+                  output.write(f"{name}={str(value).lower()}\n")
+          print(f"Affected checks: frontend={frontend}, backend={backend}, transactional_authority={security}")
+          print("Full regression is a separate manually dispatched Release validation workflow.")
+
+  frontend:
+    name: Frontend types, lint and module boundaries
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
     env:
       NEXT_TELEMETRY_DISABLED: '1'
     steps:
@@ -33,23 +73,17 @@ jobs:
           cache-dependency-path: |
             frontend/package-lock.json
             backend/legacy/package-lock.json
-      - name: Install legacy adapter dependencies
-        run: npm ci --prefix backend/legacy
-      - name: Install frontend dependencies
-        run: npm ci --prefix frontend
-      - name: Type check
-        run: npm run typecheck --prefix frontend
-      - name: Lint
-        run: npm run lint --prefix frontend
-      - name: Regression and future-date tests
-        run: npm test --prefix frontend
-      - name: Production build
-        run: npm run build --prefix frontend
+      - run: npm ci --prefix backend/legacy
+      - run: npm ci --prefix frontend
+      - run: npm run typecheck --prefix frontend
+      - run: npm run lint --prefix frontend
 
   backend:
-    name: Backend and real Mongo transactions
+    name: Backend compile, contracts and affected authority
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-24.04
-    timeout-minutes: 90
+    timeout-minutes: 20
     env:
       DOTNET_CLI_TELEMETRY_OPTOUT: '1'
       DOTNET_NOLOGO: '1'
@@ -66,27 +100,10 @@ jobs:
           node-version: '24'
           cache: npm
           cache-dependency-path: backend/contracts/package-lock.json
-      - name: Install pinned contract generator
-        run: npm ci --prefix backend/contracts --ignore-scripts
-      - name: Start isolated replica-set server
-        run: |
-          docker run --detach --name unit-toko-mongo \
-            --publish 127.0.0.1:27028:27028 \
-            mongo:8.2.12 --replSet rs0 --bind_ip_all --port 27028 --setParameter enableTestCommands=1
-          for attempt in $(seq 1 30); do
-            if docker exec unit-toko-mongo mongosh --quiet --port 27028 --eval 'quit(db.adminCommand({ping:1}).ok === 1 ? 0 : 1)'; then
-              exit 0
-            fi
-            sleep 1
-          done
-          docker logs --tail 2000 unit-toko-mongo
-          exit 1
+      - run: npm ci --prefix backend/contracts --ignore-scripts
       - name: Build pinned SDK solution
         working-directory: backend
         run: dotnet build UnitToko.slnx --nologo
-      - name: Unit and real replica-set integration tests
-        working-directory: backend
-        run: dotnet test UnitToko.slnx --no-build --nologo --logger "console;verbosity=normal"
       - name: Auth0 Action policy fixtures
         run: node --test backend/integrations/auth0/v1/actions.test.cjs
       - name: Check server OpenAPI contract
@@ -94,84 +111,38 @@ jobs:
         run: ./backend/contracts/export-openapi.ps1 -Check
       - name: Check generated frontend contract
         run: npm run check --prefix backend/contracts
-      - name: Mongo diagnostics on failure
-        if: failure()
-        run: docker logs --tail 2000 unit-toko-mongo
-      - name: Stop disposable database
-        if: always()
-        run: docker rm --force unit-toko-mongo
-
-  stock_browser:
-    name: Browser, HTTPS and real Mongo
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
-    env:
-      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
-      DOTNET_NOLOGO: '1'
-      NEXT_TELEMETRY_DISABLED: '1'
-      UNITTOKO_STOCK_BROWSER: '1'
-      UNITTOKO_BROWSER_CHANNEL: chromium
-      UNITTOKO_TEST_MONGO_URI: mongodb://127.0.0.1:27028/?replicaSet=rs0
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
-        with:
-          global-json-file: backend/global.json
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: '24'
-          cache: npm
-          cache-dependency-path: |
-            frontend/package-lock.json
-            backend/legacy/package-lock.json
-            frontend/tests/browser/package-lock.json
-      - name: Install legacy adapter dependencies
-        run: npm ci --prefix backend/legacy
-      - name: Install frontend dependencies
-        run: npm ci --prefix frontend
-      - name: Install pinned browser verification tools
-        run: npm ci --prefix frontend/tests/browser --ignore-scripts
-      - name: Install Chromium and system dependencies
-        run: node frontend/tests/browser/node_modules/playwright/cli.js install --with-deps chromium
-      - name: Build production frontend
-        run: npm run build --prefix frontend
-      - name: Start isolated replica-set server
+      - name: Start isolated authority regression database
+        if: needs.changes.outputs.security == 'true'
         run: |
-          docker run --detach --name unit-toko-browser-mongo \
+          docker run --detach --name unit-toko-focused-mongo \
             --publish 127.0.0.1:27028:27028 \
-            mongo:8.2.12 --replSet rs0 --bind_ip_all --port 27028
+            mongo:8.2.12 --replSet rs0 --bind_ip_all --port 27028 --setParameter enableTestCommands=1
           for attempt in $(seq 1 30); do
-            if docker exec unit-toko-browser-mongo mongosh --quiet --port 27028 --eval 'quit(db.adminCommand({ping:1}).ok === 1 ? 0 : 1)'; then
+            if docker exec unit-toko-focused-mongo mongosh --quiet --port 27028 --eval 'quit(db.adminCommand({ping:1}).ok === 1 ? 0 : 1)'; then
               exit 0
             fi
             sleep 1
           done
-          docker logs --tail 2000 unit-toko-browser-mongo
+          docker logs --tail 2000 unit-toko-focused-mongo
           exit 1
-      - name: Real browser sign-in, stock counting, source and channel review, operating policies, suspension and recovery
+      - name: Changed shared authority regression (not full backend validation)
+        if: needs.changes.outputs.security == 'true'
         working-directory: backend
         run: |
-          export UNITTOKO_BROWSER_NODE="$(command -v node)"
-          export UNITTOKO_BROWSER_PLAYWRIGHT_PACKAGE="$GITHUB_WORKSPACE/frontend/tests/browser/node_modules/playwright/package.json"
-          dotnet test tests/UnitToko.Tests/UnitToko.Tests.csproj --nologo \
-            --filter 'FullyQualifiedName~StockCountBrowserTests|FullyQualifiedName~StockSourceBrowserTests|FullyQualifiedName~StockSourceRevisionBrowserTests|FullyQualifiedName~StockSourceAliasBrowserTests|FullyQualifiedName~StockSourceSuspensionBrowserTests|FullyQualifiedName~StockSourcePolicyBrowserTests' \
-            --logger 'console;verbosity=normal' \
-            --logger 'trx;LogFileName=stock-browser.trx' \
-            --results-directory ../tmp/production/stock-browser-ci
+          dotnet test tests/UnitToko.Tests/UnitToko.Tests.csproj --no-build --nologo \
+            --filter 'FullyQualifiedName~PersonApprovalStoreTests|FullyQualifiedName~PersonApprovalSessionTests|FullyQualifiedName~NumericContractTests' \
+            --logger 'trx;LogFileName=authority.trx' --results-directory ../tmp/focused-ci
           python3 - <<'PY'
           import xml.etree.ElementTree as ET
-          root = ET.parse("../tmp/production/stock-browser-ci/stock-browser.trx").getroot()
+          root = ET.parse("../tmp/focused-ci/authority.trx").getroot()
           counters = root.find(".//{http://microsoft.com/schemas/VisualStudio/TeamTest/2010}Counters")
-          assert counters is not None, "Missing browser test counters"
-          for name, expected in {"total": "6", "executed": "6", "passed": "6", "failed": "0", "notExecuted": "0"}.items():
-              assert counters.get(name) == expected, f"Browser rehearsal did not execute successfully: {name}"
-          print("All six real browser rehearsals executed and passed; no skipped or missing test.")
+          assert counters is not None, "Missing focused regression results"
+          total = int(counters.get("total", "0"))
+          assert total > 0 and int(counters.get("passed", "0")) == total, "Missing, skipped or failing focused checks"
           PY
-      - name: Mongo diagnostics on failure
-        if: failure()
-        run: docker logs --tail 2000 unit-toko-browser-mongo
-      - name: Stop disposable database
-        if: always()
-        run: docker rm --force unit-toko-browser-mongo
+      - name: Authority database diagnostics on failure
+        if: failure() && needs.changes.outputs.security == 'true'
+        run: docker logs --tail 2000 unit-toko-focused-mongo
+      - name: Stop disposable authority database
+        if: always() && needs.changes.outputs.security == 'true'
+        run: docker rm --force unit-toko-focused-mongo

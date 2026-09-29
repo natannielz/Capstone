@@ -1,4 +1,5 @@
 .tools/
+.npm-cache/
 reference/
 node_modules/
 .env

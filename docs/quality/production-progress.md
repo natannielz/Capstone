@@ -1,5 +1,48 @@
 # Production implementation progress
 
+Current execution plan: [Accelerated completion, M0–M6](../superpowers/plans/2026-09-29-accelerated-completion.md).
+Authoritative checkout: `C:/Users/User/Documents/Capstone`, branch `main`.
+Scope: original production specification, meeting/manual outcomes, audit A01–A22 and the unchanged [97-item register](../requirements/unit-toko-report-2026-09-28.md).
+
+## Current state — accelerated handoff, 29 September 2026
+
+The tables below supersede earlier sequencing and status summaries. The detailed historical evidence remains below; its former worktree paths and “next task” directions are historical, not execution instructions.
+
+| Milestone | Implemented | Connected locally | Staging validated | Production accepted |
+| --- | --- | --- | --- | --- |
+| M0 integration | Local main fast-forwarded from 09265cc to c6a5b4e; original layout/mockup changes reconciled; backups verified; CI cadence prepared | .NET build passes in authoritative root; frontend types/lint/build and production-mode landing pass | Not a provider acceptance milestone | GitHub push and final M0 verification pending |
+| M1 catalog and ordering | Existing catalog/package authoring and independent price contracts; unfinished pricing service preserved separately | Existing catalog foundation, not a complete buyer order journey; price API/migration/UI/order integration pending | No | No |
+| M2 delivery and invoices | Private evidence, inventory and accounting foundations only; complete workflows pending | No complete new-system delivery→invoice journey | No | No |
+| M3 payments/OCR/after-sales | Evidence and independent-person authorization foundations; business workflows and OCR consumers pending | No complete new-system payment→bank review→allocation/refund journey | No | No |
+| M4 procurement/stock/accounting | Inventory ledger, counts, source governance, journal foundations exist; seven-domain completeness gate is fail-closed | Existing stock/source/count staff journeys verified against local real Mongo; procurement/close/source reconciliation incomplete | No | No |
+| M5 roles and operations | Six templates, explicit permission packs, account/person/access administration and scoped staff screens exist | Local identity/access journeys exist; full lifecycle, notification processors, assistance and workspace completion pending | Actual Auth0 tenant not accepted | No |
+| M6 release and pilot | Runbooks/test infrastructure and preserved full CI available | Prior local fixtures remain useful scoped evidence | Provider/hosting, migration/restore, load/accessibility and business-policy gates pending | No deployment/cutover/pilot acceptance claimed |
+
+### M0 preservation and decisions
+
+- Previous execution stopped: old local test/watcher handles absent; process inventory found no old Unit Toko executor/test/helper; all prior subordinate agents are stopped/errored. The isolated Mongo service is deliberately retained, not mistaken for an executor.
+- Recoverable local backup: `tmp/m0-preservation-20260929/`. Original, production and older private-evidence checkouts each have SHA-256-verified working files, tracked patches, index/status/HEAD manifests. `repository.bundle` verified complete Git history. Original edits also have a separate Git stash whose exact ID is recorded locally. These backups are ignored and not published.
+- Original .gitignore addition and development-only Figma layout script map to the current layout with corrected font paths. Mentor documents and HTML match between checkouts. New execution plan/prompt are retained. Original specification/plan copies contain stale worktree pointers and the superseded Auth0-candidate wording; newer accepted branch versions remain authoritative, with the original bytes retained in backup.
+- Unfinished pricing service, draft schemas, authorization final-person correction and tests remain a distinct recoverable WIP set. The interrupted affected regression has no final result; earlier passing focused runs do not make this service production-ready. The backend WIP files have now been restored byte-for-byte into the authoritative root, recorded in pricing-wip-restored.json, and are deliberately excluded from the M0 commit. Resume M1 against these files.
+- GitHub observed main `protected=false`, no branch rules and no open PR. Remote main was an ancestor of the production checkpoint, so integration is a normal fast-forward, with no reset, force-push or protection change.
+- Ruling: follow the user's focused-check cadence and native execution. The skill's default per-task full-suite/review/worktree workflow is superseded by this explicit handoff. Retain all full CI jobs in manually dispatched `Release validation`; `Focused quality` reports source-specific compilation/contracts/types/lint and changed shared-authority regressions under distinct truthful names. No short PR is required by current repository rules.
+- Vercel project inspection currently fails inside the connector's argument mapping (`idOrName` missing despite supplied documented project ID). GitHub exposes no deployment records/status linkage for this repository. Actual provider linkage is therefore unconfirmed, not assumed absent. Ruling: `frontend/vercel.json` temporarily disables Git-triggered deploys so main integration cannot promote an unaccepted application. This uses [Vercel's documented setting](https://vercel.com/docs/project-configuration/git-configuration). M6 must explicitly deploy the tested candidate and review re-enabling automatic deployments; the source guard is not deployment acceptance.
+- Old worktrees are recovery locations only. Do not develop there. They still contain ignored artifacts/tool caches/local test database and (for private evidence) historical unstaged work; removal remains conditional on proving preservation/integration of those bytes. No broad clean/delete is authorized to make them appear empty.
+- No real stock, money, identity writer or data was switched. External messages, costs, financial transfers and real cutover still require their applicable approved inputs.
+- The goal runtime returned no active record at handoff. The same continuing objective was registered with the replacement sequence, unbudgeted, retaining all scope; no former milestone was declared complete to do this.
+
+### Verification at this checkpoint
+
+- Preserved source checkpoint `c6a5b4e`: prior exact-source focused price/authority regression recorded 231 passing cases; this is scoped local evidence.
+- Full hosted validation for `1a78f63` completed successfully: run 36547963275, all frontend/backend/real-browser jobs green. The newer c6a5b4e run started before the attempted queued-run cancellation, so it was left running as the one useful full checkpoint run. No whole-system success is inferred for c6a5b4e.
+- Authoritative-root .NET solution build passes with zero warnings/errors.
+- Both workflow files parse; the full release jobs compare exactly with the previous workflow jobs. Full tests have not been replaced with success stubs.
+- Frontend typecheck/lint/build pass (zero lint errors, nine existing warnings); local production-mode landing returns HTTP 200 and excludes the development capture script. Server OpenAPI and generated client checks pass. WIP recovery hash verification passes. Remote main verification follows publication.
+
+## Historical implementation evidence
+
+# Production implementation progress
+
 Plan: `docs/superpowers/plans/2026-09-27-unit-toko-production.md`
 
 Implementation workspace: `C:/Users/User/.codex/worktrees/unit-toko-production/Capstone`
