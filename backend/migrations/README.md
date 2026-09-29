@@ -1,5 +1,7 @@
 # Mongo collection migrations
 
+Current migration 22 installs canonical order/reservation/decision storage. See the [order upgrade runbook](../../docs/runbooks/order-submission-migration.md) for preflight, preservation, interruption recovery and outstanding live acceptance. Existing generic order data is never silently converted.
+
 Configure `Mongo__Uri` and `Mongo__Database` for the intended dedicated database, verify the replica set and backup, then run the explicit migration:
 
 ```powershell

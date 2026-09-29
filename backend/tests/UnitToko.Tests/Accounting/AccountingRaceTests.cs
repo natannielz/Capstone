@@ -112,7 +112,7 @@ public sealed class AccountingRaceTests(MongoFixture fixture)
         await read.Task.WaitAsync(TimeSpan.FromSeconds(10));
         try
         {
-            await data.DB.GetCollection<BsonDocument>("orders").UpdateOneAsync(new BsonDocument("_id", 42L), Builders<BsonDocument>.Update.Set("version", 2L).Set("amount", new BsonDecimal128(200m)));
+            await data.DB.GetCollection<BsonDocument>("fixtureBusinessRecords").UpdateOneAsync(new BsonDocument("_id", 42L), Builders<BsonDocument>.Update.Set("version", 2L).Set("amount", new BsonDecimal128(200m)));
         }
         finally
         {

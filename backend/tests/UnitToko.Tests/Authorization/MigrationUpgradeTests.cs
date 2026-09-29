@@ -34,13 +34,16 @@ public sealed class MigrationUpgradeTests(MongoFixture fixture)
             Assert.Equal(Enumerable.Range(1, CollectionMigrations.CurrentVersion), history.Select(item => item["_id"].AsInt32));
             Assert.All(history, item => Assert.Equal("applied", item["state"].AsString));
 
-            // The old deployment refuses this database even though v1 aggregate formats stay valid.
+            // The old deployment refuses the new history; version 22 also refuses generic old order writes.
             var oldReleaseGate = new MigrationGate(database, clock, 1);
             Assert.False(await oldReleaseGate.IsCurrentAsync(CancellationToken.None));
             await Assert.ThrowsAsync<InvalidOperationException>(() =>
                 oldReleaseGate.AcquireAsync(1, CancellationToken.None));
-            await database.GetCollection<BsonDocument>("orders").InsertOneAsync(new BsonDocument
-                { { "schemaVersion", 1 }, { "protected", true } });
+            await Assert.ThrowsAsync<MongoWriteException>(() => database.GetCollection<BsonDocument>("orders").InsertOneAsync(new BsonDocument
+                { { "schemaVersion", 1 }, { "protected", true } }));
+            var orderStorage = await (await database.ListCollectionsAsync(new ListCollectionsOptions { Filter = new BsonDocument("name", "orders") })).SingleAsync();
+            Assert.True(InventorySchemas.Contains(orderStorage["options"]["validator"].AsBsonDocument, new BsonDocument("$jsonSchema", new BsonDocument {
+                { "bsonType", "object" }, { "required", new BsonArray { "schemaVersion", "protected" } } })));
             await Assert.ThrowsAsync<MongoWriteException>(() =>
                 database.GetCollection<BsonDocument>("idempotencyRecords").InsertOneAsync(new BsonDocument
                 {

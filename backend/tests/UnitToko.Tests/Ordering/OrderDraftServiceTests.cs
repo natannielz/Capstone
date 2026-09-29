@@ -15,8 +15,7 @@ public sealed class OrderDraftServiceTests(MongoFixture fixture)
 {
     private static OrderDraftService Service(CatalogPriceTestData data) => new(data.Catalog.Database, new(data.Catalog.Client), new(data.Catalog.Database), data.Catalog.Clock);
     private static async Task<OrderDraftInput> Prepare(CatalogPriceTestData data) {
-        var lease = await new MigrationGate(data.Catalog.Database, data.Catalog.Clock, 21).AcquireAsync(21, default);
-        if (lease is not null) { await new OrderDraftMigration(data.Catalog.Database).ApplyAsync(lease, default); await lease.CompleteAsync(default); }
+        await new CollectionMigrations(data.Catalog.Database, data.Catalog.Clock).ApplyAsync();
         await data.Catalog.Base.AddGrantAsync(data.Catalog.Buyer, 6200, CatalogAuthoringTestData.Audience, [Permissions.OrderSubmit]);
         await data.Catalog.AssortmentsAsync();
         await data.Catalog.Service.SetPublicationsAsync(data.Maker, new(new(data.SkuId), 1, [new(501)], [new(new(501), 1)]), CatalogPriceTestData.Meta("draft-publish"));

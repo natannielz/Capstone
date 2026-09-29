@@ -155,11 +155,11 @@ public sealed class EvidenceAdmissionTests(MongoFixture fixture)
         await data.DB.RunCommandAsync<BsonDocument>(new BsonDocument { { "collMod", "auditEvents" },
             { "validator", new BsonDocument("kind", new BsonDocument("$ne", "evidence.reserve")) } });
         using var tx = await data.Client.StartSessionAsync(); tx.StartTransaction();
-        await data.Rows("orders").InsertOneAsync(tx, new BsonDocument { { "_id", 987L }, { "schemaVersion", 1 } });
+        await data.Rows("fixtureBusinessRecords").InsertOneAsync(tx, new BsonDocument { { "_id", 987L }, { "schemaVersion", 1 } });
         await Assert.ThrowsAnyAsync<Exception>(() => data.Service.ReserveAsync(tx, data.Actor, new(data.Target), EvidenceAdmissionTestData.Meta()));
         Assert.False(tx.IsInTransaction);
         await Assert.ThrowsAnyAsync<Exception>(() => tx.CommitTransactionAsync());
-        Assert.Equal(0, await data.Rows("orders").CountDocumentsAsync(new BsonDocument("_id", 987L)));
+        Assert.Equal(0, await data.Rows("fixtureBusinessRecords").CountDocumentsAsync(new BsonDocument("_id", 987L)));
         Assert.Equal(0, await data.Rows("evidenceUploadReservations").CountDocumentsAsync(new BsonDocument()));
         Assert.Equal(0, (await data.Rows("evidenceStorePolicies").Find(new BsonDocument()).SingleAsync())["chargedBytes"].AsInt64);
     }

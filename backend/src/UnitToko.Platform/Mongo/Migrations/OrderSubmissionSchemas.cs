@@ -5,8 +5,9 @@ using S = UnitToko.Platform.Mongo.Migrations.StockSourceSetupSchemas;
 
 namespace UnitToko.Platform.Mongo.Migrations;
 
-/// <summary>Closed draft contracts for the order owner. Not yet an applied migration or production activation.
-/// Connected isolated fixtures install these explicitly; a quiescent forward migration is required for release.</summary>
+/// <summary>Canonical order contracts installed by forward migration 22. Storage readiness does not
+/// activate commercial or stock-source admission; those require their actual approved owner workflows.</summary>
+// Version-22 schema contract: future format changes require a new versioned schema and migration.
 internal static class OrderSubmissionSchemas
 {
     internal static readonly string[] Collections = [OrderSubmissionBson.Orders, OrderSubmissionBson.Suborders, OrderSubmissionBson.Reservations, "orderDecisions"];

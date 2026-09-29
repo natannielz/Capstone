@@ -23,7 +23,7 @@ public sealed class AccountingAuthorizationTests(MongoFixture fixture)
         var calls = 0;
         var work = data.Access.Store.ExecuteAuthorizedAsync(data.Actor, "fixture.receipt", Permissions.OrderSubmit, new("revoked", "Synthetic request", "test"), new { Id = 42 }, async (session, token) =>
         {
-            var row = await data.DB.GetCollection<BsonDocument>("orders").Find(session, new BsonDocument("_id", 42L)).SingleAsync(token);
+            var row = await data.DB.GetCollection<BsonDocument>("fixtureBusinessRecords").Find(session, new BsonDocument("_id", 42L)).SingleAsync(token);
             if (Interlocked.Increment(ref calls) == 1)
             {
                 read.SetResult();
@@ -33,7 +33,7 @@ public sealed class AccountingAuthorizationTests(MongoFixture fixture)
             return new(AuthorizationBson.Resource(row));
         }, async (session, token) =>
         {
-            await data.DB.GetCollection<BsonDocument>("orders").UpdateOneAsync(session, new BsonDocument("_id", 42L), Builders<BsonDocument>.Update.Inc("effects", 1), cancellationToken: token);
+            await data.DB.GetCollection<BsonDocument>("fixtureBusinessRecords").UpdateOneAsync(session, new BsonDocument("_id", 42L), Builders<BsonDocument>.Update.Inc("effects", 1), cancellationToken: token);
             var posted = await data.Writer.PostAsync(session, data.Actor, AccountingData.Source, 1, AccountingData.Metadata, token);
             return new BsonDocument("id", posted.Id);
         });
@@ -89,9 +89,9 @@ public sealed class AccountingAuthorizationTests(MongoFixture fixture)
         var db = client.GetDatabase(data.DB.DatabaseNamespace.DatabaseName);
         var store = new AuthorizationStore(db, new(client), data.Access.Clock);
         var writer = new PostJournal(db, data.Access.Clock, [new FixtureSourceReader(db)]);
-        Task<BsonDocument> Command() => store.ExecuteAuthorizedAsync(data.Actor, "fixture.receipt", Permissions.OrderSubmit, new("uncertain", AccountingData.Metadata.Reason, AccountingData.Metadata.CorrelationId), new { Source = AccountingData.Source }, async (session, token) => new(AuthorizationBson.Resource(await db.GetCollection<BsonDocument>("orders").Find(session, new BsonDocument("_id", 42L)).SingleAsync(token))), async (session, token) =>
+        Task<BsonDocument> Command() => store.ExecuteAuthorizedAsync(data.Actor, "fixture.receipt", Permissions.OrderSubmit, new("uncertain", AccountingData.Metadata.Reason, AccountingData.Metadata.CorrelationId), new { Source = AccountingData.Source }, async (session, token) => new(AuthorizationBson.Resource(await db.GetCollection<BsonDocument>("fixtureBusinessRecords").Find(session, new BsonDocument("_id", 42L)).SingleAsync(token))), async (session, token) =>
         {
-            await db.GetCollection<BsonDocument>("orders").UpdateOneAsync(session, new BsonDocument("_id", 42L), Builders<BsonDocument>.Update.Inc("effects", 1), cancellationToken: token);
+            await db.GetCollection<BsonDocument>("fixtureBusinessRecords").UpdateOneAsync(session, new BsonDocument("_id", 42L), Builders<BsonDocument>.Update.Inc("effects", 1), cancellationToken: token);
             var result = await writer.PostAsync(session, data.Actor, AccountingData.Source, 1, AccountingData.Metadata, token);
             return new BsonDocument("journalId", result.Id);
         });

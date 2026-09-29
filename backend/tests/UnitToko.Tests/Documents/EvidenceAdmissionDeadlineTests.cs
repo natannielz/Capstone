@@ -89,11 +89,11 @@ public sealed class EvidenceAdmissionDeadlineTests(MongoFixture fixture)
         }
         var reservation = await data.RowAsync("evidenceUploadReservations", frozen.Reservation.ReservationId);
         using var tx = await data.Client.StartSessionAsync(); tx.StartTransaction();
-        await data.Rows("orders").InsertOneAsync(tx, new BsonDocument { { "_id", 932L }, { "schemaVersion", 1 } });
+        await data.Rows("fixtureBusinessRecords").InsertOneAsync(tx, new BsonDocument { { "_id", 932L }, { "schemaVersion", 1 } });
         await Assert.ThrowsAnyAsync<Exception>(() => data.Service.ClaimPublicationAsync(tx, data.Actor,
             frozen.Reservation.ReservationId, reservation["revision"].AsInt64, new string('e', 64), deadline, EvidenceAdmissionTestData.Meta()));
         Assert.False(tx.IsInTransaction);
-        Assert.Equal(0, await data.Rows("orders").CountDocumentsAsync(new BsonDocument("_id", 932L)));
+        Assert.Equal(0, await data.Rows("fixtureBusinessRecords").CountDocumentsAsync(new BsonDocument("_id", 932L)));
         Assert.True((await data.RowAsync("evidenceUploadAttempts", frozen.Reservation.AttemptId))["claimKind"].IsBsonNull);
     }
 }

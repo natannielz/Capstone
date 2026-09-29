@@ -300,7 +300,7 @@ public sealed class StockSourceSetupTests(MongoFixture fixture)
             async (tx, token) =>
             {
                 writes++;
-                await Rows(data, "orders").InsertOneAsync(tx, new BsonDocument { { "_id", 4000L }, { "schemaVersion", 1 } }, cancellationToken: token);
+                await Rows(data, "fixtureBusinessRecords").InsertOneAsync(tx, new BsonDocument { { "_id", 4000L }, { "schemaVersion", 1 } }, cancellationToken: token);
                 return new BsonDocument("ok", true);
             }, default, (_, _, _) =>
             {
@@ -309,12 +309,12 @@ public sealed class StockSourceSetupTests(MongoFixture fixture)
                 return Task.CompletedTask;
             });
         await Assert.ThrowsAsync<AuthorizationDeniedException>(Execute);
-        Assert.Equal(0, await Count(data, "orders")); Assert.Equal(0, await Count(data, "idempotencyRecords"));
+        Assert.Equal(0, await Count(data, "fixtureBusinessRecords")); Assert.Equal(0, await Count(data, "idempotencyRecords"));
         shouldFail = false; var result = await Execute();
         shouldFail = true; await Assert.ThrowsAsync<AuthorizationDeniedException>(Execute);
         shouldFail = false; Assert.Equal(result, await Execute());
         Assert.Equal(2, writes); Assert.Equal(4, checks);
-        Assert.Equal(1, await Count(data, "orders")); Assert.Equal(1, await Count(data, "idempotencyRecords"));
+        Assert.Equal(1, await Count(data, "fixtureBusinessRecords")); Assert.Equal(1, await Count(data, "idempotencyRecords"));
     }
     [Fact]
     public async Task Receipt_disappearing_after_recovery_lookup_never_resubmits_the_command()

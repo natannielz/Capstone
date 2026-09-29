@@ -22,7 +22,7 @@ public sealed class AbortCleanupTests(MongoFixture fixture)
         var admin = fixture.Client.GetDatabase("admin");
         try
         {
-            await database.GetCollection<BsonDocument>("orders").InsertOneAsync(new BsonDocument("_id", "setup"));
+            await database.GetCollection<BsonDocument>("fixtureBusinessRecords").InsertOneAsync(new BsonDocument("_id", "setup"));
             var enabled = await admin.RunCommandAsync<BsonDocument>(new BsonDocument
             {
                 { "configureFailPoint", "failCommand" }, { "mode", new BsonDocument("times", 1) },
@@ -37,7 +37,7 @@ public sealed class AbortCleanupTests(MongoFixture fixture)
             var failure = await Assert.ThrowsAsync<DomainValidationException>(() =>
                 new MongoUnitOfWork(client).ExecuteAsync<int>(async (session, token) =>
                 {
-                    await database.GetCollection<BsonDocument>("orders").InsertOneAsync(session,
+                    await database.GetCollection<BsonDocument>("fixtureBusinessRecords").InsertOneAsync(session,
                         new BsonDocument("_id", "partial"), cancellationToken: token);
                     throw new DomainValidationException("injected", "Known business rejection");
                 }));
@@ -53,7 +53,7 @@ public sealed class AbortCleanupTests(MongoFixture fixture)
                 $"Abort failpoint did not exercise the cleanup timeout: {clock.Elapsed}");
             Assert.True(clock.Elapsed < TimeSpan.FromSeconds(9),
                 $"Abort cleanup took {clock.Elapsed}; the original failure was masked or delayed");
-            var independent = fixture.Client.GetDatabase(name).GetCollection<BsonDocument>("orders");
+            var independent = fixture.Client.GetDatabase(name).GetCollection<BsonDocument>("fixtureBusinessRecords");
             Assert.Null(await independent.Find(new BsonDocument("_id", "partial")).FirstOrDefaultAsync());
             Assert.Equal(1, await independent.CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty));
         }

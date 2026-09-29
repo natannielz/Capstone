@@ -49,13 +49,13 @@ public sealed class InventoryLedgerTests(MongoFixture fixture)
     }
     private static FixtureReader Reader(StoreTestData data) => new(data.Database);
     private static InventoryLedger Ledger(StoreTestData data, params IInventorySourceReader[] readers) => new(data.Database, data.Clock, readers);
-    private static Task Earlier(StoreTestData data, IClientSessionHandle tx) => data.Database.GetCollection<BsonDocument>("orders").InsertOneAsync(tx,
+    private static Task Earlier(StoreTestData data, IClientSessionHandle tx) => data.Database.GetCollection<BsonDocument>("fixtureBusinessRecords").InsertOneAsync(tx,
         new BsonDocument { { "_id", 99000L }, { "schemaVersion", 1 } });
     private static async Task AssertUnchanged(StoreTestData data)
     {
         Assert.Equal(10, (await data.Database.GetCollection<BsonDocument>("stockBalances").Find(new BsonDocument()).SingleAsync())["onHand"].AsInt64);
         Assert.Equal(0, await data.Database.GetCollection<BsonDocument>("movements").CountDocumentsAsync(new BsonDocument()));
-        Assert.Equal(0, await data.Database.GetCollection<BsonDocument>("orders").CountDocumentsAsync(new BsonDocument()));
+        Assert.Equal(0, await data.Database.GetCollection<BsonDocument>("fixtureBusinessRecords").CountDocumentsAsync(new BsonDocument()));
         Assert.Equal(0, (await data.Database.GetCollection<BsonDocument>("inventoryPools").Find(new BsonDocument()).SingleAsync())["fence"].AsInt64);
         Assert.Equal(0, (await data.Database.GetCollection<BsonDocument>("inventoryTestSources").Find(new BsonDocument()).SingleAsync())["fence"].AsInt64);
     }
@@ -95,7 +95,7 @@ public sealed class InventoryLedgerTests(MongoFixture fixture)
         using var tx = await fixture.Client.StartSessionAsync(); tx.StartTransaction(); await Earlier(data, tx);
         var error = await Assert.ThrowsAsync<PersistenceConflictException>(() => ledger.ApplyAsync(tx, Actor, Source, 1, Metadata));
         Assert.Equal("inventory_source_already_applied", error.Code); Assert.False(tx.IsInTransaction);
-        Assert.Equal(0, await data.Database.GetCollection<BsonDocument>("orders").CountDocumentsAsync(new BsonDocument()));
+        Assert.Equal(0, await data.Database.GetCollection<BsonDocument>("fixtureBusinessRecords").CountDocumentsAsync(new BsonDocument()));
         Assert.Equal(13, (await data.Database.GetCollection<BsonDocument>("stockBalances").Find(new BsonDocument()).SingleAsync())["onHand"].AsInt64);
         Assert.Equal(1, await data.Database.GetCollection<BsonDocument>("movements").CountDocumentsAsync(new BsonDocument()));
     }
@@ -246,7 +246,7 @@ public sealed class InventoryLedgerTests(MongoFixture fixture)
             await Assert.ThrowsAsync<PersistenceConflictException>(() => ledger.ApplyAsync(tx, Actor, Source, 1, Metadata));
             Assert.False(tx.IsInTransaction);
             Assert.Equal(0, await data.Database.GetCollection<BsonDocument>("movements").CountDocumentsAsync(new BsonDocument()));
-            Assert.Equal(0, await data.Database.GetCollection<BsonDocument>("orders").CountDocumentsAsync(new BsonDocument()));
+            Assert.Equal(0, await data.Database.GetCollection<BsonDocument>("fixtureBusinessRecords").CountDocumentsAsync(new BsonDocument()));
             Assert.Equal(0, (await data.Database.GetCollection<BsonDocument>("inventoryTestSources").Find(new BsonDocument()).SingleAsync())["fence"].AsInt64);
         }
         else { Assert.Equal(2, (await ledger.ApplyAsync(tx, Actor, Source, 1, Metadata)).Balances.Length); await tx.CommitTransactionAsync(); }

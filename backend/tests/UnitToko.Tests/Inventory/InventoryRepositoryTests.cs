@@ -41,8 +41,8 @@ public sealed class InventoryRepositoryTests(MongoFixture fixture)
         return true;
     }, default);
     private static Task EarlierWrite(StoreTestData data, IClientSessionHandle tx) =>
-        data.Database.GetCollection<BsonDocument>("orders").InsertOneAsync(tx, new BsonDocument { { "_id", 99000L }, { "schemaVersion", 1 }, { "version", 1L } });
-    private static Task<long> EarlierCount(StoreTestData data) => data.Database.GetCollection<BsonDocument>("orders").CountDocumentsAsync(new BsonDocument("_id", 99000L));
+        data.Database.GetCollection<BsonDocument>("fixtureBusinessRecords").InsertOneAsync(tx, new BsonDocument { { "_id", 99000L }, { "schemaVersion", 1 }, { "version", 1L } });
+    private static Task<long> EarlierCount(StoreTestData data) => data.Database.GetCollection<BsonDocument>("fixtureBusinessRecords").CountDocumentsAsync(new BsonDocument("_id", 99000L));
     private Task<InventoryBalanceDocument> Read(InventoryRepository repository, long id) => Unit.ExecuteAsync((tx, ct) => repository.ReadAsync(tx, id, ct), default);
 
     [Fact]

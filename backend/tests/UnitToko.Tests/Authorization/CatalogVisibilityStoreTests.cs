@@ -51,7 +51,7 @@ public sealed class CatalogVisibilityStoreTests(MongoFixture fixture)
             Assert.DoesNotContain("secret", serialized, StringComparison.OrdinalIgnoreCase);
             Assert.Equal(new[] { "DisplayName", "Id", "PublicId" }, typeof(CatalogMetadata).GetProperties().Select(property => property.Name).Order());
         }
-        var orders = data.Base.Database.GetCollection<BsonDocument>("orders");
+        var orders = data.Base.Database.GetCollection<BsonDocument>("fixtureBusinessRecords");
         Assert.NotNull(await data.Base.Store.ReadAsync(data.BuyerA, Permissions.OrderRead, orders, 70001));
         Assert.Null(await data.Base.Store.ReadAsync(data.BuyerB, Permissions.OrderRead, orders, 70001));
         await data.AddSkuAsync(10, [new(502, CatalogStoreTestData.ShopOwner)], "Hidden extra coffee");

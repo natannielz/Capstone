@@ -39,12 +39,10 @@ internal sealed class OrderSubmissionTestData(CatalogPriceTestData prices) : IAs
             var item = Assert.Single((await catalog.BuyerService.QueryAsync(catalog.Buyer, 0, 25, null)).Items);
             data.Input = new(new(new(10), new(11)), [new(item.Sku.Id, item.Definition.Id, item.Definition.Version, item.CurrentPrice!.Id, item.CurrentPrice.Version, 2)],
                 new("Penerima fixture", "081234567890", "Alamat cabang sintetis 1", "Jakarta", "12810", null), "PO fixture");
-            // Install only the draft writer contracts in this isolated database. This is not migration acceptance.
-            var existing = await (await data.Database.ListCollectionNamesAsync()).ToListAsync();
+            // Exercise the real registered order migration. Only external policy/source inputs below
+            // remain synthetic; the fixture never installs or weakens order validators itself.
             foreach (var name in OrderSubmissionSchemas.Collections) {
-                await data.Database.RunCommandAsync<BsonDocument>(new BsonDocument { { existing.Contains(name) ? "collMod" : "create", name },
-                    { "validator", OrderSubmissionSchemas.Validator(name) }, { "validationLevel", "strict" }, { "validationAction", "error" } });
-                if (!OrderSubmissionSchemas.Key(name).Equals(new BsonDocument("_id", 1))) await data.Rows(name).Indexes.CreateOneAsync(new CreateIndexModel<BsonDocument>(OrderSubmissionSchemas.Key(name), new CreateIndexOptions { Unique = true, Name = "ux_order_" + name }));
+                await InventoryRepository.RequireStorageAsync(data.Database, name, OrderSubmissionSchemas.Validator(name), OrderSubmissionSchemas.Key(name), default);
             }
             await InventoryGraphTests.InstallBalances(catalog.Base);
             await data.Database.RunCommandAsync<BsonDocument>(new BsonDocument { { "collMod", "movements" }, { "validator", InventoryMovementSchemas.Validator() }, { "validationLevel", "strict" }, { "validationAction", "error" } });

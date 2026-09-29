@@ -25,7 +25,7 @@ public sealed class CommitFaultTests(MongoFixture fixture)
             var result = await store.ExecuteAsync(scope, async (session, token) =>
             {
                 calls++;
-                await database.GetCollection<BsonDocument>("orders").InsertOneAsync(session,
+                await database.GetCollection<BsonDocument>("fixtureBusinessRecords").InsertOneAsync(session,
                     new BsonDocument { { "_id", 101L }, { "schemaVersion", 1 } }, cancellationToken: token);
                 await outbox.EnqueueAsync(session, "order:101", "order.created", new BsonDocument("id", 101L), token);
                 return new BsonDocument("id", "101");
@@ -50,7 +50,7 @@ public sealed class CommitFaultTests(MongoFixture fixture)
             async Task<BsonDocument> Work(IClientSessionHandle session, CancellationToken token)
             {
                 calls++;
-                await database.GetCollection<BsonDocument>("orders").InsertOneAsync(session,
+                await database.GetCollection<BsonDocument>("fixtureBusinessRecords").InsertOneAsync(session,
                     new BsonDocument { { "_id", 101L }, { "schemaVersion", 1 } }, cancellationToken: token);
                 await outbox.EnqueueAsync(session, "order:101", "order.created", new BsonDocument("id", 101L), token);
                 return new BsonDocument("id", "101");
@@ -85,7 +85,7 @@ public sealed class CommitFaultTests(MongoFixture fixture)
             async Task<BsonDocument> Work(IClientSessionHandle session, CancellationToken token)
             {
                 calls++;
-                await database.GetCollection<BsonDocument>("orders").InsertOneAsync(session,
+                await database.GetCollection<BsonDocument>("fixtureBusinessRecords").InsertOneAsync(session,
                     new BsonDocument { { "_id", 101L }, { "schemaVersion", 1 } }, cancellationToken: token);
                 await outbox.EnqueueAsync(session, "order:101", "order.created", new BsonDocument("id", 101L), token);
                 return new BsonDocument("id", "101");
@@ -109,7 +109,7 @@ public sealed class CommitFaultTests(MongoFixture fixture)
         await WithFaultDatabase(async (client, database, appName, _) =>
         {
             var calls = 0;
-            var orders = database.GetCollection<BsonDocument>("orders");
+            var orders = database.GetCollection<BsonDocument>("fixtureBusinessRecords");
             var outbox = new OutboxStore(database, new SystemClock());
             await fixture.Client.GetDatabase("admin").RunCommandAsync<BsonDocument>(new BsonDocument
             {
@@ -188,7 +188,7 @@ public sealed class CommitFaultTests(MongoFixture fixture)
 
     private static async Task AssertSingleEffect(IMongoDatabase database)
     {
-        foreach (var name in new[] { "orders", "idempotencyRecords", "outboxEvents" })
+        foreach (var name in new[] { "fixtureBusinessRecords", "idempotencyRecords", "outboxEvents" })
             Assert.Equal(1, await database.GetCollection<BsonDocument>(name)
                 .CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty));
     }

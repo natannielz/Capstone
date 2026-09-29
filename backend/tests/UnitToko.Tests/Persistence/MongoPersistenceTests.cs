@@ -20,7 +20,7 @@ public sealed class MongoPersistenceTests(MongoFixture fixture)
     public async Task Transaction_failure_rolls_back_business_and_outbox()
     {
         await new CollectionMigrations(database, clock).ApplyAsync();
-        var business = database.GetCollection<BsonDocument>("orders");
+        var business = database.GetCollection<BsonDocument>("fixtureBusinessRecords");
         var outbox = new OutboxStore(database, clock);
         var id = Guid.NewGuid().ToString("N");
         await Assert.ThrowsAsync<InvalidOperationException>(() => unitOfWork.ExecuteAsync<int>(async (session, token) =>
@@ -38,7 +38,7 @@ public sealed class MongoPersistenceTests(MongoFixture fixture)
     {
         await new CollectionMigrations(database, clock).ApplyAsync();
         var store = new IdempotencyStore(database, unitOfWork, clock);
-        var orders = database.GetCollection<BsonDocument>("orders");
+        var orders = database.GetCollection<BsonDocument>("fixtureBusinessRecords");
         var key = Guid.NewGuid().ToString("N");
         var hash = new string('a', 64);
         var actor = new ActorContext(9_007_199_254_740_993L, "issuer", "subject", 1,
@@ -71,7 +71,7 @@ public sealed class MongoPersistenceTests(MongoFixture fixture)
     {
         await new CollectionMigrations(database, clock).ApplyAsync();
         var store = new IdempotencyStore(database, unitOfWork, clock);
-        var orders = database.GetCollection<BsonDocument>("orders");
+        var orders = database.GetCollection<BsonDocument>("fixtureBusinessRecords");
         var key = Guid.NewGuid().ToString("N");
         var scope = new IdempotencyScope("123", "order.submit", key, new string('c', 64));
         async Task<BsonDocument> Work(IClientSessionHandle session, CancellationToken token)
@@ -89,7 +89,7 @@ public sealed class MongoPersistenceTests(MongoFixture fixture)
     public async Task Version_mismatch_is_409_style_and_fresh_version_succeeds()
     {
         await new CollectionMigrations(database, clock).ApplyAsync();
-        var orders = database.GetCollection<BsonDocument>("orders");
+        var orders = database.GetCollection<BsonDocument>("fixtureBusinessRecords");
         var key = Guid.NewGuid().ToString("N");
         await orders.InsertOneAsync(new BsonDocument { { "_id", key }, { "schemaVersion", 1 }, { "version", 1L } });
         async Task<int> Change(long expected) => await unitOfWork.ExecuteAsync(async (session, token) =>
@@ -214,7 +214,7 @@ public sealed class MongoConflictTests(MongoFixture fixture)
     public async Task Four_conflicts_rollback_every_partial_write_and_fresh_retry_succeeds()
     {
         await new CollectionMigrations(database, clock).ApplyAsync();
-        var orders = database.GetCollection<BsonDocument>("orders");
+        var orders = database.GetCollection<BsonDocument>("fixtureBusinessRecords");
         var audit = database.GetCollection<BsonDocument>("auditEvents");
         var existing = Guid.NewGuid().ToString("N");
         var partial = Guid.NewGuid().ToString("N");
@@ -260,7 +260,7 @@ public sealed class MongoConflictTests(MongoFixture fixture)
     public async Task Concurrent_different_writes_with_same_expected_version_have_one_winner()
     {
         await new CollectionMigrations(database, clock).ApplyAsync();
-        var orders = database.GetCollection<BsonDocument>("orders");
+        var orders = database.GetCollection<BsonDocument>("fixtureBusinessRecords");
         var id = Guid.NewGuid().ToString("N");
         await orders.InsertOneAsync(new BsonDocument { { "_id", id }, { "schemaVersion", 1 }, { "version", 1L }, { "quantity", 10 } });
         async Task<bool> Reserve(int quantity)

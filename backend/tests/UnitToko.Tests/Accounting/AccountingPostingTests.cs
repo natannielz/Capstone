@@ -41,10 +41,10 @@ public sealed class AccountingPostingTests(MongoFixture fixture)
         await using var data = await AccountingData.CreateAsync(fixture);
         await data.CommandAsync("original");
         if (changed)
-            await data.DB.GetCollection<BsonDocument>("orders").UpdateOneAsync(new BsonDocument("_id", 42L), Builders<BsonDocument>.Update.Set("amount", new BsonDecimal128(200m)));
+            await data.DB.GetCollection<BsonDocument>("fixtureBusinessRecords").UpdateOneAsync(new BsonDocument("_id", 42L), Builders<BsonDocument>.Update.Set("amount", new BsonDecimal128(200m)));
         using var session = await fixture.Client.StartSessionAsync();
         session.StartTransaction();
-        await data.DB.GetCollection<BsonDocument>("orders").UpdateOneAsync(session, new BsonDocument("_id", 42L), Builders<BsonDocument>.Update.Set("caughtEffect", true));
+        await data.DB.GetCollection<BsonDocument>("fixtureBusinessRecords").UpdateOneAsync(session, new BsonDocument("_id", 42L), Builders<BsonDocument>.Update.Set("caughtEffect", true));
         var error = await Assert.ThrowsAsync<PersistenceConflictException>(() => data.Writer.PostAsync(session, data.Actor, AccountingData.Source, 1, AccountingData.Metadata));
         Assert.Equal(changed ? "journal_source_conflict" : "journal_source_duplicate", error.Code);
         Assert.False(session.IsInTransaction);
@@ -74,7 +74,7 @@ public sealed class AccountingPostingTests(MongoFixture fixture)
         if (failure == "period")
             await data.DB.GetCollection<BsonDocument>("periods").DeleteOneAsync(new BsonDocument("_id", 1L));
         if (failure == "account")
-            await data.DB.GetCollection<BsonDocument>("orders").UpdateOneAsync(new BsonDocument("_id", 42L), Builders<BsonDocument>.Update.Set("mapping", "unknown"));
+            await data.DB.GetCollection<BsonDocument>("fixtureBusinessRecords").UpdateOneAsync(new BsonDocument("_id", 42L), Builders<BsonDocument>.Update.Set("mapping", "unknown"));
         await Assert.ThrowsAsync<DomainValidationException>(() => data.CommandAsync("failure"));
         Assert.False((await data.Order()).Contains("effects"));
         Assert.Equal(0, await data.Count("journalEntries"));
@@ -119,7 +119,7 @@ public sealed class AccountingPostingTests(MongoFixture fixture)
         chart["mappings"][0]["accountId"] = 601L;
         await data.DB.GetCollection<BsonDocument>("accountingChartVersions").InsertOneAsync(chart);
         await data.DB.GetCollection<BsonDocument>("accountingBooks").UpdateOneAsync(new BsonDocument("_id", 1L), Builders<BsonDocument>.Update.Set("chartVersionId", 21L).Inc("version", 1L).Inc("fence", 1L));
-        await data.DB.GetCollection<BsonDocument>("orders").UpdateOneAsync(new BsonDocument("_id", 42L), Builders<BsonDocument>.Update.Set("originalJournalId", result["journalId"]).Set("date", "2026-10-01"));
+        await data.DB.GetCollection<BsonDocument>("fixtureBusinessRecords").UpdateOneAsync(new BsonDocument("_id", 42L), Builders<BsonDocument>.Update.Set("originalJournalId", result["journalId"]).Set("date", "2026-10-01"));
         var reversal = await data.Uow.ExecuteAsync((session, token) => data.Writer.ReverseAsync(session, data.Actor, new("fixture", 42, "reversal", 1), 1, AccountingData.Metadata, token));
         var saved = await data.DB.GetCollection<BsonDocument>("journalEntries").Find(new BsonDocument("_id", reversal.Id)).SingleAsync();
         Assert.Equal(501L, saved["lines"][0]["accountId"].AsInt64);
@@ -157,20 +157,20 @@ internal sealed class AccountingData : IAsyncDisposable
         var data = new AccountingData(await StoreTestData.CreateAsync(fixture), fixture);
         data.Actor = await data.Access.AddActorAsync(1000, new(GrantScopeKind.BuyingOrganization, 10), Permissions.OrderSubmit, Permissions.OrganizationWide);
         await data.Access.AddResourceAsync(42, 10, 11, data.Actor.UserId);
-        await data.DB.GetCollection<BsonDocument>("orders").UpdateOneAsync(new BsonDocument("_id", 42L), Builders<BsonDocument>.Update.Set("amount", new BsonDecimal128(100m)).Set("date", "2026-09-28").Set("mapping", "inventory"));
+        await data.DB.GetCollection<BsonDocument>("fixtureBusinessRecords").UpdateOneAsync(new BsonDocument("_id", 42L), Builders<BsonDocument>.Update.Set("amount", new BsonDecimal128(100m)).Set("date", "2026-09-28").Set("mapping", "inventory"));
         await AccountingTestDocuments.ConfigureAsync(data.DB);
         return data;
     }
 
-    internal Task<BsonDocument> CommandAsync(string key, ActorContext? actor = null) => Access.Store.ExecuteAuthorizedAsync(actor ?? Actor, "fixture.receipt", Permissions.OrderSubmit, new(key, Metadata.Reason, Metadata.CorrelationId), new { Source }, async (session, token) => new(AuthorizationBson.Resource(await DB.GetCollection<BsonDocument>("orders").Find(session, new BsonDocument("_id", 42L)).SingleAsync(token))), async (session, token) =>
+    internal Task<BsonDocument> CommandAsync(string key, ActorContext? actor = null) => Access.Store.ExecuteAuthorizedAsync(actor ?? Actor, "fixture.receipt", Permissions.OrderSubmit, new(key, Metadata.Reason, Metadata.CorrelationId), new { Source }, async (session, token) => new(AuthorizationBson.Resource(await DB.GetCollection<BsonDocument>("fixtureBusinessRecords").Find(session, new BsonDocument("_id", 42L)).SingleAsync(token))), async (session, token) =>
     {
-        await DB.GetCollection<BsonDocument>("orders").UpdateOneAsync(session, new BsonDocument("_id", 42L), Builders<BsonDocument>.Update.Inc("effects", 1), cancellationToken: token);
+        await DB.GetCollection<BsonDocument>("fixtureBusinessRecords").UpdateOneAsync(session, new BsonDocument("_id", 42L), Builders<BsonDocument>.Update.Inc("effects", 1), cancellationToken: token);
         var receipt = await Writer.PostAsync(session, actor ?? Actor, Source, 1, Metadata, token);
         await Access.Store.FenceAsync(actor ?? Actor, [], session, token);
         return new BsonDocument("journalId", receipt.Id);
     });
     internal Task<long> Count(string name) => DB.GetCollection<BsonDocument>(name).CountDocumentsAsync(new BsonDocument());
-    internal Task<BsonDocument> Order() => DB.GetCollection<BsonDocument>("orders").Find(new BsonDocument("_id", 42L)).SingleAsync();
+    internal Task<BsonDocument> Order() => DB.GetCollection<BsonDocument>("fixtureBusinessRecords").Find(new BsonDocument("_id", 42L)).SingleAsync();
     public ValueTask DisposeAsync() => Access.DisposeAsync();
 }
 
@@ -182,7 +182,7 @@ internal sealed class FixtureSourceReader(IMongoDatabase database) : IAccounting
 
     private async Task<BsonDocument> LoadAsync(IClientSessionHandle session, JournalSource source, long expected, CancellationToken token)
     {
-        var rows = database.GetCollection<BsonDocument>("orders");
+        var rows = database.GetCollection<BsonDocument>("fixtureBusinessRecords");
         var row = await rows.Find(session, new BsonDocument("_id", source.DocumentId)).SingleAsync(token);
         if (BeforeFence is not null)
             await BeforeFence();

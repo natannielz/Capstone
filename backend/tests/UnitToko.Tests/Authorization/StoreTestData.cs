@@ -32,10 +32,12 @@ internal sealed class StoreTestData : IAsyncDisposable
     internal static Task<StoreTestData> CreateForStockSourceSuspensionMigrationAsync(MongoFixture fixture) => CreateAsync(fixture, false, false, false, false, true);
     internal static Task<StoreTestData> CreateForStockSourcePolicyMigrationAsync(MongoFixture fixture) => CreateAsync(fixture, false, sourcePolicyMigration: true);
     internal static Task<StoreTestData> CreateForCatalogPriceMigrationAsync(MongoFixture fixture) => CreateAsync(fixture, false, catalogPriceMigration: true);
-    private static async Task<StoreTestData> CreateAsync(MongoFixture fixture, bool legacyCatalog, bool sourceSetupMigration = false, bool sourceRevisionMigration = false, bool sourceAliasMigration = false, bool sourceSuspensionMigration = false, bool sourcePolicyMigration = false, bool catalogPriceMigration = false)
+    internal static Task<StoreTestData> CreateForLegacyOrderReadsAsync(MongoFixture fixture) => CreateAsync(fixture, false, legacyOrderReads: true);
+    private static async Task<StoreTestData> CreateAsync(MongoFixture fixture, bool legacyCatalog, bool sourceSetupMigration = false, bool sourceRevisionMigration = false, bool sourceAliasMigration = false, bool sourceSuspensionMigration = false, bool sourcePolicyMigration = false, bool catalogPriceMigration = false, bool legacyOrderReads = false)
     {
         var data = new StoreTestData(fixture);
-        if (catalogPriceMigration) await LegacyCatalogPriceTestSchema.ApplyV19Async(data.Database, data.Clock);
+        if (legacyOrderReads) await LegacyOrderSubmissionTestSchema.ApplyV21Async(data.Database, data.Clock);
+        else if (catalogPriceMigration) await LegacyCatalogPriceTestSchema.ApplyV19Async(data.Database, data.Clock);
         else if (sourcePolicyMigration) await LegacyStockSourcePolicyTestSchema.ApplyV18Async(data.Database, data.Clock);
         else if (sourceSuspensionMigration) await LegacyStockSourceSuspensionTestSchema.ApplyV17Async(data.Database, data.Clock);
         else if (sourceAliasMigration) await LegacyStockSourceAliasTestSchema.ApplyV16Async(data.Database, data.Clock);
@@ -79,7 +81,7 @@ internal sealed class StoreTestData : IAsyncDisposable
         await Database.GetCollection<BsonDocument>("authorizationGrants").InsertOneAsync(AuthorizationBson.Grant(grant));
     }
     public Task AddResourceAsync(long id, long? organizationId, long? branchId, long createdBy, long[]? assigned = null) =>
-        Database.GetCollection<BsonDocument>("orders").InsertOneAsync(new BsonDocument
+        Database.GetCollection<BsonDocument>("fixtureBusinessRecords").InsertOneAsync(new BsonDocument
         {
             { "_id", id }, { "schemaVersion", 1 }, { "version", 1L },
             { "buyingOrganizationId", organizationId.HasValue ? new BsonInt64(organizationId.Value) : BsonNull.Value },

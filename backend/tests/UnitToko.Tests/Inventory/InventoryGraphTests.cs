@@ -76,10 +76,10 @@ public sealed class InventoryGraphTests(MongoFixture fixture)
         if (fault != "missing-pool") await data.Database.GetCollection<BsonDocument>("inventoryPools").ReplaceOneAsync(new BsonDocument("_id", 400L), pool, new ReplaceOptions { BypassDocumentValidation = true }); // Deliberately corrupt a guarded local fixture.
         if (fault != "missing-lot") await data.Database.GetCollection<BsonDocument>("lots").ReplaceOneAsync(new BsonDocument("_id", 202L), lot);
         using var tx = await fixture.Client.StartSessionAsync(); tx.StartTransaction();
-        await data.Database.GetCollection<BsonDocument>("orders").InsertOneAsync(tx, new BsonDocument { { "_id", 99000L }, { "schemaVersion", 1 } });
+        await data.Database.GetCollection<BsonDocument>("fixtureBusinessRecords").InsertOneAsync(tx, new BsonDocument { { "_id", 99000L }, { "schemaVersion", 1 } });
         var error = await Assert.ThrowsAsync<DomainValidationException>(() => new InventoryRepository(data.Database).ApplyAsync(tx, [Receive()], default));
         Assert.Equal("inventory_graph_unavailable", error.Code); Assert.False(tx.IsInTransaction);
-        Assert.Equal(0, await data.Database.GetCollection<BsonDocument>("orders").CountDocumentsAsync(new BsonDocument()));
+        Assert.Equal(0, await data.Database.GetCollection<BsonDocument>("fixtureBusinessRecords").CountDocumentsAsync(new BsonDocument()));
         Assert.Equal(InventoryBson.Balance(Balance()), await data.Database.GetCollection<BsonDocument>("stockBalances").Find(new BsonDocument("_id", 1000L)).SingleAsync());
     }
     [Theory]
@@ -237,11 +237,11 @@ public sealed class InventoryGraphTests(MongoFixture fixture)
     {
         await using var data = await Data();
         using var tx = await fixture.Client.StartSessionAsync(); tx.StartTransaction();
-        await data.Database.GetCollection<BsonDocument>("orders").InsertOneAsync(tx, new BsonDocument { { "_id", 99000L }, { "schemaVersion", 1 } });
+        await data.Database.GetCollection<BsonDocument>("fixtureBusinessRecords").InsertOneAsync(tx, new BsonDocument { { "_id", 99000L }, { "schemaVersion", 1 } });
         await Assert.ThrowsAsync<DomainValidationException>(() => new InventoryRepository(data.Database).ApplyAsync(tx,
             [Receive() with { Action = InventoryBalanceAction.Reserve, Packages = 11 }], default));
         Assert.False(tx.IsInTransaction);
-        Assert.Equal(0, await data.Database.GetCollection<BsonDocument>("orders").CountDocumentsAsync(new BsonDocument()));
+        Assert.Equal(0, await data.Database.GetCollection<BsonDocument>("fixtureBusinessRecords").CountDocumentsAsync(new BsonDocument()));
         Assert.Equal(0, (await data.Database.GetCollection<BsonDocument>("inventoryPools").Find(new BsonDocument()).SingleAsync())["fence"].AsInt64);
         Assert.Equal(InventoryBson.Balance(Balance()), await data.Database.GetCollection<BsonDocument>("stockBalances").Find(new BsonDocument()).SingleAsync());
     }

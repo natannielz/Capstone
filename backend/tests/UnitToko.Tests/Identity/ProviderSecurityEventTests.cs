@@ -136,7 +136,7 @@ public sealed class ProviderSecurityEventTests(MongoFixture fixture)
         await data.Store.AddResourceAsync(1, 10, 11, data.Actor.UserId);
         var ready = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var resume = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var orders = data.Rows("orders");
+        var orders = data.Rows("fixtureBusinessRecords");
         var writes = 0;
         var pending = data.Store.Store.ExecuteAuthorizedAsync(data.Actor with { Session = issued.Session.Reference },
             "order.submit", Permissions.OrderSubmit, new("event-race", "Reviewed order", "provider-event-test"), new { id = 1 },

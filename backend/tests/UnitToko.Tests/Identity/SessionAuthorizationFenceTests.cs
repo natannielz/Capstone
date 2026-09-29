@@ -35,7 +35,7 @@ public sealed class SessionAuthorizationFenceTests(MongoFixture fixture)
             new(actor.UserId, 1, actor.GrantVersion, actor.ProviderIssuer, actor.ProviderSubject), proof, "encrypted-fixture", ct));
         var signedIn = actor with { Session = issued.Session.Reference };
         await data.AddResourceAsync(1, 10, 11, actor.UserId);
-        var orders = data.Database.GetCollection<BsonDocument>("orders");
+        var orders = data.Database.GetCollection<BsonDocument>("fixtureBusinessRecords");
         var read = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var resume = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var writes = 0;

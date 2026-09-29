@@ -16,7 +16,16 @@ namespace UnitToko.Tests.Documents;
 internal sealed class EvidenceAdmissionTestData : IAsyncDisposable
 {
     private readonly string marker = Guid.NewGuid().ToString("N");
-    private readonly string parent = Path.GetFullPath(Environment.CurrentDirectory);
+    // Keep source/builds in the authoritative checkout. Hosts whose checkout ancestors are not
+    // private may place only synthetic evidence bytes under an explicitly protected test parent.
+    // OpenLocal still validates the actual leaf and every ancestor; no ACL bypass is available.
+    private readonly string parent = EvidenceTestParent();
+    private static string EvidenceTestParent() {
+        var configured = Environment.GetEnvironmentVariable("UNITTOKO_EVIDENCE_TEST_PARENT");
+        if (configured is null) return Path.GetFullPath(Environment.CurrentDirectory);
+        if (!Path.IsPathFullyQualified(configured) || !Directory.Exists(configured)) throw new InvalidOperationException("Evidence test parent must be an existing absolute directory");
+        return Path.GetFullPath(configured);
+    }
     internal string Root { get; }
     internal string StoreId { get; } = new('a', 64);
     internal CatalogAuthoringTestData Catalog { get; private set; } = null!;

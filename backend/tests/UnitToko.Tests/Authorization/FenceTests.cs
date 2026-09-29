@@ -22,7 +22,7 @@ public sealed class FenceTests(MongoFixture fixture)
         var grantNodes = Assert.Single(query.Clauses).RequiredNodes;
         Assert.Equal(ScopeNodeKind.BuyingOrganization, Assert.Single(grantNodes).Kind);
 
-        var records = data.Database.GetCollection<BsonDocument>("orders");
+        var records = data.Database.GetCollection<BsonDocument>("fixtureBusinessRecords");
         var read = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var resume = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var reads = 0;
@@ -71,7 +71,7 @@ public sealed class FenceTests(MongoFixture fixture)
         var actor = await data.AddActorAsync(1000, new(GrantScopeKind.BuyerOwned, 10, 11), Permissions.OrderSubmit);
         var administrator = await data.AddActorAsync(1001, suspendBranch ? new(GrantScopeKind.System) : new(GrantScopeKind.BuyingBranch, 10, 11), Permissions.AccessRevoke);
         await data.AddResourceAsync(1, 10, 11, actor.UserId);
-        var records = data.Database.GetCollection<BsonDocument>("orders");
+        var records = data.Database.GetCollection<BsonDocument>("fixtureBusinessRecords");
         var read = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var resume = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var reads = 0;

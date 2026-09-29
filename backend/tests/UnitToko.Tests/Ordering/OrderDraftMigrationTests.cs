@@ -26,7 +26,7 @@ public sealed class OrderDraftMigrationTests(MongoFixture fixture)
         await data.Catalog.Database.CreateCollectionAsync(OrderDraftBson.Heads, new CreateCollectionOptions<BsonDocument> { Validator = stronger });
         Assert.False(await new CollectionMigrations(data.Catalog.Database, data.Catalog.Clock).IsCurrentAsync());
         await new CollectionMigrations(data.Catalog.Database, data.Catalog.Clock).ApplyAsync();
-        var after = await History(data); Assert.Equal(21, after.Count); Assert.Equal(before, new BsonArray(after.Take(20)));
+        var after = await History(data); Assert.Equal(CollectionMigrations.CurrentVersion, after.Count); Assert.Equal(before, new BsonArray(after.Take(20)));
         foreach (var name in OrderDraftSchemas.Collections) await InventoryRepository.RequireStorageAsync(data.Catalog.Database, name, OrderDraftSchemas.Validator(name), OrderDraftSchemas.Key(name), default);
         var definition = await (await data.Catalog.Database.ListCollectionsAsync(new ListCollectionsOptions { Filter = new BsonDocument("name", OrderDraftBson.Heads) })).SingleAsync();
         Assert.Equal(stronger, definition["options"]["validator"]);

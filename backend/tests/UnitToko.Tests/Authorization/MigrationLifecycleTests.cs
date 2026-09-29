@@ -166,7 +166,11 @@ public sealed class MigrationLifecycleTests(MongoFixture fixture)
             Assert.NotEmpty(ddl);
             Assert.All(ddl, command => Assert.Equal("majority", command["writeConcern"]["w"].AsString));
             Assert.DoesNotContain(ddl, command => command.TryGetValue("collMod", out var value) &&
-                new[] { "memberships", "orders", "authorizationScopes" }.Contains(value.AsString));
+                new[] { "memberships", "authorizationScopes" }.Contains(value.AsString));
+            // Version 22 now deliberately installs canonical order storage, while v3 predecessor
+            // authorization rules must still never be replayed or weakened.
+            Assert.All(ddl.Where(command => command.TryGetValue("collMod", out var value) && value == "orders"),
+                command => Assert.True(InventorySchemas.Contains(command["validator"].AsBsonDocument, OrderSubmissionSchemas.Validator("orders"))));
         });
     }
 

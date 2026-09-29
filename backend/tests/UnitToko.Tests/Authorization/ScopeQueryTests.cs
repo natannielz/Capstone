@@ -33,7 +33,7 @@ public sealed class ScopeQueryTests(MongoFixture fixture)
         await using var data = await StoreTestData.CreateAsync(fixture);
         var actor = await data.AddActorAsync(1000, new(GrantScopeKind.BuyerOwned, 10, 11), Permissions.OrderRead);
         await data.AddResourceAsync(1, 10, 11, actor.UserId);
-        var collection = data.Database.GetCollection<BsonDocument>("orders");
+        var collection = data.Database.GetCollection<BsonDocument>("fixtureBusinessRecords");
         var original = await collection.Find(new BsonDocument("_id", 1L)).FirstAsync();
         var variants = new[]
         {
@@ -70,7 +70,7 @@ public sealed class ScopeQueryTests(MongoFixture fixture)
         await data.AddResourceAsync(2, 10, 11, actor.UserId);
         await data.AddResourceAsync(3, 10, 11, 1001, [actor.UserId]);
         await data.AddResourceAsync(4, 10, 12, actor.UserId);
-        var collection = data.Database.GetCollection<BsonDocument>("orders");
+        var collection = data.Database.GetCollection<BsonDocument>("fixtureBusinessRecords");
         var result = await data.Store.QueryAsync(actor, Permissions.OrderRead, collection, 0, 1);
         Assert.Equal(2, result.Total);
         Assert.Equal(2L, Assert.Single(result.Items)["_id"].AsInt64);
@@ -88,7 +88,7 @@ public sealed class ScopeQueryTests(MongoFixture fixture)
         await data.AddResourceAsync(2, 20, 21, 1002);
         await data.AddResourceAsync(3, 10, 21, 1002); // Invalid cross-product of otherwise authorized IDs.
         await data.AddResourceAsync(4, 10, 12, 1002);
-        var collection = data.Database.GetCollection<BsonDocument>("orders");
+        var collection = data.Database.GetCollection<BsonDocument>("fixtureBusinessRecords");
         Assert.Equal(2, (await data.Store.QueryAsync(actor, Permissions.OrderRead, collection, 0, 20)).Total);
         await data.Database.GetCollection<BsonDocument>("authorizationScopes").UpdateOneAsync(new BsonDocument("_id", 21L),
             Builders<BsonDocument>.Update.Set("status", "suspended").Inc("version", 1L).Inc("fence", 1L));

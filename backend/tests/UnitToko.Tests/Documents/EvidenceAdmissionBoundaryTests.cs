@@ -43,10 +43,10 @@ public sealed class EvidenceAdmissionBoundaryTests(MongoFixture fixture)
         }
         else await data.Rows("idempotencyRecords").DeleteOneAsync(new BsonDocument("operation", "evidence.catalog-image.reserve"));
         using var tx = await data.Client.StartSessionAsync(); tx.StartTransaction();
-        await data.Rows("orders").InsertOneAsync(tx, new() { { "_id", 88L }, { "schemaVersion", 1 } });
+        await data.Rows("fixtureBusinessRecords").InsertOneAsync(tx, new() { { "_id", 88L }, { "schemaVersion", 1 } });
         await Assert.ThrowsAnyAsync<Exception>(() => data.Service.ClaimStageAsync(tx, data.Actor, r.ReservationId, r.Revision, new string('b', 64), data.Catalog.Clock.UtcNow.AddSeconds(120), EvidenceAdmissionTestData.Meta()));
         Assert.False(tx.IsInTransaction);
-        Assert.Equal(0, await data.Rows("orders").CountDocumentsAsync(new BsonDocument("_id", 88L)));
+        Assert.Equal(0, await data.Rows("fixtureBusinessRecords").CountDocumentsAsync(new BsonDocument("_id", 88L)));
     }
 
     [WindowsStorageFact]
@@ -189,10 +189,10 @@ public sealed class EvidenceAdmissionBoundaryTests(MongoFixture fixture)
         var client = new MongoClient(settings); var db = client.GetDatabase(data.DB.DatabaseNamespace.DatabaseName);
         var service = data.NewService(db: db, client: client);
         using var tx = await client.StartSessionAsync(); tx.StartTransaction();
-        await db.GetCollection<BsonDocument>("orders").InsertOneAsync(tx, new() { { "_id", 91L }, { "schemaVersion", 1 } });
+        await db.GetCollection<BsonDocument>("fixtureBusinessRecords").InsertOneAsync(tx, new() { { "_id", 91L }, { "schemaVersion", 1 } });
         await Assert.ThrowsAsync<PersistenceConflictException>(() => service.FreezeContentAsync(tx, data.Actor, stage, sealedStage, EvidenceAdmissionTestData.Meta()));
         Assert.Equal(1, observed); Assert.False(tx.IsInTransaction);
-        Assert.Equal(0, await data.Rows("orders").CountDocumentsAsync(new BsonDocument("_id", 91L)));
+        Assert.Equal(0, await data.Rows("fixtureBusinessRecords").CountDocumentsAsync(new BsonDocument("_id", 91L)));
         Assert.Equal("writing", (await data.RowAsync("evidenceUploadAttempts", reserved.AttemptId))["state"]);
     }
 
@@ -218,10 +218,10 @@ public sealed class EvidenceAdmissionBoundaryTests(MongoFixture fixture)
         await using var handle = opened.Handle;
         await data.DB.RunCommandAsync<BsonDocument>(new BsonDocument { { "collMod", "auditEvents" }, { "validator", new BsonDocument("kind", new BsonDocument("$ne", "evidence.quarantine")) } });
         using var tx = await data.Client.StartSessionAsync(); tx.StartTransaction();
-        await data.Rows("orders").InsertOneAsync(tx, new() { { "_id", 99L }, { "schemaVersion", 1 } });
+        await data.Rows("fixtureBusinessRecords").InsertOneAsync(tx, new() { { "_id", 99L }, { "schemaVersion", 1 } });
         await Assert.ThrowsAsync<MongoWriteException>(() => data.Service.CompleteUploadAsync(tx, data.Actor, claim, handle, EvidenceAdmissionTestData.Meta()));
         Assert.False(tx.IsInTransaction);
-        Assert.Equal(0, await data.Rows("orders").CountDocumentsAsync(new BsonDocument("_id", 99L)));
+        Assert.Equal(0, await data.Rows("fixtureBusinessRecords").CountDocumentsAsync(new BsonDocument("_id", 99L)));
         Assert.Equal("reserved", (await data.RowAsync("documentVersions", frozen.Reservation.VersionRowId))["state"]);
         Assert.Single(Directory.GetFiles(data.Root, "*.original"));
     }

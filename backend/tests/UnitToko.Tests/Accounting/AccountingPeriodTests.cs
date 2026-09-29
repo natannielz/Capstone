@@ -77,7 +77,7 @@ public sealed class AccountingPeriodTests(MongoFixture fixture)
     public async Task Cumulative_snapshot_allows_two_valid_large_journals_above_one_journal_cap()
     {
         await using var data = await AccountingData.CreateAsync(fixture);
-        await data.DB.GetCollection<BsonDocument>("orders").UpdateOneAsync(new BsonDocument("_id", 42L), Builders<BsonDocument>.Update.Set("amount", new BsonDecimal128(999999999999999.99m)));
+        await data.DB.GetCollection<BsonDocument>("fixtureBusinessRecords").UpdateOneAsync(new BsonDocument("_id", 42L), Builders<BsonDocument>.Update.Set("amount", new BsonDecimal128(999999999999999.99m)));
         await data.CommandAsync("large");
         await data.Uow.ExecuteAsync((session, token) => data.Writer.PostAsync(session, data.Actor, new("fixture", 42, "another", 1), 1, AccountingData.Metadata, token));
         var snapshot = await data.Uow.ExecuteAsync((session, token) => new AccountingPeriodStore(data.DB, data.Access.Clock).CaptureAsync(session, AccountingData.Book, "2026-09", token));
@@ -87,7 +87,7 @@ public sealed class AccountingPeriodTests(MongoFixture fixture)
     }
 
     internal static Task<BsonDocument> Period(AccountingData data, string month) => data.DB.GetCollection<BsonDocument>("periods").Find(new BsonDocument("month", month)).SingleAsync();
-    internal static Task SetDateAsync(AccountingData data, string date) => data.DB.GetCollection<BsonDocument>("orders").UpdateOneAsync(new BsonDocument("_id", 42L), Builders<BsonDocument>.Update.Set("date", date));
+    internal static Task SetDateAsync(AccountingData data, string date) => data.DB.GetCollection<BsonDocument>("fixtureBusinessRecords").UpdateOneAsync(new BsonDocument("_id", 42L), Builders<BsonDocument>.Update.Set("date", date));
     // Explicit synthetic approved-stage fixture only: this is not an implemented approval/reconciliation workflow.
     internal static async Task<AccountingStorageSnapshot> SeedApprovalAsync(AccountingData data, string month)
     {

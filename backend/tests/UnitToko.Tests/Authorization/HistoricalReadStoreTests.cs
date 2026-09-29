@@ -358,7 +358,9 @@ internal sealed class HistoricalStoreData : IAsyncDisposable
     internal HistoricalReadStore CreateReads(Func<CancellationToken, Task>? afterRead = null) => new(Base.Database, Base.Store, new(Base.Database), Base.Clock, afterRead);
     internal static async Task<HistoricalStoreData> CreateAsync(MongoFixture fixture, string source = "orders")
     {
-        var data = new HistoricalStoreData(await StoreTestData.CreateAsync(fixture), source);
+        // These are legacy metadata and deliberately malformed scope probes, not canonical submitted
+        // orders. Use the real predecessor chain, without weakening version-22 order storage.
+        var data = new HistoricalStoreData(await StoreTestData.CreateForLegacyOrderReadsAsync(fixture), source);
         data.Base.Clock.UtcNow = DateTimeOffset.FromUnixTimeMilliseconds(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
         data.Actor = await data.Base.AddActorAsync(1000, new(GrantScopeKind.BuyingOrganization, 10), Permissions.HistoryRead, Permissions.ReportRead);
         await data.Base.Database.GetCollection<BsonDocument>("authorizationGrants").UpdateOneAsync(new BsonDocument("_id", data.Actor.UserId),
