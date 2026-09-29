@@ -9,7 +9,7 @@ export class IdentityFailure extends Error {
   }
 }
 
-const returnPaths = ["/identity/account", "/administration/access", "/administration/organizations", "/administration/history", "/administration/person-reviews", "/administration/catalog", "/catalog/prices", "/catalog/browse", "/ordering/drafts", "/ordering/checkout", "/ordering/reviews", "/ordering/orders", "/fulfillment/preparations", "/fulfillment/dispatches", "/inventory/counts", "/inventory/sources", "/inventory/sources/revisions", "/inventory/sources/aliases", "/inventory/sources/suspensions", "/inventory/sources/policies"];
+const returnPaths = ["/identity/account", "/administration/access", "/administration/organizations", "/administration/history", "/administration/person-reviews", "/administration/catalog", "/catalog/prices", "/catalog/browse", "/ordering/drafts", "/ordering/checkout", "/ordering/reviews", "/ordering/orders", "/fulfillment/preparations", "/fulfillment/dispatches", "/fulfillment/shipments", "/inventory/counts", "/inventory/sources", "/inventory/sources/revisions", "/inventory/sources/aliases", "/inventory/sources/suspensions", "/inventory/sources/policies"];
 export const identityReturnPath = (value?: string | null) => value && returnPaths.includes(value) ? value : "/identity/account";
 const validId = (value: string) => /^[1-9][0-9]{0,18}$/.test(value) && (value.length < 19 || value <= "9223372036854775807");
 const validTime = (value: unknown): value is string => typeof value === "string" && value.length <= 40 && /^\d{4}-\d\d-\d\dT/.test(value) && Number.isFinite(Date.parse(value));
@@ -78,6 +78,7 @@ export function identityDestinations(actions: readonly string[]) {
   return [
     { href: "/fulfillment/preparations", label: "Persiapan kiriman", description: "Pilih kemasan dan jumlah yang akan disiapkan dari pesanan toko yang diterima.", visible: actions.includes("shipment.prepare") },
     { href: "/fulfillment/dispatches", label: "Keberangkatan kiriman", description: "Periksa lot fisik dan kurir sebelum barang diberangkatkan.", visible: actions.includes("shipment.dispatch") && actions.includes("shipment.assign") },
+    { href: "/fulfillment/shipments", label: "Kiriman", description: "Lihat barang yang diberangkatkan dan tujuan dalam penugasan Anda.", visible: actions.includes("shipment.read") },
     { href: "/ordering/drafts", label: "Draf pesanan", description: "Lanjutkan kebutuhan barang dan rencana pengiriman cabang Anda.", visible: actions.includes("order.submit") },
     { href: "/ordering/orders", label: "Pesanan saya", description: "Lihat kemasan, tujuan, biaya dan perkembangan pesanan yang telah diajukan.", visible: actions.includes("order.read") },
     { href: "/ordering/reviews", label: "Peninjauan pesanan", description: "Tinjau persetujuan belanja cabang atau penerimaan toko sesuai penugasan.", visible: actions.some(action => ["order.spend.approve", "order.accept", "order.cancel"].includes(action)) },

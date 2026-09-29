@@ -14,6 +14,7 @@ using MongoDB.Driver;
 using UnitToko.Platform;
 using UnitToko.Platform.Fulfillment;
 using UnitToko.Platform.Identity;
+using UnitToko.Tests.Catalog;
 using UnitToko.Tests.Identity;
 using UnitToko.Tests.Inventory;
 using Xunit.Abstractions;
@@ -30,7 +31,8 @@ public sealed class ShipmentDispatchBrowserTests(MongoFixture fixture, ITestOutp
         Assert.True(Path.IsPathFullyQualified(node ?? "") && File.Exists(node)); Assert.True(Path.IsPathFullyQualified(playwright ?? "") && File.Exists(playwright));
         Assert.True(File.Exists(Path.Combine(root, "frontend", ".next", "BUILD_ID")));
         await using var data = await ShipmentDispatchTestData.CreateAsync(fixture); var order = data.Order;
-        foreach (var actor in new[] { data.Dispatcher, data.Picker })
+        await order.Prices.Catalog.Base.AddGrantAsync(order.Buyer, 6510, CatalogAuthoringTestData.Audience, [UnitToko.Modules.Identity.Permissions.ShipmentRead]);
+        foreach (var actor in new[] { data.Dispatcher, data.Picker, order.Buyer })
             await order.Rows("accountProfiles").InsertOneAsync(new BsonDocument { { "_id", actor.UserId }, { "schemaVersion", 1 }, { "version", 1L },
                 { "displayName", "Staf fixture lokal" }, { "verifiedEmail", "dispatch-" + actor.UserId + "@example.invalid" }, { "verifiedAt", order.Prices.Catalog.Clock.UtcNow.UtcDateTime }, { "updatedAt", order.Prices.Catalog.Clock.UtcNow.UtcDateTime } });
         using var keys = new IdentityRuntimeTests.RuntimeKeys(); var settings = IdentityRuntimeTests.Settings(keys);
@@ -48,6 +50,7 @@ public sealed class ShipmentDispatchBrowserTests(MongoFixture fixture, ITestOutp
         using var tls = certificate.CreateSelfSigned(DateTimeOffset.UtcNow.AddMinutes(-5), DateTimeOffset.UtcNow.AddHours(1)); var password = Convert.ToHexString(RandomNumberGenerator.GetBytes(24));
         var input = new { apiAddress, origin, pfx = Convert.ToBase64String(tls.Export(X509ContentType.Pfx, password)), password, playwrightPackage = playwright,
             dispatcherToken = order.Prices.Catalog.Issued[data.Dispatcher.UserId].OpaqueToken, deniedToken = order.Prices.Catalog.Issued[data.Picker.UserId].OpaqueToken,
+            courierToken = order.Prices.Catalog.Issued[data.Courier.UserId].OpaqueToken, buyerToken = order.Prices.Catalog.Issued[order.Buyer.UserId].OpaqueToken,
             dispatcherId = data.Dispatcher.UserId.ToString(), deniedId = data.Picker.UserId.ToString(), orderId = data.Source.OrderId.ToString(), suborderId = data.Source.SuborderId.ToString(), courierId = data.Courier.UserId.ToString() };
         var start = new ProcessStartInfo(node!) { WorkingDirectory = Path.Combine(root, "frontend"), UseShellExecute = false, CreateNoWindow = true,
             RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true };

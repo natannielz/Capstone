@@ -93,6 +93,23 @@ try {
     const csrf = await (await fetch('/api/v1/identity/csrf')).json();
     return (await fetch('/api/v1/fulfillment/dispatches/' + suborderId + '/query', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf.requestToken, 'X-Expected-Actor-Id': actorId }, body: JSON.stringify({ purpose: 'shipment-dispatch' }) })).status;
   }, { suborderId: config.suborderId, actorId: config.deniedId }); assert.equal(status, 403);
+  for (const [label, token] of [['courier', config.courierToken], ['buyer', config.buyerToken]]) {
+    const reader = await user(token), readPage = reader.page;
+    await readPage.goto(origin.origin + '/identity/account');
+    await readPage.getByRole('link', { name: /^Kiriman Lihat barang/ }).click();
+    const open = readPage.getByRole('button', { name: 'Lihat kiriman 100/103/2026/1', exact: true }); await open.click();
+    const detail = readPage.getByRole('region', { name: 'Rincian kiriman', exact: true }); await detail.waitFor();
+    assert.match(await detail.innerText(), /1 Dus · isi 12 piece per kemasan · total 12 piece/);
+    assert.match(await detail.innerText(), /Alamat cabang sintetis 1/); assert.match(await detail.innerText(), /Penerimaan barang oleh cabang belum dicatat/);
+    assert.equal(await detail.evaluate(element => element === document.activeElement), true);
+    assert.equal(await readPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+    await readPage.screenshot({ path: resolve(directory, 'shipment-' + label + '-mobile.png'), fullPage: true });
+    await detail.getByRole('button', { name: 'Tutup rincian', exact: true }).click();
+    assert.equal(await open.evaluate(element => element === document.activeElement), true);
+    await readPage.getByRole('button', { name: 'Muat kiriman terbaru', exact: true }).click(); await open.waitFor();
+    await reader.context.close();
+  }
+  assert.equal(writes.length, 1);
   assert.deepEqual(errors, []); console.log('REAL_SHIPMENT_DISPATCH_BROWSER_PASS ' + JSON.stringify({ dispatchAttempts: writes.length, recovered: dropped, explicitLot: true, explicitCourier: true, mobile: true, unauthorizedDetail: status }));
 } catch (error) {
   for (const [index, page] of pages.entries()) if (!page.isClosed()) {
