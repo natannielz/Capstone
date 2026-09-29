@@ -1,0 +1,15 @@
+# Source suspension recovery journal — 29 September 2026
+
+Base commit: e1ed80b310f2064f6b5e5ddb716b6113b4ade5d9. This small continuation adds the dedicated recovery adapter required before the suspension staff screen can be connected. It does not add a new screen or complete CAT02.
+
+The journal permits exactly stock.source.suspend and routes it before generic source/setup handling. The adapter is lookup-only, with no close operation and no fallback to setup, mapping, revision or legacy recovery. Persistent storage remains restricted to actor ID, operation, original request key and creation time; pool selection, reasons, reviewed configuration and credentials are not stored there.
+
+A committed result must have exactly the declared suspension fields, status suspended and positive exact Int64 strings. Malformed, private, ambiguous or late results keep the reference pending. Missing receipts remain unconfirmed. Successful lookup clears only the matching actor/operation/key; other actors, keys and operations remain. The owning screen must still supply the selected pool, current-session guard and frozen-attempt result binding through the typed gateway before reconciliation.
+
+Five new tests initially executed with four expected failures because suspension was not allowlisted, and one passing unsupported-operation check. After implementation, all **21 affected suspension/alias/revision recovery tests passed**. The complete frontend run then passed **638 normal tests, six future-date tests and seven legacy golden scenarios: 651 executions**, zero failures or skips. Type checking, module boundaries, lint and production build passed. Lint retains the same nine preexisting warnings. Only generated Next declaration paths were restored afterward. No backend implementation changed and no new backend/browser run is claimed.
+
+Evidence is retained under tmp/production/stock-source-suspension-workspace-results, including the original failures, focused/final logs, source manifests and checksums. Root inspection is complete; independent review remains pending reviewer capacity. The separate API/client checkpoint retains its own verified 80-case backend evidence.
+
+Next build the staff suspension editor/page and exact login/MFA navigation, then execute the real HTTPS/Mongo browser workflow. Support action-only preview/recovery and separate history readers, deliberate pool selection after reload, frozen confirmation, stale/expired/revoked access, uncertain results and mobile/keyboard use. No suspension screen or browser acceptance is claimed here. Accepted control, producer-complete drain/handoff/reactivation, canonical inventory/cost consumers and the full original production plan/all 97 report requirements remain open.
+
+GitHub migration commit 38c2d6e is published; CI36518386948 is still being watched before the next push to avoid cancelling it. Vercel owning-account access remains unavailable. Prepared release archives are not deployments, and no real provider/data/financial/pilot acceptance is inferred.
