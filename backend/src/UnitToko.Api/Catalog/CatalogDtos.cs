@@ -116,7 +116,7 @@ public sealed record CatalogMutationResultDto(string Kind, LongId Id, string Ver
     LongId? CurrentDefinitionId, string? DefinitionVersion, LongId? PredecessorSkuId, DateTimeOffset RecordedAt);
 public sealed record CatalogReceiptDto(string State, CatalogMutationResultDto? Result, DateTimeOffset? RecordedAt);
 public sealed record CatalogPublishedVariantDto(LongId FamilyId, string FamilyPublicId, string FamilyName,
-    string Description, string CategoryCode, LongId SkuId, string PublicId, string Code, CatalogDefinitionDto Definition);
+    string Description, string CategoryCode, LongId SkuId, string PublicId, string Code, CatalogDefinitionDto Definition, CatalogPriceDto? CurrentPrice);
 public sealed record CatalogPublishedVariantPageDto(string Total, CatalogPublishedVariantDto[] Items);
 
 internal static class CatalogInputs
@@ -176,6 +176,6 @@ internal static class CatalogResponses
         ? new("not_confirmed", null, null) : new("committed", From(item), item.RecordedAt);
     internal static CatalogPublishedVariantDto From(CatalogPublishedVariant item) => new(item.Family.Id,
         item.Family.PublicId.ToString("D"), item.Family.Name, item.Family.Description, item.Family.CategoryCode,
-        item.Sku.Id, item.Sku.PublicId.ToString("D"), item.Sku.Code, From(item.Definition));
+        item.Sku.Id, item.Sku.PublicId.ToString("D"), item.Sku.Code, From(item.Definition), CatalogPriceResponses.Price(item.CurrentPrice));
     internal static CatalogPublishedVariantPageDto From(CatalogPage<CatalogPublishedVariant> page) => new(Number(page.Total), [.. page.Items.Select(From)]);
 }

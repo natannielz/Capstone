@@ -17963,7 +17963,8 @@
           "skuId",
           "publicId",
           "code",
-          "definition"
+          "definition",
+          "currentPrice"
         ],
         "type": "object",
         "properties": {
@@ -17993,6 +17994,16 @@
           },
           "definition": {
             "$ref": "#/components/schemas/CatalogDefinitionDto"
+          },
+          "currentPrice": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CatalogPriceDto"
+              }
+            ]
           }
         },
         "additionalProperties": false

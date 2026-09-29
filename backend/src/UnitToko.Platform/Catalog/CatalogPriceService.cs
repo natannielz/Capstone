@@ -24,11 +24,12 @@ public sealed partial class CatalogPriceService
     private readonly IdAllocator ids;
     private readonly IClock clock;
     private readonly CatalogRepository repository;
+    private readonly CatalogPriceGraph graph;
     private readonly AuthorizationStore authorization;
     public CatalogPriceService(IMongoDatabase database, MongoUnitOfWork unit, IdAllocator ids, IClock clock)
     {
         this.database = database; this.ids = ids; this.clock = clock;
-        repository = new(database); authorization = new(database, unit, clock);
+        repository = new(database); graph = new(database); authorization = new(database, unit, clock);
     }
     private IMongoCollection<BsonDocument> Rows(string name) => database.GetCollection<BsonDocument>(name);
     private sealed class Context(ActorContext actor, AuthorizationSnapshot snapshot, IClientSessionHandle tx, string permission,

@@ -17,6 +17,7 @@ public sealed class CatalogDefinitionQueryService(IMongoDatabase database, Autho
 {
     private static readonly FilterDefinitionBuilder<BsonDocument> F = Builders<BsonDocument>.Filter;
     private readonly CatalogRepository repository = new(database);
+    private readonly CatalogApprovedPriceReader prices = new(database);
     private readonly CatalogVisibilityStore visibility = new(database, authorization, clock);
     public Task<CatalogPage<CatalogPublishedVariant>> QueryAsync(ActorContext actor, int offset, int limit, string? search, CancellationToken cancellationToken = default)
     {
@@ -65,11 +66,13 @@ public sealed class CatalogDefinitionQueryService(IMongoDatabase database, Autho
         if (CatalogRepository.Owner(row["authoringOwner"].AsBsonDocument) != CatalogRepository.Owner(family["authoringOwner"].AsBsonDocument) ||
             CatalogRepository.Owner(family["authoringOwner"].AsBsonDocument) != CatalogRepository.Owner(category["authoringOwner"].AsBsonDocument) || category["code"] != family["categoryCode"]) throw CatalogRepository.Invalid();
         CatalogAuthoringService.RequirePair(row, definition);
+        var active = row["active"].AsBoolean && family["active"].AsBoolean && category["active"].AsBoolean;
+        var price = active ? await prices.ReadAsync(tx, row, clock.UtcNow, ct) : null;
         await repository.TouchAsync(tx, "skus", row, ct);
         await repository.TouchAsync(tx, "productFamilies", family, ct);
         await repository.TouchAsync(tx, "catalogCategories", category, ct);
-        if (!row["active"].AsBoolean || !family["active"].AsBoolean || !category["active"].AsBoolean) return null;
-        return new(CatalogRepository.Family(family), CatalogRepository.Sku(row), CatalogRepository.Definition(definition));
+        if (!active) return null;
+        return new(CatalogRepository.Family(family), CatalogRepository.Sku(row), CatalogRepository.Definition(definition), price);
     }
     private static List<BsonDocument> VisiblePipeline(FilterDefinition<BsonDocument> filter)
     {

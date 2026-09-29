@@ -2633,6 +2633,7 @@ export interface components {
         CatalogPublishedVariantDto: {
             categoryCode: string;
             code: string;
+            currentPrice: null | components["schemas"]["CatalogPriceDto"];
             definition: components["schemas"]["CatalogDefinitionDto"];
             description: string;
             familyId: components["schemas"]["LongId"];

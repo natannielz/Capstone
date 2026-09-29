@@ -144,6 +144,9 @@ public sealed class Auth0ClaimsTests
     public void Price_return_path_is_explicitly_allowlisted() =>
         Assert.Equal("/catalog/prices", ReturnPathPolicy.Require("/catalog/prices", Settings()));
     [Fact]
+    public void Buyer_catalog_return_path_is_explicitly_allowlisted() =>
+        Assert.Equal("/catalog/browse", ReturnPathPolicy.Require("/catalog/browse", Settings()));
+    [Fact]
     public void Handler_configuration_requires_code_PKCE_validation_and_never_saves_tokens_to_a_browser_ticket()
     {
         var options = new OpenIdConnectOptions(); Auth0OidcAdapter.Configure(options, Settings());

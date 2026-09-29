@@ -135,7 +135,7 @@ try {
     const author = await user('author');
     const status = await author.page.evaluate(async ({ skuId, authorId }) => {
       const csrf = await (await fetch('/api/v1/identity/csrf')).json();
-      const response = await fetch('/api/v1/catalog/administration/skus/' + skuId + '/definition', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf.requestToken, 'X-Expected-Actor-Id': authorId, 'Idempotency-Key': 'browser-relabel', 'If-Match': '"1"' },
+      const response = await fetch('/api/v1/catalog/administration/skus/' + skuId + '/definition', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf.requestToken, 'X-Expected-Actor-Id': authorId, 'Idempotency-Key': 'browser-relabel', 'If-Match': '"2"' },
         body: JSON.stringify({ definition: { packageLabel: 'Dus dua belas', packageKind: 'sealed', baseUnitCode: 'piece', baseUnitsPerPackage: 12, attributes: [], imageAssetIds: [], minimumOrderPackages: 1, orderIncrementPackages: 1 }, reason: 'Koreksi label fixture' }) }); return response.status;
     }, { skuId: config.skuId, authorId: config.authorId }); assert.equal(status, 200); await author.context.close();
     await checker.page.getByRole('button', { name: 'Konfirmasi dan kirim', exact: true }).click();
@@ -150,9 +150,29 @@ try {
     await maker.page.getByRole('heading', { name: 'Ruang harga belum dapat dibuka', exact: true }).waitFor();
     assert.equal(await maker.page.getByLabel('Harga per kemasan', { exact: true }).count(), 0);
   });
-  await check('buyer cannot open staff price history or selectors', async () => {
+  await check('buyer reads entitled current price and fresh explicit package details while staff history and unpublished details remain private', async () => {
     const buyer = await user('buyer'); await buyer.page.getByRole('heading', { name: 'Ruang harga belum dapat dibuka', exact: true }).waitFor();
-    assert.equal(await buyer.page.getByRole('button', { name: /Pensil browser/ }).count(), 0); await buyer.context.close();
+    assert.equal(await buyer.page.getByRole('button', { name: /Pensil browser/ }).count(), 0);
+    await buyer.page.goto(origin.origin + '/catalog/browse');
+    const open = buyer.page.getByRole('button', { name: 'Rincian BROWSER-12 Dus dua belas', exact: true }); await open.waitFor();
+    assert.equal(await buyer.page.getByRole('dialog').count(), 0, 'No package is selected implicitly');
+    await buyer.page.setViewportSize({ width: 360, height: 800 });
+    assert.equal(await buyer.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+    await buyer.page.screenshot({ path: resolve(directory, 'buyer-catalog-mobile.png'), fullPage: true });
+    await open.click(); const detail = buyer.page.getByRole('dialog'); await detail.waitFor();
+    assert.match(await detail.innerText(), /12 piece per kemasan/); assert.match(await detail.innerText(), /IDR 0,00/);
+    assert.doesNotMatch(await detail.innerText(), /Tinjauan independen fixture|Harga kemasan terisolasi/);
+    await buyer.page.keyboard.press('Escape'); await detail.waitFor({ state: 'hidden' });
+    assert.equal(await open.evaluate(element => element === document.activeElement), true);
+    const author = await user('author');
+    const status = await author.page.evaluate(async ({ skuId, authorId }) => {
+      const csrf = await (await fetch('/api/v1/identity/csrf')).json();
+      return (await fetch('/api/v1/catalog/administration/skus/' + skuId + '/publications', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf.requestToken, 'X-Expected-Actor-Id': authorId, 'Idempotency-Key': 'browser-unpublish', 'If-Match': '"3"' },
+        body: JSON.stringify({ assortmentIds: [], expectedAssortments: [{ id: '501', version: '2' }], reason: 'End synthetic catalog publication' }) })).status;
+    }, { skuId: config.skuId, authorId: config.authorId }); assert.equal(status, 200); await author.context.close();
+    await open.click(); await buyer.page.getByRole('status').filter({ hasText: 'Kemasan ini tidak lagi tersedia' }).waitFor();
+    assert.equal(await buyer.page.getByRole('dialog').count(), 0); assert.equal(await open.count(), 0);
+    await buyer.context.close();
   });
   assert.deepEqual(errors, []); assert.equal(dropped, 4);
   console.log('REAL_PRICE_BROWSER_PASS ' + JSON.stringify({ checks, droppedCommittedResponses: dropped, attempts: writes.length }));

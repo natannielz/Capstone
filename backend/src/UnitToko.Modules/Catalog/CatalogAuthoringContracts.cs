@@ -16,7 +16,7 @@ public sealed record CatalogAssortmentOption(LongId Id, GrantScope Owner, long V
 public sealed record CatalogPublication(LongId AssortmentId, GrantScope Owner, long Version, string Status);
 public sealed record CatalogSkuView(Sku Sku, GrantScope AuthoringOwner, VariantDefinitionVersion Definition,
     ImmutableArray<CatalogPublication> Publications);
-public sealed record CatalogPublishedVariant(ProductFamily Family, Sku Sku, VariantDefinitionVersion Definition);
+public sealed record CatalogPublishedVariant(ProductFamily Family, Sku Sku, VariantDefinitionVersion Definition, PriceVersion? CurrentPrice = null);
 public sealed record CatalogMutationResult(string Kind, LongId Id, long Version, LongId? FamilyId,
     LongId? CurrentDefinitionId, long? DefinitionVersion, LongId? PredecessorSkuId, DateTimeOffset RecordedAt);
 

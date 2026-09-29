@@ -1,0 +1,22 @@
+.toolbar, .search, .pagination, .dialogHeader { display: flex; gap: 16px; align-items: end; flex-wrap: wrap; }
+.toolbar { justify-content: space-between; padding: 22px; border: 1px solid #d7e3e7; background: white; margin-bottom: 28px; }
+.search { flex: 1; }
+.search label { display: grid; gap: 7px; flex: 1; min-width: 160px; max-width: 430px; }
+.search input { min-height: 44px; border: 1px solid #a7bac2; border-radius: 6px; padding: 9px 12px; width: 100%; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 270px), 1fr)); gap: 20px; list-style: none; padding: 0; margin: 22px 0 30px; }
+.card { background: white; border: 1px solid #d7e3e7; border-top: 4px solid #087f8c; padding: 24px; display: flex; flex-direction: column; align-items: start; overflow-wrap: anywhere; }
+.card h2 { margin: 14px 0 4px; }
+.card h3 { margin: 22px 0 4px; }
+.card button { margin-top: auto; width: 100%; }
+.category { font-size: 12px; letter-spacing: .08em; font-weight: 700; color: #087f8c; }
+.code { color: #4d6570; font-size: 14px; margin: 0; overflow-wrap: anywhere; }
+.contents { font-weight: 700; font-size: 28px; margin: 4px 0 16px; }
+.contents span { font-weight: 400; font-size: 15px; }
+.price { font-size: 22px; font-weight: 700; margin: 8px 0; }
+.price span { display: block; font-size: 14px; font-weight: 400; color: #4d6570; }
+.pagination { justify-content: center; align-items: center; }
+.dialog { width: min(680px, calc(100vw - 32px)); max-height: calc(100dvh - 48px); overflow-y: auto; padding: clamp(20px, 4vw, 36px); margin: auto; border: 1px solid #a7bac2; border-radius: 10px; color: #1d3640; background: white; }
+.dialog::backdrop { background: rgb(17 40 47 / 55%); }
+.dialogHeader { justify-content: space-between; align-items: center; }
+.description { white-space: pre-wrap; overflow-wrap: anywhere; }
+@media (max-width: 520px) { .toolbar { padding: 16px; } .search { width: 100%; } .toolbar > button { width: 100%; } .card { padding: 20px; } }

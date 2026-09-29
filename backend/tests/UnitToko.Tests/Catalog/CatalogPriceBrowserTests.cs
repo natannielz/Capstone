@@ -11,6 +11,8 @@ using Microsoft.Extensions.DependencyInjection;
 using MongoDB.Bson;
 using MongoDB.Driver;
 using UnitToko.Api.Identity;
+using UnitToko.Modules.Catalog;
+using UnitToko.Modules.Organizations;
 using UnitToko.Modules.Identity;
 using UnitToko.Modules.Identity.Contracts;
 using UnitToko.Platform.Catalog;
@@ -50,6 +52,12 @@ public sealed class CatalogPriceBrowserTests(MongoFixture fixture, ITestOutputHe
         var category = await catalog.SaveCategoryAsync(author, new(CatalogAuthoringTestData.Shop, null, 0, "PRICE", "Harga uji"), CatalogPriceTestData.Meta("category"));
         var family = await catalog.CreateFamilyAsync(author, new(CatalogAuthoringTestData.Shop, category.Id, "Pensil browser", "Kemasan uji terisolasi", []), CatalogPriceTestData.Meta("family"));
         var sku = await catalog.CreateSkuAsync(author, new(family.Id, family.Version, "BROWSER-12", "browser-pencil", CatalogAuthoringTestData.Definition()), CatalogPriceTestData.Meta("sku"));
+        await data.Database.GetCollection<BsonDocument>("catalogAssortments").InsertOneAsync(CatalogVisibilityBson.Assortment(
+            new CatalogAssortment(501, CatalogAuthoringTestData.Shop, AuthorizationStatus.Active, 1)));
+        await catalog.SetPublicationsAsync(author, new(sku.Id, 1, [new(501)], [new(new(501), 1)]), CatalogPriceTestData.Meta("publish"));
+        await data.Database.GetCollection<BsonDocument>("catalogEntitlements").InsertOneAsync(CatalogVisibilityBson.Entitlement(new CatalogEntitlement(
+            601, buyer.UserId, buyer.UserId, 501, CatalogAuthoringTestData.Audience, AuthorizationStatus.Active,
+            data.Clock.UtcNow, null, null, 1, 998, 999, 100601, 1, data.Clock.UtcNow)));
         foreach (var name in new[] { "catalogPriceProposals", "catalogPriceDecisions", "priceVersions" })
             await data.Database.GetCollection<BsonDocument>("idCounters").UpdateOneAsync(new BsonDocument("_id", name),
                 Builders<BsonDocument>.Update.Set("value", 9007199254740992L), new UpdateOptions { IsUpsert = true });

@@ -1,0 +1,49 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { createUnitTokoClient } from '../src/api/client';
+import { createBuyerCatalogGateway, parseBuyerVariant } from '../src/modules/catalog/catalog-buyer-client';
+import { actorId, family, sku, definition } from './catalog-fixtures';
+import { identityDestinations, identityReturnPath } from '../src/modules/identity/identity-workflow';
+const item = { familyId: family.id, familyPublicId: family.publicId, familyName: family.name, description: family.description,
+  categoryCode: family.categoryCode, skuId: sku.id, publicId: sku.publicId, code: sku.code, definition,
+  currentPrice: { id: '9007199254740999', skuId: sku.id, version: '2', currency: 'IDR', unitPrice: '0.00', effectiveAt: definition.effectiveAt } };
+function gateway(handler: (request: Request) => Promise<Response>) {
+  return createBuyerCatalogGateway(createUnitTokoClient({ baseUrl: 'https://unit-toko.test', fetch: async input => {
+    assert.ok(input instanceof Request);
+    if (input.url.endsWith('/identity/csrf')) return Response.json({ requestToken: 'csrf-memory' });
+    assert.equal(input.method, 'POST'); assert.equal(input.credentials, 'same-origin');
+    assert.equal(input.headers.get('X-Expected-Actor-Id'), actorId); assert.equal(input.headers.get('X-CSRF-Token'), 'csrf-memory');
+    return handler(input);
+  } }));
+}
+test('entitled buyer client preserves missing versus zero and exact package/price identity without staff fields', () => {
+  assert.equal(identityReturnPath('/catalog/browse'), '/catalog/browse');
+  assert.ok(identityDestinations(['catalog.read']).some(item => item.href === '/catalog/browse'));
+  assert.equal(parseBuyerVariant({ ...item, currentPrice: null }).currentPrice, null);
+  const parsed = parseBuyerVariant({ ...item, reason: 'private', proposedBy: '7' });
+  assert.equal(parsed.currentPrice!.unitPrice, '0.00'); assert.equal(parsed.currentPrice!.id, '9007199254740999');
+  assert.equal(parsed.definition.baseUnitsPerPackage, 12); assert.equal('reason' in parsed, false); assert.equal('proposedBy' in parsed, false);
+  assert.throws(() => parseBuyerVariant({ ...item, currentPrice: undefined }));
+  assert.throws(() => parseBuyerVariant({ ...item, currentPrice: { ...item.currentPrice, unitPrice: 0 } }));
+  assert.throws(() => parseBuyerVariant({ ...item, currentPrice: { ...item.currentPrice, skuId: '7' } }));
+  assert.throws(() => parseBuyerVariant({ ...item, definition: { ...definition, skuId: '7' } }));
+  assert.throws(() => parseBuyerVariant({ ...item, publicId: sku.publicId + '\n' }));
+});
+test('buyer query and fresh detail use only the entitled endpoints and abortable same-origin transport', async () => {
+  const calls: string[] = []; const client = gateway(async request => {
+    calls.push(new URL(request.url).pathname); const body = await request.json();
+    if (calls.length === 1) { assert.deepEqual(body, { search: 'PENA', offset: 0, limit: 25 }); return Response.json({ total: '1', items: [item] }); }
+    assert.deepEqual(body, {}); return Response.json(item);
+  });
+  assert.equal((await client.query(actorId, ' PENA ')).items[0].skuId, sku.id);
+  assert.equal((await client.variant(actorId, sku.publicId))!.currentPrice!.unitPrice, '0.00');
+  assert.deepEqual(calls, ['/api/v1/catalog/variants/query', '/api/v1/catalog/variants/' + sku.publicId + '/query']);
+});
+test('revoked access, wrong detail and ambiguous pages never become a usable buyer selection', async () => {
+  let calls = 0; const denied = gateway(async () => { calls++; return Response.json({ code: 'scope_denied' }, { status: 403 }); });
+  await assert.rejects(() => denied.query(actorId), { code: 'scope_denied' }); assert.equal(calls, 1);
+  await assert.rejects(() => gateway(async () => Response.json({ ...item, publicId: family.publicId })).variant(actorId, sku.publicId));
+  await assert.rejects(() => gateway(async () => Response.json({ total: '2', items: [item, item] })).query(actorId));
+  await assert.rejects(() => gateway(async () => Response.json({ total: '0', items: [item] })).query(actorId));
+  assert.equal(await gateway(async () => Response.json(null)).variant(actorId, sku.publicId), null);
+});
