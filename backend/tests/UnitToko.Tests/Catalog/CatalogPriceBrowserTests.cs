@@ -46,7 +46,7 @@ public sealed class CatalogPriceBrowserTests(MongoFixture fixture, ITestOutputHe
         var maker = await data.AddActorAsync(51001, CatalogAuthoringTestData.Shop, Permissions.PricingManage);
         var checker = await data.AddActorAsync(51002, CatalogAuthoringTestData.Shop, Permissions.PricingApprove);
         var author = await data.AddActorAsync(51003, CatalogAuthoringTestData.Shop, Permissions.CatalogManage);
-        var buyer = await data.AddActorAsync(51004, CatalogAuthoringTestData.Audience, Permissions.CatalogRead);
+        var buyer = await data.AddActorAsync(51004, CatalogAuthoringTestData.Audience, Permissions.CatalogRead, Permissions.OrderSubmit);
         await PersonTestData.SeedDistinctPeopleAsync(data.Database, data.Clock, maker.UserId, checker.UserId);
         var catalog = new CatalogAuthoringService(data.Database, new(fixture.Client), new(data.Database), data.Clock);
         var category = await catalog.SaveCategoryAsync(author, new(CatalogAuthoringTestData.Shop, null, 0, "PRICE", "Harga uji"), CatalogPriceTestData.Meta("category"));

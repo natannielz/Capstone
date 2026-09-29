@@ -1937,6 +1937,39 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ordering/contexts/query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["OrderBuyingContexts"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ordering/quote/query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Current branch-scoped catalog subtotal only. No stock hold, order submission, tax/credit approval or payable commitment. Submission must recalculate in its own transaction. */
+        post: operations["OrderQuotePreview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/organizations": {
         parameters: {
             query?: never;
@@ -2987,6 +3020,57 @@ export interface components {
         OperationResolveDto: {
             operation: string;
             reason: string;
+        };
+        OrderContextDto: {
+            branchId: components["schemas"]["LongId"];
+            divisionId: null | components["schemas"]["LongId"];
+            organizationId: components["schemas"]["LongId"];
+        };
+        OrderContextOptionDto: {
+            branchName: null | string;
+            context: components["schemas"]["OrderContextDto"];
+            divisionName: null | string;
+            organizationName: null | string;
+        };
+        OrderContextsDto: {
+            items: components["schemas"]["OrderContextOptionDto"][];
+        };
+        OrderPackageSelectionDto: {
+            definitionId: components["schemas"]["LongId"];
+            definitionVersion: string;
+            /** Format: int32 */
+            packages: number;
+            priceId: components["schemas"]["LongId"];
+            priceVersion: string;
+            skuId: components["schemas"]["LongId"];
+        };
+        OrderQuoteDto: {
+            /** Format: date-time */
+            calculatedAt: string;
+            catalogSubtotal: components["schemas"]["Money"];
+            context: components["schemas"]["OrderContextDto"];
+            currency: string;
+            lines: components["schemas"]["OrderQuoteLineDto"][];
+        };
+        OrderQuoteLineDto: {
+            baseUnits: string;
+            catalogSubtotal: components["schemas"]["Money"];
+            definition: components["schemas"]["CatalogDefinitionDto"];
+            familyId: components["schemas"]["LongId"];
+            familyName: string;
+            /** Format: int32 */
+            packages: number | string;
+            price: components["schemas"]["CatalogPriceDto"];
+            publicId: string;
+            skuCode: string;
+        };
+        OrderQuoteRequestDto: {
+            context: components["schemas"]["OrderContextDto"];
+            purpose: string;
+            selections: components["schemas"]["OrderPackageSelectionDto"][];
+        };
+        OrderReadDto: {
+            purpose: string;
         };
         OrganizationBeforeDto: {
             code: null | string;
@@ -13072,6 +13156,172 @@ export interface operations {
             };
             /** @description Conflict */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    OrderBuyingContexts: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
+                /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
+                "X-Expected-Actor-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OrderReadDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrderContextsDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Payload Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    OrderQuotePreview: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
+                /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
+                "X-Expected-Actor-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OrderQuoteRequestDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrderQuoteDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Payload Too Large */
+            413: {
                 headers: {
                     [name: string]: unknown;
                 };

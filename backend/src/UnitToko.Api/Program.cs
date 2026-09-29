@@ -20,6 +20,8 @@ using UnitToko.Api.Inventory;
 using UnitToko.Platform.Inventory;
 using UnitToko.Modules.Organizations;
 using UnitToko.Platform.Organizations;
+using UnitToko.Api.Ordering;
+using UnitToko.Platform.Ordering;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.ConfigureHttpJsonOptions(options =>
@@ -46,6 +48,7 @@ builder.Services.AddSingleton<CatalogVisibilityStore>();
 builder.Services.AddSingleton<CatalogAuthoringService>();
 builder.Services.AddSingleton<CatalogPriceService>();
 builder.Services.AddSingleton<CatalogDefinitionQueryService>();
+builder.Services.AddSingleton<OrderQuoteService>();
 builder.Services.AddSingleton<StockCountService>();
 builder.Services.AddSingleton<StockSourceSetupService>();
 builder.Services.AddSingleton<HistoricalReadStore>();
@@ -98,6 +101,7 @@ builder.Services.AddOpenApi("v1", options =>
                 if ((path.Key.StartsWith("/api/v1/access", StringComparison.Ordinal) || path.Key.StartsWith("/api/v1/organizations", StringComparison.Ordinal) ||
                      path.Key.StartsWith("/api/v1/identity/administration/", StringComparison.Ordinal) ||
                      path.Key.StartsWith("/api/v1/catalog/", StringComparison.Ordinal) ||
+                     path.Key.StartsWith("/api/v1/ordering/", StringComparison.Ordinal) ||
                      path.Key.StartsWith("/api/v1/inventory/", StringComparison.Ordinal)) &&
                     path.Key != "/api/v1/access/current")
                 {
@@ -277,6 +281,7 @@ app.MapAccessEndpoints();
 app.MapOrganizationEndpoints();
 app.MapCatalogEndpoints();
 app.MapCatalogPriceEndpoints();
+app.MapOrderQuoteEndpoints();
 app.MapStockCountEndpoints();
 app.MapStockSourceSetupEndpoints();
 app.MapStockSourceRevisionEndpoints();

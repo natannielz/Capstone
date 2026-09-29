@@ -1,0 +1,7 @@
+.panel { border-top: 1px solid #d7e3e7; padding-top: 20px; margin-top: 24px; }
+.panel form { display: grid; gap: 14px; }
+.panel label { display: grid; gap: 7px; }
+.panel input, .panel select { min-height: 44px; width: 100%; min-width: 0; border: 1px solid #a7bac2; padding: 10px; border-radius: 6px; background: white; color: #1d3640; }
+.result { margin-top: 20px; padding: 18px; background: #ecf7f4; border: 1px solid #a6cfc4; overflow-wrap: anywhere; }
+.result h4 { margin: 0; }
+.amount { font-weight: 700; font-size: 24px; margin: 8px 0; }

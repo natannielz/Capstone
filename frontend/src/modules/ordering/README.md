@@ -1,0 +1,7 @@
+# Branch ordering
+
+The first connected slice is a catalog subtotal preview inside the buyer's package-details dialog at `/catalog/browse`. The buyer explicitly chooses a currently permitted branch/division and a quantity. The ordering API checks `order.submit` independently of catalog membership, limits catalog entitlements to that buying context and reads approved price/package facts in the same Mongo transaction. Price, SKU, publication, grant, membership, organization and session fences serialize concurrent changes. A changed selection is rejected for renewed review.
+
+The API accepts up to 100 explicit selections; this first screen calculates one package selection at a time. Amounts and base-unit totals are exact, minimum/increment rules are enforced, and missing price is different from an approved zero. The browser does not send monetary totals or silently choose a branch. Changing the quantity or branch clears the result; closing details aborts outstanding private reads.
+
+This preview is a read, not a saved order or a held price. Repeating a read has no order, reservation, stock movement or financial effect and uses no command idempotency key. Submission must recompute and persist the accepted package/price/party/address/commercial-policy snapshot in its own transaction. Durable drafts, checkout, suborders, spending review, store acceptance and stock reservation remain the next M1 work. Pending business policies and production source acceptance stay gated.

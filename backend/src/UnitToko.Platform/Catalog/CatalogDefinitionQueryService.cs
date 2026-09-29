@@ -7,6 +7,8 @@ using MongoDB.Driver;
 using UnitToko.Modules.Catalog;
 using UnitToko.Modules.Contracts;
 using UnitToko.Modules.Identity.Contracts;
+using UnitToko.Modules.Identity;
+using UnitToko.Modules.Organizations;
 using UnitToko.Platform.Authorization;
 using UnitToko.Platform.Mongo.Migrations;
 
@@ -19,6 +21,24 @@ public sealed class CatalogDefinitionQueryService(IMongoDatabase database, Autho
     private readonly CatalogRepository repository = new(database);
     private readonly CatalogApprovedPriceReader prices = new(database);
     private readonly CatalogVisibilityStore visibility = new(database, authorization, clock);
+
+    /// <summary>Current selected catalog facts for an owning order transaction. No stock or commercial commitment.</summary>
+    internal Task<ImmutableArray<CatalogPublishedVariant>> ReadSelectedAsync(ActorContext actor, AuthorizationSnapshot snapshot,
+        IClientSessionHandle tx, GrantScope buyingScope, ImmutableArray<long> skuIds,
+        Func<CancellationToken, Task> completeOwner, CancellationToken ct)
+    {
+        if (skuIds.IsDefaultOrEmpty || skuIds.Length > 100 || skuIds.Any(id => id <= 0) || skuIds.Distinct().Count() != skuIds.Length)
+            throw new DomainValidationException("invalid_order_quote", "Choose up to 100 distinct packages");
+        return visibility.ReadWithinAsync(actor, snapshot, tx, F.In("_id", skuIds) & F.Eq("active", true), buyingScope,
+            async (session, filter, token) => {
+                var rows = await repository.Rows("skus").Find(session, filter).Limit(101).ToListAsync(token);
+                if (rows.Count != skuIds.Length) throw new AuthorizationDeniedException("order_package_unavailable");
+                var items = ImmutableArray.CreateBuilder<CatalogPublishedVariant>();
+                foreach (var row in rows) items.Add(await JoinAsync(session, row, token) ?? throw new AuthorizationDeniedException("order_package_unavailable"));
+                await completeOwner(token);
+                return items.ToImmutable();
+            }, ct);
+    }
     public Task<CatalogPage<CatalogPublishedVariant>> QueryAsync(ActorContext actor, int offset, int limit, string? search, CancellationToken cancellationToken = default)
     {
         AuthorizationStore.ValidatePage(offset, limit); var selector = F.Eq("active", true) & CatalogAuthoringService.SearchFilter("displayName", search);

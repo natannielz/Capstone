@@ -6,6 +6,7 @@ using UnitToko.Modules.Catalog;
 using UnitToko.Modules.Contracts;
 using UnitToko.Modules.Identity;
 using UnitToko.Modules.Identity.Contracts;
+using UnitToko.Modules.Organizations;
 using UnitToko.Platform.Authorization;
 using UnitToko.Platform.Identity;
 using MongoQuery = UnitToko.Platform.Authorization.CatalogVisibilityQuery;
@@ -96,13 +97,23 @@ public sealed class CatalogVisibilityStore
 
     internal Task<T> ReadCurrentAsync<T>(ActorContext actor, FilterDefinition<BsonDocument> selector,
         Func<IClientSessionHandle, FilterDefinition<BsonDocument>, CancellationToken, Task<T>> read, CancellationToken cancellationToken) =>
-        authorization.ReadAsync(actor, async (snapshot, session, token) =>
+        authorization.ReadAsync(actor, (snapshot, session, token) =>
+            ReadWithinAsync(actor, snapshot, session, selector, null, read, token), cancellationToken);
+
+    // Ordering owns the surrounding transaction. A branch selection may narrow, never broaden,
+    // the actor's catalog entitlements. Keep all read/session/publication fences in this owner.
+    internal async Task<T> ReadWithinAsync<T>(ActorContext actor, AuthorizationSnapshot snapshot, IClientSessionHandle session,
+        FilterDefinition<BsonDocument> selector, GrantScope? buyingScope,
+        Func<IClientSessionHandle, FilterDefinition<BsonDocument>, CancellationToken, Task<T>> read, CancellationToken token)
         {
+            if (buyingScope is not null && (buyingScope.Kind != GrantScopeKind.BuyerOwned || buyingScope.BranchId is not > 0 ||
+                !ScopePolicy.IsScopeActive(buyingScope, snapshot.Directory))) throw new AuthorizationDeniedException("scope_denied");
             var now = clock.UtcNow;
             var rawEntitlements = await database.GetCollection<BsonDocument>("catalogEntitlements")
                 .Find(session, EligibleEntitlements(actor.UserId, now)).Limit(MaximumAuthorityRecords + 1).ToListAsync(token);
             if (rawEntitlements.Count > MaximumAuthorityRecords) throw new AuthorizationDeniedException("catalog_authority_limit");
-            var entitlements = rawEntitlements.Select(CatalogVisibilityBson.Entitlement).ToImmutableArray();
+            var entitlements = rawEntitlements.Select(CatalogVisibilityBson.Entitlement)
+                .Where(value => buyingScope is null || ScopePolicy.ContainsScope(value.AudienceScope, buyingScope)).ToImmutableArray();
             var assortmentIds = entitlements.Select(value => value.AssortmentId).Distinct().ToArray();
             var rawAssortments = await database.GetCollection<BsonDocument>("catalogAssortments")
                 .Find(session, F.In("_id", assortmentIds)).Limit(MaximumAuthorityRecords + 1).ToListAsync(token);
@@ -117,7 +128,7 @@ public sealed class CatalogVisibilityStore
             await RequireLiveSessionAsync(actor, session, token);
             RequireStillEffective(actor, snapshot, entitlements, assortments, query);
             return result;
-        }, cancellationToken);
+        }
 
     private async Task RequireLiveSessionAsync(ActorContext actor, IClientSessionHandle session, CancellationToken token)
     {

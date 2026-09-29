@@ -10,6 +10,7 @@ import { CatalogReadGate } from './catalog-editor-state';
 import { createBuyerCatalogGateway, type BuyerVariant } from './catalog-buyer-client';
 import shared from '../administration/access.module.css';
 import styles from './buyer-catalog.module.css';
+import { OrderQuotePanel } from '../ordering/OrderQuotePanel';
 
 const path = '/catalog/browse';
 const price = (value: BuyerVariant['currentPrice']) => {
@@ -106,7 +107,8 @@ export function BuyerCatalog() {
         <dl className={shared.facts}><div><dt>Jenis kemasan</dt><dd>{{ sealed: 'Kemasan tersegel', loose: 'Satuan lepas', other: 'Kemasan lain' }[selected.definition.packageKind]}</dd></div>
           <div><dt>Minimum pembelian</dt><dd>{selected.definition.minimumOrderPackages} kemasan</dd></div><div><dt>Kelipatan pemesanan</dt><dd>{selected.definition.orderIncrementPackages} kemasan</dd></div>
           {selected.definition.attributes.map(attribute => <div key={attribute.key}><dt>{attribute.key}</dt><dd>{attribute.value}</dd></div>)}</dl>
-        <p className={shared.help}>Harga dan ketersediaan akan diperiksa kembali saat pesanan disiapkan.</p></>}
+        <p className={shared.help}>Harga dan ketersediaan akan diperiksa kembali saat pesanan disiapkan.</p>
+        {account && selected.currentPrice && <OrderQuotePanel key={account.actorId + ':' + selected.skuId + ':' + selected.definition.id + ':' + selected.currentPrice.id} actorId={account.actorId} item={selected} />}</>}
     </dialog>
   </main>;
 }
