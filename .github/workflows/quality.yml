@@ -11,7 +11,9 @@ permissions:
 
 concurrency:
   group: quality-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # Preserve the full production-branch regression while newer checkpoints queue.
+  # Other branches and pull requests retain their existing cancellation behavior.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/codex/unit-toko-production' }}
 
 jobs:
   frontend:
