@@ -8,6 +8,14 @@ namespace UnitToko.Tests.Documents;
 public sealed class EvidenceAdmissionContractTests
 {
     [Fact]
+    public void Payment_purpose_is_bound_to_payment_owner_only() {
+        var payment = new EvidenceTargetRef(EvidenceTargetKind.PaymentDeclaration, 9);
+        Assert.Equal(payment, new ReserveEvidenceImage(payment, EvidencePurpose.PaymentImage, 1).Target);
+        Assert.Throws<DomainValidationException>(() => new ReserveCatalogImage(payment));
+        Assert.Throws<DomainValidationException>(() => new ReserveEvidenceImage(payment, EvidencePurpose.CatalogImage, 1));
+        Assert.Throws<DomainValidationException>(() => new ReserveEvidenceImage(new(EvidenceTargetKind.CatalogSku, 9), EvidencePurpose.PaymentImage, 1));
+    }
+    [Fact]
     public void Request_accepts_only_catalog_image_and_positive_optional_revision()
     {
         var target = new EvidenceTargetRef(EvidenceTargetKind.CatalogSku, 9);

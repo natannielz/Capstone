@@ -21,8 +21,6 @@ internal sealed record PublicationClaim(ExpectedPublication Expected, long Reser
 /// <summary>Internal admission only. Caller owns supplied transactions; no filesystem I/O occurs in them.</summary>
 internal sealed partial class EvidenceService
 {
-    private const string ReserveOperation = "evidence.catalog-image.reserve";
-    private const string CompleteOperation = "evidence.catalog-image.complete";
     private static readonly string[] LimitFields = ["maximumContentBytes", "reservationDurationMs", "writerDurationMs", "ioDurationMs", "bufferBytes"];
     private static readonly FilterDefinitionBuilder<BsonDocument> F = Builders<BsonDocument>.Filter;
     private readonly IMongoDatabase database;
@@ -31,25 +29,36 @@ internal sealed partial class EvidenceService
     private readonly IClock clock;
     private readonly EvidenceStoreRegistration registration;
     private readonly CatalogAuthoringService catalog;
+    private readonly IPaymentEvidenceUploadTarget? paymentTargets;
     internal EvidenceService(IMongoDatabase database, MongoUnitOfWork unit, IdAllocator ids, IClock clock,
-        EvidenceStoreRegistration? registration = null)
+        EvidenceStoreRegistration? registration = null, IPaymentEvidenceUploadTarget? paymentTargets = null)
     {
         this.database = database; this.unit = unit; this.ids = ids; this.clock = clock;
         this.registration = registration ?? EvidenceStoreRegistration.Unavailable();
+        if (paymentTargets is not null && (!ReferenceEquals(paymentTargets.Database.Client, database.Client) || !paymentTargets.Database.DatabaseNamespace.Equals(database.DatabaseNamespace)))
+            throw new ArgumentException("Evidence targets must join the same owning transaction");
+        this.paymentTargets = paymentTargets;
         catalog = new(database, unit, ids, clock);
     }
 
     internal Task<ReservationResult> ReserveAsync(IClientSessionHandle tx, ActorContext actor, ReserveCatalogImage request,
+        AuthorizationCommandMetadata metadata, CancellationToken ct = default) => GuardAsync(tx, () => {
+            ArgumentNullException.ThrowIfNull(request);
+            return ReserveImageAsync(tx, actor, new ReserveEvidenceImage(request.Target, request.Purpose, request.ExpectedTargetRevision), metadata, ct);
+        });
+
+    internal Task<ReservationResult> ReserveImageAsync(IClientSessionHandle tx, ActorContext actor, ReserveEvidenceImage request,
         AuthorizationCommandMetadata metadata, CancellationToken ct = default) => GuardAsync(tx, async () =>
     {
         ValidateMetadata(metadata); ArgumentNullException.ThrowIfNull(request);
-        var hash = Hash(JsonSerializer.Serialize(new { Format = "evidence.catalog-image.reserve:v1",
+        var operation = ReserveOperation(request.Purpose);
+        var hash = Hash(JsonSerializer.Serialize(new { Format = operation + ":v1",
             Kind = request.Target.Kind.ToString(), request.Target.Id, Purpose = request.Purpose.ToString(),
             request.ExpectedTargetRevision, Reason = metadata.Reason.Trim() }));
         DateTimeOffset? deadline = null;
-        var result = await catalog.WithCatalogImageUploadTargetAsync(database, tx, actor, request.Target, null, async (target, token) =>
+        var result = await WithTargetAsync(tx, actor, request.Target, null, async (target, token) =>
         {
-            var existing = await Rows("idempotencyRecords").Find(tx, ReceiptFilter(actor.UserId, ReserveOperation, metadata.IdempotencyKey)).FirstOrDefaultAsync(token);
+            var existing = await Rows("idempotencyRecords").Find(tx, ReceiptFilter(actor.UserId, operation, metadata.IdempotencyKey)).FirstOrDefaultAsync(token);
             if (existing is not null)
             {
                 if (existing.GetValue("bodyHash", BsonNull.Value) != hash) throw Conflict("idempotency_key_reused");
@@ -58,7 +67,7 @@ internal sealed partial class EvidenceService
                 await RequireReceiptAsync(tx, saved, existing, false, token);
                 return Reservation(existing["result"].AsBsonDocument);
             }
-            if (request.Purpose != EvidencePurpose.CatalogImage) throw Invalid();
+            if (request.Purpose != Purpose(target.Target)) throw Invalid();
             if (request.ExpectedTargetRevision is { } expected && expected != target.Revision) throw Conflict("evidence_target_revision_conflict");
             RequireStore();
             var policy = await Rows("evidenceStorePolicies").Find(tx, F.Eq("storeId", registration.StoreId)).SingleOrDefaultAsync(token);
@@ -84,14 +93,14 @@ internal sealed partial class EvidenceService
             var limits = new BsonDocument(LimitFields.Select(name => new BsonElement(name, policy[name])));
             var stageToken = Token(); var generation = Token();
             var lineage = Base(lineageId, now, false);
-            lineage.Add("target", Target(request.Target)).Add("purpose", "CatalogImage").Add("owner", owner)
+            lineage.Add("target", Target(request.Target)).Add("purpose", request.Purpose.ToString()).Add("owner", owner)
                 .Add("uploader", uploader).Add("firstVersionRowId", versionId);
             var reservation = Base(reservationId, now);
             reservation.Add("lineageId", lineageId).Add("versionRowId", versionId).Add("contentVersion", 1L).Add("attemptId", attemptId)
-                .Add("target", Target(request.Target)).Add("purpose", "CatalogImage").Add("owner", owner).Add("uploader", uploader)
+                .Add("target", Target(request.Target)).Add("purpose", request.Purpose.ToString()).Add("owner", owner).Add("uploader", uploader)
                 .Add("policyId", policy["_id"]).Add("policyVersion", policy["policyVersion"]).Add("admittedTargetRevision", target.Revision)
                 .Add("admittedDefinitionId", Number(target.DefinitionId)).Add("admittedDefinitionVersion", Number(target.DefinitionVersion))
-                .Add("admittedLimits", limits).Add("operation", ReserveOperation).Add("key", metadata.IdempotencyKey).Add("bodyHash", hash)
+                .Add("admittedLimits", limits).Add("operation", operation).Add("key", metadata.IdempotencyKey).Add("bodyHash", hash)
                 .Add("expiresAt", deadline.Value.UtcDateTime).Add("chargedBytes", charge).Add("chargedReservations", 1L)
                 .Add("state", "reserved").Add("reserveAuditId", auditId).Add("completionAuditId", BsonNull.Value);
             var attempt = Base(attemptId, now);
@@ -123,7 +132,7 @@ internal sealed partial class EvidenceService
     {
         if (readMetadata is null || readMetadata.Purpose != "evidence-status" || !Text(readMetadata.CorrelationId, 128)) throw Invalid();
         var bundle = await LoadAsync(tx, reservationId, ct);
-        var result = await catalog.WithCatalogImageUploadTargetAsync(database, tx, actor, ReadTarget(bundle.Reservation), null, async (target, token) =>
+        var result = await WithTargetAsync(tx, actor, ReadTarget(bundle.Reservation), null, async (target, token) =>
         {
             RequireAuthority(bundle, target, actor, false);
             if (bundle.Reservation["state"] == "quarantined") await CompletionAsync(tx, bundle, token);
@@ -136,6 +145,24 @@ internal sealed partial class EvidenceService
         }, ct);
         ct.ThrowIfCancellationRequested(); return result;
     });
+
+    internal Task<ReservationResult?> RecoverReservationAsync(IClientSessionHandle tx, ActorContext actor, EvidenceTargetRef requestedTarget,
+        string key, CancellationToken ct) => GuardAsync(tx, () => WithTargetAsync<ReservationResult?>(tx, actor, requestedTarget, null, async (target, token) => {
+            ValidateMetadata(new(key, "Recover original upload reservation", "evidence-reservation-recovery"));
+            var receipt = await Rows("idempotencyRecords").Find(tx, ReceiptFilter(actor.UserId, ReserveOperation(Purpose(requestedTarget)), key)).SingleOrDefaultAsync(token);
+            var reservations = await Rows("evidenceUploadReservations").Find(tx, new MongoDB.Bson.BsonDocument {
+                { "uploader.userId", actor.UserId }, { "operation", ReserveOperation(Purpose(requestedTarget)) }, { "key", key } }).Limit(2).ToListAsync(token);
+            if (receipt is null && reservations.Count == 0) return null;
+            if (receipt is null || reservations.Count != 1) throw Invalid();
+            var bundle = await LoadAsync(tx, reservations[0]["_id"].AsInt64, token); RequireAuthority(bundle, target, actor, true);
+            await RequireReceiptAsync(tx, bundle, receipt, false, token); return Reservation(receipt["result"].AsBsonDocument);
+        }, ct));
+
+    internal async Task RequireBindingAsync(IClientSessionHandle tx, ActorContext actor, EvidenceTargetRef target, long reservationId, CancellationToken ct) {
+        var row = await Rows("evidenceUploadReservations").Find(tx, F.Eq("_id", reservationId)).SingleOrDefaultAsync(ct);
+        if (row is null || !row.GetValue("target", BsonNull.Value).Equals(Target(target)) ||
+            row.GetValue("purpose", BsonNull.Value) != Purpose(target).ToString() || !row.GetValue("uploader", BsonNull.Value).Equals(Uploader(actor))) throw Invalid("evidence_actor_or_owner_denied");
+    }
 
     private IMongoCollection<BsonDocument> Rows(string name) => database.GetCollection<BsonDocument>(name);
     private BsonDateTime Now => new(clock.UtcNow.UtcDateTime);
@@ -180,7 +207,7 @@ internal sealed partial class EvidenceService
             new[] { "reservationDurationMs", "writerDurationMs", "ioDurationMs" }.Any(k => policy[k].AsInt64 is <= 0 or > uint.MaxValue - 1L) ||
             policy["bufferBytes"].AsInt64 is <= 0 or > 1048576) throw Conflict("evidence_policy_unavailable");
     }
-    private static void RequireAuthority(Bundle bundle, CatalogImageUploadTarget target, ActorContext actor, bool uploader)
+    private static void RequireAuthority(Bundle bundle, EvidenceUploadTarget target, ActorContext actor, bool uploader)
     {
         if (ReadTarget(bundle.Reservation) != target.Target || CatalogRepository.Owner(bundle.Reservation["owner"].AsBsonDocument) != target.Owner ||
             uploader && !bundle.Reservation["uploader"].Equals(Uploader(actor))) throw Invalid("evidence_actor_or_owner_denied");
@@ -197,7 +224,7 @@ internal sealed partial class EvidenceService
             attempt["reservationId"] != reservation["_id"] || version["reservationId"] != reservation["_id"] || version["attemptId"] != attempt["_id"] ||
             version["lineageId"] != lineage["_id"] || lineage["firstVersionRowId"] != version["_id"] ||
             !new[] { "target", "purpose", "owner", "uploader" }.All(k => lineage[k].Equals(reservation[k])) ||
-            reservation["purpose"] != "CatalogImage" || reservation["contentVersion"] != 1L || version["contentVersion"] != 1L ||
+            reservation["purpose"] != Purpose(ReadTarget(reservation)).ToString() || reservation["operation"] != ReserveOperation(reservation) || reservation["contentVersion"] != 1L || version["contentVersion"] != 1L ||
             attempt["ticketRevision"] != 1L || version["state"] != reservation["state"] || attempt["storeId"] != version["storeId"] ||
             attempt["generation"] != version["generation"] || !new[] { "contentRevision", "length", "sha256" }.All(k => attempt[k] == version[k]) ||
             (reservation["state"] == "quarantined") != (attempt["state"] == "quarantined") ||
@@ -206,7 +233,7 @@ internal sealed partial class EvidenceService
             throw Invalid();
         var bundle = new Bundle(lineage, reservation, attempt, version);
         var receipt = await Rows("idempotencyRecords").Find(tx, ReceiptFilter(reservation["uploader"]["userId"].AsInt64,
-            ReserveOperation, reservation["key"].AsString)).SingleOrDefaultAsync(ct) ?? throw Invalid();
+            ReserveOperation(reservation), reservation["key"].AsString)).SingleOrDefaultAsync(ct) ?? throw Invalid();
         await RequireReceiptAsync(tx, bundle, receipt, false, ct);
         return bundle;
     }
@@ -256,14 +283,14 @@ internal sealed partial class EvidenceService
         ? new(bundle.Reservation["lineageId"].AsInt64, 1, bundle.Version["sha256"].AsString) : null;
     private async Task WriteReceiptAsync(IClientSessionHandle tx, ActorContext actor, Bundle bundle, bool completed, long auditId, string key, string hash, CancellationToken ct) =>
         await Rows("idempotencyRecords").InsertOneAsync(tx, new BsonDocument { { "_id", ObjectId.GenerateNewId() }, { "schemaVersion", 1 },
-            { "actorId", actor.UserId }, { "operation", completed ? CompleteOperation : ReserveOperation }, { "key", key }, { "bodyHash", hash },
+            { "actorId", actor.UserId }, { "operation", completed ? CompleteOperation(bundle) : ReserveOperation(bundle.Reservation) }, { "key", key }, { "bodyHash", hash },
             { "result", Result(bundle, completed) }, { "createdAt", Now }, { "evidenceAdmission", new BsonDocument {
                 { "schemaVersion", 1 }, { "reservationId", bundle.Reservation["_id"] }, { "auditId", auditId } } } }, cancellationToken: ct);
     private async Task RequireReceiptAsync(IClientSessionHandle tx, Bundle bundle, BsonDocument receipt, bool completed, CancellationToken ct)
     {
         var r = bundle.Reservation;
         var auditId = completed ? r["completionAuditId"] : r["reserveAuditId"];
-        if (receipt["actorId"] != r["uploader"]["userId"] || receipt["operation"] != (completed ? CompleteOperation : ReserveOperation) ||
+        if (receipt["actorId"] != r["uploader"]["userId"] || receipt["operation"] != (completed ? CompleteOperation(bundle) : ReserveOperation(r)) ||
             receipt["key"] != (completed ? CompletionKey(bundle) : r["key"].AsString) ||
             receipt["evidenceAdmission"]["reservationId"] != r["_id"] || receipt["evidenceAdmission"]["auditId"] != auditId ||
             !receipt["result"].Equals(Result(bundle, completed)) || receipt["bodyHash"] != (completed ? Hash(CompletionKey(bundle) + ":" + bundle.Version["sha256"].AsString) : r["bodyHash"].AsString)) throw Invalid();
@@ -278,7 +305,7 @@ internal sealed partial class EvidenceService
     {
         if (bundle.Reservation["state"] != "quarantined") throw Conflict();
         var receipt = await Rows("idempotencyRecords").Find(tx, ReceiptFilter(bundle.Reservation["uploader"]["userId"].AsInt64,
-            CompleteOperation, CompletionKey(bundle))).SingleOrDefaultAsync(ct) ?? throw Invalid();
+            CompleteOperation(bundle), CompletionKey(bundle))).SingleOrDefaultAsync(ct) ?? throw Invalid();
         await RequireReceiptAsync(tx, bundle, receipt, true, ct);
         var outbox = await Rows("outboxEvents").Find(tx, F.Eq("sourceKey", SourceKey(bundle))).SingleOrDefaultAsync(ct);
         if (outbox is null || outbox["kind"] != "evidence.validation.requested" || !outbox["payload"].Equals(Payload(bundle))) throw Invalid();

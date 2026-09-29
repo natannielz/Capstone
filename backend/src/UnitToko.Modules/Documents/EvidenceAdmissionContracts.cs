@@ -2,7 +2,20 @@ using UnitToko.Modules.Contracts;
 
 namespace UnitToko.Modules.Documents;
 
-public enum EvidencePurpose { CatalogImage = 1 }
+public enum EvidencePurpose { CatalogImage = 1, PaymentImage = 2 }
+
+public sealed record ReserveEvidenceImage
+{
+    public EvidenceTargetRef Target { get; }
+    public EvidencePurpose Purpose { get; }
+    public long? ExpectedTargetRevision { get; }
+    public ReserveEvidenceImage(EvidenceTargetRef target, EvidencePurpose purpose, long? expectedTargetRevision) {
+        if (target is null || expectedTargetRevision is <= 0 || !((purpose == EvidencePurpose.CatalogImage && target.Kind is EvidenceTargetKind.CatalogFamily or EvidenceTargetKind.CatalogSku) ||
+            (purpose == EvidencePurpose.PaymentImage && target.Kind == EvidenceTargetKind.PaymentDeclaration)))
+            throw new DomainValidationException("evidence_invalid_admission", "Use the owning record's supported evidence purpose");
+        Target = target; Purpose = purpose; ExpectedTargetRevision = expectedTargetRevision;
+    }
+}
 
 /// <summary>No scope, hash, address, byte count or storage ticket is accepted from the caller.</summary>
 public sealed record ReserveCatalogImage
@@ -14,7 +27,8 @@ public sealed record ReserveCatalogImage
     public ReserveCatalogImage(EvidenceTargetRef target, EvidencePurpose purpose = EvidencePurpose.CatalogImage,
         long? expectedTargetRevision = null, string? filename = null)
     {
-        if (target is null || purpose != EvidencePurpose.CatalogImage || expectedTargetRevision is <= 0)
+        if (target is null || target.Kind is not (EvidenceTargetKind.CatalogFamily or EvidenceTargetKind.CatalogSku) ||
+            purpose != EvidencePurpose.CatalogImage || expectedTargetRevision is <= 0)
             throw new DomainValidationException("evidence_invalid_admission", "Supported target, purpose and positive revision are required");
         Target = target; Purpose = purpose; ExpectedTargetRevision = expectedTargetRevision; Filename = filename;
     }

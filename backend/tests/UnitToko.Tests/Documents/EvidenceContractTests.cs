@@ -56,6 +56,7 @@ public sealed class EvidenceContractTests
     [Theory]
     [InlineData(EvidenceTargetKind.CatalogFamily)]
     [InlineData(EvidenceTargetKind.CatalogSku)]
+    [InlineData(EvidenceTargetKind.PaymentDeclaration)]
     public void Supported_target_preserves_exact_root_identity(EvidenceTargetKind kind)
     {
         var target = new EvidenceTargetRef(kind, long.MaxValue);

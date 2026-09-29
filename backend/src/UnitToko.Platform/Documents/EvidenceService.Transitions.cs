@@ -87,7 +87,7 @@ internal sealed partial class EvidenceService
         ArgumentNullException.ThrowIfNull(claim); ValidateMetadata(metadata);
         var bundle = await LoadAsync(tx, claim.Expected.Attempt.ReservationId, ct);
         DateTimeOffset? deadline = null;
-        var result = await catalog.WithCatalogImageUploadTargetAsync(database, tx, actor, ReadTarget(bundle.Reservation), null, async (target, token) =>
+        var result = await WithTargetAsync(tx, actor, ReadTarget(bundle.Reservation), null, async (target, token) =>
         {
             RequireAuthority(bundle, target, actor, true);
             if (claim.Expected != Publication(bundle)) throw Invalid("evidence_publication_mismatch");
@@ -133,7 +133,7 @@ internal sealed partial class EvidenceService
     {
         ValidateMetadata(metadata);
         var bundle = await LoadAsync(tx, reservationId, ct);
-        var result = await catalog.WithCatalogImageUploadTargetAsync(database, tx, actor, ReadTarget(bundle.Reservation), null, async (target, token) =>
+        var result = await WithTargetAsync(tx, actor, ReadTarget(bundle.Reservation), null, async (target, token) =>
         {
             RequireAuthority(bundle, target, actor, true);
             if (bundle.Reservation["state"] != "reserved") throw Conflict("evidence_recovery_required");

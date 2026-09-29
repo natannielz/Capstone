@@ -3,10 +3,11 @@ import { canManageAccounts, canReviewPeople, canUseStockCounts, canUseStockSourc
 import styles from "./access.module.css";
 
 export function AdministrationNavigation({ current, actions, locked = false }: {
-  current: "access" | "organizations" | "history" | "accounts" | "person-reviews" | "catalog" | "prices" | "counts" | "sources" | "source-revisions" | "source-aliases" | "source-suspensions" | "source-policies" | "order-reviews" | "orders" | "preparations" | "dispatches" | "shipments" | "invoices"; actions: readonly string[]; locked?: boolean;
+  current: "access" | "organizations" | "history" | "accounts" | "person-reviews" | "catalog" | "prices" | "counts" | "sources" | "source-revisions" | "source-aliases" | "source-suspensions" | "source-policies" | "order-reviews" | "orders" | "preparations" | "dispatches" | "shipments" | "invoices" | "payments"; actions: readonly string[]; locked?: boolean;
 }) {
   const links = [
     { id: "invoices", href: "/billing/invoices", label: "Tagihan", available: actions.some(action => ["invoice.read", "invoice.issue"].includes(action)) },
+    { id: "payments", href: "/billing/payments", label: "Bukti pembayaran", available: actions.includes("payment.evidence") && actions.includes("invoice.read") },
     { id: "shipments", href: "/fulfillment/shipments", label: "Kiriman", available: actions.some(action => ["shipment.read", "delivery.attempt"].includes(action)) },
     { id: "preparations", href: "/fulfillment/preparations", label: "Persiapan kiriman", available: actions.includes("shipment.prepare") },
     { id: "dispatches", href: "/fulfillment/dispatches", label: "Keberangkatan kiriman", available: actions.includes("shipment.dispatch") && actions.includes("shipment.assign") },

@@ -25,7 +25,7 @@ public sealed class InvoiceMigrationTests(MongoFixture fixture)
         await db.CreateCollectionAsync(InvoiceBson.Allocations, new CreateCollectionOptions<BsonDocument> { Validator = stronger });
         await db.GetCollection<BsonDocument>("idCounters").InsertOneAsync(new BsonDocument { { "_id", InvoiceBson.Invoices }, { "value", 9007199254740993L } });
         await new CollectionMigrations(db, Clock).ApplyAsync(); var after = await History(db);
-        Assert.Equal(history, new BsonArray(after.Take(28))); Assert.Equal(29, after.Count); await InvoiceStorage.RequireAsync(db, default);
+        Assert.Equal(history, new BsonArray(after.Take(28))); Assert.Equal(CollectionMigrations.CurrentVersion, after.Count); await InvoiceStorage.RequireAsync(db, default);
         var actual = await (await db.GetCollection<BsonDocument>(InvoiceBson.Invoices).Indexes.ListAsync()).ToListAsync();
         foreach (var index in indexes) Assert.Contains(actual, value => value.Equals(index));
         var definition = await (await db.ListCollectionsAsync(new ListCollectionsOptions { Filter = new BsonDocument("name", InvoiceBson.Allocations) })).SingleAsync();

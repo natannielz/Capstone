@@ -62,6 +62,18 @@ builder.Services.AddSingleton<ShipmentDocumentService>();
 builder.Services.AddSingleton<ShipmentReceiptService>();
 builder.Services.AddSingleton<DeliveryAttemptService>();
 builder.Services.AddSingleton<InvoiceService>();
+builder.Services.AddSingleton<PaymentDraftService>();
+builder.Services.AddSingleton(sp => {
+    var options = sp.GetRequiredService<IConfiguration>().GetSection("Evidence:PrivateWindows");
+    var root = options["Root"]; var storeId = options["StoreId"]; var operators = options.GetSection("TrustedOperatorSids").Get<string[]>() ?? [];
+    PaymentEvidenceStorageOptions? storage = null;
+    if (root is not null || storeId is not null || operators.Length > 0) {
+        if (string.IsNullOrWhiteSpace(root) || string.IsNullOrWhiteSpace(storeId)) throw new InvalidOperationException("Complete private evidence storage settings are required");
+        storage = new(root, storeId, operators);
+    }
+    return new PaymentEvidenceService(sp.GetRequiredService<IMongoDatabase>(), sp.GetRequiredService<MongoUnitOfWork>(), sp.GetRequiredService<IdAllocator>(),
+        sp.GetRequiredService<IClock>(), sp.GetRequiredService<PaymentDraftService>(), storage);
+});
 builder.Services.AddSingleton<StockCountService>();
 builder.Services.AddSingleton<StockSourceSetupService>();
 builder.Services.AddSingleton<HistoricalReadStore>();
@@ -116,6 +128,7 @@ builder.Services.AddOpenApi("v1", options =>
                      path.Key.StartsWith("/api/v1/catalog/", StringComparison.Ordinal) ||
                      path.Key.StartsWith("/api/v1/ordering/", StringComparison.Ordinal) ||
                      path.Key.StartsWith("/api/v1/fulfillment/", StringComparison.Ordinal) ||
+                     path.Key.StartsWith("/api/v1/billing/", StringComparison.Ordinal) ||
                      path.Key.StartsWith("/api/v1/inventory/", StringComparison.Ordinal)) &&
                     path.Key != "/api/v1/access/current")
                 {
@@ -184,12 +197,15 @@ app.Use(async (context, next) =>
     context.Response.Headers["X-Correlation-Id"] = correlation;
     try
     {
-        if (context.Request.ContentLength > 65_536)
+        var evidenceStream = context.GetEndpoint()?.Metadata.GetMetadata<PaymentEvidenceBodyStream.UploadMetadata>() is not null;
+        if (context.Request.ContentLength > (evidenceStream ? PaymentEvidenceBodyStream.MaximumBytes : 65_536))
         {
             await Problems.WriteAsync(context, 413, "request_too_large", "Request body is too large");
             return;
         }
-        // Always consume a bounded body: HTTP/2 can carry data on any method without length or Transfer-Encoding.
+        // JSON stays bounded on every method; the exact upload endpoint streams through its
+        // separate bounded source after authorization, including requests without Content-Length.
+        if (!evidenceStream)
         {
             await using var buffer = new MemoryStream();
             var chunk = new byte[8192];
@@ -254,9 +270,9 @@ app.Use(async (context, next) =>
     catch (BadHttpRequestException exception)
     {
         if (!context.Response.HasStarted)
-            await Problems.WriteAsync(context, exception.StatusCode == 413 ? 413 : 400,
-                exception.StatusCode == 413 ? "request_too_large" : "invalid_request",
-                exception.StatusCode == 413 ? "Request body is too large" : "Invalid request body");
+            await Problems.WriteAsync(context, exception.StatusCode is 413 or 415 ? exception.StatusCode : 400,
+                exception.StatusCode == 413 ? "request_too_large" : exception.StatusCode == 415 ? "unsupported_media_type" : "invalid_request",
+                exception.StatusCode == 413 ? "Request body is too large" : exception.StatusCode == 415 ? "Unsupported content type" : "Invalid request body");
     }
     catch (Exception exception)
     {
@@ -307,6 +323,8 @@ app.MapShipmentReceiptEndpoints();
 app.MapShipmentReceiptProofEndpoints();
 app.MapDeliveryAttemptEndpoints();
 app.MapInvoiceEndpoints();
+app.MapPaymentDraftEndpoints();
+app.MapPaymentEvidenceEndpoints();
 app.MapStockCountEndpoints();
 app.MapStockSourceSetupEndpoints();
 app.MapStockSourceRevisionEndpoints();

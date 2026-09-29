@@ -136,7 +136,7 @@ internal sealed partial class EvidenceService
         unit.ExecuteAsync((tx, token) => GuardAsync(tx, async () =>
         {
             var bundle = await LoadAsync(tx, reservationId, token);
-            var result = await catalog.WithCatalogImageUploadTargetAsync(database, tx, actor, ReadTarget(bundle.Reservation), null, async (target, inner) =>
+            var result = await WithTargetAsync(tx, actor, ReadTarget(bundle.Reservation), null, async (target, inner) =>
             {
                 RequireAuthority(bundle, target, actor, true);
                 if (bundle.Reservation["state"] == "quarantined") await CompletionAsync(tx, bundle, inner);
@@ -156,7 +156,7 @@ internal sealed partial class EvidenceService
         unit.ExecuteAsync((tx, token) => GuardAsync(tx, async () =>
         {
             var bundle = await LoadAsync(tx, reservationId, token);
-            var result = await catalog.WithCatalogImageUploadTargetAsync(database, tx, actor, ReadTarget(bundle.Reservation), null, async (target, inner) =>
+            var result = await WithTargetAsync(tx, actor, ReadTarget(bundle.Reservation), null, async (target, inner) =>
             {
                 RequireAuthority(bundle, target, actor, true); return await CompletionAsync(tx, bundle, inner);
             }, token);
