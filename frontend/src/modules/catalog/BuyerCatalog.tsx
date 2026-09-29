@@ -79,7 +79,7 @@ export function BuyerCatalog() {
   }
   function close() { dialog.current?.close(); setSelected(null); opener.current?.focus(); }
   return <main className={shared.page}><header className={shared.header}><div><Link className={shared.brand} href="/identity/account">Unit Toko</Link><h1>Katalog kemasan</h1>
-    <p>Periksa isi, satuan, dan harga setiap kemasan sebelum menyusun pesanan.</p></div><Link className={shared.secondary} href="/identity/account">Akun saya</Link></header>
+    <p>Periksa isi, satuan, dan harga setiap kemasan sebelum menyusun pesanan.</p></div><nav className={shared.actions}><Link className={shared.secondary} href="/ordering/drafts">Draf pesanan</Link><Link className={shared.secondary} href="/identity/account">Akun saya</Link></nav></header>
     <section className={styles.toolbar} aria-label="Pencarian katalog"><form className={styles.search} onSubmit={event => { event.preventDefault(); detailGate.cancel(); setSelected(null); setOffset(0); setQuery(search.trim()); refresh(); }}>
       <label>Cari kode atau kemasan<input value={search} maxLength={128} disabled={busy || detailBusy !== null} onChange={event => setSearch(event.target.value)} /></label><button className={shared.primary} disabled={busy || detailBusy !== null}>Cari</button></form>
       <button className={shared.secondary} disabled={busy || detailBusy !== null} onClick={refresh}>Muat kembali katalog</button></section>
@@ -108,7 +108,7 @@ export function BuyerCatalog() {
           <div><dt>Minimum pembelian</dt><dd>{selected.definition.minimumOrderPackages} kemasan</dd></div><div><dt>Kelipatan pemesanan</dt><dd>{selected.definition.orderIncrementPackages} kemasan</dd></div>
           {selected.definition.attributes.map(attribute => <div key={attribute.key}><dt>{attribute.key}</dt><dd>{attribute.value}</dd></div>)}</dl>
         <p className={shared.help}>Harga dan ketersediaan akan diperiksa kembali saat pesanan disiapkan.</p>
-        {account && selected.currentPrice && <OrderQuotePanel key={account.actorId + ':' + selected.skuId + ':' + selected.definition.id + ':' + selected.currentPrice.id} actorId={account.actorId} item={selected} />}</>}
+        {account && selected.currentPrice && <OrderQuotePanel key={account.actorId + ':' + selected.skuId + ':' + selected.definition.id + ':' + selected.currentPrice.id} actorId={account.actorId} item={selected} isCurrent={current} />}</>}
     </dialog>
   </main>;
 }

@@ -20,15 +20,16 @@ const { chromium } = load('playwright'), channel = process.env.UNITTOKO_BROWSER_
 assert.ok(['chromium', 'msedge'].includes(channel));
 const app = next({ dev: false, dir: process.cwd(), quiet: true }), sockets = new Set(), writes = [], errors = [], checks = [];
 const directory = resolve('../tmp/production/catalog-price-browser-results'); mkdirSync(directory, { recursive: true });
-let browser, frontend, edge, tunnel, dropNext = false, dropped = 0;
+let browser, frontend, edge, tunnel, dropNext = false, dropped = 0, firstApiAt;
 const pages = [];
 function track(server) { server.on('connection', socket => { sockets.add(socket); socket.on('close', () => sockets.delete(socket)); }); return server; }
 async function listen(server) { await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); }); return server.address().port; }
 function forward(req, res, port, isApi) {
+  if (isApi) firstApiAt ??= performance.now();
   const headers = { ...req.headers, host: '127.0.0.1:' + port };
   for (const name of Object.keys(headers)) if (name.startsWith('x-forwarded-') || name.startsWith('x-original-') || ['forwarded', 'connection'].includes(name)) delete headers[name];
   if (isApi) { headers['x-forwarded-for'] = req.socket.remoteAddress; headers['x-forwarded-host'] = origin.host; headers['x-forwarded-proto'] = 'https'; }
-  const write = req.method === 'POST' && (/^\/api\/v1\/catalog\/prices\/skus\/[0-9]+\/proposals$/.test(req.url) || /^\/api\/v1\/catalog\/prices\/proposals\/[0-9]+\/(approve|reject|withdraw)$/.test(req.url));
+  const write = req.method === 'POST' && (req.url === '/api/v1/ordering/drafts' || /^\/api\/v1\/catalog\/prices\/skus\/[0-9]+\/proposals$/.test(req.url) || /^\/api\/v1\/catalog\/prices\/proposals\/[0-9]+\/(approve|reject|withdraw)$/.test(req.url));
   if (write) writes.push({ path: req.url, key: req.headers['idempotency-key'], actor: req.headers['x-expected-actor-id'] });
   const drop = write && dropNext; if (drop) dropNext = false;
   const upstream = http.request({ hostname: '127.0.0.1', port, path: req.url, method: req.method, headers }, response => {
@@ -90,6 +91,72 @@ async function decision(page, displayed, action) {
   await page.getByLabel('Alasan keputusan', { exact: true }).fill('Kemasan dan harga diperiksa');
   await page.getByRole('button', { name: { approve: 'Tinjau persetujuan', reject: 'Tinjau penolakan', withdraw: 'Tinjau penarikan' }[action], exact: true }).click();
   await page.getByRole('region', { name: 'Konfirmasi harga', exact: true }).waitFor();
+}
+async function openDraft(page) {
+  await page.goto(origin.origin + '/ordering/drafts');
+  await page.getByLabel('Cabang pemesan').selectOption('10:11:');
+  await page.getByRole('region', { name: 'Daftar draf' }).getByRole('button', { name: /(?:Draf [0-9]+|PO-FIXTURE)/ }).click();
+  await page.getByRole('region', { name: 'Isi draf' }).waitFor();
+}
+async function draftRecovery(page, beforeWrites) {
+  await page.getByRole('button', { name: 'Periksa hasil', exact: true }).waitFor();
+  const entries = await page.evaluate(() => Object.keys(localStorage).filter(key => key.startsWith('unit-toko:pending:v1:')).map(key => JSON.parse(localStorage[key])));
+  assert.equal(entries.length, 1); assert.equal(entries[0].operation, 'ordering.draft.save');
+  assert.deepEqual(Object.keys(entries[0]).sort(), ['actorId', 'createdAt', 'key', 'operation']);
+  assert.equal(entries[0].key, writes.at(-1).key);
+  await page.goto(origin.origin + '/ordering/drafts');
+  await page.getByRole('button', { name: 'Periksa hasil', exact: true }).click();
+  await page.getByRole('region', { name: 'Isi draf' }).waitFor();
+  assert.equal(writes.length, beforeWrites + 1, 'Draft recovery must only look up the original receipt');
+  assert.equal(await page.getByRole('button', { name: 'Selesaikan dan tutup', exact: true }).count(), 0);
+}
+async function verifyDrafts(buyer) {
+  // All fixture users share one loopback IP. Respect the real 240/minute limiter rather than disabling it.
+  const pacing = Math.max(0, 61000 - (performance.now() - firstApiAt));
+  if (pacing > 0) { console.log('FIXTURE pacing before the next workflow to respect the real API rate window'); await new Promise(resolve => setTimeout(resolve, pacing)); }
+  await buyer.page.getByRole('button', { name: 'Rincian BROWSER-12 Dus dua belas', exact: true }).click();
+  const detail = buyer.page.getByRole('dialog'); await detail.getByLabel('Cabang pemesan').selectOption('10:11:');
+  await detail.getByLabel('Jumlah kemasan').fill('3'); await detail.getByRole('button', { name: 'Periksa subtotal', exact: true }).click();
+  let before = writes.length; dropNext = true;
+  await detail.getByRole('button', { name: 'Simpan sebagai draf', exact: true }).click(); await draftRecovery(buyer.page, before);
+  assert.equal(await buyer.page.getByLabel('Jumlah kemasan 1', { exact: true }).inputValue(), '3');
+  await buyer.page.getByLabel('Jumlah kemasan 1', { exact: true }).fill('4');
+  await buyer.page.getByLabel('Referensi pembelian (opsional)', { exact: true }).fill('PO-FIXTURE');
+  await buyer.page.getByLabel('Isi rencana pengiriman', { exact: true }).check();
+  await buyer.page.getByLabel('Nama penerima', { exact: true }).fill('Penerima lokal');
+  await buyer.page.getByLabel('Telepon penerima', { exact: true }).fill('+62 812-3456-7890');
+  await buyer.page.getByLabel('Alamat pengiriman', { exact: true }).fill('Jalan Fixture 1\nLantai 2');
+  await buyer.page.getByLabel('Kota', { exact: true }).fill('Jakarta');
+  await buyer.page.getByLabel('Kode pos (opsional)', { exact: true }).fill('12810');
+  await buyer.page.getByRole('button', { name: 'Tinjau perubahan draf', exact: true }).click();
+  const review = buyer.page.getByRole('region', { name: 'Konfirmasi draf' }); await review.waitFor();
+  assert.match(await review.innerText(), /4 Dus dua belas · 48 piece/);
+  assert.equal(await review.evaluate(element => element === document.activeElement), true);
+  assert.equal(await buyer.page.getByLabel('Jumlah kemasan 1', { exact: true }).isDisabled(), true);
+  assert.equal(await buyer.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  await buyer.page.screenshot({ path: resolve(directory, 'buyer-draft-mobile.png'), fullPage: true });
+  before = writes.length; dropNext = true; await buyer.page.getByRole('button', { name: 'Konfirmasi simpan draf', exact: true }).click();
+  await draftRecovery(buyer.page, before);
+  assert.equal(await buyer.page.getByLabel('Jumlah kemasan 1', { exact: true }).inputValue(), '4');
+  assert.equal(await buyer.page.getByLabel('Alamat pengiriman', { exact: true }).inputValue(), 'Jalan Fixture 1\nLantai 2');
+  const stale = await user('buyer'); await openDraft(stale.page);
+  await stale.page.getByLabel('Jumlah kemasan 1', { exact: true }).fill('5');
+  await stale.page.getByRole('button', { name: 'Tinjau perubahan draf', exact: true }).click();
+  await stale.page.getByRole('region', { name: 'Konfirmasi draf' }).waitFor();
+  // Reselect the real package explicitly. The browser must not silently replace its saved price/version.
+  await buyer.page.getByLabel('Cari kemasan untuk draf', { exact: true }).fill('BROWSER-12');
+  await buyer.page.getByRole('button', { name: 'Cari kemasan', exact: true }).click();
+  await buyer.page.getByRole('button', { name: /Pensil browser BROWSER-12 · Dus dua belas/ }).click();
+  const choice = buyer.page.getByRole('region', { name: 'Periksa pilihan kemasan' }); await choice.waitFor();
+  await choice.getByLabel('Jumlah kemasan pilihan').fill('6');
+  await choice.getByRole('button', { name: 'Ganti pilihan kode ini', exact: true }).click();
+  await buyer.page.getByRole('button', { name: 'Tinjau perubahan draf', exact: true }).click();
+  await buyer.page.getByRole('button', { name: 'Konfirmasi simpan draf', exact: true }).click();
+  await buyer.page.getByRole('region', { name: 'Isi draf' }).getByText('Versi 3.', { exact: false }).waitFor();
+  await stale.page.getByRole('button', { name: 'Konfirmasi simpan draf', exact: true }).click();
+  await stale.page.getByRole('alert').filter({ hasText: 'Draf atau akses telah berubah' }).waitFor();
+  await openDraft(stale.page); assert.equal(await stale.page.getByLabel('Jumlah kemasan 1', { exact: true }).inputValue(), '6');
+  await stale.context.close(); await buyer.page.goto(origin.origin + '/catalog/browse');
 }
 try {
   await app.prepare(); const handle = app.getRequestHandler();
@@ -174,6 +241,7 @@ try {
     await detail.getByLabel('Jumlah kemasan').fill('3'); assert.equal(await subtotal.count(), 0, 'An edited quantity invalidates the displayed quote');
     await buyer.page.keyboard.press('Escape'); await detail.waitFor({ state: 'hidden' });
     assert.equal(await open.evaluate(element => element === document.activeElement), true);
+    await check('buyer saves and edits a private Mongo draft, recovers two lost responses and rejects a stale competing edit', () => verifyDrafts(buyer));
     const author = await user('author');
     const status = await author.page.evaluate(async ({ skuId, authorId }) => {
       const csrf = await (await fetch('/api/v1/identity/csrf')).json();
@@ -182,9 +250,16 @@ try {
     }, { skuId: config.skuId, authorId: config.authorId }); assert.equal(status, 200); await author.context.close();
     await open.click(); await buyer.page.getByRole('status').filter({ hasText: 'Kemasan ini tidak lagi tersedia' }).waitFor();
     assert.equal(await buyer.page.getByRole('dialog').count(), 0); assert.equal(await open.count(), 0);
+    await openDraft(buyer.page);
+    await buyer.page.getByRole('alert').filter({ hasText: 'Sebagian kemasan atau harga tidak lagi tersedia' }).waitFor();
+    const invalidQuote = buyer.page.waitForResponse(response => new URL(response.url()).pathname === '/api/v1/ordering/quote/query');
+    await buyer.page.getByRole('button', { name: 'Tinjau perubahan draf', exact: true }).click();
+    assert.equal((await invalidQuote).status(), 403);
+    await buyer.page.locator('main').getByRole('alert').filter({ hasText: 'Akses untuk tindakan ini tidak tersedia' }).waitFor();
+    assert.equal(await buyer.page.getByRole('region', { name: 'Konfirmasi draf' }).count(), 0);
     await buyer.context.close();
   });
-  assert.deepEqual(errors, []); assert.equal(dropped, 4);
+  assert.deepEqual(errors, []); assert.equal(dropped, 6);
   console.log('REAL_PRICE_BROWSER_PASS ' + JSON.stringify({ checks, droppedCommittedResponses: dropped, attempts: writes.length }));
 } catch (error) {
   for (const { page, who } of pages) if (!page.isClosed()) {
@@ -194,6 +269,14 @@ try {
   console.error(error.stack ?? String(error)); process.exitCode = 1;
 }
 finally {
-  if (browser) await browser.close(); for (const socket of sockets) socket.destroy();
-  for (const server of [tunnel, edge, frontend]) if (server) await new Promise(resolve => server.close(resolve)); await app.close();
+  let timer;
+  try {
+    await Promise.race([(async () => {
+      if (browser) await browser.close(); for (const socket of sockets) socket.destroy();
+      for (const server of [tunnel, edge, frontend]) if (server) await new Promise(resolve => server.close(resolve)); await app.close();
+    })(), new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Fixture cleanup exceeded 10 seconds')), 10000); })]);
+  } catch (failure) { console.error(failure); process.exitCode = 1; }
+  finally { clearTimeout(timer); }
 }
+// Isolated fixture process only; preserve any assertion or cleanup failure as a failing exit.
+process.exit(process.exitCode ?? 0);

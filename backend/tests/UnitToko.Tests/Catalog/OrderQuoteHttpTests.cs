@@ -32,8 +32,8 @@ public sealed partial class CatalogAuthoringHttpTests
             selections = new[] { new { skuId = sku, definitionId = definition.GetProperty("id").GetString(), definitionVersion = definition.GetProperty("version").GetString(),
                 priceId = price.GetProperty("id").GetString(), priceVersion = priceVersion ?? price.GetProperty("version").GetString(), packages = 2 } }
         };
-        async Task<HttpResponseMessage> Request(string suffix, object body, string? fault = null) {
-            using var request = buyer.Request("/owners/query", body); request.RequestUri = new Uri(Origin + "/api/v1/ordering/" + suffix);
+        async Task<HttpResponseMessage> Request(string suffix, object body, string? fault = null, string? key = null, string? version = null) {
+            using var request = buyer.Request("/owners/query", body, key, version); request.RequestUri = new Uri(Origin + "/api/v1/ordering/" + suffix);
             if (fault == "actor") request.Headers.Remove("X-Expected-Actor-Id");
             if (fault == "csrf") request.Headers.Remove("X-CSRF-Token");
             if (fault == "wrong-actor") { request.Headers.Remove("X-Expected-Actor-Id"); request.Headers.Add("X-Expected-Actor-Id", ManagerId.ToString()); }
@@ -51,6 +51,25 @@ public sealed partial class CatalogAuthoringHttpTests
         Assert.Equal(HttpStatusCode.Conflict, (await Request("quote/query", Body(), "wrong-actor")).StatusCode);
         var forged = JsonSerializer.SerializeToNode(Body())!.AsObject(); forged["unitPrice"] = "1.00";
         Assert.Equal(HttpStatusCode.BadRequest, (await Request("quote/query", forged)).StatusCode);
+        Assert.Equal(0, await data.Count("orders")); Assert.Equal(0, await data.Count("reservations"));
+
+        var selection = JsonSerializer.SerializeToElement(Body());
+        var draftInput = new { context = selection.GetProperty("context"), selections = selection.GetProperty("selections"), delivery = new {
+            recipientName = "Penerima fixture", phone = "+62 812-3456-7890", address = "Jalan Contoh 1\nLantai 2", city = "Jakarta", postalCode = "12810", instructions = (string?)null
+        }, purchaseReference = "PO fixture" };
+        var save = new { draftId = (string?)null, input = draftInput, reason = "Buyer saves private draft" };
+        var saved = await Ok(await Request("drafts", save, key: "http-draft-save", version: "0"));
+        var draftId = saved.GetProperty("draftId").GetString()!;
+        Assert.Equal("1", saved.GetProperty("revision").GetString());
+        var readDraft = await Ok(await Request("drafts/" + draftId + "/query", new { purpose = "order-preparation" }));
+        Assert.Equal("Jalan Contoh 1\nLantai 2", readDraft.GetProperty("input").GetProperty("delivery").GetProperty("address").GetString());
+        var drafts = await Ok(await Request("drafts/query", new { purpose = "order-preparation", context = selection.GetProperty("context") }));
+        Assert.Equal(draftId, Assert.Single(drafts.GetProperty("items").EnumerateArray()).GetProperty("id").GetString());
+        Assert.Equal(saved.GetRawText(), (await Ok(await Request("drafts", save, key: "http-draft-save", version: "0"))).GetRawText());
+        var recovered = await Ok(await Request("drafts/operations/query", new { purpose = "operation-recovery", key = "http-draft-save" }));
+        Assert.Equal("committed", recovered.GetProperty("status").GetString()); Assert.Equal(saved.GetRawText(), recovered.GetProperty("result").GetRawText());
+        Assert.Equal(HttpStatusCode.Conflict, (await Request("drafts", new { draftId, input = draftInput, reason = "Stale revision" }, key: "http-stale-draft", version: "2")).StatusCode);
+        Assert.Equal(1, await data.Count("orderDrafts")); Assert.Equal(1, await data.Count("orderDraftVersions"));
         Assert.Equal(0, await data.Count("orders")); Assert.Equal(0, await data.Count("reservations"));
     }
 }

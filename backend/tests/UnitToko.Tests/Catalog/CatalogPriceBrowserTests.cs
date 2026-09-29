@@ -108,7 +108,13 @@ public sealed class CatalogPriceBrowserTests(MongoFixture fixture, ITestOutputHe
         Assert.Equal(4, await data.Database.GetCollection<BsonDocument>("catalogPriceDecisions").CountDocumentsAsync(new BsonDocument()));
         Assert.Equal(9, await data.Database.GetCollection<BsonDocument>("auditEvents").CountDocumentsAsync(new BsonDocument("kind", "catalog.price.command")));
         Assert.Equal(9, await data.Database.GetCollection<BsonDocument>("idempotencyRecords").CountDocumentsAsync(new BsonDocument("operation", new BsonDocument("$regex", "^catalog.price\\."))));
-        foreach (var name in new[] { "stockBalances", "movements", "reservations", "journalEntries" })
+        var draft = Assert.Single(await data.Database.GetCollection<BsonDocument>("orderDrafts").Find(new BsonDocument()).ToListAsync());
+        Assert.Equal(3L, draft["revision"].AsInt64); Assert.Equal(buyer.UserId, draft["createdBy"].AsInt64);
+        var drafts = await data.Database.GetCollection<BsonDocument>("orderDraftVersions").Find(new BsonDocument()).Sort(new BsonDocument("revision", 1)).ToListAsync();
+        Assert.Equal(3, drafts.Count); Assert.Equal(new[] { 3, 4, 6 }, drafts.Select(row => row["input"]["selections"][0]["packages"].AsInt32));
+        Assert.Equal("Jalan Fixture 1\nLantai 2", drafts[^1]["input"]["delivery"]["address"].AsString);
+        Assert.Equal(3, await data.Database.GetCollection<BsonDocument>("idempotencyRecords").CountDocumentsAsync(new BsonDocument("operation", "ordering.draft.save")));
+        foreach (var name in new[] { "orders", "stockBalances", "movements", "reservations", "journalEntries" })
             Assert.Equal(0, await data.Database.GetCollection<BsonDocument>(name).CountDocumentsAsync(new BsonDocument()));
     }
     private static string Root()

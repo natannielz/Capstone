@@ -71,14 +71,14 @@ public sealed class OrderQuoteService
         var query = ScopePolicy.Compile(actor, snapshot, Permissions.OrderSubmit, clock.UtcNow);
         AuthorizationStore.Require(query); return query;
     }
-    private void Require(ActorContext actor, AuthorizationSnapshot snapshot, OrderBuyingContext context)
+    internal void Require(ActorContext actor, AuthorizationSnapshot snapshot, OrderBuyingContext context)
     {
         if (!Query(actor, snapshot).Matches(context.Resource(actor.UserId))) throw new AuthorizationDeniedException("scope_denied");
     }
-    private async Task FenceAsync(ActorContext actor, AuthorizationSnapshot snapshot, IClientSessionHandle tx,
+    internal async Task FenceAsync(ActorContext actor, AuthorizationSnapshot snapshot, IClientSessionHandle tx,
         IReadOnlyCollection<OrderBuyingContext> contexts, CancellationToken ct)
     {
-        var clauses = Query(actor, snapshot).Clauses.Where(clause => contexts.Any(context => clause.Matches(context.Resource(actor.UserId)))).ToArray();
+        var clauses = Query(actor, snapshot).Clauses.Where(clause => contexts.Count == 0 || contexts.Any(context => clause.Matches(context.Resource(actor.UserId)))).ToArray();
         var nodes = clauses.SelectMany(clause => clause.RequiredNodes).Concat(contexts.SelectMany(context => ScopePolicy.RequiredNodes(context.Resource(actor.UserId), snapshot.Directory))).Distinct();
         await new HistoricalAuthorizationFence(database, authorization).FenceAsync(actor, nodes, [],
             snapshot.Grants.Where(grant => clauses.Any(clause => clause.GrantId == grant.Id)),

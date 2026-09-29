@@ -36,7 +36,7 @@ public sealed class CatalogPriceMigrationTests(MongoFixture fixture)
         var before = await History(data); Assert.Equal(19, before.Count);
         var migration = new CollectionMigrations(data.Catalog.Database, data.Catalog.Clock);
         await migration.ApplyAsync();
-        var after = await History(data); Assert.Equal(20, after.Count);
+        var after = await History(data); Assert.Equal(CollectionMigrations.CurrentVersion, after.Count);
         Assert.Equal(before, new BsonArray(after.Take(19)));
         foreach (var name in CatalogPriceSchemas.Collections)
             await InventoryRepository.RequireStorageAsync(data.Catalog.Database, name,
@@ -75,7 +75,7 @@ public sealed class CatalogPriceMigrationTests(MongoFixture fixture)
         await data.Rows("identities").UpdateManyAsync(new BsonDocument(), Builders<BsonDocument>.Update.Set("status", "suspended"));
         var before = await data.StateAsync();
         await new CollectionMigrations(data.Catalog.Database, data.Catalog.Clock).ApplyAsync();
-        Assert.Equal(20, (await History(data)).Count); Assert.Equal(before, await data.StateAsync());
+        Assert.Equal(CollectionMigrations.CurrentVersion, (await History(data)).Count); Assert.Equal(before, await data.StateAsync());
         var definition = await (await data.Catalog.Database.ListCollectionsAsync(new ListCollectionsOptions {
             Filter = new BsonDocument("name", CatalogPriceBson.Proposals) })).SingleAsync();
         Assert.Equal(stronger, definition["options"]["validator"]);

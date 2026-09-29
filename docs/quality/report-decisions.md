@@ -26,3 +26,7 @@ Asked on 28 September 2026; answers pending:
 Continue local authorization, persistence and adversarial tests using explicitly synthetic fixtures. Do not issue live entitlements, select a pricing policy or mark these business gates approved without the user's answer and the required operational details.
 
 Other D02 decisions (buyer spending approvers, historical readers, any specifically permitted suspended-branch settlement, person/finance conflicts and review/delegation cadence) remain open under the source register. Historical read never implies settlement permission. This ledger does not declare the remaining D01/D03–D08 gates satisfied.
+
+## D02/D03 branch spending rule
+
+Asked on 29 September 2026 while connecting branch drafts: which real-order spending rule is approved (every order independently approved, approval above a specified amount, or another rule), and which budget/credit limits are already approved? Answer pending. This is a request for business inputs, not approval of a proposed default. Buyer spending approval remains distinct from store acceptance. Continue implementation and isolated synthetic fixtures; no live rule, threshold, limit, tax treatment or credit permission has been inferred.

@@ -1,0 +1,16 @@
+.desk { display: grid; grid-template-columns: minmax(230px, .7fr) minmax(0, 1.6fr); gap: 24px; align-items: start; }
+.editor { background: white; border: 1px solid #d7e3e7; padding: 24px; min-width: 0; }
+.form { display: grid; gap: 20px; }
+.lines { list-style: none; padding: 0; margin: 0; display: grid; gap: 16px; }
+.line { padding: 16px; border: 1px solid #d7e3e7; border-radius: 6px; overflow-wrap: anywhere; }
+.line h3 { margin-top: 0; }
+.line label { margin: 12px 0; }
+.empty { padding: 20px; }
+.selection { border: 1px solid #b0d2cb; background: #f0f8f5; padding: 18px; margin-top: 16px; }
+.selection p { overflow-wrap: anywhere; }
+.choices { list-style: none; padding: 0; display: grid; gap: 8px; }
+.choices button { width: 100%; text-align: left; display: grid; gap: 5px; }
+.section { padding-top: 20px; margin-top: 20px; border-top: 1px solid #d7e3e7; }
+.review { padding: 20px; border: 2px solid #087f8c; background: #f2faf8; overflow-wrap: anywhere; }
+.address { white-space: pre-wrap; }
+@media (max-width: 850px) { .desk { grid-template-columns: minmax(0, 1fr); } .editor { padding: 18px; } }

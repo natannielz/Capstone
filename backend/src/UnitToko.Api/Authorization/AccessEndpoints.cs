@@ -143,7 +143,7 @@ public static partial class AccessEndpoints
     // UI task discovery is separate from administrative catalog admission. Reviewers retain
     // the verification entry when MFA ages; every protected read or command still enforces current assurance.
     private static string[] CurrentActions(ActorContext actor, AuthorizationSnapshot snapshot, DateTimeOffset now) =>
-        AvailableActions(actor, snapshot, now).Concat(new[] { Permissions.CatalogRead, Permissions.PricingManage, Permissions.PricingApprove, Permissions.StockRead, Permissions.StockCount,
+        AvailableActions(actor, snapshot, now).Concat(new[] { Permissions.OrderSubmit, Permissions.CatalogRead, Permissions.PricingManage, Permissions.PricingApprove, Permissions.StockRead, Permissions.StockCount,
                 Permissions.StockSourceRead, Permissions.StockSourcePropose, Permissions.StockSourceApprove, Permissions.StockSourceSuspend, Permissions.StockSourcePolicyPropose, Permissions.StockSourcePolicyApprove }
             .Where(permission => ScopePolicy.Compile(actor, snapshot, permission, now).IsAllowed ||
                 (permission is Permissions.PricingApprove or Permissions.StockSourceApprove or Permissions.StockSourceSuspend or Permissions.StockSourcePolicyApprove) && ScopePolicy.CanRequestStepUp(actor, snapshot, permission, now))).ToArray();

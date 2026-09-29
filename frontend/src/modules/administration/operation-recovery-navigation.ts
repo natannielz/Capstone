@@ -1,4 +1,5 @@
 export function recoveryPage(operation: string) {
+  if (operation === 'ordering.draft.save') return { href: '/ordering/drafts', label: 'halaman draf pesanan' };
   if (/^catalog\.price\.(propose|approve|reject|withdraw)$(?![\s\S])/.test(operation)) return { href: "/catalog/prices", label: "halaman harga kemasan" };
   if (/^stock\.source\.policy\.(propose|approve|reject|withdraw)$(?![\s\S])/.test(operation)) return { href: "/inventory/sources/policies", label: "halaman kebijakan operasional stok" };
   if (operation === "stock.source.suspend") return { href: "/inventory/sources/suspensions", label: "halaman penghentian sumber" };
@@ -10,6 +11,7 @@ export function recoveryPage(operation: string) {
     : { href: "/administration/person-reviews", label: "halaman peninjauan orang" };
 }
 export function operationLabel(operation: string) {
+  if (operation === 'ordering.draft.save') return 'Penyimpanan draf pesanan';
   if (operation.startsWith("catalog.price.")) return "Pengajuan atau keputusan harga kemasan";
   const sources: Readonly<Record<string, string>> = {
     "stock.source.policy.propose": "Pengajuan kebijakan operasional stok", "stock.source.policy.approve": "Persetujuan kebijakan operasional stok",
