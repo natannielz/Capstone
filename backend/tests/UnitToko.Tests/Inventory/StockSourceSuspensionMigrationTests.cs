@@ -73,7 +73,7 @@ public sealed partial class StockSourceSuspensionMigrationTests(MongoFixture fix
         var before = await History(data); Assert.Equal(17, before.Count);
         var migration = new CollectionMigrations(data.Database, data.Clock);
         Assert.False(await migration.IsCurrentAsync()); await migration.ApplyAsync();
-        var after = await History(data); Assert.Equal(18, after.Count); Assert.Equal(before, new BsonArray(after.Take(17)));
+        var after = await History(data); Assert.Equal(CollectionMigrations.CurrentVersion, after.Count); Assert.Equal(before, new BsonArray(after.Take(17)));
         await InventoryRepository.RequireStorageAsync(data.Database, Collection, StockSourceSuspensionSchemas.Validator(), StockSourceSuspensionSchemas.Key(), default);
         foreach (var expected in StockSourceSuspensionSchemas.LookupIndexes())
             Assert.Contains(await (await Rows(data, expected.Collection).Indexes.ListAsync()).ToListAsync(), index => index["key"].Equals(expected.Key));
@@ -86,7 +86,7 @@ public sealed partial class StockSourceSuspensionMigrationTests(MongoFixture fix
         await InstallDraft(data); await Seed(data); var before = await Business(data);
         await Rows(data, "idCounters").DeleteManyAsync(new BsonDocument("_id", new BsonDocument("$in", new BsonArray { Collection, "auditEvents", "inventoryPools" })));
         await new CollectionMigrations(data.Database, data.Clock).ApplyAsync();
-        Assert.Equal(18, (await History(data)).Count); Assert.Equal(before, await Business(data));
+        Assert.Equal(CollectionMigrations.CurrentVersion, (await History(data)).Count); Assert.Equal(before, await Business(data));
         foreach (var name in new[] { Collection, "auditEvents", "inventoryPools" })
         {
             var maximum = (await Rows(data, name).Find(new BsonDocument()).Sort(new BsonDocument("_id", -1)).FirstAsync())["_id"].AsInt64;

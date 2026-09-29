@@ -75,6 +75,19 @@ internal static class StockSourcePolicyBson
             previous = location.ChannelId.Value;
         }
     });
+    // Accepted versions prove ordering even when database timestamps are equal.
+    internal static void AcceptedContinuity(BsonDocument previous, BsonDocument decision, BsonDocument current) => Guard(() =>
+    {
+        if (StockSourceSetupBson.Time(decision["decidedAt"]) > StockSourceSetupBson.Time(current["proposedAt"]) || previous["poolRevision"].AsInt64 > current["poolRevision"].AsInt64 ||
+            previous["suspensionRevision"].AsInt64 > current["suspensionRevision"].AsInt64) throw Invalid();
+        if (previous["configurationHash"] == current["configurationHash"] && previous["suspensionRevision"] == current["suspensionRevision"] &&
+            previous["input"].Equals(current["input"])) throw Invalid();
+        var mappings = current["configuration"]["mappings"].AsBsonArray.Select(value => value.AsBsonDocument)
+            .ToDictionary(value => value["requestedLocation"]["channelId"].AsInt64);
+        foreach (var value in previous["configuration"]["mappings"].AsBsonArray)
+            if (!mappings.TryGetValue(value["requestedLocation"]["channelId"].AsInt64, out var mapping) ||
+                mapping["aliasRevision"].AsInt64 < value["aliasRevision"].AsInt64) throw Invalid();
+    });
     internal static void Decision(BsonDocument row, BsonDocument proposal) => Guard(() =>
     {
         Exact(row, "_id", "schemaVersion", "kind", "poolId", "proposalId", "revision", "decision", "policyId", "policyRevision",

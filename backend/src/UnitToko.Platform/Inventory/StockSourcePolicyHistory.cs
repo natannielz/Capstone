@@ -38,10 +38,9 @@ public sealed partial class StockSourceSetupService
         long revision = 0; BsonDocument? previous = null;
         foreach (var (number, view) in accepted)
         {
-            if (number != checked(++revision) || previous is not null &&
-                (StockSourceSetupBson.Time(previous["decision"]["decidedAt"]) > StockSourceSetupBson.Time(view["proposal"]["proposedAt"]) ||
-                previous["proposal"]["poolRevision"].AsInt64 > view["proposal"]["poolRevision"].AsInt64 ||
-                previous["proposal"]["suspensionRevision"].AsInt64 > view["proposal"]["suspensionRevision"].AsInt64)) throw StockSourcePolicyBson.Invalid();
+            if (number != checked(++revision)) throw StockSourcePolicyBson.Invalid();
+            if (previous is not null) StockSourcePolicyBson.AcceptedContinuity(
+                previous["proposal"].AsBsonDocument, previous["decision"].AsBsonDocument, view["proposal"].AsBsonDocument);
             previous = view;
         }
         foreach (var view in views.Values)

@@ -4,7 +4,7 @@ using S = UnitToko.Platform.Mongo.Migrations.StockSourceSetupSchemas;
 
 namespace UnitToko.Platform.Mongo.Migrations;
 
-/// <summary>Draft enforced storage for operating policies. Forward migration is required before activation.</summary>
+/// <summary>Closed operating-policy definition storage installed by migration 19. It does not authorize activation.</summary>
 internal static class StockSourcePolicySchemas
 {
     internal static readonly string[] Collections = [StockSourcePolicyBson.Proposals, StockSourcePolicyBson.Decisions, StockSourcePolicyBson.Policies];

@@ -28,17 +28,9 @@ public sealed partial class StockSourcePolicyServiceTests(MongoFixture fixture)
         new(preview["poolRevision"].AsInt64, preview["suspensionRevision"].AsInt64, preview["policyRevision"].AsInt64, preview["configurationHash"].AsString);
     private async Task<(ActorContext Maker, ActorContext Reviewer, long Pool)> Setup(StoreTestData data, bool linked = false, StockSourceSetupInput? source = null)
     {
+        // StoreTestData applies the registered migration chain; the service uses real installed policy storage.
         foreach (var collection in StockSourcePolicySchemas.Collections)
-        {
-            await data.Database.CreateCollectionAsync(collection, new CreateCollectionOptions<BsonDocument>
-            {
-                Validator = StockSourcePolicySchemas.Validator(collection), ValidationLevel = DocumentValidationLevel.Strict, ValidationAction = DocumentValidationAction.Error
-            });
-            if (collection != StockSourcePolicyBson.Proposals)
-                await Rows(data, collection).Indexes.CreateOneAsync(new CreateIndexModel<BsonDocument>(StockSourcePolicySchemas.Key(collection), new CreateIndexOptions { Unique = true, Name = "uq_policy_test" }));
-        }
-        foreach (var index in StockSourcePolicySchemas.LookupIndexes())
-            await Rows(data, index.Collection).Indexes.CreateOneAsync(new CreateIndexModel<BsonDocument>(index.Key, new CreateIndexOptions { Name = index.Name }));
+            await InventoryRepository.RequireStorageAsync(data.Database, collection, StockSourcePolicySchemas.Validator(collection), StockSourcePolicySchemas.Key(collection), default);
         var maker = await data.AddActorAsync(1100, Owner.ToScope(), Permissions.StockSourcePropose, Permissions.StockSourceRead,
             Permissions.StockSourcePolicyPropose, Permissions.StockSourceSuspend);
         var reviewer = await data.AddActorAsync(2200, Owner.ToScope(), Permissions.StockSourceApprove, Permissions.StockSourceRead, Permissions.StockSourcePolicyApprove);

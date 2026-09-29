@@ -157,7 +157,7 @@ public sealed partial class StockSourcePolicyServiceTests
         var expected = Expected(await service.PreviewOperatingPolicyAsync(maker, pool)); var before = await Effects(data);
         if (fault == "missing") await data.Database.DropCollectionAsync(StockSourcePolicyBson.Decisions);
         if (fault == "warning") await data.Database.RunCommandAsync<BsonDocument>(new BsonDocument { { "collMod", StockSourcePolicyBson.Proposals }, { "validationAction", "warn" } });
-        if (fault == "unique") await Rows(data, StockSourcePolicyBson.Policies).Indexes.DropOneAsync("uq_policy_test");
+        if (fault == "unique") await Rows(data, StockSourcePolicyBson.Policies).Indexes.DropOneAsync("ux_stock_source_policy_revision");
         if (fault == "lookup") await Rows(data, "idempotencyRecords").Indexes.DropOneAsync("ix_stock_source_policy_receipt");
         await Assert.ThrowsAsync<DomainValidationException>(() => service.ProposeOperatingPolicyAsync(maker, pool, expected, Input(), Meta("unsafe")));
         Assert.Equal(before, await Effects(data));

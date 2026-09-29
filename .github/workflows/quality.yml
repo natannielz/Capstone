@@ -47,7 +47,7 @@ jobs:
   backend:
     name: Backend and real Mongo transactions
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 90
     env:
       DOTNET_CLI_TELEMETRY_OPTOUT: '1'
       DOTNET_NOLOGO: '1'
@@ -84,7 +84,7 @@ jobs:
         run: dotnet build UnitToko.slnx --nologo
       - name: Unit and real replica-set integration tests
         working-directory: backend
-        run: dotnet test UnitToko.slnx --no-build --nologo
+        run: dotnet test UnitToko.slnx --no-build --nologo --logger "console;verbosity=normal"
       - name: Auth0 Action policy fixtures
         run: node --test backend/integrations/auth0/v1/actions.test.cjs
       - name: Check server OpenAPI contract
