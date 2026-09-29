@@ -11,6 +11,9 @@ public enum OrderSpendingMode { EveryOrder, AboveThreshold, NotRequired }
 /// The application owner must load, verify and fence that policy and its approval evidence.</summary>
 public sealed record OrderSpendingRule(OrderSpendingMode Mode, Money? Threshold);
 public enum OrderSpendingState { Pending, NotRequired, Approved, Rejected }
+public enum OrderReviewStage { Spending, Store }
+
+public sealed record OrderApprovalProgress(long Revision, OrderSpendingState SpendingState, ImmutableArray<LongId> AcceptedSuborders);
 
 public static class OrderSpendingPolicy
 {

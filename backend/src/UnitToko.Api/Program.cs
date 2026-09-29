@@ -286,6 +286,7 @@ app.MapCatalogPriceEndpoints();
 app.MapOrderQuoteEndpoints();
 app.MapOrderDraftEndpoints();
 app.MapOrderSubmissionEndpoints();
+app.MapOrderDecisionEndpoints();
 app.MapStockCountEndpoints();
 app.MapStockSourceSetupEndpoints();
 app.MapStockSourceRevisionEndpoints();

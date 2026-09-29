@@ -33,7 +33,13 @@ export type CheckoutReview = ReturnType<typeof parseCheckoutReview>;
 export function parseSubmittedOrder(value: unknown) {
   const row = record(value), submission = parseOrderSubmitResult(row.submission), input = parseDraftInput(row.input);
   if (input.delivery === null) return invalid();
-  return { input, submission, ...amounts(row, input, submission.recordedAt) };
+  const progress = record(row.progress), revision = priceId(progress.revision);
+  if (!['Pending', 'NotRequired', 'Approved'].includes(String(progress.spendingState)) || !Array.isArray(progress.acceptedSuborders)) return invalid();
+  const acceptedSuborders = progress.acceptedSuborders.map(priceId);
+  if (new Set(acceptedSuborders).size !== acceptedSuborders.length || acceptedSuborders.some(id => !submission.suborderIds.includes(id)) ||
+    progress.spendingState === 'NotRequired' && submission.spendingState !== 'NotRequired' || progress.spendingState === 'Approved' && submission.spendingState !== 'Pending' ||
+    progress.spendingState === 'Pending' && (acceptedSuborders.length > 0 || submission.spendingState !== 'Pending') || BigInt(revision) !== BigInt(1) + BigInt(acceptedSuborders.length) + (progress.spendingState === 'Approved' ? BigInt(1) : BigInt(0))) return invalid();
+  return { input, submission, progress: { revision, spendingState: progress.spendingState as 'Pending' | 'NotRequired' | 'Approved', acceptedSuborders }, ...amounts(row, input, submission.recordedAt) };
 }
 export type SubmittedOrder = ReturnType<typeof parseSubmittedOrder>;
 function data<T>(result: { data?: T; error?: unknown; response: Response }): T {

@@ -123,7 +123,8 @@ function CheckoutDesk({ account, onFailure }: { account: Account; onFailure: (er
     {recovery.error !== null && <p role="alert" className={common.alert}>{accessMessage(recovery.error)}</p>}
     {error && <p role="alert" className={common.alert}>{message(error.value, error.reading)}</p>}
     {confirmed && <section className={common.accountSection} ref={reviewPanel} tabIndex={-1} aria-label="Pesanan tercatat"><h2>Pesanan {confirmed.orderId} tercatat</h2>
-      <p>{confirmed.spendingState === 'Pending' ? 'Menunggu persetujuan belanja cabang. Penerimaan oleh toko merupakan langkah terpisah.' : 'Menunggu penerimaan oleh toko.'}</p>
+      <p>{(order?.progress.spendingState ?? confirmed.spendingState) === 'Pending' ? 'Menunggu persetujuan belanja cabang. Penerimaan oleh toko merupakan langkah terpisah.' : 'Belanja telah disetujui atau tidak memerlukan persetujuan tambahan sesuai aturan pembelian.'}</p>
+      {order && <p>{order.progress.acceptedSuborders.length} dari {confirmed.suborderIds.length} kelompok pemenuhan telah diterima toko.</p>}
       <p>{confirmed.suborderIds.length} kelompok pemenuhan tersimpan. Stok pesanan telah dicadangkan.</p>
       <button className={common.secondary} disabled={busy || recovering} onClick={() => { setBusy(true); void readConfirmed(confirmed).finally(() => { if (alive.current) setBusy(false); }); }}>Muat kembali pesanan</button></section>}
     {!confirmed && draft && <section className={common.accountSection}><h2>Draf tersimpan yang akan diajukan</h2><p>{draft.input.purchaseReference ?? 'Kebutuhan cabang'} · {draft.input.selections.length} jenis kemasan · versi {draft.revision}</p>

@@ -24,7 +24,7 @@ test('checkout review binds exact branch, delivery, packaging, approved prices a
     { ...review, input: { ...input, delivery: { ...input.delivery, address: 'Another address' } } }, { ...review, total: '0.00' }, { ...review, tax: null },
     { ...review, review: 'a'.repeat(63) }, { ...review, spendingState: 'Approved' }, { ...review, lines: [{ ...review.lines[0], packages: 3 }] } ])
     assert.throws(() => parseCheckoutReview(change, input));
-  assert.equal(parseSubmittedOrder({ ...review, submission: result }).submission.orderId, result.orderId);
+  assert.equal(parseSubmittedOrder({ ...review, submission: result, progress: { revision: '1', spendingState: 'Pending', acceptedSuborders: [] } }).submission.orderId, result.orderId);
 });
 test('order transport sends only accepted references and never retries a lost submission or sends from a stale view', async () => {
   let calls = 0; const checked = parseCheckoutReview(review, input);

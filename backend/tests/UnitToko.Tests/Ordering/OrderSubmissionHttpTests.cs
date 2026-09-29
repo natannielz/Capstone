@@ -10,6 +10,8 @@ using UnitToko.Api.Identity;
 using UnitToko.Platform;
 using UnitToko.Platform.Identity;
 using UnitToko.Platform.Ordering;
+using UnitToko.Modules.Identity;
+using UnitToko.Modules.Organizations;
 using UnitToko.Tests.Identity;
 
 namespace UnitToko.Tests.Ordering;
@@ -17,6 +19,28 @@ namespace UnitToko.Tests.Ordering;
 [Collection("Mongo")]
 public sealed class OrderSubmissionHttpTests(MongoFixture fixture)
 {
+    [Fact]
+    public async Task Approval_workspace_stays_discoverable_for_step_up_but_protected_reviews_require_fresh_factor() {
+        await using var data = await OrderSubmissionTestData.CreateAsync(fixture);
+        var approver = await data.Prices.Catalog.ActorAsync(8100, new(GrantScopeKind.BuyingBranch, 10, 11), Permissions.OrderSpendApprove, Permissions.BranchPic);
+        using var keys = new IdentityRuntimeTests.RuntimeKeys(); var settings = IdentityRuntimeTests.Settings(keys); settings["Mongo:Database"] = data.Database.DatabaseNamespace.DatabaseName;
+        using var factory = IdentityRuntimeTests.Factory(settings).WithWebHostBuilder(web => web.ConfigureTestServices(services => {
+            services.RemoveAll<IClock>(); services.AddSingleton<IClock>(data.Prices.Catalog.Clock);
+            services.RemoveAll<MongoIdentitySessionStore>(); services.AddSingleton(data.Prices.Catalog.Sessions);
+            services.RemoveAll<OrderSubmissionService>(); services.AddSingleton(data.Service);
+        }));
+        using var client = factory.CreateClient(new() { BaseAddress = new("https://portal.unit-toko.co.id"), AllowAutoRedirect = false });
+        client.DefaultRequestHeaders.Add("Cookie", OpaqueSessionCookie.Name + "=" + data.Prices.Catalog.Issued[approver.UserId].OpaqueToken);
+        data.Prices.Catalog.Clock.UtcNow = data.Prices.Catalog.Clock.UtcNow.AddMinutes(6);
+        var current = await client.GetFromJsonAsync<JsonElement>("/api/v1/access/current");
+        Assert.Contains("order.spend.approve", current.GetProperty("allowedActions").EnumerateArray().Select(value => value.GetString()));
+        Assert.DoesNotContain("order.accept", current.GetProperty("allowedActions").EnumerateArray().Select(value => value.GetString()));
+        var csrf = (await client.GetFromJsonAsync<JsonElement>("/api/v1/identity/csrf")).GetProperty("requestToken").GetString()!;
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/ordering/reviews/query") { Content = JsonContent.Create(new { purpose = "order-review", stage = "Spending", beforeId = (string?)null }) };
+        request.Headers.Add("Origin", "https://portal.unit-toko.co.id"); request.Headers.Add("X-Expected-Actor-Id", approver.UserId.ToString()); request.Headers.Add("X-CSRF-Token", csrf);
+        var response = await client.SendAsync(request); Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Equal("step_up_required", (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString());
+    }
     [Fact]
     public async Task Http_checkout_review_and_submission_require_exact_actor_csrf_and_review_and_hide_internal_authority()
     {

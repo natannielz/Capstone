@@ -44,7 +44,7 @@ internal sealed class OrderSubmissionTestData(CatalogPriceTestData prices) : IAs
             foreach (var name in OrderSubmissionSchemas.Collections) {
                 await data.Database.RunCommandAsync<BsonDocument>(new BsonDocument { { existing.Contains(name) ? "collMod" : "create", name },
                     { "validator", OrderSubmissionSchemas.Validator(name) }, { "validationLevel", "strict" }, { "validationAction", "error" } });
-                if (name == "reservations") await data.Rows(name).Indexes.CreateOneAsync(new CreateIndexModel<BsonDocument>(OrderSubmissionSchemas.Key(name), new CreateIndexOptions { Unique = true, Name = "ux_order_reservation" }));
+                if (!OrderSubmissionSchemas.Key(name).Equals(new BsonDocument("_id", 1))) await data.Rows(name).Indexes.CreateOneAsync(new CreateIndexModel<BsonDocument>(OrderSubmissionSchemas.Key(name), new CreateIndexOptions { Unique = true, Name = "ux_order_" + name }));
             }
             await InventoryGraphTests.InstallBalances(catalog.Base);
             await data.Database.RunCommandAsync<BsonDocument>(new BsonDocument { { "collMod", "movements" }, { "validator", InventoryMovementSchemas.Validator() }, { "validationLevel", "strict" }, { "validationAction", "error" } });

@@ -19,11 +19,11 @@ namespace UnitToko.Platform.Ordering;
 public sealed record OrderCheckoutReview(OrderDraftInput Input, OrderCatalogQuote Catalog, string Review, DateTimeOffset CalculatedAt,
     Money Tax, Money Charges, Money Total, OrderSpendingState SpendingState);
 public sealed record SubmittedOrderView(LongId Id, long Revision, ImmutableArray<LongId> SuborderIds, DateTimeOffset RecordedAt,
-    string InitialSpendingState, OrderDraftInput Input, OrderCatalogQuote Catalog, Money Tax, Money Charges, Money Total);
+    string InitialSpendingState, OrderDraftInput Input, OrderCatalogQuote Catalog, Money Tax, Money Charges, Money Total, OrderApprovalProgress Progress);
 
 /// <summary>Ordering owns one atomic submission and invokes the Inventory writer. No default commercial
 /// or stock authority exists; production construction stays closed until the owning adapter is supplied.</summary>
-public sealed class OrderSubmissionService
+public sealed partial class OrderSubmissionService
 {
     private readonly IMongoDatabase database;
     private readonly IClock clock;
@@ -105,7 +105,11 @@ public sealed class OrderSubmissionService
                 foreach (var line in group.Lines) groupBySku.Add(line.Definition.SkuId.Value, subId);
                 suborders.Add(new() { { "_id", subId }, { "schemaVersion", 1 }, { "kind", "ordering.suborder" }, { "orderId", id }, { "owner", CatalogRepository.Owner(group.Owner) },
                     { "skuIds", new BsonArray(group.Lines.Select(line => new BsonInt64(line.Definition.SkuId.Value))) }, { "revision", 1L }, { "fence", 0L },
-                    { "status", state == OrderSpendingState.Pending ? "awaitingSpending" : "awaitingAcceptance" }, { "catalogSubtotal", new BsonDecimal128(group.CatalogSubtotal.Value) } });
+                    { "status", state == OrderSpendingState.Pending ? "awaitingSpending" : "awaitingAcceptance" }, { "catalogSubtotal", new BsonDecimal128(group.CatalogSubtotal.Value) },
+                    { "buyingOrganizationId", input.Context.OrganizationId.Value }, { "branchId", input.Context.BranchId.Value },
+                    { "divisionId", input.Context.DivisionId.HasValue ? new BsonInt64(input.Context.DivisionId.Value.Value) : BsonNull.Value },
+                    { "createdBy", actor.UserId }, { "fulfillmentOrganizationId", group.Owner.OrganizationId!.Value }, { "shopId", group.Owner.ShopId!.Value },
+                    { "warehouseId", group.Owner.WarehouseId.HasValue ? new BsonInt64(group.Owner.WarehouseId.Value) : BsonNull.Value }, { "channelId", group.Owner.ChannelId!.Value } });
             }
             var now = DateTimeOffset.FromUnixTimeMilliseconds(clock.UtcNow.ToUnixTimeMilliseconds());
             var row = new BsonDocument { { "_id", id }, { "schemaVersion", 1 }, { "kind", "ordering.order" }, { "revision", 1L }, { "fence", 0L },
@@ -165,7 +169,8 @@ public sealed class OrderSubmissionService
         await StorageAsync(ct);
         return await authorization.ReadAsync(actor, async (snapshot, tx, token) => {
             var row = await GraphAsync(tx, actor, id, token); await TouchAsync(tx, row, token);
-            await authority.FenceAsync(actor, snapshot, tx, [OrderDraftBson.Context(row["input"]["context"].AsBsonDocument)], token); return View(row);
+            var progress = await DecisionGraphAsync(tx, row, token);
+            await authority.FenceAsync(actor, snapshot, tx, [OrderDraftBson.Context(row["input"]["context"].AsBsonDocument)], token); return View(row, progress);
         }, ct);
     }
     public async Task<(ImmutableArray<SubmittedOrderView> Items, bool HasMore)> ListOwnAsync(ActorContext actor, OrderBuyingContext context, long? beforeId = null, CancellationToken ct = default) {
@@ -177,23 +182,26 @@ public sealed class OrderSubmissionService
             if (beforeId.HasValue) filter &= F.Lt("_id", beforeId.Value);
             var rows = await Rows(B.Orders).Find(tx, filter).Sort(new BsonDocument("_id", -1)).Limit(26).ToListAsync(token);
             var result = ImmutableArray.CreateBuilder<SubmittedOrderView>();
-            foreach (var row in rows.Take(25)) { var valid = await GraphAsync(tx, actor, row["_id"].AsInt64, token); await TouchAsync(tx, valid, token); result.Add(View(valid)); }
+            foreach (var row in rows.Take(25)) { var valid = await GraphAsync(tx, actor, row["_id"].AsInt64, token); await TouchAsync(tx, valid, token); result.Add(View(valid, await DecisionGraphAsync(tx, valid, token))); }
             await authority.FenceAsync(actor, snapshot, tx, [context], token); return (result.ToImmutable(), rows.Count > 25);
         }, ct);
     }
     private Task<BsonDocument?> ReceiptAsync(ActorContext actor, string key, IClientSessionHandle tx, CancellationToken ct) =>
         Rows("idempotencyRecords").Find(tx, F.Eq("actorId", actor.UserId) & F.Eq("operation", B.Operation) & F.Eq("key", key)).SingleOrDefaultAsync(ct)!;
-    private async Task<BsonDocument> GraphAsync(IClientSessionHandle tx, ActorContext actor, long id, CancellationToken ct) {
-        var row = await Rows(B.Orders).Find(tx, F.Eq("_id", id) & F.Eq("createdBy", actor.UserId) & OrderSubmissionSchemas.Validator(B.Orders)).SingleOrDefaultAsync(ct) ?? throw Invalid();
+    private async Task<BsonDocument> GraphAsync(IClientSessionHandle tx, ActorContext actor, long id, CancellationToken ct, bool requireOwner = true) {
+        var filter = F.Eq("_id", id) & OrderSubmissionSchemas.Validator(B.Orders);
+        if (requireOwner) filter &= F.Eq("createdBy", actor.UserId);
+        var row = await Rows(B.Orders).Find(tx, filter).SingleOrDefaultAsync(ct) ?? throw Invalid();
         var input = OrderDraftBson.Input(row["input"].AsBsonDocument); var quote = B.Quote(row["quote"].AsBsonDocument);
         _ = OrderFulfillmentPolicy.Split(quote);
         if (B.SnapshotHash(row) != row["snapshotHash"].AsString || AuthorizationStore.CommandHash(Body(input, row["review"].AsString), row["reason"].AsString) != row["bodyHash"].AsString ||
             row["buyingOrganizationId"] != input.Context.OrganizationId.Value || row["branchId"] != input.Context.BranchId.Value || row["divisionId"] != row["input"]["context"]["divisionId"]) throw Invalid();
         var audit = await Rows("auditEvents").Find(tx, F.Eq("_id", row["auditId"])).SingleOrDefaultAsync(ct);
-        var receipt = await ReceiptAsync(actor, row["requestKey"].AsString, tx, ct);
+        var receipt = await Rows("idempotencyRecords").Find(tx, F.Eq("actorId", row["createdBy"]) & F.Eq("operation", B.Operation) & F.Eq("key", row["requestKey"])).SingleOrDefaultAsync(ct);
         if (audit is null || !CatalogSchemas.SemanticEquals(audit, B.Audit(row)) || receipt is null || receipt.GetValue("bodyHash", BsonNull.Value) != row["bodyHash"] ||
             !receipt.TryGetValue("result", out var result) || !CatalogSchemas.SemanticEquals(result, B.Result(row))) throw Invalid();
         await ChildrenAsync(tx, row, quote, ct);
+        _ = await DecisionGraphAsync(tx, row, ct);
         return row;
     }
     private async Task ChildrenAsync(IClientSessionHandle tx, BsonDocument order, OrderCatalogQuote quote, CancellationToken ct) {
@@ -206,6 +214,11 @@ public sealed class OrderSubmissionService
                 row["status"] != (order["initialSpendingState"] == "Pending" ? "awaitingSpending" : "awaitingAcceptance"))) throw Invalid();
         foreach (var group in groups) {
             var suborder = suborders.SingleOrDefault(row => CatalogRepository.Owner(row["owner"].AsBsonDocument) == group.Owner) ?? throw Invalid();
+            var resource = ReviewResource(order, suborder);
+            if (resource.FulfillmentOrganizationId != group.Owner.OrganizationId || resource.ShopId != group.Owner.ShopId ||
+                resource.WarehouseId != group.Owner.WarehouseId || resource.ChannelId != group.Owner.ChannelId ||
+                suborder["buyingOrganizationId"] != order["buyingOrganizationId"] || suborder["branchId"] != order["branchId"] ||
+                suborder["divisionId"] != order["divisionId"] || suborder["createdBy"] != order["createdBy"]) throw Invalid();
             if (suborder["catalogSubtotal"] != new BsonDecimal128(group.CatalogSubtotal.Value) ||
                 !suborder["skuIds"].AsBsonArray.SequenceEqual(group.Lines.Select(line => new BsonInt64(line.Definition.SkuId.Value)))) throw Invalid();
         }
@@ -238,9 +251,9 @@ public sealed class OrderSubmissionService
     private async Task TouchAsync(IClientSessionHandle tx, BsonDocument row, CancellationToken ct) {
         if (row["fence"].AsInt64 >= long.MaxValue - 1 || (await Rows(B.Orders).UpdateOneAsync(tx, row, Builders<BsonDocument>.Update.Inc("fence", 1L), cancellationToken: ct)).ModifiedCount != 1) throw Invalid();
     }
-    private static SubmittedOrderView View(BsonDocument row) => new(new(row["_id"].AsInt64), row["revision"].AsInt64,
+    private static SubmittedOrderView View(BsonDocument row, OrderApprovalProgress progress) => new(new(row["_id"].AsInt64), row["revision"].AsInt64,
         [.. row["suborderIds"].AsBsonArray.Select(value => new LongId(value.AsInt64))], OrderDraftBson.Time(row["orderedAt"]), row["initialSpendingState"].AsString,
         OrderDraftBson.Input(row["input"].AsBsonDocument), B.Quote(row["quote"].AsBsonDocument), new(Decimal128.ToDecimal(row["terms"]["tax"].AsDecimal128)),
-        new(Decimal128.ToDecimal(row["terms"]["charges"].AsDecimal128)), new(Decimal128.ToDecimal(row["terms"]["total"].AsDecimal128)));
+        new(Decimal128.ToDecimal(row["terms"]["charges"].AsDecimal128)), new(Decimal128.ToDecimal(row["terms"]["total"].AsDecimal128)), progress);
     private static AuthorizationDeniedException Invalid() => new("order_unavailable");
 }

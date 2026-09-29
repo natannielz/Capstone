@@ -14,6 +14,9 @@ using MongoDB.Driver;
 using UnitToko.Platform;
 using UnitToko.Platform.Identity;
 using UnitToko.Platform.Ordering;
+using UnitToko.Modules.Identity;
+using UnitToko.Modules.Organizations;
+using UnitToko.Tests.Authorization;
 using UnitToko.Tests.Catalog;
 using UnitToko.Tests.Identity;
 using UnitToko.Tests.Inventory;
@@ -32,9 +35,12 @@ public sealed class OrderSubmissionBrowserTests(MongoFixture fixture, ITestOutpu
         Assert.True(Path.IsPathFullyQualified(node ?? "") && File.Exists(node)); Assert.True(Path.IsPathFullyQualified(playwright ?? "") && File.Exists(playwright));
         Assert.True(File.Exists(Path.Combine(root, "frontend", ".next", "BUILD_ID")));
         await using var data = await OrderSubmissionTestData.CreateAsync(fixture, 2);
+        var approver = await data.Prices.Catalog.ActorAsync(8100, new(GrantScopeKind.BuyingBranch, 10, 11), Permissions.OrderSpendApprove, Permissions.BranchPic);
+        var store = await data.Prices.Catalog.ActorAsync(8200, CatalogAuthoringTestData.Shop, Permissions.OrderAccept);
+        await PersonTestData.SeedDistinctPeopleAsync(data.Database, data.Prices.Catalog.Clock, data.Buyer.UserId, approver.UserId);
         var draftService = new OrderDraftService(data.Database, new(fixture.Client), new(data.Database), data.Prices.Catalog.Clock);
         var draft = await draftService.SaveAsync(data.Buyer, null, 0, data.Input, CatalogPriceTestData.Meta("browser-draft"));
-        foreach (var actor in new[] { data.Buyer, data.Prices.Maker })
+        foreach (var actor in new[] { data.Buyer, data.Prices.Maker, approver, store })
             await data.Rows("accountProfiles").InsertOneAsync(new BsonDocument { { "_id", actor.UserId }, { "schemaVersion", 1 }, { "version", 1L },
                 { "displayName", "Akun fixture lokal" }, { "verifiedEmail", "order-" + actor.UserId + "@example.invalid" }, { "verifiedAt", data.Prices.Catalog.Clock.UtcNow.UtcDateTime }, { "updatedAt", data.Prices.Catalog.Clock.UtcNow.UtcDateTime } });
         using var keys = new IdentityRuntimeTests.RuntimeKeys(); var settings = IdentityRuntimeTests.Settings(keys);
@@ -52,6 +58,7 @@ public sealed class OrderSubmissionBrowserTests(MongoFixture fixture, ITestOutpu
         using var tls = certificate.CreateSelfSigned(DateTimeOffset.UtcNow.AddMinutes(-5), DateTimeOffset.UtcNow.AddHours(1)); var password = Convert.ToHexString(RandomNumberGenerator.GetBytes(24));
         var input = new { apiAddress, origin, pfx = Convert.ToBase64String(tls.Export(X509ContentType.Pfx, password)), password, playwrightPackage = playwright,
             buyerToken = data.Prices.Catalog.Issued[data.Buyer.UserId].OpaqueToken, deniedToken = data.Prices.Catalog.Issued[data.Prices.Maker.UserId].OpaqueToken,
+            approverToken = data.Prices.Catalog.Issued[approver.UserId].OpaqueToken, storeToken = data.Prices.Catalog.Issued[store.UserId].OpaqueToken,
             buyerId = data.Buyer.UserId.ToString(), deniedId = data.Prices.Maker.UserId.ToString(), draftId = draft["draftId"].AsInt64.ToString() };
         var start = new ProcessStartInfo(node!) { WorkingDirectory = Path.Combine(root, "frontend"), UseShellExecute = false, CreateNoWindow = true,
             RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true };
@@ -70,6 +77,9 @@ public sealed class OrderSubmissionBrowserTests(MongoFixture fixture, ITestOutpu
         foreach (var name in new[] { "reservations", "movements", "orderSuborders" }) Assert.Equal(1, await data.Rows(name).CountDocumentsAsync(new BsonDocument()));
         Assert.Equal(2L, (await data.Rows("stockBalances").Find(new BsonDocument()).SingleAsync())["reserved"].AsInt64);
         Assert.Equal(1, await data.Rows("idempotencyRecords").CountDocumentsAsync(new BsonDocument("operation", OrderSubmissionBson.Operation)));
+        Assert.Equal(2, await data.Rows("orderDecisions").CountDocumentsAsync(new BsonDocument()));
+        var progress = (await data.Service.ReadOwnAsync(data.Buyer, order["_id"].AsInt64)).Progress;
+        Assert.Equal(UnitToko.Modules.Ordering.OrderSpendingState.Approved, progress.SpendingState); Assert.Single(progress.AcceptedSuborders);
         Assert.Equal(0, await data.Rows("journalEntries").CountDocumentsAsync(new BsonDocument()));
     }
     private static string Root() {

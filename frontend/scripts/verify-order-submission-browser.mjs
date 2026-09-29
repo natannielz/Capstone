@@ -15,9 +15,9 @@ assert.equal(origin.href, 'https://portal.unit-toko.co.id/');
 const load = createRequire(config.playwrightPackage), metadata = load(config.playwrightPackage);
 assert.equal(metadata.name, 'playwright'); assert.equal(metadata.version, '1.62.1');
 const { chromium } = load('playwright'), channel = process.env.UNITTOKO_BROWSER_CHANNEL ?? 'chromium'; assert.ok(['chromium', 'msedge'].includes(channel));
-const app = next({ dev: false, dir: process.cwd(), quiet: true }), sockets = new Set(), writes = [], errors = [], pages = [];
+const app = next({ dev: false, dir: process.cwd(), quiet: true }), sockets = new Set(), writes = [], decisionWrites = [], errors = [], pages = [];
 const directory = resolve('../tmp/production/order-submission-browser-results'); mkdirSync(directory, { recursive: true });
-let browser, frontend, edge, tunnel, dropNext = false, dropped = 0;
+let browser, frontend, edge, tunnel, dropNext = false, dropped = 0, dropNextDecision = false, droppedDecisions = 0;
 function track(server) { server.on('connection', socket => { sockets.add(socket); socket.on('close', () => sockets.delete(socket)); }); return server; }
 async function listen(server) { await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); }); return server.address().port; }
 function forward(req, res, port, isApi) {
@@ -25,11 +25,13 @@ function forward(req, res, port, isApi) {
   for (const name of Object.keys(headers)) if (name.startsWith('x-forwarded-') || name.startsWith('x-original-') || ['forwarded', 'connection'].includes(name)) delete headers[name];
   if (isApi) { headers['x-forwarded-for'] = req.socket.remoteAddress; headers['x-forwarded-host'] = origin.host; headers['x-forwarded-proto'] = 'https'; }
   const write = req.method === 'POST' && req.url === '/api/v1/ordering/orders';
+  const decision = req.method === 'POST' && /^\/api\/v1\/ordering\/reviews\/[0-9]+\/decisions$/.test(req.url);
   if (write) writes.push({ key: req.headers['idempotency-key'], actor: req.headers['x-expected-actor-id'] });
-  const drop = write && dropNext; if (drop) dropNext = false;
+  if (decision) decisionWrites.push({ key: req.headers['idempotency-key'], actor: req.headers['x-expected-actor-id'] });
+  const drop = write && dropNext || decision && dropNextDecision; if (drop) { if (decision) dropNextDecision = false; else dropNext = false; }
   const upstream = http.request({ hostname: '127.0.0.1', port, path: req.url, method: req.method, headers }, response => {
     if (drop && response.statusCode === 200) {
-      response.resume(); response.once('end', () => { dropped++; res.writeHead(200, { 'content-type': 'application/json', 'content-length': '64', 'cache-control': 'no-store' });
+      response.resume(); response.once('end', () => { if (decision) droppedDecisions++; else dropped++; res.writeHead(200, { 'content-type': 'application/json', 'content-length': '64', 'cache-control': 'no-store' });
         res.flushHeaders(); res.write('{'); setTimeout(() => res.destroy(), 25); }); return;
     }
     res.writeHead(response.statusCode ?? 502, response.headers); response.pipe(res);
@@ -94,7 +96,43 @@ try {
     const csrf = await (await fetch('/api/v1/identity/csrf')).json();
     return (await fetch('/api/v1/ordering/orders/' + orderId + '/query', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf.requestToken, 'X-Expected-Actor-Id': actorId }, body: JSON.stringify({ purpose: 'order-preparation' }) })).status;
   }, { orderId, actorId: config.deniedId }); assert.equal(status, 403);
-  assert.deepEqual(errors, []); console.log('REAL_ORDER_BROWSER_PASS ' + JSON.stringify({ droppedCommittedResponses: dropped, submitAttempts: writes.length, mobile: true, unauthorizedDetail: status }));
+  const store = await user(config.storeToken); await store.page.goto(origin.origin + '/ordering/reviews');
+  await store.page.getByRole('button', { name: new RegExp('^Tinjau pesanan ' + orderId + ' / ') }).click();
+  const storeReview = store.page.getByRole('region', { name: 'Tinjauan keputusan', exact: true }); await storeReview.waitFor();
+  assert.match(await storeReview.innerText(), /Menunggu persetujuan belanja cabang/);
+  assert.equal(await storeReview.getByRole('button', { name: 'Terima pesanan toko', exact: true }).count(), 0);
+  assert.equal((await storeReview.innerText()).includes('Total belanja:'), false);
+  const approver = await user(config.approverToken); await approver.page.goto(origin.origin + '/ordering/reviews');
+  await approver.page.getByRole('button', { name: 'Tinjau pesanan ' + orderId, exact: true }).click();
+  const branchReview = approver.page.getByRole('region', { name: 'Tinjauan keputusan', exact: true }); await branchReview.waitFor();
+  assert.match(await branchReview.innerText(), /Total belanja: IDR 25\.500,50/);
+  assert.equal(await branchReview.evaluate(element => element === document.activeElement), true);
+  await branchReview.getByLabel('Catatan peninjauan').fill('Peninjauan kebutuhan dan biaya fixture');
+  await branchReview.getByRole('button', { name: 'Setujui belanja', exact: true }).click();
+  await branchReview.getByRole('button', { name: 'Batal keputusan', exact: true }).click(); assert.equal(decisionWrites.length, 0);
+  await branchReview.getByRole('button', { name: 'Setujui belanja', exact: true }).click();
+  assert.equal(await approver.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  await approver.page.screenshot({ path: resolve(directory, 'spending-review-mobile.png'), fullPage: true });
+  dropNextDecision = true; await branchReview.getByRole('button', { name: 'Konfirmasi persetujuan belanja', exact: true }).click();
+  await approver.page.getByRole('button', { name: 'Periksa hasil', exact: true }).waitFor();
+  const decisionEntries = await approver.page.evaluate(() => Object.keys(localStorage).filter(key => key.startsWith('unit-toko:pending:v1:')).map(key => JSON.parse(localStorage[key])));
+  assert.equal(decisionEntries.length, 1); assert.equal(decisionEntries[0].operation, 'ordering.order.spending.approve');
+  assert.deepEqual(Object.keys(decisionEntries[0]).sort(), ['actorId', 'createdAt', 'key', 'operation']);
+  await approver.page.reload(); await approver.page.getByRole('button', { name: 'Periksa hasil', exact: true }).click();
+  await approver.page.getByText('Persetujuan belanja ditemukan dan tercatat.', { exact: true }).waitFor();
+  assert.equal(decisionWrites.length, 1); assert.equal(droppedDecisions, 1);
+  await store.page.reload(); await store.page.getByRole('button', { name: new RegExp('^Tinjau pesanan ' + orderId + ' / ') }).click();
+  await storeReview.getByLabel('Catatan peninjauan').fill('Kesiapan pemenuhan toko fixture diperiksa');
+  await storeReview.getByRole('button', { name: 'Terima pesanan toko', exact: true }).click();
+  await storeReview.getByRole('button', { name: 'Konfirmasi penerimaan toko', exact: true }).click();
+  await storeReview.getByText('Bagian pesanan ini sudah diterima toko.', { exact: true }).waitFor();
+  await store.page.getByRole('region', { name: 'Pesanan sesuai akses', exact: true }).getByText('Diterima toko', { exact: true }).waitFor();
+  assert.equal(decisionWrites.length, 2); assert.equal(writes.length, 1);
+  await store.page.screenshot({ path: resolve(directory, 'store-acceptance-mobile.png'), fullPage: true });
+  await page.getByRole('button', { name: 'Muat kembali pesanan', exact: true }).click();
+  await confirmed.getByText('1 dari 1 kelompok pemenuhan telah diterima toko.', { exact: true }).waitFor();
+  assert.deepEqual(errors, []); console.log('REAL_ORDER_BROWSER_PASS ' + JSON.stringify({ droppedCommittedResponses: dropped, submitAttempts: writes.length,
+    decisionAttempts: decisionWrites.length, recoveredApprovals: droppedDecisions, mobile: true, unauthorizedDetail: status }));
 } catch (error) {
   for (const [index, page] of pages.entries()) if (!page.isClosed()) {
     console.error('FIXTURE PAGE ' + index + ': ' + (await page.locator('main').innerText().catch(() => 'unavailable')).slice(0, 5000));

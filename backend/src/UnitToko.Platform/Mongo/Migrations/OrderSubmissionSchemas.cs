@@ -9,8 +9,9 @@ namespace UnitToko.Platform.Mongo.Migrations;
 /// Connected isolated fixtures install these explicitly; a quiescent forward migration is required for release.</summary>
 internal static class OrderSubmissionSchemas
 {
-    internal static readonly string[] Collections = [OrderSubmissionBson.Orders, OrderSubmissionBson.Suborders, OrderSubmissionBson.Reservations];
-    internal static BsonDocument Key(string name) => name == OrderSubmissionBson.Reservations ? new() { { "orderId", 1 }, { "allocation.balanceId", 1 } } : new("_id", 1);
+    internal static readonly string[] Collections = [OrderSubmissionBson.Orders, OrderSubmissionBson.Suborders, OrderSubmissionBson.Reservations, "orderDecisions"];
+    internal static BsonDocument Key(string name) => name == OrderSubmissionBson.Reservations ? new() { { "orderId", 1 }, { "allocation.balanceId", 1 } } :
+        name == "orderDecisions" ? new() { { "orderId", 1 }, { "revision", 1 } } : new("_id", 1);
     private static BsonDocument Money() => new() { { "bsonType", "decimal" }, { "minimum", new BsonDecimal128(0m) }, { "maximum", new BsonDecimal128(DomainValues.MaximumMoney) }, { "multipleOf", new BsonDecimal128(.01m) } };
     private static BsonDocument Reference() => S.Object(new() { { "id", S.Number(1) }, { "revision", S.Number(1) } });
     private static BsonDocument Array(BsonDocument item, int min = 1) => new() { { "bsonType", "array" }, { "minItems", min }, { "maxItems", 100 }, { "items", item } };
@@ -23,6 +24,7 @@ internal static class OrderSubmissionSchemas
         { "location", S.Object(new() { { "organizationId", S.Number(1) }, { "shopId", S.Number(1) }, { "warehouseId", S.Number(1) }, { "channelId", S.Number(1) } }) } });
     internal static BsonDocument Validator(string name)
     {
+        if (name == "orderDecisions") return Decisions();
         var fields = new BsonDocument { { "_id", S.Number(1) }, { "schemaVersion", new BsonDocument { { "bsonType", "int" }, { "enum", new BsonArray { 1 } } } },
             { "kind", S.Choice(name == OrderSubmissionBson.Orders ? "ordering.order" : name == OrderSubmissionBson.Suborders ? "ordering.suborder" : "ordering.reservation") },
             { "revision", S.Number(1) }, { "fence", S.Number(0, long.MaxValue - 1) } };
@@ -46,6 +48,8 @@ internal static class OrderSubmissionSchemas
         } else if (name == OrderSubmissionBson.Suborders) {
             fields.Add("orderId", S.Number(1)); fields.Add("owner", Owner()); fields.Add("skuIds", Array(S.Number(1)));
             fields.Add("status", S.Choice("awaitingSpending", "awaitingAcceptance")); fields.Add("catalogSubtotal", Money());
+            foreach (var field in new[] { "createdBy", "buyingOrganizationId", "branchId", "fulfillmentOrganizationId", "shopId", "channelId" }) fields.Add(field, S.Number(1));
+            fields.Add("divisionId", Nullable(S.Number(1), "long")); fields.Add("warehouseId", Nullable(S.Number(1), "long"));
         } else if (name == OrderSubmissionBson.Reservations) {
             fields.Add("orderId", S.Number(1)); fields.Add("suborderId", S.Number(1)); fields.Add("allocation", Allocation());
             fields.Add("remaining", S.Number(0, 1000000)); fields.Add("dispatched", S.Number(0, 1000000)); fields.Add("released", S.Number(0, 1000000));
@@ -55,5 +59,15 @@ internal static class OrderSubmissionSchemas
         if (name == OrderSubmissionBson.Reservations) terms.Add(new BsonDocument("$expr", new BsonDocument("$eq", new BsonArray {
             "$allocation.packages", new BsonDocument("$add", new BsonArray { "$remaining", "$dispatched", "$released" }) })));
         return new("$and", terms);
+    }
+    private static BsonDocument Decisions() {
+        var fields = new BsonDocument { { "_id", S.Number(1) }, { "schemaVersion", new BsonDocument { { "bsonType", "int" }, { "enum", new BsonArray { 1 } } } },
+            { "kind", S.Choice("ordering.order.decision") }, { "orderId", S.Number(1) }, { "suborderId", Nullable(S.Number(1), "long") },
+            { "stage", S.Choice("Spending", "Store") }, { "revision", S.Number(2, 102) }, { "expectedRevision", S.Number(1, 101) },
+            { "review", Hash() }, { "orderSnapshot", Hash() }, { "decidedBy", S.Number(1) }, { "decidedAt", new BsonDocument("bsonType", "date") },
+            { "actorGrantVersion", S.Number(1) }, { "requestKey", S.Text(128) }, { "bodyHash", Hash() } };
+        S.Metadata(fields);
+        return new("$and", new BsonArray { new BsonDocument("$jsonSchema", S.Object(fields)), S.DateRange("decidedAt"),
+            new BsonDocument("$expr", new BsonDocument("$eq", new BsonArray { "$revision", new BsonDocument("$add", new BsonArray { "$expectedRevision", 1L }) })) });
     }
 }
