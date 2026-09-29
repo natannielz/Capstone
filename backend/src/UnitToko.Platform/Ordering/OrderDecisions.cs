@@ -9,6 +9,7 @@ using UnitToko.Modules.Ordering;
 using UnitToko.Modules.Organizations;
 using UnitToko.Platform.Authorization;
 using UnitToko.Platform.Catalog;
+using UnitToko.Platform.Fulfillment;
 using UnitToko.Platform.Identity;
 using UnitToko.Platform.Inventory;
 using UnitToko.Platform.Mongo;
@@ -39,9 +40,14 @@ public sealed partial class OrderSubmissionService
         (OrderReviewStage.Cancellation, OrderReviewAction.CancelRemainder) => "ordering.order.cancel",
         _ => throw OrderAdmissionPolicy.Invalid("invalid_order_decision") };
     private static object DecisionBody(long orderId, long? suborderId, OrderReviewStage stage, long expectedRevision, string review, OrderReviewAction action) => new { orderId, suborderId, stage, expectedRevision, review, action };
-    private static string DecisionReview(BsonDocument order, long? suborderId, OrderReviewStage stage, long revision) => CatalogRepository.Digest(new BsonDocument {
+    private static string DecisionReview(BsonDocument order, long? suborderId, OrderReviewStage stage, long revision, long dispatchSequence = 0) {
+        var accepted = new BsonDocument {
         { "orderSnapshot", order["snapshotHash"] }, { "suborderId", suborderId.HasValue ? new BsonInt64(suborderId.Value) : BsonNull.Value },
-        { "stage", stage.ToString() }, { "revision", revision } });
+        { "stage", stage.ToString() }, { "revision", revision } };
+        // Preserve pre-dispatch review hashes. Any actual dispatch requires a fresh review of the remainder.
+        if (dispatchSequence > 0) accepted.Add("dispatchSequence", dispatchSequence);
+        return CatalogRepository.Digest(accepted);
+    }
     private static ResourceScope ReviewResource(BsonDocument order, BsonDocument? suborder) => new(
         BuyingOrganizationId: order["buyingOrganizationId"].AsInt64, BranchId: order["branchId"].AsInt64,
         DivisionId: order["divisionId"].IsBsonNull ? null : order["divisionId"].AsInt64,
@@ -69,11 +75,24 @@ public sealed partial class OrderSubmissionService
         var state = Enum.Parse<OrderSpendingState>(order["initialSpendingState"].AsString); long revision = 1;
         var accepted = ImmutableArray.CreateBuilder<LongId>(); var rejected = ImmutableArray.CreateBuilder<LongId>(); var cancelled = false;
         var lastAt = OrderDraftBson.Time(order["orderedAt"]);
+        long dispatchSequence = 0;
+        await using var shipments = new ShipmentDispatchRecords(database).ReadOrderAsync(tx, order["_id"].AsInt64, ct).GetAsyncEnumerator(ct);
+        var hasShipment = await shipments.MoveNextAsync();
+        async Task ApplyDispatches() {
+            while (hasShipment && shipments.Current["decisionRevision"] == revision) {
+                var shipment = shipments.Current; var subId = shipment["suborderId"].AsInt64;
+                if (cancelled || !OrderSpendingPolicy.CanAcceptAtStore(state) || !accepted.Contains(new(subId)) || rejected.Contains(new(subId)) ||
+                    shipment["orderSequence"] != checked(dispatchSequence + 1) || OrderDraftBson.Time(shipment["recordedAt"]) < lastAt) throw Invalid();
+                await VerifyDispatchHistoryAsync(tx, order, shipment, reservations, ct);
+                dispatchSequence++; lastAt = OrderDraftBson.Time(shipment["recordedAt"]); hasShipment = await shipments.MoveNextAsync();
+            }
+        }
         foreach (var row in rows) {
+            await ApplyDispatches();
             var stage = Enum.Parse<OrderReviewStage>(row["stage"].AsString); var action = Enum.Parse<OrderReviewAction>(row["action"].AsString);
             var operation = DecisionOperation(stage, action); var subId = row["suborderId"].IsBsonNull ? (long?)null : row["suborderId"].AsInt64;
             if (cancelled || row["expectedRevision"] != revision || row["revision"] != revision + 1 || row["orderSnapshot"] != order["snapshotHash"] ||
-                row["review"] != DecisionReview(order, subId, stage, revision) || OrderDraftBson.Time(row["decidedAt"]) < lastAt ||
+                row["review"] != DecisionReview(order, subId, stage, revision, dispatchSequence) || OrderDraftBson.Time(row["decidedAt"]) < lastAt ||
                 row["bodyHash"] != AuthorizationStore.CommandHash(DecisionBody(order["_id"].AsInt64, subId, stage, revision, row["review"].AsString, action), row["reason"].AsString)) throw Invalid();
             if (stage == OrderReviewStage.Spending) {
                 if (subId.HasValue || state != OrderSpendingState.Pending || row["decidedBy"] == order["createdBy"]) throw Invalid();
@@ -95,9 +114,11 @@ public sealed partial class OrderSubmissionService
             if (stage != OrderReviewStage.Spending && receipt.Contains(PersonApprovalReceipt.Field)) throw Invalid();
             lastAt = OrderDraftBson.Time(row["decidedAt"]); revision++;
         }
+        await ApplyDispatches(); if (hasShipment) throw Invalid();
         foreach (var row in actual) foreach (var field in new[] { "revision", "remaining", "released", "dispatched" })
             if (row[field] != reservations[row["_id"].AsInt64][field]) throw Invalid();
-        return new(revision, state, accepted.ToImmutable(), rejected.ToImmutable(), cancelled);
+        return new(revision, state, accepted.ToImmutable(), rejected.ToImmutable(), cancelled) {
+            DispatchSequence = dispatchSequence, HasRemainingReservation = reservations.Values.Any(row => row["remaining"].AsInt64 > 0) };
     }
     private sealed record ReviewContext(BsonDocument Order, BsonDocument? Suborder, ResourceScope Resource, OrderApprovalProgress State);
     private AuthorizationQuery ReviewQuery(ActorContext actor, AuthorizationSnapshot snapshot, OrderReviewStage stage) {
@@ -122,14 +143,14 @@ public sealed partial class OrderSubmissionService
         var storeState = subId.HasValue ? context.State.RejectedSuborders.Contains(new(subId.Value)) ? "rejected" : context.State.Cancelled ? "cancelled" :
             context.State.SpendingState == OrderSpendingState.Rejected ? "spendingRejected" : context.State.AcceptedSuborders.Contains(new(subId.Value)) ? "accepted" :
             OrderSpendingPolicy.CanAcceptAtStore(context.State.SpendingState) ? "awaitingAcceptance" : "awaitingSpending" : null;
-        return new(order["_id"].AsInt64, subId, stage, context.State.Revision, DecisionReview(order, subId, stage, context.State.Revision),
+        return new(order["_id"].AsInt64, subId, stage, context.State.Revision, DecisionReview(order, subId, stage, context.State.Revision, context.State.DispatchSequence),
             OrderDraftBson.Context(order["input"]["context"].AsBsonDocument), order["terms"]["buyer"]["name"].AsString, OrderDraftBson.Input(order["input"].AsBsonDocument).Delivery!, quote,
             subId.HasValue ? null : new Money(Decimal128.ToDecimal(order["terms"]["tax"].AsDecimal128)),
             subId.HasValue ? null : new Money(Decimal128.ToDecimal(order["terms"]["charges"].AsDecimal128)),
             subId.HasValue ? null : new Money(Decimal128.ToDecimal(order["terms"]["total"].AsDecimal128)), context.State.SpendingState, storeState,
             !context.State.Cancelled && (stage == OrderReviewStage.Spending ? context.State.SpendingState == OrderSpendingState.Pending :
                 stage == OrderReviewStage.Store ? storeState == "awaitingAcceptance" : context.State.SpendingState != OrderSpendingState.Rejected &&
-                context.State.RejectedSuborders.Length < order["suborderIds"].AsBsonArray.Count), context.State.Cancelled, OrderDraftBson.Time(order["orderedAt"]));
+                context.State.HasRemainingReservation), context.State.Cancelled, OrderDraftBson.Time(order["orderedAt"]));
     }
     private async Task CompleteReviewAsync(ActorContext actor, AuthorizationSnapshot snapshot, IClientSessionHandle tx,
         OrderReviewStage stage, IReadOnlyCollection<ReviewContext> contexts, CancellationToken ct, bool touchOrder = true) {

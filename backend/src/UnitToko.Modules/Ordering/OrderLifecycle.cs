@@ -15,7 +15,11 @@ public enum OrderReviewStage { Spending, Store, Cancellation }
 public enum OrderReviewAction { Approve, Reject, CancelRemainder }
 
 public sealed record OrderApprovalProgress(long Revision, OrderSpendingState SpendingState, ImmutableArray<LongId> AcceptedSuborders,
-    ImmutableArray<LongId> RejectedSuborders, bool Cancelled);
+    ImmutableArray<LongId> RejectedSuborders, bool Cancelled)
+{
+    public long DispatchSequence { get; init; }
+    public bool HasRemainingReservation { get; init; } = true;
+}
 
 public static class OrderSpendingPolicy
 {

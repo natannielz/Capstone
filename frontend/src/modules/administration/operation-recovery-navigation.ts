@@ -1,4 +1,5 @@
 export function recoveryPage(operation: string) {
+  if (operation === 'fulfillment.shipment.dispatch') return { href: '/fulfillment/dispatches', label: 'halaman keberangkatan kiriman' };
   if (operation === 'fulfillment.preparation.save') return { href: '/fulfillment/preparations', label: 'halaman persiapan kiriman' };
   if (['ordering.order.spending.approve', 'ordering.order.spending.reject', 'ordering.order.store.accept', 'ordering.order.store.reject', 'ordering.order.cancel'].includes(operation)) return { href: '/ordering/reviews', label: 'halaman peninjauan pesanan' };
   if (operation === 'ordering.draft.save') return { href: '/ordering/drafts', label: 'halaman draf pesanan' };
@@ -14,6 +15,7 @@ export function recoveryPage(operation: string) {
     : { href: "/administration/person-reviews", label: "halaman peninjauan orang" };
 }
 export function operationLabel(operation: string) {
+  if (operation === 'fulfillment.shipment.dispatch') return 'Keberangkatan kiriman';
   if (operation === 'fulfillment.preparation.save') return 'Penyimpanan persiapan kiriman';
   if (operation === 'ordering.order.spending.reject') return 'Penolakan belanja cabang';
   if (operation === 'ordering.order.store.reject') return 'Penolakan pesanan toko';

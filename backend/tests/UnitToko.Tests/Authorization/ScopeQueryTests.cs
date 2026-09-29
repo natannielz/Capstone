@@ -14,7 +14,7 @@ public sealed class ScopeQueryTests(MongoFixture fixture)
     {
         await using var data = await StoreTestData.CreateAsync(fixture);
         var courier = await data.AddActorAsync(1000, new(GrantScopeKind.CourierAssignment, 100, ShopId: 101, ChannelId: 103), Permissions.ShipmentRead);
-        var shipments = data.Database.GetCollection<BsonDocument>("shipments");
+        var shipments = data.Database.GetCollection<BsonDocument>("fixtureBusinessRecords");
         for (var id = 1L; id <= 3; id++) await shipments.InsertOneAsync(new BsonDocument
         {
             { "_id", id }, { "schemaVersion", 1 }, { "version", 1L }, { "fulfillmentOrganizationId", 100L },

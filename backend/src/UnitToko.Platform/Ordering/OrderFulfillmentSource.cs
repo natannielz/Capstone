@@ -21,13 +21,17 @@ public sealed partial class OrderSubmissionService
 {
     internal IMongoDatabase SourceDatabase => database;
     internal Task RequireFulfillmentSourceStorageAsync(CancellationToken ct) => StorageAsync(ct);
-    private AuthorizationQuery ShipmentPreparationQuery(ActorContext actor, AuthorizationSnapshot snapshot) {
-        var query = ScopePolicy.Compile(actor, snapshot, Permissions.ShipmentPrepare, clock.UtcNow);
+    private AuthorizationQuery FulfillmentQuery(ActorContext actor, AuthorizationSnapshot snapshot, string permission) {
+        if (permission is not (Permissions.ShipmentPrepare or Permissions.ShipmentDispatch)) throw Invalid();
+        var query = ScopePolicy.Compile(actor, snapshot, permission, clock.UtcNow);
         AuthorizationStore.Require(query); return query;
     }
     internal async Task<FulfillmentOrderSource> ReadForShipmentPreparationAsync(ActorContext actor, AuthorizationSnapshot snapshot,
-        IClientSessionHandle tx, long suborderId, CancellationToken ct) {
-        var query = ShipmentPreparationQuery(actor, snapshot);
+        IClientSessionHandle tx, long suborderId, CancellationToken ct) =>
+        await ReadForFulfillmentAsync(actor, snapshot, tx, suborderId, Permissions.ShipmentPrepare, ct);
+    internal async Task<FulfillmentOrderSource> ReadForFulfillmentAsync(ActorContext actor, AuthorizationSnapshot snapshot,
+        IClientSessionHandle tx, long suborderId, string permission, CancellationToken ct) {
+        var query = FulfillmentQuery(actor, snapshot, permission);
         var sub = await Rows(B.Suborders).Find(tx, ScopeQuery.Create(query) & F.Eq("_id", suborderId)).SingleOrDefaultAsync(ct) ?? throw Invalid();
         var order = await GraphAsync(tx, actor, sub["orderId"].AsInt64, ct, requireOwner: false);
         var resource = ReviewResource(order, sub);
@@ -41,19 +45,24 @@ public sealed partial class OrderSubmissionService
                 line.Packages, checked((int)reservations.Where(row => row["allocation"]["skuId"] == line.Definition.SkuId.Value).Sum(row => row["remaining"].AsInt64))))
             .ToImmutableArray();
         if (lines.IsDefaultOrEmpty || reservations.Count is 0 or > 100 || lines.Any(line => line.RemainingPackages < 0 || line.RemainingPackages > line.OrderedPackages)) throw Invalid();
-        var review = CatalogRepository.Digest(new BsonDocument {
-            { "orderSnapshot", order["snapshotHash"] }, { "suborderId", suborderId }, { "decisionRevision", progress.Revision },
-            { "reservations", new BsonArray(reservations.Select(row => new BsonDocument {
-                { "id", row["_id"] }, { "revision", row["revision"] }, { "remaining", row["remaining"] }, { "released", row["released"] }, { "dispatched", row["dispatched"] } })) }
-        });
+        var review = FulfillmentReview(order, suborderId, progress.Revision, reservations);
         var canPrepare = !progress.Cancelled && OrderSpendingPolicy.CanAcceptAtStore(progress.SpendingState) &&
             progress.AcceptedSuborders.Contains(new(suborderId)) && !progress.RejectedSuborders.Contains(new(suborderId)) && lines.Any(line => line.RemainingPackages > 0);
         return new(new(new(order["_id"].AsInt64), new(suborderId), progress.Revision, review, order["terms"]["buyer"]["name"].AsString,
             OrderDraftBson.Input(order["input"].AsBsonDocument).Delivery!, lines, canPrepare, OrderDraftBson.Time(order["orderedAt"])), resource);
     }
+    private static string FulfillmentReview(BsonDocument order, long suborderId, long decisionRevision, IEnumerable<BsonDocument> reservations) =>
+        CatalogRepository.Digest(new BsonDocument {
+            { "orderSnapshot", order["snapshotHash"] }, { "suborderId", suborderId }, { "decisionRevision", decisionRevision },
+            { "reservations", new BsonArray(reservations.OrderBy(row => row["_id"].AsInt64).Select(row => new BsonDocument {
+                { "id", row["_id"] }, { "revision", row["revision"] }, { "remaining", row["remaining"] }, { "released", row["released"] }, { "dispatched", row["dispatched"] } })) }
+        });
     internal async Task FenceShipmentPreparationAsync(ActorContext actor, AuthorizationSnapshot snapshot, IClientSessionHandle tx,
-        IReadOnlyCollection<FulfillmentOrderSource> sources, CancellationToken ct) {
-        var query = ShipmentPreparationQuery(actor, snapshot);
+        IReadOnlyCollection<FulfillmentOrderSource> sources, CancellationToken ct) =>
+        await FenceFulfillmentAsync(actor, snapshot, tx, sources, Permissions.ShipmentPrepare, ct);
+    internal async Task FenceFulfillmentAsync(ActorContext actor, AuthorizationSnapshot snapshot, IClientSessionHandle tx,
+        IReadOnlyCollection<FulfillmentOrderSource> sources, string permission, CancellationToken ct) {
+        var query = FulfillmentQuery(actor, snapshot, permission);
         if (sources.Any(source => !query.Matches(source.Resource) || !ScopePolicy.IsResourceActive(source.Resource, snapshot.Directory))) throw Invalid();
         var clauses = query.Clauses.Where(clause => sources.Count == 0 || sources.Any(source => clause.Matches(source.Resource))).ToArray();
         await new HistoricalAuthorizationFence(database, authorization).FenceAsync(actor,
@@ -73,7 +82,7 @@ public sealed partial class OrderSubmissionService
                 idle.AsBsonDateTime.MillisecondsSinceEpoch <= now || absolute.AsBsonDateTime.MillisecondsSinceEpoch <= now)
                 throw new AuthorizationDeniedException("stale_or_inactive_session");
         }
-        query = ShipmentPreparationQuery(actor, snapshot);
+        query = FulfillmentQuery(actor, snapshot, permission);
         if (sources.Any(source => !query.Matches(source.Resource))) throw Invalid();
         ct.ThrowIfCancellationRequested();
     }
@@ -87,7 +96,7 @@ public sealed partial class OrderSubmissionService
     public async Task<(ImmutableArray<FulfillmentOrderView> Items, bool HasMore)> ListFulfillmentOrdersAsync(ActorContext actor, long? beforeId = null, CancellationToken ct = default) {
         if (beforeId is <= 0) throw Invalid(); await StorageAsync(ct);
         return await authorization.ReadAsync(actor, async (snapshot, tx, token) => {
-            var filter = ScopeQuery.Create(ShipmentPreparationQuery(actor, snapshot));
+            var filter = ScopeQuery.Create(FulfillmentQuery(actor, snapshot, Permissions.ShipmentPrepare));
             if (beforeId.HasValue) filter &= F.Lt("_id", beforeId.Value);
             // Scope before joins and pagination. Only accepted, uncancelled store demand enters
             // the queue; the owner verifier checks all decision/reservation provenance afterward.

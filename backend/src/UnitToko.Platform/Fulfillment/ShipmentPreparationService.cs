@@ -17,19 +17,21 @@ namespace UnitToko.Platform.Fulfillment;
 
 public sealed record ShipmentPreparationView(LongId Id, long Revision, DateTimeOffset RecordedAt,
     FulfillmentOrderView AcceptedSource, ImmutableArray<ShipmentPackageSelection> Lines, bool CurrentSourceMatches);
+internal sealed record PreparedShipment(BsonDocument Head, BsonDocument Version, OrderDispatchSource Source);
 
 /// <summary>One shared, versioned preparation per accepted store suborder. Saving a partial pick plan
 /// changes neither reservation nor physical stock. Dispatch must separately revalidate and commit it.</summary>
-public sealed class ShipmentPreparationService
+public sealed partial class ShipmentPreparationService
 {
     private readonly IMongoDatabase database;
     private readonly IClock clock;
     private readonly IdAllocator ids;
     private readonly OrderSubmissionService orders;
     private readonly AuthorizationStore authorization;
+    internal IMongoDatabase SourceDatabase => database;
     private static readonly FilterDefinitionBuilder<BsonDocument> F = Builders<BsonDocument>.Filter;
     public ShipmentPreparationService(IMongoDatabase database, MongoUnitOfWork unit, IdAllocator ids, IClock clock, OrderSubmissionService orders) {
-        if (!ReferenceEquals(database.Client, orders.SourceDatabase.Client) || database.DatabaseNamespace != orders.SourceDatabase.DatabaseNamespace)
+        if (!ReferenceEquals(database.Client, orders.SourceDatabase.Client) || !database.DatabaseNamespace.Equals(orders.SourceDatabase.DatabaseNamespace))
             throw new ArgumentException("Order and fulfillment owners must join the same database transaction", nameof(orders));
         this.database = database; this.clock = clock; this.ids = ids; this.orders = orders; authorization = new(database, unit, clock);
     }
@@ -40,10 +42,24 @@ public sealed class ShipmentPreparationService
         if (metadata.IdempotencyKey.Length > 128 || metadata.IdempotencyKey.Any(c => !char.IsAsciiLetterOrDigit(c) && c is not ('-' or '_' or '.' or ':')))
             throw new DomainValidationException("invalid_shipment_preparation_key", "Use a bounded original request reference");
     }
-    private async Task StorageAsync(CancellationToken ct) {
+    internal async Task StorageAsync(CancellationToken ct) {
         await orders.RequireFulfillmentSourceStorageAsync(ct);
         foreach (var name in ShipmentPreparationSchemas.Collections)
             await InventoryRepository.RequireStorageAsync(database, name, ShipmentPreparationSchemas.Validator(name), ShipmentPreparationSchemas.Key(name), ct);
+    }
+    internal async Task<PreparedShipment> ReadForDispatchAsync(ActorContext actor, AuthorizationSnapshot snapshot, IClientSessionHandle tx, long suborderId, CancellationToken ct) {
+        var source = await orders.ReadDispatchReservationsAsync(actor, snapshot, tx, suborderId, ct);
+        var head = await HeadAsync(tx, suborderId, ct) ?? throw B.Invalid();
+        var version = await VersionAsync(tx, head["versionId"].AsInt64, ct);
+        if (!source.Order.View.CanPrepare || source.Order.View.Review != version["source"]["review"].AsString ||
+            !CatalogEqual(head["scope"], B.Scope(source.Order.Resource))) throw Changed();
+        await TouchAsync(tx, head, ct);
+        return new(head, version, source);
+    }
+    internal async Task FenceDispatchedPreparationAsync(PreparedShipment prepared, IClientSessionHandle tx, CancellationToken ct) {
+        var head = await HeadAsync(tx, prepared.Head["suborderId"].AsInt64, ct) ?? throw B.Invalid();
+        if (head["_id"] != prepared.Head["_id"] || head["versionId"] != prepared.Version["_id"]) throw Changed();
+        await TouchAsync(tx, head, ct);
     }
     public async Task<BsonDocument> SaveAsync(ActorContext actor, long suborderId, long expectedRevision, string review,
         ImmutableArray<ShipmentPackageSelection> lines, AuthorizationCommandMetadata metadata, CancellationToken ct = default) {
@@ -131,7 +147,9 @@ public sealed class ShipmentPreparationService
         if (version["preparedBy"] != actor.UserId || version["requestKey"] != receipt["key"] || version["bodyHash"] != receipt["bodyHash"] || !CatalogEqual(B.Result(version), receipt["result"])) throw B.Invalid();
         return version;
     }
-    private async Task<BsonDocument> VersionAsync(IClientSessionHandle tx, long id, CancellationToken ct) {
+    private Task<BsonDocument> VersionAsync(IClientSessionHandle tx, long id, CancellationToken ct) => ReadVersionAsync(database, tx, id, ct);
+    internal static async Task<BsonDocument> ReadVersionAsync(IMongoDatabase database, IClientSessionHandle tx, long id, CancellationToken ct) {
+        IMongoCollection<BsonDocument> Rows(string name) => database.GetCollection<BsonDocument>(name);
         var row = await Rows(B.Versions).Find(tx, F.Eq("_id", id) & ShipmentPreparationSchemas.Validator(B.Versions)).SingleOrDefaultAsync(ct) ?? throw B.Invalid();
         var source = B.Source(row["source"].AsBsonDocument); var lines = B.Lines(row["lines"].AsBsonArray);
         _ = ShipmentPreparationPolicy.Require(source, source.Review, lines);

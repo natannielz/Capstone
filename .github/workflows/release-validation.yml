@@ -153,7 +153,7 @@ jobs:
           export UNITTOKO_BROWSER_NODE="$(command -v node)"
           export UNITTOKO_BROWSER_PLAYWRIGHT_PACKAGE="$GITHUB_WORKSPACE/frontend/tests/browser/node_modules/playwright/package.json"
           dotnet test tests/UnitToko.Tests/UnitToko.Tests.csproj --nologo \
-            --filter 'FullyQualifiedName~StockCountBrowserTests|FullyQualifiedName~StockSourceBrowserTests|FullyQualifiedName~StockSourceRevisionBrowserTests|FullyQualifiedName~StockSourceAliasBrowserTests|FullyQualifiedName~StockSourceSuspensionBrowserTests|FullyQualifiedName~StockSourcePolicyBrowserTests|FullyQualifiedName~CatalogPriceBrowserTests|FullyQualifiedName~OrderSubmissionBrowserTests' \
+            --filter 'FullyQualifiedName~StockCountBrowserTests|FullyQualifiedName~StockSourceBrowserTests|FullyQualifiedName~StockSourceRevisionBrowserTests|FullyQualifiedName~StockSourceAliasBrowserTests|FullyQualifiedName~StockSourceSuspensionBrowserTests|FullyQualifiedName~StockSourcePolicyBrowserTests|FullyQualifiedName~CatalogPriceBrowserTests|FullyQualifiedName~OrderSubmissionBrowserTests|FullyQualifiedName~ShipmentDispatchBrowserTests' \
             --logger 'console;verbosity=normal' \
             --logger 'trx;LogFileName=stock-browser.trx' \
             --results-directory ../tmp/production/stock-browser-ci

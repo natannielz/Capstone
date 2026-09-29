@@ -3,10 +3,11 @@ import { canManageAccounts, canReviewPeople, canUseStockCounts, canUseStockSourc
 import styles from "./access.module.css";
 
 export function AdministrationNavigation({ current, actions, locked = false }: {
-  current: "access" | "organizations" | "history" | "accounts" | "person-reviews" | "catalog" | "prices" | "counts" | "sources" | "source-revisions" | "source-aliases" | "source-suspensions" | "source-policies" | "order-reviews" | "orders" | "preparations"; actions: readonly string[]; locked?: boolean;
+  current: "access" | "organizations" | "history" | "accounts" | "person-reviews" | "catalog" | "prices" | "counts" | "sources" | "source-revisions" | "source-aliases" | "source-suspensions" | "source-policies" | "order-reviews" | "orders" | "preparations" | "dispatches"; actions: readonly string[]; locked?: boolean;
 }) {
   const links = [
     { id: "preparations", href: "/fulfillment/preparations", label: "Persiapan kiriman", available: actions.includes("shipment.prepare") },
+    { id: "dispatches", href: "/fulfillment/dispatches", label: "Keberangkatan kiriman", available: actions.includes("shipment.dispatch") && actions.includes("shipment.assign") },
     { id: "orders", href: "/ordering/orders", label: "Pesanan saya", available: actions.includes("order.read") },
     { id: "order-reviews", href: "/ordering/reviews", label: "Peninjauan pesanan", available: actions.some(action => ["order.spend.approve", "order.accept", "order.cancel"].includes(action)) },
     { id: "prices", href: "/catalog/prices", label: "Harga kemasan", available: actions.some(action => ["pricing.manage", "pricing.approve"].includes(action)) },

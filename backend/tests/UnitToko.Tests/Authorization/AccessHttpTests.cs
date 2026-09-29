@@ -86,7 +86,7 @@ public sealed partial class AccessHttpTests(MongoFixture fixture)
         Assert.Equal("9007199254740993", body["userId"]!.GetValue<string>());
         Assert.Equal("1", body["grantVersion"]!.GetValue<string>());
         Assert.Equal(new[] { "10", "11" }, body["scopes"]!.AsArray().Select(node => node!["id"]!.GetValue<string>()).Order().ToArray());
-        Assert.Empty(body["allowedActions"]!.AsArray());
+        Assert.Equal(new[] { Permissions.OrderRead }, body["allowedActions"]!.AsArray().Select(node => node!.GetValue<string>()));
         var catalog = await client.GetAsync("/api/v1/access/catalog");
         Assert.Equal(HttpStatusCode.Forbidden, catalog.StatusCode);
         Assert.True(catalog.Headers.CacheControl?.NoStore);

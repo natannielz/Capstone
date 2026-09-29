@@ -27,7 +27,7 @@ public sealed class ShipmentPreparationMigrationTests(MongoFixture fixture)
         await db.CreateCollectionAsync(ShipmentPreparationBson.Heads, new CreateCollectionOptions<BsonDocument> { Validator = stronger });
         await db.GetCollection<BsonDocument>("idCounters").InsertOneAsync(new BsonDocument { { "_id", ShipmentPreparationBson.Heads }, { "value", 9007199254740993L } });
         await new CollectionMigrations(db, Clock).ApplyAsync(); var after = await History(db);
-        Assert.Equal(23, after.Count); Assert.Equal(before, new BsonArray(after.Take(22)));
+        Assert.Equal(CollectionMigrations.CurrentVersion, after.Count); Assert.Equal(before, new BsonArray(after.Take(22)));
         foreach (var name in ShipmentPreparationSchemas.Collections) await InventoryRepository.RequireStorageAsync(db, name, ShipmentPreparationSchemas.Validator(name), ShipmentPreparationSchemas.Key(name), default);
         var definition = await (await db.ListCollectionsAsync(new ListCollectionsOptions { Filter = new BsonDocument("name", ShipmentPreparationBson.Heads) })).SingleAsync();
         Assert.Equal(stronger, definition["options"]["validator"]);
