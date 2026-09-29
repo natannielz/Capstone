@@ -45,7 +45,7 @@ public sealed partial class ShipmentReceiptService
         authorization = new(database, unit, clock); records = new(database); recipients = new(database, authorization, clock);
     }
     private IMongoCollection<BsonDocument> Rows(string name) => records.Rows(name);
-    private async Task StorageAsync(CancellationToken ct) { await shipments.StorageAsync(ct); await records.StorageAsync(ct); }
+    private async Task StorageAsync(CancellationToken ct) { await shipments.StorageAsync(ct); await records.StorageAsync(ct); await DeliveryAttempts.StorageAsync(ct); }
     private static string Hash(string token) => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
     private static bool TokenMatches(BsonDocument challenge, string token) => token is not null && token.Length == 64 && token.All(character => char.IsAsciiHexDigitLower(character)) &&
         CryptographicOperations.FixedTimeEquals(Encoding.ASCII.GetBytes(challenge["tokenHash"].AsString), Encoding.ASCII.GetBytes(Hash(token)));
@@ -94,6 +94,7 @@ public sealed partial class ShipmentReceiptService
         ShipmentDocumentSource source = null!; BsonDocument document = null!, final = null!; ShipmentRecipientTarget target = null!; PersonAuthorityProof proof = null!;
         await authorization.ExecuteCommandAsync(actor, ShipmentReceiptRecords.Issue, metadata, body, async (snapshot, tx, token) => {
             source = await shipments.DocumentSourceAsync(actor, snapshot, tx, shipmentId, Permissions.DeliveryEvidence, token); Courier(actor, source);
+            await DeliveryAttempts.HistoryAsync(tx, source, token);
             document = await documents.RequireReceiptDocumentAsync(tx, source, documentId, token);
             target = await recipients.ReadAsync(tx, snapshot, source.Resource, recipientId, token);
             proof = await recipients.IndependenceAsync(tx, actor.UserId, recipientId, token);
@@ -131,6 +132,7 @@ public sealed partial class ShipmentReceiptService
         await records.VerifyEffectsAsync(tx, row, ShipmentReceiptRecords.Issue, ct);
     }
     private async Task<ImmutableArray<ReceiptConfirmedLine>> VerifyReceiptAsync(IClientSessionHandle tx, BsonDocument row, ShipmentDocumentSource source, CancellationToken ct) {
+        await DeliveryAttempts.RequireUsableChallengeAsync(tx, source, row["challengeId"].AsInt64, ct);
         var challenge = await Rows(ShipmentReceiptRecords.Challenges).Find(tx, F.Eq("_id", row["challengeId"])).SingleOrDefaultAsync(ct) ?? throw ShipmentReceiptRecords.Invalid();
         await VerifyChallengeAsync(tx, challenge, source, ct);
         var lines = DeliveryReceiptPolicy.Require(ShipmentReceiptRecords.Dispatched(source.Snapshot), ShipmentReceiptRecords.Declarations(row["lines"].AsBsonArray));

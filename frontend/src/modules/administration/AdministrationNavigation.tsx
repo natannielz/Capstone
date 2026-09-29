@@ -6,7 +6,7 @@ export function AdministrationNavigation({ current, actions, locked = false }: {
   current: "access" | "organizations" | "history" | "accounts" | "person-reviews" | "catalog" | "prices" | "counts" | "sources" | "source-revisions" | "source-aliases" | "source-suspensions" | "source-policies" | "order-reviews" | "orders" | "preparations" | "dispatches" | "shipments"; actions: readonly string[]; locked?: boolean;
 }) {
   const links = [
-    { id: "shipments", href: "/fulfillment/shipments", label: "Kiriman", available: actions.includes("shipment.read") },
+    { id: "shipments", href: "/fulfillment/shipments", label: "Kiriman", available: actions.some(action => ["shipment.read", "delivery.attempt"].includes(action)) },
     { id: "preparations", href: "/fulfillment/preparations", label: "Persiapan kiriman", available: actions.includes("shipment.prepare") },
     { id: "dispatches", href: "/fulfillment/dispatches", label: "Keberangkatan kiriman", available: actions.includes("shipment.dispatch") && actions.includes("shipment.assign") },
     { id: "orders", href: "/ordering/orders", label: "Pesanan saya", available: actions.includes("order.read") },

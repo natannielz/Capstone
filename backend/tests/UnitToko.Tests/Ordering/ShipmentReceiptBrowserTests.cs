@@ -64,7 +64,11 @@ public sealed class ShipmentReceiptBrowserTests(MongoFixture fixture, ITestOutpu
         Assert.Equal(order.Buyer.UserId, receipt["recipientId"].AsInt64); Assert.True(receipt["hasException"].AsBoolean);
         Assert.Equal(6L, receipt["lines"][0]["acceptedBaseUnits"].AsInt64);
         Assert.Equal(4L, receipt["lines"][0]["rejectedBaseUnits"].AsInt64); Assert.Equal(2L, receipt["lines"][0]["missingBaseUnits"].AsInt64);
-        Assert.Equal(1, await order.Rows("shipmentReceiptChallenges").CountDocumentsAsync(new BsonDocument()));
+        Assert.Equal(2, await order.Rows("shipmentReceiptChallenges").CountDocumentsAsync(new BsonDocument()));
+        Assert.Equal(1, await order.Rows("deliveryAttempts").CountDocumentsAsync(new BsonDocument()));
+        Assert.Equal(1, await order.Rows("receiptChallengeRevocations").CountDocumentsAsync(new BsonDocument()));
+        Assert.Equal(1, await order.Rows("idempotencyRecords").CountDocumentsAsync(new BsonDocument("operation", DeliveryAttemptRecords.Operation)));
+        Assert.Equal(1, await order.Rows("outboxEvents").CountDocumentsAsync(new BsonDocument("kind", DeliveryAttemptRecords.Operation)));
         Assert.Equal(1, await order.Rows("idempotencyRecords").CountDocumentsAsync(new BsonDocument("operation", ShipmentReceiptRecords.Confirm)));
         Assert.Equal(1, await order.Rows("outboxEvents").CountDocumentsAsync(new BsonDocument("kind", ShipmentReceiptRecords.Confirm)));
         Assert.Equal(2, await order.Rows("movements").CountDocumentsAsync(new BsonDocument()));

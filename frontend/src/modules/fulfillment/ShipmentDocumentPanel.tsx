@@ -58,7 +58,7 @@ export function ShipmentDocumentPanel({ actorId, shipment, canIssue, current, on
     finally { pending.current = false; if (alive.current) setBusy(false); }
   }
   return <section className={common.accountSection} aria-label="Surat Jalan" aria-busy={busy}><h3>Surat Jalan</h3>
-    <OperationRecovery entries={recovery.entries.filter(entry => !entry.operation.startsWith('fulfillment.receipt.') && entry.operation !== 'fulfillment.receipt-proof.issue')} journal={recovery.journal} disabled={busy || offline} onBusyChange={setRecovering}
+    <OperationRecovery entries={recovery.entries.filter(entry => entry.operation === 'fulfillment.surat-jalan.issue')} journal={recovery.journal} disabled={busy || offline} onBusyChange={setRecovering}
       recoveryAdapters={{ 'fulfillment.surat-jalan': { lookup: async entry => { const receipt = await gateway.recover(entry.actorId, entry.key); recovered.current = receipt?.result ?? null; return receipt; } } }}
       onFailure={failure => { setError(failure); onDenied(failure); }} onResolved={() => {
         recovery.refresh(); ledger.resetAfterReconciliation(); if (alive.current && current() && recovered.current?.shipmentId === shipment.id) setDocument(recovered.current);

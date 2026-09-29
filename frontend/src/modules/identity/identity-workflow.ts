@@ -78,7 +78,7 @@ export function identityDestinations(actions: readonly string[]) {
   return [
     { href: "/fulfillment/preparations", label: "Persiapan kiriman", description: "Pilih kemasan dan jumlah yang akan disiapkan dari pesanan toko yang diterima.", visible: actions.includes("shipment.prepare") },
     { href: "/fulfillment/dispatches", label: "Keberangkatan kiriman", description: "Periksa lot fisik dan kurir sebelum barang diberangkatkan.", visible: actions.includes("shipment.dispatch") && actions.includes("shipment.assign") },
-    { href: "/fulfillment/shipments", label: "Kiriman", description: "Lihat barang yang diberangkatkan dan tujuan dalam penugasan Anda.", visible: actions.includes("shipment.read") },
+    { href: "/fulfillment/shipments", label: "Kiriman", description: "Lihat barang yang diberangkatkan dan tujuan dalam penugasan Anda.", visible: actions.some(action => ["shipment.read", "delivery.attempt"].includes(action)) },
     { href: "/fulfillment/receive", label: "Penerimaan kiriman", description: "Pindai QR kurir atau periksa hasil konfirmasi penerimaan.", visible: actions.includes("receipt.accept") },
     { href: "/ordering/drafts", label: "Draf pesanan", description: "Lanjutkan kebutuhan barang dan rencana pengiriman cabang Anda.", visible: actions.includes("order.submit") },
     { href: "/ordering/orders", label: "Pesanan saya", description: "Lihat kemasan, tujuan, biaya dan perkembangan pesanan yang telah diajukan.", visible: actions.includes("order.read") },

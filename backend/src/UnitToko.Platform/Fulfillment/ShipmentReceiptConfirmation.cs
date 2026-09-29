@@ -27,6 +27,7 @@ public sealed partial class ShipmentReceiptService
             var challenge = await Rows(ShipmentReceiptRecords.Challenges).Find(tx, F.Eq("_id", challengeId) & F.Eq("recipientId", actor.UserId)).SingleOrDefaultAsync(token) ?? throw ShipmentReceiptRecords.Invalid();
             var source = await shipments.DocumentSourceAsync(actor, snapshot, tx, challenge["shipmentId"].AsInt64, Permissions.ReceiptAccept, token);
             await VerifyChallengeAsync(tx, challenge, source, token);
+            await DeliveryAttempts.RequireUsableChallengeAsync(tx, source, challengeId, token);
             var target = await recipients.ReadAsync(tx, snapshot, source.Resource, actor.UserId, token);
             var proof = await recipients.IndependenceAsync(tx, challenge["courierId"].AsInt64, actor.UserId, token);
             var receipt = await records.FindReceiptAsync(tx, challenge["shipmentId"].AsInt64, token);
@@ -67,6 +68,7 @@ public sealed partial class ShipmentReceiptService
             challenge = await Rows(ShipmentReceiptRecords.Challenges).Find(tx, F.Eq("_id", challengeId) & F.Eq("recipientId", actor.UserId)).SingleOrDefaultAsync(token) ?? throw ShipmentReceiptRecords.Invalid();
             source = await shipments.DocumentSourceAsync(actor, snapshot, tx, challenge["shipmentId"].AsInt64, Permissions.ReceiptAccept, token);
             await VerifyChallengeAsync(tx, challenge, source, token);
+            await DeliveryAttempts.RequireUsableChallengeAsync(tx, source, challengeId, token);
             if (!TokenMatches(challenge, secret)) throw ShipmentReceiptRecords.Invalid();
             target = await recipients.ReadAsync(tx, snapshot, source.Resource, actor.UserId, token);
             proof = await recipients.IndependenceAsync(tx, challenge["courierId"].AsInt64, actor.UserId, token);
@@ -135,6 +137,7 @@ public sealed partial class ShipmentReceiptService
             }
             var source = await shipments.DocumentSourceAsync(actor, snapshot, tx, row["shipmentId"].AsInt64, Permissions.DeliveryEvidence, token); Courier(actor, source);
             await VerifyChallengeAsync(tx, row, source, token);
+            await DeliveryAttempts.HistoryAsync(tx, source, token);
             var target = await recipients.ReadAsync(tx, snapshot, source.Resource, row["recipientId"].AsInt64, token);
             var proof = await recipients.IndependenceAsync(tx, actor.UserId, target.UserId, token);
             await FenceAsync(actor, snapshot, tx, source, Permissions.DeliveryEvidence, target, proof, token); return Challenge(row);
