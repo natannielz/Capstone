@@ -44,7 +44,7 @@ public sealed class StockSourceSetupOpenApiTests
 
         var paths = document.RootElement.GetProperty("paths");
         var sources = paths.EnumerateObject().Where(path => path.Name.StartsWith("/api/v1/inventory/sources", StringComparison.Ordinal)).ToArray();
-        Assert.Equal(31, sources.Length);
+        Assert.Equal(41, sources.Length); // 31 existing source routes plus 10 operating-policy routes.
         foreach (var path in sources)
         {
             var operation = path.Value.GetProperty("post");

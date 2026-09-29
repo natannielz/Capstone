@@ -41,7 +41,7 @@ internal static class StockSourceRevisionResponses
     private static DateTimeOffset Time(BsonValue value) => new(value.ToUniversalTime(), TimeSpan.Zero);
     private static string Status(BsonValue? value) => value is null ? "proposed" : value.AsString switch
         { "approve" => "approved", "reject" => "rejected", "withdraw" => "withdrawn", _ => throw StockSourceSetupInputs.Invalid() };
-    private static StockSourceSettingsDto Settings(BsonDocument input)
+    internal static StockSourceSettingsDto Settings(BsonDocument input)
     {
         var location = input["location"].AsBsonDocument;
         var scope = new StockLocation(new(location["organizationId"].AsInt64), new(location["shopId"].AsInt64),
