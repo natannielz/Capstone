@@ -30,7 +30,7 @@ public sealed class OrderSubmissionMigrationTests(MongoFixture fixture)
         var unrelated = await ReadRows(db, "purchaseOrders");
         Assert.False(await new CollectionMigrations(db, Clock).IsCurrentAsync());
         await new CollectionMigrations(db, Clock).ApplyAsync(); var after = await History(db);
-        Assert.Equal(22, after.Count); Assert.Equal(before, new BsonArray(after.Take(21)));
+        Assert.Equal(CollectionMigrations.CurrentVersion, after.Count); Assert.Equal(before, new BsonArray(after.Take(21)));
         foreach (var name in OrderSubmissionSchemas.Collections) await InventoryRepository.RequireStorageAsync(db, name, OrderSubmissionSchemas.Validator(name), OrderSubmissionSchemas.Key(name), default);
         var definition = await (await db.ListCollectionsAsync(new ListCollectionsOptions { Filter = new BsonDocument("name", "orders") })).SingleAsync();
         Assert.Equal(stronger, definition["options"]["validator"]);

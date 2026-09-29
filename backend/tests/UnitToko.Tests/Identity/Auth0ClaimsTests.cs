@@ -133,6 +133,9 @@ public sealed class Auth0ClaimsTests
     [InlineData("/ordering/drafts?next=https://outside.co.id")]
     [InlineData("/ordering/orders/")]
     [InlineData("/ordering/orders?next=https://outside.co.id")]
+    [InlineData("/fulfillment/preparations/")]
+    [InlineData("/fulfillment/preparations?next=https://outside.co.id")]
+    [InlineData("//fulfillment/preparations")]
     public void Return_paths_are_exact_allowlisted_destinations(string path) =>
         Assert.Throws<DomainValidationException>(() => ReturnPathPolicy.Require(path, Settings()));
     [Fact]
@@ -157,6 +160,8 @@ public sealed class Auth0ClaimsTests
         Assert.Equal("/ordering/checkout", ReturnPathPolicy.Require("/ordering/checkout", Settings()));
     [Fact] public void Own_orders_return_path_is_exactly_allowed() =>
         Assert.Equal("/ordering/orders", ReturnPathPolicy.Require("/ordering/orders", Settings()));
+    [Fact] public void Shipment_preparation_return_path_is_exactly_allowed() =>
+        Assert.Equal("/fulfillment/preparations", ReturnPathPolicy.Require("/fulfillment/preparations", Settings()));
     [Fact]
     public void Handler_configuration_requires_code_PKCE_validation_and_never_saves_tokens_to_a_browser_ticket()
     {

@@ -22,6 +22,8 @@ using UnitToko.Modules.Organizations;
 using UnitToko.Platform.Organizations;
 using UnitToko.Api.Ordering;
 using UnitToko.Platform.Ordering;
+using UnitToko.Api.Fulfillment;
+using UnitToko.Platform.Fulfillment;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.ConfigureHttpJsonOptions(options =>
@@ -51,6 +53,7 @@ builder.Services.AddSingleton<CatalogDefinitionQueryService>();
 builder.Services.AddSingleton<OrderQuoteService>();
 builder.Services.AddSingleton<OrderDraftService>();
 builder.Services.AddSingleton<OrderSubmissionService>();
+builder.Services.AddSingleton<ShipmentPreparationService>();
 builder.Services.AddSingleton<StockCountService>();
 builder.Services.AddSingleton<StockSourceSetupService>();
 builder.Services.AddSingleton<HistoricalReadStore>();
@@ -104,6 +107,7 @@ builder.Services.AddOpenApi("v1", options =>
                      path.Key.StartsWith("/api/v1/identity/administration/", StringComparison.Ordinal) ||
                      path.Key.StartsWith("/api/v1/catalog/", StringComparison.Ordinal) ||
                      path.Key.StartsWith("/api/v1/ordering/", StringComparison.Ordinal) ||
+                     path.Key.StartsWith("/api/v1/fulfillment/", StringComparison.Ordinal) ||
                      path.Key.StartsWith("/api/v1/inventory/", StringComparison.Ordinal)) &&
                     path.Key != "/api/v1/access/current")
                 {
@@ -287,6 +291,7 @@ app.MapOrderQuoteEndpoints();
 app.MapOrderDraftEndpoints();
 app.MapOrderSubmissionEndpoints();
 app.MapOrderDecisionEndpoints();
+app.MapShipmentPreparationEndpoints();
 app.MapStockCountEndpoints();
 app.MapStockSourceSetupEndpoints();
 app.MapStockSourceRevisionEndpoints();

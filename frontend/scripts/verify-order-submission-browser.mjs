@@ -15,9 +15,9 @@ assert.equal(origin.href, 'https://portal.unit-toko.co.id/');
 const load = createRequire(config.playwrightPackage), metadata = load(config.playwrightPackage);
 assert.equal(metadata.name, 'playwright'); assert.equal(metadata.version, '1.62.1');
 const { chromium } = load('playwright'), channel = process.env.UNITTOKO_BROWSER_CHANNEL ?? 'chromium'; assert.ok(['chromium', 'msedge'].includes(channel));
-const app = next({ dev: false, dir: process.cwd(), quiet: true }), sockets = new Set(), writes = [], decisionWrites = [], errors = [], pages = [];
+const app = next({ dev: false, dir: process.cwd(), quiet: true }), sockets = new Set(), writes = [], decisionWrites = [], preparationWrites = [], errors = [], pages = [];
 const directory = resolve('../tmp/production/order-submission-browser-results'); mkdirSync(directory, { recursive: true });
-let browser, frontend, edge, tunnel, dropNext = false, dropped = 0, dropNextDecision = false, droppedDecisions = 0;
+let browser, frontend, edge, tunnel, dropNext = false, dropped = 0, dropNextDecision = false, droppedDecisions = 0, dropNextPreparation = false, droppedPreparations = 0;
 function track(server) { server.on('connection', socket => { sockets.add(socket); socket.on('close', () => sockets.delete(socket)); }); return server; }
 async function listen(server) { await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); }); return server.address().port; }
 function forward(req, res, port, isApi) {
@@ -26,12 +26,15 @@ function forward(req, res, port, isApi) {
   if (isApi) { headers['x-forwarded-for'] = req.socket.remoteAddress; headers['x-forwarded-host'] = origin.host; headers['x-forwarded-proto'] = 'https'; }
   const write = req.method === 'POST' && req.url === '/api/v1/ordering/orders';
   const decision = req.method === 'POST' && /^\/api\/v1\/ordering\/reviews\/[0-9]+\/decisions$/.test(req.url);
+  const preparation = req.method === 'POST' && /^\/api\/v1\/fulfillment\/preparations\/[0-9]+$/.test(req.url);
   if (write) writes.push({ key: req.headers['idempotency-key'], actor: req.headers['x-expected-actor-id'] });
   if (decision) decisionWrites.push({ key: req.headers['idempotency-key'], actor: req.headers['x-expected-actor-id'] });
-  const drop = write && dropNext || decision && dropNextDecision; if (drop) { if (decision) dropNextDecision = false; else dropNext = false; }
+  if (preparation) preparationWrites.push({ key: req.headers['idempotency-key'], actor: req.headers['x-expected-actor-id'] });
+  const drop = write && dropNext || decision && dropNextDecision || preparation && dropNextPreparation;
+  if (drop) { if (preparation) dropNextPreparation = false; else if (decision) dropNextDecision = false; else dropNext = false; }
   const upstream = http.request({ hostname: '127.0.0.1', port, path: req.url, method: req.method, headers }, response => {
     if (drop && response.statusCode === 200) {
-      response.resume(); response.once('end', () => { if (decision) droppedDecisions++; else dropped++; res.writeHead(200, { 'content-type': 'application/json', 'content-length': '64', 'cache-control': 'no-store' });
+      response.resume(); response.once('end', () => { if (preparation) droppedPreparations++; else if (decision) droppedDecisions++; else dropped++; res.writeHead(200, { 'content-type': 'application/json', 'content-length': '64', 'cache-control': 'no-store' });
         res.flushHeaders(); res.write('{'); setTimeout(() => res.destroy(), 25); }); return;
     }
     res.writeHead(response.statusCode ?? 502, response.headers); response.pipe(res);
@@ -131,6 +134,37 @@ try {
   await store.page.screenshot({ path: resolve(directory, 'store-acceptance-mobile.png'), fullPage: true });
   await page.getByRole('button', { name: 'Muat kembali pesanan', exact: true }).click();
   await confirmed.getByText('1 dari 1 kelompok pemenuhan telah diterima toko.', { exact: true }).waitFor();
+  const picker = await user(config.pickerToken); await picker.page.goto(origin.origin + '/identity/account');
+  await picker.page.getByRole('link', { name: /^Persiapan kiriman/ }).click();
+  const prepareQueue = picker.page.getByRole('region', { name: 'Pesanan siap disiapkan', exact: true });
+  await prepareQueue.getByRole('button', { name: new RegExp('^Siapkan pesanan ' + orderId + ' / ') }).click();
+  const plan = picker.page.getByRole('region', { name: 'Rencana persiapan', exact: true }); await plan.waitFor();
+  assert.equal(await plan.getByRole('checkbox').isChecked(), false);
+  assert.equal(await plan.evaluate(element => element === document.activeElement), true);
+  await plan.getByRole('checkbox').check(); await plan.getByLabel(/^Jumlah /).fill('1');
+  await plan.getByLabel('Catatan persiapan', { exact: true }).fill('Satu dus fixture disiapkan sebagian');
+  await plan.getByRole('button', { name: 'Tinjau persiapan', exact: true }).click();
+  await plan.getByRole('heading', { name: 'Periksa kemasan yang dipilih', exact: true }).waitFor();
+  assert.match(await plan.innerText(), /1 Dus · total 12 piece/);
+  await plan.getByRole('button', { name: 'Kembali ke jumlah', exact: true }).click(); assert.equal(preparationWrites.length, 0);
+  await plan.getByRole('button', { name: 'Tinjau persiapan', exact: true }).click();
+  dropNextPreparation = true; await plan.getByRole('button', { name: 'Konfirmasi persiapan', exact: true }).click();
+  await picker.page.getByRole('button', { name: 'Periksa hasil', exact: true }).waitFor();
+  const preparationEntries = await picker.page.evaluate(() => Object.keys(localStorage).filter(key => key.startsWith('unit-toko:pending:v1:')).map(key => JSON.parse(localStorage[key])));
+  assert.equal(preparationEntries.length, 1); assert.equal(preparationEntries[0].operation, 'fulfillment.preparation.save');
+  assert.equal(preparationEntries[0].key, preparationWrites[0].key); assert.deepEqual(Object.keys(preparationEntries[0]).sort(), ['actorId', 'createdAt', 'key', 'operation']);
+  await picker.page.reload(); await picker.page.getByRole('button', { name: 'Periksa hasil', exact: true }).click();
+  await picker.page.getByText('Persiapan ditemukan dan tercatat. Kiriman belum diberangkatkan.', { exact: true }).waitFor();
+  assert.equal(await plan.getByLabel(/^Jumlah /).inputValue(), '1'); assert.equal(preparationWrites.length, 1); assert.equal(droppedPreparations, 1);
+  await plan.getByLabel(/^Jumlah /).fill('2'); await plan.getByLabel('Catatan persiapan', { exact: true }).fill('Dua dus fixture siap diperiksa');
+  await plan.getByRole('button', { name: 'Tinjau persiapan', exact: true }).click();
+  await plan.getByRole('button', { name: 'Konfirmasi persiapan', exact: true }).click();
+  await picker.page.getByText('Persiapan tersimpan. Kiriman belum diberangkatkan.', { exact: true }).waitFor();
+  await plan.getByText('Persiapan versi 2 tersimpan.', { exact: true }).waitFor(); assert.equal(preparationWrites.length, 2);
+  assert.equal(await picker.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  await picker.page.screenshot({ path: resolve(directory, 'shipment-preparation-mobile.png'), fullPage: true });
+  await denied.page.goto(origin.origin + '/fulfillment/preparations'); await denied.page.getByRole('heading', { name: 'Periksa sesi dan akses', exact: true }).waitFor();
+  assert.equal(await denied.page.getByRole('region', { name: 'Rencana persiapan', exact: true }).count(), 0);
   const cancellationPage = await buyer.context.newPage(); pages.push(cancellationPage); cancellationPage.setDefaultTimeout(15000); cancellationPage.on('pageerror', error => errors.push(error.message));
   await cancellationPage.goto(origin.origin + '/ordering/reviews');
   await cancellationPage.getByRole('button', { name: 'Tinjau pesanan ' + orderId, exact: true }).click();
@@ -147,6 +181,11 @@ try {
   assert.equal(decisionWrites.length, 3); assert.equal(droppedDecisions, 2);
   await page.getByRole('button', { name: 'Muat kembali pesanan', exact: true }).click();
   await confirmed.getByText('Sisa pesanan dibatalkan. Cadangan barang yang belum dikirim telah dilepas.', { exact: true }).waitFor();
+  await plan.getByRole('button', { name: 'Muat ulang persiapan', exact: true }).click();
+  await plan.getByText('Sisa pesanan tidak lagi dapat disiapkan. Riwayat persiapan tetap tersimpan.', { exact: true }).waitFor();
+  assert.equal(await plan.getByRole('button', { name: 'Tinjau persiapan', exact: true }).count(), 0); assert.equal(preparationWrites.length, 2);
+  await picker.page.getByRole('button', { name: 'Muat pesanan terbaru', exact: true }).click();
+  await prepareQueue.getByText('Belum ada sisa pesanan yang dapat disiapkan dalam penugasan ini.', { exact: true }).waitFor();
   // A deliberate new order may now use the released stock. Reject it through the branch screen.
   await page.goto(origin.origin + '/ordering/checkout?draft=' + config.draftId);
   await page.getByRole('button', { name: 'Tinjau pesanan dan biaya', exact: true }).click();
@@ -178,7 +217,8 @@ try {
   await page.screenshot({ path: resolve(directory, 'order-history-mobile.png'), fullPage: true });
   await page.reload(); await history.getByRole('button', { name: 'Lihat pesanan ' + orderId, exact: true }).waitFor();
   assert.deepEqual(errors, []); console.log('REAL_ORDER_BROWSER_PASS ' + JSON.stringify({ droppedCommittedResponses: dropped, submitAttempts: writes.length,
-    decisionAttempts: decisionWrites.length, recoveredApprovals: droppedDecisions, mobile: true, ownHistory: true, unauthorizedDetail: status }));
+    decisionAttempts: decisionWrites.length, recoveredApprovals: droppedDecisions, preparationAttempts: preparationWrites.length, recoveredPreparations: droppedPreparations,
+    mobile: true, ownHistory: true, unauthorizedDetail: status }));
 } catch (error) {
   for (const [index, page] of pages.entries()) if (!page.isClosed()) {
     console.error('FIXTURE PAGE ' + index + ': ' + (await page.locator('main').innerText().catch(() => 'unavailable')).slice(0, 5000));

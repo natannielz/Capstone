@@ -1,0 +1,9 @@
+# Shipment preparation
+
+`/fulfillment/preparations` connects the scoped `shipment.prepare` permission to accepted store demand from the Ordering owner. Store acceptance is a separate permission and prerequisite. Staff choose explicit complete packages, review their contents and partial quantities, then save a shared versioned preparation. A purchase minimum does not prevent partial fulfillment. The screen receives no price, margin or other store's lines.
+
+Ordering verifies the original order, current decisions and reservation history in the caller's Mongo transaction. Fulfillment owns the preparation head and immutable versions; saving also commits its audit, original receipt and private-reference outbox event. Competing revisions, cancellation, revoked access and expired sessions cannot commit stale work. Saving a preparation neither dispatches stock nor changes money. A later dispatch must revalidate and consume the actual remaining reservation through the owners' transaction interfaces.
+
+The dedicated `fulfillment.preparation` recovery adapter only looks up the original actor/operation/key. Browser storage contains that reference and time, never the order, address or quantities. Lost responses are not retried automatically. Recovery can return an older saved version after another staff edit; the screen then fetches the current plan. A cancelled order retains its immutable preparation but cannot accept another save.
+
+Migration 23 installs preparation storage. See the [upgrade runbook](../../../../docs/runbooks/shipment-preparation-migration.md) and the single [progress ledger](../../../../docs/quality/production-progress.md). Connected local tests use synthetic identities and order-admission policies. Dispatch, courier assignment, scan assistance, recipient proof, Surat Jalan, invoices and actual production acceptance remain open.

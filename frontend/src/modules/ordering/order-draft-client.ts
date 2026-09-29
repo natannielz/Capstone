@@ -16,16 +16,19 @@ function line(value: unknown): OrderSelection {
   if (typeof row.packages !== 'number' || !Number.isSafeInteger(row.packages) || row.packages < 1 || row.packages > 1_000_000) return invalid();
   return { skuId: priceId(row.skuId), definitionId: priceId(row.definitionId), definitionVersion: priceId(row.definitionVersion), priceId: priceId(row.priceId), priceVersion: priceId(row.priceVersion), packages: row.packages };
 }
-export function parseDraftInput(value: unknown) {
-  const row = record(value), context = parseOrderContext(row.context);
-  if (!Array.isArray(row.selections) || row.selections.length === 0 || row.selections.length > 100) return invalid();
-  const selections = row.selections.map(line); if (new Set(selections.map(item => item.skuId)).size !== selections.length) return invalid();
-  const supplied = row.delivery === null ? null : record(row.delivery);
+export function parseOrderDelivery(value: unknown) {
+  const supplied = value === null ? null : record(value);
   const delivery = supplied === null ? null : { recipientName: text(supplied.recipientName, 160), phone: text(supplied.phone, 32), address: text(supplied.address, 1000, true),
     city: text(supplied.city, 120), postalCode: optional(supplied.postalCode, 5), instructions: optional(supplied.instructions, 1000, true) };
   if (delivery && (!/^\+?[0-9][0-9 ()-]*$(?![\s\S])/.test(delivery.phone) || delivery.phone.replace(/[^0-9]/g, '').length < 7 ||
     delivery.phone.replace(/[^0-9]/g, '').length > 15 || delivery.postalCode !== null && !/^[0-9]{5}$(?![\s\S])/.test(delivery.postalCode))) return invalid();
-  return { context, selections, delivery, purchaseReference: optional(row.purchaseReference, 160) };
+  return delivery;
+}
+export function parseDraftInput(value: unknown) {
+  const row = record(value), context = parseOrderContext(row.context);
+  if (!Array.isArray(row.selections) || row.selections.length === 0 || row.selections.length > 100) return invalid();
+  const selections = row.selections.map(line); if (new Set(selections.map(item => item.skuId)).size !== selections.length) return invalid();
+  return { context, selections, delivery: parseOrderDelivery(row.delivery), purchaseReference: optional(row.purchaseReference, 160) };
 }
 export type DraftInput = ReturnType<typeof parseDraftInput>;
 export function parseDraft(value: unknown) {

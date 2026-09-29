@@ -14,6 +14,7 @@ using MongoDB.Driver;
 using UnitToko.Platform;
 using UnitToko.Platform.Identity;
 using UnitToko.Platform.Ordering;
+using UnitToko.Platform.Fulfillment;
 using UnitToko.Modules.Identity;
 using UnitToko.Modules.Organizations;
 using UnitToko.Tests.Authorization;
@@ -38,10 +39,11 @@ public sealed class OrderSubmissionBrowserTests(MongoFixture fixture, ITestOutpu
         await data.Prices.Catalog.Base.AddGrantAsync(data.Buyer, 6500, CatalogAuthoringTestData.Audience, [Permissions.OrderCancel]);
         var approver = await data.Prices.Catalog.ActorAsync(8100, new(GrantScopeKind.BuyingBranch, 10, 11), Permissions.OrderSpendApprove, Permissions.BranchPic);
         var store = await data.Prices.Catalog.ActorAsync(8200, CatalogAuthoringTestData.Shop, Permissions.OrderAccept);
+        var picker = await data.Prices.Catalog.ActorAsync(8800, CatalogAuthoringTestData.Shop, Permissions.ShipmentPrepare);
         await PersonTestData.SeedDistinctPeopleAsync(data.Database, data.Prices.Catalog.Clock, data.Buyer.UserId, approver.UserId);
         var draftService = new OrderDraftService(data.Database, new(fixture.Client), new(data.Database), data.Prices.Catalog.Clock);
         var draft = await draftService.SaveAsync(data.Buyer, null, 0, data.Input, CatalogPriceTestData.Meta("browser-draft"));
-        foreach (var actor in new[] { data.Buyer, data.Prices.Maker, approver, store })
+        foreach (var actor in new[] { data.Buyer, data.Prices.Maker, approver, store, picker })
             await data.Rows("accountProfiles").InsertOneAsync(new BsonDocument { { "_id", actor.UserId }, { "schemaVersion", 1 }, { "version", 1L },
                 { "displayName", "Akun fixture lokal" }, { "verifiedEmail", "order-" + actor.UserId + "@example.invalid" }, { "verifiedAt", data.Prices.Catalog.Clock.UtcNow.UtcDateTime }, { "updatedAt", data.Prices.Catalog.Clock.UtcNow.UtcDateTime } });
         using var keys = new IdentityRuntimeTests.RuntimeKeys(); var settings = IdentityRuntimeTests.Settings(keys);
@@ -50,6 +52,7 @@ public sealed class OrderSubmissionBrowserTests(MongoFixture fixture, ITestOutpu
             services.RemoveAll<IClock>(); services.AddSingleton<IClock>(data.Prices.Catalog.Clock);
             services.RemoveAll<MongoIdentitySessionStore>(); services.AddSingleton(data.Prices.Catalog.Sessions);
             services.RemoveAll<OrderSubmissionService>(); services.AddSingleton(data.Service);
+            services.RemoveAll<ShipmentPreparationService>(); services.AddSingleton(ShipmentPreparationTests.Service(data));
         }));
         factory.UseKestrel(options => options.Listen(IPAddress.Loopback, 0)); factory.StartServer();
         var apiAddress = Assert.Single(factory.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!.Addresses);
@@ -60,6 +63,7 @@ public sealed class OrderSubmissionBrowserTests(MongoFixture fixture, ITestOutpu
         var input = new { apiAddress, origin, pfx = Convert.ToBase64String(tls.Export(X509ContentType.Pfx, password)), password, playwrightPackage = playwright,
             buyerToken = data.Prices.Catalog.Issued[data.Buyer.UserId].OpaqueToken, deniedToken = data.Prices.Catalog.Issued[data.Prices.Maker.UserId].OpaqueToken,
             approverToken = data.Prices.Catalog.Issued[approver.UserId].OpaqueToken, storeToken = data.Prices.Catalog.Issued[store.UserId].OpaqueToken,
+            pickerToken = data.Prices.Catalog.Issued[picker.UserId].OpaqueToken,
             buyerId = data.Buyer.UserId.ToString(), deniedId = data.Prices.Maker.UserId.ToString(), draftId = draft["draftId"].AsInt64.ToString() };
         var start = new ProcessStartInfo(node!) { WorkingDirectory = Path.Combine(root, "frontend"), UseShellExecute = false, CreateNoWindow = true,
             RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true };
@@ -83,6 +87,12 @@ public sealed class OrderSubmissionBrowserTests(MongoFixture fixture, ITestOutpu
         var progress = (await data.Service.ReadOwnAsync(data.Buyer, order["_id"].AsInt64)).Progress;
         Assert.Equal(UnitToko.Modules.Ordering.OrderSpendingState.Approved, progress.SpendingState); Assert.Single(progress.AcceptedSuborders); Assert.True(progress.Cancelled);
         Assert.Equal(UnitToko.Modules.Ordering.OrderSpendingState.Rejected, (await data.Service.ReadOwnAsync(data.Buyer, orders[1]["_id"].AsInt64)).Progress.SpendingState);
+        var preparation = await data.Rows(ShipmentPreparationBson.Heads).Find(new BsonDocument()).SingleAsync();
+        Assert.Equal(2L, preparation["revision"].AsInt64);
+        Assert.Equal(2, await data.Rows(ShipmentPreparationBson.Versions).CountDocumentsAsync(new BsonDocument()));
+        Assert.Equal(2, await data.Rows("idempotencyRecords").CountDocumentsAsync(new BsonDocument("operation", ShipmentPreparationBson.Operation)));
+        var plan = await ShipmentPreparationTests.Service(data).ReadAsync(picker, preparation["suborderId"].AsInt64);
+        Assert.NotNull(plan); Assert.False(plan.CurrentSourceMatches); Assert.Equal(2, Assert.Single(plan.Lines).Packages);
         Assert.Equal(0, await data.Rows("journalEntries").CountDocumentsAsync(new BsonDocument()));
     }
     private static string Root() {
