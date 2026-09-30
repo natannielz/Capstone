@@ -4,15 +4,25 @@ using UnitToko.Modules.Identity.Contracts;
 using UnitToko.Modules.Organizations;
 
 namespace UnitToko.Platform.Documents;
-internal sealed record EvidenceUploadTarget(EvidenceTargetRef Target, GrantScope Owner, long Revision, long? DefinitionId, long? DefinitionVersion);
+internal sealed record EvidenceUploadTarget(EvidenceTargetRef Target, GrantScope Owner, long Revision, long? DefinitionId, long? DefinitionVersion, long? SubmittedReservationId = null);
 internal interface IPaymentEvidenceUploadTarget
 {
     IMongoDatabase Database { get; }
     Task<T> WithTargetAsync<T>(IClientSessionHandle tx, ActorContext actor, EvidenceTargetRef target, long? expectedRevision,
         Func<EvidenceUploadTarget, CancellationToken, Task<T>> action, CancellationToken ct);
+    Task<T> WithReadTargetAsync<T>(IClientSessionHandle tx, ActorContext actor, EvidenceTargetRef target, long? expectedRevision, EvidenceRef? reference,
+        Func<EvidenceUploadTarget, CancellationToken, Task<T>> action, CancellationToken ct);
+    Task<PaymentEvidenceAssociation> RequireSubmissionAssociationAsync(IClientSessionHandle tx, ActorContext actor, long submissionId, EvidenceReadClaim claim, CancellationToken ct);
 }
+internal sealed record PaymentEvidenceAssociation(long Id, long PinId, long DeclarationId, long DeclarationVersionId, long DeclarationRevision,
+    long ReviewRevision, string Hash, string Reason, string CorrelationId, DateTimeOffset SubmittedAt, GrantScope Owner);
 internal sealed partial class EvidenceService
 {
+    private Task<T> WithReadTargetAsync<T>(IClientSessionHandle tx, ActorContext actor, EvidenceTargetRef target, long? expectedRevision, EvidenceRef? reference,
+        Func<EvidenceUploadTarget, CancellationToken, Task<T>> action, CancellationToken ct) =>
+        target.Kind == EvidenceTargetKind.PaymentDeclaration && paymentTargets is not null
+            ? paymentTargets.WithReadTargetAsync(tx, actor, target, expectedRevision, reference, action, ct)
+            : WithTargetAsync(tx, actor, target, expectedRevision, action, ct);
     private Task<T> WithTargetAsync<T>(IClientSessionHandle tx, ActorContext actor, EvidenceTargetRef target, long? expectedRevision,
         Func<EvidenceUploadTarget, CancellationToken, Task<T>> action, CancellationToken ct) {
         if (target.Kind is EvidenceTargetKind.CatalogFamily or EvidenceTargetKind.CatalogSku)

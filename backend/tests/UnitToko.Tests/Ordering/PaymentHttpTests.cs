@@ -51,6 +51,25 @@ public sealed class PaymentHttpTests(MongoFixture fixture)
         Assert.True(response.Headers.CacheControl!.NoStore); Assert.True(response.Headers.CacheControl.Private);
         Assert.Equal("attachment", response.Content.Headers.ContentDisposition!.DispositionType);
         Assert.Equal(data.Bytes, await response.Content.ReadAsByteArrayAsync());
+        async Task<HttpResponseMessage> Submit(string? fault = null, bool recovery = false) {
+            using var request = new HttpRequestMessage(HttpMethod.Post, $"/api/v1/billing/payment-declarations/{data.DeclarationId}/" + (recovery ? "submission/operations/query" : "submit")) {
+                Content = recovery ? JsonContent.Create(new { purpose = "operation-recovery", key = "http-submission" }) : JsonContent.Create(new {
+                    reservationId = data.Reservation.ReservationId.ToString(), evidence = new { id = data.Reference.Id.ToString(), version = "1", sha256 = fault == "hash" ? new string('f', 64) : data.Reference.Sha256 }, reason = "Ajukan bukti uji lokal" }) };
+            request.Headers.Add("Origin", fault == "origin" ? "https://outside.invalid" : origin);
+            if (fault != "actor") request.Headers.Add("X-Expected-Actor-Id", fault == "different-actor" ? data.Payment.Invoice.Finance.UserId.ToString() : data.Actor.UserId.ToString());
+            if (fault != "csrf") request.Headers.Add("X-CSRF-Token", csrf);
+            if (fault != "revision") request.Headers.Add("If-Match", fault == "stale" ? "\"2\"" : "\"1\"");
+            request.Headers.Add("Idempotency-Key", "http-submission"); return await client.SendAsync(request);
+        }
+        foreach (var (fault, status) in new[] { ("actor", HttpStatusCode.BadRequest), ("different-actor", HttpStatusCode.Conflict), ("origin", HttpStatusCode.Forbidden), ("csrf", HttpStatusCode.Forbidden),
+            ("revision", HttpStatusCode.BadRequest), ("stale", HttpStatusCode.Conflict), ("hash", HttpStatusCode.Conflict) }) {
+            using var denied = await Submit(fault); Assert.Equal(status, denied.StatusCode);
+        }
+        using var submitted = await Submit(); Assert.True(submitted.IsSuccessStatusCode, await submitted.Content.ReadAsStringAsync());
+        var result = await submitted.Content.ReadFromJsonAsync<JsonElement>(); Assert.Equal("submitted", result.GetProperty("state").GetString()); Assert.Equal("1", result.GetProperty("reviewRevision").GetString());
+        using var recovered = await Submit(recovery: true); var receipt = await recovered.Content.ReadFromJsonAsync<JsonElement>(); Assert.Equal("committed", receipt.GetProperty("status").GetString());
+        Assert.Equal(result.GetRawText(), receipt.GetProperty("result").GetRawText());
+        using var submittedOriginal = await Send(); Assert.Equal(data.Bytes, await submittedOriginal.Content.ReadAsByteArrayAsync());
         data.Service.ReadObserver = new(async () => {
             await data.Catalog.Sessions.RevokeAsync(data.Catalog.Issued[data.Actor.UserId].OpaqueToken, "owner_logout");
         });

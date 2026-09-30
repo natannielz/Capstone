@@ -1,12 +1,54 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createUnitTokoClient } from '../src/api/client';
-import { createPaymentGateway, preparePayment, parsePaymentResult, paymentReservationOwner, parsePaymentEvidenceStatus, paymentEvidenceLabel } from '../src/modules/billing/payment-client';
+import { createPaymentGateway, preparePayment, preparePaymentSubmission, parsePaymentResult, parsePaymentSubmissionResult, paymentSubmissionOwner, paymentReservationOwner, parsePaymentEvidenceStatus, paymentEvidenceLabel, type PaymentDraft } from '../src/modules/billing/payment-client';
 import { OperationJournal, operationRecoveryCapabilities, reconcileOperationRecovery } from '../src/modules/administration/operation-journal';
 
 const actor = '9007199254740993', declarationId = '9007199254740994';
 const input = { invoiceIds: ['9007199254740995'], declaredAmount: '4000.01', transferDate: '2026-09-29', payerName: 'Pembayar', bankReference: null, note: null };
 const result = { declarationId, versionId: '9007199254740996', revision: '1', recordedAt: '2026-09-29T03:00:00Z' };
+const declaration: PaymentDraft = { id: declarationId, revision: '2', createdAt: result.recordedAt, updatedAt: result.recordedAt, state: 'draft', input,
+  invoices: [{ invoiceId: input.invoiceIds[0], number: '1/2/2026/10', total: '5000.00', buyerName: 'Cabang fixture', sellerName: 'Omi fixture' }], submission: null };
+const checkedImage = parsePaymentEvidenceStatus({ reservationId: '51', revision: '3', state: 'quarantined', expiresAt: result.recordedAt, reference: { id: '52', version: '1', sha256: 'a'.repeat(64) }, scanStatus: 'clean', decoderStatus: 'decoded', safeFailure: null });
+const submissionResult = { declarationId, submissionId: '9007199254740997', declarationRevision: '2', reviewRevision: '1' as const, state: 'submitted' as const, submittedAt: result.recordedAt };
+const submissionKey = 's.' + declarationId + '.12345678-1234-1234-1234-123456789abc';
+test('submission freezes one explicit eligible image and rejects unchecked or already submitted declarations', () => {
+  const command = preparePaymentSubmission(actor, declaration, checkedImage, 'Ajukan untuk diperiksa');
+  assert.ok(Object.isFrozen(command)); assert.ok(Object.isFrozen(command.body)); assert.ok(Object.isFrozen(command.body.evidence));
+  assert.equal(command.body.evidence.sha256, checkedImage.reference!.sha256); assert.equal(paymentSubmissionOwner(submissionKey), declarationId);
+  for (const bad of [{ ...checkedImage, scanStatus: 'unavailable' as const, decoderStatus: 'unavailable' as const }, { ...checkedImage, safeFailure: 'scanner_unavailable' }])
+    assert.throws(() => preparePaymentSubmission(actor, declaration, bad, 'Ajukan untuk diperiksa'));
+  assert.throws(() => preparePaymentSubmission(actor, { ...declaration, state: 'submitted' }, checkedImage, 'Ajukan untuk diperiksa'));
+  for (const bad of [{ ...submissionResult, reviewRevision: 1 }, { ...submissionResult, state: 'verified' }, { ...submissionResult, bankReceiptId: '5' }]) assert.throws(() => parsePaymentSubmissionResult(bad));
+});
+test('submission makes one exact actor and revision request and preserves lost response uncertainty', async () => {
+  const command = preparePaymentSubmission(actor, declaration, checkedImage, 'Ajukan untuk diperiksa'); let calls = 0, lost = false;
+  const gateway = createPaymentGateway(createUnitTokoClient({ baseUrl: 'https://unit-toko.test', fetch: async request => {
+    assert.ok(request instanceof Request); if (request.url.endsWith('/identity/csrf')) return Response.json({ requestToken: 'csrf' }); calls++;
+    assert.equal(request.url, `https://unit-toko.test/api/v1/billing/payment-declarations/${declarationId}/submit`);
+    assert.equal(request.headers.get('X-Expected-Actor-Id'), actor); assert.equal(request.headers.get('If-Match'), '"2"'); assert.equal(request.headers.get('Idempotency-Key'), submissionKey);
+    assert.equal(request.headers.get('X-CSRF-Token'), 'csrf'); assert.deepEqual(await request.json(), command.body);
+    if (lost) throw new Error('lost committed response'); return Response.json(submissionResult);
+  } }));
+  await assert.rejects(() => gateway.submit(command, submissionKey, () => false)); assert.equal(calls, 0);
+  assert.deepEqual(await gateway.submit(command, submissionKey, () => true), submissionResult); assert.equal(calls, 1);
+  lost = true; await assert.rejects(() => gateway.submit(command, submissionKey, () => true)); assert.equal(calls, 2);
+});
+test('submission recovery cannot fall back to draft recovery or clear a different declaration receipt', async () => {
+  const values = new Map<string, string>(), storage = { get length() { return values.size; }, key: (index: number) => [...values.keys()][index] ?? null,
+    getItem: (key: string) => values.get(key) ?? null, setItem: (key: string, value: string) => { values.set(key, value); }, removeItem: (key: string) => { values.delete(key); } };
+  const journal = new OperationJournal(() => storage), entry = journal.remember(actor, 'billing.payment.submit', submissionKey);
+  const legacy = { lookup: async () => { throw new Error('wrong owner'); }, close: async () => { throw new Error('must not close'); } };
+  const draftOnly = { 'billing.payment': { lookup: async () => { throw new Error('draft fallback'); } } };
+  assert.equal(operationRecoveryCapabilities(entry.operation, draftOnly).canCheck, false);
+  await assert.rejects(() => reconcileOperationRecovery(entry, journal, legacy, draftOnly));
+  const absent = { 'billing.payment.submit': { lookup: async () => null } };
+  await assert.rejects(() => reconcileOperationRecovery(entry, journal, legacy, absent, 'close'));
+  await reconcileOperationRecovery(entry, journal, legacy, absent); assert.equal(journal.list(actor).length, 1);
+  await assert.rejects(() => reconcileOperationRecovery(entry, journal, legacy, { 'billing.payment.submit': { lookup: async () => ({ state: 'committed' as const, result: { ...submissionResult, declarationId: '6' } }) } }));
+  assert.equal(journal.list(actor).length, 1);
+  await reconcileOperationRecovery(entry, journal, legacy, { 'billing.payment.submit': { lookup: async () => ({ state: 'committed' as const, result: submissionResult }) } }); assert.equal(journal.list(actor).length, 0);
+});
 test('private evidence viewer binds actor, declaration revision and exact hash without retrying or accepting stale bytes', async () => {
   const bytes = new Uint8Array([137, 80, 78, 71]), hash = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), byte => byte.toString(16).padStart(2, '0')).join('');
   const evidence = parsePaymentEvidenceStatus({ reservationId: '51', revision: '3', state: 'quarantined', expiresAt: result.recordedAt,

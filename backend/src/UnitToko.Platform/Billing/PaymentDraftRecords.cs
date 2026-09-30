@@ -26,11 +26,11 @@ internal sealed class PaymentDraftRecords(IMongoDatabase database)
         return row;
     }
     internal async Task<BsonDocument> HeadAsync(IClientSessionHandle tx, long actorId, long id, CancellationToken ct) {
-        var head = await Rows(B.Heads).Find(tx, Builders<BsonDocument>.Filter.And(new BsonDocument { { "_id", id }, { "recordedBy", actorId } }, PaymentDraftSchemas.Validator(B.Heads))).SingleOrDefaultAsync(ct) ?? throw B.Invalid();
+        var head = await Rows(B.Heads).Find(tx, Builders<BsonDocument>.Filter.And(new BsonDocument { { "_id", id }, { "recordedBy", actorId } }, PaymentSubmissionSchemas.DeclarationValidator())).SingleOrDefaultAsync(ct) ?? throw B.Invalid();
         var latest = await Rows(B.Versions).Find(tx, new BsonDocument("declarationId", id)).Sort(new BsonDocument("revision", -1)).FirstOrDefaultAsync(ct);
         var row = await VersionAsync(tx, head["versionId"].AsInt64, ct);
         if (latest is null || latest["_id"] != row["_id"] || row["revision"] != head["revision"] || row["declarationId"] != head["_id"] ||
-            row["recordedBy"] != head["recordedBy"] || row["recordedAt"] != head["updatedAt"] || !InvoiceRecords.Equal(row["party"], head["party"]) ||
+            row["recordedBy"] != head["recordedBy"] || head["state"] == "draft" && row["recordedAt"] != head["updatedAt"] || !InvoiceRecords.Equal(row["party"], head["party"]) ||
             !InvoiceRecords.Equal(row["scopes"], head["scopes"])) throw B.Invalid();
         // Every edit retains its original maker and previous immutable version. Gaps are
         // corruption, not permission to replace declaration history with a fresh head.
@@ -44,6 +44,7 @@ internal sealed class PaymentDraftRecords(IMongoDatabase database)
             firstDate = version["recordedAt"]; previous = version["_id"]; previousHash = version["snapshotHash"];
         }
         if (expected - 1 != head["revision"] || previous != head["versionId"]) throw B.Invalid();
+        await new PaymentSubmissionRecords(database).RequireHeadAsync(tx, head, ct);
         return head;
     }
     internal async Task TouchAsync(IClientSessionHandle tx, BsonDocument row, CancellationToken ct) {

@@ -12,7 +12,7 @@ namespace UnitToko.Platform.Documents;
 
 internal sealed record EvidenceReadObserver(Func<Task> Verified);
 internal sealed record EvidenceReadClaim(long Id, string Token, EvidenceTargetRef Target, long TargetRevision, long ReservationId,
-    EvidenceRef Reference, ExpectedPublication Original, StorageIoBudget VerificationBudget, DateTimeOffset Deadline, TimeSpan RequestDuration, string Mime);
+    EvidenceRef Reference, ExpectedPublication Original, StorageIoBudget VerificationBudget, DateTimeOffset Deadline, TimeSpan RequestDuration, string Mime, TimeSpan InitialLeaseDuration);
 internal sealed record EvidenceReadWindow(DateTimeOffset Until, DateTimeOffset Deadline, TimeSpan LeaseDuration);
 
 internal sealed partial class EvidenceService
@@ -52,7 +52,7 @@ internal sealed partial class EvidenceService
         await RequireBindingAsync(tx, actor, target, reservationId, ct);
         var bundle = await LoadAsync(tx, reservationId, ct);
         DateTimeOffset? deadline = null;
-        var result = await WithTargetAsync(tx, actor, target, expectedRevision, async (authority, token) => {
+        var result = await WithReadTargetAsync(tx, actor, target, expectedRevision, reference, async (authority, token) => {
             RequireAuthority(bundle, authority, actor, true);
             if (Reference(bundle) != reference) throw Conflict("evidence_read_reference_changed");
             var eligible = await ReadEligibilityAsync(tx, bundle, token);
@@ -72,7 +72,7 @@ internal sealed partial class EvidenceService
             deadline = until;
             return new EvidenceReadClaim(row["_id"].AsInt64, row["token"].AsString, target, authority.Revision, reservationId, reference, Publication(bundle),
                 new(eligible.Policy["maximumBytes"].AsInt64, TimeSpan.FromMilliseconds(eligible.Policy["verificationDurationMs"].AsInt64), (int)bundle.Reservation["admittedLimits"]["bufferBytes"].AsInt64),
-                Date(row["deadline"]), TimeSpan.FromMilliseconds(eligible.Policy["requestDurationMs"].AsInt64), eligible.Validation["mime"].AsString);
+                Date(row["deadline"]), TimeSpan.FromMilliseconds(eligible.Policy["requestDurationMs"].AsInt64), eligible.Validation["mime"].AsString, until - now);
         }, ct);
         FinalCheck(deadline, ct); return result;
     });
@@ -80,7 +80,7 @@ internal sealed partial class EvidenceService
         VerifiedOriginalHandle handle, bool renew, CancellationToken ct) => GuardAsync<EvidenceReadWindow>(tx, async () => {
         await RequireBindingAsync(tx, actor, claim.Target, claim.ReservationId, ct);
         var bundle = await LoadAsync(tx, claim.ReservationId, ct); DateTimeOffset? finalDeadline = null;
-        var result = await WithTargetAsync(tx, actor, claim.Target, claim.TargetRevision, async (authority, token) => {
+        var result = await WithReadTargetAsync(tx, actor, claim.Target, claim.TargetRevision, claim.Reference, async (authority, token) => {
             RequireAuthority(bundle, authority, actor, true);
             var row = await LoadReadLeaseAsync(tx, claim, token);
             if (row["state"] != (renew ? "active" : "provisional") || !row["actor"].Equals(ReadActor(actor)) || Date(row["until"]) <= clock.UtcNow || Date(row["deadline"]) <= clock.UtcNow ||

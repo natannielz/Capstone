@@ -132,7 +132,7 @@ internal sealed partial class EvidenceService
     {
         if (readMetadata is null || readMetadata.Purpose != "evidence-status" || !Text(readMetadata.CorrelationId, 128)) throw Invalid();
         var bundle = await LoadAsync(tx, reservationId, ct);
-        var result = await WithTargetAsync(tx, actor, ReadTarget(bundle.Reservation), null, async (target, token) =>
+        var result = await WithReadTargetAsync(tx, actor, ReadTarget(bundle.Reservation), null, null, async (target, token) =>
         {
             RequireAuthority(bundle, target, actor, false);
             if (bundle.Reservation["state"] == "quarantined") await CompletionAsync(tx, bundle, token);
@@ -148,7 +148,7 @@ internal sealed partial class EvidenceService
     });
 
     internal Task<ReservationResult?> RecoverReservationAsync(IClientSessionHandle tx, ActorContext actor, EvidenceTargetRef requestedTarget,
-        string key, CancellationToken ct) => GuardAsync(tx, () => WithTargetAsync<ReservationResult?>(tx, actor, requestedTarget, null, async (target, token) => {
+        string key, CancellationToken ct) => GuardAsync(tx, () => WithReadTargetAsync<ReservationResult?>(tx, actor, requestedTarget, null, null, async (target, token) => {
             ValidateMetadata(new(key, "Recover original upload reservation", "evidence-reservation-recovery"));
             var receipt = await Rows("idempotencyRecords").Find(tx, ReceiptFilter(actor.UserId, ReserveOperation(Purpose(requestedTarget)), key)).SingleOrDefaultAsync(token);
             var reservations = await Rows("evidenceUploadReservations").Find(tx, new MongoDB.Bson.BsonDocument {

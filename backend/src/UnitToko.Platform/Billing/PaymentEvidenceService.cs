@@ -16,7 +16,7 @@ namespace UnitToko.Platform.Billing;
 public sealed record PaymentEvidenceStorageOptions(string Root, string StoreId, IReadOnlyCollection<string> TrustedOperatorSids);
 
 // Payment-owned admission and current-authority original reads. Neither creates a financial effect.
-public sealed class PaymentEvidenceService
+public sealed partial class PaymentEvidenceService
 {
     private readonly IMongoDatabase database;
     private readonly MongoUnitOfWork unit;
@@ -65,9 +65,12 @@ public sealed class PaymentEvidenceService
     }
     public async Task<ImmutableArray<SafeStatus>> ListAsync(ActorContext actor, long declarationId, long? beforeId = null, CancellationToken ct = default) {
         if (beforeId is <= 0) throw PaymentDraftBson.Invalid(); await StorageAsync(ct);
-        var ids = await unit.ExecuteAsync((tx, token) => ((IPaymentEvidenceUploadTarget)declarations).WithTargetAsync(tx, actor, Target(declarationId), null, async (_, inner) => {
+        var ids = await unit.ExecuteAsync((tx, token) => ((IPaymentEvidenceUploadTarget)declarations).WithReadTargetAsync(tx, actor, Target(declarationId), null, null, async (target, inner) => {
             var filter = new BsonDocument { { "target.kind", "PaymentDeclaration" }, { "target.id", declarationId }, { "purpose", "PaymentImage" }, { "uploader.userId", actor.UserId } };
-            if (beforeId.HasValue) filter.Add("_id", new BsonDocument("$lt", beforeId.Value));
+            if (target.SubmittedReservationId.HasValue) {
+                filter.Add("_id", new BsonDocument("$eq", target.SubmittedReservationId.Value));
+                if (beforeId.HasValue) filter["_id"].AsBsonDocument.Add("$lt", beforeId.Value);
+            } else if (beforeId.HasValue) filter.Add("_id", new BsonDocument("$lt", beforeId.Value));
             return await database.GetCollection<BsonDocument>("evidenceUploadReservations").Find(tx, filter).Sort(new BsonDocument("_id", -1)).Limit(25).Project(new BsonDocument("_id", 1)).ToListAsync(inner);
         }, token), ct);
         var result = ImmutableArray.CreateBuilder<SafeStatus>();

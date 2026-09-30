@@ -19,7 +19,8 @@ using B = UnitToko.Platform.Billing.PaymentDraftBson;
 namespace UnitToko.Platform.Billing;
 public sealed record PaymentInvoiceReference(LongId InvoiceId, string Number, Money Total, string BuyerName, string SellerName);
 public sealed record PaymentDraftView(LongId Id, long Revision, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt, string State,
-    PaymentDraftInput Input, ImmutableArray<PaymentInvoiceReference> Invoices);
+    PaymentDraftInput Input, ImmutableArray<PaymentInvoiceReference> Invoices, PaymentSubmissionView? Submission = null);
+public sealed record PaymentSubmissionView(LongId Id, long ReviewRevision, LongId ReservationId, UnitToko.Modules.Documents.EvidenceRef Evidence, DateTimeOffset SubmittedAt);
 public sealed record PaymentDraftPage(ImmutableArray<PaymentDraftView> Items, bool HasMore);
 
 // One declaration owner. Saving declared values never creates cash, alters AR or verifies a bank receipt.
@@ -41,7 +42,9 @@ public sealed partial class PaymentDraftService
     private async Task StorageAsync(CancellationToken ct) {
         await invoices.PaymentStorageAsync(ct);
         foreach (var name in PaymentDraftSchemas.Collections)
-            await InventoryRepository.RequireStorageAsync(database, name, PaymentDraftSchemas.Validator(name), PaymentDraftSchemas.Key(name), ct);
+            await InventoryRepository.RequireStorageAsync(database, name, name == B.Heads ? PaymentSubmissionSchemas.DeclarationValidator() : PaymentDraftSchemas.Validator(name), PaymentDraftSchemas.Key(name), ct);
+        foreach (var name in PaymentSubmissionSchemas.Collections)
+            await InventoryRepository.RequireStorageAsync(database, name, PaymentSubmissionSchemas.Validator(name), PaymentSubmissionSchemas.Key(name), ct);
     }
     private AuthorizationQuery Query(ActorContext actor, AuthorizationSnapshot authority) {
         var query = ScopePolicy.Compile(actor, authority, Permissions.PaymentEvidence, clock.UtcNow); AuthorizationStore.Require(query); return query;
@@ -72,11 +75,16 @@ public sealed partial class PaymentDraftService
         if (!InvoiceRecords.Equal(version["invoices"], await SourcesAsync(actor, authority, tx, B.Input(version["input"].AsBsonDocument), ct))) throw B.Invalid();
         return head;
     }
-    private static PaymentDraftView View(BsonDocument head, BsonDocument version) => new(new(head["_id"].AsInt64), head["revision"].AsInt64,
+    private async Task<PaymentDraftView> ViewAsync(IClientSessionHandle tx, BsonDocument head, BsonDocument version, CancellationToken ct) {
+        var submission = head["state"] == "submitted" ? await new PaymentSubmissionRecords(database).ReadAsync(tx, head["submissionId"].AsInt64, ct) : null;
+        return new(new(head["_id"].AsInt64), head["revision"].AsInt64,
         ShipmentReceiptRecords.Time(head["createdAt"]), ShipmentReceiptRecords.Time(head["updatedAt"]), head["state"].AsString, B.Input(version["input"].AsBsonDocument),
         [.. version["invoices"].AsBsonArray.Select(value => new PaymentInvoiceReference(new(value["invoiceId"].AsInt64),
             FormattableString.Invariant($"{value["numberEntity"].AsInt64}/{value["numberChannel"].AsInt64}/{value["numberYear"].AsInt64}/{value["number"].AsInt64}"),
-            InvoiceBson.Money(value["total"]), value["buyerName"].AsString, value["sellerName"].AsString))]);
+            InvoiceBson.Money(value["total"]), value["buyerName"].AsString, value["sellerName"].AsString))],
+        submission is null ? null : new(new(submission["_id"].AsInt64), submission["reviewRevision"].AsInt64, new(submission["reservationId"].AsInt64),
+            PaymentSubmissionBson.Reference(submission["evidence"].AsBsonDocument), ShipmentReceiptRecords.Time(submission["submittedAt"])));
+    }
     public async Task<BsonDocument> SaveAsync(ActorContext actor, long? declarationId, long expectedRevision, PaymentDraftInput input,
         AuthorizationCommandMetadata metadata, CancellationToken ct = default) {
         AuthorizationStore.ValidateMetadata(metadata); input = PaymentDraftPolicy.Copy(input, AccountingCalendar.BusinessDate(clock.UtcNow));
@@ -144,7 +152,8 @@ public sealed partial class PaymentDraftService
         if (declarationId <= 0) throw B.Invalid(); await StorageAsync(ct);
         return await authorization.ReadAsync(actor, async (authority, tx, token) => {
             var head = await HeadAsync(actor, authority, tx, declarationId, token); var version = await records.VersionAsync(tx, head["versionId"].AsInt64, token);
-            await records.TouchAsync(tx, head, token); await FenceAsync(actor, authority, tx, head["scopes"].AsBsonArray, token); return View(head, version);
+            var view = await ViewAsync(tx, head, version, token);
+            await records.TouchAsync(tx, head, token); await FenceAsync(actor, authority, tx, head["scopes"].AsBsonArray, token); return view;
         }, ct);
     }
     public async Task<PaymentDraftPage> ListAsync(ActorContext actor, long? beforeId = null, CancellationToken ct = default) {
@@ -161,7 +170,7 @@ public sealed partial class PaymentDraftService
             var ids = await records.Rows(B.Heads).Aggregate<BsonDocument>(tx, pipeline).ToListAsync(token); var result = ImmutableArray.CreateBuilder<PaymentDraftView>(); var allScopes = new BsonArray();
             foreach (var value in ids) {
                 var head = await HeadAsync(actor, authority, tx, value["_id"].AsInt64, token); var version = await records.VersionAsync(tx, head["versionId"].AsInt64, token);
-                await records.TouchAsync(tx, head, token); result.Add(View(head, version)); allScopes.AddRange(head["scopes"].AsBsonArray);
+                await records.TouchAsync(tx, head, token); result.Add(await ViewAsync(tx, head, version, token)); allScopes.AddRange(head["scopes"].AsBsonArray);
             }
             await FenceAsync(actor, authority, tx, allScopes, token); return new PaymentDraftPage([.. result.Take(25)], ids.Count > 25);
         }, ct);

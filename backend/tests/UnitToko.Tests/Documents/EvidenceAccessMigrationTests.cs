@@ -26,7 +26,7 @@ public sealed class EvidenceAccessMigrationTests(MongoFixture fixture)
         var policy = EvidenceAdmissionSchemaTests.Policy(); await db.GetCollection<BsonDocument>("evidenceStorePolicies").InsertOneAsync(policy);
         var stronger = new BsonDocument("$and", new BsonArray { EvidenceAccessSchemas.Validator("evidenceReadPolicies"), new BsonDocument("maximumBytes", new BsonDocument("$lte", 100000L)) });
         await db.CreateCollectionAsync("evidenceReadPolicies", new CreateCollectionOptions<BsonDocument> { Validator = stronger });
-        await new CollectionMigrations(db, Clock).ApplyAsync();
+        await LegacyOrderSubmissionTestSchema.UpgradeV33Async(db, Clock);
         var definitions = await Definitions(db); Assert.Equal(before, new BsonArray((await History(db)).Take(32)));
         foreach (var row in prior) Assert.Equal(row, definitions.Single(value => value["name"] == row["name"]));
         Assert.Equal(policy, await db.GetCollection<BsonDocument>("evidenceStorePolicies").Find(new BsonDocument()).SingleAsync());
@@ -37,7 +37,7 @@ public sealed class EvidenceAccessMigrationTests(MongoFixture fixture)
             Assert.True(InventorySchemas.Contains(options["validator"].AsBsonDocument, EvidenceAccessSchemas.Validator(name)));
             await Assert.ThrowsAsync<MongoWriteException>(() => db.GetCollection<BsonDocument>(name).InsertOneAsync(new BsonDocument("_id", 1)));
         }
-        await new CollectionMigrations(db, Clock).ApplyAsync(); Assert.Equal(33, (await History(db)).Count);
+        await LegacyOrderSubmissionTestSchema.UpgradeV33Async(db, Clock); Assert.Equal(33, (await History(db)).Count);
     });
     [Theory]
     [InlineData("preexisting")] [InlineData("ttl")] [InlineData("counter")] [InlineData("wrong_unique")]
@@ -47,7 +47,8 @@ public sealed class EvidenceAccessMigrationTests(MongoFixture fixture)
         if (fault == "counter") await db.GetCollection<BsonDocument>("idCounters").InsertOneAsync(new BsonDocument { { "_id", "evidenceReadAudits" }, { "value", long.MaxValue } });
         if (fault == "wrong_unique") await db.GetCollection<BsonDocument>("evidenceReadAudits").Indexes.CreateOneAsync(new CreateIndexModel<BsonDocument>(new BsonDocument("actorId", 1), new CreateIndexOptions { Unique = true }));
         var before = await Definitions(db); var history = await History(db);
-        await Assert.ThrowsAsync<InvalidOperationException>(() => new CollectionMigrations(db, Clock).ApplyAsync());
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => LegacyOrderSubmissionTestSchema.UpgradeV33Async(db, Clock));
+        Assert.StartsWith("Evidence access migration preflight failed:", failure.Message);
         Assert.Equal(before, await Definitions(db)); Assert.Equal(history, new BsonArray((await History(db)).Take(32)));
     });
     [Fact]
@@ -57,7 +58,7 @@ public sealed class EvidenceAccessMigrationTests(MongoFixture fixture)
             if (value.CommandName == "create") { changed = true; cancellation.Cancel(); }
         });
         using var client = new MongoClient(settings);
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => new CollectionMigrations(client.GetDatabase(db.DatabaseNamespace.DatabaseName), Clock).ApplyAsync(cancellation.Token));
-        Assert.True(changed); await new CollectionMigrations(db, Clock).ApplyAsync(); Assert.Equal(before, new BsonArray((await History(db)).Take(32)));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => LegacyOrderSubmissionTestSchema.UpgradeV33Async(client.GetDatabase(db.DatabaseNamespace.DatabaseName), Clock, cancellation.Token));
+        Assert.True(changed); await LegacyOrderSubmissionTestSchema.UpgradeV33Async(db, Clock); Assert.Equal(before, new BsonArray((await History(db)).Take(32)));
     });
 }

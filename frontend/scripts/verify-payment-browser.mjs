@@ -23,7 +23,7 @@ function forward(req, res, port, isApi) {
   const headers = { ...req.headers, host: '127.0.0.1:' + port };
   for (const name of Object.keys(headers)) if (name.startsWith('x-forwarded-') || name.startsWith('x-original-') || ['forwarded', 'connection'].includes(name)) delete headers[name];
   if (isApi) { headers['x-forwarded-for'] = req.socket.remoteAddress; headers['x-forwarded-host'] = origin.host; headers['x-forwarded-proto'] = 'https'; }
-  const kind = req.method !== 'POST' ? null : req.url === '/api/v1/billing/payment-declarations' ? 'save' : /^\/api\/v1\/billing\/payment-declarations\/[1-9][0-9]*\/evidence$/.test(req.url) ? 'reserve' : req.url.endsWith('/content') ? 'content' : null; if (kind) writes.push({ kind, key: req.headers['idempotency-key'], actor: req.headers['x-expected-actor-id'] });
+  const kind = req.method !== 'POST' ? null : req.url === '/api/v1/billing/payment-declarations' ? 'save' : /^\/api\/v1\/billing\/payment-declarations\/[1-9][0-9]*\/evidence$/.test(req.url) ? 'reserve' : req.url.endsWith('/content') ? 'content' : req.url.endsWith('/submit') ? 'submit' : null; if (kind) writes.push({ kind, key: req.headers['idempotency-key'], actor: req.headers['x-expected-actor-id'] });
   const drop = kind !== null && kind === dropNext; if (drop) dropNext = null;
   const upstream = http.request({ hostname: '127.0.0.1', port, path: req.url, method: req.method, headers }, response => {
     if (drop && response.statusCode === 200) { response.resume(); response.once('end', () => { dropped++; res.writeHead(200, { 'content-type': 'application/json', 'content-length': '64', 'cache-control': 'no-store' }); res.flushHeaders(); res.write('{'); setTimeout(() => res.destroy(), 25); }); return; }
@@ -102,15 +102,32 @@ try {
   await form.getByLabel('Catatan (opsional)', { exact: true }).fill('Perubahan draf uji'); await preview.waitFor({ state: 'hidden' });
   assert.equal(await proof.getByRole('button', { name: 'Lihat bukti asli', exact: true }).isDisabled(), true);
   await form.getByLabel('Catatan (opsional)', { exact: true }).fill('');
+  await proof.getByRole('button', { name: 'Pilih bukti untuk diajukan', exact: true }).click();
+  const confirmation = page.getByRole('region', { name: 'Periksa pengajuan pembayaran', exact: true }); await confirmation.waitFor();
+  assert.equal(await confirmation.getByRole('heading').evaluate(element => document.activeElement === element), true);
+  assert.match(await confirmation.innerText(), /2\.000,01/); assert.match(await confirmation.innerText(), /tidak mengurangi saldo tagihan/);
+  assert.equal(await form.getByLabel('Jumlah transfer (IDR)', { exact: true }).isDisabled(), true);
+  await buyer.context.setOffline(true); await page.getByText(/Koneksi terputus/).waitFor(); assert.equal(await confirmation.getByRole('button', { name: 'Ajukan untuk verifikasi', exact: true }).isDisabled(), true);
+  await buyer.context.setOffline(false); await page.getByText(/Koneksi terputus/).waitFor({ state: 'hidden' });
+  dropNext = 'submit'; await confirmation.getByRole('button', { name: 'Ajukan untuk verifikasi', exact: true }).click(); await page.getByRole('button', { name: 'Periksa hasil', exact: true }).waitFor();
+  const submissionRefs = await page.evaluate(() => Object.keys(localStorage).filter(key => key.startsWith('unit-toko:pending:v1:')).map(key => JSON.parse(localStorage[key])));
+  assert.equal(submissionRefs.length, 1); assert.equal(submissionRefs[0].operation, 'billing.payment.submit'); assert.deepEqual(Object.keys(submissionRefs[0]).sort(), ['actorId', 'createdAt', 'key', 'operation']);
+  await page.reload(); await page.getByRole('button', { name: 'Periksa hasil', exact: true }).click(); await form.getByText('Menunggu verifikasi', { exact: true }).waitFor();
+  await page.waitForFunction(() => Object.keys(localStorage).filter(key => key.startsWith('unit-toko:pending:v1:')).length === 0);
+  assert.equal(writes.filter(item => item.kind === 'submit').length, 1); assert.equal(await form.getByLabel('Jumlah transfer (IDR)', { exact: true }).count(), 0);
+  assert.equal(await form.getByRole('button', { name: 'Simpan draf pembayaran', exact: true }).count(), 0); assert.match(await form.locator('dl').innerText(), /2\.000,01/);
+  assert.equal(await proof.getByRole('button', { name: 'Unggah bukti asli', exact: true }).count(), 0);
+  await proof.getByRole('button', { name: 'Lihat bukti asli', exact: true }).click(); await preview.waitFor(); await preview.getByRole('img').evaluate(image => image.decode());
+  await preview.getByRole('button', { name: 'Tutup bukti', exact: true }).click();
   assert.equal(writes.filter(item => item.kind === 'save').length, 2); assert.equal(writes.filter(item => item.kind === 'reserve').length, 1); assert.equal(writes.filter(item => item.kind === 'content').length, 1);
-  assert.equal(dropped, 3); assert.ok(writes.every(item => item.actor === config.buyerId)); assert.equal(await page.getByRole('button', { name: /Selesaikan dan tutup/ }).count(), 0);
+  assert.equal(dropped, 4); assert.ok(writes.every(item => item.actor === config.buyerId)); assert.equal(await page.getByRole('button', { name: /Selesaikan dan tutup/ }).count(), 0);
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true); await page.screenshot({ path: resolve(directory, 'payment-buyer-mobile.png'), fullPage: true });
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.evaluate(async () => { await document.fonts.ready; await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))); });
   await page.screenshot({ path: resolve(directory, 'payment-buyer-desktop.png'), fullPage: true });
   const outsider = await user(config.outsiderToken); await outsider.page.goto(origin.origin + '/billing/payments'); await outsider.page.getByRole('heading', { name: 'Periksa sesi dan akses', exact: true }).waitFor();
   assert.equal(await outsider.page.getByRole('button', { name: /^Buka draf/ }).count(), 0);
-  assert.deepEqual(errors, []); console.log('REAL_PAYMENT_BROWSER_PASS ' + JSON.stringify({ draftWrites: 2, originalUploads: 1, durableValidation: true, privateOriginalRead: true, exactHash: true, blobRevoked: true, realDecoder: true, syntheticScanner: true, lostResponsesRecovered: dropped, outsiderDenied: true, offlineUnsent: true, mobile: true }));
+  assert.deepEqual(errors, []); console.log('REAL_PAYMENT_BROWSER_PASS ' + JSON.stringify({ draftWrites: 2, originalUploads: 1, paymentSubmissions: 1, pendingOcr: true, durableValidation: true, privateOriginalRead: true, exactHash: true, blobRevoked: true, realDecoder: true, syntheticScanner: true, lostResponsesRecovered: dropped, outsiderDenied: true, offlineUnsent: true, mobile: true }));
 } catch (error) {
   for (const [index, page] of pages.entries()) if (!page.isClosed()) { console.error('FIXTURE PAGE ' + index + ': ' + (await page.locator('main').innerText().catch(() => 'unavailable')).slice(0, 5000)); await page.screenshot({ path: resolve(directory, 'failure-' + index + '.png'), fullPage: true }).catch(() => {}); }
   console.error(error.stack ?? String(error)); process.exitCode = 1;

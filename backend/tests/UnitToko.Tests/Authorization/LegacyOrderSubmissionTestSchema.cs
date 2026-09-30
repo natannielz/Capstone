@@ -8,6 +8,11 @@ namespace UnitToko.Tests.Authorization;
 /// <summary>Actual predecessor history for forward-order upgrades and historical generic read probes.</summary>
 internal static class LegacyOrderSubmissionTestSchema
 {
+    internal static async Task ApplyV33Async(IMongoDatabase database, IClock clock, CancellationToken ct = default) {
+        await ApplyV32Async(database, clock);
+        await UpgradeV33Async(database, clock, ct);
+    }
+    internal static Task UpgradeV33Async(IMongoDatabase database, IClock clock, CancellationToken ct = default) => ApplyAsync(database, clock, new EvidenceAccessMigration(database), ct);
     internal static async Task ApplyV32Async(IMongoDatabase database, IClock clock) {
         await ApplyV31Async(database, clock);
         await ApplyAsync(database, clock, new EvidenceValidationMigration(database));
@@ -24,10 +29,10 @@ internal static class LegacyOrderSubmissionTestSchema
         await ApplyV28Async(database, clock);
         await ApplyAsync(database, clock, new InvoiceMigration(database));
     }
-    private static async Task ApplyAsync(IMongoDatabase database, IClock clock, IMigrationStep step) {
-        var lease = await new MigrationGate(database, clock, step.Version).AcquireAsync(step.Version, default);
+    private static async Task ApplyAsync(IMongoDatabase database, IClock clock, IMigrationStep step, CancellationToken ct = default) {
+        var lease = await new MigrationGate(database, clock, step.Version).AcquireAsync(step.Version, ct);
         if (lease is null) return;
-        try { await step.ApplyAsync(lease, default); await lease.CompleteAsync(default); }
+        try { await step.ApplyAsync(lease, ct); await lease.CompleteAsync(ct); }
         catch { await lease.ReleaseAsync(); throw; }
     }
     internal static async Task ApplyV28Async(IMongoDatabase database, IClock clock) {

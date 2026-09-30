@@ -76,7 +76,9 @@ public sealed class PaymentBrowserTests(MongoFixture fixture, ITestOutputHelper 
         } finally { if (!process.HasExited) { process.Kill(true); await process.WaitForExitAsync(); } }
         Assert.Equal(1, await data.Invoice.Count(PaymentDraftBson.Heads)); Assert.Equal(2, await data.Invoice.Count(PaymentDraftBson.Versions));
         Assert.Equal(1, await data.Invoice.Count("documentVersions")); Assert.Equal(0, await data.Invoice.Count("payments")); Assert.Equal(0, await data.Invoice.Count("bankReceipts")); Assert.Equal(1, await data.Invoice.Count("journalEntries"));
-        var head = await data.Invoice.Rows(PaymentDraftBson.Heads).Find(new BsonDocument()).SingleAsync(); Assert.Equal("draft", head["state"]);
+        var head = await data.Invoice.Rows(PaymentDraftBson.Heads).Find(new BsonDocument()).SingleAsync(); Assert.Equal("submitted", head["state"]);
+        Assert.Equal(1, await data.Invoice.Count("paymentSubmissions")); Assert.Equal(1, await data.Invoice.Count("evidencePins")); Assert.Equal(1, await data.Invoice.Count("evidencePinAudits"));
+        Assert.Equal(1, await data.Invoice.Rows("outboxEvents").CountDocumentsAsync(new BsonDocument { { "kind", "payment.ocr.requested" }, { "status", "pending" } }));
         var version = await data.Invoice.Rows("documentVersions").Find(new BsonDocument()).SingleAsync(); Assert.Equal("quarantined", version["state"]); Assert.Equal("unavailable", version["scanStatus"]);
         var validation = await data.Invoice.Rows("evidenceValidationResults").Find(new BsonDocument()).SingleAsync(); Assert.Equal("passed", validation["status"]); Assert.Equal(version["sha256"], validation["source"]["sha256"]);
         Assert.Equal(1, await data.Invoice.Count("evidenceValidationAudits"));
