@@ -20,6 +20,43 @@ namespace UnitToko.Tests.Ordering;
 public sealed class PaymentHttpTests(MongoFixture fixture)
 {
     [WindowsStorageFact]
+    public async Task Checked_original_http_read_requires_current_owner_exact_reference_revision_origin_and_csrf() {
+        await using var data = await PaymentEvidenceReadTests.ReadData.CreateAsync(fixture); await data.ValidateAsync();
+        using var keys = new IdentityRuntimeTests.RuntimeKeys(); var settings = IdentityRuntimeTests.Settings(keys); settings["Mongo:Database"] = data.Database.DatabaseNamespace.DatabaseName;
+        using var factory = IdentityRuntimeTests.Factory(settings).WithWebHostBuilder(web => web.ConfigureTestServices(services => {
+            services.RemoveAll<IClock>(); services.AddSingleton<IClock>(data.Catalog.Clock);
+            services.RemoveAll<MongoIdentitySessionStore>(); services.AddSingleton(data.Catalog.Sessions);
+            services.RemoveAll<PaymentDraftService>(); services.AddSingleton(data.Payment.Service);
+            services.RemoveAll<PaymentEvidenceService>(); services.AddSingleton(data.Service);
+        }));
+        const string origin = "https://portal.unit-toko.co.id"; using var client = factory.CreateClient(new() { BaseAddress = new(origin), AllowAutoRedirect = false });
+        client.DefaultRequestHeaders.Add("Cookie", OpaqueSessionCookie.Name + "=" + data.Catalog.Issued[data.Actor.UserId].OpaqueToken);
+        var csrf = (await client.GetFromJsonAsync<JsonElement>("/api/v1/identity/csrf")).GetProperty("requestToken").GetString()!;
+        async Task<HttpResponseMessage> Send(string? fault = null) {
+            using var request = new HttpRequestMessage(HttpMethod.Post, $"/api/v1/billing/payment-declarations/{data.DeclarationId}/evidence/{data.Reservation.ReservationId}/original/query") {
+                Content = JsonContent.Create(new { purpose = "payment-evidence-view", reference = new { id = data.Reference.Id.ToString(), version = "1", sha256 = fault == "hash" ? new string('f', 64) : data.Reference.Sha256 } }) };
+            request.Headers.Add("Origin", fault == "origin" ? "https://outside.invalid" : origin);
+            if (fault != "actor") request.Headers.Add("X-Expected-Actor-Id", fault == "different-actor" ? data.Payment.Invoice.Finance.UserId.ToString() : data.Actor.UserId.ToString());
+            if (fault != "csrf") request.Headers.Add("X-CSRF-Token", csrf);
+            if (fault != "revision") request.Headers.Add("If-Match", fault == "stale" ? "\"2\"" : "\"1\"");
+            if (fault == "range") request.Headers.Add("Range", "bytes=0-10");
+            return await client.SendAsync(request);
+        }
+        foreach (var (fault, status) in new[] { ("actor", HttpStatusCode.BadRequest), ("different-actor", HttpStatusCode.Conflict), ("origin", HttpStatusCode.Forbidden), ("csrf", HttpStatusCode.Forbidden),
+            ("revision", HttpStatusCode.BadRequest), ("stale", HttpStatusCode.Conflict), ("hash", HttpStatusCode.Conflict), ("range", HttpStatusCode.BadRequest) }) {
+            using var denied = await Send(fault); Assert.Equal(status, denied.StatusCode); Assert.NotEqual("image/png", denied.Content.Headers.ContentType?.MediaType);
+        }
+        using var response = await Send(); Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
+        Assert.Equal("image/png", response.Content.Headers.ContentType!.MediaType); Assert.Equal(data.Bytes.Length, response.Content.Headers.ContentLength);
+        Assert.True(response.Headers.CacheControl!.NoStore); Assert.True(response.Headers.CacheControl.Private);
+        Assert.Equal("attachment", response.Content.Headers.ContentDisposition!.DispositionType);
+        Assert.Equal(data.Bytes, await response.Content.ReadAsByteArrayAsync());
+        data.Service.ReadObserver = new(async () => {
+            await data.Catalog.Sessions.RevokeAsync(data.Catalog.Issued[data.Actor.UserId].OpaqueToken, "owner_logout");
+        });
+        using var revoked = await Send(); Assert.False(revoked.IsSuccessStatusCode); Assert.NotEqual("image/png", revoked.Content.Headers.ContentType?.MediaType);
+    }
+    [WindowsStorageFact]
     public async Task Buyer_saves_private_draft_and_streams_quarantined_original_with_strict_browser_boundary() {
         await using var files = await EvidenceAdmissionTestData.CreateAsync(fixture); await using var data = await PaymentDraftData.CreateAsync(fixture); var order = data.Invoice.Order;
         var policy = EvidenceAdmissionSchemaTests.Policy(100000, 10, 3000000); policy["_id"] = (await new IdAllocator(order.Database).NextAsync("evidenceStorePolicies")).Value;

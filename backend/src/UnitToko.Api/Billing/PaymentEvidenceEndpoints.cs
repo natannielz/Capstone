@@ -14,11 +14,14 @@ public sealed record PaymentEvidenceReserveDto([property: JsonRequired] string R
 public sealed record PaymentEvidenceRecoverDto([property: JsonRequired] string Purpose, [property: JsonRequired] string Reason);
 public sealed record PaymentUploadReservationDto(LongId ReservationId, string Revision, DateTimeOffset ExpiresAt);
 public sealed record PaymentUploadRecoveryDto(string Status, PaymentUploadReservationDto? Reservation);
-public sealed record PaymentEvidenceReferenceDto(LongId Id, string Version, string Sha256);
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record PaymentEvidenceReferenceDto([property: JsonRequired] LongId Id, [property: JsonRequired] string Version, [property: JsonRequired] string Sha256);
 public sealed record PaymentEvidenceStatusDto(LongId ReservationId, string State, string Revision, DateTimeOffset ExpiresAt,
     PaymentEvidenceReferenceDto? Reference, string ScanStatus, string DecoderStatus, string? SafeFailure);
 public sealed record PaymentUploadOutcomeDto(string State, PaymentEvidenceReferenceDto? Reference);
 public sealed record PaymentEvidencePageDto(ImmutableArray<PaymentEvidenceStatusDto> Items);
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record PaymentEvidenceReadDto([property: JsonRequired] string Purpose, [property: JsonRequired] PaymentEvidenceReferenceDto Reference);
 
 public static class PaymentEvidenceEndpoints
 {
@@ -40,6 +43,17 @@ public static class PaymentEvidenceEndpoints
         group.MapPost("/{reservationId}/query", async (string id, string reservationId, OrderReadDto request, HttpContext http, PaymentEvidenceService service, CancellationToken ct) => {
             Purpose(request.Purpose); return TypedResults.Ok(Status(await service.StatusAsync(http.Features.Get<ResolvedActor>()!.Actor, LongId.Parse(id).Value, LongId.Parse(reservationId).Value, ct)));
         }).WithName("ReadPaymentEvidenceStatus");
+        group.MapPost("/{reservationId}/original/query", async (string id, string reservationId, PaymentEvidenceReadDto request, HttpContext http, PaymentEvidenceService service,
+            [FromHeader(Name = "If-Match")] string expected, CancellationToken ct) => {
+            if (request.Purpose != "payment-evidence-view" || request.Reference is null || http.Request.Headers.ContainsKey("Range")) throw PaymentDraftEndpoints.Invalid();
+            var reference = new EvidenceRef(request.Reference.Id.Value, LongId.Parse(request.Reference.Version).Value, request.Reference.Sha256);
+            var file = await service.OpenReadAsync(http.Features.Get<ResolvedActor>()!.Actor, LongId.Parse(id).Value, LongId.Parse(reservationId).Value,
+                AccessRequestMetadata.ExpectedVersion(http.Request), reference, new(request.Purpose, http.TraceIdentifier), ct);
+            http.Response.Headers.CacheControl = "private, no-store, max-age=0"; http.Response.Headers.Pragma = "no-cache";
+            http.Response.Headers.XContentTypeOptions = "nosniff"; http.Response.Headers.ContentSecurityPolicy = "default-src 'none'; sandbox";
+            http.Response.Headers["Referrer-Policy"] = "no-referrer"; http.Response.ContentLength = file.Length;
+            return Results.Stream(file.Content, file.Mime, $"bukti-{reference.Id}-{reference.Version}.{(file.Mime == "image/png" ? "png" : "jpg")}", enableRangeProcessing: false);
+        }).Produces<byte[]>(200, "image/png", "image/jpeg").WithName("ReadPaymentEvidenceOriginal");
         group.MapPost("/{reservationId}/content", async (string id, string reservationId, HttpContext http, PaymentEvidenceService service,
             [FromHeader(Name = "Idempotency-Key")] string key, [FromHeader(Name = "If-Match")] string expected, CancellationToken ct) => {
             if (!string.Equals(http.Request.ContentType, "application/octet-stream", StringComparison.OrdinalIgnoreCase) || http.Request.Headers.ContainsKey("Content-Encoding"))

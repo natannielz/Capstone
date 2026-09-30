@@ -7,6 +7,25 @@ import { OperationJournal, operationRecoveryCapabilities, reconcileOperationReco
 const actor = '9007199254740993', declarationId = '9007199254740994';
 const input = { invoiceIds: ['9007199254740995'], declaredAmount: '4000.01', transferDate: '2026-09-29', payerName: 'Pembayar', bankReference: null, note: null };
 const result = { declarationId, versionId: '9007199254740996', revision: '1', recordedAt: '2026-09-29T03:00:00Z' };
+test('private evidence viewer binds actor, declaration revision and exact hash without retrying or accepting stale bytes', async () => {
+  const bytes = new Uint8Array([137, 80, 78, 71]), hash = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), byte => byte.toString(16).padStart(2, '0')).join('');
+  const evidence = parsePaymentEvidenceStatus({ reservationId: '51', revision: '3', state: 'quarantined', expiresAt: result.recordedAt,
+    reference: { id: '52', version: '1', sha256: hash }, scanStatus: 'clean', decoderStatus: 'decoded', safeFailure: null });
+  let mode = 'ok', calls = 0, current = true;
+  const gateway = createPaymentGateway(createUnitTokoClient({ baseUrl: 'https://unit-toko.test', fetch: async request => {
+    assert.ok(request instanceof Request); if (request.url.endsWith('/identity/csrf')) return Response.json({ requestToken: 'csrf' }); calls++;
+    assert.equal(request.url, `https://unit-toko.test/api/v1/billing/payment-declarations/${declarationId}/evidence/51/original/query`);
+    assert.equal(request.headers.get('X-Expected-Actor-Id'), actor); assert.equal(request.headers.get('If-Match'), '"2"'); assert.equal(request.headers.get('X-CSRF-Token'), 'csrf'); assert.equal(request.cache, 'no-store');
+    assert.deepEqual(await request.json(), { purpose: 'payment-evidence-view', reference: evidence.reference });
+    if (mode === 'lost') throw new Error('interrupted'); if (mode === 'stale') current = false;
+    return new Response(mode === 'changed' ? new Uint8Array([1, 2, 3, 4]) : bytes, { headers: { 'content-type': mode === 'mime' ? 'text/html' : 'image/png', 'content-length': mode === 'length' ? '5' : '4' } });
+  } }));
+  const read = () => gateway.original(actor, declarationId, '2', evidence, () => current);
+  const blob = await read(); assert.deepEqual(new Uint8Array(await blob.arrayBuffer()), bytes); assert.equal(blob.type, 'image/png');
+  for (mode of ['changed', 'mime', 'length', 'lost', 'stale']) { current = true; const before = calls; await assert.rejects(read); assert.equal(calls, before + 1); }
+  const before = calls; await assert.rejects(read); assert.equal(calls, before);
+  await assert.rejects(() => gateway.original(actor, declarationId, '2', { ...evidence, scanStatus: 'unavailable', decoderStatus: 'unavailable' }, () => true)); assert.equal(calls, before);
+});
 test('evidence verdict stays separate from payment approval and rejects contradictory server responses', () => {
   const value = { reservationId: '51', revision: '3', state: 'quarantined', expiresAt: result.recordedAt, reference: { id: '52', version: '1', sha256: 'a'.repeat(64) }, scanStatus: 'clean', decoderStatus: 'decoded', safeFailure: null };
   assert.match(paymentEvidenceLabel(parsePaymentEvidenceStatus(value)), /pembayaran belum diverifikasi/);

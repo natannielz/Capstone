@@ -6,6 +6,7 @@ import net from 'node:net';
 import { createRequire } from 'node:module';
 import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { createHash } from 'node:crypto';
 import next from 'next';
 
 const chunks = []; for await (const chunk of process.stdin) chunks.push(chunk);
@@ -81,13 +82,35 @@ try {
     await decoded.waitFor({ timeout: 1000 }).catch(() => {});
   }
   await decoded.waitFor();
+  const readResponse = page.waitForResponse(response => response.url().endsWith('/original/query'));
+  await proof.getByRole('button', { name: 'Lihat bukti asli', exact: true }).click();
+  const originalResponse = await readResponse; assert.equal(originalResponse.status(), 200);
+  const originalHeaders = originalResponse.headers(); assert.equal(originalHeaders['content-type'], 'image/png'); assert.match(originalHeaders['cache-control'], /no-store/);
+  assert.equal(originalHeaders['x-content-type-options'], 'nosniff'); assert.equal(originalHeaders['content-security-policy'], "default-src 'none'; sandbox");
+  assert.match(originalHeaders['content-disposition'], /^attachment;/); assert.equal(originalHeaders['referrer-policy'], 'no-referrer');
+  assert.equal(createHash('sha256').update(await originalResponse.body()).digest('hex'), createHash('sha256').update(image.buffer).digest('hex'));
+  const preview = page.getByRole('region', { name: /^Bukti asli · unggah/ }); await preview.waitFor();
+  const originalImage = preview.getByRole('img'); await originalImage.evaluate(image => image.decode());
+  assert.deepEqual(await originalImage.evaluate(image => [image.naturalWidth, image.naturalHeight]), [13, 7]);
+  const originalUrl = await originalImage.getAttribute('src'); assert.match(originalUrl, /^blob:/); assert.equal(await originalImage.getAttribute('srcset'), null);
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  await page.screenshot({ path: resolve(directory, 'payment-original-mobile.png'), fullPage: true });
+  await preview.getByRole('button', { name: 'Tutup bukti', exact: true }).click(); await preview.waitFor({ state: 'hidden' });
+  assert.equal(await proof.getByRole('button', { name: 'Lihat bukti asli', exact: true }).evaluate(element => document.activeElement === element), true);
+  assert.equal(await page.evaluate(async url => { try { await fetch(url); return false; } catch { return true; } }, originalUrl), true);
+  await proof.getByRole('button', { name: 'Lihat bukti asli', exact: true }).click(); await preview.waitFor();
+  await form.getByLabel('Catatan (opsional)', { exact: true }).fill('Perubahan draf uji'); await preview.waitFor({ state: 'hidden' });
+  assert.equal(await proof.getByRole('button', { name: 'Lihat bukti asli', exact: true }).isDisabled(), true);
+  await form.getByLabel('Catatan (opsional)', { exact: true }).fill('');
   assert.equal(writes.filter(item => item.kind === 'save').length, 2); assert.equal(writes.filter(item => item.kind === 'reserve').length, 1); assert.equal(writes.filter(item => item.kind === 'content').length, 1);
   assert.equal(dropped, 3); assert.ok(writes.every(item => item.actor === config.buyerId)); assert.equal(await page.getByRole('button', { name: /Selesaikan dan tutup/ }).count(), 0);
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true); await page.screenshot({ path: resolve(directory, 'payment-buyer-mobile.png'), fullPage: true });
-  await page.setViewportSize({ width: 1440, height: 1000 }); await page.screenshot({ path: resolve(directory, 'payment-buyer-desktop.png'), fullPage: true });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.evaluate(async () => { await document.fonts.ready; await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))); });
+  await page.screenshot({ path: resolve(directory, 'payment-buyer-desktop.png'), fullPage: true });
   const outsider = await user(config.outsiderToken); await outsider.page.goto(origin.origin + '/billing/payments'); await outsider.page.getByRole('heading', { name: 'Periksa sesi dan akses', exact: true }).waitFor();
   assert.equal(await outsider.page.getByRole('button', { name: /^Buka draf/ }).count(), 0);
-  assert.deepEqual(errors, []); console.log('REAL_PAYMENT_BROWSER_PASS ' + JSON.stringify({ draftWrites: 2, originalUploads: 1, durableValidation: true, realDecoder: true, syntheticScanner: true, lostResponsesRecovered: dropped, outsiderDenied: true, offlineUnsent: true, mobile: true }));
+  assert.deepEqual(errors, []); console.log('REAL_PAYMENT_BROWSER_PASS ' + JSON.stringify({ draftWrites: 2, originalUploads: 1, durableValidation: true, privateOriginalRead: true, exactHash: true, blobRevoked: true, realDecoder: true, syntheticScanner: true, lostResponsesRecovered: dropped, outsiderDenied: true, offlineUnsent: true, mobile: true }));
 } catch (error) {
   for (const [index, page] of pages.entries()) if (!page.isClosed()) { console.error('FIXTURE PAGE ' + index + ': ' + (await page.locator('main').innerText().catch(() => 'unavailable')).slice(0, 5000)); await page.screenshot({ path: resolve(directory, 'failure-' + index + '.png'), fullPage: true }).catch(() => {}); }
   console.error(error.stack ?? String(error)); process.exitCode = 1;

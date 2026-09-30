@@ -34,10 +34,11 @@ public sealed class PaymentBrowserTests(MongoFixture fixture, ITestOutputHelper 
         await using var files = await EvidenceAdmissionTestData.CreateAsync(fixture); await using var data = await PaymentDraftData.CreateAsync(fixture); var order = data.Invoice.Order;
         var policy = EvidenceAdmissionSchemaTests.Policy(); policy["_id"] = (await new IdAllocator(order.Database).NextAsync("evidenceStorePolicies")).Value; await data.Invoice.Rows("evidenceStorePolicies").InsertOneAsync(policy);
         var evidence = new PaymentEvidenceService(order.Database, new(order.Prices.Catalog.Client), new(order.Database), order.Prices.Catalog.Clock, data.Service, files.Registration);
+        await PaymentEvidenceReadTests.ReadData.PolicyAsync(order.Database, files.StoreId, order.Prices.Catalog.Clock.UtcNow);
         // Actual durable processor and decoder; the scanner verdict is an explicit synthetic fixture, not live malware acceptance.
         var processor = new EvidenceValidationProcessor(order.Database, new(order.Prices.Catalog.Client), new(order.Database), order.Prices.Catalog.Clock, files.Registration,
             EvidenceValidationTests.Consumer, new string('c', 64), new(["evidence.validation.requested"], 3, TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(2)),
-            new(1024, 100, 100, 10000), new EvidenceValidationTests.FixtureScanner(), new WindowsImageDecoder(ImageDecoderTests.Options()));
+            new(1024, 100, 100, 10000), new EvidenceValidationTests.FixtureScanner(signaturesAt: order.Prices.Catalog.Clock.UtcNow.AddHours(-1)), new WindowsImageDecoder(ImageDecoderTests.Options()));
         await EvidenceValidationTests.Policy(order.Database, order.Prices.Catalog.Clock, files.StoreId, processor.PipelineId);
         using var keys = new IdentityRuntimeTests.RuntimeKeys(); var settings = IdentityRuntimeTests.Settings(keys);
         settings["Mongo:Database"] = order.Database.DatabaseNamespace.DatabaseName; settings["Identity:TrustedProxies:0"] = "127.0.0.1"; settings["Logging:LogLevel:Default"] = "Warning";
@@ -79,6 +80,7 @@ public sealed class PaymentBrowserTests(MongoFixture fixture, ITestOutputHelper 
         var version = await data.Invoice.Rows("documentVersions").Find(new BsonDocument()).SingleAsync(); Assert.Equal("quarantined", version["state"]); Assert.Equal("unavailable", version["scanStatus"]);
         var validation = await data.Invoice.Rows("evidenceValidationResults").Find(new BsonDocument()).SingleAsync(); Assert.Equal("passed", validation["status"]); Assert.Equal(version["sha256"], validation["source"]["sha256"]);
         Assert.Equal(1, await data.Invoice.Count("evidenceValidationAudits"));
+        var leases = await data.Invoice.Rows("evidenceReadLeases").Find(new BsonDocument()).ToListAsync(); Assert.NotEmpty(leases); Assert.All(leases, row => Assert.Equal("released", row["state"]));
     }
     private static string Root() {
         for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)

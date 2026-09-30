@@ -2,6 +2,7 @@ using MongoDB.Bson;
 using MongoDB.Driver;
 using UnitToko.Modules.Documents;
 using UnitToko.Platform.Documents;
+using UnitToko.Platform.Inventory;
 using UnitToko.Platform.Mongo;
 using UnitToko.Platform.Mongo.Migrations;
 using UnitToko.Platform.Storage;
@@ -48,12 +49,17 @@ internal sealed class EvidenceValidationProcessor
     }
     internal async Task ProcessClaimAsync(BsonDocument claim, CancellationToken ct = default) {
         if (registration.Store is null || claim.GetValue("kind", "") != Kind || claim.GetValue("leaseOwner", "") != consumer) throw Unavailable();
+        foreach (var name in new[] { "evidenceLifecycles", "evidenceLifecycleAudits" })
+            await InventoryRepository.RequireStorageAsync(database, name, EvidenceAccessSchemas.Validator(name), EvidenceAccessSchemas.Key(name), ct);
         var start = await unit.ExecuteAsync(async (tx, token) => {
             var live = await queue.FenceProcessingAsync(tx, claim, null, token);
             var policy = await PolicyAsync(tx, token);
             var original = await evidence.ValidationOriginalAsync(tx, live, token);
             var existing = await EvidenceValidationRecords.ReadAsync(database, tx, live, original.Publication, original.Source, token);
-            if (existing is not null) RequirePolicyIdentity(existing, policy);
+            if (existing is not null) {
+                RequirePolicyIdentity(existing, policy);
+                await new EvidenceLifecycleStore(database, ids, clock).EnsureAsync(tx, existing, original.Publication, token);
+            }
             CheckDeadline(live, policy, token); return (Live: live, Policy: policy, Original: original, Existing: existing);
         }, ct);
         if (start.Existing is not null) return;
@@ -82,7 +88,10 @@ internal sealed class EvidenceValidationProcessor
             var original = await evidence.ValidationOriginalAsync(tx, live, token);
             if (!original.Source.Equals(start.Original.Source) || original.Publication != start.Original.Publication) throw EvidenceValidationRecords.Broken();
             var existing = await EvidenceValidationRecords.ReadAsync(database, tx, live, original.Publication, original.Source, token);
-            if (existing is not null) { RequirePolicyIdentity(existing, policy); CheckDeadline(live, policy, token); return true; }
+            if (existing is not null) {
+                RequirePolicyIdentity(existing, policy); await new EvidenceLifecycleStore(database, ids, clock).EnsureAsync(tx, existing, original.Publication, token);
+                CheckDeadline(live, policy, token); return true;
+            }
             var row = new BsonDocument {
                 { "_id", original.Source["versionRowId"] }, { "schemaVersion", 1 }, { "outboxId", live["_id"] }, { "source", original.Source },
                 { "storeId", registration.StoreId }, { "generation", original.Publication.Attempt.Generation }, { "length", original.Publication.Content.Length },
@@ -98,6 +107,7 @@ internal sealed class EvidenceValidationProcessor
             await Rows("evidenceValidationResults").InsertOneAsync(tx, row, cancellationToken: token);
             await Rows("evidenceValidationAudits").InsertOneAsync(tx, EvidenceValidationRecords.Audit(row), cancellationToken: token);
             live = await queue.FenceProcessingAsync(tx, claim, EvidenceValidationRecords.Receipt(row), token);
+            await new EvidenceLifecycleStore(database, ids, clock).EnsureAsync(tx, row, original.Publication, token);
             CheckDeadline(live, policy, token); return true;
         }, ct);
     }

@@ -138,6 +138,22 @@ public sealed class EvidenceValidationTests(MongoFixture fixture)
         internal int Calls;
         public Task<ImageDecodeResult> DecodeAsync(Stream original, EvidenceLimits limits, CancellationToken ct) { Calls++; throw new InvalidOperationException("Infected source must not reach decoder"); }
     }
+    [WindowsStorageFact]
+    public async Task Required_lifecycle_audit_failure_rolls_back_validation_and_queue_receipt_then_exact_claim_recovers() {
+        await using var data = await EvidenceAdmissionTestData.CreateAsync(fixture); await Upload(data);
+        var processor = Processor(data); await Policy(data, processor.PipelineId); var queue = new OutboxStore(data.DB, data.Catalog.Clock);
+        var claim = Assert.IsType<BsonDocument>(await queue.ClaimAsync(Consumer, ClaimPolicy));
+        var required = UnitToko.Platform.Mongo.Migrations.EvidenceAccessSchemas.Validator("evidenceLifecycleAudits");
+        await data.DB.RunCommandAsync<BsonDocument>(new BsonDocument { { "collMod", "evidenceLifecycleAudits" }, { "validator", new BsonDocument("$and", new BsonArray { required, new BsonDocument("_id", new BsonDocument("$exists", false)) }) } });
+        await Assert.ThrowsAnyAsync<MongoException>(() => processor.ProcessClaimAsync(claim));
+        foreach (var name in new[] { "evidenceValidationResults", "evidenceValidationAudits", "evidenceLifecycles", "evidenceLifecycleAudits" })
+            Assert.Equal(0, await data.Rows(name).CountDocumentsAsync(new BsonDocument()));
+        Assert.False((await data.Rows("outboxEvents").Find(new BsonDocument("_id", claim["_id"])).SingleAsync()).Contains("processingReceipt"));
+        await data.DB.RunCommandAsync<BsonDocument>(new BsonDocument { { "collMod", "evidenceLifecycleAudits" }, { "validator", required } });
+        await processor.ProcessClaimAsync(claim);
+        Assert.Equal(1, await data.Rows("evidenceLifecycles").CountDocumentsAsync(new BsonDocument()));
+        Assert.Equal(1, await data.Rows("evidenceLifecycleAudits").CountDocumentsAsync(new BsonDocument()));
+    }
     internal static OutboxClaimPolicy ClaimPolicy => new(["evidence.validation.requested"], 3, TimeSpan.FromSeconds(5), TimeSpan.FromMinutes(2));
     internal static EvidenceValidationProcessor Processor(EvidenceAdmissionTestData data, IContentScanner? scanner = null) =>
         new(data.DB, data.Unit, new(data.DB), data.Catalog.Clock, data.Registration, Consumer, new string('c', 64), ClaimPolicy,
@@ -154,11 +170,11 @@ public sealed class EvidenceValidationTests(MongoFixture fixture)
         var reservation = await data.ReserveAsync(); using var stream = new MemoryStream(content ?? ImageDecoderTests.Png(13, 7));
         var result = await data.Service.UploadAsync(data.Actor, reservation.ReservationId, reservation.Revision, stream, EvidenceAdmissionTestData.Meta()); Assert.Equal("quarantined", result.State); return reservation;
     }
-    internal sealed class FixtureScanner(string state = "clean", Func<Task>? after = null) : IContentScanner {
+    internal sealed class FixtureScanner(string state = "clean", Func<Task>? after = null, DateTimeOffset? signaturesAt = null) : IContentScanner {
         internal int Calls { get; private set; }
         public async Task<ContentScanResult> ScanAsync(Stream original, CancellationToken ct) {
             Calls++; using var bytes = new MemoryStream(); await original.CopyToAsync(bytes, ct); if (after is not null) await after();
-            return state == "scanner_unavailable" ? new(state) : new(state, "synthetic-scanner", 1, DateTimeOffset.UnixEpoch, bytes.Length, Convert.ToHexString(SHA256.HashData(bytes.ToArray())).ToLowerInvariant());
+            return state == "scanner_unavailable" ? new(state) : new(state, "synthetic-scanner", 1, signaturesAt ?? DateTimeOffset.UnixEpoch, bytes.Length, Convert.ToHexString(SHA256.HashData(bytes.ToArray())).ToLowerInvariant());
         }
     }
 }

@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Diagnostics;
 using MongoDB.Bson;
 using MongoDB.Driver;
 using UnitToko.Modules.Documents;
@@ -7,23 +8,29 @@ using UnitToko.Platform.Authorization;
 using UnitToko.Platform.Documents;
 using UnitToko.Platform.Mongo;
 using UnitToko.Platform.Mongo.Migrations;
+using UnitToko.Platform.Inventory;
+using UnitToko.Platform.Storage;
 
 namespace UnitToko.Platform.Billing;
 
 public sealed record PaymentEvidenceStorageOptions(string Root, string StoreId, IReadOnlyCollection<string> TrustedOperatorSids);
 
-// Admission only: every successful original remains quarantined, with no financial effect.
+// Payment-owned admission and current-authority original reads. Neither creates a financial effect.
 public sealed class PaymentEvidenceService
 {
     private readonly IMongoDatabase database;
     private readonly MongoUnitOfWork unit;
     private readonly PaymentDraftService declarations;
     private readonly EvidenceService evidence;
+    private readonly IClock clock;
+    private readonly EvidenceStoreRegistration registration;
+    internal EvidenceReadObserver? ReadObserver { get; set; }
     public PaymentEvidenceService(IMongoDatabase database, MongoUnitOfWork unit, IdAllocator ids, IClock clock, PaymentDraftService declarations,
         PaymentEvidenceStorageOptions? storage = null) : this(database, unit, ids, clock, declarations, storage is null ? EvidenceStoreRegistration.Unavailable() :
             EvidenceStoreRegistration.OpenLocal(storage.Root, storage.StoreId, storage.TrustedOperatorSids)) { }
     internal PaymentEvidenceService(IMongoDatabase database, MongoUnitOfWork unit, IdAllocator ids, IClock clock, PaymentDraftService declarations, EvidenceStoreRegistration registration) {
-        this.database = database; this.unit = unit; this.declarations = declarations; evidence = new(database, unit, ids, clock, registration, declarations);
+        this.database = database; this.unit = unit; this.declarations = declarations; this.clock = clock; this.registration = registration;
+        evidence = new(database, unit, ids, clock, registration, declarations);
     }
     private static EvidenceTargetRef Target(long id) => new(EvidenceTargetKind.PaymentDeclaration, id);
     private async Task StorageAsync(CancellationToken ct) {
@@ -76,5 +83,35 @@ public sealed class PaymentEvidenceService
     public async Task<UploadOutcome> RecoverUploadAsync(ActorContext actor, long declarationId, long reservationId, AuthorizationCommandMetadata metadata, CancellationToken ct = default) {
         _ = await StatusAsync(actor, declarationId, reservationId, ct);
         return await evidence.RecoverAsync(actor, reservationId, metadata, ct);
+    }
+    public async Task<ProtectedEvidenceRead> OpenReadAsync(ActorContext actor, long declarationId, long reservationId, long expectedRevision,
+        EvidenceRef reference, AuthorizationReadMetadata metadata, CancellationToken ct = default) {
+        await StorageAsync(ct);
+        foreach (var name in EvidenceAccessSchemas.Collections)
+            await InventoryRepository.RequireStorageAsync(database, name, EvidenceAccessSchemas.Validator(name), EvidenceAccessSchemas.Key(name), ct);
+        if (registration.Store is null) throw Unavailable();
+        var started = Stopwatch.GetTimestamp();
+        var claim = await unit.ExecuteAsync((tx, token) => evidence.AcquirePaymentReadAsync(tx, actor, Target(declarationId), expectedRevision, reservationId, reference, metadata, token), ct);
+        VerifiedOriginalHandle? handle = null;
+        async Task ReleaseAsync() {
+            using var cleanup = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            await unit.ExecuteAsync(async (tx, token) => { await evidence.ReleaseReadAsync(tx, claim, token); return true; }, cleanup.Token);
+        }
+        try {
+            var opened = await registration.Store.OpenVerifiedAsync(claim.Original, claim.VerificationBudget, ct);
+            handle = opened is OpenOutcome.Opened success ? success.Handle : throw new PersistenceConflictException("evidence_read_integrity_unavailable", "The exact original cannot be safely read");
+            if (ReadObserver is { } observer) await observer.Verified();
+            var window = await unit.ExecuteAsync((tx, token) => evidence.AuthorizePaymentReadAsync(tx, actor, claim, handle, false, token), ct);
+            var held = handle;
+            var content = new EvidenceReadStream(held, clock, window, claim.RequestDuration - Stopwatch.GetElapsedTime(started),
+                token => unit.ExecuteAsync((tx, inner) => evidence.AuthorizePaymentReadAsync(tx, actor, claim, held, true, inner), token), ReleaseAsync, ct);
+            handle = null; return new(content, claim.Mime, claim.Original.Content.Length, claim.Reference);
+        } catch {
+            if (handle is not null) await handle.DisposeAsync();
+            // No bytes have been returned. A failed/unknown release leaves only a bounded lease;
+            // cleanup cannot infer object deletion from this path or from request cancellation.
+            try { await ReleaseAsync(); } catch { }
+            throw;
+        }
     }
 }

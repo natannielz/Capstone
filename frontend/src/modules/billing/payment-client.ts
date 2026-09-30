@@ -101,6 +101,20 @@ export function createPaymentGateway(client: ReturnType<typeof createUnitTokoCli
         headers: { 'Content-Type': 'application/octet-stream' }, params: { path: { id: priceId(declarationId), reservationId: priceId(reservationId) }, header: { ...headers(actorId), 'Idempotency-Key': 'upload.' + reservationId, 'If-Match': '"' + priceId(revision) + '"' } } })));
       if (!current()) throw new AccessFailure(503, 'commit_outcome_unknown'); return value;
     },
+    async original(actorId: string, declarationId: string, revision: string, evidence: PaymentEvidenceStatus, current: () => boolean) {
+      const expected = parsePaymentEvidenceStatus(evidence);
+      if (!expected.reference || expected.scanStatus !== 'clean' || expected.decoderStatus !== 'decoded' || expected.safeFailure !== null) throw new RequestNotSentError(409, 'evidence_read_not_eligible');
+      check(current);
+      const response = await client.POST('/api/v1/billing/payment-declarations/{id}/evidence/{reservationId}/original/query', {
+        body: { purpose: 'payment-evidence-view', reference: expected.reference }, params: { path: { id: priceId(declarationId), reservationId: expected.reservationId },
+          header: { ...headers(actorId), 'If-Match': '"' + priceId(revision) + '"' } }, parseAs: 'arrayBuffer', cache: 'no-store' });
+      check(current); const bytes = data(response), mime = response.response.headers.get('content-type');
+      if (!(bytes instanceof ArrayBuffer) || bytes.byteLength <= 0 || bytes.byteLength > 10 * 1024 * 1024 ||
+        response.response.headers.get('content-length') !== String(bytes.byteLength) || !['image/png', 'image/jpeg'].includes(mime ?? '')) return invalid();
+      const digest = await crypto.subtle.digest('SHA-256', bytes); check(current);
+      if (Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('') !== expected.reference.sha256) return invalid();
+      return new Blob([bytes], { type: mime! });
+    },
     async recoverUpload(actorId: string, declarationId: string, reservationId: string) {
       return parse(outcome, data(await client.POST('/api/v1/billing/payment-declarations/{id}/evidence/{reservationId}/recover', { body: { purpose: 'upload-recovery', reason: 'Periksa hasil unggah asli' },
         params: { path: { id: priceId(declarationId), reservationId: priceId(reservationId) }, header: { ...headers(actorId), 'Idempotency-Key': 'upload.' + reservationId } } })));

@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createIdentityGateway } from '../identity/identity-client';
 import { IdentityFailure, sessionTiming, type IdentitySession } from '../identity/identity-workflow';
@@ -24,6 +25,8 @@ function message(error: unknown) {
   if (error instanceof AccessFailure && error.code === 'evidence_capacity_exhausted') return 'Kapasitas unggah sedang penuh. Hubungi penanggung jawab sebelum mencoba kembali.';
   if (error instanceof AccessFailure && ['payment_draft_changed', 'evidence_target_revision_conflict', 'payment_parties_locked'].includes(error.code)) return 'Draf atau kelompok penjual berubah. Muat draf terbaru dan periksa pilihan invoice.';
   if (error instanceof AccessFailure && error.code === 'payment_image_required') return 'Pilih satu foto JPG atau PNG yang tidak kosong, maksimal 10 MB.';
+  if (error instanceof AccessFailure && ['evidence_read_not_eligible', 'evidence_read_policy_unavailable'].includes(error.code)) return 'Bukti belum dapat ditampilkan. Muat status terbaru atau hubungi penanggung jawab pemeriksaan bukti.';
+  if (error instanceof AccessFailure && ['evidence_read_lease_expired', 'evidence_read_reference_changed', 'evidence_read_integrity_unavailable', 'evidence_validation_integrity', 'payment_response_invalid'].includes(error.code)) return 'Bukti tidak dapat ditampilkan dengan aman. Muat draf terbaru dan periksa kembali; hubungi penanggung jawab jika masalah berlanjut.';
   if (error instanceof IdentityFailure) return 'Masuk kembali untuk memeriksa draf pembayaran Anda.';
   return accessMessage(error);
 }
@@ -61,6 +64,14 @@ function PaymentDesk({ account, now, onDenied }: { account: Account; now: number
   const [busy, setBusy] = useState(false), [recovering, setRecovering] = useState(false), [offline, setOffline] = useState(false), [refresh, setRefresh] = useState(0), [before, setBefore] = useState<string | null>(null), [invoiceBefore, setInvoiceBefore] = useState<string | null>(null);
   const alive = useRef(false), pending = useRef(false), recoveredId = useRef<string | null>(null), heading = useRef<HTMLHeadingElement>(null), fileInput = useRef<HTMLInputElement>(null);
   const [uploadLedgers] = useState(() => new Map<string, MutationLedger>());
+  const [preview, setPreview] = useState<{ url: string; reservationId: string } | null>(null);
+  const previewUrl = useRef<string | null>(null), previewEpoch = useRef(0), previewHeading = useRef<HTMLHeadingElement>(null), previewTrigger = useRef<HTMLButtonElement | null>(null);
+  const closePreview = useCallback((restoreFocus = false) => {
+    previewEpoch.current++; if (previewUrl.current) URL.revokeObjectURL(previewUrl.current); previewUrl.current = null; setPreview(null);
+    if (restoreFocus) previewTrigger.current?.focus();
+  }, []);
+  useEffect(() => () => { previewEpoch.current++; if (previewUrl.current) URL.revokeObjectURL(previewUrl.current); previewUrl.current = null; }, []);
+  useEffect(() => { if (preview) previewHeading.current?.focus(); }, [preview]);
   const current = useCallback(() => alive.current && !sessionTiming(account.session, performance.now() - account.observedAt).expired, [account]);
   const locked = busy || recovering || offline || recovery.locked;
   useEffect(() => { alive.current = true; const connection = () => setOffline(!navigator.onLine); connection(); window.addEventListener('online', connection); window.addEventListener('offline', connection);
@@ -78,12 +89,13 @@ function PaymentDesk({ account, now, onDenied }: { account: Account; now: number
     finally { pending.current = false; if (alive.current) { setBusy(false); recovery.refresh(); } }
   }
   async function open(id: string) {
+    closePreview();
     const value = await gateway.read(account.actorId, id); if (!current()) return;
     setSelected(value); setInput({ ...value.input, invoiceIds: [...value.input.invoiceIds] }); setReason(''); setEvidence([]); setFile(null); if (fileInput.current) fileInput.current.value = '';
     const images = await gateway.evidence(account.actorId, id); if (current()) { setEvidence(images); heading.current?.focus(); }
   }
   async function save() {
-    if (locked) return; await perform(async () => {
+    if (locked) return; closePreview(); await perform(async () => {
       if (recovery.journal.list(account.actorId).length) throw new AccessFailure(400, 'resolve_previous_attempt');
       const command = preparePayment(account.actorId, selected?.id ?? null, selected?.revision ?? '0', input, reason.trim());
       const result = await submitTrackedRequest(ledger, recovery.journal, account.actorId, 'billing.payment.draft.save', 'billing.payment.draft.save', command, key => gateway.save(command, key, current));
@@ -113,6 +125,14 @@ function PaymentDesk({ account, now, onDenied }: { account: Account; now: number
       if (uploadFailure !== null) throw uploadFailure;
     });
   }
+  async function viewOriginal(item: PaymentEvidenceStatus, trigger: HTMLButtonElement) {
+    if (locked || !selected) return; const owner = selected; closePreview(); previewTrigger.current = trigger; const epoch = previewEpoch.current;
+    const stillCurrent = () => current() && previewEpoch.current === epoch;
+    await perform(async () => {
+      const blob = await gateway.original(account.actorId, owner.id, owner.revision, item, stillCurrent);
+      if (!stillCurrent()) return; const url = URL.createObjectURL(blob); previewUrl.current = url; setPreview({ url, reservationId: item.reservationId });
+    });
+  }
   const choices = new Map((selected?.invoices ?? []).map(item => [item.invoiceId, item]));
   for (const item of invoicePage.items) choices.set(item.id, { invoiceId: item.id, number: `${item.numberEntity}/${item.numberChannel}/${item.numberYear}/${item.number}`, total: item.detail.total, buyerName: item.detail.buyerName, sellerName: item.detail.sellerName });
   const hasPending = evidence.some(item => ['fresh', 'writing', 'publish_pending'].includes(item.state) && Date.parse(item.expiresAt) > now);
@@ -128,7 +148,7 @@ function PaymentDesk({ account, now, onDenied }: { account: Account; now: number
     {offline && <p role="status">Koneksi terputus. Draf dan berkas belum dapat dikirim.</p>}{busy && <p role="status">Memeriksa pembayaran…</p>}{notice && <p role="status">{notice}</p>}
     <section className={common.accountSection} aria-label="Draf pembayaran"><h2 ref={heading} tabIndex={-1}>{selected ? `Draf pembayaran ${selected.id}` : 'Catat pembayaran'}</h2>
       <p>Draf bersifat pribadi. Nilai transfer yang dicatat belum mengurangi tagihan. Bukti pembayaran wajib diperiksa sebelum dapat diajukan.</p>
-      <form onSubmit={event => { event.preventDefault(); void save(); }}><fieldset disabled={locked}><legend>Invoice yang dibayar</legend><ul className={styles.candidates}>{[...choices.values()].map(item => <li key={item.invoiceId}><label>
+      <form onChangeCapture={() => closePreview()} onSubmit={event => { event.preventDefault(); void save(); }}><fieldset disabled={locked}><legend>Invoice yang dibayar</legend><ul className={styles.candidates}>{[...choices.values()].map(item => <li key={item.invoiceId}><label>
         <input type="checkbox" checked={input.invoiceIds.includes(item.invoiceId)} disabled={locked || input.invoiceIds.length >= 20 && !input.invoiceIds.includes(item.invoiceId)} onChange={event => setInput(value => ({ ...value, invoiceIds: event.target.checked ? [...value.invoiceIds, item.invoiceId] : value.invoiceIds.filter(id => id !== item.invoiceId) }))} />
         <span><strong>{item.number}</strong><span>{item.buyerName} · {item.sellerName}</span><span>Total invoice {rupiah(item.total)}</span></span></label></li>)}</ul>
         {!choices.size && !busy && <p>Belum ada invoice dalam akses Anda.</p>}
@@ -138,19 +158,26 @@ function PaymentDesk({ account, now, onDenied }: { account: Account; now: number
         <label>Tanggal transfer<input type="date" required max={dayAt(now)} value={input.transferDate} onChange={event => setInput(value => ({ ...value, transferDate: event.target.value }))} /></label>
         <label>Nama pengirim<input required maxLength={160} value={input.payerName} onChange={event => setInput(value => ({ ...value, payerName: event.target.value }))} /></label>
         <label>Referensi bank (opsional)<input maxLength={160} value={input.bankReference ?? ''} onChange={event => setInput(value => ({ ...value, bankReference: event.target.value || null }))} /></label>
-        <label>Catatan (opsional)<textarea maxLength={1000} value={input.note ?? ''} onChange={event => setInput(value => ({ ...value, note: event.target.value || null }))} /></label>
-        <label>Alasan pencatatan atau perubahan<textarea required maxLength={1000} value={reason} onChange={event => setReason(event.target.value)} /></label>
+        <label htmlFor="payment-note">Catatan (opsional)</label><textarea id="payment-note" maxLength={1000} value={input.note ?? ''} onChange={event => setInput(value => ({ ...value, note: event.target.value || null }))} />
+        <label htmlFor="payment-reason">Alasan pencatatan atau perubahan</label><textarea id="payment-reason" required maxLength={1000} value={reason} onChange={event => setReason(event.target.value)} />
         <button className={common.primary} disabled={locked || input.invoiceIds.length === 0}>Simpan draf pembayaran</button></fieldset></form>
-      {selected && <button className={common.secondary} disabled={locked} onClick={() => { setSelected(null); setInput(empty(now)); setReason(''); setEvidence([]); setFile(null); }}>Buat draf baru</button>}
+      {selected && <button className={common.secondary} disabled={locked} onClick={() => { closePreview(); setSelected(null); setInput(empty(now)); setReason(''); setEvidence([]); setFile(null); }}>Buat draf baru</button>}
     </section>
     {selected && <section className={common.accountSection} aria-label="Bukti asli pembayaran"><h2>Bukti asli pembayaran</h2><p>Pilih foto atau hasil pindai JPG/PNG, maksimal 10 MB. Berkas asli disimpan untuk pemeriksaan. Hasil pemeriksaan keamanan tidak memverifikasi pembayaran; draf tetap belum diajukan.</p>
       <label>Pilih bukti pembayaran<input ref={fileInput} type="file" accept="image/jpeg,image/png" disabled={locked} onChange={event => setFile(event.target.files?.[0] ?? null)} /></label>
       {unsaved && <p>Simpan perubahan draf sebelum mengunggah bukti.</p>}
       {file && <p>{file.name} · {Math.ceil(file.size / 1024)} KB</p>}<button className={common.primary} disabled={locked || !file || hasPending || unsaved} onClick={() => void upload()}>Unggah bukti asli</button>
       <ul className={styles.lines}>{evidence.map(item => <li key={item.reservationId}><strong>Upaya unggah {item.reservationId}</strong><p>{paymentEvidenceLabel(item)}</p>
+        {item.scanStatus === 'clean' && item.decoderStatus === 'decoded' && item.safeFailure === null && <button className={common.secondary} disabled={locked || unsaved} onClick={event => void viewOriginal(item, event.currentTarget)}>Lihat bukti asli</button>}
         {item.state === 'fresh' && <button className={common.secondary} disabled={locked || !file || unsaved || Date.parse(item.expiresAt) <= now} onClick={() => void upload(item)}>Lanjutkan unggah ini</button>}
         {['writing', 'publish_pending'].includes(item.state) && <button className={common.secondary} disabled={locked} onClick={() => void perform(async () => { const result = await gateway.recoverUpload(account.actorId, selected.id, item.reservationId); if (current()) { setNotice(result.state === 'quarantined' ? 'Bukti asli tersimpan. Pembayaran belum diverifikasi.' : 'Hasil belum dapat dipastikan. Jangan mengulang unggah; periksa kembali atau hubungi penanggung jawab.'); const images = await gateway.evidence(account.actorId, selected.id); if (current()) setEvidence(images); } })}>Periksa hasil unggah</button>}</li>)}</ul>
-      <button className={common.secondary} disabled={locked} onClick={() => void perform(async () => { const images = await gateway.evidence(account.actorId, selected.id); if (current()) setEvidence(images); })}>Muat status bukti</button>
+      <button className={common.secondary} disabled={locked} onClick={() => { closePreview(); void perform(async () => { const images = await gateway.evidence(account.actorId, selected.id); if (current()) setEvidence(images); }); }}>Muat status bukti</button>
+      {preview && <section aria-labelledby="payment-original-heading" className={styles.evidencePreview}>
+        <h3 id="payment-original-heading" ref={previewHeading} tabIndex={-1}>Bukti asli · unggah {preview.reservationId}</h3>
+        <p>Gambar ini berasal dari bukti yang tersimpan. Pembayaran belum diajukan atau diverifikasi.</p>
+        <div className={styles.evidenceImage}><Image src={preview.url} alt={`Bukti transfer asli untuk draf pembayaran ${selected.id}`} fill unoptimized sizes="(max-width: 600px) 90vw, 800px" style={{ objectFit: 'contain' }} onError={() => { closePreview(); setError(new AccessFailure(502, 'payment_response_invalid')); }} /></div>
+        <button className={common.secondary} onClick={() => closePreview(true)}>Tutup bukti</button>
+      </section>}
     </section>}
     <section className={common.accountSection} aria-label="Daftar draf pembayaran"><h2>Draf pembayaran saya</h2><ul className={styles.candidates}>{page.items.map(item => <li key={item.id}><strong>Draf {item.id}</strong><p>{rupiah(item.input.declaredAmount)} · {item.input.transferDate} · {item.input.invoiceIds.length} invoice · Belum diajukan</p>
       <button className={common.secondary} disabled={locked} onClick={() => void perform(() => open(item.id))}>Buka draf {item.id}</button></li>)}</ul>{!busy && !page.items.length && <p>Belum ada draf pada halaman ini.</p>}
