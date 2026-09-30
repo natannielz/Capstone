@@ -84,7 +84,15 @@ public sealed class BusinessPermissionTests
         Assert.Equal(new[] { Permissions.SubstitutionPropose, Permissions.StockConvert, Permissions.ReservationRelease,
             Permissions.SupplierChangePropose }, RoleTemplates.Suggestions["store-staff"].ToArray());
         Assert.Equal(new[] { Permissions.OrderAccept, Permissions.SupplierChangeApprove }, RoleTemplates.Suggestions["store-head"].ToArray());
-        Assert.Equal(new[] { Permissions.PaymentReviewRead, Permissions.PaymentReviewCorrect }, RoleTemplates.Suggestions["finance"].ToArray());
+        var financeSuggestions = new[] { Permissions.BankReceiptRead, Permissions.BankReceiptConfirm,
+            Permissions.BankStatementRead, Permissions.BankStatementStage,
+            Permissions.PaymentReviewRead, Permissions.PaymentReviewCorrect,
+            Permissions.ReceivingAccountRead, Permissions.ReceivingAccountDetailsRead,
+            Permissions.ReceivingAccountPropose, Permissions.ReceivingAccountVerify, Permissions.ReceivingAccountApprove };
+        Assert.Equal(financeSuggestions, RoleTemplates.Suggestions["finance"].ToArray());
+        var allFinancePacks = RoleTemplates.Materialize("finance", RoleTemplates.FinancePacks.Keys, []).Permissions;
+        foreach (var suggestion in financeSuggestions)
+            Assert.DoesNotContain(suggestion, allFinancePacks);
         Assert.Empty(RoleTemplates.Suggestions["courier"]);
         Assert.Empty(RoleTemplates.Suggestions["system-admin"]);
         Assert.DoesNotContain(Permissions.SubstitutionAccept, RoleTemplates.Materialize("buyer", [], []).Permissions);

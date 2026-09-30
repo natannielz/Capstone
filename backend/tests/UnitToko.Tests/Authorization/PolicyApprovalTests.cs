@@ -18,6 +18,7 @@ public sealed class PolicyApprovalTests
     private static readonly ResourceScope Resource = new(FulfillmentOrganizationId: 2, ShopId: 21, ChannelId: 201);
 
     [Theory]
+    [InlineData(Permissions.BankReceiptConfirm)]
     [InlineData(Permissions.PaymentVerify)]
     [InlineData(Permissions.DisbursementVerify)]
     [InlineData(Permissions.ReconciliationVerify)]

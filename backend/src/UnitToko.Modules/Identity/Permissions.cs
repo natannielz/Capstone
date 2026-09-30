@@ -26,6 +26,7 @@ public static class Permissions
     public const string SourcePrepare = "source.prepare", SourceReconcile = "source.reconcile", ReportPrepare = "report.prepare", PeriodSubmit = "period.submit", PeriodApprove = "period.approve", PeriodClose = "period.close", PeriodReopenRequest = "period.reopen.request", PeriodReopenApprove = "period.reopen.approve";
     public const string InvoiceRead = "invoice.read", InvoiceIssue = "invoice.issue", PaymentEvidence = "payment.evidence", PaymentRecord = "payment.record", PaymentAllocate = "payment.allocate", PaymentVerify = "payment.verify";
     public const string ReceivingAccountRead = "receiving.account.read", ReceivingAccountDetailsRead = "receiving.account.details.read", ReceivingAccountPropose = "receiving.account.propose", ReceivingAccountVerify = "receiving.account.verify", ReceivingAccountApprove = "receiving.account.approve";
+    public const string BankReceiptRead = "bank.receipt.read", BankReceiptConfirm = "bank.receipt.confirm";
     public const string BankStatementRead = "bank.statement.read", BankStatementStage = "bank.statement.stage";
     public const string PaymentReviewRead = "payment.review.read", PaymentReviewCorrect = "payment.review.correct";
     public const string CreditRequest = "credit.request", CreditApprove = "credit.approve", RefundRequest = "refund.request", RefundApprove = "refund.approve", DisbursementRecord = "disbursement.record", DisbursementVerify = "disbursement.verify";
@@ -66,6 +67,7 @@ public static class Permissions
         Add(PricingApprove, Operations, true);
         Add(ReceivingAccountRead, Operations); Add(ReceivingAccountDetailsRead, Operations); Add(ReceivingAccountPropose, Operations);
         Add(ReceivingAccountVerify, Operations, true); Add(ReceivingAccountApprove, Operations, true);
+        Add(BankReceiptRead, Operations); Add(BankReceiptConfirm, Operations, true);
         Add(BankStatementRead, Operations); Add(BankStatementStage, Operations, true);
         Add(PaymentReviewRead, Operations);
         Add(PaymentReviewCorrect, Operations, true);

@@ -16,7 +16,7 @@ public static class ApprovalPolicy
     public static bool RequiresEvidence(string permission) => permission is
         Permissions.OrderSpendApprove or Permissions.OrderAccept or Permissions.SubstitutionAccept or
         Permissions.ReceivingAccountApprove or Permissions.ReceivingAccountVerify or Permissions.PricingApprove or Permissions.SupplierChangeApprove or Permissions.StockSourceApprove or Permissions.StockSourcePolicyApprove or
-        Permissions.PaymentVerify or Permissions.CreditApprove or Permissions.RefundApprove or
+        Permissions.BankReceiptConfirm or Permissions.PaymentVerify or Permissions.CreditApprove or Permissions.RefundApprove or
         Permissions.FundingApprove or Permissions.ExpenseApprove or Permissions.StockAdjustApprove or
         Permissions.DisbursementRecord or Permissions.DisbursementVerify or Permissions.PeriodApprove or
         Permissions.PeriodClose or Permissions.PeriodReopenApprove or Permissions.AccessApprove or
@@ -34,7 +34,7 @@ public static class ApprovalPolicy
             Permissions.ReceivingAccountApprove or Permissions.ReceivingAccountVerify or Permissions.PricingApprove or Permissions.SupplierChangeApprove or Permissions.StockSourceApprove or Permissions.StockSourcePolicyApprove => Independent(evidence.ProposedBy),
             Permissions.OrderAccept => evidence.RequestedBy is > 0,
             Permissions.SubstitutionAccept => evidence.RequestedBy is > 0 && evidence.ProposedBy is > 0,
-            Permissions.PaymentVerify or Permissions.DisbursementVerify or Permissions.ReconciliationVerify => Independent(evidence.RecordedBy),
+            Permissions.BankReceiptConfirm or Permissions.PaymentVerify or Permissions.DisbursementVerify or Permissions.ReconciliationVerify => Independent(evidence.RecordedBy),
             Permissions.CreditApprove or Permissions.RefundApprove or Permissions.FundingApprove or Permissions.ExpenseApprove => Independent(evidence.RequestedBy),
             Permissions.StockAdjustApprove => Independent(evidence.CountedBy, evidence.ProposedBy),
             Permissions.DisbursementRecord => Independent(evidence.ApprovedBy),

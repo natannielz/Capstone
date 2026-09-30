@@ -8,6 +8,9 @@ namespace UnitToko.Tests.Authorization;
 /// <summary>Actual predecessor history for forward-order upgrades and historical generic read probes.</summary>
 internal static class LegacyOrderSubmissionTestSchema
 {
+    internal static async Task ApplyV38Async(IMongoDatabase database, IClock clock, CancellationToken ct = default) {
+        await ApplyV37Async(database, clock, ct); await ApplyAsync(database, clock, new BankStatementMigration(database), ct);
+    }
     internal static async Task ApplyV37Async(IMongoDatabase database, IClock clock, CancellationToken ct = default) {
         await ApplyV36Async(database, clock, ct); await ApplyAsync(database, clock, new ReceivingAccountMigration(database), ct);
     }
