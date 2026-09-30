@@ -102,7 +102,7 @@ public sealed class OutboxProcessTests(MongoFixture fixture)
         return new OwnedProbe(Process.Start(start) ?? throw new InvalidOperationException("Could not start the test probe."));
     }
 
-    private static string FindDotnetHost()
+    internal static string FindDotnetHost()
     {
         var executableName = OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet";
         var configured = Environment.GetEnvironmentVariable("DOTNET_HOST_PATH");

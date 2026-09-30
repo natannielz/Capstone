@@ -2,6 +2,7 @@ using MongoDB.Driver;
 using UnitToko.Platform;
 using UnitToko.Platform.Mongo;
 using UnitToko.Platform.DocumentProcessing;
+using UnitToko.Platform.Billing;
 using UnitToko.Worker;
 
 var migrate = args.Contains("--migrate", StringComparer.Ordinal);
@@ -23,6 +24,7 @@ builder.Services.AddSingleton<OutboxStore>();
 builder.Services.AddSingleton<CollectionMigrations>();
 var evidenceOptions = migrate ? null : builder.Configuration.GetSection("Evidence:Validation").Get<EvidenceValidationRuntimeOptions>();
 var ocrOptions = migrate ? null : builder.Configuration.GetSection("Evidence:PaymentOcr").Get<PaymentOcrRuntimeOptions>();
+var paymentNotices = !migrate && builder.Configuration.GetValue<bool>("Notifications:PaymentReviewInApp:Enabled");
 if (evidenceOptions is not null) {
     builder.Services.AddSingleton(sp => EvidenceValidationRuntime.Create(sp.GetRequiredService<IMongoDatabase>(), sp.GetRequiredService<MongoUnitOfWork>(),
         sp.GetRequiredService<IdAllocator>(), sp.GetRequiredService<IClock>(), evidenceOptions));
@@ -32,6 +34,10 @@ if (ocrOptions is not null) {
     builder.Services.AddSingleton(sp => PaymentOcrRuntime.Create(sp.GetRequiredService<IMongoDatabase>(), sp.GetRequiredService<MongoUnitOfWork>(),
         sp.GetRequiredService<IdAllocator>(), sp.GetRequiredService<IClock>(), ocrOptions));
     builder.Services.AddHostedService<PaymentOcrWorker>();
+}
+if (paymentNotices) {
+    builder.Services.AddSingleton<PaymentReviewNotifications>();
+    builder.Services.AddHostedService<PaymentReviewNotificationWorker>();
 }
 
 using var host = builder.Build();
@@ -47,4 +53,6 @@ if (evidenceOptions is null) logger.LogWarning("Evidence validation is unconfigu
 else logger.LogInformation("Evidence validation pipeline configured: {PipelineId}; current store and worker approvals remain required", host.Services.GetRequiredService<EvidenceValidationRuntime>().PipelineId);
 if (ocrOptions is null) logger.LogWarning("Payment OCR is unconfigured; OCR jobs will not be claimed.");
 else logger.LogInformation("Payment OCR pipeline configured: {PipelineId}; current host and model approvals remain required", host.Services.GetRequiredService<PaymentOcrRuntime>().PipelineId);
+if (!paymentNotices) logger.LogWarning("Payment in-app notices are unconfigured; review events will remain pending.");
+else logger.LogInformation("Payment in-app notice worker enabled; availability is private and sends no external messages");
 await host.RunAsync();

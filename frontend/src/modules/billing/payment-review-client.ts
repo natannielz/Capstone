@@ -2,7 +2,7 @@ import { createUnitTokoClient, RequestNotSentError } from '../../api/client';
 import { z } from 'zod';
 import { AccessFailure } from '../administration/workflow';
 import { priceId } from '../catalog/catalog-price-workflow';
-import { parsePaymentDraft, parsePaymentOcr, type PaymentDraft } from './payment-client';
+import { parsePaymentDraft, parsePaymentOcr, paymentNotificationStatus, type PaymentDraft } from './payment-client';
 
 const invalid = (): never => { throw new AccessFailure(502, 'payment_response_invalid'); };
 function data<T>(value: { data?: T; error?: unknown; response: Response }): T {
@@ -17,16 +17,18 @@ const queueId = z.string().regex(/^[1-9][0-9]{0,18}$(?![\s\S])/).refine(value =>
 const queueTimestamp = z.string().datetime({ offset: true });
 const queueEntry = z.object({ declaration: z.unknown(), reviewRevision: z.union([z.literal('0'), queueId]), state: z.enum(['pending', 'assigned', 'rejected', 'replacement_requested']),
   assigneeId: queueId.nullable(), recordedAt: queueTimestamp.nullable(), ocrState: z.enum(['queued', 'running', 'retry', 'dead', 'succeeded']),
-  discrepancies: z.array(z.enum(['amount_unknown', 'amount_differs', 'date_unknown', 'date_differs', 'currency_unknown', 'ocr_quality', 'human_corrected'])).max(7),
+  discrepancies: z.array(z.enum(['amount_unknown', 'amount_differs', 'date_unknown', 'date_differs', 'currency_unknown', 'ocr_quality', 'human_corrected'])).max(7), notification: paymentNotificationStatus,
 }).strict().refine(row => (row.state === 'pending') === (row.assigneeId === null) && (row.reviewRevision === '0') === (row.recordedAt === null) &&
-  (row.reviewRevision !== '0' || row.state === 'pending') && new Set(row.discrepancies).size === row.discrepancies.length && (row.ocrState === 'succeeded' || row.discrepancies.length === 0));
+  (row.reviewRevision !== '0' || row.state === 'pending') && new Set(row.discrepancies).size === row.discrepancies.length && (row.ocrState === 'succeeded' || row.discrepancies.length === 0) &&
+  ['rejected', 'replacement_requested'].includes(row.state) === (row.notification.state !== 'not_applicable'));
 export type PaymentReviewQueueEntry = Omit<z.infer<typeof queueEntry>, 'declaration'> & { declaration: PaymentDraft };
 export function parsePaymentReviewQueue(value: unknown, beforeId: string | null) {
   const parsed = z.object({ items: z.array(queueEntry).max(25), hasMore: z.boolean(), observedAt: queueTimestamp }).strict().safeParse(value); if (!parsed.success) return invalid();
   const { observedAt, hasMore } = parsed.data;
   const items: PaymentReviewQueueEntry[] = parsed.data.items.map(row => {
     const declaration = parsePaymentReview(row.declaration), submittedAt = Date.parse(declaration.submission!.submittedAt);
-    if (submittedAt > Date.parse(observedAt) || row.recordedAt !== null && (Date.parse(row.recordedAt) < submittedAt || Date.parse(row.recordedAt) > Date.parse(observedAt))) return invalid();
+    if (submittedAt > Date.parse(observedAt) || row.recordedAt !== null && (Date.parse(row.recordedAt) < submittedAt || Date.parse(row.recordedAt) > Date.parse(observedAt)) ||
+      row.notification.availableAt !== null && (row.recordedAt === null || Date.parse(row.notification.availableAt) < Date.parse(row.recordedAt) || Date.parse(row.notification.availableAt) > Date.parse(observedAt))) return invalid();
     return { ...row, declaration };
   });
   parsePaymentReviewPage({ items: items.map(row => row.declaration), hasMore }, beforeId);

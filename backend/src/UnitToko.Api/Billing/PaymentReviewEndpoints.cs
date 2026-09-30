@@ -14,7 +14,7 @@ public sealed record PaymentDuplicateQueryDto([property: JsonRequired] string Pu
 public sealed record PaymentDuplicateMatchDto(LongId DeclarationId, string Revision, LongId SubmissionId, DateTimeOffset SubmittedAt, ImmutableArray<string> Signals);
 public sealed record PaymentDuplicatePageDto(LongId DeclarationId, string Revision, LongId SubmissionId, ImmutableArray<PaymentDuplicateMatchDto> Items, bool HasMore);
 public sealed record PaymentReviewQueueEntryDto(PaymentDraftDto Declaration, string ReviewRevision, string State, LongId? AssigneeId,
-    DateTimeOffset? RecordedAt, string OcrState, ImmutableArray<string> Discrepancies);
+    DateTimeOffset? RecordedAt, string OcrState, ImmutableArray<string> Discrepancies, PaymentNotificationStatus Notification);
 public sealed record PaymentReviewQueuePageDto(ImmutableArray<PaymentReviewQueueEntryDto> Items, bool HasMore, DateTimeOffset ObservedAt);
 
 public static class PaymentReviewEndpoints
@@ -31,7 +31,7 @@ public static class PaymentReviewEndpoints
             Purpose(request.Purpose); Private(http);
             var page = await service.ListReviewQueueAsync(http.Features.Get<ResolvedActor>()!.Actor, request.BeforeId?.Value, new(request.Purpose, http.TraceIdentifier), ct);
             return TypedResults.Ok(new PaymentReviewQueuePageDto([.. page.Items.Select(row => new PaymentReviewQueueEntryDto(PaymentDraftEndpoints.View(row.Declaration),
-                OrderDraftInputDto.Number(row.ReviewRevision), row.State, row.AssigneeId is { } assignee ? new(assignee) : null, row.RecordedAt, row.OcrState, row.Discrepancies))], page.HasMore, page.ObservedAt));
+                OrderDraftInputDto.Number(row.ReviewRevision), row.State, row.AssigneeId is { } assignee ? new(assignee) : null, row.RecordedAt, row.OcrState, row.Discrepancies, row.Notification))], page.HasMore, page.ObservedAt));
         }).WithName("ListPaymentReviewQueue");
         group.MapPost("/{id}/query", async (string id, OrderReadDto request, HttpContext http, PaymentDraftService service, CancellationToken ct) => {
             Purpose(request.Purpose); Private(http);

@@ -68,9 +68,13 @@ const ocrResult = z.object({ id, extractedAt: timestamp, provenance: z.object({ 
 const ocrView = z.object({ declarationId: id, submissionId: id, evidence: reference, state: z.enum(['queued', 'running', 'retry', 'dead', 'succeeded']), result: ocrResult.nullable() }).strict()
   .refine(value => (value.state === 'succeeded') === (value.result !== null));
 export type PaymentOcrView = z.infer<typeof ocrView>;
+export const paymentNotificationStatus = z.object({ state: z.enum(['not_applicable', 'pending', 'running', 'retry', 'failed', 'available']), availableAt: timestamp.nullable() }).strict()
+  .refine(value => (value.state === 'available') === (value.availableAt !== null));
 const followUp = z.object({ declarationId: id, declarationRevision: id, submissionId: id, evidence: reference,
-  reviewRevision: z.union([z.literal('0'), id]), state: z.enum(['pending', 'assigned', 'rejected', 'replacement_requested']), submittedAt: timestamp, recordedAt: timestamp.nullable() }).strict()
-  .refine(value => (value.reviewRevision === '0') === (value.recordedAt === null) && (value.recordedAt === null ? value.state === 'pending' : Date.parse(value.recordedAt) >= Date.parse(value.submittedAt)));
+  reviewRevision: z.union([z.literal('0'), id]), state: z.enum(['pending', 'assigned', 'rejected', 'replacement_requested']), submittedAt: timestamp, recordedAt: timestamp.nullable(), notification: paymentNotificationStatus }).strict()
+  .refine(value => (value.reviewRevision === '0') === (value.recordedAt === null) && (value.recordedAt === null ? value.state === 'pending' : Date.parse(value.recordedAt) >= Date.parse(value.submittedAt)) &&
+    ['rejected', 'replacement_requested'].includes(value.state) === (value.notification.state !== 'not_applicable') &&
+    (value.notification.availableAt === null || value.recordedAt !== null && Date.parse(value.notification.availableAt) >= Date.parse(value.recordedAt)));
 export type PaymentFollowUp = z.infer<typeof followUp>;
 export function parsePaymentFollowUp(value: unknown, owner: PaymentDraft): PaymentFollowUp {
   const view = parse(followUp, value), submitted = owner.submission;

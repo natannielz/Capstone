@@ -5736,6 +5736,7 @@ export interface components {
             declarationId: components["schemas"]["LongId"];
             declarationRevision: string;
             evidence: components["schemas"]["PaymentEvidenceReferenceDto"];
+            notification: components["schemas"]["PaymentNotificationStatus"];
             /** Format: date-time */
             recordedAt: null | string;
             reviewRevision: string;
@@ -5785,6 +5786,11 @@ export interface components {
             reviewedBy: null | components["schemas"]["LongId"];
             reviewRevision: string;
             submissionId: components["schemas"]["LongId"];
+        };
+        PaymentNotificationStatus: {
+            /** Format: date-time */
+            availableAt: null | string;
+            state: string;
         };
         PaymentOcrFieldDto: {
             boundingBox: null | string[];
@@ -5895,6 +5901,7 @@ export interface components {
             assigneeId: null | components["schemas"]["LongId"];
             declaration: components["schemas"]["PaymentDraftDto"];
             discrepancies: string[];
+            notification: components["schemas"]["PaymentNotificationStatus"];
             ocrState: string;
             /** Format: date-time */
             recordedAt: null | string;

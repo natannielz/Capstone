@@ -139,7 +139,8 @@ public sealed class PaymentReviewActionTests(MongoFixture fixture)
         }
         using var follow = await FollowUp(); Assert.True(follow.IsSuccessStatusCode, await follow.Content.ReadAsStringAsync()); Assert.True(follow.Headers.CacheControl!.NoStore);
         var visible = await follow.Content.ReadFromJsonAsync<JsonElement>(); Assert.Equal("assigned", visible.GetProperty("state").GetString());
-        Assert.Equal(new[] { "declarationId", "declarationRevision", "evidence", "recordedAt", "reviewRevision", "state", "submissionId", "submittedAt" }, visible.EnumerateObject().Select(value => value.Name).Order().ToArray());
+        Assert.Equal(new[] { "declarationId", "declarationRevision", "evidence", "notification", "recordedAt", "reviewRevision", "state", "submissionId", "submittedAt" }, visible.EnumerateObject().Select(value => value.Name).Order().ToArray());
+        Assert.Equal("not_applicable", visible.GetProperty("notification").GetProperty("state").GetString());
     }
     [WindowsStorageFact]
     public async Task Missing_permission_MFA_audit_rollback_and_concurrent_rejection_verification_never_leave_two_winners() {

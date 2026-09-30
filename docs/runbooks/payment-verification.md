@@ -50,7 +50,7 @@ Migration 43 installs empty strict `paymentReviewActions` history and its unique
 3. Save once. Immutable history, audit, receipt and a metadata-only pending event commit together. Rejection or replacement closes fresh verification, correction and manual-observation writes on this original submission. Historical decisions/results remain readable; cash, allocations and invoice balances stay intact.
 4. After a dropped response, use **Periksa hasil** with the original account/key. This is lookup-only, never a resend or closure of an unknown operation. The original result remains recoverable after a later owner action; current permission, MFA and person checks still apply.
 
-The linked buyer replacement flow is described in [payment declarations](payment-declarations.md). Delivered/failed notifications and customer-specific explanations remain pending. A replacement request does not itself create new evidence, edit the old submission, send a real notification or authorize a refund. Complete the remaining connected flows and approved operational inputs before real use.
+The linked buyer replacement flow is described in [payment declarations](payment-declarations.md). A separately enabled worker can make an in-app notice available on the original buyer's private account; see [outbox consumers](outbox-consumers.md). External notification channels and customer-specific explanations remain pending. A replacement request does not itself create new evidence, edit the old submission, send an external message or authorize a refund. Complete the remaining connected flows and approved operational inputs before real use.
 
 ## Scoped review queue
 
@@ -58,7 +58,9 @@ The workspace's **Pengajuan masuk** list shows each submitted declaration's curr
 
 Discrepancy cues compare retained source-bound OCR and human corrections with the immutable buyer declaration. Unknown amount/date/currency stays unknown; quality warnings and recorded human corrections remain visible. These summaries return no extracted values, receiving-account facts or internal staff reasons. Stored OCR results do not certify the current original-file security verdict or funds received. Open the declaration and follow the independent bank/verification procedure. Missing submission, processing receipt, extraction or correction history denies the summary rather than presenting a clean result.
 
-Queue reads require current review and invoice permissions for every constituent scope, expected actor, same-origin CSRF and audited private access, with final grant/session fences. Viewing never grants assignment, correction, bank review or financial authority. Notification delivery/failure status and approved escalation remain unfinished.
+Queue reads require current review and invoice permissions for every constituent scope, expected actor, same-origin CSRF and audited private access, with final grant/session fences. Viewing never grants assignment, correction, bank review or financial authority.
+
+For closed follow-up, **Notifikasi aplikasi** shows the actual source event's pending, running, retry, failed or available state. **Tersedia pada akun pembeli** requires the worker's exact durable receipt, not merely a completed outbox row. It proves private in-app availability, not reading, email delivery, bank acceptance or refund authority. Missing or inconsistent source/receipt history denies the read. Failed work needs operator investigation; the screen never resets attempts, replays a dead event or sends an external message. Approved escalation and other notification channels remain unfinished.
 
 ## Exact duplicate hints
 

@@ -93,5 +93,7 @@ internal sealed class StoreTestData : IAsyncDisposable
 
 internal sealed class MutableAuthorizationClock(DateTimeOffset now) : IClock
 {
-    public DateTimeOffset UtcNow { get; set; } = now;
+    private DateTimeOffset value = now;
+    internal bool UseSystemClock { get; set; }
+    public DateTimeOffset UtcNow { get => UseSystemClock ? DateTimeOffset.FromUnixTimeMilliseconds(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()) : value; set => this.value = value; }
 }

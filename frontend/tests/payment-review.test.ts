@@ -10,11 +10,11 @@ const owner = { id, revision: '2', state: 'submitted', createdAt: time, updatedA
   invoices: [{ invoiceId: '11', number: '1/2/2026/3', total: '5000.00', buyerName: 'Cabang fixture', sellerName: 'Omi fixture' }],
   submission: { id: '41', reviewRevision: '1', reservationId: '51', evidence: { id: '61', version: '1', sha256: 'a'.repeat(64) }, submittedAt: time } };
 test('bulk queue binds current submitted rows, ownership and server time and accepts only explicit nonfinancial discrepancy flags', async () => {
-  const row = { declaration: owner, reviewRevision: '1', state: 'assigned', assigneeId: actor, recordedAt: time, ocrState: 'succeeded', discrepancies: ['amount_differs', 'human_corrected'] };
+  const row = { declaration: owner, reviewRevision: '1', state: 'assigned', assigneeId: actor, recordedAt: time, ocrState: 'succeeded', discrepancies: ['amount_differs', 'human_corrected'], notification: { state: 'not_applicable', availableAt: null } };
   const page = { items: [row], hasMore: false, observedAt: '2026-09-30T04:00:00Z' };
   assert.equal(parsePaymentReviewQueue(page, null).items[0].declaration.id, id);
   for (const state of ['rejected', 'replacement_requested']) {
-    const closed = { ...row, state }; assert.equal(parsePaymentReviewQueue({ ...page, items: [closed] }, null).items[0].assigneeId, actor);
+    const closed = { ...row, state, notification: { state: 'pending', availableAt: null } }; assert.equal(parsePaymentReviewQueue({ ...page, items: [closed] }, null).items[0].assigneeId, actor);
     assert.throws(() => parsePaymentReviewQueue({ ...page, items: [{ ...closed, assigneeId: null }] }, null));
   }
   assert.equal(parsePaymentReviewQueue({ ...page, items: [{ ...row, state: 'pending', assigneeId: null }] }, null).items[0].state, 'pending');

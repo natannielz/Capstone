@@ -21,7 +21,7 @@ public sealed class PaymentReplacementMigrationTests(MongoFixture fixture)
         var extra = new BsonDocument("recordedBy", new BsonDocument("$ne", 99L));
         await db.RunCommandAsync<BsonDocument>(new BsonDocument { { "collMod", PaymentDraftBson.Versions }, { "validator", new BsonDocument("$and", new BsonArray { PaymentDraftSchemas.Validator(PaymentDraftBson.Versions), extra }) } });
         var before = await Definitions(db); var receipts = await db.GetCollection<BsonDocument>("schemaMigrations").Find(new BsonDocument()).Sort(new BsonDocument("_id", 1)).ToListAsync();
-        await new CollectionMigrations(db, new SystemClock()).ApplyAsync(); var after = await Definitions(db);
+        await LegacyOrderSubmissionTestSchema.UpgradeV44Async(db, new SystemClock()); var after = await Definitions(db);
         foreach (var row in before.Where(row => row["name"] != PaymentDraftBson.Versions)) Assert.Equal(row, after.Single(value => value["name"] == row["name"]));
         var validator = after.Single(row => row["name"] == PaymentDraftBson.Versions)["options"]["validator"].AsBsonDocument;
         Assert.True(InventorySchemas.Contains(validator, extra)); Assert.True(InventorySchemas.Contains(validator, PaymentReplacementSchemas.Validator()));
@@ -29,7 +29,7 @@ public sealed class PaymentReplacementMigrationTests(MongoFixture fixture)
         var indexes = await (await db.GetCollection<BsonDocument>(PaymentDraftBson.Versions).Indexes.ListAsync()).ToListAsync();
         var index = Assert.Single(indexes, row => row["key"].Equals(PaymentReplacementSchemas.Key())); Assert.True(index["unique"].AsBoolean); Assert.Equal(PaymentReplacementSchemas.Partial(), index["partialFilterExpression"]);
         await db.GetCollection<BsonDocument>("schemaMigrations").DeleteOneAsync(new BsonDocument("_id", 44));
-        await new CollectionMigrations(db, new SystemClock()).ApplyAsync(); Assert.Equal(after, await Definitions(db));
+        await LegacyOrderSubmissionTestSchema.UpgradeV44Async(db, new SystemClock()); Assert.Equal(after, await Definitions(db));
         Assert.Equal(indexes, await (await db.GetCollection<BsonDocument>(PaymentDraftBson.Versions).Indexes.ListAsync()).ToListAsync());
         Assert.Equal(44, await db.GetCollection<BsonDocument>("schemaMigrations").CountDocumentsAsync(new BsonDocument("state", "applied")));
     });
@@ -42,7 +42,7 @@ public sealed class PaymentReplacementMigrationTests(MongoFixture fixture)
         if (fault == "partial") await rows.Indexes.CreateOneAsync(new CreateIndexModel<BsonDocument>(PaymentReplacementSchemas.Key(), new CreateIndexOptions<BsonDocument> { Name = PaymentReplacementSchemas.IndexName, Unique = true, PartialFilterExpression = new BsonDocument("schemaVersion", 1) }));
         if (fault == "orphan") await db.GetCollection<BsonDocument>("outboxEvents").InsertOneAsync(new BsonDocument { { "_id", ObjectId.GenerateNewId() }, { "kind", PaymentDraftBson.ReplacementOperation } }, new InsertOneOptions { BypassDocumentValidation = true });
         if (fault == "counter") await db.GetCollection<BsonDocument>("idCounters").InsertOneAsync(new BsonDocument { { "_id", PaymentDraftBson.Versions }, { "value", 0 } }, new InsertOneOptions { BypassDocumentValidation = true });
-        var before = await Definitions(db); await Assert.ThrowsAsync<InvalidOperationException>(() => new CollectionMigrations(db, new SystemClock()).ApplyAsync());
+        var before = await Definitions(db); await Assert.ThrowsAsync<InvalidOperationException>(() => LegacyOrderSubmissionTestSchema.UpgradeV44Async(db, new SystemClock()));
         Assert.Equal(before, await Definitions(db)); Assert.Equal(43, await db.GetCollection<BsonDocument>("schemaMigrations").CountDocumentsAsync(new BsonDocument("state", "applied")));
         Assert.False(await db.GetCollection<BsonDocument>("schemaMigrations").Find(new BsonDocument { { "_id", 44 }, { "state", "applied" } }).AnyAsync());
     });

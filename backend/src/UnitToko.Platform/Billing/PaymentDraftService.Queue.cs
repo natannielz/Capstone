@@ -12,15 +12,16 @@ using B = UnitToko.Platform.Billing.PaymentDraftBson;
 namespace UnitToko.Platform.Billing;
 
 public sealed record PaymentReviewQueueEntry(PaymentDraftView Declaration, long ReviewRevision, string State, long? AssigneeId,
-    DateTimeOffset? RecordedAt, string OcrState, ImmutableArray<string> Discrepancies);
+    DateTimeOffset? RecordedAt, string OcrState, ImmutableArray<string> Discrepancies, PaymentNotificationStatus Notification);
 public sealed record PaymentReviewQueuePage(ImmutableArray<PaymentReviewQueueEntry> Items, bool HasMore, DateTimeOffset ObservedAt);
 
 public sealed partial class PaymentDraftService
 {
     public async Task<PaymentReviewQueuePage> ListReviewQueueAsync(ActorContext actor, long? beforeId, AuthorizationReadMetadata metadata, CancellationToken ct = default) {
         await CorrectionStorageAsync(ct); await DocumentProcessingStorage.RequireAsync(database, ct);
+        await PaymentReviewNotifications.RequireStorageAsync(database, ct);
         var page = await ListReviewsCoreAsync(actor, beforeId, metadata, "billing.payment.review.queue", QueueEntryAsync, ct);
-        if (page.Items.Any(item => item.Declaration.Submission is null || item.Declaration.Submission.SubmittedAt > page.ObservedAt || item.RecordedAt > page.ObservedAt)) throw B.Invalid();
+        if (page.Items.Any(item => item.Declaration.Submission is null || item.Declaration.Submission.SubmittedAt > page.ObservedAt || item.RecordedAt > page.ObservedAt || item.Notification.AvailableAt > page.ObservedAt)) throw B.Invalid();
         return new(page.Items, page.HasMore, page.ObservedAt);
     }
     private async Task<PaymentReviewQueueEntry> QueueEntryAsync(IClientSessionHandle tx, BsonDocument head, BsonDocument version, PaymentDraftView view, CancellationToken ct) {
@@ -49,6 +50,6 @@ public sealed partial class PaymentDraftService
             await records.Rows(PaymentCorrectionBson.Versions).Find(tx, new BsonDocument("declarationId", view.Id.Value)).AnyAsync(ct)) throw PaymentCorrectionRecords.Bad();
         return new(view, action?["revision"].AsInt64 ?? 0, action?["state"].AsString ?? "pending",
             action is null || action["assigneeId"].IsBsonNull ? null : action["assigneeId"].AsInt64,
-            action is null ? null : new(action["recordedAt"].ToUniversalTime()), state, differences.ToImmutable());
+            action is null ? null : new(action["recordedAt"].ToUniversalTime()), state, differences.ToImmutable(), await PaymentReviewNotifications.ReadAsync(database, tx, action, ct));
     }
 }

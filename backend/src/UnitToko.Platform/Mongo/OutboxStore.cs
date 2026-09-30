@@ -116,6 +116,16 @@ public sealed class OutboxStore(IMongoDatabase database, IClock clock)
         return result.ModifiedCount == 1;
     }
 
+    internal async Task CompletePaymentNotificationAsync(IClientSessionHandle tx, BsonDocument claim, BsonDocument receipt, CancellationToken ct) {
+        if (!tx.IsInTransaction || !ReferenceEquals(tx.Client, database.Client) || claim.GetValue("kind", "") != "billing.payment.review.manage") throw Invalid("invalid_claim");
+        var now = clock.UtcNow.UtcDateTime;
+        var filter = LiveClaim(claim, now) & F.Eq("sourceKey", claim["sourceKey"]) & F.Eq("payload", claim["payload"]) &
+            F.Eq("attempts", claim["attempts"]) & F.Exists("notificationReceipt", false);
+        if ((await events.UpdateOneAsync(tx, filter, ClearLease(Builders<BsonDocument>.Update.Set("status", "completed")
+            .Set("completedAt", receipt["createdAt"]).Set("notificationReceipt", receipt)), cancellationToken: ct)).ModifiedCount != 1)
+            throw new PersistenceConflictException("payment_notification_claim_lost", "The notification lease is no longer current");
+    }
+
     public Task<bool> RetryAsync(BsonDocument claim, TimeSpan delay, CancellationToken cancellationToken = default) =>
         FailAsync(claim, "processing_retry", true, delay, cancellationToken);
 

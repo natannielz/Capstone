@@ -32,7 +32,7 @@ public sealed record PaymentSubmissionDto([property: JsonRequired] LongId Reserv
 public sealed record PaymentSubmissionResultDto(LongId DeclarationId, LongId SubmissionId, string DeclarationRevision, string ReviewRevision, string State, DateTimeOffset SubmittedAt);
 public sealed record PaymentSubmissionRecoveryDto(string Status, PaymentSubmissionResultDto? Result);
 public sealed record PaymentFollowUpDto(LongId DeclarationId, string DeclarationRevision, LongId SubmissionId, PaymentEvidenceReferenceDto Evidence,
-    string ReviewRevision, string State, DateTimeOffset SubmittedAt, DateTimeOffset? RecordedAt);
+    string ReviewRevision, string State, DateTimeOffset SubmittedAt, DateTimeOffset? RecordedAt, PaymentNotificationStatus Notification);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record PaymentReplacementRequestDto([property: JsonRequired] string ReviewRevision, [property: JsonRequired] LongId ActionId,
     [property: JsonRequired] string ActionHash, [property: JsonRequired] string Binding)
@@ -70,7 +70,7 @@ public static class PaymentDraftEndpoints
             http.Response.Headers.ETag = AccessRequestMetadata.VersionTag(row.ReviewRevision);
             return TypedResults.Ok(new PaymentFollowUpDto(new(row.DeclarationId), OrderDraftInputDto.Number(row.DeclarationRevision), new(row.SubmissionId),
                 new(new(row.Evidence.Id), OrderDraftInputDto.Number(row.Evidence.Version), row.Evidence.Sha256),
-                row.ReviewRevision.ToString(System.Globalization.CultureInfo.InvariantCulture), row.State, row.SubmittedAt, row.RecordedAt));
+                row.ReviewRevision.ToString(System.Globalization.CultureInfo.InvariantCulture), row.State, row.SubmittedAt, row.RecordedAt, row.Notification));
         }).WithName("ReadOwnPaymentFollowUp");
         group.MapPost("/{id}/replacement/query", async (string id, OrderReadDto request, HttpContext http, PaymentDraftService service,
             [FromHeader(Name = "If-Match")] string expected, CancellationToken ct) => {

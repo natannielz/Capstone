@@ -45,6 +45,7 @@ public sealed class PaymentVerificationBrowserTests(MongoFixture fixture, ITestO
         await using var data = await PaymentVerificationTestData.CreateAsync(fixture, manual ? "ocr_unavailable" : null);
         if (manual) await PaymentManualReviewTests.Policy(data);
         if (workflow) await PaymentReviewActionTests.Grant(data);
+        if (workflow) data.Read.Catalog.Clock.UseSystemClock = true; // Match the actual worker host's clock instead of manufacturing a future receipt.
         if (manualRecovery) {
             var shown = await data.Service.PreviewManualReviewAsync(data.Reviewer, data.Read.DeclarationId);
             await data.Service.RecordManualReviewAsync(data.Reviewer, data.Read.DeclarationId, 0, new(shown.Binding, true, PaymentManualReviewTests.Fields()), PaymentVerificationTestData.Meta("manual-before-browser-recovery"));
@@ -83,7 +84,7 @@ public sealed class PaymentVerificationBrowserTests(MongoFixture fixture, ITestO
         var start = new ProcessStartInfo(node!) { WorkingDirectory = Path.Combine(root, "frontend"), UseShellExecute = false, CreateNoWindow = true, RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true };
         start.ArgumentList.Add(Path.Combine(root, "frontend", "scripts", "verify-payment-verification-browser.mjs")); start.Environment["NODE_ENV"] = "production"; start.Environment["NEXT_TELEMETRY_DISABLED"] = "1";
         using var process = Process.Start(start) ?? throw new InvalidOperationException("Browser child did not start");
-        var replacementValidated = false;
+        var replacementValidated = false; var noticesProcessed = false;
         try {
             var stdout = ReadOutputAsync(); var stderr = process.StandardError.ReadToEndAsync(); await process.StandardInput.WriteAsync(JsonSerializer.Serialize(input)); process.StandardInput.Close();
             await process.WaitForExitAsync().WaitAsync(TimeSpan.FromMinutes(5)); output.WriteLine(await stdout); output.WriteLine(await stderr);
@@ -93,6 +94,26 @@ public sealed class PaymentVerificationBrowserTests(MongoFixture fixture, ITestO
                 var lines = new System.Text.StringBuilder();
                 while (await process.StandardOutput.ReadLineAsync() is { } line) {
                     lines.AppendLine(line);
+                    if (line == "PAYMENT_NOTICE_READY") {
+                        Assert.True(workflow); Assert.False(noticesProcessed); noticesProcessed = true;
+                        var configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent!.Name;
+                        var workerDll = Path.Combine(root, "backend", "src", "UnitToko.Worker", "bin", configuration, "net10.0", "UnitToko.Worker.dll"); Assert.True(File.Exists(workerDll));
+                        var workerStart = new ProcessStartInfo(OutboxProcessTests.FindDotnetHost()) { UseShellExecute = false, CreateNoWindow = true,
+                            RedirectStandardOutput = true, RedirectStandardError = true, WorkingDirectory = Path.GetDirectoryName(workerDll)! };
+                        workerStart.ArgumentList.Add(workerDll);
+                        workerStart.Environment["Mongo__Uri"] = Environment.GetEnvironmentVariable("UNITTOKO_TEST_MONGO_URI") ?? "mongodb://127.0.0.1:27028/?replicaSet=rs0";
+                        workerStart.Environment["Mongo__Database"] = data.Read.Database.DatabaseNamespace.DatabaseName;
+                        workerStart.Environment["Notifications__PaymentReviewInApp__Enabled"] = "true";
+                        workerStart.Environment["Logging__LogLevel__Default"] = "Warning";
+                        using var worker = Process.Start(workerStart) ?? throw new InvalidOperationException("Notice worker did not start");
+                        var workerOutput = worker.StandardOutput.ReadToEndAsync(); var workerError = worker.StandardError.ReadToEndAsync();
+                        try {
+                            using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+                            while (await data.Rows("outboxEvents").CountDocumentsAsync(new BsonDocument { { "kind", PaymentReviewActionRecords.Operation }, { "status", new BsonDocument("$ne", "completed") } }, cancellationToken: budget.Token) > 0) {
+                                Assert.False(worker.HasExited, "Actual notice worker exited before completion"); await Task.Delay(100, budget.Token);
+                            }
+                        } finally { if (!worker.HasExited) worker.Kill(true); await worker.WaitForExitAsync(); output.WriteLine(await workerOutput); output.WriteLine(await workerError); }
+                    }
                     if (line == "REPLACEMENT_VALIDATE_READY") {
                         Assert.True(replacement); Assert.False(replacementValidated); replacementValidated = true;
                         var processor = new EvidenceValidationProcessor(data.Read.Database, new(data.Read.Catalog.Client), new(data.Read.Database), data.Read.Catalog.Clock, data.Read.Files.Registration,
@@ -110,6 +131,10 @@ public sealed class PaymentVerificationBrowserTests(MongoFixture fixture, ITestO
         Assert.Equal(2, await data.Rows("journalEntries").CountDocumentsAsync(new BsonDocument()));
         Assert.Equal(0, await data.Rows("paymentAllocations").CountDocumentsAsync(new BsonDocument()));
         if (workflow) {
+            Assert.True(noticesProcessed);
+            var events = await data.Rows("outboxEvents").Find(new BsonDocument("kind", PaymentReviewActionRecords.Operation)).ToListAsync();
+            Assert.Equal(3, events.Count); Assert.All(events, row => Assert.Equal("completed", row["status"]));
+            Assert.Single(events, row => row["notificationReceipt"]["disposition"] == "available");
             Assert.Equal(3, await data.Rows(PaymentReviewActionRecords.Versions).CountDocumentsAsync(new BsonDocument()));
             var latest = await data.Service.ReadReviewActionsAsync(data.Reader, data.Read.DeclarationId); Assert.Equal("replacement_requested", latest.Latest!["state"]);
             if (replacement) {

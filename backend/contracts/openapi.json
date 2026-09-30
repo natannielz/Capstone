@@ -37943,7 +37943,8 @@
           "reviewRevision",
           "state",
           "submittedAt",
-          "recordedAt"
+          "recordedAt",
+          "notification"
         ],
         "type": "object",
         "properties": {
@@ -37975,6 +37976,9 @@
               "string"
             ],
             "format": "date-time"
+          },
+          "notification": {
+            "$ref": "#/components/schemas/PaymentNotificationStatus"
           }
         },
         "additionalProperties": false
@@ -38152,6 +38156,26 @@
             ]
           },
           "recordedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false
+      },
+      "PaymentNotificationStatus": {
+        "required": [
+          "state",
+          "availableAt"
+        ],
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "string"
+          },
+          "availableAt": {
             "type": [
               "null",
               "string"
@@ -38657,7 +38681,8 @@
           "assigneeId",
           "recordedAt",
           "ocrState",
-          "discrepancies"
+          "discrepancies",
+          "notification"
         ],
         "type": "object",
         "properties": {
@@ -38695,6 +38720,9 @@
             "items": {
               "type": "string"
             }
+          },
+          "notification": {
+            "$ref": "#/components/schemas/PaymentNotificationStatus"
           }
         },
         "additionalProperties": false

@@ -103,6 +103,16 @@ try {
     await workflow.screenshot({ path: resolve(directory, 'review-action-mobile.png') }); await page.setViewportSize({ width: 1440, height: 1000 }); await workflow.screenshot({ path: resolve(directory, 'review-action-desktop.png') });
     await queue.getByRole('button', { name: 'Muat pengajuan terbaru', exact: true }).click();
     await queue.getByText('Bukti pengganti diminta · Penanggung jawab: akun ' + writes.find(write => write.kind === 'workflow').actor, { exact: true }).waitFor();
+    await queue.getByText(/^Notifikasi aplikasi: Menunggu layanan\./).waitFor(); console.log('PAYMENT_NOTICE_READY');
+    let available = false;
+    for (let attempt = 0; attempt < 30; attempt++) {
+      await new Promise(resolve => setTimeout(resolve, 100)); const response = page.waitForResponse(value => value.url().endsWith('/payment-reviews/queue/query'));
+      await queue.getByRole('button', { name: 'Muat pengajuan terbaru', exact: true }).click(); const value = await response; assert.equal(value.status(), 200);
+      const item = (await value.json()).items.find(row => row.declaration.id === config.declarationId); assert.ok(item);
+      if (item.notification.state === 'available') { available = true; break; }
+      assert.ok(['pending', 'running', 'retry'].includes(item.notification.state));
+    }
+    assert.equal(available, true); await queue.getByText(/^Notifikasi aplikasi: Tersedia pada akun pembeli\./).waitFor();
     await queue.getByLabel('Tampilan halaman ini', { exact: true }).selectOption('closed');
     assert.equal(await queue.getByRole('button', { name: 'Periksa pengajuan ' + config.declarationId, exact: true }).count(), 1); await page.setViewportSize({ width: 360, height: 800 });
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true); await queue.screenshot({ path: resolve(directory, 'payment-queue-mobile.png') });
@@ -115,6 +125,7 @@ try {
     const followUp = buyer.page.getByRole('region', { name: 'Tindak lanjut pengajuan', exact: true });
     await followUp.getByRole('button', { name: 'Muat tindak lanjut petugas', exact: true }).click();
     await followUp.getByRole('status').getByText('Petugas meminta bukti pengganti', { exact: true }).waitFor();
+    await followUp.getByText(/^Notifikasi aplikasi: Pemberitahuan tindak lanjut tersedia pada akun ini\./).waitFor();
     assert.equal(await followUp.getByText(/Synthetic request for eligible replacement|Akun 7410/).count(), 0);
     assert.equal(await buyer.page.getByRole('button', { name: 'Ajukan untuk verifikasi', exact: true }).count(), 0);
     assert.equal(await buyer.page.getByRole('button', { name: 'Unggah bukti asli', exact: true }).count(), 0);

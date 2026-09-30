@@ -14,6 +14,9 @@ internal static class DocumentProcessingStorage
             await InventoryRepository.RequireStorageAsync(database, name, DocumentProcessingSchemas.Validator(name), DocumentProcessingSchemas.Key(name), ct);
         foreach (var name in EvidenceAccessSchemas.Collections)
             await InventoryRepository.RequireStorageAsync(database, name, EvidenceAccessSchemas.Validator(name), EvidenceAccessSchemas.Key(name), ct);
+        await RequireOutboxAsync(database, DocumentProcessingSchemas.OutboxValidator(), ct);
+    }
+    internal static async Task RequireOutboxAsync(IMongoDatabase database, BsonDocument required, CancellationToken ct) {
         // The shared outbox retains its foundation's approved exists-only partial unique index.
         // Use the owning index contract instead of a single-owner collection's stricter index shape.
         var definition = await (await database.ListCollectionsAsync(new ListCollectionsOptions { Filter = new BsonDocument("name", "outboxEvents") }, ct)).SingleOrDefaultAsync(ct);
@@ -21,7 +24,7 @@ internal static class DocumentProcessingStorage
         if (definition is null || definition.GetValue("type", "") != "collection" || options is null || options.GetValue("validationLevel", "") != "strict" || options.GetValue("validationAction", "") != "error" ||
             options.GetValue("capped", false).AsBoolean || options.Contains("timeseries") || options.Contains("expireAfterSeconds") || options.Contains("encryptedFields") ||
             options.TryGetValue("collation", out var collation) && !InvoiceStorage.Simple(collation) ||
-            !InventorySchemas.Contains(options.GetValue("validator", new BsonDocument()).AsBsonDocument, DocumentProcessingSchemas.OutboxValidator())) throw Unavailable();
+            !InventorySchemas.Contains(options.GetValue("validator", new BsonDocument()).AsBsonDocument, required)) throw Unavailable();
         try { PaymentEvidenceMigration.RequireIndexes("outboxEvents", await (await database.GetCollection<BsonDocument>("outboxEvents").Indexes.ListAsync(ct)).ToListAsync(ct)); }
         catch (InvalidOperationException) { throw Unavailable(); }
     }
