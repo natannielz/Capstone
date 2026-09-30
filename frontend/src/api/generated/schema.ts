@@ -993,6 +993,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/billing/payment-reviews/{id}/verification": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["VerifyPaymentDeclaration"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/billing/payment-reviews/{id}/verification/operations/query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["RecoverPaymentVerification"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/billing/payment-reviews/{id}/verification/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["PreviewPaymentVerification"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/billing/payment-reviews/{id}/verification/query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ReadPaymentVerification"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/billing/payment-reviews/query": {
         parameters: {
             query?: never;
@@ -5214,6 +5278,16 @@ export interface components {
             recent: components["schemas"]["PaymentCorrectionVersionDto"][];
             reviewRevision: string;
         };
+        PaymentDiscrepancy: {
+            bank: null | string;
+            declaration: null | string;
+            field: string;
+            image: null | string;
+        };
+        PaymentDiscrepancyResolution: {
+            field: string;
+            reason: string;
+        };
         PaymentDraftDto: {
             /** Format: date-time */
             createdAt: string;
@@ -5357,6 +5431,68 @@ export interface components {
             expiresAt: string;
             reservationId: components["schemas"]["LongId"];
             revision: string;
+        };
+        PaymentVerificationCommandDto: {
+            bankReviewed: boolean;
+            binding: string;
+            imageReviewed: boolean;
+            payerVerificationReference: string;
+            payerVerified: boolean;
+            reason: string;
+            receiptId: components["schemas"]["LongId"];
+            resolutions: components["schemas"]["PaymentVerificationResolutionDto"][];
+        };
+        PaymentVerificationDetailDto: {
+            declarationRevision: string;
+            evidence: components["schemas"]["PaymentEvidenceReferenceDto"];
+            payerVerificationReference: string;
+            reason: string;
+            resolutions: components["schemas"]["PaymentDiscrepancyResolution"][];
+            result: components["schemas"]["PaymentVerificationResultDto"];
+            verifiedBy: components["schemas"]["LongId"];
+        };
+        PaymentVerificationPreviewDto: {
+            accountHolder: string;
+            accountNumber: string;
+            amount: string;
+            bankCode: string;
+            binding: string;
+            bookedDate: string;
+            buyerName: string;
+            buyingOrganizationId: components["schemas"]["LongId"];
+            declarationId: components["schemas"]["LongId"];
+            declarationRevision: string;
+            declaredPayerName: string;
+            discrepancies: components["schemas"]["PaymentDiscrepancy"][];
+            fields: components["schemas"]["PaymentReviewField"][];
+            payerVerificationProcedureReference: string;
+            receiptId: components["schemas"]["LongId"];
+            reviewRevision: string;
+            transactionId: string;
+        };
+        PaymentVerificationPreviewQueryDto: {
+            receiptId: components["schemas"]["LongId"];
+        };
+        PaymentVerificationReadDto: {
+            state: string;
+            verification: null | components["schemas"]["PaymentVerificationDetailDto"];
+        };
+        PaymentVerificationRecoveryDto: {
+            result: null | components["schemas"]["PaymentVerificationResultDto"];
+            status: string;
+        };
+        PaymentVerificationResolutionDto: {
+            field: string;
+            reason: string;
+        };
+        PaymentVerificationResultDto: {
+            declarationId: components["schemas"]["LongId"];
+            operation: string;
+            receiptId: components["schemas"]["LongId"];
+            /** Format: date-time */
+            recordedAt: string;
+            reviewRevision: string;
+            verificationId: components["schemas"]["LongId"];
         };
         PersonReviewAccountDto: {
             displayName: null | string;
@@ -11567,6 +11703,314 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PaymentDraftDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    VerifyPaymentDeclaration: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Reuse this key only for an unchanged logical command, including after an uncertain response. */
+                "Idempotency-Key": string;
+                /** @description One quoted nonnegative Int64 resource version from the latest response; never a JavaScript number. */
+                "If-Match": string;
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
+                /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
+                "X-Expected-Actor-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PaymentVerificationCommandDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentVerificationResultDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    RecoverPaymentVerification: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
+                /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
+                "X-Expected-Actor-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OrderDraftRecoveryDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentVerificationRecoveryDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    PreviewPaymentVerification: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
+                /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
+                "X-Expected-Actor-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PaymentVerificationPreviewQueryDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentVerificationPreviewDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    ReadPaymentVerification: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
+                /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
+                "X-Expected-Actor-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OrderReadDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentVerificationReadDto"];
                 };
             };
             /** @description Bad Request */

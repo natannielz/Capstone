@@ -27,8 +27,9 @@ internal sealed class BankStatementTestData(ReceivingAccountTestData accounts) :
         return new(db,new(selected),new(db),Accounts.Catalog.Clock,Accounts.NewService(selected));
     }
     internal static AuthorizationCommandMetadata Meta(string key)=>new(key,"Synthetic bank record staging","synthetic-bank-statement");
-    internal static async Task<BankStatementTestData> CreateAsync(MongoFixture fixture) {
-        var data=new BankStatementTestData(await ReceivingAccountTestData.CreateAsync(fixture)); var catalog=data.Accounts.Catalog;
+    internal static async Task<BankStatementTestData> CreateAsync(MongoFixture fixture) => await AttachAsync(await ReceivingAccountTestData.CreateAsync(fixture));
+    internal static async Task<BankStatementTestData> AttachAsync(ReceivingAccountTestData accounts) {
+        var data=new BankStatementTestData(accounts); var catalog=data.Accounts.Catalog;
         string[] read=[Permissions.BankStatementRead,Permissions.ReceivingAccountRead,Permissions.ReceivingAccountDetailsRead];
         data.Maker=await catalog.ActorAsync(7110,CatalogAuthoringTestData.Shop,[..read,Permissions.BankStatementStage]);
         data.Reader=await catalog.ActorAsync(7120,CatalogAuthoringTestData.Shop,read);

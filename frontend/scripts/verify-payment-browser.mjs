@@ -151,7 +151,7 @@ try {
   await reviewPage.getByRole('button', { name: /^Periksa pengajuan [1-9]/ }).first().click();
   const review = reviewPage.getByRole('region', { name: 'Rincian pengajuan pembayaran', exact: true }); await review.waitFor();
   assert.equal(await review.getByRole('heading', { name: /^Pengajuan [1-9]/ }).evaluate(element => document.activeElement === element), true);
-  assert.match(await review.innerText(), /2\.000,01/); await review.getByText('Menunggu verifikasi', { exact: true }).waitFor();
+  assert.match(await review.innerText(), /2\.000,01/); await review.getByText('Pengajuan telah dikirim untuk pemeriksaan.', { exact: true }).waitFor();
   const reviewRead = reviewPage.waitForResponse(response => response.url().includes('/payment-reviews/') && response.url().endsWith('/original/query'));
   await review.getByRole('button', { name: 'Lihat bukti asli', exact: true }).click(); const read = await reviewRead;
   assert.equal(read.status(), 200); assert.match(read.headers()['cache-control'], /no-store/);
@@ -165,7 +165,7 @@ try {
   await reviewOcr.getByRole('button', { name: 'Muat hasil OCR', exact: true }).click(); await reviewOcr.getByText('Hasil pembacaan tersedia', { exact: true }).waitFor();
   if (config.nativeOcr) assert.equal(await reviewOcr.getByText('Belum diketahui', { exact: true }).count(), 8);
   assert.equal(await reviewPage.getByRole('button', { name: /Verifikasi pembayaran|Alokasikan pembayaran/ }).count(), 0);
-  await review.getByRole('heading', { name: 'Konfirmasi dana masuk belum tersedia', exact: true }).waitFor();
+  await review.getByRole('heading', { name: 'Verifikasi pembayaran', exact: true }).waitFor();
   assert.equal(await reviewPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
   await reviewPage.screenshot({ path: resolve(directory, 'payment-finance-mobile.png'), fullPage: true });
   await reviewer.context.setOffline(true); await reviewPage.getByText(/Koneksi terputus/).waitFor();

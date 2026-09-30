@@ -19795,6 +19795,493 @@
         ]
       }
     },
+    "/api/v1/billing/payment-reviews/{id}/verification/preview": {
+      "post": {
+        "tags": [
+          "UnitToko.Api"
+        ],
+        "operationId": "PreviewPaymentVerification",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "required": true,
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PaymentVerificationPreviewQueryDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentVerificationPreviewDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
+    "/api/v1/billing/payment-reviews/{id}/verification/query": {
+      "post": {
+        "tags": [
+          "UnitToko.Api"
+        ],
+        "operationId": "ReadPaymentVerification",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "required": true,
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrderReadDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentVerificationReadDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
+    "/api/v1/billing/payment-reviews/{id}/verification": {
+      "post": {
+        "tags": [
+          "UnitToko.Api"
+        ],
+        "operationId": "VerifyPaymentDeclaration",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "Reuse this key only for an unchanged logical command, including after an uncertain response.",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "description": "One quoted nonnegative Int64 resource version from the latest response; never a JavaScript number.",
+            "required": true,
+            "schema": {
+              "maxLength": 21,
+              "minLength": 3,
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "required": true,
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PaymentVerificationCommandDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentVerificationResultDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
+    "/api/v1/billing/payment-reviews/{id}/verification/operations/query": {
+      "post": {
+        "tags": [
+          "UnitToko.Api"
+        ],
+        "operationId": "RecoverPaymentVerification",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "required": true,
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrderDraftRecoveryDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentVerificationRecoveryDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
     "/api/v1/billing/receiving-accounts/policies/query": {
       "post": {
         "tags": [
@@ -34479,6 +34966,55 @@
         },
         "additionalProperties": false
       },
+      "PaymentDiscrepancy": {
+        "required": [
+          "field",
+          "declaration",
+          "image",
+          "bank"
+        ],
+        "type": "object",
+        "properties": {
+          "field": {
+            "type": "string"
+          },
+          "declaration": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "image": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "bank": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "PaymentDiscrepancyResolution": {
+        "required": [
+          "field",
+          "reason"
+        ],
+        "type": "object",
+        "properties": {
+          "field": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
       "PaymentDraftDto": {
         "required": [
           "id",
@@ -35122,6 +35658,277 @@
           "expiresAt": {
             "type": "string",
             "format": "date-time"
+          }
+        },
+        "additionalProperties": false
+      },
+      "PaymentVerificationCommandDto": {
+        "required": [
+          "receiptId",
+          "binding",
+          "payerVerificationReference",
+          "imageReviewed",
+          "bankReviewed",
+          "payerVerified",
+          "resolutions",
+          "reason"
+        ],
+        "type": "object",
+        "properties": {
+          "receiptId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "binding": {
+            "type": "string"
+          },
+          "payerVerificationReference": {
+            "type": "string"
+          },
+          "imageReviewed": {
+            "type": "boolean"
+          },
+          "bankReviewed": {
+            "type": "boolean"
+          },
+          "payerVerified": {
+            "type": "boolean"
+          },
+          "resolutions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PaymentVerificationResolutionDto"
+            }
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "PaymentVerificationDetailDto": {
+        "required": [
+          "result",
+          "declarationRevision",
+          "evidence",
+          "verifiedBy",
+          "payerVerificationReference",
+          "reason",
+          "resolutions"
+        ],
+        "type": "object",
+        "properties": {
+          "result": {
+            "$ref": "#/components/schemas/PaymentVerificationResultDto"
+          },
+          "declarationRevision": {
+            "type": "string"
+          },
+          "evidence": {
+            "$ref": "#/components/schemas/PaymentEvidenceReferenceDto"
+          },
+          "verifiedBy": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "payerVerificationReference": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "resolutions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PaymentDiscrepancyResolution"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "PaymentVerificationPreviewDto": {
+        "required": [
+          "binding",
+          "declarationId",
+          "declarationRevision",
+          "receiptId",
+          "reviewRevision",
+          "buyingOrganizationId",
+          "buyerName",
+          "declaredPayerName",
+          "amount",
+          "bookedDate",
+          "transactionId",
+          "accountNumber",
+          "accountHolder",
+          "bankCode",
+          "payerVerificationProcedureReference",
+          "fields",
+          "discrepancies"
+        ],
+        "type": "object",
+        "properties": {
+          "binding": {
+            "type": "string"
+          },
+          "declarationId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "declarationRevision": {
+            "type": "string"
+          },
+          "receiptId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "reviewRevision": {
+            "type": "string"
+          },
+          "buyingOrganizationId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "buyerName": {
+            "type": "string"
+          },
+          "declaredPayerName": {
+            "type": "string"
+          },
+          "amount": {
+            "type": "string"
+          },
+          "bookedDate": {
+            "type": "string"
+          },
+          "transactionId": {
+            "type": "string"
+          },
+          "accountNumber": {
+            "type": "string"
+          },
+          "accountHolder": {
+            "type": "string"
+          },
+          "bankCode": {
+            "type": "string"
+          },
+          "payerVerificationProcedureReference": {
+            "type": "string"
+          },
+          "fields": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PaymentReviewField"
+            }
+          },
+          "discrepancies": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PaymentDiscrepancy"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "PaymentVerificationPreviewQueryDto": {
+        "required": [
+          "receiptId"
+        ],
+        "type": "object",
+        "properties": {
+          "receiptId": {
+            "$ref": "#/components/schemas/LongId"
+          }
+        },
+        "additionalProperties": false
+      },
+      "PaymentVerificationReadDto": {
+        "required": [
+          "state",
+          "verification"
+        ],
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "string"
+          },
+          "verification": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PaymentVerificationDetailDto"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "PaymentVerificationRecoveryDto": {
+        "required": [
+          "status",
+          "result"
+        ],
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string"
+          },
+          "result": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PaymentVerificationResultDto"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "PaymentVerificationResolutionDto": {
+        "required": [
+          "field",
+          "reason"
+        ],
+        "type": "object",
+        "properties": {
+          "field": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "PaymentVerificationResultDto": {
+        "required": [
+          "verificationId",
+          "declarationId",
+          "receiptId",
+          "reviewRevision",
+          "recordedAt",
+          "operation"
+        ],
+        "type": "object",
+        "properties": {
+          "verificationId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "declarationId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "receiptId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "reviewRevision": {
+            "type": "string"
+          },
+          "recordedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "operation": {
+            "type": "string"
           }
         },
         "additionalProperties": false

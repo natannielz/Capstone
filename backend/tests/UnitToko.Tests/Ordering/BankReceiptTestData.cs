@@ -27,24 +27,28 @@ internal sealed class BankReceiptTestData(BankStatementTestData statements) : IA
         return new(db,new(selected),new(db),Statements.Accounts.Catalog.Clock,Statements.NewService(selected));
     }
     internal static AuthorizationCommandMetadata Meta(string key)=>new(key,"Synthetic independent credit review","synthetic-bank-receipt");
-    internal static async Task<BankReceiptTestData> CreateAsync(MongoFixture fixture) {
-        var data=new BankReceiptTestData(await BankStatementTestData.CreateAsync(fixture)); var catalog=data.Statements.Accounts.Catalog;
+    internal static async Task<BankReceiptTestData> CreateAsync(MongoFixture fixture) => await AttachAsync(await BankStatementTestData.CreateAsync(fixture));
+    internal static async Task<BankReceiptTestData> AttachAsync(BankStatementTestData statements, bool configureAccounting = true, byte[]? original = null) {
+        var data=new BankReceiptTestData(statements); var catalog=data.Statements.Accounts.Catalog;
         try {
             string[] read=[Permissions.BankReceiptRead,Permissions.BankStatementRead,Permissions.ReceivingAccountRead,Permissions.ReceivingAccountDetailsRead];
             data.Reviewer=await catalog.ActorAsync(7210,CatalogAuthoringTestData.Shop,[..read,Permissions.BankReceiptConfirm]);
             data.Reader=await catalog.ActorAsync(7220,CatalogAuthoringTestData.Shop,read);
             data.Other=await catalog.ActorAsync(7230,CatalogAuthoringTestData.OtherOwner,[..read,Permissions.BankReceiptConfirm]);
             await PersonTestData.SeedDistinctPeopleAsync(catalog.Database,catalog.Clock,data.Statements.Maker.UserId,data.Reviewer.UserId,data.Other.UserId);
-            data.ImportId=(await data.Statements.StageAsync())["importId"].AsInt64;
+            data.ImportId=(await data.Statements.StageAsync(original:original))["importId"].AsInt64;
             var account=await data.Rows(ReceivingAccountBson.Versions).Find(new BsonDocument("_id",data.Statements.Selection.AccountVersionId)).SingleAsync();
             await data.Rows(B.Policies).InsertOneAsync(new BsonDocument { { "_id",920L }, { "schemaVersion",1 }, { "revision",1L }, { "scope",account["scope"] },
                 { "physicalIdentity",account["physicalIdentity"] }, { "bankCode","FIXTUREBANK" }, { "identityNamespace",BankStatementParserTests.Format.IdentityNamespace! },
                 { "cashMapping","bank_cash" }, { "suspenseMapping","unidentified_cash" }, { "trustedSourceReference","synthetic-independent-bank-portal" },
                 { "operatingOwnerReference","synthetic-finance-owner" }, { "approvalReference","synthetic-cash-policy-approval" },
                 { "approvedAt",catalog.Clock.UtcNow.AddDays(-1).UtcDateTime }, { "expiresAt",catalog.Clock.UtcNow.AddDays(1).UtcDateTime }, { "active",true }, { "fence",0L } });
-            await AccountingTestDocuments.ConfigureAsync(catalog.Database);
-            await data.Rows("accountingChartVersions").UpdateOneAsync(new BsonDocument("_id",20L),Builders<BsonDocument>.Update.Set("mappings",new BsonArray {
-                AccountingTestDocuments.Mapping("bank_cash",801,"A1101"),AccountingTestDocuments.Mapping("unidentified_cash",802,"A2101") }));
+            if (configureAccounting) {
+                await AccountingTestDocuments.ConfigureAsync(catalog.Database);
+                await data.Rows("accountingChartVersions").UpdateOneAsync(new BsonDocument("_id",20L),Builders<BsonDocument>.Update.Set("mappings",new BsonArray {
+                    AccountingTestDocuments.Mapping("bank_cash",801,"A1101"),AccountingTestDocuments.Mapping("unidentified_cash",802,"A2101") }));
+            } else await data.Rows("accountingChartVersions").UpdateOneAsync(new BsonDocument("_id",20L),Builders<BsonDocument>.Update.PushEach("mappings",new[] {
+                AccountingTestDocuments.Mapping("bank_cash",805,"A1102"),AccountingTestDocuments.Mapping("unidentified_cash",806,"A2102") }));
             return data;
         } catch { await data.DisposeAsync(); throw; }
     }

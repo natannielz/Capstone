@@ -26,6 +26,7 @@ public sealed partial class PaymentDraftService
         await StorageAsync(ct);
         foreach (var name in PaymentCorrectionSchemas.Collections)
             await InventoryRepository.RequireStorageAsync(database, name, PaymentCorrectionSchemas.Validator(name), PaymentCorrectionSchemas.Key(name), ct);
+        await PaymentVerificationStorage.RequireAsync(database, ct);
     }
     private AuthorizationQuery CorrectionQuery(ActorContext actor, AuthorizationSnapshot authority, BsonDocument head) {
         var query = ScopePolicy.Compile(actor, authority, Permissions.PaymentReviewCorrect, clock.UtcNow); AuthorizationStore.Require(query);
@@ -78,6 +79,7 @@ public sealed partial class PaymentDraftService
             return new(ScopePolicy.Authorize(actor, authority, Permissions.PaymentReviewCorrect, resources[0], clock.UtcNow),
                 [.. resources.SelectMany(scope => ScopePolicy.RequiredNodes(scope, authority.Directory)).Distinct()], Permissions.PaymentReviewCorrect, new(resources[0]));
         }, (tx, token) => consume(tx, async (extraction, check, inner) => {
+            await new PaymentVerificationRecords(database).RequireUnverifiedAsync(tx, id, inner);
             finalEligibility = check; var original = Original(extraction, binding);
             var history = await store.HistoryAsync(tx, id, binding, B.Fields(original), inner); var prior = history.Recent.FirstOrDefault();
             if ((history.Head?["revision"].AsInt64 ?? 0) != revision) throw PaymentDraftRecords.Changed();

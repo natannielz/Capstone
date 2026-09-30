@@ -13,6 +13,8 @@ import { createPaymentReviewGateway } from './payment-review-client';
 import { OperationRecovery, useOperationRecovery } from '../administration/OperationRecovery';
 import { createPaymentCorrectionGateway } from './payment-correction-client';
 import { PaymentCorrectionPanel } from './PaymentCorrectionPanel';
+import { PaymentVerificationPanel } from './PaymentVerificationPanel';
+import { createPaymentVerificationGateway } from './payment-verification-client';
 import { PaymentOcrPanel } from './PaymentOcrPanel';
 import type { PaymentDraft, PaymentOcrView } from './payment-client';
 import common from '../administration/access.module.css';
@@ -54,7 +56,7 @@ export function PaymentReviewWorkspace() {
   </main>;
 }
 function ReviewDesk({ account, fresh, onDenied }: { account: Account; fresh: boolean; onDenied: (failure: unknown) => void }) {
-  const [gateway] = useState(createPaymentReviewGateway), [corrections] = useState(createPaymentCorrectionGateway), recovery = useOperationRecovery(account.actorId);
+  const [gateway] = useState(createPaymentReviewGateway), [corrections] = useState(createPaymentCorrectionGateway), [verification] = useState(createPaymentVerificationGateway), recovery = useOperationRecovery(account.actorId);
   const [recovering, setRecovering] = useState(false), [editingBusy, setEditingBusy] = useState(false);
   const [page, setPage] = useState<{ items: PaymentDraft[]; hasMore: boolean }>({ items: [], hasMore: false }), [before, setBefore] = useState<string | null>(null), [refresh, setRefresh] = useState(0);
   const [selected, setSelected] = useState<PaymentDraft | null>(null), [ocr, setOcr] = useState<PaymentOcrView | null>(null), [preview, setPreview] = useState<string | null>(null);
@@ -88,10 +90,12 @@ function ReviewDesk({ account, fresh, onDenied }: { account: Account; fresh: boo
   }
   return <><AdministrationNavigation current="payment-reviews" actions={account.actions} locked={busy || editingBusy || recovering} />
     <OperationRecovery entries={recovery.entries} journal={recovery.journal} disabled={busy || offline || editingBusy} onBusyChange={setRecovering}
-      recoveryAdapters={{ 'billing.payment.review.correct': { lookup: async entry => { const result = await corrections.recover(entry.actorId, entry.key); if (!current()) throw new AccessFailure(409, 'recovery_request_stale'); return result; } } }}
+      recoveryAdapters={{ 'billing.payment.review.correct': { lookup: async entry => { const result = await corrections.recover(entry.actorId, entry.key); if (!current()) throw new AccessFailure(409, 'recovery_request_stale'); return result; } },
+        'billing.payment.verify': { lookup: async entry => { const result = await verification.recover(entry.actorId, entry.key); if (!current()) throw new AccessFailure(409, 'recovery_request_stale'); return result; } } }}
       onFailure={failure => { setError(failure); if (!(failure instanceof AccessFailure && failure.code === 'step_up_required')) onDenied(failure); }}
       onResolved={() => { recovery.refresh(); refreshPage(null); }} />
     {account.actions.includes('payment.review.correct') && (!fresh || error instanceof AccessFailure && error.code === 'step_up_required') && <p className={common.alert}>Verifikasi terbaru diperlukan untuk menyimpan atau memulihkan koreksi. <Link href="/identity/account?operation=payment.review.correct&returnPath=%2Fbilling%2Fpayment-reviews">Verifikasi dua langkah</Link></p>}
+    {account.actions.includes('payment.verify') && (!fresh || error instanceof AccessFailure && error.code === 'step_up_required') && <p className={common.alert}>Verifikasi terbaru diperlukan untuk menyimpan atau memulihkan keputusan pembayaran. <Link href="/identity/account?operation=payment.verify&returnPath=%2Fbilling%2Fpayment-reviews">Verifikasi dua langkah untuk keputusan pembayaran</Link></p>}
     {recovery.error !== null && <p role="alert">{accessMessage(recovery.error)}</p>}
     {offline && <p role="status" className={common.alert}>Koneksi terputus. Sambungkan kembali lalu muat pengajuan terbaru.</p>}
     {error !== null && <p role="alert" className={common.alert}>{message(error)}</p>}
@@ -100,11 +104,11 @@ function ReviewDesk({ account, fresh, onDenied }: { account: Account; fresh: boo
       {busy && <p role="status">Memuat data…</p>}
       {!busy && page.items.length === 0 && <p>Belum ada pengajuan yang dapat Anda periksa.</p>}
       <ul className={styles.candidates}>{page.items.map(item => <li key={item.id}><strong>{item.input.payerName}</strong><p>{item.invoices[0].buyerName} · {item.invoices[0].sellerName}</p>
-        <p>{rupiah(item.input.declaredAmount)} · Diajukan {date(item.submission!.submittedAt)}</p><p>Menunggu verifikasi</p>
+        <p>{rupiah(item.input.declaredAmount)} · Diajukan {date(item.submission!.submittedAt)}</p><p>Buka pengajuan untuk melihat hasil verifikasi terbaru.</p>
         <button className={common.secondary} disabled={locked} onClick={() => void perform(() => open(item.id))}>Periksa pengajuan {item.id}</button></li>)}</ul>
       {page.hasMore && <button className={common.secondary} disabled={locked} onClick={() => refreshPage(page.items.at(-1)!.id)}>Pengajuan lebih lama</button>}
     </section>
-    {selected && <section className={common.accountSection} aria-label="Rincian pengajuan pembayaran"><h2 ref={heading} tabIndex={-1}>Pengajuan {selected.id}</h2><p>Menunggu verifikasi</p>
+    {selected && <section className={common.accountSection} aria-label="Rincian pengajuan pembayaran"><h2 ref={heading} tabIndex={-1}>Pengajuan {selected.id}</h2><p>Pengajuan telah dikirim untuk pemeriksaan.</p>
       <p>Data berikut berasal dari pengajuan pembeli. Pembacaan dan pemeriksaan gambar belum membuktikan dana masuk.</p>
       <dl className={styles.facts}><div><dt>Jumlah yang dinyatakan</dt><dd>{rupiah(selected.input.declaredAmount)}</dd></div><div><dt>Nama pembayar</dt><dd>{selected.input.payerName}</dd></div>
         <div><dt>Tanggal transfer yang dinyatakan</dt><dd>{date(selected.input.transferDate + 'T00:00:00+07:00')}</dd></div><div><dt>Referensi yang dinyatakan</dt><dd>{selected.input.bankReference ?? 'Belum diisi'}</dd></div>
@@ -118,7 +122,9 @@ function ReviewDesk({ account, fresh, onDenied }: { account: Account; fresh: boo
       <PaymentCorrectionPanel key={selected.id + ':' + selected.revision + ':' + (ocr?.result?.id ?? 'pending')} actorId={account.actorId} owner={selected} ocr={ocr}
         allowed={account.actions.includes('payment.review.correct')} fresh={fresh}
         locked={locked || recovery.locked} current={current} journal={recovery.journal} onSettled={recovery.refresh} onDenied={onDenied} onBusyChange={setEditingBusy} />
-      <section className={common.state} aria-label="Konfirmasi bank"><h3>Konfirmasi dana masuk belum tersedia</h3><p>Rekening penerimaan yang disetujui dan pencocokan mutasi bank harus tersedia sebelum petugas independen dapat memverifikasi atau mengalokasikan pembayaran. Saldo tagihan belum berubah.</p></section>
+      <PaymentVerificationPanel key={'verify:' + selected.id + ':' + selected.revision} actorId={account.actorId} owner={selected}
+        allowed={account.actions.includes('payment.verify')} fresh={fresh} locked={locked || recovery.locked} current={current}
+        journal={recovery.journal} onSettled={recovery.refresh} onDenied={onDenied} onBusyChange={setEditingBusy} />
     </section>}
   </>;
 }

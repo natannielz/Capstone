@@ -71,6 +71,7 @@ public static class Permissions
         Add(BankStatementRead, Operations); Add(BankStatementStage, Operations, true);
         Add(PaymentReviewRead, Operations);
         Add(PaymentReviewCorrect, Operations, true);
+        result[PaymentVerify] = result[PaymentVerify] with { Assurance = new(true, TimeSpan.FromMinutes(5)) };
         Add(SupplierChangeApprove, Operations, true);
         Add(StockSourceRead, Operations);
         Add(StockSourcePropose, Operations);

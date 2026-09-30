@@ -28,8 +28,9 @@ internal sealed class ReceivingAccountTestData(CatalogAuthoringTestData catalog)
     }
     internal IMongoCollection<BsonDocument> Rows(string name) => Catalog.Rows(name);
     internal static AuthorizationCommandMetadata Meta(string key) => new(key, "Synthetic independent bank-channel review", "synthetic-receiving-account");
-    internal static async Task<ReceivingAccountTestData> CreateAsync(MongoFixture fixture) {
-        var data = new ReceivingAccountTestData(await CatalogAuthoringTestData.CreateAsync(fixture));
+    internal static async Task<ReceivingAccountTestData> CreateAsync(MongoFixture fixture) => await AttachAsync(await CatalogAuthoringTestData.CreateAsync(fixture));
+    internal static async Task<ReceivingAccountTestData> AttachAsync(CatalogAuthoringTestData catalog) {
+        var data = new ReceivingAccountTestData(catalog);
         data.Maker = await data.Catalog.ActorAsync(7010, CatalogAuthoringTestData.Shop, PermissionsAll);
         data.Checker = await data.Catalog.ActorAsync(7020, CatalogAuthoringTestData.Shop, PermissionsAll);
         data.Approver = await data.Catalog.ActorAsync(7030, CatalogAuthoringTestData.Shop, PermissionsAll);

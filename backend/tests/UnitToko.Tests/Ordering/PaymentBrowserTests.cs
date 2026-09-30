@@ -73,18 +73,20 @@ public sealed class PaymentBrowserTests(MongoFixture fixture, ITestOutputHelper 
         var start = new ProcessStartInfo(node!) { WorkingDirectory = Path.Combine(root, "frontend"), UseShellExecute = false, CreateNoWindow = true, RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true };
         start.ArgumentList.Add(Path.Combine(root, "frontend", "scripts", "verify-payment-browser.mjs")); start.Environment["NODE_ENV"] = "production"; start.Environment["NEXT_TELEMETRY_DISABLED"] = "1";
         using var process = Process.Start(start) ?? throw new InvalidOperationException("Browser child did not start");
+        var validationStarted = false; var ocrStarted = false;
         try {
             var stdout = ReadOutputAsync(); var stderr = process.StandardError.ReadToEndAsync(); await process.StandardInput.WriteAsync(JsonSerializer.Serialize(input)); process.StandardInput.Close();
             await process.WaitForExitAsync().WaitAsync(TimeSpan.FromMinutes(5)); output.WriteLine(await stdout); output.WriteLine(await stderr);
             Assert.True(process.ExitCode == 0, await stdout + await stderr); Assert.Contains("REAL_PAYMENT_BROWSER_PASS", await stdout); Assert.Contains("REAL_PAYMENT_CORRECTION_BROWSER_PASS", await stdout);
+            Assert.True(validationStarted); Assert.True(ocrStarted);
             async Task<string> ReadOutputAsync() {
-                var text = new StringBuilder(); var validationStarted = false; var ocrStarted = false;
+                var text = new StringBuilder();
                 while (await process.StandardOutput.ReadLineAsync() is { } line) {
                     text.AppendLine(line);
                     if (line == "VALIDATE_EVIDENCE_READY") { Assert.False(validationStarted); validationStarted = true; Assert.Equal("completed", await processor.RunOnceAsync()); }
                     if (line == "PROCESS_PAYMENT_OCR_READY") { Assert.False(ocrStarted); ocrStarted = true; Assert.Equal("completed", await ocr.RunOnceAsync()); }
                 }
-                Assert.True(validationStarted); Assert.True(ocrStarted); return text.ToString();
+                return text.ToString();
             }
         } finally { if (!process.HasExited) { process.Kill(true); await process.WaitForExitAsync(); } }
         Assert.Equal(1, await data.Invoice.Count(PaymentDraftBson.Heads)); Assert.Equal(2, await data.Invoice.Count(PaymentDraftBson.Versions));

@@ -134,6 +134,7 @@ public sealed class BusinessPermissionTests
         Assert.True(ApprovalPolicy.Evaluate(101, Permissions.OrderAccept, new(2, 2, RequestedBy: 101)).Allowed);
         Assert.NotNull(Permissions.Find(Permissions.OrderSpendApprove)!.Assurance.MaximumAge);
         Assert.NotNull(Permissions.Find(Permissions.SupplierChangeApprove)!.Assurance.MaximumAge);
+        Assert.Equal(TimeSpan.FromMinutes(5), Permissions.Find(Permissions.PaymentVerify)!.Assurance.MaximumAge);
     }
 
     private static AuthorizationSnapshot Snapshot(string template, GrantScope scope, string[]? additions = null)
