@@ -4,6 +4,7 @@
     <Project Path="src/UnitToko.Modules/UnitToko.Modules.csproj" />
     <Project Path="src/UnitToko.Platform/UnitToko.Platform.csproj" />
     <Project Path="src/UnitToko.Worker/UnitToko.Worker.csproj" />
+    <Project Path="src/UnitToko.ImageDecoder/UnitToko.ImageDecoder.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/UnitToko.PersistenceProbe/UnitToko.PersistenceProbe.csproj" />

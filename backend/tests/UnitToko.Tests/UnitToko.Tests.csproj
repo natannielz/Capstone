@@ -15,6 +15,7 @@
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.12" />
     <ProjectReference Include="../../src/UnitToko.Api/UnitToko.Api.csproj" />
     <ProjectReference Include="../../src/UnitToko.Worker/UnitToko.Worker.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../../src/UnitToko.ImageDecoder/UnitToko.ImageDecoder.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="../UnitToko.PersistenceProbe/UnitToko.PersistenceProbe.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
@@ -42,6 +43,13 @@
     <Copy SourceFiles="@(MigrationWorkerFiles)"
           DestinationFiles="@(MigrationWorkerFiles->'$(OutDir)MigrationWorker/%(RecursiveDir)%(Filename)%(Extension)')"
           SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="CopyImageDecoder" AfterTargets="Build">
+    <ItemGroup>
+      <ImageDecoderFiles Include="$(MSBuildThisFileDirectory)../../src/UnitToko.ImageDecoder/bin/$(Configuration)/net10.0/**/*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(ImageDecoderFiles)" DestinationFiles="@(ImageDecoderFiles->'$(OutDir)ImageDecoder/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
   </Target>
 
 </Project>

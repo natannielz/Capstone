@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <RestoreLockedMode Condition="'$(CI)' == 'true'">true</RestoreLockedMode>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Magick.NET-Q8-AnyCPU" Version="14.17.2" />
+    <Content Include="policy.xml" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="$(NuGetPackageRoot)magick.net-q8-anycpu/14.17.2/Notice.txt" Link="third-party/Magick.NET-Notice.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="$(NuGetPackageRoot)magick.net.core/14.17.2/Copyright.txt" Link="third-party/Magick.NET-Core-Copyright.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>
