@@ -107,6 +107,7 @@ export function accessMessage(error: unknown): string {
     return "Hasil perubahan belum dapat dipastikan. Coba lagi tanpa mengubah isian; permintaan yang sama akan diperiksa kembali.";
   if (error.status === 401) return "Sesi terverifikasi belum tersedia atau telah berakhir. Masuk kembali dengan akun organisasi Anda.";
   if (error.code === "step_up_required") return "Verifikasi dua langkah terbaru diperlukan sebelum melanjutkan. Muat ulang setelah verifikasi akun.";
+  if (error.code === "payment_review_closed") return "Pengajuan ini sudah ditutup karena penolakan atau permintaan bukti pengganti. Riwayat dan dana tetap tersimpan; pengajuan ini tidak dapat diverifikasi kembali.";
   if (error.status === 403) return "Akses untuk tindakan ini tidak tersedia. Muat ulang untuk memeriksa izin terbaru.";
   if (error.status === 409) return "Data atau izin telah berubah. Data terbaru dimuat; periksa dan pratinjau kembali sebelum mengajukan.";
   if (error.status >= 500) return "Layanan belum tersedia. Coba lagi dengan permintaan yang sama.";

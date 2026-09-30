@@ -15,7 +15,7 @@ assert.equal(process.versions.node.split('.')[0], '24'); assert.equal(api.protoc
 const load = createRequire(config.playwrightPackage), metadata = load(config.playwrightPackage); assert.equal(metadata.name, 'playwright'); assert.equal(metadata.version, '1.62.1');
 const { chromium } = load('playwright'), channel = process.env.UNITTOKO_BROWSER_CHANNEL ?? 'chromium'; assert.ok(['chromium', 'msedge'].includes(channel));
 const app = next({ dev: false, dir: process.cwd(), quiet: true }), sockets = new Set(), writes = [], errors = [], pages = [];
-const directory = resolve('../tmp/production/' + (config.manualRecovery ? 'payment-recovered-ocr-browser-results' : config.manual ? 'payment-manual-review-browser-results' : 'payment-verification-browser-results')); mkdirSync(directory, { recursive: true });
+const directory = resolve('../tmp/production/' + (config.workflow ? 'payment-review-action-browser-results' : config.manualRecovery ? 'payment-recovered-ocr-browser-results' : config.manual ? 'payment-manual-review-browser-results' : 'payment-verification-browser-results')); mkdirSync(directory, { recursive: true });
 let browser, frontend, edge, tunnel, dropNext = null, dropped = 0;
 function track(server) { server.on('connection', socket => { sockets.add(socket); socket.on('close', () => sockets.delete(socket)); }); return server; }
 async function listen(server) { await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); }); return server.address().port; }
@@ -23,7 +23,7 @@ function forward(req, res, port, isApi) {
   const headers = { ...req.headers, host: '127.0.0.1:' + port };
   for (const name of Object.keys(headers)) if (name.startsWith('x-forwarded-') || name.startsWith('x-original-') || ['forwarded', 'connection'].includes(name)) delete headers[name];
   if (isApi) { headers['x-forwarded-for'] = req.socket.remoteAddress; headers['x-forwarded-host'] = origin.host; headers['x-forwarded-proto'] = 'https'; }
-  const kind = req.method !== 'POST' ? null : req.url === '/api/v1/billing/payment-reviews/' + config.declarationId + '/verification' ? 'verify' : req.url === '/api/v1/billing/payment-reviews/' + config.declarationId + '/manual-review' ? 'manual' : null; if (kind) writes.push({ kind, key: req.headers['idempotency-key'], actor: req.headers['x-expected-actor-id'] });
+  const kind = req.method !== 'POST' ? null : req.url === '/api/v1/billing/payment-reviews/' + config.declarationId + '/verification' ? 'verify' : req.url === '/api/v1/billing/payment-reviews/' + config.declarationId + '/manual-review' ? 'manual' : req.url === '/api/v1/billing/payment-reviews/' + config.declarationId + '/workflow' ? 'workflow' : null; if (kind) writes.push({ kind, key: req.headers['idempotency-key'], actor: req.headers['x-expected-actor-id'] });
   const drop = kind !== null && kind === dropNext; if (drop) dropNext = null;
   const upstream = http.request({ hostname: '127.0.0.1', port, path: req.url, method: req.method, headers }, response => {
     if (drop && response.statusCode === 200) { response.resume(); response.once('end', () => { dropped++; res.writeHead(200, { 'content-type': 'application/json', 'content-length': '64', 'cache-control': 'no-store' }); res.flushHeaders(); res.write('{'); setTimeout(() => res.destroy(), 25); }); return; }
@@ -68,6 +68,39 @@ try {
   const panel = review.getByRole('region', { name: 'Verifikasi pembayaran', exact: true });
   await panel.getByRole('button', { name: 'Muat hasil verifikasi', exact: true }).click();
   await panel.getByText('Belum ada verifikasi pembayaran yang tersimpan.', { exact: true }).waitFor();
+  if (config.workflow) {
+    const workflow = review.getByRole('region', { name: 'Penanggung jawab pemeriksaan', exact: true });
+    await workflow.getByRole('button', { name: 'Muat status pemeriksaan', exact: true }).click(); await workflow.getByText(/Menunggu penanggung jawab/).waitFor();
+    assert.equal(await workflow.getByText(/Usia pengajuan.*menurut waktu server/).count(), 1);
+    await workflow.getByLabel('Alasan tindak lanjut', { exact: true }).fill('Synthetic independent queue owner');
+    await workflow.getByRole('button', { name: 'Periksa tindak lanjut', exact: true }).click();
+    const confirmation = workflow.getByRole('region', { name: 'Konfirmasi tindak lanjut pemeriksaan', exact: true }); await confirmation.waitFor();
+    assert.equal(await confirmation.getByRole('heading').evaluate(element => document.activeElement === element), true);
+    await reviewer.context.setOffline(true); await page.getByText(/Koneksi terputus/).waitFor();
+    assert.equal(await confirmation.getByRole('button', { name: 'Simpan tindak lanjut', exact: true }).isDisabled(), true); assert.equal(writes.length, 0);
+    await reviewer.context.setOffline(false); await page.getByText(/Koneksi terputus/).waitFor({ state: 'hidden' });
+    dropNext = 'workflow'; await confirmation.getByRole('button', { name: 'Simpan tindak lanjut', exact: true }).click(); await page.getByRole('button', { name: 'Periksa hasil', exact: true }).waitFor();
+    const references = await page.evaluate(() => Object.keys(localStorage).filter(key => key.startsWith('unit-toko:pending:v1:')).map(key => JSON.parse(localStorage[key])));
+    assert.equal(references.length, 1); assert.equal(references[0].operation, 'billing.payment.review.manage'); assert.deepEqual(Object.keys(references[0]).sort(), ['actorId', 'createdAt', 'key', 'operation']); assert.doesNotMatch(JSON.stringify(references), /Synthetic|0000123456789|4000/);
+    await page.reload(); await page.getByRole('button', { name: 'Periksa hasil', exact: true }).click(); await page.waitForFunction(() => !Object.keys(localStorage).some(key => key.startsWith('unit-toko:pending:v1:')));
+    await open(page); await workflow.getByRole('button', { name: 'Muat status pemeriksaan', exact: true }).click(); await workflow.getByText(/Dalam pemeriksaan/).waitFor();
+    for (const [choice, reasonText, expected] of [['release', 'Synthetic ownership release', /Menunggu penanggung jawab/], ['request_replacement', 'Synthetic request for legible replacement', /Bukti pengganti diminta/]]) {
+      await workflow.getByLabel('Tindakan', { exact: true }).selectOption(choice); await workflow.getByLabel('Alasan tindak lanjut', { exact: true }).fill(reasonText);
+      await workflow.getByRole('button', { name: 'Periksa tindak lanjut', exact: true }).click(); await confirmation.waitFor();
+      await confirmation.getByRole('button', { name: 'Simpan tindak lanjut', exact: true }).click(); await workflow.getByText(expected).waitFor();
+    }
+    assert.equal(await workflow.getByRole('button', { name: 'Periksa tindak lanjut', exact: true }).count(), 0);
+    await panel.getByRole('button', { name: 'Muat hasil verifikasi', exact: true }).click(); await panel.getByRole('button', { name: 'Pilih penerimaan bank', exact: true }).click();
+    const blocked = page.waitForResponse(response => response.url().endsWith('/verification/preview'));
+    await panel.getByRole('button', { name: 'Periksa penerimaan ' + config.receiptId, exact: true }).click(); assert.equal((await blocked).status(), 409);
+    await panel.getByRole('alert').getByText(/Pengajuan ini sudah ditutup/).waitFor();
+    assert.equal(await panel.getByRole('heading', { name: 'Tinjau pengaitan dana', exact: true }).count(), 0);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+    await workflow.screenshot({ path: resolve(directory, 'review-action-mobile.png') }); await page.setViewportSize({ width: 1440, height: 1000 }); await workflow.screenshot({ path: resolve(directory, 'review-action-desktop.png') });
+    const reader = await desk(config.readerToken); await open(reader.page); const readWorkflow = reader.page.getByRole('region', { name: 'Penanggung jawab pemeriksaan', exact: true });
+    await readWorkflow.getByRole('button', { name: 'Muat status pemeriksaan', exact: true }).click(); await readWorkflow.getByText(/Bukti pengganti diminta/).waitFor(); assert.equal(await readWorkflow.getByRole('button', { name: 'Periksa tindak lanjut', exact: true }).count(), 0);
+    assert.equal(writes.filter(w => w.kind === 'workflow').length, 3); assert.equal(writes.filter(w => w.kind === 'verify').length, 0); assert.equal(dropped, 1); assert.deepEqual(errors, []);
+  } else {
   if (config.manual) {
     await review.getByRole('button', { name: 'Muat hasil OCR', exact: true }).click();
     const manual = panel.getByRole('region', { name: 'Pengecualian gangguan OCR', exact: true });
@@ -168,6 +201,7 @@ try {
       headers: { 'content-type': 'application/json', 'X-CSRF-Token': csrf.requestToken, 'X-Expected-Actor-Id': actorId }, body: JSON.stringify({ purpose: 'payment-review' }) })).status;
   }, { id: config.declarationId, actorId: config.otherId }); assert.equal(denied, 403);
   assert.equal(writes.filter(w => w.kind === 'verify').length, 1); assert.equal(writes.filter(w => w.kind === 'manual').length, config.manual ? 1 : 0); assert.equal(dropped, config.manual ? 2 : 1); assert.deepEqual(errors, []);
+  }
   console.log('REAL_PAYMENT_VERIFICATION_BROWSER_PASS ' + JSON.stringify({ exactOriginal: true, explicitReview: true, lostResponseRecovered: true, oneCashEvent: true,
     readerCannotVerify: true, outsiderDenied: true, offlineUnsent: true, mobile: true, syntheticBankAndPayerPolicy: true, syntheticOcrEngine: true, productionAccepted: false }));
 

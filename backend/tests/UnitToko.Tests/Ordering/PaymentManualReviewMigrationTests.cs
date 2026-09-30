@@ -24,7 +24,7 @@ public sealed class PaymentManualReviewMigrationTests(MongoFixture fixture)
         var history = await History(db); Assert.Equal(41, history.Count);
         var extra = new BsonDocument("declarationId", new BsonDocument("$ne", 99L));
         await db.RunCommandAsync<BsonDocument>(new BsonDocument { { "collMod", PaymentVerificationBson.Decisions }, { "validator", new BsonDocument("$and", new BsonArray { extra, PaymentVerificationSchemas.Validator(PaymentVerificationBson.Decisions) }) } });
-        var before = await Definitions(db); await new CollectionMigrations(db, new SystemClock()).ApplyAsync();
+        var before = await Definitions(db); await LegacyOrderSubmissionTestSchema.UpgradeV42Async(db, new SystemClock());
         Assert.Equal(history, new BsonArray((await History(db)).Take(41))); Assert.Equal(42, (await History(db)).Count);
         var after = await Definitions(db);
         foreach (var row in before.Where(row => row["name"] != PaymentVerificationBson.Decisions)) Assert.Equal(row, after.Single(value => value["name"] == row["name"]));
@@ -35,10 +35,10 @@ public sealed class PaymentManualReviewMigrationTests(MongoFixture fixture)
             Assert.False(await db.GetCollection<BsonDocument>(name).Find(new BsonDocument()).AnyAsync());
             await Assert.ThrowsAsync<MongoWriteException>(() => db.GetCollection<BsonDocument>(name).InsertOneAsync(new BsonDocument("_id", 1L)));
         }
-        await new CollectionMigrations(db, new SystemClock()).ApplyAsync(); Assert.Equal(after, await Definitions(db));
+        await LegacyOrderSubmissionTestSchema.UpgradeV42Async(db, new SystemClock()); Assert.Equal(after, await Definitions(db));
         // Rehearse interruption after DDL, before its deployment receipt, with the custom constraint retained.
         await db.GetCollection<BsonDocument>("schemaMigrations").DeleteOneAsync(new BsonDocument("_id", 42));
-        await new CollectionMigrations(db, new SystemClock()).ApplyAsync(); Assert.Equal(after, await Definitions(db));
+        await LegacyOrderSubmissionTestSchema.UpgradeV42Async(db, new SystemClock()); Assert.Equal(after, await Definitions(db));
         Assert.Equal(42, (await History(db)).Count);
     });
     [Theory]

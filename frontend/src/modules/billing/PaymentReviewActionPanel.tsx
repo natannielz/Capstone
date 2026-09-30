@@ -1,0 +1,63 @@
+'use client';
+
+import Link from 'next/link';
+import { useEffect, useRef, useState } from 'react';
+import { AccessFailure, MutationLedger, accessMessage } from '../administration/workflow';
+import { submitTrackedRequest, type OperationJournal } from '../administration/operation-journal';
+import { createPaymentReviewActionGateway, prepareReviewAction, type PaymentReviewActionView } from './payment-review-action-client';
+import type { PaymentDraft } from './payment-client';
+import styles from '../administration/access.module.css';
+import invoice from './invoice.module.css';
+
+const states: Record<string, string> = { pending: 'Menunggu penanggung jawab', assigned: 'Dalam pemeriksaan', rejected: 'Pengajuan ditolak', replacement_requested: 'Bukti pengganti diminta' };
+const actions: Record<string, string> = { claim: 'Ambil tanggung jawab pemeriksaan', release: 'Lepaskan tanggung jawab', reject: 'Tolak pengajuan', request_replacement: 'Minta bukti pengganti' };
+function message(error: unknown) {
+  if (error instanceof AccessFailure && (error.code === 'payment_review_closed' || error.code === 'payment_already_verified' || error.code === 'payment_verification_changed')) return 'Pemeriksaan berubah, sudah ditutup atau terverifikasi. Muat status terbaru sebelum melanjutkan.';
+  if (error instanceof AccessFailure && error.code === 'invalid_payment_review_action') return 'Pilih tindakan yang masih tersedia dan isi alasan.';
+  return accessMessage(error);
+}
+export function PaymentReviewActionPanel({ actorId, owner, allowed, fresh, locked, current, journal, onSettled, onDenied, onBusyChange }: {
+  actorId: string; owner: PaymentDraft; allowed: boolean; fresh: boolean; locked: boolean; current: () => boolean;
+  journal: OperationJournal; onSettled: () => void; onDenied: (failure: unknown) => void; onBusyChange: (busy: boolean) => void;
+}) {
+  const [gateway] = useState(createPaymentReviewActionGateway), [ledger] = useState(() => new MutationLedger(() => 'ra.' + owner.id + '.' + crypto.randomUUID()));
+  const [view, setView] = useState<PaymentReviewActionView | null>(null), [action, setAction] = useState('claim'), [reason, setReason] = useState('');
+  const [confirm, setConfirm] = useState<ReturnType<typeof prepareReviewAction> | null>(null), [busy, setBusy] = useState(false), [error, setError] = useState<unknown>(null);
+  const alive = useRef(false), pending = useRef(false), heading = useRef<HTMLHeadingElement>(null), formHeading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => { alive.current = true; return () => { alive.current = false; onBusyChange(false); }; }, [onBusyChange]);
+  useEffect(() => { if (confirm) heading.current?.focus(); }, [confirm]);
+  const active = () => alive.current && current();
+  async function work(task: () => Promise<void>) {
+    if (!active() || locked || pending.current) return; pending.current = true; setBusy(true); onBusyChange(true); setError(null);
+    try { await task(); } catch (failure) { if (active()) { setError(failure); if (!(failure instanceof AccessFailure && failure.code === 'step_up_required')) onDenied(failure); } }
+    finally { pending.current = false; onBusyChange(false); onSettled(); if (alive.current) setBusy(false); }
+  }
+  async function load() { const result = await gateway.read(actorId, owner); if (active()) { setView(result); setConfirm(null); setReason(''); setAction(result.assigneeId === actorId ? 'release' : 'claim'); } }
+  const disabled = locked || busy, canAct = allowed && fresh && !disabled, open = view && !view.verified && ['pending', 'assigned'].includes(view.state);
+  return <section className={invoice.correctionPanel} aria-label="Penanggung jawab pemeriksaan"><h3>Penanggung jawab dan tindak lanjut</h3>
+    <p>Diajukan {new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Jakarta' }).format(new Date(owner.submission!.submittedAt))}. Pengajuan dan bukti asli tetap tersimpan.</p>
+    <button className={styles.secondary} disabled={disabled} onClick={() => void work(load)}>Muat status pemeriksaan</button>
+    {busy && <p role="status">Memeriksa status…</p>}{error !== null && <p role="alert" className={styles.alert}>{message(error)}</p>}
+    {allowed && !fresh && <p className={styles.alert}>Verifikasi dua langkah terbaru diperlukan. <Link href="/identity/account?operation=payment.review.manage&returnPath=%2Fbilling%2Fpayment-reviews">Verifikasi dua langkah untuk tindak lanjut</Link></p>}
+    {view && <><p>Status: {view.verified ? 'Pembayaran sudah terverifikasi' : states[view.state]} · Versi tindak lanjut {view.reviewRevision}</p>
+      <p>Usia pengajuan saat pemeriksaan: {Math.floor((Date.parse(view.observedAt) - Date.parse(view.submittedAt)) / 60000)} menit menurut waktu server.</p>
+      <p>Penanggung jawab: {view.assigneeId ? 'Akun ' + view.assigneeId : 'Belum ditetapkan'}</p>{view.reason && <p>Alasan terakhir: {view.reason}</p>}
+      {view.recordedAt && <p>Dicatat akun {view.recordedBy} pada {new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Jakarta' }).format(new Date(view.recordedAt))}.</p>}
+      {!open && <p>Pengajuan ini tidak menerima tindakan baru. Pemeriksaan terdahulu tetap dapat dibaca. Pengganti dan tindak lanjut penjualan harus ditautkan melalui alur yang sesuai.</p>}
+      {open && allowed && <form onSubmit={event => { event.preventDefault(); if (!canAct) return; try { setConfirm(prepareReviewAction(actorId, view, action, reason.trim())); } catch (failure) { setError(failure); } }}>
+        <h4 ref={formHeading} tabIndex={-1}>Tinjau tindakan pemeriksaan</h4><label htmlFor="review-action">Tindakan</label><select id="review-action" value={action} disabled={disabled || !!confirm} onChange={event => setAction(event.target.value)}>
+          {Object.entries(actions).map(([value, label]) => <option key={value} value={value} disabled={value === 'claim' && view.assigneeId === actorId || value === 'release' && view.state !== 'assigned'}>{label}</option>)}</select>
+        <label htmlFor="review-action-reason">Alasan tindak lanjut</label><textarea id="review-action-reason" required maxLength={1000} value={reason} disabled={disabled || !!confirm} onChange={event => setReason(event.target.value)} />
+        <p>Tanggung jawab tidak menambah kewenangan verifikasi bank. Penolakan atau permintaan pengganti menutup verifikasi baru untuk pengajuan ini. Dana dan saldo invoice tetap utuh.</p>
+        {!confirm ? <button className={styles.primary} disabled={!canAct}>Periksa tindak lanjut</button> : <section className={styles.state} aria-label="Konfirmasi tindak lanjut pemeriksaan">
+          <h4 ref={heading} tabIndex={-1}>{actions[confirm.body.action]}</h4><p>{confirm.body.reason}</p><p>Pengajuan {owner.id} · Bukti versi {owner.submission!.evidence.version} · Tindak lanjut versi {confirm.revision}</p>
+          <button type="button" className={styles.primary} disabled={!canAct} onClick={() => void work(async () => {
+            if (journal.list(actorId).length) throw new AccessFailure(400, 'resolve_previous_attempt');
+            await submitTrackedRequest(ledger, journal, actorId, 'billing.payment.review.manage', 'billing.payment.review.manage', confirm, key => gateway.save(confirm, key, active)); await load();
+          })}>Simpan tindak lanjut</button><button type="button" className={styles.secondary} disabled={disabled} onClick={() => { setConfirm(null); formHeading.current?.focus(); }}>Kembali ke tindakan</button>
+        </section>}
+      </form>}
+    </>}
+    {!allowed && <p>Tindakan memerlukan kewenangan pengelolaan pemeriksaan tersendiri.</p>}
+  </section>;
+}

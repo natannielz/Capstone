@@ -28,7 +28,7 @@ public static class Permissions
     public const string ReceivingAccountRead = "receiving.account.read", ReceivingAccountDetailsRead = "receiving.account.details.read", ReceivingAccountPropose = "receiving.account.propose", ReceivingAccountVerify = "receiving.account.verify", ReceivingAccountApprove = "receiving.account.approve";
     public const string BankReceiptRead = "bank.receipt.read", BankReceiptConfirm = "bank.receipt.confirm";
     public const string BankStatementRead = "bank.statement.read", BankStatementStage = "bank.statement.stage";
-    public const string PaymentReviewRead = "payment.review.read", PaymentReviewCorrect = "payment.review.correct", PaymentReviewManual = "payment.review.manual";
+    public const string PaymentReviewRead = "payment.review.read", PaymentReviewCorrect = "payment.review.correct", PaymentReviewManual = "payment.review.manual", PaymentReviewManage = "payment.review.manage";
     public const string CreditRequest = "credit.request", CreditApprove = "credit.approve", RefundRequest = "refund.request", RefundApprove = "refund.approve", DisbursementRecord = "disbursement.record", DisbursementVerify = "disbursement.verify";
     public const string FundingRequest = "funding.request", FundingApprove = "funding.approve", ExpenseRequest = "expense.request", ExpenseApprove = "expense.approve";
     public const string ReconciliationVerify = "reconciliation.verify", JournalPost = "journal.post", JournalReverse = "journal.reverse";
@@ -72,6 +72,7 @@ public static class Permissions
         Add(PaymentReviewRead, Operations);
         Add(PaymentReviewCorrect, Operations, true);
         Add(PaymentReviewManual, Operations, true);
+        Add(PaymentReviewManage, Operations, true);
         result[PaymentVerify] = result[PaymentVerify] with { Assurance = new(true, TimeSpan.FromMinutes(5)) };
         result[PaymentAllocate] = result[PaymentAllocate] with { Assurance = new(true, TimeSpan.FromMinutes(5)) };
         Add(SupplierChangeApprove, Operations, true);

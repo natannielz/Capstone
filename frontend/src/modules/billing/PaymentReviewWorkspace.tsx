@@ -15,6 +15,8 @@ import { createPaymentCorrectionGateway } from './payment-correction-client';
 import { PaymentCorrectionPanel } from './PaymentCorrectionPanel';
 import { PaymentManualReviewPanel } from './PaymentManualReviewPanel';
 import { createPaymentManualReviewGateway } from './payment-manual-review-client';
+import { createPaymentReviewActionGateway } from './payment-review-action-client';
+import { PaymentReviewActionPanel } from './PaymentReviewActionPanel';
 import { PaymentDuplicatePanel } from './PaymentDuplicatePanel';
 import { PaymentVerificationPanel } from './PaymentVerificationPanel';
 import { createPaymentAllocationGateway } from './payment-allocation-client';
@@ -60,7 +62,7 @@ export function PaymentReviewWorkspace() {
   </main>;
 }
 function ReviewDesk({ account, fresh, onDenied }: { account: Account; fresh: boolean; onDenied: (failure: unknown) => void }) {
-  const [gateway] = useState(createPaymentReviewGateway), [corrections] = useState(createPaymentCorrectionGateway), [manual] = useState(createPaymentManualReviewGateway), [verification] = useState(createPaymentVerificationGateway), [allocation] = useState(createPaymentAllocationGateway), recovery = useOperationRecovery(account.actorId);
+  const [gateway] = useState(createPaymentReviewGateway), [corrections] = useState(createPaymentCorrectionGateway), [manual] = useState(createPaymentManualReviewGateway), [reviewActions] = useState(createPaymentReviewActionGateway), [verification] = useState(createPaymentVerificationGateway), [allocation] = useState(createPaymentAllocationGateway), recovery = useOperationRecovery(account.actorId);
   const [recovering, setRecovering] = useState(false), [editingBusy, setEditingBusy] = useState(false);
   const [page, setPage] = useState<{ items: PaymentDraft[]; hasMore: boolean }>({ items: [], hasMore: false }), [before, setBefore] = useState<string | null>(null), [refresh, setRefresh] = useState(0);
   const [selected, setSelected] = useState<PaymentDraft | null>(null), [ocr, setOcr] = useState<PaymentOcrView | null>(null), [preview, setPreview] = useState<string | null>(null);
@@ -96,6 +98,7 @@ function ReviewDesk({ account, fresh, onDenied }: { account: Account; fresh: boo
     <OperationRecovery entries={recovery.entries} journal={recovery.journal} disabled={busy || offline || editingBusy} onBusyChange={setRecovering}
       recoveryAdapters={{ 'billing.payment.review.correct': { lookup: async entry => { const result = await corrections.recover(entry.actorId, entry.key); if (!current()) throw new AccessFailure(409, 'recovery_request_stale'); return result; } },
         'billing.payment.review.manual': { lookup: async entry => { const result = await manual.recover(entry.actorId, entry.key); if (!current()) throw new AccessFailure(409, 'recovery_request_stale'); return result; } },
+        'billing.payment.review.manage': { lookup: async entry => { const result = await reviewActions.recover(entry.actorId, entry.key); if (!current()) throw new AccessFailure(409, 'recovery_request_stale'); return result; } },
         'billing.payment.allocate': { lookup: async entry => { const result = await allocation.recover(entry.actorId, entry.key); if (!current()) throw new AccessFailure(409, 'recovery_request_stale'); return result; } },
         'billing.payment.verify': { lookup: async entry => { const result = await verification.recover(entry.actorId, entry.key); if (!current()) throw new AccessFailure(409, 'recovery_request_stale'); return result; } } }}
       onFailure={failure => { setError(failure); if (!(failure instanceof AccessFailure && failure.code === 'step_up_required')) onDenied(failure); }}
@@ -125,6 +128,8 @@ function ReviewDesk({ account, fresh, onDenied }: { account: Account; fresh: boo
       <button ref={previewTrigger} className={common.secondary} disabled={locked} onClick={() => void perform(showOriginal)}>Lihat bukti asli</button>
       {preview && <section className={styles.evidencePreview} aria-label="Bukti asli untuk pemeriksaan"><h3 ref={previewHeading} tabIndex={-1}>Bukti asli yang diajukan</h3><button className={common.secondary} onClick={() => { clearPreview(); previewTrigger.current?.focus(); }}>Tutup bukti</button>
         <div className={styles.evidenceImage}><Image src={preview} alt="Bukti pembayaran asli yang diajukan pembeli" fill unoptimized style={{ objectFit: 'contain' }} /></div></section>}
+      <PaymentReviewActionPanel key={'workflow:' + selected.id + ':' + selected.revision} actorId={account.actorId} owner={selected} allowed={account.actions.includes('payment.review.manage')}
+        fresh={fresh} locked={locked || recovery.locked} current={current} journal={recovery.journal} onSettled={recovery.refresh} onDenied={onDenied} onBusyChange={setEditingBusy} />
       <PaymentDuplicatePanel key={'duplicates:' + selected.id + ':' + selected.revision} actorId={account.actorId} owner={selected}
         locked={locked} current={current} onOpen={id => void perform(() => open(id))} onDenied={onDenied} onBusyChange={setEditingBusy} />
       <PaymentOcrPanel view={ocr} locked={locked} onRefresh={() => void perform(async () => { const value = await gateway.ocr(account.actorId, selected); if (current()) setOcr(value); })} />

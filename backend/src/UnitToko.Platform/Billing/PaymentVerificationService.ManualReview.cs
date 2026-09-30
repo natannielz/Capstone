@@ -86,6 +86,7 @@ public sealed partial class PaymentVerificationService
                 var context = await SourceAsync(new(actor, authority, tx, true) { WritePermission = Permissions.PaymentReviewManual }, id, inner);
                 await records.RequireUnverifiedAsync(tx, id, inner); var proof = await PeopleAsync(context, inner);
                 return await consume(tx, async (extraction, eligible, final) => {
+                    await new PaymentReviewActionRecords(database).RequireOpenAsync(tx, id, context.Source, final);
                     var failed = await evidence.ManualFailureAsync(tx, extraction, context.Source!["revision"].AsInt64, final);
                     var policy = await ManualPolicyAsync(context, failed.Snapshot["safeFailure"].AsString, final); var latest = await SavedManualAsync(context, final);
                     var revision = latest?["revision"].AsInt64 ?? 0;
@@ -115,6 +116,7 @@ public sealed partial class PaymentVerificationService
                         new(resources[0], new(current, current, RecordedBy: context.Source["recordedBy"].AsInt64)));
                 }, (tx, inner) => consume(tx, async (extraction, check, final) => {
                     eligible = check; var active = context ?? throw B.Broken(); var source = active.Source!; await records.RequireUnverifiedAsync(tx, id, final);
+                    await new PaymentReviewActionRecords(database).RequireOpenAsync(tx, id, source, final);
                     var store = new M(database); var latest = await SavedManualAsync(active, final);
                     if ((latest?["revision"].AsInt64 ?? 0) != revision) throw B.Changed();
                     var failure = await evidence.ManualFailureAsync(tx, extraction, source["revision"].AsInt64, final); failureCurrent = failure.RequireCurrent;

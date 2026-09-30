@@ -6,6 +6,7 @@ export function recoveryPage(operation: string) {
   if (operation === "billing.payment.verify") return { href: "/billing/payment-reviews", label: "halaman pemeriksaan pembayaran" };
   if (operation === "billing.payment.review.correct") return { href: "/billing/payment-reviews", label: "halaman pemeriksaan pembayaran" };
   if (operation === "billing.payment.review.manual") return { href: "/billing/payment-reviews", label: "halaman pengecualian OCR" };
+  if (operation === "billing.payment.review.manage") return { href: "/billing/payment-reviews", label: "halaman tindak lanjut pemeriksaan" };
   if (operation === 'billing.payment.submit' || operation === 'billing.payment.draft.save' || operation === 'evidence.payment-image.reserve') return { href: '/billing/payments', label: 'halaman bukti pembayaran' };
   if (operation === 'billing.invoice.issue') return { href: '/billing/invoices', label: 'halaman tagihan' };
   if (operation === 'fulfillment.delivery-attempt.record') return { href: '/fulfillment/shipments', label: 'halaman upaya pengiriman' };
@@ -36,6 +37,7 @@ export function operationLabel(operation: string) {
   if (operation === "billing.payment.verify") return "Verifikasi pembayaran";
   if (operation === "billing.payment.review.correct") return "Koreksi pemeriksaan pembayaran";
   if (operation === "billing.payment.review.manual") return "Pemeriksaan manual gangguan OCR";
+  if (operation === "billing.payment.review.manage") return "Tindak lanjut pemeriksaan pembayaran";
   if (operation === 'billing.payment.submit') return 'Pengajuan bukti pembayaran';
   if (operation === 'billing.payment.draft.save') return 'Penyimpanan draf pembayaran';
   if (operation === 'evidence.payment-image.reserve') return 'Persiapan unggah bukti pembayaran';

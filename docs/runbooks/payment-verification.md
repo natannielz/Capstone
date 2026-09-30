@@ -39,6 +39,19 @@ If a manual exception was recorded and OCR later succeeds, Finance can select **
 
 Changing the source clears the displayed preview, confirmation, payer reference, reasons and attestations. The chosen review's existing binding is checked again against the current source, bank receipt, corrections and payer procedure at commit. A stale or different binding creates no verification. Verification write bodies and historical OCR/manual decision formats remain unchanged. An already accepted manual decision retains its original manual version after OCR recovery; this choice only applies before verification. Both earlier manual/failure records and later OCR/corrections remain immutable. Current scope, original eligibility, fresh MFA, person independence and bank/payer review remain mandatory.
 
+## Ownership, rejection and replacement requests
+
+Migration 43 installs empty strict `paymentReviewActions` history and its unique declaration/revision index. It preserves applied migration receipts, existing collections and compatible stronger operator constraints. Preflight rejects pre-existing action rows, orphan effects, unsafe indexes/options or invalid counters before target DDL; interrupted empty installation can resume. Apply only through the explicit migration after quiescing writers, backing up and proving restore. No grant, approved person or operational policy is seeded.
+
+`payment.review.manage` is separate from viewing, correction, manual observation and bank verification. An approved access administrator must grant its exact scope; no role receives it automatically. Fresh five-minute MFA and currently verified independent maker/reviewer people are required. Taking responsibility grants no other authority.
+
+1. Select the submitted declaration and choose **Muat status pemeriksaan** under **Penanggung jawab dan tindak lanjut**. Inspect its source, submission time, owner, latest reason and server-calculated age.
+2. Choose claim/take-over, release, rejection or a request for replacement, enter the reason and inspect the frozen confirmation. A current authorized reviewer may deliberately take over or release an assignment. Source binding and the exact follow-up revision must still match at commit.
+3. Save once. Immutable history, audit, receipt and a metadata-only pending event commit together. Rejection or replacement closes fresh verification, correction and manual-observation writes on this original submission. Historical decisions/results remain readable; cash, allocations and invoice balances stay intact.
+4. After a dropped response, use **Periksa hasil** with the original account/key. This is lookup-only, never a resend or closure of an unknown operation. The original result remains recoverable after a later owner action; current permission, MFA and person checks still apply.
+
+The linked buyer replacement producer, bulk owner/status queue and delivered/failed notifications remain pending. A replacement request does not create new evidence, edit the old submission, send a real notification or authorize a refund. Complete those connected flows and their approved operational inputs before real use.
+
 ## Exact duplicate hints
 
 Use **Periksa kecocokan pengajuan** in the submitted declaration to compare the exact original-file SHA-256 and the buyer's exact reference. **Berkas gambar asli identik** and **Referensi yang dinyatakan pembeli sama** are separate advisory reasons. Blank references remain unknown; references are not fuzzy-matched or promoted to canonical bank identity. Open a comparison only through the authorized detail link and inspect its actual bank evidence.

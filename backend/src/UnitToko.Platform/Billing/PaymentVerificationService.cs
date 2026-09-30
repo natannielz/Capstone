@@ -7,6 +7,8 @@ using UnitToko.Modules.Identity.Contracts;
 using UnitToko.Modules.Organizations;
 using UnitToko.Platform.Authorization;
 using UnitToko.Platform.Identity;
+using UnitToko.Platform.Inventory;
+using UnitToko.Platform.Mongo.Migrations;
 using UnitToko.Platform.Mongo;
 using B = UnitToko.Platform.Billing.PaymentVerificationBson;
 
@@ -49,6 +51,7 @@ public sealed partial class PaymentVerificationService
     }
     private async Task StorageAsync(CancellationToken ct) {
         await declarations.VerificationStorageAsync(ct); await receipts.PaymentStorageAsync(ct); await PaymentVerificationStorage.RequireAsync(database, ct);
+        await InventoryRepository.RequireStorageAsync(database, PaymentReviewActionRecords.Versions, PaymentReviewActionSchemas.Validator(), PaymentReviewActionSchemas.Key(), ct);
     }
     private async Task<Context> SourceAsync(Context context, long id, CancellationToken ct) {
         _ = Require(context); context = context with { Source = await declarations.VerificationSourceAsync(context.Actor, context.Authority, context.Tx, id, ct) };
@@ -131,6 +134,7 @@ public sealed partial class PaymentVerificationService
                 var proof = await PeopleAsync(context, inner);
                 return await consume(tx, async (extraction, eligible, final) => {
                     var source = context.Source ?? throw B.Broken();
+                    await new PaymentReviewActionRecords(database).RequireOpenAsync(tx, id, source, final);
                     var review = await CurrentReviewAsync(context, extraction, final, reviewSource);
                     PaymentVerificationRecords.Facts(source, bank, review); var party = await records.PartyAsync(tx, bank, source, final);
                     if (party is not null) { await PartyHistoryAsync(context, party, final); await records.TouchAsync(tx, B.Parties, party, final); }
@@ -163,6 +167,7 @@ public sealed partial class PaymentVerificationService
                 }, (tx, inner) => consume(tx, async (extraction, check, final) => {
                     eligible = check; var active = context ?? throw B.Broken(); var source = active.Source!; var actual = bank ?? throw B.Broken(); var approved = policy ?? throw B.Broken();
                     await records.RequireUnverifiedAsync(tx, id, final);
+                    await new PaymentReviewActionRecords(database).RequireOpenAsync(tx, id, source, final);
                     var review = await CurrentReviewAsync(active, extraction, final, matchesReviewedBinding: candidate => B.Binding(source, actual, candidate, approved) == input.Binding);
                     if (B.Binding(source, actual, review, approved) != input.Binding) throw B.Changed();
                     PaymentVerificationRecords.Facts(source, actual, review);
