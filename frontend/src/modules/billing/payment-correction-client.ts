@@ -14,6 +14,7 @@ const field = z.object({ field: z.enum(correctionFields), value: text(256).nulla
     field === 'transfer_date' ? /^\d{4}-\d{2}-\d{2}$(?![\s\S])/.test(value) && !value.startsWith('0000') && Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value :
       field === 'transfer_time' ? /^(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]$(?![\s\S])/.test(value) : true));
 const fields = z.array(field).length(8).refine(values => values.every((value, index) => value.field === correctionFields[index]));
+export { fields as correctionValues };
 const binding = z.object({ declarationRevision: id, submissionId: id, extractionId: id, evidence: z.object({ id, version: z.literal('1'), sha256: z.string().regex(/^[0-9a-f]{64}$(?![\s\S])/) }).strict() }).strict();
 const version = z.object({ id, revision: id, actorId: id, recordedAt: timestamp, reason: text(1000), beforeFields: fields, fields }).strict();
 const view = z.object({ declarationId: id, binding, reviewRevision: revision, originalFields: fields, fields, recent: z.array(version).max(20) }).strict();

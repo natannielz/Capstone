@@ -67,6 +67,14 @@ internal sealed class ExtractionRecords(IMongoDatabase database)
         return row;
     }
     internal static BsonDocument Shape(string name, BsonDocument identity) => new("$and", new BsonArray { identity, DocumentProcessingSchemas.Validator(name) });
+    // A manual-review consumer keeps the actual failed attempt; it never manufactures extraction output.
+    internal async Task<(BsonDocument Failure, BsonDocument Read)> HistoricalFailureAsync(IClientSessionHandle tx, long id, CancellationToken ct) {
+        var row = await Rows("documentProcessingFailures").Find(tx, Shape("documentProcessingFailures", new("_id", id))).SingleOrDefaultAsync(ct) ?? throw Broken();
+        var read = await ReadAuditAsync(tx, row["readAuditId"].AsInt64, ct);
+        if (row["recordHash"] != Hash(row) || row["bindingHash"] != Hash(read["binding"].AsBsonDocument) || read["createdAt"].CompareTo(row["createdAt"]) > 0) throw Broken();
+        foreach (var name in new[] { "outboxId", "consumerId", "pipelineId", "policyId", "policyRevision", "claimToken", "claimAttempt" }) if (row[name] != read[name]) throw Broken();
+        return (row, read);
+    }
     private IMongoCollection<BsonDocument> Rows(string name) => database.GetCollection<BsonDocument>(name);
     internal static PersistenceConflictException Broken() => new("document_processing_history_invalid", "Document processing history is incomplete or inconsistent");
 }

@@ -14,7 +14,7 @@ internal sealed class PaymentVerificationRecords(IMongoDatabase database)
     internal IMongoCollection<BsonDocument> Rows(string name) => database.GetCollection<BsonDocument>(name);
     internal static void Equal(BsonValue left, BsonValue right) { if (!left.Equals(right)) throw B.Broken(); }
     internal async Task<BsonDocument> RowAsync(IClientSessionHandle tx, string name, long id, CancellationToken ct) =>
-        await Rows(name).Find(tx, new BsonDocument("$and", new BsonArray { new BsonDocument("_id", id), PaymentVerificationSchemas.Validator(name) })).SingleOrDefaultAsync(ct) ?? throw B.Broken();
+        await Rows(name).Find(tx, new BsonDocument("$and", new BsonArray { new BsonDocument("_id", id), name == B.Decisions ? PaymentManualReviewSchemas.VerificationValidator() : PaymentVerificationSchemas.Validator(name) })).SingleOrDefaultAsync(ct) ?? throw B.Broken();
     internal static void PolicyAt(BsonDocument row, DateTimeOffset now) {
         foreach (var name in new[] { "payerVerificationProcedureReference", "operatingOwnerReference", "approvalReference" })
             if (!ReceivingAccountPolicy.Text(row[name].AsString, 256)) throw B.Broken();

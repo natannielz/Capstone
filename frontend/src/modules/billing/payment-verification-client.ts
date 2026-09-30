@@ -18,9 +18,9 @@ const result = z.object({ verificationId: id, declarationId: id, receiptId: id, 
 const preview = z.object({ binding: hash, declarationId: id, declarationRevision: id, receiptId: id, reviewRevision: revision, buyingOrganizationId: id,
   buyerName: text(1000), declaredPayerName: text(160), amount, bookedDate: day, transactionId: text(80), accountNumber: z.string().regex(/^[0-9]{4,34}$(?![\s\S])/),
   accountHolder: text(160), bankCode: text(32), payerVerificationProcedureReference: text(256), fields: z.array(field).length(8).refine(values => values.every((item, index) => item.field === correctionFields[index])),
-  discrepancies: z.array(discrepancy).max(5).refine(values => new Set(values.map(item => item.field)).size === values.length) }).strict();
+  discrepancies: z.array(discrepancy).max(5).refine(values => new Set(values.map(item => item.field)).size === values.length), reviewSource: z.enum(['ocr', 'manual']) }).strict();
 const detail = z.object({ result, declarationRevision: id, evidence: z.object({ id, version: z.literal('1'), sha256: hash }).strict(), verifiedBy: id,
-  payerVerificationReference: text(256), reason: text(1000), resolutions: z.array(resolution).max(8) }).strict();
+  payerVerificationReference: text(256), reason: text(1000), resolutions: z.array(resolution).max(8), reviewSource: z.enum(['ocr', 'manual']) }).strict();
 export type PaymentVerificationPreview = z.infer<typeof preview>;
 export type PaymentVerificationResult = z.infer<typeof result>;
 export type PaymentVerificationDetail = z.infer<typeof detail>;

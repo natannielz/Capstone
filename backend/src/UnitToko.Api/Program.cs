@@ -333,6 +333,7 @@ app.MapPaymentEvidenceEndpoints();
 app.MapPaymentOcrEndpoints();
 app.MapPaymentReviewEndpoints();
 app.MapPaymentCorrectionEndpoints();
+app.MapPaymentManualReviewEndpoints();
 app.MapPaymentVerificationEndpoints();
 app.MapPaymentAllocationEndpoints();
 app.MapReceivingAccountEndpoints();

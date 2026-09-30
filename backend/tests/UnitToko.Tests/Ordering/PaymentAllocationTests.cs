@@ -43,6 +43,21 @@ public sealed class PaymentAllocationTests(MongoFixture fixture)
         await Assert.ThrowsAsync<AuthorizationDeniedException>(() => data.Service.AllocateAsync(data.Source.Reader, data.VerificationId, second.Binding, secondInput, Data.Meta("reader-denied")));
     }
     [WindowsStorageFact]
+    public async Task Allocation_requires_current_independent_manual_reviewer_after_a_different_person_verifies_the_bank_receipt() {
+        await using var data = await Data.CreateAsync(fixture, manual: true);
+        var input = data.Input(0, 1000m); var preview = await data.Service.PreviewAsync(data.Actor, data.VerificationId, input);
+        var saved = await data.Service.AllocateAsync(data.Actor, data.VerificationId, preview.Binding, input, Data.Meta("manual-allocation"));
+        Assert.Equal(saved, await data.Service.RecoverAsync(data.Actor, "manual-allocation"));
+        Assert.Equal("manual", preview.View.Verification["review"]["kind"]);
+        Assert.Equal(1, await data.Rows("paymentManualReviews").CountDocumentsAsync(new BsonDocument()));
+        Assert.Equal(1, await data.Rows(B.Events).CountDocumentsAsync(new BsonDocument()));
+        Assert.Equal(1, await data.Rows(BankReceiptBson.Receipts).CountDocumentsAsync(new BsonDocument()));
+        await data.Rows("personAccountBindings").UpdateOneAsync(new BsonDocument("_id", 7480L), Builders<BsonDocument>.Update.Set("expiresAt", data.Source.Read.Catalog.Clock.UtcNow.UtcDateTime));
+        await Assert.ThrowsAsync<AuthorizationDeniedException>(() => data.Service.PreviewAsync(data.Actor, data.VerificationId, data.Input(1, 500m)));
+        Assert.Equal(1, await data.Rows(B.Events).CountDocumentsAsync(new BsonDocument()));
+        Assert.Equal(3, await data.Rows("journalEntries").CountDocumentsAsync(new BsonDocument()));
+    }
+    [WindowsStorageFact]
     public async Task Concurrent_allocations_cannot_spend_the_same_balance_twice() {
         await using var data = await Data.CreateAsync(fixture); var input = data.Input(0, 1000m);
         var preview = await data.Service.PreviewAsync(data.Actor, data.VerificationId, input);
@@ -69,9 +84,16 @@ public sealed class PaymentAllocationTests(MongoFixture fixture)
         internal IMongoCollection<BsonDocument> Rows(string name) => Source.Rows(name);
         internal PaymentAllocationInput Input(long version, decimal amount) => new(version, [new(new(InvoiceId), version, new(amount))]);
         internal static AuthorizationCommandMetadata Meta(string key) => new(key, "Synthetic explicitly reviewed invoice allocation", "synthetic-payment-allocation");
-        internal static async Task<Data> CreateAsync(MongoFixture fixture) {
-            var data = new Data(await PaymentVerificationTestData.CreateAsync(fixture));
+        internal static async Task<Data> CreateAsync(MongoFixture fixture, bool manual = false) {
+            var data = new Data(await PaymentVerificationTestData.CreateAsync(fixture, manual ? "ocr_unavailable" : null));
             try {
+                if (manual) {
+                    await PaymentManualReviewTests.Policy(data.Source);
+                    var reviewer = await data.Source.Read.Catalog.ActorAsync(7480, CatalogAuthoringTestData.Shop, Permissions.PaymentReviewManual, Permissions.PaymentReviewRead, Permissions.InvoiceRead);
+                    await PersonTestData.SeedDistinctPeopleAsync(data.Source.Read.Database, data.Source.Read.Catalog.Clock, reviewer.UserId);
+                    var preview = await data.Source.Service.PreviewManualReviewAsync(reviewer, data.Source.Read.DeclarationId);
+                    await data.Source.Service.RecordManualReviewAsync(reviewer, data.Source.Read.DeclarationId, 0, new(preview.Binding, true, PaymentManualReviewTests.Fields()), Meta("allocation-manual-review"));
+                }
                 data.VerificationId = (await data.Source.VerifyAsync(await data.Source.PreviewAsync()))["verificationId"].AsInt64;
                 data.Actor = await data.Source.Read.Catalog.ActorAsync(7510, CatalogAuthoringTestData.Shop, Permissions.PaymentAllocate, Permissions.PaymentReviewRead,
                     Permissions.InvoiceRead, Permissions.BankReceiptRead, Permissions.BankStatementRead, Permissions.ReceivingAccountRead, Permissions.ReceivingAccountDetailsRead);

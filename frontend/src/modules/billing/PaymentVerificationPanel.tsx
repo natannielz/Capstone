@@ -24,9 +24,9 @@ function message(error: unknown) {
   }
   return accessMessage(error);
 }
-export function PaymentVerificationPanel({ actorId, owner, allowed, allocationAllowed, fresh, locked, current, journal, onSettled, onDenied, onBusyChange }: {
+export function PaymentVerificationPanel({ actorId, owner, allowed, allocationAllowed, fresh, locked, current, journal, onSettled, onDenied, onBusyChange, manualReview }: {
   actorId: string; owner: PaymentDraft; allowed: boolean; allocationAllowed: boolean; fresh: boolean; locked: boolean; current: () => boolean;
-  journal: OperationJournal; onSettled: () => void; onDenied: (failure: unknown) => void; onBusyChange: (busy: boolean) => void;
+  journal: OperationJournal; onSettled: () => void; onDenied: (failure: unknown) => void; onBusyChange: (busy: boolean) => void; manualReview?: React.ReactNode;
 }) {
   const [gateway] = useState(createPaymentVerificationGateway), [bank] = useState(createBankReceiptGateway);
   const [saved, setSaved] = useState<PaymentVerificationDetail | null>(null), [checked, setChecked] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState<unknown>(null);
@@ -56,8 +56,10 @@ export function PaymentVerificationPanel({ actorId, owner, allowed, allocationAl
     {busy && <p role="status">Memeriksa verifikasi…</p>}{error !== null && <p role="alert" className={styles.alert}>{message(error)}</p>}
     {allowed && (!fresh || error instanceof AccessFailure && error.code === 'step_up_required') && <p className={styles.alert}>Verifikasi dua langkah terbaru diperlukan. <Link href="/identity/account?operation=payment.verify&returnPath=%2Fbilling%2Fpayment-reviews">Verifikasi dua langkah untuk pembayaran</Link></p>}
     {checked && !saved && <p>Belum ada verifikasi pembayaran yang tersimpan.</p>}
+    {!saved && manualReview}
     {saved ? <section className={styles.state} aria-label="Hasil verifikasi pembayaran"><h4>Pembayaran terverifikasi</h4>
       <p>Penerimaan bank {saved.result.receiptId} · Pemeriksaan versi {saved.result.reviewRevision} · Verifikator {saved.verifiedBy}</p>
+      <p>Sumber pemeriksaan: {saved.reviewSource === 'manual' ? 'Pengecualian OCR dengan pemeriksaan manual' : 'Hasil OCR dan koreksi petugas'}</p>
       <p>{new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Jakarta' }).format(new Date(saved.result.recordedAt))}</p>
       <p>Referensi pemeriksaan pembayar: {saved.payerVerificationReference}</p><p>Alasan: {saved.reason}</p>
       <ul>{saved.resolutions.map(item => <li key={item.field}>{labels[item.field]}: {item.reason}</li>)}</ul>
@@ -98,6 +100,7 @@ export function PaymentVerificationPanel({ actorId, owner, allowed, allocationAl
             await submitTrackedRequest(ledger, journal, actorId, 'billing.payment.verify', 'billing.payment.verify', confirm, key => gateway.send(confirm, key, active)); await read();
           })}>Simpan verifikasi pembayaran</button><button type="button" className={styles.secondary} disabled={disabled} onClick={() => { setConfirm(null); heading.current?.focus(); }}>Kembali ke pemeriksaan</button>
         </section>}
+        <p>Sumber isian: {shown.reviewSource === 'manual' ? 'Pemeriksaan manual melalui pengecualian OCR yang tercatat' : 'Hasil OCR dan koreksi petugas'}</p>
       </form>}
     </>}
     {saved && <PaymentAllocationPanel key={saved.result.verificationId} actorId={actorId} owner={owner} verified={saved} allowed={allocationAllowed} fresh={fresh} locked={locked || busy}

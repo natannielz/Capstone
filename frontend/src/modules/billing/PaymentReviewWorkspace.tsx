@@ -13,6 +13,8 @@ import { createPaymentReviewGateway } from './payment-review-client';
 import { OperationRecovery, useOperationRecovery } from '../administration/OperationRecovery';
 import { createPaymentCorrectionGateway } from './payment-correction-client';
 import { PaymentCorrectionPanel } from './PaymentCorrectionPanel';
+import { PaymentManualReviewPanel } from './PaymentManualReviewPanel';
+import { createPaymentManualReviewGateway } from './payment-manual-review-client';
 import { PaymentDuplicatePanel } from './PaymentDuplicatePanel';
 import { PaymentVerificationPanel } from './PaymentVerificationPanel';
 import { createPaymentAllocationGateway } from './payment-allocation-client';
@@ -58,7 +60,7 @@ export function PaymentReviewWorkspace() {
   </main>;
 }
 function ReviewDesk({ account, fresh, onDenied }: { account: Account; fresh: boolean; onDenied: (failure: unknown) => void }) {
-  const [gateway] = useState(createPaymentReviewGateway), [corrections] = useState(createPaymentCorrectionGateway), [verification] = useState(createPaymentVerificationGateway), [allocation] = useState(createPaymentAllocationGateway), recovery = useOperationRecovery(account.actorId);
+  const [gateway] = useState(createPaymentReviewGateway), [corrections] = useState(createPaymentCorrectionGateway), [manual] = useState(createPaymentManualReviewGateway), [verification] = useState(createPaymentVerificationGateway), [allocation] = useState(createPaymentAllocationGateway), recovery = useOperationRecovery(account.actorId);
   const [recovering, setRecovering] = useState(false), [editingBusy, setEditingBusy] = useState(false);
   const [page, setPage] = useState<{ items: PaymentDraft[]; hasMore: boolean }>({ items: [], hasMore: false }), [before, setBefore] = useState<string | null>(null), [refresh, setRefresh] = useState(0);
   const [selected, setSelected] = useState<PaymentDraft | null>(null), [ocr, setOcr] = useState<PaymentOcrView | null>(null), [preview, setPreview] = useState<string | null>(null);
@@ -93,11 +95,13 @@ function ReviewDesk({ account, fresh, onDenied }: { account: Account; fresh: boo
   return <><AdministrationNavigation current="payment-reviews" actions={account.actions} locked={busy || editingBusy || recovering} />
     <OperationRecovery entries={recovery.entries} journal={recovery.journal} disabled={busy || offline || editingBusy} onBusyChange={setRecovering}
       recoveryAdapters={{ 'billing.payment.review.correct': { lookup: async entry => { const result = await corrections.recover(entry.actorId, entry.key); if (!current()) throw new AccessFailure(409, 'recovery_request_stale'); return result; } },
+        'billing.payment.review.manual': { lookup: async entry => { const result = await manual.recover(entry.actorId, entry.key); if (!current()) throw new AccessFailure(409, 'recovery_request_stale'); return result; } },
         'billing.payment.allocate': { lookup: async entry => { const result = await allocation.recover(entry.actorId, entry.key); if (!current()) throw new AccessFailure(409, 'recovery_request_stale'); return result; } },
         'billing.payment.verify': { lookup: async entry => { const result = await verification.recover(entry.actorId, entry.key); if (!current()) throw new AccessFailure(409, 'recovery_request_stale'); return result; } } }}
       onFailure={failure => { setError(failure); if (!(failure instanceof AccessFailure && failure.code === 'step_up_required')) onDenied(failure); }}
       onResolved={() => { recovery.refresh(); refreshPage(null); }} />
     {account.actions.includes('payment.review.correct') && (!fresh || error instanceof AccessFailure && error.code === 'step_up_required') && <p className={common.alert}>Verifikasi terbaru diperlukan untuk menyimpan atau memulihkan koreksi. <Link href="/identity/account?operation=payment.review.correct&returnPath=%2Fbilling%2Fpayment-reviews">Verifikasi dua langkah</Link></p>}
+    {account.actions.includes('payment.review.manual') && (!fresh || error instanceof AccessFailure && error.code === 'step_up_required') && <p className={common.alert}>Verifikasi terbaru diperlukan untuk menyimpan atau memulihkan pengecualian OCR. <Link href="/identity/account?operation=payment.review.manual&returnPath=%2Fbilling%2Fpayment-reviews">Verifikasi dua langkah untuk pengecualian</Link></p>}
     {account.actions.includes('payment.verify') && (!fresh || error instanceof AccessFailure && error.code === 'step_up_required') && <p className={common.alert}>Verifikasi terbaru diperlukan untuk menyimpan atau memulihkan keputusan pembayaran. <Link href="/identity/account?operation=payment.verify&returnPath=%2Fbilling%2Fpayment-reviews">Verifikasi dua langkah untuk keputusan pembayaran</Link></p>}
     {recovery.error !== null && <p role="alert">{accessMessage(recovery.error)}</p>}
     {offline && <p role="status" className={common.alert}>Koneksi terputus. Sambungkan kembali lalu muat pengajuan terbaru.</p>}
@@ -128,6 +132,8 @@ function ReviewDesk({ account, fresh, onDenied }: { account: Account; fresh: boo
         allowed={account.actions.includes('payment.review.correct')} fresh={fresh}
         locked={locked || recovery.locked} current={current} journal={recovery.journal} onSettled={recovery.refresh} onDenied={onDenied} onBusyChange={setEditingBusy} />
       <PaymentVerificationPanel key={'verify:' + selected.id + ':' + selected.revision} actorId={account.actorId} owner={selected}
+        manualReview={<PaymentManualReviewPanel actorId={account.actorId} owner={selected} ocr={ocr} allowed={account.actions.includes('payment.review.manual')} fresh={fresh} locked={locked || recovery.locked}
+          current={current} journal={recovery.journal} onSettled={recovery.refresh} onDenied={onDenied} onBusyChange={setEditingBusy} />}
         allowed={account.actions.includes('payment.verify')} allocationAllowed={account.actions.includes('payment.allocate')} fresh={fresh} locked={locked || recovery.locked} current={current}
         journal={recovery.journal} onSettled={recovery.refresh} onDenied={onDenied} onBusyChange={setEditingBusy} />
     </section>}

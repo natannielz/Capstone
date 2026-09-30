@@ -21,10 +21,10 @@ public sealed record PaymentVerificationCommandDto([property: JsonRequired] Long
 public sealed record PaymentVerificationPreviewDto(string Binding, LongId DeclarationId, string DeclarationRevision, LongId ReceiptId, string ReviewRevision,
     LongId BuyingOrganizationId, string BuyerName, string DeclaredPayerName, string Amount, string BookedDate, string TransactionId,
     string AccountNumber, string AccountHolder, string BankCode, string PayerVerificationProcedureReference,
-    ImmutableArray<PaymentReviewField> Fields, ImmutableArray<PaymentDiscrepancy> Discrepancies);
+    ImmutableArray<PaymentReviewField> Fields, ImmutableArray<PaymentDiscrepancy> Discrepancies, string ReviewSource);
 public sealed record PaymentVerificationResultDto(LongId VerificationId, LongId DeclarationId, LongId ReceiptId, string ReviewRevision, DateTimeOffset RecordedAt, string Operation);
 public sealed record PaymentVerificationDetailDto(PaymentVerificationResultDto Result, string DeclarationRevision, PaymentEvidenceReferenceDto Evidence,
-    LongId VerifiedBy, string PayerVerificationReference, string Reason, ImmutableArray<PaymentDiscrepancyResolution> Resolutions);
+    LongId VerifiedBy, string PayerVerificationReference, string Reason, ImmutableArray<PaymentDiscrepancyResolution> Resolutions, string ReviewSource);
 public sealed record PaymentVerificationReadDto(string State, PaymentVerificationDetailDto? Verification);
 public sealed record PaymentVerificationRecoveryDto(string Status, PaymentVerificationResultDto? Result);
 
@@ -64,7 +64,7 @@ public static class PaymentVerificationEndpoints
         new UnitToko.Modules.Accounting.Money(value.Receipt["amount"].AsDecimal).ToString(), value.Receipt["bookedDate"].AsString, value.Receipt["transactionId"].AsString,
         value.Account["details"]["accountNumber"].AsString, value.Account["details"]["holderName"].AsString, value.Account["details"]["bankCode"].AsString,
         value.Policy["payerVerificationProcedureReference"].AsString,
-        [.. value.Review["fields"].AsBsonArray.Select(field => new PaymentReviewField(field["field"].AsString, field["value"].IsBsonNull ? null : field["value"].AsString))], value.Discrepancies);
+        [.. value.Review["fields"].AsBsonArray.Select(field => new PaymentReviewField(field["field"].AsString, field["value"].IsBsonNull ? null : field["value"].AsString))], value.Discrepancies, value.Review.GetValue("kind", "ocr").AsString);
     private static PaymentVerificationResultDto Result(BsonDocument row) => new(new(row["verificationId"].AsInt64), new(row["declarationId"].AsInt64), new(row["receiptId"].AsInt64),
         Number(row["reviewRevision"]), new(row["recordedAt"].ToUniversalTime()), row["operation"].AsString);
     private static PaymentVerificationDetailDto Detail(BsonDocument row) {
@@ -72,7 +72,7 @@ public static class PaymentVerificationEndpoints
         return new(new(new(row["_id"].AsInt64), new(row["declarationId"].AsInt64), new(row["receiptId"].AsInt64), Number(row["review"]["revision"]), new(row["recordedAt"].ToUniversalTime()), row["operation"].AsString),
             Number(source["revision"]), new(new(reference["id"].AsInt64), Number(reference["version"]), reference["sha256"].AsString),
             new(row["actorId"].AsInt64), row["payerVerificationReference"].AsString, row["reason"].AsString,
-            [.. row["resolutions"].AsBsonArray.Select(item => new PaymentDiscrepancyResolution(item["field"].AsString, item["reason"].AsString))]);
+            [.. row["resolutions"].AsBsonArray.Select(item => new PaymentDiscrepancyResolution(item["field"].AsString, item["reason"].AsString))], row["review"].AsBsonDocument.GetValue("kind", "ocr").AsString);
     }
     private static void Private(HttpContext http) { http.Response.Headers.CacheControl = "private, no-store, max-age=0"; http.Response.Headers.Pragma = "no-cache"; }
 }

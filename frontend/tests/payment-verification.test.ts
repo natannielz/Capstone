@@ -9,7 +9,7 @@ import { recoveryPage } from '../src/modules/administration/operation-recovery-n
 const actor = '9007199254740993', key = 'pv.9007199254740994.9007199254740995.11111111-1111-4111-8111-111111111111';
 const preview: PaymentVerificationPreview = { binding: 'a'.repeat(64), declarationId: '9007199254740994', declarationRevision: '1', receiptId: '9007199254740995', reviewRevision: '0', buyingOrganizationId: '200',
   buyerName: 'Cabang sintetis', declaredPayerName: 'Pembayar sintetis', amount: '4000.00', bookedDate: '2026-09-27', transactionId: '0001', accountNumber: '0000123456789', accountHolder: 'Koperasi sintetis', bankCode: 'FIXTUREBANK',
-  payerVerificationProcedureReference: 'Synthetic approved procedure', fields: correctionFields.map(field => ({ field, value: null })), discrepancies: [{ field: 'transfer_time', declaration: null, image: null, bank: null }] };
+  payerVerificationProcedureReference: 'Synthetic approved procedure', fields: correctionFields.map(field => ({ field, value: null })), discrepancies: [{ field: 'transfer_time', declaration: null, image: null, bank: null }], reviewSource: 'ocr' };
 const result = { verificationId: '90', declarationId: preview.declarationId, receiptId: preview.receiptId, reviewRevision: '0', recordedAt: '2026-09-28T00:00:00Z', operation: 'billing.payment.verify' as const };
 const prepare = () => preparePaymentVerification(actor, preview, 'Independent payer source', true, true, true, [{ field: 'transfer_time', reason: 'Confirmed booking date; time unknown' }], 'Reviewed');
 test('verification requires each explicit attestation and discrepancy resolution and freezes the decision', () => {

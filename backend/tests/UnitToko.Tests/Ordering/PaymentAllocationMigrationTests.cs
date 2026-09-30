@@ -25,8 +25,11 @@ public sealed class PaymentAllocationMigrationTests(MongoFixture fixture)
         var before = await Definitions(db); await new CollectionMigrations(db, new SystemClock()).ApplyAsync();
         Assert.Equal(history, new BsonArray((await History(db)).Take(40))); Assert.Equal(CollectionMigrations.CurrentVersion, (await History(db)).Count);
         var after = await Definitions(db);
-        foreach (var row in before.Where(row => !PaymentAllocationSchemas.Collections.Contains(row["name"].AsString)))
+        foreach (var row in before.Where(row => !PaymentAllocationSchemas.Collections.Contains(row["name"].AsString) && row["name"] != PaymentVerificationBson.Decisions))
             Assert.Equal(row, after.Single(value => value["name"] == row["name"]));
+        var verification = after.Single(row => row["name"] == PaymentVerificationBson.Decisions)["options"]["validator"].AsBsonDocument;
+        Assert.True(InventorySchemas.Contains(verification, PaymentManualReviewSchemas.VerificationValidator()));
+        Assert.Equal(before.Single(row => row["name"] == PaymentVerificationBson.Decisions)["options"]["validator"], PaymentManualReviewSchemas.VerificationValidator()["$or"][0]);
         Assert.True(InventorySchemas.Contains(after.Single(row => row["name"] == PaymentAllocationBson.Events)["options"]["validator"].AsBsonDocument, extra));
         foreach (var name in PaymentAllocationSchemas.Collections) {
             Assert.False(await db.GetCollection<BsonDocument>(name).Find(new BsonDocument()).AnyAsync());

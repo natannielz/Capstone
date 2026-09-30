@@ -33,14 +33,20 @@ public sealed partial class PaymentVerificationService
         authorization = new(database, unit, clock); records = new(database);
     }
     private DateTimeOffset Now => DateTimeOffset.FromUnixTimeMilliseconds(clock.UtcNow.ToUnixTimeMilliseconds());
-    private sealed record Context(ActorContext Actor, AuthorizationSnapshot Authority, IClientSessionHandle Tx, bool Verify, BsonDocument? Source = null);
-    private static string[] Required(bool verify) => verify ? [Permissions.PaymentReviewRead, Permissions.InvoiceRead, Permissions.PaymentVerify] : [Permissions.PaymentReviewRead, Permissions.InvoiceRead];
-    private AuthorizationQuery[] Require(Context context) => Required(context.Verify).Select(permission => {
+    private sealed record Context(ActorContext Actor, AuthorizationSnapshot Authority, IClientSessionHandle Tx, bool Verify, BsonDocument? Source = null) {
+        internal string WritePermission { get; init; } = Permissions.PaymentVerify;
+        internal List<Action> ManualCurrent { get; } = [];
+    }
+    private AuthorizationQuery[] Require(Context context) {
+        foreach (var check in context.ManualCurrent) check();
+        string[] permissions = context.Verify ? [Permissions.PaymentReviewRead, Permissions.InvoiceRead, context.WritePermission] : [Permissions.PaymentReviewRead, Permissions.InvoiceRead];
+        return permissions.Select(permission => {
         var query = ScopePolicy.Compile(context.Actor, context.Authority, permission, clock.UtcNow); AuthorizationStore.Require(query);
         if (context.Source is { } source) foreach (var resource in PaymentDraftBson.Scopes(source["scopes"].AsBsonArray))
             if (!ScopePolicy.IsResourceActive(resource, context.Authority.Directory) || !query.Matches(resource)) throw B.Broken();
         return query;
-    }).ToArray();
+        }).ToArray();
+    }
     private async Task StorageAsync(CancellationToken ct) {
         await declarations.VerificationStorageAsync(ct); await receipts.PaymentStorageAsync(ct); await PaymentVerificationStorage.RequireAsync(database, ct);
     }
@@ -75,19 +81,18 @@ public sealed partial class PaymentVerificationService
         await records.TouchAsync(context.Tx, B.Policies, row, ct); return row;
     }
     private async Task<BsonDocument> SavedAsync(Context context, BsonDocument saved, CancellationToken ct) {
+        var source = context.Source ?? throw B.Broken();
         var row = await records.RawAsync(context.Tx, saved["_id"].AsInt64, ct);
         PaymentVerificationRecords.Equal(row["source"], context.Source!);
         var bank = await receipts.PaymentSourceAsync(context.Actor, context.Authority, context.Tx, row["receiptId"].AsInt64, ct);
         PaymentVerificationRecords.Equal(row["receiptHash"], bank.Receipt["snapshotHash"]);
-        var binding = PaymentCorrectionBson.Binding(row["review"]["binding"].AsBsonDocument);
-        var extraction = await evidence.AcceptedVerificationExtractionAsync(context.Tx, context.Actor, row["declarationId"].AsInt64, binding, ct);
-        var review = await declarations.VerificationReviewAsync(context.Tx, extraction, context.Source!["revision"].AsInt64, ct);
+        var review = await AcceptedReviewAsync(context, row["review"].AsBsonDocument, ct);
         PaymentVerificationRecords.Equal(row["review"], review);
-        PaymentVerificationRecords.Facts(context.Source, bank, review);
-        PaymentVerificationPolicy.RequireResolutions(PaymentVerificationRecords.Discrepancies(context.Source, bank, review), B.Input(row));
-        PaymentVerificationRecords.Equal(row["binding"], B.Binding(context.Source, bank, review, row["policy"].AsBsonDocument));
+        PaymentVerificationRecords.Facts(source, bank, review);
+        PaymentVerificationPolicy.RequireResolutions(PaymentVerificationRecords.Discrepancies(source, bank, review), B.Input(row));
+        PaymentVerificationRecords.Equal(row["binding"], B.Binding(source, bank, review, row["policy"].AsBsonDocument));
         PaymentVerificationRecords.Equal(row["policy"]["scope"], bank.Receipt["scope"]);
-        var party = await records.PartyAsync(context.Tx, bank, context.Source, ct) ?? throw B.Broken();
+        var party = await records.PartyAsync(context.Tx, bank, source, ct) ?? throw B.Broken();
         if (party["firstVerificationId"] != row["_id"]) await PartyHistoryAsync(context, party, ct);
         await records.TouchAsync(context.Tx, B.Parties, party, ct); await records.TouchAsync(context.Tx, B.Decisions, row, ct); return row;
     }
@@ -98,12 +103,10 @@ public sealed partial class PaymentVerificationService
         // Skip this shared anchor's second touch to preserve the caller's conditional write snapshot.
         var bank = await receipts.PaymentSourceAsync(context.Actor, context.Authority, context.Tx, first["receiptId"].AsInt64, ct);
         PaymentVerificationRecords.Equal(first["source"], original.Source!); PaymentVerificationRecords.Equal(first["receiptHash"], bank.Receipt["snapshotHash"]);
-        var binding = PaymentCorrectionBson.Binding(first["review"]["binding"].AsBsonDocument);
-        var extraction = await evidence.AcceptedVerificationExtractionAsync(context.Tx, context.Actor, first["declarationId"].AsInt64, binding, ct);
-        var review = await declarations.VerificationReviewAsync(context.Tx, extraction, original.Source!["revision"].AsInt64, ct);
-        PaymentVerificationRecords.Equal(first["review"], review); PaymentVerificationRecords.Facts(original.Source, bank, review);
-        PaymentVerificationRecords.Equal(first["binding"], B.Binding(original.Source, bank, review, first["policy"].AsBsonDocument));
-        PaymentVerificationPolicy.RequireResolutions(PaymentVerificationRecords.Discrepancies(original.Source, bank, review), B.Input(first));
+        var review = await AcceptedReviewAsync(original, first["review"].AsBsonDocument, ct);
+        PaymentVerificationRecords.Equal(first["review"], review); PaymentVerificationRecords.Facts(original.Source!, bank, review);
+        PaymentVerificationRecords.Equal(first["binding"], B.Binding(original.Source!, bank, review, first["policy"].AsBsonDocument));
+        PaymentVerificationPolicy.RequireResolutions(PaymentVerificationRecords.Discrepancies(original.Source!, bank, review), B.Input(first));
         await FenceAsync(original, ct);
     }
     private async Task AuditReadAsync(Context context, string action, long? id, CancellationToken ct) => await records.Rows("auditEvents").InsertOneAsync(context.Tx, new BsonDocument {
@@ -127,13 +130,14 @@ public sealed partial class PaymentVerificationService
                 var bank = await receipts.PaymentSourceAsync(actor, authority, tx, receiptId, inner); var policy = await PolicyAsync(context, bank, inner);
                 var proof = await PeopleAsync(context, inner);
                 return await consume(tx, async (extraction, eligible, final) => {
-                    var review = await declarations.VerificationReviewAsync(tx, extraction, context.Source!["revision"].AsInt64, final);
-                    PaymentVerificationRecords.Facts(context.Source, bank, review); var party = await records.PartyAsync(tx, bank, context.Source, final);
+                    var source = context.Source ?? throw B.Broken();
+                    var review = await CurrentReviewAsync(context, extraction, final);
+                    PaymentVerificationRecords.Facts(source, bank, review); var party = await records.PartyAsync(tx, bank, source, final);
                     if (party is not null) { await PartyHistoryAsync(context, party, final); await records.TouchAsync(tx, B.Parties, party, final); }
                     await AuditReadAsync(context, "preview", id, final); await FenceAsync(context, final);
                     PaymentVerificationRecords.PolicyAt(policy, Now); proof.RequireCurrent(tx, clock.UtcNow); eligible();
-                    return new PaymentVerificationPreview(B.Binding(context.Source, bank, review, policy), context.Source, bank.Receipt, bank.Account,
-                        review, B.Snapshot(policy), PaymentVerificationRecords.Discrepancies(context.Source, bank, review));
+                    return new PaymentVerificationPreview(B.Binding(source, bank, review, policy), source, bank.Receipt, bank.Account,
+                        review, B.Snapshot(policy), PaymentVerificationRecords.Discrepancies(source, bank, review));
                 }, inner);
             }, token), ct);
     }
@@ -159,13 +163,13 @@ public sealed partial class PaymentVerificationService
                 }, (tx, inner) => consume(tx, async (extraction, check, final) => {
                     eligible = check; var active = context ?? throw B.Broken(); var source = active.Source!; var actual = bank ?? throw B.Broken(); var approved = policy ?? throw B.Broken();
                     await records.RequireUnverifiedAsync(tx, id, final);
-                    var review = await declarations.VerificationReviewAsync(tx, extraction, source["revision"].AsInt64, final);
+                    var review = await CurrentReviewAsync(active, extraction, final);
                     if (B.Binding(source, actual, review, approved) != input.Binding) throw B.Changed();
                     PaymentVerificationRecords.Facts(source, actual, review);
                     PaymentVerificationPolicy.RequireResolutions(PaymentVerificationRecords.Discrepancies(source, actual, review), input);
                     people = await PeopleAsync(active, final); var party = await records.PartyAsync(tx, actual, source, final);
                     if (party is not null) await PartyHistoryAsync(active, party, final); var at = Now;
-                    var row = new BsonDocument { { "_id", decisionId }, { "schemaVersion", 1 }, { "declarationId", id }, { "receiptId", receiptId }, { "receiptHash", actual.Receipt["snapshotHash"] },
+                    var row = new BsonDocument { { "_id", decisionId }, { "schemaVersion", review.Contains("kind") ? 2 : 1 }, { "declarationId", id }, { "receiptId", receiptId }, { "receiptHash", actual.Receipt["snapshotHash"] },
                         { "source", source }, { "review", review }, { "policy", B.Snapshot(approved) }, { "binding", input.Binding }, { "payerVerificationReference", input.PayerVerificationReference },
                         { "imageReviewed", true }, { "bankReviewed", true }, { "payerVerified", true }, { "resolutions", B.Resolutions(input) },
                         { "people", new BsonArray(people.Evidence.OrderBy(p => p.UserId).Select(ReceivingAccountBson.Person)) }, { "actorId", actor.UserId }, { "actorGrantVersion", actor.GrantVersion },

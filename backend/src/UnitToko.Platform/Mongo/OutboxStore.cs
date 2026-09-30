@@ -6,6 +6,17 @@ namespace UnitToko.Platform.Mongo;
 
 public sealed class OutboxStore(IMongoDatabase database, IClock clock)
 {
+    // Serialize a reviewed failed OCR attempt with any worker claiming/retrying that same job.
+    // This does not complete, cancel or reset the job or create an OCR result.
+    internal async Task FenceFailedPaymentProcessingAsync(IClientSessionHandle tx, BsonDocument job, CancellationToken ct) {
+        if (!tx.IsInTransaction || !ReferenceEquals(tx.Client, database.Client) || job.GetValue("kind", "") != "payment.ocr.requested" ||
+            job.GetValue("status", "").AsString is not ("retry" or "dead") || job.Contains("leaseToken") || job.Contains("processingReceipt")) throw Invalid("invalid_claim");
+        var filter = new BsonDocument("$and", new BsonArray { job.DeepClone(), new BsonDocument("$or", new BsonArray {
+            new BsonDocument("processingFence", new BsonDocument("$exists", false)), new BsonDocument("processingFence", new BsonDocument {
+                { "$type", "long" }, { "$gte", 0L }, { "$lt", long.MaxValue } }) }) });
+        if ((await events.UpdateOneAsync(tx, filter, Builders<BsonDocument>.Update.Inc("processingFence", 1L), cancellationToken: ct)).ModifiedCount != 1)
+            throw new PersistenceConflictException("payment_manual_review_source_changed", "Reload the failed processing attempt before manual review");
+    }
     internal async Task<BsonDocument> FenceProcessingAsync(IClientSessionHandle tx, BsonDocument claim, BsonDocument? receipt, CancellationToken ct) {
         if (!tx.IsInTransaction || !ReferenceEquals(tx.Client, database.Client) || claim.GetValue("kind", "").AsString is not ("evidence.validation.requested" or "payment.ocr.requested")) throw Invalid("invalid_claim");
         var filter = LiveClaim(claim, clock.UtcNow.UtcDateTime) & F.Eq("sourceKey", claim["sourceKey"]) & F.Eq("payload", claim["payload"]) &

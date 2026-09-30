@@ -15,7 +15,7 @@ assert.equal(process.versions.node.split('.')[0], '24'); assert.equal(api.protoc
 const load = createRequire(config.playwrightPackage), metadata = load(config.playwrightPackage); assert.equal(metadata.name, 'playwright'); assert.equal(metadata.version, '1.62.1');
 const { chromium } = load('playwright'), channel = process.env.UNITTOKO_BROWSER_CHANNEL ?? 'chromium'; assert.ok(['chromium', 'msedge'].includes(channel));
 const app = next({ dev: false, dir: process.cwd(), quiet: true }), sockets = new Set(), writes = [], errors = [], pages = [];
-const directory = resolve('../tmp/production/payment-verification-browser-results'); mkdirSync(directory, { recursive: true });
+const directory = resolve('../tmp/production/' + (config.manual ? 'payment-manual-review-browser-results' : 'payment-verification-browser-results')); mkdirSync(directory, { recursive: true });
 let browser, frontend, edge, tunnel, dropNext = null, dropped = 0;
 function track(server) { server.on('connection', socket => { sockets.add(socket); socket.on('close', () => sockets.delete(socket)); }); return server; }
 async function listen(server) { await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); }); return server.address().port; }
@@ -23,7 +23,7 @@ function forward(req, res, port, isApi) {
   const headers = { ...req.headers, host: '127.0.0.1:' + port };
   for (const name of Object.keys(headers)) if (name.startsWith('x-forwarded-') || name.startsWith('x-original-') || ['forwarded', 'connection'].includes(name)) delete headers[name];
   if (isApi) { headers['x-forwarded-for'] = req.socket.remoteAddress; headers['x-forwarded-host'] = origin.host; headers['x-forwarded-proto'] = 'https'; }
-  const kind = req.method === 'POST' && req.url === '/api/v1/billing/payment-reviews/' + config.declarationId + '/verification' ? 'verify' : null; if (kind) writes.push({ kind, key: req.headers['idempotency-key'], actor: req.headers['x-expected-actor-id'] });
+  const kind = req.method !== 'POST' ? null : req.url === '/api/v1/billing/payment-reviews/' + config.declarationId + '/verification' ? 'verify' : req.url === '/api/v1/billing/payment-reviews/' + config.declarationId + '/manual-review' ? 'manual' : null; if (kind) writes.push({ kind, key: req.headers['idempotency-key'], actor: req.headers['x-expected-actor-id'] });
   const drop = kind !== null && kind === dropNext; if (drop) dropNext = null;
   const upstream = http.request({ hostname: '127.0.0.1', port, path: req.url, method: req.method, headers }, response => {
     if (drop && response.statusCode === 200) { response.resume(); response.once('end', () => { dropped++; res.writeHead(200, { 'content-type': 'application/json', 'content-length': '64', 'cache-control': 'no-store' }); res.flushHeaders(); res.write('{'); setTimeout(() => res.destroy(), 25); }); return; }
@@ -68,28 +68,63 @@ try {
   const panel = review.getByRole('region', { name: 'Verifikasi pembayaran', exact: true });
   await panel.getByRole('button', { name: 'Muat hasil verifikasi', exact: true }).click();
   await panel.getByText('Belum ada verifikasi pembayaran yang tersimpan.', { exact: true }).waitFor();
+  if (config.manual) {
+    await review.getByRole('button', { name: 'Muat hasil OCR', exact: true }).click();
+    const manual = panel.getByRole('region', { name: 'Pengecualian gangguan OCR', exact: true });
+    await manual.getByRole('button', { name: 'Muat pengecualian terbaru', exact: true }).click();
+    await manual.getByLabel('Nominal (IDR)', { exact: true }).fill('4000.00'); await manual.getByLabel('Mata uang', { exact: true }).fill('IDR');
+    await manual.getByLabel('Rekening tujuan pada bukti', { exact: true }).fill('0000123456789');
+    assert.equal(await manual.getByRole('checkbox').isChecked(), false);
+    assert.equal(await manual.getByRole('checkbox').evaluate(element => element.getBoundingClientRect().width), 19);
+    await manual.getByLabel('Alasan pengecualian dan hasil pemeriksaan', { exact: true }).fill('Synthetic approved outage review of the actual original');
+    assert.equal(await manual.getByRole('button', { name: 'Periksa pengecualian', exact: true }).isDisabled(), true);
+    await manual.getByRole('checkbox').check(); await manual.getByRole('button', { name: 'Periksa pengecualian', exact: true }).click();
+    const confirmation = manual.getByRole('region', { name: 'Konfirmasi pengecualian OCR', exact: true }); await confirmation.waitFor();
+    assert.equal(await confirmation.getByRole('heading').evaluate(element => document.activeElement === element), true);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+    await page.screenshot({ path: resolve(directory, 'manual-review-mobile.png'), fullPage: true });
+    await confirmation.screenshot({ path: resolve(directory, 'manual-review-confirmation.png') });
+    await reviewer.context.setOffline(true); await page.getByText(/Koneksi terputus/).waitFor();
+    assert.equal(await confirmation.getByRole('button', { name: 'Simpan pemeriksaan manual', exact: true }).isDisabled(), true); assert.equal(writes.length, 0);
+    await reviewer.context.setOffline(false); await page.getByText(/Koneksi terputus/).waitFor({ state: 'hidden' });
+    dropNext = 'manual'; await confirmation.getByRole('button', { name: 'Simpan pemeriksaan manual', exact: true }).click();
+    await page.getByRole('button', { name: 'Periksa hasil', exact: true }).waitFor();
+    const refs = await page.evaluate(() => Object.keys(localStorage).filter(key => key.startsWith('unit-toko:pending:v1:')).map(key => JSON.parse(localStorage[key])));
+    assert.equal(refs.length, 1); assert.equal(refs[0].operation, 'billing.payment.review.manual'); assert.deepEqual(Object.keys(refs[0]).sort(), ['actorId', 'createdAt', 'key', 'operation']);
+    assert.doesNotMatch(JSON.stringify(refs), /Synthetic|0000123456789|4000/);
+    await page.reload(); await page.getByRole('button', { name: 'Periksa hasil', exact: true }).click();
+    await page.waitForFunction(() => !Object.keys(localStorage).some(key => key.startsWith('unit-toko:pending:v1:')));
+    await open(page); await panel.getByRole('button', { name: 'Muat hasil verifikasi', exact: true }).click();
+    await panel.getByText('Belum ada verifikasi pembayaran yang tersimpan.', { exact: true }).waitFor();
+    await review.getByRole('button', { name: 'Muat hasil OCR', exact: true }).click();
+    await manual.getByRole('button', { name: 'Muat pengecualian terbaru', exact: true }).click();
+    await manual.getByText(/Versi pemeriksaan manual 1/).waitFor(); assert.equal(await manual.getByLabel('Nominal (IDR)', { exact: true }).inputValue(), '4000.00');
+    assert.equal(await manual.getByLabel('Nomor referensi', { exact: true }).inputValue(), '');
+    await page.setViewportSize({ width: 1440, height: 1000 }); await manual.screenshot({ path: resolve(directory, 'manual-review-desktop.png') });
+    await page.setViewportSize({ width: 360, height: 800 });
+  }
   await panel.getByRole('button', { name: 'Pilih penerimaan bank', exact: true }).click();
   await panel.getByRole('button', { name: 'Periksa penerimaan ' + config.receiptId, exact: true }).click();
   const heading = panel.getByRole('heading', { name: 'Tinjau pengaitan dana', exact: true }); await heading.waitFor();
   assert.equal(await heading.evaluate(element => document.activeElement === element), true);
-  const boxes = panel.getByRole('checkbox'); assert.equal(await boxes.count(), 3);
+  const boxes = panel.locator('form').last().getByRole('checkbox'); assert.equal(await boxes.count(), 3);
   for (let i = 0; i < 3; i++) assert.equal(await boxes.nth(i).isChecked(), false);
   const fields = panel.locator('textarea[id^="verification-"]:not(#verification-reason)'); assert.ok(await fields.count() >= 1);
   for (let i = 0; i < await fields.count(); i++) await fields.nth(i).fill('Synthetic independently resolved source difference');
   await panel.getByLabel('Referensi pemeriksaan identitas pembayar', { exact: true }).fill('Synthetic independent payer evidence');
   await panel.getByLabel('Alasan verifikasi', { exact: true }).fill('Synthetic review of exact image, bank receipt and payer');
   await panel.getByRole('button', { name: 'Periksa keputusan verifikasi', exact: true }).click();
-  await panel.getByRole('alert').waitFor(); assert.equal(writes.length, 0);
+  await panel.getByRole('alert').waitFor(); assert.equal(writes.filter(w => w.kind === 'verify').length, 0);
   for (let i = 0; i < 3; i++) await boxes.nth(i).check();
   await panel.getByRole('button', { name: 'Periksa keputusan verifikasi', exact: true }).click();
   const confirm = panel.getByRole('region', { name: 'Konfirmasi verifikasi pembayaran', exact: true }); await confirm.waitFor();
   assert.equal(await confirm.getByRole('heading').evaluate(element => document.activeElement === element), true);
-  await confirm.getByRole('button', { name: 'Kembali ke pemeriksaan', exact: true }).click(); assert.equal(writes.length, 0);
+  await confirm.getByRole('button', { name: 'Kembali ke pemeriksaan', exact: true }).click(); assert.equal(writes.filter(w => w.kind === 'verify').length, 0);
   await panel.getByRole('button', { name: 'Periksa keputusan verifikasi', exact: true }).click(); await confirm.waitFor();
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
   await page.screenshot({ path: resolve(directory, 'payment-verification-mobile.png'), fullPage: true });
   await reviewer.context.setOffline(true); await page.getByText(/Koneksi terputus/).waitFor();
-  assert.equal(await confirm.getByRole('button', { name: 'Simpan verifikasi pembayaran', exact: true }).isDisabled(), true); assert.equal(writes.length, 0);
+  assert.equal(await confirm.getByRole('button', { name: 'Simpan verifikasi pembayaran', exact: true }).isDisabled(), true); assert.equal(writes.filter(w => w.kind === 'verify').length, 0);
   await reviewer.context.setOffline(false); await page.getByText(/Koneksi terputus/).waitFor({ state: 'hidden' });
   dropNext = 'verify'; await confirm.getByRole('button', { name: 'Simpan verifikasi pembayaran', exact: true }).click();
   await page.getByRole('button', { name: 'Periksa hasil', exact: true }).waitFor();
@@ -114,7 +149,7 @@ try {
     return (await fetch('/api/v1/billing/payment-reviews/' + id + '/verification/query', { method: 'POST', credentials: 'include',
       headers: { 'content-type': 'application/json', 'X-CSRF-Token': csrf.requestToken, 'X-Expected-Actor-Id': actorId }, body: JSON.stringify({ purpose: 'payment-review' }) })).status;
   }, { id: config.declarationId, actorId: config.otherId }); assert.equal(denied, 403);
-  assert.equal(writes.length, 1); assert.equal(dropped, 1); assert.deepEqual(errors, []);
+  assert.equal(writes.filter(w => w.kind === 'verify').length, 1); assert.equal(writes.filter(w => w.kind === 'manual').length, config.manual ? 1 : 0); assert.equal(dropped, config.manual ? 2 : 1); assert.deepEqual(errors, []);
   console.log('REAL_PAYMENT_VERIFICATION_BROWSER_PASS ' + JSON.stringify({ exactOriginal: true, explicitReview: true, lostResponseRecovered: true, oneCashEvent: true,
     readerCannotVerify: true, outsiderDenied: true, offlineUnsent: true, mobile: true, syntheticBankAndPayerPolicy: true, syntheticOcrEngine: true, productionAccepted: false }));
 

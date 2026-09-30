@@ -25,11 +25,14 @@ public sealed partial class PaymentVerificationService
         PersonAuthorityProof? approval = null; PersonAuthorityProof? bankApproval = null;
         if (newEffect) {
             var maker = saved["source"]["recordedBy"].AsInt64; var checker = saved["actorId"].AsInt64;
-            approval = await new PersonRegistryService(database, clock).ResolveProofsAsync(tx, [.. new[] { maker, checker, actor.UserId }.Distinct()], ct);
+            long? manualChecker = saved["review"].AsBsonDocument.GetValue("kind", "ocr") == "manual" ?
+                (await new PaymentManualReviewRecords(database).VersionAsync(tx, saved["review"]["versionId"].AsInt64, ct))["actorId"].AsInt64 : null;
+            approval = await new PersonRegistryService(database, clock).ResolveProofsAsync(tx, [.. new[] { maker, checker, actor.UserId }.Concat(manualChecker is { } manual ? [manual] : []).Distinct()], ct);
             var makerProof = approval.Evidence.Single(person => person.UserId == maker);
             if (!PersonIndependencePolicy.AreIndependent(approval.Evidence.Single(person => person.UserId == checker), makerProof) ||
                 !PersonIndependencePolicy.AreIndependent(approval.Evidence.Single(person => person.UserId == actor.UserId), makerProof))
                 throw new AuthorizationDeniedException("independent_person_required");
+            if (manualChecker is { } recorded && !PersonIndependencePolicy.AreIndependent(approval.Evidence.Single(person => person.UserId == recorded), makerProof)) throw new AuthorizationDeniedException("independent_person_required");
             await new PersonAuthorizationFence(database, clock).TouchAsync(tx, approval, ct);
             bankApproval = await receipts.RequireAllocationApprovalAsync(actor, authority, tx, bank.Receipt, ct);
         }

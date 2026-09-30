@@ -28,10 +28,14 @@ namespace UnitToko.Tests.Ordering;
 public sealed class PaymentVerificationBrowserTests(MongoFixture fixture, ITestOutputHelper output)
 {
     [WindowsPaymentBrowserFact]
-    public async Task Browser_verifies_exact_evidence_recovers_a_lost_response_and_retains_one_cash_event() {
+    public Task Browser_verifies_exact_evidence_recovers_a_lost_response_and_retains_one_cash_event() => Run(false);
+    [WindowsPaymentBrowserFact]
+    public Task Browser_records_manual_OCR_exception_recovers_each_lost_response_and_verifies_real_bank_receipt() => Run(true);
+    private async Task Run(bool manual) {
         var root = Root(); var node = Environment.GetEnvironmentVariable("UNITTOKO_BROWSER_NODE"); var playwright = Environment.GetEnvironmentVariable("UNITTOKO_BROWSER_PLAYWRIGHT_PACKAGE");
         Assert.True(Path.IsPathFullyQualified(node ?? "") && File.Exists(node)); Assert.True(Path.IsPathFullyQualified(playwright ?? "") && File.Exists(playwright)); Assert.True(File.Exists(Path.Combine(root, "frontend", ".next", "BUILD_ID")));
-        await using var data = await PaymentVerificationTestData.CreateAsync(fixture);
+        await using var data = await PaymentVerificationTestData.CreateAsync(fixture, manual ? "ocr_unavailable" : null);
+        if (manual) await PaymentManualReviewTests.Policy(data);
         var outside = await data.Read.Catalog.ActorAsync(7490, CatalogAuthoringTestData.OtherOwner,
             [Permissions.PaymentReviewRead, Permissions.InvoiceRead, Permissions.PaymentVerify]);
         foreach (var actor in new[] { data.Reviewer, data.Reader, outside })
@@ -58,7 +62,7 @@ public sealed class PaymentVerificationBrowserTests(MongoFixture fixture, ITestO
         var input = new { apiAddress, origin, pfx = Convert.ToBase64String(tls.Export(X509ContentType.Pfx, password)), password, playwrightPackage = playwright,
             reviewerToken = data.Read.Catalog.Issued[data.Reviewer.UserId].OpaqueToken, readerToken = data.Read.Catalog.Issued[data.Reader.UserId].OpaqueToken,
             otherToken = data.Read.Catalog.Issued[outside.UserId].OpaqueToken, otherId = outside.UserId.ToString(),
-            declarationId = data.Read.DeclarationId.ToString(), receiptId = data.ReceiptId.ToString(), imageBase64 = Convert.ToBase64String(data.Read.Bytes) };
+            declarationId = data.Read.DeclarationId.ToString(), receiptId = data.ReceiptId.ToString(), imageBase64 = Convert.ToBase64String(data.Read.Bytes), manual };
         var start = new ProcessStartInfo(node!) { WorkingDirectory = Path.Combine(root, "frontend"), UseShellExecute = false, CreateNoWindow = true, RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true };
         start.ArgumentList.Add(Path.Combine(root, "frontend", "scripts", "verify-payment-verification-browser.mjs")); start.Environment["NODE_ENV"] = "production"; start.Environment["NEXT_TELEMETRY_DISABLED"] = "1";
         using var process = Process.Start(start) ?? throw new InvalidOperationException("Browser child did not start");
@@ -75,6 +79,9 @@ public sealed class PaymentVerificationBrowserTests(MongoFixture fixture, ITestO
         var saved = await data.Rows(B.Decisions).Find(new BsonDocument()).SingleAsync();
         Assert.Equal(data.ReceiptId, saved["receiptId"].AsInt64); Assert.Equal(1, saved["review"]["revision"].AsInt64);
         Assert.Equal(data.Reviewer.UserId, saved["actorId"].AsInt64);
+        Assert.Equal(manual ? 2 : 1, saved["schemaVersion"].AsInt32);
+        Assert.Equal(manual ? 1 : 0, await data.Rows(PaymentManualReviewRecords.Versions).CountDocumentsAsync(new BsonDocument()));
+        Assert.Equal(manual ? 0 : 1, await data.Rows("documentExtractionResults").CountDocumentsAsync(new BsonDocument()));
         var leases = await data.Rows("evidenceReadLeases").Find(new BsonDocument()).ToListAsync();
         Assert.NotEmpty(leases); Assert.All(leases, row => Assert.Equal("released", row["state"]));
     }

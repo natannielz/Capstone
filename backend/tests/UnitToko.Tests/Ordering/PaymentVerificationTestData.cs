@@ -23,6 +23,7 @@ internal sealed class PaymentVerificationTestData(PaymentEvidenceReadTests.ReadD
     internal ActorContext Reader = null!;
     internal long ReceiptId;
     internal PaymentCorrectionView Corrections = null!;
+    internal PaymentOcrProcessorTests.FixtureEngine? FailedEngine;
     internal PaymentVerificationService Service => new(Read.Database, new(Read.Catalog.Client), new(Read.Database), Read.Catalog.Clock, Read.Payment.Service, Read.Service, Bank.Service);
     internal PaymentVerificationService NewService(MongoClient client) => NewService(client, out _);
     internal PaymentVerificationService NewService(MongoClient client, out InvoiceService invoices) {
@@ -39,7 +40,7 @@ internal sealed class PaymentVerificationTestData(PaymentEvidenceReadTests.ReadD
     }
     internal IMongoCollection<BsonDocument> Rows(string name) => Read.Rows(name);
     internal static AuthorizationCommandMetadata Meta(string key) => new(key, "Synthetic independent payer and image review", "synthetic-payment-verification");
-    internal static async Task<PaymentVerificationTestData> CreateAsync(MongoFixture fixture) {
+    internal static async Task<PaymentVerificationTestData> CreateAsync(MongoFixture fixture, string? ocrFailure = null) {
         var data = new PaymentVerificationTestData(await PaymentEvidenceReadTests.ReadData.CreateAsync(fixture));
         try {
             var accounts = await ReceivingAccountTestData.AttachAsync(data.Read.Catalog);
@@ -48,13 +49,19 @@ internal sealed class PaymentVerificationTestData(PaymentEvidenceReadTests.ReadD
             data.ReceiptId = (await data.Bank.ConfirmAsync(await data.Bank.PreviewAsync(), observation: BankReceiptTestData.Observation(amount: 4000m)))["receiptId"].AsInt64;
             string[] readPermissions = [Permissions.PaymentReviewRead, Permissions.InvoiceRead, Permissions.BankReceiptRead, Permissions.BankStatementRead, Permissions.ReceivingAccountRead, Permissions.ReceivingAccountDetailsRead];
             data.Reviewer = await data.Read.Catalog.ActorAsync(7410, CatalogAuthoringTestData.Shop, [.. readPermissions, Permissions.PaymentVerify, Permissions.PaymentReviewCorrect]);
+            if (ocrFailure is not null) await data.Read.Catalog.Base.AddGrantAsync(data.Reviewer, 74500, CatalogAuthoringTestData.Shop, [Permissions.PaymentReviewManual]);
             data.Reader = await data.Read.Catalog.ActorAsync(7420, CatalogAuthoringTestData.Shop, readPermissions);
             await PersonTestData.SeedDistinctPeopleAsync(data.Read.Database, data.Read.Catalog.Clock, data.Reviewer.UserId);
+            if (ocrFailure is null) {
             data.Corrections = await PaymentCorrectionTests.Prepare(data.Read, data.Reviewer);
             var fields = data.Corrections.Fields.Select(field => field.Field switch {
                 "amount" => field with { Value = "4000.00" }, "currency" => field with { Value = "IDR" }, "account" => field with { Value = "0000123456789" }, _ => field }).ToImmutableArray();
             await data.Read.Service.CorrectReviewAsync(data.Reviewer, data.Read.DeclarationId, 0, data.Corrections.Binding, fields, Meta("verification-image-correction"));
             data.Corrections = await data.Read.Service.ReadCorrectionsAsync(data.Reviewer, data.Read.DeclarationId, data.Corrections.Binding, new("payment-ocr-view", "verification-image-correction"));
+            } else {
+                await PaymentOcrProcessorTests.Submit(data.Read); data.FailedEngine = new() { Failure = ocrFailure };
+                var worker = PaymentOcrProcessorTests.Processor(data.Read, data.FailedEngine); await PaymentOcrProcessorTests.Policy(data.Read, worker); Assert.Equal("retry", await worker.RunOnceAsync());
+            }
             var receipt = await data.Rows(BankReceiptBson.Receipts).Find(new BsonDocument("_id", data.ReceiptId)).SingleAsync();
             await data.Rows(B.Policies).InsertOneAsync(new BsonDocument { { "_id", 940L }, { "schemaVersion", 1 }, { "revision", 1L }, { "fence", 0L }, { "scope", receipt["scope"] },
                 { "payerVerificationProcedureReference", "synthetic-independently-established-payer-procedure" }, { "operatingOwnerReference", "synthetic-finance-owner" }, { "approvalReference", "synthetic-payer-policy-approval" },
