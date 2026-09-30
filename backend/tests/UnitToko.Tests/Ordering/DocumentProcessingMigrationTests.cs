@@ -34,7 +34,7 @@ public sealed class DocumentProcessingMigrationTests(MongoFixture fixture)
                 snapshots[name] = new(rows);
             }
             var history = await History(db); await new CollectionMigrations(db, Clock).ApplyAsync();
-            Assert.Equal(history, new BsonArray((await History(db)).Take(34))); Assert.Equal(35, (await History(db)).Count);
+            Assert.Equal(history, new BsonArray((await History(db)).Take(34))); Assert.Equal(CollectionMigrations.CurrentVersion, (await History(db)).Count);
             foreach (var pair in snapshots) Assert.Equal(pair.Value, new BsonArray(await db.GetCollection<BsonDocument>(pair.Key).Find(new BsonDocument()).Sort(new BsonDocument("_id", 1)).ToListAsync()));
             var job = await db.GetCollection<BsonDocument>("outboxEvents").Find(new BsonDocument("kind", "payment.ocr.requested")).SingleAsync();
             Assert.Equal("pending", job["status"]); Assert.Equal(0, job["attempts"]);
@@ -45,7 +45,7 @@ public sealed class DocumentProcessingMigrationTests(MongoFixture fixture)
         var history = await History(db); var extra = new BsonDocument("consumerId", new BsonDocument("$ne", "unapproved-consumer"));
         await db.CreateCollectionAsync("documentProcessingPolicies", new CreateCollectionOptions<BsonDocument> { Validator = extra });
         await new CollectionMigrations(db, Clock).ApplyAsync();
-        Assert.Equal(35, (await History(db)).Count); Assert.Equal(history, new BsonArray((await History(db)).Take(34)));
+        Assert.Equal(CollectionMigrations.CurrentVersion, (await History(db)).Count); Assert.Equal(history, new BsonArray((await History(db)).Take(34)));
         foreach (var name in DocumentProcessingSchemas.Collections) {
             Assert.False(await db.GetCollection<BsonDocument>(name).Find(new BsonDocument()).AnyAsync());
             await Assert.ThrowsAsync<MongoWriteException>(() => db.GetCollection<BsonDocument>(name).InsertOneAsync(new BsonDocument("_id", 1L)));

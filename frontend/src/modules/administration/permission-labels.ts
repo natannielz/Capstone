@@ -1,4 +1,5 @@
 const labels: Record<string, string> = {
+  "payment.review.correct": "Koreksi pemeriksaan pembayaran dengan verifikasi terbaru",
   "payment.review.read": "Lihat pengajuan dan bukti pembayaran dalam cakupan",
   "person.review.read": "Lihat peninjauan keterkaitan akun", "person.review.propose": "Ajukan penangguhan keterkaitan akun", "person.review.approve": "Putuskan penangguhan keterkaitan akun",
   "catalog.read": "Lihat katalog", "catalog.manage": "Kelola katalog", "pricing.manage": "Kelola harga",

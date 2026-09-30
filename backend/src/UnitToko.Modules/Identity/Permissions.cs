@@ -25,7 +25,7 @@ public static class Permissions
     public const string HistoryRead = "history.read", ReportRead = "report.read";
     public const string SourcePrepare = "source.prepare", SourceReconcile = "source.reconcile", ReportPrepare = "report.prepare", PeriodSubmit = "period.submit", PeriodApprove = "period.approve", PeriodClose = "period.close", PeriodReopenRequest = "period.reopen.request", PeriodReopenApprove = "period.reopen.approve";
     public const string InvoiceRead = "invoice.read", InvoiceIssue = "invoice.issue", PaymentEvidence = "payment.evidence", PaymentRecord = "payment.record", PaymentAllocate = "payment.allocate", PaymentVerify = "payment.verify";
-    public const string PaymentReviewRead = "payment.review.read";
+    public const string PaymentReviewRead = "payment.review.read", PaymentReviewCorrect = "payment.review.correct";
     public const string CreditRequest = "credit.request", CreditApprove = "credit.approve", RefundRequest = "refund.request", RefundApprove = "refund.approve", DisbursementRecord = "disbursement.record", DisbursementVerify = "disbursement.verify";
     public const string FundingRequest = "funding.request", FundingApprove = "funding.approve", ExpenseRequest = "expense.request", ExpenseApprove = "expense.approve";
     public const string ReconciliationVerify = "reconciliation.verify", JournalPost = "journal.post", JournalReverse = "journal.reverse";
@@ -63,6 +63,7 @@ public static class Permissions
         foreach (var name in new[] { OrderAccept, SubstitutionPropose, StockConvert, ReservationRelease, SupplierChangePropose }) Add(name, Operations);
         Add(PricingApprove, Operations, true);
         Add(PaymentReviewRead, Operations);
+        Add(PaymentReviewCorrect, Operations, true);
         Add(SupplierChangeApprove, Operations, true);
         Add(StockSourceRead, Operations);
         Add(StockSourcePropose, Operations);

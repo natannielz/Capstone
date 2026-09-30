@@ -1,0 +1,36 @@
+using System.Collections.Immutable;
+using System.Globalization;
+using UnitToko.Modules.Accounting;
+using UnitToko.Modules.Contracts;
+using UnitToko.Modules.Documents;
+
+namespace UnitToko.Modules.Billing;
+
+// Human observations of the image, kept separately from immutable OCR and buyer declarations.
+public sealed record PaymentReviewField(string Field, string? Value);
+public sealed record PaymentCorrectionBinding(long DeclarationRevision, long SubmissionId, EvidenceRef Evidence, long ExtractionId);
+public static class PaymentReviewCorrectionPolicy
+{
+    public static ImmutableArray<PaymentReviewField> Copy(ImmutableArray<PaymentReviewField> fields) {
+        if (fields.IsDefault || fields.Length != PaymentFieldExtractor.Fields.Count || fields.Any(field => field is null) ||
+            fields.Select(field => field.Field).Distinct(StringComparer.Ordinal).Count() != fields.Length ||
+            fields.Any(field => !PaymentFieldExtractor.Fields.Contains(field.Field, StringComparer.Ordinal))) throw Invalid();
+        return [.. PaymentFieldExtractor.Fields.Select(name => {
+            var field = fields.Single(field => field.Field == name); var value = field.Value;
+            if (value is not null) {
+                if (string.IsNullOrWhiteSpace(value) || value.Length > 256 || value != value.Trim() || value.Any(c => char.IsControl(c) || char.GetUnicodeCategory(c) == UnicodeCategory.Format)) throw Invalid();
+                if (name == "amount") value = Money.Parse(value).ToString();
+                if (name == "currency" && value != "IDR") throw Invalid();
+                if (name == "transfer_date" && !DateOnly.TryParseExact(value, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out _)) throw Invalid();
+                if (name == "transfer_time" && !TimeOnly.TryParseExact(value, "HH:mm:ss", CultureInfo.InvariantCulture, DateTimeStyles.None, out _)) throw Invalid();
+            }
+            return new PaymentReviewField(name, value);
+        })];
+    }
+    public static void Validate(PaymentCorrectionBinding binding, long revision) {
+        if (binding is null || binding.DeclarationRevision <= 0 || binding.SubmissionId <= 0 || binding.ExtractionId <= 0 || binding.Evidence is null ||
+            binding.Evidence.Id <= 0 || binding.Evidence.Version != 1 || binding.Evidence.Sha256 is null || binding.Evidence.Sha256.Length != 64 ||
+            binding.Evidence.Sha256.Any(c => c is not (>= '0' and <= '9') and not (>= 'a' and <= 'f')) || revision is < 0 or >= long.MaxValue - 1) throw Invalid();
+    }
+    public static DomainValidationException Invalid() => new("invalid_payment_correction", "Use the current payment review and bounded observed fields");
+}

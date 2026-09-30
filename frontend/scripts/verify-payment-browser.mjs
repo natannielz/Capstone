@@ -23,7 +23,7 @@ function forward(req, res, port, isApi) {
   const headers = { ...req.headers, host: '127.0.0.1:' + port };
   for (const name of Object.keys(headers)) if (name.startsWith('x-forwarded-') || name.startsWith('x-original-') || ['forwarded', 'connection'].includes(name)) delete headers[name];
   if (isApi) { headers['x-forwarded-for'] = req.socket.remoteAddress; headers['x-forwarded-host'] = origin.host; headers['x-forwarded-proto'] = 'https'; }
-  const kind = req.method !== 'POST' ? null : req.url === '/api/v1/billing/payment-declarations' ? 'save' : /^\/api\/v1\/billing\/payment-declarations\/[1-9][0-9]*\/evidence$/.test(req.url) ? 'reserve' : req.url.endsWith('/content') ? 'content' : req.url.endsWith('/submit') ? 'submit' : null; if (kind) writes.push({ kind, key: req.headers['idempotency-key'], actor: req.headers['x-expected-actor-id'] });
+  const kind = req.method !== 'POST' ? null : req.url === '/api/v1/billing/payment-declarations' ? 'save' : /^\/api\/v1\/billing\/payment-declarations\/[1-9][0-9]*\/evidence$/.test(req.url) ? 'reserve' : req.url.endsWith('/content') ? 'content' : req.url.endsWith('/submit') ? 'submit' : /^\/api\/v1\/billing\/payment-reviews\/[1-9][0-9]*\/corrections$/.test(req.url) ? 'correct' : null; if (kind) writes.push({ kind, key: req.headers['idempotency-key'], actor: req.headers['x-expected-actor-id'] });
   const drop = kind !== null && kind === dropNext; if (drop) dropNext = null;
   const upstream = http.request({ hostname: '127.0.0.1', port, path: req.url, method: req.method, headers }, response => {
     if (drop && response.statusCode === 200) { response.resume(); response.once('end', () => { dropped++; res.writeHead(200, { 'content-type': 'application/json', 'content-length': '64', 'cache-control': 'no-store' }); res.flushHeaders(); res.write('{'); setTimeout(() => res.destroy(), 25); }); return; }
@@ -164,7 +164,7 @@ try {
   const reviewOcr = review.getByRole('region', { name: 'Pembacaan bukti otomatis', exact: true });
   await reviewOcr.getByRole('button', { name: 'Muat hasil OCR', exact: true }).click(); await reviewOcr.getByText('Hasil pembacaan tersedia', { exact: true }).waitFor();
   if (config.nativeOcr) assert.equal(await reviewOcr.getByText('Belum diketahui', { exact: true }).count(), 8);
-  assert.equal(await reviewPage.getByRole('button', { name: /Verifikasi pembayaran|Alokasikan pembayaran|Simpan koreksi/ }).count(), 0);
+  assert.equal(await reviewPage.getByRole('button', { name: /Verifikasi pembayaran|Alokasikan pembayaran/ }).count(), 0);
   await review.getByRole('heading', { name: 'Konfirmasi dana masuk belum tersedia', exact: true }).waitFor();
   assert.equal(await reviewPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
   await reviewPage.screenshot({ path: resolve(directory, 'payment-finance-mobile.png'), fullPage: true });
@@ -173,6 +173,32 @@ try {
   assert.equal(await review.getByRole('button', { name: 'Lihat bukti asli', exact: true }).isDisabled(), true);
   await reviewer.context.setOffline(false); await reviewPage.reload(); await reviewPage.getByRole('button', { name: /^Periksa pengajuan [1-9]/ }).first().click();
   await reviewOcr.getByRole('button', { name: 'Muat hasil OCR', exact: true }).click(); await reviewOcr.getByText('Hasil pembacaan tersedia', { exact: true }).waitFor();
+  const correction = review.getByRole('region', { name: 'Koreksi pemeriksaan', exact: true });
+  await correction.getByRole('button', { name: 'Muat pemeriksaan terbaru', exact: true }).click();
+  await correction.getByLabel('Nominal (IDR)', { exact: true }).fill('2000.01');
+  await correction.getByLabel('Alasan koreksi', { exact: true }).fill('Pemeriksaan bukti fixture lokal');
+  await correction.getByRole('button', { name: 'Periksa koreksi', exact: true }).click();
+  const correctionConfirm = correction.getByRole('region', { name: 'Konfirmasi koreksi', exact: true }); await correctionConfirm.waitFor();
+  assert.match(await correctionConfirm.innerText(), /2000\.01/);
+  await reviewer.context.setOffline(true); await reviewPage.getByText(/Koneksi terputus/).waitFor();
+  assert.equal(await correctionConfirm.getByRole('button', { name: 'Simpan koreksi', exact: true }).isDisabled(), true);
+  assert.equal(writes.filter(row => row.kind === 'correct').length, 0);
+  await reviewer.context.setOffline(false); await reviewPage.getByText(/Koneksi terputus/).waitFor({ state: 'hidden' });
+  dropNext = 'correct'; await correctionConfirm.getByRole('button', { name: 'Simpan koreksi', exact: true }).click();
+  await reviewPage.getByRole('button', { name: 'Periksa hasil', exact: true }).waitFor();
+  const correctionRefs = await reviewPage.evaluate(() => Object.keys(localStorage).filter(key => key.startsWith('unit-toko:pending:v1:')).map(key => JSON.parse(localStorage[key])));
+  assert.equal(correctionRefs.length, 1); assert.equal(correctionRefs[0].operation, 'billing.payment.review.correct');
+  assert.deepEqual(Object.keys(correctionRefs[0]).sort(), ['actorId', 'createdAt', 'key', 'operation']);
+  await reviewPage.reload(); await reviewPage.getByRole('button', { name: 'Periksa hasil', exact: true }).click();
+  await reviewPage.waitForFunction(() => Object.keys(localStorage).filter(key => key.startsWith('unit-toko:pending:v1:')).length === 0);
+  await reviewPage.getByRole('button', { name: /^Periksa pengajuan [1-9]/ }).first().click();
+  await reviewOcr.getByRole('button', { name: 'Muat hasil OCR', exact: true }).click(); await reviewOcr.getByText('Hasil pembacaan tersedia', { exact: true }).waitFor();
+  await correction.getByRole('button', { name: 'Muat pemeriksaan terbaru', exact: true }).click();
+  await correction.getByText(/Versi pemeriksaan 1\./).waitFor(); assert.equal(await correction.getByLabel('Nominal (IDR)', { exact: true }).inputValue(), '2000.01');
+  assert.match(await correction.innerText(), /Pemeriksaan bukti fixture lokal/); assert.equal(writes.filter(row => row.kind === 'correct').length, 1); assert.equal(dropped, 5);
+  assert.equal(await reviewPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  await reviewPage.screenshot({ path: resolve(directory, 'payment-correction-mobile.png'), fullPage: true });
+  console.log('REAL_PAYMENT_CORRECTION_BROWSER_PASS ' + JSON.stringify({ compared: true, immutableOcr: true, versionHistory: true, lostResponseRecovered: true, oneWrite: true, offlineUnsent: true, mobile: true }));
   await reviewPage.setViewportSize({ width: 1440, height: 1000 }); await reviewPage.screenshot({ path: resolve(directory, 'payment-finance-desktop.png'), fullPage: true });
   assert.equal(await reviewPage.evaluate(() => Object.keys(localStorage).filter(key => key.startsWith('unit-toko:pending:v1:')).length), 0);
   console.log('REAL_FINANCE_REVIEW_BROWSER_PASS ' + JSON.stringify({ submittedQueue: true, exactOriginal: true, durableOcr: true, noMoneyAuthority: true, reload: true, outsiderDenied: true, offlineUnsent: true, mobile: true }));

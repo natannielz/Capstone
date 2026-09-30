@@ -84,7 +84,7 @@ public sealed class BusinessPermissionTests
         Assert.Equal(new[] { Permissions.SubstitutionPropose, Permissions.StockConvert, Permissions.ReservationRelease,
             Permissions.SupplierChangePropose }, RoleTemplates.Suggestions["store-staff"].ToArray());
         Assert.Equal(new[] { Permissions.OrderAccept, Permissions.SupplierChangeApprove }, RoleTemplates.Suggestions["store-head"].ToArray());
-        Assert.Equal(new[] { Permissions.PaymentReviewRead }, RoleTemplates.Suggestions["finance"].ToArray());
+        Assert.Equal(new[] { Permissions.PaymentReviewRead, Permissions.PaymentReviewCorrect }, RoleTemplates.Suggestions["finance"].ToArray());
         Assert.Empty(RoleTemplates.Suggestions["courier"]);
         Assert.Empty(RoleTemplates.Suggestions["system-admin"]);
         Assert.DoesNotContain(Permissions.SubstitutionAccept, RoleTemplates.Materialize("buyer", [], []).Permissions);

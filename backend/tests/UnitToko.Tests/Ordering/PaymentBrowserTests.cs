@@ -49,7 +49,7 @@ public sealed class PaymentBrowserTests(MongoFixture fixture, ITestOutputHelper 
             { "hostAcceptanceRef", "synthetic-host-only" }, { "modelSelectionRef", "synthetic-model-only" } });
         using var keys = new IdentityRuntimeTests.RuntimeKeys(); var settings = IdentityRuntimeTests.Settings(keys);
         var reviewer = await order.Prices.Catalog.ActorAsync(9952, UnitToko.Tests.Catalog.CatalogAuthoringTestData.Shop,
-            UnitToko.Modules.Identity.Permissions.PaymentReviewRead, UnitToko.Modules.Identity.Permissions.InvoiceRead);
+            UnitToko.Modules.Identity.Permissions.PaymentReviewRead, UnitToko.Modules.Identity.Permissions.PaymentReviewCorrect, UnitToko.Modules.Identity.Permissions.InvoiceRead);
         await data.Invoice.Rows("accountProfiles").InsertOneAsync(new BsonDocument { { "_id", reviewer.UserId }, { "schemaVersion", 1 }, { "version", 1L },
             { "displayName", "Finance reviewer fixture" }, { "verifiedEmail", "reviewer@example.invalid" }, { "verifiedAt", order.Prices.Catalog.Clock.UtcNow.UtcDateTime }, { "updatedAt", order.Prices.Catalog.Clock.UtcNow.UtcDateTime } });
         settings["Mongo:Database"] = order.Database.DatabaseNamespace.DatabaseName; settings["Identity:TrustedProxies:0"] = "127.0.0.1"; settings["Logging:LogLevel:Default"] = "Warning";
@@ -76,7 +76,7 @@ public sealed class PaymentBrowserTests(MongoFixture fixture, ITestOutputHelper 
         try {
             var stdout = ReadOutputAsync(); var stderr = process.StandardError.ReadToEndAsync(); await process.StandardInput.WriteAsync(JsonSerializer.Serialize(input)); process.StandardInput.Close();
             await process.WaitForExitAsync().WaitAsync(TimeSpan.FromMinutes(5)); output.WriteLine(await stdout); output.WriteLine(await stderr);
-            Assert.True(process.ExitCode == 0, await stdout + await stderr); Assert.Contains("REAL_PAYMENT_BROWSER_PASS", await stdout);
+            Assert.True(process.ExitCode == 0, await stdout + await stderr); Assert.Contains("REAL_PAYMENT_BROWSER_PASS", await stdout); Assert.Contains("REAL_PAYMENT_CORRECTION_BROWSER_PASS", await stdout);
             async Task<string> ReadOutputAsync() {
                 var text = new StringBuilder(); var validationStarted = false; var ocrStarted = false;
                 while (await process.StandardOutput.ReadLineAsync() is { } line) {
@@ -92,6 +92,7 @@ public sealed class PaymentBrowserTests(MongoFixture fixture, ITestOutputHelper 
         var head = await data.Invoice.Rows(PaymentDraftBson.Heads).Find(new BsonDocument()).SingleAsync(); Assert.Equal("submitted", head["state"]);
         Assert.Equal(1, await data.Invoice.Count("paymentSubmissions")); Assert.Equal(1, await data.Invoice.Count("evidencePins")); Assert.Equal(1, await data.Invoice.Count("evidencePinAudits"));
         Assert.Equal(1, await data.Invoice.Rows("outboxEvents").CountDocumentsAsync(new BsonDocument { { "kind", "payment.ocr.requested" }, { "status", "completed" } }));
+        Assert.Equal(1, await data.Invoice.Count(PaymentCorrectionBson.Heads)); Assert.Equal(1, await data.Invoice.Count(PaymentCorrectionBson.Versions));
         Assert.Equal(1, await data.Invoice.Count("documentExtractionResults")); Assert.Equal(1, await data.Invoice.Count("documentExtractionAudits"));
         Assert.True(await data.Invoice.Count("documentExtractionReadAudits") >= 2);
         Assert.True(await data.Invoice.Rows("documentExtractionReadAudits").CountDocumentsAsync(new BsonDocument("actorId", reviewer.UserId)) >= 2);

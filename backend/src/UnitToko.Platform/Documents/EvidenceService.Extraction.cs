@@ -10,8 +10,13 @@ namespace UnitToko.Platform.Documents;
 internal sealed partial class EvidenceService
 {
     internal Task<PaymentExtractionView> ReadPaymentExtractionAsync(IClientSessionHandle tx, ActorContext actor, EvidenceTargetRef target,
-        long expectedRevision, EvidenceRef reference, AuthorizationReadMetadata metadata, IPaymentOcrSource source, CancellationToken ct) => GuardAsync(tx, () =>
-        WithReadTargetAsync(tx, actor, target, expectedRevision, reference, async (owner, token) => {
+        long expectedRevision, EvidenceRef reference, AuthorizationReadMetadata metadata, IPaymentOcrSource source, CancellationToken ct) =>
+        WithPaymentExtractionAsync(tx, actor, target, expectedRevision, reference, metadata, source, (view, _, _) => Task.FromResult(view), ct);
+    internal Task<T> WithPaymentExtractionAsync<T>(IClientSessionHandle tx, ActorContext actor, EvidenceTargetRef target,
+        long expectedRevision, EvidenceRef reference, AuthorizationReadMetadata metadata, IPaymentOcrSource source,
+        Func<PaymentExtractionView, Action, CancellationToken, Task<T>> consume, CancellationToken ct) => GuardAsync(tx, async () => {
+        Action? check = null;
+        var result = await WithReadTargetAsync(tx, actor, target, expectedRevision, reference, async (owner, token) => {
             if (metadata.Purpose != "payment-ocr-view" || string.IsNullOrWhiteSpace(metadata.CorrelationId) || metadata.CorrelationId.Length > 128 || metadata.CorrelationId.Any(char.IsControl) ||
                 owner.SubmittedSubmissionId is not { } submissionId || owner.SubmittedReservationId is not { } reservationId) throw Invalid();
             var job = await Rows("outboxEvents").Find(tx, new BsonDocument { { "kind", "payment.ocr.requested" }, { "payload.submissionId", submissionId } }).SingleOrDefaultAsync(token)
@@ -32,7 +37,10 @@ internal sealed partial class EvidenceService
                 { "schemaVersion", 1 }, { "actorId", actor.UserId }, { "actorGrantVersion", actor.GrantVersion }, { "outboxId", job["_id"] }, { "submissionId", submissionId },
                 { "reference", ReadReference(reference) }, { "resultId", row is null ? BsonNull.Value : row["_id"] }, { "resultHash", row is null ? BsonNull.Value : row["resultHash"] },
                 { "state", state }, { "purpose", metadata.Purpose }, { "correlationId", metadata.CorrelationId }, { "createdAt", clock.UtcNow.UtcDateTime } }, cancellationToken: token);
-            FinalCheck(original.Until, token);
-            return new PaymentExtractionView(target.Id, submissionId, reference, state, row?["_id"].AsInt64, row is null ? null : Date(row["createdAt"]), row is null ? null : ExtractionRecords.Extract(row));
-        }, ct));
+            check = () => FinalCheck(original.Until, token);
+            var view = new PaymentExtractionView(target.Id, submissionId, reference, state, row?["_id"].AsInt64, row is null ? null : Date(row["createdAt"]), row is null ? null : ExtractionRecords.Extract(row));
+            var consumed = await consume(view, check, token); check(); return consumed;
+        }, ct);
+        check?.Invoke(); return result;
+    });
 }
