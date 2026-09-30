@@ -13,6 +13,7 @@ import { createPaymentReviewGateway } from './payment-review-client';
 import { OperationRecovery, useOperationRecovery } from '../administration/OperationRecovery';
 import { createPaymentCorrectionGateway } from './payment-correction-client';
 import { PaymentCorrectionPanel } from './PaymentCorrectionPanel';
+import { PaymentDuplicatePanel } from './PaymentDuplicatePanel';
 import { PaymentVerificationPanel } from './PaymentVerificationPanel';
 import { createPaymentAllocationGateway } from './payment-allocation-client';
 import { createPaymentVerificationGateway } from './payment-verification-client';
@@ -120,6 +121,8 @@ function ReviewDesk({ account, fresh, onDenied }: { account: Account; fresh: boo
       <button ref={previewTrigger} className={common.secondary} disabled={locked} onClick={() => void perform(showOriginal)}>Lihat bukti asli</button>
       {preview && <section className={styles.evidencePreview} aria-label="Bukti asli untuk pemeriksaan"><h3 ref={previewHeading} tabIndex={-1}>Bukti asli yang diajukan</h3><button className={common.secondary} onClick={() => { clearPreview(); previewTrigger.current?.focus(); }}>Tutup bukti</button>
         <div className={styles.evidenceImage}><Image src={preview} alt="Bukti pembayaran asli yang diajukan pembeli" fill unoptimized style={{ objectFit: 'contain' }} /></div></section>}
+      <PaymentDuplicatePanel key={'duplicates:' + selected.id + ':' + selected.revision} actorId={account.actorId} owner={selected}
+        locked={locked} current={current} onOpen={id => void perform(() => open(id))} onDenied={onDenied} onBusyChange={setEditingBusy} />
       <PaymentOcrPanel view={ocr} locked={locked} onRefresh={() => void perform(async () => { const value = await gateway.ocr(account.actorId, selected); if (current()) setOcr(value); })} />
       <PaymentCorrectionPanel key={selected.id + ':' + selected.revision + ':' + (ocr?.result?.id ?? 'pending')} actorId={account.actorId} owner={selected} ocr={ocr}
         allowed={account.actions.includes('payment.review.correct')} fresh={fresh}

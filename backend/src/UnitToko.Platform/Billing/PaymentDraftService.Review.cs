@@ -33,8 +33,12 @@ public sealed partial class PaymentDraftService
                 authority.Grants.Where(grant => clauses.Any(clause => clause.GrantId == grant.Id)),
                 authority.Memberships.Where(member => clauses.Any(clause => clause.MembershipId == member.Id)), tx, ct);
         }
-        if (actor.Session is { } session && !await records.Rows("identitySessions").Find(tx, SessionPersistence.LiveFilter(session, actor.UserId,
-                actor.ProviderIssuer, actor.ProviderSubject, actor.GrantVersion, clock.UtcNow)).AnyAsync(ct)) throw new AuthorizationDeniedException("stale_or_inactive_session");
+        if (actor.Session is { } session) {
+            var live = await records.Rows("identitySessions").Find(tx, SessionPersistence.LiveFilter(session, actor.UserId,
+                actor.ProviderIssuer, actor.ProviderSubject, actor.GrantVersion, clock.UtcNow)).SingleOrDefaultAsync(ct);
+            if (live is null || live["idleExpiresAt"].ToUniversalTime() <= clock.UtcNow.UtcDateTime || live["absoluteExpiresAt"].ToUniversalTime() <= clock.UtcNow.UtcDateTime)
+                throw new AuthorizationDeniedException("stale_or_inactive_session");
+        }
         if (scopes.Count > 0) RequireReview(actor, authority, scopes); else _ = ReviewQueries(actor, authority);
         ct.ThrowIfCancellationRequested();
     }

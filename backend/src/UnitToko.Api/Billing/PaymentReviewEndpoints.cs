@@ -1,3 +1,5 @@
+using System.Collections.Immutable;
+using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Mvc;
 using UnitToko.Api.Authorization;
 using UnitToko.Api.Ordering;
@@ -6,6 +8,11 @@ using UnitToko.Modules.Documents;
 using UnitToko.Platform.Billing;
 
 namespace UnitToko.Api.Billing;
+
+public sealed record PaymentDuplicateQueryDto([property: JsonRequired] string Purpose, [property: JsonRequired] PaymentEvidenceReferenceDto Reference,
+    [property: JsonRequired] LongId? BeforeId);
+public sealed record PaymentDuplicateMatchDto(LongId DeclarationId, string Revision, LongId SubmissionId, DateTimeOffset SubmittedAt, ImmutableArray<string> Signals);
+public sealed record PaymentDuplicatePageDto(LongId DeclarationId, string Revision, LongId SubmissionId, ImmutableArray<PaymentDuplicateMatchDto> Items, bool HasMore);
 
 public static class PaymentReviewEndpoints
 {
@@ -22,6 +29,15 @@ public static class PaymentReviewEndpoints
             var row = await service.ReadReviewAsync(http.Features.Get<ResolvedActor>()!.Actor, LongId.Parse(id).Value, new(request.Purpose, http.TraceIdentifier), ct);
             http.Response.Headers.ETag = AccessRequestMetadata.VersionTag(row.Revision); return TypedResults.Ok(PaymentDraftEndpoints.View(row));
         }).WithName("ReadPaymentReview");
+        group.MapPost("/{id}/duplicates/query", async (string id, PaymentDuplicateQueryDto request, HttpContext http, PaymentDraftService service,
+            [FromHeader(Name = "If-Match")] string expected, CancellationToken ct) => {
+            Purpose(request.Purpose); Private(http);
+            var reference = request.Reference is { } value ? new EvidenceRef(value.Id.Value, LongId.Parse(value.Version).Value, value.Sha256) : throw PaymentDraftEndpoints.Invalid();
+            var page = await service.ReadDuplicatesAsync(http.Features.Get<ResolvedActor>()!.Actor, LongId.Parse(id).Value,
+                AccessRequestMetadata.ExpectedVersion(http.Request), reference, request.BeforeId?.Value, new(request.Purpose, http.TraceIdentifier), ct);
+            return TypedResults.Ok(new PaymentDuplicatePageDto(new(page.DeclarationId), page.Revision.ToString(System.Globalization.CultureInfo.InvariantCulture), new(page.SubmissionId),
+                [.. page.Items.Select(item => new PaymentDuplicateMatchDto(new(item.DeclarationId), item.Revision.ToString(System.Globalization.CultureInfo.InvariantCulture), new(item.SubmissionId), item.SubmittedAt, [.. item.Signals]))], page.HasMore));
+        }).WithName("ReadPaymentDuplicates");
         group.MapPost("/{id}/ocr/query", async (string id, PaymentEvidenceReadDto request, HttpContext http, PaymentEvidenceService service,
             [FromHeader(Name = "If-Match")] string expected, CancellationToken ct) => {
             if (request.Purpose != "payment-ocr-view") throw PaymentDraftEndpoints.Invalid(); Private(http);

@@ -945,6 +945,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/billing/payment-reviews/{id}/duplicates/query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ReadPaymentDuplicates"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/billing/payment-reviews/{id}/evidence/{reservationId}/original/query": {
         parameters: {
             query?: never;
@@ -5473,6 +5489,26 @@ export interface components {
             declarationId: null | components["schemas"]["LongId"];
             input: components["schemas"]["PaymentDraftInputDto"];
             reason: string;
+        };
+        PaymentDuplicateMatchDto: {
+            declarationId: components["schemas"]["LongId"];
+            revision: string;
+            signals: string[];
+            submissionId: components["schemas"]["LongId"];
+            /** Format: date-time */
+            submittedAt: string;
+        };
+        PaymentDuplicatePageDto: {
+            declarationId: components["schemas"]["LongId"];
+            hasMore: boolean;
+            items: components["schemas"]["PaymentDuplicateMatchDto"][];
+            revision: string;
+            submissionId: components["schemas"]["LongId"];
+        };
+        PaymentDuplicateQueryDto: {
+            beforeId: null | components["schemas"]["LongId"];
+            purpose: string;
+            reference: components["schemas"]["PaymentEvidenceReferenceDto"];
         };
         PaymentEvidencePageDto: {
             items: components["schemas"]["PaymentEvidenceStatusDto"][];
@@ -11614,6 +11650,84 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PaymentCorrectionViewDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    ReadPaymentDuplicates: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description One quoted nonnegative Int64 resource version from the latest response; never a JavaScript number. */
+                "If-Match": string;
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
+                /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
+                "X-Expected-Actor-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PaymentDuplicateQueryDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentDuplicatePageDto"];
                 };
             };
             /** @description Bad Request */

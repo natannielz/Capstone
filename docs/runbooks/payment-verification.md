@@ -1,6 +1,6 @@
 # Evidence-bound payment verification
 
-Finance can connect a submitted customer declaration to an independently confirmed bank receipt in `/billing/payment-reviews`. The decision binds the exact original, immutable OCR result and human corrections, confirmed bank transaction and an approved payer-verification procedure. It establishes a payer claim on existing cash. It neither posts cash again nor reduces an invoice balance. Allocation is a separate, still-required workflow.
+Finance can connect a submitted customer declaration to an independently confirmed bank receipt in `/billing/payment-reviews`. The decision binds the exact original, immutable OCR result and human corrections, confirmed bank transaction and an approved payer-verification procedure. It establishes a payer claim on existing cash. It neither posts cash again nor reduces an invoice balance. Allocation uses the separate [canonical allocation workflow](payment-allocation.md).
 
 ## Authority and operational inputs
 
@@ -18,7 +18,13 @@ The controlled payer policy identifies the exact fulfillment organization/shop/c
 4. Follow the approved independent payer procedure for the displayed buying organization, record its evidence reference, and explicitly attest to reviewing the exact image, bank receipt and payer. No checkbox is preselected. Review the frozen declaration/receipt/amount/party and reason before saving.
 5. A single transaction records the immutable decision, first receipt-to-party anchor, required audit, original operation receipt and metadata-only outbox event. The reviewed declaration/evidence/OCR/correction and bank histories are fenced with current scope/session/grants/person/policy authority. Corrections cannot race a verification of the old review; accepted correction history becomes fixed for that decision. Time-sensitive authority and the held original-read window are checked through transaction completion.
 
-One declaration has one accepted verification. Further declarations from the same buying organization and fulfillment scope may identify the same canonical receipt, with the original payer claim's complete history validated. They create no extra cash or spending balance. A conflicting party is refused. Future allocation must consume the receipt's single available balance across every linked declaration; summing declarations would double-count funds. Duplicate investigation/warnings and explicit reversal or replacement decisions remain required work.
+One declaration has one accepted verification. Further declarations from the same buying organization and fulfillment scope may identify the same canonical receipt, with the original payer claim's complete history validated. They create no extra cash or spending balance. A conflicting party is refused. The allocation owner consumes the receipt's single available balance across every linked declaration; summing declarations would double-count funds. Explicit reversal/replacement and the remaining duplicate-investigation work are still required.
+
+## Exact duplicate hints
+
+Use **Periksa kecocokan pengajuan** in the submitted declaration to compare the exact original-file SHA-256 and the buyer's exact reference. **Berkas gambar asli identik** and **Referensi yang dinyatakan pembeli sama** are separate advisory reasons. Blank references remain unknown; references are not fuzzy-matched or promoted to canonical bank identity. Open a comparison only through the authorized detail link and inspect its actual bank evidence.
+
+The private, audited lookup binds the displayed declaration/submission/evidence revision, applies both review and invoice scope to every constituent before matching or pagination, and exposes no hidden counts, hashes, raw reference values, images or account data. Pages contain at most 25 matches. Missing matches do not certify uniqueness; cropped/recompressed images and other similarity signals remain pending calibrated review. It never approves/rejects a declaration, posts cash, allocates money or changes an invoice balance. No new role grant or migration is needed for these existing immutable sources.
 
 ## Uncertain responses and historical access
 
@@ -30,4 +36,4 @@ Historical decision access checks current read authority and the accepted immuta
 
 Local verification uses production-built Next, HTTPS, .NET, private Windows files and isolated replica-set MongoDB. Accounts, sessions, approved procedures/person records and OCR-engine output in this new workflow fixture are synthetic. These checks do not establish OCR-model acceptance, a live Auth0 session, bank connectivity, staging or production acceptance.
 
-Before real activation, complete allocation/overpayment/duplicate/exception/replacement/reversal/refund work, approved operator/business inputs, full release validation, actual provider/API/worker/private-storage deployment checks, one-writer migration/restore and the approved branch pilot. No purchase, live message, bank transfer or real-data cutover is authorized by this runbook. Track status in the [single progress ledger](../quality/production-progress.md).
+Before real activation, complete the remaining duplicate/similarity investigation, exception/replacement/reversal/refund work, approved operator/business inputs, full release validation, actual provider/API/worker/private-storage deployment checks, one-writer migration/restore and the approved branch pilot. No purchase, live message, bank transfer or real-data cutover is authorized by this runbook. Track status in the [single progress ledger](../quality/production-progress.md).

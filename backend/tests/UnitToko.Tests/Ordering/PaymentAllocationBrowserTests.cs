@@ -32,6 +32,7 @@ public sealed class PaymentAllocationBrowserTests(MongoFixture fixture, ITestOut
         var root = Root(); var node = Environment.GetEnvironmentVariable("UNITTOKO_BROWSER_NODE"); var playwright = Environment.GetEnvironmentVariable("UNITTOKO_BROWSER_PLAYWRIGHT_PACKAGE");
         Assert.True(Path.IsPathFullyQualified(node ?? "") && File.Exists(node)); Assert.True(Path.IsPathFullyQualified(playwright ?? "") && File.Exists(playwright)); Assert.True(File.Exists(Path.Combine(root, "frontend", ".next", "BUILD_ID")));
         await using var data = await PaymentAllocationTests.Data.CreateAsync(fixture);
+        var duplicate = await PaymentDuplicateTests.AdditionalAsync(data.Source.Read, "browser-duplicate", data.Source.Read.Payment.Input);
         var outside = await data.Source.Read.Catalog.ActorAsync(7490, CatalogAuthoringTestData.OtherOwner,
             [Permissions.PaymentReviewRead, Permissions.InvoiceRead, Permissions.PaymentAllocate]);
         foreach (var actor in new[] { data.Actor, data.Source.Reader, outside })
@@ -59,7 +60,7 @@ public sealed class PaymentAllocationBrowserTests(MongoFixture fixture, ITestOut
         var input = new { apiAddress, origin, pfx = Convert.ToBase64String(tls.Export(X509ContentType.Pfx, password)), password, playwrightPackage = playwright,
             reviewerToken = data.Source.Read.Catalog.Issued[data.Actor.UserId].OpaqueToken, readerToken = data.Source.Read.Catalog.Issued[data.Source.Reader.UserId].OpaqueToken,
             otherToken = data.Source.Read.Catalog.Issued[outside.UserId].OpaqueToken, otherId = outside.UserId.ToString(),
-            verificationId = data.VerificationId.ToString(), invoiceId = data.InvoiceId.ToString(), declarationId = data.Source.Read.DeclarationId.ToString(), receiptId = data.Source.ReceiptId.ToString(), imageBase64 = Convert.ToBase64String(data.Source.Read.Bytes) };
+            duplicateId = duplicate.Id.ToString(), verificationId = data.VerificationId.ToString(), invoiceId = data.InvoiceId.ToString(), declarationId = data.Source.Read.DeclarationId.ToString(), receiptId = data.Source.ReceiptId.ToString(), imageBase64 = Convert.ToBase64String(data.Source.Read.Bytes) };
         var start = new ProcessStartInfo(node!) { WorkingDirectory = Path.Combine(root, "frontend"), UseShellExecute = false, CreateNoWindow = true, RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true };
         start.ArgumentList.Add(Path.Combine(root, "frontend", "scripts", "verify-payment-allocation-browser.mjs")); start.Environment["NODE_ENV"] = "production"; start.Environment["NEXT_TELEMETRY_DISABLED"] = "1";
         using var process = Process.Start(start) ?? throw new InvalidOperationException("Browser child did not start");

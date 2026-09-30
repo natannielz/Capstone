@@ -56,6 +56,19 @@ try {
   }
   async function open(page) { await page.getByRole('button', { name: 'Periksa pengajuan ' + config.declarationId, exact: true }).click(); }
   const reviewer = await desk(config.reviewerToken), page = reviewer.page; await open(page);
+  const duplicates = page.getByRole('region', { name: 'Indikasi pengajuan berulang', exact: true });
+  await duplicates.getByRole('button', { name: 'Periksa kecocokan pengajuan', exact: true }).click();
+  await duplicates.getByText('Berkas gambar asli identik · Referensi yang dinyatakan pembeli sama', { exact: true }).waitFor();
+  assert.equal(await duplicates.getByRole('heading', { name: 'Hasil perbandingan pengajuan' }).evaluate(element => document.activeElement === element), true);
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  await page.screenshot({ path: resolve(directory, 'payment-duplicates-mobile.png'), fullPage: true });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.screenshot({ path: resolve(directory, 'payment-duplicates-desktop.png'), fullPage: true });
+  await page.setViewportSize({ width: 360, height: 800 });
+  await duplicates.getByRole('button', { name: 'Buka pengajuan pembanding ' + config.duplicateId, exact: true }).click();
+  await page.getByRole('heading', { name: 'Pengajuan ' + config.duplicateId, exact: true }).waitFor();
+  await open(page); assert.equal(writes.length, 0);
+
   async function balances(page) {
     await page.getByRole('button', { name: 'Muat hasil verifikasi', exact: true }).click();
     const panel = page.getByRole('region', { name: 'Alokasi pembayaran', exact: true });
@@ -103,7 +116,7 @@ try {
       headers: { 'content-type': 'application/json', 'X-CSRF-Token': csrf.requestToken, 'X-Expected-Actor-Id': actorId }, body: JSON.stringify({ purpose: 'payment-allocation', invoiceIds: [invoiceId] }) })).status;
   }, { verificationId: config.verificationId, invoiceId: config.invoiceId, actorId: config.otherId }); assert.equal(denied, 403);
   assert.equal(writes.length, 1); assert.equal(dropped, 1); assert.deepEqual(errors, []);
-  console.log('REAL_PAYMENT_ALLOCATION_BROWSER_PASS ' + JSON.stringify({ explicitInvoiceAndAmountReview: true, lostResponseRecovered: true, currentInvoiceBalance: true,
+  console.log('REAL_PAYMENT_ALLOCATION_BROWSER_PASS ' + JSON.stringify({ exactDuplicateHintsAndComparisonNavigation: true, explicitInvoiceAndAmountReview: true, lostResponseRecovered: true, currentInvoiceBalance: true,
     readerCannotAllocate: true, outsiderDenied: true, offlineUnsent: true, mobile: true, syntheticBankAndPayerPolicy: true, syntheticOcrEngine: true, productionAccepted: false }));
 
 } catch (error) {

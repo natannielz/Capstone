@@ -12,6 +12,27 @@ function data<T>(value: { data?: T; error?: unknown; response: Response }): T {
   return value.data;
 }
 const headers = (actorId: string) => ({ 'X-Expected-Actor-Id': priceId(actorId) });
+export type PaymentDuplicatePage = { declarationId: string; revision: string; submissionId: string; items: { declarationId: string; revision: string; submissionId: string; submittedAt: string; signals: ('same_image' | 'same_reference')[] }[]; hasMore: boolean };
+export function parsePaymentDuplicates(value: unknown, owner: PaymentDraft, beforeId: string | null): PaymentDuplicatePage {
+  const current = parsePaymentReview(owner);
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return invalid();
+  const page = value as Record<string, unknown>;
+  if (Object.keys(page).sort().join(',') !== 'declarationId,hasMore,items,revision,submissionId' || page.declarationId !== current.id || page.revision !== current.revision ||
+    page.submissionId !== current.submission!.id || !Array.isArray(page.items) || page.items.length > 25 || typeof page.hasMore !== 'boolean' || page.hasMore && page.items.length !== 25) return invalid();
+  const sourceItems = page.items;
+  const items = sourceItems.map((value, index) => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return invalid();
+    const item = value as Record<string, unknown>;
+    if (Object.keys(item).sort().join(',') !== 'declarationId,revision,signals,submissionId,submittedAt' || typeof item.declarationId !== 'string' || typeof item.revision !== 'string' || typeof item.submissionId !== 'string' ||
+      typeof item.submittedAt !== 'string' || !/^\d{4}-\d{2}-\d{2}T/.test(item.submittedAt) || !Number.isFinite(Date.parse(item.submittedAt)) ||
+      !Array.isArray(item.signals) || item.signals.length < 1 || item.signals.length > 2 || item.signals.some(signal => signal !== 'same_image' && signal !== 'same_reference') ||
+      new Set(item.signals).size !== item.signals.length) return invalid();
+    priceId(item.declarationId); priceId(item.revision); priceId(item.submissionId);
+    if (item.declarationId === current.id || beforeId !== null && BigInt(item.declarationId) >= BigInt(priceId(beforeId)) || index > 0 && BigInt(item.declarationId) >= BigInt(sourceItems[index - 1].declarationId)) return invalid();
+    return item as PaymentDuplicatePage['items'][number];
+  });
+  return { declarationId: current.id, revision: current.revision, submissionId: current.submission!.id, items, hasMore: page.hasMore };
+}
 export function parsePaymentReview(value: unknown): PaymentDraft {
   const result = parsePaymentDraft(value); return result.state === 'submitted' && result.submission ? result : invalid();
 }
@@ -26,6 +47,13 @@ export function parsePaymentReviewPage(value: unknown, beforeId: string | null) 
 }
 export function createPaymentReviewGateway(client: ReturnType<typeof createUnitTokoClient> = createUnitTokoClient()) {
   return {
+    async duplicates(actorId: string, owner: PaymentDraft, beforeId: string | null) {
+      const saved = parsePaymentReview(owner); if (beforeId !== null) priceId(beforeId);
+      return parsePaymentDuplicates(data(await client.POST('/api/v1/billing/payment-reviews/{id}/duplicates/query', {
+        body: { purpose: 'payment-review', reference: saved.submission!.evidence, beforeId },
+        params: { path: { id: saved.id }, header: { ...headers(actorId), 'If-Match': '"' + saved.revision + '"' } }, cache: 'no-store',
+      })), saved, beforeId);
+    },
     async list(actorId: string, beforeId: string | null, signal?: AbortSignal) {
       if (beforeId !== null) priceId(beforeId);
       return parsePaymentReviewPage(data(await client.POST('/api/v1/billing/payment-reviews/query', {
