@@ -17473,6 +17473,555 @@
         ]
       }
     },
+    "/api/v1/billing/payment-declarations/{id}/replacement/query": {
+      "post": {
+        "tags": [
+          "UnitToko.Api"
+        ],
+        "operationId": "PreviewOwnPaymentReplacement",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "description": "One quoted nonnegative Int64 resource version from the latest response; never a JavaScript number.",
+            "required": true,
+            "schema": {
+              "maxLength": 21,
+              "minLength": 3,
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "required": true,
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrderReadDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload Too Large",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentReplacementViewDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
+    "/api/v1/billing/payment-declarations/{id}/replacement": {
+      "post": {
+        "tags": [
+          "UnitToko.Api"
+        ],
+        "operationId": "CreateOwnPaymentReplacement",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "description": "One quoted nonnegative Int64 resource version from the latest response; never a JavaScript number.",
+            "required": true,
+            "schema": {
+              "maxLength": 21,
+              "minLength": 3,
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "Reuse this key only for an unchanged logical command, including after an uncertain response.",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "required": true,
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PaymentReplacementSaveDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload Too Large",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentReplacementResultDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
+    "/api/v1/billing/payment-declarations/{id}/replacement/operations/query": {
+      "post": {
+        "tags": [
+          "UnitToko.Api"
+        ],
+        "operationId": "RecoverOwnPaymentReplacement",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "required": true,
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrderDraftRecoveryDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload Too Large",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentReplacementRecoveryDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
+    "/api/v1/billing/payment-declarations/{id}/replacement-origin/query": {
+      "post": {
+        "tags": [
+          "UnitToko.Api"
+        ],
+        "operationId": "ReadOwnPaymentReplacementOrigin",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "description": "One quoted nonnegative Int64 resource version from the latest response; never a JavaScript number.",
+            "required": true,
+            "schema": {
+              "maxLength": 21,
+              "minLength": 3,
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "required": true,
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrderReadDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload Too Large",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentReplacementOriginViewDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
     "/api/v1/billing/payment-declarations": {
       "post": {
         "tags": [
@@ -37611,6 +38160,180 @@
               },
               {
                 "$ref": "#/components/schemas/PaymentOcrResultDto"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "PaymentReplacementOriginDto": {
+        "required": [
+          "parentDeclarationId",
+          "parentDeclarationRevision"
+        ],
+        "type": "object",
+        "properties": {
+          "parentDeclarationId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "parentDeclarationRevision": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "PaymentReplacementOriginViewDto": {
+        "required": [
+          "origin"
+        ],
+        "type": "object",
+        "properties": {
+          "origin": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PaymentReplacementOriginDto"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "PaymentReplacementRecoveryDto": {
+        "required": [
+          "status",
+          "result"
+        ],
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string"
+          },
+          "result": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PaymentReplacementResultDto"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "PaymentReplacementRequestDto": {
+        "required": [
+          "reviewRevision",
+          "actionId",
+          "actionHash",
+          "binding"
+        ],
+        "type": "object",
+        "properties": {
+          "reviewRevision": {
+            "type": "string"
+          },
+          "actionId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "actionHash": {
+            "type": "string"
+          },
+          "binding": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "PaymentReplacementResultDto": {
+        "required": [
+          "parentDeclarationId",
+          "parentDeclarationRevision",
+          "declarationId",
+          "versionId",
+          "revision",
+          "recordedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "parentDeclarationId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "parentDeclarationRevision": {
+            "type": "string"
+          },
+          "declarationId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "versionId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "revision": {
+            "type": "string"
+          },
+          "recordedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false
+      },
+      "PaymentReplacementSaveDto": {
+        "required": [
+          "request",
+          "reason"
+        ],
+        "type": "object",
+        "properties": {
+          "request": {
+            "$ref": "#/components/schemas/PaymentReplacementRequestDto"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "PaymentReplacementViewDto": {
+        "required": [
+          "parentDeclarationId",
+          "parentDeclarationRevision",
+          "submissionId",
+          "evidence",
+          "input",
+          "request",
+          "existing"
+        ],
+        "type": "object",
+        "properties": {
+          "parentDeclarationId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "parentDeclarationRevision": {
+            "type": "string"
+          },
+          "submissionId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "evidence": {
+            "$ref": "#/components/schemas/PaymentEvidenceReferenceDto"
+          },
+          "input": {
+            "$ref": "#/components/schemas/PaymentDraftInputDto"
+          },
+          "request": {
+            "$ref": "#/components/schemas/PaymentReplacementRequestDto"
+          },
+          "existing": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PaymentReplacementResultDto"
               }
             ]
           }

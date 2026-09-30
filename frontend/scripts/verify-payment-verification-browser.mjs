@@ -15,7 +15,7 @@ assert.equal(process.versions.node.split('.')[0], '24'); assert.equal(api.protoc
 const load = createRequire(config.playwrightPackage), metadata = load(config.playwrightPackage); assert.equal(metadata.name, 'playwright'); assert.equal(metadata.version, '1.62.1');
 const { chromium } = load('playwright'), channel = process.env.UNITTOKO_BROWSER_CHANNEL ?? 'chromium'; assert.ok(['chromium', 'msedge'].includes(channel));
 const app = next({ dev: false, dir: process.cwd(), quiet: true }), sockets = new Set(), writes = [], errors = [], pages = [];
-const directory = resolve('../tmp/production/' + (config.workflow ? 'payment-review-action-browser-results' : config.manualRecovery ? 'payment-recovered-ocr-browser-results' : config.manual ? 'payment-manual-review-browser-results' : 'payment-verification-browser-results')); mkdirSync(directory, { recursive: true });
+const directory = resolve('../tmp/production/' + (config.replacement ? 'payment-linked-replacement-browser-results' : config.workflow ? 'payment-review-action-browser-results' : config.manualRecovery ? 'payment-recovered-ocr-browser-results' : config.manual ? 'payment-manual-review-browser-results' : 'payment-verification-browser-results')); mkdirSync(directory, { recursive: true });
 let browser, frontend, edge, tunnel, dropNext = null, dropped = 0;
 function track(server) { server.on('connection', socket => { sockets.add(socket); socket.on('close', () => sockets.delete(socket)); }); return server; }
 async function listen(server) { await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); }); return server.address().port; }
@@ -23,7 +23,7 @@ function forward(req, res, port, isApi) {
   const headers = { ...req.headers, host: '127.0.0.1:' + port };
   for (const name of Object.keys(headers)) if (name.startsWith('x-forwarded-') || name.startsWith('x-original-') || ['forwarded', 'connection'].includes(name)) delete headers[name];
   if (isApi) { headers['x-forwarded-for'] = req.socket.remoteAddress; headers['x-forwarded-host'] = origin.host; headers['x-forwarded-proto'] = 'https'; }
-  const kind = req.method !== 'POST' ? null : req.url === '/api/v1/billing/payment-reviews/' + config.declarationId + '/verification' ? 'verify' : req.url === '/api/v1/billing/payment-reviews/' + config.declarationId + '/manual-review' ? 'manual' : req.url === '/api/v1/billing/payment-reviews/' + config.declarationId + '/workflow' ? 'workflow' : null; if (kind) writes.push({ kind, key: req.headers['idempotency-key'], actor: req.headers['x-expected-actor-id'] });
+  const kind = req.method !== 'POST' ? null : req.url === '/api/v1/billing/payment-reviews/' + config.declarationId + '/verification' ? 'verify' : req.url === '/api/v1/billing/payment-reviews/' + config.declarationId + '/manual-review' ? 'manual' : req.url === '/api/v1/billing/payment-reviews/' + config.declarationId + '/workflow' ? 'workflow' : req.url === '/api/v1/billing/payment-declarations/' + config.declarationId + '/replacement' ? 'replacement' : null; if (kind) writes.push({ kind, key: req.headers['idempotency-key'], actor: req.headers['x-expected-actor-id'] });
   const drop = kind !== null && kind === dropNext; if (drop) dropNext = null;
   const upstream = http.request({ hostname: '127.0.0.1', port, path: req.url, method: req.method, headers }, response => {
     if (drop && response.statusCode === 200) { response.resume(); response.once('end', () => { dropped++; res.writeHead(200, { 'content-type': 'application/json', 'content-length': '64', 'cache-control': 'no-store' }); res.flushHeaders(); res.write('{'); setTimeout(() => res.destroy(), 25); }); return; }
@@ -113,7 +113,35 @@ try {
     await buyer.page.reload(); await buyer.page.getByRole('button', { name: 'Buka pembayaran ' + config.declarationId, exact: true }).click();
     await buyer.page.getByRole('button', { name: 'Muat tindak lanjut petugas', exact: true }).click();
     await buyer.page.getByRole('region', { name: 'Tindak lanjut pengajuan', exact: true }).getByRole('status').getByText('Petugas meminta bukti pengganti', { exact: true }).waitFor();
-    assert.equal(writes.filter(w => w.kind === 'workflow').length, 3); assert.equal(writes.filter(w => w.kind === 'verify').length, 0); assert.equal(dropped, 1); assert.deepEqual(errors, []);
+    if (config.replacement) {
+      await followUp.getByRole('button', { name: 'Siapkan bukti pengganti', exact: true }).click();
+      const replacement = followUp.getByRole('region', { name: 'Konfirmasi draf pengganti', exact: true }); await replacement.waitFor();
+      assert.equal(await replacement.getByRole('heading').evaluate(element => document.activeElement === element), true);
+      await replacement.screenshot({ path: resolve(directory, 'replacement-confirmation-mobile.png') });
+      await buyer.context.setOffline(true); await buyer.page.getByText(/Koneksi terputus/).waitFor(); assert.equal(await replacement.getByRole('button', { name: 'Buat draf pengganti', exact: true }).isDisabled(), true);
+      await buyer.context.setOffline(false); await buyer.page.getByText(/Koneksi terputus/).waitFor({ state: 'hidden' });
+      dropNext = 'replacement'; await replacement.getByRole('button', { name: 'Buat draf pengganti', exact: true }).click(); await buyer.page.getByRole('button', { name: 'Periksa hasil', exact: true }).waitFor();
+      const pending = await buyer.page.evaluate(() => Object.keys(localStorage).filter(key => key.startsWith('unit-toko:pending:v1:')).map(key => JSON.parse(localStorage[key])));
+      assert.equal(pending.length, 1); assert.equal(pending[0].operation, 'billing.payment.replacement.create'); assert.deepEqual(Object.keys(pending[0]).sort(), ['actorId', 'createdAt', 'key', 'operation']); assert.doesNotMatch(JSON.stringify(pending), /4000|Synthetic|sha256|request/);
+      await buyer.page.reload(); const recovered = buyer.page.waitForResponse(response => response.url().endsWith('/replacement/operations/query'));
+      await buyer.page.getByRole('button', { name: 'Periksa hasil', exact: true }).click(); const receipt = await (await recovered).json(); assert.equal(receipt.status, 'committed'); const childId = receipt.result.declarationId;
+      const form = buyer.page.getByRole('region', { name: 'Draf pembayaran', exact: true }); await form.getByRole('heading', { name: 'Draf pembayaran ' + childId, exact: true }).waitFor();
+      assert.equal(await form.getByRole('checkbox').first().isDisabled(), true); assert.equal(await buyer.page.getByRole('button', { name: 'Pilih bukti untuk diajukan', exact: true }).count(), 0);
+      await buyer.page.waitForFunction(() => !Object.keys(localStorage).some(key => key.startsWith('unit-toko:pending:v1:')));
+      await form.getByLabel('Jumlah transfer (IDR)', { exact: true }).fill('4500.00'); await form.getByLabel('Alasan pencatatan atau perubahan', { exact: true }).fill('Synthetic linked replacement amount correction');
+      await form.getByRole('button', { name: 'Simpan draf pembayaran', exact: true }).click(); await buyer.page.getByText('Draf tersimpan. Pembayaran belum diajukan atau diverifikasi.', { exact: true }).waitFor();
+      const proof = buyer.page.getByRole('region', { name: 'Bukti asli pembayaran', exact: true }); await proof.getByLabel('Pilih bukti pembayaran', { exact: true }).setInputFiles({ name: 'synthetic-new-original.png', mimeType: 'image/png', buffer: Buffer.from(config.replacementImageBase64, 'base64') });
+      await proof.getByRole('button', { name: 'Unggah bukti asli', exact: true }).click(); await proof.getByText('Tersimpan · menunggu pemeriksaan keamanan', { exact: true }).waitFor();
+      console.log('REPLACEMENT_VALIDATE_READY');
+      for (let attempt = 0; attempt < 30 && !await proof.getByRole('button', { name: 'Pilih bukti untuk diajukan', exact: true }).count(); attempt++) { await proof.getByRole('button', { name: 'Muat status bukti', exact: true }).click(); await new Promise(resolve => setTimeout(resolve, 250)); }
+      await proof.getByRole('button', { name: 'Pilih bukti untuk diajukan', exact: true }).click(); const confirmation = buyer.page.getByRole('region', { name: 'Periksa pengajuan pembayaran', exact: true }); await confirmation.waitFor();
+      await confirmation.getByRole('button', { name: 'Ajukan untuk verifikasi', exact: true }).click(); await form.getByText('Pengajuan tersimpan', { exact: true }).waitFor();
+      assert.equal(await buyer.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true); await form.screenshot({ path: resolve(directory, 'replacement-submitted-mobile.png') });
+      await form.getByRole('button', { name: 'Buka pengajuan asli', exact: true }).click(); await form.getByRole('heading', { name: 'Pembayaran ' + config.declarationId, exact: true }).waitFor();
+      assert.equal(await form.getByLabel('Jumlah transfer (IDR)', { exact: true }).count(), 0); assert.equal(await buyer.page.getByRole('button', { name: 'Unggah bukti asli', exact: true }).count(), 0);
+      assert.equal(writes.filter(w => w.kind === 'replacement').length, 1); console.log('REAL_LINKED_REPLACEMENT_BROWSER_PASS ' + JSON.stringify({ childId, immutableParent: true, originalKeyRecovery: true, newCheckedOriginal: true, noMoney: true }));
+    }
+    assert.equal(writes.filter(w => w.kind === 'workflow').length, 3); assert.equal(writes.filter(w => w.kind === 'verify').length, 0); assert.equal(dropped, config.replacement ? 2 : 1); assert.deepEqual(errors, []);
   } else {
   if (config.manual) {
     await review.getByRole('button', { name: 'Muat hasil OCR', exact: true }).click();

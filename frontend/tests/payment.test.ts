@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createUnitTokoClient } from '../src/api/client';
-import { createPaymentGateway, preparePayment, preparePaymentSubmission, parsePaymentResult, parsePaymentSubmissionResult, paymentSubmissionOwner, paymentReservationOwner, parsePaymentEvidenceStatus, paymentEvidenceLabel, parsePaymentOcr, parsePaymentFollowUp, type PaymentDraft } from '../src/modules/billing/payment-client';
+import { createPaymentGateway, preparePayment, preparePaymentSubmission, preparePaymentReplacement, parsePaymentReplacementView, parsePaymentReplacementResult, paymentReplacementOwner, parsePaymentResult, parsePaymentSubmissionResult, paymentSubmissionOwner, paymentReservationOwner, parsePaymentEvidenceStatus, paymentEvidenceLabel, parsePaymentOcr, parsePaymentFollowUp, type PaymentDraft } from '../src/modules/billing/payment-client';
 import { OperationJournal, operationRecoveryCapabilities, reconcileOperationRecovery } from '../src/modules/administration/operation-journal';
 
 const actor = '9007199254740993', declarationId = '9007199254740994';
@@ -12,6 +12,33 @@ const declaration: PaymentDraft = { id: declarationId, revision: '2', createdAt:
 const checkedImage = parsePaymentEvidenceStatus({ reservationId: '51', revision: '3', state: 'quarantined', expiresAt: result.recordedAt, reference: { id: '52', version: '1', sha256: 'a'.repeat(64) }, scanStatus: 'clean', decoderStatus: 'decoded', safeFailure: null });
 const submissionResult = { declarationId, submissionId: '9007199254740997', declarationRevision: '2', reviewRevision: '1' as const, state: 'submitted' as const, submittedAt: result.recordedAt };
 const submissionKey = 's.' + declarationId + '.12345678-1234-1234-1234-123456789abc';
+test('replacement binds the closed parent, freezes only the exact request, and recovers a child without resending or closing', async () => {
+  const owner: PaymentDraft = { ...declaration, state: 'submitted', submission: { id: submissionResult.submissionId, reviewRevision: '1', reservationId: '51', evidence: checkedImage.reference!, submittedAt: result.recordedAt } };
+  const key = 'rp.' + declarationId + '.12345678-1234-1234-1234-123456789abc';
+  const saved = { parentDeclarationId: declarationId, parentDeclarationRevision: '2', declarationId: '9007199254741000', versionId: '9007199254741001', revision: '1' as const, recordedAt: result.recordedAt };
+  const shown = { parentDeclarationId: declarationId, parentDeclarationRevision: '2', submissionId: owner.submission!.id, evidence: checkedImage.reference!, input,
+    request: { reviewRevision: '3', actionId: '64', actionHash: 'a'.repeat(64), binding: 'b'.repeat(64) }, existing: null };
+  const command = preparePaymentReplacement(actor, owner, shown, 'Synthetic replacement'); assert.equal(Object.isFrozen(command.body.request), true); assert.equal(paymentReplacementOwner(key), declarationId);
+  const gateway = createPaymentGateway(createUnitTokoClient({ baseUrl: 'https://unit-toko.test', fetch: async request => {
+    assert.ok(request instanceof Request); if (request.url.endsWith('/identity/csrf')) return Response.json({ requestToken: 'fixture-csrf' });
+    assert.equal(new URL(request.url).pathname, '/api/v1/billing/payment-declarations/' + declarationId + '/replacement-origin/query');
+    assert.equal(request.headers.get('X-Expected-Actor-Id'), actor); assert.equal(request.headers.get('X-CSRF-Token'), 'fixture-csrf'); assert.equal(request.headers.get('If-Match'), '"2"'); assert.equal(request.cache, 'no-store');
+    return Response.json({ origin: null });
+  } }));
+  assert.equal(await gateway.replacementOrigin(actor, owner), null);
+  assert.deepEqual(parsePaymentReplacementResult(saved, key), saved);
+  for (const value of [{ ...shown, parentDeclarationRevision: '1' }, { ...shown, input: { ...input, declaredAmount: '1' } }, { ...shown, evidence: { ...shown.evidence, sha256: 'c'.repeat(64) } }, { ...shown, reason: 'Internal finance note' }]) assert.throws(() => parsePaymentReplacementView(value, owner));
+  assert.throws(() => parsePaymentReplacementResult({ ...saved, parentDeclarationId: '3' }, key)); assert.throws(() => parsePaymentReplacementResult({ ...saved, revision: '2' }, key)); assert.throws(() => paymentReplacementOwner(key + '\n'));
+  const storage = new Map<string, string>(); const journal = new OperationJournal(() => ({ get length() { return storage.size; }, key: index => [...storage.keys()][index] ?? null, getItem: key => storage.get(key) ?? null, setItem: (key, value) => { storage.set(key, value); }, removeItem: key => { storage.delete(key); } }));
+  const entry = journal.remember(actor, 'billing.payment.replacement.create', key);
+  assert.doesNotMatch([...storage.values()].join(''), /Synthetic|4000/);
+  let lookups = 0; const adapters = { 'billing.payment.replacement.create': { lookup: async () => { lookups++; return { state: 'committed' as const, result: saved }; } } };
+  assert.deepEqual(operationRecoveryCapabilities(entry.operation, adapters), { canCheck: true, canClose: false, unavailable: null });
+  const legacy = { lookup: async () => { throw Error('legacy lookup'); }, close: async () => { throw Error('legacy close'); } };
+  await assert.rejects(() => reconcileOperationRecovery(entry, journal, legacy, adapters, 'close'), { code: 'recovery_close_unsupported' }); assert.equal(lookups, 0);
+  assert.deepEqual(await reconcileOperationRecovery(entry, journal, legacy, adapters), { state: 'committed', result: { id: saved.declarationId, version: '1' } }); assert.equal(lookups, 1); assert.equal(storage.size, 0);
+});
+
 test('buyer follow-up binds the exact submitted original and admits neither private notes nor financial claims', async () => {
   const owner: PaymentDraft = { ...declaration, state: 'submitted', submission: { id: submissionResult.submissionId, reviewRevision: '1', reservationId: '51', evidence: checkedImage.reference!, submittedAt: result.recordedAt } };
   const value = { declarationId, declarationRevision: '2', submissionId: submissionResult.submissionId, evidence: checkedImage.reference,

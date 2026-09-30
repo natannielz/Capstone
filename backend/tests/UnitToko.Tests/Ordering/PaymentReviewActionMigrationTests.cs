@@ -21,14 +21,14 @@ public sealed class PaymentReviewActionMigrationTests(MongoFixture fixture)
         var before = await Definitions(db); var history = await db.GetCollection<BsonDocument>("schemaMigrations").Find(new BsonDocument()).Sort(new BsonDocument("_id", 1)).ToListAsync();
         var extra = new BsonDocument("declarationId", new BsonDocument("$ne", 99L));
         await db.RunCommandAsync<BsonDocument>(new BsonDocument { { "create", PaymentReviewActionRecords.Versions }, { "validator", extra } });
-        await new CollectionMigrations(db, new SystemClock()).ApplyAsync(); var after = await Definitions(db);
+        await LegacyOrderSubmissionTestSchema.UpgradeV43Async(db, new SystemClock()); var after = await Definitions(db);
         foreach (var row in before) Assert.Equal(row, after.Single(value => value["name"] == row["name"]));
         Assert.Equal(history, (await db.GetCollection<BsonDocument>("schemaMigrations").Find(new BsonDocument()).Sort(new BsonDocument("_id", 1)).ToListAsync()).Take(42));
         var validator = after.Single(row => row["name"] == PaymentReviewActionRecords.Versions)["options"]["validator"].AsBsonDocument;
         Assert.True(InventorySchemas.Contains(validator, extra)); Assert.True(InventorySchemas.Contains(validator, PaymentReviewActionSchemas.Validator()));
         await Assert.ThrowsAsync<MongoWriteException>(() => db.GetCollection<BsonDocument>(PaymentReviewActionRecords.Versions).InsertOneAsync(new BsonDocument("_id", 1L)));
         await db.GetCollection<BsonDocument>("schemaMigrations").DeleteOneAsync(new BsonDocument("_id", 43));
-        await new CollectionMigrations(db, new SystemClock()).ApplyAsync(); Assert.Equal(after, await Definitions(db));
+        await LegacyOrderSubmissionTestSchema.UpgradeV43Async(db, new SystemClock()); Assert.Equal(after, await Definitions(db));
         Assert.Equal(43, await db.GetCollection<BsonDocument>("schemaMigrations").CountDocumentsAsync(new BsonDocument()));
         Assert.Equal(0, await db.GetCollection<BsonDocument>(PaymentReviewActionRecords.Versions).CountDocumentsAsync(new BsonDocument()));
     });

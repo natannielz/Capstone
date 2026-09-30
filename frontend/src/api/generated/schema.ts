@@ -849,6 +849,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/billing/payment-declarations/{id}/replacement": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["CreateOwnPaymentReplacement"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/billing/payment-declarations/{id}/replacement-origin/query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ReadOwnPaymentReplacementOrigin"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/billing/payment-declarations/{id}/replacement/operations/query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["RecoverOwnPaymentReplacement"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/billing/payment-declarations/{id}/replacement/query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["PreviewOwnPaymentReplacement"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/billing/payment-declarations/{id}/submission/operations/query": {
         parameters: {
             query?: never;
@@ -5726,6 +5790,45 @@ export interface components {
             evidence: components["schemas"]["PaymentEvidenceReferenceDto"];
             result: null | components["schemas"]["PaymentOcrResultDto"];
             state: string;
+            submissionId: components["schemas"]["LongId"];
+        };
+        PaymentReplacementOriginDto: {
+            parentDeclarationId: components["schemas"]["LongId"];
+            parentDeclarationRevision: string;
+        };
+        PaymentReplacementOriginViewDto: {
+            origin: null | components["schemas"]["PaymentReplacementOriginDto"];
+        };
+        PaymentReplacementRecoveryDto: {
+            result: null | components["schemas"]["PaymentReplacementResultDto"];
+            status: string;
+        };
+        PaymentReplacementRequestDto: {
+            actionHash: string;
+            actionId: components["schemas"]["LongId"];
+            binding: string;
+            reviewRevision: string;
+        };
+        PaymentReplacementResultDto: {
+            declarationId: components["schemas"]["LongId"];
+            parentDeclarationId: components["schemas"]["LongId"];
+            parentDeclarationRevision: string;
+            /** Format: date-time */
+            recordedAt: string;
+            revision: string;
+            versionId: components["schemas"]["LongId"];
+        };
+        PaymentReplacementSaveDto: {
+            reason: string;
+            request: components["schemas"]["PaymentReplacementRequestDto"];
+        };
+        PaymentReplacementViewDto: {
+            evidence: components["schemas"]["PaymentEvidenceReferenceDto"];
+            existing: null | components["schemas"]["PaymentReplacementResultDto"];
+            input: components["schemas"]["PaymentDraftInputDto"];
+            parentDeclarationId: components["schemas"]["LongId"];
+            parentDeclarationRevision: string;
+            request: components["schemas"]["PaymentReplacementRequestDto"];
             submissionId: components["schemas"]["LongId"];
         };
         PaymentReviewActionRecoveryDto: {
@@ -11358,6 +11461,354 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PaymentDraftDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Payload Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    CreateOwnPaymentReplacement: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Reuse this key only for an unchanged logical command, including after an uncertain response. */
+                "Idempotency-Key": string;
+                /** @description One quoted nonnegative Int64 resource version from the latest response; never a JavaScript number. */
+                "If-Match": string;
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
+                /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
+                "X-Expected-Actor-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PaymentReplacementSaveDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentReplacementResultDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Payload Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    ReadOwnPaymentReplacementOrigin: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description One quoted nonnegative Int64 resource version from the latest response; never a JavaScript number. */
+                "If-Match": string;
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
+                /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
+                "X-Expected-Actor-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OrderReadDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentReplacementOriginViewDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Payload Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    RecoverOwnPaymentReplacement: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
+                /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
+                "X-Expected-Actor-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OrderDraftRecoveryDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentReplacementRecoveryDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Payload Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    PreviewOwnPaymentReplacement: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description One quoted nonnegative Int64 resource version from the latest response; never a JavaScript number. */
+                "If-Match": string;
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
+                /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
+                "X-Expected-Actor-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OrderReadDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentReplacementViewDto"];
                 };
             };
             /** @description Bad Request */

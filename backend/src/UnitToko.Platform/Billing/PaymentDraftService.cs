@@ -41,8 +41,8 @@ public sealed partial class PaymentDraftService
     private DateTimeOffset Now => DateTimeOffset.FromUnixTimeMilliseconds(clock.UtcNow.ToUnixTimeMilliseconds());
     private async Task StorageAsync(CancellationToken ct) {
         await invoices.PaymentStorageAsync(ct);
-        foreach (var name in PaymentDraftSchemas.Collections)
-            await InventoryRepository.RequireStorageAsync(database, name, name == B.Heads ? PaymentSubmissionSchemas.DeclarationValidator() : PaymentDraftSchemas.Validator(name), PaymentDraftSchemas.Key(name), ct);
+        await InventoryRepository.RequireStorageAsync(database, B.Heads, PaymentSubmissionSchemas.DeclarationValidator(), PaymentDraftSchemas.Key(B.Heads), ct);
+        await ReplacementStorageAsync(ct);
         foreach (var name in PaymentSubmissionSchemas.Collections)
             await InventoryRepository.RequireStorageAsync(database, name, PaymentSubmissionSchemas.Validator(name), PaymentSubmissionSchemas.Key(name), ct);
     }
@@ -85,22 +85,35 @@ public sealed partial class PaymentDraftService
         submission is null ? null : new(new(submission["_id"].AsInt64), submission["reviewRevision"].AsInt64, new(submission["reservationId"].AsInt64),
             PaymentSubmissionBson.Reference(submission["evidence"].AsBsonDocument), ShipmentReceiptRecords.Time(submission["submittedAt"])));
     }
-    public async Task<BsonDocument> SaveAsync(ActorContext actor, long? declarationId, long expectedRevision, PaymentDraftInput input,
-        AuthorizationCommandMetadata metadata, CancellationToken ct = default) {
-        AuthorizationStore.ValidateMetadata(metadata); input = PaymentDraftPolicy.Copy(input, AccountingCalendar.BusinessDate(clock.UtcNow));
+    public Task<BsonDocument> SaveAsync(ActorContext actor, long? declarationId, long expectedRevision, PaymentDraftInput input,
+        AuthorizationCommandMetadata metadata, CancellationToken ct = default) => SaveCoreAsync(actor, declarationId, expectedRevision, input, metadata, null, ct);
+    private async Task<BsonDocument> SaveCoreAsync(ActorContext actor, long? declarationId, long expectedRevision, PaymentDraftInput? input,
+        AuthorizationCommandMetadata metadata, ReplacementCreation? replacement, CancellationToken ct) {
+        AuthorizationStore.ValidateMetadata(metadata); if (replacement is null) input = PaymentDraftPolicy.Copy(input!, AccountingCalendar.BusinessDate(clock.UtcNow));
         if (metadata.IdempotencyKey.Length > 128 || metadata.IdempotencyKey.Any(character => !char.IsAsciiLetterOrDigit(character) && character is not ('-' or '_' or '.' or ':')) ||
             (declarationId is null ? expectedRevision != 0 : declarationId <= 0 || expectedRevision is <= 0 or >= long.MaxValue - 1))
             throw PaymentDraftPolicy.Invalid();
         await StorageAsync(ct); var id = declarationId ?? (await ids.NextAsync(B.Heads, ct)).Value;
         var versionId = (await ids.NextAsync(B.Versions, ct)).Value; var auditId = (await ids.NextAsync("auditEvents", ct)).Value;
-        var body = B.Body(declarationId, expectedRevision, input); var bodyHash = AuthorizationStore.CommandHash(body, metadata.Reason);
-        BsonDocument? previous = null; BsonArray sources = []; BsonArray scopes = [];
-        return await authorization.ExecuteCommandAsync(actor, B.Operation, metadata, body, async (authority, tx, token) => {
+        var operation = replacement is null ? B.Operation : B.ReplacementOperation;
+        var body = replacement is null ? B.Body(declarationId, expectedRevision, input!) : B.ReplacementBody(replacement.ParentId, replacement.Revision, replacement.Input);
+        var bodyHash = AuthorizationStore.CommandHash(body, metadata.Reason);
+        BsonDocument? previous = null, origin = null; BsonArray sources = []; BsonArray scopes = [];
+        return await authorization.ExecuteCommandAsync(actor, operation, metadata, body, async (authority, tx, token) => {
             _ = Query(actor, authority); previous = null;
             var orphan = await records.Rows(B.Versions).Find(tx, new BsonDocument { { "recordedBy", actor.UserId }, { "requestKey", metadata.IdempotencyKey } }).Limit(2).ToListAsync(token);
             if (orphan.Count > 1) throw B.Invalid(); if (orphan.Count == 1) _ = await records.VersionAsync(tx, orphan[0]["_id"].AsInt64, token);
             if (declarationId.HasValue) previous = await HeadAsync(actor, authority, tx, declarationId.Value, token);
-            sources = await SourcesAsync(actor, authority, tx, input, token); scopes = B.Scopes(sources, actor.UserId);
+            if (replacement is not null) {
+                origin = await ReplacementSourceAsync(actor, authority, tx, replacement, token);
+                input = PaymentDraftPolicy.Copy(B.Input(origin["source"]["input"].AsBsonDocument), AccountingCalendar.BusinessDate(clock.UtcNow));
+            }
+            sources = await SourcesAsync(actor, authority, tx, input!, token); scopes = B.Scopes(sources, actor.UserId);
+            if (previous is not null) {
+                var first = await records.Rows(B.Versions).Find(tx, new BsonDocument { { "declarationId", previous["_id"] }, { "revision", 1L } }).SingleOrDefaultAsync(token) ?? throw B.Invalid();
+                if (first["schemaVersion"] == 2 && !InvoiceRecords.Equal(first["replacement"]["source"]["input"]["invoiceIds"], B.Input(input!)["invoiceIds"]))
+                    throw PaymentDraftPolicy.Invalid("payment_replacement_invoices_locked");
+            }
             if (previous is not null && !InvoiceRecords.Equal(previous["party"], B.Party(sources))) throw PaymentDraftPolicy.Invalid("payment_parties_locked");
             var resources = B.Scopes(scopes);
             return new(ScopePolicy.Authorize(actor, authority, Permissions.PaymentEvidence, resources[0], clock.UtcNow),
@@ -108,12 +121,17 @@ public sealed partial class PaymentDraftService
         }, async (tx, token) => {
             if (previous is not null && (previous["revision"] != expectedRevision || previous["state"] != "draft")) throw PaymentDraftRecords.Changed();
             var now = Now; if (previous is not null && now < ShipmentReceiptRecords.Time(previous["updatedAt"])) throw B.Invalid();
+            if (origin is not null) {
+                var existing = await records.Rows(B.Versions).Find(tx, new BsonDocument("replacement.source.declarationId", replacement!.ParentId)).Limit(1).AnyAsync(token);
+                if (existing) throw new PersistenceConflictException("payment_replacement_exists", "Read the existing linked replacement before creating another draft");
+            }
             var prior = previous is null ? null : await records.VersionAsync(tx, previous["versionId"].AsInt64, token);
-            var row = new BsonDocument { { "_id", versionId }, { "schemaVersion", 1 }, { "declarationId", id }, { "revision", expectedRevision + 1 },
+            var row = new BsonDocument { { "_id", versionId }, { "schemaVersion", origin is null ? 1 : 2 }, { "declarationId", id }, { "revision", expectedRevision + 1 },
                 { "recordedBy", actor.UserId }, { "recordedAt", now.UtcDateTime }, { "previousVersionId", prior is null ? BsonNull.Value : prior["_id"] },
-                { "previousHash", prior is null ? BsonNull.Value : prior["snapshotHash"] }, { "input", B.Input(input) }, { "invoices", sources }, { "party", B.Party(sources) }, { "scopes", scopes },
+                { "previousHash", prior is null ? BsonNull.Value : prior["snapshotHash"] }, { "input", B.Input(input!) }, { "invoices", sources }, { "party", B.Party(sources) }, { "scopes", scopes },
                 { "actorGrantVersion", actor.GrantVersion }, { "requestKey", metadata.IdempotencyKey }, { "bodyHash", bodyHash }, { "reason", metadata.Reason },
-                { "correlationId", metadata.CorrelationId }, { "auditId", auditId } }; row.Add("snapshotHash", B.Hash(row));
+                { "correlationId", metadata.CorrelationId }, { "auditId", auditId } };
+            if (origin is not null) row.Add("replacement", origin); row.Add("snapshotHash", B.Hash(row));
             await records.Rows(B.Versions).InsertOneAsync(tx, row, cancellationToken: token);
             var head = new BsonDocument { { "_id", id }, { "schemaVersion", 1 }, { "versionId", versionId }, { "revision", expectedRevision + 1 },
                 { "recordedBy", actor.UserId }, { "state", "draft" }, { "party", row["party"].DeepClone() }, { "scopes", scopes.DeepClone() }, { "fence", 0L },
@@ -121,19 +139,21 @@ public sealed partial class PaymentDraftService
             if (previous is null) await records.Rows(B.Heads).InsertOneAsync(tx, head, cancellationToken: token);
             else if ((await records.Rows(B.Heads).ReplaceOneAsync(tx, previous, head, cancellationToken: token)).ModifiedCount != 1) throw PaymentDraftRecords.Changed();
             await records.Rows("auditEvents").InsertOneAsync(tx, B.Audit(row), cancellationToken: token);
-            await records.Rows("outboxEvents").InsertOneAsync(tx, new BsonDocument { { "_id", ObjectId.GenerateNewId() }, { "schemaVersion", 1 }, { "kind", B.Operation },
-                { "sourceKey", B.Operation + ":" + versionId }, { "payload", B.Result(row) }, { "createdAt", now.UtcDateTime }, { "dueAt", now.UtcDateTime }, { "status", "pending" }, { "attempts", 0 } }, cancellationToken: token);
+            var effect = new BsonDocument { { "_id", ObjectId.GenerateNewId() }, { "schemaVersion", 1 }, { "kind", operation },
+                { "sourceKey", operation + ":" + versionId }, { "payload", B.Result(row) }, { "createdAt", now.UtcDateTime }, { "dueAt", now.UtcDateTime }, { "status", "pending" }, { "attempts", 0 } };
+            if (origin is not null) { effect.Add("actorId", actor.UserId); effect.Add("requestKey", metadata.IdempotencyKey); }
+            await records.Rows("outboxEvents").InsertOneAsync(tx, effect, cancellationToken: token);
             return B.Result(row);
         }, ct, async (authority, tx, token) => {
-            var version = await RecoveredVersionAsync(actor, tx, metadata.IdempotencyKey, token) ?? throw B.Invalid();
+            var version = await RecoveredVersionAsync(actor, tx, metadata.IdempotencyKey, token, operation) ?? throw B.Invalid();
             if (version["bodyHash"] != bodyHash) throw B.Invalid();
             var head = await HeadAsync(actor, authority, tx, version["declarationId"].AsInt64, token);
             await records.TouchAsync(tx, head, token); await FenceAsync(actor, authority, tx, head["scopes"].AsBsonArray, token);
         });
     }
-    private async Task<BsonDocument?> RecoveredVersionAsync(ActorContext actor, IClientSessionHandle tx, string key, CancellationToken ct) {
-        var receipt = await records.Rows("idempotencyRecords").Find(tx, new BsonDocument { { "actorId", actor.UserId }, { "operation", B.Operation }, { "key", key } }).SingleOrDefaultAsync(ct);
-        var rows = await records.Rows(B.Versions).Find(tx, new BsonDocument { { "recordedBy", actor.UserId }, { "requestKey", key } }).Limit(2).ToListAsync(ct);
+    private async Task<BsonDocument?> RecoveredVersionAsync(ActorContext actor, IClientSessionHandle tx, string key, CancellationToken ct, string operation = B.Operation) {
+        var receipt = await records.Rows("idempotencyRecords").Find(tx, new BsonDocument { { "actorId", actor.UserId }, { "operation", operation }, { "key", key } }).SingleOrDefaultAsync(ct);
+        var rows = await records.Rows(B.Versions).Find(tx, new BsonDocument { { "recordedBy", actor.UserId }, { "requestKey", key }, { "schemaVersion", operation == B.ReplacementOperation ? 2 : 1 } }).Limit(2).ToListAsync(ct);
         if (rows.Count == 0 && receipt is null) return null;
         if (rows.Count != 1 || receipt is null) throw B.Invalid();
         var version = await records.VersionAsync(tx, rows[0]["_id"].AsInt64, ct);

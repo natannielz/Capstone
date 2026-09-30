@@ -32,6 +32,18 @@ Use **Periksa hasil** after a lost save/reservation/submission response. An abse
 
 Once the reservation exists, read its durable status. A `fresh` attempt may receive the chosen original. `writing` and `publish_pending` require recovery of that attempt; pending publication can only use its committed exact byte tuple. Upload recovery never reads a new browser file. `interrupted` is incomplete and retains its quota charge. `quarantined` retains the immutable original and its validation request, with scanner/decoder explicitly unavailable. The buyer screen performs a read after uploading, so a lost upload response can be reconciled without another byte upload.
 
+## Requested replacement
+
+When the private follow-up says **Petugas meminta bukti pengganti**, use **Siapkan bukti pengganti**. The server reads the exact closed submission and immutable staff request. Confirmation creates one separate draft for that parent; if it already exists, preparation opens it. The original submission, original bytes, review history and invoice balance remain unchanged.
+
+The replacement copies the original invoice group and transfer fields. Invoice selection is locked; review and correct the transfer fields, save, upload a new original, wait for security checks, then explicitly submit it. The replacement links back to **Buka pengajuan asli**. It has its own upload reservation, pin, submission and subsequent review. Creating/submitting it is neither bank acceptance nor allocation.
+
+If creation loses its response, use **Periksa hasil** after reloading. The dedicated `billing.payment.replacement.create` adapter looks up the original `rp.<parentId>.<UUID>` key under current buyer authority. It cannot close an unconfirmed attempt or resend creation. The local journal retains only actor/operation/key/time. Missing source history, receipt, audit, metadata effect or current scope blocks recovery; operators must investigate rather than rebuild the history.
+
+Migration 44 extends only the owning immutable draft-version schema and adds partial uniqueness on the parent of an initial replacement version. It preserves previous receipts, stronger conjunctive rules and actual predecessor histories. Unsafe indexes/options/counters, unexpected new versions or orphan replacement effects block installation before DDL. Empty interrupted DDL can resume. Stop application writers throughout DDL, rehearse restore and migration against the actual approved copy, and retain the one-writer cutover gate. Do not delete applied receipts to downgrade or adopt unverified rows.
+
+Local synthetic browser/API/Mongo checks do not activate real storage, deliver notifications, authorize financial actions or establish staging/production acceptance.
+
 ## Explicit host configuration
 
 The API defaults to unavailable private storage. Operators may supply `Evidence:PrivateWindows:Root`, `Evidence:PrivateWindows:StoreId` and `Evidence:PrivateWindows:TrustedOperatorSids` through the approved runtime configuration. Partial settings fail startup. The existing adapter validates the real local NTFS root, ancestors, ownership, ACLs and service rights. Unsupported hosts or unsafe permissions remain unavailable. Configuration does not seed quotas or mark the host production-accepted.

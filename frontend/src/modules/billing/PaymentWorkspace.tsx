@@ -12,7 +12,7 @@ import { OperationRecovery, useOperationRecovery } from '../administration/Opera
 import { submitTrackedRequest } from '../administration/operation-journal';
 import { orderAmount } from '../ordering/order-quote-client';
 import { createInvoiceGateway, type Invoice } from './invoice-client';
-import { createPaymentGateway, paymentReservationOwner, paymentEvidenceLabel, preparePayment, preparePaymentSubmission, type PaymentDraft, type PaymentInput, type PaymentEvidenceStatus } from './payment-client';
+import { createPaymentGateway, paymentReservationOwner, paymentEvidenceLabel, preparePayment, preparePaymentSubmission, preparePaymentReplacement, type PaymentReplacementOrigin, type PaymentDraft, type PaymentInput, type PaymentEvidenceStatus } from './payment-client';
 import common from '../administration/access.module.css';
 import styles from './invoice.module.css';
 import { PaymentOcrPanel } from './PaymentOcrPanel';
@@ -28,6 +28,7 @@ function message(error: unknown) {
   if (error instanceof AccessFailure && error.code === 'evidence_capacity_exhausted') return 'Kapasitas unggah sedang penuh. Hubungi penanggung jawab sebelum mencoba kembali.';
   if (error instanceof AccessFailure && ['payment_draft_changed', 'evidence_target_revision_conflict', 'payment_parties_locked'].includes(error.code)) return 'Draf atau kelompok penjual berubah. Muat draf terbaru dan periksa pilihan invoice.';
   if (error instanceof AccessFailure && error.code === 'payment_image_required') return 'Pilih satu foto JPG atau PNG yang tidak kosong, maksimal 10 MB.';
+  if (error instanceof AccessFailure && error.code === 'payment_replacement_exists') return 'Draf pengganti sudah dibuat. Muat permintaan terbaru untuk membuka draf tersebut.';
   if (error instanceof AccessFailure && ['evidence_read_not_eligible', 'evidence_read_policy_unavailable'].includes(error.code)) return 'Bukti belum dapat ditampilkan. Muat status terbaru atau hubungi penanggung jawab pemeriksaan bukti.';
   if (error instanceof AccessFailure && ['evidence_read_lease_expired', 'evidence_read_reference_changed', 'evidence_read_integrity_unavailable', 'evidence_validation_integrity', 'payment_response_invalid'].includes(error.code)) return 'Bukti tidak dapat ditampilkan dengan aman. Muat draf terbaru dan periksa kembali; hubungi penanggung jawab jika masalah berlanjut.';
   if (error instanceof IdentityFailure) return 'Masuk kembali untuk memeriksa draf pembayaran Anda.';
@@ -65,6 +66,9 @@ function PaymentDesk({ account, now, onDenied }: { account: Account; now: number
   const [selected, setSelected] = useState<PaymentDraft | null>(null), [input, setInput] = useState<PaymentInput>(() => empty(now)), [reason, setReason] = useState('');
   const [ocr, setOcr] = useState<PaymentOcrView | null>(null);
   const [followUp, setFollowUp] = useState<PaymentFollowUp | null>(null);
+  const [origin, setOrigin] = useState<PaymentReplacementOrigin | null>(null), [replacement, setReplacement] = useState<ReturnType<typeof preparePaymentReplacement> | null>(null);
+  const replacementHeading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => { if (replacement) replacementHeading.current?.focus(); }, [replacement]);
   const [evidence, setEvidence] = useState<PaymentEvidenceStatus[]>([]), [file, setFileState] = useState<File | null>(null), [notice, setNotice] = useState(''), [error, setError] = useState<unknown>(null);
   const [localPreview, setLocalPreview] = useState<{ url: string; rotation: number } | null>(null), [uploading, setUploading] = useState(false);
   const localPreviewUrl = useRef<string | null>(null), cameraInput = useRef<HTMLInputElement>(null);
@@ -72,6 +76,7 @@ function PaymentDesk({ account, now, onDenied }: { account: Account; now: number
   const alive = useRef(false), pending = useRef(false), recoveredId = useRef<string | null>(null), heading = useRef<HTMLHeadingElement>(null), fileInput = useRef<HTMLInputElement>(null);
   const [uploadLedgers] = useState(() => new Map<string, MutationLedger>());
   const [submissionLedgers] = useState(() => new Map<string, MutationLedger>());
+  const [replacementLedgers] = useState(() => new Map<string, MutationLedger>());
   function setFile(next: File | null) {
     setError(null);
     if (localPreviewUrl.current) URL.revokeObjectURL(localPreviewUrl.current); localPreviewUrl.current = null; setLocalPreview(null); setFileState(null);
@@ -109,8 +114,9 @@ function PaymentDesk({ account, now, onDenied }: { account: Account; now: number
     finally { pending.current = false; if (alive.current) { setBusy(false); recovery.refresh(); } }
   }
   async function open(id: string) {
-    closePreview(); setConfirmation(null); setOcr(null); setFollowUp(null);
+    closePreview(); setConfirmation(null); setOcr(null); setFollowUp(null); setReplacement(null); setOrigin(null); setSelected(null);
     const value = await gateway.read(account.actorId, id); if (!current()) return;
+    const linked = await gateway.replacementOrigin(account.actorId, value); if (!current()) return; setOrigin(linked);
     setSelected(value); setInput({ ...value.input, invoiceIds: [...value.input.invoiceIds] }); setReason(''); setEvidence([]); setFile(null); if (fileInput.current) fileInput.current.value = '';
     const images = await gateway.evidence(account.actorId, id); if (current()) { setEvidence(images); heading.current?.focus(); }
   }
@@ -168,6 +174,23 @@ function PaymentDesk({ account, now, onDenied }: { account: Account; now: number
       if (current()) { await open(result.declarationId); if (current()) { setNotice('Bukti diajukan. Pembayaran menunggu verifikasi; saldo tagihan belum berubah.'); setBefore(null); setRefresh(value => value + 1); } }
     });
   }
+  async function previewReplacement() {
+    if (locked || !selected || followUp?.state !== 'replacement_requested') return;
+    const owner = selected; await perform(async () => {
+      setReplacement(null); const shown = await gateway.replacement(account.actorId, owner); if (!current()) return;
+      if (shown.existing) { await open(shown.existing.declarationId); return; }
+      setReplacement(preparePaymentReplacement(account.actorId, owner, shown, 'Draf pengganti atas permintaan pemeriksaan bukti'));
+    });
+  }
+  async function createReplacement() {
+    if (locked || !replacement || !selected || selected.id !== replacement.parentId || selected.revision !== replacement.revision) return;
+    const command = replacement; await perform(async () => {
+      if (recovery.journal.list(account.actorId).length) throw new AccessFailure(400, 'resolve_previous_attempt');
+      const ownerLedger = replacementLedgers.get(command.parentId) ?? new MutationLedger(() => 'rp.' + command.parentId + '.' + crypto.randomUUID()); replacementLedgers.set(command.parentId, ownerLedger);
+      const result = await submitTrackedRequest(ownerLedger, recovery.journal, account.actorId, 'billing.payment.replacement.create', 'billing.payment.replacement.create', command, key => gateway.createReplacement(command, key, current));
+      if (current()) { await open(result.declarationId); if (current()) { setNotice('Draf pengganti tersimpan. Periksa data transfer dan unggah bukti asli baru sebelum mengajukan.'); setBefore(null); setRefresh(value => value + 1); } }
+    });
+  }
   const choices = new Map((selected?.invoices ?? []).map(item => [item.invoiceId, item]));
   for (const item of invoicePage.items) choices.set(item.id, { invoiceId: item.id, number: `${item.numberEntity}/${item.numberChannel}/${item.numberYear}/${item.number}`, total: item.detail.total, buyerName: item.detail.buyerName, sellerName: item.detail.sellerName });
   const hasPending = evidence.some(item => ['fresh', 'writing', 'publish_pending'].includes(item.state) && Date.parse(item.expiresAt) > now);
@@ -175,15 +198,17 @@ function PaymentDesk({ account, now, onDenied }: { account: Account; now: number
   const submitted = selected?.state === 'submitted';
   return <><AdministrationNavigation current="payments" actions={account.actions} locked={busy || recovering} />
     <OperationRecovery entries={recovery.entries} journal={recovery.journal} disabled={busy || offline} onBusyChange={setRecovering} recoveryAdapters={{
+      'billing.payment.replacement.create': { lookup: async entry => { const receipt = await gateway.recoverReplacement(entry.actorId, entry.key); if (!current()) throw new AccessFailure(409, 'recovery_request_stale'); recoveredId.current = receipt?.result.declarationId ?? null; return receipt; } },
       'billing.payment.submit': { lookup: async entry => { const receipt = await gateway.recoverSubmission(entry.actorId, entry.key); if (!current()) throw new AccessFailure(409, 'recovery_request_stale'); recoveredId.current = receipt?.result.declarationId ?? null; return receipt; } },
       'billing.payment': { lookup: async entry => { const receipt = await gateway.recover(entry.actorId, entry.key); if (!current()) throw new AccessFailure(409, 'recovery_request_stale'); recoveredId.current = receipt?.result.declarationId ?? null; return receipt; } },
       'evidence.payment-image': { lookup: async entry => { const receipt = await gateway.recoverReservation(entry.actorId, entry.key); if (!current()) throw new AccessFailure(409, 'recovery_request_stale'); recoveredId.current = receipt ? paymentReservationOwner(entry.key) : null; return receipt; } },
-    }} onFailure={failure => { setError(failure); onDenied(failure); }} onResolved={() => { recovery.refresh(); ledger.resetAfterReconciliation(); for (const item of [...uploadLedgers.values(), ...submissionLedgers.values()]) item.resetAfterReconciliation(); const id = recoveredId.current; recoveredId.current = null;
+    }} onFailure={failure => { setError(failure); onDenied(failure); }} onResolved={() => { recovery.refresh(); ledger.resetAfterReconciliation(); for (const item of [...uploadLedgers.values(), ...submissionLedgers.values(), ...replacementLedgers.values()]) item.resetAfterReconciliation(); const id = recoveredId.current; recoveredId.current = null;
       void (async () => { if (!current()) return; setBusy(true); try { if (id) await open(id); if (current()) setRefresh(value => value + 1); }
         catch (failure) { if (current()) { setError(failure); onDenied(failure); } } finally { if (alive.current) setBusy(false); } })(); }} />
     {recovery.error !== null && <p role="alert">{accessMessage(recovery.error)}</p>}{error !== null && <p role="alert" className={common.alert}>{message(error)}</p>}
     {offline && <p role="status">Koneksi terputus. Draf dan berkas belum dapat dikirim.</p>}{busy && <p role="status">Memeriksa pembayaran…</p>}{notice && <p role="status">{notice}</p>}
     <section className={common.accountSection} aria-label="Draf pembayaran"><h2 ref={heading} tabIndex={-1}>{selected ? `${submitted ? 'Pembayaran' : 'Draf pembayaran'} ${selected.id}` : 'Catat pembayaran'}</h2>
+      {origin && <p>Pengganti pengajuan {origin.parentDeclarationId}. Invoice tetap mengikuti pengajuan asli. <button className={common.secondary} disabled={locked} onClick={() => void perform(() => open(origin.parentDeclarationId))}>Buka pengajuan asli</button></p>}
       {submitted ? <p role="status"><strong>Pengajuan tersimpan</strong> · Data dan bukti pengajuan telah dikunci. Periksa tindak lanjut petugas dan rincian saldo pada invoice.</p>
         : <p>Draf bersifat pribadi. Nilai transfer yang dicatat belum mengurangi tagihan. Bukti pembayaran wajib diperiksa sebelum dapat diajukan.</p>}
       {submitted && selected ? <><dl className={styles.facts}>
@@ -193,7 +218,7 @@ function PaymentDesk({ account, now, onDenied }: { account: Account; now: number
         <h3>Invoice yang diajukan</h3><ul className={styles.lines}>{selected.invoices.map(item => <li key={item.invoiceId}><strong>{item.number}</strong><p>{item.buyerName} · {item.sellerName}</p><p>Total invoice {rupiah(item.total)}</p></li>)}</ul>
         <p>Jumlah transfer ini belum dialokasikan. Saldo invoice tetap menunggu pemeriksaan dana masuk.</p></>
       : <form onChangeCapture={() => { closePreview(); setConfirmation(null); }} onSubmit={event => { event.preventDefault(); void save(); }}><fieldset disabled={locked || confirmation !== null}><legend>Invoice yang dibayar</legend><ul className={styles.candidates}>{[...choices.values()].map(item => <li key={item.invoiceId}><label>
-        <input type="checkbox" checked={input.invoiceIds.includes(item.invoiceId)} disabled={locked || input.invoiceIds.length >= 20 && !input.invoiceIds.includes(item.invoiceId)} onChange={event => setInput(value => ({ ...value, invoiceIds: event.target.checked ? [...value.invoiceIds, item.invoiceId] : value.invoiceIds.filter(id => id !== item.invoiceId) }))} />
+        <input type="checkbox" checked={input.invoiceIds.includes(item.invoiceId)} disabled={locked || origin !== null || input.invoiceIds.length >= 20 && !input.invoiceIds.includes(item.invoiceId)} onChange={event => setInput(value => ({ ...value, invoiceIds: event.target.checked ? [...value.invoiceIds, item.invoiceId] : value.invoiceIds.filter(id => id !== item.invoiceId) }))} />
         <span><strong>{item.number}</strong><span>{item.buyerName} · {item.sellerName}</span><span>Total invoice {rupiah(item.total)}</span></span></label></li>)}</ul>
         {!choices.size && !busy && <p>Belum ada invoice dalam akses Anda.</p>}
         {invoicePage.hasMore && <button type="button" className={common.secondary} onClick={() => setInvoiceBefore(invoicePage.items.at(-1)!.id)}>Invoice lebih lama</button>}
@@ -205,13 +230,18 @@ function PaymentDesk({ account, now, onDenied }: { account: Account; now: number
         <label htmlFor="payment-note">Catatan (opsional)</label><textarea id="payment-note" maxLength={1000} value={input.note ?? ''} onChange={event => setInput(value => ({ ...value, note: event.target.value || null }))} />
         <label htmlFor="payment-reason">Alasan pencatatan atau perubahan</label><textarea id="payment-reason" required maxLength={1000} value={reason} onChange={event => setReason(event.target.value)} />
         <button className={common.primary} disabled={locked || input.invoiceIds.length === 0}>Simpan draf pembayaran</button></fieldset></form>}
-      {selected && <button className={common.secondary} disabled={locked} onClick={() => { closePreview(); setConfirmation(null); setSelected(null); setInput(empty(now)); setReason(''); setEvidence([]); setFile(null); }}>Buat draf baru</button>}
+      {selected && <button className={common.secondary} disabled={locked} onClick={() => { closePreview(); setConfirmation(null); setReplacement(null); setOrigin(null); setSelected(null); setInput(empty(now)); setReason(''); setEvidence([]); setFile(null); }}>Buat draf baru</button>}
     </section>
     {submitted && selected && <section className={common.accountSection} aria-label="Tindak lanjut pengajuan"><h2>Tindak lanjut pengajuan</h2>
-      <button className={common.secondary} disabled={locked} onClick={() => void perform(async () => { setFollowUp(null); const result = await gateway.followUp(account.actorId, selected); if (current()) setFollowUp(result); })}>Muat tindak lanjut petugas</button>
+      <button className={common.secondary} disabled={locked} onClick={() => void perform(async () => { setFollowUp(null); setReplacement(null); const result = await gateway.followUp(account.actorId, selected); if (current()) setFollowUp(result); })}>Muat tindak lanjut petugas</button>
       {followUp?.declarationId === selected.id && <><p role="status">{{ pending: 'Belum ada penanggung jawab tindak lanjut', assigned: 'Penanggung jawab tindak lanjut telah ditetapkan', rejected: 'Pengajuan bukti ditolak', replacement_requested: 'Petugas meminta bukti pengganti' }[followUp.state]}</p>
         {followUp.recordedAt && <p>Diperbarui {new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Jakarta' }).format(new Date(followUp.recordedAt))}.</p>}
-        {['rejected', 'replacement_requested'].includes(followUp.state) && <p>Pengajuan ini telah ditutup untuk verifikasi baru. Data dan bukti aslinya tetap tersimpan. Hubungi petugas sebelum mengirim bukti lain.</p>}
+        {['rejected', 'replacement_requested'].includes(followUp.state) && <p>Pengajuan ini telah ditutup untuk verifikasi baru. Data dan bukti aslinya tetap tersimpan.</p>}
+        {followUp.state === 'replacement_requested' && <button className={common.secondary} disabled={locked} onClick={() => void previewReplacement()}>Siapkan bukti pengganti</button>}
+        {replacement?.parentId === selected.id && <section aria-label="Konfirmasi draf pengganti"><h3 ref={replacementHeading} tabIndex={-1}>Buat draf bukti pengganti</h3>
+          <p>Invoice dan data transfer disalin ke draf terpisah. Periksa nilai transfer, unggah bukti asli baru, lalu ajukan untuk pemeriksaan. Pengajuan {selected.id} tetap terkunci; saldo invoice belum berubah.</p>
+          <button className={common.primary} disabled={locked} onClick={() => void createReplacement()}>Buat draf pengganti</button>
+          <button className={common.secondary} disabled={locked} onClick={() => setReplacement(null)}>Kembali ke tindak lanjut</button></section>}
         <p>Tindak lanjut bukti tidak menetapkan penerimaan dana atau saldo invoice.</p></>}
     </section>}
     {submitted && selected && <PaymentOcrPanel view={ocr} locked={locked} onRefresh={() => void perform(async () => { setOcr(null); const result = await gateway.ocr(account.actorId, selected); if (current()) setOcr(result); })} />}

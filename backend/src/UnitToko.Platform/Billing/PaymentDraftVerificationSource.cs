@@ -22,7 +22,7 @@ public sealed partial class PaymentDraftService
             if (head["state"] != "submitted" || head["revision"] != revision) throw PaymentDraftRecords.Changed();
             var version = await records.VersionAsync(tx, head["versionId"].AsInt64, token);
             var submission = await new PaymentSubmissionRecords(database).ReadAsync(tx, head["submissionId"].AsInt64, token);
-            var latest = await new PaymentReviewActionRecords(database).LatestAsync(tx, id, SubmissionSource(head, version, submission), token);
+            var latest = await new PaymentReviewActionRecords(database).LatestAsync(tx, id, PaymentDraftBson.SubmittedSource(head, version, submission), token);
             // Buyer follow-up exposes no internal reasons, staff identities or bank/payer records, and makes no financial-status claim.
             var view = new PaymentFollowUpView(id, revision, submission["_id"].AsInt64, PaymentSubmissionBson.Reference(submission["evidence"].AsBsonDocument),
                 latest?["revision"].AsInt64 ?? 0, latest?["state"].AsString ?? "pending", new(submission["submittedAt"].ToUniversalTime()),
@@ -53,12 +53,6 @@ public sealed partial class PaymentDraftService
         var version = await records.VersionAsync(tx, head["versionId"].AsInt64, ct);
         var submission = await new PaymentSubmissionRecords(database).ReadAsync(tx, head["submissionId"].AsInt64, ct);
         await records.TouchAsync(tx, head, ct); await ReviewFenceAsync(actor, authority, tx, head["scopes"].AsBsonArray, ct);
-        return SubmissionSource(head, version, submission);
+        return PaymentDraftBson.SubmittedSource(head, version, submission);
     }
-    private static BsonDocument SubmissionSource(BsonDocument head, BsonDocument version, BsonDocument submission) =>
-        new() { { "declarationId", head["_id"] }, { "revision", head["revision"] }, { "versionId", version["_id"] },
-            { "versionHash", version["snapshotHash"] }, { "submissionId", submission["_id"] }, { "submissionHash", submission["snapshotHash"] },
-            { "recordedBy", submission["recordedBy"] }, { "uploaderId", submission["uploaderId"] }, { "reservationId", submission["reservationId"] },
-            { "evidence", submission["evidence"].DeepClone() }, { "input", version["input"].DeepClone() }, { "invoices", version["invoices"].DeepClone() },
-            { "party", head["party"].DeepClone() }, { "scopes", head["scopes"].DeepClone() } };
 }

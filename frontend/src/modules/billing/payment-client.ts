@@ -39,6 +39,29 @@ const ocrField = z.object({ field: z.enum(ocrFieldNames), value: text(256).nulla
     (value.field !== 'amount' || value.value === null || money.safeParse(value.value).success) && (value.field !== 'currency' || value.value === null || value.value === 'IDR') &&
     (value.field !== 'transfer_date' || value.value === null || day.safeParse(value.value).success));
 const hash = z.string().regex(/^[0-9a-f]{64}$(?![\s\S])/);
+const replacementRequest = z.object({ reviewRevision: id, actionId: id, actionHash: hash, binding: hash }).strict();
+const replacementResult = z.object({ parentDeclarationId: id, parentDeclarationRevision: id, declarationId: id, versionId: id, revision: z.literal('1'), recordedAt: timestamp }).strict()
+  .refine(value => BigInt(value.declarationId) > BigInt(value.parentDeclarationId));
+const replacementView = z.object({ parentDeclarationId: id, parentDeclarationRevision: id, submissionId: id, evidence: reference, input, request: replacementRequest, existing: replacementResult.nullable() }).strict();
+const replacementOrigin = z.object({ parentDeclarationId: id, parentDeclarationRevision: id }).strict();
+export type PaymentReplacementResult = z.infer<typeof replacementResult>;
+export type PaymentReplacementView = z.infer<typeof replacementView>;
+export type PaymentReplacementOrigin = z.infer<typeof replacementOrigin>;
+export function paymentReplacementOwner(key: string) {
+  const match = /^rp\.([1-9][0-9]{0,18})\.([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$(?![\s\S])/.exec(key);
+  return match && match[2] !== '00000000-0000-0000-0000-000000000000' ? priceId(match[1]) : invalid();
+}
+export function parsePaymentReplacementResult(value: unknown, key: string): PaymentReplacementResult {
+  const saved = parse(replacementResult, value); return saved.parentDeclarationId === paymentReplacementOwner(key) ? saved : invalid();
+}
+export function parsePaymentReplacementView(value: unknown, owner: PaymentDraft): PaymentReplacementView {
+  const shown = parse(replacementView, value), submitted = owner.submission;
+  if (owner.state !== 'submitted' || !submitted || shown.parentDeclarationId !== owner.id || shown.parentDeclarationRevision !== owner.revision || shown.submissionId !== submitted.id ||
+    shown.evidence.id !== submitted.evidence.id || shown.evidence.version !== submitted.evidence.version || shown.evidence.sha256 !== submitted.evidence.sha256 ||
+    Object.entries(owner.input).some(([name, value]) => JSON.stringify(shown.input[name as keyof PaymentInput]) !== JSON.stringify(value)) ||
+    shown.existing !== null && (shown.existing.parentDeclarationId !== owner.id || shown.existing.parentDeclarationRevision !== owner.revision)) return invalid();
+  return shown;
+}
 const ocrResult = z.object({ id, extractedAt: timestamp, provenance: z.object({ engineVersion: text(128), modelVersion: text(128), modelSha256: hash, runtimeSha256: hash, preprocessingVersion: text(128) }).strict(),
   fields: z.array(ocrField).length(8).refine(fields => fields.every((field, index) => field.field === ocrFieldNames[index])),
   qualityFlags: z.array(z.enum(['no_text', 'amount_unknown', 'low_confidence', 'touches_image_edge', 'ambiguous_fields'])).max(16) }).strict();
@@ -104,8 +127,40 @@ export function preparePaymentSubmission(actorId: string, declaration: PaymentDr
   return Object.freeze({ actorId: priceId(actorId), declarationId: owner.id, revision: owner.revision,
     body: Object.freeze({ reservationId: evidence.reservationId, evidence: Object.freeze({ ...evidence.reference }), reason: parse(text(1000), reason) }) });
 }
+export function preparePaymentReplacement(actorId: string, owner: PaymentDraft, value: PaymentReplacementView, reason: string) {
+  const shown = parsePaymentReplacementView(value, owner); if (shown.existing !== null) throw new RequestNotSentError(409, 'payment_replacement_exists');
+  return Object.freeze({ actorId: priceId(actorId), parentId: shown.parentDeclarationId, revision: shown.parentDeclarationRevision,
+    body: Object.freeze({ request: Object.freeze({ ...shown.request }), reason: parse(text(1000), reason) }) });
+}
 export function createPaymentGateway(client: ReturnType<typeof createUnitTokoClient> = createUnitTokoClient()) {
   return {
+    async replacement(actorId: string, owner: PaymentDraft) {
+      return parsePaymentReplacementView(data(await client.POST('/api/v1/billing/payment-declarations/{id}/replacement/query', {
+        body: { purpose: 'payment-replacement' }, params: { path: { id: priceId(owner.id) }, header: { ...headers(actorId), 'If-Match': '"' + priceId(owner.revision) + '"' } }, cache: 'no-store',
+      })), owner);
+    },
+    async replacementOrigin(actorId: string, owner: PaymentDraft): Promise<PaymentReplacementOrigin | null> {
+      const value = parse(z.object({ origin: replacementOrigin.nullable() }).strict(), data(await client.POST('/api/v1/billing/payment-declarations/{id}/replacement-origin/query', {
+        body: { purpose: 'payment-replacement-origin' }, params: { path: { id: priceId(owner.id) }, header: { ...headers(actorId), 'If-Match': '"' + priceId(owner.revision) + '"' } }, cache: 'no-store',
+      }))).origin;
+      return value === null || BigInt(value.parentDeclarationId) < BigInt(owner.id) ? value : invalid();
+    },
+    async createReplacement(command: ReturnType<typeof preparePaymentReplacement>, requestKey: string, current: () => boolean) {
+      check(current); if (paymentReplacementOwner(requestKey) !== command.parentId) return invalid();
+      const saved = parsePaymentReplacementResult(data(await client.POST('/api/v1/billing/payment-declarations/{id}/replacement', {
+        body: command.body, params: { path: { id: command.parentId }, header: { ...headers(command.actorId), 'If-Match': '"' + command.revision + '"', 'Idempotency-Key': requestKey } }, cache: 'no-store',
+      })), requestKey);
+      if (!current()) throw new AccessFailure(503, 'commit_outcome_unknown');
+      return saved.parentDeclarationRevision === command.revision ? saved : invalid();
+    },
+    async recoverReplacement(actorId: string, requestKey: string) {
+      const owner = paymentReplacementOwner(requestKey);
+      const value = parse(z.object({ status: z.enum(['not_confirmed', 'committed']), result: replacementResult.nullable() }).strict(), data(await client.POST('/api/v1/billing/payment-declarations/{id}/replacement/operations/query', {
+        body: { purpose: 'operation-recovery', key: requestKey }, params: { path: { id: owner }, header: headers(actorId) }, cache: 'no-store',
+      })));
+      if (value.status === 'not_confirmed' && value.result === null) return null;
+      return value.status === 'committed' && value.result !== null ? { state: 'committed' as const, result: parsePaymentReplacementResult(value.result, requestKey) } : invalid();
+    },
     async followUp(actorId: string, owner: PaymentDraft) {
       if (owner.state !== 'submitted' || !owner.submission) return invalid();
       return parsePaymentFollowUp(data(await client.POST('/api/v1/billing/payment-declarations/{id}/follow-up/query', {

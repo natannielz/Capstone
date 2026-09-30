@@ -33,6 +33,21 @@ public sealed record PaymentSubmissionResultDto(LongId DeclarationId, LongId Sub
 public sealed record PaymentSubmissionRecoveryDto(string Status, PaymentSubmissionResultDto? Result);
 public sealed record PaymentFollowUpDto(LongId DeclarationId, string DeclarationRevision, LongId SubmissionId, PaymentEvidenceReferenceDto Evidence,
     string ReviewRevision, string State, DateTimeOffset SubmittedAt, DateTimeOffset? RecordedAt);
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record PaymentReplacementRequestDto([property: JsonRequired] string ReviewRevision, [property: JsonRequired] LongId ActionId,
+    [property: JsonRequired] string ActionHash, [property: JsonRequired] string Binding)
+{
+    internal PaymentReplacementRequest Domain() => new(LongId.Parse(ReviewRevision).Value, ActionId.Value, ActionHash, Binding);
+    internal static PaymentReplacementRequestDto From(PaymentReplacementRequest value) => new(OrderDraftInputDto.Number(value.ReviewRevision), new(value.ActionId), value.ActionHash, value.Binding);
+}
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record PaymentReplacementSaveDto([property: JsonRequired] PaymentReplacementRequestDto Request, [property: JsonRequired] string Reason);
+public sealed record PaymentReplacementResultDto(LongId ParentDeclarationId, string ParentDeclarationRevision, LongId DeclarationId, LongId VersionId, string Revision, DateTimeOffset RecordedAt);
+public sealed record PaymentReplacementViewDto(LongId ParentDeclarationId, string ParentDeclarationRevision, LongId SubmissionId, PaymentEvidenceReferenceDto Evidence,
+    PaymentDraftInputDto Input, PaymentReplacementRequestDto Request, PaymentReplacementResultDto? Existing);
+public sealed record PaymentReplacementRecoveryDto(string Status, PaymentReplacementResultDto? Result);
+public sealed record PaymentReplacementOriginDto(LongId ParentDeclarationId, string ParentDeclarationRevision);
+public sealed record PaymentReplacementOriginViewDto(PaymentReplacementOriginDto? Origin);
 
 public static class PaymentDraftEndpoints
 {
@@ -57,6 +72,32 @@ public static class PaymentDraftEndpoints
                 new(new(row.Evidence.Id), OrderDraftInputDto.Number(row.Evidence.Version), row.Evidence.Sha256),
                 row.ReviewRevision.ToString(System.Globalization.CultureInfo.InvariantCulture), row.State, row.SubmittedAt, row.RecordedAt));
         }).WithName("ReadOwnPaymentFollowUp");
+        group.MapPost("/{id}/replacement/query", async (string id, OrderReadDto request, HttpContext http, PaymentDraftService service,
+            [FromHeader(Name = "If-Match")] string expected, CancellationToken ct) => {
+            if (request.Purpose != "payment-replacement") throw Invalid(); PrivateReplacement(http);
+            var view = await service.PreviewReplacementAsync(http.Features.Get<ResolvedActor>()!.Actor, LongId.Parse(id).Value, AccessRequestMetadata.ExpectedVersion(http.Request), ct);
+            var source = view.Source; var evidence = source["evidence"]; http.Response.Headers.ETag = AccessRequestMetadata.VersionTag(source["revision"].AsInt64);
+            return TypedResults.Ok(new PaymentReplacementViewDto(new(source["declarationId"].AsInt64), OrderDraftInputDto.Number(source["revision"].AsInt64), new(source["submissionId"].AsInt64),
+                new(new(evidence["id"].AsInt64), OrderDraftInputDto.Number(evidence["version"].AsInt64), evidence["sha256"].AsString),
+                PaymentDraftInputDto.From(view.Input), PaymentReplacementRequestDto.From(view.Request), view.Existing is null ? null : ReplacementResult(view.Existing)));
+        }).WithName("PreviewOwnPaymentReplacement");
+        group.MapPost("/{id}/replacement", async (string id, PaymentReplacementSaveDto request, HttpContext http, PaymentDraftService service,
+            [FromHeader(Name = "If-Match")] string expected, [FromHeader(Name = "Idempotency-Key")] string key, CancellationToken ct) => {
+            if (request.Request is null) throw Invalid(); PrivateReplacement(http);
+            return TypedResults.Ok(ReplacementResult(await service.CreateReplacementAsync(http.Features.Get<ResolvedActor>()!.Actor, LongId.Parse(id).Value,
+                AccessRequestMetadata.ExpectedVersion(http.Request), request.Request.Domain(), new(AccessRequestMetadata.IdempotencyKey(http.Request), request.Reason, http.TraceIdentifier), ct)));
+        }).WithName("CreateOwnPaymentReplacement");
+        group.MapPost("/{id}/replacement/operations/query", async (string id, OrderDraftRecoveryDto request, HttpContext http, PaymentDraftService service, CancellationToken ct) => {
+            if (request.Purpose != "operation-recovery") throw Invalid(); PrivateReplacement(http);
+            var row = await service.RecoverReplacementAsync(http.Features.Get<ResolvedActor>()!.Actor, LongId.Parse(id).Value, request.Key, ct);
+            return TypedResults.Ok(new PaymentReplacementRecoveryDto(row is null ? "not_confirmed" : "committed", row is null ? null : ReplacementResult(row)));
+        }).WithName("RecoverOwnPaymentReplacement");
+        group.MapPost("/{id}/replacement-origin/query", async (string id, OrderReadDto request, HttpContext http, PaymentDraftService service,
+            [FromHeader(Name = "If-Match")] string expected, CancellationToken ct) => {
+            if (request.Purpose != "payment-replacement-origin") throw Invalid(); PrivateReplacement(http);
+            var row = await service.ReadReplacementOriginAsync(http.Features.Get<ResolvedActor>()!.Actor, LongId.Parse(id).Value, AccessRequestMetadata.ExpectedVersion(http.Request), ct);
+            return TypedResults.Ok(new PaymentReplacementOriginViewDto(row is null ? null : new(new(row.ParentDeclarationId), OrderDraftInputDto.Number(row.ParentDeclarationRevision))));
+        }).WithName("ReadOwnPaymentReplacementOrigin");
         group.MapPost("", async (PaymentDraftSaveDto request, HttpContext http, PaymentDraftService service,
             [FromHeader(Name = "Idempotency-Key")] string key, [FromHeader(Name = "If-Match")] string expected, CancellationToken ct) => {
             if (request.Input is null) throw Invalid();
@@ -90,4 +131,7 @@ public static class PaymentDraftEndpoints
         DateTimeOffset.FromUnixTimeMilliseconds(row["submittedAt"].AsBsonDateTime.MillisecondsSinceEpoch));
     private static PaymentDraftResultDto Result(BsonDocument row) => new(new(row["declarationId"].AsInt64), new(row["versionId"].AsInt64),
         OrderDraftInputDto.Number(row["revision"].AsInt64), DateTimeOffset.FromUnixTimeMilliseconds(row["recordedAt"].AsBsonDateTime.MillisecondsSinceEpoch));
+    private static PaymentReplacementResultDto ReplacementResult(BsonDocument row) => new(new(row["parentDeclarationId"].AsInt64), OrderDraftInputDto.Number(row["parentDeclarationRevision"].AsInt64),
+        new(row["declarationId"].AsInt64), new(row["versionId"].AsInt64), OrderDraftInputDto.Number(row["revision"].AsInt64), new(row["recordedAt"].ToUniversalTime()));
+    private static void PrivateReplacement(HttpContext http) { http.Response.Headers.CacheControl = "private, no-store, max-age=0"; http.Response.Headers.Pragma = "no-cache"; }
 }

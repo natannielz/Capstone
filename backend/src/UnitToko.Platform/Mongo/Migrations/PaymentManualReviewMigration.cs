@@ -32,18 +32,7 @@ internal sealed class PaymentManualReviewMigration(IMongoDatabase database) : IM
             await database.GetCollection<BsonDocument>(decisions).Find(new BsonDocument("$nor", new BsonArray { PaymentVerificationSchemas.Validator(decisions) })).AnyAsync(ct)) throw Bad(decisions);
         var oldValidator = PaymentVerificationSchemas.Validator(decisions); var extension = PaymentManualReviewSchemas.VerificationValidator();
         // Preserve any additional operator constraints; replace only the exact former owning schema.
-        BsonDocument Extend(BsonDocument current) {
-            if (current.Equals(oldValidator) || current.Equals(extension)) return extension;
-            if (current.ElementCount == 1 && current.TryGetValue("$and", out var terms) && terms.IsBsonArray) {
-                var changed = false; var result = new BsonArray();
-                foreach (var term in terms.AsBsonArray) {
-                    if (term.IsBsonDocument && (term.AsBsonDocument.Equals(oldValidator) || term.AsBsonDocument.Equals(extension))) { result.Add(extension); changed = true; }
-                    else result.Add(term.DeepClone());
-                }
-                if (changed) return new("$and", result);
-            }
-            throw Bad(decisions);
-        }
+        BsonDocument Extend(BsonDocument current) => ExtendValidator(current, oldValidator, extension, decisions);
         var extended = Extend(savedOptions.GetValue("validator", new BsonDocument()).AsBsonDocument);
         var prefix = new BsonRegularExpression(@"^billing\.payment\.review\.manual(?:[.:]|$)");
         foreach (var (name, filter) in new (string, BsonDocument)[] {
@@ -56,6 +45,18 @@ internal sealed class PaymentManualReviewMigration(IMongoDatabase database) : IM
         }
         await lease.RenewAsync(ct);
         await database.RunCommandAsync<BsonDocument>(new BsonDocument { { "collMod", decisions }, { "validator", extended }, { "validationLevel", "strict" }, { "validationAction", "error" }, { "writeConcern", WriteConcern.WMajority.ToBsonDocument() } }, cancellationToken: ct);
+    }
+    internal static BsonDocument ExtendValidator(BsonDocument current, BsonDocument oldValidator, BsonDocument extension, string name) {
+        if (current.Equals(oldValidator) || current.Equals(extension)) return extension;
+        if (current.ElementCount == 1 && current.TryGetValue("$and", out var terms) && terms.IsBsonArray) {
+            var changed = false; var result = new BsonArray();
+            foreach (var term in terms.AsBsonArray) {
+                if (term.IsBsonDocument && (term.AsBsonDocument.Equals(oldValidator) || term.AsBsonDocument.Equals(extension))) { result.Add(extension); changed = true; }
+                else result.Add(term.DeepClone());
+            }
+            if (changed) return new("$and", result);
+        }
+        throw Bad(name);
     }
     private static void RequireOptions(BsonDocument? definition, BsonDocument options, string name) {
         if (definition is not null && definition.GetValue("type", "") != "collection" || options.GetValue("capped", false).AsBoolean || options.Contains("timeseries") || options.Contains("expireAfterSeconds") || options.Contains("encryptedFields") ||
