@@ -31,7 +31,12 @@ public sealed class PersonApprovalSessionTests(MongoFixture fixture)
     {
         await using var data = await StoreTestData.CreateAsync(fixture);
         data.Clock.UtcNow = DateTimeOffset.FromUnixTimeMilliseconds(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
-        var permission = expiry == "factor" ? Permissions.RefundApprove : Permissions.PaymentVerify;
+        // Session expiry is isolated from factor freshness. Payment verification now requires
+        // five-minute MFA, so it cannot reach a 29-minute idle or eight-hour absolute boundary.
+        // Reconciliation retains the same recorded-by/current-person approval predicate without
+        // an MFA age limit; dedicated payment verification tests cover its stricter deadline.
+        var permission = expiry == "factor" ? Permissions.RefundApprove : Permissions.ReconciliationVerify;
+        if (expiry != "factor") Assert.Null(Permissions.Find(permission)!.Assurance.MaximumAge);
         var actor = await PrepareAsync(data, permission, expiry);
         var expiresAt = data.Clock.UtcNow + (expiry == "factor" ? TimeSpan.FromMinutes(1) + TimeSpan.FromMilliseconds(1) : TimeSpan.FromMinutes(1));
         if (replay)
