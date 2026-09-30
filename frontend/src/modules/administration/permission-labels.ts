@@ -1,4 +1,6 @@
 const labels: Record<string, string> = {
+  "bank.statement.read": "Membaca mutasi bank privat",
+  "bank.statement.stage": "Menyiapkan impor mutasi bank",
   "receiving.account.read": "Lihat daftar rekening tersamar",
   "receiving.account.details.read": "Lihat rincian rekening penerimaan",
   "receiving.account.propose": "Ajukan atau tarik perubahan rekening",

@@ -1,0 +1,17 @@
+.form { display: grid; gap: .65rem; max-width: 58rem; }
+.form input:not([type="checkbox"]), .form select, .form textarea { width: 100%; min-width: 0; padding: .7rem; border: 1px solid #cbd5d1; border-radius: .5rem; background: #fff; color: #163e2e; font: inherit; }
+.form label { font-weight: 650; margin-top: .5rem; }
+.form input[type="file"] { overflow-wrap: anywhere; }
+.check { display: flex; align-items: flex-start; gap: .65rem; line-height: 1.6; }
+.check input { flex: none; margin-top: .4rem; }
+.actions { display: flex; flex-wrap: wrap; gap: .7rem; align-items: center; margin: 1rem 0; }
+.source, .preview { margin: 1rem 0; padding: 1rem; background: #f4f8f5; border: 1px solid #dce6df; border-radius: .7rem; overflow-wrap: anywhere; }
+.tableScroll { max-width: 100%; overflow-x: auto; margin: 1rem 0; }
+.table { width: 100%; min-width: 40rem; border-collapse: collapse; font-size: .92rem; }
+.table caption { text-align: left; font-weight: 650; padding: .7rem 0; }
+.table th, .table td { text-align: left; vertical-align: top; padding: .8rem; border-bottom: 1px solid #dce6df; max-width: 22rem; overflow-wrap: anywhere; }
+.table th { background: #eaf2ec; }
+.table small { display: block; color: #52655c; margin-top: .4rem; }
+.tableScroll:focus-visible { outline: 2px solid #187548; outline-offset: 3px; }
+.scrollHint { display: none; }
+@media (max-width: 600px) { .preview { padding: .65rem; } .actions > button { width: 100%; } .scrollHint { display: block; font-size: .85rem; color: #52655c; } }

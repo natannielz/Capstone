@@ -3,9 +3,10 @@ import { canManageAccounts, canReviewPeople, canUseStockCounts, canUseStockSourc
 import styles from "./access.module.css";
 
 export function AdministrationNavigation({ current, actions, locked = false }: {
-  current: "access" | "organizations" | "history" | "accounts" | "person-reviews" | "catalog" | "prices" | "counts" | "sources" | "source-revisions" | "source-aliases" | "source-suspensions" | "source-policies" | "order-reviews" | "orders" | "preparations" | "dispatches" | "shipments" | "invoices" | "payments" | "payment-reviews" | "receiving-accounts"; actions: readonly string[]; locked?: boolean;
+  current: "access" | "organizations" | "history" | "accounts" | "person-reviews" | "catalog" | "prices" | "counts" | "sources" | "source-revisions" | "source-aliases" | "source-suspensions" | "source-policies" | "order-reviews" | "orders" | "preparations" | "dispatches" | "shipments" | "invoices" | "payments" | "payment-reviews" | "receiving-accounts" | "bank-statements"; actions: readonly string[]; locked?: boolean;
 }) {
   const links = [
+    { id: "bank-statements", href: "/billing/bank-statements", label: "Mutasi bank", available: actions.includes("bank.statement.read") },
     { id: "receiving-accounts", href: "/billing/receiving-accounts", label: "Rekening penerimaan", available: actions.includes("receiving.account.read") },
     { id: "payment-reviews", href: "/billing/payment-reviews", label: "Pemeriksaan pembayaran", available: actions.includes("payment.review.read") && actions.includes("invoice.read") },
     { id: "invoices", href: "/billing/invoices", label: "Tagihan", available: actions.some(action => ["invoice.read", "invoice.issue"].includes(action)) },
