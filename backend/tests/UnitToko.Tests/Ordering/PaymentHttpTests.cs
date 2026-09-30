@@ -9,6 +9,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using UnitToko.Api.Identity;
 using UnitToko.Platform;
 using UnitToko.Platform.Billing;
+using UnitToko.Platform.DocumentProcessing;
 using UnitToko.Platform.Identity;
 using UnitToko.Platform.Mongo;
 using UnitToko.Tests.Documents;
@@ -70,10 +71,35 @@ public sealed class PaymentHttpTests(MongoFixture fixture)
         using var recovered = await Submit(recovery: true); var receipt = await recovered.Content.ReadFromJsonAsync<JsonElement>(); Assert.Equal("committed", receipt.GetProperty("status").GetString());
         Assert.Equal(result.GetRawText(), receipt.GetProperty("result").GetRawText());
         using var submittedOriginal = await Send(); Assert.Equal(data.Bytes, await submittedOriginal.Content.ReadAsByteArrayAsync());
+        async Task<HttpResponseMessage> Ocr(string? fault = null) {
+            using var request = new HttpRequestMessage(HttpMethod.Post, $"/api/v1/billing/payment-declarations/{data.DeclarationId}/ocr/query") {
+                Content = JsonContent.Create(new { purpose = fault == "purpose" ? "payment-approval" : "payment-ocr-view", reference = new { id = data.Reference.Id.ToString(), version = "1", sha256 = fault == "hash" ? new string('f',64) : data.Reference.Sha256 } }) };
+            request.Headers.Add("Origin", fault == "origin" ? "https://outside.invalid" : origin);
+            if (fault != "actor") request.Headers.Add("X-Expected-Actor-Id", fault == "different-actor" ? data.Payment.Invoice.Finance.UserId.ToString() : data.Actor.UserId.ToString());
+            if (fault != "csrf") request.Headers.Add("X-CSRF-Token", csrf);
+            if (fault != "revision") request.Headers.Add("If-Match", fault == "stale" ? "\"2\"" : "\"1\"");
+            return await client.SendAsync(request);
+        }
+        foreach (var (fault, status) in new[] { ("actor", HttpStatusCode.BadRequest), ("different-actor", HttpStatusCode.Conflict), ("origin", HttpStatusCode.Forbidden), ("csrf", HttpStatusCode.Forbidden),
+            ("revision", HttpStatusCode.BadRequest), ("stale", HttpStatusCode.Conflict), ("hash", HttpStatusCode.Conflict), ("purpose", HttpStatusCode.BadRequest) }) {
+            using var denied = await Ocr(fault); Assert.Equal(status, denied.StatusCode);
+        }
+        var processor = PaymentOcrProcessorTests.Processor(data, new PaymentOcrProcessorTests.FixtureEngine()); await PaymentOcrProcessorTests.Policy(data, processor);
+        using var queued = await Ocr(); Assert.Equal("queued", (await queued.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("state").GetString());
+        Assert.Equal("completed", await processor.RunOnceAsync());
+        using var extracted = await Ocr(); Assert.True(extracted.IsSuccessStatusCode, await extracted.Content.ReadAsStringAsync());
+        Assert.True(extracted.Headers.CacheControl!.NoStore); Assert.True(extracted.Headers.CacheControl.Private);
+        var suggestion = await extracted.Content.ReadFromJsonAsync<JsonElement>(); Assert.Equal("succeeded", suggestion.GetProperty("state").GetString());
+        Assert.Equal("100.00", suggestion.GetProperty("result").GetProperty("fields")[0].GetProperty("value").GetString());
+        Assert.False(suggestion.TryGetProperty("verifiedAmount", out _));
         data.Service.ReadObserver = new(async () => {
             await data.Catalog.Sessions.RevokeAsync(data.Catalog.Issued[data.Actor.UserId].OpaqueToken, "owner_logout");
         });
         using var revoked = await Send(); Assert.False(revoked.IsSuccessStatusCode); Assert.NotEqual("image/png", revoked.Content.Headers.ContentType?.MediaType);
+        // The cookie's revoked identity no longer matches its original anti-forgery token;
+        // the established browser boundary rejects this request before the owning endpoint.
+        using var revokedOcr = await Ocr(); Assert.Equal(HttpStatusCode.Forbidden, revokedOcr.StatusCode);
+        Assert.Equal("antiforgery_failed", (await revokedOcr.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString());
     }
     [WindowsStorageFact]
     public async Task Buyer_saves_private_draft_and_streams_quarantined_original_with_strict_browser_boundary() {

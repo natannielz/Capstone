@@ -40,6 +40,13 @@ public sealed class PaymentBrowserTests(MongoFixture fixture, ITestOutputHelper 
             EvidenceValidationTests.Consumer, new string('c', 64), new(["evidence.validation.requested"], 3, TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(2)),
             new(1024, 100, 100, 10000), new EvidenceValidationTests.FixtureScanner(signaturesAt: order.Prices.Catalog.Clock.UtcNow.AddHours(-1)), new WindowsImageDecoder(ImageDecoderTests.Options()));
         await EvidenceValidationTests.Policy(order.Database, order.Prices.Catalog.Clock, files.StoreId, processor.PipelineId);
+        var nativeOcr = !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("UNITTOKO_OCR_PYTHON"));
+        ILocalOcrEngine ocrEngine = nativeOcr ? new WindowsLocalOcrEngine(LocalOcrTests.Options()) : new PaymentOcrProcessorTests.FixtureEngine();
+        var ocr = new PaymentOcrProcessor(order.Database, new(order.Prices.Catalog.Client), new(order.Database), order.Prices.Catalog.Clock, files.Registration, PaymentOcrProcessorTests.Consumer, ocrEngine);
+        await data.Invoice.Rows("documentProcessingPolicies").InsertOneAsync(new BsonDocument { { "_id", 1L }, { "schemaVersion", 1 }, { "consumerId", PaymentOcrProcessorTests.Consumer },
+            { "storeId", files.StoreId }, { "pipelineId", ocr.PipelineId }, { "active", true }, { "revision", 1L }, { "fence", 0L },
+            { "approvedAt", order.Prices.Catalog.Clock.UtcNow.AddMinutes(-1).UtcDateTime }, { "expiresAt", order.Prices.Catalog.Clock.UtcNow.AddHours(1).UtcDateTime },
+            { "hostAcceptanceRef", "synthetic-host-only" }, { "modelSelectionRef", "synthetic-model-only" } });
         using var keys = new IdentityRuntimeTests.RuntimeKeys(); var settings = IdentityRuntimeTests.Settings(keys);
         settings["Mongo:Database"] = order.Database.DatabaseNamespace.DatabaseName; settings["Identity:TrustedProxies:0"] = "127.0.0.1"; settings["Logging:LogLevel:Default"] = "Warning";
         using var factory = IdentityRuntimeTests.Factory(settings).WithWebHostBuilder(web => web.UseEnvironment("Production").ConfigureTestServices(services => {
@@ -55,7 +62,7 @@ public sealed class PaymentBrowserTests(MongoFixture fixture, ITestOutputHelper 
         using var rsa = RSA.Create(2048); var certificate = new CertificateRequest("CN=UnitToko payment rehearsal", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
         var names = new SubjectAlternativeNameBuilder(); names.AddDnsName(new Uri(origin).Host); certificate.CertificateExtensions.Add(names.Build());
         using var tls = certificate.CreateSelfSigned(DateTimeOffset.UtcNow.AddMinutes(-5), DateTimeOffset.UtcNow.AddHours(1)); var password = Convert.ToHexString(RandomNumberGenerator.GetBytes(24));
-        var input = new { apiAddress, origin, pfx = Convert.ToBase64String(tls.Export(X509ContentType.Pfx, password)), password, playwrightPackage = playwright,
+        var input = new { apiAddress, origin, nativeOcr, pfx = Convert.ToBase64String(tls.Export(X509ContentType.Pfx, password)), password, playwrightPackage = playwright,
             buyerToken = order.Prices.Catalog.Issued[order.Buyer.UserId].OpaqueToken, outsiderToken = order.Prices.Catalog.Issued[data.Invoice.Finance.UserId].OpaqueToken,
             buyerId = order.Buyer.UserId.ToString(), transferDate = data.Input.TransferDate.ToString("yyyy-MM-dd"), imageBase64 = Convert.ToBase64String(ImageDecoderTests.Png(13, 7)) };
         var start = new ProcessStartInfo(node!) { WorkingDirectory = Path.Combine(root, "frontend"), UseShellExecute = false, CreateNoWindow = true, RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true };
@@ -66,19 +73,22 @@ public sealed class PaymentBrowserTests(MongoFixture fixture, ITestOutputHelper 
             await process.WaitForExitAsync().WaitAsync(TimeSpan.FromMinutes(4)); output.WriteLine(await stdout); output.WriteLine(await stderr);
             Assert.True(process.ExitCode == 0, await stdout + await stderr); Assert.Contains("REAL_PAYMENT_BROWSER_PASS", await stdout);
             async Task<string> ReadOutputAsync() {
-                var text = new StringBuilder(); var validationStarted = false;
+                var text = new StringBuilder(); var validationStarted = false; var ocrStarted = false;
                 while (await process.StandardOutput.ReadLineAsync() is { } line) {
                     text.AppendLine(line);
                     if (line == "VALIDATE_EVIDENCE_READY") { Assert.False(validationStarted); validationStarted = true; Assert.Equal("completed", await processor.RunOnceAsync()); }
+                    if (line == "PROCESS_PAYMENT_OCR_READY") { Assert.False(ocrStarted); ocrStarted = true; Assert.Equal("completed", await ocr.RunOnceAsync()); }
                 }
-                Assert.True(validationStarted); return text.ToString();
+                Assert.True(validationStarted); Assert.True(ocrStarted); return text.ToString();
             }
         } finally { if (!process.HasExited) { process.Kill(true); await process.WaitForExitAsync(); } }
         Assert.Equal(1, await data.Invoice.Count(PaymentDraftBson.Heads)); Assert.Equal(2, await data.Invoice.Count(PaymentDraftBson.Versions));
         Assert.Equal(1, await data.Invoice.Count("documentVersions")); Assert.Equal(0, await data.Invoice.Count("payments")); Assert.Equal(0, await data.Invoice.Count("bankReceipts")); Assert.Equal(1, await data.Invoice.Count("journalEntries"));
         var head = await data.Invoice.Rows(PaymentDraftBson.Heads).Find(new BsonDocument()).SingleAsync(); Assert.Equal("submitted", head["state"]);
         Assert.Equal(1, await data.Invoice.Count("paymentSubmissions")); Assert.Equal(1, await data.Invoice.Count("evidencePins")); Assert.Equal(1, await data.Invoice.Count("evidencePinAudits"));
-        Assert.Equal(1, await data.Invoice.Rows("outboxEvents").CountDocumentsAsync(new BsonDocument { { "kind", "payment.ocr.requested" }, { "status", "pending" } }));
+        Assert.Equal(1, await data.Invoice.Rows("outboxEvents").CountDocumentsAsync(new BsonDocument { { "kind", "payment.ocr.requested" }, { "status", "completed" } }));
+        Assert.Equal(1, await data.Invoice.Count("documentExtractionResults")); Assert.Equal(1, await data.Invoice.Count("documentExtractionAudits"));
+        Assert.True(await data.Invoice.Count("documentExtractionReadAudits") >= 2);
         var version = await data.Invoice.Rows("documentVersions").Find(new BsonDocument()).SingleAsync(); Assert.Equal("quarantined", version["state"]); Assert.Equal("unavailable", version["scanStatus"]);
         var validation = await data.Invoice.Rows("evidenceValidationResults").Find(new BsonDocument()).SingleAsync(); Assert.Equal("passed", validation["status"]); Assert.Equal(version["sha256"], validation["source"]["sha256"]);
         Assert.Equal(1, await data.Invoice.Count("evidenceValidationAudits"));

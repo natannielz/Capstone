@@ -31,7 +31,7 @@ public sealed partial class PaymentDraftService : IPaymentEvidenceUploadTarget
             }
             var party = head["party"];
             var owner = new GrantScope(GrantScopeKind.FulfillmentShop, party["fulfillmentOrganizationId"].AsInt64, ShopId: party["shopId"].AsInt64, ChannelId: party["channelId"].AsInt64);
-            var result = await action(new(target, owner, head["revision"].AsInt64, null, null, submittedReservationId), ct);
+            var result = await action(new(target, owner, head["revision"].AsInt64, null, null, submittedReservationId, submittedReservationId.HasValue ? head["submissionId"].AsInt64 : null), ct);
             await records.TouchAsync(tx, head, ct); await FenceAsync(actor, authority, tx, head["scopes"].AsBsonArray, ct);
             return result;
         } catch {

@@ -117,6 +117,24 @@ try {
   assert.equal(writes.filter(item => item.kind === 'submit').length, 1); assert.equal(await form.getByLabel('Jumlah transfer (IDR)', { exact: true }).count(), 0);
   assert.equal(await form.getByRole('button', { name: 'Simpan draf pembayaran', exact: true }).count(), 0); assert.match(await form.locator('dl').innerText(), /2\.000,01/);
   assert.equal(await proof.getByRole('button', { name: 'Unggah bukti asli', exact: true }).count(), 0);
+  const ocrPanel = page.getByRole('region', { name: 'Pembacaan bukti otomatis', exact: true });
+  const queuedResponse = page.waitForResponse(response => response.url().endsWith('/ocr/query'));
+  await ocrPanel.getByRole('button', { name: 'Muat hasil OCR', exact: true }).click();
+  const queued = await queuedResponse; assert.equal(queued.status(), 200); assert.match(queued.headers()['cache-control'], /no-store/);
+  const queuedBody = await queued.json(); assert.equal(queuedBody.state, 'queued'); assert.equal(queuedBody.result, null);
+  await ocrPanel.getByText('Menunggu pembacaan', { exact: true }).waitFor(); console.log('PROCESS_PAYMENT_OCR_READY');
+  const available = ocrPanel.getByText('Hasil pembacaan tersedia', { exact: true });
+  for (let attempt = 0; attempt < 20 && !await available.isVisible(); attempt++) {
+    await ocrPanel.getByRole('button', { name: 'Muat hasil OCR', exact: true }).click(); await available.waitFor({ timeout: 1000 }).catch(() => {});
+  }
+  await available.waitFor(); assert.match(await ocrPanel.innerText(), /tidak mengubah pengajuan atau saldo tagihan/);
+  if (config.nativeOcr) { await ocrPanel.getByText(/Tidak ada teks yang terbaca/).waitFor(); assert.equal(await ocrPanel.getByText('Belum diketahui', { exact: true }).count(), 8); }
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  await page.screenshot({ path: resolve(directory, 'payment-ocr-mobile.png'), fullPage: true });
+  await buyer.context.setOffline(true); await page.getByText(/Koneksi terputus/).waitFor(); assert.equal(await ocrPanel.getByRole('button', { name: 'Muat hasil OCR', exact: true }).isDisabled(), true);
+  await buyer.context.setOffline(false); await page.getByText(/Koneksi terputus/).waitFor({ state: 'hidden' });
+  await page.reload(); await page.getByRole('button', { name: /^Buka pembayaran [1-9]/ }).first().click();
+  await ocrPanel.getByRole('button', { name: 'Muat hasil OCR', exact: true }).click(); await available.waitFor();
   await proof.getByRole('button', { name: 'Lihat bukti asli', exact: true }).click(); await preview.waitFor(); await preview.getByRole('img').evaluate(image => image.decode());
   await preview.getByRole('button', { name: 'Tutup bukti', exact: true }).click();
   assert.equal(writes.filter(item => item.kind === 'save').length, 2); assert.equal(writes.filter(item => item.kind === 'reserve').length, 1); assert.equal(writes.filter(item => item.kind === 'content').length, 1);
@@ -127,7 +145,7 @@ try {
   await page.screenshot({ path: resolve(directory, 'payment-buyer-desktop.png'), fullPage: true });
   const outsider = await user(config.outsiderToken); await outsider.page.goto(origin.origin + '/billing/payments'); await outsider.page.getByRole('heading', { name: 'Periksa sesi dan akses', exact: true }).waitFor();
   assert.equal(await outsider.page.getByRole('button', { name: /^Buka draf/ }).count(), 0);
-  assert.deepEqual(errors, []); console.log('REAL_PAYMENT_BROWSER_PASS ' + JSON.stringify({ draftWrites: 2, originalUploads: 1, paymentSubmissions: 1, pendingOcr: true, durableValidation: true, privateOriginalRead: true, exactHash: true, blobRevoked: true, realDecoder: true, syntheticScanner: true, lostResponsesRecovered: dropped, outsiderDenied: true, offlineUnsent: true, mobile: true }));
+  assert.deepEqual(errors, []); console.log('REAL_PAYMENT_BROWSER_PASS ' + JSON.stringify({ draftWrites: 2, originalUploads: 1, paymentSubmissions: 1, durableOcr: true, nativeOcr: config.nativeOcr, durableValidation: true, privateOriginalRead: true, exactHash: true, blobRevoked: true, realDecoder: true, syntheticScanner: true, lostResponsesRecovered: dropped, outsiderDenied: true, offlineUnsent: true, mobile: true }));
 } catch (error) {
   for (const [index, page] of pages.entries()) if (!page.isClosed()) { console.error('FIXTURE PAGE ' + index + ': ' + (await page.locator('main').innerText().catch(() => 'unavailable')).slice(0, 5000)); await page.screenshot({ path: resolve(directory, 'failure-' + index + '.png'), fullPage: true }).catch(() => {}); }
   console.error(error.stack ?? String(error)); process.exitCode = 1;

@@ -8,8 +8,8 @@ using UnitToko.Modules.Documents;
 
 namespace UnitToko.Platform.DocumentProcessing;
 
-internal sealed record OcrFilePin(string Path, string Sha256);
-internal sealed record LocalOcrOptions(string PythonExecutable, string HelperPath, string PackageRoot, string PillowRoot,
+public sealed record OcrFilePin(string Path, string Sha256);
+public sealed record LocalOcrOptions(string PythonExecutable, string HelperPath, string PackageRoot, string PillowRoot,
     string ModelRoot, string ModelVersion, IReadOnlyList<OcrFilePin> Files, EvidenceLimits Limits, long MaximumMemoryBytes, TimeSpan Timeout);
 internal sealed record LocalOcrMeasurement(TimeSpan Elapsed, long? PeakJobMemoryBytes);
 

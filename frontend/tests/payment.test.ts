@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createUnitTokoClient } from '../src/api/client';
-import { createPaymentGateway, preparePayment, preparePaymentSubmission, parsePaymentResult, parsePaymentSubmissionResult, paymentSubmissionOwner, paymentReservationOwner, parsePaymentEvidenceStatus, paymentEvidenceLabel, type PaymentDraft } from '../src/modules/billing/payment-client';
+import { createPaymentGateway, preparePayment, preparePaymentSubmission, parsePaymentResult, parsePaymentSubmissionResult, paymentSubmissionOwner, paymentReservationOwner, parsePaymentEvidenceStatus, paymentEvidenceLabel, parsePaymentOcr, type PaymentDraft } from '../src/modules/billing/payment-client';
 import { OperationJournal, operationRecoveryCapabilities, reconcileOperationRecovery } from '../src/modules/administration/operation-journal';
 
 const actor = '9007199254740993', declarationId = '9007199254740994';
@@ -12,6 +12,19 @@ const declaration: PaymentDraft = { id: declarationId, revision: '2', createdAt:
 const checkedImage = parsePaymentEvidenceStatus({ reservationId: '51', revision: '3', state: 'quarantined', expiresAt: result.recordedAt, reference: { id: '52', version: '1', sha256: 'a'.repeat(64) }, scanStatus: 'clean', decoderStatus: 'decoded', safeFailure: null });
 const submissionResult = { declarationId, submissionId: '9007199254740997', declarationRevision: '2', reviewRevision: '1' as const, state: 'submitted' as const, submittedAt: result.recordedAt };
 const submissionKey = 's.' + declarationId + '.12345678-1234-1234-1234-123456789abc';
+test('OCR suggestions are bound to the exact current submission and cannot become payment authority', () => {
+  const owner: PaymentDraft = { ...declaration, state: 'submitted', submission: { id: submissionResult.submissionId, reviewRevision: '1', reservationId: '51', evidence: checkedImage.reference!, submittedAt: result.recordedAt } };
+  const value = { declarationId, submissionId: owner.submission!.id, evidence: checkedImage.reference, state: 'succeeded', result: {
+    id: '81', extractedAt: result.recordedAt, provenance: { engineVersion: 'synthetic', modelVersion: 'synthetic', modelSha256: 'b'.repeat(64), runtimeSha256: 'c'.repeat(64), preprocessingVersion: 'synthetic' },
+    fields: ['amount', 'currency', 'transfer_date', 'transfer_time', 'recipient', 'account', 'bank', 'reference'].map(field => ({ field, value: null, confidence: null, boundingBox: null, flags: ['unknown'] })), qualityFlags: ['no_text', 'amount_unknown'],
+  } };
+  assert.equal(parsePaymentOcr(value, owner).result!.fields[0].value, null);
+  for (const bad of [{ ...value, declarationId: '1' }, { ...value, submissionId: '1' }, { ...value, evidence: { ...value.evidence, sha256: 'f'.repeat(64) } },
+    { ...value, state: 'verified' }, { ...value, verifiedAmount: '5000' }, { ...value, state: 'queued' }, { ...value, result: null },
+    { ...value, result: { ...value.result, fields: [...value.result.fields.slice(1), value.result.fields[1]] } },
+    { ...value, result: { ...value.result, fields: value.result.fields.map(field => ({ ...field, value: '5000' })) } }]) assert.throws(() => parsePaymentOcr(bad, owner));
+  assert.throws(() => parsePaymentOcr(value, declaration));
+});
 test('submission freezes one explicit eligible image and rejects unchecked or already submitted declarations', () => {
   const command = preparePaymentSubmission(actor, declaration, checkedImage, 'Ajukan untuk diperiksa');
   assert.ok(Object.isFrozen(command)); assert.ok(Object.isFrozen(command.body)); assert.ok(Object.isFrozen(command.body.evidence));

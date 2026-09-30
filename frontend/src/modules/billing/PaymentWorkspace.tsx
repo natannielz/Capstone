@@ -15,6 +15,8 @@ import { createInvoiceGateway, type Invoice } from './invoice-client';
 import { createPaymentGateway, paymentReservationOwner, paymentEvidenceLabel, preparePayment, preparePaymentSubmission, type PaymentDraft, type PaymentInput, type PaymentEvidenceStatus } from './payment-client';
 import common from '../administration/access.module.css';
 import styles from './invoice.module.css';
+import { PaymentOcrPanel } from './PaymentOcrPanel';
+import type { PaymentOcrView } from './payment-client';
 
 type Account = { actorId: string; actions: readonly string[]; session: IdentitySession; observedAt: number };
 const rupiah = (value: string) => orderAmount('IDR', value);
@@ -61,6 +63,7 @@ function PaymentDesk({ account, now, onDenied }: { account: Account; now: number
   const [gateway] = useState(createPaymentGateway), [invoices] = useState(createInvoiceGateway), [ledger] = useState(() => new MutationLedger()), recovery = useOperationRecovery(account.actorId);
   const [page, setPage] = useState<{ items: PaymentDraft[]; hasMore: boolean }>({ items: [], hasMore: false }), [invoicePage, setInvoicePage] = useState<{ items: Invoice[]; hasMore: boolean }>({ items: [], hasMore: false });
   const [selected, setSelected] = useState<PaymentDraft | null>(null), [input, setInput] = useState<PaymentInput>(() => empty(now)), [reason, setReason] = useState('');
+  const [ocr, setOcr] = useState<PaymentOcrView | null>(null);
   const [evidence, setEvidence] = useState<PaymentEvidenceStatus[]>([]), [file, setFile] = useState<File | null>(null), [notice, setNotice] = useState(''), [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false), [recovering, setRecovering] = useState(false), [offline, setOffline] = useState(false), [refresh, setRefresh] = useState(0), [before, setBefore] = useState<string | null>(null), [invoiceBefore, setInvoiceBefore] = useState<string | null>(null);
   const alive = useRef(false), pending = useRef(false), recoveredId = useRef<string | null>(null), heading = useRef<HTMLHeadingElement>(null), fileInput = useRef<HTMLInputElement>(null);
@@ -94,7 +97,7 @@ function PaymentDesk({ account, now, onDenied }: { account: Account; now: number
     finally { pending.current = false; if (alive.current) { setBusy(false); recovery.refresh(); } }
   }
   async function open(id: string) {
-    closePreview(); setConfirmation(null);
+    closePreview(); setConfirmation(null); setOcr(null);
     const value = await gateway.read(account.actorId, id); if (!current()) return;
     setSelected(value); setInput({ ...value.input, invoiceIds: [...value.input.invoiceIds] }); setReason(''); setEvidence([]); setFile(null); if (fileInput.current) fileInput.current.value = '';
     const images = await gateway.evidence(account.actorId, id); if (current()) { setEvidence(images); heading.current?.focus(); }
@@ -169,7 +172,7 @@ function PaymentDesk({ account, now, onDenied }: { account: Account; now: number
     {recovery.error !== null && <p role="alert">{accessMessage(recovery.error)}</p>}{error !== null && <p role="alert" className={common.alert}>{message(error)}</p>}
     {offline && <p role="status">Koneksi terputus. Draf dan berkas belum dapat dikirim.</p>}{busy && <p role="status">Memeriksa pembayaran…</p>}{notice && <p role="status">{notice}</p>}
     <section className={common.accountSection} aria-label="Draf pembayaran"><h2 ref={heading} tabIndex={-1}>{selected ? `${submitted ? 'Pembayaran' : 'Draf pembayaran'} ${selected.id}` : 'Catat pembayaran'}</h2>
-      {submitted ? <p role="status"><strong>Menunggu verifikasi</strong> · Data dan bukti pengajuan telah dikunci. Pembacaan otomatis (OCR) menunggu diproses. Saldo tagihan belum berubah.</p>
+      {submitted ? <p role="status"><strong>Menunggu verifikasi</strong> · Data dan bukti pengajuan telah dikunci. Saldo tagihan belum berubah.</p>
         : <p>Draf bersifat pribadi. Nilai transfer yang dicatat belum mengurangi tagihan. Bukti pembayaran wajib diperiksa sebelum dapat diajukan.</p>}
       {submitted && selected ? <><dl className={styles.facts}>
         <div><dt>Jumlah transfer</dt><dd>{rupiah(selected.input.declaredAmount)}</dd></div><div><dt>Tanggal transfer</dt><dd>{transferDay(selected.input.transferDate)}</dd></div>
@@ -192,6 +195,7 @@ function PaymentDesk({ account, now, onDenied }: { account: Account; now: number
         <button className={common.primary} disabled={locked || input.invoiceIds.length === 0}>Simpan draf pembayaran</button></fieldset></form>}
       {selected && <button className={common.secondary} disabled={locked} onClick={() => { closePreview(); setConfirmation(null); setSelected(null); setInput(empty(now)); setReason(''); setEvidence([]); setFile(null); }}>Buat draf baru</button>}
     </section>
+    {submitted && selected && <PaymentOcrPanel view={ocr} locked={locked} onRefresh={() => void perform(async () => { setOcr(null); const result = await gateway.ocr(account.actorId, selected); if (current()) setOcr(result); })} />}
     {selected && <section className={common.accountSection} aria-label="Bukti asli pembayaran"><h2>Bukti asli pembayaran</h2><p>{submitted ? 'Bukti berikut terikat pada pengajuan ini. Pemeriksaan keamanan gambar tidak membuktikan dana diterima.' : 'Pilih foto atau hasil pindai JPG/PNG, maksimal 10 MB. Berkas asli disimpan untuk pemeriksaan. Hasil pemeriksaan keamanan tidak memverifikasi pembayaran; draf tetap belum diajukan.'}</p>
       {!submitted && <><label>Pilih bukti pembayaran<input ref={fileInput} type="file" accept="image/jpeg,image/png" disabled={locked || confirmation !== null} onChange={event => setFile(event.target.files?.[0] ?? null)} /></label>
       {unsaved && <p>Simpan perubahan draf sebelum mengunggah bukti.</p>}

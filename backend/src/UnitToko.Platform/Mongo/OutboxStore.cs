@@ -7,7 +7,7 @@ namespace UnitToko.Platform.Mongo;
 public sealed class OutboxStore(IMongoDatabase database, IClock clock)
 {
     internal async Task<BsonDocument> FenceProcessingAsync(IClientSessionHandle tx, BsonDocument claim, BsonDocument? receipt, CancellationToken ct) {
-        if (!tx.IsInTransaction || !ReferenceEquals(tx.Client, database.Client) || claim.GetValue("kind", "") != "evidence.validation.requested") throw Invalid("invalid_claim");
+        if (!tx.IsInTransaction || !ReferenceEquals(tx.Client, database.Client) || claim.GetValue("kind", "").AsString is not ("evidence.validation.requested" or "payment.ocr.requested")) throw Invalid("invalid_claim");
         var filter = LiveClaim(claim, clock.UtcNow.UtcDateTime) & F.Eq("sourceKey", claim["sourceKey"]) & F.Eq("payload", claim["payload"]) &
             (F.Exists("processingFence", false) | (F.Type("processingFence", BsonType.Int64) & F.Gte("processingFence", 0L) & F.Lt("processingFence", long.MaxValue)));
         if (receipt is not null) filter &= F.Exists("processingReceipt", false) | F.Eq("processingReceipt", receipt);
@@ -36,7 +36,8 @@ public sealed class OutboxStore(IMongoDatabase database, IClock clock)
 
     private static readonly FilterDefinitionBuilder<BsonDocument> F = Builders<BsonDocument>.Filter;
     private const int MaximumTerminalizationsPerClaim = 16;
-    private static readonly string[] FailureCodes = ["processing_retry", "processing_error", "scanner_unavailable", "decoder_unavailable", "decode_timeout", "invalid_media", "infected_media", "integrity_mismatch", "unsupported_kind"];
+    private static readonly string[] FailureCodes = ["processing_retry", "processing_error", "scanner_unavailable", "decoder_unavailable", "decode_timeout", "invalid_media", "infected_media", "integrity_mismatch", "unsupported_kind",
+        "ocr_unavailable", "ocr_timeout", "ocr_invalid_output", "ocr_integrity_mismatch", "ocr_invalid_media", "ocr_original_unavailable"];
 
     /// <summary>Claim only registered kinds. A call terminalizes at most 16 exhausted jobs before yielding.</summary>
     public async Task<BsonDocument?> ClaimAsync(string consumerId, OutboxClaimPolicy policy,

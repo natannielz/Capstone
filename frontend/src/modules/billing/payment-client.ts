@@ -29,6 +29,28 @@ const status = z.object({ reservationId: id, state: z.enum(['fresh', 'writing', 
     (value.scanStatus !== 'infected' || value.decoderStatus === 'unavailable' && ['infected_media', 'integrity_mismatch'].includes(value.safeFailure ?? '')));
 const outcome = z.object({ state: z.enum(['quarantined', 'interrupted', 'unresolved', 'unknown', 'publish_pending', 'recovery_required']), reference: reference.nullable() }).strict()
   .refine(value => (value.state === 'quarantined') === (value.reference !== null));
+const fraction = z.string().regex(/^(?:0(?:\.[0-9]{1,28})?|1(?:\.0{1,28})?)$(?![\s\S])/);
+const ocrFieldNames = ['amount', 'currency', 'transfer_date', 'transfer_time', 'recipient', 'account', 'bank', 'reference'] as const;
+const ocrFlags = z.array(z.enum(['unknown', 'ambiguous', 'low_confidence', 'unparsed', 'masked', 'timezone_unverified'])).max(16);
+const ocrBox = z.tuple([fraction, fraction, fraction, fraction]).refine(box => Number(box[2]) > 0 && Number(box[3]) > 0 && Number(box[0]) + Number(box[2]) <= 1.0000000000000002 && Number(box[1]) + Number(box[3]) <= 1.0000000000000002);
+const ocrField = z.object({ field: z.enum(ocrFieldNames), value: text(256).nullable(), confidence: fraction.nullable(), boundingBox: ocrBox.nullable(), flags: ocrFlags }).strict()
+  .refine(value => (value.confidence === null) === (value.boundingBox === null) && (value.value === null || value.confidence !== null) &&
+    (value.value === null || !value.flags.some(flag => ['unknown', 'ambiguous', 'unparsed'].includes(flag))) &&
+    (value.field !== 'amount' || value.value === null || money.safeParse(value.value).success) && (value.field !== 'currency' || value.value === null || value.value === 'IDR') &&
+    (value.field !== 'transfer_date' || value.value === null || day.safeParse(value.value).success));
+const hash = z.string().regex(/^[0-9a-f]{64}$(?![\s\S])/);
+const ocrResult = z.object({ id, extractedAt: timestamp, provenance: z.object({ engineVersion: text(128), modelVersion: text(128), modelSha256: hash, runtimeSha256: hash, preprocessingVersion: text(128) }).strict(),
+  fields: z.array(ocrField).length(8).refine(fields => fields.every((field, index) => field.field === ocrFieldNames[index])),
+  qualityFlags: z.array(z.enum(['no_text', 'amount_unknown', 'low_confidence', 'touches_image_edge', 'ambiguous_fields'])).max(16) }).strict();
+const ocrView = z.object({ declarationId: id, submissionId: id, evidence: reference, state: z.enum(['queued', 'running', 'retry', 'dead', 'succeeded']), result: ocrResult.nullable() }).strict()
+  .refine(value => (value.state === 'succeeded') === (value.result !== null));
+export type PaymentOcrView = z.infer<typeof ocrView>;
+export function parsePaymentOcr(value: unknown, owner: PaymentDraft): PaymentOcrView {
+  const view = parse(ocrView, value), submitted = owner.submission;
+  if (owner.state !== 'submitted' || submitted === null || view.declarationId !== owner.id || view.submissionId !== submitted.id ||
+    view.evidence.id !== submitted.evidence.id || view.evidence.version !== submitted.evidence.version || view.evidence.sha256 !== submitted.evidence.sha256) return invalid();
+  return view;
+}
 export type PaymentInput = z.infer<typeof input>;
 export type PaymentDraft = z.infer<typeof draft>;
 export type PaymentDraftResult = z.infer<typeof result>;
@@ -72,6 +94,13 @@ export function preparePaymentSubmission(actorId: string, declaration: PaymentDr
 }
 export function createPaymentGateway(client: ReturnType<typeof createUnitTokoClient> = createUnitTokoClient()) {
   return {
+    async ocr(actorId: string, owner: PaymentDraft) {
+      if (owner.state !== 'submitted' || !owner.submission) return invalid();
+      return parsePaymentOcr(data(await client.POST('/api/v1/billing/payment-declarations/{id}/ocr/query', {
+        body: { purpose: 'payment-ocr-view', reference: owner.submission.evidence },
+        params: { path: { id: priceId(owner.id) }, header: { ...headers(actorId), 'If-Match': '"' + priceId(owner.revision) + '"' } },
+      })), owner);
+    },
     async list(actorId: string, beforeId: string | null = null, signal?: AbortSignal) {
       const value = parse(z.object({ items: z.array(draft).max(25), hasMore: z.boolean() }).strict(), data(await client.POST('/api/v1/billing/payment-declarations/query', { body: { purpose: 'payment-declarations', beforeId }, params: { header: headers(actorId) }, signal })));
       if (new Set(value.items.map(item => item.id)).size !== value.items.length || value.hasMore && value.items.length !== 25 || beforeId !== null && value.items.some(item => BigInt(item.id) >= BigInt(priceId(beforeId)))) return invalid(); return value;

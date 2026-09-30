@@ -39,13 +39,13 @@ public sealed class PaymentSubmissionMigrationTests(MongoFixture fixture)
             await db.RunCommandAsync<BsonDocument>(new BsonDocument { { "collMod", PaymentDraftBson.Heads }, { "validator", new BsonDocument("$and", new BsonArray {
                 PaymentDraftSchemas.Validator(PaymentDraftBson.Heads), new BsonDocument("revision", new BsonDocument("$lt", 2L)) }) } });
             var blockedDefinitions = await Definitions(db);
-            var blocked = await Assert.ThrowsAsync<InvalidOperationException>(() => new CollectionMigrations(db, Clock).ApplyAsync());
+            var blocked = await Assert.ThrowsAsync<InvalidOperationException>(() => LegacyOrderSubmissionTestSchema.UpgradeV34Async(db, Clock));
             Assert.Contains(PaymentDraftBson.Heads, blocked.Message); Assert.Equal(blockedDefinitions, await Definitions(db));
             Assert.Equal(before, new BsonArray((await History(db)).Take(33)));
             var extra = new BsonDocument("revision", new BsonDocument("$lt", 10000L));
             await db.RunCommandAsync<BsonDocument>(new BsonDocument { { "collMod", PaymentDraftBson.Heads }, { "validator", new BsonDocument("$and", new BsonArray { PaymentDraftSchemas.Validator(PaymentDraftBson.Heads), extra }) } });
             var definitions = await Definitions(db);
-            await new CollectionMigrations(db, Clock).ApplyAsync();
+            await LegacyOrderSubmissionTestSchema.UpgradeV34Async(db, Clock);
             Assert.Equal(34, (await History(db)).Count); Assert.Equal(before, new BsonArray((await History(db)).Take(33)));
             foreach (var pair in snapshots) Assert.Equal(pair.Value, new BsonArray(await db.GetCollection<BsonDocument>(pair.Key).Find(new BsonDocument()).Sort(new BsonDocument("_id", 1)).ToListAsync()));
             var after = await Definitions(db);
@@ -55,7 +55,7 @@ public sealed class PaymentSubmissionMigrationTests(MongoFixture fixture)
                 await Assert.ThrowsAsync<MongoWriteException>(() => db.GetCollection<BsonDocument>(name).InsertOneAsync(new BsonDocument("_id", 1)));
                 Assert.Contains(await (await db.GetCollection<BsonDocument>(name).Indexes.ListAsync()).ToListAsync(), index => index["key"].Equals(PaymentSubmissionSchemas.Key(name)) && index.GetValue("unique", false).AsBoolean);
             }
-            await new CollectionMigrations(db, Clock).ApplyAsync(); Assert.Equal(34, (await History(db)).Count);
+            await LegacyOrderSubmissionTestSchema.UpgradeV34Async(db, Clock); Assert.Equal(34, (await History(db)).Count);
         });
     }
     [Theory]
@@ -66,7 +66,7 @@ public sealed class PaymentSubmissionMigrationTests(MongoFixture fixture)
         if (fault == "counter") await db.GetCollection<BsonDocument>("idCounters").InsertOneAsync(new BsonDocument { { "_id", "evidencePinAudits" }, { "value", long.MaxValue } });
         if (fault == "orphan") await db.GetCollection<BsonDocument>("outboxEvents").InsertOneAsync(new BsonDocument { { "_id", ObjectId.GenerateNewId() }, { "kind", "payment.ocr.requested" } }, new InsertOneOptions { BypassDocumentValidation = true });
         var before = await Definitions(db); var history = await History(db);
-        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => new CollectionMigrations(db, Clock).ApplyAsync());
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => LegacyOrderSubmissionTestSchema.UpgradeV34Async(db, Clock));
         Assert.StartsWith("Payment submission migration preflight failed:", failure.Message);
         Assert.Equal(before, await Definitions(db)); Assert.Equal(history, new BsonArray((await History(db)).Take(33)));
     });
@@ -80,8 +80,8 @@ public sealed class PaymentSubmissionMigrationTests(MongoFixture fixture)
             if (value.CommandName == "create") { changed = true; cancellation.Cancel(); }
         });
         using var client = new MongoClient(settings);
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => new CollectionMigrations(client.GetDatabase(db.DatabaseNamespace.DatabaseName), Clock).ApplyAsync(cancellation.Token));
-        Assert.True(changed); await new CollectionMigrations(db, Clock).ApplyAsync(); Assert.Equal(before, new BsonArray((await History(db)).Take(33)));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => LegacyOrderSubmissionTestSchema.UpgradeV34Async(client.GetDatabase(db.DatabaseNamespace.DatabaseName), Clock, cancellation.Token));
+        Assert.True(changed); await LegacyOrderSubmissionTestSchema.UpgradeV34Async(db, Clock); Assert.Equal(before, new BsonArray((await History(db)).Take(33)));
         Assert.Equal(stronger, (await Definitions(db)).Single(row => row["name"] == "evidencePins")["options"]["validator"]);
     });
 }

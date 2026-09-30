@@ -325,6 +325,7 @@ app.MapDeliveryAttemptEndpoints();
 app.MapInvoiceEndpoints();
 app.MapPaymentDraftEndpoints();
 app.MapPaymentEvidenceEndpoints();
+app.MapPaymentOcrEndpoints();
 app.MapStockCountEndpoints();
 app.MapStockSourceSetupEndpoints();
 app.MapStockSourceRevisionEndpoints();

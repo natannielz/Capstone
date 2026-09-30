@@ -22,10 +22,16 @@ builder.Services.AddSingleton<IdempotencyStore>();
 builder.Services.AddSingleton<OutboxStore>();
 builder.Services.AddSingleton<CollectionMigrations>();
 var evidenceOptions = migrate ? null : builder.Configuration.GetSection("Evidence:Validation").Get<EvidenceValidationRuntimeOptions>();
+var ocrOptions = migrate ? null : builder.Configuration.GetSection("Evidence:PaymentOcr").Get<PaymentOcrRuntimeOptions>();
 if (evidenceOptions is not null) {
     builder.Services.AddSingleton(sp => EvidenceValidationRuntime.Create(sp.GetRequiredService<IMongoDatabase>(), sp.GetRequiredService<MongoUnitOfWork>(),
         sp.GetRequiredService<IdAllocator>(), sp.GetRequiredService<IClock>(), evidenceOptions));
     builder.Services.AddHostedService<EvidenceValidationWorker>();
+}
+if (ocrOptions is not null) {
+    builder.Services.AddSingleton(sp => PaymentOcrRuntime.Create(sp.GetRequiredService<IMongoDatabase>(), sp.GetRequiredService<MongoUnitOfWork>(),
+        sp.GetRequiredService<IdAllocator>(), sp.GetRequiredService<IClock>(), ocrOptions));
+    builder.Services.AddHostedService<PaymentOcrWorker>();
 }
 
 using var host = builder.Build();
@@ -37,6 +43,8 @@ if (migrate)
     return;
 }
 
-if (evidenceOptions is null) logger.LogWarning("Evidence validation is unconfigured; no outbox processor will claim jobs.");
+if (evidenceOptions is null) logger.LogWarning("Evidence validation is unconfigured; validation jobs will not be claimed.");
 else logger.LogInformation("Evidence validation pipeline configured: {PipelineId}; current store and worker approvals remain required", host.Services.GetRequiredService<EvidenceValidationRuntime>().PipelineId);
+if (ocrOptions is null) logger.LogWarning("Payment OCR is unconfigured; OCR jobs will not be claimed.");
+else logger.LogInformation("Payment OCR pipeline configured: {PipelineId}; current host and model approvals remain required", host.Services.GetRequiredService<PaymentOcrRuntime>().PipelineId);
 await host.RunAsync();
