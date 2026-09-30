@@ -23,7 +23,7 @@ public sealed class PaymentCorrectionMigrationTests(MongoFixture fixture)
         var extra = new BsonDocument("recordedBy", new BsonDocument("$ne", 99L));
         await db.CreateCollectionAsync(PaymentCorrectionBson.Versions, new CreateCollectionOptions<BsonDocument> { Validator = extra });
         var before = await Definitions(db); await new CollectionMigrations(db, new SystemClock()).ApplyAsync();
-        Assert.Equal(history, new BsonArray((await History(db)).Take(35))); Assert.Equal(36, (await History(db)).Count);
+        Assert.Equal(history, new BsonArray((await History(db)).Take(35))); Assert.Equal(CollectionMigrations.CurrentVersion, (await History(db)).Count);
         var after = await Definitions(db);
         foreach (var row in before.Where(row => !PaymentCorrectionSchemas.Collections.Contains(row["name"].AsString)))
             Assert.Equal(row, after.Single(value => value["name"] == row["name"]));

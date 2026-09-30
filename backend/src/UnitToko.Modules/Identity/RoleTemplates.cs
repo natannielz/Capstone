@@ -44,7 +44,8 @@ public static class RoleTemplates
                 Permissions.ReservationRelease, Permissions.SupplierChangePropose],
             ["store-head"] = [Permissions.OrderAccept, Permissions.SupplierChangeApprove],
             ["courier"] = [],
-            ["finance"] = [Permissions.PaymentReviewRead, Permissions.PaymentReviewCorrect],
+            ["finance"] = [Permissions.PaymentReviewRead, Permissions.PaymentReviewCorrect, Permissions.ReceivingAccountRead, Permissions.ReceivingAccountDetailsRead,
+                Permissions.ReceivingAccountPropose, Permissions.ReceivingAccountVerify, Permissions.ReceivingAccountApprove],
             ["system-admin"] = []
         }.ToImmutableDictionary(StringComparer.Ordinal);
 

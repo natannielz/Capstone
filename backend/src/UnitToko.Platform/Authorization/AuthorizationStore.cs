@@ -102,10 +102,13 @@ public sealed class AuthorizationStore(IMongoDatabase database, MongoUnitOfWork 
     // An owning workflow can fence its full captured authority and time constraints after receipt persistence.
     // This hook also runs on replay; throwing aborts the transaction before a result can be returned.
     // Final person/time validation runs after the hook so its database awaits cannot outlive approval evidence.
+    // A synchronous owner deadline check can run after those generic awaits too. It must not perform writes;
+    // it rechecks already-fenced owner evidence (for example a bank-channel policy and a third participant).
     internal Task<BsonDocument> ExecuteCommandAsync(ActorContext actor, string operation, AuthorizationCommandMetadata metadata,
         object requestBody, Func<AuthorizationSnapshot, IClientSessionHandle, CancellationToken, Task<CommandAuthorization>> authorize,
         Func<IClientSessionHandle, CancellationToken, Task<BsonDocument>> businessWrite, CancellationToken cancellationToken,
-        Func<AuthorizationSnapshot, IClientSessionHandle, CancellationToken, Task>? complete = null, bool requireReceipt = false)
+        Func<AuthorizationSnapshot, IClientSessionHandle, CancellationToken, Task>? complete = null, bool requireReceipt = false,
+        Action? validateCurrent = null)
     {
         ValidateMetadata(metadata);
         var hash = CommandHash(requestBody, metadata.Reason);
@@ -131,6 +134,7 @@ public sealed class AuthorizationStore(IMongoDatabase database, MongoUnitOfWork 
                 var replayProof = await RequirePersonAuthorityAsync(actor, authorization, existing, session, token);
                 if (complete is not null) await complete(snapshot, session, token);
                 await CompletePersonAuthorizationAsync(actor, snapshot, authorization, replayProof, session, token);
+                validateCurrent?.Invoke();
                 return existing["result"].AsBsonDocument.DeepClone().AsBsonDocument;
             }
             if (requireReceipt) throw new PersistenceConflictException("operation_receipt_unavailable", "The recorded operation receipt is unavailable");
@@ -148,6 +152,7 @@ public sealed class AuthorizationStore(IMongoDatabase database, MongoUnitOfWork 
             await records.UpdateOneAsync(session, filter, Builders<BsonDocument>.Update.Set("result", result), cancellationToken: token);
             if (complete is not null) await complete(snapshot, session, token);
             await CompletePersonAuthorizationAsync(actor, snapshot, authorization, personProof, session, token);
+            validateCurrent?.Invoke();
             return result.DeepClone().AsBsonDocument;
         }, cancellationToken);
     }

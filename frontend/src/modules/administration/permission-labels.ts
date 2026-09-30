@@ -1,4 +1,9 @@
 const labels: Record<string, string> = {
+  "receiving.account.read": "Lihat daftar rekening tersamar",
+  "receiving.account.details.read": "Lihat rincian rekening penerimaan",
+  "receiving.account.propose": "Ajukan atau tarik perubahan rekening",
+  "receiving.account.verify": "Periksa rekening melalui kanal bank dengan verifikasi terbaru",
+  "receiving.account.approve": "Putuskan usulan rekening secara independen dengan verifikasi terbaru",
   "payment.review.correct": "Koreksi pemeriksaan pembayaran dengan verifikasi terbaru",
   "payment.review.read": "Lihat pengajuan dan bukti pembayaran dalam cakupan",
   "person.review.read": "Lihat peninjauan keterkaitan akun", "person.review.propose": "Ajukan penangguhan keterkaitan akun", "person.review.approve": "Putuskan penangguhan keterkaitan akun",

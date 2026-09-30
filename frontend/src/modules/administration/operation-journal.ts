@@ -1,3 +1,4 @@
+import { validateReceivingReceipt, type ReceivingResult } from "../billing/receiving-account-client";
 import { parsePaymentCorrectionResult, paymentCorrectionOwner, type PaymentCorrectionResult } from "../billing/payment-correction-client";
 import { parseInvoice, type Invoice } from "../billing/invoice-client";
 import { parsePaymentResult, parsePaymentReservation, parsePaymentSubmissionResult, paymentSubmissionOwner, type PaymentSubmissionResult, type PaymentDraftResult, type PaymentReservation } from "../billing/payment-client";
@@ -19,7 +20,7 @@ export type OperationReference = Readonly<{ actorId: string; operation: string; 
 type JournalStorage = Pick<Storage, "length" | "key" | "getItem" | "setItem" | "removeItem">;
 const prefix = "unit-toko:pending:v1:";
 const keyPattern = /^[A-Za-z0-9._:-]{1,128}$/;
-const operationPattern = /^(?:billing\.payment\.(?:draft\.save|submit|review\.correct)|evidence\.payment-image\.reserve|billing\.invoice\.issue|(access|organization)\.[a-z.]{1,100}|identity\.(?:invitation\.(?:propose|approve|rejected|withdrawn|revoked)|recovery\.request)|person\.review\.(?:propose|approve|reject|withdraw)|fulfillment\.(?:preparation\.save|shipment\.dispatch|surat-jalan\.issue|delivery-attempt\.record|receipt-proof\.issue|receipt\.(?:challenge\.issue|confirm))|ordering\.(?:draft\.save|order\.(?:submit|cancel|spending\.(?:approve|reject)|store\.(?:accept|reject)))|catalog\.(?:price\.(?:propose|approve|reject|withdraw)|category\.save|family\.(?:create|edit)|sku\.(?:create|revise|replace|retire|publish))|inventory\.stock-count\.record|stock\.source\.(?:suspend|(?:(?:revision|alias|policy)\.)?(?:propose|approve|reject|withdraw)))$(?![\s\S])/;
+const operationPattern = /^(?:billing\.receiving-account\.(?:propose|observe|approve|reject|withdraw)|billing\.payment\.(?:draft\.save|submit|review\.correct)|evidence\.payment-image\.reserve|billing\.invoice\.issue|(access|organization)\.[a-z.]{1,100}|identity\.(?:invitation\.(?:propose|approve|rejected|withdrawn|revoked)|recovery\.request)|person\.review\.(?:propose|approve|reject|withdraw)|fulfillment\.(?:preparation\.save|shipment\.dispatch|surat-jalan\.issue|delivery-attempt\.record|receipt-proof\.issue|receipt\.(?:challenge\.issue|confirm))|ordering\.(?:draft\.save|order\.(?:submit|cancel|spending\.(?:approve|reject)|store\.(?:accept|reject)))|catalog\.(?:price\.(?:propose|approve|reject|withdraw)|category\.save|family\.(?:create|edit)|sku\.(?:create|revise|replace|retire|publish))|inventory\.stock-count\.record|stock\.source\.(?:suspend|(?:(?:revision|alias|policy)\.)?(?:propose|approve|reject|withdraw)))$(?![\s\S])/;
 const storageKey = (entry: OperationReference) => `${prefix}${entry.actorId}:${entry.operation}:${entry.key}`;
 
 /** Only recovery references are stored. Requests, reasons, grants and credentials never enter this journal. */
@@ -131,6 +132,7 @@ export type LegacyRecoveryAdapter = Readonly<{
 
 /** Supply this only from the owning client screen. A missing receipt is never a failed or closed request. */
 export type OperationRecoveryAdapters = Readonly<{
+  "billing.receiving-account"?: Readonly<{ lookup: (entry: OperationReference) => Promise<Readonly<{ state: "committed"; result: ReceivingResult }> | null> }>;
   "billing.payment.review.correct"?: Readonly<{ lookup: (entry: OperationReference) => Promise<Readonly<{ state: "committed"; result: PaymentCorrectionResult }> | null> }>;
   "billing.payment.submit"?: Readonly<{ lookup: (entry: OperationReference) => Promise<Readonly<{ state: "committed"; result: PaymentSubmissionResult }> | null> }>;
   "billing.payment"?: Readonly<{ lookup: (entry: OperationReference) => Promise<Readonly<{ state: "committed"; result: PaymentDraftResult }> | null> }>;
@@ -159,8 +161,9 @@ export type OperationRecoveryAdapters = Readonly<{
   }>;
 }>;
 
-function recoveryNamespace(operation: string): "access" | "organization" | "identity" | "person.review" | "catalog" | "catalog.price" | "inventory.stock-count" | "stock.source" | "stock.source.revision" | "stock.source.alias" | "stock.source.suspend" | "stock.source.policy" | "ordering.draft" | "ordering.order" | "ordering.decision" | "fulfillment.preparation" | "fulfillment.shipment" | "fulfillment.surat-jalan" | "fulfillment.receipt" | "fulfillment.receipt-proof" | "fulfillment.delivery-attempt" | "billing.invoice" | "billing.payment.review.correct" | "billing.payment.submit" | "billing.payment" | "evidence.payment-image" | null {
+function recoveryNamespace(operation: string): "billing.receiving-account" | "access" | "organization" | "identity" | "person.review" | "catalog" | "catalog.price" | "inventory.stock-count" | "stock.source" | "stock.source.revision" | "stock.source.alias" | "stock.source.suspend" | "stock.source.policy" | "ordering.draft" | "ordering.order" | "ordering.decision" | "fulfillment.preparation" | "fulfillment.shipment" | "fulfillment.surat-jalan" | "fulfillment.receipt" | "fulfillment.receipt-proof" | "fulfillment.delivery-attempt" | "billing.invoice" | "billing.payment.review.correct" | "billing.payment.submit" | "billing.payment" | "evidence.payment-image" | null {
   if (!operationPattern.test(operation)) return null;
+  if (operation.startsWith("billing.receiving-account.")) return "billing.receiving-account";
   if (operation === "billing.payment.review.correct") return "billing.payment.review.correct";
   if (operation === "billing.payment.submit") return "billing.payment.submit";
   if (operation === "billing.payment.draft.save") return "billing.payment";
@@ -194,7 +197,7 @@ export function operationRecoveryCapabilities(operation: string, adapters: Opera
   Readonly<{ canCheck: boolean; canClose: boolean; unavailable: "adapter" | "operation" | null }> {
   const namespace = recoveryNamespace(operation);
   if (!namespace) return { canCheck: false, canClose: false, unavailable: "operation" };
-  if (namespace === "billing.payment.review.correct" || namespace === "billing.payment.submit" || namespace === "billing.payment" || namespace === "evidence.payment-image" || namespace === "billing.invoice" || namespace === "fulfillment.delivery-attempt" || namespace === "fulfillment.receipt-proof" || namespace === "fulfillment.receipt" || namespace === "fulfillment.surat-jalan" || namespace === "fulfillment.shipment" || namespace === "fulfillment.preparation" || namespace === "ordering.decision" || namespace === "ordering.order" || namespace === "ordering.draft" || namespace === "catalog.price" || namespace === "catalog" || namespace === "inventory.stock-count" || namespace === "stock.source" || namespace === "stock.source.revision" || namespace === "stock.source.alias" || namespace === "stock.source.suspend" || namespace === "stock.source.policy") return typeof adapters[namespace]?.lookup === "function"
+  if (namespace === "billing.receiving-account" || namespace === "billing.payment.review.correct" || namespace === "billing.payment.submit" || namespace === "billing.payment" || namespace === "evidence.payment-image" || namespace === "billing.invoice" || namespace === "fulfillment.delivery-attempt" || namespace === "fulfillment.receipt-proof" || namespace === "fulfillment.receipt" || namespace === "fulfillment.surat-jalan" || namespace === "fulfillment.shipment" || namespace === "fulfillment.preparation" || namespace === "ordering.decision" || namespace === "ordering.order" || namespace === "ordering.draft" || namespace === "catalog.price" || namespace === "catalog" || namespace === "inventory.stock-count" || namespace === "stock.source" || namespace === "stock.source.revision" || namespace === "stock.source.alias" || namespace === "stock.source.suspend" || namespace === "stock.source.policy") return typeof adapters[namespace]?.lookup === "function"
     ? { canCheck: true, canClose: false, unavailable: null } : { canCheck: false, canClose: false, unavailable: "adapter" };
   if (namespace === "person.review") return typeof adapters[namespace]?.lookup === "function"
     ? { canCheck: true, canClose: typeof adapters[namespace]?.close?.resolve === "function" && adapters[namespace]?.close?.allowed(operation) === true, unavailable: null }
@@ -212,7 +215,7 @@ export async function reconcileOperationRecovery(entry: OperationReference, jour
   const requireCurrent = () => { if (!isCurrent()) throw new AccessFailure(409, "recovery_request_stale"); };
   requireCurrent();
   let receipt: LookupReceipt | null;
-  if (namespace === "billing.payment.review.correct" || namespace === "billing.payment.submit" || namespace === "billing.payment" || namespace === "evidence.payment-image") {
+  if (namespace === "billing.receiving-account" || namespace === "billing.payment.review.correct" || namespace === "billing.payment.submit" || namespace === "billing.payment" || namespace === "evidence.payment-image") {
     if (closeReason !== undefined) throw new AccessFailure(400, "recovery_close_unsupported");
     const adapter = adapters[namespace];
     if (typeof adapter?.lookup !== "function") throw new AccessFailure(503, "recovery_adapter_unavailable");
@@ -220,7 +223,8 @@ export async function reconcileOperationRecovery(entry: OperationReference, jour
     if (recovered === null) receipt = null;
     else {
       if (!recovered || recovered.state !== "committed" || Object.keys(recovered).sort().join(",") !== "result,state") throw new AccessFailure(502, "recovery_receipt_invalid");
-      if (namespace === "billing.payment.review.correct") { const result = parsePaymentCorrectionResult(recovered.result); if (result.declarationId !== paymentCorrectionOwner(reference.key)) throw new AccessFailure(502, "recovery_receipt_invalid"); receipt = { state: "committed", result: { id: result.declarationId, version: result.reviewRevision } }; }
+      if (namespace === "billing.receiving-account") { const result = validateReceivingReceipt(recovered.result, reference.key, reference.operation); receipt = { state: "committed", result: { id: result.proposalId, version: result.accountVersion ?? "1" } }; }
+      else if (namespace === "billing.payment.review.correct") { const result = parsePaymentCorrectionResult(recovered.result); if (result.declarationId !== paymentCorrectionOwner(reference.key)) throw new AccessFailure(502, "recovery_receipt_invalid"); receipt = { state: "committed", result: { id: result.declarationId, version: result.reviewRevision } }; }
       else if (namespace === "billing.payment.submit") { const result = parsePaymentSubmissionResult(recovered.result); if (result.declarationId !== paymentSubmissionOwner(reference.key)) throw new AccessFailure(502, "recovery_receipt_invalid"); receipt = { state: "committed", result: { id: result.declarationId, version: result.reviewRevision } }; }
       else if (namespace === "billing.payment") { const result = parsePaymentResult(recovered.result); receipt = { state: "committed", result: { id: result.declarationId, version: result.revision } }; }
       else { const result = parsePaymentReservation(recovered.result); receipt = { state: "committed", result: { id: result.reservationId, version: result.revision } }; }

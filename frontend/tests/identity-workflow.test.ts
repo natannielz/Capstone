@@ -7,6 +7,7 @@ const session = { authenticated: true, account: { userId: "9007199254740993", di
 
 test("session parsing preserves exact user identifiers and rejects malformed authenticated evidence", () => {
   assert.equal(parseIdentitySession(session).account?.userId, "9007199254740993");
+  assert.deepEqual(parseIdentitySession({ ...session, stepUpOperations: ["receiving.account.verify", "receiving.account.approve"] }).stepUpOperations, ["receiving.account.verify", "receiving.account.approve"]);
   for (const invalid of [{ ...session, account: { ...session.account, userId: 9007199254740993 } }, { ...session, account: null }, { ...session, idleExpiresAt: null }, { ...session, stepUpOperations: ["//elsewhere"] }, { ...session, absoluteExpiresAt: "invalid" }]) {
     assert.throws(() => parseIdentitySession(invalid), IdentityFailure);
   }

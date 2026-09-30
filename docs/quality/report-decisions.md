@@ -34,3 +34,9 @@ Asked on 29 September 2026 while connecting branch drafts: which real-order spen
 ## D03 invoice grouping and payment terms
 
 Asked on 30 September 2026 while connecting receipt-based invoicing: which Finance-approved grouping applies (per receipt, branch/period/channel, or organization/period/channel), and what event starts the due-date term, for how many calendar or working days? Answer pending. The UI and local rehearsal use explicitly synthetic terms; the meeting's concern about late invoices does not approve a 30-day contract. Live issuance remains closed until actual owner-backed approvals are available. Tax allocation/process, numbering continuity/format, seller/document template, holiday calendar and accounting mappings remain additional operational inputs; this question does not declare those gates satisfied.
+
+## D02/D03 receiving-account verification channel
+
+Asked on 30 September 2026 while connecting receiving-account review: which independently obtained source is approved to verify the account owner and bank details, and who is the responsible Finance owner? The choices were keeping real activation blocked, bank-issued confirmation checked through an established bank contact, or an authenticated bank portal/statement checked by authorized Finance staff. Answer pending; no account numbers or credentials were requested in chat.
+
+Continue the local workflow with explicitly synthetic approved-channel/person fixtures. Real activation requires the approved source, independently established channel, canonical bank profile/code, fulfillment scope, named owner/adjudicators, approval provenance, validity and freshness rules. A proposer-supplied contact, typed reference, provider email or observed match alone cannot supply these operational approvals. The [receiving-account runbook](../runbooks/receiving-accounts.md) records the concrete workflow and its remaining release gates.
