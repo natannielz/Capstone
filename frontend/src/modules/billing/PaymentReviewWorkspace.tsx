@@ -9,7 +9,7 @@ import { createAccessGateway } from '../administration/access-client';
 import { AccessFailure, accessMessage } from '../administration/workflow';
 import { AdministrationNavigation } from '../administration/AdministrationNavigation';
 import { orderAmount } from '../ordering/order-quote-client';
-import { createPaymentReviewGateway } from './payment-review-client';
+import { createPaymentReviewGateway, type PaymentReviewQueueEntry } from './payment-review-client';
 import { OperationRecovery, useOperationRecovery } from '../administration/OperationRecovery';
 import { createPaymentCorrectionGateway } from './payment-correction-client';
 import { PaymentCorrectionPanel } from './PaymentCorrectionPanel';
@@ -64,7 +64,8 @@ export function PaymentReviewWorkspace() {
 function ReviewDesk({ account, fresh, onDenied }: { account: Account; fresh: boolean; onDenied: (failure: unknown) => void }) {
   const [gateway] = useState(createPaymentReviewGateway), [corrections] = useState(createPaymentCorrectionGateway), [manual] = useState(createPaymentManualReviewGateway), [reviewActions] = useState(createPaymentReviewActionGateway), [verification] = useState(createPaymentVerificationGateway), [allocation] = useState(createPaymentAllocationGateway), recovery = useOperationRecovery(account.actorId);
   const [recovering, setRecovering] = useState(false), [editingBusy, setEditingBusy] = useState(false);
-  const [page, setPage] = useState<{ items: PaymentDraft[]; hasMore: boolean }>({ items: [], hasMore: false }), [before, setBefore] = useState<string | null>(null), [refresh, setRefresh] = useState(0);
+  const [page, setPage] = useState<{ items: PaymentReviewQueueEntry[]; hasMore: boolean; observedAt: string | null }>({ items: [], hasMore: false, observedAt: null }), [before, setBefore] = useState<string | null>(null), [refresh, setRefresh] = useState(0);
+  const [filter, setFilter] = useState('all');
   const [selected, setSelected] = useState<PaymentDraft | null>(null), [ocr, setOcr] = useState<PaymentOcrView | null>(null), [preview, setPreview] = useState<string | null>(null);
   const [busy, setBusy] = useState(false), [offline, setOffline] = useState(false), [error, setError] = useState<unknown>(null);
   const alive = useRef(false), pending = useRef(false), previewUrl = useRef<string | null>(null), epoch = useRef(0), heading = useRef<HTMLHeadingElement>(null), previewHeading = useRef<HTMLHeadingElement>(null), previewTrigger = useRef<HTMLButtonElement>(null);
@@ -77,8 +78,8 @@ function ReviewDesk({ account, fresh, onDenied }: { account: Account; fresh: boo
   useEffect(() => { if (selected) heading.current?.focus(); }, [selected]);
   useEffect(() => { if (preview) previewHeading.current?.focus(); }, [preview]);
   useEffect(() => { let active = true; const controller = new AbortController(); void Promise.resolve().then(async () => {
-    if (!active || !current()) return; setBusy(true); setError(null); setPage({ items: [], hasMore: false });
-    try { const result = await gateway.list(account.actorId, before, controller.signal); if (active && current()) setPage(result); }
+    if (!active || !current()) return; setBusy(true); setError(null); setPage({ items: [], hasMore: false, observedAt: null });
+    try { const result = await gateway.queue(account.actorId, before, controller.signal); if (active && current()) setPage(result); }
     catch (failure) { if (active && current()) { setError(failure); onDenied(failure); } } finally { if (active) setBusy(false); }
   }); return () => { active = false; controller.abort(); }; }, [gateway, account.actorId, before, refresh, current, onDenied]);
   async function perform(work: () => Promise<void>) {
@@ -94,6 +95,11 @@ function ReviewDesk({ account, fresh, onDenied }: { account: Account; fresh: boo
     const blob = await gateway.original(account.actorId, selected, () => current() && epoch.current === version);
     if (!current() || epoch.current !== version) return; const url = URL.createObjectURL(blob); previewUrl.current = url; setPreview(url);
   }
+  const visible = page.items.filter(row => {
+    if (filter === 'all') return true;
+    if (filter === 'attention') return row.discrepancies.length > 0 || ['retry', 'dead'].includes(row.ocrState);
+    return filter === 'closed' ? ['rejected', 'replacement_requested'].includes(row.state) : row.state === filter;
+  });
   return <><AdministrationNavigation current="payment-reviews" actions={account.actions} locked={busy || editingBusy || recovering} />
     <OperationRecovery entries={recovery.entries} journal={recovery.journal} disabled={busy || offline || editingBusy} onBusyChange={setRecovering}
       recoveryAdapters={{ 'billing.payment.review.correct': { lookup: async entry => { const result = await corrections.recover(entry.actorId, entry.key); if (!current()) throw new AccessFailure(409, 'recovery_request_stale'); return result; } },
@@ -111,12 +117,20 @@ function ReviewDesk({ account, fresh, onDenied }: { account: Account; fresh: boo
     {error !== null && <p role="alert" className={common.alert}>{message(error)}</p>}
     <section className={common.accountSection} aria-label="Pengajuan yang menunggu pemeriksaan"><h2>Pengajuan masuk</h2><p>Hanya pengajuan yang sudah dikirim dan berada dalam cakupan akses Anda.</p>
       <button className={common.secondary} disabled={locked} onClick={() => refreshPage(null)}>Muat pengajuan terbaru</button>
+      <label htmlFor="payment-queue-filter">Tampilan halaman ini</label><select id="payment-queue-filter" value={filter} disabled={locked} onChange={event => setFilter(event.target.value)}><option value="all">Semua pengajuan</option><option value="pending">Belum ditugaskan</option><option value="assigned">Dalam pemeriksaan</option><option value="attention">Perlu perhatian OCR</option><option value="closed">Tindak lanjut ditutup</option></select>
+      <p>Ringkasan dan usia mengikuti waktu server saat dimuat. Filter berlaku pada halaman ini; hasil OCR tidak menetapkan dana masuk.</p>
       {busy && <p role="status">Memuat data…</p>}
       {!busy && page.items.length === 0 && <p>Belum ada pengajuan yang dapat Anda periksa.</p>}
-      <ul className={styles.candidates}>{page.items.map(item => <li key={item.id}><strong>{item.input.payerName}</strong><p>{item.invoices[0].buyerName} · {item.invoices[0].sellerName}</p>
-        <p>{rupiah(item.input.declaredAmount)} · Diajukan {date(item.submission!.submittedAt)}</p><p>Buka pengajuan untuk melihat hasil verifikasi terbaru.</p>
+      {!busy && page.items.length > 0 && visible.length === 0 && <p>Tidak ada pengajuan untuk tampilan ini. Periksa halaman lain atau ubah tampilan.</p>}
+      <ul className={styles.candidates}>{visible.map(({ declaration: item, ...queue }) => <li key={item.id}><strong>{item.input.payerName}</strong><p>{item.invoices[0].buyerName} · {item.invoices[0].sellerName}</p>
+        <p>{rupiah(item.input.declaredAmount)} · Diajukan {date(item.submission!.submittedAt)}</p>
+        <p>{{ pending: 'Belum ditugaskan', assigned: 'Dalam pemeriksaan', rejected: 'Pengajuan ditolak', replacement_requested: 'Bukti pengganti diminta' }[queue.state]}{queue.assigneeId && ` · Penanggung jawab: akun ${queue.assigneeId}`}</p>
+        <p>Usia pengajuan: {Math.floor((Date.parse(page.observedAt!) - Date.parse(item.submission!.submittedAt)) / 60000)} menit menurut waktu server.</p>
+        <p>OCR: {{ queued: 'Menunggu pembacaan', running: 'Sedang dibaca', retry: 'Pembacaan perlu diulang oleh layanan', dead: 'Pembacaan perlu tindak lanjut petugas', succeeded: 'Hasil pembacaan tersedia' }[queue.ocrState]}</p>
+        {queue.discrepancies.length > 0 && <ul aria-label="Perhatian pada bukti">{queue.discrepancies.map(flag => <li key={flag}>{{ amount_unknown: 'Nominal bukti belum diketahui', amount_differs: 'Nominal pada bukti berbeda dari pengajuan', date_unknown: 'Tanggal pada bukti belum diketahui', date_differs: 'Tanggal pada bukti berbeda dari pengajuan', currency_unknown: 'Mata uang belum diketahui', ocr_quality: 'Keterbacaan perlu diperiksa', human_corrected: 'Ada koreksi manusia yang tersimpan' }[flag]}</li>)}</ul>}
+        <p>Buka pengajuan untuk melihat hasil verifikasi terbaru.</p>
         <button className={common.secondary} disabled={locked} onClick={() => void perform(() => open(item.id))}>Periksa pengajuan {item.id}</button></li>)}</ul>
-      {page.hasMore && <button className={common.secondary} disabled={locked} onClick={() => refreshPage(page.items.at(-1)!.id)}>Pengajuan lebih lama</button>}
+      {page.hasMore && <button className={common.secondary} disabled={locked} onClick={() => refreshPage(page.items.at(-1)!.declaration.id)}>Pengajuan lebih lama</button>}
     </section>
     {selected && <section className={common.accountSection} aria-label="Rincian pengajuan pembayaran"><h2 ref={heading} tabIndex={-1}>Pengajuan {selected.id}</h2><p>Pengajuan telah dikirim untuk pemeriksaan.</p>
       <p>Data berikut berasal dari pengajuan pembeli. Pembacaan dan pemeriksaan gambar belum membuktikan dana masuk.</p>

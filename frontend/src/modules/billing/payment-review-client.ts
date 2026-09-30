@@ -1,4 +1,5 @@
 import { createUnitTokoClient, RequestNotSentError } from '../../api/client';
+import { z } from 'zod';
 import { AccessFailure } from '../administration/workflow';
 import { priceId } from '../catalog/catalog-price-workflow';
 import { parsePaymentDraft, parsePaymentOcr, type PaymentDraft } from './payment-client';
@@ -12,6 +13,25 @@ function data<T>(value: { data?: T; error?: unknown; response: Response }): T {
   return value.data;
 }
 const headers = (actorId: string) => ({ 'X-Expected-Actor-Id': priceId(actorId) });
+const queueId = z.string().regex(/^[1-9][0-9]{0,18}$(?![\s\S])/).refine(value => BigInt(value) <= BigInt('9223372036854775807'));
+const queueTimestamp = z.string().datetime({ offset: true });
+const queueEntry = z.object({ declaration: z.unknown(), reviewRevision: z.union([z.literal('0'), queueId]), state: z.enum(['pending', 'assigned', 'rejected', 'replacement_requested']),
+  assigneeId: queueId.nullable(), recordedAt: queueTimestamp.nullable(), ocrState: z.enum(['queued', 'running', 'retry', 'dead', 'succeeded']),
+  discrepancies: z.array(z.enum(['amount_unknown', 'amount_differs', 'date_unknown', 'date_differs', 'currency_unknown', 'ocr_quality', 'human_corrected'])).max(7),
+}).strict().refine(row => (row.state === 'pending') === (row.assigneeId === null) && (row.reviewRevision === '0') === (row.recordedAt === null) &&
+  (row.reviewRevision !== '0' || row.state === 'pending') && new Set(row.discrepancies).size === row.discrepancies.length && (row.ocrState === 'succeeded' || row.discrepancies.length === 0));
+export type PaymentReviewQueueEntry = Omit<z.infer<typeof queueEntry>, 'declaration'> & { declaration: PaymentDraft };
+export function parsePaymentReviewQueue(value: unknown, beforeId: string | null) {
+  const parsed = z.object({ items: z.array(queueEntry).max(25), hasMore: z.boolean(), observedAt: queueTimestamp }).strict().safeParse(value); if (!parsed.success) return invalid();
+  const { observedAt, hasMore } = parsed.data;
+  const items: PaymentReviewQueueEntry[] = parsed.data.items.map(row => {
+    const declaration = parsePaymentReview(row.declaration), submittedAt = Date.parse(declaration.submission!.submittedAt);
+    if (submittedAt > Date.parse(observedAt) || row.recordedAt !== null && (Date.parse(row.recordedAt) < submittedAt || Date.parse(row.recordedAt) > Date.parse(observedAt))) return invalid();
+    return { ...row, declaration };
+  });
+  parsePaymentReviewPage({ items: items.map(row => row.declaration), hasMore }, beforeId);
+  return { items, hasMore, observedAt };
+}
 export type PaymentDuplicatePage = { declarationId: string; revision: string; submissionId: string; items: { declarationId: string; revision: string; submissionId: string; submittedAt: string; signals: ('same_image' | 'same_reference')[] }[]; hasMore: boolean };
 export function parsePaymentDuplicates(value: unknown, owner: PaymentDraft, beforeId: string | null): PaymentDuplicatePage {
   const current = parsePaymentReview(owner);
@@ -57,6 +77,12 @@ export function createPaymentReviewGateway(client: ReturnType<typeof createUnitT
     async list(actorId: string, beforeId: string | null, signal?: AbortSignal) {
       if (beforeId !== null) priceId(beforeId);
       return parsePaymentReviewPage(data(await client.POST('/api/v1/billing/payment-reviews/query', {
+        body: { purpose: 'payment-review', beforeId }, params: { header: headers(actorId) }, signal, cache: 'no-store',
+      })), beforeId);
+    },
+    async queue(actorId: string, beforeId: string | null, signal?: AbortSignal) {
+      if (beforeId !== null) priceId(beforeId);
+      return parsePaymentReviewQueue(data(await client.POST('/api/v1/billing/payment-reviews/queue/query', {
         body: { purpose: 'payment-review', beforeId }, params: { header: headers(actorId) }, signal, cache: 'no-store',
       })), beforeId);
     },

@@ -20,9 +20,13 @@ public sealed class PaymentReviewTests(MongoFixture fixture)
     public async Task Explicit_reviewer_sees_only_submitted_queue_and_audited_original_and_OCR_without_money_effects() {
         await using var data = await PaymentEvidenceReadTests.ReadData.CreateAsync(fixture); var reviewer = await Reviewer(data);
         Assert.Empty((await data.Payment.Service.ListReviewsAsync(reviewer, null, Metadata)).Items);
+        Assert.Empty((await data.Payment.Service.ListReviewQueueAsync(reviewer, null, Metadata)).Items);
         await Assert.ThrowsAsync<AuthorizationDeniedException>(() => data.Payment.Service.ReadReviewAsync(reviewer, data.DeclarationId, Metadata));
         await PaymentOcrProcessorTests.Submit(data);
         var page = await data.Payment.Service.ListReviewsAsync(reviewer, null, Metadata); Assert.False(page.HasMore); Assert.Equal(data.DeclarationId, Assert.Single(page.Items).Id.Value);
+        var queue = await data.Payment.Service.ListReviewQueueAsync(reviewer, null, Metadata); var queuedItem = Assert.Single(queue.Items);
+        Assert.Equal("pending", queuedItem.State); Assert.Equal(0, queuedItem.ReviewRevision); Assert.Null(queuedItem.AssigneeId); Assert.Equal("queued", queuedItem.OcrState); Assert.Empty(queuedItem.Discrepancies);
+        Assert.Equal(data.Catalog.Clock.UtcNow, queue.ObservedAt); Assert.Empty((await data.Payment.Service.ListReviewQueueAsync(reviewer, data.DeclarationId, Metadata)).Items);
         Assert.Empty((await data.Payment.Service.ListReviewsAsync(reviewer, data.DeclarationId, Metadata)).Items);
         var detail = await data.Payment.Service.ReadReviewAsync(reviewer, data.DeclarationId, Metadata); Assert.Equal("submitted", detail.State);
         await using (var file = await data.Service.OpenReviewReadAsync(reviewer, data.DeclarationId, data.Reservation.ReservationId, detail.Revision, data.Reference, PaymentEvidenceReadTests.ReadData.Metadata)) {
@@ -32,6 +36,8 @@ public sealed class PaymentReviewTests(MongoFixture fixture)
         var engine = new PaymentOcrProcessorTests.FixtureEngine(); var processor = PaymentOcrProcessorTests.Processor(data, engine); await PaymentOcrProcessorTests.Policy(data, processor); Assert.Equal("completed", await processor.RunOnceAsync());
         var extracted = await data.Service.ReadReviewExtractionAsync(reviewer, data.DeclarationId, detail.Revision, data.Reference, new("payment-ocr-view", "synthetic-review")); Assert.Equal("succeeded", extracted.State);
         Assert.Equal("100.00", extracted.Extraction!.Fields.Single(field => field.Field == "amount").Value);
+        var ready = Assert.Single((await data.Payment.Service.ListReviewQueueAsync(reviewer, null, Metadata)).Items); Assert.Equal("succeeded", ready.OcrState);
+        Assert.Equal(ready.Declaration.Input.DeclaredAmount.Value != 100m, ready.Discrepancies.Contains("amount_differs"));
         var lease = await data.Rows("evidenceReadLeases").Find(new BsonDocument("actor.userId", reviewer.UserId)).SingleAsync(); Assert.Equal("released", lease["state"]);
         Assert.Equal(2, await data.Rows("documentExtractionReadAudits").CountDocumentsAsync(new BsonDocument("actorId", reviewer.UserId)));
         Assert.True(await data.Rows("auditEvents").CountDocumentsAsync(new BsonDocument { { "kind", "billing.payment.review.read" }, { "actorId", reviewer.UserId } }) >= 4);
@@ -44,6 +50,7 @@ public sealed class PaymentReviewTests(MongoFixture fixture)
         await using var data = await PaymentEvidenceReadTests.ReadData.CreateAsync(fixture); await PaymentOcrProcessorTests.Submit(data); var reviewer = await Reviewer(data);
         var other = await data.Catalog.ActorAsync(9953, CatalogAuthoringTestData.OtherOwner, Permissions.PaymentReviewRead, Permissions.InvoiceRead);
         Assert.Empty((await data.Payment.Service.ListReviewsAsync(other, null, Metadata)).Items);
+        Assert.Empty((await data.Payment.Service.ListReviewQueueAsync(other, null, Metadata)).Items);
         foreach (var denied in new[] { data.Actor, data.Payment.Invoice.Finance, other }) {
             await Assert.ThrowsAsync<AuthorizationDeniedException>(() => data.Payment.Service.ReadReviewAsync(denied, data.DeclarationId, Metadata));
             await Assert.ThrowsAsync<AuthorizationDeniedException>(() => data.Service.OpenReviewReadAsync(denied, data.DeclarationId, data.Reservation.ReservationId, 1, data.Reference, PaymentEvidenceReadTests.ReadData.Metadata));
@@ -53,6 +60,7 @@ public sealed class PaymentReviewTests(MongoFixture fixture)
         await Assert.ThrowsAsync<AuthorizationDeniedException>(() => data.Service.OpenReadAsync(reviewer, data.DeclarationId, data.Reservation.ReservationId, 1, data.Reference, PaymentEvidenceReadTests.ReadData.Metadata));
         var noInvoices = await data.Catalog.ActorAsync(9954, CatalogAuthoringTestData.Shop, Permissions.PaymentReviewRead);
         await Assert.ThrowsAsync<AuthorizationDeniedException>(() => data.Payment.Service.ListReviewsAsync(noInvoices, null, Metadata));
+        await Assert.ThrowsAsync<AuthorizationDeniedException>(() => data.Payment.Service.ListReviewQueueAsync(noInvoices, null, Metadata));
         await data.Catalog.Base.AddGrantAsync(noInvoices, 99540, CatalogAuthoringTestData.OtherOwner, [Permissions.InvoiceRead]);
         Assert.Empty((await data.Payment.Service.ListReviewsAsync(noInvoices, null, Metadata)).Items);
         await Assert.ThrowsAsync<AuthorizationDeniedException>(() => data.Payment.Service.ReadReviewAsync(noInvoices, data.DeclarationId, Metadata));

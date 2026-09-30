@@ -57,6 +57,10 @@ try {
   }
   async function open(page) { await page.getByRole('button', { name: 'Periksa pengajuan ' + config.declarationId, exact: true }).click(); }
   const reviewer = await desk(config.reviewerToken), page = reviewer.page; await open(page);
+  const queue = page.getByRole('region', { name: 'Pengajuan yang menunggu pemeriksaan', exact: true });
+  await queue.getByText(/Usia pengajuan:.*menit menurut waktu server/).waitFor();
+  await queue.getByLabel('Tampilan halaman ini', { exact: true }).selectOption('closed'); await queue.getByText(/Tidak ada pengajuan untuk tampilan ini/).waitFor();
+  await queue.getByLabel('Tampilan halaman ini', { exact: true }).selectOption('all');
   const review = page.getByRole('region', { name: 'Rincian pengajuan pembayaran', exact: true });
   const originalResponse = page.waitForResponse(response => response.url().endsWith('/original/query'));
   await review.getByRole('button', { name: 'Lihat bukti asli', exact: true }).click(); const original = await originalResponse;
@@ -97,6 +101,12 @@ try {
     assert.equal(await panel.getByRole('heading', { name: 'Tinjau pengaitan dana', exact: true }).count(), 0);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
     await workflow.screenshot({ path: resolve(directory, 'review-action-mobile.png') }); await page.setViewportSize({ width: 1440, height: 1000 }); await workflow.screenshot({ path: resolve(directory, 'review-action-desktop.png') });
+    await queue.getByRole('button', { name: 'Muat pengajuan terbaru', exact: true }).click();
+    await queue.getByText('Bukti pengganti diminta · Penanggung jawab: akun ' + writes.find(write => write.kind === 'workflow').actor, { exact: true }).waitFor();
+    await queue.getByLabel('Tampilan halaman ini', { exact: true }).selectOption('closed');
+    assert.equal(await queue.getByRole('button', { name: 'Periksa pengajuan ' + config.declarationId, exact: true }).count(), 1); await page.setViewportSize({ width: 360, height: 800 });
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true); await queue.screenshot({ path: resolve(directory, 'payment-queue-mobile.png') });
+    await queue.getByLabel('Tampilan halaman ini', { exact: true }).selectOption('all');
     const reader = await desk(config.readerToken); await open(reader.page); const readWorkflow = reader.page.getByRole('region', { name: 'Penanggung jawab pemeriksaan', exact: true });
     await readWorkflow.getByRole('button', { name: 'Muat status pemeriksaan', exact: true }).click(); await readWorkflow.getByText(/Bukti pengganti diminta/).waitFor(); assert.equal(await readWorkflow.getByRole('button', { name: 'Periksa tindak lanjut', exact: true }).count(), 0);
     const buyer = await user(config.buyerToken); await buyer.page.goto(origin.origin + '/billing/payments');

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createUnitTokoClient } from '../src/api/client';
-import { createPaymentReviewGateway, parsePaymentDuplicates, parsePaymentReview, parsePaymentReviewPage } from '../src/modules/billing/payment-review-client';
+import { createPaymentReviewGateway, parsePaymentDuplicates, parsePaymentReview, parsePaymentReviewPage, parsePaymentReviewQueue } from '../src/modules/billing/payment-review-client';
 import { identityDestinations, identityReturnPath } from '../src/modules/identity/identity-workflow';
 
 const actor = '9007199254740993', id = '9007199254740994', time = '2026-09-30T03:00:00Z';
@@ -9,6 +9,29 @@ const owner = { id, revision: '2', state: 'submitted', createdAt: time, updatedA
   input: { invoiceIds: ['11'], declaredAmount: '1234.56', transferDate: '2026-09-30', payerName: 'Pembayar fixture', bankReference: null, note: null },
   invoices: [{ invoiceId: '11', number: '1/2/2026/3', total: '5000.00', buyerName: 'Cabang fixture', sellerName: 'Omi fixture' }],
   submission: { id: '41', reviewRevision: '1', reservationId: '51', evidence: { id: '61', version: '1', sha256: 'a'.repeat(64) }, submittedAt: time } };
+test('bulk queue binds current submitted rows, ownership and server time and accepts only explicit nonfinancial discrepancy flags', async () => {
+  const row = { declaration: owner, reviewRevision: '1', state: 'assigned', assigneeId: actor, recordedAt: time, ocrState: 'succeeded', discrepancies: ['amount_differs', 'human_corrected'] };
+  const page = { items: [row], hasMore: false, observedAt: '2026-09-30T04:00:00Z' };
+  assert.equal(parsePaymentReviewQueue(page, null).items[0].declaration.id, id);
+  for (const state of ['rejected', 'replacement_requested']) {
+    const closed = { ...row, state }; assert.equal(parsePaymentReviewQueue({ ...page, items: [closed] }, null).items[0].assigneeId, actor);
+    assert.throws(() => parsePaymentReviewQueue({ ...page, items: [{ ...closed, assigneeId: null }] }, null));
+  }
+  assert.equal(parsePaymentReviewQueue({ ...page, items: [{ ...row, state: 'pending', assigneeId: null }] }, null).items[0].state, 'pending');
+  for (const changed of [{ ...row, assigneeId: null }, { ...row, recordedAt: null }, { ...row, ocrState: 'queued' }, { ...row, discrepancies: ['paid'] }, { ...row, discrepancies: ['amount_differs', 'amount_differs'] }, { ...row, reason: 'Private staff note' }])
+    assert.throws(() => parsePaymentReviewQueue({ ...page, items: [changed] }, null));
+  assert.throws(() => parsePaymentReviewQueue({ ...page, observedAt: '2026-09-29T03:00:00Z' }, null)); assert.throws(() => parsePaymentReviewQueue(page, id));
+  assert.throws(() => parsePaymentReviewQueue({ ...page, items: [row, row] }, null));
+  let reads = 0;
+  const gateway = createPaymentReviewGateway(createUnitTokoClient({ baseUrl: 'https://unit-toko.test', fetch: async request => {
+    assert.ok(request instanceof Request); if (request.url.endsWith('/identity/csrf')) return Response.json({ requestToken: 'csrf-test' });
+    reads++; assert.equal(new URL(request.url).pathname, '/api/v1/billing/payment-reviews/queue/query'); assert.equal(request.cache, 'no-store');
+    assert.equal(request.headers.get('X-Expected-Actor-Id'), actor); assert.equal(request.headers.get('X-CSRF-Token'), 'csrf-test'); assert.equal(request.headers.get('Idempotency-Key'), null);
+    assert.deepEqual(await request.json(), { purpose: 'payment-review', beforeId: null }); return Response.json(page);
+  } }));
+  assert.deepEqual(await gateway.queue(actor, null), parsePaymentReviewQueue(page, null)); assert.equal(reads, 1);
+});
+
 test('review responses retain exact IDs and submitted state, reject draft/private or invented cash state and invalid paging', () => {
   assert.equal(parsePaymentReview(owner).id, id);
   for (const value of [{ ...owner, state: 'draft', submission: null }, { ...owner, state: 'verified' }, { ...owner, cashReceived: '1234.56' }, { ...owner, id: Number(id) }]) assert.throws(() => parsePaymentReview(value));

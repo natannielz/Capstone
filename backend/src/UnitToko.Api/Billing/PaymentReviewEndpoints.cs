@@ -13,6 +13,9 @@ public sealed record PaymentDuplicateQueryDto([property: JsonRequired] string Pu
     [property: JsonRequired] LongId? BeforeId);
 public sealed record PaymentDuplicateMatchDto(LongId DeclarationId, string Revision, LongId SubmissionId, DateTimeOffset SubmittedAt, ImmutableArray<string> Signals);
 public sealed record PaymentDuplicatePageDto(LongId DeclarationId, string Revision, LongId SubmissionId, ImmutableArray<PaymentDuplicateMatchDto> Items, bool HasMore);
+public sealed record PaymentReviewQueueEntryDto(PaymentDraftDto Declaration, string ReviewRevision, string State, LongId? AssigneeId,
+    DateTimeOffset? RecordedAt, string OcrState, ImmutableArray<string> Discrepancies);
+public sealed record PaymentReviewQueuePageDto(ImmutableArray<PaymentReviewQueueEntryDto> Items, bool HasMore, DateTimeOffset ObservedAt);
 
 public static class PaymentReviewEndpoints
 {
@@ -24,6 +27,12 @@ public static class PaymentReviewEndpoints
             var page = await service.ListReviewsAsync(http.Features.Get<ResolvedActor>()!.Actor, request.BeforeId?.Value, new(request.Purpose, http.TraceIdentifier), ct);
             return TypedResults.Ok(new PaymentDraftPageDto([.. page.Items.Select(PaymentDraftEndpoints.View)], page.HasMore));
         }).WithName("ListPaymentReviews");
+        group.MapPost("/queue/query", async (InvoiceQueryDto request, HttpContext http, PaymentDraftService service, CancellationToken ct) => {
+            Purpose(request.Purpose); Private(http);
+            var page = await service.ListReviewQueueAsync(http.Features.Get<ResolvedActor>()!.Actor, request.BeforeId?.Value, new(request.Purpose, http.TraceIdentifier), ct);
+            return TypedResults.Ok(new PaymentReviewQueuePageDto([.. page.Items.Select(row => new PaymentReviewQueueEntryDto(PaymentDraftEndpoints.View(row.Declaration),
+                OrderDraftInputDto.Number(row.ReviewRevision), row.State, row.AssigneeId is { } assignee ? new(assignee) : null, row.RecordedAt, row.OcrState, row.Discrepancies))], page.HasMore, page.ObservedAt));
+        }).WithName("ListPaymentReviewQueue");
         group.MapPost("/{id}/query", async (string id, OrderReadDto request, HttpContext http, PaymentDraftService service, CancellationToken ct) => {
             Purpose(request.Purpose); Private(http);
             var row = await service.ReadReviewAsync(http.Features.Get<ResolvedActor>()!.Actor, LongId.Parse(id).Value, new(request.Purpose, http.TraceIdentifier), ct);

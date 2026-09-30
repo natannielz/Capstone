@@ -35,9 +35,9 @@ public sealed class PaymentReviewHttpTests(MongoFixture fixture)
         Assert.DoesNotContain("payment.verify", current.GetProperty("allowedActions").EnumerateArray().Select(value => value.GetString()));
         var csrf = (await client.GetFromJsonAsync<JsonElement>("/api/v1/identity/csrf")).GetProperty("requestToken").GetString()!;
         async Task<HttpResponseMessage> Send(string kind, string? fault = null) {
-            var path = kind switch { "list" => "/query", "detail" => $"/{data.DeclarationId}/query", "ocr" => $"/{data.DeclarationId}/ocr/query", "duplicates" => $"/{data.DeclarationId}/duplicates/query", _ => $"/{data.DeclarationId}/evidence/{data.Reservation.ReservationId}/original/query" };
+            var path = kind switch { "list" => "/query", "queue" => "/queue/query", "detail" => $"/{data.DeclarationId}/query", "ocr" => $"/{data.DeclarationId}/ocr/query", "duplicates" => $"/{data.DeclarationId}/duplicates/query", _ => $"/{data.DeclarationId}/evidence/{data.Reservation.ReservationId}/original/query" };
             using var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/billing/payment-reviews" + path) {
-                Content = kind == "list" ? JsonContent.Create(new { purpose = "payment-review", beforeId = (string?)null }) : kind == "detail" ? JsonContent.Create(new { purpose = "payment-review" }) :
+                Content = kind is "list" or "queue" ? JsonContent.Create(new { purpose = "payment-review", beforeId = (string?)null }) : kind == "detail" ? JsonContent.Create(new { purpose = "payment-review" }) :
                     kind == "duplicates" ? JsonContent.Create(new { purpose = "payment-review", beforeId = (string?)null, reference = new { id = data.Reference.Id.ToString(), version = "1", sha256 = fault == "hash" ? new string('f',64) : data.Reference.Sha256 } }) : JsonContent.Create(new { purpose = kind == "ocr" ? "payment-ocr-view" : "payment-evidence-view", reference = new { id = data.Reference.Id.ToString(), version = "1", sha256 = fault == "hash" ? new string('f',64) : data.Reference.Sha256 } }) };
             request.Headers.Add("Origin", fault == "origin" ? "https://outside.invalid" : origin);
             if (fault != "actor") request.Headers.Add("X-Expected-Actor-Id", fault == "different-actor" ? data.Actor.UserId.ToString() : reviewer.UserId.ToString());
@@ -46,7 +46,7 @@ public sealed class PaymentReviewHttpTests(MongoFixture fixture)
             if (fault == "range") request.Headers.Add("Range", "bytes=0-10");
             return await client.SendAsync(request);
         }
-        foreach (var kind in new[] { "list", "detail", "ocr", "original", "duplicates" }) {
+        foreach (var kind in new[] { "list", "queue", "detail", "ocr", "original", "duplicates" }) {
             foreach (var (fault, status) in new[] { ("origin", HttpStatusCode.Forbidden), ("csrf", HttpStatusCode.Forbidden), ("actor", HttpStatusCode.BadRequest), ("different-actor", HttpStatusCode.Conflict) }) {
                 using var denied = await Send(kind, fault); Assert.Equal(status, denied.StatusCode);
             }
@@ -55,6 +55,8 @@ public sealed class PaymentReviewHttpTests(MongoFixture fixture)
             else if (kind == "ocr") { var value = await response.Content.ReadFromJsonAsync<JsonElement>(); Assert.Equal("queued", value.GetProperty("state").GetString()); Assert.Equal(data.DeclarationId.ToString(), value.GetProperty("declarationId").GetString()); }
             else if (kind == "duplicates") { var value = await response.Content.ReadFromJsonAsync<JsonElement>(); Assert.Empty(value.GetProperty("items").EnumerateArray()); Assert.Equal(data.DeclarationId.ToString(), value.GetProperty("declarationId").GetString()); Assert.False(value.GetProperty("hasMore").GetBoolean()); }
             else if (kind == "detail") { var value = await response.Content.ReadFromJsonAsync<JsonElement>(); Assert.Equal("submitted", value.GetProperty("state").GetString()); Assert.False(value.TryGetProperty("verified", out _)); }
+            else if (kind == "queue") { var value = await response.Content.ReadFromJsonAsync<JsonElement>(); Assert.Equal(data.Catalog.Clock.UtcNow, value.GetProperty("observedAt").GetDateTimeOffset());
+                var row = Assert.Single(value.GetProperty("items").EnumerateArray()); Assert.Equal("pending", row.GetProperty("state").GetString()); Assert.Equal("queued", row.GetProperty("ocrState").GetString()); Assert.False(row.TryGetProperty("reason", out _)); Assert.False(row.TryGetProperty("paid", out _)); }
         }
         foreach (var kind in new[] { "ocr", "original", "duplicates" })
             foreach (var (fault, status) in new[] { ("revision", HttpStatusCode.BadRequest), ("stale", HttpStatusCode.Conflict), ("hash", HttpStatusCode.Conflict) }) {

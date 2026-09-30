@@ -72,6 +72,11 @@ public sealed partial class PaymentDraftService
         }, ct);
     }
     public async Task<PaymentDraftPage> ListReviewsAsync(ActorContext actor, long? beforeId, AuthorizationReadMetadata metadata, CancellationToken ct = default) {
+        var page = await ListReviewsCoreAsync(actor, beforeId, metadata, "billing.payment.review.list", (_, _, _, view, _) => Task.FromResult(view), ct);
+        return new(page.Items, page.HasMore);
+    }
+    private async Task<(ImmutableArray<T> Items, bool HasMore, DateTimeOffset ObservedAt)> ListReviewsCoreAsync<T>(ActorContext actor, long? beforeId,
+        AuthorizationReadMetadata metadata, string operation, Func<IClientSessionHandle, BsonDocument, BsonDocument, PaymentDraftView, CancellationToken, Task<T>> select, CancellationToken ct) {
         if (beforeId is <= 0) throw B.Invalid(); await StorageAsync(ct);
         return await authorization.ReadAsync(actor, async (authority, tx, token) => {
             var queries = ReviewQueries(actor, authority);
@@ -82,14 +87,15 @@ public sealed partial class PaymentDraftService
                 new("$match", scoped), new("$group", new BsonDocument { { "_id", "$declarationId" }, { "matches", new BsonDocument("$sum", 1) }, { "expected", new BsonDocument("$first", "$scopeCount") } }),
                 new("$match", new BsonDocument("$expr", new BsonDocument("$eq", new BsonArray { "$matches", "$expected" }))), new("$sort", new BsonDocument("_id", -1)), new("$limit", 26)];
             var selected = await records.Rows(B.Heads).Aggregate<BsonDocument>(tx, pipeline).ToListAsync(token);
-            var result = ImmutableArray.CreateBuilder<PaymentDraftView>(); var scopes = new BsonArray();
+            var result = ImmutableArray.CreateBuilder<T>(); var scopes = new BsonArray();
             foreach (var row in selected) {
                 var head = await ReviewHeadAsync(actor, authority, tx, row["_id"].AsInt64, token);
-                result.Add(await ViewAsync(tx, head, await records.VersionAsync(tx, head["versionId"].AsInt64, token), token));
+                var version = await records.VersionAsync(tx, head["versionId"].AsInt64, token); var view = await ViewAsync(tx, head, version, token);
+                result.Add(await select(tx, head, version, view, token));
                 await records.TouchAsync(tx, head, token); scopes.AddRange(head["scopes"].AsBsonArray);
             }
-            await ReviewAuditAsync(actor, tx, "billing.payment.review.list", selected.Select(row => row["_id"].AsInt64), metadata, token);
-            await ReviewFenceAsync(actor, authority, tx, scopes, token); return new PaymentDraftPage([.. result.Take(25)], selected.Count > 25);
+            await ReviewAuditAsync(actor, tx, operation, selected.Select(row => row["_id"].AsInt64), metadata, token);
+            await ReviewFenceAsync(actor, authority, tx, scopes, token); return (result.Take(25).ToImmutableArray(), selected.Count > 25, Now);
         }, ct);
     }
     internal async Task<T> WithReviewEvidenceAsync<T>(IClientSessionHandle tx, ActorContext actor, EvidenceTargetRef target, long? expectedRevision, EvidenceRef? reference,
