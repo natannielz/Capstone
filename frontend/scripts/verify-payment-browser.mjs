@@ -65,7 +65,7 @@ try {
   assert.equal(writes.filter(item => item.kind === 'save').length, 1);
   await form.getByLabel('Jumlah transfer (IDR)', { exact: true }).fill('2000.01'); await form.getByLabel('Alasan pencatatan atau perubahan', { exact: true }).fill('Koreksi nilai deklarasi');
   await form.getByRole('button', { name: 'Simpan draf pembayaran', exact: true }).click(); await page.getByText(/^Draf tersimpan\./).waitFor();
-  const image = { name: 'bukti-asli.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+axtoAAAAASUVORK5CYII=', 'base64') };
+  const image = { name: 'bukti-asli.png', mimeType: 'image/png', buffer: Buffer.from(config.imageBase64, 'base64') };
   const proof = page.getByRole('region', { name: 'Bukti asli pembayaran', exact: true });
   await proof.getByLabel('Pilih bukti pembayaran', { exact: true }).setInputFiles(image);
   dropNext = 'reserve'; await proof.getByRole('button', { name: 'Unggah bukti asli', exact: true }).click(); await page.getByRole('button', { name: 'Periksa hasil', exact: true }).waitFor();
@@ -74,13 +74,20 @@ try {
   await page.waitForFunction(() => Object.keys(localStorage).filter(key => key.startsWith('unit-toko:pending:v1:')).length === 0);
   await proof.getByLabel('Pilih bukti pembayaran', { exact: true }).setInputFiles(image);
   dropNext = 'content'; await proof.getByRole('button', { name: 'Lanjutkan unggah ini', exact: true }).click(); await proof.getByText('Tersimpan · menunggu pemeriksaan keamanan', { exact: true }).waitFor();
+  console.log('VALIDATE_EVIDENCE_READY');
+  const decoded = proof.getByText('Pemeriksaan keamanan selesai. Bukti tetap dalam draf; pembayaran belum diverifikasi.', { exact: true });
+  for (let attempt = 0; attempt < 20 && !await decoded.isVisible(); attempt++) {
+    await proof.getByRole('button', { name: 'Muat status bukti', exact: true }).click();
+    await decoded.waitFor({ timeout: 1000 }).catch(() => {});
+  }
+  await decoded.waitFor();
   assert.equal(writes.filter(item => item.kind === 'save').length, 2); assert.equal(writes.filter(item => item.kind === 'reserve').length, 1); assert.equal(writes.filter(item => item.kind === 'content').length, 1);
   assert.equal(dropped, 3); assert.ok(writes.every(item => item.actor === config.buyerId)); assert.equal(await page.getByRole('button', { name: /Selesaikan dan tutup/ }).count(), 0);
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true); await page.screenshot({ path: resolve(directory, 'payment-buyer-mobile.png'), fullPage: true });
   await page.setViewportSize({ width: 1440, height: 1000 }); await page.screenshot({ path: resolve(directory, 'payment-buyer-desktop.png'), fullPage: true });
   const outsider = await user(config.outsiderToken); await outsider.page.goto(origin.origin + '/billing/payments'); await outsider.page.getByRole('heading', { name: 'Periksa sesi dan akses', exact: true }).waitFor();
   assert.equal(await outsider.page.getByRole('button', { name: /^Buka draf/ }).count(), 0);
-  assert.deepEqual(errors, []); console.log('REAL_PAYMENT_BROWSER_PASS ' + JSON.stringify({ draftWrites: 2, originalUploads: 1, lostResponsesRecovered: dropped, outsiderDenied: true, offlineUnsent: true, mobile: true }));
+  assert.deepEqual(errors, []); console.log('REAL_PAYMENT_BROWSER_PASS ' + JSON.stringify({ draftWrites: 2, originalUploads: 1, durableValidation: true, realDecoder: true, syntheticScanner: true, lostResponsesRecovered: dropped, outsiderDenied: true, offlineUnsent: true, mobile: true }));
 } catch (error) {
   for (const [index, page] of pages.entries()) if (!page.isClosed()) { console.error('FIXTURE PAGE ' + index + ': ' + (await page.locator('main').innerText().catch(() => 'unavailable')).slice(0, 5000)); await page.screenshot({ path: resolve(directory, 'failure-' + index + '.png'), fullPage: true }).catch(() => {}); }
   console.error(error.stack ?? String(error)); process.exitCode = 1;

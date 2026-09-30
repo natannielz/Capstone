@@ -61,7 +61,7 @@ public sealed class LocalScannerTests
     }
     private static LocalClamdScanner Scanner(Server server, TimeSpan? duration = null) => new(new(server.Port, "1.5.1", 30000, TimeSpan.FromDays(2), 1024, duration ?? TimeSpan.FromSeconds(3)), new FixedClock(Now));
     private static string Version(DateTimeOffset? date = null) => "ClamAV 1.5.1/30000/" + (date ?? Now.AddHours(-1)).UtcDateTime.ToString("ddd MMM d HH:mm:ss yyyy", CultureInfo.InvariantCulture);
-    private sealed class Server : IAsyncDisposable {
+    internal sealed class Server : IAsyncDisposable {
         private readonly TcpListener listener = new(IPAddress.Loopback, 0); private readonly CancellationTokenSource stop = new(); private readonly Task run;
         public int Port => ((IPEndPoint)listener.LocalEndpoint).Port;
         public byte[]? Bytes { get; private set; }

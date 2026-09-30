@@ -17,7 +17,7 @@ internal sealed class UnavailableImageDecoder : IImageDecoder
 {
     public Task<ImageDecodeResult> DecodeAsync(Stream original, EvidenceLimits limits, CancellationToken ct) => Task.FromResult(new ImageDecodeResult("decoder_unavailable"));
 }
-internal sealed record ImageDecoderOptions(string DotnetExecutable, string AssemblyPath, string ExecutableSha256, string AssemblySha256,
+public sealed record ImageDecoderOptions(string DotnetExecutable, string AssemblyPath, string ExecutableSha256, string AssemblySha256,
     string DepsSha256, string RuntimeConfigSha256, string ManagedLibrarySha256, string CoreLibrarySha256, string NativeLibrarySha256, string PolicySha256, long MaximumMemoryBytes, TimeSpan Timeout);
 
 /// <summary>Actual full-pixel decoding in a Windows job with creation-time limits. Not a host/network acceptance certificate.</summary>

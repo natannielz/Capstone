@@ -6,6 +6,16 @@ namespace UnitToko.Platform.Mongo;
 
 public sealed class OutboxStore(IMongoDatabase database, IClock clock)
 {
+    internal async Task<BsonDocument> FenceProcessingAsync(IClientSessionHandle tx, BsonDocument claim, BsonDocument? receipt, CancellationToken ct) {
+        if (!tx.IsInTransaction || !ReferenceEquals(tx.Client, database.Client) || claim.GetValue("kind", "") != "evidence.validation.requested") throw Invalid("invalid_claim");
+        var filter = LiveClaim(claim, clock.UtcNow.UtcDateTime) & F.Eq("sourceKey", claim["sourceKey"]) & F.Eq("payload", claim["payload"]) &
+            (F.Exists("processingFence", false) | (F.Type("processingFence", BsonType.Int64) & F.Gte("processingFence", 0L) & F.Lt("processingFence", long.MaxValue)));
+        if (receipt is not null) filter &= F.Exists("processingReceipt", false) | F.Eq("processingReceipt", receipt);
+        var update = Builders<BsonDocument>.Update.Inc("processingFence", 1L);
+        if (receipt is not null) update = update.Set("processingReceipt", receipt);
+        var row = await events.FindOneAndUpdateAsync(tx, filter, update, new FindOneAndUpdateOptions<BsonDocument> { ReturnDocument = ReturnDocument.After }, ct);
+        return FreshClaim(row, ct) ?? throw new PersistenceConflictException("evidence_validation_claim_lost", "Evidence processing lease is no longer current");
+    }
     private readonly IMongoCollection<BsonDocument> events = database.GetCollection<BsonDocument>("outboxEvents");
     private readonly IMongoCollection<BsonDocument> durableEvents =
         database.GetCollection<BsonDocument>("outboxEvents").WithWriteConcern(WriteConcern.WMajority);

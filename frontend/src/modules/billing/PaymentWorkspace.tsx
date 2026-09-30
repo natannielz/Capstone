@@ -11,7 +11,7 @@ import { OperationRecovery, useOperationRecovery } from '../administration/Opera
 import { submitTrackedRequest } from '../administration/operation-journal';
 import { orderAmount } from '../ordering/order-quote-client';
 import { createInvoiceGateway, type Invoice } from './invoice-client';
-import { createPaymentGateway, paymentReservationOwner, preparePayment, type PaymentDraft, type PaymentInput, type PaymentEvidenceStatus } from './payment-client';
+import { createPaymentGateway, paymentReservationOwner, paymentEvidenceLabel, preparePayment, type PaymentDraft, type PaymentInput, type PaymentEvidenceStatus } from './payment-client';
 import common from '../administration/access.module.css';
 import styles from './invoice.module.css';
 
@@ -143,11 +143,11 @@ function PaymentDesk({ account, now, onDenied }: { account: Account; now: number
         <button className={common.primary} disabled={locked || input.invoiceIds.length === 0}>Simpan draf pembayaran</button></fieldset></form>
       {selected && <button className={common.secondary} disabled={locked} onClick={() => { setSelected(null); setInput(empty(now)); setReason(''); setEvidence([]); setFile(null); }}>Buat draf baru</button>}
     </section>
-    {selected && <section className={common.accountSection} aria-label="Bukti asli pembayaran"><h2>Bukti asli pembayaran</h2><p>Pilih foto atau hasil pindai JPG/PNG, maksimal 10 MB. Berkas asli disimpan untuk pemeriksaan. Pemeriksaan keamanan belum tersedia; pembayaran tetap belum diajukan.</p>
+    {selected && <section className={common.accountSection} aria-label="Bukti asli pembayaran"><h2>Bukti asli pembayaran</h2><p>Pilih foto atau hasil pindai JPG/PNG, maksimal 10 MB. Berkas asli disimpan untuk pemeriksaan. Hasil pemeriksaan keamanan tidak memverifikasi pembayaran; draf tetap belum diajukan.</p>
       <label>Pilih bukti pembayaran<input ref={fileInput} type="file" accept="image/jpeg,image/png" disabled={locked} onChange={event => setFile(event.target.files?.[0] ?? null)} /></label>
       {unsaved && <p>Simpan perubahan draf sebelum mengunggah bukti.</p>}
       {file && <p>{file.name} · {Math.ceil(file.size / 1024)} KB</p>}<button className={common.primary} disabled={locked || !file || hasPending || unsaved} onClick={() => void upload()}>Unggah bukti asli</button>
-      <ul className={styles.lines}>{evidence.map(item => <li key={item.reservationId}><strong>Upaya unggah {item.reservationId}</strong><p>{({ fresh: 'Siap menerima berkas', writing: 'Unggah belum terkonfirmasi', publish_pending: 'Penyimpanan perlu dikonfirmasi', interrupted: 'Unggah terputus; berkas belum lengkap', quarantined: 'Tersimpan · menunggu pemeriksaan keamanan' })[item.state]}</p>
+      <ul className={styles.lines}>{evidence.map(item => <li key={item.reservationId}><strong>Upaya unggah {item.reservationId}</strong><p>{paymentEvidenceLabel(item)}</p>
         {item.state === 'fresh' && <button className={common.secondary} disabled={locked || !file || unsaved || Date.parse(item.expiresAt) <= now} onClick={() => void upload(item)}>Lanjutkan unggah ini</button>}
         {['writing', 'publish_pending'].includes(item.state) && <button className={common.secondary} disabled={locked} onClick={() => void perform(async () => { const result = await gateway.recoverUpload(account.actorId, selected.id, item.reservationId); if (current()) { setNotice(result.state === 'quarantined' ? 'Bukti asli tersimpan. Pembayaran belum diverifikasi.' : 'Hasil belum dapat dipastikan. Jangan mengulang unggah; periksa kembali atau hubungi penanggung jawab.'); const images = await gateway.evidence(account.actorId, selected.id); if (current()) setEvidence(images); } })}>Periksa hasil unggah</button>}</li>)}</ul>
       <button className={common.secondary} disabled={locked} onClick={() => void perform(async () => { const images = await gateway.evidence(account.actorId, selected.id); if (current()) setEvidence(images); })}>Muat status bukti</button>

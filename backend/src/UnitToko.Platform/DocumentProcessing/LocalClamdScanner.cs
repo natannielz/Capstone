@@ -14,7 +14,7 @@ internal sealed class UnavailableContentScanner : IContentScanner
 {
     public Task<ContentScanResult> ScanAsync(Stream original, CancellationToken ct) => Task.FromResult(new ContentScanResult("scanner_unavailable"));
 }
-internal sealed record LocalClamdOptions(int Port, string EngineVersion, long MinimumSignatureVersion, TimeSpan MaximumSignatureAge, long MaximumBytes, TimeSpan Timeout);
+public sealed record LocalClamdOptions(int Port, string EngineVersion, long MinimumSignatureVersion, TimeSpan MaximumSignatureAge, long MaximumBytes, TimeSpan Timeout);
 
 // Loopback only, without DNS, cloud upload, file-path commands or quarantine/delete commands.
 // The listener identity, definitions and service confinement still require real host acceptance.

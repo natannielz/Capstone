@@ -18,8 +18,12 @@ const result = z.object({ declarationId: id, versionId: id, revision: id, record
 const reservation = z.object({ reservationId: id, revision: z.literal('1'), expiresAt: timestamp }).strict();
 const reference = z.object({ id, version: z.literal('1'), sha256: z.string().regex(/^[0-9a-f]{64}$(?![\s\S])/) }).strict();
 const status = z.object({ reservationId: id, state: z.enum(['fresh', 'writing', 'publish_pending', 'interrupted', 'quarantined']), revision: id,
-  expiresAt: timestamp, reference: reference.nullable(), scanStatus: z.literal('unavailable'), decoderStatus: z.literal('unavailable'), safeFailure: z.string().max(100).nullable() }).strict()
-  .refine(value => (value.state === 'quarantined') === (value.reference !== null));
+  expiresAt: timestamp, reference: reference.nullable(), scanStatus: z.enum(['unavailable', 'clean', 'infected']), decoderStatus: z.enum(['unavailable', 'decoded', 'invalid']), safeFailure: z.string().max(100).nullable() }).strict()
+  .refine(value => (value.state === 'quarantined') === (value.reference !== null) &&
+    (value.state === 'quarantined' || value.scanStatus === 'unavailable' && value.decoderStatus === 'unavailable') &&
+    (value.decoderStatus !== 'decoded' || value.scanStatus === 'clean' && value.safeFailure === null) &&
+    (value.decoderStatus !== 'invalid' || value.scanStatus === 'clean' && value.safeFailure === 'invalid_media') &&
+    (value.scanStatus !== 'infected' || value.decoderStatus === 'unavailable' && ['infected_media', 'integrity_mismatch'].includes(value.safeFailure ?? '')));
 const outcome = z.object({ state: z.enum(['quarantined', 'interrupted', 'unresolved', 'unknown', 'publish_pending', 'recovery_required']), reference: reference.nullable() }).strict()
   .refine(value => (value.state === 'quarantined') === (value.reference !== null));
 export type PaymentInput = z.infer<typeof input>;
@@ -31,6 +35,16 @@ function invalid(): never { throw new AccessFailure(502, 'payment_response_inval
 function parse<T>(schema: z.ZodType<T>, value: unknown): T { const parsed = schema.safeParse(value); return parsed.success ? parsed.data : invalid(); }
 export const parsePaymentResult = (value: unknown) => parse(result, value);
 export const parsePaymentReservation = (value: unknown) => parse(reservation, value);
+export const parsePaymentEvidenceStatus = (value: unknown) => parse(status, value);
+export function paymentEvidenceLabel(value: PaymentEvidenceStatus): string {
+  if (value.state !== 'quarantined') return ({ fresh: 'Siap menerima berkas', writing: 'Unggah belum terkonfirmasi', publish_pending: 'Penyimpanan perlu dikonfirmasi', interrupted: 'Unggah terputus; berkas belum lengkap' })[value.state];
+  if (value.safeFailure === 'integrity_mismatch') return 'Identitas berkas tidak cocok. Bukti ditahan; hubungi penanggung jawab.';
+  if (value.scanStatus === 'infected') return 'Berkas ditolak karena terdeteksi berbahaya. Unggah bukti asli yang aman.';
+  if (value.decoderStatus === 'invalid') return 'Gambar tidak dapat dibaca dengan aman. Unggah ulang gambar asli yang lengkap.';
+  if (value.scanStatus === 'clean' && value.decoderStatus === 'decoded' && value.safeFailure === null) return 'Pemeriksaan keamanan selesai. Bukti tetap dalam draf; pembayaran belum diverifikasi.';
+  if (value.safeFailure !== null) return 'Pemeriksaan keamanan belum selesai. Bukti tetap ditahan; coba muat status kembali atau hubungi penanggung jawab.';
+  return 'Tersimpan · menunggu pemeriksaan keamanan';
+}
 export function paymentReservationOwner(key: string) { const match = /^p\.([1-9][0-9]{0,18})\.([0-9a-f-]{36})$(?![\s\S])/.exec(key); return match ? priceId(match[1]) : invalid(); }
 function data<T>(response: { data?: T; error?: unknown; response: Response }): T {
   if (!response.response.ok || response.data === undefined) { const error = response.error && typeof response.error === 'object' ? response.error as Record<string, unknown> : {}; throw new AccessFailure(response.response.status, typeof error.code === 'string' ? error.code : 'request_failed'); } return response.data;

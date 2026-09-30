@@ -1,12 +1,19 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createUnitTokoClient } from '../src/api/client';
-import { createPaymentGateway, preparePayment, parsePaymentResult, paymentReservationOwner } from '../src/modules/billing/payment-client';
+import { createPaymentGateway, preparePayment, parsePaymentResult, paymentReservationOwner, parsePaymentEvidenceStatus, paymentEvidenceLabel } from '../src/modules/billing/payment-client';
 import { OperationJournal, operationRecoveryCapabilities, reconcileOperationRecovery } from '../src/modules/administration/operation-journal';
 
 const actor = '9007199254740993', declarationId = '9007199254740994';
 const input = { invoiceIds: ['9007199254740995'], declaredAmount: '4000.01', transferDate: '2026-09-29', payerName: 'Pembayar', bankReference: null, note: null };
 const result = { declarationId, versionId: '9007199254740996', revision: '1', recordedAt: '2026-09-29T03:00:00Z' };
+test('evidence verdict stays separate from payment approval and rejects contradictory server responses', () => {
+  const value = { reservationId: '51', revision: '3', state: 'quarantined', expiresAt: result.recordedAt, reference: { id: '52', version: '1', sha256: 'a'.repeat(64) }, scanStatus: 'clean', decoderStatus: 'decoded', safeFailure: null };
+  assert.match(paymentEvidenceLabel(parsePaymentEvidenceStatus(value)), /pembayaran belum diverifikasi/);
+  assert.match(paymentEvidenceLabel(parsePaymentEvidenceStatus({ ...value, scanStatus: 'infected', decoderStatus: 'unavailable', safeFailure: 'infected_media' })), /berkas ditolak/i);
+  assert.match(paymentEvidenceLabel(parsePaymentEvidenceStatus({ ...value, scanStatus: 'unavailable', decoderStatus: 'unavailable', safeFailure: 'scanner_unavailable' })), /tetap ditahan/);
+  for (const bad of [{ ...value, scanStatus: 'infected' }, { ...value, safeFailure: 'invalid_media' }, { ...value, state: 'fresh', reference: null }, { ...value, decoderStatus: 'invalid' }, { ...value, approved: true }]) assert.throws(() => parsePaymentEvidenceStatus(bad));
+});
 test('payment freezes invoice intent and keeps IDs and money exact', () => {
   const command = preparePayment(actor, null, '0', input, 'Pembayaran cabang'); assert.ok(Object.isFrozen(command.body.input.invoiceIds));
   assert.equal(command.body.input.declaredAmount, '4000.01'); assert.deepEqual(parsePaymentResult(result), result);

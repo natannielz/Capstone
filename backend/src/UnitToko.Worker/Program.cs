@@ -1,6 +1,8 @@
 using MongoDB.Driver;
 using UnitToko.Platform;
 using UnitToko.Platform.Mongo;
+using UnitToko.Platform.DocumentProcessing;
+using UnitToko.Worker;
 
 var migrate = args.Contains("--migrate", StringComparer.Ordinal);
 var builder = Host.CreateApplicationBuilder(args.Where(arg => arg != "--migrate").ToArray());
@@ -19,6 +21,12 @@ builder.Services.AddSingleton<IdAllocator>();
 builder.Services.AddSingleton<IdempotencyStore>();
 builder.Services.AddSingleton<OutboxStore>();
 builder.Services.AddSingleton<CollectionMigrations>();
+var evidenceOptions = migrate ? null : builder.Configuration.GetSection("Evidence:Validation").Get<EvidenceValidationRuntimeOptions>();
+if (evidenceOptions is not null) {
+    builder.Services.AddSingleton(sp => EvidenceValidationRuntime.Create(sp.GetRequiredService<IMongoDatabase>(), sp.GetRequiredService<MongoUnitOfWork>(),
+        sp.GetRequiredService<IdAllocator>(), sp.GetRequiredService<IClock>(), evidenceOptions));
+    builder.Services.AddHostedService<EvidenceValidationWorker>();
+}
 
 using var host = builder.Build();
 var logger = host.Services.GetRequiredService<ILoggerFactory>().CreateLogger("UnitToko.Worker");
@@ -29,5 +37,6 @@ if (migrate)
     return;
 }
 
-logger.LogWarning("No outbox processors are registered; external delivery is disabled.");
+if (evidenceOptions is null) logger.LogWarning("Evidence validation is unconfigured; no outbox processor will claim jobs.");
+else logger.LogInformation("Evidence validation pipeline configured: {PipelineId}; current store and worker approvals remain required", host.Services.GetRequiredService<EvidenceValidationRuntime>().PipelineId);
 await host.RunAsync();

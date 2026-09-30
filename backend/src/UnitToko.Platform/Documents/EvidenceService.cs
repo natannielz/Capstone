@@ -136,12 +136,13 @@ internal sealed partial class EvidenceService
         {
             RequireAuthority(bundle, target, actor, false);
             if (bundle.Reservation["state"] == "quarantined") await CompletionAsync(tx, bundle, token);
+            var validation = await ValidationStatusAsync(tx, bundle, token);
             var auditId = (await ids.NextAsync("auditEvents", token)).Value;
             await WriteAuditAsync(tx, actor, bundle, "evidence.status", auditId, Revisions(bundle),
                 new("evidence-status", "evidence-status", readMetadata.CorrelationId), null, token);
             return new SafeStatus(reservationId, bundle.Reservation["state"] == "quarantined" ? "quarantined" : bundle.Attempt["state"].AsString,
                 bundle.Reservation["revision"].AsInt64, Date(bundle.Reservation["expiresAt"]), Reference(bundle),
-                "unavailable", "unavailable", bundle.Attempt["lastSafeFailure"].IsBsonNull ? null : bundle.Attempt["lastSafeFailure"].AsString);
+                validation.Scan, validation.Decoder, validation.Failure);
         }, ct);
         ct.ThrowIfCancellationRequested(); return result;
     });
