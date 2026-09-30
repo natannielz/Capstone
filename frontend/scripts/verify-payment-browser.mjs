@@ -68,13 +68,42 @@ try {
   await form.getByRole('button', { name: 'Simpan draf pembayaran', exact: true }).click(); await page.getByText(/^Draf tersimpan\./).waitFor();
   const image = { name: 'bukti-asli.png', mimeType: 'image/png', buffer: Buffer.from(config.imageBase64, 'base64') };
   const proof = page.getByRole('region', { name: 'Bukti asli pembayaran', exact: true });
+  const camera = proof.getByLabel('Ambil foto bukti pembayaran', { exact: true }); assert.equal(await camera.getAttribute('capture'), 'environment');
+  assert.equal(await proof.getByLabel('Pilih bukti pembayaran', { exact: true }).getAttribute('capture'), null);
+  await camera.setInputFiles(image);
+  const local = proof.getByRole('region', { name: 'Pratinjau berkas pilihan', exact: true }), localImage = local.getByRole('img');
+  await localImage.evaluate(element => element.decode()); let localUrl = await localImage.getAttribute('src'); assert.match(localUrl, /^blob:/);
+  await local.getByRole('button', { name: 'Putar tampilan 90°', exact: true }).click();
+  assert.equal(await localImage.evaluate(element => getComputedStyle(element).transform), 'matrix(0, 1, -1, 0, 0, 0)');
+  assert.equal(await page.evaluate(async url => { const bytes = await (await fetch(url)).arrayBuffer(); return [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map(v => v.toString(16).padStart(2, '0')).join(''); }, localUrl), createHash('sha256').update(image.buffer).digest('hex'));
+  assert.equal(writes.filter(item => item.kind === 'reserve' || item.kind === 'content').length, 0);
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  await local.screenshot({ path: resolve(directory, 'payment-local-preview-mobile.png') });
+  await local.getByRole('button', { name: 'Hapus pilihan berkas', exact: true }).click(); await local.waitFor({ state: 'hidden' });
+  assert.equal(await proof.getByLabel('Pilih bukti pembayaran', { exact: true }).evaluate(element => document.activeElement === element), true);
+  assert.equal(await proof.getByRole('button', { name: 'Unggah bukti asli', exact: true }).isDisabled(), true);
+  assert.equal(await page.evaluate(async url => { try { await fetch(url); return false; } catch { return true; } }, localUrl), true);
+  await camera.setInputFiles(image); await localImage.evaluate(element => element.decode()); localUrl = await localImage.getAttribute('src');
   await proof.getByLabel('Pilih bukti pembayaran', { exact: true }).setInputFiles(image);
+  assert.equal(await page.evaluate(async url => { try { await fetch(url); return false; } catch { return true; } }, localUrl), true);
+  await localImage.evaluate(element => element.decode()); assert.equal(await localImage.evaluate(element => getComputedStyle(element).transform), 'matrix(1, 0, 0, 1, 0, 0)');
   dropNext = 'reserve'; await proof.getByRole('button', { name: 'Unggah bukti asli', exact: true }).click(); await page.getByRole('button', { name: 'Periksa hasil', exact: true }).waitFor();
   assert.equal(writes.filter(item => item.kind === 'content').length, 0);
   await page.reload(); await page.getByRole('button', { name: 'Periksa hasil', exact: true }).click(); await proof.getByText('Siap menerima berkas', { exact: true }).waitFor();
   await page.waitForFunction(() => Object.keys(localStorage).filter(key => key.startsWith('unit-toko:pending:v1:')).length === 0);
   await proof.getByLabel('Pilih bukti pembayaran', { exact: true }).setInputFiles(image);
-  dropNext = 'content'; await proof.getByRole('button', { name: 'Lanjutkan unggah ini', exact: true }).click(); await proof.getByText('Tersimpan · menunggu pemeriksaan keamanan', { exact: true }).waitFor();
+  let releaseUpload; const uploadAllowed = new Promise(resolve => { releaseUpload = resolve; });
+  await page.route('**/api/v1/billing/payment-declarations/*/evidence/*/content', async route => { await uploadAllowed; await route.continue(); });
+  dropNext = 'content';
+  try {
+    await proof.getByRole('button', { name: 'Lanjutkan unggah ini', exact: true }).click();
+    const progress = proof.getByRole('progressbar', { name: 'Proses unggah bukti asli', exact: true }); await progress.waitFor();
+    assert.equal(await progress.getAttribute('value'), null); assert.equal(await proof.getByRole('button', { name: 'Unggah bukti asli', exact: true }).isDisabled(), true);
+    assert.equal(writes.filter(item => item.kind === 'content').length, 0);
+  } finally { releaseUpload(); }
+  await proof.getByText('Tersimpan · menunggu pemeriksaan keamanan', { exact: true }).waitFor();
+  await page.unroute('**/api/v1/billing/payment-declarations/*/evidence/*/content');
+  await proof.getByRole('progressbar', { name: 'Proses unggah bukti asli', exact: true }).waitFor({ state: 'hidden' });
   console.log('VALIDATE_EVIDENCE_READY');
   const decoded = proof.getByText('Pemeriksaan keamanan selesai. Bukti tetap dalam draf; pembayaran belum diverifikasi.', { exact: true });
   for (let attempt = 0; attempt < 20 && !await decoded.isVisible(); attempt++) {

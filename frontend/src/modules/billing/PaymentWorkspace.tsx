@@ -64,11 +64,22 @@ function PaymentDesk({ account, now, onDenied }: { account: Account; now: number
   const [page, setPage] = useState<{ items: PaymentDraft[]; hasMore: boolean }>({ items: [], hasMore: false }), [invoicePage, setInvoicePage] = useState<{ items: Invoice[]; hasMore: boolean }>({ items: [], hasMore: false });
   const [selected, setSelected] = useState<PaymentDraft | null>(null), [input, setInput] = useState<PaymentInput>(() => empty(now)), [reason, setReason] = useState('');
   const [ocr, setOcr] = useState<PaymentOcrView | null>(null);
-  const [evidence, setEvidence] = useState<PaymentEvidenceStatus[]>([]), [file, setFile] = useState<File | null>(null), [notice, setNotice] = useState(''), [error, setError] = useState<unknown>(null);
+  const [evidence, setEvidence] = useState<PaymentEvidenceStatus[]>([]), [file, setFileState] = useState<File | null>(null), [notice, setNotice] = useState(''), [error, setError] = useState<unknown>(null);
+  const [localPreview, setLocalPreview] = useState<{ url: string; rotation: number } | null>(null), [uploading, setUploading] = useState(false);
+  const localPreviewUrl = useRef<string | null>(null), cameraInput = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false), [recovering, setRecovering] = useState(false), [offline, setOffline] = useState(false), [refresh, setRefresh] = useState(0), [before, setBefore] = useState<string | null>(null), [invoiceBefore, setInvoiceBefore] = useState<string | null>(null);
   const alive = useRef(false), pending = useRef(false), recoveredId = useRef<string | null>(null), heading = useRef<HTMLHeadingElement>(null), fileInput = useRef<HTMLInputElement>(null);
   const [uploadLedgers] = useState(() => new Map<string, MutationLedger>());
   const [submissionLedgers] = useState(() => new Map<string, MutationLedger>());
+  function setFile(next: File | null) {
+    setError(null);
+    if (localPreviewUrl.current) URL.revokeObjectURL(localPreviewUrl.current); localPreviewUrl.current = null; setLocalPreview(null); setFileState(null);
+    if (fileInput.current) fileInput.current.value = ''; if (cameraInput.current) cameraInput.current.value = '';
+    if (!next) return;
+    if (next.size <= 0 || next.size > 10 * 1024 * 1024 || !['image/jpeg', 'image/png'].includes(next.type)) { setError(new AccessFailure(400, 'payment_image_required')); return; }
+    const url = URL.createObjectURL(next); localPreviewUrl.current = url; setFileState(next); setLocalPreview({ url, rotation: 0 });
+  }
+  useEffect(() => () => { if (localPreviewUrl.current) URL.revokeObjectURL(localPreviewUrl.current); localPreviewUrl.current = null; }, []);
   const [confirmation, setConfirmation] = useState<ReturnType<typeof preparePaymentSubmission> | null>(null);
   const confirmationHeading = useRef<HTMLHeadingElement>(null);
   useEffect(() => { if (confirmation) confirmationHeading.current?.focus(); }, [confirmation]);
@@ -112,7 +123,7 @@ function PaymentDesk({ account, now, onDenied }: { account: Account; now: number
   }
   async function upload(existing?: PaymentEvidenceStatus) {
     if (locked || !selected || selected.state !== 'draft' || confirmation || !file || JSON.stringify(input) !== JSON.stringify(selected.input)) return; const owner = selected, chosen = file;
-    await perform(async () => {
+    setUploading(true); try { await perform(async () => {
       if (chosen.size <= 0 || chosen.size > 10 * 1024 * 1024 || !['image/jpeg', 'image/png'].includes(chosen.type)) throw new AccessFailure(400, 'payment_image_required');
       if (recovery.journal.list(account.actorId).length) throw new AccessFailure(400, 'resolve_previous_attempt');
       const ownerLedger = uploadLedgers.get(owner.id) ?? new MutationLedger(() => 'p.' + owner.id + '.' + crypto.randomUUID()); uploadLedgers.set(owner.id, ownerLedger);
@@ -131,7 +142,7 @@ function PaymentDesk({ account, now, onDenied }: { account: Account; now: number
         }
       }
       if (uploadFailure !== null) throw uploadFailure;
-    });
+    }); } finally { if (alive.current) setUploading(false); }
   }
   async function viewOriginal(item: PaymentEvidenceStatus, trigger: HTMLButtonElement) {
     if (locked || !selected) return; const owner = selected; closePreview(); previewTrigger.current = trigger; const epoch = previewEpoch.current;
@@ -198,8 +209,16 @@ function PaymentDesk({ account, now, onDenied }: { account: Account; now: number
     {submitted && selected && <PaymentOcrPanel view={ocr} locked={locked} onRefresh={() => void perform(async () => { setOcr(null); const result = await gateway.ocr(account.actorId, selected); if (current()) setOcr(result); })} />}
     {selected && <section className={common.accountSection} aria-label="Bukti asli pembayaran"><h2>Bukti asli pembayaran</h2><p>{submitted ? 'Bukti berikut terikat pada pengajuan ini. Pemeriksaan keamanan gambar tidak membuktikan dana diterima.' : 'Pilih foto atau hasil pindai JPG/PNG, maksimal 10 MB. Berkas asli disimpan untuk pemeriksaan. Hasil pemeriksaan keamanan tidak memverifikasi pembayaran; draf tetap belum diajukan.'}</p>
       {!submitted && <><label>Pilih bukti pembayaran<input ref={fileInput} type="file" accept="image/jpeg,image/png" disabled={locked || confirmation !== null} onChange={event => setFile(event.target.files?.[0] ?? null)} /></label>
+      <label>Ambil foto bukti pembayaran<input ref={cameraInput} type="file" accept="image/jpeg,image/png" capture="environment" disabled={locked || confirmation !== null} onChange={event => setFile(event.target.files?.[0] ?? null)} /></label>
       {unsaved && <p>Simpan perubahan draf sebelum mengunggah bukti.</p>}
-      {file && <p>{file.name} · {Math.ceil(file.size / 1024)} KB</p>}<button className={common.primary} disabled={locked || !file || hasPending || unsaved || confirmation !== null} onClick={() => void upload()}>Unggah bukti asli</button></>}
+      {file && <p>{file.name} · {Math.ceil(file.size / 1024)} KB</p>}
+      {localPreview && <section className={styles.evidencePreview} aria-label="Pratinjau berkas pilihan"><h3>Pratinjau berkas pilihan</h3><p>Putar tampilan untuk memeriksa keterbacaan. Berkas asli tetap utuh; gambar belum diunggah atau lolos pemeriksaan keamanan.</p>
+        <div className={styles.evidenceImage} style={{ width: 'min(100%, 560px)', height: 'auto', minHeight: 0, aspectRatio: '1' }}><Image key={localPreview.url} src={localPreview.url} alt="Bukti pembayaran pilihan sebelum unggah" fill unoptimized sizes="(max-width: 600px) 90vw, 560px" style={{ objectFit: 'contain', transform: `rotate(${localPreview.rotation}deg)` }} onError={() => { if (localPreviewUrl.current !== localPreview.url) return; setFile(null); setError(new AccessFailure(400, 'payment_image_required')); }} /></div>
+        <button type="button" className={common.secondary} disabled={locked || confirmation !== null} onClick={() => setLocalPreview(value => value ? { ...value, rotation: (value.rotation + 90) % 360 } : null)}>Putar tampilan 90°</button>
+        <button type="button" className={common.secondary} disabled={locked || confirmation !== null} onClick={() => { setFile(null); fileInput.current?.focus(); }}>Hapus pilihan berkas</button>
+      </section>}
+      {uploading && <div role="status"><progress aria-label="Proses unggah bukti asli" /><p>Menyimpan bukti asli. Tunggu hasil upaya ini sebelum mencoba kembali.</p></div>}
+      <button className={common.primary} disabled={locked || !file || hasPending || unsaved || confirmation !== null} onClick={() => void upload()}>Unggah bukti asli</button></>}
       <ul className={styles.lines}>{evidence.filter(item => !submitted || item.reservationId === selected.submission?.reservationId).map(item => <li key={item.reservationId}><strong>Upaya unggah {item.reservationId}</strong><p>{submitted && item.scanStatus === 'clean' && item.decoderStatus === 'decoded' && item.safeFailure === null ? 'Bukti pengajuan · pemeriksaan keamanan selesai' : paymentEvidenceLabel(item)}</p>
         {item.scanStatus === 'clean' && item.decoderStatus === 'decoded' && item.safeFailure === null && <button className={common.secondary} disabled={locked || unsaved} onClick={event => void viewOriginal(item, event.currentTarget)}>Lihat bukti asli</button>}
         {!submitted && item.scanStatus === 'clean' && item.decoderStatus === 'decoded' && item.safeFailure === null && <button className={common.primary} disabled={locked || unsaved || confirmation !== null} onClick={() => reviewSubmission(item)}>Pilih bukti untuk diajukan</button>}
