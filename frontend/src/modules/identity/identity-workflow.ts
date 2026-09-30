@@ -9,7 +9,7 @@ export class IdentityFailure extends Error {
   }
 }
 
-const returnPaths = ["/identity/account", "/administration/access", "/administration/organizations", "/administration/history", "/administration/person-reviews", "/administration/catalog", "/catalog/prices", "/catalog/browse", "/ordering/drafts", "/ordering/checkout", "/ordering/reviews", "/ordering/orders", "/fulfillment/preparations", "/fulfillment/dispatches", "/fulfillment/shipments", "/fulfillment/receive", "/billing/invoices", "/billing/payments", "/inventory/counts", "/inventory/sources", "/inventory/sources/revisions", "/inventory/sources/aliases", "/inventory/sources/suspensions", "/inventory/sources/policies"];
+const returnPaths = ["/identity/account", "/administration/access", "/administration/organizations", "/administration/history", "/administration/person-reviews", "/administration/catalog", "/catalog/prices", "/catalog/browse", "/ordering/drafts", "/ordering/checkout", "/ordering/reviews", "/ordering/orders", "/fulfillment/preparations", "/fulfillment/dispatches", "/fulfillment/shipments", "/fulfillment/receive", "/billing/invoices", "/billing/payments", "/billing/payment-reviews", "/inventory/counts", "/inventory/sources", "/inventory/sources/revisions", "/inventory/sources/aliases", "/inventory/sources/suspensions", "/inventory/sources/policies"];
 export const identityReturnPath = (value?: string | null) => value && returnPaths.includes(value) ? value : "/identity/account";
 const validId = (value: string) => /^[1-9][0-9]{0,18}$/.test(value) && (value.length < 19 || value <= "9223372036854775807");
 const validTime = (value: unknown): value is string => typeof value === "string" && value.length <= 40 && /^\d{4}-\d\d-\d\dT/.test(value) && Number.isFinite(Date.parse(value));
@@ -81,6 +81,7 @@ export function identityDestinations(actions: readonly string[]) {
     { href: "/fulfillment/shipments", label: "Kiriman", description: "Lihat barang yang diberangkatkan dan tujuan dalam penugasan Anda.", visible: actions.some(action => ["shipment.read", "delivery.attempt"].includes(action)) },
     { href: "/fulfillment/receive", label: "Penerimaan kiriman", description: "Pindai QR kurir atau periksa hasil konfirmasi penerimaan.", visible: actions.includes("receipt.accept") },
     { href: "/billing/invoices", label: "Tagihan", description: "Tinjau penerimaan, terbitkan invoice dan periksa dokumen tagihan.", visible: actions.some(action => ["invoice.read", "invoice.issue"].includes(action)) },
+    { href: "/billing/payment-reviews", label: "Pemeriksaan pembayaran", description: "Periksa pengajuan cabang, bukti asli dan saran pembacaan dalam cakupan akses.", visible: actions.includes("payment.review.read") && actions.includes("invoice.read") },
     { href: "/billing/payments", label: "Bukti pembayaran", description: "Catat transfer dan simpan bukti pembayaran untuk invoice cabang.", visible: actions.includes("payment.evidence") && actions.includes("invoice.read") },
     { href: "/ordering/drafts", label: "Draf pesanan", description: "Lanjutkan kebutuhan barang dan rencana pengiriman cabang Anda.", visible: actions.includes("order.submit") },
     { href: "/ordering/orders", label: "Pesanan saya", description: "Lihat kemasan, tujuan, biaya dan perkembangan pesanan yang telah diajukan.", visible: actions.includes("order.read") },

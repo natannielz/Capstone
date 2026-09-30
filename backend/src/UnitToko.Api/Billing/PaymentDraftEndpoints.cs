@@ -70,7 +70,7 @@ public static class PaymentDraftEndpoints
     }
     internal static void Purpose(string value) { if (value != "payment-declarations") throw Invalid(); }
     internal static DomainValidationException Invalid() => new("invalid_payment_declaration", "Use the current authorized payment declaration workflow");
-    private static PaymentDraftDto View(PaymentDraftView row) => new(row.Id, OrderDraftInputDto.Number(row.Revision), row.CreatedAt, row.UpdatedAt, row.State, PaymentDraftInputDto.From(row.Input), row.Invoices,
+    internal static PaymentDraftDto View(PaymentDraftView row) => new(row.Id, OrderDraftInputDto.Number(row.Revision), row.CreatedAt, row.UpdatedAt, row.State, PaymentDraftInputDto.From(row.Input), row.Invoices,
         row.Submission is { } submitted ? new(submitted.Id, OrderDraftInputDto.Number(submitted.ReviewRevision), submitted.ReservationId,
             new(new(submitted.Evidence.Id), OrderDraftInputDto.Number(submitted.Evidence.Version), submitted.Evidence.Sha256), submitted.SubmittedAt) : null);
     private static PaymentSubmissionResultDto Submitted(BsonDocument row) => new(new(row["declarationId"].AsInt64), new(row["submissionId"].AsInt64),

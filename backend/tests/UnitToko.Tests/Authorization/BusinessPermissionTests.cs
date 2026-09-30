@@ -84,7 +84,7 @@ public sealed class BusinessPermissionTests
         Assert.Equal(new[] { Permissions.SubstitutionPropose, Permissions.StockConvert, Permissions.ReservationRelease,
             Permissions.SupplierChangePropose }, RoleTemplates.Suggestions["store-staff"].ToArray());
         Assert.Equal(new[] { Permissions.OrderAccept, Permissions.SupplierChangeApprove }, RoleTemplates.Suggestions["store-head"].ToArray());
-        Assert.Empty(RoleTemplates.Suggestions["finance"]);
+        Assert.Equal(new[] { Permissions.PaymentReviewRead }, RoleTemplates.Suggestions["finance"].ToArray());
         Assert.Empty(RoleTemplates.Suggestions["courier"]);
         Assert.Empty(RoleTemplates.Suggestions["system-admin"]);
         Assert.DoesNotContain(Permissions.SubstitutionAccept, RoleTemplates.Materialize("buyer", [], []).Permissions);
@@ -94,6 +94,18 @@ public sealed class BusinessPermissionTests
         var legacy = Snapshot("buyer", Buyer);
         Assert.True(ScopePolicy.Compile(Actor, legacy, Permissions.OrderSubstitute, Now).IsAllowed);
         Assert.False(ScopePolicy.Compile(Actor, legacy, Permissions.SubstitutionAccept, Now).IsAllowed);
+    }
+
+    [Fact]
+    public void Submitted_payment_review_requires_an_explicit_scoped_grant_and_never_grants_financial_actions()
+    {
+        Assert.DoesNotContain(Permissions.PaymentReviewRead, RoleTemplates.Materialize("finance", ["billing"], []).Permissions);
+        var review = Snapshot("finance", Shop, [Permissions.PaymentReviewRead]);
+        Assert.True(ScopePolicy.Compile(Actor, review, Permissions.PaymentReviewRead, Now).Matches(Order));
+        foreach (var permission in new[] { Permissions.PaymentEvidence, Permissions.PaymentRecord, Permissions.PaymentAllocate, Permissions.PaymentVerify })
+            Assert.False(ScopePolicy.Compile(Actor, review, permission, Now).IsAllowed);
+        Assert.Equal(new[] { GrantScopeKind.FulfillmentShop, GrantScopeKind.FulfillmentWarehouse }, Permissions.Find(Permissions.PaymentReviewRead)!.AllowedScopes.ToArray());
+        Assert.False(ScopePolicy.Compile(Actor, Snapshot("buyer", Buyer), Permissions.PaymentReviewRead, Now).IsAllowed);
     }
 
     [Fact]

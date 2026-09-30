@@ -60,6 +60,7 @@ export type PaymentEvidenceStatus = z.infer<typeof status>;
 function invalid(): never { throw new AccessFailure(502, 'payment_response_invalid'); }
 function parse<T>(schema: z.ZodType<T>, value: unknown): T { const parsed = schema.safeParse(value); return parsed.success ? parsed.data : invalid(); }
 export const parsePaymentResult = (value: unknown) => parse(result, value);
+export const parsePaymentDraft = (value: unknown) => parse(draft, value);
 export const parsePaymentSubmissionResult = (value: unknown) => parse(submitted, value);
 export const parsePaymentReservation = (value: unknown) => parse(reservation, value);
 export const parsePaymentEvidenceStatus = (value: unknown) => parse(status, value);

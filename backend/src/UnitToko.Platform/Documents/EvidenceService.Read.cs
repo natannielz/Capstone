@@ -49,11 +49,10 @@ internal sealed partial class EvidenceService
     internal Task<EvidenceReadClaim> AcquirePaymentReadAsync(IClientSessionHandle tx, ActorContext actor, EvidenceTargetRef target, long expectedRevision,
         long reservationId, EvidenceRef reference, AuthorizationReadMetadata metadata, CancellationToken ct) => GuardAsync<EvidenceReadClaim>(tx, async () => {
         if (target.Kind != EvidenceTargetKind.PaymentDeclaration || expectedRevision <= 0 || metadata.Purpose != "payment-evidence-view" || !Text(metadata.CorrelationId, 128)) throw Invalid();
-        await RequireBindingAsync(tx, actor, target, reservationId, ct);
-        var bundle = await LoadAsync(tx, reservationId, ct);
         DateTimeOffset? deadline = null;
         var result = await WithReadTargetAsync(tx, actor, target, expectedRevision, reference, async (authority, token) => {
-            RequireAuthority(bundle, authority, actor, true);
+            var bundle = await LoadAsync(tx, reservationId, token);
+            RequireReadAuthority(bundle, authority, actor);
             if (Reference(bundle) != reference) throw Conflict("evidence_read_reference_changed");
             var eligible = await ReadEligibilityAsync(tx, bundle, token);
             var now = clock.UtcNow; deadline = now.AddMilliseconds(eligible.Policy["requestDurationMs"].AsInt64);
@@ -78,10 +77,10 @@ internal sealed partial class EvidenceService
     });
     internal Task<EvidenceReadWindow> AuthorizePaymentReadAsync(IClientSessionHandle tx, ActorContext actor, EvidenceReadClaim claim,
         VerifiedOriginalHandle handle, bool renew, CancellationToken ct) => GuardAsync<EvidenceReadWindow>(tx, async () => {
-        await RequireBindingAsync(tx, actor, claim.Target, claim.ReservationId, ct);
-        var bundle = await LoadAsync(tx, claim.ReservationId, ct); DateTimeOffset? finalDeadline = null;
+        DateTimeOffset? finalDeadline = null;
         var result = await WithReadTargetAsync(tx, actor, claim.Target, claim.TargetRevision, claim.Reference, async (authority, token) => {
-            RequireAuthority(bundle, authority, actor, true);
+            var bundle = await LoadAsync(tx, claim.ReservationId, token);
+            RequireReadAuthority(bundle, authority, actor);
             var row = await LoadReadLeaseAsync(tx, claim, token);
             if (row["state"] != (renew ? "active" : "provisional") || !row["actor"].Equals(ReadActor(actor)) || Date(row["until"]) <= clock.UtcNow || Date(row["deadline"]) <= clock.UtcNow ||
                 row["target"]["id"] != claim.Target.Id || row["target"]["revision"] != claim.TargetRevision || Date(row["deadline"]) != claim.Deadline || !row["reference"].Equals(ReadReference(claim.Reference)) ||
@@ -104,6 +103,14 @@ internal sealed partial class EvidenceService
         if (row["state"] == "released") return true;
         var next = Clone(row); next["state"] = "released"; await SaveReadLeaseAsync(tx, row, next, "released", ct); return true;
     });
+    // Only the Billing-owned submitted-review adapter may bind a different original uploader.
+    // Upload/admission paths continue to require the exact current actor's provider identity.
+    private static void RequireReadAuthority(Bundle bundle, EvidenceUploadTarget target, ActorContext actor) {
+        RequireAuthority(bundle, target, actor, target.ReviewUploaderId is null);
+        if (target.ReviewUploaderId is { } uploader && (uploader <= 0 || target.Target.Kind != EvidenceTargetKind.PaymentDeclaration ||
+            target.SubmittedSubmissionId is not > 0 || target.SubmittedReservationId != bundle.Reservation["_id"].AsInt64 || bundle.Reservation["uploader"]["userId"] != uploader))
+            throw Invalid("evidence_actor_or_owner_denied");
+    }
     private async Task<BsonDocument> LoadReadLeaseAsync(IClientSessionHandle tx, EvidenceReadClaim claim, CancellationToken ct) {
         var row = await Rows("evidenceReadLeases").Find(tx, new BsonDocument("$and", new BsonArray {
             new BsonDocument { { "_id", claim.Id }, { "token", claim.Token }, { "reservationId", claim.ReservationId } }, EvidenceAccessSchemas.Validator("evidenceReadLeases") })).SingleOrDefaultAsync(ct)

@@ -18,7 +18,7 @@ internal sealed partial class EvidenceService
                 ?? throw ExtractionRecords.Broken();
             // This never opens the original. It applies the current owning access, original eligibility and exact pin checks to its private derivative.
             var original = await ProcessingOriginalAsync(tx, source, job, clock.UtcNow.AddSeconds(5), token);
-            if (original.Source.Evidence != reference || original.Source.ReservationId != reservationId || original.Source.DeclarationId != target.Id || original.Source.UploaderId != actor.UserId)
+            if (original.Source.Evidence != reference || original.Source.ReservationId != reservationId || original.Source.DeclarationId != target.Id || original.Source.UploaderId != (owner.ReviewUploaderId ?? actor.UserId))
                 throw Invalid();
             var row = await new ExtractionRecords(database).ResultAsync(tx, job, token);
             if (row is not null) {

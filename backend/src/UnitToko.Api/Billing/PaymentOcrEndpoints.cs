@@ -23,11 +23,13 @@ public static class PaymentOcrEndpoints
             var result = await service.ReadExtractionAsync(http.Features.Get<ResolvedActor>()!.Actor, LongId.Parse(id).Value, AccessRequestMetadata.ExpectedVersion(http.Request),
                 reference, new(request.Purpose, http.TraceIdentifier), ct);
             http.Response.Headers.CacheControl = "private, no-store, max-age=0"; http.Response.Headers.Pragma = "no-cache";
-            return TypedResults.Ok(new PaymentOcrViewDto(new(result.DeclarationId), new(result.SubmissionId), request.Reference, result.State,
-                result.Extraction is not { } extraction ? null : new(new(result.ResultId!.Value), result.ExtractedAt!.Value, extraction.Provenance,
-                    [.. extraction.Fields.Select(field => new PaymentOcrFieldDto(field.Field, field.Value, field.Confidence?.ToString(CultureInfo.InvariantCulture),
-                        field.BoundingBox is null ? null : [.. field.BoundingBox.Select(value => value.ToString(CultureInfo.InvariantCulture))], [.. field.Flags]))], [.. extraction.QualityFlags])));
+            return TypedResults.Ok(View(result));
         }).RequireAuthorization().AddEndpointFilter<ActorRequiredFilter>().WithName("ReadPaymentOcr");
         foreach (var status in new[] { 400, 401, 403, 409, 503 }) endpoint.WithMetadata(new ProducesResponseTypeMetadata(status, typeof(ApiProblem), ["application/problem+json"]));
     }
+    internal static PaymentOcrViewDto View(PaymentExtractionView result) => new(new(result.DeclarationId), new(result.SubmissionId),
+        new(new(result.Evidence.Id), OrderDraftInputDto.Number(result.Evidence.Version), result.Evidence.Sha256), result.State,
+        result.Extraction is not { } extraction ? null : new(new(result.ResultId!.Value), result.ExtractedAt!.Value, extraction.Provenance,
+            [.. extraction.Fields.Select(field => new PaymentOcrFieldDto(field.Field, field.Value, field.Confidence?.ToString(CultureInfo.InvariantCulture),
+                field.BoundingBox is null ? null : [.. field.BoundingBox.Select(value => value.ToString(CultureInfo.InvariantCulture))], [.. field.Flags]))], [.. extraction.QualityFlags]));
 }

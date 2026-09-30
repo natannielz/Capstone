@@ -4,7 +4,7 @@ using UnitToko.Modules.Identity.Contracts;
 using UnitToko.Modules.Organizations;
 
 namespace UnitToko.Platform.Documents;
-internal sealed record EvidenceUploadTarget(EvidenceTargetRef Target, GrantScope Owner, long Revision, long? DefinitionId, long? DefinitionVersion, long? SubmittedReservationId = null, long? SubmittedSubmissionId = null);
+internal sealed record EvidenceUploadTarget(EvidenceTargetRef Target, GrantScope Owner, long Revision, long? DefinitionId, long? DefinitionVersion, long? SubmittedReservationId = null, long? SubmittedSubmissionId = null, long? ReviewUploaderId = null);
 internal interface IPaymentEvidenceUploadTarget
 {
     IMongoDatabase Database { get; }

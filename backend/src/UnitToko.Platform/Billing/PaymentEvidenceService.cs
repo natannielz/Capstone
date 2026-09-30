@@ -22,6 +22,7 @@ public sealed partial class PaymentEvidenceService
     private readonly MongoUnitOfWork unit;
     private readonly PaymentDraftService declarations;
     private readonly EvidenceService evidence;
+    private readonly EvidenceService reviewEvidence;
     private readonly IClock clock;
     private readonly EvidenceStoreRegistration registration;
     internal EvidenceReadObserver? ReadObserver { get; set; }
@@ -31,6 +32,7 @@ public sealed partial class PaymentEvidenceService
     internal PaymentEvidenceService(IMongoDatabase database, MongoUnitOfWork unit, IdAllocator ids, IClock clock, PaymentDraftService declarations, EvidenceStoreRegistration registration) {
         this.database = database; this.unit = unit; this.declarations = declarations; this.clock = clock; this.registration = registration;
         evidence = new(database, unit, ids, clock, registration, declarations);
+        reviewEvidence = new(database, unit, ids, clock, registration, new PaymentReviewTarget(database, declarations));
     }
     private static EvidenceTargetRef Target(long id) => new(EvidenceTargetKind.PaymentDeclaration, id);
     private async Task StorageAsync(CancellationToken ct) {
@@ -88,26 +90,32 @@ public sealed partial class PaymentEvidenceService
         return await evidence.RecoverAsync(actor, reservationId, metadata, ct);
     }
     public async Task<ProtectedEvidenceRead> OpenReadAsync(ActorContext actor, long declarationId, long reservationId, long expectedRevision,
-        EvidenceRef reference, AuthorizationReadMetadata metadata, CancellationToken ct = default) {
+        EvidenceRef reference, AuthorizationReadMetadata metadata, CancellationToken ct = default) =>
+        await OpenBoundReadAsync(evidence, actor, declarationId, reservationId, expectedRevision, reference, metadata, ct);
+    public async Task<ProtectedEvidenceRead> OpenReviewReadAsync(ActorContext actor, long declarationId, long reservationId, long expectedRevision,
+        EvidenceRef reference, AuthorizationReadMetadata metadata, CancellationToken ct = default) =>
+        await OpenBoundReadAsync(reviewEvidence, actor, declarationId, reservationId, expectedRevision, reference, metadata, ct);
+    private async Task<ProtectedEvidenceRead> OpenBoundReadAsync(EvidenceService reader, ActorContext actor, long declarationId, long reservationId, long expectedRevision,
+        EvidenceRef reference, AuthorizationReadMetadata metadata, CancellationToken ct) {
         await StorageAsync(ct);
         foreach (var name in EvidenceAccessSchemas.Collections)
             await InventoryRepository.RequireStorageAsync(database, name, EvidenceAccessSchemas.Validator(name), EvidenceAccessSchemas.Key(name), ct);
         if (registration.Store is null) throw Unavailable();
         var started = Stopwatch.GetTimestamp();
-        var claim = await unit.ExecuteAsync((tx, token) => evidence.AcquirePaymentReadAsync(tx, actor, Target(declarationId), expectedRevision, reservationId, reference, metadata, token), ct);
+        var claim = await unit.ExecuteAsync((tx, token) => reader.AcquirePaymentReadAsync(tx, actor, Target(declarationId), expectedRevision, reservationId, reference, metadata, token), ct);
         VerifiedOriginalHandle? handle = null;
         async Task ReleaseAsync() {
             using var cleanup = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            await unit.ExecuteAsync(async (tx, token) => { await evidence.ReleaseReadAsync(tx, claim, token); return true; }, cleanup.Token);
+            await unit.ExecuteAsync(async (tx, token) => { await reader.ReleaseReadAsync(tx, claim, token); return true; }, cleanup.Token);
         }
         try {
             var opened = await registration.Store.OpenVerifiedAsync(claim.Original, claim.VerificationBudget, ct);
             handle = opened is OpenOutcome.Opened success ? success.Handle : throw new PersistenceConflictException("evidence_read_integrity_unavailable", "The exact original cannot be safely read");
             if (ReadObserver is { } observer) await observer.Verified();
-            var window = await unit.ExecuteAsync((tx, token) => evidence.AuthorizePaymentReadAsync(tx, actor, claim, handle, false, token), ct);
+            var window = await unit.ExecuteAsync((tx, token) => reader.AuthorizePaymentReadAsync(tx, actor, claim, handle, false, token), ct);
             var held = handle;
             var content = new EvidenceReadStream(held, clock, window, claim.RequestDuration - Stopwatch.GetElapsedTime(started),
-                token => unit.ExecuteAsync((tx, inner) => evidence.AuthorizePaymentReadAsync(tx, actor, claim, held, true, inner), token), ReleaseAsync, ct);
+                token => unit.ExecuteAsync((tx, inner) => reader.AuthorizePaymentReadAsync(tx, actor, claim, held, true, inner), token), ReleaseAsync, ct);
             handle = null; return new(content, claim.Mime, claim.Original.Content.Length, claim.Reference);
         } catch {
             if (handle is not null) await handle.DisposeAsync();

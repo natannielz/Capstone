@@ -145,6 +145,37 @@ try {
   await page.screenshot({ path: resolve(directory, 'payment-buyer-desktop.png'), fullPage: true });
   const outsider = await user(config.outsiderToken); await outsider.page.goto(origin.origin + '/billing/payments'); await outsider.page.getByRole('heading', { name: 'Periksa sesi dan akses', exact: true }).waitFor();
   assert.equal(await outsider.page.getByRole('button', { name: /^Buka draf/ }).count(), 0);
+  await outsider.page.goto(origin.origin + '/billing/payment-reviews'); await outsider.page.getByRole('heading', { name: 'Periksa sesi dan akses', exact: true }).waitFor();
+  const reviewer = await user(config.reviewerToken), reviewPage = reviewer.page;
+  await reviewPage.goto(origin.origin + '/billing/payment-reviews');
+  await reviewPage.getByRole('button', { name: /^Periksa pengajuan [1-9]/ }).first().click();
+  const review = reviewPage.getByRole('region', { name: 'Rincian pengajuan pembayaran', exact: true }); await review.waitFor();
+  assert.equal(await review.getByRole('heading', { name: /^Pengajuan [1-9]/ }).evaluate(element => document.activeElement === element), true);
+  assert.match(await review.innerText(), /2\.000,01/); await review.getByText('Menunggu verifikasi', { exact: true }).waitFor();
+  const reviewRead = reviewPage.waitForResponse(response => response.url().includes('/payment-reviews/') && response.url().endsWith('/original/query'));
+  await review.getByRole('button', { name: 'Lihat bukti asli', exact: true }).click(); const read = await reviewRead;
+  assert.equal(read.status(), 200); assert.match(read.headers()['cache-control'], /no-store/);
+  assert.equal(createHash('sha256').update(await read.body()).digest('hex'), createHash('sha256').update(image.buffer).digest('hex'));
+  const reviewPreview = review.getByRole('region', { name: 'Bukti asli untuk pemeriksaan', exact: true }); await reviewPreview.getByRole('img').evaluate(image => image.decode());
+  const reviewUrl = await reviewPreview.getByRole('img').getAttribute('src'); assert.match(reviewUrl, /^blob:/);
+  await reviewPreview.getByRole('button', { name: 'Tutup bukti', exact: true }).click(); await reviewPreview.waitFor({ state: 'hidden' });
+  assert.equal(await review.getByRole('button', { name: 'Lihat bukti asli', exact: true }).evaluate(element => document.activeElement === element), true);
+  assert.equal(await reviewPage.evaluate(async url => { try { await fetch(url); return false; } catch { return true; } }, reviewUrl), true);
+  const reviewOcr = review.getByRole('region', { name: 'Pembacaan bukti otomatis', exact: true });
+  await reviewOcr.getByRole('button', { name: 'Muat hasil OCR', exact: true }).click(); await reviewOcr.getByText('Hasil pembacaan tersedia', { exact: true }).waitFor();
+  if (config.nativeOcr) assert.equal(await reviewOcr.getByText('Belum diketahui', { exact: true }).count(), 8);
+  assert.equal(await reviewPage.getByRole('button', { name: /Verifikasi pembayaran|Alokasikan pembayaran|Simpan koreksi/ }).count(), 0);
+  await review.getByRole('heading', { name: 'Konfirmasi dana masuk belum tersedia', exact: true }).waitFor();
+  assert.equal(await reviewPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  await reviewPage.screenshot({ path: resolve(directory, 'payment-finance-mobile.png'), fullPage: true });
+  await reviewer.context.setOffline(true); await reviewPage.getByText(/Koneksi terputus/).waitFor();
+  assert.equal(await reviewOcr.getByRole('button', { name: 'Muat hasil OCR', exact: true }).isDisabled(), true);
+  assert.equal(await review.getByRole('button', { name: 'Lihat bukti asli', exact: true }).isDisabled(), true);
+  await reviewer.context.setOffline(false); await reviewPage.reload(); await reviewPage.getByRole('button', { name: /^Periksa pengajuan [1-9]/ }).first().click();
+  await reviewOcr.getByRole('button', { name: 'Muat hasil OCR', exact: true }).click(); await reviewOcr.getByText('Hasil pembacaan tersedia', { exact: true }).waitFor();
+  await reviewPage.setViewportSize({ width: 1440, height: 1000 }); await reviewPage.screenshot({ path: resolve(directory, 'payment-finance-desktop.png'), fullPage: true });
+  assert.equal(await reviewPage.evaluate(() => Object.keys(localStorage).filter(key => key.startsWith('unit-toko:pending:v1:')).length), 0);
+  console.log('REAL_FINANCE_REVIEW_BROWSER_PASS ' + JSON.stringify({ submittedQueue: true, exactOriginal: true, durableOcr: true, noMoneyAuthority: true, reload: true, outsiderDenied: true, offlineUnsent: true, mobile: true }));
   assert.deepEqual(errors, []); console.log('REAL_PAYMENT_BROWSER_PASS ' + JSON.stringify({ draftWrites: 2, originalUploads: 1, paymentSubmissions: 1, durableOcr: true, nativeOcr: config.nativeOcr, durableValidation: true, privateOriginalRead: true, exactHash: true, blobRevoked: true, realDecoder: true, syntheticScanner: true, lostResponsesRecovered: dropped, outsiderDenied: true, offlineUnsent: true, mobile: true }));
 } catch (error) {
   for (const [index, page] of pages.entries()) if (!page.isClosed()) { console.error('FIXTURE PAGE ' + index + ': ' + (await page.locator('main').innerText().catch(() => 'unavailable')).slice(0, 5000)); await page.screenshot({ path: resolve(directory, 'failure-' + index + '.png'), fullPage: true }).catch(() => {}); }
