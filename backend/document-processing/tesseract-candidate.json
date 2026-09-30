@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "purpose": "Local evaluation candidate; not production selection or worker activation",
+  "engine": "tesseract-5.5.3/tesserocr-2.11.0",
+  "platform": "Windows x64, CPython 3.12",
+  "wrapper": {
+    "source": "https://github.com/simonflueckiger/tesserocr-windows_build/releases/tag/tesserocr-v2.11.0-tesseract-5.5.3",
+    "url": "https://github.com/simonflueckiger/tesserocr-windows_build/releases/download/tesserocr-v2.11.0-tesseract-5.5.3/tesserocr-2.11.0-cp312-cp312-win_amd64.whl",
+    "sha256": "74604b65547b6e988dcdab0d6d7366964ec588a9fd28a526b2ca9b9f8b8d3dea",
+    "digestSource": "GitHub release asset digest, checked before installing the local candidate",
+    "license": "MIT (tesserocr); bundled native libraries have their own licenses and notices"
+  },
+  "models": {
+    "source": "https://github.com/tesseract-ocr/tessdata_fast/tree/87416418657359cb625c412a48b6e1d6d41c29bd",
+    "revision": "87416418657359cb625c412a48b6e1d6d41c29bd",
+    "license": "Apache-2.0",
+    "digestSource": "Observed local SHA-256 of files downloaded from this exact official source revision",
+    "files": [
+      { "name": "eng.traineddata", "sha256": "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2" },
+      { "name": "ind.traineddata", "sha256": "69786901da87ab8766c1ea7fbb10b28f2110c14da3f6c8f2735df131fba95d88" }
+    ]
+  },
+  "preprocessing": "original-rgb-psm6-ind+eng-v1/payment-labels-id-en-v1",
+  "releaseGates": [
+    "Compare PP-OCRv6 tiny and small against Tesseract on held-out annotated private payment images",
+    "Review full runtime and native dependency inventory, licenses, vulnerabilities and signed release pins",
+    "Approve accuracy/unknown/false-match thresholds, operator correction effort and target CPU/RAM",
+    "Verify denied egress, restricted service credentials and approved immutable runtime directories",
+    "Connect exact assigned evidence leases, immutable result/audit persistence and scoped UI"
+  ]
+}

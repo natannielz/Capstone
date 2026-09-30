@@ -8,14 +8,15 @@ using Microsoft.Win32.SafeHandles;
 
 namespace UnitToko.Platform.DocumentProcessing;
 
-internal sealed record BoundedProcessResult(string Status, int ExitCode = -1, string Output = "", string Error = "", long InputLength = 0, string? InputSha256 = null);
+internal sealed record BoundedProcessResult(string Status, int ExitCode = -1, string Output = "", string Error = "", long InputLength = 0, string? InputSha256 = null, long? PeakJobMemoryBytes = null);
 
 /// <summary>Resource confinement, not a substitute for a restricted service identity or denied host egress.</summary>
 [SupportedOSPlatform("windows")]
 internal static class WindowsBoundedProcess
 {
     internal static async Task<BoundedProcessResult> RunAsync(string executable, IReadOnlyList<string> args, long memoryBytes, TimeSpan timeout,
-        Stream input, long maximumInputBytes, CancellationToken ct) {
+        Stream input, long maximumInputBytes, CancellationToken ct, int maximumOutputBytes = 4096) {
+        if (maximumOutputBytes is < 1 or > 131072) throw new ArgumentOutOfRangeException(nameof(maximumOutputBytes));
         using var job = CreateJobObject(0, null);
         if (job.IsInvalid) throw new Win32Exception();
         var limits = new ExtendedLimits { Basic = new() { LimitFlags = 0x2000 | 0x100 | 0x200 | 0x8 | 0x2 | 0x400,
@@ -56,11 +57,12 @@ internal static class WindowsBoundedProcess
             using var receive = new FileStream(parentOutput, FileAccess.Read, 4096, false);
             using var error = new FileStream(parentError, FileAccess.Read, 4096, false);
             var writer = SendAsync(send, input, maximumInputBytes, deadline.Token);
-            var stdout = ReadBoundedAsync(receive, deadline.Token); var stderr = ReadBoundedAsync(error, deadline.Token);
+            var stdout = ReadBoundedAsync(receive, maximumOutputBytes, deadline.Token); var stderr = ReadBoundedAsync(error, 4096, deadline.Token);
             var exit = process.WaitForExitAsync(deadline.Token);
             try {
                 await Task.WhenAll(writer, stdout, stderr, exit).WaitAsync(deadline.Token);
-                return new("exited", process.ExitCode, await stdout, await stderr, writer.Result.Length, writer.Result.Hash);
+                var peak = QueryInformationJobObject(job, 9, out var measured, (uint)Marshal.SizeOf<ExtendedLimits>(), out _) ? (long?)measured.PeakJobMemoryUsed : null;
+                return new("exited", process.ExitCode, await stdout, await stderr, writer.Result.Length, writer.Result.Hash, peak);
             } catch (OperationCanceledException) when (!ct.IsCancellationRequested) { return new("decode_timeout"); }
             catch (InputLimitException) { return new("invalid_media"); }
             catch (OperationCanceledException) { throw; }
@@ -91,8 +93,8 @@ internal static class WindowsBoundedProcess
             await pipe.FlushAsync(ct); return (total, Convert.ToHexString(digest.GetHashAndReset()).ToLowerInvariant());
         } finally { pipe.Dispose(); }
     }
-    private static async Task<string> ReadBoundedAsync(Stream stream, CancellationToken ct) {
-        var bytes = new byte[4097]; var total = 0;
+    private static async Task<string> ReadBoundedAsync(Stream stream, int maximum, CancellationToken ct) {
+        var bytes = new byte[maximum + 1]; var total = 0;
         while (total < bytes.Length) { var read = await stream.ReadAsync(bytes.AsMemory(total), ct); if (read == 0) return new UTF8Encoding(false, true).GetString(bytes, 0, total); total += read; }
         throw new InvalidDataException("Decoder output exceeded its envelope");
     }
@@ -117,6 +119,7 @@ internal static class WindowsBoundedProcess
     [StructLayout(LayoutKind.Sequential)] private struct ExtendedLimits { public BasicLimits Basic; public IoCounters Io; public nuint ProcessMemoryLimit, JobMemoryLimit, PeakProcessMemoryUsed, PeakJobMemoryUsed; }
     [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)] private static extern SafeFileHandle CreateJobObject(nint attributes, string? name);
     [DllImport("kernel32.dll", SetLastError = true)] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool SetInformationJobObject(SafeFileHandle job, int kind, ref ExtendedLimits info, uint length);
+    [DllImport("kernel32.dll", SetLastError = true)] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool QueryInformationJobObject(SafeFileHandle job, int kind, out ExtendedLimits info, uint length, out uint returnedLength);
     [DllImport("kernel32.dll", SetLastError = true)] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool TerminateJobObject(SafeFileHandle job, uint exitCode);
     [DllImport("kernel32.dll", SetLastError = true)] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool CreatePipe(out SafeFileHandle read, out SafeFileHandle write, ref SecurityAttributes attributes, uint size);
     [DllImport("kernel32.dll", SetLastError = true)] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool SetHandleInformation(SafeFileHandle handle, uint mask, uint flags);
