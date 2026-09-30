@@ -9,7 +9,7 @@ public static class PersonApprovalPolicy
 {
     public static bool RequiresEvidence(string permission) => permission is
         Permissions.OrderSpendApprove or Permissions.ReceivingAccountApprove or Permissions.ReceivingAccountVerify or Permissions.PricingApprove or Permissions.SupplierChangeApprove or Permissions.StockSourceApprove or Permissions.StockSourcePolicyApprove or
-        Permissions.BankReceiptConfirm or Permissions.PaymentVerify or Permissions.DisbursementVerify or Permissions.ReconciliationVerify or
+        Permissions.BankReceiptConfirm or Permissions.PaymentVerify or Permissions.PaymentAllocate or Permissions.DisbursementVerify or Permissions.ReconciliationVerify or
         Permissions.CreditApprove or Permissions.RefundApprove or Permissions.FundingApprove or
         Permissions.ExpenseApprove or Permissions.StockAdjustApprove or Permissions.DisbursementRecord or
         Permissions.PeriodApprove or Permissions.PeriodClose or Permissions.PeriodReopenApprove or
@@ -29,7 +29,7 @@ public static class PersonApprovalPolicy
             Permissions.OrderSpendApprove or Permissions.CreditApprove or Permissions.RefundApprove or
                 Permissions.FundingApprove or Permissions.ExpenseApprove => [evidence!.RequestedBy],
             Permissions.ReceivingAccountApprove or Permissions.ReceivingAccountVerify or Permissions.PricingApprove or Permissions.SupplierChangeApprove or Permissions.StockSourceApprove or Permissions.StockSourcePolicyApprove => [evidence!.ProposedBy],
-            Permissions.BankReceiptConfirm or Permissions.PaymentVerify or Permissions.DisbursementVerify or
+            Permissions.BankReceiptConfirm or Permissions.PaymentVerify or Permissions.PaymentAllocate or Permissions.DisbursementVerify or
                 Permissions.ReconciliationVerify => [evidence!.RecordedBy],
             Permissions.StockAdjustApprove => [evidence!.CountedBy, evidence.ProposedBy],
             Permissions.DisbursementRecord => [evidence!.ApprovedBy],

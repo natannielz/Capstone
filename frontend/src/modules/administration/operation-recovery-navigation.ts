@@ -1,4 +1,5 @@
 export function recoveryPage(operation: string) {
+  if (operation === "billing.payment.allocate") return { href: "/billing/payment-reviews", label: "halaman alokasi pembayaran" };
   if (operation === "billing.bank-receipt.confirm") return { href: "/billing/bank-receipts", label: "halaman penerimaan bank" };
   if (operation === "billing.bank-statement.stage") return { href: "/billing/bank-statements", label: "halaman mutasi bank" };
   if (operation.startsWith("billing.receiving-account.")) return { href: "/billing/receiving-accounts", label: "halaman rekening penerimaan" };
@@ -27,6 +28,7 @@ export function recoveryPage(operation: string) {
     : { href: "/administration/person-reviews", label: "halaman peninjauan orang" };
 }
 export function operationLabel(operation: string) {
+  if (operation === "billing.payment.allocate") return "Alokasi pembayaran";
   if (operation === "billing.bank-receipt.confirm") return "Konfirmasi kredit bank";
   if (operation === "billing.bank-statement.stage") return "Impor mutasi bank";
   if (operation.startsWith("billing.receiving-account.")) return "Perubahan rekening penerimaan";

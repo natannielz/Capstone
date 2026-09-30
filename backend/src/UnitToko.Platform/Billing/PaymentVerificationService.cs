@@ -15,7 +15,7 @@ namespace UnitToko.Platform.Billing;
 public sealed record PaymentVerificationPreview(string Binding, BsonDocument Declaration, BsonDocument Receipt, BsonDocument Account,
     BsonDocument Review, BsonDocument Policy, ImmutableArray<PaymentDiscrepancy> Discrepancies);
 
-public sealed class PaymentVerificationService
+public sealed partial class PaymentVerificationService
 {
     private readonly IMongoDatabase database;
     private readonly IClock clock;

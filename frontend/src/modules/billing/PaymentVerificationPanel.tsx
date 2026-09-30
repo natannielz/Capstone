@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { PaymentAllocationPanel } from './PaymentAllocationPanel';
 import { useEffect, useRef, useState } from 'react';
 import { AccessFailure, MutationLedger, accessMessage } from '../administration/workflow';
 import { submitTrackedRequest, type OperationJournal } from '../administration/operation-journal';
@@ -23,8 +24,8 @@ function message(error: unknown) {
   }
   return accessMessage(error);
 }
-export function PaymentVerificationPanel({ actorId, owner, allowed, fresh, locked, current, journal, onSettled, onDenied, onBusyChange }: {
-  actorId: string; owner: PaymentDraft; allowed: boolean; fresh: boolean; locked: boolean; current: () => boolean;
+export function PaymentVerificationPanel({ actorId, owner, allowed, allocationAllowed, fresh, locked, current, journal, onSettled, onDenied, onBusyChange }: {
+  actorId: string; owner: PaymentDraft; allowed: boolean; allocationAllowed: boolean; fresh: boolean; locked: boolean; current: () => boolean;
   journal: OperationJournal; onSettled: () => void; onDenied: (failure: unknown) => void; onBusyChange: (busy: boolean) => void;
 }) {
   const [gateway] = useState(createPaymentVerificationGateway), [bank] = useState(createBankReceiptGateway);
@@ -60,7 +61,7 @@ export function PaymentVerificationPanel({ actorId, owner, allowed, fresh, locke
       <p>{new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Jakarta' }).format(new Date(saved.result.recordedAt))}</p>
       <p>Referensi pemeriksaan pembayar: {saved.payerVerificationReference}</p><p>Alasan: {saved.reason}</p>
       <ul>{saved.resolutions.map(item => <li key={item.field}>{labels[item.field]}: {item.reason}</li>)}</ul>
-      <p>Pengaitan ini tidak mencatat kas lagi dan belum mengurangi saldo invoice. Alokasi dana dilakukan melalui langkah terpisah.</p>
+      <p>Pengaitan menetapkan pemilik dana. Periksa saldo dan alokasi invoice melalui bagian di bawah ini.</p>
     </section> : allowed && <>
       <button className={styles.secondary} disabled={!canVerify || !checked} onClick={() => void work(() => receipts(null))}>Pilih penerimaan bank</button>
       <p>Jika dana belum dikonfirmasi, buka <Link href="/billing/bank-receipts">penerimaan bank</Link>. Nama atau referensi yang mirip bukan bukti identitas transfer.</p>
@@ -99,6 +100,8 @@ export function PaymentVerificationPanel({ actorId, owner, allowed, fresh, locke
         </section>}
       </form>}
     </>}
+    {saved && <PaymentAllocationPanel key={saved.result.verificationId} actorId={actorId} owner={owner} verified={saved} allowed={allocationAllowed} fresh={fresh} locked={locked || busy}
+      current={current} journal={journal} onSettled={onSettled} onDenied={onDenied} onBusyChange={onBusyChange} />}
     {!allowed && <p>Akun ini dapat membaca hasil; verifikasi memerlukan kewenangan tersendiri dan pemeriksa independen.</p>}
   </section>;
 }

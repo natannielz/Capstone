@@ -67,6 +67,7 @@ builder.Services.AddSingleton<ReceivingAccountService>();
 builder.Services.AddSingleton<BankStatementService>();
 builder.Services.AddSingleton<BankReceiptService>();
 builder.Services.AddSingleton<PaymentVerificationService>();
+builder.Services.AddSingleton<PaymentAllocationService>();
 builder.Services.AddSingleton(sp => {
     var options = sp.GetRequiredService<IConfiguration>().GetSection("Evidence:PrivateWindows");
     var root = options["Root"]; var storeId = options["StoreId"]; var operators = options.GetSection("TrustedOperatorSids").Get<string[]>() ?? [];
@@ -333,6 +334,7 @@ app.MapPaymentOcrEndpoints();
 app.MapPaymentReviewEndpoints();
 app.MapPaymentCorrectionEndpoints();
 app.MapPaymentVerificationEndpoints();
+app.MapPaymentAllocationEndpoints();
 app.MapReceivingAccountEndpoints();
 app.MapBankStatementEndpoints();
 app.MapBankReceiptEndpoints();

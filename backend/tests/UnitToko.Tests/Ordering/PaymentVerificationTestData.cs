@@ -24,14 +24,15 @@ internal sealed class PaymentVerificationTestData(PaymentEvidenceReadTests.ReadD
     internal long ReceiptId;
     internal PaymentCorrectionView Corrections = null!;
     internal PaymentVerificationService Service => new(Read.Database, new(Read.Catalog.Client), new(Read.Database), Read.Catalog.Clock, Read.Payment.Service, Read.Service, Bank.Service);
-    internal PaymentVerificationService NewService(MongoClient client) {
+    internal PaymentVerificationService NewService(MongoClient client) => NewService(client, out _);
+    internal PaymentVerificationService NewService(MongoClient client, out InvoiceService invoices) {
         var db = client.GetDatabase(Read.Database.DatabaseNamespace.DatabaseName); var clock = Read.Catalog.Clock;
         var orders = new UnitToko.Platform.Ordering.OrderSubmissionService(db, new(client), new(db), clock);
         var preparations = new UnitToko.Platform.Fulfillment.ShipmentPreparationService(db, new(client), new(db), clock, orders);
         var shipments = new UnitToko.Platform.Fulfillment.ShipmentQueryService(db, new(client), clock, orders, preparations);
         var documents = new UnitToko.Platform.Fulfillment.ShipmentDocumentService(db, new(client), new(db), clock, shipments);
         var received = new UnitToko.Platform.Fulfillment.ShipmentReceiptService(db, new(client), new(db), clock, shipments, documents);
-        var invoices = new InvoiceService(db, new(client), new(db), clock, received);
+        invoices = new InvoiceService(db, new(client), new(db), clock, received);
         var declarations = new PaymentDraftService(db, new(client), new(db), clock, invoices);
         var evidence = new PaymentEvidenceService(db, new(client), new(db), clock, declarations, Read.Files.Registration);
         return new(db, new(client), new(db), clock, declarations, evidence, Bank.NewService(client));
