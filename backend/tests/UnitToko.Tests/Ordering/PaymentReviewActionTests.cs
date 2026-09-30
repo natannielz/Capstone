@@ -64,6 +64,32 @@ public sealed class PaymentReviewActionTests(MongoFixture fixture)
         await Assert.ThrowsAsync<AuthorizationDeniedException>(() => data.Service.RecoverReviewActionAsync(data.Reviewer, data.Read.DeclarationId, meta.IdempotencyKey));
     }
     [WindowsStorageFact]
+    public async Task Buyer_reads_only_their_exact_follow_up_without_staff_bank_details_or_money_effects_and_missing_history_denies() {
+        await using var data = await PaymentVerificationTestData.CreateAsync(fixture); await Grant(data);
+        var buyer = data.Read.Actor; var owner = data.Read.Payment.Service; var id = data.Read.DeclarationId;
+        var original = await owner.ReadAsync(buyer, id); var journals = await data.Rows("journalEntries").Find(new BsonDocument()).Sort(new BsonDocument("_id", 1)).ToListAsync();
+        var versions = await data.Rows(PaymentDraftBson.Versions).Find(new BsonDocument("declarationId", id)).Sort(new BsonDocument("revision", 1)).ToListAsync();
+        var first = await owner.ReadFollowUpAsync(buyer, id, original.Revision); Assert.Equal("pending", first.State); Assert.Equal(0, first.ReviewRevision); Assert.Null(first.RecordedAt);
+        Assert.Equal(original.Submission!.Id.Value, first.SubmissionId); Assert.Equal(original.Submission.Evidence, first.Evidence); Assert.Equal(original.Submission.SubmittedAt, first.SubmittedAt);
+        await Assert.ThrowsAsync<AuthorizationDeniedException>(() => owner.ReadFollowUpAsync(data.Reader, id, original.Revision));
+        await Assert.ThrowsAsync<PersistenceConflictException>(() => owner.ReadFollowUpAsync(buyer, id, original.Revision + 1));
+        var shown = await data.Service.ReadReviewActionsAsync(data.Reviewer, id); var meta = PaymentVerificationTestData.Meta("buyer-follow-up-claim");
+        await data.Service.RecordReviewActionAsync(data.Reviewer, id, 0, new(shown.Binding, "claim"), meta);
+        Assert.Equal("assigned", (await owner.ReadFollowUpAsync(buyer, id, original.Revision)).State);
+        shown = await data.Service.ReadReviewActionsAsync(data.Reviewer, id);
+        await data.Service.RecordReviewActionAsync(data.Reviewer, id, 1, new(shown.Binding, "request_replacement"), PaymentVerificationTestData.Meta("buyer-follow-up-replacement"));
+        var closed = await owner.ReadFollowUpAsync(buyer, id, original.Revision); Assert.Equal("replacement_requested", closed.State); Assert.Equal(2, closed.ReviewRevision); Assert.NotNull(closed.RecordedAt);
+        Assert.Equal(original.Submission, (await owner.ReadAsync(buyer, id)).Submission);
+        Assert.Equal(versions, await data.Rows(PaymentDraftBson.Versions).Find(new BsonDocument("declarationId", id)).Sort(new BsonDocument("revision", 1)).ToListAsync());
+        Assert.Equal(journals, await data.Rows("journalEntries").Find(new BsonDocument()).Sort(new BsonDocument("_id", 1)).ToListAsync());
+        var grants = await data.Rows("authorizationGrants").Find(new BsonDocument("userId", buyer.UserId)).ToListAsync(); Assert.NotEmpty(grants);
+        await data.Rows("authorizationGrants").UpdateManyAsync(new BsonDocument("userId", buyer.UserId), Builders<BsonDocument>.Update.Set("status", "revoked"));
+        await Assert.ThrowsAsync<AuthorizationDeniedException>(() => owner.ReadFollowUpAsync(buyer, id, original.Revision));
+        foreach (var grant in grants) await data.Rows("authorizationGrants").ReplaceOneAsync(new BsonDocument("_id", grant["_id"]), grant);
+        await data.Rows("idempotencyRecords").DeleteOneAsync(new BsonDocument { { "operation", W.Operation }, { "key", meta.IdempotencyKey } });
+        await Assert.ThrowsAsync<AuthorizationDeniedException>(() => owner.ReadFollowUpAsync(buyer, id, original.Revision));
+    }
+    [WindowsStorageFact]
     public async Task Private_workflow_routes_enforce_actor_origin_CSRF_versions_and_exact_lookup_only_recovery() {
         await using var data = await PaymentVerificationTestData.CreateAsync(fixture); await Grant(data);
         var view = await data.Service.ReadReviewActionsAsync(data.Reviewer, data.Read.DeclarationId);
@@ -72,6 +98,7 @@ public sealed class PaymentReviewActionTests(MongoFixture fixture)
             services.RemoveAll<IClock>(); services.AddSingleton<IClock>(data.Read.Catalog.Clock);
             services.RemoveAll<MongoIdentitySessionStore>(); services.AddSingleton(data.Read.Catalog.Sessions);
             services.RemoveAll<PaymentVerificationService>(); services.AddSingleton(data.Service);
+            services.RemoveAll<PaymentDraftService>(); services.AddSingleton(data.Read.Payment.Service);
         }));
         const string origin = "https://portal.unit-toko.co.id";
         using var client = factory.CreateClient(new() { BaseAddress = new(origin), AllowAutoRedirect = false });
@@ -97,6 +124,22 @@ public sealed class PaymentReviewActionTests(MongoFixture fixture)
         var saved = await save.Content.ReadFromJsonAsync<JsonElement>(); Assert.Equal("assigned", saved.GetProperty("state").GetString());
         using var recovery = await Send("recover"); var result = await recovery.Content.ReadFromJsonAsync<JsonElement>(); Assert.Equal("committed", result.GetProperty("status").GetString()); Assert.Equal(saved.GetRawText(), result.GetProperty("result").GetRawText());
         Assert.Equal(1, await data.Rows(W.Versions).CountDocumentsAsync(new BsonDocument())); Assert.Equal(0, await data.Rows(B.Decisions).CountDocumentsAsync(new BsonDocument())); Assert.Equal(2, await data.Rows("journalEntries").CountDocumentsAsync(new BsonDocument()));
+        using var buyer = factory.CreateClient(new() { BaseAddress = new(origin), AllowAutoRedirect = false });
+        buyer.DefaultRequestHeaders.Add("Cookie", OpaqueSessionCookie.Name + "=" + data.Read.Catalog.Issued[data.Read.Actor.UserId].OpaqueToken);
+        var buyerCsrf = (await buyer.GetFromJsonAsync<JsonElement>("/api/v1/identity/csrf")).GetProperty("requestToken").GetString()!;
+        async Task<HttpResponseMessage> FollowUp(string? fault = null) {
+            using var request = new HttpRequestMessage(HttpMethod.Post, $"/api/v1/billing/payment-declarations/{data.Read.DeclarationId}/follow-up/query") { Content = JsonContent.Create(new { purpose = "payment-follow-up" }) };
+            request.Headers.Add("Origin", fault == "origin" ? "https://outside.invalid" : origin);
+            if (fault != "actor") request.Headers.Add("X-Expected-Actor-Id", data.Read.Actor.UserId.ToString());
+            if (fault != "csrf") request.Headers.Add("X-CSRF-Token", buyerCsrf);
+            if (fault != "revision") request.Headers.Add("If-Match", "\"1\""); return await buyer.SendAsync(request);
+        }
+        foreach (var (fault, status) in new[] { ("origin", HttpStatusCode.Forbidden), ("csrf", HttpStatusCode.Forbidden), ("actor", HttpStatusCode.BadRequest), ("revision", HttpStatusCode.BadRequest) }) {
+            using var denied = await FollowUp(fault); Assert.Equal(status, denied.StatusCode);
+        }
+        using var follow = await FollowUp(); Assert.True(follow.IsSuccessStatusCode, await follow.Content.ReadAsStringAsync()); Assert.True(follow.Headers.CacheControl!.NoStore);
+        var visible = await follow.Content.ReadFromJsonAsync<JsonElement>(); Assert.Equal("assigned", visible.GetProperty("state").GetString());
+        Assert.Equal(new[] { "declarationId", "declarationRevision", "evidence", "recordedAt", "reviewRevision", "state", "submissionId", "submittedAt" }, visible.EnumerateObject().Select(value => value.Name).Order().ToArray());
     }
     [WindowsStorageFact]
     public async Task Missing_permission_MFA_audit_rollback_and_concurrent_rejection_verification_never_leave_two_winners() {

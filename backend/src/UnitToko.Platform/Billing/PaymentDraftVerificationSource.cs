@@ -5,11 +5,34 @@ using UnitToko.Modules.Documents;
 using UnitToko.Modules.Identity;
 using UnitToko.Modules.Identity.Contracts;
 using UnitToko.Platform.Authorization;
+using UnitToko.Platform.Inventory;
+using UnitToko.Platform.Mongo.Migrations;
 
 namespace UnitToko.Platform.Billing;
 
+public sealed record PaymentFollowUpView(long DeclarationId, long DeclarationRevision, long SubmissionId, EvidenceRef Evidence,
+    long ReviewRevision, string State, DateTimeOffset SubmittedAt, DateTimeOffset? RecordedAt);
 public sealed partial class PaymentDraftService
 {
+    public async Task<PaymentFollowUpView> ReadFollowUpAsync(ActorContext actor, long id, long revision, CancellationToken ct = default) {
+        if (id <= 0 || revision <= 0) throw PaymentDraftBson.Invalid(); await StorageAsync(ct);
+        await InventoryRepository.RequireStorageAsync(database, PaymentReviewActionRecords.Versions, PaymentReviewActionSchemas.Validator(), PaymentReviewActionSchemas.Key(), ct);
+        return await authorization.ReadAsync(actor, async (authority, tx, token) => {
+            var head = await HeadAsync(actor, authority, tx, id, token);
+            if (head["state"] != "submitted" || head["revision"] != revision) throw PaymentDraftRecords.Changed();
+            var version = await records.VersionAsync(tx, head["versionId"].AsInt64, token);
+            var submission = await new PaymentSubmissionRecords(database).ReadAsync(tx, head["submissionId"].AsInt64, token);
+            var latest = await new PaymentReviewActionRecords(database).LatestAsync(tx, id, SubmissionSource(head, version, submission), token);
+            // Buyer follow-up exposes no internal reasons, staff identities or bank/payer records, and makes no financial-status claim.
+            var view = new PaymentFollowUpView(id, revision, submission["_id"].AsInt64, PaymentSubmissionBson.Reference(submission["evidence"].AsBsonDocument),
+                latest?["revision"].AsInt64 ?? 0, latest?["state"].AsString ?? "pending", new(submission["submittedAt"].ToUniversalTime()),
+                latest is null ? null : new(latest["recordedAt"].ToUniversalTime()));
+            await records.Rows("auditEvents").InsertOneAsync(tx, new BsonDocument { { "_id", (await ids.NextAsync("auditEvents", token)).Value },
+                { "schemaVersion", 1 }, { "kind", "billing.payment.follow-up.read" }, { "actorId", actor.UserId }, { "actorGrantVersion", actor.GrantVersion },
+                { "declarationId", id }, { "declarationRevision", revision }, { "reviewRevision", view.ReviewRevision }, { "createdAt", Now.UtcDateTime } }, cancellationToken: token);
+            await records.TouchAsync(tx, head, token); await FenceAsync(actor, authority, tx, head["scopes"].AsBsonArray, token); return view;
+        }, ct);
+    }
     internal IMongoDatabase VerificationDatabase => database;
     internal Task VerificationStorageAsync(CancellationToken ct) => CorrectionStorageAsync(ct);
     internal async Task<BsonDocument> VerificationReviewAsync(IClientSessionHandle tx, PaymentExtractionView extraction, long revision, CancellationToken ct) {
@@ -30,10 +53,12 @@ public sealed partial class PaymentDraftService
         var version = await records.VersionAsync(tx, head["versionId"].AsInt64, ct);
         var submission = await new PaymentSubmissionRecords(database).ReadAsync(tx, head["submissionId"].AsInt64, ct);
         await records.TouchAsync(tx, head, ct); await ReviewFenceAsync(actor, authority, tx, head["scopes"].AsBsonArray, ct);
-        return new() { { "declarationId", head["_id"] }, { "revision", head["revision"] }, { "versionId", version["_id"] },
+        return SubmissionSource(head, version, submission);
+    }
+    private static BsonDocument SubmissionSource(BsonDocument head, BsonDocument version, BsonDocument submission) =>
+        new() { { "declarationId", head["_id"] }, { "revision", head["revision"] }, { "versionId", version["_id"] },
             { "versionHash", version["snapshotHash"] }, { "submissionId", submission["_id"] }, { "submissionHash", submission["snapshotHash"] },
             { "recordedBy", submission["recordedBy"] }, { "uploaderId", submission["uploaderId"] }, { "reservationId", submission["reservationId"] },
             { "evidence", submission["evidence"].DeepClone() }, { "input", version["input"].DeepClone() }, { "invoices", version["invoices"].DeepClone() },
             { "party", head["party"].DeepClone() }, { "scopes", head["scopes"].DeepClone() } };
-    }
 }

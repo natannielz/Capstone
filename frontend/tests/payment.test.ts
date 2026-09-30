@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createUnitTokoClient } from '../src/api/client';
-import { createPaymentGateway, preparePayment, preparePaymentSubmission, parsePaymentResult, parsePaymentSubmissionResult, paymentSubmissionOwner, paymentReservationOwner, parsePaymentEvidenceStatus, paymentEvidenceLabel, parsePaymentOcr, type PaymentDraft } from '../src/modules/billing/payment-client';
+import { createPaymentGateway, preparePayment, preparePaymentSubmission, parsePaymentResult, parsePaymentSubmissionResult, paymentSubmissionOwner, paymentReservationOwner, parsePaymentEvidenceStatus, paymentEvidenceLabel, parsePaymentOcr, parsePaymentFollowUp, type PaymentDraft } from '../src/modules/billing/payment-client';
 import { OperationJournal, operationRecoveryCapabilities, reconcileOperationRecovery } from '../src/modules/administration/operation-journal';
 
 const actor = '9007199254740993', declarationId = '9007199254740994';
@@ -12,6 +12,24 @@ const declaration: PaymentDraft = { id: declarationId, revision: '2', createdAt:
 const checkedImage = parsePaymentEvidenceStatus({ reservationId: '51', revision: '3', state: 'quarantined', expiresAt: result.recordedAt, reference: { id: '52', version: '1', sha256: 'a'.repeat(64) }, scanStatus: 'clean', decoderStatus: 'decoded', safeFailure: null });
 const submissionResult = { declarationId, submissionId: '9007199254740997', declarationRevision: '2', reviewRevision: '1' as const, state: 'submitted' as const, submittedAt: result.recordedAt };
 const submissionKey = 's.' + declarationId + '.12345678-1234-1234-1234-123456789abc';
+test('buyer follow-up binds the exact submitted original and admits neither private notes nor financial claims', async () => {
+  const owner: PaymentDraft = { ...declaration, state: 'submitted', submission: { id: submissionResult.submissionId, reviewRevision: '1', reservationId: '51', evidence: checkedImage.reference!, submittedAt: result.recordedAt } };
+  const value = { declarationId, declarationRevision: '2', submissionId: submissionResult.submissionId, evidence: checkedImage.reference,
+    reviewRevision: '2', state: 'replacement_requested', submittedAt: result.recordedAt, recordedAt: result.recordedAt };
+  assert.equal(parsePaymentFollowUp(value, owner).state, 'replacement_requested');
+  for (const changed of [{ ...value, declarationRevision: '1' }, { ...value, evidence: { ...value.evidence, sha256: 'b'.repeat(64) } },
+    { ...value, submittedAt: '2026-09-28T03:00:00Z' }, { ...value, recordedAt: null }, { ...value, reason: 'Internal bank note' }, { ...value, paid: true }])
+    assert.throws(() => parsePaymentFollowUp(changed, owner));
+  let reads = 0;
+  const gateway = createPaymentGateway(createUnitTokoClient({ baseUrl: 'https://unit-toko.test', fetch: async request => {
+    assert.ok(request instanceof Request); if (request.url.endsWith('/identity/csrf')) return Response.json({ requestToken: 'fixture-csrf' });
+    reads++; assert.equal(new URL(request.url).pathname, '/api/v1/billing/payment-declarations/' + declarationId + '/follow-up/query');
+    assert.equal(request.headers.get('X-Expected-Actor-Id'), actor); assert.equal(request.headers.get('X-CSRF-Token'), 'fixture-csrf'); assert.equal(request.headers.get('If-Match'), '"2"'); assert.equal(request.cache, 'no-store');
+    assert.deepEqual(await request.json(), { purpose: 'payment-follow-up' }); return new Response(JSON.stringify(value), { headers: { 'Content-Type': 'application/json' } });
+  } }));
+  assert.equal((await gateway.followUp(actor, owner)).state, 'replacement_requested'); assert.equal(reads, 1);
+  await assert.rejects(() => gateway.followUp(actor, declaration)); assert.equal(reads, 1);
+});
 test('OCR suggestions are bound to the exact current submission and cannot become payment authority', () => {
   const owner: PaymentDraft = { ...declaration, state: 'submitted', submission: { id: submissionResult.submissionId, reviewRevision: '1', reservationId: '51', evidence: checkedImage.reference!, submittedAt: result.recordedAt } };
   const value = { declarationId, submissionId: owner.submission!.id, evidence: checkedImage.reference, state: 'succeeded', result: {

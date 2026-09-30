@@ -31,6 +31,8 @@ public sealed record PaymentDraftRecoveryDto(string Status, PaymentDraftResultDt
 public sealed record PaymentSubmissionDto([property: JsonRequired] LongId ReservationId, [property: JsonRequired] PaymentEvidenceReferenceDto Evidence, [property: JsonRequired] string Reason);
 public sealed record PaymentSubmissionResultDto(LongId DeclarationId, LongId SubmissionId, string DeclarationRevision, string ReviewRevision, string State, DateTimeOffset SubmittedAt);
 public sealed record PaymentSubmissionRecoveryDto(string Status, PaymentSubmissionResultDto? Result);
+public sealed record PaymentFollowUpDto(LongId DeclarationId, string DeclarationRevision, LongId SubmissionId, PaymentEvidenceReferenceDto Evidence,
+    string ReviewRevision, string State, DateTimeOffset SubmittedAt, DateTimeOffset? RecordedAt);
 
 public static class PaymentDraftEndpoints
 {
@@ -45,6 +47,16 @@ public static class PaymentDraftEndpoints
             Purpose(request.Purpose); var row = await service.ReadAsync(http.Features.Get<ResolvedActor>()!.Actor, LongId.Parse(id).Value, ct);
             http.Response.Headers.ETag = AccessRequestMetadata.VersionTag(row.Revision); return TypedResults.Ok(View(row));
         }).WithName("ReadPaymentDeclaration");
+        group.MapPost("/{id}/follow-up/query", async (string id, OrderReadDto request, HttpContext http, PaymentDraftService service,
+            [FromHeader(Name = "If-Match")] string expected, CancellationToken ct) => {
+            if (request.Purpose != "payment-follow-up") throw Invalid();
+            http.Response.Headers.CacheControl = "private, no-store, max-age=0"; http.Response.Headers.Pragma = "no-cache";
+            var row = await service.ReadFollowUpAsync(http.Features.Get<ResolvedActor>()!.Actor, LongId.Parse(id).Value, AccessRequestMetadata.ExpectedVersion(http.Request), ct);
+            http.Response.Headers.ETag = AccessRequestMetadata.VersionTag(row.ReviewRevision);
+            return TypedResults.Ok(new PaymentFollowUpDto(new(row.DeclarationId), OrderDraftInputDto.Number(row.DeclarationRevision), new(row.SubmissionId),
+                new(new(row.Evidence.Id), OrderDraftInputDto.Number(row.Evidence.Version), row.Evidence.Sha256),
+                row.ReviewRevision.ToString(System.Globalization.CultureInfo.InvariantCulture), row.State, row.SubmittedAt, row.RecordedAt));
+        }).WithName("ReadOwnPaymentFollowUp");
         group.MapPost("", async (PaymentDraftSaveDto request, HttpContext http, PaymentDraftService service,
             [FromHeader(Name = "Idempotency-Key")] string key, [FromHeader(Name = "If-Match")] string expected, CancellationToken ct) => {
             if (request.Input is null) throw Invalid();

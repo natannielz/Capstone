@@ -73,6 +73,7 @@ public sealed class PaymentVerificationBrowserTests(MongoFixture fixture, ITestO
         var input = new { apiAddress, origin, pfx = Convert.ToBase64String(tls.Export(X509ContentType.Pfx, password)), password, playwrightPackage = playwright,
             reviewerToken = data.Read.Catalog.Issued[data.Reviewer.UserId].OpaqueToken, readerToken = data.Read.Catalog.Issued[data.Reader.UserId].OpaqueToken,
             otherToken = data.Read.Catalog.Issued[outside.UserId].OpaqueToken, otherId = outside.UserId.ToString(),
+            buyerToken = data.Read.Catalog.Issued[data.Read.Actor.UserId].OpaqueToken,
             declarationId = data.Read.DeclarationId.ToString(), receiptId = data.ReceiptId.ToString(), imageBase64 = Convert.ToBase64String(data.Read.Bytes), manual = manual && !manualRecovery, manualRecovery, workflow };
         var start = new ProcessStartInfo(node!) { WorkingDirectory = Path.Combine(root, "frontend"), UseShellExecute = false, CreateNoWindow = true, RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true };
         start.ArgumentList.Add(Path.Combine(root, "frontend", "scripts", "verify-payment-verification-browser.mjs")); start.Environment["NODE_ENV"] = "production"; start.Environment["NEXT_TELEMETRY_DISABLED"] = "1";

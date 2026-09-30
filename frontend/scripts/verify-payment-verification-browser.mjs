@@ -99,6 +99,20 @@ try {
     await workflow.screenshot({ path: resolve(directory, 'review-action-mobile.png') }); await page.setViewportSize({ width: 1440, height: 1000 }); await workflow.screenshot({ path: resolve(directory, 'review-action-desktop.png') });
     const reader = await desk(config.readerToken); await open(reader.page); const readWorkflow = reader.page.getByRole('region', { name: 'Penanggung jawab pemeriksaan', exact: true });
     await readWorkflow.getByRole('button', { name: 'Muat status pemeriksaan', exact: true }).click(); await readWorkflow.getByText(/Bukti pengganti diminta/).waitFor(); assert.equal(await readWorkflow.getByRole('button', { name: 'Periksa tindak lanjut', exact: true }).count(), 0);
+    const buyer = await user(config.buyerToken); await buyer.page.goto(origin.origin + '/billing/payments');
+    await buyer.page.getByRole('heading', { name: 'Bukti pembayaran', exact: true }).waitFor();
+    await buyer.page.getByRole('button', { name: 'Buka pembayaran ' + config.declarationId, exact: true }).click();
+    const followUp = buyer.page.getByRole('region', { name: 'Tindak lanjut pengajuan', exact: true });
+    await followUp.getByRole('button', { name: 'Muat tindak lanjut petugas', exact: true }).click();
+    await followUp.getByRole('status').getByText('Petugas meminta bukti pengganti', { exact: true }).waitFor();
+    assert.equal(await followUp.getByText(/Synthetic request for eligible replacement|Akun 7410/).count(), 0);
+    assert.equal(await buyer.page.getByRole('button', { name: 'Ajukan untuk verifikasi', exact: true }).count(), 0);
+    assert.equal(await buyer.page.getByRole('button', { name: 'Unggah bukti asli', exact: true }).count(), 0);
+    assert.equal(await buyer.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+    await followUp.screenshot({ path: resolve(directory, 'buyer-follow-up-mobile.png') });
+    await buyer.page.reload(); await buyer.page.getByRole('button', { name: 'Buka pembayaran ' + config.declarationId, exact: true }).click();
+    await buyer.page.getByRole('button', { name: 'Muat tindak lanjut petugas', exact: true }).click();
+    await buyer.page.getByRole('region', { name: 'Tindak lanjut pengajuan', exact: true }).getByRole('status').getByText('Petugas meminta bukti pengganti', { exact: true }).waitFor();
     assert.equal(writes.filter(w => w.kind === 'workflow').length, 3); assert.equal(writes.filter(w => w.kind === 'verify').length, 0); assert.equal(dropped, 1); assert.deepEqual(errors, []);
   } else {
   if (config.manual) {

@@ -141,7 +141,7 @@ try {
   dropNext = 'submit'; await confirmation.getByRole('button', { name: 'Ajukan untuk verifikasi', exact: true }).click(); await page.getByRole('button', { name: 'Periksa hasil', exact: true }).waitFor();
   const submissionRefs = await page.evaluate(() => Object.keys(localStorage).filter(key => key.startsWith('unit-toko:pending:v1:')).map(key => JSON.parse(localStorage[key])));
   assert.equal(submissionRefs.length, 1); assert.equal(submissionRefs[0].operation, 'billing.payment.submit'); assert.deepEqual(Object.keys(submissionRefs[0]).sort(), ['actorId', 'createdAt', 'key', 'operation']);
-  await page.reload(); await page.getByRole('button', { name: 'Periksa hasil', exact: true }).click(); await form.getByText('Menunggu verifikasi', { exact: true }).waitFor();
+  await page.reload(); await page.getByRole('button', { name: 'Periksa hasil', exact: true }).click(); await form.getByText('Pengajuan tersimpan', { exact: true }).waitFor();
   await page.waitForFunction(() => Object.keys(localStorage).filter(key => key.startsWith('unit-toko:pending:v1:')).length === 0);
   assert.equal(writes.filter(item => item.kind === 'submit').length, 1); assert.equal(await form.getByLabel('Jumlah transfer (IDR)', { exact: true }).count(), 0);
   assert.equal(await form.getByRole('button', { name: 'Simpan draf pembayaran', exact: true }).count(), 0); assert.match(await form.locator('dl').innerText(), /2\.000,01/);

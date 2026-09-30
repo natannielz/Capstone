@@ -45,6 +45,17 @@ const ocrResult = z.object({ id, extractedAt: timestamp, provenance: z.object({ 
 const ocrView = z.object({ declarationId: id, submissionId: id, evidence: reference, state: z.enum(['queued', 'running', 'retry', 'dead', 'succeeded']), result: ocrResult.nullable() }).strict()
   .refine(value => (value.state === 'succeeded') === (value.result !== null));
 export type PaymentOcrView = z.infer<typeof ocrView>;
+const followUp = z.object({ declarationId: id, declarationRevision: id, submissionId: id, evidence: reference,
+  reviewRevision: z.union([z.literal('0'), id]), state: z.enum(['pending', 'assigned', 'rejected', 'replacement_requested']), submittedAt: timestamp, recordedAt: timestamp.nullable() }).strict()
+  .refine(value => (value.reviewRevision === '0') === (value.recordedAt === null) && (value.recordedAt === null ? value.state === 'pending' : Date.parse(value.recordedAt) >= Date.parse(value.submittedAt)));
+export type PaymentFollowUp = z.infer<typeof followUp>;
+export function parsePaymentFollowUp(value: unknown, owner: PaymentDraft): PaymentFollowUp {
+  const view = parse(followUp, value), submitted = owner.submission;
+  if (owner.state !== 'submitted' || !submitted || view.declarationId !== owner.id || view.declarationRevision !== owner.revision || view.submissionId !== submitted.id ||
+    view.evidence.id !== submitted.evidence.id || view.evidence.version !== submitted.evidence.version || view.evidence.sha256 !== submitted.evidence.sha256 ||
+    Date.parse(view.submittedAt) !== Date.parse(submitted.submittedAt)) return invalid();
+  return view;
+}
 export function parsePaymentOcr(value: unknown, owner: PaymentDraft): PaymentOcrView {
   const view = parse(ocrView, value), submitted = owner.submission;
   if (owner.state !== 'submitted' || submitted === null || view.declarationId !== owner.id || view.submissionId !== submitted.id ||
@@ -95,6 +106,12 @@ export function preparePaymentSubmission(actorId: string, declaration: PaymentDr
 }
 export function createPaymentGateway(client: ReturnType<typeof createUnitTokoClient> = createUnitTokoClient()) {
   return {
+    async followUp(actorId: string, owner: PaymentDraft) {
+      if (owner.state !== 'submitted' || !owner.submission) return invalid();
+      return parsePaymentFollowUp(data(await client.POST('/api/v1/billing/payment-declarations/{id}/follow-up/query', {
+        body: { purpose: 'payment-follow-up' }, params: { path: { id: priceId(owner.id) }, header: { ...headers(actorId), 'If-Match': '"' + priceId(owner.revision) + '"' } }, cache: 'no-store',
+      })), owner);
+    },
     async ocr(actorId: string, owner: PaymentDraft) {
       if (owner.state !== 'submitted' || !owner.submission) return invalid();
       return parsePaymentOcr(data(await client.POST('/api/v1/billing/payment-declarations/{id}/ocr/query', {
