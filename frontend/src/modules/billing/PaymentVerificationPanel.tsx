@@ -17,6 +17,9 @@ function message(error: unknown) {
   if (error instanceof AccessFailure) {
     if (error.code === 'payment_verification_facts_mismatch') return 'Nominal pengajuan dan bukti, mata uang IDR, serta rekening pada bukti harus sesuai dengan penerimaan bank. Periksa koreksi; jangan menebak angka yang tidak terbaca.';
     if (error.code === 'payment_verification_policy_unavailable') return 'Prosedur verifikasi pembayar belum disetujui atau sudah tidak berlaku. Hubungi penanggung jawab Finance.';
+    if (error.code === 'payment_manual_review_policy_unavailable') return 'Prosedur pengecualian manual sudah tidak berlaku. Jika OCR berhasil dipulihkan, pilih hasil OCR dan periksa penerimaan lagi. Hubungi penanggung jawab Finance untuk prosedur manual.';
+    if (error.code === 'payment_verification_ocr_required') return 'Hasil OCR yang berhasil belum tersedia. Muat hasil OCR terbaru; pengecualian manual hanya dapat dipakai melalui prosedur yang disetujui.';
+    if (error.code === 'payment_manual_review_required') return 'Belum ada pemeriksaan manual yang tersimpan untuk bukti ini.';
     if (error.code === 'payment_verification_changed' || error.code === 'payment_already_verified') return 'Pemeriksaan berubah atau sudah diverifikasi. Muat hasil terbaru sebelum melanjutkan.';
     if (error.code === 'payment_receipt_payer_conflict') return 'Penerimaan ini sudah dikaitkan dengan pihak lain. Hubungi penanggung jawab rekonsiliasi.';
     if (error.code === 'independent_person_required') return 'Verifikator harus merupakan orang terverifikasi yang berbeda dari pembuat dan pengunggah pengajuan.';
@@ -31,6 +34,7 @@ export function PaymentVerificationPanel({ actorId, owner, allowed, allocationAl
   const [gateway] = useState(createPaymentVerificationGateway), [bank] = useState(createBankReceiptGateway);
   const [saved, setSaved] = useState<PaymentVerificationDetail | null>(null), [checked, setChecked] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState<unknown>(null);
   const [page, setPage] = useState<{ items: BankReceiptView[]; hasMore: boolean } | null>(null), [shown, setShown] = useState<PaymentVerificationPreview | null>(null);
+  const [reviewSource, setReviewSource] = useState<'ocr' | 'manual' | null>(null);
   const [payerReference, setPayerReference] = useState(''), [reason, setReason] = useState(''), [image, setImage] = useState(false), [bankChecked, setBankChecked] = useState(false), [payer, setPayer] = useState(false);
   const [resolutions, setResolutions] = useState<Record<string, string>>({}), [confirm, setConfirm] = useState<ReturnType<typeof preparePaymentVerification> | null>(null);
   const alive = useRef(false), pending = useRef(false), heading = useRef<HTMLHeadingElement>(null), reviewHeading = useRef<HTMLHeadingElement>(null);
@@ -46,7 +50,7 @@ export function PaymentVerificationPanel({ actorId, owner, allowed, allocationAl
   async function read() { const result = await gateway.read(actorId, owner); if (active()) { setSaved(result); setChecked(true); setShown(null); setConfirm(null); setPage(null); } }
   async function receipts(after: string | null) { const result = await bank.list(actorId, after); if (active()) setPage(result); }
   async function choose(receiptId: string) {
-    const result = await gateway.preview(actorId, owner, receiptId);
+    const result = await gateway.preview(actorId, owner, receiptId, reviewSource);
     if (active()) { setShown(result); setConfirm(null); setPayerReference(''); setReason(''); setImage(false); setBankChecked(false); setPayer(false); setResolutions({}); }
   }
   const disabled = locked || busy, canVerify = allowed && fresh && !disabled;
@@ -65,6 +69,12 @@ export function PaymentVerificationPanel({ actorId, owner, allowed, allocationAl
       <ul>{saved.resolutions.map(item => <li key={item.field}>{labels[item.field]}: {item.reason}</li>)}</ul>
       <p>Pengaitan menetapkan pemilik dana. Periksa saldo dan alokasi invoice melalui bagian di bawah ini.</p>
     </section> : allowed && <>
+      <label htmlFor="verification-review-source">Sumber isian untuk pemeriksaan</label>
+      <select id="verification-review-source" value={reviewSource ?? ''} disabled={!canVerify} onChange={event => {
+        setReviewSource(event.target.value === 'ocr' ? 'ocr' : event.target.value === 'manual' ? 'manual' : null);
+        setShown(null); setConfirm(null); setPayerReference(''); setReason(''); setImage(false); setBankChecked(false); setPayer(false); setResolutions({}); setError(null);
+      }}><option value="">Pemeriksaan terkini</option><option value="ocr">Hasil OCR dan koreksi petugas</option><option value="manual">Pengecualian manual yang tersimpan</option></select>
+      <p>Jika OCR pulih setelah pengecualian, pilih hasil OCR lalu periksa penerimaan kembali. Pilihan ini mempertahankan riwayat manual dan memerlukan keputusan baru sebelum pengaitan dana.</p>
       <button className={styles.secondary} disabled={!canVerify || !checked} onClick={() => void work(() => receipts(null))}>Pilih penerimaan bank</button>
       <p>Jika dana belum dikonfirmasi, buka <Link href="/billing/bank-receipts">penerimaan bank</Link>. Nama atau referensi yang mirip bukan bukti identitas transfer.</p>
       {page && <><ul className={invoice.candidates}>{page.items.map(item => <li key={item.receiptId}><strong>Penerimaan {item.receiptId} · {orderAmount('IDR', item.amount)}</strong>

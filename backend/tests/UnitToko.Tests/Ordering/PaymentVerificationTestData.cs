@@ -70,6 +70,16 @@ internal sealed class PaymentVerificationTestData(PaymentEvidenceReadTests.ReadD
         } catch { await data.DisposeAsync(); throw; }
     }
     internal Task<PaymentVerificationPreview> PreviewAsync() => Service.PreviewAsync(Reviewer, Read.DeclarationId, ReceiptId);
+    internal async Task RecoverOcrAsync() {
+        FailedEngine!.Failure = null; Read.Catalog.Clock.UtcNow = Read.Catalog.Clock.UtcNow.AddMinutes(1);
+        Assert.Equal("completed", await PaymentOcrProcessorTests.Processor(Read, FailedEngine).RunOnceAsync());
+        var extraction = await Read.Service.ReadReviewExtractionAsync(Reviewer, Read.DeclarationId, 1, Read.Reference, new("payment-ocr-view", "synthetic-recovered-OCR"));
+        Corrections = await Read.Service.ReadCorrectionsAsync(Reviewer, Read.DeclarationId, new(1, extraction.SubmissionId, Read.Reference, extraction.ResultId!.Value), new("payment-ocr-view", "synthetic-recovered-OCR"));
+        var fields = Corrections.Fields.Select(field => field.Field switch {
+            "amount" => field with { Value = "4000.00" }, "currency" => field with { Value = "IDR" }, "account" => field with { Value = "0000123456789" }, _ => field }).ToImmutableArray();
+        await Read.Service.CorrectReviewAsync(Reviewer, Read.DeclarationId, 0, Corrections.Binding, fields, Meta("recovered-image-correction"));
+        Corrections = await Read.Service.ReadCorrectionsAsync(Reviewer, Read.DeclarationId, Corrections.Binding, new("payment-ocr-view", "synthetic-recovered-OCR"));
+    }
     internal static PaymentVerificationInput Input(PaymentVerificationPreview preview) => new(preview.Binding, "synthetic-bank-payer-and-organization-confirmation", true, true, true,
         [.. preview.Discrepancies.Select(item => new PaymentDiscrepancyResolution(item.Field, "Synthetic reviewed source difference; no automatic inference"))]);
     internal Task<BsonDocument> VerifyAsync(PaymentVerificationPreview preview, string key = "verify-payment") => Service.VerifyAsync(Reviewer, Read.DeclarationId, ReceiptId, Input(preview), Meta(key));

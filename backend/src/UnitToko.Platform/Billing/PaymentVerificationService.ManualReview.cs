@@ -50,9 +50,16 @@ public sealed partial class PaymentVerificationService
         M.PolicyAt(row, Now, failure); await store.TouchAsync(context.Tx, M.Policies, row, ct);
         context.ManualCurrent.Add(() => M.PolicyAt(row, Now, failure)); return M.Snapshot(row);
     }
-    private async Task<BsonDocument> CurrentReviewAsync(Context context, PaymentExtractionView extraction, CancellationToken ct) {
+    private async Task<BsonDocument> CurrentReviewAsync(Context context, PaymentExtractionView extraction, CancellationToken ct,
+        string? reviewSource = null, Func<BsonDocument, bool>? matchesReviewedBinding = null) {
         var manual = await SavedManualAsync(context, ct);
-        if (manual is null) return await declarations.VerificationReviewAsync(context.Tx, extraction, context.Source!["revision"].AsInt64, ct);
+        if (reviewSource == "manual" && manual is null) throw B.Changed("payment_manual_review_required");
+        if (manual is null || reviewSource == "ocr") return await declarations.VerificationReviewAsync(context.Tx, extraction, context.Source!["revision"].AsInt64, ct);
+        if (matchesReviewedBinding is not null && extraction.State == "succeeded") {
+            var recovered = await declarations.VerificationReviewAsync(context.Tx, extraction, context.Source!["revision"].AsInt64, ct);
+            // The existing decision binding proves an explicit OCR preview; never silently switch a manual decision.
+            if (matchesReviewedBinding(recovered)) return recovered;
+        }
         var policy = await ManualPolicyAsync(context, manual["failure"]["safeFailure"].AsString, ct);
         PaymentVerificationRecords.Equal(policy, manual["policy"]);
         var proof = await ManualPeopleAsync(context, manual["actorId"].AsInt64, ct); context.ManualCurrent.Add(() => proof.RequireCurrent(context.Tx, clock.UtcNow));

@@ -121,8 +121,8 @@ public sealed partial class PaymentVerificationService
     private async Task<BsonDocument> InitialSourceAsync(ActorContext actor, long id, CancellationToken ct) => await authorization.ReadAsync(actor, async (authority, tx, token) => {
         var context = await SourceAsync(new(actor, authority, tx, true), id, token); await PeopleAsync(context, token); await FenceAsync(context, token); return context.Source!;
     }, ct);
-    public async Task<PaymentVerificationPreview> PreviewAsync(ActorContext actor, long id, long receiptId, CancellationToken ct = default) {
-        if (id <= 0 || receiptId <= 0) throw PaymentVerificationPolicy.Invalid(); await StorageAsync(ct);
+    public async Task<PaymentVerificationPreview> PreviewAsync(ActorContext actor, long id, long receiptId, CancellationToken ct = default, string? reviewSource = null) {
+        if (id <= 0 || receiptId <= 0 || reviewSource is not (null or "ocr" or "manual")) throw PaymentVerificationPolicy.Invalid(); await StorageAsync(ct);
         var initial = await InitialSourceAsync(actor, id, ct);
         return await evidence.WithVerificationOriginalAsync<PaymentVerificationPreview>(actor, id, initial["revision"].AsInt64, initial["reservationId"].AsInt64,
             PaymentSubmissionBson.Reference(initial["evidence"].AsBsonDocument), (consume, token) => authorization.ReadAsync(actor, async (authority, tx, inner) => {
@@ -131,7 +131,7 @@ public sealed partial class PaymentVerificationService
                 var proof = await PeopleAsync(context, inner);
                 return await consume(tx, async (extraction, eligible, final) => {
                     var source = context.Source ?? throw B.Broken();
-                    var review = await CurrentReviewAsync(context, extraction, final);
+                    var review = await CurrentReviewAsync(context, extraction, final, reviewSource);
                     PaymentVerificationRecords.Facts(source, bank, review); var party = await records.PartyAsync(tx, bank, source, final);
                     if (party is not null) { await PartyHistoryAsync(context, party, final); await records.TouchAsync(tx, B.Parties, party, final); }
                     await AuditReadAsync(context, "preview", id, final); await FenceAsync(context, final);
@@ -163,7 +163,7 @@ public sealed partial class PaymentVerificationService
                 }, (tx, inner) => consume(tx, async (extraction, check, final) => {
                     eligible = check; var active = context ?? throw B.Broken(); var source = active.Source!; var actual = bank ?? throw B.Broken(); var approved = policy ?? throw B.Broken();
                     await records.RequireUnverifiedAsync(tx, id, final);
-                    var review = await CurrentReviewAsync(active, extraction, final);
+                    var review = await CurrentReviewAsync(active, extraction, final, matchesReviewedBinding: candidate => B.Binding(source, actual, candidate, approved) == input.Binding);
                     if (B.Binding(source, actual, review, approved) != input.Binding) throw B.Changed();
                     PaymentVerificationRecords.Facts(source, actual, review);
                     PaymentVerificationPolicy.RequireResolutions(PaymentVerificationRecords.Discrepancies(source, actual, review), input);

@@ -43,7 +43,7 @@ public sealed class PaymentVerificationHttpTests(MongoFixture fixture)
             var suffix = kind switch { "query" => "/query", "preview" => "/preview", "recover" => "/operations/query", _ => "" };
             object body = manual ? kind switch { "query" => new { purpose = "payment-review" }, "recover" => new { purpose = "operation-recovery", key = "http-verify" },
                 _ => (object)new { binding = manualView!.Binding, imageReviewed = true, fields = PaymentManualReviewTests.Fields(), reason = "Synthetic authorized original review during OCR outage" } } :
-                kind switch { "query" => new { purpose = "payment-review" }, "preview" => new { receiptId = data.ReceiptId.ToString() },
+                kind switch { "query" => new { purpose = "payment-review" }, "preview" => new { receiptId = data.ReceiptId.ToString(), reviewSource = fault == "source" ? "invalid" : "ocr" },
                 "recover" => new { purpose = "operation-recovery", key = "http-verify" }, _ => new { receiptId = data.ReceiptId.ToString(), binding = view!.Binding,
                     payerVerificationReference = input!.PayerVerificationReference, imageReviewed = true, bankReviewed = true, payerVerified = true,
                     resolutions = input.Resolutions.Select(item => new { field = item.Field, reason = item.Reason }), reason = "Synthetic independent HTTP verification" } };
@@ -58,10 +58,11 @@ public sealed class PaymentVerificationHttpTests(MongoFixture fixture)
             using var response = await Send(kind, fault); Assert.Equal(status, response.StatusCode);
         }
         foreach (var fault in new[] { "key", "revision" }) { using var response = await Send("save", fault); Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode); }
+        if (!manual) { using var invalid = await Send("preview", "source"); Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode); }
         using var preview = await Send(manual ? "query" : "preview"); Assert.True(preview.IsSuccessStatusCode, await preview.Content.ReadAsStringAsync());
         var shown = await preview.Content.ReadFromJsonAsync<JsonElement>(); Assert.True(preview.Headers.CacheControl!.NoStore);
         if (manual) { Assert.Equal("0", shown.GetProperty("reviewRevision").GetString()); Assert.Equal("ocr_unavailable", shown.GetProperty("failureCode").GetString()); }
-        else Assert.Equal("4000.00", shown.GetProperty("amount").GetString());
+        else { Assert.Equal("4000.00", shown.GetProperty("amount").GetString()); Assert.Equal("ocr", shown.GetProperty("reviewSource").GetString()); }
         using var saved = await Send("save"); Assert.True(saved.IsSuccessStatusCode, await saved.Content.ReadAsStringAsync()); Assert.True(saved.Headers.CacheControl!.NoStore);
         var result = await saved.Content.ReadFromJsonAsync<JsonElement>(); Assert.Equal(data.Read.DeclarationId.ToString(), result.GetProperty("declarationId").GetString());
         using var recovery = await Send("recover"); var recovered = await recovery.Content.ReadFromJsonAsync<JsonElement>();

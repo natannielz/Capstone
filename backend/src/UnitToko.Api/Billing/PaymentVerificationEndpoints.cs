@@ -11,7 +11,7 @@ using UnitToko.Platform.Billing;
 namespace UnitToko.Api.Billing;
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed record PaymentVerificationPreviewQueryDto([property: JsonRequired] LongId ReceiptId);
+public sealed record PaymentVerificationPreviewQueryDto([property: JsonRequired] LongId ReceiptId, string? ReviewSource = null);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record PaymentVerificationResolutionDto([property: JsonRequired] string Field, [property: JsonRequired] string Reason);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
@@ -34,7 +34,7 @@ public static class PaymentVerificationEndpoints
         var group = app.MapGroup("/api/v1/billing/payment-reviews/{id}/verification").RequireAuthorization().AddEndpointFilter<ActorRequiredFilter>();
         foreach (var status in new[] { 400, 401, 403, 409, 503 }) group.WithMetadata(new ProducesResponseTypeMetadata(status, typeof(ApiProblem), ["application/problem+json"]));
         group.MapPost("/preview", async (string id, PaymentVerificationPreviewQueryDto request, HttpContext http, PaymentVerificationService service, CancellationToken ct) => {
-            Private(http); var preview = await service.PreviewAsync(http.Features.Get<ResolvedActor>()!.Actor, LongId.Parse(id).Value, request.ReceiptId.Value, ct);
+            Private(http); var preview = await service.PreviewAsync(http.Features.Get<ResolvedActor>()!.Actor, LongId.Parse(id).Value, request.ReceiptId.Value, ct, request.ReviewSource);
             return TypedResults.Ok(Preview(preview));
         }).WithName("PreviewPaymentVerification");
         group.MapPost("/query", async (string id, OrderReadDto request, HttpContext http, PaymentVerificationService service, CancellationToken ct) => {

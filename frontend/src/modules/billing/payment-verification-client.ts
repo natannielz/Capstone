@@ -58,10 +58,11 @@ export function createPaymentVerificationGateway(client: ReturnType<typeof creat
         value.evidence.id !== owner.submission.evidence.id || value.evidence.version !== owner.submission.evidence.version ||
         value.evidence.sha256 !== owner.submission.evidence.sha256) return invalid(); return value;
     },
-    async preview(actorId: string, owner: PaymentDraft, receiptId: string) {
-      const saved = parse(preview, data(await client.POST('/api/v1/billing/payment-reviews/{id}/verification/preview', { body: { receiptId: parse(id, receiptId) },
+    async preview(actorId: string, owner: PaymentDraft, receiptId: string, reviewSource: 'ocr' | 'manual' | null = null) {
+      if (reviewSource !== null) parse(z.enum(['ocr', 'manual']), reviewSource);
+      const saved = parse(preview, data(await client.POST('/api/v1/billing/payment-reviews/{id}/verification/preview', { body: { receiptId: parse(id, receiptId), ...(reviewSource === null ? {} : { reviewSource }) },
         params: { path: { id: owner.id }, header: header(actorId) }, cache: 'no-store' })));
-      if (saved.declarationId !== owner.id || saved.declarationRevision !== owner.revision || saved.receiptId !== receiptId || saved.amount !== owner.input.declaredAmount || saved.declaredPayerName !== owner.input.payerName) return invalid(); return saved;
+      if (saved.declarationId !== owner.id || saved.declarationRevision !== owner.revision || saved.receiptId !== receiptId || saved.amount !== owner.input.declaredAmount || saved.declaredPayerName !== owner.input.payerName || reviewSource !== null && saved.reviewSource !== reviewSource) return invalid(); return saved;
     },
     async send(command: ReturnType<typeof preparePaymentVerification>, key: string, current: () => boolean) {
       if (!current()) throw new RequestNotSentError(409, 'payment_verification_view_stale'); const owner = paymentVerificationKey(key);

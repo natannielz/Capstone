@@ -60,6 +60,39 @@ public sealed class PaymentManualReviewTests(MongoFixture fixture)
         Assert.Equal(3, await data.Rows(M.Versions).CountDocumentsAsync(new BsonDocument()));
     }
     [WindowsStorageFact]
+    public async Task Recovered_OCR_requires_explicit_selection_keeps_manual_history_and_rejects_stale_bindings_without_live_manual_policy() {
+        await using var data = await PaymentVerificationTestData.CreateAsync(fixture, "ocr_unavailable"); await Policy(data);
+        var shown = await data.Service.PreviewManualReviewAsync(data.Reviewer, data.Read.DeclarationId);
+        await data.Service.RecordManualReviewAsync(data.Reviewer, data.Read.DeclarationId, 0, new(shown.Binding, true, Fields()), PaymentVerificationTestData.Meta("manual-before-recovery"));
+        var manual = await data.PreviewAsync();
+        await Assert.ThrowsAsync<PersistenceConflictException>(() => data.Service.PreviewAsync(data.Reviewer, data.Read.DeclarationId, data.ReceiptId, reviewSource: "ocr"));
+        await data.RecoverOcrAsync();
+        Assert.Equal(manual.Binding, (await data.PreviewAsync()).Binding);
+        var ocr = await data.Service.PreviewAsync(data.Reviewer, data.Read.DeclarationId, data.ReceiptId, reviewSource: "ocr");
+        Assert.False(ocr.Review.Contains("kind")); Assert.NotEqual(manual.Binding, ocr.Binding);
+        await data.Read.Service.CorrectReviewAsync(data.Reviewer, data.Read.DeclarationId, 1, data.Corrections.Binding,
+            [.. data.Corrections.Fields.Select(field => field.Field == "reference" ? field with { Value = "synthetic-recovered-reference" } : field)], PaymentVerificationTestData.Meta("recovered-changed-review"));
+        await Assert.ThrowsAsync<PersistenceConflictException>(() => data.VerifyAsync(ocr, "stale-recovered-binding"));
+        await data.Rows(M.Policies).UpdateManyAsync(new BsonDocument(), Builders<BsonDocument>.Update.Set("active", false));
+        var missing = await Assert.ThrowsAsync<PersistenceConflictException>(() => data.PreviewAsync()); Assert.Equal("payment_manual_review_policy_unavailable", missing.Code);
+        await Assert.ThrowsAsync<PersistenceConflictException>(() => data.Service.PreviewAsync(data.Reviewer, data.Read.DeclarationId, data.ReceiptId, reviewSource: "manual"));
+        await Assert.ThrowsAsync<PersistenceConflictException>(() => data.VerifyAsync(manual, "expired-manual-binding"));
+        foreach (var actor in new[] { data.Reader, data.Read.Actor, data.Reviewer with { AuthenticatedAt = data.Read.Catalog.Clock.UtcNow.AddMinutes(-6) } })
+            await Assert.ThrowsAsync<AuthorizationDeniedException>(() => data.Service.PreviewAsync(actor, data.Read.DeclarationId, data.ReceiptId, reviewSource: "ocr"));
+        await Assert.ThrowsAsync<UnitToko.Modules.Contracts.DomainValidationException>(() => data.Service.PreviewAsync(data.Reviewer, data.Read.DeclarationId, data.ReceiptId, reviewSource: "automatic"));
+        Assert.Equal(0, await data.Rows(PaymentVerificationBson.Decisions).CountDocumentsAsync(new BsonDocument()));
+        var before = await data.Rows("journalEntries").Find(new BsonDocument()).Sort(new BsonDocument("_id", 1)).ToListAsync();
+        ocr = await data.Service.PreviewAsync(data.Reviewer, data.Read.DeclarationId, data.ReceiptId, reviewSource: "ocr");
+        var verified = await data.VerifyAsync(ocr); Assert.Equal(verified, await data.VerifyAsync(ocr));
+        Assert.Equal(verified, await data.Service.RecoverAsync(data.Reviewer, "verify-payment"));
+        var saved = await data.Service.ReadAsync(data.Reader, data.Read.DeclarationId);
+        Assert.Equal(1, saved!["schemaVersion"].AsInt32); Assert.False(saved["review"].AsBsonDocument.Contains("kind")); Assert.Equal(2, saved["review"]["revision"].AsInt64);
+        Assert.Equal(1, await data.Rows(M.Versions).CountDocumentsAsync(new BsonDocument()));
+        Assert.Equal(1, await data.Rows("documentProcessingFailures").CountDocumentsAsync(new BsonDocument()));
+        Assert.Equal(1, await data.Rows("bankReceipts").CountDocumentsAsync(new BsonDocument()));
+        Assert.Equal(before, await data.Rows("journalEntries").Find(new BsonDocument()).Sort(new BsonDocument("_id", 1)).ToListAsync());
+    }
+    [WindowsStorageFact]
     public async Task Permission_policy_original_MFA_and_required_audit_are_not_bypassed_and_first_revision_races_have_one_winner() {
         await using var data = await PaymentVerificationTestData.CreateAsync(fixture, "ocr_timeout");
         var missing = await Assert.ThrowsAsync<PersistenceConflictException>(() => data.Service.PreviewManualReviewAsync(data.Reviewer, data.Read.DeclarationId)); Assert.Equal("payment_manual_review_policy_unavailable", missing.Code);

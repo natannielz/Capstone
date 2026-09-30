@@ -33,6 +33,12 @@ The named Operations/Finance owner must approve the exact fulfillment/shop/chann
 
 After an uncertain save, **Periksa hasil** checks the original actor's recorded result with current permission/person/session/MFA. The browser stores only actor, operation, key and time; it never resends or closes the review. A changed body cannot reuse the original key. A fresh manual version remains a deliberate action, not an automatic retry.
 
+## Selecting recovered OCR before verification
+
+If a manual exception was recorded and OCR later succeeds, Finance can select **Hasil OCR dan koreksi petugas** under **Sumber isian untuk pemeriksaan**, then inspect the bank receipt again. The default retains the saved manual review; an expired or changed manual procedure never silently switches the source. Explicit manual selection requires that saved review and its current matching approved procedure. Explicit OCR selection requires the actual successful extraction and current correction history; it cannot manufacture recovery while OCR is queued, running or failed.
+
+Changing the source clears the displayed preview, confirmation, payer reference, reasons and attestations. The chosen review's existing binding is checked again against the current source, bank receipt, corrections and payer procedure at commit. A stale or different binding creates no verification. Verification write bodies and historical OCR/manual decision formats remain unchanged. An already accepted manual decision retains its original manual version after OCR recovery; this choice only applies before verification. Both earlier manual/failure records and later OCR/corrections remain immutable. Current scope, original eligibility, fresh MFA, person independence and bank/payer review remain mandatory.
+
 ## Exact duplicate hints
 
 Use **Periksa kecocokan pengajuan** in the submitted declaration to compare the exact original-file SHA-256 and the buyer's exact reference. **Berkas gambar asli identik** and **Referensi yang dinyatakan pembeli sama** are separate advisory reasons. Blank references remain unknown; references are not fuzzy-matched or promoted to canonical bank identity. Open a comparison only through the authorized detail link and inspect its actual bank evidence.

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { createUnitTokoClient } from '../src/api/client';
 import { createPaymentVerificationGateway, preparePaymentVerification, parsePaymentVerificationResult, type PaymentVerificationPreview } from '../src/modules/billing/payment-verification-client';
 import { correctionFields } from '../src/modules/billing/payment-correction-client';
+import { parsePaymentDraft } from '../src/modules/billing/payment-client';
 import { OperationJournal, reconcileOperationRecovery, operationRecoveryCapabilities } from '../src/modules/administration/operation-journal';
 import { recoveryPage } from '../src/modules/administration/operation-recovery-navigation';
 
@@ -33,6 +34,21 @@ test('verification client sends actor CSRF immutable binding and exact identifie
   } }));
   await assert.rejects(() => gateway.send(command, key, () => false)); await assert.rejects(() => gateway.send(command, key.replace('9007199254740995', '9'), () => true)); assert.equal(writes, 0);
   assert.deepEqual(await gateway.send(command, key, () => true), result); assert.equal(writes, 1); assert.deepEqual((await gateway.recover(actor, key))?.result, result); assert.equal(writes, 1);
+});
+test('explicit preview source is sent privately and a different returned source is rejected without changing write bodies', async () => {
+  const time = '2026-09-30T03:00:00Z', owner = parsePaymentDraft({ id: preview.declarationId, revision: preview.declarationRevision, state: 'submitted', createdAt: time, updatedAt: time,
+    input: { invoiceIds: ['11'], declaredAmount: preview.amount, transferDate: '2026-09-30', payerName: preview.declaredPayerName, bankReference: null, note: null },
+    invoices: [{ invoiceId: '11', number: '1/2/2026/3', total: preview.amount, buyerName: 'Cabang', sellerName: 'Toko' }],
+    submission: { id: '41', reviewRevision: '1', reservationId: '71', evidence: { id: '61', version: '1', sha256: 'b'.repeat(64) }, submittedAt: time } });
+  let source: 'ocr' | 'manual' = 'ocr', calls = 0;
+  const gateway = createPaymentVerificationGateway(createUnitTokoClient({ baseUrl: 'https://unit-toko.test', fetch: async request => {
+    assert.ok(request instanceof Request); if (request.url.endsWith('/identity/csrf')) return Response.json({ requestToken: 'csrf' });
+    calls++; assert.equal(request.headers.get('X-Expected-Actor-Id'), actor); assert.equal(request.headers.get('X-CSRF-Token'), 'csrf'); assert.equal(request.cache, 'no-store');
+    assert.deepEqual(await request.json(), { receiptId: preview.receiptId, reviewSource: 'ocr' }); return Response.json({ ...preview, reviewSource: source });
+  } }));
+  assert.deepEqual(await gateway.preview(actor, owner, preview.receiptId, 'ocr'), preview); source = 'manual';
+  await assert.rejects(() => gateway.preview(actor, owner, preview.receiptId, 'ocr'));
+  assert.equal(calls, 2); assert.equal('reviewSource' in prepare().body, false);
 });
 test('verification recovery preserves metadata only, keeps unknown outcomes, and accepts an original decision with no corrections', async () => {
   const rows = new Map<string, string>(), journal = new OperationJournal(() => ({ get length() { return rows.size; }, key: index => [...rows.keys()][index] ?? null,

@@ -5738,6 +5738,7 @@ export interface components {
         };
         PaymentVerificationPreviewQueryDto: {
             receiptId: components["schemas"]["LongId"];
+            reviewSource?: null | string;
         };
         PaymentVerificationReadDto: {
             state: string;

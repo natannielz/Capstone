@@ -15,7 +15,7 @@ assert.equal(process.versions.node.split('.')[0], '24'); assert.equal(api.protoc
 const load = createRequire(config.playwrightPackage), metadata = load(config.playwrightPackage); assert.equal(metadata.name, 'playwright'); assert.equal(metadata.version, '1.62.1');
 const { chromium } = load('playwright'), channel = process.env.UNITTOKO_BROWSER_CHANNEL ?? 'chromium'; assert.ok(['chromium', 'msedge'].includes(channel));
 const app = next({ dev: false, dir: process.cwd(), quiet: true }), sockets = new Set(), writes = [], errors = [], pages = [];
-const directory = resolve('../tmp/production/' + (config.manual ? 'payment-manual-review-browser-results' : 'payment-verification-browser-results')); mkdirSync(directory, { recursive: true });
+const directory = resolve('../tmp/production/' + (config.manualRecovery ? 'payment-recovered-ocr-browser-results' : config.manual ? 'payment-manual-review-browser-results' : 'payment-verification-browser-results')); mkdirSync(directory, { recursive: true });
 let browser, frontend, edge, tunnel, dropNext = null, dropped = 0;
 function track(server) { server.on('connection', socket => { sockets.add(socket); socket.on('close', () => sockets.delete(socket)); }); return server; }
 async function listen(server) { await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); }); return server.address().port; }
@@ -104,6 +104,13 @@ try {
     await page.setViewportSize({ width: 360, height: 800 });
   }
   await panel.getByRole('button', { name: 'Pilih penerimaan bank', exact: true }).click();
+  if (config.manualRecovery) {
+    const denied = page.waitForResponse(response => response.url().endsWith('/verification/preview'));
+    await panel.getByRole('button', { name: 'Periksa penerimaan ' + config.receiptId, exact: true }).click();
+    assert.equal((await denied).status(), 409); await panel.getByText(/Prosedur pengecualian manual sudah tidak berlaku/).waitFor();
+    assert.equal(await panel.getByRole('heading', { name: 'Tinjau pengaitan dana', exact: true }).count(), 0);
+    await panel.getByLabel('Sumber isian untuk pemeriksaan', { exact: true }).selectOption('ocr');
+  }
   await panel.getByRole('button', { name: 'Periksa penerimaan ' + config.receiptId, exact: true }).click();
   const heading = panel.getByRole('heading', { name: 'Tinjau pengaitan dana', exact: true }); await heading.waitFor();
   assert.equal(await heading.evaluate(element => document.activeElement === element), true);
@@ -118,6 +125,17 @@ try {
   for (let i = 0; i < 3; i++) await boxes.nth(i).check();
   await panel.getByRole('button', { name: 'Periksa keputusan verifikasi', exact: true }).click();
   const confirm = panel.getByRole('region', { name: 'Konfirmasi verifikasi pembayaran', exact: true }); await confirm.waitFor();
+  if (config.manualRecovery) {
+    await panel.getByLabel('Sumber isian untuk pemeriksaan', { exact: true }).selectOption('manual');
+    assert.equal(await confirm.count(), 0); assert.equal(await boxes.count(), 0); assert.equal(writes.filter(w => w.kind === 'verify').length, 0);
+    await panel.getByLabel('Sumber isian untuk pemeriksaan', { exact: true }).selectOption('ocr');
+    await panel.getByRole('button', { name: 'Periksa penerimaan ' + config.receiptId, exact: true }).click(); await heading.waitFor();
+    for (let i = 0; i < await fields.count(); i++) await fields.nth(i).fill('Synthetic independently resolved source difference');
+    await panel.getByLabel('Referensi pemeriksaan identitas pembayar', { exact: true }).fill('Synthetic independent payer evidence');
+    await panel.getByLabel('Alasan verifikasi', { exact: true }).fill('Synthetic review of exact image, bank receipt and payer');
+    for (let i = 0; i < 3; i++) { assert.equal(await boxes.nth(i).isChecked(), false); await boxes.nth(i).check(); }
+    await panel.getByRole('button', { name: 'Periksa keputusan verifikasi', exact: true }).click(); await confirm.waitFor();
+  }
   assert.equal(await confirm.getByRole('heading').evaluate(element => document.activeElement === element), true);
   await confirm.getByRole('button', { name: 'Kembali ke pemeriksaan', exact: true }).click(); assert.equal(writes.filter(w => w.kind === 'verify').length, 0);
   await panel.getByRole('button', { name: 'Periksa keputusan verifikasi', exact: true }).click(); await confirm.waitFor();

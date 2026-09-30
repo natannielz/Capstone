@@ -37424,6 +37424,12 @@
         "properties": {
           "receiptId": {
             "$ref": "#/components/schemas/LongId"
+          },
+          "reviewSource": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         },
         "additionalProperties": false
