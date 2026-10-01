@@ -13,7 +13,7 @@ const config = JSON.parse(Buffer.concat(chunks).toString('utf8')), api = new URL
 assert.equal(process.versions.node.split('.')[0], '24'); assert.equal(api.protocol, 'http:'); assert.equal(api.hostname, '127.0.0.1'); assert.ok(Number(api.port) > 0); assert.equal(origin.href, 'https://portal.unit-toko.co.id/');
 const load = createRequire(config.playwrightPackage), metadata = load(config.playwrightPackage); assert.equal(metadata.name, 'playwright'); assert.equal(metadata.version, '1.62.1');
 const { chromium } = load('playwright'), channel = process.env.UNITTOKO_BROWSER_CHANNEL ?? 'chromium'; assert.ok(['chromium', 'msedge'].includes(channel));
-const app = next({ dev: false, dir: process.cwd(), quiet: true }), sockets = new Set(), writes = [], caseWrites = [], decisionWrites = [], returnWrites = [], inspectionWrites = [], errors = [], pages = [];
+const app = next({ dev: false, dir: process.cwd(), quiet: true }), sockets = new Set(), writes = [], caseWrites = [], decisionWrites = [], returnWrites = [], inspectionWrites = [], resolutionWrites = [], errors = [], pages = [];
 const directory = resolve('../tmp/production/invoice-browser-results'); mkdirSync(directory, { recursive: true });
 let browser, frontend, edge, tunnel, dropNext = false, dropped = 0;
 function track(server) { server.on('connection', socket => { sockets.add(socket); socket.on('close', () => sockets.delete(socket)); }); return server; }
@@ -27,7 +27,8 @@ function forward(req, res, port, isApi) {
   const decisionWrite = req.method === 'POST' && /^\/api\/v1\/fulfillment\/cases\/[1-9][0-9]*\/decision$/.test(req.url); if (decisionWrite) decisionWrites.push({ key: req.headers['idempotency-key'], actor: req.headers['x-expected-actor-id'] });
   const returnWrite = req.method === 'POST' && /^\/api\/v1\/fulfillment\/cases\/[1-9][0-9]*\/returns$/.test(req.url); if (returnWrite) returnWrites.push({ key: req.headers['idempotency-key'], actor: req.headers['x-expected-actor-id'] });
   const inspectionWrite = req.method === 'POST' && /^\/api\/v1\/fulfillment\/cases\/[1-9][0-9]*\/returns\/[1-9][0-9]*\/inspection$/.test(req.url); if (inspectionWrite) inspectionWrites.push({ key: req.headers['idempotency-key'], actor: req.headers['x-expected-actor-id'] });
-  const drop = (write || caseWrite || decisionWrite || returnWrite || inspectionWrite) && dropNext; if (drop) dropNext = false;
+  const resolutionWrite = req.method === 'POST' && /^\/api\/v1\/fulfillment\/cases\/[1-9][0-9]*\/returns\/[1-9][0-9]*\/resolution$/.test(req.url); if (resolutionWrite) resolutionWrites.push({ key: req.headers['idempotency-key'], actor: req.headers['x-expected-actor-id'] });
+  const drop = (write || caseWrite || decisionWrite || returnWrite || inspectionWrite || resolutionWrite) && dropNext; if (drop) dropNext = false;
   const upstream = http.request({ hostname: '127.0.0.1', port, path: req.url, method: req.method, headers }, response => {
     if (drop && response.statusCode === 200) { response.resume(); response.once('end', () => { dropped++; res.writeHead(200, { 'content-type': 'application/json', 'content-length': '64', 'cache-control': 'no-store' }); res.flushHeaders(); res.write('{'); setTimeout(() => res.destroy(), 25); }); return; }
     res.writeHead(response.statusCode ?? 502, response.headers); response.pipe(res);
@@ -171,6 +172,31 @@ try {
         const publicInspection = await buyer.page.locator('main').innerText(); for (const secret of ['Penilaian pemeriksaan privat', 'Label produk terperiksa privat', 'LOT-PRIVAT']) assert.ok(!publicInspection.includes(secret)); assert.equal(await inspectedReturns.getByRole('button', { name: /^Periksa barang retur/ }).count(), 0);
         assert.equal(await buyer.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true); await buyer.page.screenshot({ path: resolve(directory, 'return-inspection-buyer-mobile.png'), fullPage: true });
         console.log('REAL_RETURN_INSPECTION_BROWSER_PASS ' + JSON.stringify({ inspections: inspectionWrites.length, lostInspectionRecovered: true, privateObservationsHidden: true, baseUnits: 1, identity: 'matched', condition: 'opened', staysQuarantined: true, offlineUnsent: true, mobile: true }));
+        await page.getByRole('button', { name: /^Buka keluhan \d+$/ }).click(); const resolutionReturns = page.getByRole('region', { name: 'Penerimaan retur', exact: true });
+        await resolutionReturns.getByRole('button', { name: 'Perbarui riwayat retur', exact: true }).click(); await resolutionReturns.getByRole('button', { name: /^Lihat hasil pemeriksaan/ }).click();
+        const resolutionPanel = resolutionReturns.getByRole('region', { name: /^Penyelesaian retur \d+$/ });
+        await resolutionPanel.getByRole('combobox', { name: /^Pilihan penyelesaian/ }).waitFor();
+        assert.deepEqual(await resolutionPanel.getByRole('combobox', { name: /^Pilihan penyelesaian/ }).locator('option').evaluateAll(options => options.map(option => option.value)), ['replacement']);
+        await resolutionPanel.getByRole('button', { name: 'Periksa pilihan penyelesaian', exact: true }).click();
+        await resolutionPanel.getByLabel('Pengajuan penyelesaian untuk pelanggan', { exact: true }).fill('Pengajuan penggantian satu barang yang telah diperiksa');
+        await resolutionPanel.getByLabel('Catatan pengajuan penyelesaian internal', { exact: true }).fill('Pertimbangan penyelesaian privat');
+        await resolutionPanel.getByRole('button', { name: 'Tinjau pengajuan penyelesaian', exact: true }).click(); const resolutionReview = resolutionPanel.getByRole('region', { name: 'Konfirmasi pengajuan penyelesaian', exact: true });
+        await resolutionReview.waitFor(); assert.equal(await resolutionReview.getByRole('heading', { name: 'Ajukan penyelesaian untuk persetujuan', exact: true }).evaluate(element => element === document.activeElement), true);
+        await resolutionReview.getByRole('button', { name: 'Kembali ke pengajuan penyelesaian', exact: true }).click(); assert.equal(resolutionWrites.length, 0);
+        await resolutionPanel.getByRole('button', { name: 'Tinjau pengajuan penyelesaian', exact: true }).click(); assert.equal(await resolutionReview.getByRole('button', { name: 'Kirim pengajuan penyelesaian', exact: true }).isDisabled(), true); await resolutionReview.getByRole('checkbox').check();
+        await finance.context.setOffline(true); await page.getByText(/Koneksi terputus/).waitFor(); assert.equal(await resolutionReview.getByRole('button', { name: 'Kirim pengajuan penyelesaian', exact: true }).isDisabled(), true); assert.equal(resolutionWrites.length, 0);
+        await finance.context.setOffline(false); await page.getByText(/Koneksi terputus/).waitFor({ state: 'hidden' }); assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+        await page.screenshot({ path: resolve(directory, 'return-resolution-review-mobile.png'), fullPage: true }); dropNext = true; await resolutionReview.getByRole('button', { name: 'Kirim pengajuan penyelesaian', exact: true }).click(); await page.getByRole('button', { name: 'Periksa hasil', exact: true }).waitFor();
+        const pendingResolution = await page.evaluate(() => Object.keys(localStorage).filter(key => key.startsWith('unit-toko:pending:v1:')).map(key => JSON.parse(localStorage[key])));
+        assert.equal(pendingResolution.length, 1); assert.equal(pendingResolution[0].operation, 'fulfillment.case.resolution_request'); assert.match(pendingResolution[0].key, /^cq\.[1-9][0-9]*\.[1-9][0-9]*\./); assert.deepEqual(Object.keys(pendingResolution[0]).sort(), ['actorId', 'createdAt', 'key', 'operation']); assert.ok(!JSON.stringify(pendingResolution).includes('privat'));
+        await page.reload(); await page.getByRole('button', { name: 'Periksa hasil', exact: true }).click(); await page.getByRole('button', { name: 'Periksa hasil', exact: true }).waitFor({ state: 'hidden' });
+        assert.equal(resolutionWrites.length, 1); assert.equal(resolutionWrites[0].actor, config.financeId); assert.equal(dropped, 6); assert.equal(await page.getByRole('button', { name: /Selesaikan dan tutup/ }).count(), 0);
+        await buyer.page.reload(); await buyer.page.getByRole('button', { name: /^Buka keluhan \d+$/ }).click(); const resolvedReturns = buyer.page.getByRole('region', { name: 'Penerimaan retur', exact: true });
+        await resolvedReturns.getByRole('button', { name: 'Perbarui riwayat retur', exact: true }).click(); await resolvedReturns.getByRole('button', { name: /^Lihat hasil pemeriksaan/ }).click(); await resolvedReturns.getByRole('button', { name: /^Lihat pengajuan penyelesaian/ }).click();
+        await resolvedReturns.getByText('Pengajuan penggantian satu barang yang telah diperiksa', { exact: true }).waitFor(); await resolvedReturns.getByText(/Menunggu persetujuan penyelesaian/).waitFor();
+        const publicResolution = await buyer.page.locator('main').innerText(); for (const secret of ['Pertimbangan penyelesaian privat', 'Label produk terperiksa privat', 'LOT-PRIVAT']) assert.ok(!publicResolution.includes(secret)); assert.equal(await resolvedReturns.getByRole('button', { name: 'Periksa pilihan penyelesaian', exact: true }).count(), 0);
+        assert.equal(await buyer.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true); await buyer.page.screenshot({ path: resolve(directory, 'return-resolution-buyer-mobile.png'), fullPage: true });
+        console.log('REAL_RETURN_RESOLUTION_BROWSER_PASS ' + JSON.stringify({ requests: resolutionWrites.length, lostResolutionRecovered: true, privateNoteHidden: true, baseUnits: 1, action: 'replacement', state: 'resolution_requested', noApprovalOrFinancialPosting: true, offlineUnsent: true, mobile: true }));
       }
     }
     const caseOutsider = await user(config.courierToken); await caseOutsider.page.goto(origin.origin + '/fulfillment/cases'); await caseOutsider.page.getByRole('heading', { name: 'Periksa sesi dan akses', exact: true }).waitFor();

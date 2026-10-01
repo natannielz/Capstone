@@ -25,6 +25,7 @@ public static class AfterSalesReturnEndpoints
 {
     public static void MapAfterSalesReturnEndpoints(this WebApplication app) {
         app.MapAfterSalesInspectionEndpoints();
+        app.MapAfterSalesResolutionEndpoints();
         var group = app.MapGroup("/api/v1/fulfillment/cases/{id}/returns").RequireAuthorization().AddEndpointFilter<ActorRequiredFilter>();
         foreach (var status in new[] { 400, 401, 403, 409, 503 }) group.WithMetadata(new ProducesResponseTypeMetadata(status, typeof(ApiProblem), ["application/problem+json"]));
         foreach (var preview in new[] { false, true }) {

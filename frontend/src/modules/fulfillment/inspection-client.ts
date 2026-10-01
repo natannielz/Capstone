@@ -17,6 +17,7 @@ const assessment = z.object({ inspectedAt: z.string().datetime({ offset: true })
 const result = z.object({ returnId: id, caseId: id, invoiceId: id, revision: z.literal('1'), inspectedAt: z.string().datetime({ offset: true }), state: z.literal('inspected_quarantine'), operation: z.literal('fulfillment.case.return_inspect') }).strict();
 export type InspectionLine = z.infer<typeof line>;
 export type InspectionResult = z.infer<typeof result>;
+export function parseInspectionAssessment(value: unknown) { return parse(assessment, value); }
 export type InspectionView = { caseId: string; invoiceId: string; revision: '0' | '1'; binding: string; receipt: ReturnReceipt; inspection: z.infer<typeof assessment> | null };
 export const inspectionIdentities = { unverified: 'Identitas belum dapat dipastikan', matched: 'Sesuai produk pada invoice', different: 'Produk berbeda dari invoice' };
 export const inspectionConditions = { sealed: 'Segel utuh', opened: 'Kemasan terbuka', damaged: 'Rusak', mixed: 'Kondisi campuran — tetap karantina' };

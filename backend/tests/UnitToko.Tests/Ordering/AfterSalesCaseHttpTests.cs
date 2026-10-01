@@ -129,5 +129,22 @@ public sealed class AfterSalesCaseHttpTests(MongoFixture fixture)
         var inspectionText = await buyerInspection.Content.ReadAsStringAsync(); Assert.Contains(inspection.publicNote, inspectionText);
         foreach (var secret in new[] { inspection.reason, inspectionLines[0].observedIdentity, "observedIdentity", "observedLotLabel", "source", "actorId", "people", "lotIdentity", "requestKey", "bodyHash", "stockLotId" }) Assert.DoesNotContain(secret, inspectionText, StringComparison.OrdinalIgnoreCase);
         Assert.Equal(1, await data.Invoice.Count("returnInspections"));
+        var resolutionPath = "/returns/" + returnId + "/resolution";
+        Assert.Equal(HttpStatusCode.Forbidden, (await Request("/" + caseId + resolutionPath + "/preview/query", new { purpose = "after-sales-resolution", action = "replacement" }, "2")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Staff(resolutionPath + "/preview/query", new { purpose = "after-sales-resolution", action = (string?)null }, "2")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await Staff(resolutionPath + "/preview/query", new { purpose = "after-sales-resolution", action = "refund" }, "2")).StatusCode);
+        var resolutionPreview = await Staff(resolutionPath + "/preview/query", new { purpose = "after-sales-resolution", action = "replacement" }, "2"); Assert.True(resolutionPreview.IsSuccessStatusCode, await resolutionPreview.Content.ReadAsStringAsync()); Assert.True(resolutionPreview.Headers.CacheControl!.NoStore); Assert.Equal("\"0\"", resolutionPreview.Headers.ETag!.Tag);
+        var resolutionView = await resolutionPreview.Content.ReadFromJsonAsync<JsonElement>(); var resolution = new { binding = resolutionView.GetProperty("binding").GetString(), action = "replacement", publicNote = "Ajukan penggantian satu barang yang telah diperiksa", reason = "Pertimbangan penyelesaian privat" };
+        Assert.Equal(HttpStatusCode.BadRequest, (await Staff(resolutionPath, resolution, "0", "actor")).StatusCode); Assert.Equal(HttpStatusCode.Forbidden, (await Staff(resolutionPath, resolution, "0", "csrf")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Staff(resolutionPath, resolution, "1")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Staff(resolutionPath, new { resolution.binding, resolution.action, resolution.publicNote, resolution.reason, refundAmount = "1" }, "0")).StatusCode);
+        Assert.Equal(0, await data.Invoice.Count("returnResolutionRequests"));
+        var requested = await Staff(resolutionPath, resolution, "0"); Assert.True(requested.IsSuccessStatusCode, await requested.Content.ReadAsStringAsync()); var originalResolution = await requested.Content.ReadFromJsonAsync<JsonElement>(); Assert.Equal("resolution_requested", originalResolution.GetProperty("state").GetString());
+        var resolutionRecovery = await Staff(resolutionPath + "/operations/query", new { purpose = "operation-recovery", key = "cr." + caseId + ".http" }); Assert.True(resolutionRecovery.IsSuccessStatusCode);
+        Assert.Equal(originalResolution.GetRawText(), (await resolutionRecovery.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("result").GetRawText());
+        var buyerResolution = await Request("/" + caseId + resolutionPath + "/query", new { purpose = "after-sales-resolution" }, "2"); Assert.True(buyerResolution.IsSuccessStatusCode); Assert.True(buyerResolution.Headers.CacheControl!.NoStore); Assert.Equal("\"1\"", buyerResolution.Headers.ETag!.Tag);
+        var resolutionText = await buyerResolution.Content.ReadAsStringAsync(); Assert.Contains(resolution.publicNote, resolutionText); Assert.Contains("resolution_requested", resolutionText);
+        foreach (var secret in new[] { resolution.reason, inspectionLines[0].observedIdentity, "observedIdentity", "observedLotLabel", "actorId", "people", "requestKey", "snapshotHash", "paidAmount", "refundAmount" }) Assert.DoesNotContain(secret, resolutionText, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(1, await data.Invoice.Count("returnResolutionRequests")); Assert.Equal(1, await data.Invoice.Count("journalEntries")); Assert.Equal(1, await data.Invoice.Count(UnitToko.Platform.Billing.InvoiceBson.Invoices));
     }
 }
