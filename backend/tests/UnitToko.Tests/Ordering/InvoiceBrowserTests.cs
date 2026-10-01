@@ -36,6 +36,70 @@ public sealed class InvoiceBrowserTests(MongoFixture fixture, ITestOutputHelper 
     public Task Browser_receives_inspects_and_requests_return_resolution_recovers_lost_replies_and_preserves_pack_stock_and_money() => RunAsync(true, true, true);
     [LocalStockBrowserFact]
     public Task Browser_requests_exact_return_entitlement_recovers_original_and_preserves_invoice_cash_and_quarantine() => RunAsync(true, true, true, true);
+    [LocalStockBrowserFact]
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+    public async Task Browser_independent_Finance_credits_and_reserves_original_funding_recovers_exact_lost_approval_without_resend_or_cash_transfer() {
+        if (!OperatingSystem.IsWindows()) throw new PlatformNotSupportedException("The configured native evidence and browser fixture requires Windows");
+        var root = Root(); var node = Environment.GetEnvironmentVariable("UNITTOKO_BROWSER_NODE"); var playwright = Environment.GetEnvironmentVariable("UNITTOKO_BROWSER_PLAYWRIGHT_PACKAGE");
+        Assert.True(Path.IsPathFullyQualified(node ?? "") && File.Exists(node)); Assert.True(Path.IsPathFullyQualified(playwright ?? "") && File.Exists(playwright));
+        Assert.True(File.Exists(Path.Combine(root, "frontend", ".next", "BUILD_ID")));
+        await using var data = await ReturnFinancialApprovalTests.Data.CreateAsync(fixture, "refund");
+        var source = data.Source; var invoice = source.Payment.Invoice; var order = invoice.Order; var catalog = order.Prices.Catalog;
+        // Like the existing invoice/bank browser fixtures, seed the actual actor's persisted
+        // synthetic account profile; the production identity/session endpoint remains intact.
+        await data.Rows("accountProfiles").InsertOneAsync(new BsonDocument { { "_id", data.Actor.UserId }, { "schemaVersion", 1 }, { "version", 1L },
+            { "displayName", "Independent Finance checker fixture" }, { "verifiedEmail", "finance-checker@example.invalid" },
+            { "verifiedAt", data.Clock.UtcNow.UtcDateTime }, { "updatedAt", data.Clock.UtcNow.UtcDateTime } });
+        var original = await data.OriginalAsync();
+        var stock = new Dictionary<string, List<BsonDocument>>();
+        foreach (var table in new[] { "stockBalances", "lots", "movements", "reservations" }) {
+            var rows = await data.Rows(table).Find(new BsonDocument()).Sort(new BsonDocument("_id", 1)).ToListAsync(); foreach (var stockRow in rows) { stockRow.Remove("fence"); stockRow.Remove("postingFence"); } stock[table] = rows;
+        }
+        using var keys = new IdentityRuntimeTests.RuntimeKeys(); var settings = IdentityRuntimeTests.Settings(keys);
+        settings["Mongo:Database"] = data.Database.DatabaseNamespace.DatabaseName; settings["Identity:TrustedProxies:0"] = "127.0.0.1"; settings["Logging:LogLevel:Default"] = "Warning";
+        using var factory = IdentityRuntimeTests.Factory(settings).WithWebHostBuilder(web => web.UseEnvironment("Production").ConfigureTestServices(services => {
+            services.RemoveAll<IClock>(); services.AddSingleton<IClock>(data.Clock);
+            services.RemoveAll<MongoIdentitySessionStore>(); services.AddSingleton(catalog.Sessions);
+            services.RemoveAll<InvoiceService>(); services.AddSingleton(invoice.Service);
+            services.RemoveAll<AfterSalesCaseService>(); services.AddSingleton(new AfterSalesCaseService(data.Database, new(catalog.Client), new(data.Database), data.Clock, invoice.Service));
+            services.RemoveAll<ReturnEntitlementService>(); services.AddSingleton(source.Service);
+            services.RemoveAll<PaymentAllocationService>(); services.AddSingleton(data.Allocations);
+            services.RemoveAll<ReturnFinancialApprovalService>(); services.AddSingleton(data.Service);
+        }));
+        factory.UseKestrel(options => options.Listen(IPAddress.Loopback, 0)); factory.StartServer();
+        var apiAddress = Assert.Single(factory.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!.Addresses);
+        const string origin = "https://portal.unit-toko.co.id";
+        using var rsa = RSA.Create(2048); var certificate = new CertificateRequest("CN=UnitToko financial approval rehearsal", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        var names = new SubjectAlternativeNameBuilder(); names.AddDnsName(new Uri(origin).Host); certificate.CertificateExtensions.Add(names.Build());
+        using var tls = certificate.CreateSelfSigned(DateTimeOffset.UtcNow.AddMinutes(-5), DateTimeOffset.UtcNow.AddHours(1)); var password = Convert.ToHexString(RandomNumberGenerator.GetBytes(24));
+        var input = new { apiAddress, origin, pfx = Convert.ToBase64String(tls.Export(X509ContentType.Pfx, password)), password, playwrightPackage = playwright,
+            financeToken = catalog.Issued[data.Actor.UserId].OpaqueToken, buyerToken = catalog.Issued[order.Buyer.UserId].OpaqueToken,
+            courierToken = catalog.Issued[invoice.Dispatch.Courier.UserId].OpaqueToken, makerToken = catalog.Issued[source.Actor.UserId].OpaqueToken,
+            financeId = data.Actor.UserId.ToString(), makerId = source.Actor.UserId.ToString(), buyerId = order.Buyer.UserId.ToString(), financialApproval = true,
+            caseId = source.CaseId.ToString(), returnId = source.ReturnId.ToString(), invoiceId = data.InvoiceId.ToString(), action = source.Action,
+            originalAllocationId = data.Input.Releases[0].OriginalAllocationId.Value.ToString(), expectedInvoiceVersion = data.Input.ExpectedInvoiceVersion.ToString(), expectedReceiptVersion = data.Input.Releases[0].ExpectedReceiptVersion.ToString() };
+        var start = new ProcessStartInfo(node!) { WorkingDirectory = Path.Combine(root, "frontend"), UseShellExecute = false, CreateNoWindow = true, RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true };
+        start.ArgumentList.Add(Path.Combine(root, "frontend", "scripts", "verify-invoice-browser.mjs")); start.Environment["NODE_ENV"] = "production"; start.Environment["NEXT_TELEMETRY_DISABLED"] = "1";
+        using var process = Process.Start(start) ?? throw new InvalidOperationException("Financial approval browser child did not start");
+        try {
+            var stdout = process.StandardOutput.ReadToEndAsync(); var stderr = process.StandardError.ReadToEndAsync(); await process.StandardInput.WriteAsync(JsonSerializer.Serialize(input)); process.StandardInput.Close();
+            await process.WaitForExitAsync().WaitAsync(TimeSpan.FromMinutes(3)); output.WriteLine(await stdout); output.WriteLine(await stderr);
+            Assert.True(process.ExitCode == 0, await stdout + await stderr); Assert.Contains("REAL_RETURN_FINANCIAL_APPROVAL_BROWSER_PASS", await stdout);
+        } finally { if (!process.HasExited) { process.Kill(true); await process.WaitForExitAsync(); } }
+        var row = await data.Rows(ReturnFinancialApprovalBson.Events).Find(new BsonDocument()).SingleAsync();
+        Assert.Equal(data.Actor.UserId, row["actorId"].AsInt64); Assert.NotEqual(source.Actor.UserId, row["actorId"].AsInt64);
+        Assert.Equal(source.CaseId, row["caseId"].AsInt64); Assert.Equal(source.ReturnId, row["returnId"].AsInt64);
+        Assert.Equal(1000.02m, row["credit"].AsDecimal); Assert.Equal(1000m, row["reservedRefund"].AsDecimal);
+        Assert.StartsWith("fa." + source.CaseId + "." + source.ReturnId + ".refund.", row["requestKey"].AsString);
+        var head = await data.Rows(PaymentAllocationBson.Invoices).Find(new BsonDocument("_id", data.InvoiceId)).SingleAsync();
+        Assert.Equal(2L, head["version"].AsInt64); Assert.Equal(0m, head["paid"].AsDecimal); Assert.Equal(1000.02m, head["credited"].AsDecimal);
+        var receipt = await data.Rows(PaymentAllocationBson.Receipts).Find(new BsonDocument()).SingleAsync(); Assert.Equal(2L, receipt["version"].AsInt64);
+        Assert.Equal(0m, receipt["allocated"].AsDecimal); Assert.Equal(1000m, receipt["reservedForRefund"].AsDecimal); Assert.Equal(3000m, receipt["total"].AsDecimal - receipt["allocated"].AsDecimal - receipt["reservedForRefund"].AsDecimal);
+        Assert.Equal(1, await data.Rows("journalEntries").CountDocumentsAsync(new BsonDocument("source.namespace", "billing.return-financial")));
+        foreach (var (table, field) in new[] { ("idempotencyRecords", "operation"), ("auditEvents", "kind"), ("outboxEvents", "kind") }) Assert.Equal(1, await data.Rows(table).CountDocumentsAsync(new BsonDocument(field, ReturnFinancialApprovalBson.Operation)));
+        await data.AssertOriginalAsync(original);
+        foreach (var table in stock.Keys) { var rows = await data.Rows(table).Find(new BsonDocument()).Sort(new BsonDocument("_id", 1)).ToListAsync(); foreach (var current in rows) { current.Remove("fence"); current.Remove("postingFence"); } Assert.Equal(stock[table], rows); }
+    }
     private async Task RunAsync(bool afterSales, bool caseDecision = false, bool caseReturn = false, bool financialRequest = false) {
         var root = Root(); var node = Environment.GetEnvironmentVariable("UNITTOKO_BROWSER_NODE"); var playwright = Environment.GetEnvironmentVariable("UNITTOKO_BROWSER_PLAYWRIGHT_PACKAGE");
         Assert.True(Path.IsPathFullyQualified(node ?? "") && File.Exists(node)); Assert.True(Path.IsPathFullyQualified(playwright ?? "") && File.Exists(playwright));

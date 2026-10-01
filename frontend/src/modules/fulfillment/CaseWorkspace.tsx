@@ -16,6 +16,8 @@ import { createReturnGateway } from './return-client';
 import { createInspectionGateway } from './inspection-client';
 import { createResolutionGateway } from './resolution-client';
 import { createReturnEntitlementGateway, returnEntitlementOwner } from './return-entitlement-client';
+import { canApproveReturnFinancial, createReturnFinancialApprovalGateway, returnFinancialApprovalOwner } from './return-financial-approval-client';
+import { ReturnFinancialApprovalPanel } from './ReturnFinancialApprovalPanel';
 import common from '../administration/access.module.css';
 import styles from '../ordering/order-draft.module.css';
 
@@ -55,9 +57,10 @@ export function CaseWorkspace() {
   </main>;
 }
 function CaseDesk({ account, fresh, onDenied }: { account: Account; fresh: boolean; onDenied: (failure: unknown) => void }) {
-  const [gateway] = useState(createCaseGateway), [returns] = useState(createReturnGateway), [inspections] = useState(createInspectionGateway), [resolutions] = useState(createResolutionGateway), [entitlements] = useState(createReturnEntitlementGateway), recovery = useOperationRecovery(account.actorId);
+  const [gateway] = useState(createCaseGateway), [returns] = useState(createReturnGateway), [inspections] = useState(createInspectionGateway), [resolutions] = useState(createResolutionGateway), [entitlements] = useState(createReturnEntitlementGateway), [financialApprovals] = useState(createReturnFinancialApprovalGateway), recovery = useOperationRecovery(account.actorId);
   const [ledgers] = useState(() => new Map<string, MutationLedger>());
   const canRead = account.actions.includes('case.read'), canRequest = account.actions.includes('case.request'), canManage = account.actions.includes('case.manage');
+  const canApproveFinancial = canApproveReturnFinancial(account.actions, 'credit') || canApproveReturnFinancial(account.actions, 'refund');
   const [page, setPage] = useState<{ items: AfterSalesCase[]; hasMore: boolean }>({ items: [], hasMore: false }), [before, setBefore] = useState<string | null>(null), [refresh, setRefresh] = useState(0);
   const [invoiceId, setInvoiceId] = useState(''), [source, setSource] = useState<CaseSource | null>(null), [quantities, setQuantities] = useState<Record<string, string>>({});
   const [issue, setIssue] = useState('damaged'), [reason, setReason] = useState(''), [review, setReview] = useState<ReturnType<typeof prepareCase> | null>(null), [consent, setConsent] = useState(false);
@@ -65,6 +68,7 @@ function CaseDesk({ account, fresh, onDenied }: { account: Account; fresh: boole
   const [busy, setBusy] = useState(false), [recovering, setRecovering] = useState(false), [offline, setOffline] = useState(false), [editing, setEditing] = useState(false);
   const alive = useRef(false), pending = useRef(false), heading = useRef<HTMLHeadingElement>(null), recovered = useRef<CaseResult | null>(null);
   const current = useCallback(() => alive.current && !sessionTiming(account.session, performance.now() - account.observedAt).expired, [account]);
+  const freshCurrent = useCallback(() => current() && sessionTiming(account.session, performance.now() - account.observedAt).fresh, [current, account]);
   const locked = busy || recovering || offline || recovery.locked || editing;
   useEffect(() => { alive.current = true; const connection = () => setOffline(!navigator.onLine); connection(); window.addEventListener('online', connection); window.addEventListener('offline', connection);
     void Promise.resolve().then(() => { if (alive.current) setInvoiceId(new URL(window.location.href).searchParams.get('invoice') ?? ''); });
@@ -100,7 +104,11 @@ function CaseDesk({ account, fresh, onDenied }: { account: Account; fresh: boole
   }
   return <><AdministrationNavigation current="cases" actions={account.actions} locked={busy || recovering || editing} />
     <OperationRecovery entries={recovery.entries} journal={recovery.journal} disabled={busy || offline || editing} onBusyChange={setRecovering}
-      recoveryAdapters={canRequest || canManage ? { 'billing.return.entitlement.request': { lookup: async entry => {
+      recoveryAdapters={canRequest || canManage || canApproveFinancial ? { 'billing.return.financial.approve': { lookup: async entry => {
+        const financial = returnFinancialApprovalOwner(entry.key);
+        if (!canApproveReturnFinancial(account.actions, financial.action)) throw new AccessFailure(403, 'scope_denied');
+        const value = await financialApprovals.recover(entry.actorId, entry.key); if (!current()) throw new AccessFailure(409, 'recovery_request_stale'); return value;
+      } }, 'billing.return.entitlement.request': { lookup: async entry => {
         const financial = returnEntitlementOwner(entry.key);
         if (!canRead || !canManage || !account.actions.includes('invoice.read') || !account.actions.includes(financial.action + '.request')) throw new AccessFailure(403, 'scope_denied');
         const value = await entitlements.recover(entry.actorId, entry.key); if (!current()) throw new AccessFailure(409, 'recovery_request_stale'); return value;
@@ -143,6 +151,8 @@ function CaseDesk({ account, fresh, onDenied }: { account: Account; fresh: boole
       {selected.state === 'return_authorized' && <CaseReturnPanel key={'returns:' + selected.id} actorId={account.actorId} owner={selected} canReceive={canManage && account.actions.includes('stock.receive')} canInspect={canManage && account.actions.includes('stock.count')} fresh={fresh} locked={locked} current={current}
         resolutionOptions={canManage ? ['replacement', ...(account.actions.includes('credit.request') ? ['credit' as const] : []), ...(account.actions.includes('refund.request') ? ['refund' as const] : [])] : []} canReadInvoice={account.actions.includes('invoice.read')}
         journal={recovery.journal} onDenied={onDenied} onBusyChange={setEditing} onSettled={recovery.refresh} />}
+      {selected.state === 'return_authorized' && canApproveFinancial && <ReturnFinancialApprovalPanel key={'financial:' + selected.id} actorId={account.actorId} owner={selected} actions={account.actions}
+        fresh={fresh} locked={locked} current={current} freshCurrent={freshCurrent} journal={recovery.journal} onDenied={onDenied} onBusyChange={setEditing} onSettled={recovery.refresh} />}
       <button className={common.secondary} disabled={busy || recovering || editing} onClick={() => setSelected(null)}>Tutup keluhan</button></section>}
     {canRead && <section className={common.accountSection} aria-label="Daftar keluhan"><h2>Pengajuan dalam akses Anda</h2>{!busy && !page.items.length && <p>Belum ada pengajuan pada halaman ini.</p>}
       <ul>{page.items.map(item => <li key={item.id}><strong>Keluhan {item.id}</strong><p>{item.source.buyerName} · {item.source.number} · {states[item.state]}</p><button className={common.secondary} disabled={busy || recovering || offline || editing || !!review} onClick={() => void perform(async () => { const value = await gateway.read(account.actorId, item.id, item.revision); if (current()) setSelected(value); })}>Buka keluhan {item.id}</button></li>)}</ul>

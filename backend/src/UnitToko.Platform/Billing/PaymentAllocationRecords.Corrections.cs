@@ -3,6 +3,7 @@ using MongoDB.Driver;
 using UnitToko.Modules.Identity;
 using B = UnitToko.Platform.Billing.PaymentAllocationBson;
 using C = UnitToko.Platform.Billing.PaymentAllocationCorrectionBson;
+using A = UnitToko.Platform.Billing.ReturnFinancialApprovalBson;
 
 namespace UnitToko.Platform.Billing;
 internal sealed partial class PaymentAllocationRecords
@@ -26,11 +27,16 @@ internal sealed partial class PaymentAllocationRecords
     }
     internal async Task<Dictionary<long, decimal>> CorrectionTotalsAsync(IClientSessionHandle tx, long allocationId, CancellationToken ct) {
         var original = await RawAsync(tx, allocationId, ct); var totals = original["lines"].AsBsonArray.ToDictionary(line => line["invoiceId"].AsInt64, _ => 0m); var seen = new HashSet<long>(); var version = original["receiptVersion"].AsInt64;
-        using var cursor = await Rows(C.Events).Find(tx, new BsonDocument("originalAllocationId", allocationId)).Sort(new BsonDocument("receiptVersion", 1)).ToCursorAsync(ct);
-        while (await cursor.MoveNextAsync(ct)) foreach (var candidate in cursor.Current) {
-            var row = await RawEventAsync(tx, true, candidate["_id"].AsInt64, ct); if (!seen.Add(row["_id"].AsInt64) || row["receiptVersion"].AsInt64 <= version) throw B.Broken(); version = row["receiptVersion"].AsInt64;
-            foreach (var line in row["lines"].AsBsonArray) {
-                var id = line["invoiceId"].AsInt64; Equal(line["previouslyReversed"], new BsonDecimal128(totals[id]));
+        var candidates = await Rows(C.Events).Find(tx, new BsonDocument("originalAllocationId", allocationId)).ToListAsync(ct);
+        candidates.AddRange(await Rows(A.Events).Find(tx, new BsonDocument("links.originalAllocationId", allocationId)).ToListAsync(ct));
+        foreach (var candidate in candidates.OrderBy(row => EventVersion(row, true, original["receiptId"].AsInt64))) {
+            var row = await ReadEventAsync(tx, candidate, ct); var nextVersion = EventVersion(row, true, original["receiptId"].AsInt64);
+            if (!seen.Add(row["_id"].AsInt64) || nextVersion <= version) throw B.Broken(); version = nextVersion;
+            var lines = row["operation"] == C.Operation ? row["lines"].AsBsonArray : new BsonArray(row["links"].AsBsonArray.Where(link => link["originalAllocationId"] == allocationId));
+            foreach (var line in lines) {
+                var id = row["operation"] == C.Operation ? line["invoiceId"].AsInt64 : row["invoiceId"].AsInt64;
+                if (!totals.ContainsKey(id)) throw B.Broken();
+                Equal(line[row["operation"] == C.Operation ? "previouslyReversed" : "previouslyReleased"], new BsonDecimal128(totals[id]));
                 totals[id] = checked(totals[id] + line["amount"].AsDecimal); if (totals[id] > line["originallyAllocated"].AsDecimal) throw B.Broken();
             }
         }
@@ -38,6 +44,7 @@ internal sealed partial class PaymentAllocationRecords
             using var effects = await Rows(table).Find(tx, new BsonDocument { { field, C.Operation }, { payload + ".originalAllocationId", allocationId } }).ToCursorAsync(ct);
             while (await effects.MoveNextAsync(ct)) foreach (var effect in effects.Current) if (!seen.Contains(effect[payload]["correctionId"].AsInt64)) throw B.Broken();
         }
+        await RequireFinancialReleaseEffectsAsync(tx, allocationId, seen, ct);
         return totals;
     }
     internal async Task<BsonDocument?> CorrectionForKeyAsync(IClientSessionHandle tx, long actor, string key, CancellationToken ct) {

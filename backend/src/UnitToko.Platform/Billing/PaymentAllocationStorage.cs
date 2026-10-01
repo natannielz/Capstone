@@ -3,21 +3,28 @@ using MongoDB.Driver;
 using UnitToko.Platform.Mongo.Migrations;
 using B = UnitToko.Platform.Billing.PaymentAllocationBson;
 using C = UnitToko.Platform.Billing.PaymentAllocationCorrectionBson;
+using A = UnitToko.Platform.Billing.ReturnFinancialApprovalBson;
 
 namespace UnitToko.Platform.Billing;
 
 internal static class PaymentAllocationStorage
 {
-    internal static async Task RequireAsync(IMongoDatabase database, CancellationToken ct) {
-        foreach (var name in PaymentAllocationSchemas.Collections.Concat(PaymentAllocationCorrectionSchemas.Collections)) {
+    internal static Task RequireAsync(IMongoDatabase database, CancellationToken ct) =>
+        RequireCollectionsAsync(database, PaymentAllocationSchemas.Collections.Concat(PaymentAllocationCorrectionSchemas.Collections), ct);
+    // Completed migrations retain their predecessor checks. Only current runtime admission
+    // requires the new financial owner and its storage controls.
+    internal static Task RequireFinancialAsync(IMongoDatabase database, CancellationToken ct) =>
+        RequireCollectionsAsync(database, [A.Policies, A.Events], ct);
+    private static async Task RequireCollectionsAsync(IMongoDatabase database, IEnumerable<string> names, CancellationToken ct) {
+        foreach (var name in names) {
             var definition = await (await database.ListCollectionsAsync(new ListCollectionsOptions { Filter = new BsonDocument("name", name) }, ct)).SingleOrDefaultAsync(ct);
             if (definition is null || definition.GetValue("type", "") != "collection") throw B.Broken();
             var options = definition.GetValue("options", new BsonDocument()).AsBsonDocument;
             if (options.GetValue("capped", false).AsBoolean || options.Contains("timeseries") || options.Contains("expireAfterSeconds") || options.Contains("encryptedFields") ||
                 options.GetValue("validationLevel", "strict") != "strict" || options.GetValue("validationAction", "error") != "error" ||
                 options.TryGetValue("collation", out var collation) && !InvoiceStorage.Simple(collation) ||
-                !InventorySchemas.Contains(options.GetValue("validator", new BsonDocument()).AsBsonDocument, name is C.Events or C.Policies ? PaymentAllocationCorrectionSchemas.Validator(name) : PaymentAllocationSchemas.Validator(name))) throw B.Broken();
-            var indexes = await (await database.GetCollection<BsonDocument>(name).Indexes.ListAsync(ct)).ToListAsync(ct); var keys = name is C.Events or C.Policies ? PaymentAllocationCorrectionSchemas.Keys(name) : PaymentAllocationSchemas.Keys(name);
+                !InventorySchemas.Contains(options.GetValue("validator", new BsonDocument()).AsBsonDocument, name is A.Events or A.Policies ? ReturnFinancialApprovalSchemas.Validator(name) : name is C.Events or C.Policies ? PaymentAllocationCorrectionSchemas.Validator(name) : PaymentAllocationSchemas.Validator(name))) throw B.Broken();
+            var indexes = await (await database.GetCollection<BsonDocument>(name).Indexes.ListAsync(ct)).ToListAsync(ct); var keys = name is A.Events or A.Policies ? ReturnFinancialApprovalSchemas.Keys(name) : name is C.Events or C.Policies ? PaymentAllocationCorrectionSchemas.Keys(name) : PaymentAllocationSchemas.Keys(name);
             bool Matches(BsonDocument index, BsonDocument key) => index["key"].Equals(key) && (index["name"] == "_id_" || index.GetValue("unique", false).AsBoolean) && !InvoiceStorage.Unsafe(index) && !index.Contains("partialFilterExpression");
             if (!indexes.Any(index => index["name"] == "_id_" && index["key"].Equals(new BsonDocument("_id", 1)) && !InvoiceStorage.Unsafe(index)) ||
                 keys.Any(key => !indexes.Any(index => Matches(index, key))) || indexes.Any(index => InvoiceStorage.Unsafe(index) || index.Contains("partialFilterExpression") ||

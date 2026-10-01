@@ -17,8 +17,10 @@ public sealed class PaymentAllocationCorrectionMigrationTests(MongoFixture fixtu
         var data = await PaymentAllocationTests.Data.CreateAsync(fixture);
         try {
             var input = data.Input(0, 1000m); var preview = await data.Service.PreviewAsync(data.Actor, data.VerificationId, input); await data.Service.AllocateAsync(data.Actor, data.VerificationId, preview.Binding, input, PaymentAllocationTests.Data.Meta("correction-upgrade-source"));
+            await ReturnFinancialApprovalMigrationTests.RemoveEmptyUpgradeAsync(data.Source.Read.Database);
+            await ReturnEntitlementMigrationTests.RemoveEmptyUpgradeAsync(data.Source.Read.Database);
             foreach (var table in PaymentAllocationCorrectionSchemas.Collections) { Assert.False(await data.Rows(table).Find(new BsonDocument()).AnyAsync()); await data.Source.Read.Database.DropCollectionAsync(table); }
-            await data.Rows("schemaMigrations").DeleteOneAsync(new BsonDocument("_id", 52)); return data;
+            Assert.Equal(1, (await data.Rows("schemaMigrations").DeleteOneAsync(new BsonDocument { { "_id", 52 }, { "state", "applied" } })).DeletedCount); return data;
         } catch { await data.DisposeAsync(); throw; }
     }
     private static async Task<List<BsonDocument>> Definitions(IMongoDatabase db) => (await (await db.ListCollectionsAsync()).ToListAsync()).OrderBy(row => row["name"].AsString).ToList();
@@ -29,7 +31,9 @@ public sealed class PaymentAllocationCorrectionMigrationTests(MongoFixture fixtu
         Assert.Equal(original, await data.Rows(B.Events).Find(new BsonDocument()).SingleAsync()); Assert.Equal(head, await data.Rows(B.Receipts).Find(new BsonDocument()).SingleAsync()); var definitions = await Definitions(db);
         var target = Assert.Single(definitions, row => row["name"] == C.Events); Assert.True(InventorySchemas.Contains(target["options"]["validator"].AsBsonDocument, guard)); Assert.Equal("strict", target["options"]["validationLevel"]); Assert.Equal("error", target["options"]["validationAction"]);
         var indexes = await (await data.Rows(C.Events).Indexes.ListAsync()).ToListAsync(); Assert.Equal(4, indexes.Count); Assert.All(indexes.Where(row => row["name"] != "_id_"), row => Assert.True(row["unique"].AsBoolean));
-        await data.Rows("schemaMigrations").DeleteOneAsync(new BsonDocument("_id", 52)); await new CollectionMigrations(db, clock).ApplyAsync(); Assert.Equal(definitions, await Definitions(db)); Assert.Equal(head, await data.Rows(B.Receipts).Find(new BsonDocument()).SingleAsync());
+        await ReturnFinancialApprovalMigrationTests.RemoveEmptyUpgradeAsync(db, dropTargets: false); await ReturnEntitlementMigrationTests.RemoveEmptyUpgradeAsync(db, dropTargets: false);
+        Assert.Equal(1, (await data.Rows("schemaMigrations").DeleteOneAsync(new BsonDocument { { "_id", 52 }, { "state", "applied" } })).DeletedCount);
+        await new CollectionMigrations(db, clock).ApplyAsync(); Assert.Equal(definitions, await Definitions(db)); Assert.Equal(head, await data.Rows(B.Receipts).Find(new BsonDocument()).SingleAsync());
     }
     [WindowsStorageTheory]
     [InlineData("ttl")] [InlineData("partial")] [InlineData("missing-allocation")] [InlineData("missing-head")] [InlineData("missing-bank-journal")] [InlineData("missing-invoice-journal")] [InlineData("orphan-correction")]

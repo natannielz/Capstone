@@ -17,7 +17,7 @@ public sealed record ReturnEntitlementPreview(ReturnEntitlementView View, string
 
 /// <summary>Financial maker stage. An immutable inspected request reserves original line attribution;
 /// independent approval must consume this history together with canonical invoice/receipt balances.</summary>
-public sealed class ReturnEntitlementService
+public sealed partial class ReturnEntitlementService
 {
     private readonly IMongoDatabase database;
     private readonly IClock clock;

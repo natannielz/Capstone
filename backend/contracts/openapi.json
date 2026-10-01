@@ -26150,6 +26150,525 @@
         ]
       }
     },
+    "/api/v1/billing/cases/{id}/returns/{returnId}/financial-approval/query": {
+      "post": {
+        "tags": [
+          "UnitToko.Api"
+        ],
+        "operationId": "ReadReturnFinancialApproval",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "returnId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "required": true,
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReturnFinancialApprovalQueryDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReturnFinancialApprovalViewDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
+    "/api/v1/billing/cases/{id}/returns/{returnId}/financial-approval/preview": {
+      "post": {
+        "tags": [
+          "UnitToko.Api"
+        ],
+        "operationId": "PreviewReturnFinancialApproval",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "returnId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "required": true,
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReturnFinancialApprovalPreviewInputDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReturnFinancialApprovalPreviewDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
+    "/api/v1/billing/cases/{id}/returns/{returnId}/financial-approval": {
+      "post": {
+        "tags": [
+          "UnitToko.Api"
+        ],
+        "operationId": "ApproveReturnFinancialResolution",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "returnId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "Reuse this key only for an unchanged logical command, including after an uncertain response.",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "description": "One quoted nonnegative Int64 resource version from the latest response; never a JavaScript number.",
+            "required": true,
+            "schema": {
+              "maxLength": 21,
+              "minLength": 3,
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "required": true,
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReturnFinancialApprovalCommandDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReturnFinancialApprovalResultDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
+    "/api/v1/billing/cases/{id}/returns/{returnId}/financial-approval/operations/query": {
+      "post": {
+        "tags": [
+          "UnitToko.Api"
+        ],
+        "operationId": "RecoverReturnFinancialApproval",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "returnId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "required": true,
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReturnFinancialApprovalRecoveryInputDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReturnFinancialApprovalRecoveryDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
     "/api/v1/billing/receiving-accounts/policies/query": {
       "post": {
         "tags": [
@@ -45780,6 +46299,496 @@
                 "$ref": "#/components/schemas/ReturnEntitlementResultDto"
               }
             ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "ReturnFinancialAllocationDto": {
+        "required": [
+          "originalAllocationId",
+          "receiptId",
+          "receiptVersion",
+          "originallyAllocated",
+          "previouslyReleased",
+          "available"
+        ],
+        "type": "object",
+        "properties": {
+          "originalAllocationId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "receiptId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "receiptVersion": {
+            "type": "string"
+          },
+          "originallyAllocated": {
+            "type": "string"
+          },
+          "previouslyReleased": {
+            "type": "string"
+          },
+          "available": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ReturnFinancialApprovalCommandDto": {
+        "required": [
+          "action",
+          "binding",
+          "input",
+          "reason"
+        ],
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "binding": {
+            "type": "string"
+          },
+          "input": {
+            "$ref": "#/components/schemas/ReturnFinancialApprovalInputDto"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ReturnFinancialApprovalInputDto": {
+        "required": [
+          "expectedInvoiceVersion",
+          "releases"
+        ],
+        "type": "object",
+        "properties": {
+          "expectedInvoiceVersion": {
+            "type": "string"
+          },
+          "releases": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReturnFinancialReleaseInputDto"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "ReturnFinancialApprovalPreviewDto": {
+        "required": [
+          "view",
+          "binding",
+          "creditNoteProcedureReference",
+          "taxTreatmentReference",
+          "chargeTreatmentReference",
+          "refundReservationProcedureReference",
+          "invoiceVersion",
+          "credit",
+          "reservedRefund",
+          "remainingInvoice",
+          "receipts",
+          "releases"
+        ],
+        "type": "object",
+        "properties": {
+          "view": {
+            "$ref": "#/components/schemas/ReturnFinancialApprovalViewDto"
+          },
+          "binding": {
+            "type": "string"
+          },
+          "creditNoteProcedureReference": {
+            "type": "string"
+          },
+          "taxTreatmentReference": {
+            "type": "string"
+          },
+          "chargeTreatmentReference": {
+            "type": "string"
+          },
+          "refundReservationProcedureReference": {
+            "type": "string"
+          },
+          "invoiceVersion": {
+            "type": "string"
+          },
+          "credit": {
+            "type": "string"
+          },
+          "reservedRefund": {
+            "type": "string"
+          },
+          "remainingInvoice": {
+            "type": "string"
+          },
+          "receipts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReturnFinancialReceiptResultDto"
+            }
+          },
+          "releases": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReturnFinancialReleaseResultDto"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "ReturnFinancialApprovalPreviewInputDto": {
+        "required": [
+          "action",
+          "input"
+        ],
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "input": {
+            "$ref": "#/components/schemas/ReturnFinancialApprovalInputDto"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ReturnFinancialApprovalQueryDto": {
+        "required": [
+          "purpose",
+          "action",
+          "beforeAllocationId"
+        ],
+        "type": "object",
+        "properties": {
+          "purpose": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string"
+          },
+          "beforeAllocationId": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LongId"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "ReturnFinancialApprovalRecoveryDto": {
+        "required": [
+          "status",
+          "result"
+        ],
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string"
+          },
+          "result": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ReturnFinancialApprovalResultDto"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "ReturnFinancialApprovalRecoveryInputDto": {
+        "required": [
+          "purpose",
+          "action",
+          "requestKey"
+        ],
+        "type": "object",
+        "properties": {
+          "purpose": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string"
+          },
+          "requestKey": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ReturnFinancialApprovalResultDto": {
+        "required": [
+          "financialApprovalId",
+          "caseId",
+          "returnId",
+          "invoiceId",
+          "action",
+          "invoiceVersion",
+          "credit",
+          "reservedRefund",
+          "remainingInvoice",
+          "recordedAt",
+          "operation",
+          "state",
+          "receipts",
+          "releases"
+        ],
+        "type": "object",
+        "properties": {
+          "financialApprovalId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "caseId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "returnId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "invoiceId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "action": {
+            "type": "string"
+          },
+          "invoiceVersion": {
+            "type": "string"
+          },
+          "credit": {
+            "type": "string"
+          },
+          "reservedRefund": {
+            "type": "string"
+          },
+          "remainingInvoice": {
+            "type": "string"
+          },
+          "recordedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "operation": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "receipts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReturnFinancialReceiptResultDto"
+            }
+          },
+          "releases": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReturnFinancialReleaseResultDto"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "ReturnFinancialApprovalViewDto": {
+        "required": [
+          "request",
+          "invoice",
+          "receipts",
+          "allocations",
+          "hasMore",
+          "beforeAllocationId",
+          "approval"
+        ],
+        "type": "object",
+        "properties": {
+          "request": {
+            "$ref": "#/components/schemas/ReturnEntitlementResultDto"
+          },
+          "invoice": {
+            "$ref": "#/components/schemas/ReturnFinancialInvoiceDto"
+          },
+          "receipts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReturnFinancialReceiptBalanceDto"
+            }
+          },
+          "allocations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReturnFinancialAllocationDto"
+            }
+          },
+          "hasMore": {
+            "type": "boolean"
+          },
+          "beforeAllocationId": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LongId"
+              }
+            ]
+          },
+          "approval": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ReturnFinancialApprovalResultDto"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "ReturnFinancialInvoiceDto": {
+        "required": [
+          "invoiceId",
+          "version",
+          "issued",
+          "paid",
+          "credited",
+          "outstanding",
+          "paymentState",
+          "buyerName"
+        ],
+        "type": "object",
+        "properties": {
+          "invoiceId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "version": {
+            "type": "string"
+          },
+          "issued": {
+            "type": "string"
+          },
+          "paid": {
+            "type": "string"
+          },
+          "credited": {
+            "type": "string"
+          },
+          "outstanding": {
+            "type": "string"
+          },
+          "paymentState": {
+            "type": "string"
+          },
+          "buyerName": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ReturnFinancialReceiptBalanceDto": {
+        "required": [
+          "receiptId",
+          "version",
+          "received",
+          "allocated",
+          "reservedForRefund",
+          "available"
+        ],
+        "type": "object",
+        "properties": {
+          "receiptId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "version": {
+            "type": "string"
+          },
+          "received": {
+            "type": "string"
+          },
+          "allocated": {
+            "type": "string"
+          },
+          "reservedForRefund": {
+            "type": "string"
+          },
+          "available": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ReturnFinancialReceiptResultDto": {
+        "required": [
+          "receiptId",
+          "version",
+          "released",
+          "reservedForRefund",
+          "available"
+        ],
+        "type": "object",
+        "properties": {
+          "receiptId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "version": {
+            "type": "string"
+          },
+          "released": {
+            "type": "string"
+          },
+          "reservedForRefund": {
+            "type": "string"
+          },
+          "available": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ReturnFinancialReleaseInputDto": {
+        "required": [
+          "originalAllocationId",
+          "expectedReceiptVersion",
+          "amount"
+        ],
+        "type": "object",
+        "properties": {
+          "originalAllocationId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "expectedReceiptVersion": {
+            "type": "string"
+          },
+          "amount": {
+            "$ref": "#/components/schemas/Money"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ReturnFinancialReleaseResultDto": {
+        "required": [
+          "originalAllocationId",
+          "invoiceId",
+          "amount"
+        ],
+        "type": "object",
+        "properties": {
+          "originalAllocationId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "invoiceId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "amount": {
+            "type": "string"
           }
         },
         "additionalProperties": false

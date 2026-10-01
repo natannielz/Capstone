@@ -13,6 +13,7 @@ using UnitToko.Platform.Mongo;
 using B = UnitToko.Platform.Billing.PaymentAllocationBson;
 using R = UnitToko.Platform.Billing.PaymentAllocationRecords;
 using C = UnitToko.Platform.Billing.PaymentAllocationCorrectionBson;
+using A = UnitToko.Platform.Billing.ReturnFinancialApprovalBson;
 
 namespace UnitToko.Platform.Billing;
 
@@ -27,34 +28,38 @@ public sealed partial class PaymentAllocationService
     private readonly AuthorizationStore authorization;
     private readonly PaymentVerificationService verifications;
     private readonly InvoiceService invoices;
+    private readonly ReturnEntitlementService entitlements;
     private readonly R records;
-    public PaymentAllocationService(IMongoDatabase database, MongoUnitOfWork unit, IdAllocator ids, IClock clock, PaymentVerificationService verifications, InvoiceService invoices) {
-        foreach (var owner in new[] { verifications.AllocationDatabase, invoices.PaymentSourceDatabase })
+    public PaymentAllocationService(IMongoDatabase database, MongoUnitOfWork unit, IdAllocator ids, IClock clock, PaymentVerificationService verifications, InvoiceService invoices, ReturnEntitlementService entitlements) {
+        foreach (var owner in new[] { verifications.AllocationDatabase, invoices.PaymentSourceDatabase, entitlements.ApprovalSourceDatabase })
             if (!ReferenceEquals(owner.Client, database.Client) || !owner.DatabaseNamespace.Equals(database.DatabaseNamespace)) throw new ArgumentException("Allocation owners must share one transaction");
-        this.database = database; this.clock = clock; this.ids = ids; this.verifications = verifications; this.invoices = invoices; authorization = new(database, unit, clock); records = new(database);
+        this.database = database; this.clock = clock; this.ids = ids; this.verifications = verifications; this.invoices = invoices; this.entitlements = entitlements; authorization = new(database, unit, clock); records = new(database, clock);
     }
     private DateTimeOffset Now => DateTimeOffset.FromUnixTimeMilliseconds(clock.UtcNow.ToUnixTimeMilliseconds());
-    private sealed class Context(ActorContext actor, AuthorizationSnapshot authority, IClientSessionHandle tx, bool write, bool correction = false) {
+    private sealed class Context(ActorContext actor, AuthorizationSnapshot authority, IClientSessionHandle tx, bool write, bool correction = false, bool financial = false) {
         internal ActorContext Actor { get; } = actor;
         internal AuthorizationSnapshot Authority { get; } = authority;
         internal IClientSessionHandle Tx { get; } = tx;
         internal bool Write { get; } = write;
         internal bool Correction { get; } = correction;
+        internal bool Financial { get; } = financial;
         internal PaymentAllocationSource Source = null!;
         internal readonly List<BsonDocument> Invoices = [];
         internal readonly List<Action> Current = [];
+        internal readonly List<Func<CancellationToken, Task>> SourceFences = [];
         internal readonly HashSet<long> Validated = [];
+        internal readonly List<ResourceScope> AdditionalResources = [];
         internal BsonDocument? Policy;
         internal BsonDocument? CorrectionPolicy;
         internal ResourceScope[] Resources => [.. (Source is null ? [] : PaymentDraftBson.Scopes(Source.Decision["source"]["scopes"].AsBsonArray))
-            .Concat(Invoices.SelectMany(source => PaymentDraftBson.Scopes(source["scopes"].AsBsonArray))).Distinct()];
+            .Concat(Invoices.SelectMany(source => PaymentDraftBson.Scopes(source["scopes"].AsBsonArray))).Concat(AdditionalResources).Distinct()];
     }
     private sealed record Prepared(Context Context, BsonDocument ReceiptBalance, BsonDocument? ReceiptHead,
         BsonArray Lines, IReadOnlyDictionary<long, BsonDocument?> InvoiceHeads) {
         internal PaymentAllocationView View => new(Context.Source.Decision, Context.Source.Bank.Receipt, ReceiptBalance,
             new(Lines.Select(line => new BsonDocument { { "source", line["source"] }, { "balance", line["before"] } })));
     }
-    private AuthorizationQuery[] Require(Context context) => (context.Write ? new[] { Permissions.PaymentReviewRead, Permissions.InvoiceRead, Permissions.PaymentAllocate }.Concat(context.Correction ? [Permissions.JournalReverse] : []) : [Permissions.PaymentReviewRead, Permissions.InvoiceRead]).Select(permission => {
+    private AuthorizationQuery[] Require(Context context) => (context.Write ? new[] { Permissions.PaymentReviewRead, Permissions.InvoiceRead, Permissions.PaymentAllocate }.Concat(context.Correction ? [Permissions.JournalReverse] : []) : context.Financial ? [Permissions.InvoiceRead] : [Permissions.PaymentReviewRead, Permissions.InvoiceRead]).Select(permission => {
         var query = ScopePolicy.Compile(context.Actor, context.Authority, permission, clock.UtcNow); AuthorizationStore.Require(query);
         if (context.Resources.Any(resource => !ScopePolicy.IsResourceActive(resource, context.Authority.Directory) || !query.Matches(resource))) throw B.Broken();
         return query;
@@ -65,6 +70,7 @@ public sealed partial class PaymentAllocationService
         if (context.CorrectionPolicy is { } correctionPolicy) C.PolicyAt(correctionPolicy, Now);
     }
     private async Task FenceAsync(Context context, CancellationToken ct) {
+        foreach (var fence in context.SourceFences) await fence(ct);
         var queries = Require(context); var resources = context.Resources;
         var clauses = queries.SelectMany(query => query.Clauses.Where(clause => resources.Length == 0 || resources.Any(clause.Matches))).ToArray();
         await new HistoricalAuthorizationFence(database, authorization).FenceAsync(context.Actor,
@@ -78,9 +84,11 @@ public sealed partial class PaymentAllocationService
     }
     private async Task StorageAsync(CancellationToken ct) {
         await verifications.AllocationStorageAsync(ct); await invoices.PaymentStorageAsync(ct); await PaymentAllocationStorage.RequireAsync(database, ct);
+        await entitlements.ApprovalStorageAsync(ct); await PaymentAllocationStorage.RequireFinancialAsync(database, ct);
     }
     private async Task SourceAsync(Context context, long id, bool newEffect, CancellationToken ct) {
         _ = Require(context); context.Source = await verifications.AllocationSourceAsync(context.Actor, context.Authority, context.Tx, id, newEffect, ct);
+        context.AdditionalResources.AddRange(PaymentDraftBson.Scopes(context.Source.Decision["source"]["scopes"].AsBsonArray));
         context.Current.Add(context.Source.RequireCurrent); _ = Require(context);
     }
     private async Task<BsonDocument> PolicyAsync(Context context, CancellationToken ct) {
@@ -92,7 +100,10 @@ public sealed partial class PaymentAllocationService
     }
     private async Task ValidateSourceAsync(Context context, BsonDocument row, CancellationToken ct) {
         if (!context.Validated.Add(row["_id"].AsInt64)) return;
+        if (row["operation"] == A.Operation) { await ValidateFinancialSourceAsync(context, row, ct); return; }
+        if (row["operation"] != B.Operation && row["operation"] != C.Operation) throw B.Broken();
         var source = await verifications.AllocationSourceAsync(context.Actor, context.Authority, context.Tx, row["verificationId"].AsInt64, false, ct);
+        context.AdditionalResources.AddRange(PaymentDraftBson.Scopes(source.Decision["source"]["scopes"].AsBsonArray));
         context.Current.Add(source.RequireCurrent);
         R.Equal(row["verificationHash"], source.Decision["snapshotHash"]); R.Equal(row["receiptId"], source.Bank.Receipt["_id"]);
         R.Equal(row["receiptHash"], source.Bank.Receipt["snapshotHash"]); R.Equal(row["receiptTotal"], source.Bank.Receipt["amount"]);
@@ -148,6 +159,7 @@ public sealed partial class PaymentAllocationService
             var row = await records.RawEventAsync(context.Tx, type == "unallocated", journal["source"]["documentId"].AsInt64, ct);
             R.Equal(row["journalId"], journal["_id"]);
         }
+        await RequireNoOrphanFinancialJournalAsync(context, party, ct);
     }
     private async Task AuditReadAsync(Context context, string action, long? verificationId, CancellationToken ct) => await records.Rows("auditEvents").InsertOneAsync(context.Tx, new BsonDocument {
         { "_id", (await ids.NextAsync("auditEvents", ct)).Value }, { "schemaVersion", 1 }, { "kind", B.Prefix + "read" }, { "operation", B.Prefix + action },

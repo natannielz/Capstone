@@ -152,10 +152,11 @@ public sealed class ReturnEntitlementTests(MongoFixture fixture)
         Assert.Equal(1, await data.Rows(E.Pools).CountDocumentsAsync(new BsonDocument())); await data.AssertBusinessAsync(before);
     }
 
-    internal sealed class Data(PaymentDraftData payment, IAsyncDisposable owner, AfterSalesCaseService cases, long caseId, long returnId, string action) : IAsyncDisposable
+    internal sealed class Data(PaymentDraftData payment, IAsyncDisposable owner, AfterSalesCaseService cases, long caseId, long returnId, string action, PaymentAllocationTests.Data? allocation = null) : IAsyncDisposable
     {
         internal const long FinancialGrantId = 99870, PolicyId = 99871;
         internal PaymentDraftData Payment { get; } = payment;
+        internal PaymentAllocationTests.Data? Allocation { get; } = allocation;
         internal IMongoDatabase Database => Payment.Invoice.Order.Database;
         internal UnitToko.Platform.IClock Clock => Payment.Invoice.Order.Prices.Catalog.Clock;
         internal ActorContext Actor => Payment.Invoice.Finance;
@@ -181,7 +182,7 @@ public sealed class ReturnEntitlementTests(MongoFixture fixture)
                 await payment.Invoice.Order.Prices.Catalog.Base.AddGrantAsync(actor, FinancialGrantId, CatalogAuthoringTestData.Shop, [ReturnResolutionPolicy.Permission(action)]);
                 var proposal = await cases.ReadResolutionAsync(actor, caseId, returnId, action);
                 await cases.RequestResolutionAsync(actor, caseId, returnId, 0, proposal.Binding, new(action, "Permintaan penyelesaian hasil pemeriksaan"), CatalogPriceTestData.Meta("entitlement-source-resolution"));
-                var data = new Data(payment, owner, cases, caseId, returnId, action);
+                var data = new Data(payment, owner, cases, caseId, returnId, action, allocation);
                 var line = await data.Rows("returnInspections").Find(new BsonDocument("_id", returnId)).SingleAsync(); var inspected = line["input"]["lines"][0];
                 data.Input = new([new(inspected["receiptId"].AsInt64, inspected["skuId"].AsInt64, new Money(0m), new Money(0m))]);
                 if (policy) await data.PolicyAsync(); return data;

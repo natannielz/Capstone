@@ -6,6 +6,7 @@ using UnitToko.Modules.Identity;
 using UnitToko.Modules.Identity.Contracts;
 using UnitToko.Platform.Authorization;
 using UnitToko.Platform.Billing;
+using UnitToko.Platform.Fulfillment;
 using UnitToko.Tests.Authorization;
 using UnitToko.Tests.Catalog;
 using UnitToko.Tests.Documents;
@@ -76,10 +77,13 @@ public sealed class PaymentAllocationTests(MongoFixture fixture)
         internal ActorContext Actor = null!;
         internal long VerificationId;
         internal long InvoiceId => Source.Read.Payment.Issued.Id.Value;
-        internal PaymentAllocationService Service => new(Source.Read.Database, new(Source.Read.Catalog.Client), new(Source.Read.Database), Source.Read.Catalog.Clock, Source.Service, Source.Read.Payment.Invoice.Service);
+        internal PaymentAllocationService Service => new(Source.Read.Database, new(Source.Read.Catalog.Client), new(Source.Read.Database), Source.Read.Catalog.Clock, Source.Service, Source.Read.Payment.Invoice.Service,
+            Entitlements(Source.Read.Database, Source.Read.Catalog.Client, Source.Read.Payment.Invoice.Service));
+        private ReturnEntitlementService Entitlements(IMongoDatabase db, MongoClient client, InvoiceService invoices) =>
+            new(db, new(client), new(db), Source.Read.Catalog.Clock, new AfterSalesCaseService(db, new(client), new(db), Source.Read.Catalog.Clock, invoices), invoices);
         internal PaymentAllocationService NewService(MongoClient client) {
             var verify = Source.NewService(client, out var invoices); var db = client.GetDatabase(Source.Read.Database.DatabaseNamespace.DatabaseName);
-            return new(db, new(client), new(db), Source.Read.Catalog.Clock, verify, invoices);
+            return new(db, new(client), new(db), Source.Read.Catalog.Clock, verify, invoices, Entitlements(db, client, invoices));
         }
         internal IMongoCollection<BsonDocument> Rows(string name) => Source.Rows(name);
         internal PaymentAllocationInput Input(long version, decimal amount) => new(version, [new(new(InvoiceId), version, new(amount))]);

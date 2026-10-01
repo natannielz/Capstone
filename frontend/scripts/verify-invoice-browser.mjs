@@ -4,17 +4,21 @@ import http from 'node:http';
 import https from 'node:https';
 import net from 'node:net';
 import { createRequire } from 'node:module';
-import { mkdirSync, readFileSync } from 'node:fs';
+import { appendFileSync, mkdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import next from 'next';
+import { verifyReturnFinancialApprovalBrowser } from './verify-return-financial-approval-browser.mjs';
 
 const chunks = []; for await (const chunk of process.stdin) chunks.push(chunk);
 const config = JSON.parse(Buffer.concat(chunks).toString('utf8')), api = new URL(config.apiAddress), origin = new URL(config.origin);
 assert.equal(process.versions.node.split('.')[0], '24'); assert.equal(api.protocol, 'http:'); assert.equal(api.hostname, '127.0.0.1'); assert.ok(Number(api.port) > 0); assert.equal(origin.href, 'https://portal.unit-toko.co.id/');
 const load = createRequire(config.playwrightPackage), metadata = load(config.playwrightPackage); assert.equal(metadata.name, 'playwright'); assert.equal(metadata.version, '1.62.1');
 const { chromium } = load('playwright'), channel = process.env.UNITTOKO_BROWSER_CHANNEL ?? 'chromium'; assert.ok(['chromium', 'msedge'].includes(channel));
-const app = next({ dev: false, dir: process.cwd(), quiet: true }), sockets = new Set(), writes = [], caseWrites = [], decisionWrites = [], returnWrites = [], inspectionWrites = [], resolutionWrites = [], entitlementWrites = [], errors = [], pages = [];
+const app = next({ dev: false, dir: process.cwd(), quiet: true }), sockets = new Set(), writes = [], caseWrites = [], decisionWrites = [], returnWrites = [], inspectionWrites = [], resolutionWrites = [], entitlementWrites = [], financialWrites = [], financialRecoveries = [], errors = [], pages = [];
 const directory = resolve('../tmp/production/invoice-browser-results'); mkdirSync(directory, { recursive: true });
+const financialTracePath = config.financialApproval ? resolve(directory, 'return-financial-approval-flow-' + Date.now() + '.jsonl') : null;
+function traceFinancial(type, value) { if (financialTracePath) appendFileSync(financialTracePath, JSON.stringify({ at: new Date().toISOString(), type, ...value }) + '\n'); }
+traceFinancial('host-start', {});
 let browser, frontend, edge, tunnel, dropNext = false, dropped = 0;
 function track(server) { server.on('connection', socket => { sockets.add(socket); socket.on('close', () => sockets.delete(socket)); }); return server; }
 async function listen(server) { await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); }); return server.address().port; }
@@ -29,9 +33,23 @@ function forward(req, res, port, isApi) {
   const inspectionWrite = req.method === 'POST' && /^\/api\/v1\/fulfillment\/cases\/[1-9][0-9]*\/returns\/[1-9][0-9]*\/inspection$/.test(req.url); if (inspectionWrite) inspectionWrites.push({ key: req.headers['idempotency-key'], actor: req.headers['x-expected-actor-id'] });
   const resolutionWrite = req.method === 'POST' && /^\/api\/v1\/fulfillment\/cases\/[1-9][0-9]*\/returns\/[1-9][0-9]*\/resolution$/.test(req.url); if (resolutionWrite) resolutionWrites.push({ key: req.headers['idempotency-key'], actor: req.headers['x-expected-actor-id'] });
   const entitlementWrite = req.method === 'POST' && /^\/api\/v1\/billing\/cases\/[1-9][0-9]*\/returns\/[1-9][0-9]*\/entitlement$/.test(req.url); if (entitlementWrite) entitlementWrites.push({ key: req.headers['idempotency-key'], actor: req.headers['x-expected-actor-id'] });
-  const drop = (write || caseWrite || decisionWrite || returnWrite || inspectionWrite || resolutionWrite || entitlementWrite) && dropNext; if (drop) dropNext = false;
+  const financialWrite = req.method === 'POST' && /^\/api\/v1\/billing\/cases\/[1-9][0-9]*\/returns\/[1-9][0-9]*\/financial-approval$/.test(req.url);
+  const financialRecovery = req.method === 'POST' && /^\/api\/v1\/billing\/cases\/[1-9][0-9]*\/returns\/[1-9][0-9]*\/financial-approval\/operations\/query$/.test(req.url);
+  const financialPath = config.financialApproval && /^\/api\/v1\/billing\/cases\/[1-9][0-9]*\/returns\/[1-9][0-9]*\/financial-approval(?:\/.*)?$/.test(req.url);
+  if (financialPath) traceFinancial('request-begin', { path: req.url, method: req.method, actor: req.headers['x-expected-actor-id'] });
+  let financialReference;
+  if (financialWrite || financialRecovery) {
+    const reference = { path: req.url, key: req.headers['idempotency-key'], actor: req.headers['x-expected-actor-id'] }, body = [];
+    financialReference = reference;
+    (financialWrite ? financialWrites : financialRecoveries).push(reference);
+    req.on('data', chunk => body.push(chunk)); req.on('end', () => { reference.body = JSON.parse(Buffer.concat(body).toString('utf8')); });
+  }
+  const drop = (write || caseWrite || decisionWrite || returnWrite || inspectionWrite || resolutionWrite || entitlementWrite || financialWrite) && dropNext; if (drop) dropNext = false;
+  const startedAt = performance.now();
   const upstream = http.request({ hostname: '127.0.0.1', port, path: req.url, method: req.method, headers }, response => {
-    if (drop && response.statusCode === 200) { response.resume(); response.once('end', () => { dropped++; res.writeHead(200, { 'content-type': 'application/json', 'content-length': '64', 'cache-control': 'no-store' }); res.flushHeaders(); res.write('{'); setTimeout(() => res.destroy(), 25); }); return; }
+    if (financialPath) traceFinancial('response-headers', { path: req.url, status: response.statusCode, elapsedMs: Math.round(performance.now() - startedAt) });
+    if (financialReference) { financialReference.status = response.statusCode; financialReference.elapsedMs = Math.round(performance.now() - startedAt); }
+    if (drop && response.statusCode === 200) { response.resume(); response.once('end', () => { dropped++; if (financialWrite) traceFinancial('actual-200-response-ended-before-intentional-loss', { path: req.url, elapsedMs: Math.round(performance.now() - startedAt) }); res.writeHead(200, { 'content-type': 'application/json', 'content-length': '64', 'cache-control': 'no-store' }); res.flushHeaders(); res.write('{'); setTimeout(() => res.destroy(), 25); }); return; }
     res.writeHead(response.statusCode ?? 502, response.headers); response.pipe(res);
   }); upstream.on('error', () => { if (!res.headersSent) res.writeHead(502); res.end(); }); req.on('aborted', () => upstream.destroy()); req.pipe(upstream);
 }
@@ -56,6 +74,11 @@ try {
   }); const proxyPort = await listen(tunnel);
   browser = await chromium.launch({ ...(channel === 'msedge' ? { channel: 'msedge' } : {}), headless: true, proxy: { server: 'http://127.0.0.1:' + proxyPort } });
   const finance = await user(config.financeToken), page = finance.page;
+  if (config.financialApproval) {
+    await verifyReturnFinancialApprovalBrowser({ config, finance, user, origin, directory, financialWrites, financialRecoveries, dropNext: () => { dropNext = true; }, dropped: () => dropped });
+    assert.equal(writes.length + caseWrites.length + decisionWrites.length + returnWrites.length + inspectionWrites.length + resolutionWrites.length + entitlementWrites.length, 0);
+    assert.deepEqual(errors, []);
+  } else {
   await page.goto(origin.origin + '/identity/account'); await page.getByRole('link', { name: /^Tagihan\b/ }).click();
   const candidates = page.getByRole('region', { name: 'Penerimaan untuk invoice', exact: true });
   await candidates.getByRole('checkbox').check(); await candidates.getByLabel('Alasan penerbitan', { exact: true }).fill('Bukti penerimaan cabang diperiksa');
@@ -249,12 +272,19 @@ try {
   const outsider = await user(config.courierToken); await outsider.page.goto(origin.origin + '/billing/invoices'); await outsider.page.getByRole('heading', { name: 'Periksa sesi dan akses', exact: true }).waitFor();
   assert.equal(await outsider.page.getByRole('button', { name: /^Buka invoice/ }).count(), 0);
   assert.deepEqual(errors, []); console.log('REAL_INVOICE_BROWSER_PASS ' + JSON.stringify({ issued: writes.length, lostResponseRecovered: dropped, acceptedBaseUnits: 6, buyerDownload: true, outsiderDenied: true, offlineUnsent: true, mobile: true }));
+  }
 } catch (error) {
   for (const [index, page] of pages.entries()) if (!page.isClosed()) { console.error('FIXTURE PAGE ' + index + ': ' + (await page.locator('main').innerText().catch(() => 'unavailable')).slice(0, 5000)); await page.screenshot({ path: resolve(directory, 'failure-' + index + '.png'), fullPage: true }).catch(() => {}); }
   console.error(error.stack ?? String(error)); process.exitCode = 1;
 } finally {
+  if (config.financialApproval) console.log('FIXTURE FINANCIAL FLOW ' + JSON.stringify({
+    writes: financialWrites.map(({ path, key, actor, status, elapsedMs }) => ({ path, key, actor, status, elapsedMs })),
+    recoveries: financialRecoveries.map(({ path, key, actor, status, elapsedMs }) => ({ path, key, actor, status, elapsedMs })), dropped }));
+  traceFinancial('host-finally', { writes: financialWrites.length, recoveries: financialRecoveries.length, dropped });
   let timer;
-  try { await Promise.race([(async () => { if (browser) await browser.close(); for (const socket of sockets) socket.destroy(); for (const server of [tunnel, edge, frontend]) if (server) await new Promise(resolve => server.close(resolve)); await app.close(); })(), new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Fixture cleanup exceeded 10 seconds')), 10000); })]); }
+  try { await Promise.race([(async () => { traceFinancial('cleanup-browser-begin', {}); if (browser) await browser.close(); traceFinancial('cleanup-browser-ended', {}); for (const socket of sockets) socket.destroy();
+    for (const [name, server] of [['tunnel', tunnel], ['edge', edge], ['frontend', frontend]]) if (server) { traceFinancial('cleanup-server-begin', { name }); await new Promise(resolve => server.close(resolve)); traceFinancial('cleanup-server-ended', { name }); }
+    traceFinancial('cleanup-next-begin', {}); await app.close(); traceFinancial('cleanup-next-ended', {}); })(), new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Fixture cleanup exceeded 10 seconds')), 10000); })]); }
   catch (failure) { console.error(failure); process.exitCode = 1; } finally { clearTimeout(timer); }
 }
 process.exit(process.exitCode ?? 0);

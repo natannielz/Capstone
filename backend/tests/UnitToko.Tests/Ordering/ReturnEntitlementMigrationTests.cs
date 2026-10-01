@@ -30,13 +30,21 @@ public sealed class ReturnEntitlementMigrationTests(MongoFixture fixture)
     }
     private static async Task PredecessorAsync(PaymentDraftData data) {
         var database = data.Invoice.Order.Database;
-        Assert.True(await data.Invoice.Rows("schemaMigrations").Find(new BsonDocument { { "_id", 52 }, { "state", "applied" } }).AnyAsync());
+        await ReturnFinancialApprovalMigrationTests.RemoveEmptyUpgradeAsync(database);
+        await RemoveEmptyUpgradeAsync(database);
+    }
+    internal static async Task RemoveEmptyUpgradeAsync(IMongoDatabase database, bool dropTargets = true) {
+        IMongoCollection<BsonDocument> Rows(string name) => database.GetCollection<BsonDocument>(name);
+        Assert.True(await Rows("schemaMigrations").Find(new BsonDocument { { "_id", 52 }, { "state", "applied" } }).AnyAsync());
+        Assert.True(await Rows("schemaMigrations").Find(new BsonDocument { { "_id", 53 }, { "state", "applied" } }).AnyAsync());
         foreach (var name in ReturnEntitlementSchemas.Collections) {
-            Assert.Equal(0, await data.Invoice.Count(name));
-            await database.DropCollectionAsync(name);
+            Assert.Equal(0, await Rows(name).CountDocumentsAsync(new BsonDocument()));
         }
+        foreach (var (table, field) in new[] { ("idempotencyRecords", "operation"), ("auditEvents", "kind"), ("auditEvents", "operation"), ("outboxEvents", "kind"), ("outboxEvents", "sourceKey") })
+            Assert.False(await Rows(table).Find(new BsonDocument(field, new BsonRegularExpression("^" + System.Text.RegularExpressions.Regex.Escape(B.Operation) + @"(?:[.:]|$)"))).AnyAsync());
         // Only this isolated fixture is put back into its actual empty-target predecessor.
-        Assert.Equal(1, (await data.Invoice.Rows("schemaMigrations").DeleteOneAsync(new BsonDocument("_id", 53))).DeletedCount);
+        if (dropTargets) foreach (var name in ReturnEntitlementSchemas.Collections) await database.DropCollectionAsync(name);
+        Assert.Equal(1, (await Rows("schemaMigrations").DeleteOneAsync(new BsonDocument { { "_id", 53 }, { "state", "applied" } })).DeletedCount);
     }
     private static Task UpgradeAsync(PaymentDraftData data) => new CollectionMigrations(data.Invoice.Order.Database, data.Invoice.Order.Prices.Catalog.Clock).ApplyAsync();
     private static async Task RefusedBeforeDdlAsync(PaymentDraftData data) {
@@ -104,7 +112,8 @@ public sealed class ReturnEntitlementMigrationTests(MongoFixture fixture)
         var indexes = await (await data.Invoice.Rows(B.Requests).Indexes.ListAsync()).ToListAsync();
         Assert.Single(indexes, index => index["name"] == "operator_request_index");
         foreach (var key in ReturnEntitlementSchemas.Keys(B.Requests)) Assert.True(Assert.Single(indexes, index => index["key"].Equals(key))["unique"].AsBoolean);
-        await data.Invoice.Rows("schemaMigrations").DeleteOneAsync(new BsonDocument("_id", 53));
+        await ReturnFinancialApprovalMigrationTests.RemoveEmptyUpgradeAsync(database, dropTargets: false);
+        await RemoveEmptyUpgradeAsync(database, dropTargets: false);
         await UpgradeAsync(data); Assert.Equal(definitions, await Definitions(database));
         await ReturnEntitlementStorage.RequireAsync(database, default);
     }
