@@ -4,6 +4,8 @@ using UnitToko.Modules.Identity;
 using UnitToko.Modules.Identity.Contracts;
 using UnitToko.Platform.Inventory;
 using UnitToko.Platform.Mongo.Migrations;
+using UnitToko.Platform.Fulfillment;
+using UnitToko.Platform.Ordering;
 
 namespace UnitToko.Platform.Billing;
 public sealed partial class InvoiceService
@@ -31,5 +33,23 @@ public sealed partial class InvoiceService
             { "lines", new BsonArray(view.Detail.Lines.Select(line => new BsonDocument { { "orderId", line.OrderId.Value }, { "shipmentId", line.ShipmentId.Value },
                 { "receiptId", line.ReceiptId.Value }, { "skuId", line.SkuId.Value }, { "skuCode", line.SkuCode }, { "productName", line.ProductName },
                 { "packageLabel", line.PackageLabel }, { "baseUnitsPerPackage", line.BaseUnitsPerPackage }, { "baseUnitCode", line.BaseUnitCode }, { "acceptedBaseUnits", line.AcceptedBaseUnits } })) } };
+    }
+    internal async Task<BsonArray> CaseStockSourceAsync(ActorContext actor, AuthorizationSnapshot authority, IClientSessionHandle tx, BsonDocument expected, string permission, CancellationToken ct) {
+        var invoice = await AuthorizedInvoiceAsync(actor, authority, tx, expected["invoiceId"].AsInt64, permission, ct);
+        if (!InvoiceRecords.Equal(CaseSnapshot(invoice), expected)) throw InvoiceRecords.Invalid();
+        var result = new BsonArray();
+        foreach (var line in expected["lines"].AsBsonArray) {
+            var shipment = await new ShipmentDispatchRecords(database).ReadAsync(tx, line["shipmentId"].AsInt64, ct);
+            var allocations = shipment["stockEffects"].AsBsonArray.Select(effect => OrderSubmissionBson.Allocation(effect["allocation"].AsBsonDocument)).Where(item => item.SkuId == line["skuId"].AsInt64).ToArray();
+            if (allocations.Length == 0 || allocations.Select(item => item.Change.Key.DefinitionId).Distinct().Count() != 1 || allocations.Select(item => item.Pool.Location).Distinct().Count() != 1) throw InvoiceRecords.Invalid();
+            var item = allocations[0];
+            result.Add(new BsonDocument { { "receiptId", line["receiptId"] }, { "skuId", line["skuId"] }, { "definitionId", item.Change.Key.DefinitionId.Value },
+                { "packageLabel", line["packageLabel"] }, { "baseUnitsPerPackage", line["baseUnitsPerPackage"] }, { "baseUnitCode", line["baseUnitCode"] },
+                { "location", OrderSubmissionBson.Allocation(item)["location"].DeepClone() }, { "dispatchId", shipment["_id"] }, { "dispatchReview", shipment["review"] },
+                // Candidate lots are original provenance, never a claim that the returned loose item belongs to a particular lot.
+                { "originalLots", new BsonArray(allocations.OrderBy(value => value.Change.Key.LotId.Value).Select(value => new BsonDocument {
+                    { "lotId", value.Change.Key.LotId.Value }, { "poolId", value.Pool.Id }, { "dispatchedPackages", value.Change.Packages } })) } });
+        }
+        return result;
     }
 }

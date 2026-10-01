@@ -21,19 +21,21 @@ public sealed class AfterSalesDecisionMigrationTests(MongoFixture fixture)
         var service = new AfterSalesCaseService(db, new(order.Prices.Catalog.Client), new(db), clock, data.Invoice.Service); var source = await service.SourceAsync(order.Buyer, data.Issued.Id.Value); var line = source.Lines[0];
         await service.RequestAsync(order.Buyer, new(source.InvoiceId.Value, source.Binding, "damaged", [new(line.ReceiptId.Value, line.SkuId.Value, 1)]), CatalogPriceTestData.Meta("populated-47-case"));
         // Isolated version-47 image: format-1 requests are unchanged; no decision writer has run.
-        await data.Invoice.Rows("schemaMigrations").DeleteOneAsync(new BsonDocument("_id", 48)); await db.DropCollectionAsync(D.Collection); await db.DropCollectionAsync(InvoiceService.CaseReturnFences);
+        Assert.Equal(0, await data.Invoice.Count(UnitToko.Platform.Inventory.ReturnQuarantineLedger.Collection));
+        await data.Invoice.Rows("schemaMigrations").DeleteManyAsync(new BsonDocument("_id", new BsonDocument("$gt", 47)));
+        await db.DropCollectionAsync(UnitToko.Platform.Inventory.ReturnQuarantineLedger.Collection); await db.DropCollectionAsync(D.Collection); await db.DropCollectionAsync(InvoiceService.CaseReturnFences);
         var extra = new BsonDocument("actorId", new BsonDocument("$ne", 999L)); var fenceExtra = new BsonDocument("invoiceHash", new BsonDocument("$ne", new string('a', 64)));
         await db.RunCommandAsync<BsonDocument>(new BsonDocument { { "create", D.Collection }, { "validator", extra } });
         await db.RunCommandAsync<BsonDocument>(new BsonDocument { { "create", InvoiceService.CaseReturnFences }, { "validator", fenceExtra } });
         var before = await Definitions(db); var receipts = await data.Invoice.Rows("schemaMigrations").Find(new BsonDocument()).Sort(new BsonDocument("_id", 1)).ToListAsync();
         var original = await data.Invoice.Rows("afterSalesCases").Find(new BsonDocument()).SingleAsync(); var invoice = await data.Invoice.Rows(InvoiceBson.Invoices).Find(new BsonDocument()).SingleAsync();
-        await new CollectionMigrations(db, clock).ApplyAsync(); var after = await Definitions(db);
+        await LegacyOrderSubmissionTestSchema.UpgradeV48Async(db, clock); var after = await Definitions(db);
         Assert.Equal(before.Where(row => row["name"] != D.Collection && row["name"] != InvoiceService.CaseReturnFences), after.Where(row => row["name"] != D.Collection && row["name"] != InvoiceService.CaseReturnFences));
         Assert.Equal(original, await data.Invoice.Rows("afterSalesCases").Find(new BsonDocument()).SingleAsync()); Assert.Equal(invoice, await data.Invoice.Rows(InvoiceBson.Invoices).Find(new BsonDocument()).SingleAsync());
         Assert.Equal(receipts, (await data.Invoice.Rows("schemaMigrations").Find(new BsonDocument()).Sort(new BsonDocument("_id", 1)).ToListAsync()).Take(47));
         Assert.True(InventorySchemas.Contains(after.Single(row => row["name"] == D.Collection)["options"]["validator"].AsBsonDocument, extra));
         Assert.True(InventorySchemas.Contains(after.Single(row => row["name"] == InvoiceService.CaseReturnFences)["options"]["validator"].AsBsonDocument, fenceExtra));
-        await data.Invoice.Rows("schemaMigrations").DeleteOneAsync(new BsonDocument("_id", 48)); await new CollectionMigrations(db, clock).ApplyAsync(); Assert.Equal(after, await Definitions(db));
+        await data.Invoice.Rows("schemaMigrations").DeleteOneAsync(new BsonDocument("_id", 48)); await LegacyOrderSubmissionTestSchema.UpgradeV48Async(db, clock); Assert.Equal(after, await Definitions(db));
     }
     [Theory]
     [InlineData("ttl")] [InlineData("partial-fence")] [InlineData("orphan")]
@@ -44,7 +46,7 @@ public sealed class AfterSalesDecisionMigrationTests(MongoFixture fixture)
             if (fault == "ttl") { await db.CreateCollectionAsync(D.Collection); await db.GetCollection<BsonDocument>(D.Collection).Indexes.CreateOneAsync(new CreateIndexModel<BsonDocument>(new BsonDocument("decidedAt", 1), new CreateIndexOptions { ExpireAfter = TimeSpan.FromDays(1) })); }
             else if (fault == "partial-fence") { await db.CreateCollectionAsync(InvoiceService.CaseReturnFences); await db.GetCollection<BsonDocument>(InvoiceService.CaseReturnFences).Indexes.CreateOneAsync(new CreateIndexModel<BsonDocument>(new BsonDocument("invoiceHash", 1), new CreateIndexOptions<BsonDocument> { PartialFilterExpression = new BsonDocument("fence", new BsonDocument("$gt", 0L)) })); }
             else await db.GetCollection<BsonDocument>("outboxEvents").InsertOneAsync(new BsonDocument { { "_id", ObjectId.GenerateNewId() }, { "kind", D.Operation }, { "payload", new BsonDocument("caseId", 99L) } }, new InsertOneOptions { BypassDocumentValidation = true });
-            var before = await Definitions(db); await Assert.ThrowsAsync<InvalidOperationException>(() => new CollectionMigrations(db, clock).ApplyAsync()); Assert.Equal(before, await Definitions(db));
+            var before = await Definitions(db); await Assert.ThrowsAsync<InvalidOperationException>(() => LegacyOrderSubmissionTestSchema.UpgradeV48Async(db, clock)); Assert.Equal(before, await Definitions(db));
             Assert.False(await db.GetCollection<BsonDocument>("schemaMigrations").Find(new BsonDocument { { "_id", 48 }, { "state", "applied" } }).AnyAsync());
         } finally { await fixture.Client.DropDatabaseAsync(name); }
     }

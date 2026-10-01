@@ -32,7 +32,9 @@ public sealed class InvoiceBrowserTests(MongoFixture fixture, ITestOutputHelper 
     public Task Browser_links_finalized_sale_case_recovers_original_request_and_preserves_sale() => RunAsync(true);
     [LocalStockBrowserFact]
     public Task Browser_independently_decides_return_recovers_lost_decision_and_shows_private_buyer_explanation() => RunAsync(true, true);
-    private async Task RunAsync(bool afterSales, bool caseDecision = false) {
+    [LocalStockBrowserFact]
+    public Task Browser_receives_actual_return_into_quarantine_recovers_lost_intake_and_preserves_pack_stock_and_money() => RunAsync(true, true, true);
+    private async Task RunAsync(bool afterSales, bool caseDecision = false, bool caseReturn = false) {
         var root = Root(); var node = Environment.GetEnvironmentVariable("UNITTOKO_BROWSER_NODE"); var playwright = Environment.GetEnvironmentVariable("UNITTOKO_BROWSER_PLAYWRIGHT_PACKAGE");
         Assert.True(Path.IsPathFullyQualified(node ?? "") && File.Exists(node)); Assert.True(Path.IsPathFullyQualified(playwright ?? "") && File.Exists(playwright));
         Assert.True(File.Exists(Path.Combine(root, "frontend", ".next", "BUILD_ID")));
@@ -43,6 +45,8 @@ public sealed class InvoiceBrowserTests(MongoFixture fixture, ITestOutputHelper 
             foreach (var person in new[] { order.Buyer.UserId, data.Finance.UserId }) if (!await data.Rows("personRecords").Find(new BsonDocument("_id", PersonTestData.PersonId(person))).AnyAsync())
                 await PersonTestData.SeedDistinctPeopleAsync(order.Database, order.Prices.Catalog.Clock, person);
         }
+        if (caseReturn) await order.Prices.Catalog.Base.AddGrantAsync(data.Finance, 99831, CatalogAuthoringTestData.Shop, [Permissions.StockReceive]);
+        var originalStock = await data.Rows("stockBalances").Find(new BsonDocument()).Sort(new BsonDocument("_id", 1)).ToListAsync(); Assert.NotEmpty(originalStock);
         using var keys = new IdentityRuntimeTests.RuntimeKeys(); var settings = IdentityRuntimeTests.Settings(keys);
         settings["Mongo:Database"] = order.Database.DatabaseNamespace.DatabaseName; settings["Identity:TrustedProxies:0"] = "127.0.0.1"; settings["Logging:LogLevel:Default"] = "Warning";
         using var factory = IdentityRuntimeTests.Factory(settings).WithWebHostBuilder(web => web.UseEnvironment("Production").ConfigureTestServices(services => {
@@ -59,7 +63,7 @@ public sealed class InvoiceBrowserTests(MongoFixture fixture, ITestOutputHelper 
         using var tls = certificate.CreateSelfSigned(DateTimeOffset.UtcNow.AddMinutes(-5), DateTimeOffset.UtcNow.AddHours(1)); var password = Convert.ToHexString(RandomNumberGenerator.GetBytes(24));
         var input = new { apiAddress, origin, pfx = Convert.ToBase64String(tls.Export(X509ContentType.Pfx, password)), password, playwrightPackage = playwright,
             financeToken = order.Prices.Catalog.Issued[data.Finance.UserId].OpaqueToken, buyerToken = order.Prices.Catalog.Issued[order.Buyer.UserId].OpaqueToken,
-            courierToken = order.Prices.Catalog.Issued[data.Dispatch.Courier.UserId].OpaqueToken, financeId = data.Finance.UserId.ToString(), buyerId = order.Buyer.UserId.ToString(), receiptId = data.Receipt.Id.ToString(), afterSales, caseDecision };
+            courierToken = order.Prices.Catalog.Issued[data.Dispatch.Courier.UserId].OpaqueToken, financeId = data.Finance.UserId.ToString(), buyerId = order.Buyer.UserId.ToString(), receiptId = data.Receipt.Id.ToString(), afterSales, caseDecision, caseReturn };
         var start = new ProcessStartInfo(node!) { WorkingDirectory = Path.Combine(root, "frontend"), UseShellExecute = false, CreateNoWindow = true, RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true };
         start.ArgumentList.Add(Path.Combine(root, "frontend", "scripts", "verify-invoice-browser.mjs")); start.Environment["NODE_ENV"] = "production"; start.Environment["NEXT_TELEMETRY_DISABLED"] = "1";
         using var process = Process.Start(start) ?? throw new InvalidOperationException("Browser child did not start");
@@ -69,11 +73,19 @@ public sealed class InvoiceBrowserTests(MongoFixture fixture, ITestOutputHelper 
             Assert.True(process.ExitCode == 0, await stdout + await stderr); Assert.Contains("REAL_INVOICE_BROWSER_PASS", await stdout);
             if (afterSales) Assert.Contains("REAL_CASE_BROWSER_PASS", await stdout);
             if (caseDecision) Assert.Contains("REAL_CASE_DECISION_BROWSER_PASS", await stdout);
+            if (caseReturn) Assert.Contains("REAL_RETURN_QUARANTINE_BROWSER_PASS", await stdout);
         } finally { if (!process.HasExited) { process.Kill(true); await process.WaitForExitAsync(); } }
         Assert.Equal(1, await data.Count(InvoiceBson.Invoices)); Assert.Equal(1, await data.Count(InvoiceBson.Allocations)); Assert.Equal(1, await data.Count("journalEntries"));
         var row = await data.Rows(InvoiceBson.Invoices).Find(new BsonDocument()).SingleAsync(); Assert.Equal(6L, row["lines"][0]["acceptedBaseUnits"].AsInt64);
         Assert.Equal(1, await data.Rows("idempotencyRecords").CountDocumentsAsync(new BsonDocument("operation", InvoiceBson.Operation)));
         Assert.Equal(1, await data.Rows("outboxEvents").CountDocumentsAsync(new BsonDocument("kind", InvoiceBson.Operation)));
+        Assert.Equal(originalStock, await data.Rows("stockBalances").Find(new BsonDocument()).Sort(new BsonDocument("_id", 1)).ToListAsync());
+        if (caseReturn) {
+            var intake = await data.Rows("returnQuarantineReceipts").Find(new BsonDocument()).SingleAsync(); Assert.Equal("quarantined", intake["state"]); Assert.Equal("unverified", intake["lotIdentity"]);
+            Assert.Equal(1L, intake["input"]["lines"][0]["receivedBaseUnits"].AsInt64); Assert.Equal("opened", intake["input"]["lines"][0]["observedCondition"]);
+            Assert.Equal(12, intake["source"]["stock"][0]["baseUnitsPerPackage"].AsInt32); Assert.Equal(data.Finance.UserId, intake["actorId"]);
+            Assert.Equal(1, await data.Rows("idempotencyRecords").CountDocumentsAsync(new BsonDocument("operation", "fulfillment.case.return_receive"))); Assert.Equal(1, await data.Rows("outboxEvents").CountDocumentsAsync(new BsonDocument("kind", "fulfillment.case.return_receive")));
+        }
         if (afterSales) {
             Assert.Equal(1, await data.Count("afterSalesCases")); var complaint = await data.Rows("afterSalesCases").Find(new BsonDocument()).SingleAsync();
             Assert.Equal(row["_id"], complaint["input"]["invoiceId"]); Assert.Equal(1L, complaint["input"]["lines"][0]["reportedBaseUnits"].AsInt64);

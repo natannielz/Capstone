@@ -8,6 +8,7 @@ import { parseManualReviewResult, type PaymentManualReviewResult } from "../bill
 import { parseReviewActionResult, type PaymentReviewActionResult } from "../billing/payment-review-action-client";
 import { parseInvoice, type Invoice } from "../billing/invoice-client";
 import { parseCaseResult, parseCaseDecisionResult, type CaseResult, type CaseDecisionResult } from "../fulfillment/case-client";
+import { parseReturnResult, type ReturnResult } from "../fulfillment/return-client";
 import { parsePaymentResult, parsePaymentReservation, parsePaymentSubmissionResult, paymentSubmissionOwner, parsePaymentReplacementResult, type PaymentReplacementResult, type PaymentSubmissionResult, type PaymentDraftResult, type PaymentReservation } from "../billing/payment-client";
 import { parseDeliveryAttempt, type DeliveryAttempt } from "../fulfillment/delivery-attempt-client";
 import { parseReceiptProof, type ReceiptProof } from "../fulfillment/receipt-proof-client";
@@ -27,7 +28,7 @@ export type OperationReference = Readonly<{ actorId: string; operation: string; 
 type JournalStorage = Pick<Storage, "length" | "key" | "getItem" | "setItem" | "removeItem">;
 const prefix = "unit-toko:pending:v1:";
 const keyPattern = /^[A-Za-z0-9._:-]{1,128}$/;
-const operationPattern = /^(?:billing\.bank-receipt\.confirm|billing\.bank-statement\.stage|billing\.receiving-account\.(?:propose|observe|approve|reject|withdraw)|billing\.payment\.(?:draft\.save|replacement\.create|submit|verify|allocate|review\.(?:correct|manual|manage))|evidence\.payment-image\.reserve|billing\.invoice\.issue|(access|organization)\.[a-z.]{1,100}|identity\.(?:invitation\.(?:propose|approve|rejected|withdrawn|revoked)|recovery\.request)|person\.review\.(?:propose|approve|reject|withdraw)|fulfillment\.(?:case\.(?:request|decide)|preparation\.save|shipment\.dispatch|surat-jalan\.issue|delivery-attempt\.record|receipt-proof\.issue|receipt\.(?:challenge\.issue|confirm))|ordering\.(?:draft\.save|order\.(?:submit|cancel|spending\.(?:approve|reject)|store\.(?:accept|reject)))|catalog\.(?:price\.(?:propose|approve|reject|withdraw)|category\.save|family\.(?:create|edit)|sku\.(?:create|revise|replace|retire|publish))|inventory\.stock-count\.record|stock\.source\.(?:suspend|(?:(?:revision|alias|policy)\.)?(?:propose|approve|reject|withdraw)))$(?![\s\S])/;
+const operationPattern = /^(?:billing\.bank-receipt\.confirm|billing\.bank-statement\.stage|billing\.receiving-account\.(?:propose|observe|approve|reject|withdraw)|billing\.payment\.(?:draft\.save|replacement\.create|submit|verify|allocate|review\.(?:correct|manual|manage))|evidence\.payment-image\.reserve|billing\.invoice\.issue|(access|organization)\.[a-z.]{1,100}|identity\.(?:invitation\.(?:propose|approve|rejected|withdrawn|revoked)|recovery\.request)|person\.review\.(?:propose|approve|reject|withdraw)|fulfillment\.(?:case\.(?:request|decide|return_receive)|preparation\.save|shipment\.dispatch|surat-jalan\.issue|delivery-attempt\.record|receipt-proof\.issue|receipt\.(?:challenge\.issue|confirm))|ordering\.(?:draft\.save|order\.(?:submit|cancel|spending\.(?:approve|reject)|store\.(?:accept|reject)))|catalog\.(?:price\.(?:propose|approve|reject|withdraw)|category\.save|family\.(?:create|edit)|sku\.(?:create|revise|replace|retire|publish))|inventory\.stock-count\.record|stock\.source\.(?:suspend|(?:(?:revision|alias|policy)\.)?(?:propose|approve|reject|withdraw)))$(?![\s\S])/;
 const storageKey = (entry: OperationReference) => `${prefix}${entry.actorId}:${entry.operation}:${entry.key}`;
 
 /** Only recovery references are stored. Requests, reasons, grants and credentials never enter this journal. */
@@ -139,7 +140,7 @@ export type LegacyRecoveryAdapter = Readonly<{
 
 /** Supply this only from the owning client screen. A missing receipt is never a failed or closed request. */
 export type OperationRecoveryAdapters = Readonly<{
-  "fulfillment.case"?: Readonly<{ lookup: (entry: OperationReference) => Promise<Readonly<{ state: "committed"; result: CaseResult | CaseDecisionResult }> | null> }>;
+  "fulfillment.case"?: Readonly<{ lookup: (entry: OperationReference) => Promise<Readonly<{ state: "committed"; result: CaseResult | CaseDecisionResult | ReturnResult }> | null> }>;
   "billing.bank-receipt"?: Readonly<{ lookup: (entry: OperationReference) => Promise<Readonly<{ state: "committed"; result: BankReceiptResult }> | null> }>;
   "billing.bank-statement"?: Readonly<{ lookup: (entry: OperationReference) => Promise<Readonly<{ state: "committed"; result: StatementResult }> | null> }>;
   "billing.receiving-account"?: Readonly<{ lookup: (entry: OperationReference) => Promise<Readonly<{ state: "committed"; result: ReceivingResult }> | null> }>;
@@ -178,7 +179,7 @@ export type OperationRecoveryAdapters = Readonly<{
 
 function recoveryNamespace(operation: string): "fulfillment.case" | "billing.bank-receipt" | "billing.bank-statement" | "billing.receiving-account" | "access" | "organization" | "identity" | "person.review" | "catalog" | "catalog.price" | "inventory.stock-count" | "stock.source" | "stock.source.revision" | "stock.source.alias" | "stock.source.suspend" | "stock.source.policy" | "ordering.draft" | "ordering.order" | "ordering.decision" | "fulfillment.preparation" | "fulfillment.shipment" | "fulfillment.surat-jalan" | "fulfillment.receipt" | "fulfillment.receipt-proof" | "fulfillment.delivery-attempt" | "billing.invoice" | "billing.payment.allocate" | "billing.payment.verify" | "billing.payment.review.correct" | "billing.payment.submit" | "billing.payment" | "evidence.payment-image" | "billing.payment.review.manual" | "billing.payment.review.manage" | "billing.payment.replacement.create" | null {
   if (!operationPattern.test(operation)) return null;
-  if (operation === "fulfillment.case.request" || operation === "fulfillment.case.decide") return "fulfillment.case";
+  if (operation === "fulfillment.case.request" || operation === "fulfillment.case.decide" || operation === "fulfillment.case.return_receive") return "fulfillment.case";
   if (operation === "billing.bank-receipt.confirm") return "billing.bank-receipt";
   if (operation === "billing.bank-statement.stage") return "billing.bank-statement";
   if (operation.startsWith("billing.receiving-account.")) return "billing.receiving-account";
@@ -248,7 +249,7 @@ export async function reconcileOperationRecovery(entry: OperationReference, jour
     if (recovered === null) receipt = null;
     else {
       if (!recovered || recovered.state !== "committed" || Object.keys(recovered).sort().join(",") !== "result,state") throw new AccessFailure(502, "recovery_receipt_invalid");
-      if (namespace === "fulfillment.case") { const result = reference.operation === 'fulfillment.case.decide' ? parseCaseDecisionResult(recovered.result, reference.key) : parseCaseResult(recovered.result, reference.key); receipt = { state: "committed", result: { id: result.caseId, version: result.revision } }; }
+      if (namespace === "fulfillment.case") { const result = reference.operation === 'fulfillment.case.return_receive' ? parseReturnResult(recovered.result, reference.key) : reference.operation === 'fulfillment.case.decide' ? parseCaseDecisionResult(recovered.result, reference.key) : parseCaseResult(recovered.result, reference.key); receipt = { state: "committed", result: { id: reference.operation === 'fulfillment.case.return_receive' ? (result as ReturnResult).returnId : result.caseId, version: result.revision } }; }
       else if (namespace === "billing.bank-receipt") { const result = parseBankReceiptResult(recovered.result, reference.key); receipt = { state: "committed", result: { id: result.receiptId, version: "1" } }; }
       else if (namespace === "billing.bank-statement") { const result = parseStatementResult(recovered.result, reference.key); receipt = { state: "committed", result: { id: result.importId, version: "1" } }; }
       else if (namespace === "billing.receiving-account") { const result = validateReceivingReceipt(recovered.result, reference.key, reference.operation); receipt = { state: "committed", result: { id: result.proposalId, version: result.accountVersion ?? "1" } }; }

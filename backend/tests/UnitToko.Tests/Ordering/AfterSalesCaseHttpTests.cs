@@ -67,7 +67,7 @@ public sealed class AfterSalesCaseHttpTests(MongoFixture fixture)
         foreach (var secret in new[] { "invoiceHash", "snapshotHash", "requestKey", "requestedBy", "grantVersion", "journal", "price", "tax", "bank", "scopes" }) Assert.DoesNotContain(secret, text, StringComparison.OrdinalIgnoreCase);
         Assert.True((await Request("/query", new { purpose = "after-sales-case" })).IsSuccessStatusCode);
         Assert.Equal(1, await data.Invoice.Count("afterSalesCases"));
-        await order.Prices.Catalog.Base.AddGrantAsync(data.Invoice.Finance, 99830, CatalogAuthoringTestData.Shop, [Permissions.CaseRead, Permissions.CaseManage]);
+        await order.Prices.Catalog.Base.AddGrantAsync(data.Invoice.Finance, 99830, CatalogAuthoringTestData.Shop, [Permissions.CaseRead, Permissions.CaseManage, Permissions.StockReceive]);
         foreach (var person in new[] { buyer.UserId, data.Invoice.Finance.UserId }) if (!await data.Invoice.Rows("personRecords").Find(new BsonDocument("_id", PersonTestData.PersonId(person))).AnyAsync())
             await PersonTestData.SeedDistinctPeopleAsync(order.Database, order.Prices.Catalog.Clock, person);
         using var staff = factory.CreateClient(new() { BaseAddress = new(origin), AllowAutoRedirect = false });
@@ -78,7 +78,7 @@ public sealed class AfterSalesCaseHttpTests(MongoFixture fixture)
         async Task<HttpResponseMessage> Staff(string suffix, object value, string version = "1", string? fault = null) {
             using var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/fulfillment/cases/" + caseId + suffix) { Content = JsonContent.Create(value) };
             request.Headers.Add("Origin", origin); if (fault != "actor") request.Headers.Add("X-Expected-Actor-Id", data.Invoice.Finance.UserId.ToString());
-            if (fault != "csrf") request.Headers.Add("X-CSRF-Token", staffCsrf); request.Headers.Add("If-Match", "\"" + version + "\""); request.Headers.Add("Idempotency-Key", "case-http-decision"); return await staff.SendAsync(request);
+            if (fault != "csrf") request.Headers.Add("X-CSRF-Token", staffCsrf); request.Headers.Add("If-Match", "\"" + version + "\""); request.Headers.Add("Idempotency-Key", suffix.StartsWith("/returns", StringComparison.Ordinal) ? "cr." + caseId + ".http" : "case-http-decision"); return await staff.SendAsync(request);
         }
         Assert.Equal(HttpStatusCode.Forbidden, (await Request("/" + caseId + "/decision/query", new { purpose = "after-sales-decision" })).StatusCode);
         var decisionPreview = await Staff("/decision/query", new { purpose = "after-sales-decision" }); Assert.True(decisionPreview.IsSuccessStatusCode, await decisionPreview.Content.ReadAsStringAsync()); Assert.True(decisionPreview.Headers.CacheControl!.NoStore);
@@ -95,5 +95,23 @@ public sealed class AfterSalesCaseHttpTests(MongoFixture fixture)
         var buyerDecision = await Request("/" + caseId + "/query", new { purpose = "after-sales-case" }, "2"); Assert.True(buyerDecision.IsSuccessStatusCode); Assert.Equal("\"2\"", buyerDecision.Headers.ETag!.Tag);
         var buyerText = await buyerDecision.Content.ReadAsStringAsync(); Assert.Contains(action.publicExplanation, buyerText); Assert.DoesNotContain(action.reason, buyerText); Assert.DoesNotContain("personId", buyerText); Assert.DoesNotContain("actorId", buyerText);
         Assert.Equal(1, await data.Invoice.Count("afterSalesCaseDecisions"));
+        Assert.Contains((await staff.GetFromJsonAsync<JsonElement>("/api/v1/access/current")).GetProperty("allowedActions").EnumerateArray(), value => value.GetString() == Permissions.StockReceive);
+        Assert.Equal(HttpStatusCode.Forbidden, (await Request("/" + caseId + "/returns/preview/query", new { purpose = "after-sales-return" }, "2")).StatusCode);
+        var returnPreview = await Staff("/returns/preview/query", new { purpose = "after-sales-return" }, "2"); Assert.True(returnPreview.IsSuccessStatusCode, await returnPreview.Content.ReadAsStringAsync()); Assert.Equal("\"0\"", returnPreview.Headers.ETag!.Tag);
+        var returns = await returnPreview.Content.ReadFromJsonAsync<JsonElement>(); var returnBinding = returns.GetProperty("binding").GetString();
+        var receivedLines = new[] { new { receiptId, skuId, receivedBaseUnits = "1", observedCondition = "opened" } };
+        var intake = new { binding = returnBinding, publicNote = "Satu barang telah tiba dan dikarantina", lines = receivedLines, reason = "Pertimbangan penerimaan privat" };
+        Assert.Equal(HttpStatusCode.BadRequest, (await Staff("/returns", intake, "0", "actor")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await Staff("/returns", intake, "0", "csrf")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Staff("/returns", new { intake.binding, intake.publicNote, intake.lines, intake.reason, refundAmount = "1" }, "0")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Staff("/returns", new { intake.binding, intake.publicNote, lines = new[] { new { receiptId, skuId, receivedBaseUnits = 1, observedCondition = "opened" } }, intake.reason }, "0")).StatusCode);
+        var returnCommit = await Staff("/returns", intake, "0"); Assert.True(returnCommit.IsSuccessStatusCode, await returnCommit.Content.ReadAsStringAsync()); var originalReturn = await returnCommit.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("quarantined", originalReturn.GetProperty("state").GetString()); Assert.Equal("1", originalReturn.GetProperty("revision").GetString());
+        var returnRecovery = await Staff("/returns/operations/query", new { purpose = "operation-recovery", key = "cr." + caseId + ".http" }); Assert.True(returnRecovery.IsSuccessStatusCode);
+        Assert.Equal(originalReturn.GetRawText(), (await returnRecovery.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("result").GetRawText());
+        var buyerReturns = await Request("/" + caseId + "/returns/query", new { purpose = "after-sales-return" }, "2"); Assert.True(buyerReturns.IsSuccessStatusCode); Assert.True(buyerReturns.Headers.CacheControl!.NoStore);
+        var returnText = await buyerReturns.Content.ReadAsStringAsync(); Assert.Contains(intake.publicNote, returnText);
+        foreach (var secret in new[] { intake.reason, "people", "snapshotHash", "requestKey", "actorId", "originalLots", "dispatchReview", "scopes", "price", "bank" }) Assert.DoesNotContain(secret, returnText, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(1, await data.Invoice.Count("returnQuarantineReceipts"));
     }
 }

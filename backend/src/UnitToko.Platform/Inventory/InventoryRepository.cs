@@ -112,7 +112,9 @@ internal sealed class InventoryRepository(IMongoDatabase database)
 
     private Task RequireStorageAsync(CancellationToken ct) => RequireStorageAsync(database, "stockBalances", InventorySchemas.BalanceValidator(), InventorySchemas.BalanceKey(), ct);
 
-    internal static async Task RequireStorageAsync(IMongoDatabase database, string collection, BsonDocument requiredValidator, BsonDocument requiredKey, CancellationToken ct)
+    internal static Task RequireStorageAsync(IMongoDatabase database, string collection, BsonDocument requiredValidator, BsonDocument requiredKey, CancellationToken ct) =>
+        RequireStorageAsync(database, collection, requiredValidator, [requiredKey], ct);
+    internal static async Task RequireStorageAsync(IMongoDatabase database, string collection, BsonDocument requiredValidator, BsonDocument[] requiredKeys, CancellationToken ct)
     {
         // Read-only metadata checks. A reviewed deployment migration owns DDL and quiesces writers.
         var definition = await (await database.ListCollectionsAsync(
@@ -126,10 +128,10 @@ internal sealed class InventoryRepository(IMongoDatabase database)
             !InventorySchemas.Contains(validator.AsBsonDocument, requiredValidator))
             throw Invalid("inventory_storage_unavailable");
         var indexes = await (await database.GetCollection<BsonDocument>(collection).Indexes.ListAsync(ct)).ToListAsync(ct);
-        bool Required(BsonDocument index) => index["key"].AsBsonDocument.Equals(requiredKey) &&
-            (index.GetValue("unique", false).AsBoolean || index["name"] == "_id_" && requiredKey.Equals(new BsonDocument("_id", 1))) && !Unsafe(index);
+        bool Required(BsonDocument index) => requiredKeys.Any(key => index["key"].AsBsonDocument.Equals(key) &&
+            (index.GetValue("unique", false).AsBoolean || index["name"] == "_id_" && key.Equals(new BsonDocument("_id", 1)))) && !Unsafe(index);
         if (!indexes.Any(index => index["key"].AsBsonDocument.Equals(new BsonDocument("_id", 1)) && !Unsafe(index)) ||
-            !indexes.Any(Required) || indexes.Any(index => index.Contains("expireAfterSeconds") ||
+            requiredKeys.Length == 0 || requiredKeys.Any(key => !indexes.Any(index => index["key"].Equals(key) && Required(index))) || indexes.Any(index => index.Contains("expireAfterSeconds") || requiredKeys.Length > 1 && Unsafe(index) ||
                 index.GetValue("unique", false).AsBoolean && index["name"] != "_id_" && !Required(index)))
             throw Invalid("inventory_storage_unavailable");
         ct.ThrowIfCancellationRequested();

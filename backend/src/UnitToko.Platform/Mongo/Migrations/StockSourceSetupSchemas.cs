@@ -94,7 +94,7 @@ internal static class StockSourceSetupSchemas
         { "externalNamespace", NullableText(64) }, { "reservationProtocolReference", NullableText(160) },
         { "discrepancyOwnerReference", Text(160) }, { "handoffReference", Text(160) }
     });
-    private static BsonDocument Location() => Object(new()
+    internal static BsonDocument Location() => Object(new()
         { { "organizationId", Number(1) }, { "shopId", Number(1) }, { "warehouseId", Number(1) }, { "channelId", Number(1) } });
     internal static BsonDocument Number(long minimum, long? maximum = null)
     {

@@ -35,6 +35,7 @@ export type AfterSalesCase = z.infer<typeof view>;
 export type CaseDecision = z.infer<typeof decision>;
 const decisionResult = z.object({ caseId: id, invoiceId: id, revision: z.literal('2'), state: z.enum(['return_authorized', 'rejected']), decidedAt: timestamp, operation: z.literal('fulfillment.case.decide') }).strict();
 export type CaseDecisionResult = z.infer<typeof decisionResult>;
+export function parseCaseView(value: unknown): AfterSalesCase { return parse(view, value); }
 function invalid(): never { throw new AccessFailure(502, 'case_response_invalid'); }
 function parse<T>(schema: z.ZodType<T>, value: unknown): T { const parsed = schema.safeParse(value); return parsed.success ? parsed.data : invalid(); }
 const headers = (actorId: string) => ({ 'X-Expected-Actor-Id': priceId(actorId) });
