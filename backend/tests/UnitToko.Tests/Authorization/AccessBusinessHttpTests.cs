@@ -29,7 +29,12 @@ public sealed partial class AccessHttpTests
             Assert.DoesNotContain("order.spend.approve", Values(role, "suggestedPermissions"));
             Assert.Empty(Values(role, "suggestedPermissions").Intersect(Values(role, "permissions")));
         }
-        Assert.Empty(Values(roles["finance"], "suggestedPermissions"));
+        Assert.Equal(new[] { Permissions.BankReceiptRead, Permissions.BankReceiptConfirm, Permissions.BankStatementRead, Permissions.BankStatementStage,
+            Permissions.PaymentReviewRead, Permissions.PaymentReviewCorrect, Permissions.ReceivingAccountRead, Permissions.ReceivingAccountDetailsRead,
+            Permissions.ReceivingAccountPropose, Permissions.ReceivingAccountVerify, Permissions.ReceivingAccountApprove }, Values(roles["finance"], "suggestedPermissions"));
+        Assert.Empty(Values(roles["finance"], "permissions"));
+        Assert.Empty(RoleTemplates.Materialize("finance", [], []).Permissions);
+        Assert.DoesNotContain(Permissions.PaymentVerify, Values(roles["finance"], "suggestedPermissions"));
         Assert.Empty(Values(roles["courier"], "suggestedPermissions"));
         Assert.Empty(Values(roles["system-admin"], "suggestedPermissions"));
         Assert.Contains("order.substitute", Values(roles["buyer"], "permissions"));
@@ -43,6 +48,8 @@ public sealed partial class AccessHttpTests
         Assert.True(definitions["order.spend.approve"]["requiresFreshMfa"]!.GetValue<bool>());
         Assert.True(definitions["supplier.change.approve"]["requiresFreshMfa"]!.GetValue<bool>());
         using var current = await client.GetAsync("/api/v1/access/current");
-        Assert.Equal(new[] { Permissions.AccessPropose }, Values((await Body(current))["grants"]![0]!, "permissions"));
+        var currentBody = await Body(current);
+        Assert.Equal(new[] { Permissions.AccessPropose }, Values(currentBody["grants"]![0]!, "permissions"));
+        Assert.Equal(new[] { Permissions.AccessPropose }, Values(currentBody, "allowedActions"));
     }
 }

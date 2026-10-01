@@ -27,7 +27,7 @@ public sealed class PaymentReviewExplanationMigrationTests(MongoFixture fixture)
         await db.RunCommandAsync<BsonDocument>(new BsonDocument { { "collMod", name }, { "validator", new BsonDocument("$and", new BsonArray { old, extra }) } });
         var before = await Definitions(db); var receipts = await db.GetCollection<BsonDocument>("schemaMigrations").Find(new BsonDocument()).Sort(new BsonDocument("_id", 1)).ToListAsync();
         var indexes = await (await db.GetCollection<BsonDocument>(name).Indexes.ListAsync()).ToListAsync();
-        await new CollectionMigrations(db, new SystemClock()).ApplyAsync(); var after = await Definitions(db);
+        await LegacyOrderSubmissionTestSchema.UpgradeV46Async(db, new SystemClock()); var after = await Definitions(db);
         Assert.Equal(before.Where(row => row["name"] != name), after.Where(row => row["name"] != name));
         var validator = after.Single(row => row["name"] == name)["options"]["validator"].AsBsonDocument;
         Assert.True(InventorySchemas.Contains(validator, extra)); Assert.True(InventorySchemas.Contains(validator, PaymentReviewExplanationSchemas.Validator()));
@@ -35,7 +35,7 @@ public sealed class PaymentReviewExplanationMigrationTests(MongoFixture fixture)
         Assert.Equal(receipts, (await db.GetCollection<BsonDocument>("schemaMigrations").Find(new BsonDocument()).Sort(new BsonDocument("_id", 1)).ToListAsync()).Take(45));
         // Isolated interrupted-install fixture; production receipts are never removed or downgraded.
         await db.GetCollection<BsonDocument>("schemaMigrations").DeleteOneAsync(new BsonDocument("_id", 46));
-        await new CollectionMigrations(db, new SystemClock()).ApplyAsync(); Assert.Equal(after, await Definitions(db));
+        await LegacyOrderSubmissionTestSchema.UpgradeV46Async(db, new SystemClock()); Assert.Equal(after, await Definitions(db));
     });
     [Theory]
     [InlineData("ttl")] [InlineData("orphan")] [InlineData("unexpected_v2")]
@@ -45,7 +45,7 @@ public sealed class PaymentReviewExplanationMigrationTests(MongoFixture fixture)
         else if (fault == "unexpected_v2") await rows.InsertOneAsync(new BsonDocument { { "_id", 99L }, { "schemaVersion", 2 } }, new InsertOneOptions { BypassDocumentValidation = true });
         else await db.GetCollection<BsonDocument>("outboxEvents").InsertOneAsync(new BsonDocument { { "_id", ObjectId.GenerateNewId() }, { "kind", PaymentReviewActionRecords.Operation },
             { "payload", new BsonDocument("actionId", 99L) } }, new InsertOneOptions { BypassDocumentValidation = true });
-        var before = await Definitions(db); Assert.NotNull(await Record.ExceptionAsync(() => new CollectionMigrations(db, new SystemClock()).ApplyAsync()));
+        var before = await Definitions(db); Assert.NotNull(await Record.ExceptionAsync(() => LegacyOrderSubmissionTestSchema.UpgradeV46Async(db, new SystemClock())));
         Assert.Equal(before, await Definitions(db)); Assert.False(await db.GetCollection<BsonDocument>("schemaMigrations").Find(new BsonDocument { { "_id", 46 }, { "state", "applied" } }).AnyAsync());
     });
     [WindowsStorageFact]
@@ -58,12 +58,12 @@ public sealed class PaymentReviewExplanationMigrationTests(MongoFixture fixture)
         var before = new Dictionary<string, List<BsonDocument>>(); foreach (var table in tables) before[table] = await data.Rows(table).Find(new BsonDocument()).Sort(new BsonDocument("_id", 1)).ToListAsync();
         // Model the actual v45 predecessor in this isolated fixture, retaining every prior data and migration receipt.
         await db.RunCommandAsync<BsonDocument>(new BsonDocument { { "collMod", PaymentReviewActionRecords.Versions }, { "validator", PaymentReviewActionSchemas.Validator() } });
-        await data.Rows("schemaMigrations").DeleteOneAsync(new BsonDocument("_id", 46));
+        await data.Rows("schemaMigrations").DeleteManyAsync(new BsonDocument("_id", new BsonDocument("$gte", 46)));
         var receipts = await data.Rows("schemaMigrations").Find(new BsonDocument("_id", new BsonDocument("$lt", 46))).Sort(new BsonDocument("_id", 1)).ToListAsync();
-        await new CollectionMigrations(db, data.Read.Catalog.Clock).ApplyAsync();
+        await LegacyOrderSubmissionTestSchema.UpgradeV46Async(db, data.Read.Catalog.Clock);
         foreach (var table in tables) Assert.Equal(before[table], await data.Rows(table).Find(new BsonDocument()).Sort(new BsonDocument("_id", 1)).ToListAsync());
         Assert.Equal(receipts, await data.Rows("schemaMigrations").Find(new BsonDocument("_id", new BsonDocument("$lt", 46))).Sort(new BsonDocument("_id", 1)).ToListAsync());
-        Assert.Equal("idle", await processor.RunOnceAsync());
+        await new CollectionMigrations(db, data.Read.Catalog.Clock).ApplyAsync(); Assert.Equal("idle", await processor.RunOnceAsync());
         var visible = await data.Read.Payment.Service.ReadFollowUpAsync(data.Read.Actor, data.Read.DeclarationId, 1);
         Assert.Equal("rejected", visible.State); Assert.Null(visible.PublicExplanation); Assert.Equal("available", visible.Notification.State);
     }

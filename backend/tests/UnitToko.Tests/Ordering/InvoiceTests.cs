@@ -78,7 +78,10 @@ public sealed class InvoiceTests(MongoFixture fixture)
         if (failure == "final-session") await data.Rows("fixtureInvoiceApprovals").UpdateOneAsync(new BsonDocument("_id", 1L),
             Builders<BsonDocument>.Update.Set("expiresAt", data.Order.Prices.Catalog.Clock.UtcNow.AddDays(1).UtcDateTime));
         var review = await data.Service.PreviewAsync(data.Finance, data.Selection);
-        if (failure == "closed-book") await data.Rows("accountingBooks").UpdateOneAsync(new BsonDocument("_id", 1L), Builders<BsonDocument>.Update.Set("closedThrough", "2026-09"));
+        if (failure == "closed-book") {
+            var closed = await data.Rows("accountingBooks").UpdateOneAsync(new BsonDocument("_id", 1L), Builders<BsonDocument>.Update.Set("closedThrough", review.IssueDate.ToString("yyyy-MM", System.Globalization.CultureInfo.InvariantCulture)));
+            Assert.Equal(1, closed.MatchedCount);
+        }
         if (failure == "missing-chart") await data.Rows("accountingChartVersions").DeleteManyAsync(new BsonDocument());
         if (failure == "audit-failure") await data.Order.Database.RunCommandAsync<BsonDocument>(new BsonDocument { { "collMod", "auditEvents" }, { "validator", new BsonDocument("operation", new BsonDocument("$ne", InvoiceBson.Operation)) }, { "validationLevel", "strict" }, { "validationAction", "error" } });
         if (failure == "final-policy") data.Admission.BeforeComplete = (_, _) => throw InvoicePolicy.Invalid();

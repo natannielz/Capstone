@@ -10,6 +10,7 @@ export function recoveryPage(operation: string) {
   if (operation === 'billing.payment.submit' || operation === 'billing.payment.draft.save' || operation === 'evidence.payment-image.reserve') return { href: '/billing/payments', label: 'halaman bukti pembayaran' };
   if (operation === 'billing.payment.replacement.create') return { href: '/billing/payments', label: 'halaman bukti pengganti' };
   if (operation === 'billing.invoice.issue') return { href: '/billing/invoices', label: 'halaman tagihan' };
+  if (operation === 'fulfillment.case.request') return { href: '/fulfillment/cases', label: 'halaman keluhan barang' };
   if (operation === 'fulfillment.delivery-attempt.record') return { href: '/fulfillment/shipments', label: 'halaman upaya pengiriman' };
   if (operation === 'fulfillment.receipt-proof.issue') return { href: '/fulfillment/receive', label: 'halaman bukti penerimaan' };
   if (operation === 'fulfillment.receipt.challenge.issue') return { href: '/fulfillment/shipments', label: 'QR penerimaan di rincian kiriman' };
@@ -44,6 +45,7 @@ export function operationLabel(operation: string) {
   if (operation === 'billing.payment.draft.save') return 'Penyimpanan draf pembayaran';
   if (operation === 'evidence.payment-image.reserve') return 'Persiapan unggah bukti pembayaran';
   if (operation === 'billing.invoice.issue') return 'Penerbitan invoice';
+  if (operation === 'fulfillment.case.request') return 'Pengajuan keluhan barang';
   if (operation === 'fulfillment.delivery-attempt.record') return 'Pencatatan upaya pengiriman';
   if (operation === 'fulfillment.receipt-proof.issue') return 'Penerbitan bukti penerimaan';
   if (operation === 'fulfillment.receipt.challenge.issue') return 'Pembuatan QR penerimaan';

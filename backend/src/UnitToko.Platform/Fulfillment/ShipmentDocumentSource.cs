@@ -16,7 +16,7 @@ public sealed partial class ShipmentQueryService
     // from the accepted order/dispatch, not current address/catalog masters or client input.
     internal async Task<ShipmentDocumentSource> DocumentSourceAsync(ActorContext actor, AuthorizationSnapshot snapshot,
         IClientSessionHandle tx, long shipmentId, string permission, CancellationToken ct) {
-        if (permission is not (Permissions.ShipmentRead or Permissions.ShipmentPrepare or Permissions.DeliveryAttempt or Permissions.DeliveryEvidence or Permissions.ReceiptAccept or Permissions.InvoiceRead or Permissions.InvoiceIssue) || shipmentId <= 0) throw ShipmentDispatchRecords.Invalid();
+        if (permission is not (Permissions.ShipmentRead or Permissions.ShipmentPrepare or Permissions.DeliveryAttempt or Permissions.DeliveryEvidence or Permissions.ReceiptAccept or Permissions.InvoiceRead or Permissions.InvoiceIssue or Permissions.CaseRead or Permissions.CaseRequest or Permissions.CaseManage) || shipmentId <= 0) throw ShipmentDispatchRecords.Invalid();
         var scoped = await Rows("shipments").Find(tx, F.Eq("_id", shipmentId) & ScopeQuery.Create(Query(actor, snapshot, permission))).SingleOrDefaultAsync(ct)
             ?? throw ShipmentDispatchRecords.Invalid();
         var row = await new ShipmentDispatchRecords(database).ReadAsync(tx, shipmentId, ct);

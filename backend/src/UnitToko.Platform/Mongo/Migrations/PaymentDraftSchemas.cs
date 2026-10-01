@@ -13,7 +13,7 @@ internal static class PaymentDraftSchemas
     private static BsonDocument Hash() => new() { { "bsonType", "string" }, { "pattern", @"\A[0-9a-f]{64}\z" } };
     private static BsonDocument Money() => new() { { "bsonType", "decimal" }, { "minimum", new BsonDecimal128(.01m) }, { "maximum", new BsonDecimal128(DomainValues.MaximumMoney) }, { "multipleOf", new BsonDecimal128(.01m) } };
     private static BsonDocument Array(BsonDocument value, int maximum) => new() { { "bsonType", "array" }, { "minItems", 1 }, { "maxItems", maximum }, { "items", value } };
-    private static BsonDocument Scopes() => Array(S.Object(new() {
+    internal static BsonDocument Scopes() => Array(S.Object(new() {
         { "buyingOrganizationId", S.Number(1) }, { "branchId", Nullable(S.Number(1)) }, { "divisionId", Nullable(S.Number(1)) },
         { "fulfillmentOrganizationId", S.Number(1) }, { "shopId", S.Number(1) }, { "warehouseId", Nullable(S.Number(1)) },
         { "channelId", S.Number(1) }, { "createdBy", S.Number(1) } }), PaymentDraftPolicy.MaximumInvoices * InvoicePolicy.MaximumReceipts);

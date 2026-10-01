@@ -46,7 +46,7 @@ public sealed partial class ShipmentReceiptService
     internal Task<ImmutableArray<long>> InvoiceShipmentsAsync(ActorContext actor, AuthorizationSnapshot authority, IClientSessionHandle tx, long? beforeId, CancellationToken ct) =>
         shipments.InvoiceShipmentsAsync(actor, authority, tx, beforeId, ct);
     internal async Task<InvoiceReceiptSource?> InvoiceSourceAsync(ActorContext actor, AuthorizationSnapshot authority, IClientSessionHandle tx, long shipmentId, string permission, CancellationToken ct) {
-        if (permission is not (Permissions.InvoiceRead or Permissions.InvoiceIssue)) throw ShipmentReceiptRecords.Invalid();
+        if (permission is not (Permissions.InvoiceRead or Permissions.InvoiceIssue or Permissions.CaseRead or Permissions.CaseRequest or Permissions.CaseManage)) throw ShipmentReceiptRecords.Invalid();
         var shipment = await shipments.DocumentSourceAsync(actor, authority, tx, shipmentId, permission, ct);
         var receipt = await records.FindReceiptAsync(tx, shipmentId, ct);
         if (receipt is null) { await shipments.FenceAsync(actor, authority, tx, [shipment.Resource], ct, permission); return null; }
