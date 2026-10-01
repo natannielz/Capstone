@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createUnitTokoClient } from '../src/api/client';
-import { createCaseGateway, prepareCase, parseCaseResult } from '../src/modules/fulfillment/case-client';
+import { createCaseGateway, prepareCase, prepareCaseDecision, parseCaseResult, parseCaseDecisionResult } from '../src/modules/fulfillment/case-client';
 import { OperationJournal, reconcileOperationRecovery, operationRecoveryCapabilities } from '../src/modules/administration/operation-journal';
 import { identityDestinations, identityReturnPath } from '../src/modules/identity/identity-workflow';
 
@@ -44,4 +44,31 @@ test('case original-key recovery never falls back, closes, resends or removes an
   assert.equal((await reconcileOperationRecovery(entry, journal, legacy, absent)).state, 'unconfirmed'); assert.equal(journal.list(actor).length, 1);
   await assert.rejects(() => reconcileOperationRecovery(entry, journal, legacy, { 'fulfillment.case': { lookup: async () => ({ state: 'committed' as const, result: { ...result, invoiceId: '1' } }) } })); assert.equal(journal.list(actor).length, 1);
   await reconcileOperationRecovery(entry, journal, legacy, { 'fulfillment.case': { lookup: async () => ({ state: 'committed' as const, result }) } }); assert.equal(journal.list(actor).length, 0);
+});
+test('manual case decisions bind original report and actor, preserve private recovery, and reject changed ownership, quantities and mixed receipts', async () => {
+  const owner = { id: result.caseId, revision: '1' as const, requestedAt: result.requestedAt, state: 'requested' as const, issue: 'damaged' as const, reportedProblem: 'Barang rusak', source, lines, decision: null };
+  const preview = { caseId: owner.id, invoiceId, revision: '1' as const, binding: 'b'.repeat(64), state: 'requested' as const, decidedAt: null, publicExplanation: null, lines: [] };
+  const decisionKey = 'cd.' + owner.id + '.original', saved = { caseId: owner.id, invoiceId, revision: '2' as const, state: 'return_authorized' as const, decidedAt: '2026-09-30T03:02:00Z', operation: 'fulfillment.case.decide' as const };
+  const command = prepareCaseDecision(actor, owner, preview, 'authorize_return', lines, 'Kembalikan untuk pemeriksaan', 'Catatan petugas'); assert.ok(Object.isFrozen(command.body.lines[0])); assert.equal(command.actorId, actor);
+  for (const changed of [{ ...preview, caseId: '1' }, { ...preview, invoiceId: '1' }, { ...preview, binding: 'A'.repeat(64) }]) assert.throws(() => prepareCaseDecision(actor, owner, changed, 'authorize_return', lines, 'Penjelasan', 'Catatan'));
+  for (const changed of [[], [{ ...lines[0], reportedBaseUnits: '2' }], [...lines, ...lines]]) assert.throws(() => prepareCaseDecision(actor, owner, preview, 'authorize_return', changed, 'Penjelasan', 'Catatan'));
+  assert.throws(() => prepareCaseDecision(actor, owner, preview, 'reject', lines, 'Penjelasan', 'Catatan'));
+  assert.throws(() => prepareCaseDecision(actor, owner, preview, 'paid', [], 'Penjelasan', 'Catatan'));
+  assert.throws(() => parseCaseDecisionResult(result, decisionKey)); assert.throws(() => parseCaseResult(saved, key)); assert.throws(() => parseCaseDecisionResult({ ...saved, caseId: '1' }, decisionKey));
+  assert.deepEqual(parseCaseDecisionResult(saved, decisionKey), saved);
+  const requests: Request[] = []; const gateway = createCaseGateway(createUnitTokoClient({ baseUrl: 'https://unit-toko.test', fetch: async request => {
+    assert.ok(request instanceof Request); if (request.url.endsWith('/identity/csrf')) return Response.json({ requestToken: 'csrf' }); requests.push(request);
+    if (request.url.endsWith('/operations/query')) return Response.json({ status: 'committed', result: saved });
+    assert.equal(request.headers.get('X-Expected-Actor-Id'), actor); assert.equal(request.headers.get('X-CSRF-Token'), 'csrf'); assert.equal(request.headers.get('If-Match'), '"1"'); assert.equal(request.headers.get('Idempotency-Key'), decisionKey); return Response.json(saved);
+  } }));
+  await assert.rejects(() => gateway.decide(command, decisionKey, () => false)); assert.equal(requests.length, 0);
+  assert.deepEqual(await gateway.decide(command, decisionKey, () => true), saved); assert.deepEqual(await requests[0].clone().json(), command.body);
+  assert.deepEqual(await gateway.recoverDecision(actor, decisionKey), { state: 'committed', result: saved });
+  const values = new Map<string, string>(), storage = { get length() { return values.size; }, key: (index: number) => [...values.keys()][index] ?? null,
+    getItem: (key: string) => values.get(key) ?? null, setItem: (key: string, value: string) => { values.set(key, value); }, removeItem: (key: string) => { values.delete(key); } };
+  const journal = new OperationJournal(() => storage), entry = journal.remember(actor, 'fulfillment.case.decide', decisionKey), legacy = { lookup: async () => { throw new Error('wrong owner'); }, close: async () => { throw new Error('must not close'); } };
+  assert.ok(!JSON.stringify([...values.values()]).includes('Catatan')); assert.equal(operationRecoveryCapabilities(entry.operation, { 'fulfillment.case': { lookup: async () => null } }).canClose, false);
+  await assert.rejects(() => reconcileOperationRecovery(entry, journal, legacy, { 'fulfillment.case': { lookup: async () => ({ state: 'committed', result }) } })); assert.equal(journal.list(actor).length, 1);
+  assert.equal((await reconcileOperationRecovery(entry, journal, legacy, { 'fulfillment.case': { lookup: async () => null } })).state, 'unconfirmed'); assert.equal(journal.list(actor).length, 1);
+  await reconcileOperationRecovery(entry, journal, legacy, { 'fulfillment.case': { lookup: async () => ({ state: 'committed', result: saved }) } }); assert.equal(journal.list(actor).length, 0);
 });

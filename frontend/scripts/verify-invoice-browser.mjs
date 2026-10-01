@@ -13,7 +13,7 @@ const config = JSON.parse(Buffer.concat(chunks).toString('utf8')), api = new URL
 assert.equal(process.versions.node.split('.')[0], '24'); assert.equal(api.protocol, 'http:'); assert.equal(api.hostname, '127.0.0.1'); assert.ok(Number(api.port) > 0); assert.equal(origin.href, 'https://portal.unit-toko.co.id/');
 const load = createRequire(config.playwrightPackage), metadata = load(config.playwrightPackage); assert.equal(metadata.name, 'playwright'); assert.equal(metadata.version, '1.62.1');
 const { chromium } = load('playwright'), channel = process.env.UNITTOKO_BROWSER_CHANNEL ?? 'chromium'; assert.ok(['chromium', 'msedge'].includes(channel));
-const app = next({ dev: false, dir: process.cwd(), quiet: true }), sockets = new Set(), writes = [], caseWrites = [], errors = [], pages = [];
+const app = next({ dev: false, dir: process.cwd(), quiet: true }), sockets = new Set(), writes = [], caseWrites = [], decisionWrites = [], errors = [], pages = [];
 const directory = resolve('../tmp/production/invoice-browser-results'); mkdirSync(directory, { recursive: true });
 let browser, frontend, edge, tunnel, dropNext = false, dropped = 0;
 function track(server) { server.on('connection', socket => { sockets.add(socket); socket.on('close', () => sockets.delete(socket)); }); return server; }
@@ -24,7 +24,8 @@ function forward(req, res, port, isApi) {
   if (isApi) { headers['x-forwarded-for'] = req.socket.remoteAddress; headers['x-forwarded-host'] = origin.host; headers['x-forwarded-proto'] = 'https'; }
   const write = req.method === 'POST' && req.url === '/api/v1/billing/invoices'; if (write) writes.push({ key: req.headers['idempotency-key'], actor: req.headers['x-expected-actor-id'] });
   const caseWrite = req.method === 'POST' && req.url === '/api/v1/fulfillment/cases'; if (caseWrite) caseWrites.push({ key: req.headers['idempotency-key'], actor: req.headers['x-expected-actor-id'] });
-  const drop = (write || caseWrite) && dropNext; if (drop) dropNext = false;
+  const decisionWrite = req.method === 'POST' && /^\/api\/v1\/fulfillment\/cases\/[1-9][0-9]*\/decision$/.test(req.url); if (decisionWrite) decisionWrites.push({ key: req.headers['idempotency-key'], actor: req.headers['x-expected-actor-id'] });
+  const drop = (write || caseWrite || decisionWrite) && dropNext; if (drop) dropNext = false;
   const upstream = http.request({ hostname: '127.0.0.1', port, path: req.url, method: req.method, headers }, response => {
     if (drop && response.statusCode === 200) { response.resume(); response.once('end', () => { dropped++; res.writeHead(200, { 'content-type': 'application/json', 'content-length': '64', 'cache-control': 'no-store' }); res.flushHeaders(); res.write('{'); setTimeout(() => res.destroy(), 25); }); return; }
     res.writeHead(response.statusCode ?? 502, response.headers); response.pipe(res);
@@ -94,10 +95,37 @@ try {
     const caseReferences = await buyer.page.evaluate(() => Object.keys(localStorage).filter(key => key.startsWith('unit-toko:pending:v1:')).map(key => JSON.parse(localStorage[key])));
     assert.equal(caseReferences.length, 1); assert.equal(caseReferences[0].operation, 'fulfillment.case.request'); assert.deepEqual(Object.keys(caseReferences[0]).sort(), ['actorId', 'createdAt', 'key', 'operation']);
     assert.match(caseReferences[0].key, /^ca\.[1-9][0-9]*\./); assert.ok(!JSON.stringify(caseReferences).includes('rusak'));
-    await buyer.page.reload(); await buyer.page.getByRole('button', { name: 'Periksa hasil', exact: true }).click(); await buyer.page.getByText(/^Keluhan \d+ tersimpan/).waitFor();
+    await buyer.page.reload(); await buyer.page.getByRole('button', { name: 'Periksa hasil', exact: true }).click(); await buyer.page.getByText(/^Pengajuan keluhan \d+ tercatat/).waitFor();
     assert.equal(caseWrites.length, 1); assert.equal(caseWrites[0].actor, config.buyerId); assert.equal(dropped, 2); assert.equal(await buyer.page.getByRole('button', { name: /Selesaikan dan tutup/ }).count(), 0);
     await buyer.page.getByRole('button', { name: /^Buka keluhan \d+$/ }).click(); await buyer.page.getByRole('region', { name: 'Rincian keluhan', exact: true }).getByText('Satu barang rusak saat dibuka', { exact: true }).waitFor();
     assert.equal(await buyer.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true); await buyer.page.screenshot({ path: resolve(directory, 'case-buyer-mobile.png'), fullPage: true });
+    if (config.caseDecision) {
+      assert.equal(await buyer.page.getByRole('button', { name: 'Periksa kewenangan keputusan', exact: true }).count(), 0);
+      await page.goto(origin.origin + '/fulfillment/cases'); await page.getByRole('button', { name: /^Buka keluhan \d+$/ }).click();
+      const decisionPanel = page.getByRole('region', { name: 'Pemeriksaan keluhan', exact: true });
+      await decisionPanel.getByRole('button', { name: 'Periksa kewenangan keputusan', exact: true }).click();
+      await decisionPanel.getByLabel(/^Jumlah retur/).fill('1'); await decisionPanel.getByLabel('Penjelasan keputusan untuk pelanggan', { exact: true }).fill('Kembalikan satu barang untuk pemeriksaan kondisi');
+      await decisionPanel.getByLabel('Catatan pemeriksa internal', { exact: true }).fill('Pertimbangan pemeriksa privat');
+      await decisionPanel.getByRole('button', { name: 'Tinjau keputusan keluhan', exact: true }).click();
+      const decisionReview = decisionPanel.getByRole('region', { name: 'Konfirmasi keputusan keluhan', exact: true }); await decisionReview.waitFor();
+      assert.equal(await decisionReview.getByRole('heading', { name: 'Izinkan pengembalian barang', exact: true }).evaluate(element => element === document.activeElement), true);
+      await decisionReview.getByRole('button', { name: 'Kembali ke pemeriksaan', exact: true }).click(); assert.equal(decisionWrites.length, 0);
+      await decisionPanel.getByRole('button', { name: 'Tinjau keputusan keluhan', exact: true }).click(); await decisionReview.getByRole('checkbox').check();
+      await finance.context.setOffline(true); await page.getByText(/Koneksi terputus/).waitFor(); assert.equal(await decisionReview.getByRole('button', { name: 'Simpan keputusan keluhan', exact: true }).isDisabled(), true); assert.equal(decisionWrites.length, 0);
+      await finance.context.setOffline(false); await page.getByText(/Koneksi terputus/).waitFor({ state: 'hidden' });
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true); await page.screenshot({ path: resolve(directory, 'case-decision-review-mobile.png'), fullPage: true });
+      dropNext = true; await decisionReview.getByRole('button', { name: 'Simpan keputusan keluhan', exact: true }).click(); await page.getByRole('button', { name: 'Periksa hasil', exact: true }).waitFor();
+      const pending = await page.evaluate(() => Object.keys(localStorage).filter(key => key.startsWith('unit-toko:pending:v1:')).map(key => JSON.parse(localStorage[key])));
+      assert.equal(pending.length, 1); assert.equal(pending[0].operation, 'fulfillment.case.decide'); assert.match(pending[0].key, /^cd\.[1-9][0-9]*\./);
+      assert.deepEqual(Object.keys(pending[0]).sort(), ['actorId', 'createdAt', 'key', 'operation']); assert.ok(!JSON.stringify(pending).includes('privat'));
+      await page.reload(); await page.getByRole('button', { name: 'Periksa hasil', exact: true }).click(); await page.getByRole('button', { name: 'Periksa hasil', exact: true }).waitFor({ state: 'hidden' });
+      assert.equal(decisionWrites.length, 1); assert.equal(decisionWrites[0].actor, config.financeId); assert.equal(dropped, 3); assert.equal(await page.getByRole('button', { name: /Selesaikan dan tutup/ }).count(), 0);
+      await buyer.page.reload(); await buyer.page.getByRole('button', { name: /^Buka keluhan \d+$/ }).click();
+      const explanation = buyer.page.getByRole('region', { name: 'Keputusan keluhan', exact: true }); await explanation.getByText('Kembalikan satu barang untuk pemeriksaan kondisi', { exact: true }).waitFor();
+      assert.ok(!(await buyer.page.locator('main').innerText()).includes('Pertimbangan pemeriksa privat')); assert.equal(await buyer.page.getByRole('button', { name: 'Periksa kewenangan keputusan', exact: true }).count(), 0);
+      assert.equal(await buyer.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true); await buyer.page.screenshot({ path: resolve(directory, 'case-decision-buyer-mobile.png'), fullPage: true });
+      console.log('REAL_CASE_DECISION_BROWSER_PASS ' + JSON.stringify({ decisions: decisionWrites.length, independentReviewer: true, lostDecisionRecovered: true, privateNoteHidden: true, originalReportPreserved: true, offlineUnsent: true, mobile: true }));
+    }
     const caseOutsider = await user(config.courierToken); await caseOutsider.page.goto(origin.origin + '/fulfillment/cases'); await caseOutsider.page.getByRole('heading', { name: 'Periksa sesi dan akses', exact: true }).waitFor();
     assert.equal(await caseOutsider.page.getByRole('button', { name: /^Buka keluhan/ }).count(), 0);
     console.log('REAL_CASE_BROWSER_PASS ' + JSON.stringify({ requests: caseWrites.length, lostResponseRecovered: true, originalSaleLinked: true, requester: true, outsiderDenied: true, privateMetadataOnly: true, offlineUnsent: true, mobile: true }));

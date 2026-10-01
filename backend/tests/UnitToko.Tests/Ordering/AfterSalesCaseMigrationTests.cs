@@ -21,14 +21,14 @@ public sealed class AfterSalesCaseMigrationTests(MongoFixture fixture)
         var extra = new BsonDocument("requestKey", new BsonDocument("$ne", "operator-blocked-case"));
         await db.RunCommandAsync<BsonDocument>(new BsonDocument { { "create", AfterSalesCaseRecords.Collection }, { "validator", extra } });
         var before = await Definitions(db); var receipts = await db.GetCollection<BsonDocument>("schemaMigrations").Find(new BsonDocument()).Sort(new BsonDocument("_id", 1)).ToListAsync();
-        await new CollectionMigrations(db, new SystemClock()).ApplyAsync(); var after = await Definitions(db);
+        await LegacyOrderSubmissionTestSchema.UpgradeV47Async(db, new SystemClock()); var after = await Definitions(db);
         Assert.Equal(before.Where(row => row["name"] != AfterSalesCaseRecords.Collection), after.Where(row => row["name"] != AfterSalesCaseRecords.Collection));
         var validator = after.Single(row => row["name"] == AfterSalesCaseRecords.Collection)["options"]["validator"].AsBsonDocument;
         Assert.True(InventorySchemas.Contains(validator, extra)); Assert.True(InventorySchemas.Contains(validator, AfterSalesCaseSchemas.Validator()));
         Assert.Equal(receipts, (await db.GetCollection<BsonDocument>("schemaMigrations").Find(new BsonDocument()).Sort(new BsonDocument("_id", 1)).ToListAsync()).Take(46));
         // Isolated empty interrupted-install fixture; no production receipt is deleted or downgraded.
         await db.GetCollection<BsonDocument>("schemaMigrations").DeleteOneAsync(new BsonDocument("_id", 47));
-        await new CollectionMigrations(db, new SystemClock()).ApplyAsync(); Assert.Equal(after, await Definitions(db));
+        await LegacyOrderSubmissionTestSchema.UpgradeV47Async(db, new SystemClock()); Assert.Equal(after, await Definitions(db));
     });
     [Theory]
     [InlineData("ttl")] [InlineData("legacy")] [InlineData("orphan")]
@@ -36,7 +36,7 @@ public sealed class AfterSalesCaseMigrationTests(MongoFixture fixture)
         if (fault == "ttl") { await db.CreateCollectionAsync(AfterSalesCaseRecords.Collection); await db.GetCollection<BsonDocument>(AfterSalesCaseRecords.Collection).Indexes.CreateOneAsync(new CreateIndexModel<BsonDocument>(new BsonDocument("requestedAt", 1), new CreateIndexOptions { ExpireAfter = TimeSpan.FromDays(1) })); }
         else if (fault == "legacy") await db.GetCollection<BsonDocument>("cases").InsertOneAsync(new BsonDocument { { "_id", 99L }, { "schemaVersion", 1 } }, new InsertOneOptions { BypassDocumentValidation = true });
         else await db.GetCollection<BsonDocument>("outboxEvents").InsertOneAsync(new BsonDocument { { "_id", ObjectId.GenerateNewId() }, { "kind", AfterSalesCaseRecords.Operation }, { "payload", new BsonDocument("caseId", 99L) } }, new InsertOneOptions { BypassDocumentValidation = true });
-        var before = await Definitions(db); await Assert.ThrowsAsync<InvalidOperationException>(() => new CollectionMigrations(db, new SystemClock()).ApplyAsync()); Assert.Equal(before, await Definitions(db));
+        var before = await Definitions(db); await Assert.ThrowsAsync<InvalidOperationException>(() => LegacyOrderSubmissionTestSchema.UpgradeV47Async(db, new SystemClock())); Assert.Equal(before, await Definitions(db));
         Assert.False(await db.GetCollection<BsonDocument>("schemaMigrations").Find(new BsonDocument { { "_id", 47 }, { "state", "applied" } }).AnyAsync());
     });
 }

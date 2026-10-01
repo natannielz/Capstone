@@ -20,9 +20,9 @@ public sealed record AfterSalesSourceLine(LongId OrderId, LongId ShipmentId, Lon
     string PackageLabel, int BaseUnitsPerPackage, string BaseUnitCode, long AcceptedBaseUnits);
 public sealed record AfterSalesSourceView(LongId InvoiceId, string Binding, string Number, string BuyerName, string SellerName, DateTimeOffset IssuedAt, ImmutableArray<AfterSalesSourceLine> Lines);
 public sealed record AfterSalesCaseView(LongId Id, long Revision, DateTimeOffset RequestedAt, string State, string Issue, string ReportedProblem,
-    AfterSalesSourceView Source, ImmutableArray<AfterSalesCaseLine> Lines);
+    AfterSalesSourceView Source, ImmutableArray<AfterSalesCaseLine> Lines, AfterSalesDecisionView? Decision = null);
 public sealed record AfterSalesCasePage(ImmutableArray<AfterSalesCaseView> Items, bool HasMore);
-public sealed class AfterSalesCaseService
+public sealed partial class AfterSalesCaseService
 {
     private readonly IMongoDatabase database;
     private readonly IClock clock;
@@ -38,7 +38,9 @@ public sealed class AfterSalesCaseService
     private DateTimeOffset Now => DateTimeOffset.FromUnixTimeMilliseconds(clock.UtcNow.ToUnixTimeMilliseconds());
     private async Task StorageAsync(CancellationToken ct) {
         await invoices.PaymentStorageAsync(ct);
+        await invoices.CaseReturnStorageAsync(ct);
         await InventoryRepository.RequireStorageAsync(database, R.Collection, AfterSalesCaseSchemas.Validator(), AfterSalesCaseSchemas.Key(), ct);
+        await InventoryRepository.RequireStorageAsync(database, AfterSalesDecisionRecords.Collection, AfterSalesDecisionSchemas.Validator(), AfterSalesDecisionSchemas.Key(), ct);
         if (!await new CollectionMigrations(database, clock).IsCurrentAsync(ct)) throw R.Broken();
     }
     private AuthorizationQuery Query(ActorContext actor, AuthorizationSnapshot authority, string permission) {
@@ -53,7 +55,9 @@ public sealed class AfterSalesCaseService
         var candidate = await records.Rows(R.Collection).Find(tx, new BsonDocument("_id", id)).SingleOrDefaultAsync(ct) ?? throw R.Broken(); Require(actor, authority, candidate, permission);
         var row = await records.ReadAsync(tx, id, ct);
         var source = await invoices.CaseSourceAsync(actor, authority, tx, row["source"]["invoiceId"].AsInt64, permission, ct);
-        if (!InvoiceRecords.Equal(source, row["source"]) || row["requestedAt"].ToUniversalTime() > Now.UtcDateTime) throw R.Broken(); return row;
+        if (!InvoiceRecords.Equal(source, row["source"]) || row["requestedAt"].ToUniversalTime() > Now.UtcDateTime) throw R.Broken();
+        var decision = await new AfterSalesDecisionRecords(database).ReadAsync(tx, row, ct);
+        if (decision is not null && decision["decidedAt"].ToUniversalTime() > Now.UtcDateTime) throw R.Broken(); return row;
     }
     private async Task FenceAsync(ActorContext actor, AuthorizationSnapshot authority, IClientSessionHandle tx, BsonDocument row, string permission, CancellationToken ct) {
         await records.TouchAsync(tx, row, ct); await invoices.CaseFenceAsync(actor, authority, tx, row["source"]["scopes"].AsBsonArray, permission, ct); Require(actor, authority, row, permission);
@@ -65,8 +69,12 @@ public sealed class AfterSalesCaseService
         new(row["issuedAt"].ToUniversalTime()), [.. row["lines"].AsBsonArray.Select(line => new AfterSalesSourceLine(new(line["orderId"].AsInt64), new(line["shipmentId"].AsInt64),
             new(line["receiptId"].AsInt64), new(line["skuId"].AsInt64), line["skuCode"].AsString, line["productName"].AsString, line["packageLabel"].AsString,
             line["baseUnitsPerPackage"].AsInt32, line["baseUnitCode"].AsString, line["acceptedBaseUnits"].AsInt64))]);
-    private static AfterSalesCaseView View(BsonDocument row) => new(new(row["_id"].AsInt64), row["revision"].AsInt64, new(row["requestedAt"].ToUniversalTime()), "requested",
-        row["input"]["issue"].AsString, row["reason"].AsString, SourceView(row["source"].AsBsonDocument), R.Input(row["input"].AsBsonDocument).Lines);
+    private async Task<AfterSalesCaseView> ViewAsync(IClientSessionHandle tx, BsonDocument row, CancellationToken ct) {
+        var decision = await new AfterSalesDecisionRecords(database).ReadAsync(tx, row, ct);
+        return new(new(row["_id"].AsInt64), decision is null ? 1 : 2, new(row["requestedAt"].ToUniversalTime()), decision?["state"].AsString ?? "requested",
+            row["input"]["issue"].AsString, row["reason"].AsString, SourceView(row["source"].AsBsonDocument), R.Input(row["input"].AsBsonDocument).Lines,
+            decision is null ? null : DecisionView(row, decision));
+    }
     public async Task<AfterSalesSourceView> SourceAsync(ActorContext actor, long invoiceId, CancellationToken ct = default) {
         if (invoiceId <= 0) throw AfterSalesCasePolicy.Invalid(); await StorageAsync(ct);
         return await authorization.ReadAsync(actor, async (authority, tx, token) => {
@@ -110,7 +118,7 @@ public sealed class AfterSalesCaseService
         if (id <= 0) throw AfterSalesCasePolicy.Invalid(); await StorageAsync(ct);
         return await authorization.ReadAsync(actor, async (authority, tx, token) => {
             var row = await AuthorizedAsync(actor, authority, tx, id, Permissions.CaseRead, token); await AuditReadAsync(actor, tx, "read", id, token);
-            await FenceAsync(actor, authority, tx, row, Permissions.CaseRead, token); return View(row);
+            await FenceAsync(actor, authority, tx, row, Permissions.CaseRead, token); return await ViewAsync(tx, row, token);
         }, ct);
     }
     public async Task<AfterSalesCasePage> ListAsync(ActorContext actor, long? beforeId = null, CancellationToken ct = default) {
@@ -127,7 +135,7 @@ public sealed class AfterSalesCaseService
             var candidates = await records.Rows(R.Collection).Aggregate<BsonDocument>(tx, pipeline).ToListAsync(token); var views = ImmutableArray.CreateBuilder<AfterSalesCaseView>(); var scopes = new BsonArray();
             foreach (var candidate in candidates) {
                 var row = await AuthorizedAsync(actor, authority, tx, candidate["_id"].AsInt64, Permissions.CaseRead, token);
-                await FenceAsync(actor, authority, tx, row, Permissions.CaseRead, token); scopes.AddRange(row["source"]["scopes"].AsBsonArray); views.Add(View(row));
+                await FenceAsync(actor, authority, tx, row, Permissions.CaseRead, token); scopes.AddRange(row["source"]["scopes"].AsBsonArray); views.Add(await ViewAsync(tx, row, token));
             }
             await AuditReadAsync(actor, tx, "list", BsonNull.Value, token); await invoices.CaseFenceAsync(actor, authority, tx, scopes, Permissions.CaseRead, token);
             return new AfterSalesCasePage([.. views.Take(25)], candidates.Count > 25);

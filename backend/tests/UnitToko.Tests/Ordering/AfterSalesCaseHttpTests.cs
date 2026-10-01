@@ -12,6 +12,9 @@ using UnitToko.Platform.Fulfillment;
 using UnitToko.Platform.Identity;
 using UnitToko.Tests.Catalog;
 using UnitToko.Tests.Identity;
+using MongoDB.Bson;
+using MongoDB.Driver;
+using UnitToko.Tests.Authorization;
 
 namespace UnitToko.Tests.Ordering;
 [Collection("Mongo")]
@@ -64,5 +67,33 @@ public sealed class AfterSalesCaseHttpTests(MongoFixture fixture)
         foreach (var secret in new[] { "invoiceHash", "snapshotHash", "requestKey", "requestedBy", "grantVersion", "journal", "price", "tax", "bank", "scopes" }) Assert.DoesNotContain(secret, text, StringComparison.OrdinalIgnoreCase);
         Assert.True((await Request("/query", new { purpose = "after-sales-case" })).IsSuccessStatusCode);
         Assert.Equal(1, await data.Invoice.Count("afterSalesCases"));
+        await order.Prices.Catalog.Base.AddGrantAsync(data.Invoice.Finance, 99830, CatalogAuthoringTestData.Shop, [Permissions.CaseRead, Permissions.CaseManage]);
+        foreach (var person in new[] { buyer.UserId, data.Invoice.Finance.UserId }) if (!await data.Invoice.Rows("personRecords").Find(new BsonDocument("_id", PersonTestData.PersonId(person))).AnyAsync())
+            await PersonTestData.SeedDistinctPeopleAsync(order.Database, order.Prices.Catalog.Clock, person);
+        using var staff = factory.CreateClient(new() { BaseAddress = new(origin), AllowAutoRedirect = false });
+        staff.DefaultRequestHeaders.Add("Cookie", OpaqueSessionCookie.Name + "=" + order.Prices.Catalog.Issued[data.Invoice.Finance.UserId].OpaqueToken);
+        var staffCsrf = (await staff.GetFromJsonAsync<JsonElement>("/api/v1/identity/csrf")).GetProperty("requestToken").GetString()!;
+        var staffAccess = await staff.GetFromJsonAsync<JsonElement>("/api/v1/access/current"); Assert.Contains(staffAccess.GetProperty("allowedActions").EnumerateArray(), value => value.GetString() == Permissions.CaseManage);
+        var caseId = result.GetProperty("caseId").GetString()!;
+        async Task<HttpResponseMessage> Staff(string suffix, object value, string version = "1", string? fault = null) {
+            using var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/fulfillment/cases/" + caseId + suffix) { Content = JsonContent.Create(value) };
+            request.Headers.Add("Origin", origin); if (fault != "actor") request.Headers.Add("X-Expected-Actor-Id", data.Invoice.Finance.UserId.ToString());
+            if (fault != "csrf") request.Headers.Add("X-CSRF-Token", staffCsrf); request.Headers.Add("If-Match", "\"" + version + "\""); request.Headers.Add("Idempotency-Key", "case-http-decision"); return await staff.SendAsync(request);
+        }
+        Assert.Equal(HttpStatusCode.Forbidden, (await Request("/" + caseId + "/decision/query", new { purpose = "after-sales-decision" })).StatusCode);
+        var decisionPreview = await Staff("/decision/query", new { purpose = "after-sales-decision" }); Assert.True(decisionPreview.IsSuccessStatusCode, await decisionPreview.Content.ReadAsStringAsync()); Assert.True(decisionPreview.Headers.CacheControl!.NoStore);
+        var decision = await decisionPreview.Content.ReadFromJsonAsync<JsonElement>(); Assert.Equal(caseId, decision.GetProperty("caseId").GetString());
+        var action = new { binding = decision.GetProperty("binding").GetString(), action = "authorize_return", publicExplanation = "Kembalikan barang untuk pemeriksaan", lines, reason = "Catatan pemeriksa privat" };
+        Assert.Equal(HttpStatusCode.BadRequest, (await Staff("/decision", action, fault: "actor")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await Staff("/decision", action, fault: "csrf")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Staff("/decision", new { action.binding, action.action, action.publicExplanation, lines, action.reason, refundAmount = "1000" })).StatusCode);
+        var recorded = await Staff("/decision", action); Assert.True(recorded.IsSuccessStatusCode, await recorded.Content.ReadAsStringAsync()); var savedDecision = await recorded.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("2", savedDecision.GetProperty("revision").GetString());
+        var decisionRecovery = await Staff("/decision/operations/query", new { purpose = "operation-recovery", key = "case-http-decision" }); Assert.True(decisionRecovery.IsSuccessStatusCode);
+        Assert.Equal(savedDecision.GetRawText(), (await decisionRecovery.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("result").GetRawText());
+        Assert.Equal(HttpStatusCode.Conflict, (await Request("/" + caseId + "/query", new { purpose = "after-sales-case" })).StatusCode);
+        var buyerDecision = await Request("/" + caseId + "/query", new { purpose = "after-sales-case" }, "2"); Assert.True(buyerDecision.IsSuccessStatusCode); Assert.Equal("\"2\"", buyerDecision.Headers.ETag!.Tag);
+        var buyerText = await buyerDecision.Content.ReadAsStringAsync(); Assert.Contains(action.publicExplanation, buyerText); Assert.DoesNotContain(action.reason, buyerText); Assert.DoesNotContain("personId", buyerText); Assert.DoesNotContain("actorId", buyerText);
+        Assert.Equal(1, await data.Invoice.Count("afterSalesCaseDecisions"));
     }
 }

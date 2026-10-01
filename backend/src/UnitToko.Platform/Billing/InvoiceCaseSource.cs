@@ -2,15 +2,29 @@ using MongoDB.Bson;
 using MongoDB.Driver;
 using UnitToko.Modules.Identity;
 using UnitToko.Modules.Identity.Contracts;
+using UnitToko.Platform.Inventory;
+using UnitToko.Platform.Mongo.Migrations;
 
 namespace UnitToko.Platform.Billing;
 public sealed partial class InvoiceService
 {
+    internal const string CaseReturnFences = "invoiceCaseReturnFences";
+    internal Task CaseReturnStorageAsync(CancellationToken ct) => InventoryRepository.RequireStorageAsync(database, CaseReturnFences, InvoiceCaseReturnSchemas.Validator(), new BsonDocument("_id", 1), ct);
     internal Task CaseFenceAsync(ActorContext actor, AuthorizationSnapshot authority, IClientSessionHandle tx, BsonArray scopes, string permission, CancellationToken ct) =>
         receipts.InvoiceFenceAsync(actor, authority, tx, PaymentDraftBson.Scopes(scopes), permission, ct);
+    internal async Task CaseReturnFenceAsync(IClientSessionHandle tx, BsonDocument source, CancellationToken ct) {
+        if (!tx.IsInTransaction || !ReferenceEquals(tx.Client, database.Client)) throw InvoiceRecords.Invalid();
+        var touched = await database.GetCollection<BsonDocument>(CaseReturnFences).UpdateOneAsync(tx,
+            new BsonDocument { { "_id", source["invoiceId"] }, { "invoiceHash", source["invoiceHash"] }, { "fence", new BsonDocument("$lt", long.MaxValue - 1) } },
+            Builders<BsonDocument>.Update.SetOnInsert("schemaVersion", 1).SetOnInsert("invoiceHash", source["invoiceHash"]).Inc("fence", 1L), new UpdateOptions { IsUpsert = true }, ct);
+        if (touched.ModifiedCount != 1 && touched.UpsertedId is null) throw InvoiceRecords.Invalid();
+    }
     internal async Task<BsonDocument> CaseSourceAsync(ActorContext actor, AuthorizationSnapshot authority, IClientSessionHandle tx, long id, string permission, CancellationToken ct) {
         if (permission is not (Permissions.CaseRead or Permissions.CaseRequest or Permissions.CaseManage)) throw InvoiceRecords.Invalid();
-        var row = await AuthorizedInvoiceAsync(actor, authority, tx, id, permission, ct); var view = View(row);
+        var row = await AuthorizedInvoiceAsync(actor, authority, tx, id, permission, ct); return CaseSnapshot(row);
+    }
+    internal static BsonDocument CaseSnapshot(BsonDocument row) {
+        var view = View(row);
         return new() { { "invoiceId", row["_id"] }, { "invoiceHash", row["snapshotHash"] }, { "issuedAt", row["issuedAt"] },
             { "number", FormattableString.Invariant($"{view.NumberEntity.Value}/{view.NumberChannel.Value}/{view.NumberYear}/{view.Number}") },
             { "buyerName", view.Detail.BuyerName }, { "sellerName", view.Detail.SellerName }, { "scopes", row["scopes"].DeepClone() },

@@ -35,6 +35,7 @@ public sealed class PolicyApprovalTests
 
     [Theory]
     [InlineData(Permissions.CreditApprove)]
+    [InlineData(Permissions.CaseManage)]
     [InlineData(Permissions.RefundApprove)]
     [InlineData(Permissions.FundingApprove)]
     [InlineData(Permissions.ExpenseApprove)]
@@ -43,6 +44,17 @@ public sealed class PolicyApprovalTests
         Assert.False(ApprovalPolicy.Evaluate(Actor.UserId, permission, new(1, 1, RequestedBy: Actor.UserId)).Allowed);
         Assert.False(ApprovalPolicy.Evaluate(Actor.UserId, permission, new(1, 1)).Allowed);
         Assert.True(ApprovalPolicy.Evaluate(Actor.UserId, permission, new(1, 1, RequestedBy: 999)).Allowed);
+    }
+
+    [Fact]
+    public void Case_decisions_require_current_revision_fresh_factor_and_verified_independent_people() {
+        var snapshot = Snapshot([Permissions.CaseManage]); var independent = new ApprovalRequest(1, 1, RequestedBy: 999);
+        Assert.True(ScopePolicy.Authorize(Actor, snapshot, Permissions.CaseManage, Resource, Now, independent).Allowed);
+        Assert.False(ScopePolicy.Authorize(Actor, snapshot, Permissions.CaseManage, Resource, Now.AddMinutes(5), independent).Allowed);
+        Assert.False(ScopePolicy.Authorize(Actor, snapshot, Permissions.CaseManage, Resource, Now, independent with { ExpectedRevision = 2 }).Allowed);
+        Assert.Equal(new long[] { Actor.UserId, 999 }, PersonApprovalPolicy.RequiredAccounts(Actor.UserId, Permissions.CaseManage, independent).ToArray());
+        Assert.True(PersonApprovalPolicy.RequiredAccounts(Actor.UserId, Permissions.CaseManage, independent with { RequestedBy = Actor.UserId }).IsDefault);
+        Assert.False(PersonApprovalPolicy.Evaluate(Actor.UserId, Permissions.CaseManage, independent, []).Allowed);
     }
 
     [Fact]

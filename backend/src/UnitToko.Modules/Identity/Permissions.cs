@@ -73,6 +73,7 @@ public static class Permissions
         Add(PaymentReviewCorrect, Operations, true);
         Add(PaymentReviewManual, Operations, true);
         Add(PaymentReviewManage, Operations, true);
+        result[CaseManage] = result[CaseManage] with { Assurance = new(true, TimeSpan.FromMinutes(5)) };
         result[PaymentVerify] = result[PaymentVerify] with { Assurance = new(true, TimeSpan.FromMinutes(5)) };
         result[PaymentAllocate] = result[PaymentAllocate] with { Assurance = new(true, TimeSpan.FromMinutes(5)) };
         Add(SupplierChangeApprove, Operations, true);
