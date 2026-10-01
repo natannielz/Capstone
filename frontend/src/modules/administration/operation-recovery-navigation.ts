@@ -1,4 +1,5 @@
 export function recoveryPage(operation: string) {
+  if (operation === "billing.payment.allocation.correct") return { href: "/billing/payment-reviews", label: "halaman koreksi alokasi pembayaran" };
   if (operation === "billing.payment.allocate") return { href: "/billing/payment-reviews", label: "halaman alokasi pembayaran" };
   if (operation === "billing.bank-receipt.confirm") return { href: "/billing/bank-receipts", label: "halaman penerimaan bank" };
   if (operation === "billing.bank-statement.stage") return { href: "/billing/bank-statements", label: "halaman mutasi bank" };
@@ -36,6 +37,7 @@ export function recoveryPage(operation: string) {
     : { href: "/administration/person-reviews", label: "halaman peninjauan orang" };
 }
 export function operationLabel(operation: string) {
+  if (operation === "billing.payment.allocation.correct") return "Koreksi alokasi pembayaran";
   if (operation === 'fulfillment.case.resolution_request') return 'Pengajuan penyelesaian retur';
   if (operation === 'fulfillment.case.return_inspect') return 'Pemeriksaan barang retur';
   if (operation === 'fulfillment.case.decide') return 'Keputusan pengembalian barang';

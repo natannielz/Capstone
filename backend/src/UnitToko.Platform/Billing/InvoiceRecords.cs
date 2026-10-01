@@ -19,11 +19,17 @@ internal sealed class InvoiceRecords(IMongoDatabase database, ShipmentReceiptSer
     internal static AuthorizationDeniedException Invalid() => new("invoice_unavailable");
     internal static bool Equal(BsonValue left, BsonValue right) => CatalogSchemas.SemanticEquals(left, right);
     internal async Task<BsonDocument> VerifyAsync(ActorContext actor, IClientSessionHandle tx, BsonDocument row, CancellationToken ct) {
+        foreach (var source in InvoiceBson.Sources(row["sources"].AsBsonArray)) await receipts.RequireInvoiceHistoryAsync(actor, tx, source, ct);
+        return await VerifyPersistedAsync(database, tx, row, ct);
+    }
+    // Deployment-only consumers validate persisted business anchors without inventing a live actor.
+    // Runtime reads still validate every receipt/shipment/commercial owner above.
+    internal static async Task<BsonDocument> VerifyPersistedAsync(IMongoDatabase database, IClientSessionHandle tx, BsonDocument row, CancellationToken ct) {
+        IMongoCollection<BsonDocument> Rows(string name) => database.GetCollection<BsonDocument>(name);
         if (!await Rows(InvoiceBson.Invoices).Find(tx, Builders<BsonDocument>.Filter.Eq("_id", row["_id"]) & InvoiceSchemas.Validator(InvoiceBson.Invoices)).AnyAsync(ct)) throw Invalid();
         var sources = InvoiceBson.Sources(row["sources"].AsBsonArray); var terms = InvoiceBson.Terms(row["terms"].AsBsonDocument);
         var issued = ShipmentReceiptRecords.Time(row["issuedAt"]); var date = AccountingCalendar.BusinessDate(issued);
         InvoiceAdmissionPolicy.Require(sources, terms, issued);
-        foreach (var source in sources) await receipts.RequireInvoiceHistoryAsync(actor, tx, source, ct);
         var orderIds = sources.Select(source => source.Snapshot["commercial"]["orderId"].AsInt64).Distinct().Order().ToArray();
         if (!Equal(row["orderIds"], new BsonArray(orderIds.Select(id => new BsonInt64(id)))) || !Equal(row["terms"], InvoiceBson.Terms(terms)) ||
             !Equal(row["scopes"], new BsonArray(sources.Select(source => ShipmentPreparationBson.Scope(source.Resource)))) ||

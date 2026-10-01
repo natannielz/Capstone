@@ -1,6 +1,7 @@
 using System.Runtime.Versioning;
 using MongoDB.Bson;
 using MongoDB.Driver;
+using UnitToko.Modules.Accounting;
 using UnitToko.Platform.Authorization;
 using UnitToko.Tests.Documents;
 using B = UnitToko.Platform.Billing.PaymentAllocationBson;
@@ -35,7 +36,10 @@ public sealed class PaymentAllocationIntegrityTests(MongoFixture fixture)
     public async Task Failed_allocation_rolls_back_balances_event_accounting_and_operation_receipt(string fault) {
         await using var data = await PaymentAllocationTests.Data.CreateAsync(fixture); var input = data.Input(0, 1000m);
         var preview = await data.Service.PreviewAsync(data.Actor, data.VerificationId, input);
-        if (fault == "period") await data.Rows("accountingBooks").UpdateOneAsync(new BsonDocument("_id", 1L), Builders<BsonDocument>.Update.Set("closedThrough", "2026-09"));
+        if (fault == "period") {
+            var month = AccountingCalendar.Month(DateOnly.FromDateTime(data.Source.Read.Catalog.Clock.UtcNow.ToOffset(TimeSpan.FromHours(7)).DateTime));
+            Assert.Equal(1, (await data.Rows("accountingBooks").UpdateOneAsync(new BsonDocument("_id", 1L), Builders<BsonDocument>.Update.Set("closedThrough", month))).ModifiedCount);
+        }
         if (fault == "policy") await data.Rows(B.Policies).UpdateOneAsync(new BsonDocument(), Builders<BsonDocument>.Update.Set("active", false));
         if (fault is "suspense-remapped" or "ar-remapped") {
             var chart = await data.Rows("accountingChartVersions").Find(new BsonDocument("_id", 20L)).SingleAsync();
@@ -46,6 +50,7 @@ public sealed class PaymentAllocationIntegrityTests(MongoFixture fixture)
             { "validator", new BsonDocument("kind", new BsonDocument("$ne", B.Operation)) }, { "validationLevel", "strict" }, { "validationAction", "error" } });
         var error = await Record.ExceptionAsync(() => data.Service.AllocateAsync(data.Actor, data.VerificationId, preview.Binding, input, PaymentAllocationTests.Data.Meta("rollback")));
         Assert.NotNull(error);
+        if (fault == "period") Assert.Equal("accounting_period_closed", Assert.IsType<UnitToko.Platform.Mongo.PersistenceConflictException>(error).Code);
         if (fault is "suspense-remapped" or "ar-remapped") Assert.Equal("payment_allocation_accounting_mapping_changed", Assert.IsType<UnitToko.Platform.Mongo.PersistenceConflictException>(error).Code);
         foreach (var name in new[] { B.Events, B.Receipts, B.Invoices }) Assert.False(await data.Rows(name).Find(new BsonDocument()).AnyAsync());
         foreach (var (name, field) in new[] { ("auditEvents", "kind"), ("outboxEvents", "kind"), ("idempotencyRecords", "operation") }) Assert.False(await data.Rows(name).Find(new BsonDocument(field, B.Operation)).AnyAsync());

@@ -339,6 +339,7 @@ app.MapPaymentManualReviewEndpoints();
 app.MapPaymentReviewActionEndpoints();
 app.MapPaymentVerificationEndpoints();
 app.MapPaymentAllocationEndpoints();
+app.MapPaymentAllocationCorrectionEndpoints();
 app.MapReceivingAccountEndpoints();
 app.MapBankStatementEndpoints();
 app.MapBankReceiptEndpoints();

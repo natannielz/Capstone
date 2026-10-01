@@ -12,9 +12,10 @@ import styles from '../administration/access.module.css';
 import invoice from './invoice.module.css';
 
 const rupiah = (value: string) => orderAmount('IDR', value);
-const number = (item: PaymentAllocationView['invoices'][number]) => `${item.numberEntity}/${item.numberChannel}/${item.numberYear}/${item.number.padStart(6, '0')}`;
+export const allocationInvoiceNumber = (item: PaymentAllocationView['invoices'][number]) => `${item.numberEntity}/${item.numberChannel}/${item.numberYear}/${item.number.padStart(6, '0')}`;
+const number = allocationInvoiceNumber;
 const statuses: Record<string, string> = { unpaid: 'Belum dibayar', partial: 'Dibayar sebagian', paid: 'Lunas', credited: 'Dikreditkan', settled: 'Selesai', overdue: 'Lewat jatuh tempo', due: 'Jatuh tempo hari ini', not_due: 'Belum jatuh tempo' };
-function amount(value: string) {
+export function allocationAmount(value: string) {
   const found = /^(0|[1-9][0-9]{0,14})(?:[.,]([0-9]{1,2}))?$(?![\s\S])/.exec(value.trim());
   if (!found || !/[1-9]/.test(value)) throw new AccessFailure(400, 'invalid_payment_allocation');
   return found[1] + '.' + (found[2] ?? '').padEnd(2, '0');
@@ -64,7 +65,7 @@ export function PaymentAllocationPanel({ actorId, owner, verified, allowed, fres
       <dl className={invoice.facts}><div><dt>Dana diterima</dt><dd>{rupiah(view.received)}</dd></div><div><dt>Sudah dialokasikan</dt><dd>{rupiah(view.allocated)}</dd></div>
         <div><dt>Dicadangkan untuk pengembalian</dt><dd>{rupiah(view.reservedForRefund)}</dd></div><div><dt>Dana tersedia</dt><dd>{rupiah(view.available)}</dd></div></dl>
       <form onSubmit={event => { event.preventDefault(); if (!canAllocate) return; void work(async () => {
-        const lines = view.invoices.filter(item => Object.hasOwn(values, item.invoiceId)).map(item => ({ invoiceId: item.invoiceId, expectedVersion: item.version, amount: amount(values[item.invoiceId]) }));
+        const lines = view.invoices.filter(item => Object.hasOwn(values, item.invoiceId)).map(item => ({ invoiceId: item.invoiceId, expectedVersion: item.version, amount: allocationAmount(values[item.invoiceId]) }));
         if (!lines.length) throw new AccessFailure(400, 'invalid_payment_allocation');
         const result = await gateway.preview(actorId, owner, verified, { expectedReceiptVersion: view.receiptVersion, lines });
         if (active()) { setShown(result); setConfirm(preparePaymentAllocation(actorId, result, reason.trim())); }

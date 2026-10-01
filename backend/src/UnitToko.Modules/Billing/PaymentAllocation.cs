@@ -11,6 +11,7 @@ public sealed record PaymentAllocationLine(LongId InvoiceId, long ExpectedVersio
 public sealed record PaymentAllocationInput(long ExpectedReceiptVersion, ImmutableArray<PaymentAllocationLine> Lines);
 public sealed record PaymentAllocationResult(Money Total, Money RemainingReceipt, ImmutableArray<InvoiceAllocationResult> Invoices);
 public sealed record InvoiceAllocationResult(LongId InvoiceId, long PreviousVersion, Money Amount, Money Remaining);
+public sealed record AllocationReversalCapacity(LongId InvoiceId, Money OriginallyAllocated, Money PreviouslyReversed);
 
 /// <summary>Exact arithmetic only. The owning transaction must load and fence canonical
 /// receipt/refund reservations and issued invoice balances; browser totals are never inputs.</summary>
@@ -50,6 +51,27 @@ public static class PaymentAllocationPolicy
         }
         if (total.Value > available.Value) throw Invalid("payment_allocation_exceeds_receipt");
         return new(total, new(available.Value - total.Value), results.ToImmutable());
+    }
+    public static PaymentAllocationResult ReviewReversal(ReceiptFunds receipt, ImmutableArray<InvoiceFunds> invoices,
+        ImmutableArray<AllocationReversalCapacity> capacities, PaymentAllocationInput input) {
+        input = Copy(input); var available = Available(receipt);
+        if (receipt.Version != input.ExpectedReceiptVersion) throw Invalid("payment_allocation_stale");
+        if (invoices.IsDefault || capacities.IsDefault || invoices.Length != input.Lines.Length || capacities.Length != input.Lines.Length ||
+            invoices.Any(invoice => invoice is null) || capacities.Any(capacity => capacity is null) ||
+            invoices.Select(invoice => invoice.InvoiceId).Distinct().Count() != invoices.Length || capacities.Select(capacity => capacity.InvoiceId).Distinct().Count() != capacities.Length) throw Invalid("payment_balance_unavailable");
+        var total = new Money(0); var results = ImmutableArray.CreateBuilder<InvoiceAllocationResult>();
+        foreach (var line in input.Lines) {
+            var invoice = invoices.SingleOrDefault(value => value.InvoiceId == line.InvoiceId) ?? throw Invalid("payment_balance_unavailable");
+            var capacity = capacities.SingleOrDefault(value => value.InvoiceId == line.InvoiceId) ?? throw Invalid("payment_balance_unavailable");
+            var outstanding = Outstanding(invoice);
+            if (invoice.Party != receipt.Party || invoice.Currency != receipt.Currency) throw Invalid("payment_allocation_party_mismatch");
+            if (invoice.Version != line.ExpectedVersion) throw Invalid("payment_allocation_stale");
+            if (capacity.OriginallyAllocated.Value <= 0 || capacity.PreviouslyReversed.Value > capacity.OriginallyAllocated.Value ||
+                line.Amount.Value > capacity.OriginallyAllocated.Value - capacity.PreviouslyReversed.Value || line.Amount.Value > invoice.Paid.Value) throw Invalid("payment_reversal_exceeds_allocation");
+            total = Money.Add(total, line.Amount); results.Add(new(invoice.InvoiceId, invoice.Version, line.Amount, Money.Add(outstanding, line.Amount)));
+        }
+        if (total.Value > receipt.Allocated.Value) throw Invalid("payment_reversal_exceeds_allocation");
+        return new(total, Money.Add(available, total), results.ToImmutable());
     }
     private static bool Version(long value) => value is >= 0 and < long.MaxValue - 1;
     private static bool Party(PaymentPartyKey party) => party is not null && party.BuyingOrganizationId.Value > 0 && party.FulfillmentOrganizationId.Value > 0 && party.ShopId.Value > 0 && party.ChannelId.Value > 0;

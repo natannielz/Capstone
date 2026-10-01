@@ -20,6 +20,7 @@ import { PaymentReviewActionPanel } from './PaymentReviewActionPanel';
 import { PaymentDuplicatePanel } from './PaymentDuplicatePanel';
 import { PaymentVerificationPanel } from './PaymentVerificationPanel';
 import { createPaymentAllocationGateway } from './payment-allocation-client';
+import { createPaymentAllocationCorrectionGateway } from './payment-allocation-correction-client';
 import { createPaymentVerificationGateway } from './payment-verification-client';
 import { PaymentOcrPanel } from './PaymentOcrPanel';
 import type { PaymentDraft, PaymentOcrView } from './payment-client';
@@ -62,7 +63,7 @@ export function PaymentReviewWorkspace() {
   </main>;
 }
 function ReviewDesk({ account, fresh, onDenied }: { account: Account; fresh: boolean; onDenied: (failure: unknown) => void }) {
-  const [gateway] = useState(createPaymentReviewGateway), [corrections] = useState(createPaymentCorrectionGateway), [manual] = useState(createPaymentManualReviewGateway), [reviewActions] = useState(createPaymentReviewActionGateway), [verification] = useState(createPaymentVerificationGateway), [allocation] = useState(createPaymentAllocationGateway), recovery = useOperationRecovery(account.actorId);
+  const [gateway] = useState(createPaymentReviewGateway), [corrections] = useState(createPaymentCorrectionGateway), [manual] = useState(createPaymentManualReviewGateway), [reviewActions] = useState(createPaymentReviewActionGateway), [verification] = useState(createPaymentVerificationGateway), [allocation] = useState(createPaymentAllocationGateway), [allocationCorrections] = useState(createPaymentAllocationCorrectionGateway), recovery = useOperationRecovery(account.actorId);
   const [recovering, setRecovering] = useState(false), [editingBusy, setEditingBusy] = useState(false);
   const [page, setPage] = useState<{ items: PaymentReviewQueueEntry[]; hasMore: boolean; observedAt: string | null }>({ items: [], hasMore: false, observedAt: null }), [before, setBefore] = useState<string | null>(null), [refresh, setRefresh] = useState(0);
   const [filter, setFilter] = useState('all');
@@ -106,6 +107,7 @@ function ReviewDesk({ account, fresh, onDenied }: { account: Account; fresh: boo
         'billing.payment.review.manual': { lookup: async entry => { const result = await manual.recover(entry.actorId, entry.key); if (!current()) throw new AccessFailure(409, 'recovery_request_stale'); return result; } },
         'billing.payment.review.manage': { lookup: async entry => { const result = await reviewActions.recover(entry.actorId, entry.key); if (!current()) throw new AccessFailure(409, 'recovery_request_stale'); return result; } },
         'billing.payment.allocate': { lookup: async entry => { const result = await allocation.recover(entry.actorId, entry.key); if (!current()) throw new AccessFailure(409, 'recovery_request_stale'); return result; } },
+        'billing.payment.allocation.correct': { lookup: async entry => { const result = await allocationCorrections.recover(entry.actorId, entry.key); if (!current()) throw new AccessFailure(409, 'recovery_request_stale'); return result; } },
         'billing.payment.verify': { lookup: async entry => { const result = await verification.recover(entry.actorId, entry.key); if (!current()) throw new AccessFailure(409, 'recovery_request_stale'); return result; } } }}
       onFailure={failure => { setError(failure); if (!(failure instanceof AccessFailure && failure.code === 'step_up_required')) onDenied(failure); }}
       onResolved={() => { recovery.refresh(); refreshPage(null); }} />
@@ -154,7 +156,7 @@ function ReviewDesk({ account, fresh, onDenied }: { account: Account; fresh: boo
       <PaymentVerificationPanel key={'verify:' + selected.id + ':' + selected.revision} actorId={account.actorId} owner={selected}
         manualReview={<PaymentManualReviewPanel actorId={account.actorId} owner={selected} ocr={ocr} allowed={account.actions.includes('payment.review.manual')} fresh={fresh} locked={locked || recovery.locked}
           current={current} journal={recovery.journal} onSettled={recovery.refresh} onDenied={onDenied} onBusyChange={setEditingBusy} />}
-        allowed={account.actions.includes('payment.verify')} allocationAllowed={account.actions.includes('payment.allocate')} fresh={fresh} locked={locked || recovery.locked} current={current}
+        allowed={account.actions.includes('payment.verify')} allocationAllowed={account.actions.includes('payment.allocate')} allocationCorrectionAllowed={account.actions.includes('payment.allocate') && account.actions.includes('journal.reverse')} fresh={fresh} locked={locked || recovery.locked} current={current}
         journal={recovery.journal} onSettled={recovery.refresh} onDenied={onDenied} onBusyChange={setEditingBusy} />
     </section>}
   </>;

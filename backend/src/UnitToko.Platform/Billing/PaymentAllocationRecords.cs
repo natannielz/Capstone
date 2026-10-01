@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using MongoDB.Bson;
 using MongoDB.Driver;
 using UnitToko.Modules.Accounting;
@@ -7,15 +8,16 @@ using UnitToko.Platform.Accounting;
 using UnitToko.Platform.Authorization;
 using UnitToko.Platform.Mongo.Migrations;
 using B = UnitToko.Platform.Billing.PaymentAllocationBson;
+using C = UnitToko.Platform.Billing.PaymentAllocationCorrectionBson;
 
 namespace UnitToko.Platform.Billing;
 
-internal sealed class PaymentAllocationRecords(IMongoDatabase database)
+internal sealed partial class PaymentAllocationRecords(IMongoDatabase database)
 {
     internal IMongoCollection<BsonDocument> Rows(string name) => database.GetCollection<BsonDocument>(name);
     internal static void Equal(BsonValue a, BsonValue b) { if (!a.Equals(b)) throw B.Broken(); }
     internal async Task<BsonDocument> RowAsync(IClientSessionHandle tx, string name, long id, CancellationToken ct) =>
-        await Rows(name).Find(tx, new BsonDocument("$and", new BsonArray { new BsonDocument("_id", id), PaymentAllocationSchemas.Validator(name) })).SingleOrDefaultAsync(ct) ?? throw B.Broken();
+        await Rows(name).Find(tx, new BsonDocument("$and", new BsonArray { new BsonDocument("_id", id), name is C.Events or C.Policies ? PaymentAllocationCorrectionSchemas.Validator(name) : PaymentAllocationSchemas.Validator(name) })).SingleOrDefaultAsync(ct) ?? throw B.Broken();
     internal static BsonDocument Empty(bool receipt) => new() { { "version", 0L }, { receipt ? "allocated" : "paid", new BsonDecimal128(0m) },
         { receipt ? "reservedForRefund" : "credited", new BsonDecimal128(0m) }, { "lastEventId", BsonNull.Value }, { "lastEventHash", BsonNull.Value } };
     internal static BsonDocument Balance(BsonDocument head, bool receipt) => new(Empty(receipt).Names.Select(name => new BsonElement(name, head[name])));
@@ -24,7 +26,8 @@ internal sealed class PaymentAllocationRecords(IMongoDatabase database)
         var before = (receipt ? row["receiptBefore"] : line!["before"]).AsBsonDocument;
         var next = before.DeepClone().AsBsonDocument;
         next["version"] = receipt ? row["receiptVersion"] : line!["version"];
-        next[receipt ? "allocated" : "paid"] = new BsonDecimal128(before[receipt ? "allocated" : "paid"].AsDecimal + (receipt ? row["amount"] : line!["amount"]).AsDecimal);
+        var amount = (receipt ? row["amount"] : line!["amount"]).AsDecimal;
+        next[receipt ? "allocated" : "paid"] = new BsonDecimal128(before[receipt ? "allocated" : "paid"].AsDecimal + (row["operation"] == C.Operation ? -amount : amount));
         next["lastEventId"] = row["_id"]; next["lastEventHash"] = row["snapshotHash"]; return next;
     }
     internal static void PolicyAt(BsonDocument policy, DateTimeOffset at) {
@@ -43,16 +46,18 @@ internal sealed class PaymentAllocationRecords(IMongoDatabase database)
         }) if (await Rows(name).Find(tx, filter).AnyAsync(ct)) throw B.Broken();
         return null;
     }
-    internal async Task<BsonDocument> RawAsync(IClientSessionHandle tx, long id, CancellationToken ct) {
-        var row = await RowAsync(tx, B.Events, id, ct); Equal(row["snapshotHash"], B.Hash(row));
-        Equal(row["bodyHash"], AuthorizationStore.CommandHash(B.Body(row["verificationId"].AsInt64, row["binding"].AsString, B.Input(row)), row["reason"].AsString));
+    internal Task<BsonDocument> RawAsync(IClientSessionHandle tx, long id, CancellationToken ct) => RawEventAsync(tx, false, id, ct);
+    internal async Task<BsonDocument> RawEventAsync(IClientSessionHandle tx, bool correction, long id, CancellationToken ct) {
+        var row = await RowAsync(tx, correction ? C.Events : B.Events, id, ct); Equal(row["snapshotHash"], B.Hash(row));
+        if (await Rows(correction ? B.Events : C.Events).Find(tx, new BsonDocument("_id", id)).AnyAsync(ct)) throw B.Broken();
+        Equal(row["bodyHash"], AuthorizationStore.CommandHash(correction ? C.Body(row["originalAllocationId"].AsInt64, row["binding"].AsString, B.Input(row)) : B.Body(row["verificationId"].AsInt64, row["binding"].AsString, B.Input(row)), row["reason"].AsString));
         PolicyAt(row["policy"].AsBsonDocument, new(row["recordedAt"].ToUniversalTime()));
         if (row["postingFence"] != 1L || row["journalId"].IsBsonNull || row["journalFingerprint"].IsBsonNull) throw B.Broken();
         var before = row["receiptBefore"]; var party = B.Party(row["party"].AsBsonDocument);
-        var result = PaymentAllocationPolicy.Review(new(new(row["receiptId"].AsInt64), before["version"].AsInt64, party, "IDR", InvoiceBson.Money(row["receiptTotal"]),
-            InvoiceBson.Money(before["allocated"]), InvoiceBson.Money(before["reservedForRefund"])),
-            [.. row["lines"].AsBsonArray.Select(line => new InvoiceFunds(new(line["invoiceId"].AsInt64), line["before"]["version"].AsInt64, B.Party(PaymentDraftBson.Party(new BsonArray { line["source"] })), "IDR",
-                InvoiceBson.Money(line["source"]["total"]), InvoiceBson.Money(line["before"]["paid"]), InvoiceBson.Money(line["before"]["credited"])))], B.Input(row));
+        var funds = new ReceiptFunds(new(row["receiptId"].AsInt64), before["version"].AsInt64, party, "IDR", InvoiceBson.Money(row["receiptTotal"]), InvoiceBson.Money(before["allocated"]), InvoiceBson.Money(before["reservedForRefund"]));
+        var invoiceFunds = row["lines"].AsBsonArray.Select(line => new InvoiceFunds(new(line["invoiceId"].AsInt64), line["before"]["version"].AsInt64, B.Party(PaymentDraftBson.Party(new BsonArray { line["source"] })), "IDR", InvoiceBson.Money(line["source"]["total"]), InvoiceBson.Money(line["before"]["paid"]), InvoiceBson.Money(line["before"]["credited"]))).ToImmutableArray();
+        if (correction) await RequireCorrectionOriginalAsync(tx, row, ct);
+        var result = correction ? PaymentAllocationPolicy.ReviewReversal(funds, invoiceFunds, [.. row["lines"].AsBsonArray.Select(line => new AllocationReversalCapacity(new(line["invoiceId"].AsInt64), InvoiceBson.Money(line["originallyAllocated"]), InvoiceBson.Money(line["previouslyReversed"])))], B.Input(row)) : PaymentAllocationPolicy.Review(funds, invoiceFunds, B.Input(row));
         Equal(row["amount"], InvoiceBson.Money(result.Total)); Equal(row["unapplied"], InvoiceBson.Money(result.RemainingReceipt));
         Equal(row["receiptVersion"], before["version"].AsInt64 + 1);
         foreach (var line in row["lines"].AsBsonArray) {
@@ -60,14 +65,15 @@ internal sealed class PaymentAllocationRecords(IMongoDatabase database)
             Equal(line["version"], line["before"]["version"].AsInt64 + 1);
             Equal(line["remaining"], InvoiceBson.Money(result.Invoices.Single(value => value.InvoiceId.Value == line["invoiceId"].AsInt64).Remaining));
         }
-        Equal(await Rows("auditEvents").Find(tx, new BsonDocument("_id", row["auditId"])).SingleOrDefaultAsync(ct) ?? throw B.Broken(), B.Audit(row));
-        var receipt = await Rows("idempotencyRecords").Find(tx, new BsonDocument { { "actorId", row["actorId"] }, { "operation", B.Operation }, { "key", row["requestKey"] } }).SingleOrDefaultAsync(ct) ?? throw B.Broken();
+        var operation = correction ? C.Operation : B.Operation; var savedResult = correction ? C.Result(row) : B.Result(row);
+        Equal(await Rows("auditEvents").Find(tx, new BsonDocument("_id", row["auditId"])).SingleOrDefaultAsync(ct) ?? throw B.Broken(), correction ? C.Audit(row) : B.Audit(row));
+        var receipt = await Rows("idempotencyRecords").Find(tx, new BsonDocument { { "actorId", row["actorId"] }, { "operation", operation }, { "key", row["requestKey"] } }).SingleOrDefaultAsync(ct) ?? throw B.Broken();
         if (receipt.ElementCount != 9 || !receipt["_id"].IsObjectId || receipt["schemaVersion"] != 1 || !receipt["createdAt"].IsBsonDateTime || receipt["createdAt"].ToUniversalTime() > row["recordedAt"].ToUniversalTime()) throw B.Broken();
-        Equal(receipt["bodyHash"], row["bodyHash"]); Equal(receipt["result"], B.Result(row));
+        Equal(receipt["bodyHash"], row["bodyHash"]); Equal(receipt["result"], savedResult);
         var revision = row["declarationRevision"].AsInt64;
         Equal(receipt[PersonApprovalReceipt.Field], PersonApprovalReceipt.Create(Permissions.PaymentAllocate, new(revision, revision, RecordedBy: row["recordedBy"].AsInt64)));
-        var effect = await Rows("outboxEvents").Find(tx, new BsonDocument("sourceKey", B.SourceKey(row))).SingleOrDefaultAsync(ct) ?? throw B.Broken();
-        Equal(effect["kind"], B.Operation); Equal(effect["actorId"], row["actorId"]); Equal(effect["requestKey"], row["requestKey"]); Equal(effect["payload"], B.Result(row)); Equal(effect["createdAt"], row["recordedAt"]);
+        var effect = await Rows("outboxEvents").Find(tx, new BsonDocument("sourceKey", correction ? C.SourceKey(row) : B.SourceKey(row))).SingleOrDefaultAsync(ct) ?? throw B.Broken();
+        Equal(effect["kind"], operation); Equal(effect["actorId"], row["actorId"]); Equal(effect["requestKey"], row["requestKey"]); Equal(effect["payload"], savedResult); Equal(effect["createdAt"], row["recordedAt"]);
         var journal = await Rows("journalEntries").Find(tx, new BsonDocument("_id", row["journalId"])).SingleOrDefaultAsync(ct) ?? throw B.Broken();
         var draft = AccountingBson.ReadDraft(journal); var expected = PaymentAllocationPostingSource.Snapshot(row);
         var suspense = draft.Lines.Single(line => line.MappingKey == row["policy"]["suspenseMapping"].AsString);
@@ -86,8 +92,10 @@ internal sealed class PaymentAllocationRecords(IMongoDatabase database)
         using var cursor = await Rows(B.Events).Find(tx, new BsonDocument(receipt ? "receiptId" : "lines.invoiceId", id)).Sort(new BsonDocument(receipt ? "receiptVersion" : "recordedAt", 1)).ToCursorAsync(ct);
         // Invoice histories can span receipts. Order by that invoice's version, not the array's minimum.
         var events = new List<BsonDocument>(); while (await cursor.MoveNextAsync(ct)) events.AddRange(cursor.Current);
+        events.AddRange(await Rows(C.Events).Find(tx, new BsonDocument(receipt ? "receiptId" : "lines.invoiceId", id)).ToListAsync(ct));
         foreach (var item in events.OrderBy(row => receipt ? row["receiptVersion"].AsInt64 : row["lines"].AsBsonArray.Single(line => line["invoiceId"] == id)["version"].AsInt64)) {
-            var row = await RawAsync(tx, item["_id"].AsInt64, ct); await validateSource(row); seen.Add(row["_id"].AsInt64);
+            var row = await RawEventAsync(tx, item["operation"] == C.Operation, item["_id"].AsInt64, ct); await validateSource(row); if (!seen.Add(row["_id"].AsInt64)) throw B.Broken();
+            if (row["operation"] == C.Operation) await CorrectionTotalsAsync(tx, row["originalAllocationId"].AsInt64, ct);
             Equal(row["party"], party); var line = receipt ? null : row["lines"].AsBsonArray.Single(value => value["invoiceId"] == id);
             Equal(receipt ? row["receiptBefore"] : line!["before"], expected);
             Equal(receipt ? row["receiptHash"] : line!["source"]["snapshotHash"], sourceHash);
@@ -95,9 +103,9 @@ internal sealed class PaymentAllocationRecords(IMongoDatabase database)
             expected = After(row, receipt, id);
         }
         // A deleted event/head must not reset spendable funds while its committed effects survive.
-        foreach (var (collection, kind, prefix) in new[] { ("auditEvents", "kind", "result"), ("idempotencyRecords", "operation", "result"), ("outboxEvents", "kind", "payload") }) {
-            using var effects = await Rows(collection).Find(tx, new BsonDocument { { kind, B.Operation }, { prefix + (receipt ? ".receiptId" : ".invoices.invoiceId"), id } }).ToCursorAsync(ct);
-            while (await effects.MoveNextAsync(ct)) foreach (var effect in effects.Current) if (!seen.Contains(effect[prefix]["allocationId"].AsInt64)) throw B.Broken();
+        foreach (var operation in new[] { B.Operation, C.Operation }) foreach (var (collection, kind, prefix) in new[] { ("auditEvents", "kind", "result"), ("idempotencyRecords", "operation", "result"), ("outboxEvents", "kind", "payload") }) {
+            using var effects = await Rows(collection).Find(tx, new BsonDocument { { kind, operation }, { prefix + (receipt ? ".receiptId" : ".invoices.invoiceId"), id } }).ToCursorAsync(ct);
+            while (await effects.MoveNextAsync(ct)) foreach (var effect in effects.Current) if (!seen.Contains(effect[prefix][operation == C.Operation ? "correctionId" : "allocationId"].AsInt64)) throw B.Broken();
         }
         if (raw is null) { if (seen.Count != 0) throw B.Broken(); return (expected, null); }
         var head = await RowAsync(tx, name, id, ct); Equal(head["snapshotHash"], B.Hash(head)); Equal(Balance(head, receipt), expected);

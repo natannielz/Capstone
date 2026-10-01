@@ -12,6 +12,7 @@ using UnitToko.Platform.Identity;
 using UnitToko.Platform.Mongo;
 using B = UnitToko.Platform.Billing.PaymentAllocationBson;
 using R = UnitToko.Platform.Billing.PaymentAllocationRecords;
+using C = UnitToko.Platform.Billing.PaymentAllocationCorrectionBson;
 
 namespace UnitToko.Platform.Billing;
 
@@ -33,16 +34,18 @@ public sealed partial class PaymentAllocationService
         this.database = database; this.clock = clock; this.ids = ids; this.verifications = verifications; this.invoices = invoices; authorization = new(database, unit, clock); records = new(database);
     }
     private DateTimeOffset Now => DateTimeOffset.FromUnixTimeMilliseconds(clock.UtcNow.ToUnixTimeMilliseconds());
-    private sealed class Context(ActorContext actor, AuthorizationSnapshot authority, IClientSessionHandle tx, bool write) {
+    private sealed class Context(ActorContext actor, AuthorizationSnapshot authority, IClientSessionHandle tx, bool write, bool correction = false) {
         internal ActorContext Actor { get; } = actor;
         internal AuthorizationSnapshot Authority { get; } = authority;
         internal IClientSessionHandle Tx { get; } = tx;
         internal bool Write { get; } = write;
+        internal bool Correction { get; } = correction;
         internal PaymentAllocationSource Source = null!;
         internal readonly List<BsonDocument> Invoices = [];
         internal readonly List<Action> Current = [];
         internal readonly HashSet<long> Validated = [];
         internal BsonDocument? Policy;
+        internal BsonDocument? CorrectionPolicy;
         internal ResourceScope[] Resources => [.. (Source is null ? [] : PaymentDraftBson.Scopes(Source.Decision["source"]["scopes"].AsBsonArray))
             .Concat(Invoices.SelectMany(source => PaymentDraftBson.Scopes(source["scopes"].AsBsonArray))).Distinct()];
     }
@@ -51,7 +54,7 @@ public sealed partial class PaymentAllocationService
         internal PaymentAllocationView View => new(Context.Source.Decision, Context.Source.Bank.Receipt, ReceiptBalance,
             new(Lines.Select(line => new BsonDocument { { "source", line["source"] }, { "balance", line["before"] } })));
     }
-    private AuthorizationQuery[] Require(Context context) => (context.Write ? new[] { Permissions.PaymentReviewRead, Permissions.InvoiceRead, Permissions.PaymentAllocate } : [Permissions.PaymentReviewRead, Permissions.InvoiceRead]).Select(permission => {
+    private AuthorizationQuery[] Require(Context context) => (context.Write ? new[] { Permissions.PaymentReviewRead, Permissions.InvoiceRead, Permissions.PaymentAllocate }.Concat(context.Correction ? [Permissions.JournalReverse] : []) : [Permissions.PaymentReviewRead, Permissions.InvoiceRead]).Select(permission => {
         var query = ScopePolicy.Compile(context.Actor, context.Authority, permission, clock.UtcNow); AuthorizationStore.Require(query);
         if (context.Resources.Any(resource => !ScopePolicy.IsResourceActive(resource, context.Authority.Directory) || !query.Matches(resource))) throw B.Broken();
         return query;
@@ -59,6 +62,7 @@ public sealed partial class PaymentAllocationService
     private void Current(Context context) {
         _ = Require(context); foreach (var current in context.Current) current();
         if (context.Policy is { } policy) R.PolicyAt(policy, Now);
+        if (context.CorrectionPolicy is { } correctionPolicy) C.PolicyAt(correctionPolicy, Now);
     }
     private async Task FenceAsync(Context context, CancellationToken ct) {
         var queries = Require(context); var resources = context.Resources;
@@ -100,7 +104,7 @@ public sealed partial class PaymentAllocationService
             var invoice = await invoices.AllocationSourceAsync(context.Actor, context.Authority, context.Tx, line["invoiceId"].AsInt64, ct);
             context.Invoices.Add(invoice); R.Equal(line["source"], invoice);
         }
-        R.Equal(row["binding"], B.Binding(row["verificationHash"], row["receiptHash"], row["policy"].AsBsonDocument, row["receiptBefore"].AsBsonDocument, row["lines"].AsBsonArray));
+        R.Equal(row["binding"], row["operation"] == C.Operation ? C.Binding(await records.RawAsync(context.Tx, row["originalAllocationId"].AsInt64, ct), row["correctionPolicy"].AsBsonDocument, row["policy"].AsBsonDocument, row["receiptBefore"].AsBsonDocument, row["lines"].AsBsonArray) : B.Binding(row["verificationHash"], row["receiptHash"], row["policy"].AsBsonDocument, row["receiptBefore"].AsBsonDocument, row["lines"].AsBsonArray));
         _ = Require(context);
     }
     private async Task<Prepared> PrepareAsync(Context context, long verificationId, long[] invoiceIds, bool newEffect, CancellationToken ct) {
@@ -140,7 +144,8 @@ public sealed partial class PaymentAllocationService
             { "dimensions.shopId", party["shopId"] }, { "dimensions.channelId", party["channelId"] }, { "dimensions.buyingOrganizationId", party["buyingOrganizationId"] } };
         using var cursor = await records.Rows("journalEntries").Find(context.Tx, filter).ToCursorAsync(ct);
         while (await cursor.MoveNextAsync(ct)) foreach (var journal in cursor.Current) {
-            var row = await records.RawAsync(context.Tx, journal["source"]["documentId"].AsInt64, ct);
+            var type = journal["source"]["eventKind"].AsString; if (type is not ("allocated" or "unallocated")) throw B.Broken();
+            var row = await records.RawEventAsync(context.Tx, type == "unallocated", journal["source"]["documentId"].AsInt64, ct);
             R.Equal(row["journalId"], journal["_id"]);
         }
     }

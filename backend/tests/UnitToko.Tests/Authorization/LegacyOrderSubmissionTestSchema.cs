@@ -29,6 +29,7 @@ internal static class LegacyOrderSubmissionTestSchema
     internal static Task UpgradeV48Async(IMongoDatabase database, IClock clock, CancellationToken ct = default) => ApplyAsync(database, clock, new AfterSalesDecisionMigration(database), ct);
     internal static Task UpgradeV49Async(IMongoDatabase database, IClock clock, CancellationToken ct = default) => ApplyAsync(database, clock, new ReturnQuarantineMigration(database), ct);
     internal static Task UpgradeV50Async(IMongoDatabase database, IClock clock, CancellationToken ct = default) => ApplyAsync(database, clock, new ReturnInspectionMigration(database, clock), ct);
+    internal static Task UpgradeV51Async(IMongoDatabase database, IClock clock, CancellationToken ct = default) => ApplyAsync(database, clock, new ReturnResolutionMigration(database, clock), ct);
     internal static async Task ApplyV41Async(IMongoDatabase database, IClock clock, CancellationToken ct = default) {
         await ApplyV40Async(database, clock, ct); await ApplyAsync(database, clock, new PaymentAllocationMigration(database), ct);
     }

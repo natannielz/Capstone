@@ -21,6 +21,7 @@ using UnitToko.Platform.Billing;
 using UnitToko.Modules.Identity;
 using UnitToko.Tests.Catalog;
 using B = UnitToko.Platform.Billing.PaymentAllocationBson;
+using C = UnitToko.Platform.Billing.PaymentAllocationCorrectionBson;
 
 namespace UnitToko.Tests.Ordering;
 [Collection("Mongo")]
@@ -28,14 +29,16 @@ namespace UnitToko.Tests.Ordering;
 public sealed class PaymentAllocationBrowserTests(MongoFixture fixture, ITestOutputHelper output)
 {
     [WindowsPaymentBrowserFact]
-    public async Task Browser_allocates_reviewed_funds_and_recovers_a_lost_response_without_double_spending() {
+    public async Task Browser_allocates_and_independently_corrects_linked_funds_recovers_lost_replies_and_preserves_original_cash() {
         var root = Root(); var node = Environment.GetEnvironmentVariable("UNITTOKO_BROWSER_NODE"); var playwright = Environment.GetEnvironmentVariable("UNITTOKO_BROWSER_PLAYWRIGHT_PACKAGE");
         Assert.True(Path.IsPathFullyQualified(node ?? "") && File.Exists(node)); Assert.True(Path.IsPathFullyQualified(playwright ?? "") && File.Exists(playwright)); Assert.True(File.Exists(Path.Combine(root, "frontend", ".next", "BUILD_ID")));
         await using var data = await PaymentAllocationTests.Data.CreateAsync(fixture);
+        var checker = await PaymentAllocationCorrectionTests.Checker(data);
+        var originalCash = await data.Rows("journalEntries").Find(new BsonDocument("source.namespace", "billing.bank-receipt")).SingleAsync();
         var duplicate = await PaymentDuplicateTests.AdditionalAsync(data.Source.Read, "browser-duplicate", data.Source.Read.Payment.Input);
         var outside = await data.Source.Read.Catalog.ActorAsync(7490, CatalogAuthoringTestData.OtherOwner,
             [Permissions.PaymentReviewRead, Permissions.InvoiceRead, Permissions.PaymentAllocate]);
-        foreach (var actor in new[] { data.Actor, data.Source.Reader, outside })
+        foreach (var actor in new[] { data.Actor, checker, data.Source.Reader, outside })
             await data.Rows("accountProfiles").InsertOneAsync(new BsonDocument { { "_id", actor.UserId }, { "schemaVersion", 1 }, { "version", 1L },
                 { "displayName", "Payment allocation fixture " + actor.UserId }, { "verifiedEmail", "verification-" + actor.UserId + "@example.invalid" },
                 { "verifiedAt", data.Source.Read.Catalog.Clock.UtcNow.UtcDateTime }, { "updatedAt", data.Source.Read.Catalog.Clock.UtcNow.UtcDateTime } });
@@ -59,6 +62,7 @@ public sealed class PaymentAllocationBrowserTests(MongoFixture fixture, ITestOut
         using var tls = certificate.CreateSelfSigned(DateTimeOffset.UtcNow.AddMinutes(-5), DateTimeOffset.UtcNow.AddHours(1)); var password = Convert.ToHexString(RandomNumberGenerator.GetBytes(24));
         var input = new { apiAddress, origin, pfx = Convert.ToBase64String(tls.Export(X509ContentType.Pfx, password)), password, playwrightPackage = playwright,
             reviewerToken = data.Source.Read.Catalog.Issued[data.Actor.UserId].OpaqueToken, readerToken = data.Source.Read.Catalog.Issued[data.Source.Reader.UserId].OpaqueToken,
+            checkerToken = data.Source.Read.Catalog.Issued[checker.UserId].OpaqueToken,
             otherToken = data.Source.Read.Catalog.Issued[outside.UserId].OpaqueToken, otherId = outside.UserId.ToString(),
             duplicateId = duplicate.Id.ToString(), verificationId = data.VerificationId.ToString(), invoiceId = data.InvoiceId.ToString(), declarationId = data.Source.Read.DeclarationId.ToString(), receiptId = data.Source.ReceiptId.ToString(), imageBase64 = Convert.ToBase64String(data.Source.Read.Bytes) };
         var start = new ProcessStartInfo(node!) { WorkingDirectory = Path.Combine(root, "frontend"), UseShellExecute = false, CreateNoWindow = true, RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true };
@@ -71,11 +75,21 @@ public sealed class PaymentAllocationBrowserTests(MongoFixture fixture, ITestOut
         } finally { if (!process.HasExited) { process.Kill(true); await process.WaitForExitAsync(); } }
         Assert.Equal(1, await data.Rows(B.Events).CountDocumentsAsync(new BsonDocument()));
         Assert.Equal(1, await data.Rows("bankReceipts").CountDocumentsAsync(new BsonDocument()));
-        Assert.Equal(3, await data.Rows("journalEntries").CountDocumentsAsync(new BsonDocument()));
+        Assert.Equal(1, await data.Rows(C.Events).CountDocumentsAsync(new BsonDocument()));
+        Assert.Equal(4, await data.Rows("journalEntries").CountDocumentsAsync(new BsonDocument()));
+        Assert.Equal(originalCash, await data.Rows("journalEntries").Find(new BsonDocument("_id", originalCash["_id"])).SingleAsync());
+        var original = await data.Rows(B.Events).Find(new BsonDocument()).SingleAsync();
+        Assert.Equal(1000m, original["amount"].AsDecimal); Assert.Equal(1L, original["receiptVersion"].AsInt64);
+        var correction = await data.Rows(C.Events).Find(new BsonDocument()).SingleAsync();
+        Assert.Equal(original["_id"], correction["originalAllocationId"]); Assert.Equal(original["snapshotHash"], correction["originalAllocationHash"]); Assert.Equal(400m, correction["amount"].AsDecimal);
+        Assert.Equal(1, await data.Rows("auditEvents").CountDocumentsAsync(new BsonDocument("kind", C.Operation)));
+        Assert.Equal(1, await data.Rows("outboxEvents").CountDocumentsAsync(new BsonDocument("kind", C.Operation)));
+        Assert.Equal(1, await data.Rows("idempotencyRecords").CountDocumentsAsync(new BsonDocument("operation", C.Operation)));
         var receipt = await data.Rows(B.Receipts).Find(new BsonDocument()).SingleAsync();
         var invoice = await data.Rows(B.Invoices).Find(new BsonDocument()).SingleAsync();
-        Assert.Equal(1000m, receipt["allocated"].AsDecimal); Assert.Equal(1000m, invoice["paid"].AsDecimal);
-        Assert.Equal(1L, receipt["version"].AsInt64); Assert.Equal(1L, invoice["version"].AsInt64);
+        Assert.Equal(600m, receipt["allocated"].AsDecimal); Assert.Equal(600m, invoice["paid"].AsDecimal);
+        Assert.Equal(0m, receipt["reservedForRefund"].AsDecimal); Assert.Equal(0m, invoice["credited"].AsDecimal);
+        Assert.Equal(2L, receipt["version"].AsInt64); Assert.Equal(2L, invoice["version"].AsInt64);
     }
     private static string Root() {
         for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)

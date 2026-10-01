@@ -45,6 +45,8 @@ function ownerCheck(value: PaymentAllocationView, owner: PaymentDraft, verified:
     value.received !== owner.input.declaredAmount || value.invoices.some(line => !owner.invoices.some(item => item.invoiceId === line.invoiceId && item.total === line.total))) return invalid();
   return value;
 }
+export { ownerCheck as assertPaymentAllocationOwner };
+export const paymentAllocationSchemas = { id, text, money, positive, hash, cents, lines, input, view };
 export function paymentAllocationKey(key: string) {
   const found = /^pa\.([1-9][0-9]{0,18})\.([1-9][0-9]{0,18})\.([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$(?![\s\S])/.exec(key);
   if (!found) return invalid(); return { verificationId: parse(id, found[1]), receiptId: parse(id, found[2]) };

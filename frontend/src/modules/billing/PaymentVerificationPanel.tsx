@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { PaymentAllocationPanel } from './PaymentAllocationPanel';
+import { PaymentAllocationCorrectionPanel } from './PaymentAllocationCorrectionPanel';
 import { useEffect, useRef, useState } from 'react';
 import { AccessFailure, MutationLedger, accessMessage } from '../administration/workflow';
 import { submitTrackedRequest, type OperationJournal } from '../administration/operation-journal';
@@ -27,11 +28,12 @@ function message(error: unknown) {
   }
   return accessMessage(error);
 }
-export function PaymentVerificationPanel({ actorId, owner, allowed, allocationAllowed, fresh, locked, current, journal, onSettled, onDenied, onBusyChange, manualReview }: {
-  actorId: string; owner: PaymentDraft; allowed: boolean; allocationAllowed: boolean; fresh: boolean; locked: boolean; current: () => boolean;
+export function PaymentVerificationPanel({ actorId, owner, allowed, allocationAllowed, allocationCorrectionAllowed, fresh, locked, current, journal, onSettled, onDenied, onBusyChange, manualReview }: {
+  actorId: string; owner: PaymentDraft; allowed: boolean; allocationAllowed: boolean; allocationCorrectionAllowed: boolean; fresh: boolean; locked: boolean; current: () => boolean;
   journal: OperationJournal; onSettled: () => void; onDenied: (failure: unknown) => void; onBusyChange: (busy: boolean) => void; manualReview?: React.ReactNode;
 }) {
   const [gateway] = useState(createPaymentVerificationGateway), [bank] = useState(createBankReceiptGateway);
+  const [allocationRevision, setAllocationRevision] = useState(0);
   const [saved, setSaved] = useState<PaymentVerificationDetail | null>(null), [checked, setChecked] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState<unknown>(null);
   const [page, setPage] = useState<{ items: BankReceiptView[]; hasMore: boolean } | null>(null), [shown, setShown] = useState<PaymentVerificationPreview | null>(null);
   const [reviewSource, setReviewSource] = useState<'ocr' | 'manual' | null>(null);
@@ -113,8 +115,10 @@ export function PaymentVerificationPanel({ actorId, owner, allowed, allocationAl
         <p>Sumber isian: {shown.reviewSource === 'manual' ? 'Pemeriksaan manual melalui pengecualian OCR yang tercatat' : 'Hasil OCR dan koreksi petugas'}</p>
       </form>}
     </>}
-    {saved && <PaymentAllocationPanel key={saved.result.verificationId} actorId={actorId} owner={owner} verified={saved} allowed={allocationAllowed} fresh={fresh} locked={locked || busy}
+    {saved && <PaymentAllocationPanel key={saved.result.verificationId + ':' + allocationRevision} actorId={actorId} owner={owner} verified={saved} allowed={allocationAllowed} fresh={fresh} locked={locked || busy}
       current={current} journal={journal} onSettled={onSettled} onDenied={onDenied} onBusyChange={onBusyChange} />}
+    {saved && <PaymentAllocationCorrectionPanel key={'correction:' + saved.result.verificationId} actorId={actorId} owner={owner} verified={saved} allowed={allocationCorrectionAllowed} fresh={fresh} locked={locked || busy}
+      current={current} journal={journal} onSettled={onSettled} onDenied={onDenied} onBusyChange={onBusyChange} onCorrected={() => setAllocationRevision(value => value + 1)} />}
     {!allowed && <p>Akun ini dapat membaca hasil; verifikasi memerlukan kewenangan tersendiri dan pemeriksa independen.</p>}
   </section>;
 }

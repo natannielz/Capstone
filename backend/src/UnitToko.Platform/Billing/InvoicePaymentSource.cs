@@ -11,6 +11,9 @@ public sealed partial class InvoiceService
     internal async Task<BsonDocument> AllocationSourceAsync(ActorContext actor, AuthorizationSnapshot authority,
         IClientSessionHandle tx, long invoiceId, CancellationToken ct) {
         var row = await AuthorizedInvoiceAsync(actor, authority, tx, invoiceId, Permissions.InvoiceRead, ct);
+        return await AllocationSnapshotAsync(database, tx, row, ct);
+    }
+    internal static async Task<BsonDocument> AllocationSnapshotAsync(IMongoDatabase database, IClientSessionHandle tx, BsonDocument row, CancellationToken ct) {
         var source = PaymentSnapshot(row);
         source.Add("arMapping", InvoiceBson.Terms(row["terms"].AsBsonDocument).ReceivableMapping);
         var journal = await database.GetCollection<BsonDocument>("journalEntries").Find(tx, new BsonDocument("_id", row["journalId"])).SingleOrDefaultAsync(ct) ?? throw PaymentAllocationBson.Broken();

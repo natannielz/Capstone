@@ -68,9 +68,9 @@ public static class PaymentAllocationEndpoints
             return TypedResults.Ok(new PaymentAllocationRecoveryDto(row is null ? "not_confirmed" : "committed", row is null ? null : Result(row)));
         }).WithName("RecoverPaymentAllocation");
     }
-    private static string Number(long value) => OrderDraftInputDto.Number(value);
-    private static string MoneyText(BsonValue value) => new Money(value.AsDecimal).ToString();
-    private static PaymentAllocationViewDto View(PaymentAllocationView view, IClock clock) {
+    internal static string Number(long value) => OrderDraftInputDto.Number(value);
+    internal static string MoneyText(BsonValue value) => new Money(value.AsDecimal).ToString();
+    internal static PaymentAllocationViewDto View(PaymentAllocationView view, IClock clock) {
         var balance = view.ReceiptBalance; var receipt = view.Receipt; var source = view.Verification["source"];
         var available = new Money(receipt["amount"].AsDecimal - balance["allocated"].AsDecimal - balance["reservedForRefund"].AsDecimal);
         var day = DateOnly.FromDateTime(clock.UtcNow.ToOffset(TimeSpan.FromHours(7)).DateTime);
@@ -85,5 +85,5 @@ public static class PaymentAllocationEndpoints
     }
     private static PaymentAllocationResultDto Result(BsonDocument row) => new(new(row["allocationId"].AsInt64), new(row["verificationId"].AsInt64), new(row["receiptId"].AsInt64), Number(row["receiptVersion"].AsInt64), MoneyText(row["amount"]), MoneyText(row["unapplied"]),
         new(row["recordedAt"].ToUniversalTime()), row["operation"].AsString, [.. row["invoices"].AsBsonArray.Select(line => new PaymentAllocationInvoiceResultDto(new(line["invoiceId"].AsInt64), Number(line["version"].AsInt64), MoneyText(line["amount"]), MoneyText(line["remaining"])))]);
-    private static void Private(HttpContext http) { http.Response.Headers.CacheControl = "private, no-store, max-age=0"; http.Response.Headers.Pragma = "no-cache"; }
+    internal static void Private(HttpContext http) { http.Response.Headers.CacheControl = "private, no-store, max-age=0"; http.Response.Headers.Pragma = "no-cache"; }
 }

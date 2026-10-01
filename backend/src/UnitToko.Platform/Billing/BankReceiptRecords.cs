@@ -41,7 +41,10 @@ internal sealed class BankReceiptRecords(IMongoDatabase database, BankStatementS
             await Rows("outboxEvents").Find(tx,new BsonDocument { { "actorId",actorId }, { "kind",B.Operation }, { "requestKey",key } }).AnyAsync(ct)) throw B.Broken();
         return null;
     }
-    private async Task<BsonDocument> ConfirmationRawAsync(IClientSessionHandle tx, long id, CancellationToken ct) {
+    private Task<BsonDocument> ConfirmationRawAsync(IClientSessionHandle tx, long id, CancellationToken ct) => ReadConfirmationAsync(database, tx, id, ct);
+    internal static async Task<BsonDocument> ReadConfirmationAsync(IMongoDatabase database, IClientSessionHandle tx, long id, CancellationToken ct) {
+        IMongoCollection<BsonDocument> Rows(string name) => database.GetCollection<BsonDocument>(name);
+        async Task<BsonDocument> RowAsync(IClientSessionHandle session, string name, long value, CancellationToken token) => await Rows(name).Find(session, new BsonDocument("$and", new BsonArray { new BsonDocument("_id", value), BankReceiptSchemas.Validator(name) })).SingleOrDefaultAsync(token) ?? throw B.Broken();
         var row = await RowAsync(tx,B.Confirmations,id,ct); Equal(row["snapshotHash"],B.Hash(row));
         _ = BankReceiptPolicy.Copy(B.Observation(row["observed"]));
         if (!BankStatementParser.Text(row["sourceReference"].AsString,256) || !BankStatementParser.Text(row["reason"].AsString,1000)) throw B.Broken();

@@ -22,7 +22,7 @@ function forward(req, res, port, isApi) {
   const headers = { ...req.headers, host: '127.0.0.1:' + port };
   for (const name of Object.keys(headers)) if (name.startsWith('x-forwarded-') || name.startsWith('x-original-') || ['forwarded', 'connection'].includes(name)) delete headers[name];
   if (isApi) { headers['x-forwarded-for'] = req.socket.remoteAddress; headers['x-forwarded-host'] = origin.host; headers['x-forwarded-proto'] = 'https'; }
-  const kind = req.method === 'POST' && req.url === '/api/v1/billing/payment-verifications/' + config.verificationId + '/allocations' ? 'allocate' : null; if (kind) writes.push({ kind, key: req.headers['idempotency-key'], actor: req.headers['x-expected-actor-id'] });
+  const kind = req.method !== 'POST' ? null : req.url === '/api/v1/billing/payment-verifications/' + config.verificationId + '/allocations' ? 'allocate' : /^\/api\/v1\/billing\/payment-allocations\/[1-9][0-9]*\/corrections$/.test(req.url) ? 'correct' : null; if (kind) writes.push({ kind, key: req.headers['idempotency-key'], actor: req.headers['x-expected-actor-id'] });
   const drop = kind !== null && kind === dropNext; if (drop) dropNext = null;
   const upstream = http.request({ hostname: '127.0.0.1', port, path: req.url, method: req.method, headers }, response => {
     if (drop && response.statusCode === 200) { response.resume(); response.once('end', () => { dropped++; res.writeHead(200, { 'content-type': 'application/json', 'content-length': '64', 'cache-control': 'no-store' }); res.flushHeaders(); res.write('{'); setTimeout(() => res.destroy(), 25); }); return; }
@@ -105,8 +105,50 @@ try {
   assert.match(await panel.locator('dl').innerText(), /Sudah dialokasikan\s+IDR\s*1\.000/);
   assert.match(await panel.locator('dl').innerText(), /Dana tersedia\s+IDR\s*3\.000/);
   await page.setViewportSize({ width: 1440, height: 950 }); await page.screenshot({ path: resolve(directory, 'payment-allocation-desktop.png'), fullPage: true });
+  const makerCorrections = page.getByRole('region', { name: 'Koreksi alokasi pembayaran', exact: true });
+  assert.equal(await makerCorrections.getByRole('button', { name: 'Periksa koreksi alokasi', exact: true }).count(), 0);
+  const checker = await desk(config.checkerToken); await open(checker.page); await balances(checker.page);
+  const correctionPanel = checker.page.getByRole('region', { name: 'Koreksi alokasi pembayaran', exact: true });
+  await correctionPanel.getByRole('button', { name: 'Muat alokasi asli', exact: true }).click();
+  const choose = correctionPanel.getByRole('button', { name: /^Tinjau alokasi [1-9][0-9]*$/ }); await choose.waitFor();
+  const originalAllocationId = (await choose.innerText()).match(/([1-9][0-9]*)$/)[1]; await choose.click();
+  const correctionHeading = correctionPanel.getByRole('heading', { name: 'Saldo untuk koreksi alokasi ' + originalAllocationId, exact: true }); await correctionHeading.waitFor();
+  assert.equal(await correctionHeading.evaluate(element => document.activeElement === element), true);
+  await correctionPanel.getByRole('checkbox').check(); await correctionPanel.getByLabel('Nominal koreksi (IDR)', { exact: true }).fill('400,00');
+  await correctionPanel.getByLabel('Alasan koreksi alokasi', { exact: true }).fill('Synthetic independent original allocation correction');
+  await correctionPanel.getByRole('button', { name: 'Periksa koreksi alokasi', exact: true }).click();
+  const correctionConfirm = correctionPanel.getByRole('region', { name: 'Konfirmasi koreksi alokasi', exact: true }); await correctionConfirm.waitFor();
+  assert.equal(await correctionConfirm.getByRole('heading').evaluate(element => document.activeElement === element), true);
+  assert.equal(await correctionPanel.getByLabel('Nominal koreksi (IDR)', { exact: true }).isDisabled(), true);
+  await correctionConfirm.getByRole('button', { name: 'Kembali ke nominal koreksi', exact: true }).click(); assert.equal(writes.length, 1);
+  await correctionPanel.getByRole('button', { name: 'Periksa koreksi alokasi', exact: true }).click(); await correctionConfirm.waitFor();
+  assert.equal(await checker.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  await checker.page.screenshot({ path: resolve(directory, 'payment-allocation-correction-mobile.png'), fullPage: true });
+  await checker.context.setOffline(true); await checker.page.getByText(/Koneksi terputus/).waitFor();
+  assert.equal(await correctionConfirm.getByRole('button', { name: 'Simpan koreksi alokasi', exact: true }).isDisabled(), true); assert.equal(writes.length, 1);
+  await checker.context.setOffline(false); await checker.page.getByText(/Koneksi terputus/).waitFor({ state: 'hidden' });
+  dropNext = 'correct'; await correctionConfirm.getByRole('button', { name: 'Simpan koreksi alokasi', exact: true }).click();
+  await checker.page.getByRole('button', { name: 'Periksa hasil', exact: true }).waitFor();
+  const correctionReferences = await checker.page.evaluate(() => Object.keys(localStorage).filter(key => key.startsWith('unit-toko:pending:v1:')).map(key => JSON.parse(localStorage[key])));
+  assert.equal(correctionReferences.length, 1); assert.deepEqual(Object.keys(correctionReferences[0]).sort(), ['actorId', 'createdAt', 'key', 'operation']);
+  assert.equal(correctionReferences[0].operation, 'billing.payment.allocation.correct');
+  assert.match(correctionReferences[0].key, new RegExp('^pc\\.' + config.verificationId + '\\.' + config.receiptId + '\\.' + originalAllocationId + '\\.'));
+  assert.doesNotMatch(JSON.stringify(correctionReferences), /Synthetic|"amount"|"binding"|"reason"/);
+  await checker.page.reload(); await checker.page.getByRole('button', { name: 'Periksa hasil', exact: true }).click();
+  await checker.page.waitForFunction(() => !Object.keys(localStorage).some(key => key.startsWith('unit-toko:pending:v1:')));
+  await open(checker.page); const currentPanel = await balances(checker.page);
+  assert.match(await currentPanel.locator('dl').innerText(), /Sudah dialokasikan\s+IDR\s*600/);
+  assert.match(await currentPanel.locator('dl').innerText(), /Dana tersedia\s+IDR\s*3\.400/);
+  await correctionPanel.getByRole('button', { name: 'Muat alokasi asli', exact: true }).click();
+  await correctionPanel.getByText(/Telah dikoreksi IDR\s*400/).waitFor();
+  await checker.page.setViewportSize({ width: 1440, height: 1000 }); await checker.page.screenshot({ path: resolve(directory, 'payment-allocation-correction-desktop.png'), fullPage: true });
   const reader = await desk(config.readerToken); await open(reader.page); const readPanel = await balances(reader.page);
   assert.equal(await readPanel.getByRole('checkbox').count(), 0); assert.equal(await readPanel.getByRole('button', { name: /Periksa alokasi|Simpan alokasi/ }).count(), 0);
+  const readCorrections = reader.page.getByRole('region', { name: 'Koreksi alokasi pembayaran', exact: true });
+  await readCorrections.getByRole('button', { name: 'Muat alokasi asli', exact: true }).click();
+  await readCorrections.getByRole('button', { name: /^Tinjau alokasi/ }).click();
+  await readCorrections.getByRole('heading', { name: /^Saldo untuk koreksi alokasi/ }).waitFor();
+  assert.equal(await readCorrections.getByRole('checkbox').count(), 0); assert.equal(await readCorrections.getByRole('button', { name: /Periksa koreksi|Simpan koreksi/ }).count(), 0);
   await readPanel.getByText(/Dibayar sebagian/).waitFor();
   const outsider = await desk(config.otherToken); await outsider.page.getByRole('button', { name: 'Muat pengajuan terbaru', exact: true }).waitFor();
   assert.equal(await outsider.page.getByRole('button', { name: 'Periksa pengajuan ' + config.declarationId, exact: true }).count(), 0);
@@ -115,9 +157,9 @@ try {
     return (await fetch('/api/v1/billing/payment-verifications/' + verificationId + '/allocations/query', { method: 'POST', credentials: 'include',
       headers: { 'content-type': 'application/json', 'X-CSRF-Token': csrf.requestToken, 'X-Expected-Actor-Id': actorId }, body: JSON.stringify({ purpose: 'payment-allocation', invoiceIds: [invoiceId] }) })).status;
   }, { verificationId: config.verificationId, invoiceId: config.invoiceId, actorId: config.otherId }); assert.equal(denied, 403);
-  assert.equal(writes.length, 1); assert.equal(dropped, 1); assert.deepEqual(errors, []);
+  assert.equal(writes.length, 2); assert.deepEqual(writes.map(item => item.kind), ['allocate', 'correct']); assert.equal(dropped, 2); assert.deepEqual(errors, []);
   console.log('REAL_PAYMENT_ALLOCATION_BROWSER_PASS ' + JSON.stringify({ exactDuplicateHintsAndComparisonNavigation: true, explicitInvoiceAndAmountReview: true, lostResponseRecovered: true, currentInvoiceBalance: true,
-    readerCannotAllocate: true, outsiderDenied: true, offlineUnsent: true, mobile: true, syntheticBankAndPayerPolicy: true, syntheticOcrEngine: true, productionAccepted: false }));
+    independentLinkedCorrection: true, correctionLostResponseRecovered: true, exactOriginalCorrectionKey: true, readerCannotAllocateOrCorrect: true, outsiderDenied: true, offlineUnsent: true, mobile: true, syntheticBankAndPayerPolicy: true, syntheticOcrEngine: true, productionAccepted: false }));
 
 } catch (error) {
   for (const [index, page] of pages.entries()) if (!page.isClosed()) { console.error('FIXTURE PAGE ' + index + ': ' + (await page.locator('main').innerText().catch(() => 'unavailable')).slice(0, 5000)); await page.screenshot({ path: resolve(directory, 'failure-' + index + '.png'), fullPage: true }).catch(() => {}); }
