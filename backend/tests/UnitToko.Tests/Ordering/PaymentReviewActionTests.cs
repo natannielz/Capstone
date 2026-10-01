@@ -139,7 +139,8 @@ public sealed class PaymentReviewActionTests(MongoFixture fixture)
         }
         using var follow = await FollowUp(); Assert.True(follow.IsSuccessStatusCode, await follow.Content.ReadAsStringAsync()); Assert.True(follow.Headers.CacheControl!.NoStore);
         var visible = await follow.Content.ReadFromJsonAsync<JsonElement>(); Assert.Equal("assigned", visible.GetProperty("state").GetString());
-        Assert.Equal(new[] { "declarationId", "declarationRevision", "evidence", "notification", "recordedAt", "reviewRevision", "state", "submissionId", "submittedAt" }, visible.EnumerateObject().Select(value => value.Name).Order().ToArray());
+        Assert.Equal(new[] { "declarationId", "declarationRevision", "evidence", "notification", "publicExplanation", "recordedAt", "reviewRevision", "state", "submissionId", "submittedAt" }, visible.EnumerateObject().Select(value => value.Name).Order().ToArray());
+        Assert.Equal(JsonValueKind.Null, visible.GetProperty("publicExplanation").ValueKind);
         Assert.Equal("not_applicable", visible.GetProperty("notification").GetProperty("state").GetString());
     }
     [WindowsStorageFact]

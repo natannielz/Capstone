@@ -11,8 +11,9 @@ const action = z.enum(['claim', 'release', 'reject', 'request_replacement']), st
 const result = z.object({ declarationId: id, submissionId: id, reviewRevision: id, actionId: id, action, state, assigneeId: id.nullable(), recordedAt: timestamp, operation: z.literal('billing.payment.review.manage') }).strict()
   .refine(value => value.action === 'release' ? value.state === 'pending' && value.assigneeId === null : value.assigneeId !== null && value.state === ({ claim: 'assigned', reject: 'rejected', request_replacement: 'replacement_requested' } as const)[value.action]);
 const view = z.object({ binding: hash, declarationId: id, declarationRevision: id, submissionId: id, evidence: z.object({ id, version: z.literal('1'), sha256: hash }).strict(),
-  reviewRevision: revision, state, assigneeId: id.nullable(), recordedBy: id.nullable(), recordedAt: timestamp.nullable(), reason: text(1000).nullable(), verified: z.boolean(), submittedAt: timestamp, observedAt: timestamp }).strict()
+  reviewRevision: revision, state, assigneeId: id.nullable(), recordedBy: id.nullable(), recordedAt: timestamp.nullable(), reason: text(1000).nullable(), publicExplanation: text(1000).nullable(), verified: z.boolean(), submittedAt: timestamp, observedAt: timestamp }).strict()
   .refine(value => Date.parse(value.submittedAt) <= Date.parse(value.observedAt))
+  .refine(value => value.publicExplanation === null || ['rejected', 'replacement_requested'].includes(value.state))
   .refine(value => (value.state === 'pending') === (value.assigneeId === null) && (value.reviewRevision === '0' ? value.state === 'pending' && value.recordedBy === null && value.recordedAt === null && value.reason === null : value.recordedBy !== null && value.recordedAt !== null && value.reason !== null));
 export type PaymentReviewActionView = z.infer<typeof view>;
 export type PaymentReviewActionResult = z.infer<typeof result>;
@@ -25,10 +26,13 @@ export function parseReviewActionView(value: unknown, owner: PaymentDraft) {
   if (!submission || saved.declarationId !== owner.id || saved.declarationRevision !== owner.revision || saved.submissionId !== submission.id || saved.evidence.id !== submission.evidence.id || saved.evidence.version !== submission.evidence.version || saved.evidence.sha256 !== submission.evidence.sha256 || Date.parse(saved.submittedAt) !== Date.parse(submission.submittedAt)) return invalid();
   return saved;
 }
-export function prepareReviewAction(actorId: string, shown: PaymentReviewActionView, selected: string, reason: string) {
+export function prepareReviewAction(actorId: string, shown: PaymentReviewActionView, selected: string, reason: string, publicExplanation: string | null = null) {
   const source = parse(view, shown), choice = parse(action, selected), audit = text(1000).safeParse(reason); actorId = priceId(actorId);
   if (!audit.success || source.verified || !['pending', 'assigned'].includes(source.state) || choice === 'release' && source.state !== 'assigned' || choice === 'claim' && source.assigneeId === actorId) throw new AccessFailure(400, 'invalid_payment_review_action');
-  const command = { actorId, declarationId: source.declarationId, submissionId: source.submissionId, revision: source.reviewRevision, body: { binding: source.binding, action: choice, reason: audit.data } };
+  const closing = choice === 'reject' || choice === 'request_replacement', explanation = text(1000).safeParse(publicExplanation);
+  if (closing ? !explanation.success : publicExplanation !== null) throw new AccessFailure(400, 'invalid_payment_review_action');
+  const command = { actorId, declarationId: source.declarationId, submissionId: source.submissionId, revision: source.reviewRevision,
+    body: { binding: source.binding, action: choice, reason: audit.data, ...(closing && explanation.success ? { publicExplanation: explanation.data } : {}) } };
   Object.freeze(command.body); return Object.freeze(command);
 }
 function data<T>(value: { data?: T; error?: unknown; response: Response }): T {

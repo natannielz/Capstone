@@ -27,7 +27,7 @@ public sealed partial class PaymentDraftService
         foreach (var name in PaymentCorrectionSchemas.Collections)
             await InventoryRepository.RequireStorageAsync(database, name, PaymentCorrectionSchemas.Validator(name), PaymentCorrectionSchemas.Key(name), ct);
         await PaymentVerificationStorage.RequireAsync(database, ct);
-        await InventoryRepository.RequireStorageAsync(database, PaymentReviewActionRecords.Versions, PaymentReviewActionSchemas.Validator(), PaymentReviewActionSchemas.Key(), ct);
+        await InventoryRepository.RequireStorageAsync(database, PaymentReviewActionRecords.Versions, PaymentReviewExplanationSchemas.Validator(), PaymentReviewActionSchemas.Key(), ct);
     }
     private AuthorizationQuery CorrectionQuery(ActorContext actor, AuthorizationSnapshot authority, BsonDocument head) {
         var query = ScopePolicy.Compile(actor, authority, Permissions.PaymentReviewCorrect, clock.UtcNow); AuthorizationStore.Require(query);

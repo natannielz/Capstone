@@ -13,7 +13,7 @@ const owner = parsePaymentDraft({ id: '51', revision: '2', state: 'submitted', c
   invoices: [{ invoiceId: '11', number: '1/2/2026/3', total: '500.00', buyerName: 'Cabang', sellerName: 'Toko' }],
   submission: { id: '41', reviewRevision: '1', reservationId: '71', evidence, submittedAt: time } });
 const raw = { binding: 'b'.repeat(64), declarationId: '51', declarationRevision: '2', submissionId: '41', evidence, reviewRevision: '0', state: 'pending',
-  assigneeId: null, recordedBy: null, recordedAt: null, reason: null, verified: false, submittedAt: time, observedAt: '2026-10-01T04:00:00Z' };
+  assigneeId: null, recordedBy: null, recordedAt: null, reason: null, publicExplanation: null, verified: false, submittedAt: time, observedAt: '2026-10-01T04:00:00Z' };
 const view = parseReviewActionView(raw, owner), saved = { declarationId: '51', submissionId: '41', reviewRevision: '1', actionId: '91', action: 'claim', state: 'assigned',
   assigneeId: actor, recordedAt: time, operation: 'billing.payment.review.manage' } as const;
 test('review actions bind exact submission, require a live transition and freeze the reason without financial assertions', () => {
@@ -25,6 +25,12 @@ test('review actions bind exact submission, require a live transition and freeze
   assert.throws(() => prepareReviewAction(actor, view, 'release', 'Reviewed')); assert.throws(() => prepareReviewAction(actor, view, 'claim', ''));
   assert.throws(() => parseReviewActionResult({ ...saved, state: 'pending' }, key)); assert.throws(() => parseReviewActionResult({ ...saved, actionId: 91 }, key));
   assert.throws(() => parseReviewActionResult({ ...saved, paid: true }, key)); assert.throws(() => parseReviewActionResult({ ...saved, declarationId: '52' }, key));
+  const closing = prepareReviewAction(actor, view, 'request_replacement', 'Internal check', 'Please upload a clear original.');
+  assert.equal(closing.body.reason, 'Internal check'); assert.equal(closing.body.publicExplanation, 'Please upload a clear original.'); assert.ok(Object.isFrozen(closing.body));
+  assert.throws(() => prepareReviewAction(actor, view, 'reject', 'Internal check'));
+  assert.throws(() => prepareReviewAction(actor, view, 'claim', 'Internal check', 'Customer text'));
+  for (const explanation of ['', ' hidden ', 'a'.repeat(1001), 'hidden\u200b']) assert.throws(() => prepareReviewAction(actor, view, 'reject', 'Internal check', explanation));
+  assert.throws(() => parseReviewActionView({ ...raw, publicExplanation: 'Unexpected open text' }, owner));
 });
 test('review client sends actor CSRF and exact version/key, rejects stale ownership and never resends during recovery', async () => {
   const command = prepareReviewAction(actor, view, 'claim', 'Reviewed owner'); let writes = 0;

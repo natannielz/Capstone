@@ -45,12 +45,14 @@ public sealed partial class PaymentVerificationService
             var change = PaymentReviewActionPolicy.Apply(previous?["state"].AsString ?? "pending", previous is null || previous["assigneeId"].IsBsonNull ? null : previous["assigneeId"].AsInt64, input.Action, actor.UserId);
             proof = await PeopleAsync(active, token); var at = Now;
             if (previous is not null && previous["recordedAt"].ToUniversalTime() > at.UtcDateTime) throw B.Broken();
-            var row = new BsonDocument { { "_id", versionId }, { "schemaVersion", 1 }, { "declarationId", id }, { "revision", revision + 1 },
+            var row = new BsonDocument { { "_id", versionId }, { "schemaVersion", input.PublicExplanation is null ? 1 : 2 }, { "declarationId", id }, { "revision", revision + 1 },
                 { "previousVersionId", previous is null ? BsonNull.Value : previous["_id"] }, { "previousHash", previous is null ? BsonNull.Value : previous["snapshotHash"] },
                 { "source", source }, { "binding", input.Binding }, { "action", input.Action }, { "state", change.State }, { "assigneeId", change.AssigneeId is { } user ? new BsonInt64(user) : BsonNull.Value },
                 { "people", new BsonArray(proof.Evidence.OrderBy(p => p.UserId).Select(ReceivingAccountBson.Person)) }, { "actorId", actor.UserId }, { "actorGrantVersion", actor.GrantVersion },
                 { "operation", W.Operation }, { "requestKey", metadata.IdempotencyKey }, { "bodyHash", bodyHash }, { "reason", metadata.Reason }, { "correlationId", metadata.CorrelationId },
-                { "auditId", auditId }, { "recordedAt", at.UtcDateTime }, { "fence", 0L } }; row.Add("snapshotHash", B.Hash(row));
+                { "auditId", auditId }, { "recordedAt", at.UtcDateTime }, { "fence", 0L } };
+            if (input.PublicExplanation is not null) row.Add("publicExplanation", input.PublicExplanation);
+            row.Add("snapshotHash", B.Hash(row));
             await store.Rows(W.Versions).InsertOneAsync(tx, row, cancellationToken: token); await store.Rows("auditEvents").InsertOneAsync(tx, W.Audit(row), cancellationToken: token);
             await store.Rows("outboxEvents").InsertOneAsync(tx, new BsonDocument { { "_id", ObjectId.GenerateNewId() }, { "schemaVersion", 1 }, { "kind", W.Operation }, { "sourceKey", W.Operation + ":" + versionId },
                 { "actorId", actor.UserId }, { "requestKey", metadata.IdempotencyKey }, { "payload", W.Result(row) }, { "createdAt", at.UtcDateTime }, { "dueAt", at.UtcDateTime }, { "status", "pending" }, { "attempts", 0 } }, cancellationToken: token);

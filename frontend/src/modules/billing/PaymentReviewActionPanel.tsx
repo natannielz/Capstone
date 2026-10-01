@@ -22,6 +22,7 @@ export function PaymentReviewActionPanel({ actorId, owner, allowed, fresh, locke
 }) {
   const [gateway] = useState(createPaymentReviewActionGateway), [ledger] = useState(() => new MutationLedger(() => 'ra.' + owner.id + '.' + crypto.randomUUID()));
   const [view, setView] = useState<PaymentReviewActionView | null>(null), [action, setAction] = useState('claim'), [reason, setReason] = useState('');
+  const [publicExplanation, setPublicExplanation] = useState('');
   const [confirm, setConfirm] = useState<ReturnType<typeof prepareReviewAction> | null>(null), [busy, setBusy] = useState(false), [error, setError] = useState<unknown>(null);
   const alive = useRef(false), pending = useRef(false), heading = useRef<HTMLHeadingElement>(null), formHeading = useRef<HTMLHeadingElement>(null);
   useEffect(() => { alive.current = true; return () => { alive.current = false; onBusyChange(false); }; }, [onBusyChange]);
@@ -32,7 +33,7 @@ export function PaymentReviewActionPanel({ actorId, owner, allowed, fresh, locke
     try { await task(); } catch (failure) { if (active()) { setError(failure); if (!(failure instanceof AccessFailure && failure.code === 'step_up_required')) onDenied(failure); } }
     finally { pending.current = false; onBusyChange(false); onSettled(); if (alive.current) setBusy(false); }
   }
-  async function load() { const result = await gateway.read(actorId, owner); if (active()) { setView(result); setConfirm(null); setReason(''); setAction(result.assigneeId === actorId ? 'release' : 'claim'); } }
+  async function load() { const result = await gateway.read(actorId, owner); if (active()) { setView(result); setConfirm(null); setReason(''); setPublicExplanation(''); setAction(result.assigneeId === actorId ? 'release' : 'claim'); } }
   const disabled = locked || busy, canAct = allowed && fresh && !disabled, open = view && !view.verified && ['pending', 'assigned'].includes(view.state);
   return <section className={invoice.correctionPanel} aria-label="Penanggung jawab pemeriksaan"><h3>Penanggung jawab dan tindak lanjut</h3>
     <p>Diajukan {new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Jakarta' }).format(new Date(owner.submission!.submittedAt))}. Pengajuan dan bukti asli tetap tersimpan.</p>
@@ -41,16 +42,23 @@ export function PaymentReviewActionPanel({ actorId, owner, allowed, fresh, locke
     {allowed && !fresh && <p className={styles.alert}>Verifikasi dua langkah terbaru diperlukan. <Link href="/identity/account?operation=payment.review.manage&returnPath=%2Fbilling%2Fpayment-reviews">Verifikasi dua langkah untuk tindak lanjut</Link></p>}
     {view && <><p>Status: {view.verified ? 'Pembayaran sudah terverifikasi' : states[view.state]} · Versi tindak lanjut {view.reviewRevision}</p>
       <p>Usia pengajuan saat pemeriksaan: {Math.floor((Date.parse(view.observedAt) - Date.parse(view.submittedAt)) / 60000)} menit menurut waktu server.</p>
-      <p>Penanggung jawab: {view.assigneeId ? 'Akun ' + view.assigneeId : 'Belum ditetapkan'}</p>{view.reason && <p>Alasan terakhir: {view.reason}</p>}
+      <p>Penanggung jawab: {view.assigneeId ? 'Akun ' + view.assigneeId : 'Belum ditetapkan'}</p>{view.reason && <p>Alasan internal terakhir: {view.reason}</p>}
+      {view.publicExplanation && <p>Penjelasan untuk pelanggan: {view.publicExplanation}</p>}
       {view.recordedAt && <p>Dicatat akun {view.recordedBy} pada {new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Jakarta' }).format(new Date(view.recordedAt))}.</p>}
       {!open && <p>Pengajuan ini tidak menerima tindakan baru. Pemeriksaan terdahulu tetap dapat dibaca. Pengganti dan tindak lanjut penjualan harus ditautkan melalui alur yang sesuai.</p>}
-      {open && allowed && <form onSubmit={event => { event.preventDefault(); if (!canAct) return; try { setConfirm(prepareReviewAction(actorId, view, action, reason.trim())); } catch (failure) { setError(failure); } }}>
+      {open && allowed && <form onSubmit={event => { event.preventDefault(); if (!canAct) return; try { setConfirm(prepareReviewAction(actorId, view, action, reason.trim(), ['reject', 'request_replacement'].includes(action) ? publicExplanation.trim() : null)); } catch (failure) { setError(failure); } }}>
         <h4 ref={formHeading} tabIndex={-1}>Tinjau tindakan pemeriksaan</h4><label htmlFor="review-action">Tindakan</label><select id="review-action" value={action} disabled={disabled || !!confirm} onChange={event => setAction(event.target.value)}>
           {Object.entries(actions).map(([value, label]) => <option key={value} value={value} disabled={value === 'claim' && view.assigneeId === actorId || value === 'release' && view.state !== 'assigned'}>{label}</option>)}</select>
         <label htmlFor="review-action-reason">Alasan tindak lanjut</label><textarea id="review-action-reason" required maxLength={1000} value={reason} disabled={disabled || !!confirm} onChange={event => setReason(event.target.value)} />
+        <p>Alasan tindak lanjut hanya untuk petugas yang berwenang.</p>
+        {['reject', 'request_replacement'].includes(action) && <><label htmlFor="review-action-public">Penjelasan untuk pelanggan</label>
+          <textarea id="review-action-public" required maxLength={1000} value={publicExplanation} disabled={disabled || !!confirm} onChange={event => setPublicExplanation(event.target.value)} />
+          <p>Jelaskan perbaikan yang diperlukan. Teks ini terlihat oleh pemilik pengajuan; hindari catatan internal atau data rekening.</p></>}
         <p>Tanggung jawab tidak menambah kewenangan verifikasi bank. Penolakan atau permintaan pengganti menutup verifikasi baru untuk pengajuan ini. Dana dan saldo invoice tetap utuh.</p>
         {!confirm ? <button className={styles.primary} disabled={!canAct}>Periksa tindak lanjut</button> : <section className={styles.state} aria-label="Konfirmasi tindak lanjut pemeriksaan">
-          <h4 ref={heading} tabIndex={-1}>{actions[confirm.body.action]}</h4><p>{confirm.body.reason}</p><p>Pengajuan {owner.id} · Bukti versi {owner.submission!.evidence.version} · Tindak lanjut versi {confirm.revision}</p>
+          <h4 ref={heading} tabIndex={-1}>{actions[confirm.body.action]}</h4><p>Alasan internal: {confirm.body.reason}</p>
+          {confirm.body.publicExplanation && <p>Penjelasan untuk pelanggan: {confirm.body.publicExplanation}</p>}
+          <p>Pengajuan {owner.id} · Bukti versi {owner.submission!.evidence.version} · Tindak lanjut versi {confirm.revision}</p>
           <button type="button" className={styles.primary} disabled={!canAct} onClick={() => void work(async () => {
             if (journal.list(actorId).length) throw new AccessFailure(400, 'resolve_previous_attempt');
             await submitTrackedRequest(ledger, journal, actorId, 'billing.payment.review.manage', 'billing.payment.review.manage', confirm, key => gateway.save(confirm, key, active)); await load();

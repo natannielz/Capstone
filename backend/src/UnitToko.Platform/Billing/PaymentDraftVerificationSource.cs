@@ -11,12 +11,12 @@ using UnitToko.Platform.Mongo.Migrations;
 namespace UnitToko.Platform.Billing;
 
 public sealed record PaymentFollowUpView(long DeclarationId, long DeclarationRevision, long SubmissionId, EvidenceRef Evidence,
-    long ReviewRevision, string State, DateTimeOffset SubmittedAt, DateTimeOffset? RecordedAt, PaymentNotificationStatus Notification);
+    long ReviewRevision, string State, DateTimeOffset SubmittedAt, DateTimeOffset? RecordedAt, string? PublicExplanation, PaymentNotificationStatus Notification);
 public sealed partial class PaymentDraftService
 {
     public async Task<PaymentFollowUpView> ReadFollowUpAsync(ActorContext actor, long id, long revision, CancellationToken ct = default) {
         if (id <= 0 || revision <= 0) throw PaymentDraftBson.Invalid(); await StorageAsync(ct);
-        await InventoryRepository.RequireStorageAsync(database, PaymentReviewActionRecords.Versions, PaymentReviewActionSchemas.Validator(), PaymentReviewActionSchemas.Key(), ct);
+        await InventoryRepository.RequireStorageAsync(database, PaymentReviewActionRecords.Versions, PaymentReviewExplanationSchemas.Validator(), PaymentReviewActionSchemas.Key(), ct);
         await PaymentReviewNotifications.RequireStorageAsync(database, ct);
         return await authorization.ReadAsync(actor, async (authority, tx, token) => {
             var head = await HeadAsync(actor, authority, tx, id, token);
@@ -27,7 +27,8 @@ public sealed partial class PaymentDraftService
             // Buyer follow-up exposes no internal reasons, staff identities or bank/payer records, and makes no financial-status claim.
             var view = new PaymentFollowUpView(id, revision, submission["_id"].AsInt64, PaymentSubmissionBson.Reference(submission["evidence"].AsBsonDocument),
                 latest?["revision"].AsInt64 ?? 0, latest?["state"].AsString ?? "pending", new(submission["submittedAt"].ToUniversalTime()),
-                latest is null ? null : new(latest["recordedAt"].ToUniversalTime()), await PaymentReviewNotifications.ReadAsync(database, tx, latest, token));
+                latest is null ? null : new(latest["recordedAt"].ToUniversalTime()), latest?.GetValue("publicExplanation", BsonNull.Value) is { IsString: true } explanation ? explanation.AsString : null,
+                await PaymentReviewNotifications.ReadAsync(database, tx, latest, token));
             await records.Rows("auditEvents").InsertOneAsync(tx, new BsonDocument { { "_id", (await ids.NextAsync("auditEvents", token)).Value },
                 { "schemaVersion", 1 }, { "kind", "billing.payment.follow-up.read" }, { "actorId", actor.UserId }, { "actorGrantVersion", actor.GrantVersion },
                 { "declarationId", id }, { "declarationRevision", revision }, { "reviewRevision", view.ReviewRevision }, { "createdAt", Now.UtcDateTime } }, cancellationToken: token);

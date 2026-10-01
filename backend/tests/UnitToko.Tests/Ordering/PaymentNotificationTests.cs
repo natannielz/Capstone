@@ -18,14 +18,14 @@ public sealed class PaymentNotificationTests(MongoFixture fixture)
         var db = data.Read.Database; var shown = await data.Service.ReadReviewActionsAsync(data.Reviewer, data.Read.DeclarationId);
         await data.Service.RecordReviewActionAsync(data.Reviewer, data.Read.DeclarationId, 0, new(shown.Binding, "request_replacement"), PaymentVerificationTestData.Meta("notice-upgrade"));
         var events = await data.Rows("outboxEvents").Find(new BsonDocument()).Sort(new BsonDocument("_id", 1)).ToListAsync();
-        var receipts = await data.Rows("schemaMigrations").Find(new BsonDocument("_id", new BsonDocument("$lt", 45))).Sort(new BsonDocument("_id", 1)).ToListAsync();
+        var receipts = await data.Rows("schemaMigrations").Find(new BsonDocument("_id", new BsonDocument("$lt", CollectionMigrations.CurrentVersion))).Sort(new BsonDocument("_id", 1)).ToListAsync();
         // Isolated interrupted-install fixture: the extension exists, but migration completion was not recorded.
-        await data.Rows("schemaMigrations").DeleteOneAsync(new BsonDocument("_id", 45));
+        await data.Rows("schemaMigrations").DeleteOneAsync(new BsonDocument("_id", CollectionMigrations.CurrentVersion));
         var processor = new PaymentReviewNotifications(db, new(data.Read.Catalog.Client), data.Read.Catalog.Clock);
         await Assert.ThrowsAsync<PersistenceConflictException>(() => processor.RunOnceAsync());
         Assert.Equal(events, await data.Rows("outboxEvents").Find(new BsonDocument()).Sort(new BsonDocument("_id", 1)).ToListAsync());
         await new CollectionMigrations(db, data.Read.Catalog.Clock).ApplyAsync();
-        Assert.Equal(receipts, await data.Rows("schemaMigrations").Find(new BsonDocument("_id", new BsonDocument("$lt", 45))).Sort(new BsonDocument("_id", 1)).ToListAsync());
+        Assert.Equal(receipts, await data.Rows("schemaMigrations").Find(new BsonDocument("_id", new BsonDocument("$lt", CollectionMigrations.CurrentVersion))).Sort(new BsonDocument("_id", 1)).ToListAsync());
         Assert.Equal(events, await data.Rows("outboxEvents").Find(new BsonDocument()).Sort(new BsonDocument("_id", 1)).ToListAsync());
         Assert.Equal("completed", await processor.RunOnceAsync());
     }

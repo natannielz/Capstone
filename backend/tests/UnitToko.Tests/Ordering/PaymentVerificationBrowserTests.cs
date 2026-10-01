@@ -137,6 +137,8 @@ public sealed class PaymentVerificationBrowserTests(MongoFixture fixture, ITestO
             Assert.Single(events, row => row["notificationReceipt"]["disposition"] == "available");
             Assert.Equal(3, await data.Rows(PaymentReviewActionRecords.Versions).CountDocumentsAsync(new BsonDocument()));
             var latest = await data.Service.ReadReviewActionsAsync(data.Reader, data.Read.DeclarationId); Assert.Equal("replacement_requested", latest.Latest!["state"]);
+            Assert.Equal(2, latest.Latest["schemaVersion"]); Assert.Equal("Unggah foto bukti asli yang terbaca jelas.", latest.Latest["publicExplanation"]);
+            Assert.Equal(latest.Latest["snapshotHash"], Assert.Single(events, row => row["notificationReceipt"]["disposition"] == "available")["notificationReceipt"]["actionHash"]);
             if (replacement) {
                 var first = await data.Rows(PaymentDraftBson.Versions).Find(new BsonDocument("schemaVersion", 2)).SingleAsync();
                 var child = await data.Read.Payment.Service.ReadAsync(data.Read.Actor, first["declarationId"].AsInt64);

@@ -10,9 +10,9 @@ using UnitToko.Platform.Billing;
 namespace UnitToko.Api.Billing;
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed record PaymentReviewActionSaveDto([property: JsonRequired] string Binding, [property: JsonRequired] string Action, [property: JsonRequired] string Reason);
+public sealed record PaymentReviewActionSaveDto([property: JsonRequired] string Binding, [property: JsonRequired] string Action, [property: JsonRequired] string Reason, string? PublicExplanation = null);
 public sealed record PaymentReviewActionViewDto(string Binding, LongId DeclarationId, string DeclarationRevision, LongId SubmissionId, PaymentEvidenceReferenceDto Evidence,
-    string ReviewRevision, string State, LongId? AssigneeId, LongId? RecordedBy, DateTimeOffset? RecordedAt, string? Reason, bool Verified, DateTimeOffset SubmittedAt, DateTimeOffset ObservedAt);
+    string ReviewRevision, string State, LongId? AssigneeId, LongId? RecordedBy, DateTimeOffset? RecordedAt, string? Reason, string? PublicExplanation, bool Verified, DateTimeOffset SubmittedAt, DateTimeOffset ObservedAt);
 public sealed record PaymentReviewActionResultDto(LongId DeclarationId, LongId SubmissionId, string ReviewRevision, LongId ActionId, string Action, string State, LongId? AssigneeId, DateTimeOffset RecordedAt, string Operation);
 public sealed record PaymentReviewActionRecoveryDto(string Status, PaymentReviewActionResultDto? Result);
 public static class PaymentReviewActionEndpoints
@@ -29,12 +29,13 @@ public static class PaymentReviewActionEndpoints
             return TypedResults.Ok(new PaymentReviewActionViewDto(view.Binding, new(source["declarationId"].AsInt64), Number(source["revision"]), new(source["submissionId"].AsInt64),
                 new(new(evidence["id"].AsInt64), Number(evidence["version"]), evidence["sha256"].AsString), view.ReviewRevision.ToString(System.Globalization.CultureInfo.InvariantCulture),
                 last?["state"].AsString ?? "pending", last is null || last["assigneeId"].IsBsonNull ? null : new(last["assigneeId"].AsInt64),
-                last is null ? null : new(last["actorId"].AsInt64), last is null ? null : new(last["recordedAt"].ToUniversalTime()), last?["reason"].AsString, view.Verified, view.SubmittedAt, view.ObservedAt));
+                last is null ? null : new(last["actorId"].AsInt64), last is null ? null : new(last["recordedAt"].ToUniversalTime()), last?["reason"].AsString,
+                last?.GetValue("publicExplanation", BsonNull.Value) is { IsString: true } explanation ? explanation.AsString : null, view.Verified, view.SubmittedAt, view.ObservedAt));
         }).WithName("ReadPaymentReviewWorkflow");
         group.MapPost("", async (string id, PaymentReviewActionSaveDto request, HttpContext http, PaymentVerificationService service,
             [FromHeader(Name = "Idempotency-Key")] string key, [FromHeader(Name = "If-Match")] string expected, CancellationToken ct) => {
             Private(http); return TypedResults.Ok(Result(await service.RecordReviewActionAsync(http.Features.Get<ResolvedActor>()!.Actor, LongId.Parse(id).Value,
-                AccessRequestMetadata.ExpectedVersion(http.Request), new(request.Binding, request.Action), new(AccessRequestMetadata.IdempotencyKey(http.Request), request.Reason, http.TraceIdentifier), ct)));
+                AccessRequestMetadata.ExpectedVersion(http.Request), new(request.Binding, request.Action, request.PublicExplanation), new(AccessRequestMetadata.IdempotencyKey(http.Request), request.Reason, http.TraceIdentifier), ct)));
         }).WithName("RecordPaymentReviewAction");
         group.MapPost("/operations/query", async (string id, OrderDraftRecoveryDto request, HttpContext http, PaymentVerificationService service, CancellationToken ct) => {
             if (request.Purpose != "operation-recovery") throw PaymentReviewActionPolicy.Invalid(); Private(http);

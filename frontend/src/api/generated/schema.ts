@@ -5737,6 +5737,7 @@ export interface components {
             declarationRevision: string;
             evidence: components["schemas"]["PaymentEvidenceReferenceDto"];
             notification: components["schemas"]["PaymentNotificationStatus"];
+            publicExplanation: null | string;
             /** Format: date-time */
             recordedAt: null | string;
             reviewRevision: string;
@@ -5872,6 +5873,7 @@ export interface components {
         PaymentReviewActionSaveDto: {
             action: string;
             binding: string;
+            publicExplanation?: null | string;
             reason: string;
         };
         PaymentReviewActionViewDto: {
@@ -5882,6 +5884,7 @@ export interface components {
             evidence: components["schemas"]["PaymentEvidenceReferenceDto"];
             /** Format: date-time */
             observedAt: string;
+            publicExplanation: null | string;
             reason: null | string;
             /** Format: date-time */
             recordedAt: null | string;

@@ -59,7 +59,7 @@ public sealed class PaymentReviewNotifications(IMongoDatabase database, MongoUni
         if (job.GetValue("kind", "") != PaymentReviewActionRecords.Operation || !job.TryGetValue("payload", out var payload) || !payload.IsBsonDocument ||
             !payload.AsBsonDocument.TryGetValue("actionId", out var actionId) || !actionId.IsInt64 || actionId.AsInt64 <= 0) throw Broken();
         var action = await database.GetCollection<BsonDocument>(PaymentReviewActionRecords.Versions).Find(tx,
-            Builders<BsonDocument>.Filter.Eq("_id", actionId) & PaymentReviewActionSchemas.Validator()).SingleOrDefaultAsync(ct) ?? throw Broken();
+            Builders<BsonDocument>.Filter.Eq("_id", actionId) & PaymentReviewExplanationSchemas.Validator()).SingleOrDefaultAsync(ct) ?? throw Broken();
         var drafts = new PaymentDraftRecords(database); var head = await drafts.HeadAsync(tx, action["source"]["recordedBy"].AsInt64, action["declarationId"].AsInt64, ct);
         if (head["state"] != "submitted") throw Broken();
         var version = await drafts.VersionAsync(tx, head["versionId"].AsInt64, ct);

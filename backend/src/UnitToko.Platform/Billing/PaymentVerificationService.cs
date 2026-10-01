@@ -51,7 +51,7 @@ public sealed partial class PaymentVerificationService
     }
     private async Task StorageAsync(CancellationToken ct) {
         await declarations.VerificationStorageAsync(ct); await receipts.PaymentStorageAsync(ct); await PaymentVerificationStorage.RequireAsync(database, ct);
-        await InventoryRepository.RequireStorageAsync(database, PaymentReviewActionRecords.Versions, PaymentReviewActionSchemas.Validator(), PaymentReviewActionSchemas.Key(), ct);
+        await InventoryRepository.RequireStorageAsync(database, PaymentReviewActionRecords.Versions, PaymentReviewExplanationSchemas.Validator(), PaymentReviewActionSchemas.Key(), ct);
     }
     private async Task<Context> SourceAsync(Context context, long id, CancellationToken ct) {
         _ = Require(context); context = context with { Source = await declarations.VerificationSourceAsync(context.Actor, context.Authority, context.Tx, id, ct) };

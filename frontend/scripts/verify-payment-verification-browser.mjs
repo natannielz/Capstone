@@ -90,7 +90,9 @@ try {
     await open(page); await workflow.getByRole('button', { name: 'Muat status pemeriksaan', exact: true }).click(); await workflow.getByText(/Dalam pemeriksaan/).waitFor();
     for (const [choice, reasonText, expected] of [['release', 'Synthetic ownership release', /Menunggu penanggung jawab/], ['request_replacement', 'Synthetic request for legible replacement', /Bukti pengganti diminta/]]) {
       await workflow.getByLabel('Tindakan', { exact: true }).selectOption(choice); await workflow.getByLabel('Alasan tindak lanjut', { exact: true }).fill(reasonText);
+      if (choice === 'request_replacement') await workflow.getByLabel('Penjelasan untuk pelanggan', { exact: true }).fill('Unggah foto bukti asli yang terbaca jelas.');
       await workflow.getByRole('button', { name: 'Periksa tindak lanjut', exact: true }).click(); await confirmation.waitFor();
+      if (choice === 'request_replacement') await confirmation.getByText('Penjelasan untuk pelanggan: Unggah foto bukti asli yang terbaca jelas.', { exact: true }).waitFor();
       await confirmation.getByRole('button', { name: 'Simpan tindak lanjut', exact: true }).click(); await workflow.getByText(expected).waitFor();
     }
     assert.equal(await workflow.getByRole('button', { name: 'Periksa tindak lanjut', exact: true }).count(), 0);
@@ -126,7 +128,8 @@ try {
     await followUp.getByRole('button', { name: 'Muat tindak lanjut petugas', exact: true }).click();
     await followUp.getByRole('status').getByText('Petugas meminta bukti pengganti', { exact: true }).waitFor();
     await followUp.getByText(/^Notifikasi aplikasi: Pemberitahuan tindak lanjut tersedia pada akun ini\./).waitFor();
-    assert.equal(await followUp.getByText(/Synthetic request for eligible replacement|Akun 7410/).count(), 0);
+    await followUp.getByText('Penjelasan petugas: Unggah foto bukti asli yang terbaca jelas.', { exact: true }).waitFor();
+    assert.equal(await followUp.getByText(/Synthetic request for legible replacement|Akun 7410/).count(), 0);
     assert.equal(await buyer.page.getByRole('button', { name: 'Ajukan untuk verifikasi', exact: true }).count(), 0);
     assert.equal(await buyer.page.getByRole('button', { name: 'Unggah bukti asli', exact: true }).count(), 0);
     assert.equal(await buyer.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);

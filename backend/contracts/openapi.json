@@ -37944,6 +37944,7 @@
           "state",
           "submittedAt",
           "recordedAt",
+          "publicExplanation",
           "notification"
         ],
         "type": "object",
@@ -37976,6 +37977,12 @@
               "string"
             ],
             "format": "date-time"
+          },
+          "publicExplanation": {
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "notification": {
             "$ref": "#/components/schemas/PaymentNotificationStatus"
@@ -38563,6 +38570,12 @@
           },
           "reason": {
             "type": "string"
+          },
+          "publicExplanation": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         },
         "additionalProperties": false
@@ -38580,6 +38593,7 @@
           "recordedBy",
           "recordedAt",
           "reason",
+          "publicExplanation",
           "verified",
           "submittedAt",
           "observedAt"
@@ -38635,6 +38649,12 @@
             "format": "date-time"
           },
           "reason": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "publicExplanation": {
             "type": [
               "null",
               "string"

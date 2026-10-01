@@ -22,14 +22,14 @@ public sealed class PaymentNotificationMigrationTests(MongoFixture fixture)
         var extra = new BsonDocument("sourceKey", new BsonDocument("$ne", "operator-blocked-source"));
         await db.RunCommandAsync<BsonDocument>(new BsonDocument { { "collMod", "outboxEvents" }, { "validator", new BsonDocument("$and", new BsonArray { definition["options"]["validator"], extra }) } });
         var before = await Definitions(db); var receipts = await db.GetCollection<BsonDocument>("schemaMigrations").Find(new BsonDocument()).Sort(new BsonDocument("_id", 1)).ToListAsync();
-        await new CollectionMigrations(db, new SystemClock()).ApplyAsync(); var after = await Definitions(db);
+        await LegacyOrderSubmissionTestSchema.UpgradeV45Async(db, new SystemClock()); var after = await Definitions(db);
         Assert.Equal(before.Where(row => row["name"] != "outboxEvents"), after.Where(row => row["name"] != "outboxEvents"));
         var validator = after.Single(row => row["name"] == "outboxEvents")["options"]["validator"].AsBsonDocument;
         Assert.True(InventorySchemas.Contains(validator, extra)); Assert.True(InventorySchemas.Contains(validator, PaymentNotificationSchemas.OutboxValidator()));
         Assert.Equal(receipts, (await db.GetCollection<BsonDocument>("schemaMigrations").Find(new BsonDocument()).Sort(new BsonDocument("_id", 1)).ToListAsync()).Take(44));
         // Isolated interrupted-install fixture; no production history is deleted or downgraded.
         await db.GetCollection<BsonDocument>("schemaMigrations").DeleteOneAsync(new BsonDocument("_id", 45));
-        await new CollectionMigrations(db, new SystemClock()).ApplyAsync(); Assert.Equal(after, await Definitions(db));
+        await LegacyOrderSubmissionTestSchema.UpgradeV45Async(db, new SystemClock()); Assert.Equal(after, await Definitions(db));
     });
     [Theory]
     [InlineData("ttl")] [InlineData("orphan")] [InlineData("unexplained_completion")]
@@ -38,7 +38,7 @@ public sealed class PaymentNotificationMigrationTests(MongoFixture fixture)
         if (fault == "ttl") await rows.Indexes.CreateOneAsync(new CreateIndexModel<BsonDocument>(new BsonDocument("createdAt", 1), new CreateIndexOptions { ExpireAfter = TimeSpan.FromDays(1) }));
         else await rows.InsertOneAsync(new BsonDocument { { "_id", ObjectId.GenerateNewId() }, { "kind", PaymentReviewActionRecords.Operation },
             { "status", fault == "orphan" ? "pending" : "completed" }, { "attempts", 0 }, { "createdAt", DateTime.UtcNow }, { "payload", new BsonDocument("actionId", 99L) } }, new InsertOneOptions { BypassDocumentValidation = true });
-        var before = await Definitions(db); await Assert.ThrowsAsync<InvalidOperationException>(() => new CollectionMigrations(db, new SystemClock()).ApplyAsync());
+        var before = await Definitions(db); await Assert.ThrowsAsync<InvalidOperationException>(() => LegacyOrderSubmissionTestSchema.UpgradeV45Async(db, new SystemClock()));
         Assert.Equal(before, await Definitions(db)); Assert.False(await db.GetCollection<BsonDocument>("schemaMigrations").Find(new BsonDocument { { "_id", 45 }, { "state", "applied" } }).AnyAsync());
     });
 }

@@ -42,8 +42,11 @@ test('replacement binds the closed parent, freezes only the exact request, and r
 test('buyer follow-up binds the exact submitted original and admits neither private notes nor financial claims', async () => {
   const owner: PaymentDraft = { ...declaration, state: 'submitted', submission: { id: submissionResult.submissionId, reviewRevision: '1', reservationId: '51', evidence: checkedImage.reference!, submittedAt: result.recordedAt } };
   const value = { declarationId, declarationRevision: '2', submissionId: submissionResult.submissionId, evidence: checkedImage.reference,
-    reviewRevision: '2', state: 'replacement_requested', submittedAt: result.recordedAt, recordedAt: result.recordedAt, notification: { state: 'pending', availableAt: null } };
+    reviewRevision: '2', state: 'replacement_requested', submittedAt: result.recordedAt, recordedAt: result.recordedAt, publicExplanation: null, notification: { state: 'pending', availableAt: null } };
   assert.equal(parsePaymentFollowUp(value, owner).state, 'replacement_requested');
+  assert.equal(parsePaymentFollowUp({ ...value, publicExplanation: 'Please upload the clear original.' }, owner).publicExplanation, 'Please upload the clear original.');
+  for (const publicExplanation of ['', ' hidden ', 'a'.repeat(1001), 'hidden\u200b']) assert.throws(() => parsePaymentFollowUp({ ...value, publicExplanation }, owner));
+  assert.throws(() => parsePaymentFollowUp({ ...value, state: 'assigned', publicExplanation: 'Unexpected open text', notification: { state: 'not_applicable', availableAt: null } }, owner));
   assert.equal(parsePaymentFollowUp({ ...value, notification: { state: 'available', availableAt: result.recordedAt } }, owner).notification.state, 'available');
   for (const notification of [{ state: 'available', availableAt: null }, { state: 'failed', availableAt: result.recordedAt }, { state: 'not_applicable', availableAt: null },
     { state: 'delivered_email', availableAt: result.recordedAt }, { state: 'pending', availableAt: null, recipientId: actor }]) assert.throws(() => parsePaymentFollowUp({ ...value, notification }, owner));

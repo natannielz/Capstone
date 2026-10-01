@@ -13,7 +13,9 @@ internal sealed class PaymentReviewActionRecords(IMongoDatabase database)
     internal const string Versions = "paymentReviewActions", Operation = "billing.payment.review.manage";
     internal IMongoCollection<BsonDocument> Rows(string name) => database.GetCollection<BsonDocument>(name);
     internal static string Binding(BsonDocument source, long revision) => B.Hash(new() { { "source", source }, { "revision", revision } });
-    internal static object Body(long id, long revision, PaymentReviewActionInput input) => new { declarationId = id, expectedReviewRevision = revision, input };
+    internal static object Body(long id, long revision, PaymentReviewActionInput input) => input.PublicExplanation is null
+        ? new { declarationId = id, expectedReviewRevision = revision, input = new { input.Binding, input.Action } }
+        : new { declarationId = id, expectedReviewRevision = revision, input };
     internal static BsonDocument Result(BsonDocument row) => new() { { "declarationId", row["declarationId"] }, { "submissionId", row["source"]["submissionId"] },
         { "reviewRevision", row["revision"] }, { "actionId", row["_id"] }, { "action", row["action"] }, { "state", row["state"] },
         { "assigneeId", row["assigneeId"] }, { "recordedAt", row["recordedAt"] }, { "operation", Operation } };
@@ -25,14 +27,14 @@ internal sealed class PaymentReviewActionRecords(IMongoDatabase database)
         // ponytail: validate the full linear history; add verified checkpoints only if measured review volume requires them.
         using var cursor = await Rows(Versions).Find(tx, new BsonDocument("declarationId", id)).Sort(new BsonDocument("revision", 1)).ToCursorAsync(ct);
         while (await cursor.MoveNextAsync(ct)) foreach (var candidate in cursor.Current) {
-            var row = await Rows(Versions).Find(tx, Builders<BsonDocument>.Filter.Eq("_id", candidate["_id"]) & PaymentReviewActionSchemas.Validator()).SingleOrDefaultAsync(ct) ?? throw B.Broken();
+            var row = await Rows(Versions).Find(tx, Builders<BsonDocument>.Filter.Eq("_id", candidate["_id"]) & PaymentReviewExplanationSchemas.Validator()).SingleOrDefaultAsync(ct) ?? throw B.Broken();
             PaymentVerificationRecords.Equal(row["snapshotHash"], B.Hash(row));
             PaymentVerificationRecords.Equal(row["source"]["declarationId"], new BsonInt64(id));
             if (source is not null) PaymentVerificationRecords.Equal(row["source"], source);
             if (previous is not null) PaymentVerificationRecords.Equal(row["source"], previous["source"]);
             if (row["revision"] != ++revision || row["previousVersionId"] != (previous is null ? BsonNull.Value : previous["_id"]) ||
                 row["previousHash"] != (previous is null ? BsonNull.Value : previous["snapshotHash"]) || previous is not null && row["recordedAt"].CompareTo(previous["recordedAt"]) < 0) throw B.Broken();
-            var input = PaymentReviewActionPolicy.Copy(new(row["binding"].AsString, row["action"].AsString));
+            var input = PaymentReviewActionPolicy.Copy(new(row["binding"].AsString, row["action"].AsString, row["schemaVersion"] == 2 ? row["publicExplanation"].AsString : null));
             if (input.Binding != Binding(row["source"].AsBsonDocument, revision - 1) || row["bodyHash"] != AuthorizationStore.CommandHash(Body(id, revision - 1, input), row["reason"].AsString)) throw B.Broken();
             var expected = PaymentReviewActionPolicy.Apply(state, assignee, input.Action, row["actorId"].AsInt64);
             if (row["state"] != expected.State || row["assigneeId"] != (expected.AssigneeId is { } user ? new BsonInt64(user) : BsonNull.Value)) throw B.Broken();
