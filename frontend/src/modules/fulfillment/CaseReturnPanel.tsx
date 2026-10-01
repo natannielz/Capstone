@@ -10,8 +10,8 @@ import type { ResolutionAction } from './resolution-client';
 import { createReturnGateway, prepareReturn, returnConditions, type ReturnLine, type ReturnView } from './return-client';
 import styles from '../administration/access.module.css';
 
-export function CaseReturnPanel({ actorId, owner, canReceive, canInspect, resolutionOptions, fresh, locked, current, journal, onSettled, onDenied, onBusyChange }: {
-  actorId: string; owner: AfterSalesCase; canReceive: boolean; canInspect: boolean; resolutionOptions: readonly ResolutionAction[]; fresh: boolean; locked: boolean; current: () => boolean; journal: OperationJournal;
+export function CaseReturnPanel({ actorId, owner, canReceive, canInspect, resolutionOptions, canReadInvoice = false, fresh, locked, current, journal, onSettled, onDenied, onBusyChange }: {
+  actorId: string; owner: AfterSalesCase; canReceive: boolean; canInspect: boolean; resolutionOptions: readonly ResolutionAction[]; canReadInvoice?: boolean; fresh: boolean; locked: boolean; current: () => boolean; journal: OperationJournal;
   onSettled: () => void; onDenied: (failure: unknown) => void; onBusyChange: (busy: boolean) => void;
 }) {
   const [gateway] = useState(createReturnGateway), [ledger] = useState(() => new MutationLedger(() => 'cr.' + owner.id + '.' + crypto.randomUUID()));
@@ -36,7 +36,7 @@ export function CaseReturnPanel({ actorId, owner, canReceive, canInspect, resolu
     {view && <><ul>{view.limits.map(item => { const original = product(item.receiptId, item.skuId); return <li key={item.receiptId + ':' + item.skuId}>{original.productName}: {item.receivedBaseUnits} dari {item.authorizedBaseUnits} {original.baseUnitCode} telah diterima dalam karantina. Sisa {String(BigInt(item.authorizedBaseUnits) - BigInt(item.receivedBaseUnits))} {original.baseUnitCode}. {original.packageLabel} berisi {original.baseUnitsPerPackage} {original.baseUnitCode}.</li>; })}</ul>
       {view.recent.length === 0 && <p>Belum ada penerimaan retur yang tercatat.</p>}
       <ul aria-label="Riwayat penerimaan retur">{view.recent.map(row => <li key={row.id}><strong>Penerimaan {row.id}</strong><p>{new Date(row.receivedAt).toLocaleString('id-ID')} · Karantina</p><p>{row.publicNote}</p><ul>{row.lines.map(item => { const original = product(item.receiptId, item.skuId); return <li key={item.receiptId + ':' + item.skuId}>{original.productName}: {item.receivedBaseUnits} {original.baseUnitCode} · {returnConditions[item.observedCondition]}</li>; })}</ul>
-        <CaseInspectionPanel actorId={actorId} owner={owner} returnId={row.id} canInspect={canInspect} resolutionOptions={resolutionOptions} fresh={fresh} locked={disabled} current={current} journal={journal} onSettled={onSettled} onDenied={onDenied} onBusyChange={onBusyChange} /></li>)}</ul>
+        <CaseInspectionPanel actorId={actorId} owner={owner} returnId={row.id} canInspect={canInspect} resolutionOptions={resolutionOptions} canReadInvoice={canReadInvoice} fresh={fresh} locked={disabled} current={current} journal={journal} onSettled={onSettled} onDenied={onDenied} onBusyChange={onBusyChange} /></li>)}</ul>
       {view.hasEarlier && <p>25 penerimaan terakhir ditampilkan. Jumlah di atas mencakup seluruh penerimaan retur.</p>}</>}
     {canReceive && preview && view && !confirm && view.limits.some(item => BigInt(item.receivedBaseUnits) < BigInt(item.authorizedBaseUnits)) && <form onSubmit={event => { event.preventDefault(); if (!canAct) return;
       try { const lines = view.limits.flatMap(item => { const key = item.receiptId + ':' + item.skuId; return quantities[key] ? [{ receiptId: item.receiptId, skuId: item.skuId, receivedBaseUnits: quantities[key], observedCondition: conditions[key] ?? 'uninspected' }] : []; });

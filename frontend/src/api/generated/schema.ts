@@ -561,6 +561,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/billing/cases/{id}/returns/{returnId}/entitlement": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["RequestReturnEntitlement"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/billing/cases/{id}/returns/{returnId}/entitlement/operations/query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["RecoverReturnEntitlement"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/billing/cases/{id}/returns/{returnId}/entitlement/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["PreviewReturnEntitlement"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/billing/cases/{id}/returns/{returnId}/entitlement/query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ReadReturnEntitlement"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/billing/invoices": {
         parameters: {
             query?: never;
@@ -7001,6 +7065,101 @@ export interface components {
             receivedBaseUnits: string;
             skuId: components["schemas"]["LongId"];
         };
+        ReturnEntitlementCommandDto: {
+            action: string;
+            binding: string;
+            expectedVersion: string;
+            input: components["schemas"]["ReturnEntitlementInputDto"];
+            reason: string;
+        };
+        ReturnEntitlementInputDto: {
+            lines: components["schemas"]["ReturnEntitlementLineInputDto"][];
+        };
+        ReturnEntitlementLineDto: {
+            attributedBaseUnits: string;
+            charges: string;
+            net: string;
+            receiptId: components["schemas"]["LongId"];
+            skuId: components["schemas"]["LongId"];
+            tax: string;
+        };
+        ReturnEntitlementLineInputDto: {
+            charges: components["schemas"]["Money"];
+            receiptId: components["schemas"]["LongId"];
+            skuId: components["schemas"]["LongId"];
+            tax: components["schemas"]["Money"];
+        };
+        ReturnEntitlementPreviewDto: {
+            attributionProcedureReference: string;
+            binding: string;
+            charges: string;
+            chargeTreatmentReference: string;
+            credit: string;
+            creditNoteProcedureReference: string;
+            lines: components["schemas"]["ReturnEntitlementLineDto"][];
+            net: string;
+            tax: string;
+            taxTreatmentReference: string;
+            view: components["schemas"]["ReturnEntitlementViewDto"];
+        };
+        ReturnEntitlementPreviewInputDto: {
+            action: string;
+            input: components["schemas"]["ReturnEntitlementInputDto"];
+        };
+        ReturnEntitlementQueryDto: {
+            action: string;
+            purpose: string;
+        };
+        ReturnEntitlementRecoveryDto: {
+            result: null | components["schemas"]["ReturnEntitlementResultDto"];
+            status: string;
+        };
+        ReturnEntitlementRecoveryInputDto: {
+            action: string;
+            purpose: string;
+            requestKey: string;
+        };
+        ReturnEntitlementResultDto: {
+            action: string;
+            caseId: components["schemas"]["LongId"];
+            charges: string;
+            credit: string;
+            invoiceId: components["schemas"]["LongId"];
+            lines: components["schemas"]["ReturnEntitlementLineDto"][];
+            net: string;
+            operation: string;
+            /** Format: date-time */
+            requestedAt: string;
+            returnId: components["schemas"]["LongId"];
+            state: string;
+            tax: string;
+            version: string;
+        };
+        ReturnEntitlementSourceLineDto: {
+            condition: string;
+            identity: string;
+            inspectedBaseUnits: string;
+            issuedBaseUnits: string;
+            issuedCharges: string;
+            issuedNet: string;
+            issuedTax: string;
+            previouslyAttributedBaseUnits: string;
+            previouslyAttributedCharges: string;
+            previouslyAttributedNet: string;
+            previouslyAttributedTax: string;
+            receiptId: components["schemas"]["LongId"];
+            skuId: components["schemas"]["LongId"];
+        };
+        ReturnEntitlementViewDto: {
+            action: string;
+            buyerName: string;
+            caseId: components["schemas"]["LongId"];
+            invoiceId: components["schemas"]["LongId"];
+            lines: components["schemas"]["ReturnEntitlementSourceLineDto"][];
+            request: null | components["schemas"]["ReturnEntitlementResultDto"];
+            returnId: components["schemas"]["LongId"];
+            version: string;
+        };
         ReturnInspectionAssessmentDto: {
             /** Format: date-time */
             inspectedAt: string;
@@ -10600,6 +10759,318 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StatementProfilesDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    RequestReturnEntitlement: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Reuse this key only for an unchanged logical command, including after an uncertain response. */
+                "Idempotency-Key": string;
+                /** @description One quoted nonnegative Int64 resource version from the latest response; never a JavaScript number. */
+                "If-Match": string;
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
+                /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
+                "X-Expected-Actor-Id": string;
+            };
+            path: {
+                id: string;
+                returnId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReturnEntitlementCommandDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReturnEntitlementResultDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    RecoverReturnEntitlement: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
+                /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
+                "X-Expected-Actor-Id": string;
+            };
+            path: {
+                id: string;
+                returnId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReturnEntitlementRecoveryInputDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReturnEntitlementRecoveryDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    PreviewReturnEntitlement: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
+                /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
+                "X-Expected-Actor-Id": string;
+            };
+            path: {
+                id: string;
+                returnId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReturnEntitlementPreviewInputDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReturnEntitlementPreviewDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    ReadReturnEntitlement: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
+                /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
+                "X-Expected-Actor-Id": string;
+            };
+            path: {
+                id: string;
+                returnId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReturnEntitlementQueryDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReturnEntitlementViewDto"];
                 };
             };
             /** @description Bad Request */

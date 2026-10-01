@@ -25631,6 +25631,525 @@
         ]
       }
     },
+    "/api/v1/billing/cases/{id}/returns/{returnId}/entitlement/query": {
+      "post": {
+        "tags": [
+          "UnitToko.Api"
+        ],
+        "operationId": "ReadReturnEntitlement",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "returnId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "required": true,
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReturnEntitlementQueryDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReturnEntitlementViewDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
+    "/api/v1/billing/cases/{id}/returns/{returnId}/entitlement/preview": {
+      "post": {
+        "tags": [
+          "UnitToko.Api"
+        ],
+        "operationId": "PreviewReturnEntitlement",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "returnId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "required": true,
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReturnEntitlementPreviewInputDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReturnEntitlementPreviewDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
+    "/api/v1/billing/cases/{id}/returns/{returnId}/entitlement": {
+      "post": {
+        "tags": [
+          "UnitToko.Api"
+        ],
+        "operationId": "RequestReturnEntitlement",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "returnId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "Reuse this key only for an unchanged logical command, including after an uncertain response.",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "description": "One quoted nonnegative Int64 resource version from the latest response; never a JavaScript number.",
+            "required": true,
+            "schema": {
+              "maxLength": 21,
+              "minLength": 3,
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "required": true,
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReturnEntitlementCommandDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReturnEntitlementResultDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
+    "/api/v1/billing/cases/{id}/returns/{returnId}/entitlement/operations/query": {
+      "post": {
+        "tags": [
+          "UnitToko.Api"
+        ],
+        "operationId": "RecoverReturnEntitlement",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "returnId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "required": true,
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReturnEntitlementRecoveryInputDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReturnEntitlementRecoveryDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
     "/api/v1/billing/receiving-accounts/policies/query": {
       "post": {
         "tags": [
@@ -44858,6 +45377,409 @@
           },
           "observedCondition": {
             "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ReturnEntitlementCommandDto": {
+        "required": [
+          "action",
+          "expectedVersion",
+          "binding",
+          "input",
+          "reason"
+        ],
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "expectedVersion": {
+            "type": "string"
+          },
+          "binding": {
+            "type": "string"
+          },
+          "input": {
+            "$ref": "#/components/schemas/ReturnEntitlementInputDto"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ReturnEntitlementInputDto": {
+        "required": [
+          "lines"
+        ],
+        "type": "object",
+        "properties": {
+          "lines": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReturnEntitlementLineInputDto"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "ReturnEntitlementLineDto": {
+        "required": [
+          "receiptId",
+          "skuId",
+          "attributedBaseUnits",
+          "net",
+          "tax",
+          "charges"
+        ],
+        "type": "object",
+        "properties": {
+          "receiptId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "skuId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "attributedBaseUnits": {
+            "type": "string"
+          },
+          "net": {
+            "type": "string"
+          },
+          "tax": {
+            "type": "string"
+          },
+          "charges": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ReturnEntitlementLineInputDto": {
+        "required": [
+          "receiptId",
+          "skuId",
+          "tax",
+          "charges"
+        ],
+        "type": "object",
+        "properties": {
+          "receiptId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "skuId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "tax": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "charges": {
+            "$ref": "#/components/schemas/Money"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ReturnEntitlementPreviewDto": {
+        "required": [
+          "view",
+          "binding",
+          "attributionProcedureReference",
+          "taxTreatmentReference",
+          "chargeTreatmentReference",
+          "creditNoteProcedureReference",
+          "net",
+          "tax",
+          "charges",
+          "credit",
+          "lines"
+        ],
+        "type": "object",
+        "properties": {
+          "view": {
+            "$ref": "#/components/schemas/ReturnEntitlementViewDto"
+          },
+          "binding": {
+            "type": "string"
+          },
+          "attributionProcedureReference": {
+            "type": "string"
+          },
+          "taxTreatmentReference": {
+            "type": "string"
+          },
+          "chargeTreatmentReference": {
+            "type": "string"
+          },
+          "creditNoteProcedureReference": {
+            "type": "string"
+          },
+          "net": {
+            "type": "string"
+          },
+          "tax": {
+            "type": "string"
+          },
+          "charges": {
+            "type": "string"
+          },
+          "credit": {
+            "type": "string"
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReturnEntitlementLineDto"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "ReturnEntitlementPreviewInputDto": {
+        "required": [
+          "action",
+          "input"
+        ],
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "input": {
+            "$ref": "#/components/schemas/ReturnEntitlementInputDto"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ReturnEntitlementQueryDto": {
+        "required": [
+          "purpose",
+          "action"
+        ],
+        "type": "object",
+        "properties": {
+          "purpose": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ReturnEntitlementRecoveryDto": {
+        "required": [
+          "status",
+          "result"
+        ],
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string"
+          },
+          "result": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ReturnEntitlementResultDto"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "ReturnEntitlementRecoveryInputDto": {
+        "required": [
+          "purpose",
+          "action",
+          "requestKey"
+        ],
+        "type": "object",
+        "properties": {
+          "purpose": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string"
+          },
+          "requestKey": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ReturnEntitlementResultDto": {
+        "required": [
+          "returnId",
+          "caseId",
+          "invoiceId",
+          "action",
+          "version",
+          "requestedAt",
+          "net",
+          "tax",
+          "charges",
+          "credit",
+          "lines",
+          "state",
+          "operation"
+        ],
+        "type": "object",
+        "properties": {
+          "returnId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "caseId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "invoiceId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "action": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "requestedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "net": {
+            "type": "string"
+          },
+          "tax": {
+            "type": "string"
+          },
+          "charges": {
+            "type": "string"
+          },
+          "credit": {
+            "type": "string"
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReturnEntitlementLineDto"
+            }
+          },
+          "state": {
+            "type": "string"
+          },
+          "operation": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ReturnEntitlementSourceLineDto": {
+        "required": [
+          "receiptId",
+          "skuId",
+          "inspectedBaseUnits",
+          "identity",
+          "condition",
+          "issuedBaseUnits",
+          "issuedNet",
+          "issuedTax",
+          "issuedCharges",
+          "previouslyAttributedBaseUnits",
+          "previouslyAttributedNet",
+          "previouslyAttributedTax",
+          "previouslyAttributedCharges"
+        ],
+        "type": "object",
+        "properties": {
+          "receiptId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "skuId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "inspectedBaseUnits": {
+            "type": "string"
+          },
+          "identity": {
+            "type": "string"
+          },
+          "condition": {
+            "type": "string"
+          },
+          "issuedBaseUnits": {
+            "type": "string"
+          },
+          "issuedNet": {
+            "type": "string"
+          },
+          "issuedTax": {
+            "type": "string"
+          },
+          "issuedCharges": {
+            "type": "string"
+          },
+          "previouslyAttributedBaseUnits": {
+            "type": "string"
+          },
+          "previouslyAttributedNet": {
+            "type": "string"
+          },
+          "previouslyAttributedTax": {
+            "type": "string"
+          },
+          "previouslyAttributedCharges": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ReturnEntitlementViewDto": {
+        "required": [
+          "returnId",
+          "caseId",
+          "invoiceId",
+          "action",
+          "version",
+          "buyerName",
+          "lines",
+          "request"
+        ],
+        "type": "object",
+        "properties": {
+          "returnId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "caseId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "invoiceId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "action": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "buyerName": {
+            "type": "string"
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReturnEntitlementSourceLineDto"
+            }
+          },
+          "request": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ReturnEntitlementResultDto"
+              }
+            ]
           }
         },
         "additionalProperties": false

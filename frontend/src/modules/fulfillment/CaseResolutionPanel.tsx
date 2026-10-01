@@ -6,11 +6,12 @@ import { AccessFailure, MutationLedger, accessMessage } from '../administration/
 import { submitTrackedRequest, type OperationJournal } from '../administration/operation-journal';
 import type { AfterSalesCase } from './case-client';
 import type { InspectionView } from './inspection-client';
+import { ReturnEntitlementPanel } from './ReturnEntitlementPanel';
 import { createResolutionGateway, prepareResolution, resolutionActions, type ResolutionAction, type ResolutionView } from './resolution-client';
 import styles from '../administration/access.module.css';
 
-export function CaseResolutionPanel({ actorId, owner, inspection, allowedActions, fresh, locked, current, journal, onSettled, onDenied, onBusyChange }: {
-  actorId: string; owner: AfterSalesCase; inspection: InspectionView; allowedActions: readonly ResolutionAction[]; fresh: boolean; locked: boolean; current: () => boolean; journal: OperationJournal;
+export function CaseResolutionPanel({ actorId, owner, inspection, allowedActions, canReadInvoice = false, fresh, locked, current, journal, onSettled, onDenied, onBusyChange }: {
+  actorId: string; owner: AfterSalesCase; inspection: InspectionView; allowedActions: readonly ResolutionAction[]; canReadInvoice?: boolean; fresh: boolean; locked: boolean; current: () => boolean; journal: OperationJournal;
   onSettled: () => void; onDenied: (failure: unknown) => void; onBusyChange: (busy: boolean) => void;
 }) {
   const [gateway] = useState(createResolutionGateway), [ledger] = useState(() => new MutationLedger(() => 'cq.' + owner.id + '.' + inspection.receipt.id + '.' + crypto.randomUUID()));
@@ -32,6 +33,8 @@ export function CaseResolutionPanel({ actorId, owner, inspection, allowedActions
     <button className={styles.secondary} disabled={disabled} onClick={() => void work(async () => { const value = await gateway.read(actorId, owner, inspection); if (active()) { setView(value); setPreview(false); setConfirm(null); } })}>Lihat pengajuan penyelesaian {inspection.receipt.id}</button>
     {view && !view.request && <p>Belum ada pengajuan penyelesaian untuk penerimaan ini.</p>}
     {view?.request && <section aria-label="Pengajuan penyelesaian barang"><p>{resolutionActions[view.request.action]} · Menunggu persetujuan penyelesaian</p><p>{new Date(view.request.requestedAt).toLocaleString('id-ID')}</p><p>{view.request.publicNote}</p></section>}
+    {view?.request && view.request.action !== 'replacement' && canReadInvoice && allowedActions.includes(view.request.action) &&
+      <ReturnEntitlementPanel key={view.returnId + ':' + view.request.action} actorId={actorId} owner={owner} resolution={view} fresh={fresh} locked={disabled} current={current} journal={journal} onSettled={onSettled} onDenied={onDenied} onBusyChange={onBusyChange} />}
     {allowedActions.length > 0 && !view?.request && !confirm && <><label>Pilihan penyelesaian<select disabled={disabled} value={action} onChange={event => { setAction(event.target.value as ResolutionAction); setPreview(false); setConfirm(null); }}>{allowedActions.map(value => <option key={value} value={value}>{resolutionActions[value]}</option>)}</select></label>
       <button className={styles.secondary} disabled={!canAct} onClick={() => void work(async () => { const value = await gateway.read(actorId, owner, inspection, action); if (active()) { setView(value); setPreview(true); setConfirm(null); setConsent(false); } })}>Periksa pilihan penyelesaian</button></>}
     {preview && view && view.revision === '0' && !confirm && <form onSubmit={event => { event.preventDefault(); if (!canAct) return;

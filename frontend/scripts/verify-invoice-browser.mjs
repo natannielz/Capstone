@@ -13,7 +13,7 @@ const config = JSON.parse(Buffer.concat(chunks).toString('utf8')), api = new URL
 assert.equal(process.versions.node.split('.')[0], '24'); assert.equal(api.protocol, 'http:'); assert.equal(api.hostname, '127.0.0.1'); assert.ok(Number(api.port) > 0); assert.equal(origin.href, 'https://portal.unit-toko.co.id/');
 const load = createRequire(config.playwrightPackage), metadata = load(config.playwrightPackage); assert.equal(metadata.name, 'playwright'); assert.equal(metadata.version, '1.62.1');
 const { chromium } = load('playwright'), channel = process.env.UNITTOKO_BROWSER_CHANNEL ?? 'chromium'; assert.ok(['chromium', 'msedge'].includes(channel));
-const app = next({ dev: false, dir: process.cwd(), quiet: true }), sockets = new Set(), writes = [], caseWrites = [], decisionWrites = [], returnWrites = [], inspectionWrites = [], resolutionWrites = [], errors = [], pages = [];
+const app = next({ dev: false, dir: process.cwd(), quiet: true }), sockets = new Set(), writes = [], caseWrites = [], decisionWrites = [], returnWrites = [], inspectionWrites = [], resolutionWrites = [], entitlementWrites = [], errors = [], pages = [];
 const directory = resolve('../tmp/production/invoice-browser-results'); mkdirSync(directory, { recursive: true });
 let browser, frontend, edge, tunnel, dropNext = false, dropped = 0;
 function track(server) { server.on('connection', socket => { sockets.add(socket); socket.on('close', () => sockets.delete(socket)); }); return server; }
@@ -28,7 +28,8 @@ function forward(req, res, port, isApi) {
   const returnWrite = req.method === 'POST' && /^\/api\/v1\/fulfillment\/cases\/[1-9][0-9]*\/returns$/.test(req.url); if (returnWrite) returnWrites.push({ key: req.headers['idempotency-key'], actor: req.headers['x-expected-actor-id'] });
   const inspectionWrite = req.method === 'POST' && /^\/api\/v1\/fulfillment\/cases\/[1-9][0-9]*\/returns\/[1-9][0-9]*\/inspection$/.test(req.url); if (inspectionWrite) inspectionWrites.push({ key: req.headers['idempotency-key'], actor: req.headers['x-expected-actor-id'] });
   const resolutionWrite = req.method === 'POST' && /^\/api\/v1\/fulfillment\/cases\/[1-9][0-9]*\/returns\/[1-9][0-9]*\/resolution$/.test(req.url); if (resolutionWrite) resolutionWrites.push({ key: req.headers['idempotency-key'], actor: req.headers['x-expected-actor-id'] });
-  const drop = (write || caseWrite || decisionWrite || returnWrite || inspectionWrite || resolutionWrite) && dropNext; if (drop) dropNext = false;
+  const entitlementWrite = req.method === 'POST' && /^\/api\/v1\/billing\/cases\/[1-9][0-9]*\/returns\/[1-9][0-9]*\/entitlement$/.test(req.url); if (entitlementWrite) entitlementWrites.push({ key: req.headers['idempotency-key'], actor: req.headers['x-expected-actor-id'] });
+  const drop = (write || caseWrite || decisionWrite || returnWrite || inspectionWrite || resolutionWrite || entitlementWrite) && dropNext; if (drop) dropNext = false;
   const upstream = http.request({ hostname: '127.0.0.1', port, path: req.url, method: req.method, headers }, response => {
     if (drop && response.statusCode === 200) { response.resume(); response.once('end', () => { dropped++; res.writeHead(200, { 'content-type': 'application/json', 'content-length': '64', 'cache-control': 'no-store' }); res.flushHeaders(); res.write('{'); setTimeout(() => res.destroy(), 25); }); return; }
     res.writeHead(response.statusCode ?? 502, response.headers); response.pipe(res);
@@ -176,9 +177,11 @@ try {
         await resolutionReturns.getByRole('button', { name: 'Perbarui riwayat retur', exact: true }).click(); await resolutionReturns.getByRole('button', { name: /^Lihat hasil pemeriksaan/ }).click();
         const resolutionPanel = resolutionReturns.getByRole('region', { name: /^Penyelesaian retur \d+$/ });
         await resolutionPanel.getByRole('combobox', { name: /^Pilihan penyelesaian/ }).waitFor();
-        assert.deepEqual(await resolutionPanel.getByRole('combobox', { name: /^Pilihan penyelesaian/ }).locator('option').evaluateAll(options => options.map(option => option.value)), ['replacement']);
+        assert.deepEqual(await resolutionPanel.getByRole('combobox', { name: /^Pilihan penyelesaian/ }).locator('option').evaluateAll(options => options.map(option => option.value)), config.financialRequest ? ['replacement', 'credit'] : ['replacement']);
+        if (config.financialRequest) await resolutionPanel.getByRole('combobox', { name: /^Pilihan penyelesaian/ }).selectOption('credit');
         await resolutionPanel.getByRole('button', { name: 'Periksa pilihan penyelesaian', exact: true }).click();
-        await resolutionPanel.getByLabel('Pengajuan penyelesaian untuk pelanggan', { exact: true }).fill('Pengajuan penggantian satu barang yang telah diperiksa');
+        const resolutionNote = config.financialRequest ? 'Pengajuan kredit satu barang yang telah diperiksa' : 'Pengajuan penggantian satu barang yang telah diperiksa';
+        await resolutionPanel.getByLabel('Pengajuan penyelesaian untuk pelanggan', { exact: true }).fill(resolutionNote);
         await resolutionPanel.getByLabel('Catatan pengajuan penyelesaian internal', { exact: true }).fill('Pertimbangan penyelesaian privat');
         await resolutionPanel.getByRole('button', { name: 'Tinjau pengajuan penyelesaian', exact: true }).click(); const resolutionReview = resolutionPanel.getByRole('region', { name: 'Konfirmasi pengajuan penyelesaian', exact: true });
         await resolutionReview.waitFor(); assert.equal(await resolutionReview.getByRole('heading', { name: 'Ajukan penyelesaian untuk persetujuan', exact: true }).evaluate(element => element === document.activeElement), true);
@@ -193,10 +196,50 @@ try {
         assert.equal(resolutionWrites.length, 1); assert.equal(resolutionWrites[0].actor, config.financeId); assert.equal(dropped, 6); assert.equal(await page.getByRole('button', { name: /Selesaikan dan tutup/ }).count(), 0);
         await buyer.page.reload(); await buyer.page.getByRole('button', { name: /^Buka keluhan \d+$/ }).click(); const resolvedReturns = buyer.page.getByRole('region', { name: 'Penerimaan retur', exact: true });
         await resolvedReturns.getByRole('button', { name: 'Perbarui riwayat retur', exact: true }).click(); await resolvedReturns.getByRole('button', { name: /^Lihat hasil pemeriksaan/ }).click(); await resolvedReturns.getByRole('button', { name: /^Lihat pengajuan penyelesaian/ }).click();
-        await resolvedReturns.getByText('Pengajuan penggantian satu barang yang telah diperiksa', { exact: true }).waitFor(); await resolvedReturns.getByText(/Menunggu persetujuan penyelesaian/).waitFor();
+        await resolvedReturns.getByText(resolutionNote, { exact: true }).waitFor(); await resolvedReturns.getByText(/Menunggu persetujuan penyelesaian/).waitFor();
         const publicResolution = await buyer.page.locator('main').innerText(); for (const secret of ['Pertimbangan penyelesaian privat', 'Label produk terperiksa privat', 'LOT-PRIVAT']) assert.ok(!publicResolution.includes(secret)); assert.equal(await resolvedReturns.getByRole('button', { name: 'Periksa pilihan penyelesaian', exact: true }).count(), 0);
         assert.equal(await buyer.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true); await buyer.page.screenshot({ path: resolve(directory, 'return-resolution-buyer-mobile.png'), fullPage: true });
-        console.log('REAL_RETURN_RESOLUTION_BROWSER_PASS ' + JSON.stringify({ requests: resolutionWrites.length, lostResolutionRecovered: true, privateNoteHidden: true, baseUnits: 1, action: 'replacement', state: 'resolution_requested', noApprovalOrFinancialPosting: true, offlineUnsent: true, mobile: true }));
+        console.log('REAL_RETURN_RESOLUTION_BROWSER_PASS ' + JSON.stringify({ requests: resolutionWrites.length, lostResolutionRecovered: true, privateNoteHidden: true, baseUnits: 1, action: config.financialRequest ? 'credit' : 'replacement', state: 'resolution_requested', noApprovalOrFinancialPosting: true, offlineUnsent: true, mobile: true }));
+        if (config.financialRequest) {
+          async function openFinancial() {
+            await page.getByRole('button', { name: /^Buka keluhan \d+$/ }).click();
+            const returns = page.getByRole('region', { name: 'Penerimaan retur', exact: true });
+            await returns.getByRole('button', { name: 'Perbarui riwayat retur', exact: true }).click();
+            await returns.getByRole('button', { name: /^Lihat hasil pemeriksaan/ }).click();
+            await returns.getByRole('button', { name: /^Lihat pengajuan penyelesaian/ }).click();
+            const panel = returns.getByRole('region', { name: /^Nilai finansial retur \d+$/ }); await panel.waitFor();
+            await panel.getByRole('button', { name: /^Periksa nilai finansial retur \d+$/ }).click(); return panel;
+          }
+          const financial = await openFinancial();
+          assert.equal(await financial.getByLabel(/^Pajak yang diajukan/).inputValue(), '0.00'); assert.equal(await financial.getByLabel(/^Biaya yang diajukan/).inputValue(), '0.00');
+          await financial.getByLabel('Alasan pengajuan nilai finansial', { exact: true }).fill('Nilai satu barang retur terperiksa privat');
+          await financial.getByRole('button', { name: 'Tinjau nilai finansial retur', exact: true }).click();
+          const financialReview = financial.getByRole('region', { name: 'Konfirmasi pengajuan nilai retur', exact: true }); await financialReview.waitFor();
+          assert.equal(await financialReview.getByRole('heading', { name: 'Ajukan nilai retur untuk pemeriksaan Finance', exact: true }).evaluate(element => element === document.activeElement), true);
+          await financialReview.getByRole('button', { name: 'Kembali ke nilai retur', exact: true }).click(); assert.equal(entitlementWrites.length, 0);
+          await financial.getByRole('button', { name: 'Tinjau nilai finansial retur', exact: true }).click();
+          assert.equal(await financialReview.getByRole('button', { name: 'Kirim pengajuan nilai retur', exact: true }).isDisabled(), true); await financialReview.getByRole('checkbox').check();
+          await finance.context.setOffline(true); await page.getByText(/Koneksi terputus/).waitFor();
+          assert.equal(await financialReview.getByRole('button', { name: 'Kirim pengajuan nilai retur', exact: true }).isDisabled(), true); assert.equal(entitlementWrites.length, 0);
+          await finance.context.setOffline(false); await page.getByText(/Koneksi terputus/).waitFor({ state: 'hidden' });
+          assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true); await page.screenshot({ path: resolve(directory, 'return-entitlement-review-mobile.png'), fullPage: true });
+          dropNext = true; await financialReview.getByRole('button', { name: 'Kirim pengajuan nilai retur', exact: true }).click(); await page.getByRole('button', { name: 'Periksa hasil', exact: true }).waitFor();
+          const pendingFinancial = await page.evaluate(() => Object.keys(localStorage).filter(key => key.startsWith('unit-toko:pending:v1:')).map(key => JSON.parse(localStorage[key])));
+          assert.equal(pendingFinancial.length, 1); assert.equal(pendingFinancial[0].operation, 'billing.return.entitlement.request'); assert.match(pendingFinancial[0].key, /^er\.[1-9][0-9]*\.[1-9][0-9]*\.credit\./);
+          assert.deepEqual(Object.keys(pendingFinancial[0]).sort(), ['actorId', 'createdAt', 'key', 'operation']); assert.ok(!JSON.stringify(pendingFinancial).includes('privat'));
+          await page.reload(); await page.getByRole('button', { name: 'Periksa hasil', exact: true }).click(); await page.getByRole('button', { name: 'Periksa hasil', exact: true }).waitFor({ state: 'hidden' });
+          assert.equal(entitlementWrites.length, 1); assert.equal(entitlementWrites[0].actor, config.financeId); assert.equal(dropped, 7);
+          assert.equal(await page.getByRole('button', { name: /Selesaikan dan tutup/ }).count(), 0);
+          const savedFinancial = await openFinancial(); await savedFinancial.getByRole('region', { name: 'Pengajuan nilai retur tercatat', exact: true }).waitFor();
+          await savedFinancial.getByText(/Menunggu pemeriksaan finansial/).waitFor();
+          assert.equal(await savedFinancial.getByRole('button', { name: 'Tinjau nilai finansial retur', exact: true }).count(), 0);
+          assert.equal(await page.evaluate(() => Object.keys(localStorage).filter(key => key.startsWith('unit-toko:pending:v1:')).length), 0);
+          assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true); await page.screenshot({ path: resolve(directory, 'return-entitlement-saved-mobile.png'), fullPage: true });
+          await page.setViewportSize({ width: 1440, height: 1000 }); assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+          await page.screenshot({ path: resolve(directory, 'return-entitlement-saved-desktop.png'), fullPage: true });
+          assert.equal(await resolvedReturns.getByRole('button', { name: /^Periksa nilai finansial retur/ }).count(), 0); assert.ok(!(await buyer.page.locator('main').innerText()).includes('Nilai satu barang retur terperiksa privat'));
+          console.log('REAL_RETURN_ENTITLEMENT_BROWSER_PASS ' + JSON.stringify({ requests: entitlementWrites.length, lostOriginalRecovered: true, inspectedBaseUnits: 1, originalInvoiceMoney: true, noCreditOrRefundApproval: true, offlineUnsent: true, privateMetadataOnly: true, mobile: true, desktop: true }));
+        }
       }
     }
     const caseOutsider = await user(config.courierToken); await caseOutsider.page.goto(origin.origin + '/fulfillment/cases'); await caseOutsider.page.getByRole('heading', { name: 'Periksa sesi dan akses', exact: true }).waitFor();
