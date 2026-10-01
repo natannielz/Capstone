@@ -13,6 +13,7 @@ import { createCaseGateway, prepareCase, type AfterSalesCase, type CaseResult, t
 import { CaseDecisionPanel } from './CaseDecisionPanel';
 import { CaseReturnPanel } from './CaseReturnPanel';
 import { createReturnGateway } from './return-client';
+import { createInspectionGateway } from './inspection-client';
 import common from '../administration/access.module.css';
 import styles from '../ordering/order-draft.module.css';
 
@@ -52,7 +53,7 @@ export function CaseWorkspace() {
   </main>;
 }
 function CaseDesk({ account, fresh, onDenied }: { account: Account; fresh: boolean; onDenied: (failure: unknown) => void }) {
-  const [gateway] = useState(createCaseGateway), [returns] = useState(createReturnGateway), recovery = useOperationRecovery(account.actorId);
+  const [gateway] = useState(createCaseGateway), [returns] = useState(createReturnGateway), [inspections] = useState(createInspectionGateway), recovery = useOperationRecovery(account.actorId);
   const [ledgers] = useState(() => new Map<string, MutationLedger>());
   const canRead = account.actions.includes('case.read'), canRequest = account.actions.includes('case.request'), canManage = account.actions.includes('case.manage');
   const [page, setPage] = useState<{ items: AfterSalesCase[]; hasMore: boolean }>({ items: [], hasMore: false }), [before, setBefore] = useState<string | null>(null), [refresh, setRefresh] = useState(0);
@@ -98,6 +99,7 @@ function CaseDesk({ account, fresh, onDenied }: { account: Account; fresh: boole
   return <><AdministrationNavigation current="cases" actions={account.actions} locked={busy || recovering || editing} />
     <OperationRecovery entries={recovery.entries} journal={recovery.journal} disabled={busy || offline || editing} onBusyChange={setRecovering}
       recoveryAdapters={canRequest || canManage ? { 'fulfillment.case': { lookup: async entry => {
+        if (entry.operation === 'fulfillment.case.return_inspect') { if (!canManage || !account.actions.includes('stock.count')) throw new AccessFailure(403, 'scope_denied'); const value = await inspections.recover(entry.actorId, entry.key); if (!current()) throw new AccessFailure(409, 'recovery_request_stale'); return value; }
         if (entry.operation === 'fulfillment.case.return_receive') { if (!canManage || !account.actions.includes('stock.receive')) throw new AccessFailure(403, 'scope_denied'); const value = await returns.recover(entry.actorId, entry.key); if (!current()) throw new AccessFailure(409, 'recovery_request_stale'); return value; }
         if (entry.operation === 'fulfillment.case.decide') { if (!canManage) throw new AccessFailure(403, 'scope_denied'); const value = await gateway.recoverDecision(entry.actorId, entry.key); if (!current()) throw new AccessFailure(409, 'recovery_request_stale'); return value; }
         if (!canRequest) throw new AccessFailure(403, 'scope_denied'); const value = await gateway.recover(entry.actorId, entry.key); if (!current()) throw new AccessFailure(409, 'recovery_request_stale'); recovered.current = value?.result ?? null; return value;
@@ -131,7 +133,7 @@ function CaseDesk({ account, fresh, onDenied }: { account: Account; fresh: boole
       {canManage && selected.state === 'requested' && <CaseDecisionPanel key={selected.id + ':' + selected.revision} actorId={account.actorId} owner={selected} fresh={fresh} locked={locked} current={current}
         journal={recovery.journal} onDenied={onDenied} onBusyChange={setEditing} onSettled={recovery.refresh}
         onSaved={async saved => { const value = await gateway.read(account.actorId, saved.caseId, saved.revision); if (current()) { setSelected(value); setBefore(null); setRefresh(count => count + 1); } }} />}
-      {selected.state === 'return_authorized' && <CaseReturnPanel key={'returns:' + selected.id} actorId={account.actorId} owner={selected} canReceive={canManage && account.actions.includes('stock.receive')} fresh={fresh} locked={locked} current={current}
+      {selected.state === 'return_authorized' && <CaseReturnPanel key={'returns:' + selected.id} actorId={account.actorId} owner={selected} canReceive={canManage && account.actions.includes('stock.receive')} canInspect={canManage && account.actions.includes('stock.count')} fresh={fresh} locked={locked} current={current}
         journal={recovery.journal} onDenied={onDenied} onBusyChange={setEditing} onSettled={recovery.refresh} />}
       <button className={common.secondary} disabled={busy || recovering || editing} onClick={() => setSelected(null)}>Tutup keluhan</button></section>}
     {canRead && <section className={common.accountSection} aria-label="Daftar keluhan"><h2>Pengajuan dalam akses Anda</h2>{!busy && !page.items.length && <p>Belum ada pengajuan pada halaman ini.</p>}

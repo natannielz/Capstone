@@ -22,6 +22,7 @@ public sealed class AfterSalesDecisionMigrationTests(MongoFixture fixture)
         await service.RequestAsync(order.Buyer, new(source.InvoiceId.Value, source.Binding, "damaged", [new(line.ReceiptId.Value, line.SkuId.Value, 1)]), CatalogPriceTestData.Meta("populated-47-case"));
         // Isolated version-47 image: format-1 requests are unchanged; no decision writer has run.
         Assert.Equal(0, await data.Invoice.Count(UnitToko.Platform.Inventory.ReturnQuarantineLedger.Collection));
+        Assert.Equal(0, await data.Invoice.Count(UnitToko.Platform.Inventory.ReturnInspectionRecords.Collection)); await db.DropCollectionAsync(UnitToko.Platform.Inventory.ReturnInspectionRecords.Collection);
         await data.Invoice.Rows("schemaMigrations").DeleteManyAsync(new BsonDocument("_id", new BsonDocument("$gt", 47)));
         await db.DropCollectionAsync(UnitToko.Platform.Inventory.ReturnQuarantineLedger.Collection); await db.DropCollectionAsync(D.Collection); await db.DropCollectionAsync(InvoiceService.CaseReturnFences);
         var extra = new BsonDocument("actorId", new BsonDocument("$ne", 999L)); var fenceExtra = new BsonDocument("invoiceHash", new BsonDocument("$ne", new string('a', 64)));

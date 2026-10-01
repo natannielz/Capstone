@@ -13,6 +13,7 @@ export function recoveryPage(operation: string) {
   if (operation === 'fulfillment.case.request') return { href: '/fulfillment/cases', label: 'halaman keluhan barang' };
   if (operation === 'fulfillment.case.decide') return { href: '/fulfillment/cases', label: 'halaman pemeriksaan keluhan' };
   if (operation === 'fulfillment.case.return_receive') return { href: '/fulfillment/cases', label: 'halaman penerimaan retur' };
+  if (operation === 'fulfillment.case.return_inspect') return { href: '/fulfillment/cases', label: 'halaman pemeriksaan barang retur' };
   if (operation === 'fulfillment.delivery-attempt.record') return { href: '/fulfillment/shipments', label: 'halaman upaya pengiriman' };
   if (operation === 'fulfillment.receipt-proof.issue') return { href: '/fulfillment/receive', label: 'halaman bukti penerimaan' };
   if (operation === 'fulfillment.receipt.challenge.issue') return { href: '/fulfillment/shipments', label: 'QR penerimaan di rincian kiriman' };
@@ -34,6 +35,7 @@ export function recoveryPage(operation: string) {
     : { href: "/administration/person-reviews", label: "halaman peninjauan orang" };
 }
 export function operationLabel(operation: string) {
+  if (operation === 'fulfillment.case.return_inspect') return 'Pemeriksaan barang retur';
   if (operation === 'fulfillment.case.decide') return 'Keputusan pengembalian barang';
   if (operation === "billing.payment.allocate") return "Alokasi pembayaran";
   if (operation === "billing.bank-receipt.confirm") return "Konfirmasi kredit bank";

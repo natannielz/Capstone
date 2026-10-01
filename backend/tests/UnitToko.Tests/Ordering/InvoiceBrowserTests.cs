@@ -33,7 +33,7 @@ public sealed class InvoiceBrowserTests(MongoFixture fixture, ITestOutputHelper 
     [LocalStockBrowserFact]
     public Task Browser_independently_decides_return_recovers_lost_decision_and_shows_private_buyer_explanation() => RunAsync(true, true);
     [LocalStockBrowserFact]
-    public Task Browser_receives_actual_return_into_quarantine_recovers_lost_intake_and_preserves_pack_stock_and_money() => RunAsync(true, true, true);
+    public Task Browser_receives_and_inspects_actual_return_recovers_lost_replies_and_preserves_pack_stock_and_money() => RunAsync(true, true, true);
     private async Task RunAsync(bool afterSales, bool caseDecision = false, bool caseReturn = false) {
         var root = Root(); var node = Environment.GetEnvironmentVariable("UNITTOKO_BROWSER_NODE"); var playwright = Environment.GetEnvironmentVariable("UNITTOKO_BROWSER_PLAYWRIGHT_PACKAGE");
         Assert.True(Path.IsPathFullyQualified(node ?? "") && File.Exists(node)); Assert.True(Path.IsPathFullyQualified(playwright ?? "") && File.Exists(playwright));
@@ -45,7 +45,7 @@ public sealed class InvoiceBrowserTests(MongoFixture fixture, ITestOutputHelper 
             foreach (var person in new[] { order.Buyer.UserId, data.Finance.UserId }) if (!await data.Rows("personRecords").Find(new BsonDocument("_id", PersonTestData.PersonId(person))).AnyAsync())
                 await PersonTestData.SeedDistinctPeopleAsync(order.Database, order.Prices.Catalog.Clock, person);
         }
-        if (caseReturn) await order.Prices.Catalog.Base.AddGrantAsync(data.Finance, 99831, CatalogAuthoringTestData.Shop, [Permissions.StockReceive]);
+        if (caseReturn) await order.Prices.Catalog.Base.AddGrantAsync(data.Finance, 99831, CatalogAuthoringTestData.Shop, [Permissions.StockReceive, Permissions.StockCount]);
         var originalStock = await data.Rows("stockBalances").Find(new BsonDocument()).Sort(new BsonDocument("_id", 1)).ToListAsync(); Assert.NotEmpty(originalStock);
         using var keys = new IdentityRuntimeTests.RuntimeKeys(); var settings = IdentityRuntimeTests.Settings(keys);
         settings["Mongo:Database"] = order.Database.DatabaseNamespace.DatabaseName; settings["Identity:TrustedProxies:0"] = "127.0.0.1"; settings["Logging:LogLevel:Default"] = "Warning";
@@ -74,6 +74,7 @@ public sealed class InvoiceBrowserTests(MongoFixture fixture, ITestOutputHelper 
             if (afterSales) Assert.Contains("REAL_CASE_BROWSER_PASS", await stdout);
             if (caseDecision) Assert.Contains("REAL_CASE_DECISION_BROWSER_PASS", await stdout);
             if (caseReturn) Assert.Contains("REAL_RETURN_QUARANTINE_BROWSER_PASS", await stdout);
+            if (caseReturn) Assert.Contains("REAL_RETURN_INSPECTION_BROWSER_PASS", await stdout);
         } finally { if (!process.HasExited) { process.Kill(true); await process.WaitForExitAsync(); } }
         Assert.Equal(1, await data.Count(InvoiceBson.Invoices)); Assert.Equal(1, await data.Count(InvoiceBson.Allocations)); Assert.Equal(1, await data.Count("journalEntries"));
         var row = await data.Rows(InvoiceBson.Invoices).Find(new BsonDocument()).SingleAsync(); Assert.Equal(6L, row["lines"][0]["acceptedBaseUnits"].AsInt64);
@@ -85,6 +86,10 @@ public sealed class InvoiceBrowserTests(MongoFixture fixture, ITestOutputHelper 
             Assert.Equal(1L, intake["input"]["lines"][0]["receivedBaseUnits"].AsInt64); Assert.Equal("opened", intake["input"]["lines"][0]["observedCondition"]);
             Assert.Equal(12, intake["source"]["stock"][0]["baseUnitsPerPackage"].AsInt32); Assert.Equal(data.Finance.UserId, intake["actorId"]);
             Assert.Equal(1, await data.Rows("idempotencyRecords").CountDocumentsAsync(new BsonDocument("operation", "fulfillment.case.return_receive"))); Assert.Equal(1, await data.Rows("outboxEvents").CountDocumentsAsync(new BsonDocument("kind", "fulfillment.case.return_receive")));
+            var inspection = await data.Rows("returnInspections").Find(new BsonDocument()).SingleAsync(); Assert.Equal(intake["_id"], inspection["_id"]); Assert.Equal("inspected_quarantine", inspection["state"]); Assert.Equal("unverified", inspection["lotIdentity"]);
+            Assert.Equal("matched", inspection["input"]["lines"][0]["identity"]); Assert.Equal("opened", inspection["input"]["lines"][0]["condition"]); Assert.Equal(1L, inspection["input"]["lines"][0]["inspectedBaseUnits"].AsInt64);
+            Assert.Equal("LOT-PRIVAT", inspection["input"]["lines"][0]["observedLotLabel"]); Assert.Equal(intake["snapshotHash"], inspection["source"]["returnHash"]);
+            Assert.Equal(1, await data.Rows("idempotencyRecords").CountDocumentsAsync(new BsonDocument("operation", "fulfillment.case.return_inspect"))); Assert.Equal(1, await data.Rows("outboxEvents").CountDocumentsAsync(new BsonDocument("kind", "fulfillment.case.return_inspect")));
         }
         if (afterSales) {
             Assert.Equal(1, await data.Count("afterSalesCases")); var complaint = await data.Rows("afterSalesCases").Find(new BsonDocument()).SingleAsync();

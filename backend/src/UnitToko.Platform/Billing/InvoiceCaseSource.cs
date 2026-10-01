@@ -37,6 +37,10 @@ public sealed partial class InvoiceService
     internal async Task<BsonArray> CaseStockSourceAsync(ActorContext actor, AuthorizationSnapshot authority, IClientSessionHandle tx, BsonDocument expected, string permission, CancellationToken ct) {
         var invoice = await AuthorizedInvoiceAsync(actor, authority, tx, expected["invoiceId"].AsInt64, permission, ct);
         if (!InvoiceRecords.Equal(CaseSnapshot(invoice), expected)) throw InvoiceRecords.Invalid();
+        return await CaseDispatchStockAsync(database, tx, expected, ct);
+    }
+    internal static async Task<BsonArray> CaseDispatchStockAsync(IMongoDatabase database, IClientSessionHandle tx, BsonDocument expected, CancellationToken ct) {
+        if (!tx.IsInTransaction || !ReferenceEquals(tx.Client, database.Client)) throw InvoiceRecords.Invalid();
         var result = new BsonArray();
         foreach (var line in expected["lines"].AsBsonArray) {
             var shipment = await new ShipmentDispatchRecords(database).ReadAsync(tx, line["shipmentId"].AsInt64, ct);

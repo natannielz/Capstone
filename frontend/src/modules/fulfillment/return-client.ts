@@ -28,6 +28,7 @@ const view = z.object({ caseId: id, invoiceId: id, revision: count, binding: z.s
 const result = z.object({ returnId: id, caseId: id, invoiceId: id, revision: id, receivedAt: timestamp, state: z.literal('quarantined'), operation: z.literal('fulfillment.case.return_receive') }).strict();
 export type ReturnView = z.infer<typeof view>;
 export type ReturnLine = z.infer<typeof line>;
+export type ReturnReceipt = z.infer<typeof receipt>;
 export type ReturnResult = z.infer<typeof result>;
 export const returnConditions = { uninspected: 'Belum diperiksa', sealed: 'Segel terlihat utuh', opened: 'Kemasan terbuka', damaged: 'Kerusakan terlihat' };
 function invalid(): never { throw new AccessFailure(502, 'return_response_invalid'); }
@@ -39,6 +40,12 @@ export function parseReturnView(value: unknown, original: AfterSalesCase) {
   if (owner.state !== 'return_authorized' || !owner.decision || parsed.caseId !== owner.id || parsed.invoiceId !== owner.source.invoiceId || parsed.limits.length !== owner.decision.lines.length || parsed.limits.some(item => {
     const allowed = owner.decision!.lines.find(line => line.receiptId === item.receiptId && line.skuId === item.skuId); return !allowed || allowed.reportedBaseUnits !== item.authorizedBaseUnits;
   }) || parsed.recent.some(row => Date.parse(row.receivedAt) < Date.parse(owner.decision!.decidedAt!))) return invalid(); return parsed;
+}
+export function parseReturnReceipt(value: unknown, original: AfterSalesCase) {
+  const owner = parseCaseView(original), parsed = parse(receipt, value);
+  if (owner.state !== 'return_authorized' || !owner.decision || Date.parse(parsed.receivedAt) < Date.parse(owner.decision.decidedAt!) || parsed.lines.some(item => {
+    const allowed = owner.decision!.lines.find(line => line.receiptId === item.receiptId && line.skuId === item.skuId); return !allowed || BigInt(item.receivedBaseUnits) > BigInt(allowed.reportedBaseUnits);
+  })) return invalid(); return parsed;
 }
 export function prepareReturn(actorId: string, owner: AfterSalesCase, preview: ReturnView, quantities: readonly ReturnLine[], publicNote: string, reason: string) {
   const reviewed = parseReturnView(preview, owner), values = lines.safeParse(quantities), note = text.safeParse(publicNote), internal = text.safeParse(reason);

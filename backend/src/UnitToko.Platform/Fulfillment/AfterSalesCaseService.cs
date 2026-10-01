@@ -42,6 +42,7 @@ public sealed partial class AfterSalesCaseService
         await InventoryRepository.RequireStorageAsync(database, R.Collection, AfterSalesCaseSchemas.Validator(), AfterSalesCaseSchemas.Key(), ct);
         await InventoryRepository.RequireStorageAsync(database, AfterSalesDecisionRecords.Collection, AfterSalesDecisionSchemas.Validator(), AfterSalesDecisionSchemas.Key(), ct);
         await InventoryRepository.RequireStorageAsync(database, ReturnQuarantineLedger.Collection, ReturnQuarantineSchemas.Validator(), [ReturnQuarantineSchemas.Key(), ReturnQuarantineSchemas.RequestKey()], ct);
+        await InventoryRepository.RequireStorageAsync(database, ReturnInspectionRecords.Collection, ReturnInspectionSchemas.Validator(), ReturnInspectionSchemas.Key(), ct);
         if (!await new CollectionMigrations(database, clock).IsCurrentAsync(ct)) throw R.Broken();
     }
     private AuthorizationQuery Query(ActorContext actor, AuthorizationSnapshot authority, string permission) {

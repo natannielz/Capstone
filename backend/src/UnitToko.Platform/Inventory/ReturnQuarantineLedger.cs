@@ -71,8 +71,9 @@ internal sealed class ReturnQuarantineLedger(IMongoDatabase database, IClock clo
                 quantities.GetValueOrDefault((line.ReceiptId, line.SkuId)) > authorized["reportedBaseUnits"].AsInt64 - line.ReceivedBaseUnits) throw AfterSalesDecisionRecords.Changed("returned_stock_quantity_exceeded");
         }
     }
-    internal static AuthorizationQuery RequireReceiver(ActorContext actor, AuthorizationSnapshot authority, BsonDocument source, DateTimeOffset now) {
-        var query = ScopePolicy.Compile(actor, authority, Permissions.StockReceive, now); AuthorizationStore.Require(query);
+    internal static AuthorizationQuery RequireReceiver(ActorContext actor, AuthorizationSnapshot authority, BsonDocument source, DateTimeOffset now, string permission = Permissions.StockReceive) {
+        if (permission is not (Permissions.StockReceive or Permissions.StockCount)) throw R.Broken();
+        var query = ScopePolicy.Compile(actor, authority, permission, now); AuthorizationStore.Require(query);
         foreach (var line in source["stock"].AsBsonArray.Where(line => source["authorizedLines"].AsBsonArray.Any(item => item["receiptId"] == line["receiptId"] && item["skuId"] == line["skuId"]))) {
             var resource = CatalogRepository.Resource(InventoryGraph.Location(line["location"].AsBsonDocument).ToScope());
             if (!ScopePolicy.IsResourceActive(resource, authority.Directory) || !query.Matches(resource)) throw R.Broken();
@@ -80,8 +81,8 @@ internal sealed class ReturnQuarantineLedger(IMongoDatabase database, IClock clo
         return query;
     }
     internal static async Task FenceReceiverAsync(IMongoDatabase database, AuthorizationStore authorization, ActorContext actor, AuthorizationSnapshot authority, IClientSessionHandle tx,
-        BsonDocument source, DateTimeOffset now, CancellationToken ct) {
-        var query = RequireReceiver(actor, authority, source, now);
+        BsonDocument source, DateTimeOffset now, CancellationToken ct, string permission = Permissions.StockReceive) {
+        var query = RequireReceiver(actor, authority, source, now, permission);
         var locations = source["stock"].AsBsonArray.Select(line => InventoryGraph.Location(line["location"].AsBsonDocument).ToScope()).Distinct().ToArray();
         var clauses = query.Clauses.Where(clause => locations.Any(location => clause.Matches(CatalogRepository.Resource(location)))).ToArray();
         await new HistoricalAuthorizationFence(database, authorization).FenceAsync(actor, clauses.SelectMany(clause => clause.RequiredNodes).Concat(locations.SelectMany(location => ScopePolicy.RequiredNodes(location, authority.Directory))).Distinct(), [],

@@ -67,7 +67,7 @@ public sealed class AfterSalesCaseHttpTests(MongoFixture fixture)
         foreach (var secret in new[] { "invoiceHash", "snapshotHash", "requestKey", "requestedBy", "grantVersion", "journal", "price", "tax", "bank", "scopes" }) Assert.DoesNotContain(secret, text, StringComparison.OrdinalIgnoreCase);
         Assert.True((await Request("/query", new { purpose = "after-sales-case" })).IsSuccessStatusCode);
         Assert.Equal(1, await data.Invoice.Count("afterSalesCases"));
-        await order.Prices.Catalog.Base.AddGrantAsync(data.Invoice.Finance, 99830, CatalogAuthoringTestData.Shop, [Permissions.CaseRead, Permissions.CaseManage, Permissions.StockReceive]);
+        await order.Prices.Catalog.Base.AddGrantAsync(data.Invoice.Finance, 99830, CatalogAuthoringTestData.Shop, [Permissions.CaseRead, Permissions.CaseManage, Permissions.StockReceive, Permissions.StockCount]);
         foreach (var person in new[] { buyer.UserId, data.Invoice.Finance.UserId }) if (!await data.Invoice.Rows("personRecords").Find(new BsonDocument("_id", PersonTestData.PersonId(person))).AnyAsync())
             await PersonTestData.SeedDistinctPeopleAsync(order.Database, order.Prices.Catalog.Clock, person);
         using var staff = factory.CreateClient(new() { BaseAddress = new(origin), AllowAutoRedirect = false });
@@ -113,5 +113,21 @@ public sealed class AfterSalesCaseHttpTests(MongoFixture fixture)
         var returnText = await buyerReturns.Content.ReadAsStringAsync(); Assert.Contains(intake.publicNote, returnText);
         foreach (var secret in new[] { intake.reason, "people", "snapshotHash", "requestKey", "actorId", "originalLots", "dispatchReview", "scopes", "price", "bank" }) Assert.DoesNotContain(secret, returnText, StringComparison.OrdinalIgnoreCase);
         Assert.Equal(1, await data.Invoice.Count("returnQuarantineReceipts"));
+        Assert.Contains((await staff.GetFromJsonAsync<JsonElement>("/api/v1/access/current")).GetProperty("allowedActions").EnumerateArray(), value => value.GetString() == Permissions.StockCount);
+        var returnId = originalReturn.GetProperty("returnId").GetString()!; var inspectionPath = "/returns/" + returnId + "/inspection";
+        Assert.Equal(HttpStatusCode.Forbidden, (await Request("/" + caseId + inspectionPath + "/preview/query", new { purpose = "after-sales-return-inspection" }, "2")).StatusCode);
+        var inspectionPreview = await Staff(inspectionPath + "/preview/query", new { purpose = "after-sales-return-inspection" }, "2"); Assert.True(inspectionPreview.IsSuccessStatusCode, await inspectionPreview.Content.ReadAsStringAsync()); Assert.Equal("\"0\"", inspectionPreview.Headers.ETag!.Tag);
+        var inspectionView = await inspectionPreview.Content.ReadFromJsonAsync<JsonElement>(); var inspectionLines = new[] { new { receiptId, skuId, inspectedBaseUnits = "1", identity = "matched", condition = "opened", observedIdentity = "Label terperiksa privat", observedLotLabel = (string?)null } };
+        var inspection = new { binding = inspectionView.GetProperty("binding").GetString(), publicNote = "Satu barang sesuai produk, kemasan terbuka", lines = inspectionLines, reason = "Pemeriksaan internal privat" };
+        Assert.Equal(HttpStatusCode.BadRequest, (await Staff(inspectionPath, inspection, "0", "actor")).StatusCode); Assert.Equal(HttpStatusCode.Forbidden, (await Staff(inspectionPath, inspection, "0", "csrf")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Staff(inspectionPath, new { inspection.binding, inspection.publicNote, inspection.lines, inspection.reason, stockLotId = "1" }, "0")).StatusCode);
+        var inspected = await Staff(inspectionPath, inspection, "0"); Assert.True(inspected.IsSuccessStatusCode, await inspected.Content.ReadAsStringAsync()); var originalInspection = await inspected.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("inspected_quarantine", originalInspection.GetProperty("state").GetString());
+        var inspectionRecovery = await Staff(inspectionPath + "/operations/query", new { purpose = "operation-recovery", key = "cr." + caseId + ".http" }); Assert.True(inspectionRecovery.IsSuccessStatusCode);
+        Assert.Equal(originalInspection.GetRawText(), (await inspectionRecovery.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("result").GetRawText());
+        var buyerInspection = await Request("/" + caseId + inspectionPath + "/query", new { purpose = "after-sales-return-inspection" }, "2"); Assert.True(buyerInspection.IsSuccessStatusCode); Assert.True(buyerInspection.Headers.CacheControl!.NoStore); Assert.Equal("\"1\"", buyerInspection.Headers.ETag!.Tag);
+        var inspectionText = await buyerInspection.Content.ReadAsStringAsync(); Assert.Contains(inspection.publicNote, inspectionText);
+        foreach (var secret in new[] { inspection.reason, inspectionLines[0].observedIdentity, "observedIdentity", "observedLotLabel", "source", "actorId", "people", "lotIdentity", "requestKey", "bodyHash", "stockLotId" }) Assert.DoesNotContain(secret, inspectionText, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(1, await data.Invoice.Count("returnInspections"));
     }
 }
