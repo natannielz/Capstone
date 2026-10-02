@@ -71,7 +71,7 @@ public static class Permissions
             SourcePrepare, SourceReconcile, ReportPrepare, PeriodSubmit, PeriodApprove, PeriodClose, PeriodReopenRequest, PeriodReopenApprove,
             InvoiceIssue, PaymentRecord, PaymentAllocate, PaymentVerify, CreditRequest, CreditApprove, RefundRequest, DisbursementRecord,
             DisbursementVerify, FundingRequest, FundingApprove, ExpenseApprove, ReconciliationVerify, JournalPost, JournalReverse }) Add(name, Operations);
-        foreach (var name in new[] { OrderAccept, SubstitutionPropose, StockConvert, ReservationRelease, SupplierChangePropose }) Add(name, Operations);
+        foreach (var name in new[] { OrderAccept, SubstitutionPropose, StockConvert, ReservationRelease }) Add(name, Operations);
         Add(PricingApprove, Operations, true);
         Add(ReceivingAccountRead, Operations); Add(ReceivingAccountDetailsRead, Operations); Add(ReceivingAccountPropose, Operations);
         Add(ReceivingAccountVerify, Operations, true); Add(ReceivingAccountApprove, Operations, true);
@@ -89,7 +89,8 @@ public static class Permissions
         result[CreditApprove] = result[CreditApprove] with { Assurance = new(true, TimeSpan.FromMinutes(5)) };
         result[DisbursementRecord] = result[DisbursementRecord] with { Assurance = new(true, TimeSpan.FromMinutes(5)) };
         result[DisbursementVerify] = result[DisbursementVerify] with { Assurance = new(true, TimeSpan.FromMinutes(5)) };
-        Add(SupplierChangeApprove, Operations, true);
+        Add(SupplierChangePropose, [GrantScopeKind.FulfillmentShop], true);
+        Add(SupplierChangeApprove, [GrantScopeKind.FulfillmentShop], true);
         Add(StockSourceRead, Operations);
         Add(StockSourcePropose, Operations);
         Add(StockSourceApprove, Operations, true);

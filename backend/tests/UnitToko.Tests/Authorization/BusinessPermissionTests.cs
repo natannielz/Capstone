@@ -119,6 +119,29 @@ public sealed class BusinessPermissionTests
     }
 
     [Fact]
+    public void Supplier_governance_is_shop_only_fresh_and_separate_from_procurement_or_payment_authority()
+    {
+        foreach (var permission in new[] { Permissions.SupplierChangePropose, Permissions.SupplierChangeApprove }) {
+            Assert.Equal(new[] { GrantScopeKind.FulfillmentShop }, Permissions.Find(permission)!.AllowedScopes.ToArray());
+            Assert.Equal(TimeSpan.FromMinutes(5), Permissions.Find(permission)!.Assurance.MaximumAge);
+            var policy = Snapshot("finance", Shop, [permission]);
+            Assert.True(ScopePolicy.Compile(Actor, policy, permission, Now).Matches(Order));
+            Assert.False(ScopePolicy.Compile(Actor, policy, permission, Now).Matches(Order with { ShopId = 22 }));
+            Assert.False(ScopePolicy.Compile(Actor with { AuthenticatedAt = Now.AddMinutes(-6) }, policy, permission, Now).IsAllowed);
+            foreach (var other in new[] { Permissions.ProcurementPrepare, Permissions.ProcurementApprove, Permissions.StockReceive, Permissions.PaymentRecord, Permissions.DisbursementRecord })
+                Assert.False(ScopePolicy.Compile(Actor, policy, other, Now).IsAllowed);
+            Assert.False(ScopePolicy.Compile(Actor, Snapshot("finance", Shop, [Permissions.ProcurementRead]), permission, Now).IsAllowed);
+            var warehouse = Snapshot("finance", new(GrantScopeKind.FulfillmentWarehouse, 2, ShopId: 21, WarehouseId: 211, ChannelId: 201), [permission]) with {
+                Directory = new([.. Directory.Nodes, new(211, ScopeNodeKind.Warehouse, 21, AuthorizationStatus.Active, 1)]) };
+            Assert.False(ScopePolicy.Compile(Actor, warehouse, permission, Now).IsAllowed);
+            Assert.All(RoleTemplates.Templates.Values, role => Assert.DoesNotContain(permission, role.Permissions));
+        }
+        Assert.False(ApprovalPolicy.Evaluate(101, Permissions.SupplierChangeApprove, new(1, 1, ProposedBy: 101)).Allowed);
+        Assert.False(ApprovalPolicy.Evaluate(101, Permissions.SupplierChangeApprove, new(1, 1, RequestedBy: 102)).Allowed);
+        Assert.True(ApprovalPolicy.Evaluate(101, Permissions.SupplierChangeApprove, new(1, 1, ProposedBy: 102)).Allowed);
+    }
+
+    [Fact]
     public void Store_proposal_cannot_consent_and_buyer_consent_cannot_propose()
     {
         var staff = Snapshot("store-staff", Shop, [Permissions.SubstitutionPropose]);
@@ -134,8 +157,7 @@ public sealed class BusinessPermissionTests
     [Fact]
     public void Fulfillment_stock_supplier_and_read_only_scopes_are_explicit()
     {
-        foreach (var permission in new[] { Permissions.StockConvert, Permissions.ReservationRelease,
-            Permissions.SupplierChangePropose, Permissions.SupplierChangeApprove })
+        foreach (var permission in new[] { Permissions.StockConvert, Permissions.ReservationRelease })
         {
             Assert.Equal(new[] { GrantScopeKind.FulfillmentShop, GrantScopeKind.FulfillmentWarehouse },
                 Permissions.Find(permission)!.AllowedScopes.ToArray());

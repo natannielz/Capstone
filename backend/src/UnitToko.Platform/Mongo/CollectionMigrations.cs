@@ -8,7 +8,7 @@ public sealed class CollectionMigrations(IMongoDatabase database, IClock clock)
 {
     // Deployment history and document format versions are independent. Adding a migration
     // must not silently make existing collection writers produce a new document format.
-    public const int CurrentVersion = 61;
+    public const int CurrentVersion = 62;
     public const int FoundationDocumentSchemaVersion = 1;
     public const int AuthorizationDocumentSchemaVersion = 1;
 
@@ -81,7 +81,8 @@ public sealed class CollectionMigrations(IMongoDatabase database, IClock clock)
             new OrganizationAddressMigration(durableDatabase),
             new OrderSpendingPolicyMigration(durableDatabase),
             new AccountingBookSetupMigration(durableDatabase),
-            new ProcurementRequestMigration(durableDatabase)
+            new ProcurementRequestMigration(durableDatabase),
+            new SupplierMigration(durableDatabase)
         ];
         if (!steps.Select(step => step.Version).SequenceEqual(Enumerable.Range(1, CurrentVersion)))
             throw new InvalidOperationException("Schema migration registry must contain every version in order");

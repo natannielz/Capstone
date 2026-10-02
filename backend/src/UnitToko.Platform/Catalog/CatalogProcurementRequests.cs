@@ -16,7 +16,7 @@ public sealed partial class CatalogAuthoringService
     private void RequireProcurement(IMongoDatabase owner, ActorContext actor, AuthorizationSnapshot authority, IClientSessionHandle tx,
         ProcurementLocation location, string permission) {
         if (owner is null || !ReferenceEquals(owner.Client, database.Client) || !owner.DatabaseNamespace.Equals(database.DatabaseNamespace) ||
-            !tx.IsInTransaction || !ReferenceEquals(tx.Client, database.Client) || permission is not (Permissions.ProcurementRead or Permissions.ProcurementPrepare or Permissions.ProcurementApprove))
+            !tx.IsInTransaction || !ReferenceEquals(tx.Client, database.Client) || permission is not (Permissions.ProcurementRead or Permissions.ProcurementPrepare or Permissions.ProcurementApprove or Permissions.SupplierChangePropose or Permissions.SupplierChangeApprove))
             throw new InvalidOperationException("Procurement catalog reads require the authorized owning transaction");
         var scope = ProcurementRequestRules.Scope(location); var query = ScopePolicy.Compile(actor, authority, permission, clock.UtcNow);
         AuthorizationStore.Require(query);
@@ -58,8 +58,8 @@ public sealed partial class CatalogAuthoringService
         RequireProcurement(owner, actor, authority, tx, location, permission); ct.ThrowIfCancellationRequested();
     }
     internal async Task<(ProcurementCatalogCapture Capture, bool HasMore)> ProcurementPackagesAsync(IMongoDatabase owner, ActorContext actor, AuthorizationSnapshot authority,
-        IClientSessionHandle tx, ProcurementLocation location, int offset, int limit, string? search, CancellationToken ct) {
-        RequireProcurement(owner, actor, authority, tx, location, Permissions.ProcurementRead); AuthorizationStore.ValidatePage(offset, limit);
+        IClientSessionHandle tx, ProcurementLocation location, int offset, int limit, string? search, CancellationToken ct, string permission = Permissions.ProcurementRead) {
+        RequireProcurement(owner, actor, authority, tx, location, permission); AuthorizationStore.ValidatePage(offset, limit);
         var scope = ProcurementRequestRules.Scope(location); var shop = scope with { Kind = GrantScopeKind.FulfillmentShop, WarehouseId = null };
         var pipeline = StockChoicePipeline(F.Or(CatalogRepository.OwnerFilter("authoringOwner", scope), CatalogRepository.OwnerFilter("authoringOwner", shop)) &
             F.Eq("active", true) & SearchFilter("displayName", search));
@@ -68,7 +68,7 @@ public sealed partial class CatalogAuthoringService
         var rows = await repository.Rows("skus").Aggregate<BsonDocument>(tx, pipeline).ToListAsync(ct);
         var lines = rows.Take(limit).Select(row => new ProcurementRequestLineInput(row["_id"].AsInt64, row["revision"].AsInt64,
             row["currentDefinitionId"].AsInt64, row["definition"]["version"].AsInt64, 1, null)).ToArray();
-        return (await CaptureProcurementAsync(owner, actor, authority, tx, location, Permissions.ProcurementRead, lines, ct), rows.Count > limit);
+        return (await CaptureProcurementAsync(owner, actor, authority, tx, location, permission, lines, ct), rows.Count > limit);
     }
     internal static BsonDocument ProcurementMaster(BsonDocument row) { var copy = row.DeepClone().AsBsonDocument; copy["fence"] = 0L; return copy; }
     private async Task RequireProcurementAuditAsync(IClientSessionHandle tx, BsonDocument audit, string part, BsonDocument row, CancellationToken ct) {

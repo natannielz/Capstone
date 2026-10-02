@@ -269,6 +269,39 @@ public sealed partial class AccessHttpTests(MongoFixture fixture)
         }
     }
     [Fact]
+    public async Task Current_access_discovers_only_granted_supplier_tasks_and_keeps_step_up_entry_without_promoting_warehouse_authority()
+    {
+        await using var data = await StoreTestData.CreateAsync(fixture);
+        var scope = new GrantScope(GrantScopeKind.FulfillmentShop, 100, ShopId: 101, ChannelId: 103);
+        var maker = await data.AddActorAsync(7691, scope, Permissions.SupplierChangePropose);
+        var checker = await data.AddActorAsync(7692, scope, Permissions.SupplierChangeApprove);
+        var reader = await data.AddActorAsync(7693, scope, Permissions.ProcurementRead);
+        var assignments = new[] { (Actor: maker, Task: Permissions.SupplierChangePropose), (Actor: checker, Task: Permissions.SupplierChangeApprove), (Actor: reader, Task: Permissions.ProcurementRead) };
+        async Task<string[]> Actions(ActorContext actor) {
+            using var factory = Factory(data, actor); using var client = factory.CreateClient();
+            using var response = await client.GetAsync("/api/v1/access/current"); Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            Assert.True(response.Headers.CacheControl!.NoStore);
+            return (await Body(response))["allowedActions"]!.AsArray().Select(node => node!.GetValue<string>()).Order().ToArray();
+        }
+        foreach (var assignment in assignments) {
+            Assert.Equal(new[] { assignment.Task }, await Actions(assignment.Actor));
+            Assert.True(ScopePolicy.Compile(assignment.Actor, await data.Store.ReadCurrentAsync(assignment.Actor), assignment.Task, data.Clock.UtcNow).IsAllowed);
+        }
+        data.Clock.UtcNow = data.Clock.UtcNow.AddMinutes(6);
+        foreach (var assignment in assignments) {
+            Assert.Equal(new[] { assignment.Task }, await Actions(assignment.Actor));
+            var current = await data.Store.ReadCurrentAsync(assignment.Actor);
+            var compiled = ScopePolicy.Compile(assignment.Actor, current, assignment.Task, data.Clock.UtcNow);
+            if (assignment.Task == Permissions.ProcurementRead) Assert.True(compiled.IsAllowed);
+            else { Assert.False(compiled.IsAllowed); Assert.Equal("step_up_required", compiled.DenialCode);
+                Assert.True(ScopePolicy.CanRequestStepUp(assignment.Actor, current, assignment.Task, data.Clock.UtcNow)); }
+        }
+        // Warehouse-only procurement readers keep only their ordinary task; supplier governance is never discovered by promotion.
+        var warehouse = await data.AddActorAsync(7694, new(GrantScopeKind.FulfillmentWarehouse, 100, ShopId: 101, WarehouseId: 102, ChannelId: 103), Permissions.ProcurementRead);
+        Assert.Equal(new[] { Permissions.ProcurementRead }, await Actions(warehouse));
+    }
+
+    [Fact]
     public async Task Catalog_has_six_roles_and_separate_finance_packs_without_implicit_payment_verification()
     {
         await using var data = await StoreTestData.CreateAsync(fixture);

@@ -1,4 +1,5 @@
 export function recoveryPage(operation: string) {
+  if (/^procurement\.supplier\.(propose|observe|approve|reject)$(?![\s\S])/.test(operation)) return { href: '/procurement/suppliers', label: 'halaman pemasok dan kode sumber' };
   if (/^procurement\.request\.(submit|approve|reject)$(?![\s\S])/.test(operation)) return { href: '/procurement/requests', label: 'halaman permintaan pengadaan' };
   if (/^accounting\.book\.(propose|approve|reject)$(?![\s\S])/.test(operation)) return { href: '/accounting/books', label: 'halaman buku akuntansi' };
   if (/^ordering\.spending\.policy\.(propose|approve|reject)$(?![\s\S])/.test(operation)) return { href: '/ordering/spending-policies', label: 'halaman persetujuan belanja' };
@@ -45,6 +46,10 @@ export function recoveryPage(operation: string) {
     : { href: "/administration/person-reviews", label: "halaman peninjauan orang" };
 }
 export function operationLabel(operation: string) {
+  if (operation === 'procurement.supplier.propose') return 'Pengajuan pemasok';
+  if (operation === 'procurement.supplier.observe') return 'Pemeriksaan independen pemasok';
+  if (operation === 'procurement.supplier.approve') return 'Persetujuan pemasok';
+  if (operation === 'procurement.supplier.reject') return 'Penolakan pemasok';
   if (operation === 'procurement.request.submit') return 'Pengiriman permintaan pengadaan';
   if (operation === 'procurement.request.approve') return 'Persetujuan permintaan pengadaan';
   if (operation === 'procurement.request.reject') return 'Penolakan permintaan pengadaan';
