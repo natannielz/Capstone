@@ -119,6 +119,34 @@ public sealed class BusinessPermissionTests
     }
 
     [Fact]
+    public void Supplier_bank_authorities_are_shop_only_private_explicit_and_independent_without_transfer_rights()
+    {
+        foreach (var permission in new[] { Permissions.SupplierBankRead, Permissions.SupplierBankDetailsRead, Permissions.SupplierBankPropose, Permissions.SupplierBankApprove }) {
+            Assert.Equal(new[] { GrantScopeKind.FulfillmentShop }, Permissions.Find(permission)!.AllowedScopes.ToArray());
+            Assert.All(RoleTemplates.Templates.Values, role => Assert.DoesNotContain(permission, role.Permissions));
+            var policy = Snapshot("finance", Shop, [permission]);
+            Assert.True(ScopePolicy.Compile(Actor, policy, permission, Now).Matches(Order));
+            Assert.False(ScopePolicy.Compile(Actor, policy, permission, Now).Matches(Order with { ShopId = 22 }));
+            foreach (var other in new[] { Permissions.SupplierChangeApprove, Permissions.FundingApprove, Permissions.DisbursementRecord, Permissions.PaymentRecord, Permissions.JournalPost })
+                Assert.False(ScopePolicy.Compile(Actor, policy, other, Now).IsAllowed);
+            Assert.False(ScopePolicy.Compile(Actor, Snapshot("finance", Shop, [Permissions.SupplierChangeApprove]), permission, Now).IsAllowed);
+            Assert.False(ScopePolicy.Compile(Actor, Snapshot("finance", new(GrantScopeKind.FulfillmentWarehouse, 2, ShopId: 21, WarehouseId: 211, ChannelId: 201), [permission]), permission, Now).IsAllowed);
+            foreach (var other in new[] { Permissions.SupplierBankRead, Permissions.SupplierBankDetailsRead, Permissions.SupplierBankPropose, Permissions.SupplierBankApprove }.Where(value => value != permission))
+                Assert.False(ScopePolicy.Compile(Actor, policy, other, Now).IsAllowed);
+            if (permission is Permissions.SupplierBankPropose or Permissions.SupplierBankApprove) {
+                Assert.Equal(TimeSpan.FromMinutes(5), Permissions.Find(permission)!.Assurance.MaximumAge);
+                Assert.False(ScopePolicy.Compile(Actor with { AuthenticatedAt = Now.AddMinutes(-6) }, policy, permission, Now).IsAllowed);
+            }
+        }
+        const string approval = Permissions.SupplierBankApprove;
+        Assert.True(ApprovalPolicy.RequiresEvidence(approval)); Assert.True(PersonApprovalPolicy.RequiresEvidence(approval));
+        Assert.False(ApprovalPolicy.Evaluate(101, approval, new(1, 1, ProposedBy: 101)).Allowed);
+        Assert.False(ApprovalPolicy.Evaluate(101, approval, new(1, 2, ProposedBy: 102)).Allowed);
+        Assert.False(ApprovalPolicy.Evaluate(101, approval, new(1, 1, RequestedBy: 102)).Allowed);
+        Assert.Equal(new long[] { 101, 102 }, PersonApprovalPolicy.RequiredAccounts(101, approval, new(1, 1, ProposedBy: 102)).ToArray());
+    }
+
+    [Fact]
     public void Procurement_requests_require_scoped_current_authority_and_requester_independence_without_receiving_or_payment_authority()
     {
         foreach (var permission in new[] { Permissions.ProcurementRead, Permissions.ProcurementPrepare, Permissions.ProcurementApprove }) {
@@ -221,7 +249,8 @@ public sealed class BusinessPermissionTests
             Permissions.BankStatementRead, Permissions.BankStatementStage,
             Permissions.PaymentReviewRead, Permissions.PaymentReviewCorrect,
             Permissions.ReceivingAccountRead, Permissions.ReceivingAccountDetailsRead,
-            Permissions.ReceivingAccountPropose, Permissions.ReceivingAccountVerify, Permissions.ReceivingAccountApprove, Permissions.FundingRead };
+            Permissions.ReceivingAccountPropose, Permissions.ReceivingAccountVerify, Permissions.ReceivingAccountApprove, Permissions.FundingRead,
+            Permissions.SupplierBankRead, Permissions.SupplierBankDetailsRead, Permissions.SupplierBankPropose, Permissions.SupplierBankApprove };
         Assert.Equal(financeSuggestions, RoleTemplates.Suggestions["finance"].ToArray());
         var allFinancePacks = RoleTemplates.Materialize("finance", RoleTemplates.FinancePacks.Keys, []).Permissions;
         foreach (var suggestion in financeSuggestions)

@@ -1,4 +1,5 @@
 export function recoveryPage(operation: string) {
+  if (/^procurement\.supplierbank\.(propose|observe|approve|reject)$(?![\s\S])/.test(operation)) return { href: '/procurement/supplier-banks', label: 'halaman rekening pemasok' };
   if (/^procurement\.funding\.(request|approve|reject)$(?![\s\S])/.test(operation)) return { href: '/procurement/funding', label: 'halaman otorisasi uang muka' };
   if (/^procurement\.purchase\.order\.(propose|approve|reject)$(?![\s\S])/.test(operation)) return { href: '/procurement/purchase-orders', label: 'halaman pesanan pembelian' };
   if (/^procurement\.supplier\.(propose|observe|approve|reject)$(?![\s\S])/.test(operation)) return { href: '/procurement/suppliers', label: 'halaman pemasok dan kode sumber' };
@@ -48,6 +49,10 @@ export function recoveryPage(operation: string) {
     : { href: "/administration/person-reviews", label: "halaman peninjauan orang" };
 }
 export function operationLabel(operation: string) {
+  if (operation === 'procurement.supplierbank.propose') return 'Pengajuan rekening pemasok';
+  if (operation === 'procurement.supplierbank.observe') return 'Pemeriksaan bank pemasok';
+  if (operation === 'procurement.supplierbank.approve') return 'Persetujuan rekening pemasok';
+  if (operation === 'procurement.supplierbank.reject') return 'Penolakan rekening pemasok';
   if (operation === 'procurement.funding.request') return 'Permintaan uang muka';
   if (operation === 'procurement.funding.approve') return 'Otorisasi uang muka';
   if (operation === 'procurement.funding.reject') return 'Penolakan uang muka';

@@ -268,6 +268,40 @@ public sealed partial class AccessHttpTests(MongoFixture fixture)
             }
         }
     }
+
+    [Fact]
+    public async Task Current_access_discovers_only_granted_supplier_bank_tasks_and_preserves_renewal_without_authorizing_expired_factor()
+    {
+        await using var data = await StoreTestData.CreateAsync(fixture);
+        var scope = new GrantScope(GrantScopeKind.FulfillmentShop, 100, ShopId: 101, ChannelId: 103);
+        var maker = await data.AddActorAsync(7711, scope, Permissions.SupplierBankRead, Permissions.SupplierBankDetailsRead, Permissions.SupplierBankPropose);
+        var checker = await data.AddActorAsync(7712, scope, Permissions.SupplierBankRead, Permissions.SupplierBankDetailsRead, Permissions.SupplierBankApprove);
+        var reader = await data.AddActorAsync(7713, scope, Permissions.SupplierBankRead);
+        var assignments = new[] {
+            (Actor: maker, Tasks: new[] { Permissions.SupplierBankRead, Permissions.SupplierBankDetailsRead, Permissions.SupplierBankPropose }),
+            (Actor: checker, Tasks: new[] { Permissions.SupplierBankRead, Permissions.SupplierBankDetailsRead, Permissions.SupplierBankApprove }),
+            (Actor: reader, Tasks: new[] { Permissions.SupplierBankRead })
+        };
+        async Task<string[]> Actions(ActorContext actor) {
+            using var factory = Factory(data, actor); using var client = factory.CreateClient(); using var response = await client.GetAsync("/api/v1/access/current");
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode); Assert.True(response.Headers.CacheControl!.NoStore);
+            return (await Body(response))["allowedActions"]!.AsArray().Select(node => node!.GetValue<string>()).Order().ToArray();
+        }
+        foreach (var assignment in assignments) {
+            Assert.Equal(assignment.Tasks.Order(), await Actions(assignment.Actor)); var current = await data.Store.ReadCurrentAsync(assignment.Actor);
+            foreach (var permission in assignment.Tasks) Assert.True(ScopePolicy.Compile(assignment.Actor, current, permission, data.Clock.UtcNow).IsAllowed);
+        }
+        data.Clock.UtcNow = data.Clock.UtcNow.AddMinutes(6);
+        foreach (var assignment in assignments) {
+            Assert.Equal(assignment.Tasks.Order(), await Actions(assignment.Actor)); var current = await data.Store.ReadCurrentAsync(assignment.Actor);
+            foreach (var permission in assignment.Tasks) {
+                var policy = ScopePolicy.Compile(assignment.Actor, current, permission, data.Clock.UtcNow);
+                if (permission is Permissions.SupplierBankPropose or Permissions.SupplierBankApprove) {
+                    Assert.False(policy.IsAllowed); Assert.Equal("step_up_required", policy.DenialCode); Assert.True(ScopePolicy.CanRequestStepUp(assignment.Actor, current, permission, data.Clock.UtcNow));
+                } else Assert.True(policy.IsAllowed);
+            }
+        }
+    }
     [Fact]
     public async Task Current_access_discovers_only_granted_procurement_tasks_and_keeps_step_up_entry_without_authorizing_expired_factor()
     {

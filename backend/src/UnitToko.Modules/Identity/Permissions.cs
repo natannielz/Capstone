@@ -23,6 +23,7 @@ public static class Permissions
     public const string CaseRead = "case.read", CaseRequest = "case.request", CaseManage = "case.manage";
     public const string ProcurementRead = "procurement.read", ProcurementPrepare = "procurement.prepare", ProcurementApprove = "procurement.approve", SupplierClaim = "supplier.claim";
     public const string SupplierChangePropose = "supplier.change.propose", SupplierChangeApprove = "supplier.change.approve";
+    public const string SupplierBankRead = "supplier.bank.read", SupplierBankDetailsRead = "supplier.bank.details.read", SupplierBankPropose = "supplier.bank.propose", SupplierBankApprove = "supplier.bank.approve";
     public const string HistoryRead = "history.read", ReportRead = "report.read";
     public const string SourcePrepare = "source.prepare", SourceReconcile = "source.reconcile", ReportPrepare = "report.prepare", PeriodSubmit = "period.submit", PeriodApprove = "period.approve", PeriodClose = "period.close", PeriodReopenRequest = "period.reopen.request", PeriodReopenApprove = "period.reopen.approve";
     public const string InvoiceRead = "invoice.read", InvoiceIssue = "invoice.issue", PaymentEvidence = "payment.evidence", PaymentRecord = "payment.record", PaymentAllocate = "payment.allocate", PaymentVerify = "payment.verify";
@@ -94,6 +95,10 @@ public static class Permissions
         result[DisbursementVerify] = result[DisbursementVerify] with { Assurance = new(true, TimeSpan.FromMinutes(5)) };
         Add(SupplierChangePropose, [GrantScopeKind.FulfillmentShop], true);
         Add(SupplierChangeApprove, [GrantScopeKind.FulfillmentShop], true);
+        Add(SupplierBankRead, [GrantScopeKind.FulfillmentShop]);
+        Add(SupplierBankDetailsRead, [GrantScopeKind.FulfillmentShop]);
+        Add(SupplierBankPropose, [GrantScopeKind.FulfillmentShop], true);
+        Add(SupplierBankApprove, [GrantScopeKind.FulfillmentShop], true);
         Add(StockSourceRead, Operations);
         Add(StockSourcePropose, Operations);
         Add(StockSourceApprove, Operations, true);

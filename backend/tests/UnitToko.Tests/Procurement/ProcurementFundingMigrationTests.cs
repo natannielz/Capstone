@@ -87,7 +87,8 @@ public sealed class ProcurementFundingMigrationTests(MongoFixture fixture)
 
     internal static async Task RestoreV63Async(OrganizationAddressTestData data)
     {
-        var history = await HistoryAsync(data.Database); Assert.Equal(CollectionMigrations.CurrentVersion, history.Count);
+        await SupplierBankMigrationTests.RestoreV64Async(data);
+        var history = await HistoryAsync(data.Database); Assert.Equal(64, history.Count);
         Assert.All(history, row => Assert.Equal("applied", row["state"])); Assert.Equal(new[] { 64 }, history.Skip(63).Select(row => row["_id"].AsInt32));
         foreach (var name in ProcurementFundingSchemas.Collections) {
             Assert.False(await data.Rows(name).Find(new BsonDocument()).AnyAsync()); Assert.False(await data.Rows("idCounters").Find(new BsonDocument("_id", name)).AnyAsync());

@@ -1,0 +1,117 @@
+import { z } from 'zod';
+import { createUnitTokoClient, RequestNotSentError } from '../../api/client';
+import { AccessFailure } from '../administration/workflow';
+import { paymentAllocationSchemas } from '../billing/payment-allocation-client';
+import { freezeCatalogAttempt } from '../catalog/catalog-editor-state';
+
+const { id, hash } = paymentAllocationSchemas;
+const zeroVersion = z.union([z.literal('0'), id]);
+const text = (max: number) => z.string().min(1).max(max).refine(value => value === value.trim() && !/\p{Cc}/u.test(value));
+const bankText = (max: number) => text(max).refine(value => !/\p{Cf}/u.test(value));
+const labelText = (max: number) => text(max).refine(value => value === value.normalize('NFKC') && !/[\p{Cf}\p{Co}\p{Cs}]/u.test(value));
+const time = z.string().datetime({ offset: true }).refine(value => /(?:Z|\+00:00)$/.test(value) && !/\.\d{4,}/.test(value) && Date.parse(value) > Date.parse('0001-01-01T00:00:00Z'));
+const owner = z.object({ organizationId: id, shopId: id, channelId: id }).strict().refine(value => new Set(Object.values(value)).size === 3);
+export const supplierBankOwnerKey = (value: z.infer<typeof owner>) => [value.organizationId, value.shopId, value.channelId].join(':');
+const sameOwner = (left: z.infer<typeof owner>, right: z.infer<typeof owner>) => supplierBankOwnerKey(left) === supplierBankOwnerKey(right);
+const label = z.object({ id, code: labelText(64), name: labelText(160), scopeVersion: id, profileVersion: id }).strict();
+const source = z.object({ organization: label, shop: label, channel: label }).strict();
+const sourceMatches = (where: z.infer<typeof owner>, names: z.infer<typeof source>) => where.organizationId === names.organization.id && where.shopId === names.shop.id && where.channelId === names.channel.id;
+const target = z.object({ owner, ...source.shape }).strict().refine(value => sourceMatches(value.owner, value));
+const targets = z.object({ items: z.array(target).max(256) }).strict().refine(value => new Set(value.items.map(item => supplierBankOwnerKey(item.owner))).size === value.items.length);
+const bankCode = bankText(32).refine(value => /^[A-Z0-9-]+$(?![\s\S])/.test(value));
+const details = z.object({ bankCode, accountNumber: z.string().regex(/^[0-9]{4,34}$(?![\s\S])/), holderName: bankText(160), currency: z.literal('IDR') }).strict();
+const masked = z.object({ bankCode, maskedAccount: z.string().regex(/^(?:\*{4}|\*{1,30}[0-9]{4})$(?![\s\S])/), currency: z.literal('IDR') }).strict();
+const supplier = z.object({ id, versionId: id, version: id, subjectReference: text(128), legalName: text(160), displayName: text(160) }).strict();
+const choice = z.object({ supplier, beneficiaryId: id.nullable(), bankVersion: zeroVersion }).strict().refine(value => value.bankVersion === '0' || value.beneficiaryId !== null);
+const choices = z.object({ owner, source, items: z.array(choice).max(25), nextSupplierId: id.nullable() }).strict().refine(value => sourceMatches(value.owner, value.source) && value.items.every((item, index) => index === 0 || BigInt(item.supplier.id) < BigInt(value.items[index - 1].supplier.id)) && (value.nextSupplierId === null || value.items.every(item => BigInt(item.supplier.id) >= BigInt(value.nextSupplierId!))));
+const policy = z.object({ id, owner, supplierId: id, supplierVersionId: id, supplierVersion: id, subjectReference: text(128), revision: id, bankCode, bankName: bankText(160), currency: z.literal('IDR'), method: z.enum(['bank-contact', 'authenticated-bank-record']),
+  trustedChannelReference: text(256), authorizationReference: text(256), operatingOwnerReference: text(256), approvalReference: text(256), approvedAt: time, expiresAt: time, maxObservationAgeSeconds: id.refine(value => BigInt(value) <= BigInt(31536000)), allowReferenceOnly: z.boolean(), active: z.boolean() }).strict().refine(value => Date.parse(value.approvedAt) < Date.parse(value.expiresAt));
+const policies = z.object({ owner, supplierId: id, items: z.array(policy).max(256) }).strict().refine(value => new Set(value.items.map(item => item.id)).size === value.items.length && value.items.every(item => sameOwner(item.owner, value.owner) && item.supplierId === value.supplierId));
+const input = z.object({ owner, supplierId: id, supplierVersionId: id, supplierVersion: id, baseVersion: zeroVersion.refine(value => BigInt(value) < BigInt('9223372036854775806')), policyId: id, policyRevision: id, details }).strict();
+const facts = { input, source, supplier, policy };
+const factsMatch = (value: { [K in keyof typeof facts]: z.infer<typeof facts[K]> }) => sourceMatches(value.input.owner, value.source) && sameOwner(value.input.owner, value.policy.owner) && value.input.supplierId === value.supplier.id && value.input.supplierVersionId === value.supplier.versionId && value.input.supplierVersion === value.supplier.version && value.policy.supplierId === value.supplier.id && value.policy.supplierVersionId === value.supplier.versionId && value.policy.supplierVersion === value.supplier.version && value.policy.subjectReference === value.supplier.subjectReference && value.input.policyId === value.policy.id && value.input.policyRevision === value.policy.revision && value.input.details.bankCode === value.policy.bankCode;
+const preview = z.object({ ...facts, binding: hash, observedAt: time }).strict().refine(factsMatch);
+const observation = z.object({ id, observed: details, sourceReference: text(256), reason: text(1000), checkedAt: time }).strict();
+const decision = z.enum(['approve', 'reject']);
+const decisionRecord = z.object({ id, decision, reason: text(1000), decidedAt: time, versionId: id.nullable(), version: id.nullable() }).strict();
+const proposal = z.object({ id, beneficiaryId: id, version: z.literal('1'), ...facts, reason: text(1000), proposedAt: time, state: z.enum(['pending', 'approved', 'rejected']), observation: observation.nullable(), decision: decisionRecord.nullable() }).strict().refine(factsMatch).refine(value => {
+  if (value.observation && Date.parse(value.observation.checkedAt) < Date.parse(value.proposedAt)) return false;
+  if (value.state === 'pending') return value.decision === null;
+  if (!value.decision || Date.parse(value.decision.decidedAt) < Date.parse(value.proposedAt)) return false;
+  if (value.state === 'rejected') return value.decision.decision === 'reject' && value.decision.versionId === null && value.decision.version === null;
+  return value.decision.decision === 'approve' && value.decision.versionId !== null && value.decision.version !== null && BigInt(value.decision.version) === BigInt(value.input.baseVersion) + BigInt(1) && value.observation !== null && JSON.stringify(value.observation.observed) === JSON.stringify(value.input.details) && Date.parse(value.decision.decidedAt) >= Date.parse(value.observation.checkedAt);
+});
+const summary = z.object({ id, beneficiaryId: id, supplier, baseVersion: zeroVersion, bankVersion: zeroVersion, details: masked, state: z.enum(['pending', 'approved', 'rejected']), proposedAt: time }).strict().refine(value => BigInt(value.bankVersion) >= BigInt(value.baseVersion) && (value.state !== 'approved' || BigInt(value.bankVersion) > BigInt(value.baseVersion)));
+const history = z.object({ owner, items: z.array(summary).max(25), nextProposalId: id.nullable() }).strict().refine(value => value.items.every((item, index) => index === 0 || BigInt(item.id) < BigInt(value.items[index - 1].id)) && (value.nextProposalId === null || value.items.length > 0 && value.nextProposalId === value.items.at(-1)!.id));
+const current = z.object({ supplierId: id, beneficiaryId: id.nullable(), versionId: id.nullable(), version: zeroVersion, proposalId: id.nullable(), details: masked.nullable(), eligible: z.boolean() }).strict().refine(value => value.version === '0' ? value.versionId === null && value.proposalId === null && value.details === null && !value.eligible : value.beneficiaryId !== null && value.versionId !== null && value.proposalId !== null && value.details !== null);
+const observationPreview = z.object({ proposal, observed: details, sourceReference: text(256), binding: hash, observedAt: time }).strict().refine(value => value.proposal.state === 'pending' && value.proposal.observation === null && Date.parse(value.observedAt) >= Date.parse(value.proposal.proposedAt));
+const decisionPreview = z.object({ proposal, decision, observationId: id.nullable(), binding: hash, observedAt: time }).strict().refine(value => value.proposal.state === 'pending' && Date.parse(value.observedAt) >= Date.parse(value.proposal.proposedAt) && (value.decision === 'reject' ? value.observationId === null : value.proposal.observation !== null && value.observationId === value.proposal.observation.id));
+const operation = z.enum(['procurement.supplierbank.propose', 'procurement.supplierbank.observe', 'procurement.supplierbank.approve', 'procurement.supplierbank.reject']);
+const result = z.object({ beneficiaryId: id, proposalId: id, proposalVersion: z.literal('1'), recordId: id, operation, versionId: id.nullable(), version: id.nullable() }).strict().refine(value => (value.operation === 'procurement.supplierbank.approve' ? value.versionId !== null && value.version !== null : value.versionId === null && value.version === null) && (value.operation !== 'procurement.supplierbank.propose' || value.recordId === value.proposalId));
+const recovery = z.object({ status: z.enum(['confirmed', 'not_confirmed']), result: result.nullable() }).strict().refine(value => (value.status === 'confirmed') === (value.result !== null));
+const invalid = (): never => { throw new AccessFailure(502, 'supplier_bank_response_invalid'); };
+function parse<T>(schema: z.ZodType<T>, value: unknown): T { try { const checked = schema.safeParse(value); return checked.success ? checked.data : invalid(); } catch { return invalid(); } }
+function entered<T>(schema: z.ZodType<T>, value: unknown): T { try { const checked = schema.safeParse(value); if (checked.success) return checked.data; } catch { /* Malformed exact versions can fail arithmetic checks. */ } throw new RequestNotSentError(400, 'invalid_supplier_bank'); }
+function data<T>(response: { data?: T; error?: unknown; response: Response }): T { if (!response.response.ok || response.data === undefined) throw new AccessFailure(response.response.status, (response.error as { code?: string })?.code ?? 'request_failed'); return response.data; }
+const headers = (actorId: string) => ({ 'X-Expected-Actor-Id': parse(id, actorId) });
+const purpose = 'supplier-bank-review';
+export type SupplierBankOwner = z.infer<typeof owner>;
+export type SupplierBankTarget = z.infer<typeof target>;
+export type SupplierBankDetails = z.infer<typeof details>;
+export type SupplierBankPolicy = z.infer<typeof policy>;
+export type SupplierBankChoice = z.infer<typeof choice>;
+export type SupplierBankChoices = z.infer<typeof choices>;
+export type SupplierBankInput = z.infer<typeof input>;
+export type SupplierBankPreview = z.infer<typeof preview>;
+export type SupplierBankProposal = z.infer<typeof proposal>;
+export type SupplierBankSummary = z.infer<typeof summary>;
+export type SupplierBankCurrent = z.infer<typeof current>;
+export type SupplierBankObservationPreview = z.infer<typeof observationPreview>;
+export type SupplierBankDecisionPreview = z.infer<typeof decisionPreview>;
+export type SupplierBankResult = z.infer<typeof result>;
+export function supplierBankInput(value: SupplierBankInput) { return entered(input, value); }
+export function supplierBankDetails(value: unknown) { return entered(details, value); }
+export function supplierBankPolicyCurrent(value: SupplierBankPolicy, now: number) { return value.active && Date.parse(value.approvedAt) <= now && now < Date.parse(value.expiresAt); }
+export function parseSupplierBankHistory(value: unknown) { return parse(history, value); }
+export function parseSupplierBankCurrent(value: unknown) { return parse(current, value); }
+export function parseSupplierBankProposal(value: unknown, expectedId?: string) { const checked = parse(proposal, value); return expectedId === undefined || checked.id === expectedId ? checked : invalid(); }
+const uuid = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
+export function supplierBankKeyOwner(value: string, op: string) { parse(operation, op); const found = new RegExp(`^sb\\.(propose|observe|approve|reject)\\.([1-9][0-9]{0,18})\\.(${uuid})$(?![\\s\\S])`).exec(value); if (!found || op !== 'procurement.supplierbank.' + found[1] || found[3] === '00000000-0000-0000-0000-000000000000') return invalid(); return { id: parse(id, found[2]), action: found[1] }; }
+export function parseSupplierBankResult(value: unknown, key: string, op: string) { const owned = supplierBankKeyOwner(key, op), checked = parse(result, value); return checked.operation === op && (owned.action === 'propose' || checked.proposalId === owned.id) ? checked : invalid(); }
+export function prepareSupplierBank(actorId: string, selected: SupplierBankTarget, selectedSupplier: SupplierBankChoice, selectedPolicy: SupplierBankPolicy, sent: SupplierBankInput, shown: SupplierBankPreview, reason: string) {
+  const scope = parse(target, selected), chosen = parse(choice, selectedSupplier), approved = parse(policy, selectedPolicy), clean = supplierBankInput(sent), checked = parse(preview, shown);
+  if (!sameOwner(scope.owner, clean.owner) || JSON.stringify(clean) !== JSON.stringify(checked.input) || JSON.stringify(chosen.supplier) !== JSON.stringify(checked.supplier) || chosen.bankVersion !== clean.baseVersion || JSON.stringify(approved) !== JSON.stringify(checked.policy) || !supplierBankPolicyCurrent(approved, Date.parse(checked.observedAt)) || !approved.allowReferenceOnly || (['organization', 'shop', 'channel'] as const).some(field => JSON.stringify(scope[field]) !== JSON.stringify(checked.source[field]))) throw new RequestNotSentError(409, 'supplier_bank_view_stale');
+  return freezeCatalogAttempt({ actorId: parse(id, actorId), supplierId: clean.supplierId, body: { input: clean, binding: checked.binding, reason: entered(text(1000), reason) } });
+}
+export function prepareSupplierBankObservation(actorId: string, original: SupplierBankProposal, observed: SupplierBankDetails, sourceReference: string, shown: SupplierBankObservationPreview, reason: string, attested: boolean) {
+  const saved = parse(proposal, original), checked = parse(observationPreview, shown), clean = entered(details, observed), reference = entered(text(256), sourceReference);
+  if (!attested || JSON.stringify(saved) !== JSON.stringify(checked.proposal) || JSON.stringify(clean) !== JSON.stringify(checked.observed) || reference !== checked.sourceReference || !supplierBankPolicyCurrent(saved.policy, Date.parse(checked.observedAt)) || !saved.policy.allowReferenceOnly) throw new RequestNotSentError(409, 'supplier_bank_view_stale');
+  return freezeCatalogAttempt({ actorId: parse(id, actorId), proposalId: saved.id, revision: saved.version, body: { observed: clean, sourceReference: reference, binding: checked.binding, attested: true as const, reason: entered(text(1000), reason) } });
+}
+export function prepareSupplierBankDecision(actorId: string, original: SupplierBankProposal, shown: SupplierBankDecisionPreview, reason: string) {
+  const saved = parse(proposal, original), checked = parse(decisionPreview, shown);
+  if (JSON.stringify(saved) !== JSON.stringify(checked.proposal) || checked.decision === 'approve' && (!saved.observation || !supplierBankPolicyCurrent(saved.policy, Date.parse(checked.observedAt)) || !saved.policy.allowReferenceOnly || JSON.stringify(saved.observation.observed) !== JSON.stringify(saved.input.details) || Date.parse(checked.observedAt) >= Date.parse(saved.observation.checkedAt) + Number(saved.policy.maxObservationAgeSeconds) * 1000)) throw new RequestNotSentError(409, 'supplier_bank_view_stale');
+  return freezeCatalogAttempt({ actorId: parse(id, actorId), proposalId: saved.id, revision: saved.version, decision: checked.decision, body: { decision: checked.decision, observationId: checked.observationId, binding: checked.binding, reason: entered(text(1000), reason) } });
+}
+export function createSupplierBankGateway(client: ReturnType<typeof createUnitTokoClient> = createUnitTokoClient()) {
+  const ensure = (current: () => boolean) => { if (!current()) throw new RequestNotSentError(409, 'supplier_bank_view_stale'); }, after = (current: () => boolean) => { if (!current()) throw new AccessFailure(503, 'commit_outcome_unknown'); };
+  return {
+    async targets(actorId: string, signal?: AbortSignal) { return parse(targets, data(await client.POST('/api/v1/procurement/suppliers/bank-beneficiaries/targets/query', { body: { purpose }, params: { header: headers(actorId) }, signal }))); },
+    async suppliers(actorId: string, scope: SupplierBankOwner, beforeId: string | null = null, signal?: AbortSignal) { const checked = parse(choices, data(await client.POST('/api/v1/procurement/suppliers/bank-beneficiaries/suppliers/query', { body: { purpose, owner: parse(owner, scope), beforeId }, params: { header: headers(actorId) }, signal }))); return sameOwner(checked.owner, scope) && (beforeId === null || checked.items.every(item => BigInt(item.supplier.id) < BigInt(parse(id, beforeId))) && (checked.nextSupplierId === null || BigInt(checked.nextSupplierId) < BigInt(beforeId))) ? checked : invalid(); },
+    async policies(actorId: string, scope: SupplierBankOwner, supplierId: string, signal?: AbortSignal) { const checked = parse(policies, data(await client.POST('/api/v1/procurement/suppliers/bank-beneficiaries/policies/query', { body: { purpose, owner: parse(owner, scope), supplierId: parse(id, supplierId) }, params: { header: headers(actorId) }, signal }))); return sameOwner(checked.owner, scope) && checked.supplierId === supplierId ? checked : invalid(); },
+    async list(actorId: string, scope: SupplierBankOwner, beforeId: string | null = null, signal?: AbortSignal) { const checked = parse(history, data(await client.POST('/api/v1/procurement/suppliers/bank-beneficiaries/proposals/query', { body: { purpose, owner: parse(owner, scope), beforeId }, params: { header: headers(actorId) }, signal }))); return sameOwner(checked.owner, scope) && (beforeId === null || checked.items.every(item => BigInt(item.id) < BigInt(parse(id, beforeId)))) ? checked : invalid(); },
+    async proposal(actorId: string, proposalId: string, signal?: AbortSignal) { return parseSupplierBankProposal(data(await client.POST('/api/v1/procurement/suppliers/bank-beneficiaries/proposals/{id}/query', { body: { purpose }, params: { path: { id: parse(id, proposalId) }, header: headers(actorId) }, signal })), proposalId); },
+    async current(actorId: string, supplierId: string, signal?: AbortSignal) { const checked = parse(current, data(await client.POST('/api/v1/procurement/suppliers/bank-beneficiaries/current/query', { body: { purpose, supplierId: parse(id, supplierId) }, params: { header: headers(actorId) }, signal }))); return checked.supplierId === supplierId ? checked : invalid(); },
+    async preview(actorId: string, value: SupplierBankInput, signal?: AbortSignal) { return parse(preview, data(await client.POST('/api/v1/procurement/suppliers/bank-beneficiaries/preview/query', { body: { purpose, input: supplierBankInput(value) }, params: { header: headers(actorId) }, signal }))); },
+    async previewObservation(actorId: string, original: SupplierBankProposal, observed: SupplierBankDetails, sourceReference: string, signal?: AbortSignal) { const checked = parse(observationPreview, data(await client.POST('/api/v1/procurement/suppliers/bank-beneficiaries/proposals/{id}/observation-preview/query', { body: { purpose, observed: entered(details, observed), sourceReference: entered(text(256), sourceReference) }, params: { path: { id: parse(id, original.id) }, header: headers(actorId) }, signal }))); return checked.proposal.id === original.id ? checked : invalid(); },
+    async previewDecision(actorId: string, original: SupplierBankProposal, selected: 'approve' | 'reject', signal?: AbortSignal) { const checked = parse(decisionPreview, data(await client.POST('/api/v1/procurement/suppliers/bank-beneficiaries/proposals/{id}/decision-preview/query', { body: { purpose, decision: selected, observationId: selected === 'approve' ? original.observation?.id ?? null : null }, params: { path: { id: parse(id, original.id) }, header: headers(actorId) }, signal }))); return checked.proposal.id === original.id && checked.decision === selected ? checked : invalid(); },
+    async propose(command: ReturnType<typeof prepareSupplierBank>, key: string, current: () => boolean) { const op = 'procurement.supplierbank.propose'; if (supplierBankKeyOwner(key, op).id !== command.supplierId) return invalid(); ensure(current); const saved = parseSupplierBankResult(data(await client.POST('/api/v1/procurement/suppliers/bank-beneficiaries/proposals', { body: command.body, params: { header: { ...headers(command.actorId), 'Idempotency-Key': key } } })), key, op); after(current); return saved; },
+    async observe(command: ReturnType<typeof prepareSupplierBankObservation>, key: string, current: () => boolean) { const op = 'procurement.supplierbank.observe'; if (supplierBankKeyOwner(key, op).id !== command.proposalId) return invalid(); ensure(current); const saved = parseSupplierBankResult(data(await client.POST('/api/v1/procurement/suppliers/bank-beneficiaries/proposals/{id}/observations', { body: command.body, params: { path: { id: command.proposalId }, header: { ...headers(command.actorId), 'Idempotency-Key': key, 'If-Match': '"1"' } } })), key, op); after(current); return saved; },
+    async decide(command: ReturnType<typeof prepareSupplierBankDecision>, key: string, current: () => boolean) { const op = 'procurement.supplierbank.' + command.decision; if (supplierBankKeyOwner(key, op).id !== command.proposalId) return invalid(); ensure(current); const saved = parseSupplierBankResult(data(await client.POST('/api/v1/procurement/suppliers/bank-beneficiaries/proposals/{id}/decisions', { body: command.body, params: { path: { id: command.proposalId }, header: { ...headers(command.actorId), 'Idempotency-Key': key, 'If-Match': '"1"' } } })), key, op); after(current); return saved; },
+    async recover(actorId: string, op: string, key: string) { const owned = supplierBankKeyOwner(key, op), checked = parse(recovery, data(await client.POST('/api/v1/procurement/suppliers/bank-beneficiaries/operations/query', { body: { purpose: 'operation-recovery', operation: op, key }, params: { header: headers(actorId) } }))); if (!checked.result) return null; const saved = parseSupplierBankResult(checked.result, key, op);
+      const actual = parseSupplierBankProposal(data(await client.POST('/api/v1/procurement/suppliers/bank-beneficiaries/proposals/{id}/query', { body: { purpose }, params: { path: { id: saved.proposalId }, header: headers(actorId) } })), saved.proposalId);
+      if (actual.beneficiaryId !== saved.beneficiaryId || owned.action === 'propose' && actual.supplier.id !== owned.id || owned.action === 'observe' && actual.observation?.id !== saved.recordId || (owned.action === 'approve' || owned.action === 'reject') && (actual.decision?.id !== saved.recordId || actual.decision.decision !== owned.action || actual.decision.versionId !== saved.versionId || actual.decision.version !== saved.version)) return invalid();
+      return { state: 'committed' as const, result: saved };
+    },
+  };
+}

@@ -64,6 +64,7 @@ public sealed class PersonIndependenceTests
         yield return [Permissions.CreditApprove, new ApprovalRequest(3, 3, RequestedBy: 201), new long[] { 101, 201 }];
         yield return [Permissions.RefundApprove, new ApprovalRequest(3, 3, RequestedBy: 201), new long[] { 101, 201 }];
         yield return [Permissions.FundingApprove, new ApprovalRequest(3, 3, RequestedBy: 201), new long[] { 101, 201 }];
+        yield return [Permissions.SupplierBankApprove, new ApprovalRequest(3, 3, ProposedBy: 201), new long[] { 101, 201 }];
         yield return [Permissions.ExpenseApprove, new ApprovalRequest(3, 3, RequestedBy: 201), new long[] { 101, 201 }];
         yield return [Permissions.StockAdjustApprove, new ApprovalRequest(3, 3, CountedBy: 205, ProposedBy: 202), new long[] { 101, 202, 205 }];
         yield return [Permissions.DisbursementRecord, new ApprovalRequest(3, 3, ApprovedBy: 204), new long[] { 101, 204 }];
