@@ -6,7 +6,7 @@ import { AccessFailure } from '../administration/workflow';
 import { createBuyerCatalogGateway, type BuyerVariant } from '../catalog/catalog-buyer-client';
 import { CatalogReadGate } from '../catalog/catalog-editor-state';
 import { prepareDraftCommand, type DraftCommand, type OrderDraft } from './order-draft-client';
-import { createOrderQuoteGateway, orderAmount, orderQuantity, type OrderQuote } from './order-quote-client';
+import { createOrderQuoteGateway, orderAmount, orderContextKey, orderQuantity, type OrderAddresses, type OrderQuote } from './order-quote-client';
 import { draftMessage } from './DraftSave';
 import common from '../administration/access.module.css';
 import styles from './order-draft.module.css';
@@ -23,11 +23,24 @@ export function OrderDraftEditor({ actorId, draft, initialQuote, initialIssue, l
   const [busy, setBusy] = useState(false), [error, setError] = useState<unknown>(initialIssue), [search, setSearch] = useState(''), [results, setResults] = useState<BuyerVariant[]>([]);
   const [searchPage, setSearchPage] = useState<{ query: string; offset: number; total: string } | null>(null), [selected, setSelected] = useState<BuyerVariant | null>(null), [packageQuantity, setPackageQuantity] = useState('');
   const [review, setReview] = useState<{ command: DraftCommand; quote: OrderQuote } | null>(null);
+  const [approvedAddresses, setApprovedAddresses] = useState<{ actorId: string; view: OrderAddresses } | null>(null);
+  const contextKey = orderContextKey(draft.input.context);
   const alive = useRef(false), pending = useRef(false), reviewRef = useRef<HTMLDivElement>(null);
-  useEffect(() => { alive.current = true; return () => { alive.current = false; gate.cancel(); }; }, [gate]);
+  useEffect(() => { alive.current = true; return () => { alive.current = false; gate.cancel(); }; }, [gate, actorId, contextKey]);
   useEffect(() => { if (review) reviewRef.current?.focus(); }, [review]);
   const disabled = locked || busy || review !== null, current = () => alive.current && isCurrent();
-  const failed = (failure: unknown) => { setError(failure); if (failure instanceof AccessFailure && ([401, 403].includes(failure.status) || failure.code === 'actor_changed')) onFailure(failure); };
+  const failed = (failure: unknown) => { setApprovedAddresses(null); setError(failure); if (failure instanceof AccessFailure && ([401, 403].includes(failure.status) || failure.code === 'actor_changed')) onFailure(failure); };
+  const shownAddresses = approvedAddresses?.actorId === actorId && orderContextKey(approvedAddresses.view.context) === contextKey && isCurrent() ? approvedAddresses.view : null;
+  async function readAddresses() {
+    if (disabled || pending.current || !current()) return;
+    pending.current = true; setBusy(true); setError(null); setApprovedAddresses(null);
+    const request = gate.begin(actorId, 'addresses:' + contextKey);
+    try {
+      const view = await quotes.addresses(actorId, draft.input.context, request.signal);
+      if (request.current() && current()) setApprovedAddresses({ actorId, view });
+    } catch (failure) { if (request.current() && current()) failed(failure); }
+    finally { pending.current = false; if (request.current()) setBusy(false); }
+  }
   async function find(query = search.trim(), offset = 0) {
     if (disabled || pending.current || !current()) return;
     pending.current = true; setBusy(true); setError(null); setSelected(null); setResults([]);
@@ -82,7 +95,9 @@ export function OrderDraftEditor({ actorId, draft, initialQuote, initialIssue, l
   return <section className={styles.editor} aria-label="Isi draf" aria-busy={busy || locked}>
     <h2>Draf {draft.id}</h2><p className={common.help}>Versi {draft.revision}. Perubahan baru tersimpan setelah Anda meninjau dan mengonfirmasi.</p>
     {!locked && <p><Link href={'/ordering/checkout?draft=' + encodeURIComponent(draft.id)}>Lanjut ke pengajuan draf tersimpan</Link></p>}
-    {error !== null && <p role="alert" className={common.alert}>{initialQuote === null && error === initialIssue ? 'Sebagian kemasan atau harga tidak lagi tersedia. Pilih kembali kemasan dari katalog; pilihan lama tidak diganti otomatis.' : draftMessage(error, true)}</p>}
+    {error !== null && <p role="alert" className={common.alert}>{error instanceof AccessFailure && error.code === 'organization_address_changed'
+      ? 'Alamat penagihan atau tujuan belum tersedia sebagai alamat yang disetujui. Hubungi pengelola organisasi, lalu periksa kembali.'
+      : initialQuote === null && error === initialIssue ? 'Sebagian kemasan atau harga tidak lagi tersedia. Pilih kembali kemasan dari katalog; pilihan lama tidak diganti otomatis.' : draftMessage(error, true)}</p>}
     <form className={styles.form} onSubmit={event => void prepare(event)}>
       <ul className={styles.lines}>{selections.map((item, index) => {
         const label = labels.get(item.skuId);
@@ -95,6 +110,17 @@ export function OrderDraftEditor({ actorId, draft, initialQuote, initialIssue, l
       })}</ul>
       {selections.length === 0 && <p>Pilih setidaknya satu kemasan sebelum menyimpan draf.</p>}
       <label>Referensi pembelian (opsional)<input value={reference} disabled={disabled} maxLength={160} onChange={event => setReference(event.target.value)} /></label>
+      <section aria-label="Alamat yang disetujui"><h3>Alamat organisasi dan tujuan</h3>
+        <p className={common.help}>Periksa alamat yang telah disetujui untuk organisasi dan tujuan draf ini. Pemeriksaan ini tidak mengubah isian pengiriman atau memverifikasi penerima.</p>
+        <button type="button" className={common.secondary} disabled={disabled} onClick={() => void readAddresses()}>Periksa alamat yang disetujui</button>
+        {shownAddresses && <><p className={common.help}>Diperiksa {new Date(shownAddresses.observedAt).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })} WIB.</p>
+          <div className={common.twoFields}>{[shownAddresses.legalBilling, shownAddresses.delivery].map(item => {
+            const label = item.purpose === 'legal_billing' ? 'Alamat penagihan organisasi' : item.target.kind === 'division' ? 'Alamat pengiriman divisi' : 'Alamat pengiriman cabang';
+            return <section key={item.purpose} className={styles.line} aria-label={label}><h4>{label}</h4><p><strong>{item.name}</strong><br />{item.code}</p>
+              <p className={styles.address}>{[item.address.line1, item.address.line2, item.address.city, item.address.region, item.address.postalCode, item.address.countryCode].filter(value => value !== null).join('\n')}</p>
+              <p className={common.help}>Versi {item.version} · Berlaku {new Date(item.effectiveAt).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })} WIB.</p></section>;
+          })}</div></>}
+      </section>
       <label className={common.checkbox}><input type="checkbox" checked={delivery} disabled={disabled} onChange={event => setDelivery(event.target.checked)} />Isi rencana pengiriman</label>
       {delivery && <fieldset className={common.fields} disabled={disabled}><legend>Rencana pengiriman</legend><p className={common.help}>Alamat ini diajukan oleh Anda. Tujuan dan penerima tetap perlu diverifikasi sebelum pesanan diproses.</p>
         <label>Nama penerima<input required value={address.recipientName} maxLength={160} onChange={event => setAddress({ ...address, recipientName: event.target.value })} /></label>

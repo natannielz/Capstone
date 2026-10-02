@@ -40,6 +40,18 @@ public sealed partial class CatalogAuthoringHttpTests
             return await buyer.Client.SendAsync(request);
         }
         Assert.Equal("11", Assert.Single((await Ok(await Request("contexts/query", new { purpose = "order-preparation" }))).GetProperty("items").EnumerateArray()).GetProperty("context").GetProperty("branchId").GetString());
+        object PostalBody(string purpose = "order-preparation", string branch = "11") => new {
+            purpose, context = new { organizationId = "10", branchId = branch, divisionId = (string?)null }
+        };
+        Assert.Equal(HttpStatusCode.BadRequest, (await Request("addresses/query", PostalBody("access-review"))).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Request("addresses/query", PostalBody(), "actor")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await Request("addresses/query", PostalBody(), "csrf")).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await Request("addresses/query", PostalBody(), "wrong-actor")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await Request("addresses/query", PostalBody(branch: "12"))).StatusCode);
+        var postalBody = JsonSerializer.SerializeToNode(PostalBody())!.AsObject(); postalBody["context"]!["branchId"] = 11;
+        Assert.Equal(HttpStatusCode.BadRequest, (await Request("addresses/query", postalBody)).StatusCode);
+        postalBody = JsonSerializer.SerializeToNode(PostalBody())!.AsObject(); postalBody["approvedAddress"] = "Caller supplied approval";
+        Assert.Equal(HttpStatusCode.BadRequest, (await Request("addresses/query", postalBody)).StatusCode);
         var quote = await Ok(await Request("quote/query", Body()));
         Assert.Equal("24000.50", quote.GetProperty("catalogSubtotal").GetString()); Assert.Equal("IDR", quote.GetProperty("currency").GetString());
         var line = Assert.Single(quote.GetProperty("lines").EnumerateArray()); Assert.Equal("24", line.GetProperty("baseUnits").GetString());

@@ -55,12 +55,12 @@ public sealed partial class OrganizationMasterDataService(IMongoDatabase databas
         return (node, profile, parents);
     }
     private Task AuditAsync(long id, ActorContext actor, long subjectId, string operation, AuthorizationCommandMetadata metadata,
-        BsonDocument before, BsonDocument after, IClientSessionHandle session, CancellationToken token) =>
+        BsonDocument before, BsonDocument after, DateTime occurredAt, IClientSessionHandle session, CancellationToken token) =>
         Collection("authorizationHistory").InsertOneAsync(session, new BsonDocument
         {
             { "_id", id }, { "schemaVersion", 1 }, { "actorId", actor.UserId }, { "subjectId", subjectId },
             { "operation", operation }, { "reason", metadata.Reason }, { "correlationId", metadata.CorrelationId },
-            { "createdAt", clock.UtcNow.UtcDateTime }, { "actorGrantVersion", actor.GrantVersion },
+            { "createdAt", occurredAt }, { "actorGrantVersion", actor.GrantVersion },
             { "before", before }, { "after", after }, { "scope", AuthorizationBson.Scope(new GrantScope(GrantScopeKind.System)) }
         }, cancellationToken: token);
     private static BsonValue Number(long? value) => value is { } id ? new BsonInt64(id) : BsonNull.Value;

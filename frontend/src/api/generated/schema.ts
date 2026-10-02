@@ -4417,6 +4417,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ordering/addresses/query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Current approved legal billing and exact branch or division delivery addresses for order preparation. No order admission, recipient, contact, tax or financial authority is granted. */
+        post: operations["OrderAddresses"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ordering/contexts/query": {
         parameters: {
             query?: never;
@@ -6325,6 +6342,18 @@ export interface components {
             operation: string;
             reason: string;
         };
+        OrderAddressesDto: {
+            binding: string;
+            context: components["schemas"]["OrderContextDto"];
+            delivery: components["schemas"]["OrderPostalAddressDto"];
+            legalBilling: components["schemas"]["OrderPostalAddressDto"];
+            /** Format: date-time */
+            observedAt: string;
+        };
+        OrderAddressesRequestDto: {
+            context: components["schemas"]["OrderContextDto"];
+            purpose: string;
+        };
         OrderApprovalProgressDto: {
             acceptedSuborders: unknown[];
             cancelled: boolean;
@@ -6457,6 +6486,23 @@ export interface components {
             priceId: components["schemas"]["LongId"];
             priceVersion: string;
             skuId: components["schemas"]["LongId"];
+        };
+        OrderPostalAddressDto: {
+            address: components["schemas"]["PostalAddressDto"];
+            addressId: components["schemas"]["LongId"];
+            code: string;
+            /** Format: date-time */
+            effectiveAt: string;
+            name: string;
+            profileId: components["schemas"]["LongId"];
+            profileVersion: string;
+            purpose: string;
+            snapshotHash: string;
+            sourceHash: string;
+            sourceScopeVersion: string;
+            target: components["schemas"]["OrganizationAddressTargetDto"];
+            version: string;
+            versionId: components["schemas"]["LongId"];
         };
         OrderQuoteDto: {
             /** Format: date-time */
@@ -31060,6 +31106,89 @@ export interface operations {
             };
             /** @description Conflict */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    OrderAddresses: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
+                /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
+                "X-Expected-Actor-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OrderAddressesRequestDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrderAddressesDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Payload Too Large */
+            413: {
                 headers: {
                     [name: string]: unknown;
                 };

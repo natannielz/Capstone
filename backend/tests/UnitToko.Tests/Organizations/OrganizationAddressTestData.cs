@@ -33,30 +33,36 @@ internal sealed class OrganizationAddressTestData(StoreTestData data, MongoClien
     internal static AuthorizationCommandMetadata Meta(string key) => new(key, "Synthetic independently reviewed postal facts; no contact or bank authority", "organization-address-test");
     internal IMongoCollection<BsonDocument> Rows(string table) => Database.GetCollection<BsonDocument>(table);
     internal static async Task<OrganizationAddressTestData> CreateAsync(MongoFixture fixture) {
-        var data = new OrganizationAddressTestData(await StoreTestData.CreateAsync(fixture), fixture.Client);
+        var data = await StoreTestData.CreateAsync(fixture);
         try {
-            var system = new GrantScope(GrantScopeKind.System);
-            data.ProfileMaker = await data.Base.AddActorAsync(1, system, Permissions.TechnicalConfigure);
-            data.ProfileChecker = await data.Base.AddActorAsync(2, system, Permissions.OrganizationApprove);
-            foreach (var (id, kind, parent, code, name) in new (long, ScopeNodeKind, long?, string, string)[] {
-                (10, ScopeNodeKind.BuyingOrganization, null, "BUYER", "Synthetic buying organization"),
-                (11, ScopeNodeKind.Branch, 10, "TEBET", "Synthetic Tebet branch"),
-                (100, ScopeNodeKind.FulfillmentOrganization, null, "TOKO", "Synthetic cooperative"),
-                (101, ScopeNodeKind.Shop, 100, "SHOP", "Synthetic fulfillment shop"),
-                (102, ScopeNodeKind.Warehouse, 101, "WAREHOUSE", "Synthetic dispatch warehouse") }) {
-                var proposed = await data.Organizations.ProposeAsync(data.ProfileMaker,
-                    new(OrganizationChangeKind.UpdateProfile, kind, parent, code, name, id, 1, 0), Meta("postal-profile-" + id));
-                await data.Organizations.ApproveAsync(data.ProfileChecker, proposed.Id, 1, Meta("postal-profile-" + id + "-approve"));
-            }
-            data.Maker = await data.Base.AddActorAsync(301, system, Permissions.TechnicalConfigure);
-            data.Checker = await data.Base.AddActorAsync(302, system, Permissions.OrganizationApprove);
-            data.Reader = await data.Base.AddActorAsync(303, BranchScope, Permissions.OrganizationAddressRead, Permissions.BranchPic);
-            data.WarehouseReader = await data.Base.AddActorAsync(304, WarehouseScope, Permissions.OrganizationAddressRead);
-            data.Orderer = await data.Base.AddActorAsync(305, BranchScope, Permissions.OrderSubmit, Permissions.BranchPic);
-            await PersonTestData.SeedDistinctPeopleAsync(data.Database, data.Clock,
-                data.Maker.UserId, data.Checker.UserId, data.Reader.UserId, data.WarehouseReader.UserId, data.Orderer.UserId);
-            return data;
+            return await PrepareAsync(data, fixture.Client);
         } catch { await data.DisposeAsync(); throw; }
+    }
+    // The caller retains ownership of its existing isolated database. Use the same real
+    // organization and reviewed-person producers for integrated browser rehearsals.
+    internal static async Task<OrganizationAddressTestData> PrepareAsync(StoreTestData source, MongoClient client) {
+        var data = new OrganizationAddressTestData(source, client);
+        var system = new GrantScope(GrantScopeKind.System);
+        data.ProfileMaker = await data.Base.AddActorAsync(1, system, Permissions.TechnicalConfigure);
+        data.ProfileChecker = await data.Base.AddActorAsync(2, system, Permissions.OrganizationApprove);
+        foreach (var (id, kind, parent, code, name) in new (long, ScopeNodeKind, long?, string, string)[] {
+            (10, ScopeNodeKind.BuyingOrganization, null, "BUYER", "Synthetic buying organization"),
+            (11, ScopeNodeKind.Branch, 10, "TEBET", "Synthetic Tebet branch"),
+            (100, ScopeNodeKind.FulfillmentOrganization, null, "TOKO", "Synthetic cooperative"),
+            (101, ScopeNodeKind.Shop, 100, "SHOP", "Synthetic fulfillment shop"),
+            (102, ScopeNodeKind.Warehouse, 101, "WAREHOUSE", "Synthetic dispatch warehouse") }) {
+            var proposed = await data.Organizations.ProposeAsync(data.ProfileMaker,
+                new(OrganizationChangeKind.UpdateProfile, kind, parent, code, name, id, 1, 0), Meta("postal-profile-" + id));
+            await data.Organizations.ApproveAsync(data.ProfileChecker, proposed.Id, 1, Meta("postal-profile-" + id + "-approve"));
+        }
+        data.Maker = await data.Base.AddActorAsync(301, system, Permissions.TechnicalConfigure);
+        data.Checker = await data.Base.AddActorAsync(302, system, Permissions.OrganizationApprove);
+        data.Reader = await data.Base.AddActorAsync(303, BranchScope, Permissions.OrganizationAddressRead, Permissions.BranchPic);
+        data.WarehouseReader = await data.Base.AddActorAsync(304, WarehouseScope, Permissions.OrganizationAddressRead);
+        data.Orderer = await data.Base.AddActorAsync(305, BranchScope, Permissions.OrderSubmit, Permissions.BranchPic);
+        await PersonTestData.SeedDistinctPeopleAsync(data.Database, data.Clock,
+            data.Maker.UserId, data.Checker.UserId, data.Reader.UserId, data.WarehouseReader.UserId, data.Orderer.UserId);
+        return data;
     }
     internal async Task<BsonDocument> ProposeAsync(string key, OrganizationAddressInput? input = null) {
         input ??= Input(); var preview = await Service.PreviewAsync(Maker, input);

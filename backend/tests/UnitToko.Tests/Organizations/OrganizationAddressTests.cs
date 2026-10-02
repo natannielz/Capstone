@@ -5,9 +5,11 @@ using MongoDB.Driver;
 using UnitToko.Modules.Identity;
 using UnitToko.Modules.Identity.Contracts;
 using UnitToko.Modules.Organizations;
+using UnitToko.Platform;
 using UnitToko.Platform.Authorization;
 using UnitToko.Platform.Identity;
 using UnitToko.Platform.Mongo;
+using UnitToko.Platform.Organizations;
 using UnitToko.Tests.Authorization;
 using B = UnitToko.Platform.Organizations.OrganizationAddressBson;
 
@@ -16,6 +18,47 @@ namespace UnitToko.Tests.Organizations;
 [Collection("Mongo")]
 public sealed class OrganizationAddressTests(MongoFixture fixture)
 {
+    [Fact]
+    public async Task Advancing_clock_preserves_real_profile_approval_and_postal_source_history_for_create_and_update() {
+        await using var data = await OrganizationAddressTestData.CreateAsync(fixture);
+        var clock = new AdvancingClock(data.Clock.UtcNow);
+        var organizations = new OrganizationMasterDataService(data.Database, new(data.Database, data.Unit, clock), new(data.Database), clock);
+        var addresses = new OrganizationAddressService(data.Database, data.Unit, new(data.Database), clock, organizations);
+        var target = new OrganizationAddressTarget(ScopeNodeKind.Branch, 12);
+        BsonValue? firstCreatedAt = null;
+        for (var version = 1; version <= 2; version++) {
+            var key = "advancing-profile-" + version;
+            var proposal = await organizations.ProposeAsync(data.ProfileMaker,
+                new(OrganizationChangeKind.UpdateProfile, ScopeNodeKind.Branch, 10, "PANCORAN", "Synthetic branch revision " + version,
+                    12, version, version - 1), OrganizationAddressTestData.Meta(key));
+            await organizations.ApproveAsync(data.ProfileChecker, proposal.Id, 1, OrganizationAddressTestData.Meta(key + "-approved"));
+            var proposed = await data.Rows("authorizationHistory").Find(new BsonDocument {
+                { "operation", "organization.proposed" }, { "after._id", proposal.Id } }).SingleAsync();
+            var approved = await data.Rows("authorizationHistory").Find(new BsonDocument {
+                { "operation", "organization.approved" }, { "after.proposal._id", proposal.Id } }).SingleAsync();
+            var profile = await data.Rows("organizationProfiles").Find(new BsonDocument("_id", 12L)).SingleAsync();
+            Assert.Equal(proposed["createdAt"], proposed["after"]["createdAt"]);
+            Assert.Equal(approved["createdAt"], approved["after"]["proposal"]["approvedAt"]);
+            Assert.Equal(approved["createdAt"], profile["updatedAt"]);
+            firstCreatedAt ??= approved["createdAt"]; Assert.Equal(firstCreatedAt, profile["createdAt"]);
+            Assert.True(proposed["createdAt"].ToUniversalTime() < approved["createdAt"].ToUniversalTime());
+            var input = new OrganizationAddressInput(target, OrganizationAddressPurpose.Delivery, version + 1, version, version - 1,
+                OrganizationAddressTestData.Postal with { Line1 = "Jalan Pancoran " + version });
+            var preview = await addresses.PreviewAsync(data.Maker, input);
+            var postal = await addresses.ProposeAsync(data.Maker, input, preview.Binding, OrganizationAddressTestData.Meta(key + "-postal"));
+            var decision = await addresses.PreviewDecisionAsync(data.Checker, postal["proposalId"].AsInt64, 1, OrganizationAddressDecision.Approve);
+            await addresses.DecideAsync(data.Checker, postal["proposalId"].AsInt64, 1, OrganizationAddressDecision.Approve,
+                decision.Binding, OrganizationAddressTestData.Meta(key + "-postal-approved"));
+            var current = await addresses.ReadAsync(data.Maker, target, OrganizationAddressPurpose.Delivery);
+            Assert.True(current["current"].AsBoolean); Assert.Equal((long)version, current["version"].AsInt64);
+            Assert.Equal("Synthetic branch revision " + version, current["name"].AsString); Assert.Equal(B.Details(input.Address), current["address"]);
+        }
+    }
+    private sealed class AdvancingClock(DateTimeOffset start) : IClock {
+        private long elapsed;
+        public DateTimeOffset UtcNow => start.AddMilliseconds(Interlocked.Increment(ref elapsed));
+    }
+
     [Fact]
     public async Task Actual_independent_approval_retains_postal_versions_and_exact_actor_key_replay_and_recovery() {
         await using var data = await OrganizationAddressTestData.CreateAsync(fixture);

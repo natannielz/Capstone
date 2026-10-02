@@ -22,6 +22,7 @@ using UnitToko.Platform.Ordering;
 using UnitToko.Tests.Authorization;
 using UnitToko.Tests.Identity;
 using UnitToko.Tests.Inventory;
+using UnitToko.Tests.Organizations;
 using Xunit.Abstractions;
 
 namespace UnitToko.Tests.Catalog;
@@ -129,11 +130,18 @@ public sealed class CatalogPriceBrowserTests(MongoFixture fixture, ITestOutputHe
         // All real session and TTL dates are current. These explicitly synthetic
         // provider proofs establish a local rehearsal, never Auth0 acceptance.
         data.Clock.UtcNow = DateTimeOffset.FromUnixTimeMilliseconds(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()); data.Clock.UseSystemClock = true;
+        var postal = await OrganizationAddressTestData.PrepareAsync(data, fixture.Client);
+        foreach (var (key, target, purpose, address) in new[] {
+            ("primary-billing", OrganizationAddressTestData.Buyer, OrganizationAddressPurpose.LegalBilling,
+                OrganizationAddressTestData.Postal with { Line1 = "Jalan Penagihan Utama 5", Line2 = "Lantai administrasi", PostalCode = "12820" }),
+            ("primary-delivery", OrganizationAddressTestData.Branch, OrganizationAddressPurpose.Delivery, OrganizationAddressTestData.Postal) })
+            await postal.DecideAsync(await postal.ProposeAsync(key, postal.Input(target: target, purpose: purpose) with { Address = address }), key + "-approved");
+        var originalPostal = await postal.StateAsync();
         var author = await data.AddActorAsync(52001, CatalogAuthoringTestData.Shop, Permissions.CatalogManage, Permissions.PricingManage);
         var checker = await data.AddActorAsync(52002, CatalogAuthoringTestData.Shop, Permissions.PricingApprove);
         var buyer = await data.AddActorAsync(52004, CatalogAuthoringTestData.Audience, Permissions.CatalogRead, Permissions.OrderSubmit);
         var foreign = await data.AddActorAsync(52005, new GrantScope(GrantScopeKind.BuyerOwned, 20, 21), Permissions.CatalogRead, Permissions.OrderSubmit);
-        await PersonTestData.SeedDistinctPeopleAsync(data.Database, data.Clock, author.UserId, checker.UserId);
+        await PersonTestData.SeedDistinctPeopleAsync(data.Database, data.Clock, author.UserId, checker.UserId, buyer.UserId);
         var catalog = new CatalogAuthoringService(data.Database, new(fixture.Client), new(data.Database), data.Clock);
         var category = await catalog.SaveCategoryAsync(author, new(CatalogAuthoringTestData.Shop, null, 0, "PRIMARY", "Kemasan uji utama"), CatalogPriceTestData.Meta("primary-category"));
         var family = await catalog.CreateFamilyAsync(author, new(CatalogAuthoringTestData.Shop, category.Id, "Pensil utama", "Kemasan terisolasi untuk cabang; bukan stok tersedia", []), CatalogPriceTestData.Meta("primary-family"));
@@ -205,6 +213,7 @@ public sealed class CatalogPriceBrowserTests(MongoFixture fixture, ITestOutputHe
         Assert.Equal(1, await data.Database.GetCollection<BsonDocument>("idempotencyRecords").CountDocumentsAsync(new BsonDocument("operation", OrderDraftBson.Operation)));
         var afterSku = await data.Database.GetCollection<BsonDocument>("skus").Find(new BsonDocument("_id", sku.Id.Value)).SingleAsync(); afterSku.Remove("fence"); Assert.Equal(originalSku, afterSku);
         Assert.Equal(originalPrice, await data.Database.GetCollection<BsonDocument>("priceVersions").Find(new BsonDocument("_id", originalPrice["_id"])).SingleAsync());
+        Assert.Equal(originalPostal, await postal.StateAsync());
         foreach (var table in new[] { "orders", "stockBalances", "movements", "reservations", "journalEntries", "media" })
             Assert.False(await data.Database.GetCollection<BsonDocument>(table).Find(new BsonDocument()).AnyAsync());
     }

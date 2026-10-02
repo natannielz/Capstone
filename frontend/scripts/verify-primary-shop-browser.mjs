@@ -67,8 +67,32 @@ export async function verifyPrimaryShopBrowser({ config, user, origin, directory
   assert.equal(await page.evaluate(() => Object.keys(localStorage).filter(key => key.startsWith('unit-toko:pending:v1:')).length), 0);
   await page.getByRole('link', { name: 'Buka draf pesanan', exact: true }).click();
   await page.getByLabel('Cabang pemesan', { exact: true }).selectOption('10:11:');
-  await page.getByRole('region', { name: 'Daftar draf', exact: true }).getByRole('button', { name: /Draf [0-9]+/ }).waitFor();
+  const savedDraft = page.getByRole('region', { name: 'Daftar draf', exact: true }).getByRole('button', { name: /Draf [0-9]+/ });
+  await savedDraft.waitFor(); assert.equal(await savedDraft.count(), 1);
   await page.screenshot({ path: resolve(directory, 'primary-draft-recovered-desktop.png'), fullPage: true });
+  const draftTitle = await savedDraft.locator('strong').innerText(); await savedDraft.click();
+  const editor = page.getByRole('region', { name: 'Isi draf', exact: true }); await editor.getByRole('heading', { name: draftTitle, exact: true }).waitFor();
+  assert.equal(await editor.getByRole('region', { name: 'Alamat penagihan organisasi', exact: true }).count(), 0, 'Approved postal facts require an explicit read');
+  await editor.getByLabel('Isi rencana pengiriman', { exact: true }).check();
+  const deliveryFields = ['Nama penerima', 'Telepon penerima', 'Alamat pengiriman', 'Kota', 'Kode pos (opsional)', 'Catatan pengiriman (opsional)'];
+  for (const label of deliveryFields) assert.equal(await editor.getByLabel(label, { exact: true }).inputValue(), '');
+  const postalResponse = page.waitForResponse(response => new URL(response.url()).pathname === '/api/v1/ordering/addresses/query' && response.request().method() === 'POST');
+  await editor.getByRole('button', { name: 'Periksa alamat yang disetujui', exact: true }).click();
+  assert.equal((await postalResponse).status(), 200);
+  const postal = editor.getByRole('region', { name: 'Alamat yang disetujui', exact: true }); await postal.waitFor();
+  const billing = postal.getByRole('region', { name: 'Alamat penagihan organisasi', exact: true });
+  const delivery = postal.getByRole('region', { name: 'Alamat pengiriman cabang', exact: true });
+  for (const text of ['BUYER', 'Synthetic buying organization', 'Jalan Penagihan Utama 5', 'Lantai administrasi', 'Jakarta Selatan', 'DKI Jakarta', '12820', 'ID'])
+    assert.ok((await billing.innerText()).includes(text), 'The approved billing card must include ' + text);
+  for (const text of ['TEBET', 'Synthetic Tebet branch', 'Jalan Tebet Raya 12', 'Lantai 2', 'Jakarta Selatan', 'DKI Jakarta', '12810', 'ID'])
+    assert.ok((await delivery.innerText()).includes(text), 'The approved delivery card must include ' + text);
+  for (const label of deliveryFields) assert.equal(await editor.getByLabel(label, { exact: true }).inputValue(), '', 'Postal review must not invent or overwrite recipient/contact input');
+  assert.equal(writes.length, 1, 'Reading postal facts cannot save a draft or submit an order');
+  assert.equal(requests.filter(request => request.path === '/api/v1/ordering/addresses/query').length, 1);
+  await page.screenshot({ path: resolve(directory, 'primary-draft-approved-addresses-desktop.png'), fullPage: true });
+  await page.setViewportSize({ width: 360, height: 800 });
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  await page.screenshot({ path: resolve(directory, 'primary-draft-approved-addresses-mobile.png'), fullPage: true });
   const foreign = await user('foreign');
   // Active branch permissions do not replace an independently approved catalog entitlement.
   await foreign.page.getByText('Katalog ini belum tersedia untuk akun Anda. Hubungi pengelola akun.', { exact: true }).waitFor();
@@ -79,24 +103,30 @@ export async function verifyPrimaryShopBrowser({ config, user, origin, directory
     const { requestToken } = await csrf.json();
     if (typeof requestToken !== 'string' || !requestToken) throw new Error('Invalid real CSRF response');
     const results = [];
-    for (const path of ['/api/v1/catalog/variants/query', '/api/v1/catalog/variants/' + id + '/query']) {
+    for (const [path, body] of [
+      ['/api/v1/catalog/variants/query', {}], ['/api/v1/catalog/variants/' + id + '/query', {}],
+      ['/api/v1/ordering/addresses/query', { purpose: 'order-preparation', context: { organizationId: '10', branchId: '11', divisionId: null } }],
+    ]) {
       const response = await fetch(path, { method: 'POST', credentials: 'same-origin', headers: {
         'Content-Type': 'application/json', 'X-Expected-Actor-Id': actor, 'X-CSRF-Token': requestToken,
-      }, body: '{}' });
+      }, body: JSON.stringify(body) });
       results.push({ status: response.status, body: await response.json() });
     }
     return results;
   }, { id: config.publicId, actor: config.foreignId });
-  assert.equal(unavailable.length, 2);
-  for (const denial of unavailable) {
+  assert.equal(unavailable.length, 3);
+  for (const denial of unavailable.slice(0, 2)) {
     assert.equal(denial.status, 403); assert.equal(denial.body.code, 'catalog_visibility_denied');
     for (const field of ['items', 'total', 'skuId', 'publicId', 'definition', 'currentPrice', 'familyId']) assert.equal(Object.hasOwn(denial.body, field), false);
     assert.doesNotMatch(JSON.stringify(denial.body), /PRIMARY-12|Pensil utama|12000\.25/);
   }
+  assert.equal(unavailable[2].status, 403);
+  for (const field of ['legalBilling', 'delivery', 'address', 'name', 'binding']) assert.equal(Object.hasOwn(unavailable[2].body, field), false);
+  assert.doesNotMatch(JSON.stringify(unavailable[2].body), /Jalan|Tebet|Penagihan|12810|12820|Synthetic buying organization/);
   assert.doesNotMatch(await foreign.page.locator('main').innerText(), /PRIMARY-12|Pensil utama/);
   assert.equal(writes.length, 1);
   assert.deepEqual(requests.filter(request => /^\/api\/(catalog|session|commands)(?:\/|$)/.test(request.path)), [], 'Primary shop uses no legacy catalog/session/command routes');
   await foreign.context.close(); await buyer.context.close();
   console.log('REAL_PRIMARY_SHOP_BROWSER_PASS ' + JSON.stringify({ savedDraftCommands: writes.length, exactReceiptLookups: recoveries.length,
-    droppedCommittedResponses: dropped(), packagePublicId: config.publicId, screenshotDirectory: directory }));
+    approvedPostalRead: true, recipientFieldsUnchanged: true, droppedCommittedResponses: dropped(), packagePublicId: config.publicId, screenshotDirectory: directory }));
 }

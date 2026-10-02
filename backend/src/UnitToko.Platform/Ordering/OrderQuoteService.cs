@@ -10,8 +10,15 @@ using UnitToko.Platform.Authorization;
 using UnitToko.Platform.Catalog;
 using UnitToko.Platform.Identity;
 using UnitToko.Platform.Mongo;
+using UnitToko.Platform.Organizations;
 
 namespace UnitToko.Platform.Ordering;
+
+public sealed record OrderPostalAddress(OrganizationAddressTarget Target, OrganizationAddressPurpose Purpose,
+    LongId AddressId, LongId VersionId, long Version, long SourceScopeVersion, LongId ProfileId, long ProfileVersion,
+    string Code, string Name, string SourceHash, string SnapshotHash, DateTimeOffset EffectiveAt, PostalAddress Address);
+public sealed record OrderAddressPreview(OrderBuyingContext Context, DateTimeOffset ObservedAt,
+    OrderPostalAddress LegalBilling, OrderPostalAddress Delivery, string Binding);
 
 /// <summary>Read-only commercial preview. A submitted order must recompute and persist its accepted snapshot
 /// in the owner transaction; this result grants no stock reservation, credit, tax approval or payable amount.</summary>
@@ -21,10 +28,13 @@ public sealed class OrderQuoteService
     private readonly IClock clock;
     private readonly AuthorizationStore authorization;
     private readonly CatalogDefinitionQueryService catalog;
+    private readonly OrganizationAddressService addresses;
     public OrderQuoteService(IMongoDatabase database, MongoUnitOfWork unit, IClock clock)
     {
         this.database = database; this.clock = clock; authorization = new(database, unit, clock);
         catalog = new(database, authorization, clock);
+        var ids = new IdAllocator(database);
+        addresses = new(database, unit, ids, clock, new OrganizationMasterDataService(database, authorization, ids, clock));
     }
     public Task<ImmutableArray<OrderBuyingOption>> ContextsAsync(ActorContext actor, CancellationToken ct = default) =>
         authorization.ReadAsync(actor, async (snapshot, tx, token) => {
@@ -48,6 +58,49 @@ public sealed class OrderQuoteService
             await FenceAsync(actor, snapshot, tx, contexts, token);
             return result;
         }, ct);
+
+    public Task<OrderAddressPreview> AddressesAsync(ActorContext actor, OrderBuyingContext context, CancellationToken ct = default)
+    {
+        context.Validate();
+        return authorization.ReadAsync(actor, async (snapshot, tx, token) => {
+            Require(actor, snapshot, context);
+            var resource = context.Resource(actor.UserId);
+            var legalBilling = await addresses.ReadCurrentSourceAsync(actor, snapshot, tx,
+                new(ScopeNodeKind.BuyingOrganization, context.OrganizationId.Value), OrganizationAddressPurpose.LegalBilling,
+                resource, Permissions.OrderSubmit, token);
+            var deliveryTarget = context.DivisionId is { } division
+                ? new OrganizationAddressTarget(ScopeNodeKind.Division, division.Value)
+                : new OrganizationAddressTarget(ScopeNodeKind.Branch, context.BranchId.Value);
+            var delivery = await addresses.ReadCurrentSourceAsync(actor, snapshot, tx, deliveryTarget,
+                OrganizationAddressPurpose.Delivery, resource, Permissions.OrderSubmit, token);
+            legalBilling.RequireContext(actor, snapshot, tx); delivery.RequireContext(actor, snapshot, tx);
+            var legalView = Postal(legalBilling); var deliveryView = Postal(delivery);
+            var binding = CatalogRepository.Digest(new BsonDocument {
+                { "purpose", "order-preparation" }, { "actor", new BsonDocument {
+                    { "userId", actor.UserId }, { "issuer", actor.ProviderIssuer }, { "subject", actor.ProviderSubject },
+                    { "grantVersion", actor.GrantVersion }, { "authenticatedAt", actor.AuthenticatedAt.UtcDateTime }, { "assurance", actor.Assurance.ToString() },
+                    { "session", actor.Session is { } session ? new BsonDocument { { "id", session.Id }, { "version", session.Version }, { "securityVersion", session.SecurityVersion } } : BsonNull.Value } } },
+                { "context", new BsonDocument { { "organizationId", context.OrganizationId.Value }, { "branchId", context.BranchId.Value },
+                    { "divisionId", context.DivisionId is { } selectedDivision ? new BsonInt64(selectedDivision.Value) : BsonNull.Value } } },
+                { "legalBilling", PostalReference(legalBilling) }, { "delivery", PostalReference(delivery) } });
+            await legalBilling.FenceAsync(token); await delivery.FenceAsync(token);
+            await FenceAsync(actor, snapshot, tx, [context], token);
+            legalBilling.RequireContext(actor, snapshot, tx); delivery.RequireContext(actor, snapshot, tx);
+            Require(actor, snapshot, context); token.ThrowIfCancellationRequested();
+            return new OrderAddressPreview(context, DateTimeOffset.FromUnixTimeMilliseconds(clock.UtcNow.ToUnixTimeMilliseconds()), legalView, deliveryView, binding);
+        }, ct);
+    }
+    private static OrderPostalAddress Postal(OrganizationPostalSource captured)
+    {
+        var row = captured.Snapshot; var source = row["source"]; var profile = source["profile"];
+        return new(OrganizationAddressBson.Target(row["target"]), OrganizationAddressBson.Purpose(row["purpose"]),
+            new(captured.AddressId), new(captured.VersionId), captured.Version, source["target"]["version"].AsInt64,
+            new(profile["id"].AsInt64), profile["version"].AsInt64, profile["code"].AsString, profile["name"].AsString,
+            source["snapshotHash"].AsString, row["snapshotHash"].AsString, new(row["effectiveAt"].ToUniversalTime(), TimeSpan.Zero), captured.Address);
+    }
+    private static BsonDocument PostalReference(OrganizationPostalSource captured) => new() {
+        { "addressId", captured.AddressId }, { "versionId", captured.VersionId }, { "version", captured.Version },
+        { "sourceHash", captured.Snapshot["source"]["snapshotHash"] }, { "snapshotHash", captured.Snapshot["snapshotHash"] } };
 
     public Task<OrderQuotePreview> PreviewAsync(ActorContext actor, OrderBuyingContext context,
         ImmutableArray<OrderPackageSelection> selections, CancellationToken ct = default)

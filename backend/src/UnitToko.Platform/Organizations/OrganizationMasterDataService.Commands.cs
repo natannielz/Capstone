@@ -24,6 +24,7 @@ public sealed partial class OrganizationMasterDataService
                 var validated = await ValidateChangeAsync(request, snapshot, session, token);
                 var impact = await ImpactAsync(request, snapshot.Directory, session, token);
                 await store.FenceAsync(actor, validated.Parents.Concat(impact.Nodes.Where(node => node.Status == AuthorizationStatus.Active)).Distinct(), session, token);
+                var occurredAt = clock.UtcNow.UtcDateTime;
                 var proposal = new BsonDocument
                 {
                     { "_id", proposalId }, { "schemaVersion", 1 }, { "changeKind", AuthorizationBson.Name(request.ChangeKind) },
@@ -31,10 +32,10 @@ public sealed partial class OrganizationMasterDataService
                     { "code", request.Code }, { "normalizedCode", request.Code }, { "name", request.Name },
                     { "expectedScopeVersion", request.ExpectedScopeVersion }, { "expectedProfileVersion", request.ExpectedProfileVersion },
                     { "requestedBy", actor.UserId }, { "reason", metadata.Reason }, { "status", "pending" }, { "version", 1L },
-                    { "createdAt", clock.UtcNow.UtcDateTime }, { "before", Before(validated.Node, validated.Profile) }, { "impact", ImpactDocument(impact.Summary) }
+                    { "createdAt", occurredAt }, { "before", Before(validated.Node, validated.Profile) }, { "impact", ImpactDocument(impact.Summary) }
                 };
                 await Collection("organizationProposals").InsertOneAsync(session, proposal, cancellationToken: token);
-                await AuditAsync(historyId, actor, request.ScopeId ?? proposalId, "organization.proposed", metadata, new(), proposal, session, token);
+                await AuditAsync(historyId, actor, request.ScopeId ?? proposalId, "organization.proposed", metadata, new(), proposal, occurredAt, session, token);
                 return Result(proposalId, request.ScopeId, "pending", 1);
             }, cancellationToken);
         return new(result["id"].AsInt64, result["status"].AsString, result["version"].AsInt64);
@@ -66,6 +67,7 @@ public sealed partial class OrganizationMasterDataService
                 var scopeId = request.ScopeId ?? allocatedScopeId;
                 var before = new BsonDocument { { "scope", validated.Node is null ? BsonNull.Value : await FindAsync("authorizationScopes", scopeId, session, token) },
                     { "profile", validated.Profile ?? (BsonValue)BsonNull.Value }, { "proposal", proposal.DeepClone() } };
+                var occurredAt = clock.UtcNow.UtcDateTime;
                 if (request.ChangeKind == OrganizationChangeKind.Create)
                     await Collection("authorizationScopes").InsertOneAsync(session, AuthorizationBson.Node(new ScopeNode(scopeId, request.Kind, request.ParentId, AuthorizationStatus.Active, 1)), cancellationToken: token);
                 else
@@ -76,16 +78,16 @@ public sealed partial class OrganizationMasterDataService
                         F.Eq("_id", scopeId) & F.Eq("kind", AuthorizationBson.Name(request.Kind)) & F.Eq("status", AuthorizationBson.Name(validated.Node!.Status)),
                         request.ExpectedScopeVersion, update, token);
                 }
-                await WriteProfileAsync(scopeId, proposalId, request, validated.Profile, actor.UserId, session, token);
+                await WriteProfileAsync(scopeId, proposalId, request, validated.Profile, actor.UserId, occurredAt, session, token);
                 if (request.ChangeKind == OrganizationChangeKind.Reactivate)
                     await InvalidateAffectedAccountsAsync(impact, session, token);
                 await MongoUnitOfWork.RequireVersionAsync(Collection("organizationProposals"), session,
                     F.Eq("_id", proposalId) & F.Eq("status", "pending"), expectedVersion,
                     Builders<BsonDocument>.Update.Set("status", "approved").Set("approvedBy", actor.UserId)
-                        .Set("approvedAt", clock.UtcNow.UtcDateTime).Set("resultScopeId", scopeId), token);
+                        .Set("approvedAt", occurredAt).Set("resultScopeId", scopeId), token);
                 var after = new BsonDocument { { "scope", await FindAsync("authorizationScopes", scopeId, session, token) },
                     { "profile", await FindAsync("organizationProfiles", scopeId, session, token) }, { "proposal", await FindAsync("organizationProposals", proposalId, session, token) } };
-                await AuditAsync(historyId, actor, scopeId, "organization.approved", metadata, before, after, session, token);
+                await AuditAsync(historyId, actor, scopeId, "organization.approved", metadata, before, after, occurredAt, session, token);
                 return Result(proposalId, scopeId, "approved", expectedVersion + 1, request.ExpectedScopeVersion + 1,
                     request.ExpectedProfileVersion + 1, impact.Summary.AffectedAccounts);
             }, cancellationToken);
@@ -112,29 +114,30 @@ public sealed partial class OrganizationMasterDataService
             {
                 var proposal = await FindAsync("organizationProposals", proposalId, session, token); EnsurePending(proposal, expectedVersion);
                 var status = withdraw ? "withdrawn" : "rejected";
+                var occurredAt = clock.UtcNow.UtcDateTime;
                 await MongoUnitOfWork.RequireVersionAsync(Collection("organizationProposals"), session,
                     F.Eq("_id", proposalId) & F.Eq("status", "pending"), expectedVersion,
                     Builders<BsonDocument>.Update.Set("status", status).Set("decisionBy", actor.UserId)
-                        .Set("decisionAt", clock.UtcNow.UtcDateTime).Set("decisionReason", metadata.Reason), token);
+                        .Set("decisionAt", occurredAt).Set("decisionReason", metadata.Reason), token);
                 var after = await FindAsync("organizationProposals", proposalId, session, token);
                 await AuditAsync(historyId, actor, NullableLong(proposal, "scopeId") ?? proposalId,
-                    "organization." + status, metadata, proposal, after, session, token);
+                    "organization." + status, metadata, proposal, after, occurredAt, session, token);
                 return Result(proposalId, NullableLong(proposal, "scopeId"), status, expectedVersion + 1);
             }, cancellationToken);
         return ParseResult(result);
     }
     private Task WriteProfileAsync(long scopeId, long proposalId, OrganizationChangeRequest request, BsonDocument? existing,
-        long actorId, IClientSessionHandle session, CancellationToken token)
+        long actorId, DateTime occurredAt, IClientSessionHandle session, CancellationToken token)
     {
         if (existing is null) return Collection("organizationProfiles").InsertOneAsync(session, new BsonDocument
         {
             { "_id", scopeId }, { "schemaVersion", 1 }, { "kind", AuthorizationBson.Name(request.Kind) }, { "parentId", Number(request.ParentId) },
             { "code", request.Code }, { "normalizedCode", request.Code }, { "name", request.Name }, { "version", 1L },
-            { "createdBy", actorId }, { "updatedBy", actorId }, { "createdAt", clock.UtcNow.UtcDateTime },
-            { "updatedAt", clock.UtcNow.UtcDateTime }, { "approvedProposalId", proposalId }
+            { "createdBy", actorId }, { "updatedBy", actorId }, { "createdAt", occurredAt },
+            { "updatedAt", occurredAt }, { "approvedProposalId", proposalId }
         }, cancellationToken: token);
         return MongoUnitOfWork.RequireVersionAsync(Collection("organizationProfiles"), session, F.Eq("_id", scopeId), request.ExpectedProfileVersion,
             Builders<BsonDocument>.Update.Set("code", request.Code).Set("normalizedCode", request.Code).Set("name", request.Name)
-                .Set("updatedBy", actorId).Set("updatedAt", clock.UtcNow.UtcDateTime).Set("approvedProposalId", proposalId), token);
+                .Set("updatedBy", actorId).Set("updatedAt", occurredAt).Set("approvedProposalId", proposalId), token);
     }
 }

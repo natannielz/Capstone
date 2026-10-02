@@ -11484,6 +11484,125 @@
         ]
       }
     },
+    "/api/v1/ordering/addresses/query": {
+      "post": {
+        "tags": [
+          "UnitToko.Api"
+        ],
+        "description": "Current approved legal billing and exact branch or division delivery addresses for order preparation. No order admission, recipient, contact, tax or financial authority is granted.",
+        "operationId": "OrderAddresses",
+        "parameters": [
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "required": true,
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrderAddressesRequestDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderAddressesDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload Too Large",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
     "/api/v1/ordering/quote/query": {
       "post": {
         "tags": [
@@ -44155,6 +44274,51 @@
         },
         "additionalProperties": false
       },
+      "OrderAddressesDto": {
+        "required": [
+          "context",
+          "observedAt",
+          "legalBilling",
+          "delivery",
+          "binding"
+        ],
+        "type": "object",
+        "properties": {
+          "context": {
+            "$ref": "#/components/schemas/OrderContextDto"
+          },
+          "observedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "legalBilling": {
+            "$ref": "#/components/schemas/OrderPostalAddressDto"
+          },
+          "delivery": {
+            "$ref": "#/components/schemas/OrderPostalAddressDto"
+          },
+          "binding": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "OrderAddressesRequestDto": {
+        "required": [
+          "purpose",
+          "context"
+        ],
+        "type": "object",
+        "properties": {
+          "purpose": {
+            "type": "string"
+          },
+          "context": {
+            "$ref": "#/components/schemas/OrderContextDto"
+          }
+        },
+        "additionalProperties": false
+      },
       "OrderApprovalProgressDto": {
         "required": [
           "revision",
@@ -44730,6 +44894,71 @@
           "packages": {
             "type": "integer",
             "format": "int32"
+          }
+        },
+        "additionalProperties": false
+      },
+      "OrderPostalAddressDto": {
+        "required": [
+          "target",
+          "purpose",
+          "addressId",
+          "versionId",
+          "version",
+          "sourceScopeVersion",
+          "profileId",
+          "profileVersion",
+          "code",
+          "name",
+          "sourceHash",
+          "snapshotHash",
+          "effectiveAt",
+          "address"
+        ],
+        "type": "object",
+        "properties": {
+          "target": {
+            "$ref": "#/components/schemas/OrganizationAddressTargetDto"
+          },
+          "purpose": {
+            "type": "string"
+          },
+          "addressId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "versionId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "version": {
+            "type": "string"
+          },
+          "sourceScopeVersion": {
+            "type": "string"
+          },
+          "profileId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "profileVersion": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "sourceHash": {
+            "type": "string"
+          },
+          "snapshotHash": {
+            "type": "string"
+          },
+          "effectiveAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "address": {
+            "$ref": "#/components/schemas/PostalAddressDto"
           }
         },
         "additionalProperties": false
