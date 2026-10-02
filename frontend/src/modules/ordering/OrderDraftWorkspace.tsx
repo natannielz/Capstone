@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { createIdentityGateway } from '../identity/identity-client';
 import { IdentityFailure, sessionTiming, type IdentitySession } from '../identity/identity-workflow';
 import { createAccessGateway } from '../administration/access-client';
@@ -59,6 +59,7 @@ export function OrderDraftWorkspace() {
 }
 
 function DraftDesk({ account, onFailure }: { account: Account; onFailure: (error: unknown) => void }) {
+  const branchLabelId = useId();
   const { actorId, options } = account, [gateway] = useState(() => createOrderDraftGateway()), [quotes] = useState(() => createOrderQuoteGateway()), [gate] = useState(() => new CatalogReadGate());
   const [branch, setBranch] = useState(''), [rows, setRows] = useState<OrderDraft[]>([]), [hasMore, setHasMore] = useState(false), [after, setAfter] = useState<string | null>(null);
   const [loaded, setLoaded] = useState<{ draft: OrderDraft; quote: OrderQuote | null; issue: unknown; sequence: number } | null>(null);
@@ -99,7 +100,7 @@ function DraftDesk({ account, onFailure }: { account: Account; onFailure: (error
   const locked = loading || save.locked;
   return <>
     <section className={common.accountSection}><h2>Kebutuhan cabang</h2><p className={common.help}>Penyimpanan draf tidak mengunci harga, memesan stok, atau memulai penagihan.</p>
-      <label>Cabang pemesan<select value={branch} disabled={locked} onChange={event => { setBranch(event.target.value); setNotice(''); void reload(null, undefined, event.target.value); }}>
+      <label><span id={branchLabelId}>Cabang pemesan</span><select aria-labelledby={branchLabelId} value={branch} disabled={locked} onChange={event => { setBranch(event.target.value); setNotice(''); void reload(null, undefined, event.target.value); }}>
         <option value="">Pilih cabang</option>{options.map(option => <option key={orderContextKey(option.context)} value={orderContextKey(option.context)}>{branchLabel(option)}</option>)}</select></label>
       {options.length === 0 && <p>Belum ada cabang pemesan yang tersedia untuk akun Anda.</p>}</section>
     {save.recoveryView}

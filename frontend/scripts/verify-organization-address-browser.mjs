@@ -11,8 +11,11 @@ export async function verifyOrganizationAddressBrowser({ config, maker, user, or
     const observation = { responses: [], pending: [] }; bootstrap.set(currentPage, observation);
     currentPage.on('response', response => {
       const requestPath = new URL(response.url()).pathname; if (!bootstrapPaths.has(requestPath)) return;
-      const record = { path: requestPath, status: response.status(), code: null }; observation.responses.push(record);
+      const record = { path: requestPath, status: response.status(), code: null, ...(requestPath === '/api/v1/identity/session' ? { authenticated: null } : {}) }; observation.responses.push(record);
       // Never retain or print a successful session/access body, headers or credentials.
+      if (record.status === 200 && requestPath === '/api/v1/identity/session') observation.pending.push(response.json().then(session => {
+        if (typeof session?.authenticated === 'boolean') record.authenticated = session.authenticated;
+      }).catch(() => {}));
       if (record.status >= 400) observation.pending.push(response.json().then(problem => {
         if (typeof problem?.code === 'string' && /^[a-zA-Z0-9_.-]{1,80}$/.test(problem.code)) record.code = problem.code;
       }).catch(() => {}).finally(() => console.error('FIXTURE POSTAL BOOTSTRAP FAILURE ' + JSON.stringify(record))));

@@ -12,7 +12,6 @@ import shared from '../administration/access.module.css';
 import styles from './buyer-catalog.module.css';
 import { OrderQuotePanel } from '../ordering/OrderQuotePanel';
 
-const path = '/catalog/browse';
 const price = (value: BuyerVariant['currentPrice']) => {
   if (value === null) return 'Harga belum tersedia';
   const [whole, fraction] = value.unitPrice.split('.'); return value.currency + ' ' + BigInt(whole).toLocaleString('id-ID') + ',' + fraction;
@@ -27,7 +26,20 @@ function message(error: unknown) {
   return 'Katalog belum dapat dimuat. Periksa koneksi, lalu coba lagi.';
 }
 type Account = { actorId: string; name: string; session: IdentitySession; observedAt: number };
-export function BuyerCatalog() {
+function PackageReview({ item, account, isCurrent }: { item: BuyerVariant; account: Account; isCurrent: () => boolean }) {
+  return <div className={styles.packageLayout}><div className={styles.packageFacts}>
+    <span className={styles.category}>{item.categoryCode}</span><h2 id="buyer-package-title" className={styles.packageTitle}>{item.familyName} — {item.definition.packageLabel}</h2>
+    <p className={styles.code}>{item.code}</p>{item.description && <p className={styles.description}>{item.description}</p>}
+    <p className={styles.contents}>{item.definition.baseUnitsPerPackage.toLocaleString('id-ID')} <span>{item.definition.baseUnitCode} per kemasan</span></p>
+    <p className={styles.price}>{price(item.currentPrice)}<span> per {item.definition.packageLabel}</span></p>
+    <dl className={shared.facts}><div><dt>Jenis kemasan</dt><dd>{{ sealed: 'Kemasan tersegel', loose: 'Satuan lepas', other: 'Kemasan lain' }[item.definition.packageKind]}</dd></div>
+      <div><dt>Minimum pembelian</dt><dd>{item.definition.minimumOrderPackages} kemasan</dd></div><div><dt>Kelipatan pemesanan</dt><dd>{item.definition.orderIncrementPackages} kemasan</dd></div>
+      {item.definition.attributes.map(attribute => <div key={attribute.key}><dt>{attribute.key}</dt><dd>{attribute.value}</dd></div>)}</dl>
+    <p className={shared.help}>Harga dan ketersediaan akan diperiksa kembali saat pesanan disiapkan.</p>
+  </div>{item.currentPrice && <div className={styles.quoteArea}><OrderQuotePanel key={account.actorId + ':' + item.skuId + ':' + item.definition.id + ':' + item.currentPrice.id}
+    actorId={account.actorId} item={item} isCurrent={isCurrent} /></div>}</div>;
+}
+export function BuyerCatalog({ publicId, returnPath = '/catalog/browse' }: { publicId?: string; returnPath?: '/shop' | '/catalog/browse' } = {}) {
   const [identity] = useState(() => createIdentityGateway()), [access] = useState(() => createAccessGateway());
   const [gateway] = useState(() => createBuyerCatalogGateway()), [listGate] = useState(() => new CatalogReadGate()), [detailGate] = useState(() => new CatalogReadGate());
   const [account, setAccount] = useState<Account | null>(null), [items, setItems] = useState<BuyerVariant[]>([]), [total, setTotal] = useState('0');
@@ -44,7 +56,7 @@ export function BuyerCatalog() {
     return () => { alive.current = false; window.clearInterval(timer); window.removeEventListener('pageshow', restored); };
   }, [account, refresh]);
   useEffect(() => {
-    const request = listGate.begin('session', query + ':' + offset); let active = true;
+    const request = listGate.begin('session', publicId ?? query + ':' + offset); let active = true;
     void Promise.resolve().then(async () => {
       if (!active) return; setBusy(true); setItems([]); setAccount(null); setSelected(null); setError(null); setNotice(''); setTotal('0');
       try {
@@ -52,19 +64,21 @@ export function BuyerCatalog() {
         if (!session.authenticated || !session.account) throw new IdentityFailure(401, 'unauthenticated');
         const scope = await access.current(); if (!request.current()) return;
         if (scope.userId !== session.account.userId) throw new AccessFailure(409, 'actor_changed');
-        const page = await gateway.query(scope.userId, query, offset, request.signal); if (!request.current()) return;
+        const page = publicId === undefined ? await gateway.query(scope.userId, query, offset, request.signal) : null;
+        const variant = publicId === undefined ? null : await gateway.variant(scope.userId, publicId, request.signal); if (!request.current()) return;
         if (sessionTiming(session, performance.now() - observedAt).expired) throw new IdentityFailure(401, 'session_expired');
         setAccount({ actorId: scope.userId, name: session.account.displayName ?? 'Akun Anda', session, observedAt });
-        setElapsed(performance.now() - observedAt); setItems(page.items); setTotal(page.total);
+        setElapsed(performance.now() - observedAt); setItems(page?.items ?? []); setTotal(page?.total ?? '0'); setSelected(variant);
+        if (publicId !== undefined && variant === null) setNotice('Kemasan ini belum tersedia untuk akun Anda. Kembali ke katalog untuk memeriksa pilihan yang tersedia.');
       } catch (failure) { if (request.current()) setError(failure); }
       finally { if (request.current()) setBusy(false); }
     });
     return () => { active = false; listGate.cancel(); detailGate.cancel(); };
-  }, [identity, access, gateway, listGate, detailGate, query, offset, revision]);
+  }, [identity, access, gateway, listGate, detailGate, query, offset, revision, publicId]);
   const expired = account !== null && sessionTiming(account.session, elapsed).expired;
   useEffect(() => {
-    if (selected && !expired) dialog.current?.showModal(); else dialog.current?.close();
-  }, [selected, expired]);
+    if (publicId === undefined && selected && !expired) dialog.current?.showModal(); else dialog.current?.close();
+  }, [selected, expired, publicId]);
   async function details(item: BuyerVariant, button: HTMLButtonElement) {
     if (!account || expired || busy || detailBusy) return;
     const request = detailGate.begin(account.actorId, item.publicId); opener.current = button; setSelected(null); setDetailBusy(item.skuId); setError(null); setNotice('');
@@ -78,37 +92,32 @@ export function BuyerCatalog() {
     } finally { if (request.current() && alive.current) setDetailBusy(null); }
   }
   function close() { dialog.current?.close(); setSelected(null); opener.current?.focus(); }
-  return <main className={shared.page}><header className={shared.header}><div><Link className={shared.brand} href="/identity/account">Unit Toko</Link><h1>Katalog kemasan</h1>
-    <p>Periksa isi, satuan, dan harga setiap kemasan sebelum menyusun pesanan.</p></div><nav className={shared.actions}><Link className={shared.secondary} href="/ordering/drafts">Draf pesanan</Link><Link className={shared.secondary} href="/identity/account">Akun saya</Link></nav></header>
-    <section className={styles.toolbar} aria-label="Pencarian katalog"><form className={styles.search} onSubmit={event => { event.preventDefault(); detailGate.cancel(); setSelected(null); setOffset(0); setQuery(search.trim()); refresh(); }}>
+  return <main className={`${shared.page} ${styles.page}`}><header className={shared.header}><div><Link className={shared.brand} href="/identity/account">Unit Toko</Link><h1>{publicId === undefined ? 'Katalog kemasan' : 'Rincian kemasan'}</h1>
+    <p>Periksa isi, satuan, dan harga setiap kemasan sebelum menyusun pesanan.</p></div><nav className={shared.actions} aria-label="Navigasi belanja">{publicId !== undefined && <Link className={shared.secondary} href={returnPath}>Katalog kemasan</Link>}<Link className={shared.secondary} href="/ordering/drafts">Draf pesanan</Link><Link className={shared.secondary} href="/identity/account">Akun saya</Link></nav></header>
+    {publicId === undefined ? <section className={styles.toolbar} aria-label="Pencarian katalog"><form className={styles.search} onSubmit={event => { event.preventDefault(); detailGate.cancel(); setSelected(null); setOffset(0); setQuery(search.trim()); refresh(); }}>
       <label>Cari kode atau kemasan<input value={search} maxLength={128} disabled={busy || detailBusy !== null} onChange={event => setSearch(event.target.value)} /></label><button className={shared.primary} disabled={busy || detailBusy !== null}>Cari</button></form>
-      <button className={shared.secondary} disabled={busy || detailBusy !== null} onClick={refresh}>Muat kembali katalog</button></section>
+      <button className={shared.secondary} disabled={busy || detailBusy !== null} onClick={refresh}>Muat kembali katalog</button></section> : <div className={styles.detailToolbar}><Link href={returnPath}>Kembali ke katalog</Link><button className={shared.secondary} disabled={busy} onClick={refresh}>Muat kembali kemasan</button></div>}
     {error !== null && <p role="alert" className={shared.alert}>{message(error)}</p>}
     {expired && <p role="alert" className={shared.alert}>Sesi telah berakhir. Masuk kembali untuk membuka katalog.</p>}
-    {(expired || !account && !busy) && <Link href={'/identity/login?returnPath=' + encodeURIComponent(path)}>Masuk atau periksa akun</Link>}
+    {(expired || !account && !busy) && <Link href={'/identity/login?returnPath=' + encodeURIComponent(returnPath)}>Masuk atau periksa akun</Link>}
     {notice && <p role="status">{notice}</p>}
-    <section aria-busy={busy} aria-label="Kemasan yang tersedia">{busy ? <p role="status">Memuat katalog untuk akun Anda…</p> : account && !expired && <>
+    {publicId !== undefined ? <section className={styles.packagePage} aria-busy={busy} aria-label="Rincian kemasan">{busy ? <p role="status">Memuat kemasan untuk akun Anda…</p> : account && !expired && selected && <PackageReview item={selected} account={account} isCurrent={current} />}</section>
+      : <section aria-busy={busy} aria-label="Kemasan yang tersedia">{busy ? <p role="status">Memuat katalog untuk akun Anda…</p> : account && !expired && <>
       <p className={shared.help}>{account.name} · {BigInt(total).toLocaleString('id-ID')} kemasan dalam katalog</p>
       {items.length === 0 ? <p>Belum ada kemasan yang sesuai. Ubah pencarian atau periksa kembali nanti.</p> : <ul className={styles.grid}>{items.map(item => <li className={styles.card} key={item.skuId}>
         <span className={styles.category}>{item.categoryCode}</span><h2>{item.familyName}</h2><p className={styles.code}>{item.code}</p><h3>{item.definition.packageLabel}</h3>
         <p className={styles.contents}>{item.definition.baseUnitsPerPackage.toLocaleString('id-ID')} <span>{item.definition.baseUnitCode} per kemasan</span></p>
         <p className={styles.price}>{price(item.currentPrice)}<span> per {item.definition.packageLabel}</span></p>
         <p className={shared.help}>Minimum {item.definition.minimumOrderPackages}; kelipatan {item.definition.orderIncrementPackages} kemasan</p>
-        <button className={shared.primary} aria-label={'Rincian ' + item.code + ' ' + item.definition.packageLabel} disabled={detailBusy !== null} onClick={event => void details(item, event.currentTarget)}>{detailBusy === item.skuId ? 'Memuat…' : 'Periksa kemasan'}</button>
+        <div className={styles.cardActions}><button className={shared.primary} aria-label={'Rincian ' + item.code + ' ' + item.definition.packageLabel} disabled={detailBusy !== null} onClick={event => void details(item, event.currentTarget)}>{detailBusy === item.skuId ? 'Memuat…' : 'Periksa kemasan'}</button>
+          <Link className={styles.packageLink} href={'/shop/' + item.publicId} aria-label={'Halaman ' + item.code + ' ' + item.definition.packageLabel}>Buka halaman kemasan</Link></div>
       </li>)}</ul>}
       <nav className={styles.pagination} aria-label="Halaman katalog"><button className={shared.secondary} disabled={offset === 0 || detailBusy !== null} onClick={() => setOffset(value => Math.max(0, value - 25))}>Sebelumnya</button>
         <span>Halaman {offset / 25 + 1}</span><button className={shared.secondary} disabled={offset >= 10000 || BigInt(offset + items.length) >= BigInt(total) || items.length === 0 || detailBusy !== null} onClick={() => setOffset(value => value + 25)}>Berikutnya</button></nav>
-    </>}</section>
-    <dialog ref={dialog} className={styles.dialog} aria-labelledby="buyer-package-title" onCancel={event => { event.preventDefault(); close(); }}>
+    </>}</section>}
+    {publicId === undefined && <dialog ref={dialog} className={styles.dialog} aria-labelledby="buyer-package-title" onCancel={event => { event.preventDefault(); close(); }}>
       {selected && !expired && <><div className={styles.dialogHeader}><p className={styles.code}>{selected.code}</p><button className={shared.secondary} onClick={close}>Tutup rincian</button></div>
-        <h2 id="buyer-package-title">{selected.familyName} — {selected.definition.packageLabel}</h2><p className={styles.description}>{selected.description}</p>
-        <p className={styles.contents}>{selected.definition.baseUnitsPerPackage.toLocaleString('id-ID')} <span>{selected.definition.baseUnitCode} per kemasan</span></p>
-        <p className={styles.price}>{price(selected.currentPrice)}<span> per {selected.definition.packageLabel}</span></p>
-        <dl className={shared.facts}><div><dt>Jenis kemasan</dt><dd>{{ sealed: 'Kemasan tersegel', loose: 'Satuan lepas', other: 'Kemasan lain' }[selected.definition.packageKind]}</dd></div>
-          <div><dt>Minimum pembelian</dt><dd>{selected.definition.minimumOrderPackages} kemasan</dd></div><div><dt>Kelipatan pemesanan</dt><dd>{selected.definition.orderIncrementPackages} kemasan</dd></div>
-          {selected.definition.attributes.map(attribute => <div key={attribute.key}><dt>{attribute.key}</dt><dd>{attribute.value}</dd></div>)}</dl>
-        <p className={shared.help}>Harga dan ketersediaan akan diperiksa kembali saat pesanan disiapkan.</p>
-        {account && selected.currentPrice && <OrderQuotePanel key={account.actorId + ':' + selected.skuId + ':' + selected.definition.id + ':' + selected.currentPrice.id} actorId={account.actorId} item={selected} isCurrent={current} />}</>}
-    </dialog>
+        {account && <PackageReview item={selected} account={account} isCurrent={current} />}</>}
+    </dialog>}
   </main>;
 }

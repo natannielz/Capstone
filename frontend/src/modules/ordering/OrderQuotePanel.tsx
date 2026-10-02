@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import Link from 'next/link';
 import { AccessFailure } from '../administration/workflow';
 import type { BuyerVariant } from '../catalog/catalog-buyer-client';
@@ -21,6 +21,7 @@ function message(error: unknown) {
   return 'Subtotal belum dapat dihitung. Periksa koneksi lalu coba lagi.';
 }
 export function OrderQuotePanel({ actorId, item, isCurrent }: { actorId: string; item: BuyerVariant; isCurrent: () => boolean }) {
+  const branchLabel = useId();
   const [gateway] = useState(() => createOrderQuoteGateway());
   const [options, setOptions] = useState<OrderContextOption[]>([]), [branch, setBranch] = useState(''), [quantity, setQuantity] = useState('');
   const [loading, setLoading] = useState(true), [busy, setBusy] = useState(false), [error, setError] = useState<unknown>(null), [quote, setQuote] = useState<OrderQuote | null>(null);
@@ -51,7 +52,7 @@ export function OrderQuotePanel({ actorId, item, isCurrent }: { actorId: string;
   return <section className={styles.panel} aria-label="Perhitungan untuk cabang" aria-busy={loading || busy}>
     <h3>Siapkan jumlah untuk cabang</h3><p className={shared.help}>Pilih cabang dan jumlah kemasan untuk memeriksa subtotal terbaru.</p>
     {loading ? <p role="status">Memeriksa cabang yang tersedia…</p> : options.length > 0 ? <form onSubmit={event => { event.preventDefault(); void calculate(); }}>
-      <label>Cabang pemesan<select value={branch} required disabled={busy || saving.locked} onChange={event => { setBranch(event.target.value); setQuote(null); setSaved(null); setError(null); }}>
+      <label><span id={branchLabel}>Cabang pemesan</span><select aria-labelledby={branchLabel} value={branch} required disabled={busy || saving.locked} onChange={event => { setBranch(event.target.value); setQuote(null); setSaved(null); setError(null); }}>
         <option value="">Pilih cabang</option>{options.map(option => <option value={orderContextKey(option.context)} key={orderContextKey(option.context)}>
           {option.organizationName ?? 'Organisasi ' + option.context.organizationId} · {option.branchName ?? 'Cabang ' + option.context.branchId}{option.context.divisionId ? ' · ' + (option.divisionName ?? 'Divisi ' + option.context.divisionId) : ''}
         </option>)}</select></label>

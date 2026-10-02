@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createUnitTokoClient } from '../src/api/client';
 import { createBuyerCatalogGateway, parseBuyerVariant } from '../src/modules/catalog/catalog-buyer-client';
 import { actorId, family, sku, definition } from './catalog-fixtures';
-import { identityDestinations, identityReturnPath } from '../src/modules/identity/identity-workflow';
+import { identityDestinations, identityReturnPath, loginFields } from '../src/modules/identity/identity-workflow';
 const item = { familyId: family.id, familyPublicId: family.publicId, familyName: family.name, description: family.description,
   categoryCode: family.categoryCode, skuId: sku.id, publicId: sku.publicId, code: sku.code, definition,
   currentPrice: { id: '9007199254740999', skuId: sku.id, version: '2', currency: 'IDR', unitPrice: '0.00', effectiveAt: definition.effectiveAt } };
@@ -18,7 +18,14 @@ function gateway(handler: (request: Request) => Promise<Response>) {
 }
 test('entitled buyer client preserves missing versus zero and exact package/price identity without staff fields', () => {
   assert.equal(identityReturnPath('/catalog/browse'), '/catalog/browse');
-  assert.ok(identityDestinations(['catalog.read']).some(item => item.href === '/catalog/browse'));
+  assert.equal(identityReturnPath('/shop'), '/shop');
+  assert.deepEqual(loginFields('/shop', '', ''), { returnPath: '/shop' });
+  assert.ok(identityDestinations(['catalog.read']).some(item => item.href === '/shop'));
+  assert.ok(!identityDestinations(['order.submit']).some(item => item.href === '/shop'));
+  for (const path of ['/shop/', '/shop?next=https://outside.co.id', '//shop', '/shop/' + sku.publicId]) {
+    assert.equal(identityReturnPath(path), '/identity/account');
+    assert.throws(() => loginFields(path, '', ''));
+  }
   assert.equal(parseBuyerVariant({ ...item, currentPrice: null }).currentPrice, null);
   const parsed = parseBuyerVariant({ ...item, reason: 'private', proposedBy: '7' });
   assert.equal(parsed.currentPrice!.unitPrice, '0.00'); assert.equal(parsed.currentPrice!.id, '9007199254740999');

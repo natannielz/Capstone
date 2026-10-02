@@ -1,4 +1,5 @@
-.toolbar, .search, .pagination, .dialogHeader { display: flex; gap: 16px; align-items: end; flex-wrap: wrap; }
+.page { background: #f2f6f7; }
+.toolbar, .search, .pagination, .dialogHeader, .detailToolbar { display: flex; gap: 16px; align-items: end; flex-wrap: wrap; }
 .toolbar { justify-content: space-between; padding: 22px; border: 1px solid #d7e3e7; background: white; margin-bottom: 28px; }
 .search { flex: 1; }
 .search label { display: grid; gap: 7px; flex: 1; min-width: 160px; max-width: 430px; }
@@ -7,8 +8,10 @@
 .card { background: white; border: 1px solid #d7e3e7; border-top: 4px solid #087f8c; padding: 24px; display: flex; flex-direction: column; align-items: start; overflow-wrap: anywhere; }
 .card h2 { margin: 14px 0 4px; }
 .card h3 { margin: 22px 0 4px; }
-.card button { margin-top: auto; width: 100%; }
-.category { font-size: 12px; letter-spacing: .08em; font-weight: 700; color: #087f8c; }
+.cardActions { margin-top: auto; padding-top: 16px; width: 100%; display: grid; gap: 8px; }
+.card button { width: 100%; }
+.packageLink { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; color: #126a74; font-size: 14px; text-underline-offset: 4px; }
+.category { font-size: 14px; font-weight: 650; color: #087f8c; }
 .code { color: #4d6570; font-size: 14px; margin: 0; overflow-wrap: anywhere; }
 .contents { font-weight: 700; font-size: 28px; margin: 4px 0 16px; }
 .contents span { font-weight: 400; font-size: 15px; }
@@ -19,4 +22,16 @@
 .dialog::backdrop { background: rgb(17 40 47 / 55%); }
 .dialogHeader { justify-content: space-between; align-items: center; }
 .description { white-space: pre-wrap; overflow-wrap: anywhere; }
-@media (max-width: 520px) { .toolbar { padding: 16px; } .search { width: 100%; } .toolbar > button { width: 100%; } .card { padding: 20px; } }
+.detailToolbar { justify-content: space-between; align-items: center; margin-bottom: 22px; }
+.detailToolbar > a { color: #126a74; min-height: 44px; display: inline-flex; align-items: center; text-underline-offset: 4px; }
+.packageLayout { display: grid; gap: 24px; }
+.packageFacts, .quoteArea { min-width: 0; overflow-wrap: anywhere; }
+.packageFacts .packageTitle { font-size: clamp(24px, 3vw, 36px); margin: 12px 0; line-height: 1.2; }
+.packageFacts .contents { margin-top: 28px; }
+.packageFacts .price { margin-bottom: 28px; }
+.packagePage { background: white; border: 1px solid #d7e3e7; padding: clamp(20px, 4vw, 40px); }
+.packagePage .packageLayout { grid-template-columns: minmax(0, 1.2fr) minmax(300px, .8fr); gap: clamp(24px, 4vw, 48px); align-items: start; }
+.packagePage .quoteArea { border-left: 1px solid #d7e3e7; padding-left: clamp(24px, 3vw, 36px); }
+.packagePage .quoteArea > section { border-top: 0; margin-top: 0; padding-top: 0; }
+@media (max-width: 860px) { .packagePage .packageLayout { grid-template-columns: minmax(0, 1fr); } .packagePage .quoteArea { border-left: 0; border-top: 1px solid #d7e3e7; padding: 24px 0 0; } }
+@media (max-width: 520px) { .toolbar { padding: 16px; } .search { width: 100%; } .toolbar > button { width: 100%; } .card { padding: 20px; } .detailToolbar > button { width: 100%; } }

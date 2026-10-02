@@ -7,6 +7,7 @@ import { createRequire } from 'node:module';
 import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import next from 'next';
+import { verifyPrimaryShopBrowser } from './verify-primary-shop-browser.mjs';
 
 const chunks = []; for await (const chunk of process.stdin) chunks.push(chunk);
 const config = JSON.parse(Buffer.concat(chunks).toString('utf8'));
@@ -19,18 +20,31 @@ assert.equal(metadata.name, 'playwright'); assert.equal(metadata.version, '1.62.
 const { chromium } = load('playwright'), channel = process.env.UNITTOKO_BROWSER_CHANNEL ?? 'chromium';
 assert.ok(['chromium', 'msedge'].includes(channel));
 const app = next({ dev: false, dir: process.cwd(), quiet: true }), sockets = new Set(), writes = [], errors = [], checks = [];
-const directory = resolve('../tmp/production/catalog-price-browser-results'); mkdirSync(directory, { recursive: true });
+const directory = resolve(config.primaryShop ? '../tmp/production/primary-shop-browser-results' : '../tmp/production/catalog-price-browser-results'); mkdirSync(directory, { recursive: true });
+const requests = [];
 let browser, frontend, edge, tunnel, dropNext = false, dropped = 0, firstApiAt;
 const pages = [];
 function track(server) { server.on('connection', socket => { sockets.add(socket); socket.on('close', () => sockets.delete(socket)); }); return server; }
 async function listen(server) { await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); }); return server.address().port; }
 function forward(req, res, port, isApi) {
+  const observed = { path: new URL(req.url, origin).pathname, method: req.method };
+  if (config.primaryShop) {
+    requests.push(observed);
+    if (req.method === 'POST' && /^\/api\/v1\/ordering\/(drafts(?:\/operations\/query)?|quote\/query)$/.test(observed.path)) {
+      const body = []; req.on('data', chunk => body.push(chunk)); req.on('end', () => {
+        try { observed.body = JSON.parse(Buffer.concat(body).toString('utf8')); } catch { observed.body = null; }
+      });
+    }
+  }
   if (isApi) firstApiAt ??= performance.now();
   const headers = { ...req.headers, host: '127.0.0.1:' + port };
   for (const name of Object.keys(headers)) if (name.startsWith('x-forwarded-') || name.startsWith('x-original-') || ['forwarded', 'connection'].includes(name)) delete headers[name];
   if (isApi) { headers['x-forwarded-for'] = req.socket.remoteAddress; headers['x-forwarded-host'] = origin.host; headers['x-forwarded-proto'] = 'https'; }
   const write = req.method === 'POST' && (req.url === '/api/v1/ordering/drafts' || /^\/api\/v1\/catalog\/prices\/skus\/[0-9]+\/proposals$/.test(req.url) || /^\/api\/v1\/catalog\/prices\/proposals\/[0-9]+\/(approve|reject|withdraw)$/.test(req.url));
-  if (write) writes.push({ path: req.url, key: req.headers['idempotency-key'], actor: req.headers['x-expected-actor-id'] });
+  if (write) {
+    const entry = { path: req.url, key: req.headers['idempotency-key'], actor: req.headers['x-expected-actor-id'] }; writes.push(entry);
+    if (config.primaryShop) Object.defineProperty(entry, 'body', { get: () => observed.body });
+  }
   const drop = write && dropNext; if (drop) dropNext = false;
   const upstream = http.request({ hostname: '127.0.0.1', port, path: req.url, method: req.method, headers }, response => {
     if (drop && response.statusCode === 200) {
@@ -41,7 +55,7 @@ function forward(req, res, port, isApi) {
   });
   upstream.on('error', () => { if (!res.headersSent) res.writeHead(502); res.end(); }); req.on('aborted', () => upstream.destroy()); req.pipe(upstream);
 }
-const path = '/catalog/prices';
+const path = config.primaryShop ? '/shop' : '/catalog/prices';
 async function check(name, action) { await action(); checks.push(name); console.log('PASS ' + name); }
 const cookie = who => ({ name: '__Host-ut_session', value: config.tokens[who], domain: origin.hostname, path: '/', secure: true, httpOnly: true, sameSite: 'Lax' });
 async function user(who) {
@@ -172,6 +186,10 @@ try {
     sockets.add(upstream); upstream.on('close', () => sockets.delete(upstream)); upstream.on('error', () => socket.destroy()); socket.on('error', () => upstream.destroy()); socket.on('close', () => upstream.destroy());
   }); const proxyPort = await listen(tunnel);
   browser = await chromium.launch({ ...(channel === 'msedge' ? { channel: 'msedge' } : {}), headless: true, proxy: { server: 'http://127.0.0.1:' + proxyPort } });
+  if (config.primaryShop) {
+    await verifyPrimaryShopBrowser({ config, user, origin, directory, writes, requests, loseNext: () => { dropNext = true; }, dropped: () => dropped });
+    assert.deepEqual(errors, []);
+  } else {
   const maker = await user('maker'), checker = await user('checker');
   await check('price-only maker selects explicit packaging and recovers a lost committed proposal', async () => {
     await choose(maker.page); assert.match(await maker.page.locator('main').innerText(), /12 piece/); assert.match(await maker.page.locator('main').innerText(), /Belum ada harga disetujui/);
@@ -261,6 +279,7 @@ try {
   });
   assert.deepEqual(errors, []); assert.equal(dropped, 6);
   console.log('REAL_PRICE_BROWSER_PASS ' + JSON.stringify({ checks, droppedCommittedResponses: dropped, attempts: writes.length }));
+  }
 } catch (error) {
   for (const { page, who } of pages) if (!page.isClosed()) {
     console.error('FIXTURE PAGE ' + who + ': ' + (await page.locator('main').innerText().catch(() => 'unavailable')).slice(0, 5000));

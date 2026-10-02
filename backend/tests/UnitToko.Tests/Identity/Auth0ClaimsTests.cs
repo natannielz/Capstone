@@ -153,6 +153,16 @@ public sealed class Auth0ClaimsTests
     [Fact]
     public void Buyer_catalog_return_path_is_explicitly_allowlisted() =>
         Assert.Equal("/catalog/browse", ReturnPathPolicy.Require("/catalog/browse", Settings()));
+    [Theory]
+    [InlineData("/shop")]
+    [InlineData("/administration/organizations/addresses")]
+    public void Primary_shop_and_postal_return_destinations_are_exact_and_within_the_existing_bound(string path) {
+        var settings = Settings();
+        Assert.Equal(path, ReturnPathPolicy.Require(path, settings));
+        Assert.True(settings.AllowedReturnPaths.Length <= 32);
+        foreach (var changed in new[] { path + "/", path + "?next=https://outside.co.id", path.Replace("/", "//", StringComparison.Ordinal), path + "/00000000-0000-0000-0000-000000000001" })
+            Assert.Throws<DomainValidationException>(() => ReturnPathPolicy.Require(changed, settings));
+    }
     [Fact]
     public void Order_draft_return_path_is_explicitly_allowlisted() =>
         Assert.Equal("/ordering/drafts", ReturnPathPolicy.Require("/ordering/drafts", Settings()));

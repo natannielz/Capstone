@@ -1,7 +1,4 @@
-import { StorefrontCatalog } from "@/components/shop/storefront";
-import { storefrontPageActor } from "@/lib/server/page-session";
-export const metadata = { title: "Belanja | Unit Toko" };
-export default async function ShopPage() {
-  await storefrontPageActor();
-  return <StorefrontCatalog />;
-}
+import { BuyerCatalog } from '../../modules/catalog/BuyerCatalog';
+
+export const metadata = { title: 'Katalog kemasan | Unit Toko' };
+export default function ShopPage() { return <BuyerCatalog returnPath="/shop" />; }
