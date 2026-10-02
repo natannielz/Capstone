@@ -62,7 +62,10 @@ public sealed class MongoUnitOfWork(MongoClient client)
                 await AbortIfActiveAsync(session);
                 if (attempt == MaximumAttempts)
                     throw new PersistenceConflictException("version_conflict", "Data changed; refresh and try again");
-                await Task.Delay(TimeSpan.FromMilliseconds(15 * attempt), cancellationToken);
+                // Fenced reads can hold shared source rows for hundreds of milliseconds. Leave
+                // time for the competing transaction to finish without synchronizing its peers.
+                var minimumDelayMs = 100 << (attempt - 1);
+                await Task.Delay(TimeSpan.FromMilliseconds(minimumDelayMs + Random.Shared.Next(minimumDelayMs / 2 + 1)), cancellationToken);
             }
             catch
             {

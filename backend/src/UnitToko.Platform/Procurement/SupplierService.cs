@@ -37,6 +37,7 @@ public sealed partial class SupplierService
         internal IClientSessionHandle Tx { get; } = tx;
         internal SupplierOwner Owner { get; } = owner;
         internal string Permission { get; } = permission;
+        internal bool PurchaseOrderConsumer => readLocation is not null && Permission is Permissions.ProcurementPrepare or Permissions.ProcurementApprove;
         internal ResourceScope Resource => new(FulfillmentOrganizationId: Owner.OrganizationId, ShopId: Owner.ShopId, ChannelId: Owner.ChannelId, WarehouseId: readLocation?.WarehouseId);
         internal BsonDocument Sources { get; } = sources;
         internal BsonArray MappingSources { get; set; } = [];
@@ -62,7 +63,7 @@ public sealed partial class SupplierService
     private ScopeClause[] Clauses(Context context) {
         var query = Query(context.Actor, context.Authority, context.Permission);
         var clauses = query.Clauses.Where(clause => clause.Matches(context.Resource) &&
-            (context.Permission == Permissions.ProcurementRead || clause.Scope.Kind == GrantScopeKind.FulfillmentShop && clause.Scope == SupplierRules.Scope(context.Owner))).ToArray();
+            (context.Permission == Permissions.ProcurementRead || context.PurchaseOrderConsumer || clause.Scope.Kind == GrantScopeKind.FulfillmentShop && clause.Scope == SupplierRules.Scope(context.Owner))).ToArray();
         if (!ScopePolicy.IsResourceActive(context.Resource, context.Authority.Directory) || clauses.Length == 0) throw new AuthorizationDeniedException("scope_denied"); return clauses;
     }
     private async Task StorageAsync(CancellationToken ct) {

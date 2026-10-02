@@ -11,7 +11,7 @@ using B = UnitToko.Platform.Procurement.SupplierBson;
 
 namespace UnitToko.Platform.Procurement;
 
-internal sealed class SupplierRecords(IMongoDatabase database, CatalogAuthoringService catalog)
+internal sealed partial class SupplierRecords(IMongoDatabase database, CatalogAuthoringService catalog)
 {
     private IMongoCollection<BsonDocument> Rows(string name) => database.GetCollection<BsonDocument>(name);
     internal static void Equal(BsonValue actual, BsonValue expected) { if (!actual.Equals(expected)) throw B.Broken(); }

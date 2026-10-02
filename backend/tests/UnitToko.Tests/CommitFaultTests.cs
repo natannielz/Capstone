@@ -137,6 +137,39 @@ public sealed class CommitFaultTests(MongoFixture fixture)
         });
     }
 
+    [Fact]
+    public async Task Transient_retry_then_uncertain_commit_retries_only_commit_and_same_key_has_one_effect()
+    {
+        await WithFaultDatabase(async (client, database, appName, commits) =>
+        {
+            var clock = new SystemClock(); var store = new IdempotencyStore(database, new MongoUnitOfWork(client), clock);
+            var outbox = new OutboxStore(database, clock); var orders = database.GetCollection<BsonDocument>("fixtureBusinessRecords");
+            var scope = new IdempotencyScope("123", "fault.order", "transient-then-unknown", new string('d', 64)); var calls = 0;
+            async Task<BsonDocument> Work(IClientSessionHandle session, CancellationToken token)
+            {
+                var attempt = ++calls;
+                await orders.InsertOneAsync(session, new BsonDocument { { "_id", 101L }, { "schemaVersion", 1 } }, cancellationToken: token);
+                if (attempt == 1)
+                    await fixture.Client.GetDatabase("admin").RunCommandAsync<BsonDocument>(new BsonDocument
+                    {
+                        { "configureFailPoint", "failCommand" }, { "mode", new BsonDocument("times", 1) },
+                        { "data", new BsonDocument { { "appName", appName }, { "failCommands", new BsonArray { "find" } },
+                            { "errorCode", 112 }, { "errorLabels", new BsonArray { "TransientTransactionError" } } } }
+                    }, cancellationToken: token);
+                await orders.Find(session, new BsonDocument("_id", 101L)).FirstAsync(token);
+                await outbox.EnqueueAsync(session, "order:101", "order.created", new BsonDocument("id", 101L), token);
+                await EnableCommitAmbiguity(appName, new BsonDocument("times", 2));
+                return new BsonDocument("id", "101");
+            }
+            var result = await store.ExecuteAsync(scope, Work);
+            Assert.Equal("101", result["id"].AsString); Assert.Equal(2, calls);
+            Assert.True(commits() >= 3, "The server must actually inject ambiguous commit replies after the transient retry.");
+            await AssertSingleEffect(database);
+            Assert.Equal(result, await store.ExecuteAsync(scope, Work)); Assert.Equal(2, calls);
+            await AssertSingleEffect(database);
+        });
+    }
+
     private async Task WithFaultDatabase(Func<MongoClient, IMongoDatabase, string, Func<int>, Task> test,
         Action? afterCommitReply = null)
     {

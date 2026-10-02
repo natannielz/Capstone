@@ -160,6 +160,7 @@ public sealed class Auth0ClaimsTests
     [InlineData("/accounting/books")]
     [InlineData("/procurement/requests")]
     [InlineData("/procurement/suppliers")]
+    [InlineData("/procurement/purchase-orders")]
     public void Operational_workspace_return_destinations_are_exact_and_within_the_configured_bound(string path) {
         var settings = Settings();
         Assert.Equal(path, ReturnPathPolicy.Require(path, settings));

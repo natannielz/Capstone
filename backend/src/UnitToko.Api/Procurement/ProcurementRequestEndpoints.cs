@@ -135,7 +135,7 @@ public static class ProcurementRequestEndpoints
     private static ProcurementLocation Location(ProcurementLocationDto value) => value is null ? throw ProcurementRequestRules.Invalid() : value.Domain();
     internal static ProcurementLocationDto Location(BsonValue value) => new(new(value["organizationId"].AsInt64), new(value["shopId"].AsInt64), new(value["warehouseId"].AsInt64), new(value["channelId"].AsInt64));
     internal static ProcurementLabelDto Label(BsonValue value) => new(new(value["id"].AsInt64), value["code"].AsString, value["name"].AsString, Number(value["scopeVersion"]), Number(value["profileVersion"]));
-    private static ProcurementSourceDto Source(BsonValue value) => new(Label(value["organization"]), Label(value["shop"]), Label(value["warehouse"]), Label(value["channel"]));
+    internal static ProcurementSourceDto Source(BsonValue value) => new(Label(value["organization"]), Label(value["shop"]), Label(value["warehouse"]), Label(value["channel"]));
     internal static ProcurementTargetDto Target(BsonValue value) => new(Location(value["location"]), Label(value["organization"]), Label(value["shop"]), Label(value["warehouse"]), Label(value["channel"]));
     internal static ProcurementPackageDto Package(BsonValue value) => new(new(value["skuId"].AsInt64), Number(value["skuRevision"]), new(value["definitionId"].AsInt64), Number(value["definitionVersion"]),
         value["skuCode"].AsString, value["familyName"].AsString, value["packageLabel"].AsString, value["packageKind"].AsString, value["baseUnitCode"].AsString, value["baseUnitsPerPackage"].AsInt32);
