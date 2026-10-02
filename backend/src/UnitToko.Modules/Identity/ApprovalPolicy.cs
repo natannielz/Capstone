@@ -14,7 +14,7 @@ public sealed record ApprovalRequest(
 public static class ApprovalPolicy
 {
     public static bool RequiresEvidence(string permission) => permission is
-        Permissions.OrderSpendApprove or Permissions.OrderSpendingPolicyApprove or Permissions.OrderAccept or Permissions.SubstitutionAccept or
+        Permissions.OrderSpendApprove or Permissions.OrderSpendingPolicyApprove or Permissions.AccountingBookApprove or Permissions.OrderAccept or Permissions.SubstitutionAccept or
         Permissions.ReceivingAccountApprove or Permissions.ReceivingAccountVerify or Permissions.PricingApprove or Permissions.SupplierChangeApprove or Permissions.StockSourceApprove or Permissions.StockSourcePolicyApprove or
         Permissions.CaseManage or Permissions.BankReceiptConfirm or Permissions.PaymentVerify or Permissions.PaymentReviewManual or Permissions.PaymentReviewManage or Permissions.PaymentAllocate or Permissions.CreditApprove or Permissions.RefundApprove or
         Permissions.FundingApprove or Permissions.ExpenseApprove or Permissions.StockAdjustApprove or
@@ -31,7 +31,7 @@ public static class ApprovalPolicy
         var valid = permission switch
         {
             Permissions.OrderSpendApprove => Independent(evidence.RequestedBy),
-            Permissions.OrderSpendingPolicyApprove or Permissions.ReceivingAccountApprove or Permissions.ReceivingAccountVerify or Permissions.PricingApprove or Permissions.SupplierChangeApprove or Permissions.StockSourceApprove or Permissions.StockSourcePolicyApprove => Independent(evidence.ProposedBy),
+            Permissions.AccountingBookApprove or Permissions.OrderSpendingPolicyApprove or Permissions.ReceivingAccountApprove or Permissions.ReceivingAccountVerify or Permissions.PricingApprove or Permissions.SupplierChangeApprove or Permissions.StockSourceApprove or Permissions.StockSourcePolicyApprove => Independent(evidence.ProposedBy),
             Permissions.OrderAccept => evidence.RequestedBy is > 0,
             Permissions.SubstitutionAccept => evidence.RequestedBy is > 0 && evidence.ProposedBy is > 0,
             Permissions.BankReceiptConfirm or Permissions.PaymentVerify or Permissions.PaymentReviewManual or Permissions.PaymentReviewManage or Permissions.PaymentAllocate or Permissions.DisbursementVerify or Permissions.ReconciliationVerify => Independent(evidence.RecordedBy),

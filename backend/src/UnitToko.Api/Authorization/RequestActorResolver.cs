@@ -44,6 +44,7 @@ public sealed class ActorRequiredFilter : IEndpointFilter
     internal static bool NeedsExpectedActor(string method, string path) => HttpMethods.IsPost(method) &&
         (path.StartsWith("/api/v1/catalog/", StringComparison.OrdinalIgnoreCase) ||
          path.StartsWith("/api/v1/ordering/", StringComparison.OrdinalIgnoreCase) ||
+         path.StartsWith("/api/v1/accounting/", StringComparison.OrdinalIgnoreCase) ||
          path.StartsWith("/api/v1/fulfillment/", StringComparison.OrdinalIgnoreCase) ||
          path.StartsWith("/api/v1/billing/", StringComparison.OrdinalIgnoreCase) ||
          path.StartsWith("/api/v1/inventory/", StringComparison.OrdinalIgnoreCase) ||

@@ -74,7 +74,8 @@ public sealed class OrderSpendingPolicyMigrationTests(MongoFixture fixture)
         Assert.Equal(1, await data.Rows(D.Heads).CountDocumentsAsync(new BsonDocument()));
     }
     internal static async Task RestoreV58Async(OrganizationAddressTestData data) {
-        var history = await HistoryAsync(data.Database); Assert.Equal(CollectionMigrations.CurrentVersion, history.Count);
+        await UnitToko.Tests.Accounting.AccountingBookSetupMigrationTests.RestoreV59Async(data);
+        var history = await HistoryAsync(data.Database); Assert.Equal(59, history.Count);
         Assert.All(history, row => Assert.Equal("applied", row["state"])); Assert.Equal(new[] { 59 }, history.Skip(58).Select(row => row["_id"].AsInt32));
         foreach (var name in OrderSpendingPolicySchemas.Collections) {
             Assert.False(await data.Rows(name).Find(new BsonDocument()).AnyAsync());

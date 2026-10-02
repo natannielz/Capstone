@@ -63,6 +63,33 @@ public sealed class BusinessPermissionTests
     }
 
     [Fact]
+    public void Accounting_book_setup_requires_exact_shop_authority_and_independent_approval_without_posting_authority()
+    {
+        foreach (var permission in new[] { Permissions.AccountingBookRead, Permissions.AccountingBookPropose, Permissions.AccountingBookApprove }) {
+            Assert.Equal(new[] { GrantScopeKind.FulfillmentShop }, Permissions.Find(permission)!.AllowedScopes.ToArray());
+            Assert.All(RoleTemplates.Templates.Values, role => Assert.DoesNotContain(permission, role.Permissions));
+            var policy = Snapshot("finance", Shop, [permission]);
+            Assert.True(ScopePolicy.Compile(Actor, policy, permission, Now).Matches(Order));
+            Assert.False(ScopePolicy.Compile(Actor, policy, permission, Now).Matches(Order with { ShopId = 22 }));
+            Assert.False(ScopePolicy.Compile(Actor, policy, Permissions.JournalPost, Now).IsAllowed);
+            Assert.False(ScopePolicy.Compile(Actor, policy, Permissions.PeriodClose, Now).IsAllowed);
+            Assert.False(ScopePolicy.Compile(Actor, Snapshot("finance", Shop, [Permissions.JournalPost]), permission, Now).IsAllowed);
+            Assert.False(ScopePolicy.Compile(Actor, Snapshot("buyer", Buyer, [permission]), permission, Now).IsAllowed);
+            Assert.False(ScopePolicy.Compile(Actor, Snapshot("finance", new(GrantScopeKind.FulfillmentWarehouse, 2, ShopId: 21, WarehouseId: 211, ChannelId: 201), [permission]), permission, Now).IsAllowed);
+            if (permission != Permissions.AccountingBookRead) {
+                Assert.Equal(TimeSpan.FromMinutes(5), Permissions.Find(permission)!.Assurance.MaximumAge);
+                Assert.False(ScopePolicy.Compile(Actor with { AuthenticatedAt = Now.AddMinutes(-6) }, policy, permission, Now).IsAllowed);
+            }
+        }
+        const string approval = Permissions.AccountingBookApprove;
+        Assert.True(ApprovalPolicy.RequiresEvidence(approval)); Assert.True(PersonApprovalPolicy.RequiresEvidence(approval));
+        Assert.False(ApprovalPolicy.Evaluate(101, approval, new(1, 1, ProposedBy: 101)).Allowed);
+        Assert.False(ApprovalPolicy.Evaluate(101, approval, new(1, 2, ProposedBy: 102)).Allowed);
+        Assert.False(ApprovalPolicy.Evaluate(101, approval, new(1, 1)).Allowed);
+        Assert.Equal(new long[] { 101, 102 }, PersonApprovalPolicy.RequiredAccounts(101, approval, new(1, 1, ProposedBy: 102)).ToArray());
+    }
+
+    [Fact]
     public void Store_proposal_cannot_consent_and_buyer_consent_cannot_propose()
     {
         var staff = Snapshot("store-staff", Shop, [Permissions.SubstitutionPropose]);

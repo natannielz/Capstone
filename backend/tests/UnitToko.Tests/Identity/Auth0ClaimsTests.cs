@@ -157,7 +157,8 @@ public sealed class Auth0ClaimsTests
     [InlineData("/shop")]
     [InlineData("/administration/organizations/addresses")]
     [InlineData("/ordering/spending-policies")]
-    public void Shop_postal_and_spending_return_destinations_are_exact_and_within_the_configured_bound(string path) {
+    [InlineData("/accounting/books")]
+    public void Shop_postal_spending_and_book_return_destinations_are_exact_and_within_the_configured_bound(string path) {
         var settings = Settings();
         Assert.Equal(path, ReturnPathPolicy.Require(path, settings));
         Assert.True(settings.AllowedReturnPaths.Length <= Auth0Options.MaximumReturnPaths);

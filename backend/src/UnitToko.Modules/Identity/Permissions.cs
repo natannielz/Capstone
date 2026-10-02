@@ -33,6 +33,7 @@ public static class Permissions
     public const string CreditRequest = "credit.request", CreditApprove = "credit.approve", RefundRequest = "refund.request", RefundApprove = "refund.approve", DisbursementRecord = "disbursement.record", DisbursementVerify = "disbursement.verify";
     public const string FundingRequest = "funding.request", FundingApprove = "funding.approve", ExpenseRequest = "expense.request", ExpenseApprove = "expense.approve";
     public const string ReconciliationVerify = "reconciliation.verify", JournalPost = "journal.post", JournalReverse = "journal.reverse";
+    public const string AccountingBookRead = "accounting.book.read", AccountingBookPropose = "accounting.book.propose", AccountingBookApprove = "accounting.book.approve";
     public const string InviteManage = "invite.manage", MembershipPropose = "membership.propose", MembershipApprove = "membership.approve", AccessPropose = "access.propose", AccessApprove = "access.approve", AccessRevoke = "access.revoke", RecoveryInitiate = "recovery.initiate", TechnicalConfigure = "technical.configure", AccessAuditRead = "access.audit.read";
     public const string PersonReviewPropose = "person.review.propose", PersonReviewApprove = "person.review.approve", PersonReviewRead = "person.review.read";
     public const string OrganizationApprove = "organization.approve", OrganizationAddressRead = "organization.address.read";
@@ -60,6 +61,9 @@ public static class Permissions
         foreach (var name in new[] { OrderSpendingPolicyPropose, OrderSpendingPolicyApprove })
             Add(name, [GrantScopeKind.BuyingDivision, GrantScopeKind.BuyingBranch, GrantScopeKind.BuyingOrganization], true);
         Add(SubstitutionAccept, Buying);
+        Add(AccountingBookRead, [GrantScopeKind.FulfillmentShop]);
+        Add(AccountingBookPropose, [GrantScopeKind.FulfillmentShop], true);
+        Add(AccountingBookApprove, [GrantScopeKind.FulfillmentShop], true);
         Add(BranchPic, [GrantScopeKind.BuyingBranch, GrantScopeKind.BuyingDivision]);
         Add(OrganizationWide, [GrantScopeKind.BuyingOrganization]);
         foreach (var name in new[] { CatalogManage, PricingManage, StockRead, StockReceive, StockCount, StockAdjustPropose, StockAdjustApprove,

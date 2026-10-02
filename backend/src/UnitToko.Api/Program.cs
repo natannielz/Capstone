@@ -27,6 +27,8 @@ using UnitToko.Api.Fulfillment;
 using UnitToko.Platform.Fulfillment;
 using UnitToko.Api.Billing;
 using UnitToko.Platform.Billing;
+using UnitToko.Api.Accounting;
+using UnitToko.Platform.Accounting;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.ConfigureHttpJsonOptions(options =>
@@ -102,6 +104,7 @@ builder.Services.AddSingleton<AccessAdministrationService>();
 builder.Services.AddSingleton<OrganizationMasterDataService>();
 builder.Services.AddSingleton<OrganizationAddressService>();
 builder.Services.AddSingleton<OrderSpendingPolicyService>();
+builder.Services.AddSingleton<AccountingBookSetupService>();
 var identityEnabled = builder.Services.AddUnitTokoIdentityRuntime(builder.Configuration);
 builder.Services.AddAuthorization(options =>
     options.FallbackPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
@@ -150,6 +153,7 @@ builder.Services.AddOpenApi("v1", options =>
                      path.Key.StartsWith("/api/v1/identity/administration/", StringComparison.Ordinal) ||
                      path.Key.StartsWith("/api/v1/catalog/", StringComparison.Ordinal) ||
                      path.Key.StartsWith("/api/v1/ordering/", StringComparison.Ordinal) ||
+                     path.Key.StartsWith("/api/v1/accounting/", StringComparison.Ordinal) ||
                      path.Key.StartsWith("/api/v1/fulfillment/", StringComparison.Ordinal) ||
                      path.Key.StartsWith("/api/v1/billing/", StringComparison.Ordinal) ||
                      path.Key.StartsWith("/api/v1/inventory/", StringComparison.Ordinal)) &&
@@ -337,6 +341,7 @@ app.MapCatalogEndpoints();
 app.MapCatalogPriceEndpoints();
 app.MapOrderQuoteEndpoints();
 app.MapOrderSpendingPolicyEndpoints();
+app.MapAccountingBookSetupEndpoints();
 app.MapOrderDraftEndpoints();
 app.MapOrderSubmissionEndpoints();
 app.MapOrderDecisionEndpoints();
