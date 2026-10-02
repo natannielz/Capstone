@@ -29,6 +29,8 @@ using UnitToko.Api.Billing;
 using UnitToko.Platform.Billing;
 using UnitToko.Api.Accounting;
 using UnitToko.Platform.Accounting;
+using UnitToko.Api.Procurement;
+using UnitToko.Platform.Procurement;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.ConfigureHttpJsonOptions(options =>
@@ -105,6 +107,7 @@ builder.Services.AddSingleton<OrganizationMasterDataService>();
 builder.Services.AddSingleton<OrganizationAddressService>();
 builder.Services.AddSingleton<OrderSpendingPolicyService>();
 builder.Services.AddSingleton<AccountingBookSetupService>();
+builder.Services.AddSingleton<ProcurementRequestService>();
 var identityEnabled = builder.Services.AddUnitTokoIdentityRuntime(builder.Configuration);
 builder.Services.AddAuthorization(options =>
     options.FallbackPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
@@ -153,7 +156,8 @@ builder.Services.AddOpenApi("v1", options =>
                      path.Key.StartsWith("/api/v1/identity/administration/", StringComparison.Ordinal) ||
                      path.Key.StartsWith("/api/v1/catalog/", StringComparison.Ordinal) ||
                      path.Key.StartsWith("/api/v1/ordering/", StringComparison.Ordinal) ||
-                     path.Key.StartsWith("/api/v1/accounting/", StringComparison.Ordinal) ||
+                      path.Key.StartsWith("/api/v1/accounting/", StringComparison.Ordinal) ||
+                      path.Key.StartsWith("/api/v1/procurement/", StringComparison.Ordinal) ||
                      path.Key.StartsWith("/api/v1/fulfillment/", StringComparison.Ordinal) ||
                      path.Key.StartsWith("/api/v1/billing/", StringComparison.Ordinal) ||
                      path.Key.StartsWith("/api/v1/inventory/", StringComparison.Ordinal)) &&
@@ -342,6 +346,7 @@ app.MapCatalogPriceEndpoints();
 app.MapOrderQuoteEndpoints();
 app.MapOrderSpendingPolicyEndpoints();
 app.MapAccountingBookSetupEndpoints();
+app.MapProcurementRequestEndpoints();
 app.MapOrderDraftEndpoints();
 app.MapOrderSubmissionEndpoints();
 app.MapOrderDecisionEndpoints();

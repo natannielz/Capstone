@@ -8,7 +8,7 @@ namespace UnitToko.Modules.Identity;
 public static class PersonApprovalPolicy
 {
     public static bool RequiresEvidence(string permission) => permission is
-        Permissions.OrderSpendApprove or Permissions.OrderSpendingPolicyApprove or Permissions.AccountingBookApprove or Permissions.ReceivingAccountApprove or Permissions.ReceivingAccountVerify or Permissions.PricingApprove or Permissions.SupplierChangeApprove or Permissions.StockSourceApprove or Permissions.StockSourcePolicyApprove or
+        Permissions.ProcurementApprove or Permissions.OrderSpendApprove or Permissions.OrderSpendingPolicyApprove or Permissions.AccountingBookApprove or Permissions.ReceivingAccountApprove or Permissions.ReceivingAccountVerify or Permissions.PricingApprove or Permissions.SupplierChangeApprove or Permissions.StockSourceApprove or Permissions.StockSourcePolicyApprove or
         Permissions.BankReceiptConfirm or Permissions.PaymentReviewManual or Permissions.PaymentReviewManage or Permissions.PaymentVerify or Permissions.PaymentAllocate or Permissions.DisbursementVerify or Permissions.ReconciliationVerify or
         Permissions.CaseManage or Permissions.CreditApprove or Permissions.RefundApprove or Permissions.FundingApprove or
         Permissions.ExpenseApprove or Permissions.StockAdjustApprove or Permissions.DisbursementRecord or
@@ -26,7 +26,7 @@ public static class PersonApprovalPolicy
         // AccountDecision has validated every required ID using the existing account policy.
         ImmutableArray<long?> participants = permission switch
         {
-            Permissions.CaseManage or Permissions.OrderSpendApprove or Permissions.CreditApprove or Permissions.RefundApprove or
+            Permissions.ProcurementApprove or Permissions.CaseManage or Permissions.OrderSpendApprove or Permissions.CreditApprove or Permissions.RefundApprove or
                 Permissions.FundingApprove or Permissions.ExpenseApprove => [evidence!.RequestedBy],
             Permissions.AccountingBookApprove or Permissions.OrderSpendingPolicyApprove or Permissions.ReceivingAccountApprove or Permissions.ReceivingAccountVerify or Permissions.PricingApprove or Permissions.SupplierChangeApprove or Permissions.StockSourceApprove or Permissions.StockSourcePolicyApprove => [evidence!.ProposedBy],
             Permissions.BankReceiptConfirm or Permissions.PaymentReviewManual or Permissions.PaymentReviewManage or Permissions.PaymentVerify or Permissions.PaymentAllocate or Permissions.DisbursementVerify or

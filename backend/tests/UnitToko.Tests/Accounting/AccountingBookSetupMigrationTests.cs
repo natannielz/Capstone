@@ -100,7 +100,8 @@ public sealed class AccountingBookSetupMigrationTests(MongoFixture fixture)
 
     internal static async Task RestoreV59Async(OrganizationAddressTestData data)
     {
-        var history = await HistoryAsync(data.Database); Assert.Equal(CollectionMigrations.CurrentVersion, history.Count);
+        await UnitToko.Tests.Procurement.ProcurementRequestMigrationTests.RestoreV60Async(data);
+        var history = await HistoryAsync(data.Database); Assert.Equal(60, history.Count);
         Assert.All(history, row => Assert.Equal("applied", row["state"])); Assert.Equal(new[] { 60 }, history.Skip(59).Select(row => row["_id"].AsInt32));
         foreach (var name in AccountingBookSetupSchemas.Collections) Assert.False(await data.Rows(name).Find(new BsonDocument()).AnyAsync());
         foreach (var name in AccountingBookSetupSchemas.Collections.Append("accountingAccounts")) Assert.False(await data.Rows("idCounters").Find(new BsonDocument("_id", name)).AnyAsync());

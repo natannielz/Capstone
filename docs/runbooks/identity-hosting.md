@@ -25,7 +25,7 @@ Supply these through environment-specific secret/configuration storage, never a 
 | `Identity:Auth0:ConnectionId`, `ConnectionName` | Approved Auth0 database connection |
 | `Identity:Auth0:ClaimsNamespace` | Controlled HTTPS namespace for verified assurance evidence |
 | `Identity:Auth0:AssurancePolicyVersion` | Version matching both installed reviewed OTP Actions |
-| `Identity:Auth0:AllowedReturnPaths` | At most 64 unique exact local destinations, including `/identity/account`; no query, fragment or wildcard. An override must include `/ordering/spending-policies` and `/accounting/books` to return to their workspaces while retaining the other reviewed destinations. |
+| `Identity:Auth0:AllowedReturnPaths` | At most 64 unique exact local destinations, including `/identity/account`; no query, fragment or wildcard. An override must include `/ordering/spending-policies`, `/accounting/books` and `/procurement/requests` to return to their workspaces while retaining the other reviewed destinations. |
 | `Identity:Keys:Directory` | Existing absolute persistent key directory shared by participating API instances |
 | `Identity:Keys:ApplicationName` | Stable discriminator unique to this application/environment |
 | `Identity:Keys:CertificatePath`, `CertificatePassword` | Absolute encrypted PKCS#12 file and separately managed password; current valid private RSA certificate, at least 2048 bits |

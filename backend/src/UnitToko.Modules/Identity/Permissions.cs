@@ -82,6 +82,8 @@ public static class Permissions
         Add(PaymentReviewManual, Operations, true);
         Add(PaymentReviewManage, Operations, true);
         result[CaseManage] = result[CaseManage] with { Assurance = new(true, TimeSpan.FromMinutes(5)) };
+        result[ProcurementApprove] = result[ProcurementApprove] with { Assurance = new(true, TimeSpan.FromMinutes(5)) };
+        result[ProcurementPrepare] = result[ProcurementPrepare] with { Assurance = new(true, TimeSpan.FromMinutes(5)) };
         result[PaymentVerify] = result[PaymentVerify] with { Assurance = new(true, TimeSpan.FromMinutes(5)) };
         result[PaymentAllocate] = result[PaymentAllocate] with { Assurance = new(true, TimeSpan.FromMinutes(5)) };
         result[CreditApprove] = result[CreditApprove] with { Assurance = new(true, TimeSpan.FromMinutes(5)) };
