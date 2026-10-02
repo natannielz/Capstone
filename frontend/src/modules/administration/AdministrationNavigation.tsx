@@ -1,9 +1,9 @@
 import Link from "next/link";
-import { canManageAccounts, canReviewPeople, canUseStockCounts, canUseStockSources, canUseStockSourceSuspensions, canUseStockSourcePolicies } from "../identity/identity-workflow";
+import { canManageAccounts, canReviewPeople, canUseStockCounts, canUseStockSources, canUseStockSourceSuspensions, canUseStockSourcePolicies, canUseOrganizationAddresses } from "../identity/identity-workflow";
 import styles from "./access.module.css";
 
 export function AdministrationNavigation({ current, actions, locked = false }: {
-  current: "cases" | "access" | "organizations" | "history" | "accounts" | "person-reviews" | "catalog" | "prices" | "counts" | "sources" | "source-revisions" | "source-aliases" | "source-suspensions" | "source-policies" | "order-reviews" | "orders" | "preparations" | "dispatches" | "shipments" | "invoices" | "payments" | "payment-reviews" | "receiving-accounts" | "bank-statements" | "bank-receipts"; actions: readonly string[]; locked?: boolean;
+  current: "organization-addresses" | "cases" | "access" | "organizations" | "history" | "accounts" | "person-reviews" | "catalog" | "prices" | "counts" | "sources" | "source-revisions" | "source-aliases" | "source-suspensions" | "source-policies" | "order-reviews" | "orders" | "preparations" | "dispatches" | "shipments" | "invoices" | "payments" | "payment-reviews" | "receiving-accounts" | "bank-statements" | "bank-receipts"; actions: readonly string[]; locked?: boolean;
 }) {
   const links = [
     { id: "cases", href: "/fulfillment/cases", label: "Keluhan barang", available: actions.some(action => ["case.read", "case.request"].includes(action)) },
@@ -31,6 +31,7 @@ export function AdministrationNavigation({ current, actions, locked = false }: {
     { id: "person-reviews", href: "/administration/person-reviews", label: "Keterkaitan akun", available: canReviewPeople(actions) },
     { id: "access", href: "/administration/access", label: "Akses dan keanggotaan", available: actions.some(action => action.startsWith("access.") || action.startsWith("membership.")) },
     { id: "organizations", href: "/administration/organizations", label: "Organisasi dan unit", available: actions.some(action => ["technical.configure", "organization.approve", "access.audit.read"].includes(action)) },
+    { id: "organization-addresses", href: "/administration/organizations/addresses", label: "Alamat organisasi", available: canUseOrganizationAddresses(actions) },
     { id: "history", href: "/administration/history", label: "Riwayat perubahan", available: actions.some(action => ["access.audit.read", "access.approve", "membership.approve", "access.revoke", "technical.configure", "organization.approve"].includes(action)) },
   ];
   return <nav className={styles.administrationNav} aria-label="Pengelolaan">

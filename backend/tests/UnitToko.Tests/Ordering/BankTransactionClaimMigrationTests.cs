@@ -84,21 +84,38 @@ public sealed class BankTransactionClaimMigrationTests(MongoFixture fixture)
     // Synthetic fixture predecessor only: prove the exact installed credit owners and
     // absence of outgoing settlement before removing the forward history marker.
     private static async Task<BsonArray> RestoreV55Async(BankReceiptTestData data) {
-        Assert.True(CollectionMigrations.CurrentVersion >= 56); Assert.False(await data.Rows(C.Settlements).Find(new BsonDocument()).AnyAsync());
+        // Only the known empty v56-v58 suffix is admitted. No populated postal
+        // graph, settlement policy or command effect is erased to create v55.
+        Assert.Equal(58, CollectionMigrations.CurrentVersion);
+        foreach (var table in OrganizationAddressSchemas.Collections.Concat(RefundSettlementSchemas.Collections))
+            Assert.False(await data.Rows(table).Find(new BsonDocument()).AnyAsync());
+        foreach (var (table, field) in new[] { ("idempotencyRecords", "operation"), ("auditEvents", "kind"), ("auditEvents", "operation"),
+            ("outboxEvents", "kind"), ("outboxEvents", "sourceKey"), ("authorizationHistory", "operation") })
+            Assert.False(await data.Rows(table).Find(new BsonDocument(field, new BsonRegularExpression(@"^organization\.address(?:[.:]|$)"))).AnyAsync());
+        Assert.False(await data.Rows(C.Settlements).Find(new BsonDocument()).AnyAsync());
+        Assert.False(await data.Rows(C.Collection).Find(new BsonDocument("direction", "debit")).AnyAsync());
         foreach (var (table, field) in new[] { ("idempotencyRecords", "operation"), ("auditEvents", "kind"), ("outboxEvents", "kind"), ("journalEntries", "source.namespace") })
             Assert.False(await data.Rows(table).Find(new BsonDocument(field, new BsonRegularExpression(@"^billing\.refund\.payout\.verify(?:[.:]|$)"))).AnyAsync());
         var catalog = data.Statements.Accounts.Catalog;
+        await BankTransactionClaimSchemas.RequireStorageAsync(catalog.Database, default);
+        var claims = new BsonArray(await data.Rows(C.Collection).Find(new BsonDocument()).Sort(new BsonDocument("_id", 1)).ToListAsync());
         await new MongoUnitOfWork(catalog.Client).ExecuteAsync(async (tx, ct) => {
-            foreach (var candidate in await data.Rows(B.Receipts).Find(tx, new BsonDocument()).ToListAsync(ct)) {
+            var receipts = await data.Rows(B.Receipts).Find(tx, new BsonDocument()).ToListAsync(ct);
+            Assert.Equal(receipts.LongCount(), await data.Rows(C.Collection).CountDocumentsAsync(tx, new BsonDocument(), cancellationToken: ct));
+            foreach (var candidate in receipts) {
                 var receipt = await BankReceiptRecords.ReadReceiptHistoryAsync(catalog.Database, tx, candidate["_id"].AsInt64, ct);
                 await new C(catalog.Database).RequireCreditAsync(tx, receipt, ct);
             }
             return true;
         });
-        var suffix = (await HistoryAsync(data)).Skip(55).ToArray(); Assert.Equal(CollectionMigrations.CurrentVersion - 55, suffix.Length);
-        foreach (var record in suffix) Assert.Equal("applied", record["state"]);
+        var history = await HistoryAsync(data); Assert.Equal(CollectionMigrations.CurrentVersion, history.Count);
+        Assert.Equal(Enumerable.Range(1, CollectionMigrations.CurrentVersion), history.Select(row => row["_id"].AsInt32));
+        Assert.All(history, row => Assert.Equal("applied", row["state"]));
+        var suffix = history.Skip(55).ToArray(); Assert.Equal(new[] { 56, 57, 58 }, suffix.Select(row => row["_id"].AsInt32));
         Assert.Equal(suffix.LongLength, (await data.Rows("schemaMigrations").DeleteManyAsync(new BsonDocument {
             { "_id", new BsonDocument("$in", new BsonArray(suffix.Select(record => record["_id"]))) }, { "state", "applied" } })).DeletedCount);
+        Assert.Equal(new BsonArray(history.Take(55)), await HistoryAsync(data));
+        Assert.Equal(claims, new BsonArray(await data.Rows(C.Collection).Find(new BsonDocument()).Sort(new BsonDocument("_id", 1)).ToListAsync()));
         return await HistoryAsync(data);
     }
     private static async Task<BsonDocument> DefinitionAsync(BankReceiptTestData data) => await (await data.Statements.Accounts.Catalog.Database.ListCollectionsAsync(

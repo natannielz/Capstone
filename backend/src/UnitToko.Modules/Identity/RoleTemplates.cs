@@ -39,12 +39,12 @@ public static class RoleTemplates
     public static ImmutableDictionary<string, ImmutableArray<string>> Suggestions { get; } =
         new Dictionary<string, ImmutableArray<string>>(StringComparer.Ordinal)
         {
-            ["buyer"] = [Permissions.SubstitutionAccept],
-            ["store-staff"] = [Permissions.SubstitutionPropose, Permissions.StockConvert,
+            ["buyer"] = [Permissions.SubstitutionAccept, Permissions.OrganizationAddressRead],
+            ["store-staff"] = [Permissions.OrganizationAddressRead, Permissions.SubstitutionPropose, Permissions.StockConvert,
                 Permissions.ReservationRelease, Permissions.SupplierChangePropose],
-            ["store-head"] = [Permissions.OrderAccept, Permissions.SupplierChangeApprove],
+            ["store-head"] = [Permissions.OrderAccept, Permissions.SupplierChangeApprove, Permissions.OrganizationAddressRead],
             ["courier"] = [],
-            ["finance"] = [Permissions.BankReceiptRead, Permissions.BankReceiptConfirm, Permissions.BankStatementRead, Permissions.BankStatementStage, Permissions.PaymentReviewRead, Permissions.PaymentReviewCorrect, Permissions.ReceivingAccountRead, Permissions.ReceivingAccountDetailsRead,
+            ["finance"] = [Permissions.OrganizationAddressRead, Permissions.BankReceiptRead, Permissions.BankReceiptConfirm, Permissions.BankStatementRead, Permissions.BankStatementStage, Permissions.PaymentReviewRead, Permissions.PaymentReviewCorrect, Permissions.ReceivingAccountRead, Permissions.ReceivingAccountDetailsRead,
                 Permissions.ReceivingAccountPropose, Permissions.ReceivingAccountVerify, Permissions.ReceivingAccountApprove],
             ["system-admin"] = []
         }.ToImmutableDictionary(StringComparer.Ordinal);

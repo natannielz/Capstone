@@ -34,7 +34,7 @@ public static class Permissions
     public const string ReconciliationVerify = "reconciliation.verify", JournalPost = "journal.post", JournalReverse = "journal.reverse";
     public const string InviteManage = "invite.manage", MembershipPropose = "membership.propose", MembershipApprove = "membership.approve", AccessPropose = "access.propose", AccessApprove = "access.approve", AccessRevoke = "access.revoke", RecoveryInitiate = "recovery.initiate", TechnicalConfigure = "technical.configure", AccessAuditRead = "access.audit.read";
     public const string PersonReviewPropose = "person.review.propose", PersonReviewApprove = "person.review.approve", PersonReviewRead = "person.review.read";
-    public const string OrganizationApprove = "organization.approve";
+    public const string OrganizationApprove = "organization.approve", OrganizationAddressRead = "organization.address.read";
 
     private static readonly ImmutableArray<GrantScopeKind> Buying = [GrantScopeKind.BuyerOwned, GrantScopeKind.BuyingDivision, GrantScopeKind.BuyingBranch, GrantScopeKind.BuyingOrganization];
     private static readonly ImmutableArray<GrantScopeKind> Operations = [GrantScopeKind.FulfillmentShop, GrantScopeKind.FulfillmentWarehouse];
@@ -50,7 +50,7 @@ public static class Permissions
         var result = ImmutableDictionary.CreateBuilder<string, PermissionDefinition>(StringComparer.Ordinal);
         void Add(string name, ImmutableArray<GrantScopeKind> scopes, bool fresh = false) =>
             result.Add(name, new(name, name.Replace('.', ' '), scopes, new(true, fresh ? TimeSpan.FromMinutes(5) : null)));
-        foreach (var name in new[] { CatalogRead, OrderRead, ShipmentRead, CaseRead, InvoiceRead }) Add(name, [.. Buying, .. Operations]);
+        foreach (var name in new[] { CatalogRead, OrderRead, ShipmentRead, CaseRead, InvoiceRead, OrganizationAddressRead }) Add(name, [.. Buying, .. Operations]);
         foreach (var name in new[] { HistoryRead, ReportRead }) Add(name, [.. Buying, .. Operations]);
         result[ShipmentRead] = result[ShipmentRead] with { AllowedScopes = [.. Buying, .. Operations, .. Courier] };
         foreach (var name in new[] { OrderSubmit, OrderApprove, OrderSubstitute, OrderCancel, ReceiptAccept, CaseRequest, PaymentEvidence }) Add(name, Buying);

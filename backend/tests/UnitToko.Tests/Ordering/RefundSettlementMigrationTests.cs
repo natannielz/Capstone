@@ -80,7 +80,13 @@ public sealed class RefundSettlementMigrationTests(MongoFixture fixture)
     }
 
     private static async Task RestoreV56Async(Data data) {
-        Assert.Equal(57, CollectionMigrations.CurrentVersion);
+        // Explicitly admitted test-only suffix. Future steps require their own
+        // empty/source/effect proof before this fixture can simulate v56.
+        Assert.Equal(58, CollectionMigrations.CurrentVersion);
+        foreach (var table in OrganizationAddressSchemas.Collections) Assert.False(await data.Rows(table).Find(new BsonDocument()).AnyAsync());
+        foreach (var (table, field) in new[] { ("idempotencyRecords", "operation"), ("auditEvents", "kind"), ("auditEvents", "operation"),
+            ("outboxEvents", "kind"), ("outboxEvents", "sourceKey"), ("authorizationHistory", "operation") })
+            Assert.False(await data.Rows(table).Find(new BsonDocument(field, new BsonRegularExpression(@"^organization\.address(?:[.:]|$)"))).AnyAsync());
         Assert.False(await data.Rows(D.Events).Find(new BsonDocument()).AnyAsync());
         Assert.False(await data.Rows(BankTransactionClaims.Collection).Find(new BsonDocument("direction", "debit")).AnyAsync());
         foreach (var (table, field) in new[] { ("idempotencyRecords", "operation"), ("auditEvents", "kind"), ("outboxEvents", "kind"), ("journalEntries", "source.namespace") })
@@ -90,11 +96,27 @@ public sealed class RefundSettlementMigrationTests(MongoFixture fixture)
         Assert.Equal("independent_exact_bank_debit", policy["rule"]);
         foreach (var field in new[] { "bankDebitVerificationProcedureReference", "beneficiaryVerificationProcedureReference", "operatingOwnerReference", "approvalReference" })
             Assert.Equal("synthetic-test-only-" + field, policy[field]);
-        Assert.Equal(1, (await data.Rows(D.Policies).DeleteOneAsync(policy)).DeletedCount);
-        var history = await HistoryAsync(data); Assert.Equal(57, history.Count);
+        await BankTransactionClaimSchemas.RequireStorageAsync(data.Database, default);
+        var claims = await ClaimsAsync(data);
+        using (var tx = await data.Database.Client.StartSessionAsync()) {
+            tx.StartTransaction(new TransactionOptions(readConcern: ReadConcern.Snapshot, writeConcern: WriteConcern.WMajority));
+            var receipts = await data.Rows(BankReceiptBson.Receipts).Find(tx, new BsonDocument()).ToListAsync();
+            Assert.Equal(receipts.LongCount(), await data.Rows(BankTransactionClaims.Collection).CountDocumentsAsync(tx, new BsonDocument()));
+            foreach (var row in receipts) {
+                var actual = await BankReceiptRecords.ReadReceiptHistoryAsync(data.Database, tx, row["_id"].AsInt64, default);
+                await new BankTransactionClaims(data.Database).RequireCreditAsync(tx, actual, default);
+            }
+            await tx.AbortTransactionAsync();
+        }
+        var history = await HistoryAsync(data); Assert.Equal(CollectionMigrations.CurrentVersion, history.Count);
+        Assert.Equal(Enumerable.Range(1, CollectionMigrations.CurrentVersion), history.Select(row => row["_id"].AsInt32));
         Assert.All(history, row => Assert.Equal("applied", row["state"]));
-        Assert.Equal(1, (await data.Rows("schemaMigrations").DeleteOneAsync(new BsonDocument { { "_id", 57 }, { "state", "applied" } })).DeletedCount);
+        var suffix = history.Skip(56).ToArray(); Assert.Equal(new[] { 57, 58 }, suffix.Select(row => row["_id"].AsInt32));
+        Assert.Equal(1, (await data.Rows(D.Policies).DeleteOneAsync(policy)).DeletedCount);
+        Assert.Equal(suffix.LongLength, (await data.Rows("schemaMigrations").DeleteManyAsync(new BsonDocument {
+            { "_id", new BsonDocument("$in", new BsonArray(suffix.Select(row => row["_id"]))) }, { "state", "applied" } })).DeletedCount);
         Assert.Equal(new BsonArray(history.Take(56)), await HistoryAsync(data));
+        Assert.Equal(claims, await ClaimsAsync(data));
     }
     private static Task UpgradeAsync(Data data) => new CollectionMigrations(data.Database, data.Clock).ApplyAsync();
     private static async Task<List<BsonDocument>> DefinitionsAsync(Data data) => (await (await data.Database.ListCollectionsAsync()).ToListAsync()).OrderBy(row => row["name"].AsString).ToList();

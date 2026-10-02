@@ -9,7 +9,7 @@ export class IdentityFailure extends Error {
   }
 }
 
-const returnPaths = ["/identity/account", "/administration/access", "/administration/organizations", "/administration/history", "/administration/person-reviews", "/administration/catalog", "/catalog/prices", "/catalog/browse", "/ordering/drafts", "/ordering/checkout", "/ordering/reviews", "/ordering/orders", "/fulfillment/preparations", "/fulfillment/dispatches", "/fulfillment/shipments", "/fulfillment/receive", "/fulfillment/cases", "/billing/invoices", "/billing/payments", "/billing/payment-reviews", "/billing/receiving-accounts", "/billing/bank-statements", "/billing/bank-receipts", "/inventory/counts", "/inventory/sources", "/inventory/sources/revisions", "/inventory/sources/aliases", "/inventory/sources/suspensions", "/inventory/sources/policies"];
+const returnPaths = ["/identity/account", "/administration/access", "/administration/organizations", "/administration/organizations/addresses", "/administration/history", "/administration/person-reviews", "/administration/catalog", "/catalog/prices", "/catalog/browse", "/ordering/drafts", "/ordering/checkout", "/ordering/reviews", "/ordering/orders", "/fulfillment/preparations", "/fulfillment/dispatches", "/fulfillment/shipments", "/fulfillment/receive", "/fulfillment/cases", "/billing/invoices", "/billing/payments", "/billing/payment-reviews", "/billing/receiving-accounts", "/billing/bank-statements", "/billing/bank-receipts", "/inventory/counts", "/inventory/sources", "/inventory/sources/revisions", "/inventory/sources/aliases", "/inventory/sources/suspensions", "/inventory/sources/policies"];
 export const identityReturnPath = (value?: string | null) => value && returnPaths.includes(value) ? value : "/identity/account";
 const validId = (value: string) => /^[1-9][0-9]{0,18}$/.test(value) && (value.length < 19 || value <= "9223372036854775807");
 const validTime = (value: unknown): value is string => typeof value === "string" && value.length <= 40 && /^\d{4}-\d\d-\d\dT/.test(value) && Number.isFinite(Date.parse(value));
@@ -66,6 +66,8 @@ export function canManageAccounts(actions: readonly string[]) { return actions.s
 
 export function canReviewPeople(actions: readonly string[]) { return actions.some(action => ["person.review.read", "person.review.propose", "person.review.approve"].includes(action)); }
 
+export function canUseOrganizationAddresses(actions: readonly string[]) { return actions.some(action => ["organization.address.read", "technical.configure", "organization.approve"].includes(action)); }
+
 export function canUseStockSources(actions: readonly string[]) { return actions.some(action => ["stock.source.read", "stock.source.propose", "stock.source.approve"].includes(action)); }
 
 export function canUseStockSourcePolicies(actions: readonly string[]) { return actions.some(action => ["stock.source.read", "stock.source.policy.propose", "stock.source.policy.approve"].includes(action)); }
@@ -102,6 +104,7 @@ export function identityDestinations(actions: readonly string[]) {
     { href: "/administration/person-reviews", label: "Keterkaitan akun", description: "Tinjau pengajuan penangguhan keterkaitan akun sesuai penugasan.", visible: canReviewPeople(actions) },
     { href: "/administration/accounts", label: "Akun dan undangan", description: "Tinjau undangan dan akun sesuai lingkup tugas.", visible: canManageAccounts(actions) },
     { href: "/administration/access", label: "Akses dan keanggotaan", description: "Ajukan atau tinjau izin sesuai cakupan tugas.", visible: actions.some(action => action.startsWith("access.") || action.startsWith("membership.")) },
+    { href: "/administration/organizations/addresses", label: "Alamat organisasi", description: "Ajukan dan periksa alamat penagihan, cabang dan gudang sesuai penugasan.", visible: canUseOrganizationAddresses(actions) },
     { href: "/administration/organizations", label: "Organisasi dan unit", description: "Kelola struktur organisasi melalui persetujuan.", visible: actions.some(action => ["technical.configure", "organization.approve", "access.audit.read"].includes(action)) },
     { href: "/administration/history", label: "Riwayat perubahan", description: "Periksa jejak pengajuan dan keputusan akses.", visible: actions.some(action => ["access.audit.read", "access.approve", "membership.approve", "access.revoke", "technical.configure", "organization.approve"].includes(action)) },
   ].filter(item => item.visible);
