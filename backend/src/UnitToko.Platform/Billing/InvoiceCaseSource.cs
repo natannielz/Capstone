@@ -2,6 +2,8 @@ using MongoDB.Bson;
 using MongoDB.Driver;
 using UnitToko.Modules.Identity;
 using UnitToko.Modules.Identity.Contracts;
+using UnitToko.Modules.Organizations;
+using UnitToko.Platform.Authorization;
 using UnitToko.Platform.Inventory;
 using UnitToko.Platform.Mongo.Migrations;
 using UnitToko.Platform.Fulfillment;
@@ -21,9 +23,26 @@ public sealed partial class InvoiceService
             Builders<BsonDocument>.Update.SetOnInsert("schemaVersion", 1).SetOnInsert("invoiceHash", source["invoiceHash"]).Inc("fence", 1L), new UpdateOptions { IsUpsert = true }, ct);
         if (touched.ModifiedCount != 1 && touched.UpsertedId is null) throw InvoiceRecords.Invalid();
     }
-    internal async Task<BsonDocument> CaseSourceAsync(ActorContext actor, AuthorizationSnapshot authority, IClientSessionHandle tx, long id, string permission, CancellationToken ct) {
+    private async Task<BsonDocument> CaseInvoiceAsync(ActorContext actor, AuthorizationSnapshot authority, IClientSessionHandle tx, long id, string permission,
+        CancellationToken ct, FinancialInvoiceSource? issuedInvoice, string? expectedHash = null) {
+        if (issuedInvoice is null) return await AuthorizedInvoiceAsync(actor, authority, tx, id, permission, ct);
+        // Only the financial read adapter can consume this actual Invoice-owned observation.
+        // Its enclosing M53 consumer must finish the full issued-invoice fence in this tx.
+        if (permission != Permissions.CaseRead) throw InvoiceRecords.Invalid();
+        issuedInvoice.RequireContext(actor, authority, tx, id, expectedHash ?? issuedInvoice.Invoice["snapshotHash"].AsString);
+        var query = ScopePolicy.Compile(actor, authority, permission, clock.UtcNow); AuthorizationStore.Require(query);
+        var resources = InvoiceBson.Sources(issuedInvoice.Invoice["sources"].AsBsonArray).Select(source => source.Resource).ToArray();
+        if (resources.Length == 0 || resources.Any(resource => !query.Matches(resource) || !ScopePolicy.IsResourceActive(resource, authority.Directory))) throw InvoiceRecords.Invalid();
+        // Preserve the actual CaseRead grant/session/scope fence for this completed
+        // owning-module read; the enclosing return fence repeats its final admission.
+        await receipts.InvoiceFenceAsync(actor, authority, tx, resources, permission, ct);
+        issuedInvoice.RequireContext(actor, authority, tx, id, expectedHash ?? issuedInvoice.Invoice["snapshotHash"].AsString);
+        ct.ThrowIfCancellationRequested(); return issuedInvoice.Invoice.DeepClone().AsBsonDocument;
+    }
+    internal async Task<BsonDocument> CaseSourceAsync(ActorContext actor, AuthorizationSnapshot authority, IClientSessionHandle tx, long id, string permission, CancellationToken ct,
+        FinancialInvoiceSource? issuedInvoice = null) {
         if (permission is not (Permissions.CaseRead or Permissions.CaseRequest or Permissions.CaseManage)) throw InvoiceRecords.Invalid();
-        var row = await AuthorizedInvoiceAsync(actor, authority, tx, id, permission, ct); return CaseSnapshot(row);
+        var row = await CaseInvoiceAsync(actor, authority, tx, id, permission, ct, issuedInvoice); return CaseSnapshot(row);
     }
     internal static BsonDocument CaseSnapshot(BsonDocument row) {
         var view = View(row);
@@ -34,8 +53,10 @@ public sealed partial class InvoiceService
                 { "receiptId", line.ReceiptId.Value }, { "skuId", line.SkuId.Value }, { "skuCode", line.SkuCode }, { "productName", line.ProductName },
                 { "packageLabel", line.PackageLabel }, { "baseUnitsPerPackage", line.BaseUnitsPerPackage }, { "baseUnitCode", line.BaseUnitCode }, { "acceptedBaseUnits", line.AcceptedBaseUnits } })) } };
     }
-    internal async Task<BsonArray> CaseStockSourceAsync(ActorContext actor, AuthorizationSnapshot authority, IClientSessionHandle tx, BsonDocument expected, string permission, CancellationToken ct) {
-        var invoice = await AuthorizedInvoiceAsync(actor, authority, tx, expected["invoiceId"].AsInt64, permission, ct);
+    internal async Task<BsonArray> CaseStockSourceAsync(ActorContext actor, AuthorizationSnapshot authority, IClientSessionHandle tx, BsonDocument expected, string permission, CancellationToken ct,
+        FinancialInvoiceSource? issuedInvoice = null) {
+        var invoice = await CaseInvoiceAsync(actor, authority, tx, expected["invoiceId"].AsInt64, permission, ct, issuedInvoice,
+            issuedInvoice is null ? null : expected["invoiceHash"].AsString);
         if (!InvoiceRecords.Equal(CaseSnapshot(invoice), expected)) throw InvoiceRecords.Invalid();
         return await CaseDispatchStockAsync(database, tx, expected, ct);
     }

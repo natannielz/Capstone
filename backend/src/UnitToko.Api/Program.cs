@@ -71,6 +71,18 @@ builder.Services.AddSingleton<PaymentVerificationService>();
 builder.Services.AddSingleton<PaymentAllocationService>();
 builder.Services.AddSingleton<ReturnEntitlementService>();
 builder.Services.AddSingleton<ReturnFinancialApprovalService>();
+builder.Services.AddSingleton<RefundPayoutService>();
+builder.Services.AddSingleton(sp => {
+    var options = sp.GetRequiredService<IConfiguration>().GetSection("Evidence:PrivateWindows");
+    var root = options["Root"]; var storeId = options["StoreId"]; var operators = options.GetSection("TrustedOperatorSids").Get<string[]>() ?? [];
+    PaymentEvidenceStorageOptions? storage = null;
+    if (root is not null || storeId is not null || operators.Length > 0) {
+        if (string.IsNullOrWhiteSpace(root) || string.IsNullOrWhiteSpace(storeId)) throw new InvalidOperationException("Complete private evidence storage settings are required");
+        storage = new(root, storeId, operators);
+    }
+    return new RefundPayoutEvidenceService(sp.GetRequiredService<IMongoDatabase>(), sp.GetRequiredService<MongoUnitOfWork>(), sp.GetRequiredService<IdAllocator>(),
+        sp.GetRequiredService<IClock>(), sp.GetRequiredService<RefundPayoutService>(), storage);
+});
 builder.Services.AddSingleton(sp => {
     var options = sp.GetRequiredService<IConfiguration>().GetSection("Evidence:PrivateWindows");
     var root = options["Root"]; var storeId = options["StoreId"]; var operators = options.GetSection("TrustedOperatorSids").Get<string[]>() ?? [];
@@ -344,6 +356,7 @@ app.MapPaymentAllocationEndpoints();
 app.MapPaymentAllocationCorrectionEndpoints();
 app.MapReturnEntitlementEndpoints();
 app.MapReturnFinancialApprovalEndpoints();
+app.MapRefundPayoutEndpoints();
 app.MapReceivingAccountEndpoints();
 app.MapBankStatementEndpoints();
 app.MapBankReceiptEndpoints();

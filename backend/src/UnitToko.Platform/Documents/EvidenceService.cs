@@ -30,14 +30,19 @@ internal sealed partial class EvidenceService
     private readonly EvidenceStoreRegistration registration;
     private readonly CatalogAuthoringService catalog;
     private readonly IPaymentEvidenceUploadTarget? paymentTargets;
+    private readonly IRefundPayoutEvidenceUploadTarget? refundPayoutTargets;
     internal EvidenceService(IMongoDatabase database, MongoUnitOfWork unit, IdAllocator ids, IClock clock,
-        EvidenceStoreRegistration? registration = null, IPaymentEvidenceUploadTarget? paymentTargets = null)
+        EvidenceStoreRegistration? registration = null, IPaymentEvidenceUploadTarget? paymentTargets = null,
+        IRefundPayoutEvidenceUploadTarget? refundPayoutTargets = null)
     {
         this.database = database; this.unit = unit; this.ids = ids; this.clock = clock;
         this.registration = registration ?? EvidenceStoreRegistration.Unavailable();
         if (paymentTargets is not null && (!ReferenceEquals(paymentTargets.Database.Client, database.Client) || !paymentTargets.Database.DatabaseNamespace.Equals(database.DatabaseNamespace)))
             throw new ArgumentException("Evidence targets must join the same owning transaction");
         this.paymentTargets = paymentTargets;
+        if (refundPayoutTargets is not null && (!ReferenceEquals(refundPayoutTargets.Database.Client, database.Client) || !refundPayoutTargets.Database.DatabaseNamespace.Equals(database.DatabaseNamespace)))
+            throw new ArgumentException("Evidence targets must join the same owning transaction");
+        this.refundPayoutTargets = refundPayoutTargets;
         catalog = new(database, unit, ids, clock);
     }
 

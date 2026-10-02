@@ -9,7 +9,12 @@ using UnitToko.Platform.Authorization;
 namespace UnitToko.Platform.Billing;
 
 internal sealed record FinancialInvoiceSource(BsonDocument Invoice, BsonDocument MoneySource, BsonArray OriginalAccounts,
-    Action RequireCurrent, Func<CancellationToken, Task> FenceAsync);
+    Action RequireCurrent, Func<CancellationToken, Task> FenceAsync,
+    Action<FinancialInvoiceSource, ActorContext, AuthorizationSnapshot, IClientSessionHandle, long, string>? RequireObservationContext = null)
+{
+    internal void RequireContext(ActorContext actor, AuthorizationSnapshot authority, IClientSessionHandle tx, long invoiceId, string invoiceHash) =>
+        (RequireObservationContext ?? throw InvoiceRecords.Invalid())(this, actor, authority, tx, invoiceId, invoiceHash);
+}
 
 public sealed partial class InvoiceService
 {
@@ -18,7 +23,8 @@ public sealed partial class InvoiceService
     internal async Task<FinancialInvoiceSource> FinancialEntitlementSourceAsync(ActorContext actor, AuthorizationSnapshot authority,
         IClientSessionHandle tx, long invoiceId, CancellationToken ct) {
         void Session() {
-            if (actor is null || authority is null || tx is null || !tx.IsInTransaction || !ReferenceEquals(tx.Client, database.Client) || invoiceId <= 0)
+            if (actor is null || authority is null || tx is null || !tx.IsInTransaction || !ReferenceEquals(tx.Client, database.Client) || invoiceId <= 0 ||
+                actor.UserId != authority.UserId || actor.GrantVersion != authority.GrantVersion)
                 throw InvoiceRecords.Invalid();
             _ = actor.Validate();
         }
@@ -42,14 +48,23 @@ public sealed partial class InvoiceService
             return (row.DeepClone().AsBsonDocument, money.DeepClone().AsBsonDocument, accounts);
         }
         var frozen = await ReadAsync(ct);
+        FinancialInvoiceSource? projection = null;
         var scopes = InvoiceBson.Sources(frozen.Invoice["sources"].AsBsonArray).Select(source => source.Resource).ToArray();
+        static bool Same(BsonValue left, BsonValue right) => new BsonDocument("value", left).ToBson().SequenceEqual(new BsonDocument("value", right).ToBson());
         void Current() {
             Session();
+            if (projection is not null && (!Same(projection.Invoice, frozen.Invoice) || !Same(projection.MoneySource, frozen.Money) || !Same(projection.OriginalAccounts, frozen.Accounts)))
+                throw InvoiceRecords.Invalid();
             var query = ScopePolicy.Compile(actor, authority, Permissions.InvoiceRead, clock.UtcNow); AuthorizationStore.Require(query);
             if (scopes.Length == 0 || scopes.Any(scope => !query.Matches(scope) || !ScopePolicy.IsResourceActive(scope, authority.Directory)))
                 throw InvoiceRecords.Invalid();
         }
-        static bool Same(BsonValue left, BsonValue right) => new BsonDocument("value", left).ToBson().SequenceEqual(new BsonDocument("value", right).ToBson());
+        void RequireContext(FinancialInvoiceSource candidate, ActorContext candidateActor, AuthorizationSnapshot candidateAuthority, IClientSessionHandle candidateTx, long candidateId, string candidateHash) {
+            if (!ReferenceEquals(candidate, projection) || !ReferenceEquals(candidateActor, actor) || !ReferenceEquals(candidateAuthority, authority) || !ReferenceEquals(candidateTx, tx) ||
+                !candidateTx.IsInTransaction || !ReferenceEquals(candidateTx.Client, database.Client) || candidateId != invoiceId || candidateHash != frozen.Invoice["snapshotHash"].AsString)
+                throw InvoiceRecords.Invalid();
+            Current(); ct.ThrowIfCancellationRequested();
+        }
         async Task Fence(CancellationToken token) {
             Current();
             var current = await ReadAsync(token);
@@ -60,7 +75,8 @@ public sealed partial class InvoiceService
         Current();
         // Callback baselines are private clones, so mutating a returned projection cannot
         // change what the final source fence requires from the actual issued history.
-        return new(frozen.Invoice.DeepClone().AsBsonDocument, frozen.Money.DeepClone().AsBsonDocument,
-            frozen.Accounts.DeepClone().AsBsonArray, Current, Fence);
+        projection = new(frozen.Invoice.DeepClone().AsBsonDocument, frozen.Money.DeepClone().AsBsonDocument,
+            frozen.Accounts.DeepClone().AsBsonArray, Current, Fence, RequireContext);
+        Current(); return projection;
     }
 }

@@ -3,6 +3,7 @@ using System.Net;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text.Json;
+using System.Text;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
@@ -99,6 +100,109 @@ public sealed class InvoiceBrowserTests(MongoFixture fixture, ITestOutputHelper 
         foreach (var (table, field) in new[] { ("idempotencyRecords", "operation"), ("auditEvents", "kind"), ("outboxEvents", "kind") }) Assert.Equal(1, await data.Rows(table).CountDocumentsAsync(new BsonDocument(field, ReturnFinancialApprovalBson.Operation)));
         await data.AssertOriginalAsync(original);
         foreach (var table in stock.Keys) { var rows = await data.Rows(table).Find(new BsonDocument()).Sort(new BsonDocument("_id", 1)).ToListAsync(); foreach (var current in rows) { current.Remove("fence"); current.Remove("postingFence"); } Assert.Equal(stock[table], rows); }
+    }
+    [LocalStockBrowserFact]
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+    public async Task Browser_records_exact_refund_private_evidence_recovers_lost_reply_without_resend_or_money_transfer() {
+        if (!OperatingSystem.IsWindows()) throw new PlatformNotSupportedException("This private evidence/browser fixture requires Windows");
+        var root = Root(); var node = Environment.GetEnvironmentVariable("UNITTOKO_BROWSER_NODE"); var playwright = Environment.GetEnvironmentVariable("UNITTOKO_BROWSER_PLAYWRIGHT_PACKAGE");
+        Assert.True(Path.IsPathFullyQualified(node ?? "") && File.Exists(node)); Assert.True(Path.IsPathFullyQualified(playwright ?? "") && File.Exists(playwright));
+        Assert.True(File.Exists(Path.Combine(root, "frontend", ".next", "BUILD_ID")));
+        await using var data = await RefundPayoutTests.Data.CreateAsync(fixture, createDraft: false);
+        var source = data.Source; var catalog = data.Catalog; var invoice = source.Allocation.Source.Read.Payment.Invoice;
+        // Persist the real synthetic users' current profiles before the HTTP host loads their
+        // already-issued real opaque sessions. No alternate session endpoint or actor is used.
+        foreach (var (actor, display) in new[] { (data.Actor, "Independent refund evidence recorder fixture"), (source.Approver, "Independent refund approver fixture") })
+            if (!await data.Rows("accountProfiles").Find(new BsonDocument("_id", actor.UserId)).AnyAsync())
+                await data.Rows("accountProfiles").InsertOneAsync(new BsonDocument { { "_id", actor.UserId }, { "schemaVersion", 1 }, { "version", 1L },
+                    { "displayName", display }, { "verifiedEmail", "refund-" + actor.UserId + "@example.invalid" },
+                    { "verifiedAt", data.Clock.UtcNow.UtcDateTime }, { "updatedAt", data.Clock.UtcNow.UtcDateTime } });
+        var protectedTables = new[] { PaymentAllocationBson.Invoices, PaymentAllocationBson.Receipts, PaymentAllocationBson.Events,
+            ReturnEntitlementBson.Requests, ReturnEntitlementBson.Pools, ReturnFinancialApprovalBson.Events, BankReceiptBson.Receipts, BankReceiptBson.Accounts,
+            "journalEntries", "stockBalances", "lots", "movements", "reservations", "stockMovements", "invoices", "paymentSubmissions" }.Distinct().ToArray();
+        async Task<BsonDocument> ProtectedAsync() {
+            var snapshot = new BsonDocument();
+            foreach (var table in protectedTables) {
+                var rows = await data.Rows(table).Find(new BsonDocument()).Sort(new BsonDocument("_id", 1)).ToListAsync();
+                foreach (var row in rows) { row.Remove("fence"); if (table == "invoices") row.Remove("postingFence"); }
+                // Keep original snapshot hashes, money, quantities and versions in the assertion.
+                snapshot[table] = new BsonArray(rows);
+            }
+            return snapshot;
+        }
+        var original = await ProtectedAsync();
+        using var keys = new IdentityRuntimeTests.RuntimeKeys(); var settings = IdentityRuntimeTests.Settings(keys);
+        settings["Mongo:Database"] = data.Database.DatabaseNamespace.DatabaseName; settings["Identity:TrustedProxies:0"] = "127.0.0.1"; settings["Logging:LogLevel:Default"] = "Warning";
+        using var factory = IdentityRuntimeTests.Factory(settings).WithWebHostBuilder(web => web.UseEnvironment("Production").ConfigureTestServices(services => {
+            services.RemoveAll<IClock>(); services.AddSingleton<IClock>(data.Clock);
+            services.RemoveAll<MongoIdentitySessionStore>(); services.AddSingleton(catalog.Sessions);
+            services.RemoveAll<InvoiceService>(); services.AddSingleton(invoice.Service);
+            services.RemoveAll<AfterSalesCaseService>(); services.AddSingleton(source.Cases);
+            services.RemoveAll<ReturnEntitlementService>(); services.AddSingleton(source.Entitlements);
+            services.RemoveAll<PaymentAllocationService>(); services.AddSingleton(source.Allocation.Service);
+            services.RemoveAll<ReturnFinancialApprovalService>(); services.AddSingleton(source.Service);
+            services.RemoveAll<RefundPayoutService>(); services.AddSingleton(data.Service);
+            services.RemoveAll<RefundPayoutEvidenceService>(); services.AddSingleton(data.Evidence);
+        }));
+        factory.UseKestrel(options => options.Listen(IPAddress.Loopback, 0)); factory.StartServer();
+        var apiAddress = Assert.Single(factory.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!.Addresses);
+        const string origin = "https://portal.unit-toko.co.id";
+        using var rsa = RSA.Create(2048); var certificate = new CertificateRequest("CN=UnitToko refund evidence rehearsal", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        var names = new SubjectAlternativeNameBuilder(); names.AddDnsName(new Uri(origin).Host); certificate.CertificateExtensions.Add(names.Build());
+        using var tls = certificate.CreateSelfSigned(DateTimeOffset.UtcNow.AddMinutes(-5), DateTimeOffset.UtcNow.AddHours(1)); var password = Convert.ToHexString(RandomNumberGenerator.GetBytes(24));
+        var artifacts = Path.Combine(root, "tmp", "production", "invoice-browser-results"); Directory.CreateDirectory(artifacts);
+        var run = "refund-payout-" + Guid.NewGuid().ToString("N"); var imagePath = Path.Combine(artifacts, run + ".png"); var validationReadyPath = Path.Combine(artifacts, run + "-validated.txt");
+        await File.WriteAllBytesAsync(imagePath, data.Bytes);
+        var input = new { apiAddress, origin, pfx = Convert.ToBase64String(tls.Export(X509ContentType.Pfx, password)), password, playwrightPackage = playwright,
+            financeToken = catalog.Issued[data.Actor.UserId].OpaqueToken, recorderToken = catalog.Issued[data.Actor.UserId].OpaqueToken,
+            approverToken = catalog.Issued[source.Approver.UserId].OpaqueToken, recorderId = data.Actor.UserId.ToString(), approverId = source.Approver.UserId.ToString(),
+            caseId = source.CaseId.ToString(), returnId = source.ReturnId.ToString(), invoiceId = source.Allocation.InvoiceId.ToString(), approvalId = data.ApprovalId.ToString(),
+            transferDate = data.Input.TransferDate.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture), transferReference = data.Input.TransferReference,
+            reservedRefund = data.Input.Amount.ToString(), imagePath, validationReadyPath, refundPayout = true };
+        var start = new ProcessStartInfo(node!) { WorkingDirectory = Path.Combine(root, "frontend"), UseShellExecute = false, CreateNoWindow = true, RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true };
+        start.ArgumentList.Add(Path.Combine(root, "frontend", "scripts", "verify-invoice-browser.mjs")); start.Environment["NODE_ENV"] = "production"; start.Environment["NEXT_TELEMETRY_DISABLED"] = "1";
+        using var process = Process.Start(start) ?? throw new InvalidOperationException("Refund payout browser child did not start");
+        var text = new StringBuilder(); var validationStarted = false; var stdout = ReadOutputAsync(); var stderr = process.StandardError.ReadToEndAsync();
+        try {
+            await process.StandardInput.WriteAsync(JsonSerializer.Serialize(input)); process.StandardInput.Close();
+            var exit = process.WaitForExitAsync().WaitAsync(TimeSpan.FromMinutes(3));
+            var first = await Task.WhenAny(exit, stdout); if (first == stdout && stdout.IsFaulted) await stdout;
+            await exit; var result = await stdout;
+            Assert.True(process.ExitCode == 0, result + await stderr); Assert.Contains("REAL_REFUND_PAYOUT_BROWSER_PASS", result); Assert.True(validationStarted);
+        } finally {
+            if (!process.HasExited) { process.Kill(true); await process.WaitForExitAsync(); }
+            try { await stdout; } catch (Exception error) { text.AppendLine("NATIVE_WORKER_OR_CHILD_OUTPUT_FAILED " + error); }
+            var failure = await stderr; output.WriteLine(text.ToString()); output.WriteLine(failure);
+            await File.WriteAllTextAsync(Path.Combine(artifacts, run + "-native-child.log"), text + Environment.NewLine + failure);
+        }
+        async Task<string> ReadOutputAsync() {
+            while (await process.StandardOutput.ReadLineAsync() is { } line) {
+                text.AppendLine(line);
+                if (line == "VALIDATE_REFUND_PAYOUT_EVIDENCE_READY") {
+                    Assert.False(validationStarted); validationStarted = true;
+                    await data.ValidateAsync(); await File.WriteAllTextAsync(validationReadyPath, "Actual native validation processor completed");
+                }
+            }
+            return text.ToString();
+        }
+        Assert.Equal(original, await ProtectedAsync());
+        var draft = await data.Rows(RefundPayoutBson.Drafts).Find(new BsonDocument()).SingleAsync();
+        var payout = await data.Rows(RefundPayoutBson.Payouts).Find(new BsonDocument()).SingleAsync();
+        var pin = await data.Rows("evidencePins").Find(new BsonDocument("associationKind", "RefundPayout")).SingleAsync();
+        Assert.Equal(data.Actor.UserId, payout["recordedBy"].AsInt64); Assert.NotEqual(source.Approver.UserId, payout["recordedBy"].AsInt64);
+        Assert.Equal(data.ApprovalId, payout["financialApprovalId"].AsInt64); Assert.Equal("recorded_unverified", payout["state"]);
+        Assert.Equal(600m, payout["input"]["amount"].AsDecimal); Assert.Equal(payout["_id"], draft["recordedPayoutId"]);
+        Assert.Equal(payout["pinId"], pin["_id"]); Assert.Equal(payout["_id"], pin["associationId"]); Assert.Equal(draft["_id"], pin["refundPayoutDraftId"]);
+        Assert.Equal(payout["snapshotHash"], pin["associationHash"]); Assert.Equal(payout["evidence"], pin["reference"]);
+        Assert.Equal(1, await data.Rows("evidencePinAudits").CountDocumentsAsync(new BsonDocument("pinId", pin["_id"])));
+        foreach (var operation in new[] { RefundPayoutBson.DraftOperation, RefundPayoutBson.Operation })
+            foreach (var (table, field) in new[] { ("idempotencyRecords", "operation"), ("auditEvents", "kind"), ("outboxEvents", "kind") })
+                Assert.Equal(1, await data.Rows(table).CountDocumentsAsync(new BsonDocument(field, operation)));
+        Assert.StartsWith("rpd." + data.ApprovalId + ".", draft["requestKey"].AsString); Assert.StartsWith("rpr." + draft["_id"].AsInt64 + ".", payout["requestKey"].AsString);
+        Assert.Equal(RefundPayoutBson.Result(payout), await data.Service.RecoverRecordAsync(data.Actor, draft["_id"].AsInt64, payout["requestKey"].AsString));
+        var leases = await data.Rows("evidenceReadLeases").Find(new BsonDocument("target.kind", "RefundPayout")).ToListAsync();
+        Assert.NotEmpty(leases); Assert.All(leases, row => Assert.Equal("released", row["state"]));
+        Assert.Equal(original, await ProtectedAsync());
     }
     private async Task RunAsync(bool afterSales, bool caseDecision = false, bool caseReturn = false, bool financialRequest = false) {
         var root = Root(); var node = Environment.GetEnvironmentVariable("UNITTOKO_BROWSER_NODE"); var playwright = Environment.GetEnvironmentVariable("UNITTOKO_BROWSER_PLAYWRIGHT_PACKAGE");

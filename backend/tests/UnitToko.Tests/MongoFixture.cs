@@ -1,5 +1,7 @@
 using MongoDB.Bson;
 using MongoDB.Driver;
+using MongoDB.Driver.Core.Events;
+using System.Collections.Concurrent;
 
 namespace UnitToko.Tests;
 
@@ -7,6 +9,8 @@ public sealed class MongoFixture : IAsyncLifetime
 {
     public string DatabaseName { get; } = "unittoko_test_" + Guid.NewGuid().ToString("N");
     public MongoClient Client { get; private set; } = null!;
+    // Optional local timing diagnostics: table names and durations only, never command bodies.
+    internal Action<string, double>? CommandCompleted { get; set; }
 
     public async Task InitializeAsync()
     {
@@ -30,7 +34,20 @@ public sealed class MongoFixture : IAsyncLifetime
         }
         catch (MongoCommandException exception) when (exception.Code == 23) { }
 
-        Client = new MongoClient(uri);
+        var settings = MongoClientSettings.FromConnectionString(uri);
+        var observed = new ConcurrentDictionary<int, string>();
+        settings.ClusterConfigurator = builder => {
+            builder.Subscribe<CommandStartedEvent>(command => {
+                if (CommandCompleted is null) return;
+                var target = command.Command.GetValue(command.CommandName, BsonNull.Value);
+                observed[command.RequestId] = command.CommandName + (target.IsString ? "/" + target.AsString : "");
+            });
+            builder.Subscribe<CommandSucceededEvent>(command => {
+                if (observed.TryRemove(command.RequestId, out var name)) CommandCompleted?.Invoke(name, command.Duration.TotalMilliseconds);
+            });
+            builder.Subscribe<CommandFailedEvent>(command => { observed.TryRemove(command.RequestId, out _); });
+        };
+        Client = new MongoClient(settings);
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         while (!timeout.IsCancellationRequested)
         {

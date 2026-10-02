@@ -6,7 +6,8 @@ public enum EvidenceTargetKind
 {
     CatalogFamily = 1,
     CatalogSku = 2,
-    PaymentDeclaration = 3
+    PaymentDeclaration = 3,
+    RefundPayout = 4
 }
 
 /// <summary>
@@ -38,7 +39,7 @@ public sealed record EvidenceTargetRef
 
     public EvidenceTargetRef(EvidenceTargetKind kind, long id)
     {
-        if (kind is not (EvidenceTargetKind.CatalogFamily or EvidenceTargetKind.CatalogSku or EvidenceTargetKind.PaymentDeclaration) || id <= 0)
+        if (kind is not (EvidenceTargetKind.CatalogFamily or EvidenceTargetKind.CatalogSku or EvidenceTargetKind.PaymentDeclaration or EvidenceTargetKind.RefundPayout) || id <= 0)
             throw new DomainValidationException("evidence_invalid_target", "Evidence target is invalid");
         Kind = kind;
         Id = id;

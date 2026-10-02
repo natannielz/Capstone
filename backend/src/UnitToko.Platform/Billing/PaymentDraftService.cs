@@ -9,6 +9,7 @@ using UnitToko.Modules.Identity;
 using UnitToko.Modules.Identity.Contracts;
 using UnitToko.Modules.Organizations;
 using UnitToko.Platform.Authorization;
+using UnitToko.Platform.Documents;
 using UnitToko.Platform.Fulfillment;
 using UnitToko.Platform.Identity;
 using UnitToko.Platform.Inventory;
@@ -44,7 +45,7 @@ public sealed partial class PaymentDraftService
         await InventoryRepository.RequireStorageAsync(database, B.Heads, PaymentSubmissionSchemas.DeclarationValidator(), PaymentDraftSchemas.Key(B.Heads), ct);
         await ReplacementStorageAsync(ct);
         foreach (var name in PaymentSubmissionSchemas.Collections)
-            await InventoryRepository.RequireStorageAsync(database, name, PaymentSubmissionSchemas.Validator(name), PaymentSubmissionSchemas.Key(name), ct);
+            await RefundPayoutEvidenceSchemas.RequireCompatibleStorageAsync(database, name, PaymentSubmissionSchemas.Validator(name), PaymentSubmissionSchemas.Key(name), ct);
     }
     private AuthorizationQuery Query(ActorContext actor, AuthorizationSnapshot authority) {
         var query = ScopePolicy.Compile(actor, authority, Permissions.PaymentEvidence, clock.UtcNow); AuthorizationStore.Require(query); return query;

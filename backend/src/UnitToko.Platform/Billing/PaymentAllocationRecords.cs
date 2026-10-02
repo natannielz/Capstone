@@ -91,7 +91,8 @@ internal sealed partial class PaymentAllocationRecords(IMongoDatabase database, 
         return row;
     }
     internal async Task<(BsonDocument Balance, BsonDocument? Head)> BalanceAsync(IClientSessionHandle tx, bool receipt, long id, BsonDocument party,
-        BsonValue total, BsonValue sourceHash, Func<BsonDocument, Task> validateSource, CancellationToken ct) {
+        BsonValue total, BsonValue sourceHash, Func<BsonDocument, Task> validateSource, CancellationToken ct,
+        Dictionary<long, Dictionary<long, decimal>>? capturedReleaseTotals = null) {
         var name = receipt ? B.Receipts : B.Invoices; var raw = await Rows(name).Find(tx, new BsonDocument("_id", id)).SingleOrDefaultAsync(ct);
         var expected = Empty(receipt); var seen = new HashSet<long>();
         using var cursor = await Rows(B.Events).Find(tx, new BsonDocument(receipt ? "receiptId" : "lines.invoiceId", id)).Sort(new BsonDocument(receipt ? "receiptVersion" : "recordedAt", 1)).ToCursorAsync(ct);
@@ -101,8 +102,11 @@ internal sealed partial class PaymentAllocationRecords(IMongoDatabase database, 
         events.AddRange(await Rows(A.Events).Find(tx, new BsonDocument(receipt ? "receipts.receiptId" : "invoiceId", id)).ToListAsync(ct));
         foreach (var item in events.OrderBy(row => EventVersion(row, receipt, id))) {
             var row = await ReadEventAsync(tx, item, ct); await validateSource(row); if (!seen.Add(row["_id"].AsInt64)) throw B.Broken();
-            if (row["operation"] == C.Operation) await CorrectionTotalsAsync(tx, row["originalAllocationId"].AsInt64, ct);
-            if (row["operation"] == A.Operation) foreach (var allocation in row["links"].AsBsonArray.Select(link => link["originalAllocationId"].AsInt64).Distinct()) await CorrectionTotalsAsync(tx, allocation, ct);
+            foreach (var allocation in row["operation"] == C.Operation ? new[] { row["originalAllocationId"].AsInt64 } :
+                row["operation"] == A.Operation ? row["links"].AsBsonArray.Select(link => link["originalAllocationId"].AsInt64).Distinct() : []) {
+                var totals = await CorrectionTotalsAsync(tx, allocation, ct);
+                if (capturedReleaseTotals is not null) capturedReleaseTotals[allocation] = new(totals);
+            }
             Equal(row["party"], party); Equal(EventBefore(row, receipt, id), expected);
             Equal(EventSourceHash(row, receipt, id), sourceHash); Equal(EventTotal(row, receipt, id), total);
             expected = After(row, receipt, id);

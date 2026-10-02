@@ -4,6 +4,7 @@ using UnitToko.Platform.Inventory;
 using UnitToko.Platform.Billing;
 using UnitToko.Platform.Mongo;
 using UnitToko.Platform.Mongo.Migrations;
+using UnitToko.Platform.Documents;
 
 namespace UnitToko.Platform.DocumentProcessing;
 
@@ -13,7 +14,7 @@ internal static class DocumentProcessingStorage
         foreach (var name in DocumentProcessingSchemas.Collections)
             await InventoryRepository.RequireStorageAsync(database, name, DocumentProcessingSchemas.Validator(name), DocumentProcessingSchemas.Key(name), ct);
         foreach (var name in EvidenceAccessSchemas.Collections)
-            await InventoryRepository.RequireStorageAsync(database, name, EvidenceAccessSchemas.Validator(name), EvidenceAccessSchemas.Key(name), ct);
+            await RefundPayoutEvidenceSchemas.RequireCompatibleStorageAsync(database, name, EvidenceAccessSchemas.Validator(name), EvidenceAccessSchemas.Key(name), ct);
         await RequireOutboxAsync(database, DocumentProcessingSchemas.OutboxValidator(), ct);
     }
     internal static async Task RequireOutboxAsync(IMongoDatabase database, BsonDocument required, CancellationToken ct) {

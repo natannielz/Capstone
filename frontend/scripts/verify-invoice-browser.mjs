@@ -4,20 +4,22 @@ import http from 'node:http';
 import https from 'node:https';
 import net from 'node:net';
 import { createRequire } from 'node:module';
-import { appendFileSync, mkdirSync, readFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import next from 'next';
 import { verifyReturnFinancialApprovalBrowser } from './verify-return-financial-approval-browser.mjs';
+import { verifyRefundPayoutBrowser } from './verify-refund-payout-browser.mjs';
 
 const chunks = []; for await (const chunk of process.stdin) chunks.push(chunk);
 const config = JSON.parse(Buffer.concat(chunks).toString('utf8')), api = new URL(config.apiAddress), origin = new URL(config.origin);
 assert.equal(process.versions.node.split('.')[0], '24'); assert.equal(api.protocol, 'http:'); assert.equal(api.hostname, '127.0.0.1'); assert.ok(Number(api.port) > 0); assert.equal(origin.href, 'https://portal.unit-toko.co.id/');
 const load = createRequire(config.playwrightPackage), metadata = load(config.playwrightPackage); assert.equal(metadata.name, 'playwright'); assert.equal(metadata.version, '1.62.1');
 const { chromium } = load('playwright'), channel = process.env.UNITTOKO_BROWSER_CHANNEL ?? 'chromium'; assert.ok(['chromium', 'msedge'].includes(channel));
-const app = next({ dev: false, dir: process.cwd(), quiet: true }), sockets = new Set(), writes = [], caseWrites = [], decisionWrites = [], returnWrites = [], inspectionWrites = [], resolutionWrites = [], entitlementWrites = [], financialWrites = [], financialRecoveries = [], errors = [], pages = [];
+const app = next({ dev: false, dir: process.cwd(), quiet: true }), sockets = new Set(), writes = [], caseWrites = [], decisionWrites = [], returnWrites = [], inspectionWrites = [], resolutionWrites = [], entitlementWrites = [], financialWrites = [], financialRecoveries = [], draftWrites = [], payoutWrites = [], payoutRecoveries = [], errors = [], pages = [];
 const directory = resolve('../tmp/production/invoice-browser-results'); mkdirSync(directory, { recursive: true });
 const financialTracePath = config.financialApproval ? resolve(directory, 'return-financial-approval-flow-' + Date.now() + '.jsonl') : null;
-function traceFinancial(type, value) { if (financialTracePath) appendFileSync(financialTracePath, JSON.stringify({ at: new Date().toISOString(), type, ...value }) + '\n'); }
+const payoutTracePath = config.refundPayout ? resolve(directory, 'refund-payout-flow-' + Date.now() + '.jsonl') : null;
+function traceFinancial(type, value) { for (const path of [financialTracePath, payoutTracePath]) if (path) appendFileSync(path, JSON.stringify({ at: new Date().toISOString(), type, ...value }) + '\n'); }
 traceFinancial('host-start', {});
 let browser, frontend, edge, tunnel, dropNext = false, dropped = 0;
 function track(server) { server.on('connection', socket => { sockets.add(socket); socket.on('close', () => sockets.delete(socket)); }); return server; }
@@ -36,22 +38,29 @@ function forward(req, res, port, isApi) {
   const financialWrite = req.method === 'POST' && /^\/api\/v1\/billing\/cases\/[1-9][0-9]*\/returns\/[1-9][0-9]*\/financial-approval$/.test(req.url);
   const financialRecovery = req.method === 'POST' && /^\/api\/v1\/billing\/cases\/[1-9][0-9]*\/returns\/[1-9][0-9]*\/financial-approval\/operations\/query$/.test(req.url);
   const financialPath = config.financialApproval && /^\/api\/v1\/billing\/cases\/[1-9][0-9]*\/returns\/[1-9][0-9]*\/financial-approval(?:\/.*)?$/.test(req.url);
-  if (financialPath) traceFinancial('request-begin', { path: req.url, method: req.method, actor: req.headers['x-expected-actor-id'] });
+  const draftWrite = req.method === 'POST' && /^\/api\/v1\/billing\/refund-approvals\/[1-9][0-9]*\/payout-drafts$/.test(req.url);
+  const payoutWrite = req.method === 'POST' && /^\/api\/v1\/billing\/refund-payout-drafts\/[1-9][0-9]*\/record$/.test(req.url);
+  const payoutRecovery = req.method === 'POST' && /^\/api\/v1\/billing\/refund-payout-drafts\/[1-9][0-9]*\/operations\/query$/.test(req.url);
+  const payoutPath = config.refundPayout && /^\/api\/v1\/billing\/(?:refund-approvals\/|refund-payout-drafts\/|cases\/[1-9][0-9]*\/returns\/[1-9][0-9]*\/refund-payout\/)/.test(req.url);
+  if (financialPath || payoutPath) traceFinancial('request-begin', { path: req.url, method: req.method, actor: req.headers['x-expected-actor-id'] });
   let financialReference;
-  if (financialWrite || financialRecovery) {
+  if (financialWrite || financialRecovery || draftWrite || payoutWrite || payoutRecovery) {
     const reference = { path: req.url, key: req.headers['idempotency-key'], actor: req.headers['x-expected-actor-id'] }, body = [];
     financialReference = reference;
-    (financialWrite ? financialWrites : financialRecoveries).push(reference);
+    (financialWrite ? financialWrites : financialRecovery ? financialRecoveries : draftWrite ? draftWrites : payoutWrite ? payoutWrites : payoutRecoveries).push(reference);
     req.on('data', chunk => body.push(chunk)); req.on('end', () => { reference.body = JSON.parse(Buffer.concat(body).toString('utf8')); });
   }
-  const drop = (write || caseWrite || decisionWrite || returnWrite || inspectionWrite || resolutionWrite || entitlementWrite || financialWrite) && dropNext; if (drop) dropNext = false;
-  const startedAt = performance.now();
+  const drop = (write || caseWrite || decisionWrite || returnWrite || inspectionWrite || resolutionWrite || entitlementWrite || financialWrite || payoutWrite) && dropNext; if (drop) dropNext = false;
+  const startedAt = performance.now(); let upstreamCompleted = false;
   const upstream = http.request({ hostname: '127.0.0.1', port, path: req.url, method: req.method, headers }, response => {
-    if (financialPath) traceFinancial('response-headers', { path: req.url, status: response.statusCode, elapsedMs: Math.round(performance.now() - startedAt) });
+    response.once('end', () => { upstreamCompleted = true; });
+    if (financialPath || payoutPath) traceFinancial('response-headers', { path: req.url, status: response.statusCode, elapsedMs: Math.round(performance.now() - startedAt) });
     if (financialReference) { financialReference.status = response.statusCode; financialReference.elapsedMs = Math.round(performance.now() - startedAt); }
-    if (drop && response.statusCode === 200) { response.resume(); response.once('end', () => { dropped++; if (financialWrite) traceFinancial('actual-200-response-ended-before-intentional-loss', { path: req.url, elapsedMs: Math.round(performance.now() - startedAt) }); res.writeHead(200, { 'content-type': 'application/json', 'content-length': '64', 'cache-control': 'no-store' }); res.flushHeaders(); res.write('{'); setTimeout(() => res.destroy(), 25); }); return; }
+    if (drop && response.statusCode === 200) { response.resume(); response.once('end', () => { dropped++; if (financialWrite || payoutWrite) traceFinancial('actual-200-response-ended-before-intentional-loss', { path: req.url, elapsedMs: Math.round(performance.now() - startedAt) }); res.writeHead(200, { 'content-type': 'application/json', 'content-length': '64', 'cache-control': 'no-store' }); res.flushHeaders(); res.write('{'); setTimeout(() => res.destroy(), 25); }); return; }
     res.writeHead(response.statusCode ?? 502, response.headers); response.pipe(res);
-  }); upstream.on('error', () => { if (!res.headersSent) res.writeHead(502); res.end(); }); req.on('aborted', () => upstream.destroy()); req.pipe(upstream);
+  }); upstream.on('error', () => { if (res.destroyed || res.writableEnded) return; if (!res.headersSent) res.writeHead(502); res.end(); });
+  res.once('close', () => { if (!res.writableEnded && !upstreamCompleted) { if (isApi) traceFinancial('downstream-cancelled', { path: req.url, method: req.method, elapsedMs: Math.round(performance.now() - startedAt) }); upstream.destroy(); } });
+  req.on('aborted', () => upstream.destroy()); req.pipe(upstream);
 }
 async function user(token) {
   const context = await browser.newContext({ ignoreHTTPSErrors: true, viewport: { width: 360, height: 800 }, locale: 'id-ID', timezoneId: 'Asia/Jakarta' });
@@ -74,7 +83,19 @@ try {
   }); const proxyPort = await listen(tunnel);
   browser = await chromium.launch({ ...(channel === 'msedge' ? { channel: 'msedge' } : {}), headless: true, proxy: { server: 'http://127.0.0.1:' + proxyPort } });
   const finance = await user(config.financeToken), page = finance.page;
-  if (config.financialApproval) {
+  if (config.refundPayout) {
+    assert.equal(config.financeToken, config.recorderToken); assert.equal(typeof config.validationReadyPath, 'string');
+    await verifyRefundPayoutBrowser({ config, recorder: finance, user, origin, directory, draftWrites, payoutWrites, payoutRecoveries, dropNext: () => { dropNext = true; }, dropped: () => dropped,
+      validateEvidence: async () => {
+        assert.equal(existsSync(config.validationReadyPath), false); traceFinancial('actual-evidence-validation-requested', {});
+        console.log('VALIDATE_REFUND_PAYOUT_EVIDENCE_READY');
+        const startedAt = performance.now();
+        while (!existsSync(config.validationReadyPath)) { assert.ok(performance.now() - startedAt < 60000, 'Actual private evidence validation did not finish within 60 seconds'); await new Promise(resolve => setTimeout(resolve, 100)); }
+        traceFinancial('actual-evidence-validation-completed', { elapsedMs: Math.round(performance.now() - startedAt) });
+      } });
+    assert.equal(writes.length + caseWrites.length + decisionWrites.length + returnWrites.length + inspectionWrites.length + resolutionWrites.length + entitlementWrites.length + financialWrites.length, 0);
+    assert.deepEqual(errors, []);
+  } else if (config.financialApproval) {
     await verifyReturnFinancialApprovalBrowser({ config, finance, user, origin, directory, financialWrites, financialRecoveries, dropNext: () => { dropNext = true; }, dropped: () => dropped });
     assert.equal(writes.length + caseWrites.length + decisionWrites.length + returnWrites.length + inspectionWrites.length + resolutionWrites.length + entitlementWrites.length, 0);
     assert.deepEqual(errors, []);
@@ -277,6 +298,10 @@ try {
   for (const [index, page] of pages.entries()) if (!page.isClosed()) { console.error('FIXTURE PAGE ' + index + ': ' + (await page.locator('main').innerText().catch(() => 'unavailable')).slice(0, 5000)); await page.screenshot({ path: resolve(directory, 'failure-' + index + '.png'), fullPage: true }).catch(() => {}); }
   console.error(error.stack ?? String(error)); process.exitCode = 1;
 } finally {
+  if (config.refundPayout) console.log('FIXTURE REFUND PAYOUT FLOW ' + JSON.stringify({
+    drafts: draftWrites.map(({ path, key, actor, status, elapsedMs }) => ({ path, key, actor, status, elapsedMs })),
+    writes: payoutWrites.map(({ path, key, actor, status, elapsedMs }) => ({ path, key, actor, status, elapsedMs })),
+    recoveries: payoutRecoveries.map(({ path, key, actor, status, elapsedMs }) => ({ path, key, actor, status, elapsedMs })), dropped, tracePath: payoutTracePath }));
   if (config.financialApproval) console.log('FIXTURE FINANCIAL FLOW ' + JSON.stringify({
     writes: financialWrites.map(({ path, key, actor, status, elapsedMs }) => ({ path, key, actor, status, elapsedMs })),
     recoveries: financialRecoveries.map(({ path, key, actor, status, elapsedMs }) => ({ path, key, actor, status, elapsedMs })), dropped }));

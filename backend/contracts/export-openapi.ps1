@@ -1,4 +1,4 @@
-param([switch]$Check)
+param([switch]$Check, [ValidateSet('Debug','Release')][string]$Configuration = 'Debug')
 $ErrorActionPreference = 'Stop'
 $backend = Split-Path $PSScriptRoot -Parent
 $repo = Split-Path $backend -Parent
@@ -18,7 +18,7 @@ try {
   $port = ([System.Net.IPEndPoint]$listener.LocalEndpoint).Port
   $listener.Stop()
   $baseUrl = "http://127.0.0.1:$port"
-  $apiDll = Join-Path $backend 'src/UnitToko.Api/bin/Debug/net10.0/UnitToko.Api.dll'
+  $apiDll = Join-Path $backend "src/UnitToko.Api/bin/$Configuration/net10.0/UnitToko.Api.dll"
   if (-not (Test-Path $apiDll)) { throw 'Build backend/UnitToko.slnx before exporting OpenAPI.' }
   # Start-Process joins ArgumentList elements; preserve the DLL as one argument in paths with spaces.
   $startArgs = @{ FilePath = $dotnet; ArgumentList = @(('"' + $apiDll + '"'),'--urls',$baseUrl); PassThru = $true }

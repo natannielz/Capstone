@@ -18,6 +18,8 @@ import { createResolutionGateway } from './resolution-client';
 import { createReturnEntitlementGateway, returnEntitlementOwner } from './return-entitlement-client';
 import { canApproveReturnFinancial, createReturnFinancialApprovalGateway, returnFinancialApprovalOwner } from './return-financial-approval-client';
 import { ReturnFinancialApprovalPanel } from './ReturnFinancialApprovalPanel';
+import { RefundPayoutPanel } from './RefundPayoutPanel';
+import { canRecordRefundPayout, createRefundPayoutGateway } from './refund-payout-client';
 import common from '../administration/access.module.css';
 import styles from '../ordering/order-draft.module.css';
 
@@ -61,6 +63,7 @@ function CaseDesk({ account, fresh, onDenied }: { account: Account; fresh: boole
   const [ledgers] = useState(() => new Map<string, MutationLedger>());
   const canRead = account.actions.includes('case.read'), canRequest = account.actions.includes('case.request'), canManage = account.actions.includes('case.manage');
   const canApproveFinancial = canApproveReturnFinancial(account.actions, 'credit') || canApproveReturnFinancial(account.actions, 'refund');
+  const [payouts] = useState(createRefundPayoutGateway), canRecordPayout = canRecordRefundPayout(account.actions);
   const [page, setPage] = useState<{ items: AfterSalesCase[]; hasMore: boolean }>({ items: [], hasMore: false }), [before, setBefore] = useState<string | null>(null), [refresh, setRefresh] = useState(0);
   const [invoiceId, setInvoiceId] = useState(''), [source, setSource] = useState<CaseSource | null>(null), [quantities, setQuantities] = useState<Record<string, string>>({});
   const [issue, setIssue] = useState('damaged'), [reason, setReason] = useState(''), [review, setReview] = useState<ReturnType<typeof prepareCase> | null>(null), [consent, setConsent] = useState(false);
@@ -104,7 +107,14 @@ function CaseDesk({ account, fresh, onDenied }: { account: Account; fresh: boole
   }
   return <><AdministrationNavigation current="cases" actions={account.actions} locked={busy || recovering || editing} />
     <OperationRecovery entries={recovery.entries} journal={recovery.journal} disabled={busy || offline || editing} onBusyChange={setRecovering}
-      recoveryAdapters={canRequest || canManage || canApproveFinancial ? { 'billing.return.financial.approve': { lookup: async entry => {
+      recoveryAdapters={canRequest || canManage || canApproveFinancial || canRecordPayout ? { 'billing.refund.payout': { lookup: async entry => {
+        if (!canRecordPayout || entry.actorId !== account.actorId) throw new AccessFailure(403, 'scope_denied');
+        const value = entry.operation === 'billing.refund.payout.draft' ? await payouts.recoverDraft(entry.actorId, entry.key) : await payouts.recoverRecord(entry.actorId, entry.key);
+        if (!current()) throw new AccessFailure(409, 'recovery_request_stale'); return value;
+      } }, 'evidence.refund-payout-image': { lookup: async entry => {
+        if (!canRecordPayout || entry.actorId !== account.actorId) throw new AccessFailure(403, 'scope_denied');
+        const value = await payouts.recoverReservation(entry.actorId, entry.key); if (!current()) throw new AccessFailure(409, 'recovery_request_stale'); return value;
+      } }, 'billing.return.financial.approve': { lookup: async entry => {
         const financial = returnFinancialApprovalOwner(entry.key);
         if (!canApproveReturnFinancial(account.actions, financial.action)) throw new AccessFailure(403, 'scope_denied');
         const value = await financialApprovals.recover(entry.actorId, entry.key); if (!current()) throw new AccessFailure(409, 'recovery_request_stale'); return value;
@@ -152,6 +162,8 @@ function CaseDesk({ account, fresh, onDenied }: { account: Account; fresh: boole
         resolutionOptions={canManage ? ['replacement', ...(account.actions.includes('credit.request') ? ['credit' as const] : []), ...(account.actions.includes('refund.request') ? ['refund' as const] : [])] : []} canReadInvoice={account.actions.includes('invoice.read')}
         journal={recovery.journal} onDenied={onDenied} onBusyChange={setEditing} onSettled={recovery.refresh} />}
       {selected.state === 'return_authorized' && canApproveFinancial && <ReturnFinancialApprovalPanel key={'financial:' + selected.id} actorId={account.actorId} owner={selected} actions={account.actions}
+        fresh={fresh} locked={locked} current={current} freshCurrent={freshCurrent} journal={recovery.journal} onDenied={onDenied} onBusyChange={setEditing} onSettled={recovery.refresh} />}
+      {selected.state === 'return_authorized' && canRecordPayout && <RefundPayoutPanel key={'payout:' + selected.id} actorId={account.actorId} owner={selected} actions={account.actions}
         fresh={fresh} locked={locked} current={current} freshCurrent={freshCurrent} journal={recovery.journal} onDenied={onDenied} onBusyChange={setEditing} onSettled={recovery.refresh} />}
       <button className={common.secondary} disabled={busy || recovering || editing} onClick={() => setSelected(null)}>Tutup keluhan</button></section>}
     {canRead && <section className={common.accountSection} aria-label="Daftar keluhan"><h2>Pengajuan dalam akses Anda</h2>{!busy && !page.items.length && <p>Belum ada pengajuan pada halaman ini.</p>}

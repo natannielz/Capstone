@@ -19,7 +19,7 @@ public sealed record ReturnFinancialApprovalPreview(ReturnFinancialApprovalView 
 
 /// <summary>Consumes a real inspected financial request once. Credits, linked allocation releases,
 /// refund liability, canonical balances and effects commit together; this command cannot pay money.</summary>
-public sealed class ReturnFinancialApprovalService
+public sealed partial class ReturnFinancialApprovalService
 {
     private readonly IMongoDatabase database;
     private readonly IClock clock;

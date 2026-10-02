@@ -93,14 +93,16 @@ public sealed partial class AccessHttpTests(MongoFixture fixture)
     }
 
     [Fact]
-    public async Task Current_access_discovers_only_granted_financial_approval_tasks_and_keeps_step_up_entry_without_authorizing_expired_factor()
+    public async Task Current_access_discovers_only_granted_financial_tasks_and_keeps_step_up_entry_without_authorizing_expired_factor()
     {
         await using var data = await StoreTestData.CreateAsync(fixture);
         var scope = new GrantScope(GrantScopeKind.FulfillmentShop, 100, ShopId: 101, ChannelId: 103);
+        var financialTasks = new[] { Permissions.CreditApprove, Permissions.RefundApprove,
+            Permissions.DisbursementRecord, Permissions.DisbursementVerify };
         var checker = await data.AddActorAsync(7625, scope, Permissions.CaseRead, Permissions.InvoiceRead,
-            Permissions.CreditApprove, Permissions.RefundApprove);
+            Permissions.CreditApprove, Permissions.RefundApprove, Permissions.DisbursementRecord, Permissions.DisbursementVerify);
         var reader = await data.AddActorAsync(7626, scope, Permissions.CaseRead, Permissions.InvoiceRead);
-        foreach (var permission in new[] { Permissions.CreditApprove, Permissions.RefundApprove })
+        foreach (var permission in financialTasks)
             Assert.Equal(TimeSpan.FromMinutes(5), Permissions.Find(permission)!.Assurance.MaximumAge);
 
         async Task<string[]> Actions(UnitToko.Modules.Identity.Contracts.ActorContext actor)
@@ -119,22 +121,24 @@ public sealed partial class AccessHttpTests(MongoFixture fixture)
             Assert.DoesNotContain(Permissions.CreditRequest, actions);
             Assert.DoesNotContain(Permissions.RefundRequest, actions);
         }
-        Assert.Contains(Permissions.CreditApprove, await Actions(checker));
-        Assert.Contains(Permissions.RefundApprove, await Actions(checker));
-        Assert.DoesNotContain(Permissions.CreditApprove, await Actions(reader));
-        Assert.DoesNotContain(Permissions.RefundApprove, await Actions(reader));
+        var currentActions = await Actions(checker);
+        var readerActions = await Actions(reader);
+        foreach (var permission in financialTasks)
+        {
+            Assert.Contains(permission, currentActions);
+            Assert.DoesNotContain(permission, readerActions);
+        }
 
         data.Clock.UtcNow = data.Clock.UtcNow.AddMinutes(6);
         var agedActions = await Actions(checker);
         var snapshot = await data.Store.ReadCurrentAsync(checker);
-        foreach (var permission in new[] { Permissions.CreditApprove, Permissions.RefundApprove })
+        foreach (var permission in financialTasks)
         {
             Assert.Contains(permission, agedActions);
             Assert.Equal("step_up_required", ScopePolicy.Compile(checker, snapshot, permission, data.Clock.UtcNow).DenialCode);
             Assert.True(ScopePolicy.CanRequestStepUp(checker, snapshot, permission, data.Clock.UtcNow));
         }
-        Assert.DoesNotContain(Permissions.CreditApprove, await Actions(reader));
-        Assert.DoesNotContain(Permissions.RefundApprove, await Actions(reader));
+        foreach (var permission in financialTasks) Assert.DoesNotContain(permission, await Actions(reader));
     }
 
     [Fact]

@@ -36,13 +36,17 @@ public sealed partial class PaymentAllocationService
         this.database = database; this.clock = clock; this.ids = ids; this.verifications = verifications; this.invoices = invoices; this.entitlements = entitlements; authorization = new(database, unit, clock); records = new(database, clock);
     }
     private DateTimeOffset Now => DateTimeOffset.FromUnixTimeMilliseconds(clock.UtcNow.ToUnixTimeMilliseconds());
-    private sealed class Context(ActorContext actor, AuthorizationSnapshot authority, IClientSessionHandle tx, bool write, bool correction = false, bool financial = false) {
+    private sealed class Context(ActorContext actor, AuthorizationSnapshot authority, IClientSessionHandle tx, bool write, bool correction = false, bool financial = false,
+        FinancialEntitlementRequestSource? seededSource = null) {
         internal ActorContext Actor { get; } = actor;
         internal AuthorizationSnapshot Authority { get; } = authority;
         internal IClientSessionHandle Tx { get; } = tx;
         internal bool Write { get; } = write;
         internal bool Correction { get; } = correction;
         internal bool Financial { get; } = financial;
+        // Only FinancialSourcesAsync supplies this actual same-transaction owner proof;
+        // its full issued-invoice fence is registered once by that entry point.
+        internal FinancialEntitlementRequestSource? SeededSource { get; } = seededSource;
         internal PaymentAllocationSource Source = null!;
         internal readonly List<BsonDocument> Invoices = [];
         internal readonly List<Action> Current = [];
@@ -112,7 +116,11 @@ public sealed partial class PaymentAllocationService
         R.Equal(row["party"], source.Decision["source"]["party"]); R.Equal(row["policy"]["scope"], source.Bank.Receipt["scope"]);
         R.Equal(row["policy"]["suspenseMapping"], source.Bank.Receipt["policy"]["suspenseMapping"]);
         foreach (var line in row["lines"].AsBsonArray) {
-            var invoice = await invoices.AllocationSourceAsync(context.Actor, context.Authority, context.Tx, line["invoiceId"].AsInt64, ct);
+            BsonDocument invoice;
+            if (context.SeededSource is { } seed && line["invoiceId"] == seed.Invoice.MoneySource["invoiceId"]) {
+                seed.RequireContext(context.Actor, context.Authority, context.Tx);
+                invoice = seed.Invoice.MoneySource; R.Equal(line["source"], invoice);
+            } else invoice = await invoices.AllocationSourceAsync(context.Actor, context.Authority, context.Tx, line["invoiceId"].AsInt64, ct);
             context.Invoices.Add(invoice); R.Equal(line["source"], invoice);
         }
         R.Equal(row["binding"], row["operation"] == C.Operation ? C.Binding(await records.RawAsync(context.Tx, row["originalAllocationId"].AsInt64, ct), row["correctionPolicy"].AsBsonDocument, row["policy"].AsBsonDocument, row["receiptBefore"].AsBsonDocument, row["lines"].AsBsonArray) : B.Binding(row["verificationHash"], row["receiptHash"], row["policy"].AsBsonDocument, row["receiptBefore"].AsBsonDocument, row["lines"].AsBsonArray));

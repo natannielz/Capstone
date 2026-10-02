@@ -22,7 +22,7 @@ internal sealed class PaymentSubmissionRecords(IMongoDatabase database)
         if (audit is null || !InvoiceRecords.Equal(audit, B.Audit(row)) || receipt is null || receipt.GetValue("bodyHash", BsonNull.Value) != row["bodyHash"] ||
             !InvoiceRecords.Equal(receipt.GetValue("result", BsonNull.Value), B.Result(row))) throw PaymentDraftBson.Invalid();
         var pin = await EvidencePinRecords.ReadAsync(database, tx, row["pinId"].AsInt64, ct);
-        if (pin["associationId"] != row["_id"] || pin["associationHash"] != row["snapshotHash"] || pin["declarationId"] != row["declarationId"] ||
+        if (pin["associationKind"] != "PaymentSubmission" || pin["associationId"] != row["_id"] || pin["associationHash"] != row["snapshotHash"] || pin["declarationId"] != row["declarationId"] ||
             pin["declarationVersionId"] != row["declarationVersionId"] || pin["declarationRevision"] != row["declarationRevision"] || pin["reviewRevision"] != row["reviewRevision"] ||
             !InvoiceRecords.Equal(pin["reference"], row["evidence"]) || pin["reservationId"] != row["reservationId"] || pin["actorId"] != row["submittedBy"] ||
             pin["actorGrantVersion"] != row["actorGrantVersion"] || pin["createdAt"] != row["submittedAt"] || pin["reason"] != row["reason"] || pin["correlationId"] != row["correlationId"]) throw PaymentDraftBson.Invalid();

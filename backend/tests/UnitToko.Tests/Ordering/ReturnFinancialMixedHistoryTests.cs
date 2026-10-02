@@ -119,6 +119,7 @@ public sealed class ReturnFinancialMixedHistoryTests(MongoFixture fixture)
         ActorContext approver, ActorContext checker) : IAsyncDisposable
     {
         internal PaymentAllocationTests.Data Allocation { get; } = allocation;
+        internal AfterSalesCaseService Cases => cases;
         internal IMongoDatabase Database => Allocation.Source.Read.Database;
         internal UnitToko.Platform.IClock Clock => Allocation.Source.Read.Catalog.Clock;
         internal long CaseId { get; } = caseId;

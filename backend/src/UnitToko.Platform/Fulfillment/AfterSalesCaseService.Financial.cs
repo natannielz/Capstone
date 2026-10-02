@@ -11,7 +11,8 @@ using R = UnitToko.Platform.Fulfillment.AfterSalesCaseRecords;
 namespace UnitToko.Platform.Fulfillment;
 
 internal sealed record FinancialReturnSource(BsonDocument Root, BsonDocument Receipt, BsonDocument Inspection, BsonDocument Proposal,
-    ImmutableArray<long> Participants, Func<CancellationToken, Task> FenceReadAsync, Func<CancellationToken, Task> FenceNewAsync, Action RequireCurrent);
+    ImmutableArray<long> Participants, Func<CancellationToken, Task> FenceReadAsync, Func<CancellationToken, Task> FenceNewAsync, Action RequireCurrent,
+    FinancialInvoiceSource? IssuedInvoice = null);
 
 public sealed partial class AfterSalesCaseService
 {
@@ -21,7 +22,8 @@ public sealed partial class AfterSalesCaseService
     // A financial consumer uses the actual caller's transaction and source read grants. Historical
     // custody/inspection authority does not confer financial approval or become a new stock grant.
     internal async Task<FinancialReturnSource> FinancialResolutionSourceAsync(ActorContext actor, AuthorizationSnapshot authority,
-        IClientSessionHandle tx, long caseId, long returnId, string expectedAction, CancellationToken ct) {
+        IClientSessionHandle tx, long caseId, long returnId, string expectedAction, CancellationToken ct,
+        FinancialInvoiceSource? issuedInvoice = null, bool captureIssuedInvoice = false) {
         if (caseId <= 0 || returnId <= 0 || expectedAction is not ("credit" or "refund")) throw ReturnResolutionPolicy.Invalid();
         void Guard() {
             if (!tx.IsInTransaction || !ReferenceEquals(tx.Client, database.Client) || actor.UserId <= 0 || actor.GrantVersion < 0 ||
@@ -32,9 +34,21 @@ public sealed partial class AfterSalesCaseService
             // The case's shared writer fence is mutable; every business/source field is immutable.
             if (root) copy.Remove("fence"); return copy;
         }
+        if (captureIssuedInvoice) {
+            if (issuedInvoice is not null) throw R.Broken(); Guard(); _ = Query(actor, authority, Permissions.CaseRead);
+            var candidate = await records.Rows(R.Collection).Find(tx, new BsonDocument("_id", caseId)).SingleOrDefaultAsync(ct) ?? throw R.Broken();
+            Require(actor, authority, candidate, Permissions.CaseRead);
+            // The real case owner validates its schema/hash/input/audit/idempotency/outbox
+            // before following the actual stored invoice identity, never a caller-supplied ID.
+            var root = await records.ReadAsync(tx, caseId, ct); Require(actor, authority, root, Permissions.CaseRead);
+            if (root["requestedAt"].ToUniversalTime() > clock.UtcNow.UtcDateTime) throw R.Broken();
+            issuedInvoice = await invoices.FinancialEntitlementSourceAsync(actor, authority, tx, root["source"]["invoiceId"].AsInt64, ct);
+            issuedInvoice.RequireContext(actor, authority, tx, root["source"]["invoiceId"].AsInt64, root["source"]["invoiceHash"].AsString);
+            if (!InvoiceRecords.Equal(InvoiceService.CaseSnapshot(issuedInvoice.Invoice), root["source"])) throw R.Broken();
+        }
         async Task<(BsonDocument Root, BsonDocument Receipt, BsonDocument Inspection, BsonDocument Proposal, long DecidedBy)> ReadAsync(CancellationToken token) {
-            Guard(); var root = await AuthorizedAsync(actor, authority, tx, caseId, Permissions.CaseRead, token);
-            var receipt = await InspectionReceiptAsync(actor, authority, tx, root, returnId, Permissions.CaseRead, token);
+            Guard(); var root = await AuthorizedAsync(actor, authority, tx, caseId, Permissions.CaseRead, token, issuedInvoice);
+            var receipt = await InspectionReceiptAsync(actor, authority, tx, root, returnId, Permissions.CaseRead, token, issuedInvoice);
             var inspection = await new ReturnInspectionRecords(database, clock).ReadAsync(tx, receipt, token) ?? throw R.Broken();
             var proposal = await new ReturnResolutionRecords(database, clock).ReadAsync(tx, inspection, token) ?? throw R.Broken();
             var decision = await new AfterSalesDecisionRecords(database).ReadAsync(tx, root, token) ?? throw R.Broken();
@@ -52,9 +66,13 @@ public sealed partial class AfterSalesCaseService
         var participants = People(source);
         void Current() {
             Guard(); Require(actor, authority, rootSnapshot, Permissions.CaseRead);
+            issuedInvoice?.RequireContext(actor, authority, tx, rootSnapshot["source"]["invoiceId"].AsInt64, rootSnapshot["source"]["invoiceHash"].AsString);
             if (proposalSnapshot["requestedAt"].ToUniversalTime() > clock.UtcNow.UtcDateTime) throw R.Broken();
         }
         async Task FenceAsync(bool newEffect, CancellationToken token) {
+            // Observation reuse is confined to deferred M55 reads; producer/new-effect
+            // consumers retain their existing independent invoice/stock fence path.
+            if (newEffect && issuedInvoice is not null) throw R.Broken();
             Current(); var latest = await ReadAsync(token);
             if (!InvoiceRecords.Equal(Copy(latest.Root, true), rootSnapshot) || !InvoiceRecords.Equal(latest.Receipt, receiptSnapshot) ||
                 !InvoiceRecords.Equal(latest.Inspection, inspectionSnapshot) || !InvoiceRecords.Equal(latest.Proposal, proposalSnapshot) ||
@@ -64,6 +82,6 @@ public sealed partial class AfterSalesCaseService
             Current();
         }
         Current(); return new(Copy(rootSnapshot), Copy(receiptSnapshot), Copy(inspectionSnapshot), Copy(proposalSnapshot), participants,
-            token => FenceAsync(false, token), token => FenceAsync(true, token), Current);
+            token => FenceAsync(false, token), token => FenceAsync(true, token), Current, issuedInvoice);
     }
 }

@@ -21,6 +21,7 @@ namespace UnitToko.Tests.Ordering;
 public sealed class ReturnFinancialApprovalMigrationTests(MongoFixture fixture)
 {
     internal static async Task RemoveEmptyUpgradeAsync(IMongoDatabase database, bool dropTargets = true) {
+        await RefundPayoutMigrationTests.RemoveEmptyUpgradeAsync(database);
         IMongoCollection<BsonDocument> Rows(string name) => database.GetCollection<BsonDocument>(name);
         Assert.True(await Rows("schemaMigrations").Find(new BsonDocument { { "_id", 53 }, { "state", "applied" } }).AnyAsync());
         Assert.True(await Rows("schemaMigrations").Find(new BsonDocument { { "_id", 54 }, { "state", "applied" } }).AnyAsync());

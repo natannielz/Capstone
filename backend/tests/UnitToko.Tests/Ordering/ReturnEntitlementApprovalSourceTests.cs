@@ -5,6 +5,7 @@ using UnitToko.Modules.Identity;
 using UnitToko.Modules.Identity.Contracts;
 using UnitToko.Platform.Authorization;
 using UnitToko.Platform.Billing;
+using UnitToko.Platform.Fulfillment;
 using UnitToko.Tests.Authorization;
 using UnitToko.Tests.Catalog;
 using E = UnitToko.Platform.Billing.ReturnEntitlementBson;
@@ -40,6 +41,55 @@ public sealed class ReturnEntitlementApprovalSourceTests(MongoFixture fixture)
         Assert.Equal(invoiceFence["fence"].AsInt64 + 1, (await data.Rows("invoiceCaseReturnFences").Find(new BsonDocument("_id", data.Payment.Issued.Id.Value)).SingleAsync())["fence"].AsInt64);
         Assert.Equal(pool, await data.Rows(E.Pools).Find(new BsonDocument()).SingleAsync()); Assert.Equal(request, await data.Rows(E.Requests).Find(new BsonDocument("_id", data.ReturnId)).SingleAsync());
         await data.AssertBusinessAsync(before);
+    }
+
+    [Fact]
+    public async Task Deferred_read_reuses_only_actual_invoice_observation_and_rejects_context_or_projection_substitution() {
+        await using var data = await ReturnEntitlementTests.Data.CreateAsync(fixture); var preview = await data.PreviewAsync();
+        await data.RequestAsync(preview, ReturnEntitlementTests.Data.Meta("approval-source-deferred-observation"));
+        var reader = await Reader(data); var catalog = data.Payment.Invoice.Order.Prices.Catalog; var before = await data.BusinessAsync();
+        var request = await data.Rows(E.Requests).Find(new BsonDocument("_id", data.ReturnId)).SingleAsync();
+        var pool = await data.Rows(E.Pools).Find(new BsonDocument()).SingleAsync();
+        await new AuthorizationStore(data.Database, new(catalog.Client), data.Clock).ReadAsync(reader, async (authority, tx, ct) => {
+            var source = await data.Service.ApprovalSourceAsync(reader, authority, tx, data.CaseId, data.ReturnId, data.Action, false, ct, deferReadCaptureFences: true);
+            var invoice = source.Invoice; var invoiceId = invoice.Invoice["_id"].AsInt64; var invoiceHash = invoice.Invoice["snapshotHash"].AsString;
+            Assert.Same(invoice, source.Returned.IssuedInvoice); Assert.Equal(request, source.Request);
+            var invoices = data.Payment.Invoice.Service;
+            var cases = new AfterSalesCaseService(data.Database, new(catalog.Client), new(data.Database), data.Clock, invoices);
+            var expected = InvoiceService.CaseSnapshot(invoice.Invoice);
+            Assert.Equal(expected, await invoices.CaseSourceAsync(reader, authority, tx, invoiceId, Permissions.CaseRead, ct, invoice));
+            Assert.Throws<AuthorizationDeniedException>(() => invoice.RequireContext(reader with { }, authority, tx, invoiceId, invoiceHash));
+            Assert.Throws<AuthorizationDeniedException>(() => invoice.RequireContext(reader, authority with { }, tx, invoiceId, invoiceHash));
+            Assert.Throws<AuthorizationDeniedException>(() => invoice.RequireContext(reader, authority, tx, invoiceId + 1, invoiceHash));
+            Assert.Throws<AuthorizationDeniedException>(() => invoice.RequireContext(reader, authority, tx, invoiceId, new string(invoiceHash[0] == 'a' ? 'b' : 'a', 64)));
+            await Assert.ThrowsAsync<AuthorizationDeniedException>(() => invoices.CaseSourceAsync(reader, authority, tx, invoiceId, Permissions.CaseRead, ct, invoice with { }));
+            await Assert.ThrowsAsync<AuthorizationDeniedException>(() => invoices.CaseStockSourceAsync(reader, authority, tx, expected, Permissions.CaseRead, ct, invoice with { }));
+            using (var other = await catalog.Client.StartSessionAsync(cancellationToken: ct)) {
+                other.StartTransaction(new TransactionOptions(readConcern: ReadConcern.Snapshot, writeConcern: WriteConcern.WMajority));
+                try {
+                    await Assert.ThrowsAsync<AuthorizationDeniedException>(() => cases.FinancialResolutionSourceAsync(reader, authority, other,
+                        data.CaseId, data.ReturnId, data.Action, ct, invoice));
+                } finally { await other.AbortTransactionAsync(ct); }
+            }
+            var document = invoice.Invoice["document"];
+            invoice.Invoice["document"] = document.AsString + "changed projection";
+            try {
+                Assert.Throws<AuthorizationDeniedException>(source.Returned.RequireCurrent);
+                await Assert.ThrowsAsync<AuthorizationDeniedException>(() => invoices.CaseSourceAsync(reader, authority, tx, invoiceId, Permissions.CaseRead, ct, invoice));
+            } finally { invoice.Invoice["document"] = document; }
+            var total = invoice.MoneySource["total"];
+            invoice.MoneySource["total"] = new BsonDecimal128(total.AsDecimal + 0.01m);
+            try { await Assert.ThrowsAsync<AuthorizationDeniedException>(() => invoices.CaseStockSourceAsync(reader, authority, tx, expected, Permissions.CaseRead, ct, invoice)); }
+            finally { invoice.MoneySource["total"] = total; }
+            var account = invoice.OriginalAccounts[0]["accountCode"];
+            invoice.OriginalAccounts[0]["accountCode"] = "changed projection";
+            try { await Assert.ThrowsAsync<AuthorizationDeniedException>(() => cases.FinancialResolutionSourceAsync(reader, authority, tx, data.CaseId, data.ReturnId, data.Action, ct, invoice)); }
+            finally { invoice.OriginalAccounts[0]["accountCode"] = account; }
+            await source.FenceReadAsync(ct); source.RequireCurrent(); invoice.RequireContext(reader, authority, tx, invoiceId, invoiceHash);
+            await Assert.ThrowsAsync<AuthorizationDeniedException>(() => source.Returned.FenceNewAsync(ct)); return true;
+        }, CancellationToken.None);
+        Assert.Equal(pool, await data.Rows(E.Pools).Find(new BsonDocument()).SingleAsync());
+        Assert.Equal(request, await data.Rows(E.Requests).Find(new BsonDocument("_id", data.ReturnId)).SingleAsync()); await data.AssertBusinessAsync(before);
     }
 
     [Fact]

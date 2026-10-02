@@ -53,11 +53,12 @@ public sealed partial class AfterSalesCaseService
         var query = Query(actor, authority, permission); var scopes = PaymentDraftBson.Scopes(row["scopes"].AsBsonArray);
         if (scopes.Length == 0 || scopes.Any(scope => !query.Matches(scope))) throw R.Broken();
     }
-    private async Task<BsonDocument> AuthorizedAsync(ActorContext actor, AuthorizationSnapshot authority, IClientSessionHandle tx, long id, string permission, CancellationToken ct) {
+    private async Task<BsonDocument> AuthorizedAsync(ActorContext actor, AuthorizationSnapshot authority, IClientSessionHandle tx, long id, string permission, CancellationToken ct,
+        FinancialInvoiceSource? issuedInvoice = null) {
         _ = Query(actor, authority, permission);
         var candidate = await records.Rows(R.Collection).Find(tx, new BsonDocument("_id", id)).SingleOrDefaultAsync(ct) ?? throw R.Broken(); Require(actor, authority, candidate, permission);
         var row = await records.ReadAsync(tx, id, ct);
-        var source = await invoices.CaseSourceAsync(actor, authority, tx, row["source"]["invoiceId"].AsInt64, permission, ct);
+        var source = await invoices.CaseSourceAsync(actor, authority, tx, row["source"]["invoiceId"].AsInt64, permission, ct, issuedInvoice);
         if (!InvoiceRecords.Equal(source, row["source"]) || row["requestedAt"].ToUniversalTime() > Now.UtcDateTime) throw R.Broken();
         var decision = await new AfterSalesDecisionRecords(database).ReadAsync(tx, row, ct);
         if (decision is not null && decision["decidedAt"].ToUniversalTime() > Now.UtcDateTime) throw R.Broken(); return row;

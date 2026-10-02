@@ -19,10 +19,11 @@ public sealed record AfterSalesReturnReceipt(LongId Id, long Revision, DateTimeO
 public sealed record AfterSalesReturnView(LongId CaseId, LongId InvoiceId, long Revision, string Binding, ImmutableArray<AfterSalesReturnLimit> Limits, ImmutableArray<AfterSalesReturnReceipt> Recent, bool HasEarlier);
 public sealed partial class AfterSalesCaseService
 {
-    private async Task<BsonDocument> ReturnSourceAsync(ActorContext actor, AuthorizationSnapshot authority, IClientSessionHandle tx, BsonDocument root, string permission, CancellationToken ct) {
+    private async Task<BsonDocument> ReturnSourceAsync(ActorContext actor, AuthorizationSnapshot authority, IClientSessionHandle tx, BsonDocument root, string permission, CancellationToken ct,
+        FinancialInvoiceSource? issuedInvoice = null) {
         var decisions = new AfterSalesDecisionRecords(database); var decision = await decisions.ReadAsync(tx, root, ct) ?? throw R.Broken();
         if (decision["state"] != "return_authorized") throw R.Broken(); await decisions.RequireCapacityAsync(tx, root, [], ct);
-        var stock = await invoices.CaseStockSourceAsync(actor, authority, tx, root["source"].AsBsonDocument, permission, ct);
+        var stock = await invoices.CaseStockSourceAsync(actor, authority, tx, root["source"].AsBsonDocument, permission, ct, issuedInvoice);
         return Q.Source(root, decision, new BsonArray(stock.Where(line => decision["input"]["lines"].AsBsonArray.Any(item => item["receiptId"] == line["receiptId"] && item["skuId"] == line["skuId"]))));
     }
     private static AfterSalesReturnView ReturnsView(BsonDocument source, ReturnQuarantineHistory history) => new(new(source["caseId"].AsInt64), new(source["invoiceId"].AsInt64), history.Revision,

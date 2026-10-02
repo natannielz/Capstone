@@ -77,6 +77,8 @@ public static class Permissions
         result[PaymentVerify] = result[PaymentVerify] with { Assurance = new(true, TimeSpan.FromMinutes(5)) };
         result[PaymentAllocate] = result[PaymentAllocate] with { Assurance = new(true, TimeSpan.FromMinutes(5)) };
         result[CreditApprove] = result[CreditApprove] with { Assurance = new(true, TimeSpan.FromMinutes(5)) };
+        result[DisbursementRecord] = result[DisbursementRecord] with { Assurance = new(true, TimeSpan.FromMinutes(5)) };
+        result[DisbursementVerify] = result[DisbursementVerify] with { Assurance = new(true, TimeSpan.FromMinutes(5)) };
         Add(SupplierChangeApprove, Operations, true);
         Add(StockSourceRead, Operations);
         Add(StockSourcePropose, Operations);

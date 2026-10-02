@@ -21,8 +21,9 @@ public sealed record AfterSalesInspectionAssessment(DateTimeOffset InspectedAt, 
 public sealed record AfterSalesReturnInspectionView(LongId CaseId, LongId InvoiceId, long Revision, string Binding, AfterSalesReturnReceipt Receipt, AfterSalesInspectionAssessment? Inspection);
 public sealed partial class AfterSalesCaseService
 {
-    private async Task<BsonDocument> InspectionReceiptAsync(ActorContext actor, AuthorizationSnapshot authority, IClientSessionHandle tx, BsonDocument root, long returnId, string permission, CancellationToken ct) {
-        var source = await ReturnSourceAsync(actor, authority, tx, root, permission, ct); _ = await new Q(database, clock).ReadAsync(tx, source, ct);
+    private async Task<BsonDocument> InspectionReceiptAsync(ActorContext actor, AuthorizationSnapshot authority, IClientSessionHandle tx, BsonDocument root, long returnId, string permission, CancellationToken ct,
+        FinancialInvoiceSource? issuedInvoice = null) {
+        var source = await ReturnSourceAsync(actor, authority, tx, root, permission, ct, issuedInvoice); _ = await new Q(database, clock).ReadAsync(tx, source, ct);
         var receipt = await records.Rows(Q.Collection).Find(tx, new BsonDocument { { "_id", returnId }, { "caseId", root["_id"] } }).SingleOrDefaultAsync(ct) ?? throw R.Broken();
         if (!InvoiceRecords.Equal(receipt["source"], source)) throw R.Broken(); return receipt;
     }
