@@ -42,10 +42,10 @@ public static class RoleTemplates
             ["buyer"] = [Permissions.SubstitutionAccept, Permissions.OrganizationAddressRead],
             ["store-staff"] = [Permissions.OrganizationAddressRead, Permissions.SubstitutionPropose, Permissions.StockConvert,
                 Permissions.ReservationRelease, Permissions.SupplierChangePropose],
-            ["store-head"] = [Permissions.OrderAccept, Permissions.SupplierChangeApprove, Permissions.OrganizationAddressRead],
+            ["store-head"] = [Permissions.OrderAccept, Permissions.SupplierChangeApprove, Permissions.OrganizationAddressRead, Permissions.FundingRead],
             ["courier"] = [],
             ["finance"] = [Permissions.OrganizationAddressRead, Permissions.BankReceiptRead, Permissions.BankReceiptConfirm, Permissions.BankStatementRead, Permissions.BankStatementStage, Permissions.PaymentReviewRead, Permissions.PaymentReviewCorrect, Permissions.ReceivingAccountRead, Permissions.ReceivingAccountDetailsRead,
-                Permissions.ReceivingAccountPropose, Permissions.ReceivingAccountVerify, Permissions.ReceivingAccountApprove],
+                Permissions.ReceivingAccountPropose, Permissions.ReceivingAccountVerify, Permissions.ReceivingAccountApprove, Permissions.FundingRead],
             ["system-admin"] = []
         }.ToImmutableDictionary(StringComparer.Ordinal);
 

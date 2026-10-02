@@ -16,6 +16,7 @@ import { verifyAccountingBooksBrowser } from './verify-accounting-books-browser.
 import { verifyProcurementRequestsBrowser } from './verify-procurement-requests-browser.mjs';
 import { verifySuppliersBrowser } from './verify-suppliers-browser.mjs';
 import { verifyPurchaseOrdersBrowser } from './verify-purchase-orders-browser.mjs';
+import { verifyProcurementFundingBrowser } from './verify-procurement-funding-browser.mjs';
 
 const chunks = []; for await (const chunk of process.stdin) chunks.push(chunk);
 const config = JSON.parse(Buffer.concat(chunks).toString('utf8')), api = new URL(config.apiAddress), origin = new URL(config.origin);
@@ -33,7 +34,8 @@ const bookWrites = [], bookRecoveries = [], bookTracePath = config.accountingBoo
 const procurementWrites = [], procurementRecoveries = [], procurementTracePath = config.procurementRequests ? resolve(directory, 'procurement-requests-flow-' + Date.now() + '.jsonl') : null;
 const supplierWrites = [], supplierRecoveries = [], supplierTracePath = config.suppliers ? resolve(directory, 'supplier-flow-' + Date.now() + '.jsonl') : null;
 const purchaseOrderWrites = [], purchaseOrderRecoveries = [], purchaseOrderTracePath = config.purchaseOrders ? resolve(directory, 'purchase-order-flow-' + Date.now() + '.jsonl') : null;
-function traceFinancial(type, value) { for (const path of [financialTracePath, payoutTracePath, settlementTracePath, addressTracePath, spendingTracePath, bookTracePath, procurementTracePath, supplierTracePath, purchaseOrderTracePath]) if (path) appendFileSync(path, JSON.stringify({ at: new Date().toISOString(), type, ...value }) + '\n'); }
+const fundingWrites = [], fundingRecoveries = [], fundingTracePath = config.procurementFunding ? resolve(directory, 'procurement-funding-flow-' + Date.now() + '.jsonl') : null;
+function traceFinancial(type, value) { for (const path of [financialTracePath, payoutTracePath, settlementTracePath, addressTracePath, spendingTracePath, bookTracePath, procurementTracePath, supplierTracePath, purchaseOrderTracePath, fundingTracePath]) if (path) appendFileSync(path, JSON.stringify({ at: new Date().toISOString(), type, ...value }) + '\n'); }
 traceFinancial('host-start', {});
 let browser, frontend, edge, tunnel, dropNext = false, dropped = 0;
 function track(server) { server.on('connection', socket => { sockets.add(socket); socket.on('close', () => sockets.delete(socket)); }); return server; }
@@ -78,21 +80,24 @@ function forward(req, res, port, isApi) {
   const purchaseOrderWrite = req.method === 'POST' && /^\/api\/v1\/procurement\/purchase-orders\/(?:proposals|proposals\/[1-9][0-9]*\/decisions)$/.test(req.url);
   const purchaseOrderRecovery = req.method === 'POST' && req.url === '/api/v1/procurement/purchase-orders/operations/query';
   const purchaseOrderPath = config.purchaseOrders && req.url.startsWith('/api/v1/procurement/purchase-orders/');
-  if (financialPath || payoutPath || settlementPath || addressPath || spendingPath || bookPath || procurementPath || supplierPath || purchaseOrderPath) traceFinancial('request-begin', { path: req.url, method: req.method, actor: req.headers['x-expected-actor-id'] });
+  const fundingWrite = req.method === 'POST' && /^\/api\/v1\/procurement\/funding\/(?:requests|requests\/[1-9][0-9]*\/decisions)$/.test(req.url);
+  const fundingRecovery = req.method === 'POST' && req.url === '/api/v1/procurement/funding/operations/query';
+  const fundingPath = config.procurementFunding && req.url.startsWith('/api/v1/procurement/funding/');
+  if (financialPath || payoutPath || settlementPath || addressPath || spendingPath || bookPath || procurementPath || supplierPath || purchaseOrderPath || fundingPath) traceFinancial('request-begin', { path: req.url, method: req.method, actor: req.headers['x-expected-actor-id'] });
   let financialReference;
-  if (financialWrite || financialRecovery || draftWrite || payoutWrite || payoutRecovery || settlementWrite || settlementRecovery || settlementOriginal || addressWrite || addressRecovery || spendingWrite || spendingRecovery || bookWrite || bookRecovery || procurementWrite || procurementRecovery || supplierWrite || supplierRecovery || purchaseOrderWrite || purchaseOrderRecovery) {
-    const reference = { path: req.url, key: req.headers['idempotency-key'], actor: req.headers['x-expected-actor-id'], ...(addressWrite || spendingWrite || bookWrite || procurementWrite || supplierWrite || purchaseOrderWrite ? { version: req.headers['if-match'] } : {}) }, body = [];
+  if (financialWrite || financialRecovery || draftWrite || payoutWrite || payoutRecovery || settlementWrite || settlementRecovery || settlementOriginal || addressWrite || addressRecovery || spendingWrite || spendingRecovery || bookWrite || bookRecovery || procurementWrite || procurementRecovery || supplierWrite || supplierRecovery || purchaseOrderWrite || purchaseOrderRecovery || fundingWrite || fundingRecovery) {
+    const reference = { path: req.url, key: req.headers['idempotency-key'], actor: req.headers['x-expected-actor-id'], ...(addressWrite || spendingWrite || bookWrite || procurementWrite || supplierWrite || purchaseOrderWrite || fundingWrite ? { version: req.headers['if-match'] } : {}) }, body = [];
     financialReference = reference;
-    (purchaseOrderWrite ? purchaseOrderWrites : purchaseOrderRecovery ? purchaseOrderRecoveries : supplierWrite ? supplierWrites : supplierRecovery ? supplierRecoveries : procurementWrite ? procurementWrites : procurementRecovery ? procurementRecoveries : bookWrite ? bookWrites : bookRecovery ? bookRecoveries : spendingWrite ? spendingWrites : spendingRecovery ? spendingRecoveries : addressWrite ? addressWrites : addressRecovery ? addressRecoveries : financialWrite ? financialWrites : financialRecovery ? financialRecoveries : draftWrite ? draftWrites : payoutWrite ? payoutWrites : payoutRecovery ? payoutRecoveries : settlementWrite ? settlementWrites : settlementRecovery ? settlementRecoveries : settlementOriginalReads).push(reference);
+    (fundingWrite ? fundingWrites : fundingRecovery ? fundingRecoveries : purchaseOrderWrite ? purchaseOrderWrites : purchaseOrderRecovery ? purchaseOrderRecoveries : supplierWrite ? supplierWrites : supplierRecovery ? supplierRecoveries : procurementWrite ? procurementWrites : procurementRecovery ? procurementRecoveries : bookWrite ? bookWrites : bookRecovery ? bookRecoveries : spendingWrite ? spendingWrites : spendingRecovery ? spendingRecoveries : addressWrite ? addressWrites : addressRecovery ? addressRecoveries : financialWrite ? financialWrites : financialRecovery ? financialRecoveries : draftWrite ? draftWrites : payoutWrite ? payoutWrites : payoutRecovery ? payoutRecoveries : settlementWrite ? settlementWrites : settlementRecovery ? settlementRecoveries : settlementOriginalReads).push(reference);
     req.on('data', chunk => body.push(chunk)); req.on('end', () => { reference.body = JSON.parse(Buffer.concat(body).toString('utf8')); });
   }
-  const drop = (write || caseWrite || decisionWrite || returnWrite || inspectionWrite || resolutionWrite || entitlementWrite || financialWrite || payoutWrite || settlementWrite || addressWrite || spendingWrite || bookWrite || procurementWrite || supplierWrite || purchaseOrderWrite) && dropNext; if (drop) dropNext = false;
+  const drop = (write || caseWrite || decisionWrite || returnWrite || inspectionWrite || resolutionWrite || entitlementWrite || financialWrite || payoutWrite || settlementWrite || addressWrite || spendingWrite || bookWrite || procurementWrite || supplierWrite || purchaseOrderWrite || fundingWrite) && dropNext; if (drop) dropNext = false;
   const startedAt = performance.now(); let upstreamCompleted = false;
   const upstream = http.request({ hostname: '127.0.0.1', port, path: req.url, method: req.method, headers }, response => {
     response.once('end', () => { upstreamCompleted = true; });
-    if (financialPath || payoutPath || settlementPath || addressPath || spendingPath || bookPath || procurementPath || supplierPath || purchaseOrderPath) traceFinancial('response-headers', { path: req.url, status: response.statusCode, elapsedMs: Math.round(performance.now() - startedAt) });
+    if (financialPath || payoutPath || settlementPath || addressPath || spendingPath || bookPath || procurementPath || supplierPath || purchaseOrderPath || fundingPath) traceFinancial('response-headers', { path: req.url, status: response.statusCode, elapsedMs: Math.round(performance.now() - startedAt) });
     if (financialReference) { financialReference.status = response.statusCode; financialReference.elapsedMs = Math.round(performance.now() - startedAt); }
-    if (drop && response.statusCode === 200) { response.resume(); response.once('end', () => { dropped++; if (financialWrite || payoutWrite || settlementWrite || addressWrite || spendingWrite || bookWrite || procurementWrite || supplierWrite || purchaseOrderWrite) traceFinancial('actual-200-response-ended-before-intentional-loss', { path: req.url, elapsedMs: Math.round(performance.now() - startedAt) }); res.writeHead(200, { 'content-type': 'application/json', 'content-length': '64', 'cache-control': 'no-store' }); res.flushHeaders(); res.write('{'); setTimeout(() => res.destroy(), 25); }); return; }
+    if (drop && response.statusCode === 200) { response.resume(); response.once('end', () => { dropped++; if (financialWrite || payoutWrite || settlementWrite || addressWrite || spendingWrite || bookWrite || procurementWrite || supplierWrite || purchaseOrderWrite || fundingWrite) traceFinancial('actual-200-response-ended-before-intentional-loss', { path: req.url, elapsedMs: Math.round(performance.now() - startedAt) }); res.writeHead(200, { 'content-type': 'application/json', 'content-length': '64', 'cache-control': 'no-store' }); res.flushHeaders(); res.write('{'); setTimeout(() => res.destroy(), 25); }); return; }
     res.writeHead(response.statusCode ?? 502, response.headers); response.pipe(res);
   }); upstream.on('error', () => { if (res.destroyed || res.writableEnded) return; if (!res.headersSent) res.writeHead(502); res.end(); });
   res.once('close', () => { if (!res.writableEnded && !upstreamCompleted) { if (isApi) traceFinancial('downstream-cancelled', { path: req.url, method: req.method, elapsedMs: Math.round(performance.now() - startedAt) }); upstream.destroy(); } });
@@ -119,7 +124,12 @@ try {
   }); const proxyPort = await listen(tunnel);
   browser = await chromium.launch({ ...(channel === 'msedge' ? { channel: 'msedge' } : {}), headless: true, proxy: { server: 'http://127.0.0.1:' + proxyPort } });
   const finance = await user(config.financeToken), page = finance.page;
-  if (config.purchaseOrders) {
+  if (config.procurementFunding) {
+    assert.equal(config.financeToken, config.makerToken);
+    await verifyProcurementFundingBrowser({ config, maker: finance, user, origin, directory, fundingWrites, fundingRecoveries, dropNext: () => { dropNext = true; }, dropped: () => dropped });
+    assert.equal(writes.length + caseWrites.length + decisionWrites.length + returnWrites.length + inspectionWrites.length + resolutionWrites.length + entitlementWrites.length + financialWrites.length + payoutWrites.length + draftWrites.length + settlementWrites.length + addressWrites.length + spendingWrites.length + bookWrites.length + procurementWrites.length + supplierWrites.length + purchaseOrderWrites.length, 0);
+    assert.deepEqual(errors, []);
+  } else if (config.purchaseOrders) {
     assert.equal(config.financeToken, config.makerToken);
     await verifyPurchaseOrdersBrowser({ config, maker: finance, user, origin, directory, purchaseOrderWrites, purchaseOrderRecoveries, dropNext: () => { dropNext = true; }, dropped: () => dropped });
     assert.equal(writes.length + caseWrites.length + decisionWrites.length + returnWrites.length + inspectionWrites.length + resolutionWrites.length + entitlementWrites.length + financialWrites.length + payoutWrites.length + draftWrites.length + settlementWrites.length + addressWrites.length + spendingWrites.length + bookWrites.length + procurementWrites.length + supplierWrites.length, 0);
@@ -370,6 +380,9 @@ try {
   for (const [index, page] of pages.entries()) if (!page.isClosed()) { console.error('FIXTURE PAGE ' + index + ': ' + (await page.locator('main').innerText().catch(() => 'unavailable')).slice(0, 5000)); await page.screenshot({ path: resolve(directory, 'failure-' + index + '.png'), fullPage: true }).catch(() => {}); }
   console.error(error.stack ?? String(error)); process.exitCode = 1;
 } finally {
+  if (config.procurementFunding) console.log('FIXTURE PROCUREMENT FUNDING FLOW ' + JSON.stringify({
+    writes: fundingWrites.map(({ path, key, actor, status, elapsedMs }) => ({ path, key, actor, status, elapsedMs })),
+    recoveries: fundingRecoveries.map(({ path, actor, status, elapsedMs }) => ({ path, actor, status, elapsedMs })), dropped, tracePath: fundingTracePath }));
   if (config.purchaseOrders) console.log('FIXTURE PURCHASE ORDER FLOW ' + JSON.stringify({
     writes: purchaseOrderWrites.map(({ path, key, actor, status, elapsedMs }) => ({ path, key, actor, status, elapsedMs })),
     recoveries: purchaseOrderRecoveries.map(({ path, actor, status, elapsedMs }) => ({ path, actor, status, elapsedMs })), dropped, tracePath: purchaseOrderTracePath }));

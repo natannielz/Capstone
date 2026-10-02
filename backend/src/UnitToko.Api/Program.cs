@@ -110,6 +110,7 @@ builder.Services.AddSingleton<AccountingBookSetupService>();
 builder.Services.AddSingleton<ProcurementRequestService>();
 builder.Services.AddSingleton<SupplierService>();
 builder.Services.AddSingleton<PurchaseOrderService>();
+builder.Services.AddSingleton<ProcurementFundingService>();
 var identityEnabled = builder.Services.AddUnitTokoIdentityRuntime(builder.Configuration);
 builder.Services.AddAuthorization(options =>
     options.FallbackPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
@@ -351,6 +352,7 @@ app.MapAccountingBookSetupEndpoints();
 app.MapProcurementRequestEndpoints();
 app.MapSupplierEndpoints();
 app.MapPurchaseOrderEndpoints();
+app.MapProcurementFundingEndpoints();
 app.MapOrderDraftEndpoints();
 app.MapOrderSubmissionEndpoints();
 app.MapOrderDecisionEndpoints();

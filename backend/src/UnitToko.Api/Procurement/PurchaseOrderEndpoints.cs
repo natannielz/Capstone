@@ -156,8 +156,8 @@ public static class PurchaseOrderEndpoints
         [.. value["lines"].AsBsonArray.Select(line => { var p = R.Package(line); return new PurchaseOrderRequestLineDto(p.SkuId, p.SkuRevision, p.DefinitionId, p.DefinitionVersion,
             p.SkuCode, p.FamilyName, p.PackageLabel, p.PackageKind, p.BaseUnitCode, p.BaseUnitsPerPackage, line["packages"].AsInt32, Text(line["specification"]), line["committedPackages"].AsInt32, line["availablePackages"].AsInt32); })]);
     private static PurchaseOrderRequestReferenceDto RequestReference(BsonValue value) => new(new(value["id"].AsInt64), Number(value["version"]), new(value["decisionId"].AsInt64));
-    private static PurchaseOrderSupplierDto Supplier(BsonValue value) => new(new(value["id"].AsInt64), new(value["versionId"].AsInt64), Number(value["version"]), value["subjectReference"].AsString, value["displayName"].AsString);
-    private static PurchaseOrderLineDto[] Lines(BsonValue value) => [.. value.AsBsonArray.Select(line => { var p = R.Package(line); return new PurchaseOrderLineDto(p.SkuId, p.SkuRevision, p.DefinitionId, p.DefinitionVersion,
+    internal static PurchaseOrderSupplierDto Supplier(BsonValue value) => new(new(value["id"].AsInt64), new(value["versionId"].AsInt64), Number(value["version"]), value["subjectReference"].AsString, value["displayName"].AsString);
+    internal static PurchaseOrderLineDto[] Lines(BsonValue value) => [.. value.AsBsonArray.Select(line => { var p = R.Package(line); return new PurchaseOrderLineDto(p.SkuId, p.SkuRevision, p.DefinitionId, p.DefinitionVersion,
         p.SkuCode, p.FamilyName, p.PackageLabel, p.PackageKind, p.BaseUnitCode, p.BaseUnitsPerPackage, line["packages"].AsInt32, Text(line["specification"]), line["sourceSystem"].AsString,
         line["sourceAccountReference"].AsString, line["externalItemCode"].AsString, Amount(line["netPricePerPackage"]), Amount(line["taxAmount"]), Amount(line["supplierChargeAmount"]),
         Amount(line["netAmount"]), Amount(line["totalAmount"]), Number(line["baseUnits"])); })];
