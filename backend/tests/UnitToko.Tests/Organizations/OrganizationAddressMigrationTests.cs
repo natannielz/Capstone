@@ -83,7 +83,7 @@ public sealed class OrganizationAddressMigrationTests(MongoFixture fixture)
     }
 
     private static async Task RestoreV57Async(OrganizationAddressTestData data) {
-        Assert.Equal(58, CollectionMigrations.CurrentVersion);
+        await UnitToko.Tests.Ordering.OrderSpendingPolicyMigrationTests.RestoreV58Async(data);
         foreach (var target in OrganizationAddressSchemas.Collections) Assert.False(await data.Rows(target).Find(new BsonDocument()).AnyAsync());
         foreach (var (table, field) in new[] { ("idempotencyRecords", "operation"), ("auditEvents", "kind"), ("outboxEvents", "kind") })
             Assert.False(await data.Rows(table).Find(new BsonDocument(field, new BsonRegularExpression(@"^organization\.address(?:[.:]|$)"))).AnyAsync());

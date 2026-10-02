@@ -11,6 +11,7 @@ import { verifyReturnFinancialApprovalBrowser } from './verify-return-financial-
 import { verifyRefundPayoutBrowser } from './verify-refund-payout-browser.mjs';
 import { verifyRefundSettlementBrowser } from './verify-refund-settlement-browser.mjs';
 import { verifyOrganizationAddressBrowser } from './verify-organization-address-browser.mjs';
+import { verifyOrderSpendingPolicyBrowser } from './verify-order-spending-policy-browser.mjs';
 
 const chunks = []; for await (const chunk of process.stdin) chunks.push(chunk);
 const config = JSON.parse(Buffer.concat(chunks).toString('utf8')), api = new URL(config.apiAddress), origin = new URL(config.origin);
@@ -23,7 +24,8 @@ const financialTracePath = config.financialApproval ? resolve(directory, 'return
 const payoutTracePath = config.refundPayout ? resolve(directory, 'refund-payout-flow-' + Date.now() + '.jsonl') : null;
 const settlementTracePath = config.refundSettlement ? resolve(directory, 'refund-settlement-flow-' + Date.now() + '.jsonl') : null;
 const addressTracePath = config.organizationAddress ? resolve(directory, 'organization-address-flow-' + Date.now() + '.jsonl') : null;
-function traceFinancial(type, value) { for (const path of [financialTracePath, payoutTracePath, settlementTracePath, addressTracePath]) if (path) appendFileSync(path, JSON.stringify({ at: new Date().toISOString(), type, ...value }) + '\n'); }
+const spendingWrites = [], spendingRecoveries = [], spendingTracePath = config.orderSpendingPolicy ? resolve(directory, 'order-spending-policy-flow-' + Date.now() + '.jsonl') : null;
+function traceFinancial(type, value) { for (const path of [financialTracePath, payoutTracePath, settlementTracePath, addressTracePath, spendingTracePath]) if (path) appendFileSync(path, JSON.stringify({ at: new Date().toISOString(), type, ...value }) + '\n'); }
 traceFinancial('host-start', {});
 let browser, frontend, edge, tunnel, dropNext = false, dropped = 0;
 function track(server) { server.on('connection', socket => { sockets.add(socket); socket.on('close', () => sockets.delete(socket)); }); return server; }
@@ -53,21 +55,24 @@ function forward(req, res, port, isApi) {
   const addressWrite = req.method === 'POST' && /^\/api\/v1\/organizations\/addresses\/(?:proposals|proposals\/[1-9][0-9]*\/decide)$/.test(req.url);
   const addressRecovery = req.method === 'POST' && req.url === '/api/v1/organizations/addresses/operations/query';
   const addressPath = config.organizationAddress && req.url.startsWith('/api/v1/organizations/addresses/');
-  if (financialPath || payoutPath || settlementPath || addressPath) traceFinancial('request-begin', { path: req.url, method: req.method, actor: req.headers['x-expected-actor-id'] });
+  const spendingWrite = req.method === 'POST' && /^\/api\/v1\/ordering\/spending-policies\/(?:proposals|proposals\/[1-9][0-9]*\/decisions)$/.test(req.url);
+  const spendingRecovery = req.method === 'POST' && req.url === '/api/v1/ordering/spending-policies/operations/query';
+  const spendingPath = config.orderSpendingPolicy && req.url.startsWith('/api/v1/ordering/spending-policies/');
+  if (financialPath || payoutPath || settlementPath || addressPath || spendingPath) traceFinancial('request-begin', { path: req.url, method: req.method, actor: req.headers['x-expected-actor-id'] });
   let financialReference;
-  if (financialWrite || financialRecovery || draftWrite || payoutWrite || payoutRecovery || settlementWrite || settlementRecovery || settlementOriginal || addressWrite || addressRecovery) {
-    const reference = { path: req.url, key: req.headers['idempotency-key'], actor: req.headers['x-expected-actor-id'], ...(addressWrite ? { version: req.headers['if-match'] } : {}) }, body = [];
+  if (financialWrite || financialRecovery || draftWrite || payoutWrite || payoutRecovery || settlementWrite || settlementRecovery || settlementOriginal || addressWrite || addressRecovery || spendingWrite || spendingRecovery) {
+    const reference = { path: req.url, key: req.headers['idempotency-key'], actor: req.headers['x-expected-actor-id'], ...(addressWrite || spendingWrite ? { version: req.headers['if-match'] } : {}) }, body = [];
     financialReference = reference;
-    (addressWrite ? addressWrites : addressRecovery ? addressRecoveries : financialWrite ? financialWrites : financialRecovery ? financialRecoveries : draftWrite ? draftWrites : payoutWrite ? payoutWrites : payoutRecovery ? payoutRecoveries : settlementWrite ? settlementWrites : settlementRecovery ? settlementRecoveries : settlementOriginalReads).push(reference);
+    (spendingWrite ? spendingWrites : spendingRecovery ? spendingRecoveries : addressWrite ? addressWrites : addressRecovery ? addressRecoveries : financialWrite ? financialWrites : financialRecovery ? financialRecoveries : draftWrite ? draftWrites : payoutWrite ? payoutWrites : payoutRecovery ? payoutRecoveries : settlementWrite ? settlementWrites : settlementRecovery ? settlementRecoveries : settlementOriginalReads).push(reference);
     req.on('data', chunk => body.push(chunk)); req.on('end', () => { reference.body = JSON.parse(Buffer.concat(body).toString('utf8')); });
   }
-  const drop = (write || caseWrite || decisionWrite || returnWrite || inspectionWrite || resolutionWrite || entitlementWrite || financialWrite || payoutWrite || settlementWrite || addressWrite) && dropNext; if (drop) dropNext = false;
+  const drop = (write || caseWrite || decisionWrite || returnWrite || inspectionWrite || resolutionWrite || entitlementWrite || financialWrite || payoutWrite || settlementWrite || addressWrite || spendingWrite) && dropNext; if (drop) dropNext = false;
   const startedAt = performance.now(); let upstreamCompleted = false;
   const upstream = http.request({ hostname: '127.0.0.1', port, path: req.url, method: req.method, headers }, response => {
     response.once('end', () => { upstreamCompleted = true; });
-    if (financialPath || payoutPath || settlementPath || addressPath) traceFinancial('response-headers', { path: req.url, status: response.statusCode, elapsedMs: Math.round(performance.now() - startedAt) });
+    if (financialPath || payoutPath || settlementPath || addressPath || spendingPath) traceFinancial('response-headers', { path: req.url, status: response.statusCode, elapsedMs: Math.round(performance.now() - startedAt) });
     if (financialReference) { financialReference.status = response.statusCode; financialReference.elapsedMs = Math.round(performance.now() - startedAt); }
-    if (drop && response.statusCode === 200) { response.resume(); response.once('end', () => { dropped++; if (financialWrite || payoutWrite || settlementWrite || addressWrite) traceFinancial('actual-200-response-ended-before-intentional-loss', { path: req.url, elapsedMs: Math.round(performance.now() - startedAt) }); res.writeHead(200, { 'content-type': 'application/json', 'content-length': '64', 'cache-control': 'no-store' }); res.flushHeaders(); res.write('{'); setTimeout(() => res.destroy(), 25); }); return; }
+    if (drop && response.statusCode === 200) { response.resume(); response.once('end', () => { dropped++; if (financialWrite || payoutWrite || settlementWrite || addressWrite || spendingWrite) traceFinancial('actual-200-response-ended-before-intentional-loss', { path: req.url, elapsedMs: Math.round(performance.now() - startedAt) }); res.writeHead(200, { 'content-type': 'application/json', 'content-length': '64', 'cache-control': 'no-store' }); res.flushHeaders(); res.write('{'); setTimeout(() => res.destroy(), 25); }); return; }
     res.writeHead(response.statusCode ?? 502, response.headers); response.pipe(res);
   }); upstream.on('error', () => { if (res.destroyed || res.writableEnded) return; if (!res.headersSent) res.writeHead(502); res.end(); });
   res.once('close', () => { if (!res.writableEnded && !upstreamCompleted) { if (isApi) traceFinancial('downstream-cancelled', { path: req.url, method: req.method, elapsedMs: Math.round(performance.now() - startedAt) }); upstream.destroy(); } });
@@ -94,7 +99,12 @@ try {
   }); const proxyPort = await listen(tunnel);
   browser = await chromium.launch({ ...(channel === 'msedge' ? { channel: 'msedge' } : {}), headless: true, proxy: { server: 'http://127.0.0.1:' + proxyPort } });
   const finance = await user(config.financeToken), page = finance.page;
-  if (config.organizationAddress) {
+  if (config.orderSpendingPolicy) {
+    assert.equal(config.financeToken, config.makerToken);
+    await verifyOrderSpendingPolicyBrowser({ config, maker: finance, user, origin, directory, spendingWrites, spendingRecoveries, dropNext: () => { dropNext = true; }, dropped: () => dropped });
+    assert.equal(writes.length + caseWrites.length + decisionWrites.length + returnWrites.length + inspectionWrites.length + resolutionWrites.length + entitlementWrites.length + financialWrites.length + payoutWrites.length + draftWrites.length + settlementWrites.length + addressWrites.length, 0);
+    assert.deepEqual(errors, []);
+  } else if (config.organizationAddress) {
     assert.equal(config.financeToken, config.makerToken);
     await verifyOrganizationAddressBrowser({ config, maker: finance, user, origin, directory, addressWrites, addressRecoveries, dropNext: () => { dropNext = true; }, dropped: () => dropped });
     assert.equal(writes.length + caseWrites.length + decisionWrites.length + returnWrites.length + inspectionWrites.length + resolutionWrites.length + entitlementWrites.length + financialWrites.length + payoutWrites.length + draftWrites.length + settlementWrites.length, 0);
@@ -320,6 +330,9 @@ try {
   for (const [index, page] of pages.entries()) if (!page.isClosed()) { console.error('FIXTURE PAGE ' + index + ': ' + (await page.locator('main').innerText().catch(() => 'unavailable')).slice(0, 5000)); await page.screenshot({ path: resolve(directory, 'failure-' + index + '.png'), fullPage: true }).catch(() => {}); }
   console.error(error.stack ?? String(error)); process.exitCode = 1;
 } finally {
+  if (config.orderSpendingPolicy) console.log('FIXTURE ORDER SPENDING POLICY FLOW ' + JSON.stringify({
+    writes: spendingWrites.map(({ path, key, actor, status, elapsedMs }) => ({ path, key, actor, status, elapsedMs })),
+    recoveries: spendingRecoveries.map(({ path, actor, status, elapsedMs }) => ({ path, actor, status, elapsedMs })), dropped, tracePath: spendingTracePath }));
   if (config.organizationAddress) console.log('FIXTURE ORGANIZATION ADDRESS FLOW ' + JSON.stringify({
     writes: addressWrites.map(({ path, key, actor, status, elapsedMs }) => ({ path, key, actor, status, elapsedMs })),
     recoveries: addressRecoveries.map(({ path, actor, status, elapsedMs }) => ({ path, actor, status, elapsedMs })), dropped, tracePath: addressTracePath }));

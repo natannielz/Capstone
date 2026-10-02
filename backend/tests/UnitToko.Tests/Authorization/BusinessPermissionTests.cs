@@ -37,6 +37,32 @@ public sealed class BusinessPermissionTests
     }
 
     [Fact]
+    public void Spending_policy_governance_is_scoped_explicit_and_separate_from_order_approval()
+    {
+        foreach (var permission in new[] { Permissions.OrderSpendingPolicyRead, Permissions.OrderSpendingPolicyPropose, Permissions.OrderSpendingPolicyApprove }) {
+            Assert.Equal(new[] { GrantScopeKind.BuyingDivision, GrantScopeKind.BuyingBranch, GrantScopeKind.BuyingOrganization }, Permissions.Find(permission)!.AllowedScopes.ToArray());
+            Assert.All(RoleTemplates.Templates.Values, role => Assert.DoesNotContain(permission, role.Permissions));
+            Assert.False(ScopePolicy.Compile(Actor, Snapshot("buyer", Branch, [Permissions.OrderSpendApprove]), permission, Now).IsAllowed);
+            Assert.False(ScopePolicy.Compile(Actor, Snapshot("buyer", Branch, [permission]), permission, Now).IsAllowed);
+            var policy = Snapshot("buyer", Branch, [permission, Permissions.BranchPic]);
+            Assert.True(ScopePolicy.Compile(Actor, policy, permission, Now).Matches(Order));
+            Assert.False(ScopePolicy.Compile(Actor, policy, Permissions.OrderSpendApprove, Now).IsAllowed);
+            Assert.False(ScopePolicy.Compile(Actor, policy, Permissions.OrderAccept, Now).IsAllowed);
+            Assert.False(ScopePolicy.Compile(Actor, Snapshot("buyer", Buyer, [permission]), permission, Now).IsAllowed);
+            if (permission != Permissions.OrderSpendingPolicyRead) {
+                Assert.Equal(TimeSpan.FromMinutes(5), Permissions.Find(permission)!.Assurance.MaximumAge);
+                Assert.False(ScopePolicy.Compile(Actor with { AuthenticatedAt = Now.AddMinutes(-6) }, policy, permission, Now).IsAllowed);
+            }
+        }
+        const string approval = Permissions.OrderSpendingPolicyApprove;
+        Assert.True(ApprovalPolicy.RequiresEvidence(approval)); Assert.True(PersonApprovalPolicy.RequiresEvidence(approval));
+        Assert.False(ApprovalPolicy.Evaluate(101, approval, new(1, 1, ProposedBy: 101)).Allowed);
+        Assert.False(ApprovalPolicy.Evaluate(101, approval, new(1, 2, ProposedBy: 102)).Allowed);
+        Assert.False(ApprovalPolicy.Evaluate(101, approval, new(1, 1)).Allowed);
+        Assert.Equal(new long[] { 101, 102 }, PersonApprovalPolicy.RequiredAccounts(101, approval, new(1, 1, ProposedBy: 102)).ToArray());
+    }
+
+    [Fact]
     public void Store_proposal_cannot_consent_and_buyer_consent_cannot_propose()
     {
         var staff = Snapshot("store-staff", Shop, [Permissions.SubstitutionPropose]);
@@ -80,11 +106,11 @@ public sealed class BusinessPermissionTests
     public void Suggestions_do_not_change_v1_materialization_or_legacy_snapshot()
     {
         Assert.Equal(1, RoleTemplates.CurrentVersion);
-        Assert.Equal(new[] { Permissions.SubstitutionAccept }, RoleTemplates.Suggestions["buyer"].ToArray());
-        Assert.Equal(new[] { Permissions.SubstitutionPropose, Permissions.StockConvert, Permissions.ReservationRelease,
+        Assert.Equal(new[] { Permissions.SubstitutionAccept, Permissions.OrganizationAddressRead }, RoleTemplates.Suggestions["buyer"].ToArray());
+        Assert.Equal(new[] { Permissions.OrganizationAddressRead, Permissions.SubstitutionPropose, Permissions.StockConvert, Permissions.ReservationRelease,
             Permissions.SupplierChangePropose }, RoleTemplates.Suggestions["store-staff"].ToArray());
-        Assert.Equal(new[] { Permissions.OrderAccept, Permissions.SupplierChangeApprove }, RoleTemplates.Suggestions["store-head"].ToArray());
-        var financeSuggestions = new[] { Permissions.BankReceiptRead, Permissions.BankReceiptConfirm,
+        Assert.Equal(new[] { Permissions.OrderAccept, Permissions.SupplierChangeApprove, Permissions.OrganizationAddressRead }, RoleTemplates.Suggestions["store-head"].ToArray());
+        var financeSuggestions = new[] { Permissions.OrganizationAddressRead, Permissions.BankReceiptRead, Permissions.BankReceiptConfirm,
             Permissions.BankStatementRead, Permissions.BankStatementStage,
             Permissions.PaymentReviewRead, Permissions.PaymentReviewCorrect,
             Permissions.ReceivingAccountRead, Permissions.ReceivingAccountDetailsRead,

@@ -11,6 +11,7 @@ public static class Permissions
     public const string CatalogRead = "catalog.read", CatalogManage = "catalog.manage", PricingManage = "pricing.manage", PricingApprove = "pricing.approve";
     public const string OrderRead = "order.read", OrderSubmit = "order.submit", OrderApprove = "order.approve", OrderSubstitute = "order.substitute", OrderCancel = "order.cancel";
     public const string OrderSpendApprove = "order.spend.approve", OrderAccept = "order.accept";
+    public const string OrderSpendingPolicyRead = "order.spending.policy.read", OrderSpendingPolicyPropose = "order.spending.policy.propose", OrderSpendingPolicyApprove = "order.spending.policy.approve";
     public const string SubstitutionPropose = "substitution.propose", SubstitutionAccept = "substitution.accept";
     public const string BranchPic = "branch.pic", OrganizationWide = "organization.wide";
     public const string StockRead = "stock.read", StockReceive = "stock.receive", StockCount = "stock.count", StockAdjustPropose = "stock.adjust.propose", StockAdjustApprove = "stock.adjust.approve";
@@ -55,6 +56,9 @@ public static class Permissions
         result[ShipmentRead] = result[ShipmentRead] with { AllowedScopes = [.. Buying, .. Operations, .. Courier] };
         foreach (var name in new[] { OrderSubmit, OrderApprove, OrderSubstitute, OrderCancel, ReceiptAccept, CaseRequest, PaymentEvidence }) Add(name, Buying);
         Add(OrderSpendApprove, [GrantScopeKind.BuyingDivision, GrantScopeKind.BuyingBranch, GrantScopeKind.BuyingOrganization], true);
+        Add(OrderSpendingPolicyRead, [GrantScopeKind.BuyingDivision, GrantScopeKind.BuyingBranch, GrantScopeKind.BuyingOrganization]);
+        foreach (var name in new[] { OrderSpendingPolicyPropose, OrderSpendingPolicyApprove })
+            Add(name, [GrantScopeKind.BuyingDivision, GrantScopeKind.BuyingBranch, GrantScopeKind.BuyingOrganization], true);
         Add(SubstitutionAccept, Buying);
         Add(BranchPic, [GrantScopeKind.BuyingBranch, GrantScopeKind.BuyingDivision]);
         Add(OrganizationWide, [GrantScopeKind.BuyingOrganization]);

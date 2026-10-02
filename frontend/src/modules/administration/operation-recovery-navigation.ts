@@ -1,4 +1,5 @@
 export function recoveryPage(operation: string) {
+  if (/^ordering\.spending\.policy\.(propose|approve|reject)$(?![\s\S])/.test(operation)) return { href: '/ordering/spending-policies', label: 'halaman persetujuan belanja' };
   if (/^organization\.address\.(propose|approve|reject)$(?![\s\S])/.test(operation)) return { href: '/administration/organizations/addresses', label: 'halaman alamat organisasi' };
   if (operation === 'billing.refund.payout.verify') return { href: '/fulfillment/cases', label: 'halaman verifikasi debit refund' };
   if (operation.startsWith('billing.refund.payout.') || operation === 'evidence.refund-payout-image.reserve') return { href: '/fulfillment/cases', label: 'halaman pencatatan bukti refund' };
@@ -42,6 +43,9 @@ export function recoveryPage(operation: string) {
     : { href: "/administration/person-reviews", label: "halaman peninjauan orang" };
 }
 export function operationLabel(operation: string) {
+  if (operation === 'ordering.spending.policy.propose') return 'Pengajuan aturan belanja';
+  if (operation === 'ordering.spending.policy.approve') return 'Persetujuan aturan belanja';
+  if (operation === 'ordering.spending.policy.reject') return 'Penolakan aturan belanja';
   if (operation === 'organization.address.propose') return 'Pengajuan alamat organisasi';
   if (operation === 'organization.address.approve') return 'Persetujuan alamat organisasi';
   if (operation === 'organization.address.reject') return 'Penolakan alamat organisasi';

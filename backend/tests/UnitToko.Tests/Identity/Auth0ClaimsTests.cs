@@ -156,12 +156,26 @@ public sealed class Auth0ClaimsTests
     [Theory]
     [InlineData("/shop")]
     [InlineData("/administration/organizations/addresses")]
-    public void Primary_shop_and_postal_return_destinations_are_exact_and_within_the_existing_bound(string path) {
+    [InlineData("/ordering/spending-policies")]
+    public void Shop_postal_and_spending_return_destinations_are_exact_and_within_the_configured_bound(string path) {
         var settings = Settings();
         Assert.Equal(path, ReturnPathPolicy.Require(path, settings));
-        Assert.True(settings.AllowedReturnPaths.Length <= 32);
+        Assert.True(settings.AllowedReturnPaths.Length <= Auth0Options.MaximumReturnPaths);
+        Assert.True(new Auth0OptionsValidator().Validate(null, settings).Succeeded);
         foreach (var changed in new[] { path + "/", path + "?next=https://outside.co.id", path.Replace("/", "//", StringComparison.Ordinal), path + "/00000000-0000-0000-0000-000000000001" })
             Assert.Throws<DomainValidationException>(() => ReturnPathPolicy.Require(changed, settings));
+    }
+    [Fact]
+    public void Return_path_configuration_remains_bounded_unique_and_canonical() {
+        var settings = Settings(); var validator = new Auth0OptionsValidator();
+        settings.AllowedReturnPaths = Enumerable.Range(0, Auth0Options.MaximumReturnPaths).Select(index => "/reviewed/" + index).ToArray();
+        Assert.True(validator.Validate(null, settings).Succeeded);
+        settings.AllowedReturnPaths = [.. settings.AllowedReturnPaths, "/reviewed/overflow"];
+        Assert.True(validator.Validate(null, settings).Failed);
+        settings.AllowedReturnPaths = ["/ordering/spending-policies", "/ordering/spending-policies"];
+        Assert.True(validator.Validate(null, settings).Failed);
+        settings.AllowedReturnPaths = ["https://outside.co.id"];
+        Assert.True(validator.Validate(null, settings).Failed);
     }
     [Fact]
     public void Order_draft_return_path_is_explicitly_allowlisted() =>

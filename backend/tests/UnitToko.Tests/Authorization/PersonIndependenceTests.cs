@@ -51,6 +51,7 @@ public sealed class PersonIndependenceTests
     public static IEnumerable<object[]> ApprovalCases()
     {
         yield return [Permissions.OrderSpendApprove, new ApprovalRequest(3, 3, RequestedBy: 201), new long[] { 101, 201 }];
+        yield return [Permissions.OrderSpendingPolicyApprove, new ApprovalRequest(3, 3, ProposedBy: 202), new long[] { 101, 202 }];
         yield return [Permissions.SupplierChangeApprove, new ApprovalRequest(3, 3, ProposedBy: 202), new long[] { 101, 202 }];
         yield return [Permissions.ReceivingAccountVerify, new ApprovalRequest(3, 3, ProposedBy: 202), new long[] { 101, 202 }];
         yield return [Permissions.ReceivingAccountApprove, new ApprovalRequest(3, 3, ProposedBy: 202), new long[] { 101, 202 }];

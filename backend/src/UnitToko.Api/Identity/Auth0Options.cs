@@ -8,6 +8,7 @@ public sealed class Auth0Options
     public const string Scheme = "UnitTokoOidc";
     public const string CallbackPath = "/auth/callback";
     public const string SignedOutCallbackPath = "/auth/signed-out";
+    public const int MaximumReturnPaths = 64;
     public bool Enabled { get; set; }
     public string Issuer { get; set; } = "";
     public string PublicOrigin { get; set; } = "";
@@ -17,7 +18,7 @@ public sealed class Auth0Options
     public string ConnectionName { get; set; } = "";
     public string ClaimsNamespace { get; set; } = "";
     public string AssurancePolicyVersion { get; set; } = "unit-toko-otp-v1";
-    public string[] AllowedReturnPaths { get; set; } = ["/", "/identity/account", "/administration/access", "/administration/organizations", "/administration/organizations/addresses", "/administration/history", "/administration/person-reviews", "/administration/catalog", "/catalog/prices", "/catalog/browse", "/shop", "/ordering/drafts", "/ordering/checkout", "/ordering/reviews", "/ordering/orders", "/fulfillment/preparations", "/fulfillment/dispatches", "/fulfillment/shipments", "/fulfillment/receive", "/fulfillment/cases", "/billing/invoices", "/billing/payments", "/billing/payment-reviews", "/billing/receiving-accounts", "/billing/bank-statements", "/billing/bank-receipts", "/inventory/counts", "/inventory/sources", "/inventory/sources/revisions", "/inventory/sources/aliases", "/inventory/sources/suspensions", "/inventory/sources/policies"];
+    public string[] AllowedReturnPaths { get; set; } = ["/", "/identity/account", "/administration/access", "/administration/organizations", "/administration/organizations/addresses", "/administration/history", "/administration/person-reviews", "/administration/catalog", "/catalog/prices", "/catalog/browse", "/shop", "/ordering/drafts", "/ordering/checkout", "/ordering/reviews", "/ordering/orders", "/ordering/spending-policies", "/fulfillment/preparations", "/fulfillment/dispatches", "/fulfillment/shipments", "/fulfillment/receive", "/fulfillment/cases", "/billing/invoices", "/billing/payments", "/billing/payment-reviews", "/billing/receiving-accounts", "/billing/bank-statements", "/billing/bank-receipts", "/inventory/counts", "/inventory/sources", "/inventory/sources/revisions", "/inventory/sources/aliases", "/inventory/sources/suspensions", "/inventory/sources/policies"];
 }
 
 public sealed class Auth0OptionsValidator : IValidateOptions<Auth0Options>
@@ -28,7 +29,7 @@ public sealed class Auth0OptionsValidator : IValidateOptions<Auth0Options>
         var valid = HttpsOrigin(options.Issuer, requireTrailingSlash: true) && HttpsOrigin(options.PublicOrigin, requireTrailingSlash: false) &&
             Bounded(options.ClientId, 200) && Bounded(options.ClientSecret, 4096) && Bounded(options.ConnectionId, 200) && Bounded(options.ConnectionName, 200) &&
             options.AssurancePolicyVersion.Length is > 0 and <= 40 && options.AssurancePolicyVersion.All(character => char.IsAsciiLetterOrDigit(character) || character is '.' or '_' or '-') &&
-            ValidNamespace(options.ClaimsNamespace) && options.AllowedReturnPaths is { Length: > 0 and <= 32 } &&
+            ValidNamespace(options.ClaimsNamespace) && options.AllowedReturnPaths is { Length: > 0 and <= Auth0Options.MaximumReturnPaths } &&
             options.AllowedReturnPaths.Distinct(StringComparer.Ordinal).Count() == options.AllowedReturnPaths.Length && options.AllowedReturnPaths.All(ReturnPathPolicy.IsCanonicalPath);
         return valid ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail("Auth0 requires reviewed HTTPS origins, confidential-client configuration, a controlled claims namespace and exact local return paths.");
     }
