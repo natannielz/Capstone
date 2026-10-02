@@ -1,4 +1,5 @@
 export function recoveryPage(operation: string) {
+  if (operation === 'billing.refund.payout.verify') return { href: '/fulfillment/cases', label: 'halaman verifikasi debit refund' };
   if (operation.startsWith('billing.refund.payout.') || operation === 'evidence.refund-payout-image.reserve') return { href: '/fulfillment/cases', label: 'halaman pencatatan bukti refund' };
   if (operation === 'billing.return.financial.approve') return { href: '/fulfillment/cases', label: 'halaman persetujuan Finance retur' };
   if (operation === 'billing.return.entitlement.request') return { href: '/fulfillment/cases', label: 'halaman pengajuan nilai finansial retur' };
@@ -40,6 +41,7 @@ export function recoveryPage(operation: string) {
     : { href: "/administration/person-reviews", label: "halaman peninjauan orang" };
 }
 export function operationLabel(operation: string) {
+  if (operation === 'billing.refund.payout.verify') return 'Verifikasi debit bank refund';
   if (operation === 'billing.refund.payout.draft') return 'Penyimpanan draf bukti refund';
   if (operation === 'billing.refund.payout.record') return 'Pencatatan refund belum diverifikasi';
   if (operation === 'evidence.refund-payout-image.reserve') return 'Persiapan unggah bukti refund';

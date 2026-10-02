@@ -7,6 +7,7 @@ using UnitToko.Platform.Authorization;
 using A = UnitToko.Platform.Billing.ReturnFinancialApprovalBson;
 using B = UnitToko.Platform.Billing.PaymentAllocationBson;
 using C = UnitToko.Platform.Billing.PaymentAllocationCorrectionBson;
+using D = UnitToko.Platform.Billing.RefundSettlementBson;
 
 namespace UnitToko.Platform.Billing;
 
@@ -15,6 +16,7 @@ internal sealed partial class PaymentAllocationRecords
     private static BsonDocument FinancialReceipt(BsonDocument row, long id) =>
         row["receipts"].AsBsonArray.SingleOrDefault(value => value["receiptId"] == id)?.AsBsonDocument ?? throw B.Broken();
     private static BsonValue EventBefore(BsonDocument row, bool receipt, long id) {
+        if (row["operation"] == D.Operation) return SettlementReceipt(row, receipt, id)["before"];
         if (row["operation"] == A.Operation) {
             if (!receipt) { Equal(row["invoiceId"], id); return row["invoiceBefore"]; }
             return FinancialReceipt(row, id)["before"];
@@ -23,6 +25,7 @@ internal sealed partial class PaymentAllocationRecords
         return receipt ? row["receiptBefore"] : row["lines"].AsBsonArray.Single(line => line["invoiceId"] == id)["before"];
     }
     private static long EventVersion(BsonDocument row, bool receipt, long id) {
+        if (row["operation"] == D.Operation) return SettlementReceipt(row, receipt, id)["version"].AsInt64;
         if (row["operation"] == A.Operation) {
             if (!receipt) { Equal(row["invoiceId"], id); return row["invoiceVersion"].AsInt64; }
             return FinancialReceipt(row, id)["version"].AsInt64;
@@ -30,10 +33,12 @@ internal sealed partial class PaymentAllocationRecords
         if (row["operation"] != B.Operation && row["operation"] != C.Operation) throw B.Broken();
         return (receipt ? row["receiptVersion"] : row["lines"].AsBsonArray.Single(line => line["invoiceId"] == id)["version"]).AsInt64;
     }
-    private static BsonValue EventSourceHash(BsonDocument row, bool receipt, long id) => row["operation"] == A.Operation
+    private static BsonValue EventSourceHash(BsonDocument row, bool receipt, long id) => row["operation"] == D.Operation
+        ? SettlementReceipt(row, receipt, id)["receiptHash"] : row["operation"] == A.Operation
         ? receipt ? FinancialReceipt(row, id)["receiptHash"] : row["invoice"]["snapshotHash"]
         : receipt ? row["receiptHash"] : row["lines"].AsBsonArray.Single(line => line["invoiceId"] == id)["source"]["snapshotHash"];
-    private static BsonValue EventTotal(BsonDocument row, bool receipt, long id) => row["operation"] == A.Operation
+    private static BsonValue EventTotal(BsonDocument row, bool receipt, long id) => row["operation"] == D.Operation
+        ? SettlementReceipt(row, receipt, id)["receiptTotal"] : row["operation"] == A.Operation
         ? receipt ? FinancialReceipt(row, id)["receiptTotal"] : row["invoice"]["total"]
         : receipt ? row["receiptTotal"] : row["lines"].AsBsonArray.Single(line => line["invoiceId"] == id)["source"]["total"];
     private static BsonDocument AfterFinancial(BsonDocument row, bool receipt, long id) {
@@ -48,6 +53,7 @@ internal sealed partial class PaymentAllocationRecords
         B.Operation => RawAsync(tx, candidate["_id"].AsInt64, ct),
         C.Operation => RawEventAsync(tx, true, candidate["_id"].AsInt64, ct),
         A.Operation => RawApprovalAsync(tx, candidate["_id"].AsInt64, ct),
+        D.Operation => RawSettlementAsync(tx, candidate["_id"].AsInt64, ct),
         _ => throw B.Broken()
     };
 
@@ -56,7 +62,7 @@ internal sealed partial class PaymentAllocationRecords
     internal async Task<BsonDocument> RawApprovalAsync(IClientSessionHandle tx, long id, CancellationToken ct) {
         if (!tx.IsInTransaction || !ReferenceEquals(tx.Client, database.Client) || clock is null) throw B.Broken();
         var row = await RowAsync(tx, A.Events, id, ct); Equal(row["operation"], A.Operation); Equal(row["snapshotHash"], B.Hash(row));
-        foreach (var other in new[] { B.Events, C.Events }) if (await Rows(other).Find(tx, new BsonDocument("_id", id)).AnyAsync(ct)) throw B.Broken();
+        foreach (var other in new[] { B.Events, C.Events, D.Events }) if (await Rows(other).Find(tx, new BsonDocument("_id", id)).AnyAsync(ct)) throw B.Broken();
         var request = await new ReturnEntitlementRecords(database, clock).RawAsync(tx, row["returnId"].AsInt64, ct);
         Equal(row["request"], request); Equal(row["caseId"], request["caseId"]); Equal(row["invoiceId"], request["invoiceId"]); Equal(row["action"], request["action"]);
         Equal(row["invoice"], request["source"]["invoice"]); Equal(row["party"], PaymentDraftBson.Party(new BsonArray { row["invoice"] }));

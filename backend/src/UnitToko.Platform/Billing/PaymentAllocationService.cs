@@ -14,6 +14,7 @@ using B = UnitToko.Platform.Billing.PaymentAllocationBson;
 using R = UnitToko.Platform.Billing.PaymentAllocationRecords;
 using C = UnitToko.Platform.Billing.PaymentAllocationCorrectionBson;
 using A = UnitToko.Platform.Billing.ReturnFinancialApprovalBson;
+using D = UnitToko.Platform.Billing.RefundSettlementBson;
 
 namespace UnitToko.Platform.Billing;
 
@@ -89,6 +90,7 @@ public sealed partial class PaymentAllocationService
     private async Task StorageAsync(CancellationToken ct) {
         await verifications.AllocationStorageAsync(ct); await invoices.PaymentStorageAsync(ct); await PaymentAllocationStorage.RequireAsync(database, ct);
         await entitlements.ApprovalStorageAsync(ct); await PaymentAllocationStorage.RequireFinancialAsync(database, ct);
+        await PaymentAllocationStorage.RequireSettlementsAsync(database, ct);
     }
     private async Task SourceAsync(Context context, long id, bool newEffect, CancellationToken ct) {
         _ = Require(context); context.Source = await verifications.AllocationSourceAsync(context.Actor, context.Authority, context.Tx, id, newEffect, ct);
@@ -104,6 +106,7 @@ public sealed partial class PaymentAllocationService
     }
     private async Task ValidateSourceAsync(Context context, BsonDocument row, CancellationToken ct) {
         if (!context.Validated.Add(row["_id"].AsInt64)) return;
+        if (row["operation"] == D.Operation) { await ValidateSettlementSourceAsync(context, row, ct); return; }
         if (row["operation"] == A.Operation) { await ValidateFinancialSourceAsync(context, row, ct); return; }
         if (row["operation"] != B.Operation && row["operation"] != C.Operation) throw B.Broken();
         var source = await verifications.AllocationSourceAsync(context.Actor, context.Authority, context.Tx, row["verificationId"].AsInt64, false, ct);
@@ -168,6 +171,7 @@ public sealed partial class PaymentAllocationService
             R.Equal(row["journalId"], journal["_id"]);
         }
         await RequireNoOrphanFinancialJournalAsync(context, party, ct);
+        await RequireNoOrphanSettlementJournalAsync(context, party, ct);
     }
     private async Task AuditReadAsync(Context context, string action, long? verificationId, CancellationToken ct) => await records.Rows("auditEvents").InsertOneAsync(context.Tx, new BsonDocument {
         { "_id", (await ids.NextAsync("auditEvents", ct)).Value }, { "schemaVersion", 1 }, { "kind", B.Prefix + "read" }, { "operation", B.Prefix + action },

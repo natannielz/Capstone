@@ -23,11 +23,13 @@ public sealed partial class RefundPayoutService
         R.Equal(draft["source"], frame.Source); return (draft, frame);
     }
     public async Task<BsonDocument> ReadDraftAsync(ActorContext actor, long draftId, CancellationToken ct = default) {
-        if (draftId <= 0) throw RefundPayoutPolicy.Invalid(); await StorageAsync(ct);
+        if (draftId <= 0) throw RefundPayoutPolicy.Invalid(); await StorageAsync(ct); await PaymentAllocationStorage.RequireSettlementsAsync(database, ct);
         return await authorization.ReadAsync(actor, async (authority, tx, token) => {
             var (draft, frame) = await DraftFrameAsync(actor, authority, tx, draftId, token);
             var payout = await SavedAsync(frame, token); if (payout is not null && payout["draftId"] != draft["_id"]) payout = null;
             var view = View(frame, payout); view.Add("draft", B.DraftResult(draft));
+            var settlement = payout is null ? null : await SettlementSavedAsync(tx, payout["_id"].AsInt64, token);
+            view["settlement"] = settlement is null ? BsonNull.Value : RefundSettlementBson.Result(settlement);
             view.Add("evidence", payout is null ? BsonNull.Value : payout["evidence"].DeepClone());
             view.Add("reservationId", payout is null ? BsonNull.Value : payout["reservationId"]);
             await records.TouchAsync(tx, B.Drafts, draft, token); await FenceAsync(frame, token); return view;

@@ -10,6 +10,7 @@ using UnitToko.Platform.Mongo.Migrations;
 using B = UnitToko.Platform.Billing.PaymentAllocationBson;
 using C = UnitToko.Platform.Billing.PaymentAllocationCorrectionBson;
 using A = UnitToko.Platform.Billing.ReturnFinancialApprovalBson;
+using D = UnitToko.Platform.Billing.RefundSettlementBson;
 
 namespace UnitToko.Platform.Billing;
 
@@ -23,6 +24,7 @@ internal sealed partial class PaymentAllocationRecords(IMongoDatabase database, 
         { receipt ? "reservedForRefund" : "credited", new BsonDecimal128(0m) }, { "lastEventId", BsonNull.Value }, { "lastEventHash", BsonNull.Value } };
     internal static BsonDocument Balance(BsonDocument head, bool receipt) => new(Empty(receipt).Names.Select(name => new BsonElement(name, head[name])));
     internal static BsonDocument After(BsonDocument row, bool receipt, long id) {
+        if (row["operation"] == D.Operation) return AfterSettlement(row, receipt, id);
         if (row["operation"] == A.Operation) return AfterFinancial(row, receipt, id);
         if (row["operation"] != B.Operation && row["operation"] != C.Operation) throw B.Broken();
         var line = receipt ? null : row["lines"].AsBsonArray.Single(value => value["invoiceId"] == id).AsBsonDocument;
@@ -55,6 +57,7 @@ internal sealed partial class PaymentAllocationRecords(IMongoDatabase database, 
         Equal(row["operation"], correction ? C.Operation : B.Operation);
         if (await Rows(correction ? B.Events : C.Events).Find(tx, new BsonDocument("_id", id)).AnyAsync(ct)) throw B.Broken();
         if (await Rows(A.Events).Find(tx, new BsonDocument("_id", id)).AnyAsync(ct)) throw B.Broken();
+        if (await Rows(D.Events).Find(tx, new BsonDocument("_id", id)).AnyAsync(ct)) throw B.Broken();
         Equal(row["bodyHash"], AuthorizationStore.CommandHash(correction ? C.Body(row["originalAllocationId"].AsInt64, row["binding"].AsString, B.Input(row)) : B.Body(row["verificationId"].AsInt64, row["binding"].AsString, B.Input(row)), row["reason"].AsString));
         PolicyAt(row["policy"].AsBsonDocument, new(row["recordedAt"].ToUniversalTime()));
         if (row["postingFence"] != 1L || row["journalId"].IsBsonNull || row["journalFingerprint"].IsBsonNull) throw B.Broken();
@@ -94,12 +97,15 @@ internal sealed partial class PaymentAllocationRecords(IMongoDatabase database, 
         BsonValue total, BsonValue sourceHash, Func<BsonDocument, Task> validateSource, CancellationToken ct,
         Dictionary<long, Dictionary<long, decimal>>? capturedReleaseTotals = null) {
         var name = receipt ? B.Receipts : B.Invoices; var raw = await Rows(name).Find(tx, new BsonDocument("_id", id)).SingleOrDefaultAsync(ct);
-        var expected = Empty(receipt); var seen = new HashSet<long>();
+        var expected = Empty(receipt); var seen = new HashSet<long>(); var paidRefunds = 0m;
         using var cursor = await Rows(B.Events).Find(tx, new BsonDocument(receipt ? "receiptId" : "lines.invoiceId", id)).Sort(new BsonDocument(receipt ? "receiptVersion" : "recordedAt", 1)).ToCursorAsync(ct);
         // Invoice histories can span receipts. Order by that invoice's version, not the array's minimum.
         var events = new List<BsonDocument>(); while (await cursor.MoveNextAsync(ct)) events.AddRange(cursor.Current);
         events.AddRange(await Rows(C.Events).Find(tx, new BsonDocument(receipt ? "receiptId" : "lines.invoiceId", id)).ToListAsync(ct));
         events.AddRange(await Rows(A.Events).Find(tx, new BsonDocument(receipt ? "receipts.receiptId" : "invoiceId", id)).ToListAsync(ct));
+        // Settlement consumes an already blocked refund. Only its receipt history advances;
+        // the approval already owns the invoice's credit and allocation release.
+        if (receipt) events.AddRange(await Rows(D.Events).Find(tx, new BsonDocument("receipts.receiptId", id)).ToListAsync(ct));
         foreach (var item in events.OrderBy(row => EventVersion(row, receipt, id))) {
             var row = await ReadEventAsync(tx, item, ct); await validateSource(row); if (!seen.Add(row["_id"].AsInt64)) throw B.Broken();
             foreach (var allocation in row["operation"] == C.Operation ? new[] { row["originalAllocationId"].AsInt64 } :
@@ -109,6 +115,7 @@ internal sealed partial class PaymentAllocationRecords(IMongoDatabase database, 
             }
             Equal(row["party"], party); Equal(EventBefore(row, receipt, id), expected);
             Equal(EventSourceHash(row, receipt, id), sourceHash); Equal(EventTotal(row, receipt, id), total);
+            if (row["operation"] == D.Operation) paidRefunds = RequireSettlementPaidReceipt(row, id, paidRefunds);
             expected = After(row, receipt, id);
         }
         // A deleted event/head must not reset spendable funds while its committed effects survive.
@@ -117,6 +124,7 @@ internal sealed partial class PaymentAllocationRecords(IMongoDatabase database, 
             while (await effects.MoveNextAsync(ct)) foreach (var effect in effects.Current) if (!seen.Contains(effect[prefix][operation == C.Operation ? "correctionId" : "allocationId"].AsInt64)) throw B.Broken();
         }
         await RequireFinancialEffectsAsync(tx, receipt, id, seen, ct);
+        if (receipt) await RequireSettlementEffectsAsync(tx, id, seen, ct);
         if (raw is null) { if (seen.Count != 0) throw B.Broken(); return (expected, null); }
         var head = await RowAsync(tx, name, id, ct); Equal(head["snapshotHash"], B.Hash(head)); Equal(Balance(head, receipt), expected);
         Equal(head["party"], party); Equal(head["total"], total); Equal(head["sourceHash"], sourceHash); return (expected, head);

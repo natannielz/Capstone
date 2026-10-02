@@ -52,6 +52,7 @@ public sealed partial class BankReceiptService
                 keys.Any(key=>!indexes.Any(index=>Matches(index,key))) || indexes.Any(index=>InvoiceStorage.Unsafe(index) || index.Contains("partialFilterExpression") ||
                     index.GetValue("unique",false).AsBoolean && index["name"]!="_id_" && !keys.Any(key=>Matches(index,key)))) throw B.Broken();
         }
+        await BankTransactionClaimSchemas.RequireStorageAsync(database, ct);
     }
 
     private async Task FenceAsync(Context context,CancellationToken ct) {
@@ -97,9 +98,15 @@ public sealed partial class BankReceiptService
     }
     private async Task<BsonDocument?> ExistingAsync(Context context,BankStatementReceiptSource source,CancellationToken ct) {
         var canonical=source.Row["identityCandidate"];
+        var claims = new BankTransactionClaims(database);
+        await claims.RequireNoOrphanSettlementAsync(context.Tx, ct);
+        var claim = await claims.ReadAsync(context.Tx, canonical.AsString, ct);
+        if (claim is not null && claim["direction"] != "credit") throw B.Changed("bank_transaction_already_claimed");
         var row=await records.Rows(B.Receipts).Find(context.Tx,new BsonDocument("canonicalIdentity",canonical)).SingleOrDefaultAsync(ct);
         if (row is null) {
-            if (await records.Rows(B.Confirmations).Find(context.Tx,new BsonDocument("canonicalIdentity",canonical)).AnyAsync(ct)) throw B.Broken(); return null;
+            if (claim is not null || await records.Rows(B.Confirmations).Find(context.Tx,new BsonDocument("canonicalIdentity",canonical)).AnyAsync(ct)) throw B.Broken();
+            await claims.RequireUnclaimedAsync(context.Tx, canonical.AsString, ct);
+            await claims.RequireNoOrphanCreditAsync(context.Tx, canonical.AsString, ct); return null;
         }
         row=await records.ReceiptAsync(context.Actor,context.Authority,context.Tx,row["_id"].AsInt64,ct); BankReceiptRecords.SameTransfer(row,source); return row;
     }
@@ -122,13 +129,20 @@ public sealed partial class BankReceiptService
         await StorageAsync(ct); var confirmationId=(await ids.NextAsync(B.Confirmations,ct)).Value; var receiptId=(await ids.NextAsync(B.Receipts,ct)).Value;
         var anchorId=(await ids.NextAsync(B.Accounts,ct)).Value; var auditId=(await ids.NextAsync("auditEvents",ct)).Value;
         var body=B.Body(importId,rowNumber,binding,observed,sourceReference,attested);
-        Context? captured=null; BankStatementReceiptSource? source=null; BsonDocument? policy=null; PersonAuthorityProof? proof=null; bool fresh=false;
+        Context? captured=null; BankStatementReceiptSource? source=null; BsonDocument? policy=null; PersonAuthorityProof? proof=null;
+        BsonDocument? capturedExisting=null; bool fresh=false;
         return await authorization.ExecuteCommandAsync(actor,B.Operation,metadata,body,async (authority,tx,token)=>{
-            policy=null; proof=null; fresh=false;
+            policy=null; proof=null; capturedExisting=null; fresh=false;
             var context=new Context(actor,authority,tx,true); _=Require(context);
             var saved=await records.ForKeyAsync(tx,actor.UserId,metadata.IdempotencyKey,token);
             (context,source)=await SourceAsync(context,saved?["importId"].AsInt64 ?? importId,saved?["rowNumber"].AsInt32 ?? rowNumber,saved is null,token);
-            if (saved is null) { policy=await PolicyAsync(context,source,token); if (B.Binding(source,policy)!=binding) throw B.Changed(); fresh=true; }
+            if (saved is null) {
+                policy=await PolicyAsync(context,source,token); if (B.Binding(source,policy)!=binding) throw B.Changed();
+                // Prove all retained canonical owners and reverse orphan effects before
+                // AuthorizationStore inserts this command's own provisional receipt.
+                // This exact source/owner proof remains in the same transaction snapshot.
+                capturedExisting=await ExistingAsync(context,source,token); fresh=true;
+            }
             captured=context; var resource=ReceivingAccountBson.Scope(context.Scope!); var approval=new ApprovalRequest(1,1,RecordedBy:source.Import["actorId"].AsInt64);
             // Person authority is resolved and fenced by AuthorizationStore as well as the owner proof retained below.
             var queries=Require(context);
@@ -136,10 +150,11 @@ public sealed partial class BankReceiptService
                 ScopePolicy.RequiredNodes(resource,authority.Directory),Permissions.BankReceiptConfirm,new(resource,approval));
         },async (tx,token)=>{
             var context=captured ?? throw B.Broken(); var actual=source ?? throw B.Broken(); var approved=policy ?? throw B.Broken();
+            if (!fresh || !ReferenceEquals(context.Tx,tx) || !tx.IsInTransaction) throw B.Broken();
             BankReceiptPolicy.RequireMatch(observed,actual.Import["account"]["details"]["accountNumber"].AsString,B.Line(actual.Row));
             proof=await PeopleAsync(context,actual,token);
             if (await records.Rows(B.Confirmations).Find(tx,new BsonDocument { { "importId",importId }, { "rowNumber",rowNumber } }).AnyAsync(token)) throw B.Changed("bank_receipt_row_already_reviewed");
-            var existing=await ExistingAsync(context,actual,token); var at=Now; var created=existing is null; var finalReceipt=existing?["_id"].AsInt64 ?? receiptId;
+            var existing=capturedExisting; var at=Now; var created=existing is null; var finalReceipt=existing?["_id"].AsInt64 ?? receiptId;
             if (created) {
                 var anchor=await records.AnchorAsync(tx,approved["physicalIdentity"].AsString,token);
                 if (anchor is null) {
@@ -168,6 +183,10 @@ public sealed partial class BankReceiptService
             await records.Rows("auditEvents").InsertOneAsync(tx,B.Audit(row),cancellationToken:token);
             await records.Rows("outboxEvents").InsertOneAsync(tx,new BsonDocument { { "_id",ObjectId.GenerateNewId() }, { "schemaVersion",1 }, { "kind",B.Operation }, { "sourceKey",B.SourceKey(row) },
                 { "actorId",actor.UserId }, { "requestKey",metadata.IdempotencyKey }, { "payload",B.Result(row) }, { "createdAt",at.UtcDateTime }, { "dueAt",at.UtcDateTime }, { "status","pending" }, { "attempts",0 } },cancellationToken:token);
+            var claimedReceipt = await records.Rows(B.Receipts).Find(tx, new BsonDocument("_id", finalReceipt)).SingleOrDefaultAsync(token) ?? throw B.Broken();
+            var claims = new BankTransactionClaims(database);
+            if (created) await claims.ClaimCreditAsync(tx, claimedReceipt, token);
+            else await claims.RequireCreditAsync(tx, claimedReceipt, token);
             return B.Result(row);
         },ct,async (authority,tx,token)=>{
             var context=captured ?? throw B.Broken(); var saved=await records.ForKeyAsync(tx,actor.UserId,metadata.IdempotencyKey,token) ?? throw B.Broken();
@@ -177,6 +196,7 @@ public sealed partial class BankReceiptService
             if (fresh) {
                 source=(await SourceAsync(context,importId,rowNumber,true,token)).Source; var current=await PolicyAsync(context,source,token);
                 if (B.Hash(current)!=B.Hash(policy!)) throw B.Changed(); await records.TouchAsync(tx,B.Policies,current,token);
+                _ = await ExistingAsync(context, source, token);
             }
             await FenceAsync(context,token);
         },validateCurrent:()=>{ _=Require(captured ?? throw B.Broken()); if (fresh) { BankReceiptRecords.PolicyAt(policy!,Now); BankStatementRecords.ProfileAt(source!.CurrentProfile!,Now); } proof?.RequireCurrent(captured!.Tx,clock.UtcNow); });

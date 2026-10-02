@@ -94,11 +94,7 @@ public sealed partial class RefundPayoutService
         ObservePhase("policy-person-authority-fence", started);
     }
     private static BsonDocument ApprovalSnapshot(RefundPayoutApprovedSource source) {
-        var row = source.Approval;
-        return new() { { "id", row["_id"] }, { "hash", row["snapshotHash"] }, { "caseId", row["caseId"] }, { "returnId", row["returnId"] }, { "invoiceId", row["invoiceId"] },
-            { "party", row["party"].DeepClone() }, { "reservedRefund", row["reservedRefund"] }, { "approvedBy", source.ApprovedBy.UserId },
-            { "approvedByPersonId", source.ApprovedBy.PersonId ?? throw B.Broken() }, { "recordedAt", row["recordedAt"] }, { "journalId", row["journalId"] }, { "journalFingerprint", row["journalFingerprint"] },
-            { "refundLiabilityAccountId", source.LiabilityAccount["accountId"] }, { "refundLiabilityAccountCode", source.LiabilityAccount["accountCode"] } };
+        return B.ApprovalSnapshot(source.Approval, source.LiabilityAccount);
     }
     private static BsonDocument BankSnapshot(RefundPayoutBankSource source) => new() {
         { "accountId", source.Account["accountId"] }, { "versionId", source.Account["_id"] }, { "headHash", BankReceiptBson.Hash(source.AccountHead) }, { "versionHash", source.Account["snapshotHash"] },
@@ -150,7 +146,7 @@ public sealed partial class RefundPayoutService
         { "beneficiaryBankCode", frame.Beneficiary["details"]["bankCode"] }, { "beneficiaryAccountSuffix", frame.Beneficiary["details"]["accountNumber"].AsString[^4..] },
         { "payingAccountId", frame.Bank.Account["accountId"] }, { "payingAccountVersionId", frame.Bank.Account["_id"] }, { "payingBankCode", frame.Bank.Account["details"]["bankCode"] },
         { "payingAccountSuffix", frame.Bank.Account["details"]["accountNumber"].AsString[^4..] }, { "payoutRecordingProcedureReference", frame.Policy["payoutRecordingProcedureReference"] },
-        { "beneficiaryVerificationProcedureReference", frame.Policy["beneficiaryVerificationProcedureReference"] }, { "input", B.Input(frame.Input) }, { "payout", saved is null ? BsonNull.Value : B.Result(saved) } };
+        { "beneficiaryVerificationProcedureReference", frame.Policy["beneficiaryVerificationProcedureReference"] }, { "input", B.Input(frame.Input) }, { "payout", saved is null ? BsonNull.Value : B.Result(saved) }, { "settlement", BsonNull.Value } };
     public async Task<RefundPayoutDraftPreview> PreviewDraftFromTransferAsync(ActorContext actor, long approvalId, DateOnly transferDate, string transferReference, CancellationToken ct = default) {
         if (approvalId <= 0 || transferDate.Year < 2000 || !ReceivingAccountPolicy.Text(transferReference, 160)) throw RefundPayoutPolicy.Invalid(); await StorageAsync(ct);
         return await authorization.ReadAsync(actor, async (authority, tx, token) => {

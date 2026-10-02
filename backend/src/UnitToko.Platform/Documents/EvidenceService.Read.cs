@@ -52,6 +52,9 @@ internal sealed partial class EvidenceService
     internal Task<EvidenceReadClaim> AcquireRefundPayoutReadAsync(IClientSessionHandle tx, ActorContext actor, EvidenceTargetRef target, long expectedRevision,
         long reservationId, EvidenceRef reference, AuthorizationReadMetadata metadata, CancellationToken ct) =>
         AcquireBoundReadAsync(tx, actor, target, EvidenceTargetKind.RefundPayout, "refund-payout-evidence-view", expectedRevision, reservationId, reference, metadata, ct);
+    internal Task<EvidenceReadClaim> AcquireRefundSettlementReadAsync(IClientSessionHandle tx, ActorContext actor, EvidenceTargetRef target, long expectedRevision,
+        long reservationId, EvidenceRef reference, AuthorizationReadMetadata metadata, CancellationToken ct) =>
+        AcquireBoundReadAsync(tx, actor, target, EvidenceTargetKind.RefundPayout, "refund-settlement-evidence-view", expectedRevision, reservationId, reference, metadata, ct);
     private Task<EvidenceReadClaim> AcquireBoundReadAsync(IClientSessionHandle tx, ActorContext actor, EvidenceTargetRef target,
         EvidenceTargetKind requiredKind, string requiredPurpose, long expectedRevision, long reservationId, EvidenceRef reference,
         AuthorizationReadMetadata metadata, CancellationToken ct) => GuardAsync<EvidenceReadClaim>(tx, async () => {

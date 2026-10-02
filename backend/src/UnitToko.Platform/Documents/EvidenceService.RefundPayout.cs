@@ -12,11 +12,17 @@ internal sealed partial class EvidenceService
 {
     internal EvidenceReadObserver? RefundPayoutReadObserver { get; set; }
     internal Action<double, bool>? RefundPayoutPinObserver { get; set; }
-    internal async Task<ProtectedEvidenceRead> OpenRefundPayoutReadAsync(ActorContext actor, EvidenceTargetRef target, long expectedRevision,
-        long reservationId, EvidenceRef reference, AuthorizationReadMetadata metadata, CancellationToken ct = default) {
+    internal Task<ProtectedEvidenceRead> OpenRefundPayoutReadAsync(ActorContext actor, EvidenceTargetRef target, long expectedRevision,
+        long reservationId, EvidenceRef reference, AuthorizationReadMetadata metadata, CancellationToken ct = default) =>
+        OpenBoundRefundReadAsync(actor, (tx, token) => AcquireRefundPayoutReadAsync(tx, actor, target, expectedRevision, reservationId, reference, metadata, token), ct);
+    internal Task<ProtectedEvidenceRead> OpenRefundSettlementReadAsync(ActorContext actor, EvidenceTargetRef target, long expectedRevision,
+        long reservationId, EvidenceRef reference, AuthorizationReadMetadata metadata, CancellationToken ct = default) =>
+        OpenBoundRefundReadAsync(actor, (tx, token) => AcquireRefundSettlementReadAsync(tx, actor, target, expectedRevision, reservationId, reference, metadata, token), ct);
+    private async Task<ProtectedEvidenceRead> OpenBoundRefundReadAsync(ActorContext actor,
+        Func<IClientSessionHandle, CancellationToken, Task<EvidenceReadClaim>> acquire, CancellationToken ct) {
         await RefundPayoutEvidenceSchemas.RequireStorageAsync(database, ct); RequireStore();
         var started = Stopwatch.GetTimestamp();
-        var claim = await unit.ExecuteAsync((tx, token) => AcquireRefundPayoutReadAsync(tx, actor, target, expectedRevision, reservationId, reference, metadata, token), ct);
+        var claim = await unit.ExecuteAsync(acquire, ct);
         VerifiedOriginalHandle? handle = null;
         try {
             handle = await OpenRefundPayoutOriginalAsync(claim, ct);

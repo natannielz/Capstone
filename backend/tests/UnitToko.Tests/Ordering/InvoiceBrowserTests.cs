@@ -25,7 +25,7 @@ using Xunit.Abstractions;
 
 namespace UnitToko.Tests.Ordering;
 [Collection("Mongo")]
-public sealed class InvoiceBrowserTests(MongoFixture fixture, ITestOutputHelper output)
+public sealed partial class InvoiceBrowserTests(MongoFixture fixture, ITestOutputHelper output)
 {
     [LocalStockBrowserFact]
     public Task Browser_issues_received_goods_recovers_lost_response_and_downloads_private_invoice() => RunAsync(false);

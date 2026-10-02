@@ -11,7 +11,7 @@ using B = UnitToko.Platform.Billing.BankReceiptBson;
 
 namespace UnitToko.Platform.Billing;
 
-internal sealed class BankReceiptRecords(IMongoDatabase database, BankStatementService statements)
+internal sealed partial class BankReceiptRecords(IMongoDatabase database, BankStatementService statements)
 {
     internal IMongoCollection<BsonDocument> Rows(string name) => database.GetCollection<BsonDocument>(name);
     internal async Task<BsonDocument> RowAsync(IClientSessionHandle tx, string name, long id, CancellationToken ct) =>
@@ -41,8 +41,15 @@ internal sealed class BankReceiptRecords(IMongoDatabase database, BankStatementS
             await Rows("outboxEvents").Find(tx,new BsonDocument { { "actorId",actorId }, { "kind",B.Operation }, { "requestKey",key } }).AnyAsync(ct)) throw B.Broken();
         return null;
     }
-    private Task<BsonDocument> ConfirmationRawAsync(IClientSessionHandle tx, long id, CancellationToken ct) => ReadConfirmationAsync(database, tx, id, ct);
+    private async Task<BsonDocument> ConfirmationRawAsync(IClientSessionHandle tx, long id, CancellationToken ct) {
+        var row = await ReadConfirmationAsync(database, tx, id, ct);
+        var receipt = await Rows(B.Receipts).Find(tx, new BsonDocument("_id", row["receiptId"])).SingleOrDefaultAsync(ct) ?? throw B.Broken();
+        await new BankTransactionClaims(database).RequireCreditAsync(tx, receipt, ct); return row;
+    }
+    // Raw owning graph core for predecessor migration and first-bank reconstruction. Normal
+    // receipt/confirmation readers additionally require the installed canonical claim.
     internal static async Task<BsonDocument> ReadConfirmationAsync(IMongoDatabase database, IClientSessionHandle tx, long id, CancellationToken ct) {
+        BankTransactionClaims.RequireTransaction(database, tx);
         IMongoCollection<BsonDocument> Rows(string name) => database.GetCollection<BsonDocument>(name);
         async Task<BsonDocument> RowAsync(IClientSessionHandle session, string name, long value, CancellationToken token) => await Rows(name).Find(session, new BsonDocument("$and", new BsonArray { new BsonDocument("_id", value), BankReceiptSchemas.Validator(name) })).SingleOrDefaultAsync(token) ?? throw B.Broken();
         var row = await RowAsync(tx,B.Confirmations,id,ct); Equal(row["snapshotHash"],B.Hash(row));
@@ -91,6 +98,7 @@ internal sealed class BankReceiptRecords(IMongoDatabase database, BankStatementS
             draft.ReversalOf is not null || draft.Fingerprint != row["journalFingerprint"].AsString || journal["actorId"] != row["actorId"] ||
             !draft.Lines.Select(line => new PostingLine(line.MappingKey,line.Debit,line.Credit)).SequenceEqual(expected.Lines)) throw B.Broken();
         var anchor = await AnchorAsync(tx,row["physicalIdentity"].AsString,ct) ?? throw B.Broken(); Equal(anchor["scope"],row["scope"]); Equal(anchor["identityNamespace"],row["identityNamespace"]);
+        await new BankTransactionClaims(database).RequireCreditAsync(tx, row, ct);
         return row;
     }
     internal async Task<(BsonDocument Row, BankStatementReceiptSource Source)> ConfirmationAsync(ActorContext actor, AuthorizationSnapshot authority, IClientSessionHandle tx, long id, CancellationToken ct) {

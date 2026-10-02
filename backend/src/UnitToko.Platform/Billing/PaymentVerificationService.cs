@@ -26,6 +26,7 @@ public sealed partial class PaymentVerificationService
     private readonly PaymentDraftService declarations;
     private readonly PaymentEvidenceService evidence;
     private readonly BankReceiptService receipts;
+    internal BankReceiptService SettlementBankOwner => receipts;
     private readonly PaymentVerificationRecords records;
     public PaymentVerificationService(IMongoDatabase database, MongoUnitOfWork unit, IdAllocator ids, IClock clock,
         PaymentDraftService declarations, PaymentEvidenceService evidence, BankReceiptService receipts) {

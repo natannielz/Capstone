@@ -36,11 +36,11 @@ public sealed record RefundPayoutViewDto(LongId ApprovalId, LongId CaseId, LongI
     LongId BeneficiaryId, string BeneficiaryRevision, string BeneficiaryName, string BeneficiaryBankCode, string BeneficiaryAccountSuffix,
     LongId PayingAccountId, LongId PayingAccountVersionId, string PayingBankCode, string PayingAccountSuffix,
     string PayoutRecordingProcedureReference, string BeneficiaryVerificationProcedureReference, RefundPayoutInputDto Input,
-    RefundPayoutResultDto? Payout, RefundPayoutDraftResultDto? Draft, PaymentEvidenceReferenceDto? Evidence, LongId? ReservationId);
+    RefundPayoutResultDto? Payout, RefundPayoutDraftResultDto? Draft, PaymentEvidenceReferenceDto? Evidence, LongId? ReservationId, RefundSettlementResultDto? Settlement);
 public sealed record RefundPayoutPreviewDto(RefundPayoutViewDto View, string Binding);
 public sealed record RefundPayoutDraftRecoveryDto(string Status, RefundPayoutDraftResultDto? Result);
 public sealed record RefundPayoutRecoveryDto(string Status, RefundPayoutResultDto? Result);
-public sealed record ApprovedRefundPayoutDto(ReturnFinancialApprovalResultDto? Approval, RefundPayoutResultDto? Payout, RefundPayoutDraftResultDto? Draft);
+public sealed record ApprovedRefundPayoutDto(ReturnFinancialApprovalResultDto? Approval, RefundPayoutResultDto? Payout, RefundPayoutDraftResultDto? Draft, RefundSettlementResultDto? Settlement);
 
 public static class RefundPayoutEndpoints {
     public static void MapRefundPayoutEndpoints(this WebApplication app) {
@@ -49,7 +49,8 @@ public static class RefundPayoutEndpoints {
             Purpose(request.Purpose, "refund-payout"); A.Private(http);
             var row = await service.ReadApprovedRefundAsync(http.Features.Get<ResolvedActor>()!.Actor, LongId.Parse(id).Value, LongId.Parse(returnId).Value, ct);
             return TypedResults.Ok(new ApprovedRefundPayoutDto(row["approval"].IsBsonNull ? null : ReturnFinancialApprovalEndpoints.Result(row["approval"].AsBsonDocument),
-                row["payout"].IsBsonNull ? null : Result(row["payout"].AsBsonDocument), row["draft"].IsBsonNull ? null : Draft(row["draft"].AsBsonDocument)));
+                row["payout"].IsBsonNull ? null : Result(row["payout"].AsBsonDocument), row["draft"].IsBsonNull ? null : Draft(row["draft"].AsBsonDocument),
+                row["settlement"].IsBsonNull ? null : RefundSettlementEndpoints.Result(row["settlement"].AsBsonDocument)));
         }).RequireAuthorization().AddEndpointFilter<ActorRequiredFilter>().WithName("ReadApprovedRefundPayout");
         var approvals = app.MapGroup("/api/v1/billing/refund-approvals/{id}/payout-drafts").RequireAuthorization().AddEndpointFilter<ActorRequiredFilter>();
         var drafts = app.MapGroup("/api/v1/billing/refund-payout-drafts/{id}").RequireAuthorization().AddEndpointFilter<ActorRequiredFilter>();
@@ -89,6 +90,7 @@ public static class RefundPayoutEndpoints {
             return TypedResults.Ok(new RefundPayoutRecoveryDto(row is null ? "not_confirmed" : "committed", row is null ? null : Result(row)));
         }).WithName("RecoverRefundPayoutRecord");
         MapEvidence(drafts);
+        app.MapRefundSettlementEndpoints();
     }
     private static void Purpose(string value, string expected) { if (value != expected) throw RefundPayoutPolicy.Invalid(); }
     private static void RecoveryPurpose(string value) => Purpose(value, "operation-recovery");
@@ -107,7 +109,8 @@ public static class RefundPayoutEndpoints {
                 DateOnly.ParseExact(input["transferDate"].AsString, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture), input["transferReference"].AsString),
             row["payout"].IsBsonNull ? null : Result(row["payout"].AsBsonDocument), hasDraft ? Draft(draft!.AsBsonDocument) : null,
             row.TryGetValue("evidence", out var evidence) && !evidence.IsBsonNull ? new(new(evidence["id"].AsInt64), A.Number(evidence["version"].AsInt64), evidence["sha256"].AsString) : null,
-            row.TryGetValue("reservationId", out var reservation) && !reservation.IsBsonNull ? new(reservation.AsInt64) : null);
+            row.TryGetValue("reservationId", out var reservation) && !reservation.IsBsonNull ? new(reservation.AsInt64) : null,
+            row["settlement"].IsBsonNull ? null : RefundSettlementEndpoints.Result(row["settlement"].AsBsonDocument));
     }
     private static PaymentUploadReservationDto Reservation(ReservationResult row) => new(new(row.ReservationId), A.Number(row.Revision), row.ExpiresAt);
     private static PaymentEvidenceReferenceDto Reference(EvidenceRef row) => new(new(row.Id), A.Number(row.Version), row.Sha256);

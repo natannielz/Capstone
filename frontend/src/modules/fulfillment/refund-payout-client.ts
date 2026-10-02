@@ -5,6 +5,7 @@ import { paymentAllocationSchemas } from '../billing/payment-allocation-client';
 import { parsePaymentEvidenceStatus, parsePaymentReservation, type PaymentEvidenceStatus } from '../billing/payment-client';
 import { parseCaseView, type AfterSalesCase } from './case-client';
 import { parseReturnFinancialApprovalResult, type ReturnFinancialApprovalResult } from './return-financial-approval-client';
+import { refundSettlementResultSchema, type RefundSettlementResult } from './refund-settlement-client';
 
 const { id, positive, hash, text } = paymentAllocationSchemas;
 const day = z.string().regex(/^[2-9][0-9]{3}-[0-9]{2}-[0-9]{2}$(?![\s\S])/).refine(value => Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value);
@@ -18,11 +19,14 @@ const view = z.object({ approvalId: id, caseId: id, returnId: id, invoiceId: id,
   beneficiaryName: text(160), beneficiaryBankCode: text(80), beneficiaryAccountSuffix: z.string().regex(/^[0-9]{4}$(?![\s\S])/),
   payingAccountId: id, payingAccountVersionId: id, payingBankCode: text(80), payingAccountSuffix: z.string().regex(/^[0-9]{4}$(?![\s\S])/),
   payoutRecordingProcedureReference: text(256), beneficiaryVerificationProcedureReference: text(256), input, payout: result.nullable(), draft: draftResult.nullable(),
-  evidence: reference.nullable(), reservationId: id.nullable() }).strict().refine(value => value.input.amount === value.amount && value.input.beneficiaryId === value.beneficiaryId &&
+  evidence: reference.nullable(), reservationId: id.nullable(), settlement: refundSettlementResultSchema.nullable() }).strict().refine(value => value.input.amount === value.amount && value.input.beneficiaryId === value.beneficiaryId &&
     value.input.expectedBeneficiaryRevision === value.beneficiaryRevision && value.input.payingAccountId === value.payingAccountId && value.input.payingAccountVersionId === value.payingAccountVersionId &&
     (value.draft === null || value.draft.approvalId === value.approvalId && value.draft.amount === value.amount) &&
     (value.payout === null || value.draft !== null && value.payout.draftId === value.draft.draftId && value.payout.approvalId === value.approvalId && value.payout.amount === value.amount && Date.parse(value.payout.recordedAt) >= Date.parse(value.draft.createdAt)) &&
-    (value.reservationId === null) === (value.evidence === null) && (value.evidence === null || value.draft !== null) && (value.payout === null || value.evidence !== null));
+    (value.reservationId === null) === (value.evidence === null) && (value.evidence === null || value.draft !== null) && (value.payout === null || value.evidence !== null) &&
+    (value.settlement === null || value.payout !== null && value.settlement.payoutId === value.payout.payoutId && value.settlement.financialApprovalId === value.approvalId &&
+      value.settlement.caseId === value.caseId && value.settlement.returnId === value.returnId && value.settlement.invoiceId === value.invoiceId && value.settlement.amount === value.amount &&
+      Date.parse(value.settlement.recordedAt) >= Date.parse(value.payout.recordedAt)));
 const preview = z.object({ view, binding: hash }).strict();
 const uploadOutcome = z.object({ state: z.enum(['quarantined', 'interrupted', 'unresolved', 'unknown', 'publish_pending', 'recovery_required']), reference: reference.nullable() }).strict()
   .refine(value => (value.state === 'quarantined') === (value.reference !== null));
@@ -30,7 +34,7 @@ export type RefundPayoutDraftResult = z.infer<typeof draftResult>;
 export type RefundPayoutResult = z.infer<typeof result>;
 export type RefundPayoutView = z.infer<typeof view>;
 export type RefundPayoutPreview = z.infer<typeof preview>;
-export type ApprovedRefundView = { approval: ReturnFinancialApprovalResult | null; payout: RefundPayoutResult | null; draft: RefundPayoutDraftResult | null };
+export type ApprovedRefundView = { approval: ReturnFinancialApprovalResult | null; payout: RefundPayoutResult | null; draft: RefundPayoutDraftResult | null; settlement: RefundSettlementResult | null };
 function invalid(): never { throw new AccessFailure(502, 'refund_payout_response_invalid'); }
 function parse<T>(schema: z.ZodType<T>, value: unknown): T { const checked = schema.safeParse(value); return checked.success ? checked.data : invalid(); }
 function data<T>(response: { data?: T; error?: unknown; response: Response }): T {
@@ -71,13 +75,16 @@ export function createRefundPayoutGateway(client: ReturnType<typeof createUnitTo
   return {
     async approved(actorId: string, owner: AfterSalesCase, returnId: string): Promise<ApprovedRefundView> {
       parseCaseView(owner); if (owner.state !== 'return_authorized') return invalid();
-      const raw = parse(z.object({ approval: z.unknown().nullable(), payout: result.nullable(), draft: draftResult.nullable() }).strict(), data(await client.POST('/api/v1/billing/cases/{id}/returns/{returnId}/refund-payout/query', {
+      const raw = parse(z.object({ approval: z.unknown().nullable(), payout: result.nullable(), draft: draftResult.nullable(), settlement: refundSettlementResultSchema.nullable() }).strict(), data(await client.POST('/api/v1/billing/cases/{id}/returns/{returnId}/refund-payout/query', {
         body: { purpose: 'refund-payout' }, params: { path: { id: owner.id, returnId: parse(id, returnId) }, header: headers(actorId) }, cache: 'no-store' })));
       const approval = raw.approval === null ? null : parseReturnFinancialApprovalResult(raw.approval, 'fa.' + owner.id + '.' + returnId + '.refund.aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
-      if (approval === null ? raw.payout !== null || raw.draft !== null : approval.invoiceId !== owner.source.invoiceId ||
+      if (approval === null ? raw.payout !== null || raw.draft !== null || raw.settlement !== null : approval.invoiceId !== owner.source.invoiceId ||
         raw.payout !== null && (raw.payout.approvalId !== approval.financialApprovalId || raw.payout.amount !== approval.reservedRefund) ||
-        raw.draft !== null && (raw.draft.approvalId !== approval.financialApprovalId || raw.draft.amount !== approval.reservedRefund)) return invalid();
-      return { approval, payout: raw.payout, draft: raw.draft };
+        raw.draft !== null && (raw.draft.approvalId !== approval.financialApprovalId || raw.draft.amount !== approval.reservedRefund) ||
+        raw.settlement !== null && (raw.payout === null || raw.settlement.payoutId !== raw.payout.payoutId || raw.settlement.financialApprovalId !== approval.financialApprovalId ||
+          raw.settlement.caseId !== owner.id || raw.settlement.returnId !== returnId || raw.settlement.invoiceId !== owner.source.invoiceId || raw.settlement.amount !== raw.payout.amount ||
+          Date.parse(raw.settlement.recordedAt) < Date.parse(raw.payout.recordedAt))) return invalid();
+      return { approval, payout: raw.payout, draft: raw.draft, settlement: raw.settlement };
     },
     async previewDraft(actorId: string, owner: AfterSalesCase, approval: ReturnFinancialApprovalResult, transferDate: string, transferReference: string) {
       const transfer = parse(z.object({ transferDate: day, transferReference: text(160) }).strict(), { transferDate, transferReference });

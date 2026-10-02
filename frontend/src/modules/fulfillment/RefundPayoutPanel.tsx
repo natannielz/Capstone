@@ -30,6 +30,13 @@ function imageLabel(item: PaymentEvidenceStatus) {
   if (item.state === 'quarantined') return item.scanStatus === 'infected' || item.decoderStatus === 'invalid' ? 'Gambar ditahan: pemeriksaan keamanan gagal. Pilih bukti asli yang aman.' : 'Gambar tersimpan; menunggu pemeriksaan keamanan.';
   return item.state === 'fresh' ? 'Siap menerima berkas' : 'Unggah belum selesai. Periksa hasil upaya ini sebelum mengirim berkas lagi.';
 }
+function PayoutStatus({ payout, settlement }: { payout: NonNullable<ApprovedRefundView['payout']>; settlement: ApprovedRefundView['settlement'] }) {
+  return settlement ? <section aria-label="Hasil verifikasi debit refund"><p role="status">Pembayaran refund {rupiah(settlement.amount)} telah dicocokkan dengan debit bank secara independen.</p>
+    <p>Verifikasi {settlement.settlementId} · {new Date(settlement.recordedAt).toLocaleString('id-ID')}</p>
+    <ul>{settlement.receipts.map(row => <li key={row.receiptId}>Penerimaan bank {row.receiptId}: refund dibayar {rupiah(row.paid)}, masih disisihkan {rupiah(row.pending)}, dana tersedia {rupiah(row.available)}.</li>)}</ul>
+  </section> : <section aria-label="Refund tercatat belum diverifikasi"><p role="status">Bukti refund {rupiah(payout.amount)} tercatat, menunggu verifikasi bank independen.</p>
+    <p>Pencatatan {payout.payoutId} · {new Date(payout.recordedAt).toLocaleString('id-ID')}</p><p>Catatan ini belum membuktikan uang diterima pelanggan.</p></section>;
+}
 export function RefundPayoutPanel(props: Props) {
   const { actorId, owner, actions, locked, fresh, current, onBusyChange, onDenied, onSettled } = props;
   const [returns] = useState(createReturnGateway), [gateway] = useState(createRefundPayoutGateway);
@@ -52,7 +59,7 @@ export function RefundPayoutPanel(props: Props) {
       {physical.recent.length ? <label>Penerimaan barang retur untuk refund<select required value={returnId} disabled={locked || busy || !!olderId} onChange={event => { setReturnId(event.target.value); setOpened(null); }}>{physical.recent.map(row => <option key={row.id} value={row.id}>{row.id} · {new Date(row.receivedAt).toLocaleString('id-ID')}</option>)}</select></label> : <p>Belum ada penerimaan retur.</p>}
       {physical.hasEarlier && <label>ID penerimaan retur yang lebih lama untuk refund<input inputMode="numeric" pattern="[1-9][0-9]*" maxLength={19} value={olderId} disabled={locked || busy} onChange={event => { setOlderId(event.target.value); setOpened(null); }} /></label>}
       <button className={styles.secondary} disabled={locked || busy || !fresh || !(olderId || returnId)}>Buka persetujuan refund</button></form>}
-    {opened && (opened.approval === null ? <p role="status">Belum ada persetujuan refund untuk penerimaan ini.</p> : opened.payout ? <section aria-label="Refund tercatat belum diverifikasi"><p role="status">Bukti refund {rupiah(opened.payout.amount)} tercatat, menunggu verifikasi bank independen.</p><p>Pencatatan {opened.payout.payoutId} · {new Date(opened.payout.recordedAt).toLocaleString('id-ID')}</p><p>Catatan ini belum membuktikan uang diterima pelanggan.</p></section> : <PayoutDesk key={opened.approval.financialApprovalId} {...props} approved={opened} />)}
+    {opened && (opened.approval === null ? <p role="status">Belum ada persetujuan refund untuk penerimaan ini.</p> : opened.payout ? <PayoutStatus payout={opened.payout} settlement={opened.settlement} /> : <PayoutDesk key={opened.approval.financialApprovalId} {...props} approved={opened} />)}
   </section>;
 }
 function PayoutDesk({ actorId, owner, approved, fresh, locked, current, freshCurrent, journal, onSettled, onDenied, onBusyChange }: Props & { approved: ApprovedRefundView }) {
@@ -110,7 +117,7 @@ function PayoutDesk({ actorId, owner, approved, fresh, locked, current, freshCur
     {view && <><p>Penerima terverifikasi: {view.beneficiaryName} · Bank {view.beneficiaryBankCode} · Rekening berakhir {view.beneficiaryAccountSuffix}</p>
       <p>Rekening pembayaran: bank {view.payingBankCode} · Berakhir {view.payingAccountSuffix} · Nilai {rupiah(view.amount)}</p>
       <p>Tanggal {view.input.transferDate} · Referensi {view.input.transferReference}</p>
-      {view.payout ? <section aria-label="Refund tercatat belum diverifikasi"><p role="status">Bukti refund {rupiah(view.payout.amount)} tercatat, menunggu verifikasi bank independen.</p><p>Pencatatan {view.payout.payoutId} · {new Date(view.payout.recordedAt).toLocaleString('id-ID')}</p><p>Catatan ini belum membuktikan uang diterima pelanggan.</p></section> : draft && !recordCommand && <>
+      {view.payout ? <PayoutStatus payout={view.payout} settlement={view.settlement} /> : draft && !recordCommand && <>
         <label>Alasan pencatatan bukti refund<textarea required maxLength={1000} value={reason} disabled={disabled} onChange={event => { setReason(event.target.value); clearReview(); }} /></label>
         <label>Gambar bukti transfer refund asli<input ref={fileInput} type="file" accept="image/png,image/jpeg" disabled={disabled || unresolvedUpload} onChange={event => { setFile(event.target.files?.[0] ?? null); setSeen(null); closeOriginal(); clearReview(); }} /></label>
         <p>JPEG atau PNG, maksimal 10 MiB. Bukti disimpan secara privat dan diperiksa keamanannya.</p>

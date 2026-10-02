@@ -15,6 +15,10 @@ internal static class PaymentAllocationStorage
     // requires the new financial owner and its storage controls.
     internal static Task RequireFinancialAsync(IMongoDatabase database, CancellationToken ct) =>
         RequireCollectionsAsync(database, [A.Policies, A.Events], ct);
+    internal static async Task RequireSettlementsAsync(IMongoDatabase database, CancellationToken ct) {
+        foreach (var table in RefundSettlementSchemas.Collections)
+            await UnitToko.Platform.Inventory.InventoryRepository.RequireStorageAsync(database, table, RefundSettlementSchemas.Validator(table), RefundSettlementSchemas.Keys(table), ct);
+    }
     private static async Task RequireCollectionsAsync(IMongoDatabase database, IEnumerable<string> names, CancellationToken ct) {
         foreach (var name in names) {
             var definition = await (await database.ListCollectionsAsync(new ListCollectionsOptions { Filter = new BsonDocument("name", name) }, ct)).SingleOrDefaultAsync(ct);

@@ -28802,6 +28802,613 @@
         ]
       }
     },
+    "/api/v1/billing/refund-payouts/{id}/settlement/query": {
+      "post": {
+        "tags": [
+          "UnitToko.Api"
+        ],
+        "operationId": "ReadRefundSettlement",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "required": true,
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrderReadDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RefundSettlementViewDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
+    "/api/v1/billing/refund-payouts/{id}/settlement/preview": {
+      "post": {
+        "tags": [
+          "UnitToko.Api"
+        ],
+        "operationId": "PreviewRefundSettlement",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "required": true,
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefundSettlementInputDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RefundSettlementPreviewDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
+    "/api/v1/billing/refund-payouts/{id}/settlement/verify": {
+      "post": {
+        "tags": [
+          "UnitToko.Api"
+        ],
+        "operationId": "VerifyRefundSettlement",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "Reuse this key only for an unchanged logical command, including after an uncertain response.",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "required": true,
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefundSettlementCommandDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RefundSettlementResultDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
+    "/api/v1/billing/refund-payouts/{id}/settlement/operations/query": {
+      "post": {
+        "tags": [
+          "UnitToko.Api"
+        ],
+        "operationId": "RecoverRefundSettlement",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "required": true,
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrderDraftRecoveryDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RefundSettlementRecoveryDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
+    "/api/v1/billing/refund-payouts/{id}/settlement/evidence/{reservationId}/original/query": {
+      "post": {
+        "tags": [
+          "UnitToko.Api"
+        ],
+        "operationId": "ReadRefundSettlementEvidenceOriginal",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "reservationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "required": true,
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PaymentEvidenceReadDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "image/png": {
+                "schema": {
+                  "type": "string",
+                  "format": "byte"
+                }
+              },
+              "image/jpeg": {
+                "schema": {
+                  "type": "string",
+                  "format": "byte"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
     "/api/v1/billing/receiving-accounts/policies/query": {
       "post": {
         "tags": [
@@ -38456,7 +39063,8 @@
         "required": [
           "approval",
           "payout",
-          "draft"
+          "draft",
+          "settlement"
         ],
         "type": "object",
         "properties": {
@@ -38487,6 +39095,16 @@
               },
               {
                 "$ref": "#/components/schemas/RefundPayoutDraftResultDto"
+              }
+            ]
+          },
+          "settlement": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RefundSettlementResultDto"
               }
             ]
           }
@@ -48314,7 +48932,8 @@
           "payout",
           "draft",
           "evidence",
-          "reservationId"
+          "reservationId",
+          "settlement"
         ],
         "type": "object",
         "properties": {
@@ -48408,6 +49027,409 @@
                 "$ref": "#/components/schemas/LongId"
               }
             ]
+          },
+          "settlement": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RefundSettlementResultDto"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "RefundSettlementCommandDto": {
+        "required": [
+          "input",
+          "binding",
+          "attested",
+          "reason"
+        ],
+        "type": "object",
+        "properties": {
+          "input": {
+            "$ref": "#/components/schemas/RefundSettlementInputDto"
+          },
+          "binding": {
+            "type": "string"
+          },
+          "attested": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "RefundSettlementDebitDto": {
+        "required": [
+          "bankImportId",
+          "bankRowNumber",
+          "transactionId",
+          "bookedDate",
+          "amount",
+          "accountDisplay",
+          "importedBy"
+        ],
+        "type": "object",
+        "properties": {
+          "bankImportId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "bankRowNumber": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "transactionId": {
+            "type": "string"
+          },
+          "bookedDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "amount": {
+            "type": "string"
+          },
+          "accountDisplay": {
+            "type": "string"
+          },
+          "importedBy": {
+            "$ref": "#/components/schemas/LongId"
+          }
+        },
+        "additionalProperties": false
+      },
+      "RefundSettlementInputDto": {
+        "required": [
+          "bankImportId",
+          "bankRowNumber",
+          "beneficiaryVerificationReference",
+          "transferVerificationReference"
+        ],
+        "type": "object",
+        "properties": {
+          "bankImportId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "bankRowNumber": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "beneficiaryVerificationReference": {
+            "type": "string"
+          },
+          "transferVerificationReference": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "RefundSettlementPreviewDto": {
+        "required": [
+          "binding",
+          "view",
+          "input",
+          "debit",
+          "policy",
+          "receipts"
+        ],
+        "type": "object",
+        "properties": {
+          "binding": {
+            "type": "string"
+          },
+          "view": {
+            "$ref": "#/components/schemas/RefundSettlementViewDto"
+          },
+          "input": {
+            "$ref": "#/components/schemas/RefundSettlementInputDto"
+          },
+          "debit": {
+            "$ref": "#/components/schemas/RefundSettlementDebitDto"
+          },
+          "policy": {
+            "$ref": "#/components/schemas/RefundSettlementProcedureDto"
+          },
+          "receipts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RefundSettlementReceiptPreviewDto"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "RefundSettlementProcedureDto": {
+        "required": [
+          "bankDebitVerificationProcedureReference",
+          "beneficiaryVerificationProcedureReference"
+        ],
+        "type": "object",
+        "properties": {
+          "bankDebitVerificationProcedureReference": {
+            "type": "string"
+          },
+          "beneficiaryVerificationProcedureReference": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "RefundSettlementReceiptDto": {
+        "required": [
+          "receiptId",
+          "version",
+          "paid",
+          "pending",
+          "reservedForRefund",
+          "available"
+        ],
+        "type": "object",
+        "properties": {
+          "receiptId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "version": {
+            "type": "string"
+          },
+          "paid": {
+            "type": "string"
+          },
+          "pending": {
+            "type": "string"
+          },
+          "reservedForRefund": {
+            "type": "string"
+          },
+          "available": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "RefundSettlementReceiptPreviewDto": {
+        "required": [
+          "receiptId",
+          "versionBefore",
+          "versionAfter",
+          "paidBefore",
+          "paidAfter",
+          "pending",
+          "reservedForRefund",
+          "available",
+          "received",
+          "allocated"
+        ],
+        "type": "object",
+        "properties": {
+          "receiptId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "versionBefore": {
+            "type": "string"
+          },
+          "versionAfter": {
+            "type": "string"
+          },
+          "paidBefore": {
+            "type": "string"
+          },
+          "paidAfter": {
+            "type": "string"
+          },
+          "pending": {
+            "type": "string"
+          },
+          "reservedForRefund": {
+            "type": "string"
+          },
+          "available": {
+            "type": "string"
+          },
+          "received": {
+            "type": "string"
+          },
+          "allocated": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "RefundSettlementRecoveryDto": {
+        "required": [
+          "status",
+          "result"
+        ],
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string"
+          },
+          "result": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RefundSettlementResultDto"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "RefundSettlementResultDto": {
+        "required": [
+          "settlementId",
+          "payoutId",
+          "financialApprovalId",
+          "caseId",
+          "returnId",
+          "invoiceId",
+          "amount",
+          "operation",
+          "state",
+          "recordedAt",
+          "receipts"
+        ],
+        "type": "object",
+        "properties": {
+          "settlementId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "payoutId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "financialApprovalId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "caseId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "returnId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "invoiceId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "amount": {
+            "type": "string"
+          },
+          "operation": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "recordedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "receipts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RefundSettlementReceiptDto"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "RefundSettlementViewDto": {
+        "required": [
+          "payout",
+          "caseId",
+          "returnId",
+          "invoiceId",
+          "amount",
+          "draftRevision",
+          "draftId",
+          "reservationId",
+          "evidence",
+          "settlement",
+          "candidateInstructions",
+          "beneficiaryName",
+          "beneficiaryBankCode",
+          "beneficiaryAccountSuffix",
+          "payingBankCode",
+          "payingAccountSuffix",
+          "transferDate",
+          "transferReference"
+        ],
+        "type": "object",
+        "properties": {
+          "payout": {
+            "$ref": "#/components/schemas/RefundPayoutResultDto"
+          },
+          "caseId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "returnId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "invoiceId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "amount": {
+            "type": "string"
+          },
+          "draftRevision": {
+            "type": "string"
+          },
+          "draftId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "reservationId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "evidence": {
+            "$ref": "#/components/schemas/PaymentEvidenceReferenceDto"
+          },
+          "settlement": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RefundSettlementResultDto"
+              }
+            ]
+          },
+          "candidateInstructions": {
+            "type": "string"
+          },
+          "beneficiaryName": {
+            "type": "string"
+          },
+          "beneficiaryBankCode": {
+            "type": "string"
+          },
+          "beneficiaryAccountSuffix": {
+            "type": "string"
+          },
+          "payingBankCode": {
+            "type": "string"
+          },
+          "payingAccountSuffix": {
+            "type": "string"
+          },
+          "transferDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "transferReference": {
+            "type": "string"
           }
         },
         "additionalProperties": false

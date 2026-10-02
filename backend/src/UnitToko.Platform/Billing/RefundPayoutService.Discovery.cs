@@ -13,7 +13,7 @@ using R = UnitToko.Platform.Billing.RefundPayoutRecords;
 namespace UnitToko.Platform.Billing;
 public sealed partial class RefundPayoutService {
     public async Task<BsonDocument> ReadApprovedRefundAsync(ActorContext actor, long caseId, long returnId, CancellationToken ct = default) {
-        if (caseId <= 0 || returnId <= 0) throw RefundPayoutPolicy.Invalid(); await StorageAsync(ct);
+        if (caseId <= 0 || returnId <= 0) throw RefundPayoutPolicy.Invalid(); await StorageAsync(ct); await PaymentAllocationStorage.RequireSettlementsAsync(database, ct);
         return await authorization.ReadAsync(actor, async (authority, tx, token) => {
             var caseSource = await cases.RefundDiscoverySourceAsync(actor, authority, tx, caseId, returnId, token);
             var resources = PaymentDraftBson.Scopes(caseSource.Case["scopes"].AsBsonArray);
@@ -26,7 +26,7 @@ public sealed partial class RefundPayoutService {
             }
             _ = RequireRead();
             var candidate = await records.Rows(A.Events).Find(tx, new BsonDocument { { "caseId", caseId }, { "returnId", returnId }, { "action", "refund" } }).SingleOrDefaultAsync(token);
-            BsonDocument? approvalResult = null, payoutResult = null, draftResult = null;
+            BsonDocument? approvalResult = null, payoutResult = null, draftResult = null, settlementResult = null;
             PersonAuthorityProof? people = null; RefundPayoutApprovalSource? approvalSource = null;
             if (candidate is not null) {
                 approvalSource = await approvals.PayoutSourceAsync(actor, authority, tx, candidate["_id"].AsInt64, token);
@@ -41,7 +41,11 @@ public sealed partial class RefundPayoutService {
                 await new PersonAuthorizationFence(database, clock).TouchAsync(tx, people, token);
                 approvalResult = A.Result(approvalSource.Approval);
                 var payout = await records.Rows(B.Payouts).Find(tx, new BsonDocument("financialApprovalId", approvalSource.Approval["_id"])).SingleOrDefaultAsync(token);
-                if (payout is not null) payoutResult = B.Result(await records.PayoutAsync(tx, payout["_id"].AsInt64, false, token));
+                if (payout is not null) {
+                    payoutResult = B.Result(await records.PayoutAsync(tx, payout["_id"].AsInt64, false, token));
+                    var settlement = await SettlementSavedAsync(tx, payout["_id"].AsInt64, token);
+                    if (settlement is not null) settlementResult = RefundSettlementBson.Result(settlement);
+                }
                 else foreach (var (table, field, payload) in new[] { ("idempotencyRecords", "operation", "result"), ("auditEvents", "kind", "result"), ("outboxEvents", "kind", "payload") })
                     if (await records.Rows(table).Find(tx, new BsonDocument { { field, B.Operation }, { payload + ".approvalId", approvalSource.Approval["_id"] } }).AnyAsync(token)) throw B.Broken();
                 var draft = await records.Rows(B.Drafts).Find(tx, new BsonDocument { { "financialApprovalId", approvalSource.Approval["_id"] }, { "userId", actor.UserId } }).Sort(new BsonDocument("_id", -1)).FirstOrDefaultAsync(token);
@@ -70,7 +74,7 @@ public sealed partial class RefundPayoutService {
                 clauses.SelectMany(clause => clause.RequiredNodes).Concat(resources.SelectMany(scope => ScopePolicy.RequiredNodes(scope, authority.Directory))).Distinct(), [],
                 authority.Grants.Where(grant => clauses.Any(clause => clause.GrantId == grant.Id)), authority.Memberships.Where(member => clauses.Any(clause => clause.MembershipId == member.Id)), tx, token);
             _ = RequireRead(); caseSource.RequireCurrent(); approvalSource?.RequireCurrent(); people?.RequireCurrent(tx, clock.UtcNow);
-            return new BsonDocument { { "approval", approvalResult is null ? BsonNull.Value : approvalResult }, { "payout", payoutResult is null ? BsonNull.Value : payoutResult }, { "draft", draftResult is null ? BsonNull.Value : draftResult } };
+            return new BsonDocument { { "approval", approvalResult is null ? BsonNull.Value : approvalResult }, { "payout", payoutResult is null ? BsonNull.Value : payoutResult }, { "draft", draftResult is null ? BsonNull.Value : draftResult }, { "settlement", settlementResult is null ? BsonNull.Value : settlementResult } };
         }, ct);
     }
 }

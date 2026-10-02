@@ -22,7 +22,7 @@ const input = { beneficiaryId: '100', expectedBeneficiaryRevision: '1', payingAc
 const view = { approvalId, caseId, returnId, invoiceId, amount: input.amount, beneficiaryId: input.beneficiaryId, beneficiaryRevision: input.expectedBeneficiaryRevision,
   beneficiaryName: 'Koperasi Cabang Tebet', beneficiaryBankCode: 'BNI', beneficiaryAccountSuffix: '6789', payingAccountId: input.payingAccountId, payingAccountVersionId: input.payingAccountVersionId,
   payingBankCode: 'BNI', payingAccountSuffix: '4321', payoutRecordingProcedureReference: 'Prosedur bukti refund disetujui', beneficiaryVerificationProcedureReference: 'Prosedur verifikasi penerima independen', input,
-  payout: null, draft: null, evidence: null, reservationId: null };
+  payout: null, draft: null, evidence: null, reservationId: null, settlement: null };
 const preview = { view, binding: 'c'.repeat(64) }, draft = { draftId, revision: '1' as const, approvalId, state: 'awaiting_private_evidence' as const, amount: input.amount, createdAt: '2026-10-01T03:08:00Z' };
 const evidence = { reservationId: '103', revision: '5', expiresAt: '2026-10-02T03:08:00Z', state: 'quarantined' as const,
   reference: { id: '104', version: '1' as const, sha256: 'd'.repeat(64) }, scanStatus: 'clean' as const, decoderStatus: 'decoded' as const, safeFailure: null };
@@ -99,4 +99,24 @@ test('original image view validates authenticated bytes, exact MIME and hash whi
   assert.equal((await gateway.original(actor, draftId, '1', { ...evidence, reference: { ...evidence.reference, sha256 } }, () => true)).size, 3);
   await assert.rejects(gateway.original(actor, draftId, '1', evidence, () => true));
   await assert.rejects(gateway.upload(actor, draftId, '103', '1', new File(['not-image'], 'file.txt', { type: 'text/plain' }), () => true), RequestNotSentError); assert.equal(count, 2);
+});
+
+test('recorder summary accepts only actual bank-debit settlement matching the recorded payout and source chronology', async () => {
+  const settlement = { settlementId: '106', payoutId: payout.payoutId, financialApprovalId: approvalId, caseId, returnId, invoiceId, amount: payout.amount,
+    operation: 'billing.refund.payout.verify' as const, state: 'bank_debit_verified' as const, recordedAt: '2026-10-01T03:10:00Z',
+    receipts: [{ receiptId: approval.receipts[0].receiptId, version: '5', paid: '900.00', pending: '100.00', reservedForRefund: '1000.00', available: '100.00' }] };
+  const recorded = { ...recordPreview.view, payout, settlement };
+  assert.deepEqual(parseRefundPayoutView(recorded, owner, approval).settlement, settlement); assert.equal(recorded.payout.state, 'recorded_unverified');
+  for (const changed of [{ ...recorded, payout: null }, { ...recorded, settlement: { ...settlement, payoutId: '1' } }, { ...recorded, settlement: { ...settlement, financialApprovalId: '1' } },
+    { ...recorded, settlement: { ...settlement, caseId: '1' } }, { ...recorded, settlement: { ...settlement, returnId: '1' } }, { ...recorded, settlement: { ...settlement, invoiceId: '1' } },
+    { ...recorded, settlement: { ...settlement, amount: '899.99' } }, { ...recorded, settlement: { ...settlement, state: 'paid' } },
+    { ...recorded, settlement: { ...settlement, recordedAt: '2026-10-01T03:08:00Z' } }, { ...recorded, settlement: { ...settlement, receipts: [{ ...settlement.receipts[0], pending: '99.99' }] } }])
+    assert.throws(() => parseRefundPayoutView(changed, owner, approval));
+  let response: unknown = { approval, payout, draft, settlement };
+  const gateway = createRefundPayoutGateway(createUnitTokoClient({ baseUrl: 'https://unit-toko.test', fetch: async request =>
+    (request as Request).url.endsWith('/csrf') ? Response.json({ requestToken: 'token' }) : Response.json(response) }));
+  assert.deepEqual((await gateway.approved(actor, owner, returnId)).settlement, settlement);
+  response = { approval, payout: null, draft, settlement }; await assert.rejects(gateway.approved(actor, owner, returnId));
+  response = { approval, payout, draft, settlement: { ...settlement, returnId: '1' } }; await assert.rejects(gateway.approved(actor, owner, returnId));
+  response = { approval, payout, draft, settlement: { ...settlement, recordedAt: '2026-10-01T03:08:00Z' } }; await assert.rejects(gateway.approved(actor, owner, returnId));
 });

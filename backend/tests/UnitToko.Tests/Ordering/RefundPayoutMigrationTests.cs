@@ -9,6 +9,7 @@ using UnitToko.Tests.Catalog;
 using UnitToko.Tests.Documents;
 using A = UnitToko.Platform.Billing.ReturnFinancialApprovalBson;
 using B = UnitToko.Platform.Billing.RefundPayoutBson;
+using Claims = UnitToko.Platform.Billing.BankTransactionClaims;
 using Data = UnitToko.Tests.Ordering.ReturnFinancialApprovalTests.Data;
 
 namespace UnitToko.Tests.Ordering;
@@ -21,6 +22,28 @@ public sealed class RefundPayoutMigrationTests(MongoFixture fixture)
         if (!await Rows("schemaMigrations").Find(new BsonDocument { { "_id", 55 }, { "state", "applied" } }).AnyAsync()) return;
         Assert.True(await Rows("schemaMigrations").Find(new BsonDocument { { "_id", 54 }, { "state", "applied" } }).AnyAsync());
         foreach (var name in RefundPayoutSchemas.Collections) Assert.Equal(0, await Rows(name).CountDocumentsAsync(new BsonDocument()));
+        foreach (var name in RefundSettlementSchemas.Collections) Assert.False(await Rows(name).Find(new BsonDocument()).AnyAsync());
+        foreach (var (table, field) in new[] { ("idempotencyRecords", "operation"), ("auditEvents", "kind"), ("auditEvents", "operation"),
+            ("outboxEvents", "kind"), ("outboxEvents", "sourceKey"), ("journalEntries", "source.namespace") })
+            Assert.False(await Rows(table).Find(new BsonDocument(field, new BsonRegularExpression(@"^billing\.refund\.payout\.verify(?:[.:]|$)"))).AnyAsync());
+        Assert.False(await Rows(Claims.Collection).Find(new BsonDocument("direction", "debit")).AnyAsync());
+        // The forward bank-claim resume retains real incoming owners. Prove every
+        // immutable receipt/claim graph instead of deleting claims or inventing actors.
+        await BankTransactionClaimSchemas.RequireStorageAsync(database, default);
+        using (var tx = await database.Client.StartSessionAsync()) {
+            tx.StartTransaction(new TransactionOptions(readConcern: ReadConcern.Snapshot, writeConcern: WriteConcern.WMajority));
+            var receipts = await Rows(BankReceiptBson.Receipts).Find(tx, new BsonDocument()).ToListAsync();
+            Assert.Equal(receipts.LongCount(), await Rows(Claims.Collection).CountDocumentsAsync(tx, new BsonDocument()));
+            foreach (var row in receipts) {
+                var actual = await BankReceiptRecords.ReadReceiptHistoryAsync(database, tx, row["_id"].AsInt64, default);
+                await new Claims(database).RequireCreditAsync(tx, actual, default);
+            }
+            await tx.AbortTransactionAsync();
+        }
+        var history = await Rows("schemaMigrations").Find(new BsonDocument()).Sort(new BsonDocument("_id", 1)).ToListAsync();
+        Assert.Equal(CollectionMigrations.CurrentVersion, history.Count);
+        Assert.All(history, row => Assert.Equal("applied", row["state"]));
+        var suffix = history.Skip(54).ToArray(); Assert.Equal(CollectionMigrations.CurrentVersion - 54, suffix.Length);
         foreach (var (table, field) in new[] { ("idempotencyRecords", "operation"), ("auditEvents", "kind"), ("auditEvents", "operation"), ("outboxEvents", "kind"), ("outboxEvents", "sourceKey") })
             Assert.False(await Rows(table).Find(new BsonDocument(field, new BsonRegularExpression(@"^billing\.refund\.payout(?:[.:]|$)"))).AnyAsync());
         Assert.False(await Rows("journalEntries").Find(new BsonDocument("source.namespace", new BsonRegularExpression(@"^billing\.refund(?:[.:-]|$)"))).AnyAsync());
@@ -45,7 +68,9 @@ public sealed class RefundPayoutMigrationTests(MongoFixture fixture)
             await database.RunCommandAsync<BsonDocument>(new BsonDocument { { "collMod", name }, { "validator", before }, { "validationLevel", "strict" }, { "validationAction", "error" } });
         }
         if (dropTargets) foreach (var name in RefundPayoutSchemas.Collections) await database.DropCollectionAsync(name);
-        Assert.Equal(1, (await Rows("schemaMigrations").DeleteOneAsync(new BsonDocument { { "_id", 55 }, { "state", "applied" } })).DeletedCount);
+        Assert.Equal(suffix.LongLength, (await Rows("schemaMigrations").DeleteManyAsync(new BsonDocument {
+            { "_id", new BsonDocument("$in", new BsonArray(suffix.Select(row => row["_id"]))) }, { "state", "applied" } })).DeletedCount);
+        Assert.Equal(history.Take(54), await Rows("schemaMigrations").Find(new BsonDocument()).Sort(new BsonDocument("_id", 1)).ToListAsync());
     }
     private static async Task<List<BsonDocument>> Definitions(IMongoDatabase database) =>
         (await (await database.ListCollectionsAsync()).ToListAsync()).OrderBy(row => row["name"].AsString).ToList();

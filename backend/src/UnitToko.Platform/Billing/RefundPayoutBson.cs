@@ -13,6 +13,14 @@ internal static class RefundPayoutBson
     internal const string Policies = "refundPayoutPolicies", Beneficiaries = "refundBeneficiaries", Drafts = "refundPayoutDrafts", Payouts = "refundPayouts";
     internal const string DraftOperation = "billing.refund.payout.draft", Operation = "billing.refund.payout.record";
     internal static string Hash(BsonDocument row) => B.Hash(row);
+    internal static BsonDocument ApprovalSnapshot(BsonDocument row, BsonDocument liability) {
+        var approving = row["people"].AsBsonArray.Select(ReceivingAccountBson.Person).Single(person => person.UserId == row["actorId"].AsInt64);
+        if (row["action"] != "refund" || approving.Verification != PersonVerification.Verified || approving.PersonId is null) throw Broken();
+        return new() { { "id", row["_id"] }, { "hash", row["snapshotHash"] }, { "caseId", row["caseId"] }, { "returnId", row["returnId"] }, { "invoiceId", row["invoiceId"] },
+            { "party", row["party"].DeepClone() }, { "reservedRefund", row["reservedRefund"] }, { "approvedBy", approving.UserId }, { "approvedByPersonId", approving.PersonId.Value },
+            { "recordedAt", row["recordedAt"] }, { "journalId", row["journalId"] }, { "journalFingerprint", row["journalFingerprint"] },
+            { "refundLiabilityAccountId", liability["accountId"] }, { "refundLiabilityAccountCode", liability["accountCode"] } };
+    }
     internal static BsonDocument Snapshot(BsonDocument row) => B.Snapshot(row);
     internal static BsonDocument BeneficiarySnapshot(BsonDocument row) {
         var copy = row.DeepClone().AsBsonDocument; copy.Remove("fence"); return copy;
