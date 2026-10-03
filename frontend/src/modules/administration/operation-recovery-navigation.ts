@@ -1,4 +1,5 @@
 export function recoveryPage(operation: string) {
+  if (/^stock\.source\.reconciliation\.(propose|decide)$(?![\s\S])/.test(operation)) return { href: "/inventory/source-reconciliations", label: "halaman rekonsiliasi jumlah fisik" };
   if (/^procurement\.stockvaluation\.(propose|decide)$(?![\s\S])/.test(operation)) return { href: "/procurement/stock-valuations", label: "halaman penilaian stok ditahan" };
   if (operation === "procurement.stockreceipt.receive") return { href: "/procurement/stock-receipts", label: "halaman penerimaan stok ditahan" };
   if (/^procurement\.supplierclaim\.(request|approve|reject)$(?![\s\S])/.test(operation)) return { href: "/procurement/supplier-claims", label: "halaman klaim pemasok" };
@@ -57,6 +58,8 @@ export function recoveryPage(operation: string) {
     : { href: "/administration/person-reviews", label: "halaman peninjauan orang" };
 }
 export function operationLabel(operation: string) {
+  if (operation === "stock.source.reconciliation.propose") return "Pengajuan rekonsiliasi jumlah fisik";
+  if (operation === "stock.source.reconciliation.decide") return "Keputusan rekonsiliasi jumlah fisik";
   if (operation === "procurement.stockvaluation.propose") return "Pengajuan penilaian stok ditahan";
   if (operation === "procurement.stockvaluation.decide") return "Keputusan penilaian stok ditahan";
   if (operation === "procurement.stockreceipt.receive") return "Penerimaan stok ditahan";

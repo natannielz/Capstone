@@ -1,11 +1,12 @@
 import Link from "next/link";
-import { canManageAccounts, canReviewPeople, canUseStockCounts, canUseStockSources, canUseStockSourceSuspensions, canUseStockSourcePolicies, canUseOrganizationAddresses } from "../identity/identity-workflow";
+import { canManageAccounts, canReviewPeople, canUseStockCounts, canUseStockSources, canUseStockSourceSuspensions, canUseStockSourcePolicies, canUseStockSourceReconciliations, canUseOrganizationAddresses } from "../identity/identity-workflow";
 import styles from "./access.module.css";
 
 export function AdministrationNavigation({ current, actions, locked = false }: {
-  current: "organization-addresses" | "cases" | "access" | "organizations" | "history" | "accounts" | "person-reviews" | "catalog" | "prices" | "counts" | "sources" | "source-revisions" | "source-aliases" | "source-suspensions" | "source-policies" | "order-reviews" | "orders" | "preparations" | "dispatches" | "shipments" | "invoices" | "payments" | "payment-reviews" | "receiving-accounts" | "bank-statements" | "bank-receipts"; actions: readonly string[]; locked?: boolean;
+  current: "source-reconciliations" | "organization-addresses" | "cases" | "access" | "organizations" | "history" | "accounts" | "person-reviews" | "catalog" | "prices" | "counts" | "sources" | "source-revisions" | "source-aliases" | "source-suspensions" | "source-policies" | "order-reviews" | "orders" | "preparations" | "dispatches" | "shipments" | "invoices" | "payments" | "payment-reviews" | "receiving-accounts" | "bank-statements" | "bank-receipts"; actions: readonly string[]; locked?: boolean;
 }) {
   const links = [
+    { id: "source-reconciliations", href: "/inventory/source-reconciliations", label: "Rekonsiliasi jumlah fisik", available: canUseStockSourceReconciliations(actions) },
     { id: "cases", href: "/fulfillment/cases", label: "Keluhan barang", available: actions.some(action => ["case.read", "case.request"].includes(action)) },
     { id: "bank-receipts", href: "/billing/bank-receipts", label: "Penerimaan bank", available: actions.includes("bank.receipt.read") },
     { id: "bank-statements", href: "/billing/bank-statements", label: "Mutasi bank", available: actions.includes("bank.statement.read") },

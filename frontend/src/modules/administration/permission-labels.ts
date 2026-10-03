@@ -1,4 +1,7 @@
 const labels: Record<string, string> = {
+  "stock.source.reconciliation.read": "Lihat rekonsiliasi jumlah fisik",
+  "stock.source.reconciliation.propose": "Ajukan pengamatan jumlah fisik dengan verifikasi terbaru",
+  "stock.source.reconciliation.decide": "Periksa rekonsiliasi secara independen dengan verifikasi terbaru",
   "procurement.stockvaluation.read": "Lihat penilaian stok ditahan",
   "procurement.stockvaluation.propose": "Ajukan penilaian stok ditahan dengan verifikasi terbaru",
   "procurement.stockvaluation.decide": "Putuskan penilaian stok secara independen dengan verifikasi terbaru",

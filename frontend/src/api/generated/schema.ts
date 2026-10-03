@@ -3809,6 +3809,134 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/inventory/source-reconciliations/operations/query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["StockSourceReconciliationReceipt"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/inventory/source-reconciliations/pools/{poolId}/baseline/query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["StockSourceReconciliationBaseline"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/inventory/source-reconciliations/pools/{poolId}/proposals/query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["StockSourceReconciliationHistory"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/inventory/source-reconciliations/proposals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["StockSourceReconciliationPropose"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/inventory/source-reconciliations/proposals/{id}/decide": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["StockSourceReconciliationDecide"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/inventory/source-reconciliations/proposals/{id}/query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["StockSourceReconciliationDetail"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/inventory/source-reconciliations/proposals/{id}/review/query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["StockSourceReconciliationReview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/inventory/source-reconciliations/targets/query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["StockSourceReconciliationTargets"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/inventory/sources": {
         parameters: {
             query?: never;
@@ -13613,6 +13741,10 @@ export interface components {
             /** @enum {string} */
             purpose: "inventory-source-current";
         };
+        StockSourceObservedBalanceDto: {
+            balanceId: components["schemas"]["LongId"];
+            packages: string;
+        };
         StockSourcePolicyBindingDto: {
             configurationHash: string;
             /** @description Exact decimal Int64 string; runtime range and workflow version rules also apply. */
@@ -13760,6 +13892,186 @@ export interface components {
             action: "approve" | "reject" | "withdraw";
             /** @enum {string} */
             purpose: "inventory-source-policy-review";
+        };
+        StockSourceReconciliationBalanceDto: {
+            balanceId: components["schemas"]["LongId"];
+            baseUnitCode: string;
+            /** Format: int32 */
+            baseUnitsPerPackage: number | string;
+            definitionId: components["schemas"]["LongId"];
+            definitionVersion: string;
+            expired: string;
+            expiresOn: null | string;
+            held: string;
+            location: components["schemas"]["AccessScopeDto"];
+            lotId: components["schemas"]["LongId"];
+            lotReference: string;
+            onHand: string;
+            packageKind: string;
+            packageLabel: string;
+            receiptId: components["schemas"]["LongId"];
+            reserved: string;
+            skuCode: string;
+            skuId: components["schemas"]["LongId"];
+            version: string;
+        };
+        StockSourceReconciliationBaselineDto: {
+            balances: components["schemas"]["StockSourceReconciliationBalanceDto"][];
+            baselineHash: string;
+            binding: string;
+            /** Format: date-time */
+            capturedAt: string;
+            configurationHash: string;
+            /** Format: date-time */
+            latestSourceAt: string;
+            maximumAgeMilliseconds: string;
+            ownerLocation: components["schemas"]["AccessScopeDto"];
+            physicalKey: string;
+            policyId: components["schemas"]["LongId"];
+            policyRevision: string;
+            poolFence: string;
+            poolId: components["schemas"]["LongId"];
+            poolLabel: string;
+            poolRevision: string;
+            reconciliationProcedureReference: string;
+        };
+        StockSourceReconciliationDecideDto: {
+            binding: string;
+            decision: string;
+            observation: null | components["schemas"]["StockSourceReconciliationObservationDto"];
+            reason: string;
+        };
+        StockSourceReconciliationDecisionDto: {
+            decision: string;
+            id: components["schemas"]["LongId"];
+            observation: null | components["schemas"]["StockSourceReconciliationObservationDto"];
+            reason: string;
+            /** Format: date-time */
+            recordedAt: string;
+            recordedBy: components["schemas"]["LongId"];
+        };
+        StockSourceReconciliationDetailDto: {
+            decision: null | components["schemas"]["StockSourceReconciliationDecisionDto"];
+            proposal: components["schemas"]["StockSourceReconciliationProposalDto"];
+        };
+        StockSourceReconciliationDifferenceDto: {
+            balanceId: components["schemas"]["LongId"];
+            baselinePackages: string;
+            observedPackages: string;
+        };
+        StockSourceReconciliationHistoryDto: {
+            /**
+             * Format: int32
+             * @default 25
+             */
+            limit: number;
+            /**
+             * Format: int32
+             * @default 0
+             */
+            offset: number;
+            purpose: string;
+        };
+        StockSourceReconciliationInputDto: {
+            configurationHash: string;
+            observation: components["schemas"]["StockSourceReconciliationObservationDto"];
+            policyId: components["schemas"]["LongId"];
+            policyRevision: string;
+            poolFence: string;
+            poolId: components["schemas"]["LongId"];
+            poolRevision: string;
+        };
+        StockSourceReconciliationObservationDto: {
+            entries: components["schemas"]["StockSourceObservedBalanceDto"][];
+            /** Format: date-time */
+            observedAt: string;
+            sourceReference: string;
+        };
+        StockSourceReconciliationPageDto: {
+            items: components["schemas"]["StockSourceReconciliationDetailDto"][];
+            total: string;
+        };
+        StockSourceReconciliationPreviewDto: {
+            decision: string;
+            observation: null | components["schemas"]["StockSourceReconciliationObservationDto"];
+            purpose: string;
+        };
+        StockSourceReconciliationProposalDto: {
+            baseline: components["schemas"]["StockSourceReconciliationBaselineDto"];
+            differences: components["schemas"]["StockSourceReconciliationDifferenceDto"][];
+            id: components["schemas"]["LongId"];
+            observation: components["schemas"]["StockSourceReconciliationObservationDto"];
+            poolId: components["schemas"]["LongId"];
+            reason: string;
+            /** Format: date-time */
+            recordedAt: string;
+            recordedBy: components["schemas"]["LongId"];
+            status: string;
+            version: string;
+        };
+        StockSourceReconciliationProposeDto: {
+            binding: string;
+            input: components["schemas"]["StockSourceReconciliationInputDto"];
+            reason: string;
+        };
+        StockSourceReconciliationReadDto: {
+            purpose: string;
+        };
+        StockSourceReconciliationReceiptDto: {
+            result: null | components["schemas"]["StockSourceReconciliationResultDto"];
+            state: string;
+        };
+        StockSourceReconciliationRecoveryDto: {
+            key: string;
+            operation: string;
+            purpose: string;
+        };
+        StockSourceReconciliationResultDto: {
+            decisionId: null | components["schemas"]["LongId"];
+            poolId: components["schemas"]["LongId"];
+            proposalId: components["schemas"]["LongId"];
+            /** Format: date-time */
+            recordedAt: string;
+            revision: string;
+            status: string;
+        };
+        StockSourceReconciliationReviewDto: {
+            baseline: null | components["schemas"]["StockSourceReconciliationBaselineDto"];
+            binding: string;
+            canConfirm: boolean;
+            checkerDifferences: components["schemas"]["StockSourceReconciliationDifferenceDto"][];
+            decision: string;
+            /** Format: date-time */
+            observedAt: string;
+            proposal: components["schemas"]["StockSourceReconciliationProposalDto"];
+        };
+        StockSourceReconciliationTargetDto: {
+            channelNames: string[];
+            label: string;
+            organizationName: string;
+            ownerLocation: components["schemas"]["AccessScopeDto"];
+            physicalKey: string;
+            poolId: components["schemas"]["LongId"];
+            shopName: string;
+            warehouseName: string;
+        };
+        StockSourceReconciliationTargetPageDto: {
+            items: components["schemas"]["StockSourceReconciliationTargetDto"][];
+            total: string;
+        };
+        StockSourceReconciliationTargetsDto: {
+            /**
+             * Format: int32
+             * @default 25
+             */
+            limit: number;
+            location: components["schemas"]["AccessScopeDto"];
+            /**
+             * Format: int32
+             * @default 0
+             */
+            offset: number;
+            purpose: string;
         };
         StockSourceRevisionCommandDto: {
             /** @description Exact decimal Int64 string; runtime range and workflow version rules also apply. */
@@ -14036,7 +14348,7 @@ export interface components {
         };
         StockSourceWarehouseQueryDto: {
             /** @enum {string} */
-            purpose: "inventory-source-propose" | "inventory-source-review" | "inventory-source-history";
+            purpose: "inventory-source-propose" | "inventory-source-review" | "inventory-source-history" | "stock-source-reconciliation-review";
         };
         SubmittedOrderDto: {
             buyerName: string;
@@ -34101,6 +34413,614 @@ export interface operations {
             };
             /** @description Forbidden */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    StockSourceReconciliationReceipt: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
+                /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
+                "X-Expected-Actor-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StockSourceReconciliationRecoveryDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StockSourceReconciliationReceiptDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    StockSourceReconciliationBaseline: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
+                /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
+                "X-Expected-Actor-Id": string;
+            };
+            path: {
+                poolId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StockSourceReconciliationReadDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StockSourceReconciliationBaselineDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    StockSourceReconciliationHistory: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
+                /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
+                "X-Expected-Actor-Id": string;
+            };
+            path: {
+                poolId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StockSourceReconciliationHistoryDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StockSourceReconciliationPageDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    StockSourceReconciliationPropose: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Reuse this key only for an unchanged logical command, including after an uncertain response. */
+                "Idempotency-Key": string;
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
+                /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
+                "X-Expected-Actor-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StockSourceReconciliationProposeDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StockSourceReconciliationResultDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    StockSourceReconciliationDecide: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Reuse this key only for an unchanged logical command, including after an uncertain response. */
+                "Idempotency-Key": string;
+                /** @description One quoted nonnegative Int64 resource version from the latest response; never a JavaScript number. */
+                "If-Match": string;
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
+                /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
+                "X-Expected-Actor-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StockSourceReconciliationDecideDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StockSourceReconciliationResultDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    StockSourceReconciliationDetail: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
+                /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
+                "X-Expected-Actor-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StockSourceReconciliationReadDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StockSourceReconciliationDetailDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    StockSourceReconciliationReview: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
+                /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
+                "X-Expected-Actor-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StockSourceReconciliationPreviewDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StockSourceReconciliationReviewDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    StockSourceReconciliationTargets: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
+                /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
+                "X-Expected-Actor-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StockSourceReconciliationTargetsDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StockSourceReconciliationTargetPageDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

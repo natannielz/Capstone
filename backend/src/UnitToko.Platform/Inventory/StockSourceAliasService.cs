@@ -169,7 +169,8 @@ public sealed partial class StockSourceSetupService
 
     private Task<BsonDocument> AliasCommandAsync(ActorContext actor, string operation, string permission, AuthorizationCommandMetadata metadata,
         object body, Func<AuthorizationSnapshot, IClientSessionHandle, CancellationToken, Task<(ResourceScope[] Resources, ApprovalRequest? Approval)>> target,
-        Func<IClientSessionHandle, CancellationToken, Task<BsonDocument>> write, CancellationToken ct, bool recoveryOnly)
+        Func<IClientSessionHandle, CancellationToken, Task<BsonDocument>> write, CancellationToken ct, bool recoveryOnly,
+        Action? validateCurrent = null)
     {
         ResourceScope[]? captured = null;
         return authorization.ExecuteCommandAsync(actor, operation, metadata, body, async (snapshot, tx, token) =>
@@ -182,7 +183,8 @@ public sealed partial class StockSourceSetupService
                 captured.SelectMany(resource => ScopePolicy.RequiredNodes(resource, snapshot.Directory)).Distinct().ToImmutableArray(),
                 permission, new(captured[0], loaded.Approval));
         }, write, ct, async (snapshot, tx, token) =>
-            await CompleteAuthorityAsync(actor, snapshot, permission, captured ?? throw StockSourceAliasBson.Invalid(), tx, token), requireReceipt: recoveryOnly);
+            await CompleteAuthorityAsync(actor, snapshot, permission, captured ?? throw StockSourceAliasBson.Invalid(), tx, token),
+            requireReceipt: recoveryOnly, validateCurrent: validateCurrent);
     }
     private async Task<ResourceScope[]> AliasScopesAsync(ActorContext actor, AuthorizationSnapshot snapshot, IClientSessionHandle tx,
         long poolId, StockLocation requested, string permission, CancellationToken ct)

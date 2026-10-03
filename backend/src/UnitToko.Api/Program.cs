@@ -441,6 +441,7 @@ app.MapStockSourceRevisionEndpoints();
 app.MapStockSourceAliasEndpoints();
 app.MapStockSourceSuspensionEndpoints();
 app.MapStockSourcePolicyEndpoints();
+app.MapStockSourceReconciliationEndpoints();
 app.MapGet("/health/live", () => TypedResults.Ok(new HealthStatus("live"))).AllowAnonymous().WithName("Liveness");
 app.MapGet("/health/ready", async (HttpContext context, MongoConnection mongo,
     CollectionMigrations migrations, CancellationToken cancellationToken) =>

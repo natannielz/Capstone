@@ -9,6 +9,12 @@ public static class ScopePolicy
     public static AuthorizationQuery Compile(ActorContext actor, AuthorizationSnapshot snapshot, string permission,
         DateTimeOffset now) => CompileCore(actor, snapshot, permission, now, requestingStepUp: false);
 
+    /// <summary>Checks a stored participant's current grants and scope without claiming a new factor event.
+    /// This is only a dependency check; it never authorizes that participant to issue a command.</summary>
+    public static AuthorizationQuery CompileParticipantGrants(ActorContext actor, AuthorizationSnapshot snapshot,
+        string permission, DateTimeOffset now) => CompileCore(actor, snapshot, permission, now,
+            requestingStepUp: false, skipAssurance: true);
+
     /// <summary>Only permits starting a new factor challenge for an existing sensitive permission.
     /// It never returns a query or business authorization and never changes the actor's factor evidence.</summary>
     public static bool CanRequestStepUp(ActorContext actor, AuthorizationSnapshot snapshot, string permission,
@@ -16,7 +22,7 @@ public static class ScopePolicy
         CompileCore(actor, snapshot, permission, now, requestingStepUp: true).IsAllowed;
 
     private static AuthorizationQuery CompileCore(ActorContext actor, AuthorizationSnapshot snapshot, string permission,
-        DateTimeOffset now, bool requestingStepUp)
+        DateTimeOffset now, bool requestingStepUp, bool skipAssurance = false)
     {
         var definition = Permissions.Find(permission);
         var requirement = definition?.Assurance ?? new AssuranceRequirement(true);
@@ -27,7 +33,7 @@ public static class ScopePolicy
             return Deny("stale_or_inactive_actor");
         if (definition is null) return Deny("unknown_permission");
         var requiredEvidence = requestingStepUp ? requirement with { MaximumAge = null } : requirement;
-        if (!AssurancePolicy.Satisfies(actor, requiredEvidence, now)) return Deny("step_up_required");
+        if (!skipAssurance && !AssurancePolicy.Satisfies(actor, requiredEvidence, now)) return Deny("step_up_required");
         if (snapshot.Grants.IsDefaultOrEmpty || snapshot.Memberships.IsDefaultOrEmpty) return Deny("permission_denied");
         if (snapshot.Grants.Select(grant => grant.Id).Distinct().Count() != snapshot.Grants.Length) return Deny("invalid_authorization_snapshot");
         var clauses = ImmutableArray.CreateBuilder<ScopeClause>();

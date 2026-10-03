@@ -24,6 +24,7 @@ public sealed partial class StockSourceSetupService
             "inventory-source-propose" => Permissions.StockSourcePropose,
             "inventory-source-review" => Permissions.StockSourceApprove,
             "inventory-source-history" => Permissions.StockSourceRead,
+            "stock-source-reconciliation-review" => Permissions.StockSourceReconciliationRead,
             _ => throw new DomainValidationException("invalid_read_purpose", "Choose an explicit source-setup purpose")
         };
         if (!StockSourceSetupPolicy.Text(correlationId, 128)) throw StockSourceSetupBson.Invalid();

@@ -5,7 +5,7 @@ import { parseStockLocation, parseStockWarehouses, stockLocationKey, stockPageRe
 
 export type SourceDecision = "approve" | "reject" | "withdraw";
 export type SourceOperation = "stock.source.propose" | "stock.source.approve" | "stock.source.reject" | "stock.source.withdraw";
-export type SourcePurpose = "inventory-source-propose" | "inventory-source-review" | "inventory-source-history";
+export type SourcePurpose = "inventory-source-propose" | "inventory-source-review" | "inventory-source-history" | "stock-source-reconciliation-review";
 export type SourceDraft = {
   physicalKey: string; label: string; mode: string; control: string; maximumAgeSeconds: string; safetyBufferBaseUnits: string;
   externalNamespace: string; reservationProtocolReference: string; discrepancyOwnerReference: string; handoffReference: string; reason: string;
@@ -73,7 +73,7 @@ export function sourceOperation(value: unknown): SourceOperation {
   return value;
 }
 export function sourcePurpose(value: unknown): SourcePurpose {
-  if (value !== "inventory-source-propose" && value !== "inventory-source-review" && value !== "inventory-source-history") return inputInvalid();
+  if (value !== "inventory-source-propose" && value !== "inventory-source-review" && value !== "inventory-source-history" && value !== "stock-source-reconciliation-review") return inputInvalid();
   return value;
 }
 export function sourceWarehouses(value: unknown) {
