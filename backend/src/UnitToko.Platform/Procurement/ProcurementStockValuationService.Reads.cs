@@ -167,9 +167,10 @@ public sealed partial class ProcurementStockValuationService
     public async Task<BsonDocument> ReadAsync(ActorContext actor, long proposalId, CancellationToken ct = default) {
         if (proposalId <= 0) throw ProcurementStockValuationRules.Invalid(); await StorageAsync(ct);
         return await authorization.ReadAsync<BsonDocument>(actor, async (authority, tx, token) => {
-            var proposal = await records.ProposalAsync(tx, proposalId, token); var input = B.Input(proposal["input"]);
+            var verified = await records.ProposalWithSourcesAsync(tx, proposalId, token);
+            var proposal = verified.Proposal; var source = verified.Sources; var input = B.Input(proposal["input"]);
             var context = new Context(actor, authority, tx, input.Location, Permissions.ProcurementStockValuationRead); _ = Require(context);
-            var decision = await records.DecisionAsync(tx, proposal, token); var source = await records.SourcesAsync(tx, input, token, proposal);
+            var decision = await records.DecisionAsync(tx, proposal, token);
             var result = new BsonDocument { { "proposal", ProposalView(proposal, decision, source) },
                 { "decision", decision is null ? BsonNull.Value : B.Result(decision) },
                 { "decisionReason", decision is null ? BsonNull.Value : decision["reason"] } };
@@ -183,8 +184,8 @@ public sealed partial class ProcurementStockValuationService
             var filter = new BsonDocument("location", R.Location(location)); if (beforeId is { } before) filter.Add("_id", new BsonDocument("$lt", before));
             var raws = await Rows(B.Proposals).Find(tx, filter).Sort(new BsonDocument("_id", -1)).Limit(26).ToListAsync(token);
             var items = new BsonArray(); foreach (var raw in raws.Take(25)) {
-                var proposal = await records.ProposalAsync(tx, raw["_id"].AsInt64, token);
-                var input = B.Input(proposal["input"]); var source = await records.SourcesAsync(tx, input, token, proposal);
+                var verified = await records.ProposalWithSourcesAsync(tx, raw["_id"].AsInt64, token);
+                var proposal = verified.Proposal; var source = verified.Sources;
                 var decision = await records.DecisionAsync(tx, proposal, token);
                 items.Add(new BsonDocument { { "proposal", ProposalView(proposal, decision, source) },
                     { "decision", decision is null ? BsonNull.Value : B.Result(decision) },

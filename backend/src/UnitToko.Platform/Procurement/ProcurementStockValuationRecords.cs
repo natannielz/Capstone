@@ -127,7 +127,10 @@ internal sealed class ProcurementStockValuationRecords(IMongoDatabase database, 
         }
         return new(receipt, invoice, match, line, policy, accounting, capacity, history);
     }
-    internal async Task<BsonDocument> ProposalAsync(IClientSessionHandle tx, long id, CancellationToken ct) {
+    internal async Task<BsonDocument> ProposalAsync(IClientSessionHandle tx, long id, CancellationToken ct) =>
+        (await ProposalWithSourcesAsync(tx, id, ct)).Proposal;
+    internal async Task<(BsonDocument Proposal, ProcurementStockValuationSources Sources)> ProposalWithSourcesAsync(
+        IClientSessionHandle tx, long id, CancellationToken ct) {
         var row = await Rows(B.Proposals).Find(tx, new BsonDocument { { "_id", id }, { "$and", new BsonArray { ProcurementStockValuationSchemas.Validator(B.Proposals) } } }).SingleOrDefaultAsync(ct)
             ?? throw B.Broken();
         Equal(row["snapshotHash"], B.Hash(row)); Equal(row["proposalId"], id); Equal(row["version"], 1L);
@@ -150,7 +153,7 @@ internal sealed class ProcurementStockValuationRecords(IMongoDatabase database, 
         Equal(row["matchActorId"], historical.Match["actorId"]);
         var bookKey = new OperationalBookKey(input.Location.OrganizationId, input.Location.ShopId, input.Location.ChannelId, "IDR");
         if (await new AccountingBookSetupRecords(database).ApprovedAsync(tx, bookKey, ct) is null) throw B.Broken();
-        await EffectsAsync(tx, row, ct); return row;
+        await EffectsAsync(tx, row, ct); return (row, historical);
     }
     internal async Task<BsonDocument?> DecisionAsync(IClientSessionHandle tx, BsonDocument proposal, CancellationToken ct) {
         var raw = await Rows(B.Decisions).Find(tx, new BsonDocument("proposalId", proposal["_id"])).Limit(2).ToListAsync(ct);

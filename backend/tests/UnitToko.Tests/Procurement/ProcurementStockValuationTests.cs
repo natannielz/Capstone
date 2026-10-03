@@ -280,12 +280,17 @@ public sealed class ProcurementStockValuationTests(MongoFixture fixture)
             Assert.Equal(1L, (await data.Rows(table).DeleteOneAsync(filter)).DeletedCount);
             try {
                 await DeniedAsync(() => data.Service.ReadAsync(data.Reader, id));
+                if (table == "auditEvents") await DeniedAsync(() => data.Service.HistoryAsync(data.Reader, data.Input().Location));
                 await DeniedAsync(() => data.Service.LookupAsync(data.Checker, D.DecideOperation, "valuation-proof-approved"));
                 await DeniedAsync(() => data.Service.PreviewAsync(data.Maker, data.Input()));
                 await DeniedAsync(() => data.Service.CostAsync(data.Reader, data.ReceiptId));
             } finally { await data.Rows(table).InsertOneAsync(row); }
             Assert.Equal(state, await data.StateAsync()); Assert.Equal(preserved, await data.PreservedAsync());
         }
+        var restoredRead = await data.Service.ReadAsync(data.Reader, id);
+        var restoredHistory = await data.Service.HistoryAsync(data.Reader, data.Input().Location);
+        Assert.Equal(restoredRead["proposal"], restoredHistory["items"].AsBsonArray
+            .Single(item => item["proposal"]["id"].AsInt64 == id)["proposal"]);
         foreach (var operation in new[] { D.ProposeOperation, D.DecideOperation })
             foreach (var (table, field) in new[] { ("auditEvents", "kind"), ("idempotencyRecords", "operation"), ("outboxEvents", "kind") }) {
                 var proof = await data.Rows(table).Find(new BsonDocument(field, operation)).SingleAsync(); var filter = new BsonDocument("_id", proof["_id"]);
