@@ -27,7 +27,7 @@ public sealed class RefundPayoutEvidenceService
         evidence.RefundPayoutPinObserver = (elapsedMs, readable) => payouts.PhaseObserver?.Invoke(readable ? "pin-check-open" : "pin-check-closed", elapsedMs);
     }
     private static EvidenceTargetRef Target(long id) => new(EvidenceTargetKind.RefundPayout, id);
-    private async Task StorageAsync(CancellationToken ct) { await payouts.StorageAsync(ct); await RefundPayoutEvidenceSchemas.RequireStorageAsync(database, ct); }
+    private async Task StorageAsync(CancellationToken ct) { await payouts.StorageAsync(ct); await ProcurementDisbursementEvidenceSchemas.RequireStorageAsync(database, ct); }
     public async Task<ReservationResult> ReserveAsync(ActorContext actor, long draftId, long expectedRevision, AuthorizationCommandMetadata metadata, CancellationToken ct = default) {
         if (expectedRevision != 1) throw RefundPayoutRecords.Changed(); await StorageAsync(ct);
         return await unit.ExecuteAsync((tx, token) => evidence.ReserveImageAsync(tx, actor, new(Target(draftId), EvidencePurpose.RefundPayoutImage, expectedRevision), metadata, token), ct);

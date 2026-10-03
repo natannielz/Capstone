@@ -20,7 +20,7 @@ internal sealed partial class EvidenceService
         OpenBoundRefundReadAsync(actor, (tx, token) => AcquireRefundSettlementReadAsync(tx, actor, target, expectedRevision, reservationId, reference, metadata, token), ct);
     private async Task<ProtectedEvidenceRead> OpenBoundRefundReadAsync(ActorContext actor,
         Func<IClientSessionHandle, CancellationToken, Task<EvidenceReadClaim>> acquire, CancellationToken ct) {
-        await RefundPayoutEvidenceSchemas.RequireStorageAsync(database, ct); RequireStore();
+        await ProcurementDisbursementEvidenceSchemas.RequireStorageAsync(database, ct); RequireStore();
         var started = Stopwatch.GetTimestamp();
         var claim = await unit.ExecuteAsync(acquire, ct);
         VerifiedOriginalHandle? handle = null;
@@ -44,7 +44,7 @@ internal sealed partial class EvidenceService
         long reservationId, EvidenceRef reference, AuthorizationReadMetadata metadata,
         Func<EvidenceReadClaim, VerifiedOriginalHandle, long, CancellationToken, Task<T>> command, CancellationToken ct = default) {
         ArgumentNullException.ThrowIfNull(command);
-        await RefundPayoutEvidenceSchemas.RequireStorageAsync(database, ct); RequireStore();
+        await ProcurementDisbursementEvidenceSchemas.RequireStorageAsync(database, ct); RequireStore();
         var started = Stopwatch.GetTimestamp();
         var claim = await unit.ExecuteAsync((tx, token) => AcquireRefundPayoutReadAsync(tx, actor, target, expectedRevision, reservationId, reference, metadata, token), ct);
         VerifiedOriginalHandle? handle = null;

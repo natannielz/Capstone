@@ -2,7 +2,7 @@ using UnitToko.Modules.Contracts;
 
 namespace UnitToko.Modules.Documents;
 
-public enum EvidencePurpose { CatalogImage = 1, PaymentImage = 2, RefundPayoutImage = 3 }
+public enum EvidencePurpose { CatalogImage = 1, PaymentImage = 2, RefundPayoutImage = 3, ProcurementDisbursementImage = 4 }
 
 public sealed record ReserveEvidenceImage
 {
@@ -12,7 +12,8 @@ public sealed record ReserveEvidenceImage
     public ReserveEvidenceImage(EvidenceTargetRef target, EvidencePurpose purpose, long? expectedTargetRevision) {
         if (target is null || expectedTargetRevision is <= 0 || !((purpose == EvidencePurpose.CatalogImage && target.Kind is EvidenceTargetKind.CatalogFamily or EvidenceTargetKind.CatalogSku) ||
             (purpose == EvidencePurpose.PaymentImage && target.Kind == EvidenceTargetKind.PaymentDeclaration) ||
-            (purpose == EvidencePurpose.RefundPayoutImage && target.Kind == EvidenceTargetKind.RefundPayout)))
+            (purpose == EvidencePurpose.RefundPayoutImage && target.Kind == EvidenceTargetKind.RefundPayout) ||
+            (purpose == EvidencePurpose.ProcurementDisbursementImage && target.Kind == EvidenceTargetKind.ProcurementDisbursement)))
             throw new DomainValidationException("evidence_invalid_admission", "Use the owning record's supported evidence purpose");
         Target = target; Purpose = purpose; ExpectedTargetRevision = expectedTargetRevision;
     }

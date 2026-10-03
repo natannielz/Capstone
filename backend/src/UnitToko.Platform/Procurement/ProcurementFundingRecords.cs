@@ -35,10 +35,12 @@ internal sealed class ProcurementFundingRecords(IMongoDatabase database, Catalog
         var people = row["people"].AsBsonArray.Select(B.Person).ToArray();
         if (!people.Select(person => person.UserId).SequenceEqual(users.Distinct().Order()) || people.Any(person => person is not { Verification: PersonVerification.Verified, PersonId: > 0, Version: > 0 })) throw B.Broken();
     }
-    internal async Task<BsonDocument> RequestAsync(IClientSessionHandle tx, long id, CancellationToken ct) {
+    internal async Task<BsonDocument> RequestAsync(IClientSessionHandle tx, long id, CancellationToken ct, PurchaseOrderFundingCapture? orderProof = null) {
         var row = await RowAsync(tx, B.Requests, id, ct); Equal(row["snapshotHash"], B.Hash(row)); var input = B.Input(row["input"]); Equal(row["input"], B.Input(input));
         Equal(row["location"], R.Location(input.Location)); Equal(row["orderId"], input.OrderId);
-        var source = await orders.FundingSourceAsync(database, tx, input.OrderId, input.OrderVersion, input.OrderApprovalId, ct); Equal(row["orderSource"], source);
+        var source = orderProof is null ? await orders.FundingSourceAsync(database, tx, input.OrderId, input.OrderVersion, input.OrderApprovalId, ct)
+            : orderProof.RequireSource(orders, tx, row["orderSource"].AsBsonDocument);
+        Equal(row["orderSource"], source); Equal(source["order"]["_id"], input.OrderId); Equal(source["order"]["version"], input.OrderVersion); Equal(source["order"]["approvalId"], input.OrderApprovalId);
         Equal(source["order"]["location"], row["location"]); Equal(row["policy"]["_id"], input.PolicyId); Equal(row["policy"]["revision"], input.PolicyRevision);
         if (source["order"]["recordedAt"].ToUniversalTime() > row["recordedAt"].ToUniversalTime()) throw B.Broken();
         await new ProcurementRequestRecords(database, catalog).SourcesAsync(tx, input.Location, row["sources"].AsBsonDocument, ct);
@@ -98,11 +100,11 @@ internal sealed class ProcurementFundingRecords(IMongoDatabase database, Catalog
         }
         var request = await RequestAsync(tx, row["requestId"].AsInt64, ct); return table == B.Requests ? request : await DecisionAsync(tx, row["_id"].AsInt64, request, ct);
     }
-    internal async Task<BsonArray> ClaimsAsync(IClientSessionHandle tx, long orderId, CancellationToken ct) {
+    internal async Task<BsonArray> ClaimsAsync(IClientSessionHandle tx, long orderId, CancellationToken ct, PurchaseOrderFundingCapture? orderProof = null) {
         var claims = new BsonArray(); long requests = 0, decisions = 0;
         using var cursor = await Rows(B.Requests).Find(tx, new BsonDocument("orderId", orderId)).ToCursorAsync(ct);
         while (await cursor.MoveNextAsync(ct)) foreach (var raw in cursor.Current) {
-            var request = await RequestAsync(tx, raw["_id"].AsInt64, ct); requests++; var decision = await DecisionForAsync(tx, request, ct); if (decision is null) continue; decisions++;
+            var request = await RequestAsync(tx, raw["_id"].AsInt64, ct, orderProof); requests++; var decision = await DecisionForAsync(tx, request, ct); if (decision is null) continue; decisions++;
             if (decision["decision"] == "approve") claims.Add(new BsonDocument { { "authorizationId", decision["authorizationId"] }, { "decisionId", decision["_id"] }, { "decisionHash", decision["snapshotHash"] }, { "amount", decision["authorizedAmount"] }, { "reviewCapacity", decision["reviewCapacity"] }, { "recordedAt", decision["recordedAt"] } });
         }
         if (await Rows(B.Decisions).CountDocumentsAsync(tx, new BsonDocument("orderId", orderId), cancellationToken: ct) != decisions) throw B.Broken();

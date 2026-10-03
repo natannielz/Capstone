@@ -45,7 +45,10 @@ internal sealed partial class EvidenceService
             if (policyUntil is { } until) FinalCheck(until, ct);
             if (claim.Target.Kind == EvidenceTargetKind.RefundPayout)
                 RefundPayoutPinObserver?.Invoke(Stopwatch.GetElapsedTime(verificationStarted).TotalMilliseconds, handle.Stream.CanRead);
-            if (!handle.Stream.CanRead || Stopwatch.GetElapsedTime(verificationStarted) >= claim.InitialLeaseDuration) throw Conflict("evidence_read_lease_expired");
+            if (claim.Target.Kind == EvidenceTargetKind.ProcurementDisbursement)
+                ProcurementDisbursementPinObserver?.Invoke(Stopwatch.GetElapsedTime(verificationStarted).TotalMilliseconds, handle.Stream.CanRead);
+            if (!handle.Stream.CanRead || Stopwatch.GetElapsedTime(claim.LeaseStarted) >= claim.InitialLeaseDuration ||
+                Stopwatch.GetElapsedTime(verificationStarted) >= claim.RequestDuration) throw Conflict("evidence_read_lease_expired");
         }
         Final();
         if (lease["state"] != "provisional" || !lease["actor"].Equals(ReadActor(actor)) || lease["target"]["kind"] != claim.Target.Kind.ToString() || lease["target"]["id"] != claim.Target.Id ||

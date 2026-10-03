@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using MongoDB.Bson;
 using MongoDB.Driver;
 using UnitToko.Modules.Documents;
@@ -12,7 +13,7 @@ namespace UnitToko.Platform.Documents;
 
 internal sealed record EvidenceReadObserver(Func<Task> Verified);
 internal sealed record EvidenceReadClaim(long Id, string Token, EvidenceTargetRef Target, long TargetRevision, long ReservationId,
-    EvidenceRef Reference, ExpectedPublication Original, StorageIoBudget VerificationBudget, DateTimeOffset Deadline, TimeSpan RequestDuration, string Mime, TimeSpan InitialLeaseDuration);
+    EvidenceRef Reference, ExpectedPublication Original, StorageIoBudget VerificationBudget, DateTimeOffset Deadline, TimeSpan RequestDuration, string Mime, TimeSpan InitialLeaseDuration, long LeaseStarted);
 internal sealed record EvidenceReadWindow(DateTimeOffset Until, DateTimeOffset Deadline, TimeSpan LeaseDuration);
 
 internal sealed partial class EvidenceService
@@ -55,6 +56,9 @@ internal sealed partial class EvidenceService
     internal Task<EvidenceReadClaim> AcquireRefundSettlementReadAsync(IClientSessionHandle tx, ActorContext actor, EvidenceTargetRef target, long expectedRevision,
         long reservationId, EvidenceRef reference, AuthorizationReadMetadata metadata, CancellationToken ct) =>
         AcquireBoundReadAsync(tx, actor, target, EvidenceTargetKind.RefundPayout, "refund-settlement-evidence-view", expectedRevision, reservationId, reference, metadata, ct);
+    internal Task<EvidenceReadClaim> AcquireProcurementDisbursementReadAsync(IClientSessionHandle tx, ActorContext actor, EvidenceTargetRef target, long expectedRevision,
+        long reservationId, EvidenceRef reference, AuthorizationReadMetadata metadata, CancellationToken ct) =>
+        AcquireBoundReadAsync(tx, actor, target, EvidenceTargetKind.ProcurementDisbursement, "procurement-disbursement-evidence-view", expectedRevision, reservationId, reference, metadata, ct);
     private Task<EvidenceReadClaim> AcquireBoundReadAsync(IClientSessionHandle tx, ActorContext actor, EvidenceTargetRef target,
         EvidenceTargetKind requiredKind, string requiredPurpose, long expectedRevision, long reservationId, EvidenceRef reference,
         AuthorizationReadMetadata metadata, CancellationToken ct) => GuardAsync<EvidenceReadClaim>(tx, async () => {
@@ -65,6 +69,9 @@ internal sealed partial class EvidenceService
             RequireReadAuthority(bundle, authority, actor);
             if (Reference(bundle) != reference) throw Conflict("evidence_read_reference_changed");
             var eligible = await ReadEligibilityAsync(tx, bundle, token);
+            // Admission precedes the lease. Allocator/insertion waits, final owner fences
+            // and commit all consume its lifetime from this point, including with a frozen UTC clock.
+            var leaseStarted = Stopwatch.GetTimestamp();
             var now = clock.UtcNow; deadline = now.AddMilliseconds(eligible.Policy["requestDurationMs"].AsInt64);
             var until = ReadUntil(eligible, deadline.Value);
             var row = new BsonDocument {
@@ -81,7 +88,7 @@ internal sealed partial class EvidenceService
             deadline = until;
             return new EvidenceReadClaim(row["_id"].AsInt64, row["token"].AsString, target, authority.Revision, reservationId, reference, Publication(bundle),
                 new(eligible.Policy["maximumBytes"].AsInt64, TimeSpan.FromMilliseconds(eligible.Policy["verificationDurationMs"].AsInt64), (int)bundle.Reservation["admittedLimits"]["bufferBytes"].AsInt64),
-                Date(row["deadline"]), TimeSpan.FromMilliseconds(eligible.Policy["requestDurationMs"].AsInt64), eligible.Validation["mime"].AsString, until - now);
+                Date(row["deadline"]), TimeSpan.FromMilliseconds(eligible.Policy["requestDurationMs"].AsInt64), eligible.Validation["mime"].AsString, until - now, leaseStarted);
         }, ct);
         FinalCheck(deadline, ct); return result;
     });
@@ -91,6 +98,9 @@ internal sealed partial class EvidenceService
     internal Task<EvidenceReadWindow> AuthorizeRefundPayoutReadAsync(IClientSessionHandle tx, ActorContext actor, EvidenceReadClaim claim,
         VerifiedOriginalHandle handle, bool renew, CancellationToken ct) =>
         AuthorizeBoundReadAsync(tx, actor, claim, EvidenceTargetKind.RefundPayout, handle, renew, ct);
+    internal Task<EvidenceReadWindow> AuthorizeProcurementDisbursementReadAsync(IClientSessionHandle tx, ActorContext actor, EvidenceReadClaim claim,
+        VerifiedOriginalHandle handle, bool renew, CancellationToken ct) =>
+        AuthorizeBoundReadAsync(tx, actor, claim, EvidenceTargetKind.ProcurementDisbursement, handle, renew, ct);
     private Task<EvidenceReadWindow> AuthorizeBoundReadAsync(IClientSessionHandle tx, ActorContext actor, EvidenceReadClaim claim,
         EvidenceTargetKind requiredKind, VerifiedOriginalHandle handle, bool renew, CancellationToken ct) => GuardAsync<EvidenceReadWindow>(tx, async () => {
         if (claim.Target.Kind != requiredKind) throw Invalid();
@@ -120,23 +130,32 @@ internal sealed partial class EvidenceService
         if (row["state"] == "released") return true;
         var next = Clone(row); next["state"] = "released"; await SaveReadLeaseAsync(tx, row, next, "released", ct); return true;
     });
-    // Only the Billing-owned submitted-review adapter may bind a different original uploader.
+    // Only the corresponding owner's immutable association may bind a different original uploader.
     // Upload/admission paths continue to require the exact current actor's provider identity.
     private static void RequireReadAuthority(Bundle bundle, EvidenceUploadTarget target, ActorContext actor) {
-        RequireAuthority(bundle, target, actor, target.ReviewUploaderId is null && target.PayoutUploaderId is null);
-        if (target.ReviewUploaderId is { } uploader && (uploader <= 0 || target.Target.Kind != EvidenceTargetKind.PaymentDeclaration ||
-            target.SubmittedSubmissionId is not > 0 || target.SubmittedReservationId != bundle.Reservation["_id"].AsInt64 || bundle.Reservation["uploader"]["userId"] != uploader))
+        var payment = target.ReviewUploaderId is not null || target.SubmittedReservationId is not null || target.SubmittedSubmissionId is not null;
+        var payout = target.PayoutUploaderId is not null || target.PayoutReservationId is not null || target.PayoutId is not null;
+        var disbursement = target.DisbursementUploaderId is not null || target.DisbursementReservationId is not null || target.DisbursementId is not null;
+        if ((payment ? 1 : 0) + (payout ? 1 : 0) + (disbursement ? 1 : 0) > 1) throw Invalid("evidence_actor_or_owner_denied");
+        // A submitted payment also carries its immutable association for the original
+        // uploader. Only a separately authorized reader supplies an uploader override.
+        RequireAuthority(bundle, target, actor, target.ReviewUploaderId is null && target.PayoutUploaderId is null && target.DisbursementUploaderId is null);
+        if (payment && (target.Target.Kind != EvidenceTargetKind.PaymentDeclaration ||
+            target.SubmittedSubmissionId is not > 0 || target.SubmittedReservationId != bundle.Reservation["_id"].AsInt64 ||
+            target.ReviewUploaderId is { } uploader && (uploader <= 0 || bundle.Reservation["uploader"]["userId"] != uploader)))
             throw Invalid("evidence_actor_or_owner_denied");
-        if (target.PayoutUploaderId is { } payoutUploader && (payoutUploader <= 0 || target.Target.Kind != EvidenceTargetKind.RefundPayout ||
-            target.PayoutId is not > 0 || target.PayoutReservationId != bundle.Reservation["_id"].AsInt64 || bundle.Reservation["uploader"]["userId"] != payoutUploader ||
-            target.ReviewUploaderId is not null || target.SubmittedReservationId is not null || target.SubmittedSubmissionId is not null))
+        if (payout && (target.PayoutUploaderId is not > 0 || target.Target.Kind != EvidenceTargetKind.RefundPayout ||
+            target.PayoutId is not > 0 || target.PayoutReservationId != bundle.Reservation["_id"].AsInt64 || bundle.Reservation["uploader"]["userId"] != target.PayoutUploaderId.Value))
+            throw Invalid("evidence_actor_or_owner_denied");
+        if (disbursement && (target.DisbursementUploaderId is not > 0 || target.Target.Kind != EvidenceTargetKind.ProcurementDisbursement ||
+            target.DisbursementId is not > 0 || target.DisbursementReservationId != bundle.Reservation["_id"].AsInt64 || bundle.Reservation["uploader"]["userId"] != target.DisbursementUploaderId.Value))
             throw Invalid("evidence_actor_or_owner_denied");
     }
     private Task<BsonDocument> LoadReadLeaseAsync(IClientSessionHandle tx, EvidenceReadClaim claim, CancellationToken ct) =>
         LoadReadLeaseAsync(tx, claim.Id, claim.Token, claim.ReservationId, ct);
     private async Task<BsonDocument> LoadReadLeaseAsync(IClientSessionHandle tx, long id, string token, long reservationId, CancellationToken ct) {
         var row = await Rows("evidenceReadLeases").Find(tx, new BsonDocument("$and", new BsonArray {
-            new BsonDocument { { "_id", id }, { "token", token }, { "reservationId", reservationId } }, RefundPayoutEvidenceSchemas.Validator("evidenceReadLeases") })).SingleOrDefaultAsync(ct)
+            new BsonDocument { { "_id", id }, { "token", token }, { "reservationId", reservationId } }, ProcurementDisbursementEvidenceSchemas.Validator("evidenceReadLeases") })).SingleOrDefaultAsync(ct)
             ?? throw Conflict("evidence_read_lease_expired");
         var audit = await Rows("evidenceReadAudits").Find(tx, F.Eq("_id", row["lastAuditId"])).SingleOrDefaultAsync(ct);
         var kind = row["state"] == "provisional" ? "acquired" : row["state"] == "released" ? "released" : row["revision"] == 2L ? "activated" : "renewed";

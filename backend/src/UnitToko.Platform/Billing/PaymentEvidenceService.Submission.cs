@@ -25,7 +25,7 @@ public sealed partial class PaymentEvidenceService
         if (recovered is not null) return recovered;
         await StorageAsync(ct);
         foreach (var name in EvidenceAccessSchemas.Collections)
-            await RefundPayoutEvidenceSchemas.RequireCompatibleStorageAsync(database, name, EvidenceAccessSchemas.Validator(name), EvidenceAccessSchemas.Key(name), ct);
+            await ProcurementDisbursementEvidenceSchemas.RequireCompatibleStorageAsync(database, name, EvidenceAccessSchemas.Validator(name), EvidenceAccessSchemas.Key(name), ct);
         if (registration.Store is null) throw Unavailable();
         var started = Stopwatch.GetTimestamp();
         var claim = await unit.ExecuteAsync((tx, token) => evidence.AcquirePaymentReadAsync(tx, actor, Target(declarationId), expectedRevision, reservationId, reference,

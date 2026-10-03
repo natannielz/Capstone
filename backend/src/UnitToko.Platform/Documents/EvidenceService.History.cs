@@ -50,8 +50,11 @@ internal sealed partial class EvidenceService
         var validation = await HistoricalValidationAsync(tx, bundle, ct) ?? throw EvidenceValidationRecords.Broken();
         var lifecycle = await RequireHistoricalLifecycleAsync(tx, bundle, validation, ct) ?? throw EvidenceValidationRecords.Broken();
         var target = ReadTarget(bundle.Reservation);
-        var bound = pin["associationKind"] == "PaymentSubmission" ? target.Kind == EvidenceTargetKind.PaymentDeclaration && target.Id == pin["declarationId"].AsInt64 :
-            pin["associationKind"] == "RefundPayout" && target.Kind == EvidenceTargetKind.RefundPayout && target.Id == pin["refundPayoutDraftId"].AsInt64;
+        var bound = pin["associationKind"].AsString switch {
+            "PaymentSubmission" => target.Kind == EvidenceTargetKind.PaymentDeclaration && target.Id == pin["declarationId"].AsInt64,
+            "RefundPayout" => target.Kind == EvidenceTargetKind.RefundPayout && target.Id == pin["refundPayoutDraftId"].AsInt64,
+            "ProcurementDisbursement" => target.Kind == EvidenceTargetKind.ProcurementDisbursement && target.Id == pin["procurementDisbursementDraftId"].AsInt64,
+            _ => false };
         if (!bound || !pin["reference"].Equals(ReadReference(reference)) || pin["actorId"] != bundle.Reservation["uploader"]["userId"] ||
             pin["versionRowId"] != bundle.Version["_id"] || pin["storeId"] != bundle.Version["storeId"] || pin["generation"] != bundle.Version["generation"] ||
             validation["status"] != "passed" || pin["validationHash"] != validation["resultHash"] || pin["lifecycleRevision"] != lifecycle["revision"] ||

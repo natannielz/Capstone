@@ -26,6 +26,11 @@ internal sealed class PurchaseOrderFundingCapture(object owner, ActorContext act
             session.WrappedCoreSession.CurrentTransaction.TransactionNumber != transaction || B.Hash(Source) != hash) throw B.Broken(); current();
     }
     internal void RequireCurrent() => RequireContext(owner, actor, authority, tx);
+    internal BsonDocument RequireSource(object service, IClientSessionHandle session, BsonDocument expected) {
+        RequireContext(service, actor, authority, session);
+        if (!Source.Equals(expected)) throw B.Broken();
+        return Source;
+    }
     internal async Task FenceAsync(CancellationToken ct) { RequireCurrent(); await fence(ct); RequireCurrent(); ct.ThrowIfCancellationRequested(); }
 }
 

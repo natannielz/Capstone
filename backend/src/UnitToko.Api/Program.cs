@@ -112,6 +112,18 @@ builder.Services.AddSingleton<SupplierService>();
 builder.Services.AddSingleton<PurchaseOrderService>();
 builder.Services.AddSingleton<ProcurementFundingService>();
 builder.Services.AddSingleton<SupplierBankService>();
+builder.Services.AddSingleton<ProcurementDisbursementService>();
+builder.Services.AddSingleton(sp => {
+    var options = sp.GetRequiredService<IConfiguration>().GetSection("Evidence:PrivateWindows");
+    var root = options["Root"]; var storeId = options["StoreId"]; var operators = options.GetSection("TrustedOperatorSids").Get<string[]>() ?? [];
+    PaymentEvidenceStorageOptions? storage = null;
+    if (root is not null || storeId is not null || operators.Length > 0) {
+        if (string.IsNullOrWhiteSpace(root) || string.IsNullOrWhiteSpace(storeId)) throw new InvalidOperationException("Complete private evidence storage settings are required");
+        storage = new(root, storeId, operators);
+    }
+    return new ProcurementDisbursementEvidenceService(sp.GetRequiredService<IMongoDatabase>(), sp.GetRequiredService<MongoUnitOfWork>(), sp.GetRequiredService<IdAllocator>(),
+        sp.GetRequiredService<IClock>(), sp.GetRequiredService<ProcurementDisbursementService>(), storage);
+});
 var identityEnabled = builder.Services.AddUnitTokoIdentityRuntime(builder.Configuration);
 builder.Services.AddAuthorization(options =>
     options.FallbackPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
@@ -355,6 +367,7 @@ app.MapSupplierEndpoints();
 app.MapPurchaseOrderEndpoints();
 app.MapProcurementFundingEndpoints();
 app.MapSupplierBankEndpoints();
+app.MapProcurementDisbursementEndpoints();
 app.MapOrderDraftEndpoints();
 app.MapOrderSubmissionEndpoints();
 app.MapOrderDecisionEndpoints();

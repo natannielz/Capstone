@@ -1,7 +1,9 @@
 using System.Runtime.Versioning;
 using MongoDB.Bson;
 using MongoDB.Driver;
+using UnitToko.Modules.Contracts;
 using UnitToko.Modules.Documents;
+using UnitToko.Modules.Identity;
 using UnitToko.Modules.Identity.Contracts;
 using UnitToko.Platform.Authorization;
 using UnitToko.Platform.Billing;
@@ -9,6 +11,7 @@ using UnitToko.Platform.DocumentProcessing;
 using UnitToko.Platform.Documents;
 using UnitToko.Platform.Mongo;
 using UnitToko.Platform.Mongo.Migrations;
+using UnitToko.Tests.Catalog;
 using UnitToko.Tests.Documents;
 
 namespace UnitToko.Tests.Ordering;
@@ -17,6 +20,60 @@ namespace UnitToko.Tests.Ordering;
 [SupportedOSPlatform("windows")]
 public sealed class PaymentEvidenceReadTests(MongoFixture fixture)
 {
+    [WindowsStorageFact]
+    public async Task Submitted_original_keeps_uploader_and_explicit_reviewer_access_without_accepting_foreign_or_mixed_associations() {
+        await using var data = await ReadData.CreateAsync(fixture); await data.ValidateAsync();
+        await data.Service.SubmitAsync(data.Actor, data.DeclarationId, 1, data.Reservation.ReservationId,
+            data.Reference, EvidenceAdmissionTestData.Meta("submitted-original-authority"));
+        var leasesAfterSubmission = await data.Rows("evidenceReadLeases").CountDocumentsAsync(new BsonDocument());
+        var reviewer = await PaymentReviewTests.Reviewer(data);
+        var foreign = await data.Catalog.ActorAsync(9953, CatalogAuthoringTestData.OtherOwner, Permissions.PaymentReviewRead, Permissions.InvoiceRead);
+        var submitted = await data.Payment.Service.ReadAsync(data.Actor, data.DeclarationId);
+        Assert.Equal("submitted", submitted.State); Assert.Equal(1, submitted.Revision);
+        await using (var original = await data.OpenAsync()) {
+            using var received = new MemoryStream(); await original.Content.CopyToAsync(received); Assert.Equal(data.Bytes, received.ToArray());
+        }
+        await using (var original = await data.Service.OpenReviewReadAsync(reviewer, data.DeclarationId, data.Reservation.ReservationId,
+            submitted.Revision, data.Reference, ReadData.Metadata)) {
+            using var received = new MemoryStream(); await original.Content.CopyToAsync(received); Assert.Equal(data.Bytes, received.ToArray());
+        }
+        var before = await StateAsync();
+        await Assert.ThrowsAsync<AuthorizationDeniedException>(() => data.OpenAsync(reviewer));
+        await Assert.ThrowsAsync<AuthorizationDeniedException>(() => data.Service.OpenReviewReadAsync(foreign, data.DeclarationId,
+            data.Reservation.ReservationId, submitted.Revision, data.Reference, ReadData.Metadata));
+        var unit = new MongoUnitOfWork(data.Catalog.Client);
+        foreach (var change in new Func<EvidenceUploadTarget, EvidenceUploadTarget>[] {
+            target => target with { ReviewUploaderId = reviewer.UserId },
+            target => target with { SubmittedReservationId = data.Reservation.ReservationId + 1 },
+            target => target with { SubmittedSubmissionId = null },
+            target => target with { Owner = CatalogAuthoringTestData.OtherOwner },
+            target => target with { PayoutReservationId = data.Reservation.ReservationId, PayoutId = 1, PayoutUploaderId = data.Actor.UserId },
+            target => target with { DisbursementReservationId = data.Reservation.ReservationId, DisbursementId = 1, DisbursementUploaderId = data.Actor.UserId } }) {
+            var documents = new EvidenceService(data.Database, unit, new(data.Database), data.Catalog.Clock, data.Files.Registration,
+                new AlteredReadTarget(data.Payment.Service, change));
+            var denied = await Assert.ThrowsAsync<DomainValidationException>(() => unit.ExecuteAsync((tx, ct) =>
+                documents.AcquirePaymentReadAsync(tx, data.Actor, new(EvidenceTargetKind.PaymentDeclaration, data.DeclarationId), submitted.Revision,
+                    data.Reservation.ReservationId, data.Reference, ReadData.Metadata, ct)));
+            Assert.Equal("evidence_actor_or_owner_denied", denied.Code);
+            Assert.Equal(before, await StateAsync());
+        }
+        Assert.Equal(leasesAfterSubmission + 2, await data.Rows("evidenceReadLeases").CountDocumentsAsync(new BsonDocument()));
+        Assert.False(await data.Rows("evidenceReadLeases").Find(new BsonDocument("state", new BsonDocument("$ne", "released"))).AnyAsync());
+        Assert.Equal(1, await data.Rows("paymentSubmissions").CountDocumentsAsync(new BsonDocument()));
+        Assert.Equal(1, await data.Rows("evidencePins").CountDocumentsAsync(new BsonDocument()));
+        Assert.Equal(0, await data.Rows("payments").CountDocumentsAsync(new BsonDocument()));
+        Assert.Equal(0, await data.Rows("bankReceipts").CountDocumentsAsync(new BsonDocument()));
+        Assert.Equal(1, await data.Rows("journalEntries").CountDocumentsAsync(new BsonDocument()));
+
+        async Task<BsonDocument> StateAsync() {
+            var state = new BsonDocument();
+            foreach (var name in new[] { "paymentSubmissions", "evidencePins", "evidencePinAudits", "evidenceReadLeases", "evidenceReadAudits",
+                "payments", "bankReceipts", "journalEntries", "idempotencyRecords", "auditEvents", "outboxEvents" })
+                state[name] = new BsonArray(await data.Rows(name).Find(new BsonDocument()).Sort(new BsonDocument("_id", 1)).ToListAsync());
+            return state;
+        }
+    }
+
     [WindowsStorageFact]
     public async Task Checked_original_opens_under_a_bound_read_lease_and_preserves_upload_receipt_and_money() {
         await using var data = await ReadData.CreateAsync(fixture);
@@ -125,6 +182,19 @@ public sealed class PaymentEvidenceReadTests(MongoFixture fixture)
         var lease = await data.Rows("evidenceReadLeases").Find(new BsonDocument()).SingleAsync(); Assert.Equal("released", lease["state"]); Assert.Equal(2L, lease["revision"]);
         Assert.Equal(new[] { "acquired", "released" }, (await data.Rows("evidenceReadAudits").Find(new BsonDocument()).Sort(new BsonDocument("revision", 1)).ToListAsync()).Select(row => row["kind"].AsString));
         Assert.Equal(0, await data.Rows("payments").CountDocumentsAsync(new BsonDocument()));
+    }
+
+    // Corrupt only the adapter result after its genuine owner has authorized and
+    // reconstructed the submission, to exercise the shared final association boundary.
+    private sealed class AlteredReadTarget(IPaymentEvidenceUploadTarget actual, Func<EvidenceUploadTarget, EvidenceUploadTarget> change) : IPaymentEvidenceUploadTarget {
+        public IMongoDatabase Database => actual.Database;
+        public Task<T> WithReadTargetAsync<T>(IClientSessionHandle tx, ActorContext actor, EvidenceTargetRef target, long? revision, EvidenceRef? reference,
+            Func<EvidenceUploadTarget, CancellationToken, Task<T>> action, CancellationToken ct) =>
+            actual.WithReadTargetAsync(tx, actor, target, revision, reference, (authority, token) => action(change(authority), token), ct);
+        public Task<T> WithTargetAsync<T>(IClientSessionHandle tx, ActorContext actor, EvidenceTargetRef target, long? revision,
+            Func<EvidenceUploadTarget, CancellationToken, Task<T>> action, CancellationToken ct) => throw new NotSupportedException();
+        public Task<PaymentEvidenceAssociation> RequireSubmissionAssociationAsync(IClientSessionHandle tx, ActorContext actor, long submissionId,
+            EvidenceReadClaim claim, CancellationToken ct) => throw new NotSupportedException();
     }
 
     internal sealed class ReadData : IAsyncDisposable {

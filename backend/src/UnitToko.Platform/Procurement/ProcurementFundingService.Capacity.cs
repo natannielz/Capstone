@@ -28,11 +28,12 @@ public sealed partial class ProcurementFundingService
         ProcurementFundingRecords.Equal(row["orderId"], source["order"]["_id"]); ProcurementFundingRecords.Equal(row["orderVersion"], source["order"]["version"]);
         ProcurementFundingRecords.Equal(row["orderHash"], source["order"]["snapshotHash"]); ProcurementFundingRecords.Equal(row["orderApprovalId"], source["order"]["approvalId"]);
     }
-    private async Task<FundingCapacityState> CapacityAsync(IClientSessionHandle tx, BsonDocument source, CancellationToken ct) {
+    private async Task<FundingCapacityState> CapacityAsync(IClientSessionHandle tx, BsonDocument source, CancellationToken ct, PurchaseOrderFundingCapture? orderProof = null) {
+        if (orderProof is not null) _ = orderProof.RequireSource(orders, tx, source);
         var filter = new BsonDocument("orderId", source["order"]["_id"]); var rawHead = await Rows(B.Heads).Find(tx, filter).SingleOrDefaultAsync(ct);
         var head = rawHead is null ? null : await records.RowAsync(tx, B.Heads, rawHead["_id"].AsInt64, ct);
         var rawRows = await Rows(B.Allocations).Find(tx, filter).Sort(new BsonDocument("sequence", 1)).ToListAsync(ct);
-        var claims = await records.ClaimsAsync(tx, source["order"]["_id"].AsInt64, ct);
+        var claims = await records.ClaimsAsync(tx, source["order"]["_id"].AsInt64, ct, orderProof);
         if (claims.Count != rawRows.Count || (head is null) != (rawRows.Count == 0)) throw B.Broken();
         BsonDocument? previous = null; long sequence = 0; var authorized = new Money(0); var limit = Money.Parse(source["proposal"]["input"]["paymentTerms"]["requiredAdvance"].AsString);
         foreach (var raw in rawRows) {

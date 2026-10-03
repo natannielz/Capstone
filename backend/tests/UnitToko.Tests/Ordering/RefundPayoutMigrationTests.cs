@@ -20,6 +20,7 @@ public sealed class RefundPayoutMigrationTests(MongoFixture fixture)
     internal static async Task RemoveEmptyUpgradeAsync(IMongoDatabase database, bool dropTargets = true) {
         IMongoCollection<BsonDocument> Rows(string name) => database.GetCollection<BsonDocument>(name);
         if (!await Rows("schemaMigrations").Find(new BsonDocument { { "_id", 55 }, { "state", "applied" } }).AnyAsync()) return;
+        await UnitToko.Tests.Procurement.ProcurementDisbursementMigrationTests.RestoreV65Async(database);
         Assert.True(await Rows("schemaMigrations").Find(new BsonDocument { { "_id", 54 }, { "state", "applied" } }).AnyAsync());
         foreach (var name in RefundPayoutSchemas.Collections) Assert.Equal(0, await Rows(name).CountDocumentsAsync(new BsonDocument()));
         foreach (var name in RefundSettlementSchemas.Collections) Assert.False(await Rows(name).Find(new BsonDocument()).AnyAsync());
@@ -41,9 +42,9 @@ public sealed class RefundPayoutMigrationTests(MongoFixture fixture)
             await tx.AbortTransactionAsync();
         }
         var history = await Rows("schemaMigrations").Find(new BsonDocument()).Sort(new BsonDocument("_id", 1)).ToListAsync();
-        Assert.Equal(CollectionMigrations.CurrentVersion, history.Count);
+        Assert.Equal(65, history.Count);
         Assert.All(history, row => Assert.Equal("applied", row["state"]));
-        var suffix = history.Skip(54).ToArray(); Assert.Equal(CollectionMigrations.CurrentVersion - 54, suffix.Length);
+        var suffix = history.Skip(54).ToArray(); Assert.Equal(65 - 54, suffix.Length);
         foreach (var (table, field) in new[] { ("idempotencyRecords", "operation"), ("auditEvents", "kind"), ("auditEvents", "operation"), ("outboxEvents", "kind"), ("outboxEvents", "sourceKey") })
             Assert.False(await Rows(table).Find(new BsonDocument(field, new BsonRegularExpression(@"^billing\.refund\.payout(?:[.:]|$)"))).AnyAsync());
         Assert.False(await Rows("journalEntries").Find(new BsonDocument("source.namespace", new BsonRegularExpression(@"^billing\.refund(?:[.:-]|$)"))).AnyAsync());
@@ -102,7 +103,7 @@ public sealed class RefundPayoutMigrationTests(MongoFixture fixture)
             var before = Assert.Single(definitions, row => row["name"] == name);
             var after = await (await data.Database.ListCollectionsAsync(new ListCollectionsOptions { Filter = new BsonDocument("name", name) })).SingleAsync();
             Assert.Equal(before["info"]["uuid"], after["info"]["uuid"]);
-            Assert.True(InventorySchemas.Contains(after["options"]["validator"].AsBsonDocument, RefundPayoutEvidenceSchemas.Validator(name)));
+            Assert.True(ProcurementDisbursementEvidenceSchemas.Supports(name, after["options"]["validator"].AsBsonDocument, RefundPayoutEvidenceSchemas.Validator(name)));
         }
     }
     [WindowsStorageTheory]

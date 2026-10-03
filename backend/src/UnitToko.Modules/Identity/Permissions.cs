@@ -33,6 +33,7 @@ public static class Permissions
     public const string PaymentReviewRead = "payment.review.read", PaymentReviewCorrect = "payment.review.correct", PaymentReviewManual = "payment.review.manual", PaymentReviewManage = "payment.review.manage";
     public const string CreditRequest = "credit.request", CreditApprove = "credit.approve", RefundRequest = "refund.request", RefundApprove = "refund.approve", DisbursementRecord = "disbursement.record", DisbursementVerify = "disbursement.verify";
     public const string FundingRead = "funding.read", FundingRequest = "funding.request", FundingApprove = "funding.approve", ExpenseRequest = "expense.request", ExpenseApprove = "expense.approve";
+    public const string ProcurementDisbursementRead = "procurement.disbursement.read", ProcurementDisbursementEvidenceRead = "procurement.disbursement.evidence.read";
     public const string ReconciliationVerify = "reconciliation.verify", JournalPost = "journal.post", JournalReverse = "journal.reverse";
     public const string AccountingBookRead = "accounting.book.read", AccountingBookPropose = "accounting.book.propose", AccountingBookApprove = "accounting.book.approve";
     public const string InviteManage = "invite.manage", MembershipPropose = "membership.propose", MembershipApprove = "membership.approve", AccessPropose = "access.propose", AccessApprove = "access.approve", AccessRevoke = "access.revoke", RecoveryInitiate = "recovery.initiate", TechnicalConfigure = "technical.configure", AccessAuditRead = "access.audit.read";
@@ -86,6 +87,8 @@ public static class Permissions
         result[ProcurementApprove] = result[ProcurementApprove] with { Assurance = new(true, TimeSpan.FromMinutes(5)) };
         result[ProcurementPrepare] = result[ProcurementPrepare] with { Assurance = new(true, TimeSpan.FromMinutes(5)) };
         Add(FundingRead, Operations);
+        Add(ProcurementDisbursementRead, Operations);
+        Add(ProcurementDisbursementEvidenceRead, Operations);
         result[FundingRequest] = result[FundingRequest] with { Assurance = new(true, TimeSpan.FromMinutes(5)) };
         result[FundingApprove] = result[FundingApprove] with { Assurance = new(true, TimeSpan.FromMinutes(5)) };
         result[PaymentVerify] = result[PaymentVerify] with { Assurance = new(true, TimeSpan.FromMinutes(5)) };

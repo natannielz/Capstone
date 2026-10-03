@@ -38,7 +38,7 @@ internal sealed class CatalogAuthoringTestData : IAsyncDisposable
     internal Dictionary<long, SessionIssue> Issued { get; } = [];
     private readonly SessionPayloadProtector protector = SessionPayloadProtector.FromTestProvider(new EphemeralDataProtectionProvider());
     private static readonly SessionPolicy Policy = new("https://approved.example/", "fixture-connection", "fixture-policy");
-    private CatalogAuthoringTestData(StoreTestData data, MongoClient client)
+    internal CatalogAuthoringTestData(StoreTestData data, MongoClient client)
     {
         Base = data; Client = client;
         Sessions = new(Database, new(client), Clock, Policy, protector);

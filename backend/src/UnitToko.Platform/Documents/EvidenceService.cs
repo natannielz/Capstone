@@ -31,9 +31,11 @@ internal sealed partial class EvidenceService
     private readonly CatalogAuthoringService catalog;
     private readonly IPaymentEvidenceUploadTarget? paymentTargets;
     private readonly IRefundPayoutEvidenceUploadTarget? refundPayoutTargets;
+    private readonly IProcurementDisbursementEvidenceUploadTarget? procurementDisbursementTargets;
     internal EvidenceService(IMongoDatabase database, MongoUnitOfWork unit, IdAllocator ids, IClock clock,
         EvidenceStoreRegistration? registration = null, IPaymentEvidenceUploadTarget? paymentTargets = null,
-        IRefundPayoutEvidenceUploadTarget? refundPayoutTargets = null)
+        IRefundPayoutEvidenceUploadTarget? refundPayoutTargets = null,
+        IProcurementDisbursementEvidenceUploadTarget? procurementDisbursementTargets = null)
     {
         this.database = database; this.unit = unit; this.ids = ids; this.clock = clock;
         this.registration = registration ?? EvidenceStoreRegistration.Unavailable();
@@ -43,6 +45,9 @@ internal sealed partial class EvidenceService
         if (refundPayoutTargets is not null && (!ReferenceEquals(refundPayoutTargets.Database.Client, database.Client) || !refundPayoutTargets.Database.DatabaseNamespace.Equals(database.DatabaseNamespace)))
             throw new ArgumentException("Evidence targets must join the same owning transaction");
         this.refundPayoutTargets = refundPayoutTargets;
+        if (procurementDisbursementTargets is not null && (!ReferenceEquals(procurementDisbursementTargets.Database.Client, database.Client) || !procurementDisbursementTargets.Database.DatabaseNamespace.Equals(database.DatabaseNamespace)))
+            throw new ArgumentException("Evidence targets must join the same owning transaction");
+        this.procurementDisbursementTargets = procurementDisbursementTargets;
         catalog = new(database, unit, ids, clock);
     }
 
