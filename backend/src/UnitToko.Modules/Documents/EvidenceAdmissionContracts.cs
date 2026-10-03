@@ -2,7 +2,7 @@ using UnitToko.Modules.Contracts;
 
 namespace UnitToko.Modules.Documents;
 
-public enum EvidencePurpose { CatalogImage = 1, PaymentImage = 2, RefundPayoutImage = 3, ProcurementDisbursementImage = 4, ProcurementUnboxingVideo = 5 }
+public enum EvidencePurpose { CatalogImage = 1, PaymentImage = 2, RefundPayoutImage = 3, ProcurementDisbursementImage = 4, ProcurementUnboxingVideo = 5, SupplierDocumentImage = 6 }
 
 /// <summary>Video admission is separate from image limits and requires its actual inspection owner.</summary>
 public sealed record ReserveEvidenceVideo
@@ -26,7 +26,8 @@ public sealed record ReserveEvidenceImage
         if (target is null || expectedTargetRevision is <= 0 || !((purpose == EvidencePurpose.CatalogImage && target.Kind is EvidenceTargetKind.CatalogFamily or EvidenceTargetKind.CatalogSku) ||
             (purpose == EvidencePurpose.PaymentImage && target.Kind == EvidenceTargetKind.PaymentDeclaration) ||
             (purpose == EvidencePurpose.RefundPayoutImage && target.Kind == EvidenceTargetKind.RefundPayout) ||
-            (purpose == EvidencePurpose.ProcurementDisbursementImage && target.Kind == EvidenceTargetKind.ProcurementDisbursement)))
+            (purpose == EvidencePurpose.ProcurementDisbursementImage && target.Kind == EvidenceTargetKind.ProcurementDisbursement) ||
+            (purpose == EvidencePurpose.SupplierDocumentImage && target.Kind == EvidenceTargetKind.SupplierDocument)))
             throw new DomainValidationException("evidence_invalid_admission", "Use the owning record's supported evidence purpose");
         Target = target; Purpose = purpose; ExpectedTargetRevision = expectedTargetRevision;
     }

@@ -33,11 +33,13 @@ internal sealed partial class EvidenceService
     private readonly IRefundPayoutEvidenceUploadTarget? refundPayoutTargets;
     private readonly IProcurementDisbursementEvidenceUploadTarget? procurementDisbursementTargets;
     private readonly IProcurementInspectionEvidenceUploadTarget? procurementInspectionTargets;
+    private readonly ISupplierDocumentEvidenceUploadTarget? supplierDocumentTargets;
     internal EvidenceService(IMongoDatabase database, MongoUnitOfWork unit, IdAllocator ids, IClock clock,
         EvidenceStoreRegistration? registration = null, IPaymentEvidenceUploadTarget? paymentTargets = null,
         IRefundPayoutEvidenceUploadTarget? refundPayoutTargets = null,
         IProcurementDisbursementEvidenceUploadTarget? procurementDisbursementTargets = null,
-        IProcurementInspectionEvidenceUploadTarget? procurementInspectionTargets = null)
+        IProcurementInspectionEvidenceUploadTarget? procurementInspectionTargets = null,
+        ISupplierDocumentEvidenceUploadTarget? supplierDocumentTargets = null)
     {
         this.database = database; this.unit = unit; this.ids = ids; this.clock = clock;
         this.registration = registration ?? EvidenceStoreRegistration.Unavailable();
@@ -53,6 +55,9 @@ internal sealed partial class EvidenceService
         if (procurementInspectionTargets is not null && (!ReferenceEquals(procurementInspectionTargets.Database.Client, database.Client) || !procurementInspectionTargets.Database.DatabaseNamespace.Equals(database.DatabaseNamespace)))
             throw new ArgumentException("Evidence targets must join the same owning transaction");
         this.procurementInspectionTargets = procurementInspectionTargets;
+        if (supplierDocumentTargets is not null && (!ReferenceEquals(supplierDocumentTargets.Database.Client, database.Client) || !supplierDocumentTargets.Database.DatabaseNamespace.Equals(database.DatabaseNamespace)))
+            throw new ArgumentException("Evidence targets must join the same owning transaction");
+        this.supplierDocumentTargets = supplierDocumentTargets;
         catalog = new(database, unit, ids, clock);
     }
 
@@ -157,13 +162,15 @@ internal sealed partial class EvidenceService
         return result;
     }
     internal Task<SafeStatus> GetStatusAsync(IClientSessionHandle tx, ActorContext actor, long reservationId,
-        AuthorizationReadMetadata readMetadata, CancellationToken ct = default) => GuardAsync(tx, async () =>
+        AuthorizationReadMetadata readMetadata, CancellationToken ct = default, EvidenceTargetRef? requestedTarget = null) => GuardAsync(tx, async () =>
     {
         if (readMetadata is null || readMetadata.Purpose != "evidence-status" || !Text(readMetadata.CorrelationId, 128)) throw Invalid();
         var bundle = await LoadAsync(tx, reservationId, ct);
+        if (requestedTarget is not null && ReadTarget(bundle.Reservation) != requestedTarget) throw Invalid("evidence_actor_or_owner_denied");
         var result = await WithReadTargetAsync(tx, actor, ReadTarget(bundle.Reservation), null, null, async (target, token) =>
         {
-            RequireAuthority(bundle, target, actor, false);
+            if (requestedTarget is not null) RequireReadAuthority(bundle, target, actor);
+            else RequireAuthority(bundle, target, actor, false);
             if (bundle.Reservation["state"] == "quarantined") await CompletionAsync(tx, bundle, token);
             var validation = await ValidationStatusAsync(tx, bundle, token);
             var auditId = (await ids.NextAsync("auditEvents", token)).Value;

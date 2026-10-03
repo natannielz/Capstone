@@ -116,6 +116,18 @@ builder.Services.AddSingleton<ProcurementDisbursementService>();
 builder.Services.AddSingleton<ProcurementSettlementService>();
 builder.Services.AddSingleton<ProcurementReceivingService>();
 builder.Services.AddSingleton<ProcurementInspectionService>();
+builder.Services.AddSingleton<SupplierDocumentService>();
+builder.Services.AddSingleton(sp => {
+    var options = sp.GetRequiredService<IConfiguration>().GetSection("Evidence:PrivateWindows");
+    var root = options["Root"]; var storeId = options["StoreId"]; var operators = options.GetSection("TrustedOperatorSids").Get<string[]>() ?? [];
+    PaymentEvidenceStorageOptions? storage = null;
+    if (root is not null || storeId is not null || operators.Length > 0) {
+        if (string.IsNullOrWhiteSpace(root) || string.IsNullOrWhiteSpace(storeId)) throw new InvalidOperationException("Complete private evidence storage settings are required");
+        storage = new(root, storeId, operators);
+    }
+    return new SupplierDocumentEvidenceService(sp.GetRequiredService<IMongoDatabase>(), sp.GetRequiredService<MongoUnitOfWork>(), sp.GetRequiredService<IdAllocator>(),
+        sp.GetRequiredService<IClock>(), sp.GetRequiredService<SupplierDocumentService>(), storage);
+});
 builder.Services.AddSingleton(sp => {
     var options = sp.GetRequiredService<IConfiguration>().GetSection("Evidence:PrivateVideoWindows");
     var root = options["Root"]; var storeId = options["StoreId"]; var operators = options.GetSection("TrustedOperatorSids").Get<string[]>() ?? [];
@@ -388,6 +400,7 @@ app.MapProcurementDisbursementEndpoints();
 app.MapProcurementSettlementEndpoints();
 app.MapProcurementReceivingEndpoints();
 app.MapProcurementInspectionEndpoints();
+app.MapSupplierDocumentEndpoints();
 app.MapOrderDraftEndpoints();
 app.MapOrderSubmissionEndpoints();
 app.MapOrderDecisionEndpoints();

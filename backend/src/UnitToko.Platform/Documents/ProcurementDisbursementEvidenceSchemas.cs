@@ -52,15 +52,15 @@ internal static partial class ProcurementDisbursementEvidenceSchemas
                 options.GetValue("validationLevel", "") != "strict" || options.GetValue("validationAction", "") != "error" ||
                 options.GetValue("capped", false).AsBoolean || options.Contains("timeseries") || options.Contains("expireAfterSeconds") || options.Contains("encryptedFields") ||
                 options.TryGetValue("collation", out var collation) && !UnitToko.Platform.Billing.InvoiceStorage.Simple(collation) ||
-                !ProcurementInspectionEvidenceSchemas.Supports(name, options.GetValue("validator", new BsonDocument()).AsBsonDocument, required))
+                !SupplierDocumentEvidenceSchemas.Supports(name, options.GetValue("validator", new BsonDocument()).AsBsonDocument, required))
                 throw new UnitToko.Platform.Mongo.PersistenceConflictException("evidence_storage_unavailable", "Evidence storage is not ready");
             try { PaymentEvidenceMigration.RequireIndexes(name, await (await database.GetCollection<BsonDocument>(name).Indexes.ListAsync(ct)).ToListAsync(ct)); }
             catch (InvalidOperationException) { throw new UnitToko.Platform.Mongo.PersistenceConflictException("evidence_storage_unavailable", "Evidence storage is not ready"); }
         }
         foreach (var name in EvidenceAccessSchemas.Collections)
-            await ProcurementInspectionEvidenceSchemas.RequireCompatibleStorageAsync(database, name, name == "evidenceReadLeases" ? Validator(name) : EvidenceAccessSchemas.Validator(name), EvidenceAccessSchemas.Key(name), ct);
+            await SupplierDocumentEvidenceSchemas.RequireCompatibleStorageAsync(database, name, name == "evidenceReadLeases" ? Validator(name) : EvidenceAccessSchemas.Validator(name), EvidenceAccessSchemas.Key(name), ct);
         foreach (var name in new[] { "evidencePins", "evidencePinAudits" })
-            await ProcurementInspectionEvidenceSchemas.RequireCompatibleStorageAsync(database, name, name == "evidencePins" ? Validator(name) : PaymentSubmissionSchemas.Validator(name), PaymentSubmissionSchemas.Key(name), ct);
+            await SupplierDocumentEvidenceSchemas.RequireCompatibleStorageAsync(database, name, name == "evidencePins" ? Validator(name) : PaymentSubmissionSchemas.Validator(name), PaymentSubmissionSchemas.Key(name), ct);
     }
     private static BsonValue Translate(BsonValue value) {
         if (value.IsString) return value.AsString switch {

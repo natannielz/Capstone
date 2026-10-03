@@ -78,12 +78,12 @@ public sealed record ExtractionResult
         string status, string? failureCode, IEnumerable<RecognizedLine> lines) {
         ExtractionBounds.Text(jobId, 128);
         if (!Enum.IsDefined(purpose) || status is not ("succeeded" or "failed") ||
-            (status == "succeeded" ? failureCode is not null || purpose != ExtractionPurpose.Payment : failureCode is not ("ocr_unavailable" or "ocr_timeout" or "ocr_invalid_output" or "ocr_integrity_mismatch" or "ocr_invalid_media" or "ocr_unsupported_purpose"))) throw ExtractionBounds.Invalid();
+            (status == "succeeded" ? failureCode is not null || purpose is not (ExtractionPurpose.Payment or ExtractionPurpose.SupplierInvoice) : failureCode is not ("ocr_unavailable" or "ocr_timeout" or "ocr_invalid_output" or "ocr_integrity_mismatch" or "ocr_invalid_media" or "ocr_unsupported_purpose"))) throw ExtractionBounds.Invalid();
         Lines = ExtractionBounds.Lines(lines);
         if (status == "failed" && Lines.Count != 0) throw ExtractionBounds.Invalid();
         JobId = jobId; Evidence = evidence ?? throw ExtractionBounds.Invalid(); Purpose = purpose; Provenance = provenance ?? throw ExtractionBounds.Invalid();
         Status = status; FailureCode = failureCode;
-        var parsed = status == "succeeded" ? PaymentFieldExtractor.Extract(Lines) : new PaymentExtraction(Array.Empty<FieldCandidate>(), Array.Empty<string>());
+        var parsed = status == "succeeded" && purpose == ExtractionPurpose.Payment ? PaymentFieldExtractor.Extract(Lines) : new PaymentExtraction(Array.Empty<FieldCandidate>(), Array.Empty<string>());
         Fields = parsed.Fields; QualityFlags = parsed.QualityFlags;
     }
 }

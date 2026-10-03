@@ -1,4 +1,7 @@
 const labels: Record<string, string> = {
+  "procurement.supplier.document.record": "Catat invoice atau SPH pemasok",
+  "procurement.supplier.document.evidence.read": "Lihat gambar asli dan saran pembacaan dokumen pemasok",
+  "procurement.supplier.document.match": "Tinjau pencocokan invoice dan SPH pemasok",
   "procurement.inspection.record": "Catat pemeriksaan barang pengadaan dengan verifikasi terbaru",
   "procurement.inspection.evidence.read": "Lihat video asli pemeriksaan pengadaan dalam cakupan",
   "bank.receipt.read": "Membaca riwayat penerimaan bank",

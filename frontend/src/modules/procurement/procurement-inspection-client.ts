@@ -62,6 +62,7 @@ const purpose = 'inspection-review';
 const ensure = (current: () => boolean) => { if (!current()) throw new RequestNotSentError(409, 'procurement_inspection_view_stale'); };
 const after = (current: () => boolean) => { if (!current()) throw new AccessFailure(503, 'commit_outcome_unknown'); };
 export type InspectionInput = z.infer<typeof input>;
+export const procurementInspectionSourceSchemas = { order, notice, receipt, input, inspectionLine, location };
 export type InspectionLine = z.infer<typeof inspectionLine>;
 export type InspectionChoice = z.infer<typeof choice>;
 export type InspectionChoices = z.infer<typeof choicePage>;

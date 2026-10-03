@@ -8,6 +8,18 @@ namespace UnitToko.Tests.Documents;
 public sealed class EvidenceAdmissionContractTests
 {
     [Fact]
+    public void Supplier_document_images_cannot_be_admitted_under_another_owner_or_as_video() {
+        var supplier = new EvidenceTargetRef(EvidenceTargetKind.SupplierDocument, 9);
+        Assert.Equal(supplier, new ReserveEvidenceImage(supplier, EvidencePurpose.SupplierDocumentImage, 1).Target);
+        foreach (var purpose in Enum.GetValues<EvidencePurpose>().Where(value => value != EvidencePurpose.SupplierDocumentImage))
+            Assert.Throws<DomainValidationException>(() => new ReserveEvidenceImage(supplier, purpose, 1));
+        foreach (var kind in Enum.GetValues<EvidenceTargetKind>().Where(value => value != EvidenceTargetKind.SupplierDocument))
+            Assert.Throws<DomainValidationException>(() => new ReserveEvidenceImage(new(kind, 9), EvidencePurpose.SupplierDocumentImage, 1));
+        Assert.Throws<DomainValidationException>(() => new ReserveEvidenceVideo(supplier, 1));
+        Assert.Throws<DomainValidationException>(() => new ReserveCatalogImage(supplier));
+    }
+
+    [Fact]
     public void Payment_purpose_is_bound_to_payment_owner_only() {
         var payment = new EvidenceTargetRef(EvidenceTargetKind.PaymentDeclaration, 9);
         Assert.Equal(payment, new ReserveEvidenceImage(payment, EvidencePurpose.PaymentImage, 1).Target);

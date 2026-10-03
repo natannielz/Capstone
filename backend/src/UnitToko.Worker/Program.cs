@@ -25,6 +25,7 @@ builder.Services.AddSingleton<CollectionMigrations>();
 var evidenceOptions = migrate ? null : builder.Configuration.GetSection("Evidence:Validation").Get<EvidenceValidationRuntimeOptions>();
 var videoOptions = migrate ? null : builder.Configuration.GetSection("Evidence:VideoValidation").Get<VideoValidationRuntimeOptions>();
 var ocrOptions = migrate ? null : builder.Configuration.GetSection("Evidence:PaymentOcr").Get<PaymentOcrRuntimeOptions>();
+var supplierOcrOptions = migrate ? null : builder.Configuration.GetSection("Evidence:SupplierDocumentOcr").Get<SupplierDocumentOcrRuntimeOptions>();
 var paymentNotices = !migrate && builder.Configuration.GetValue<bool>("Notifications:PaymentReviewInApp:Enabled");
 if (evidenceOptions is not null) {
     builder.Services.AddSingleton(sp => EvidenceValidationRuntime.Create(sp.GetRequiredService<IMongoDatabase>(), sp.GetRequiredService<MongoUnitOfWork>(),
@@ -37,9 +38,15 @@ if (ocrOptions is not null) {
     builder.Services.AddHostedService<PaymentOcrWorker>();
 }
 if (videoOptions is not null) {
+    // Video and supplier OCR require independent, explicitly configured worker approvals.
     builder.Services.AddSingleton(sp => VideoValidationRuntime.Create(sp.GetRequiredService<IMongoDatabase>(), sp.GetRequiredService<MongoUnitOfWork>(),
         sp.GetRequiredService<IdAllocator>(), sp.GetRequiredService<IClock>(), videoOptions));
     builder.Services.AddHostedService<VideoValidationWorker>();
+}
+if (supplierOcrOptions is not null) {
+    builder.Services.AddSingleton(sp => SupplierDocumentOcrRuntime.Create(sp.GetRequiredService<IMongoDatabase>(), sp.GetRequiredService<MongoUnitOfWork>(),
+        sp.GetRequiredService<IdAllocator>(), sp.GetRequiredService<IClock>(), supplierOcrOptions));
+    builder.Services.AddHostedService<SupplierDocumentOcrWorker>();
 }
 if (paymentNotices) {
     builder.Services.AddSingleton<PaymentReviewNotifications>();
@@ -61,6 +68,8 @@ if (videoOptions is null) logger.LogWarning("Private video validation is unconfi
 else logger.LogInformation("Private video validation pipeline configured: {PipelineId}; current host, scanner and worker approvals remain required", host.Services.GetRequiredService<VideoValidationRuntime>().PipelineId);
 if (ocrOptions is null) logger.LogWarning("Payment OCR is unconfigured; OCR jobs will not be claimed.");
 else logger.LogInformation("Payment OCR pipeline configured: {PipelineId}; current host and model approvals remain required", host.Services.GetRequiredService<PaymentOcrRuntime>().PipelineId);
+if (supplierOcrOptions is null) logger.LogWarning("Supplier document OCR is unconfigured; supplier OCR jobs will not be claimed.");
+else logger.LogInformation("Supplier document OCR pipeline configured: {PipelineId}; current host and model approvals remain required", host.Services.GetRequiredService<SupplierDocumentOcrRuntime>().PipelineId);
 if (!paymentNotices) logger.LogWarning("Payment in-app notices are unconfigured; review events will remain pending.");
 else logger.LogInformation("Payment in-app notice worker enabled; availability is private and sends no external messages");
 await host.RunAsync();

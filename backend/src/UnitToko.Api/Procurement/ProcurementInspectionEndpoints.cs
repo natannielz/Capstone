@@ -130,18 +130,18 @@ public static class ProcurementInspectionEndpoints {
     private static EvidenceRef Reference(PaymentEvidenceReferenceDto value) => value is null ? throw ProcurementInspectionRules.Invalid() : new(value.Id.Value, LongId.Parse(value.Version).Value, value.Sha256);
     private static PaymentEvidenceReferenceDto Reference(EvidenceRef value) => new(new(value.Id), value.Version.ToString(CultureInfo.InvariantCulture), value.Sha256);
     private static PaymentEvidenceReferenceDto Evidence(BsonValue value) => new(new(value["id"].AsInt64), Number(value["version"]), value["sha256"].AsString);
-    private static ProcurementInspectionInputDto Input(BsonValue row) => new(R.Location(row["location"]), new(row["noticeId"].AsInt64), new(row["intakeId"].AsInt64), row["inspectionDate"].AsString,
+    internal static ProcurementInspectionInputDto Input(BsonValue row) => new(R.Location(row["location"]), new(row["noticeId"].AsInt64), new(row["intakeId"].AsInt64), row["inspectionDate"].AsString,
         row["inspectionReference"].AsString, row["inspectedContainers"].AsInt32, [.. row["lines"].AsBsonArray.Select(item => new ProcurementInspectionLineInputDto(new(item["requestSkuId"].AsInt64), new(item["definitionId"].AsInt64), Number(item["definitionVersion"]),
             item["declaredPackages"].AsInt32, item["receivedPackages"].AsInt32, item["damagedPackages"].AsInt32, item["expiredPackages"].AsInt32, item["openedPackages"].AsInt32,
             Text(item["lotCode"]), Text(item["expiryDate"]), Text(item["putawayReference"]), Text(item["discrepancy"])))], Text(row["discrepancy"]));
     private static ProcurementInspectionCapacityDto Capacity(BsonValue row) => new(Number(row["version"]), Number(row["receivedContainers"]), Number(row["inspectedContainers"]), Number(row["remainingContainers"]));
-    private static ProcurementArrivalNoticeDto Notice(BsonValue row) {
+    internal static ProcurementArrivalNoticeDto Notice(BsonValue row) {
         var input = row["input"];
         return new(new(row["id"].AsInt64), Number(row["version"]), new(R.Location(input["location"]), new(input["orderId"].AsInt64), Number(input["orderVersion"]), new(input["orderApprovalId"].AsInt64),
             input["noticeDate"].AsString, input["supplierDocumentReference"].AsString, Text(input["ddoRequestReference"]), Text(input["ddoTelephoneReference"]), input["declaredContainers"].AsInt32, input["note"].AsString),
             ProcurementFundingEndpoints.Order(row["order"]), R.Source(row["source"]), Date(row["recordedAt"]), row["reason"].AsString, row["state"].AsString);
     }
-    private static ProcurementContainerReceiptDto Intake(BsonValue row) {
+    internal static ProcurementContainerReceiptDto Intake(BsonValue row) {
         var input = row["input"];
         return new(new(row["id"].AsInt64), new(row["noticeId"].AsInt64), Number(row["version"]), new(input["receivedDate"].AsString, input["intakeReference"].AsString,
             input["matchedContainers"].AsInt32, input["excessContainers"].AsInt32, input["heldContainers"].AsInt32, input["condition"].AsString, Text(input["discrepancy"])), Date(row["recordedAt"]), row["reason"].AsString, row["state"].AsString);

@@ -123,6 +123,7 @@ public sealed class ProcurementInspectionMigrationTests(MongoFixture fixture)
 
     internal static async Task RestoreV68Async(IMongoDatabase database)
     {
+        await SupplierDocumentMigrationTests.RestoreV69Async(database);
         var history = await HistoryAsync(database);
         if (history.Count <= 68) { Assert.All(history, row => Assert.Equal("applied", row["state"])); return; }
         Assert.Equal(69, history.Count); Assert.All(history, row => Assert.Equal("applied", row["state"]));
@@ -192,7 +193,8 @@ public sealed class ProcurementInspectionMigrationTests(MongoFixture fixture)
         var after = await DefinitionsAsync(database); Assert.Equal(before.Count, after.Count);
         foreach (var prior in before) {
             var name = prior["name"].AsString; var expected = prior.DeepClone().AsBsonDocument;
-            if (ProcurementInspectionEvidenceSchemas.Collections.Contains(name)) expected["options"]["validator"] = ProcurementInspectionEvidenceSchemas.Extend(name, prior["options"]["validator"].AsBsonDocument);
+            if (ProcurementInspectionEvidenceSchemas.Collections.Contains(name)) expected["options"]["validator"] = SupplierDocumentEvidenceSchemas.Extend(name,
+                ProcurementInspectionEvidenceSchemas.Extend(name, prior["options"]["validator"].AsBsonDocument));
             Assert.Equal(expected, Assert.Single(after, row => row["name"] == name));
         }
     }

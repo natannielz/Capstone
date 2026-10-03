@@ -147,10 +147,11 @@ internal sealed partial class EvidenceService
         var payout = target.PayoutUploaderId is not null || target.PayoutReservationId is not null || target.PayoutId is not null;
         var disbursement = target.DisbursementUploaderId is not null || target.DisbursementReservationId is not null || target.DisbursementId is not null;
         var inspection = target.InspectionUploaderId is not null || target.InspectionReservationId is not null || target.InspectionId is not null;
-        if ((payment ? 1 : 0) + (payout ? 1 : 0) + (disbursement ? 1 : 0) + (inspection ? 1 : 0) > 1) throw Invalid("evidence_actor_or_owner_denied");
+        var supplierDocument = target.SupplierDocumentUploaderId is not null || target.SupplierDocumentReservationId is not null || target.SupplierDocumentId is not null;
+        if ((payment ? 1 : 0) + (payout ? 1 : 0) + (disbursement ? 1 : 0) + (inspection ? 1 : 0) + (supplierDocument ? 1 : 0) > 1) throw Invalid("evidence_actor_or_owner_denied");
         // A submitted payment also carries its immutable association for the original
         // uploader. Only a separately authorized reader supplies an uploader override.
-        RequireAuthority(bundle, target, actor, target.ReviewUploaderId is null && target.PayoutUploaderId is null && target.DisbursementUploaderId is null && target.InspectionUploaderId is null);
+        RequireAuthority(bundle, target, actor, target.ReviewUploaderId is null && target.PayoutUploaderId is null && target.DisbursementUploaderId is null && target.InspectionUploaderId is null && target.SupplierDocumentUploaderId is null);
         if (payment && (target.Target.Kind != EvidenceTargetKind.PaymentDeclaration ||
             target.SubmittedSubmissionId is not > 0 || target.SubmittedReservationId != bundle.Reservation["_id"].AsInt64 ||
             target.ReviewUploaderId is { } uploader && (uploader <= 0 || bundle.Reservation["uploader"]["userId"] != uploader)))
@@ -164,12 +165,15 @@ internal sealed partial class EvidenceService
         if (inspection && (target.InspectionUploaderId is not > 0 || target.Target.Kind != EvidenceTargetKind.ProcurementInspection ||
             target.InspectionId is not > 0 || target.InspectionReservationId != bundle.Reservation["_id"].AsInt64 || bundle.Reservation["uploader"]["userId"] != target.InspectionUploaderId.Value))
             throw Invalid("evidence_actor_or_owner_denied");
+        if (supplierDocument && (target.SupplierDocumentUploaderId is not > 0 || target.Target.Kind != EvidenceTargetKind.SupplierDocument ||
+            target.SupplierDocumentId is not > 0 || target.SupplierDocumentReservationId != bundle.Reservation["_id"].AsInt64 || bundle.Reservation["uploader"]["userId"] != target.SupplierDocumentUploaderId.Value))
+            throw Invalid("evidence_actor_or_owner_denied");
     }
     private Task<BsonDocument> LoadReadLeaseAsync(IClientSessionHandle tx, EvidenceReadClaim claim, CancellationToken ct) =>
         LoadReadLeaseAsync(tx, claim.Id, claim.Token, claim.ReservationId, ct);
     private async Task<BsonDocument> LoadReadLeaseAsync(IClientSessionHandle tx, long id, string token, long reservationId, CancellationToken ct) {
         var row = await Rows("evidenceReadLeases").Find(tx, new BsonDocument("$and", new BsonArray {
-            new BsonDocument { { "_id", id }, { "token", token }, { "reservationId", reservationId } }, ProcurementInspectionEvidenceSchemas.Validator("evidenceReadLeases") })).SingleOrDefaultAsync(ct)
+            new BsonDocument { { "_id", id }, { "token", token }, { "reservationId", reservationId } }, SupplierDocumentEvidenceSchemas.Validator("evidenceReadLeases") })).SingleOrDefaultAsync(ct)
             ?? throw Conflict("evidence_read_lease_expired");
         var audit = await Rows("evidenceReadAudits").Find(tx, F.Eq("_id", row["lastAuditId"])).SingleOrDefaultAsync(ct);
         var kind = row["state"] == "provisional" ? "acquired" : row["state"] == "released" ? "released" : row["revision"] == 2L ? "activated" : "renewed";

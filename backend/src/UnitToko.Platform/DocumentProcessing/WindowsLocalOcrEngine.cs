@@ -20,21 +20,25 @@ internal sealed class WindowsLocalOcrEngine : ILocalOcrEngine
     internal const string Engine = "tesseract-5.5.3/tesserocr-2.11.0";
     internal const string Preprocessing = "original-rgb-psm6-ind+eng-v1/" + PaymentFieldExtractor.Version;
     private readonly LocalOcrOptions options;
+    private readonly ExtractionPurpose purpose;
     public ExtractionProvenance Provenance { get; }
     internal LocalOcrMeasurement? LastMeasurement { get; private set; }
-    internal WindowsLocalOcrEngine(LocalOcrOptions options) {
+    internal WindowsLocalOcrEngine(LocalOcrOptions options, ExtractionPurpose purpose = ExtractionPurpose.Payment) {
         ArgumentNullException.ThrowIfNull(options);
+        if (purpose is not (ExtractionPurpose.Payment or ExtractionPurpose.SupplierInvoice)) throw new ArgumentException("Unsupported OCR purpose", nameof(purpose));
+        this.purpose = purpose;
         // Freeze the configuration; a mutable collection supplied by composition cannot change an in-flight model.
         this.options = options with { Files = Array.AsReadOnly(options.Files.ToArray()) };
         var models = this.options.Files.Where(f => Path.GetDirectoryName(f.Path) == options.ModelRoot).OrderBy(f => Path.GetFileName(f.Path), StringComparer.Ordinal).ToArray();
         if (models.Length != 2 || !models.Select(f => Path.GetFileName(f.Path)).SequenceEqual(new[] { "eng.traineddata", "ind.traineddata" })) throw new ArgumentException("OCR language pins are incomplete");
         Provenance = new(Engine, options.ModelVersion, Digest(models.Select(f => Path.GetFileName(f.Path) + ":" + f.Sha256)),
-            Digest(this.options.Files.OrderBy(f => f.Path, StringComparer.OrdinalIgnoreCase).Select(f => f.Path + ":" + f.Sha256)), Preprocessing);
+            Digest(this.options.Files.OrderBy(f => f.Path, StringComparer.OrdinalIgnoreCase).Select(f => f.Path + ":" + f.Sha256)),
+            purpose == ExtractionPurpose.Payment ? Preprocessing : "original-rgb-psm6-ind+eng-v1/" + SupplierDocumentFieldExtractor.Version);
     }
     public async Task<ExtractionResult> ExtractAsync(string jobId, EvidenceRef evidence, ExtractionPurpose purpose, Stream validatedBytes, CancellationToken cancellationToken) {
         cancellationToken.ThrowIfCancellationRequested();
         LastMeasurement = null;
-        if (purpose != ExtractionPurpose.Payment) return Failed("ocr_unsupported_purpose");
+        if (purpose != this.purpose) return Failed("ocr_unsupported_purpose");
         if (!OperatingSystem.IsWindows() || RuntimeInformation.ProcessArchitecture != Architecture.X64) return Failed("ocr_unavailable");
         var pins = new List<FileStream>(); var elapsed = Stopwatch.StartNew();
         try {

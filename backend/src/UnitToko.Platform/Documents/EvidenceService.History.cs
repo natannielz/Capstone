@@ -57,6 +57,7 @@ internal sealed partial class EvidenceService
             "RefundPayout" => target.Kind == EvidenceTargetKind.RefundPayout && target.Id == pin["refundPayoutDraftId"].AsInt64,
             "ProcurementDisbursement" => target.Kind == EvidenceTargetKind.ProcurementDisbursement && target.Id == pin["procurementDisbursementDraftId"].AsInt64,
             "ProcurementInspection" => target.Kind == EvidenceTargetKind.ProcurementInspection && target.Id == pin["procurementInspectionDraftId"].AsInt64,
+            "SupplierDocument" => target.Kind == EvidenceTargetKind.SupplierDocument && target.Id == pin["supplierDocumentDraftId"].AsInt64,
             _ => false };
         if (!bound || !pin["reference"].Equals(ReadReference(reference)) || pin["actorId"] != bundle.Reservation["uploader"]["userId"] ||
             pin["versionRowId"] != bundle.Version["_id"] || pin["storeId"] != bundle.Version["storeId"] || pin["generation"] != bundle.Version["generation"] ||

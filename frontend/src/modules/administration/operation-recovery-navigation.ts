@@ -1,4 +1,5 @@
 export function recoveryPage(operation: string) {
+  if (/^procurement\.supplierdocument\.(draft|submit|match)$(?![\s\S])/.test(operation) || operation === "evidence.supplier-document-image.reserve") return { href: "/procurement/supplier-documents", label: "halaman dokumen pemasok" };
   if (/^procurement\.inspection\.(draft|submit)$(?![\s\S])/.test(operation) || operation === 'evidence.procurement-unboxing-video.reserve') return { href: '/procurement/inspections', label: 'halaman pemeriksaan barang pengadaan' };
   if (/^procurement\.receiving\.(notice|intake)$(?![\s\S])/.test(operation)) return { href: "/procurement/receiving", label: "halaman penerimaan pengadaan" };
   if (operation === 'procurement.settlement.verify') return { href: '/procurement/settlements', label: 'halaman verifikasi debit pemasok' };
@@ -53,6 +54,10 @@ export function recoveryPage(operation: string) {
     : { href: "/administration/person-reviews", label: "halaman peninjauan orang" };
 }
 export function operationLabel(operation: string) {
+  if (operation === "procurement.supplierdocument.draft") return "Draf dokumen pemasok";
+  if (operation === "procurement.supplierdocument.submit") return "Pengajuan dokumen pemasok dengan gambar asli";
+  if (operation === "procurement.supplierdocument.match") return "Pencocokan dokumen pemasok";
+  if (operation === "evidence.supplier-document-image.reserve") return "Persiapan unggah gambar dokumen pemasok";
   if (operation === 'procurement.inspection.draft') return 'Draf pemeriksaan barang pengadaan';
   if (operation === 'procurement.inspection.submit') return 'Pengajuan hasil pemeriksaan dalam karantina';
   if (operation === 'evidence.procurement-unboxing-video.reserve') return 'Persiapan unggah video pembukaan koli';

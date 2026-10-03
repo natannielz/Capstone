@@ -72,14 +72,14 @@ internal static partial class ProcurementInspectionEvidenceSchemas
                 options.GetValue("validationLevel", "") != "strict" || options.GetValue("validationAction", "") != "error" ||
                 options.GetValue("capped", false).AsBoolean || options.Contains("timeseries") || options.Contains("expireAfterSeconds") || options.Contains("encryptedFields") ||
                 options.TryGetValue("collation", out var collation) && !InvoiceStorage.Simple(collation) ||
-                !InventorySchemas.Contains(options.GetValue("validator", new BsonDocument()).AsBsonDocument, Validator(name))) throw Unavailable();
+                !SupplierDocumentEvidenceSchemas.Supports(name, options.GetValue("validator", new BsonDocument()).AsBsonDocument, Validator(name))) throw Unavailable();
             try { PaymentEvidenceMigration.RequireIndexes(name, await (await database.GetCollection<BsonDocument>(name).Indexes.ListAsync(ct)).ToListAsync(ct)); }
             catch (InvalidOperationException) { throw Unavailable(); }
         }
         foreach (var name in EvidenceAccessSchemas.Collections)
-            await InventoryRepository.RequireStorageAsync(database, name, Validator(name), EvidenceAccessSchemas.Key(name), ct);
+            await SupplierDocumentEvidenceSchemas.RequireCompatibleStorageAsync(database, name, Validator(name), EvidenceAccessSchemas.Key(name), ct);
         foreach (var name in new[] { "evidencePins", "evidencePinAudits" })
-            await InventoryRepository.RequireStorageAsync(database, name, Validator(name), PaymentSubmissionSchemas.Key(name), ct);
+            await SupplierDocumentEvidenceSchemas.RequireCompatibleStorageAsync(database, name, Validator(name), PaymentSubmissionSchemas.Key(name), ct);
         foreach (var name in NewCollections)
             await InventoryRepository.RequireStorageAsync(database, name, Validator(name), Key(name), ct);
     }
