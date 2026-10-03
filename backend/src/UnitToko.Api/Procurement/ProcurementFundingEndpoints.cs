@@ -129,7 +129,7 @@ public static class ProcurementFundingEndpoints
         [.. value["eligibleRoutes"].AsBsonArray.Select(route => route.AsString)], value["allowInstallments"].AsBoolean, value["reserveUndisbursed"].AsBoolean,
         value["requiresAdditionalBudgetSource"].AsBoolean, value["requiresAdditionalLimitSource"].AsBoolean, value["operatingOwnerReference"].AsString,
         value["procedureReference"].AsString, value["approvalReference"].AsString, Date(value["approvedAt"]), Date(value["expiresAt"]), value["active"].AsBoolean);
-    private static ProcurementFundingOrderDto Order(BsonValue value) => new(new(value["id"].AsInt64), Number(value["version"]), new(value["approvalId"].AsInt64), new(value["proposalId"].AsInt64),
+    internal static ProcurementFundingOrderDto Order(BsonValue value) => new(new(value["id"].AsInt64), Number(value["version"]), new(value["approvalId"].AsInt64), new(value["proposalId"].AsInt64),
         value["route"].AsString, value["businessDate"].AsString, value["currency"].AsString, PurchaseOrderEndpoints.Supplier(value["supplier"]), Amount(value["total"]), Amount(value["requiredAdvance"]),
         new(value["paymentTerms"]["kind"].AsString, value["paymentTerms"]["description"].AsString, Amount(value["paymentTerms"]["requiredAdvance"]),
             value["paymentTerms"]["balanceTrigger"].AsString, Text(value["paymentTerms"]["dueDate"])),

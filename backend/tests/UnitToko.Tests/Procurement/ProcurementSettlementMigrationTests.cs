@@ -61,7 +61,7 @@ public sealed class ProcurementSettlementMigrationTests(MongoFixture fixture)
         Assert.Equal(ProcurementBankClaimSchemas.Extend(definition["options"]["validator"].AsBsonDocument), after["options"]["validator"]);
         Assert.True(InventorySchemas.Contains(after["options"]["validator"].AsBsonDocument, guard));
         await RequireInstalledIndexesAsync(data.Database);
-        Assert.Equal(67, (await HistoryAsync(data.Database)).Count);
+        Assert.Equal(CollectionMigrations.CurrentVersion, (await HistoryAsync(data.Database)).Count);
         var applied = await HistoryAsync(data.Database); var completedDefinitions = await DefinitionsAsync(data.Database); var completedIndexes = await IndexesAsync(data.Database);
         await new CollectionMigrations(data.Database, data.Clock).ApplyAsync();
         Assert.Equal(applied, await HistoryAsync(data.Database)); Assert.Equal(completedDefinitions, await DefinitionsAsync(data.Database));
@@ -132,6 +132,7 @@ public sealed class ProcurementSettlementMigrationTests(MongoFixture fixture)
 
     internal static async Task RestoreV66Async(IMongoDatabase database)
     {
+        await ProcurementReceivingMigrationTests.RestoreV67Async(database);
         IMongoCollection<BsonDocument> Rows(string name) => database.GetCollection<BsonDocument>(name);
         var history = await HistoryAsync(database);
         if (history.Count <= 66) { Assert.All(history, row => Assert.Equal("applied", row["state"])); return; }
