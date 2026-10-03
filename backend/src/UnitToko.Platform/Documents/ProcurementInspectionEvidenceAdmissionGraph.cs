@@ -13,7 +13,14 @@ namespace UnitToko.Platform.Documents;
 internal static class ProcurementInspectionEvidenceAdmissionGraph
 {
     private static readonly string[] IdCollections = ["evidenceLineages", "documentVersions", "evidenceUploadReservations", "evidenceUploadAttempts"];
-    internal static async Task ValidateAsync(IMongoDatabase database, MigrationLease lease, CancellationToken ct)
+    internal static Task ValidateAsync(IMongoDatabase database, MigrationLease lease, CancellationToken ct) =>
+        ValidateAsync(database, lease, ReserveOperation, CompleteOperation, ct);
+    internal static Task ValidateSupplierDocumentAsync(IMongoDatabase database, MigrationLease lease, CancellationToken ct) =>
+        ValidateAsync(database, lease,
+            row => row["target"]["kind"] == "SupplierDocument" ? "evidence.supplier-document-image.reserve" : ReserveOperation(row),
+            row => row["target"]["kind"] == "SupplierDocument" ? "evidence.supplier-document-image.complete" : CompleteOperation(row), ct);
+    private static async Task ValidateAsync(IMongoDatabase database, MigrationLease lease,
+        Func<BsonDocument, string> reserveOperation, Func<BsonDocument, string> completeOperation, CancellationToken ct)
     {
         IMongoCollection<BsonDocument> Rows(string name) => database.GetCollection<BsonDocument>(name).WithReadConcern(ReadConcern.Majority);
         async Task<BsonDocument> Get(string name, BsonValue id)
@@ -66,8 +73,8 @@ internal static class ProcurementInspectionEvidenceAdmissionGraph
             if (reserveAudit["bodyHash"] != r["bodyHash"] || reserveAudit["evidence"]["from"]["reservation"] != 0L ||
                 reserveAudit["evidence"]["to"]["reservation"] != 1L) throw Bad("reserve audit");
             var receipt = await OneAsync(Rows("idempotencyRecords"), new BsonDocument {
-                { "actorId", r["uploader"]["userId"] }, { "operation", ReserveOperation(r) }, { "key", r["key"] } }, ct);
-            RequireReceipt(receipt, r, v, r["reserveAuditId"], false);
+                { "actorId", r["uploader"]["userId"] }, { "operation", reserveOperation(r) }, { "key", r["key"] } }, ct);
+            RequireReceipt(receipt, r, v, r["reserveAuditId"], false, reserveOperation, completeOperation);
 
             if (r["state"] == "quarantined")
             {
@@ -76,14 +83,14 @@ internal static class ProcurementInspectionEvidenceAdmissionGraph
                 if (audit["bodyHash"] != CompletionHash(r, v) || v["quarantinedAt"] != audit["createdAt"] ||
                     audit["evidence"]["to"]["reservation"] != r["revision"]) throw Bad("completion audit");
                 var completeReceipt = await OneAsync(Rows("idempotencyRecords"), new BsonDocument {
-                    { "actorId", r["uploader"]["userId"] }, { "operation", CompleteOperation(r) }, { "key", CompletionKey(r) } }, ct);
-                RequireReceipt(completeReceipt, r, v, r["completionAuditId"], true);
+                    { "actorId", r["uploader"]["userId"] }, { "operation", completeOperation(r) }, { "key", CompletionKey(r) } }, ct);
+                RequireReceipt(completeReceipt, r, v, r["completionAuditId"], true, reserveOperation, completeOperation);
                 var message = await OneAsync(Rows("outboxEvents"), new BsonDocument("sourceKey", SourceKey(v)), ct);
                 if (message["kind"] != (r["purpose"] == "ProcurementUnboxingVideo" ? "evidence.video-validation.requested" : "evidence.validation.requested") || !Same(message["payload"], Payload(r, v))) throw Bad("completion outbox");
             }
             else
             {
-                if (await Rows("idempotencyRecords").Find(new BsonDocument { { "operation", CompleteOperation(r) }, { "evidenceAdmission.reservationId", r["_id"] } }).Limit(1).AnyAsync(ct) ||
+                if (await Rows("idempotencyRecords").Find(new BsonDocument { { "operation", completeOperation(r) }, { "evidenceAdmission.reservationId", r["_id"] } }).Limit(1).AnyAsync(ct) ||
                     await Rows("outboxEvents").Find(new BsonDocument("sourceKey", SourceKey(v))).Limit(1).AnyAsync(ct)) throw Bad("premature completion");
             }
 
@@ -131,8 +138,8 @@ internal static class ProcurementInspectionEvidenceAdmissionGraph
         await EvidenceMigration.EachAsync(Rows("idempotencyRecords"), EvidenceSchemas.Condition("idempotencyRecords")!, async receipt =>
         {
             var r = await Get("evidenceUploadReservations", receipt["evidenceAdmission"]["reservationId"]);
-            var complete = receipt["operation"] == CompleteOperation(r);
-            RequireReceipt(receipt, r, await Get("documentVersions", r["versionRowId"]), r[complete ? "completionAuditId" : "reserveAuditId"], complete);
+            var complete = receipt["operation"] == completeOperation(r);
+            RequireReceipt(receipt, r, await Get("documentVersions", r["versionRowId"]), r[complete ? "completionAuditId" : "reserveAuditId"], complete, reserveOperation, completeOperation);
         }, lease, ct);
         await EvidenceMigration.EachAsync(Rows("outboxEvents"), EvidenceSchemas.Condition("outboxEvents")!, async message =>
         {
@@ -174,10 +181,11 @@ internal static class ProcurementInspectionEvidenceAdmissionGraph
         if (evidence["reservationId"] != r["_id"]) throw Bad("audit reservation");
         if (kind is not ("evidence.reserve" or "evidence.quarantine") && !audit["bodyHash"].IsBsonNull) throw Bad("audit fingerprint");
     }
-    private static void RequireReceipt(BsonDocument receipt, BsonDocument r, BsonDocument v, BsonValue auditId, bool completed)
+    private static void RequireReceipt(BsonDocument receipt, BsonDocument r, BsonDocument v, BsonValue auditId, bool completed,
+        Func<BsonDocument, string> reserveOperation, Func<BsonDocument, string> completeOperation)
     {
         if (receipt["actorId"] != r["uploader"]["userId"] ||
-            receipt["operation"] != (completed ? CompleteOperation(r) : ReserveOperation(r)) ||
+            receipt["operation"] != (completed ? completeOperation(r) : reserveOperation(r)) ||
             receipt["key"] != (completed ? CompletionKey(r) : r["key"].AsString) ||
             receipt["bodyHash"] != (completed ? CompletionHash(r, v) : r["bodyHash"].AsString) ||
             receipt["evidenceAdmission"]["reservationId"] != r["_id"] || receipt["evidenceAdmission"]["auditId"] != auditId ||

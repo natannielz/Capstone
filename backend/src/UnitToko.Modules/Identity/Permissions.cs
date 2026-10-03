@@ -22,6 +22,7 @@ public static class Permissions
     public const string ShipmentRead = "shipment.read", ShipmentPrepare = "shipment.prepare", ShipmentDispatch = "shipment.dispatch", ShipmentAssign = "shipment.assign", DeliveryAttempt = "delivery.attempt", DeliveryEvidence = "delivery.evidence", DeliveryReturn = "delivery.return", ReceiptAccept = "receipt.accept";
     public const string CaseRead = "case.read", CaseRequest = "case.request", CaseManage = "case.manage";
     public const string ProcurementRead = "procurement.read", ProcurementPrepare = "procurement.prepare", ProcurementApprove = "procurement.approve", SupplierClaim = "supplier.claim";
+    public const string SupplierClaimApprove = "supplier.claim.approve";
     public const string SupplierChangePropose = "supplier.change.propose", SupplierChangeApprove = "supplier.change.approve";
     public const string SupplierBankRead = "supplier.bank.read", SupplierBankDetailsRead = "supplier.bank.details.read", SupplierBankPropose = "supplier.bank.propose", SupplierBankApprove = "supplier.bank.approve";
     public const string HistoryRead = "history.read", ReportRead = "report.read";
@@ -101,6 +102,8 @@ public static class Permissions
         Add(ProcurementSupplierDocumentRecord, Operations, true);
         Add(ProcurementSupplierDocumentMatch, Operations, true);
         Add(ProcurementSupplierDocumentEvidenceRead, Operations);
+        result[SupplierClaim] = result[SupplierClaim] with { Assurance = new(true, TimeSpan.FromMinutes(5)) };
+        Add(SupplierClaimApprove, Operations, true);
         result[FundingRequest] = result[FundingRequest] with { Assurance = new(true, TimeSpan.FromMinutes(5)) };
         result[FundingApprove] = result[FundingApprove] with { Assurance = new(true, TimeSpan.FromMinutes(5)) };
         result[PaymentVerify] = result[PaymentVerify] with { Assurance = new(true, TimeSpan.FromMinutes(5)) };

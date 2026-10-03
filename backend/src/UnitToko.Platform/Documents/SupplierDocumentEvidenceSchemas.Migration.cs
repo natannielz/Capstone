@@ -66,7 +66,10 @@ internal static partial class SupplierDocumentEvidenceSchemas
             indexes.Any(index => InvoiceStorage.Unsafe(index) || index.Contains("partialFilterExpression") ||
                 index["name"] != "_id_" && index.GetValue("unique", false).AsBoolean && !index["key"].Equals(key))) throw Bad(name);
     }
-    internal static async Task RequireHistoriesAsync(IMongoDatabase database, MigrationLease lease, CancellationToken ct) {
+    internal static Task RequireHistoriesAsync(IMongoDatabase database, MigrationLease lease, CancellationToken ct) =>
+        RequireHistoriesAsync(database, lease, null, ct);
+    internal static async Task RequireHistoriesAsync(IMongoDatabase database, MigrationLease lease,
+        Func<IClientSessionHandle, long, CancellationToken, Task<BsonDocument>>? supplierSubmission, CancellationToken ct) {
         var client = database.Client as MongoClient ?? throw Bad("unsupported native database client");
         var documents = new EvidenceService(database, new(client), new(database), new SystemClock());
         var unit = new MongoUnitOfWork(client); var ids = new IdAllocator(database); var clock = new SystemClock();
@@ -98,6 +101,7 @@ internal static partial class SupplierDocumentEvidenceSchemas
                 "RefundPayout" => await new RefundPayoutRecords(database, new SystemClock(), new(client)).PayoutAsync(tx, row["associationId"].AsInt64, false, ct),
                 "ProcurementDisbursement" => await disbursements.RecordAsync(tx, row["associationId"].AsInt64, false, ct),
                 "ProcurementInspection" => await InspectionAsync(tx, row["associationId"].AsInt64),
+                "SupplierDocument" when supplierSubmission is not null => await supplierSubmission(tx, row["associationId"].AsInt64, ct),
                 _ => throw Bad("supplier pin before acceptance") };
             if (!pin.Equals(row) || source["pinId"] != row["_id"]) throw Bad("pin source");
         });

@@ -13,27 +13,8 @@ namespace UnitToko.Platform.Procurement;
 
 public sealed partial class SupplierDocumentService
 {
-    private async Task<List<SupplierDocumentSourceCapacity>> SourceCapacitiesAsync(Context context, Dictionary<long, ProcurementInspectionHistory> inspections, BsonArray links, CancellationToken ct) {
-        var result = new List<SupplierDocumentSourceCapacity>(); var ordersSeen = new HashSet<(long Order, long Sku)>();
-        foreach (var pair in inspections.OrderBy(pair => pair.Key)) {
-            var history = pair.Value; var inspection = history.Submissions.Single(row => row["_id"] == pair.Key);
-            SupplierDocumentRecords.Equal(inspection["location"], R.Location(context.Location));
-            var lines = new BsonArray(inspection["input"]["lines"].AsBsonArray.Select(line => new BsonDocument("packages", line["receivedPackages"])));
-            result.Add(await CapacityAsync(context, "inspection", pair.Key, null, inspection["snapshotHash"].AsString, B.Capacity(lines), ct));
-            foreach (var (table, row) in new[] { (ProcurementReceivingBson.Heads, history.CustodyHead), (ProcurementInspectionBson.Heads, history.Head!),
-                (ProcurementInspectionBson.Drafts, history.Drafts.Single(row => row["_id"] == inspection["draftId"])) })
-                if (!context.ExtraFences.Any(existing => existing.Table == table && existing.Row["_id"] == row["_id"])) context.ExtraFences.Add((table, row));
-            foreach (var link in links.Where(link => !link.IsBsonNull && link["kind"] == "inspection" && link["id"] == pair.Key)) {
-                var key = (link["orderId"].AsInt64, link["requestSkuId"].AsInt64); if (!ordersSeen.Add(key)) continue;
-                var source = history.Source["notice"]["source"]; var quoted = source["proposal"]["input"]["lines"].AsBsonArray.Single(line => line["requestSkuId"] == key.Item2);
-                var maximum = B.Capacity(new BsonArray { new BsonDocument("packages", quoted["packages"]) });
-                maximum.Add("maximumAmounts", new BsonDocument { { "netAmount", Money.Multiply(Money.Parse(quoted["netPricePerPackage"].AsString), quoted["packages"].AsInt32).ToString() },
-                    { "taxAmount", quoted["taxAmount"] }, { "chargeAmount", quoted["supplierChargeAmount"] } });
-                result.Add(await CapacityAsync(context, "order", key.Item1, key.Item2, link["orderHash"].AsString, maximum, ct));
-            }
-        }
-        return result;
-    }
+    private Task<List<SupplierDocumentSourceCapacity>> SourceCapacitiesAsync(Context context, Dictionary<long, ProcurementInspectionHistory> inspections, BsonArray links, CancellationToken ct) =>
+        records.SourceCapacitiesAsync(context.Tx, context.Location, inspections, links, context.ExtraFences, ct);
     private async Task<IReadOnlyList<SupplierDocumentSourceCapacity>> PrepareMatchAsync(Context context, SupplierDocumentMatchInput input, CancellationToken ct) {
         var history = context.History ?? throw B.Broken(); var document = context.Submission ?? throw B.Broken();
         await VerifySourcesAsync(context, ct);

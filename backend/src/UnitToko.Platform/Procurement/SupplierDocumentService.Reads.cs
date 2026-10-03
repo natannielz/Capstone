@@ -16,25 +16,13 @@ public sealed partial class SupplierDocumentService
         await StorageAsync(ct); return await receiving.OrdersAsync(actor, location, beforeId, ct);
     }
     private async Task VerifySourcesAsync(Context context, CancellationToken ct) {
-        var history = context.History ?? throw B.Broken(); var inspections = new Dictionary<long, ProcurementInspectionHistory>(); var links = new BsonArray();
-        foreach (var match in history.Matches) {
-            var resolved = await records.ResolveAsync(context.Tx, history.Document!, B.MatchInput(match["input"]), ct);
-            foreach (var pair in resolved.Inspections) inspections[pair.Key] = pair.Value;
-            foreach (var link in resolved.Links.Where(link => !link.IsBsonNull)) {
-                links.Add(link);
-                if (link["kind"] != "invoice_match") continue;
-                var invoice = await records.SubmissionAsync(context.Tx, link["documentId"].AsInt64, ct);
-                var invoiceHistory = await records.HistoryAsync(context.Tx, invoice["draftId"].AsInt64, ct);
-                foreach (var invoiceMatch in invoiceHistory.Matches) {
-                    var original = await records.ResolveAsync(context.Tx, invoice, B.MatchInput(invoiceMatch["input"]), ct);
-                    foreach (var pair in original.Inspections) inspections[pair.Key] = pair.Value;
-                    foreach (var originalLink in original.Links.Where(value => !value.IsBsonNull)) links.Add(originalLink);
-                }
-                foreach (var pair in new[] { (B.Heads, invoiceHistory.Head), (B.Identities, invoiceHistory.Identity), (B.Drafts, invoiceHistory.Draft) })
-                    if (!context.ExtraFences.Any(value => value.Table == pair.Item1 && value.Row["_id"] == pair.Item2["_id"])) context.ExtraFences.Add(pair);
-            }
+        var history = context.History ?? throw B.Broken();
+        foreach (var pair in await records.RequireSourceCapacitiesAsync(context.Tx, history, ct)) {
+            if (pair.Table is B.InspectionHeads or B.OrderHeads) {
+                context.ExtraFences.RemoveAll(value => value.Table == pair.Table && value.Row["_id"] == pair.Row["_id"]);
+                context.ExtraFences.Add(pair);
+            } else if (!context.ExtraFences.Any(value => value.Table == pair.Table && value.Row["_id"] == pair.Row["_id"])) context.ExtraFences.Add(pair);
         }
-        _ = await SourceCapacitiesAsync(context, inspections, links, ct);
     }
     private static (BsonArray Items, BsonValue Next) MatchPage(SupplierDocumentHistory history, long? beforeId) {
         var selected = history.Matches.Where(row => beforeId is null || row["_id"].AsInt64 < beforeId).OrderByDescending(row => row["_id"].AsInt64).Take(26).ToArray();

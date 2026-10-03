@@ -103,6 +103,7 @@ public sealed class SupplierDocumentMigrationTests(MongoFixture fixture)
     }
 
     internal static async Task RestoreV69Async(IMongoDatabase db) {
+        await SupplierClaimMigrationTests.RestoreV70Async(db);
         var history = await HistoryAsync(db); if (history.Count <= 69) { Assert.All(history, row => Assert.Equal("applied", row["state"])); return; }
         Assert.Equal(70, history.Count); Assert.All(history, row => Assert.Equal("applied", row["state"])); await EmptyAsync(db);
         foreach (var (table, field) in new[] { ("idempotencyRecords", "operation"), ("auditEvents", "kind"), ("auditEvents", "operation"), ("outboxEvents", "kind"), ("outboxEvents", "sourceKey"), ("authorizationHistory", "operation"), ("journalEntries", "source.namespace") })

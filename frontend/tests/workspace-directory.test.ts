@@ -8,7 +8,7 @@ const links = (actions: readonly string[], query = '') => workspaceDirectory(act
 test('workspace groups preserve real discovery and do not grant tasks from role names or unrelated permissions', () => {
   assert.deepEqual(workspaceDirectory([]), []);
   for (const role of ['admin', 'finance', 'customer', 'store-staff', '680', 'procurement.container.receive']) assert.deepEqual(workspaceDirectory([role]), []);
-  assert.deepEqual(links(['procurement.read']), ['/procurement/inspections', '/procurement/receiving', '/procurement/purchase-orders', '/procurement/requests']);
+  assert.deepEqual(links(['procurement.read']), ['/procurement/supplier-claims', '/procurement/supplier-documents', '/procurement/inspections', '/procurement/receiving', '/procurement/purchase-orders', '/procurement/requests']);
   assert.deepEqual(links(['payment.evidence']), []); assert.deepEqual(links(['payment.evidence', 'invoice.read']).sort(), ['/billing/invoices', '/billing/payments']);
   assert.deepEqual(links(['procurement.read', 'procurement.read']), links(['procurement.read']));
   assert.deepEqual(links(['procurement.read'], 'rekening'), []);

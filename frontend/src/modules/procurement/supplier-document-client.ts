@@ -83,6 +83,7 @@ const purpose = 'supplier-document-review';
 const ensure = (current: () => boolean) => { if (!current()) throw new RequestNotSentError(409, 'supplier_document_view_stale'); };
 const after = (current: () => boolean) => { if (!current()) throw new AccessFailure(503, 'commit_outcome_unknown'); };
 export type SupplierDocumentInput = z.infer<typeof input>;
+export const supplierDocumentSourceSchemas = { input, line };
 export type SupplierDocumentLine = z.infer<typeof line>;
 export type SupplierDocumentRead = z.infer<typeof read>;
 export type SupplierDocumentPreview = z.infer<typeof preview>;

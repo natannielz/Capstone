@@ -18,7 +18,7 @@ using R = UnitToko.Platform.Procurement.ProcurementRequestBson;
 namespace UnitToko.Platform.Procurement;
 
 internal sealed record SupplierDocumentHistory(BsonDocument Draft, BsonDocument? Document, BsonDocument Head, BsonDocument Identity, BsonDocument Capacity, IReadOnlyList<BsonDocument> Matches);
-internal sealed class SupplierDocumentRecords(IMongoDatabase database, MongoUnitOfWork unit, IClock clock, CatalogAuthoringService catalog, PurchaseOrderService orders)
+internal sealed partial class SupplierDocumentRecords(IMongoDatabase database, MongoUnitOfWork unit, IClock clock, CatalogAuthoringService catalog, PurchaseOrderService orders)
 {
     private IMongoCollection<BsonDocument> Rows(string table) => database.GetCollection<BsonDocument>(table);
     internal async Task<ProcurementInspectionHistory> InspectionAsync(IClientSessionHandle tx, long id, CancellationToken ct) {
