@@ -6,8 +6,9 @@ import { createAccessGateway } from "../administration/access-client";
 import { AccessFailure } from "../administration/workflow";
 import { permissionLabel } from "../administration/permission-labels";
 import { createIdentityGateway } from "./identity-client";
-import { IdentityFailure, identityDestinations, identityMessage, identityReturnPath, sessionTiming, stepUpFields, type IdentitySession } from "./identity-workflow";
+import { IdentityFailure, identityMessage, identityReturnPath, sessionTiming, stepUpFields, type IdentitySession } from "./identity-workflow";
 import { ProtectedNavigationForm } from "./ProtectedNavigationForm";
+import { WorkspaceDirectory } from "./WorkspaceDirectory";
 import styles from "./identity.module.css";
 
 const displayTime = (value: string | null) => value ? new Intl.DateTimeFormat("id-ID", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Jakarta" }).format(new Date(value)) + " WIB" : "—";
@@ -19,7 +20,7 @@ export function IdentityAccount() {
   const [actions, setActions] = useState<readonly string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<unknown>(null);
-  const [navigationError, setNavigationError] = useState(false);
+  const [navigationError, setNavigationError] = useState<'denied' | 'unavailable' | null>(null);
   const [attempt, setAttempt] = useState(0);
   const [operation, setOperation] = useState("");
   const [returnPath, setReturnPath] = useState("/identity/account");
@@ -40,14 +41,14 @@ export function IdentityAccount() {
             const current = await access.current();
             if (controller.signal.aborted) return;
             if (current.userId !== result.account.userId) throw new IdentityFailure(409, "actor_changed");
-            setActions(current.allowedActions); setNavigationError(false);
+            setActions(current.allowedActions); setNavigationError(null);
           } catch (failure) {
             if (controller.signal.aborted) return;
             if (failure instanceof IdentityFailure && failure.code === "actor_changed") throw failure;
             if (failure instanceof AccessFailure && failure.status === 401) throw new IdentityFailure(401, "unauthenticated");
-            setActions([]); setNavigationError(true);
+            setActions([]); setNavigationError(failure instanceof AccessFailure && failure.status === 403 ? 'denied' : 'unavailable');
           }
-        } else { setActions([]); setNavigationError(false); }
+        } else { setActions([]); setNavigationError(null); }
       } catch (failure) {
         if (!controller.signal.aborted) { setSession(null); setActions([]); setError(failure); }
       } finally { if (!controller.signal.aborted) setLoading(false); }
@@ -69,7 +70,6 @@ export function IdentityAccount() {
     return () => window.clearInterval(timer);
   }, [session?.authenticated, observedAt]);
   const timing = session ? sessionTiming(session, elapsed) : { expired: true, fresh: false };
-  const destinations = identityDestinations(actions);
   let verificationFields: Record<string, string> | null = null;
   if (session && operation) { try { verificationFields = stepUpFields(session, operation, returnPath); } catch { /* Permission list may change on refresh. */ } }
   const reload = () => { setLoading(true); setSession(null); setActions([]); setError(null); setAttempt(value => value + 1); };
@@ -91,9 +91,10 @@ export function IdentityAccount() {
         <Link href="/identity/login" className={styles.primary}>Ke halaman masuk</Link>
       </section>}
       {!loading && session?.account && !timing.expired && <>
+        <WorkspaceDirectory actions={actions} accessState={navigationError} />
         <div className={styles.accountGrid}>
           <section className={styles.card} aria-labelledby="profile-heading"><span className={styles.status}>Akun terverifikasi</span>
-            <h2 id="profile-heading">{session.account.displayName ?? "Akun organisasi"}</h2>
+            <h2 id="profile-heading" tabIndex={-1}>{session.account.displayName ?? "Akun organisasi"}</h2>
             <dl className={styles.facts}><div><dt>Email terverifikasi</dt><dd>{session.account.verifiedEmail}</dd></div><div><dt>Nomor akun</dt><dd>{session.account.userId}</dd></div>
               <div><dt>Verifikasi dua langkah terakhir</dt><dd>{displayTime(session.factorCompletedAt)}</dd></div><div><dt>Batas sesi tanpa aktivitas</dt><dd>{displayTime(session.idleExpiresAt)}</dd></div>
               <div><dt>Batas akhir sesi</dt><dd>{displayTime(session.absoluteExpiresAt)}</dd></div></dl>
@@ -111,11 +112,6 @@ export function IdentityAccount() {
             </> : <p className={styles.help}>Belum ada tindakan dalam penugasan Anda yang memerlukan verifikasi tambahan melalui halaman ini.</p>}
           </section>
         </div>
-        <section className={styles.workspace} aria-labelledby="workspace-heading"><h2 id="workspace-heading">Ruang kerja tersedia</h2>
-          {navigationError && <p className={styles.alert} role="status">Daftar tugas belum dapat dimuat. Gunakan “Periksa sesi” untuk mencoba kembali.</p>}
-          {destinations.length > 0 ? <nav className={styles.destinationGrid} aria-label="Ruang kerja akun">{destinations.map(item => <Link href={item.href} key={item.href} className={styles.destination}><h3>{item.label}<span aria-hidden="true">↗</span></h3><p>{item.description}</p></Link>)}</nav>
-            : !navigationError && <p className={styles.help}>Belum ada ruang kerja yang tersedia untuk penugasan akun ini. Hubungi pengelola organisasi jika Anda memerlukan akses.</p>}
-        </section>
         <aside className={styles.support}><h2>Perlu memulihkan akses?</h2><p>Hubungi pengelola organisasi untuk memulai pemulihan melalui proses resmi. Anda sendiri yang menetapkan kembali akses di layanan akun. Pengelola tidak perlu mengetahui kata sandi atau kode verifikasi Anda.</p></aside>
       </>}
     </div>

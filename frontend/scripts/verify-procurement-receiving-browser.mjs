@@ -1,6 +1,7 @@
 // Genuine approved PO, provider sessions, Kestrel and Mongo. All observations are explicit synthetic local inputs.
 import assert from 'node:assert/strict';
 import { resolve } from 'node:path';
+import { verifyWorkspaceDirectoryBrowser } from './verify-workspace-directory-browser.mjs';
 
 export async function verifyProcurementReceivingBrowser({ config, maker, user, origin, directory, receivingWrites, receivingRecoveries, dropNext, dropped }) {
   const { page, context } = maker, path = '/procurement/receiving', api = '/api/v1/procurement/receiving', purpose = 'receiving-review';
@@ -66,5 +67,7 @@ export async function verifyProcurementReceivingBrowser({ config, maker, user, o
   const reader = await user(config.readerToken); await reader.page.goto(origin.origin + path); await choose(reader.page); const readDetail = await open(reader.page); assert.ok((await readDetail.innerText()).includes(config.intakeReference)); for (const label of ['Catat pemberitahuan pemasok', 'Catat penerimaan fisik koli']) assert.equal(await reader.page.getByRole('button', { name: label, exact: true }).count(), 0);
   const foreign = await query(outsider.page, config.outsiderId, noticePath + '/query', { purpose }); assert.equal(foreign.status, 403); assert.equal(Object.hasOwn(foreign.body, 'notice'), false);
   assert.equal(completed().length, 2); assert.equal(dropped(), 2); assert.equal(receivingWrites.length, 3); assert.equal(receivingWrites.find(item => item.key === 'browser-intake-missing-version').status, 400); assert.equal(receivingRecoveries.length, 3); assert.deepEqual(receivingRecoveries.map(item => item.status), [409, 200, 200]); assert.equal(receivingRecoveries[1].body.key, noticeWrite.key); assert.equal(receivingRecoveries[2].body.key, intakeWrite.key);
+  await verifyWorkspaceDirectoryBrowser({ page: reader.page, origin, directory, actorId: config.readerId,
+    expectedLinks: ['/procurement/requests', '/procurement/purchase-orders', '/procurement/receiving'], search: { text: 'penerimaan', href: '/procurement/receiving' } });
   console.log('REAL_PROCUREMENT_RECEIVING_BROWSER_PASS ' + JSON.stringify({ writes: 2, rejectedCommands: 1, originalReplyLosses: 2, zeroAdvanceOrder: true, route: 'ddo', declared: config.declaredContainers, matched: config.matchedContainers, excess: config.excessContainers, held: config.heldContainers, remaining: config.declaredContainers - config.matchedContainers, pendingItemInspection: true, originalActorRecovery: true, offlineUnsent: true, mobile: true, desktop: true }));
 }

@@ -52,6 +52,21 @@
 .facts dd { margin: 4px 0 0; font-weight: 550; overflow-wrap: anywhere; }
 .facts > div:first-child { grid-column: 1 / -1; }
 .workspace { margin: 36px 0; display: grid; gap: 18px; }
+.directoryHeader { display: flex; align-items: start; justify-content: space-between; gap: 24px; }
+.directoryHeader > div { display: grid; gap: 10px; }
+.accountLink { color: #125e65; font-size: 14px; font-weight: 600; min-height: 44px; display: inline-flex; align-items: center; flex-shrink: 0; }
+.directorySearch { display: flex; align-items: end; gap: 12px; max-width: 760px; }
+.directorySearch label { flex: 1; min-width: 0; }
+.directorySearch button { flex-shrink: 0; }
+.workspaceSections { display: flex; flex-wrap: wrap; gap: 8px; padding-bottom: 12px; border-bottom: 1px solid #cbdad8; }
+.workspaceSections a { display: inline-flex; align-items: center; min-height: 44px; padding: 8px 14px; border: 1px solid #c1d2ce; border-radius: 5px; background: #eaf1ef; color: #125e65; font-size: 14px; font-weight: 600; text-decoration: none; }
+.workspaceSections a:hover { border-color: #0c737b; background: #fff; }
+.directoryGroups { display: grid; gap: 34px; }
+.directoryGroup { display: grid; gap: 15px; }
+.directoryGroup header { display: grid; gap: 5px; }
+.directoryGroup h3, .directoryHeader h2, .card h2 { scroll-margin-top: 24px; }
+.destinationTitle { margin: 0; font: 650 17px/1.4 var(--font-body), "Segoe UI", sans-serif; display: flex; justify-content: space-between; gap: 16px; }
+.emptyDirectory { padding: 24px; border: 1px dashed #96b2b3; border-radius: 8px; }
 .destinationGrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
 .destination { border: 1px solid #bdcfca; border-radius: 8px; background: #fff; padding: 22px; color: #173c40; text-decoration: none; display: grid; gap: 12px; }
 .destination h3 { display: flex; justify-content: space-between; gap: 16px; }
@@ -62,4 +77,5 @@
 .srOnly { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 @media (max-width: 960px) { .loginGrid { gap: 36px; grid-template-columns: 1fr 1fr; } .accountGrid { grid-template-columns: 1fr; } .destinationGrid { grid-template-columns: 1fr; } }
 @media (max-width: 720px) { .page { padding-inline: 20px; } .masthead { padding: 21px 0; } .brand { font-size: 21px; } .kicker { font-size: 12px; } .loginGrid { margin: 32px 0 44px; grid-template-columns: 1fr; gap: 32px; } .introduction > p { margin: 18px 0 24px; font-size: 16px; } .steps { gap: 18px; } .accountHeader { margin-top: 30px; flex-wrap: wrap; } .facts { grid-template-columns: 1fr; } .card { padding: 24px; } }
+@media (max-width: 720px) { .directoryHeader, .directorySearch { flex-direction: column; align-items: stretch; gap: 12px; } .directorySearch button { align-self: start; } .workspaceSections { gap: 7px; } .workspaceSections a { font-size: 13px; padding-inline: 10px; } }
 @media (prefers-reduced-motion: reduce) { .page *, .page *::before, .page *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
