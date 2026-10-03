@@ -8,7 +8,7 @@ using UnitToko.Platform.Mongo.Migrations;
 
 namespace UnitToko.Platform.Inventory;
 
-internal enum InventoryBalanceAction { Receive = 1, Reserve, Release, Dispatch, Hold, ReleaseHold, Expire, ExpireHeld }
+internal enum InventoryBalanceAction { Receive = 1, Reserve, Release, Dispatch, Hold, ReleaseHold, Expire, ExpireHeld, ReceiveHeld }
 internal sealed record InventoryBalanceDocument(long Id, long PhysicalPoolId, StockBalance Balance);
 internal sealed record InventoryBalanceChange(long Id, long PhysicalPoolId, StockBalanceKey Key, long ExpectedRevision, InventoryBalanceAction Action, long Packages);
 
@@ -94,6 +94,7 @@ internal sealed class InventoryRepository(IMongoDatabase database)
     private static StockBalance Transition(StockBalance state, InventoryBalanceChange change) => change.Action switch
     {
         InventoryBalanceAction.Receive => StockBalancePolicy.Receive(state, change.ExpectedRevision, change.Packages),
+        InventoryBalanceAction.ReceiveHeld => StockBalancePolicy.ReceiveHeld(state, change.ExpectedRevision, change.Packages),
         InventoryBalanceAction.Reserve => StockBalancePolicy.Reserve(state, change.ExpectedRevision, change.Packages),
         InventoryBalanceAction.Release => StockBalancePolicy.Release(state, change.ExpectedRevision, change.Packages),
         InventoryBalanceAction.Dispatch => StockBalancePolicy.Dispatch(state, change.ExpectedRevision, change.Packages),

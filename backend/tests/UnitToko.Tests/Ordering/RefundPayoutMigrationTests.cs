@@ -75,7 +75,14 @@ public sealed class RefundPayoutMigrationTests(MongoFixture fixture)
     }
     private static async Task<List<BsonDocument>> Definitions(IMongoDatabase database) =>
         (await (await database.ListCollectionsAsync()).ToListAsync()).OrderBy(row => row["name"].AsString).ToList();
-    private static Task UpgradeAsync(Data data) => new CollectionMigrations(data.Database, data.Clock).ApplyAsync();
+    // Replay the actual historical target; later migrations validate their own source provenance.
+    private static async Task UpgradeAsync(Data data) {
+        var database = data.Database.WithWriteConcern(WriteConcern.WMajority).WithReadPreference(ReadPreference.Primary);
+        var lease = await new MigrationGate(database, data.Clock, 55).AcquireAsync(55, default);
+        if (lease is null) return;
+        try { await new RefundPayoutMigration(database, data.Clock).ApplyAsync(lease, default); await lease.CompleteAsync(default); }
+        catch { await lease.ReleaseAsync(); throw; }
+    }
     private static async Task RefusedBeforeDdlAsync(Data data) {
         var definitions = await Definitions(data.Database);
         Assert.NotNull(await Record.ExceptionAsync(() => UpgradeAsync(data)));

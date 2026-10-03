@@ -38,7 +38,14 @@ public sealed class ReturnFinancialApprovalMigrationTests(MongoFixture fixture)
     private static async Task PredecessorAsync(Data data) {
         await RemoveEmptyUpgradeAsync(data.Database);
     }
-    private static Task UpgradeAsync(Data data) => new CollectionMigrations(data.Database, data.Clock).ApplyAsync();
+    // Replay the actual historical target; later migrations validate their own source provenance.
+    private static async Task UpgradeAsync(Data data) {
+        var database = data.Database.WithWriteConcern(WriteConcern.WMajority).WithReadPreference(ReadPreference.Primary);
+        var lease = await new MigrationGate(database, data.Clock, 54).AcquireAsync(54, default);
+        if (lease is null) return;
+        try { await new ReturnFinancialApprovalMigration(database, data.Clock).ApplyAsync(lease, default); await lease.CompleteAsync(default); }
+        catch { await lease.ReleaseAsync(); throw; }
+    }
     private static async Task RefusedBeforeDdlAsync(Data data) {
         var definitions = await Definitions(data.Database);
         Assert.NotNull(await Record.ExceptionAsync(() => UpgradeAsync(data)));

@@ -29,16 +29,44 @@ public sealed class InventoryGraphTests(MongoFixture fixture)
         { "recordedAt", new BsonDateTime(new DateTime(2026, 9, 28, 0, 0, 0, DateTimeKind.Utc)) },
         { "expiresOn", "2027-01-31" }
     };
-    internal static async Task InstallBalances(StoreTestData data)
+    internal static async Task InstallBalances(StoreTestData data, int? historicalFixtureVersion = null)
     {
-        var definition = await (await data.Database.ListCollectionsAsync(new ListCollectionsOptions { Filter = new BsonDocument("name", "stockBalances") })).SingleAsync();
-        await data.Database.RunCommandAsync<BsonDocument>(new BsonDocument
+        var required = InventorySchemas.BalanceValidator(); var key = InventorySchemas.BalanceKey();
+        if (historicalFixtureVersion is { } version)
         {
-            { "collMod", "stockBalances" }, { "validator", new BsonDocument("$and", new BsonArray { definition["options"]["validator"], InventorySchemas.BalanceValidator() }) },
-            { "validationLevel", "strict" }, { "validationAction", "error" }
-        });
-        await data.Database.GetCollection<BsonDocument>("stockBalances").Indexes.CreateOneAsync(
-            new CreateIndexModel<BsonDocument>(InventorySchemas.BalanceKey(), new CreateIndexOptions { Name = "ux_inventory_pool_balance", Unique = true }));
+            // Only these isolated pre-ledger migration fixtures install their synthetic balance contract.
+            Assert.True(version is 17 or 18);
+            Assert.True(await new MigrationGate(data.Database, data.Clock, version).IsCurrentAsync(default));
+            var rows = data.Database.GetCollection<BsonDocument>("stockBalances");
+            Assert.False(await rows.Find(new BsonDocument()).AnyAsync());
+            var definition = await (await data.Database.ListCollectionsAsync(new ListCollectionsOptions { Filter = new BsonDocument("name", "stockBalances") })).SingleAsync();
+            Assert.Equal("collection", definition["type"].AsString);
+            var options = definition["options"].AsBsonDocument;
+            Assert.False(options.GetValue("capped", false).AsBoolean || options.Contains("timeseries") || options.Contains("expireAfterSeconds"));
+            Assert.Equal("strict", options.GetValue("validationLevel", "strict").AsString);
+            Assert.Equal("error", options.GetValue("validationAction", "error").AsString);
+            Assert.True(!options.TryGetValue("collation", out var collation) || collation.Equals(new BsonDocument("locale", "simple")));
+            var previous = options["validator"].AsBsonDocument;
+            var indexes = await (await rows.Indexes.ListAsync()).ToListAsync();
+            foreach (var index in indexes)
+            {
+                Assert.False(index.GetValue("sparse", false).AsBoolean || index.GetValue("hidden", false).AsBoolean ||
+                    index.Contains("partialFilterExpression") || index.Contains("expireAfterSeconds"));
+                Assert.True(!index.TryGetValue("collation", out var indexCollation) || indexCollation.Equals(new BsonDocument("locale", "simple")));
+                if (index["key"].Equals(key)) Assert.True(index.GetValue("unique", false).AsBoolean);
+                else Assert.True(index["name"] == "_id_" || !index.GetValue("unique", false).AsBoolean);
+            }
+            if (!InventorySchemas.Contains(previous, required))
+                await data.Database.RunCommandAsync<BsonDocument>(new BsonDocument {
+                    { "collMod", "stockBalances" }, { "validator", new BsonDocument("$and", new BsonArray { previous, required }) },
+                    { "validationLevel", "strict" }, { "validationAction", "error" }
+                });
+            if (!indexes.Any(index => index["key"].Equals(key)))
+                await rows.Indexes.CreateOneAsync(new CreateIndexModel<BsonDocument>(key,
+                    new CreateIndexOptions { Name = "uq_historical_fixture_stock_balance", Unique = true }));
+        }
+        // Current fixtures use the registered migration's actual guard and key without changing DDL.
+        await InventoryRepository.RequireStorageAsync(data.Database, "stockBalances", required, key, default);
     }
     private async Task<StoreTestData> Data()
     {

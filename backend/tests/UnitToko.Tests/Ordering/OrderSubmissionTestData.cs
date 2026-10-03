@@ -46,8 +46,7 @@ internal sealed class OrderSubmissionTestData(CatalogPriceTestData prices) : IAs
                 await InventoryRepository.RequireStorageAsync(data.Database, name, OrderSubmissionSchemas.Validator(name), OrderSubmissionSchemas.Key(name), default);
             }
             await InventoryGraphTests.InstallBalances(catalog.Base);
-            await data.Database.RunCommandAsync<BsonDocument>(new BsonDocument { { "collMod", "movements" }, { "validator", InventoryMovementSchemas.Validator() }, { "validationLevel", "strict" }, { "validationAction", "error" } });
-            await data.Rows("movements").Indexes.CreateOneAsync(new CreateIndexModel<BsonDocument>(InventoryMovementSchemas.Key(), new CreateIndexOptions { Unique = true, Name = "ux_inventory_source_event" }));
+            await InventoryRepository.RequireStorageAsync(data.Database, "movements", InventoryMovementSchemas.Validator(), InventoryMovementSchemas.Key(), default);
             await data.Rows("inventoryPools").InsertOneAsync(InventoryGraphTests.Pool());
             await data.Rows("lots").InsertOneAsync(InventoryGraphTests.Lot(202, item.Sku.Id.Value, item.Definition.Id.Value));
             var balance = InventoryGraphTests.Balance();

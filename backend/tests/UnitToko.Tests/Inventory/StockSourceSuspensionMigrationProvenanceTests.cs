@@ -58,13 +58,17 @@ public sealed partial class StockSourceSuspensionMigrationTests
     {
         await using var data = await StoreTestData.CreateForStockSourceSuspensionMigrationAsync(fixture);
         await InstallDraft(data); var actors = await Seed(data);
-        await InventoryGraphTests.InstallBalances(data);
+        await InventoryGraphTests.InstallBalances(data, historicalFixtureVersion: 17);
         await Rows(data, "lots").InsertOneAsync(InventoryGraphTests.Lot());
         var stock = InventoryBson.Balance(new InventoryBalanceDocument(7000, actors.Pool,
             new(new(Owner, new(200), new(201), new(202)), 9007199254740993, 2, 3, 4, 1)));
         await Rows(data, "stockBalances").InsertOneAsync(stock);
         var before = await Business(data);
-        await new UnitToko.Platform.Mongo.CollectionMigrations(data.Database, data.Clock).ApplyAsync();
+        var durable = data.Database.WithWriteConcern(WriteConcern.WMajority).WithReadPreference(ReadPreference.Primary);
+        var lease = await new UnitToko.Platform.Mongo.MigrationGate(durable, data.Clock, 18).AcquireAsync(18, default)
+            ?? throw new InvalidOperationException("The isolated version-17 fixture must require migration 18");
+        try { await new StockSourceSuspensionMigration(durable).ApplyAsync(lease, default); await lease.CompleteAsync(default); }
+        catch { await lease.ReleaseAsync(); throw; }
         Assert.Equal(before, await Business(data));
         Assert.Equal(stock, await Rows(data, "stockBalances").Find(new BsonDocument("_id", 7000L)).SingleAsync());
     }}

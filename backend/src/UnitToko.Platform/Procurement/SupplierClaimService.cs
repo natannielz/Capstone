@@ -77,8 +77,11 @@ public sealed partial class SupplierClaimService
             (SupplierDocumentSchemas.Collections, (Func<string, BsonDocument>)SupplierDocumentSchemas.Validator, (Func<string, BsonDocument[]>)SupplierDocumentSchemas.Keys),
             (SupplierClaimSchemas.Collections, (Func<string, BsonDocument>)SupplierClaimSchemas.Validator, (Func<string, BsonDocument[]>)SupplierClaimSchemas.Keys) })
         foreach (var name in names) {
-            await InventoryRepository.RequireStorageAsync(database, name, validator(name), keys(name), ct);
-            if ((await (await Rows(name).Indexes.ListAsync(ct)).ToListAsync(ct)).Any(index => InvoiceStorage.Unsafe(index) || index.Contains("partialFilterExpression"))) throw B.Broken();
+            if (name == Q.PhysicalAllocations) await ProcurementStockReceiptSchemas.RequireDispositionStorageAsync(database, ct);
+            else {
+                await InventoryRepository.RequireStorageAsync(database, name, validator(name), keys(name), ct);
+                if ((await (await Rows(name).Indexes.ListAsync(ct)).ToListAsync(ct)).Any(index => InvoiceStorage.Unsafe(index) || index.Contains("partialFilterExpression"))) throw B.Broken();
+            }
         }
     }
     private static void AddFence(Context context, string table, BsonDocument row) {

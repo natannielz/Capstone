@@ -92,6 +92,7 @@ public static class Permissions
         result[CaseManage] = result[CaseManage] with { Assurance = new(true, TimeSpan.FromMinutes(5)) };
         result[ProcurementApprove] = result[ProcurementApprove] with { Assurance = new(true, TimeSpan.FromMinutes(5)) };
         result[ProcurementPrepare] = result[ProcurementPrepare] with { Assurance = new(true, TimeSpan.FromMinutes(5)) };
+        result[StockReceive] = result[StockReceive] with { Assurance = new(true, TimeSpan.FromMinutes(5)) };
         Add(FundingRead, Operations);
         Add(ProcurementDisbursementRead, Operations);
         Add(ProcurementDisbursementEvidenceRead, Operations);

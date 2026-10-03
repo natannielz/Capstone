@@ -73,6 +73,7 @@ internal static class InventoryMovementSchemas
         var actions = new BsonArray
         {
             Branch("Receive", Lte(quantity, Sub(long.MaxValue, Before("onHand"))), new() { ["onHand"] = Add(Before("onHand"), quantity) }),
+            Branch("ReceiveHeld", Lte(quantity, Sub(long.MaxValue, Before("onHand"))), new() { ["onHand"] = Add(Before("onHand"), quantity), ["held"] = Add(Before("held"), quantity) }),
             Branch("Reserve", Lte(quantity, available), new() { ["reserved"] = Add(Before("reserved"), quantity) }),
             Branch("Release", Lte(quantity, Before("reserved")), new() { ["reserved"] = Sub(Before("reserved"), quantity) }),
             Branch("Dispatch", Lte(quantity, Before("reserved")), new() { ["onHand"] = Sub(Before("onHand"), quantity), ["reserved"] = Sub(Before("reserved"), quantity) }),

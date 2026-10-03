@@ -43,9 +43,8 @@ internal static class ProcurementQuarantineDispositionBson
 internal sealed record ProcurementQuarantineCapacity(SupplierClaimBasis Basis, BsonDocument? Head, BsonDocument Capacity,
     BsonDocument Location, long OrderId, long SupplierId, IReadOnlyDictionary<string, long> IssuePackages);
 
-/// <summary>Physical inspection capacity shared by future putaway and supplier claims. This owner currently admits only
-/// genuine supplier-claim allocations. Shortage observations have separate storage and never occupy physical goods.
-/// A later putaway writer must extend this same physical history with its real owner proof; it cannot infer a zero hold.</summary>
+/// <summary>One physical inspection capacity for genuine supplier claims and fully held inventory receipts.
+/// Shortage observations have separate storage and never occupy physical goods.</summary>
 internal sealed class ProcurementQuarantineDisposition(IMongoDatabase database, SupplierClaimRecords records)
 {
     private IMongoCollection<BsonDocument> Rows(string name) => database.GetCollection<BsonDocument>(name);
@@ -65,6 +64,13 @@ internal sealed class ProcurementQuarantineDisposition(IMongoDatabase database, 
             var reported = input.Lines[index]; issues[reported.Issue] = checked(issues.GetValueOrDefault(reported.Issue) + reported.Packages);
             var condition = reported.Issue switch { "damaged" => "damagedPackages", "expired" => "expiredPackages", "opened" => "openedPackages", _ => null };
             if (condition is not null && issues[reported.Issue] > request["lines"][index]["inspection"]["line"][condition].AsInt32) throw B.Broken();
+        }
+        if (basis == SupplierClaimBasis.PhysicalReceived) {
+            foreach (var raw in await Rows(ProcurementStockReceiptBson.Receipts).Find(tx, filter).ToListAsync(ct)) {
+                var receipt = await records.HeldReceipts.ReadAsync(tx, raw["_id"].AsInt64, ct);
+                SupplierClaimRecords.Equal(receipt["location"], location); SupplierClaimRecords.Equal(receipt["orderId"], orderId); SupplierClaimRecords.Equal(receipt["supplierId"], supplierId);
+                expected.Add(ProcurementStockReceiptBson.Allocation(receipt));
+            }
         }
         expected = expected.OrderBy(row => row["sequence"].AsInt64).ToList(); if (expected.Count != allocations.Count || (head is null) != (expected.Count == 0)) throw B.Broken();
         var capacity = ProcurementQuarantineDispositionBson.Empty(basis, inspectionId, line, hash, total); BsonValue previous = BsonNull.Value, previousHash = BsonNull.Value, at = BsonNull.Value;
@@ -99,8 +105,14 @@ internal sealed class ProcurementQuarantineDisposition(IMongoDatabase database, 
         }
         foreach (var table in new[] { ProcurementQuarantineDispositionBson.PhysicalAllocations, ProcurementQuarantineDispositionBson.ShortageAllocations }) {
             var rows = await Rows(table).Aggregate<BsonDocument>(tx, new BsonDocument[] {
+                new("$match", new BsonDocument("kind", "supplier_claim")),
                 new("$lookup", new BsonDocument { { "from", B.Requests }, { "localField", "claimId" }, { "foreignField", "_id" }, { "as", "owner" } }),
                 new("$match", new BsonDocument("owner", new BsonDocument("$size", 0))), new("$limit", 1) }).ToListAsync(ct); if (rows.Count != 0) throw B.Broken();
         }
+        var held = await Rows(ProcurementQuarantineDispositionBson.PhysicalAllocations).Aggregate<BsonDocument>(tx, new BsonDocument[] {
+            new("$match", new BsonDocument("kind", "held_receipt")),
+            new("$lookup", new BsonDocument { { "from", ProcurementStockReceiptBson.Receipts }, { "localField", "receiptId" }, { "foreignField", "_id" }, { "as", "owner" } }),
+            new("$match", new BsonDocument("owner", new BsonDocument("$size", 0))), new("$limit", 1) }).ToListAsync(ct);
+        if (held.Count != 0) throw B.Broken(); await records.HeldReceipts.OrphansAsync(tx, ct);
     }
 }

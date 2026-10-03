@@ -46,7 +46,15 @@ public sealed class ReturnEntitlementMigrationTests(MongoFixture fixture)
         if (dropTargets) foreach (var name in ReturnEntitlementSchemas.Collections) await database.DropCollectionAsync(name);
         Assert.Equal(1, (await Rows("schemaMigrations").DeleteOneAsync(new BsonDocument { { "_id", 53 }, { "state", "applied" } })).DeletedCount);
     }
-    private static Task UpgradeAsync(PaymentDraftData data) => new CollectionMigrations(data.Invoice.Order.Database, data.Invoice.Order.Prices.Catalog.Clock).ApplyAsync();
+    // Replay the actual historical target; later migrations validate their own source provenance.
+    private static async Task UpgradeAsync(PaymentDraftData data) {
+        var database = data.Invoice.Order.Database.WithWriteConcern(WriteConcern.WMajority).WithReadPreference(ReadPreference.Primary);
+        var clock = data.Invoice.Order.Prices.Catalog.Clock;
+        var lease = await new MigrationGate(database, clock, 53).AcquireAsync(53, default);
+        if (lease is null) return;
+        try { await new ReturnEntitlementMigration(database, clock).ApplyAsync(lease, default); await lease.CompleteAsync(default); }
+        catch { await lease.ReleaseAsync(); throw; }
+    }
     private static async Task RefusedBeforeDdlAsync(PaymentDraftData data) {
         var before = await Definitions(data.Invoice.Order.Database);
         Assert.NotNull(await Record.ExceptionAsync(() => UpgradeAsync(data)));
@@ -61,7 +69,12 @@ public sealed class ReturnEntitlementMigrationTests(MongoFixture fixture)
         var checker = await PaymentAllocationCorrectionTests.Checker(allocation); var corrected = allocation.Input(1, 400m);
         var correction = await allocation.Service.PreviewCorrectionAsync(checker, original["allocationId"].AsInt64, corrected);
         await allocation.Service.CorrectAsync(checker, original["allocationId"].AsInt64, correction.Binding, corrected, PaymentAllocationTests.Data.Meta("entitlement-upgrade-linked-correction"));
-        await ProposeAsync(data); await PredecessorAsync(data);
+        await ProposeAsync(data);
+        // Establish the actual current-runtime balance before restoring the historical schema.
+        // The unchanged event, receipt/invoice head and journal snapshots below preserve this result.
+        var balance = await allocation.Service.ReadAsync(allocation.Source.Reader, allocation.VerificationId, [allocation.InvoiceId]);
+        Assert.Equal(600m, balance.ReceiptBalance["allocated"].AsDecimal); Assert.Equal(balance.ReceiptBalance["allocated"], balance.Invoices[0]["balance"]["paid"]);
+        await PredecessorAsync(data);
         var tables = new[] { InvoiceBson.Invoices, InvoiceBson.Allocations, ShipmentReceiptRecords.Receipts, AfterSalesCaseRecords.Collection, AfterSalesDecisionRecords.Collection,
             ReturnQuarantineLedger.Collection, ReturnInspectionRecords.Collection, ReturnResolutionRecords.Collection, A.Events, C.Events, A.Receipts, A.Invoices, "journalEntries", BankReceiptBson.Receipts };
         var snapshots = new Dictionary<string, List<BsonDocument>>();
@@ -70,8 +83,6 @@ public sealed class ReturnEntitlementMigrationTests(MongoFixture fixture)
         foreach (var name in tables) Assert.Equal(snapshots[name], await data.Invoice.Rows(name).Find(new BsonDocument()).Sort(new BsonDocument("_id", 1)).ToListAsync());
         foreach (var name in ReturnEntitlementSchemas.Collections) Assert.Equal(0, await data.Invoice.Count(name));
         await ReturnEntitlementStorage.RequireAsync(data.Invoice.Order.Database, default);
-        var balance = await allocation.Service.ReadAsync(allocation.Source.Reader, allocation.VerificationId, [allocation.InvoiceId]);
-        Assert.Equal(600m, balance.ReceiptBalance["allocated"].AsDecimal); Assert.Equal(balance.ReceiptBalance["allocated"], balance.Invoices[0]["balance"]["paid"]);
         Assert.True(await data.Invoice.Rows("schemaMigrations").Find(new BsonDocument { { "_id", 53 }, { "state", "applied" } }).AnyAsync());
     }
     [WindowsStorageTheory]
@@ -112,7 +123,6 @@ public sealed class ReturnEntitlementMigrationTests(MongoFixture fixture)
         var indexes = await (await data.Invoice.Rows(B.Requests).Indexes.ListAsync()).ToListAsync();
         Assert.Single(indexes, index => index["name"] == "operator_request_index");
         foreach (var key in ReturnEntitlementSchemas.Keys(B.Requests)) Assert.True(Assert.Single(indexes, index => index["key"].Equals(key))["unique"].AsBoolean);
-        await ReturnFinancialApprovalMigrationTests.RemoveEmptyUpgradeAsync(database, dropTargets: false);
         await RemoveEmptyUpgradeAsync(database, dropTargets: false);
         await UpgradeAsync(data); Assert.Equal(definitions, await Definitions(database));
         await ReturnEntitlementStorage.RequireAsync(database, default);

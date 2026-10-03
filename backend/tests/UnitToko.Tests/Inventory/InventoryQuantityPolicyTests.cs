@@ -217,7 +217,7 @@ public sealed class InventoryQuantityPolicyTests
         Assert.Equal(empty with { Revision = 10 }, dispatched);
     }
     private static IEnumerable<Func<StockBalance, long, long, StockBalance>> Changes() =>
-        [StockBalancePolicy.Reserve, StockBalancePolicy.Release, StockBalancePolicy.Dispatch, StockBalancePolicy.Receive,
+        [StockBalancePolicy.Reserve, StockBalancePolicy.Release, StockBalancePolicy.Dispatch, StockBalancePolicy.Receive, StockBalancePolicy.ReceiveHeld,
             StockBalancePolicy.Hold, StockBalancePolicy.ReleaseHold, StockBalancePolicy.Expire, StockBalancePolicy.ExpireHeld];
     private static PackConversionDefinition Conversion(int sourceStep = 1, int destinationStep = 12) =>
         new(new(500), 1, new(200), new(201), new(300), new(301), sourceStep, destinationStep);

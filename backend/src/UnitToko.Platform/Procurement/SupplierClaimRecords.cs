@@ -5,6 +5,7 @@ using UnitToko.Modules.Identity;
 using UnitToko.Modules.Procurement;
 using UnitToko.Platform.Authorization;
 using UnitToko.Platform.Catalog;
+using UnitToko.Platform.Inventory;
 using UnitToko.Platform.Mongo;
 using UnitToko.Platform.Mongo.Migrations;
 using B = UnitToko.Platform.Procurement.SupplierClaimBson;
@@ -21,7 +22,8 @@ internal sealed class SupplierClaimRecords(IMongoDatabase database, MongoUnitOfW
     private IMongoCollection<BsonDocument> Rows(string name) => database.GetCollection<BsonDocument>(name);
     internal static void Equal(BsonValue actual, BsonValue expected) { if (!actual.Equals(expected)) throw B.Broken(); }
     internal async Task<BsonDocument> RowAsync(IClientSessionHandle tx, string table, long id, CancellationToken ct) =>
-        await Rows(table).Find(tx, new BsonDocument { { "_id", id }, { "$and", new BsonArray { SupplierClaimSchemas.Validator(table) } } }).SingleOrDefaultAsync(ct) ?? throw B.Broken();
+        await Rows(table).Find(tx, new BsonDocument { { "_id", id }, { "$and", new BsonArray { table == Q.PhysicalAllocations ? ProcurementStockReceiptSchemas.DispositionValidator() : SupplierClaimSchemas.Validator(table) } } }).SingleOrDefaultAsync(ct) ?? throw B.Broken();
+    internal ProcurementStockReceiptRecords HeldReceipts => new(database, unit, clock, catalog, orders, new StockSourceSetupService(database, unit, new IdAllocator(database), clock));
     internal async Task<ProcurementInspectionHistory> InspectionAsync(IClientSessionHandle tx, long id, CancellationToken ct) =>
         await new SupplierDocumentRecords(database, unit, clock, catalog, orders).InspectionAsync(tx, id, ct);
     internal async Task<SupplierDocumentHistory> DocumentAsync(IClientSessionHandle tx, long id, CancellationToken ct, List<(string Table, BsonDocument Row)>? fences = null) {
@@ -110,10 +112,14 @@ internal sealed class SupplierClaimRecords(IMongoDatabase database, MongoUnitOfW
             Q.RequireCapacity(cap, B.Basis(original["basis"]), original["inspectionId"].AsInt64, original["inspectionLineNumber"].AsInt32, original["inspectionHash"].AsString, original["totalPackages"].AsInt64);
             if (cap["headId"] != original["headId"] || cap["version"].AsInt64 < original["version"].AsInt64 || cap["occupiedPackages"].AsInt64 < original["occupiedPackages"].AsInt64) throw B.Broken();
             var allocation = await Rows(Q.Allocations(B.Basis(cap["basis"]))).Find(tx, new BsonDocument { { "headId", cap["headId"] }, { "sequence", cap["version"] } }).SingleOrDefaultAsync(ct) ?? throw B.Broken();
-            var claim = await RequestAsync(tx, allocation["claimId"].AsInt64, ct);
-            var claimIndex = allocation["claimLineNumber"].AsInt32 - 1;
-            if (claimIndex < 0 || claimIndex >= claim["allocations"].AsBsonArray.Count || allocation["recordedAt"].CompareTo(row["recordedAt"]) > 0) throw B.Broken();
-            Equal(allocation, Q.Allocation(claim, claimIndex)); Equal(cap, allocation["after"]);
+            if (allocation["recordedAt"].CompareTo(row["recordedAt"]) > 0) throw B.Broken();
+            if (allocation["schemaVersion"] == 1 && allocation["kind"] == "supplier_claim") {
+                var claim = await RequestAsync(tx, allocation["claimId"].AsInt64, ct); var claimIndex = allocation["claimLineNumber"].AsInt32 - 1;
+                if (claimIndex < 0 || claimIndex >= claim["allocations"].AsBsonArray.Count) throw B.Broken(); Equal(allocation, Q.Allocation(claim, claimIndex));
+            } else if (B.Basis(cap["basis"]) == SupplierClaimBasis.PhysicalReceived && allocation["schemaVersion"] == 2 && allocation["kind"] == "held_receipt")
+                Equal(allocation, ProcurementStockReceiptBson.Allocation(await HeldReceipts.ReadAsync(tx, allocation["receiptId"].AsInt64, ct)));
+            else throw B.Broken();
+            Equal(cap, allocation["after"]);
         }
         People(row, row["actorId"].AsInt64, request["actorId"].AsInt64); var people = row["people"].AsBsonArray.Select(R.Person).ToDictionary(person => person.UserId); var maker = R.Person(request["people"][0]);
         if (people[maker.UserId].PersonId != maker.PersonId || !PersonIndependencePolicy.AreIndependent(people[row["actorId"].AsInt64], people[maker.UserId], maker)) throw B.Broken();

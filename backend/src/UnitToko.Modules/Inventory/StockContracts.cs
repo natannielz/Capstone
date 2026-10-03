@@ -51,12 +51,13 @@ public static class StockBalancePolicy
     public static StockBalance Release(StockBalance value, long revision, long quantity) => Change(value, revision, quantity, ChangeKind.Release);
     public static StockBalance Dispatch(StockBalance value, long revision, long quantity) => Change(value, revision, quantity, ChangeKind.Dispatch);
     public static StockBalance Receive(StockBalance value, long revision, long quantity) => Change(value, revision, quantity, ChangeKind.Receive);
+    public static StockBalance ReceiveHeld(StockBalance value, long revision, long quantity) => Change(value, revision, quantity, ChangeKind.ReceiveHeld);
     public static StockBalance Hold(StockBalance value, long revision, long quantity) => Change(value, revision, quantity, ChangeKind.Hold);
     public static StockBalance ReleaseHold(StockBalance value, long revision, long quantity) => Change(value, revision, quantity, ChangeKind.ReleaseHold);
     public static StockBalance Expire(StockBalance value, long revision, long quantity) => Change(value, revision, quantity, ChangeKind.Expire);
     public static StockBalance ExpireHeld(StockBalance value, long revision, long quantity) => Change(value, revision, quantity, ChangeKind.ExpireHeld);
 
-    private enum ChangeKind { Reserve, Release, Dispatch, Receive, Hold, ReleaseHold, Expire, ExpireHeld }
+    private enum ChangeKind { Reserve, Release, Dispatch, Receive, ReceiveHeld, Hold, ReleaseHold, Expire, ExpireHeld }
     private static StockBalance Change(StockBalance value, long expectedRevision, long quantity, ChangeKind kind)
     {
         var available = AvailablePackages(value);
@@ -77,6 +78,7 @@ public static class StockBalancePolicy
                 ChangeKind.Release => value with { Reserved = value.Reserved - quantity },
                 ChangeKind.Dispatch => value with { OnHand = value.OnHand - quantity, Reserved = value.Reserved - quantity },
                 ChangeKind.Receive => value with { OnHand = checked(value.OnHand + quantity) },
+                ChangeKind.ReceiveHeld => value with { OnHand = checked(value.OnHand + quantity), Held = checked(value.Held + quantity) },
                 ChangeKind.Hold => value with { Held = checked(value.Held + quantity) },
                 ChangeKind.ReleaseHold => value with { Held = value.Held - quantity },
                 ChangeKind.Expire => value with { Expired = checked(value.Expired + quantity) },

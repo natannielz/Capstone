@@ -1,4 +1,5 @@
 export function recoveryPage(operation: string) {
+  if (operation === "procurement.stockreceipt.receive") return { href: "/procurement/stock-receipts", label: "halaman penerimaan stok ditahan" };
   if (/^procurement\.supplierclaim\.(request|approve|reject)$(?![\s\S])/.test(operation)) return { href: "/procurement/supplier-claims", label: "halaman klaim pemasok" };
   if (/^procurement\.supplierdocument\.(draft|submit|match)$(?![\s\S])/.test(operation) || operation === "evidence.supplier-document-image.reserve") return { href: "/procurement/supplier-documents", label: "halaman dokumen pemasok" };
   if (/^procurement\.inspection\.(draft|submit)$(?![\s\S])/.test(operation) || operation === 'evidence.procurement-unboxing-video.reserve') return { href: '/procurement/inspections', label: 'halaman pemeriksaan barang pengadaan' };
@@ -55,6 +56,7 @@ export function recoveryPage(operation: string) {
     : { href: "/administration/person-reviews", label: "halaman peninjauan orang" };
 }
 export function operationLabel(operation: string) {
+  if (operation === "procurement.stockreceipt.receive") return "Penerimaan stok ditahan";
   if (operation === "procurement.supplierclaim.request") return "Pengajuan klaim pemasok";
   if (operation === "procurement.supplierclaim.approve") return "Persetujuan internal klaim pemasok";
   if (operation === "procurement.supplierclaim.reject") return "Penolakan internal klaim pemasok";

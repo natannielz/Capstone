@@ -22,15 +22,7 @@ public sealed class InventoryRepositoryTests(MongoFixture fixture)
     private async Task<StoreTestData> Data()
     {
         var data = await StoreTestData.CreateAsync(fixture);
-        var definition = await (await data.Database.ListCollectionsAsync(new ListCollectionsOptions { Filter = new BsonDocument("name", "stockBalances") })).SingleAsync();
-        var previous = definition["options"]["validator"].AsBsonDocument;
-        await data.Database.RunCommandAsync<BsonDocument>(new BsonDocument
-        {
-            { "collMod", "stockBalances" }, { "validator", new BsonDocument("$and", new BsonArray { previous, InventorySchemas.BalanceValidator() }) },
-            { "validationLevel", "strict" }, { "validationAction", "error" }
-        });
-        await data.Database.GetCollection<BsonDocument>("stockBalances").Indexes.CreateOneAsync(
-            new CreateIndexModel<BsonDocument>(InventorySchemas.BalanceKey(), new CreateIndexOptions { Name = "ux_inventory_pool_balance", Unique = true }));
+        await InventoryGraphTests.InstallBalances(data);
         await data.Database.GetCollection<BsonDocument>("inventoryPools").InsertOneAsync(InventoryGraphTests.Pool());
         await data.Database.GetCollection<BsonDocument>("lots").InsertManyAsync([InventoryGraphTests.Lot(), InventoryGraphTests.Lot(302, 300, 301)]);
         return data;
@@ -164,7 +156,9 @@ public sealed class InventoryRepositoryTests(MongoFixture fixture)
     public async Task Missing_required_index_blocks_writes_and_aborts_the_callers_work()
     {
         await using var data = await Data();
-        await data.Database.GetCollection<BsonDocument>("stockBalances").Indexes.DropOneAsync("ux_inventory_pool_balance");
+        var indexes = await (await data.Database.GetCollection<BsonDocument>("stockBalances").Indexes.ListAsync()).ToListAsync();
+        var index = Assert.Single(indexes, value => value["key"] == InventorySchemas.BalanceKey() && value.GetValue("unique", false).AsBoolean);
+        await data.Database.GetCollection<BsonDocument>("stockBalances").Indexes.DropOneAsync(index["name"].AsString);
         var repository = new InventoryRepository(data.Database);
         using var tx = await fixture.Client.StartSessionAsync(); Begin(tx); await EarlierWrite(data, tx);
         var error = await Assert.ThrowsAsync<DomainValidationException>(() => repository.CreateAsync(tx, Balance(), default));
@@ -322,7 +316,9 @@ public sealed class InventoryRepositoryTests(MongoFixture fixture)
                 new CreateIndexOptions { Name = "unreviewed_extra", Unique = kind == "extra-unique", ExpireAfter = kind == "ttl" ? TimeSpan.FromDays(1) : null }));
         else
         {
-            await rows.Indexes.DropOneAsync("ux_inventory_pool_balance");
+            var indexes = await (await rows.Indexes.ListAsync()).ToListAsync();
+            var index = Assert.Single(indexes, value => value["key"] == InventorySchemas.BalanceKey() && value.GetValue("unique", false).AsBoolean);
+            await rows.Indexes.DropOneAsync(index["name"].AsString);
             await rows.Indexes.CreateOneAsync(new CreateIndexModel<BsonDocument>(InventorySchemas.BalanceKey(),
                 new CreateIndexOptions<BsonDocument>
                 {

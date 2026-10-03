@@ -2,6 +2,7 @@ using System.Runtime.Versioning;
 using MongoDB.Bson;
 using MongoDB.Driver;
 using UnitToko.Modules.Contracts;
+using UnitToko.Platform;
 using UnitToko.Platform.Billing;
 using UnitToko.Platform.Documents;
 using UnitToko.Platform.Mongo;
@@ -14,6 +15,18 @@ namespace UnitToko.Tests.Procurement;
 [Collection("Mongo")]
 public sealed class ProcurementDisbursementMigrationTests(MongoFixture fixture)
 {
+    // These retained-history checks also assert the actual v67 bank-claim index transition.
+    private static async Task UpgradeAsync(IMongoDatabase database, IClock clock) {
+        var durable = database.WithWriteConcern(WriteConcern.WMajority).WithReadPreference(ReadPreference.Primary);
+        var gate = new MigrationGate(durable, clock, 67);
+        IMigrationStep[] steps = [new ProcurementDisbursementMigration(durable, clock), new ProcurementSettlementMigration(durable, clock)];
+        foreach (var step in steps) {
+            var lease = await gate.AcquireAsync(step.Version, default);
+            if (lease is null) continue;
+            try { await step.ApplyAsync(lease, default); await lease.CompleteAsync(default); }
+            catch { await lease.ReleaseAsync(); throw; }
+        }
+    }
     [WindowsStorageFact]
     [SupportedOSPlatform("windows")]
     public async Task Actual_verified_refund_debit_upgrades_with_preserved_pin_claim_journal_and_rejects_missing_retained_proof_before_DDL()
@@ -27,6 +40,13 @@ public sealed class ProcurementDisbursementMigrationTests(MongoFixture fixture)
         Assert.Equal(BankTransactionClaims.Debit(settlement), debit);
         Assert.True(await data.Rows(BankTransactionClaims.Collection).Find(new BsonDocument("direction", "credit")).AnyAsync());
         Assert.Equal(data.PayoutRecord["pinId"], (await data.Rows("evidencePins").Find(new BsonDocument("associationKind", "RefundPayout")).SingleAsync())["_id"]);
+        // Current-runtime recovery and protected bytes are proved before the historical predecessor.
+        // RetainedAsync then preserves their exact money, owner, pin, claim, journal and effect rows.
+        Assert.Equal(saved, await data.Service.RecoverSettlementAsync(data.Verifier, data.PayoutId, key));
+        await using (var original = await data.Payout.Evidence.ReadSettlementOriginalAsync(data.Verifier, data.PayoutId,
+            data.Payout.Reservation.ReservationId, data.Payout.Reference)) {
+            using var bytes = new MemoryStream(); await original.Content.CopyToAsync(bytes); Assert.Equal(data.Payout.Bytes, bytes.ToArray());
+        }
         await RestoreV65Async(data.Database);
         var guard = new BsonDocument("actorId", new BsonDocument("$ne", 999999L));
         foreach (var name in new[] { RefundSettlementBson.Events, "evidencePins" }) {
@@ -47,7 +67,7 @@ public sealed class ProcurementDisbursementMigrationTests(MongoFixture fixture)
             Assert.Equal(1, (await data.Rows(name).DeleteOneAsync(filter)).DeletedCount);
             try {
                 var damaged = await RetainedAsync();
-                var error = await Assert.ThrowsAsync<InvalidOperationException>(() => new CollectionMigrations(data.Database, data.Clock).ApplyAsync());
+                var error = await Assert.ThrowsAsync<InvalidOperationException>(() => UpgradeAsync(data.Database, data.Clock));
                 Assert.Equal("Procurement disbursement migration preflight failed", error.Message);
                 Assert.Equal(definitions, await DefinitionsAsync(data.Database)); Assert.Equal(indexes, await IndexesAsync());
                 Assert.Equal(damaged, await RetainedAsync());
@@ -60,14 +80,14 @@ public sealed class ProcurementDisbursementMigrationTests(MongoFixture fixture)
             }
         }
         Assert.Equal(retained, await RetainedAsync());
-        await new CollectionMigrations(data.Database, data.Clock).ApplyAsync();
+        await UpgradeAsync(data.Database, data.Clock);
         Assert.Equal(retained, await RetainedAsync());
         var upgradedIndexes = await IndexesAsync();
         foreach (var entry in indexes.Where(entry => entry.Name != BankTransactionClaims.Collection)) Assert.Equal(entry.Value, upgradedIndexes[entry.Name]);
         await ProcurementSettlementMigrationTests.RequireInstalledIndexesAsync(data.Database);
         var upgraded = await HistoryAsync(data.Database);
         Assert.Equal(history, new BsonArray(upgraded.Take(65)));
-        Assert.Equal(CollectionMigrations.CurrentVersion, upgraded.Count); Assert.Equal("applied", upgraded.Single(row => row["_id"] == 66)["state"].AsString);
+        Assert.Equal(67, upgraded.Count); Assert.Equal("applied", upgraded.Single(row => row["_id"] == 66)["state"].AsString);
         Assert.Equal("applied", upgraded[^1]["state"].AsString);
         var after = await DefinitionsAsync(data.Database); Assert.Equal(definitions.Count, after.Count);
         foreach (var before in definitions) {
@@ -80,13 +100,8 @@ public sealed class ProcurementDisbursementMigrationTests(MongoFixture fixture)
             Assert.Equal(expected, Assert.Single(after, row => row["name"] == name));
         }
         foreach (var name in ProcurementDisbursementSchemas.Collections) Assert.False(await data.Rows(name).Find(new BsonDocument()).AnyAsync());
-        await new CollectionMigrations(data.Database, data.Clock).ApplyAsync();
+        await UpgradeAsync(data.Database, data.Clock);
         Assert.Equal(upgraded, await HistoryAsync(data.Database)); Assert.Equal(retained, await RetainedAsync());
-        Assert.Equal(saved, await data.Service.RecoverSettlementAsync(data.Verifier, data.PayoutId, key));
-        await using var original = await data.Payout.Evidence.ReadSettlementOriginalAsync(data.Verifier, data.PayoutId,
-            data.Payout.Reservation.ReservationId, data.Payout.Reference);
-        using var bytes = new MemoryStream(); await original.Content.CopyToAsync(bytes); Assert.Equal(data.Payout.Bytes, bytes.ToArray());
-
         async Task<BsonDocument> RetainedAsync() {
             var result = await PreservedAsync(data.Database);
             var names = ReceivingAccountSchemas.Collections.Concat(BankStatementSchemas.Collections).Concat(BankReceiptSchemas.Collections)
@@ -113,6 +128,11 @@ public sealed class ProcurementDisbursementMigrationTests(MongoFixture fixture)
         await using var data = await PaymentEvidenceReadTests.ReadData.CreateAsync(fixture); await data.ValidateAsync();
         var submission = await data.Service.SubmitAsync(data.Actor, data.DeclarationId, 1, data.Reservation.ReservationId,
             data.Reference, EvidenceAdmissionTestData.Meta("payment-retained-by66"));
+        // Validate the protected original and original-key replay while the current schema is installed.
+        // PreservedAsync below compares the exact submission, pin, validation and idempotency history.
+        await using (var read = await data.OpenAsync()) { using var bytes = new MemoryStream(); await read.Content.CopyToAsync(bytes); Assert.Equal(data.Bytes, bytes.ToArray()); }
+        Assert.Equal(submission, await data.Service.SubmitAsync(data.Actor, data.DeclarationId, 1, data.Reservation.ReservationId,
+            data.Reference, EvidenceAdmissionTestData.Meta("payment-retained-by66")));
         await RestoreV65Async(data.Database);
         var guard = new BsonDocument("actorId", new BsonDocument("$ne", 999999L));
         foreach (var name in new[] { "evidencePins", ProcurementDisbursementTestData.Records }) {
@@ -122,7 +142,7 @@ public sealed class ProcurementDisbursementMigrationTests(MongoFixture fixture)
         }
         await data.Rows(ProcurementDisbursementTestData.Records).Indexes.DropOneAsync("ux_" + ProcurementDisbursementTestData.Records + "_0");
         var before = await DefinitionsAsync(data.Database); var preserved = await PreservedAsync(data.Database); var history = await HistoryAsync(data.Database);
-        await new CollectionMigrations(data.Database, data.Catalog.Clock).ApplyAsync();
+        await UpgradeAsync(data.Database, data.Catalog.Clock);
         Assert.Equal(history, new BsonArray((await HistoryAsync(data.Database)).Take(65))); Assert.Equal(preserved, await PreservedAsync(data.Database));
         var after = await DefinitionsAsync(data.Database);
         var changed = ProcurementDisbursementSchemas.Collections.Concat(ProcurementDisbursementEvidenceSchemas.Collections).Append(BankTransactionClaims.Collection).ToHashSet(StringComparer.Ordinal);
@@ -143,10 +163,7 @@ public sealed class ProcurementDisbursementMigrationTests(MongoFixture fixture)
             }
         }
         Assert.True(InventorySchemas.Contains((await DefinitionAsync(data.Database, "evidencePins"))["options"]["validator"].AsBsonDocument, guard));
-        await using (var read = await data.OpenAsync()) { using var bytes = new MemoryStream(); await read.Content.CopyToAsync(bytes); Assert.Equal(data.Bytes, bytes.ToArray()); }
-        Assert.Equal(submission, await data.Service.SubmitAsync(data.Actor, data.DeclarationId, 1, data.Reservation.ReservationId,
-            data.Reference, EvidenceAdmissionTestData.Meta("payment-retained-by66")));
-        var applied = await HistoryAsync(data.Database); await new CollectionMigrations(data.Database, data.Catalog.Clock).ApplyAsync();
+        var applied = await HistoryAsync(data.Database); await UpgradeAsync(data.Database, data.Catalog.Clock);
         Assert.Equal(applied, await HistoryAsync(data.Database)); Assert.Equal(after, await DefinitionsAsync(data.Database));
     }
 
@@ -162,8 +179,8 @@ public sealed class ProcurementDisbursementMigrationTests(MongoFixture fixture)
         if (fault == "orphan") await data.Rows("outboxEvents").InsertOneAsync(new BsonDocument { { "_id", ObjectId.GenerateNewId() }, { "kind", "procurement.disbursement.record" } }, new InsertOneOptions { BypassDocumentValidation = true });
         if (fault == "retained_funding") await data.Database.RunCommandAsync<BsonDocument>(new BsonDocument { { "collMod", ProcurementFundingTestData.Decisions }, { "validationLevel", "off" } });
         var before = await DefinitionsAsync(data.Database); var preserved = await PreservedAsync(data.Database);
-        if (fault == "retained_funding") Assert.Equal("inventory_storage_unavailable", (await Assert.ThrowsAsync<DomainValidationException>(() => new CollectionMigrations(data.Database, data.Clock).ApplyAsync())).Code);
-        else Assert.Equal("Procurement disbursement migration preflight failed", (await Assert.ThrowsAsync<InvalidOperationException>(() => new CollectionMigrations(data.Database, data.Clock).ApplyAsync())).Message);
+        if (fault == "retained_funding") Assert.Equal("inventory_storage_unavailable", (await Assert.ThrowsAsync<DomainValidationException>(() => UpgradeAsync(data.Database, data.Clock))).Code);
+        else Assert.Equal("Procurement disbursement migration preflight failed", (await Assert.ThrowsAsync<InvalidOperationException>(() => UpgradeAsync(data.Database, data.Clock))).Message);
         Assert.Equal(before, await DefinitionsAsync(data.Database)); Assert.Equal(preserved, await PreservedAsync(data.Database));
         Assert.False(await data.Rows("schemaMigrations").Find(new BsonDocument { { "_id", 66 }, { "state", "applied" } }).AnyAsync());
     }
@@ -176,7 +193,7 @@ public sealed class ProcurementDisbursementMigrationTests(MongoFixture fixture)
         await data.Service.SubmitAsync(data.Actor, data.DeclarationId, 1, data.Reservation.ReservationId, data.Reference, EvidenceAdmissionTestData.Meta("payment-before66-corruption"));
         await RestoreV65Async(data.Database); Assert.Equal(1, (await data.Rows("evidencePinAudits").DeleteManyAsync(new BsonDocument())).DeletedCount);
         var before = await DefinitionsAsync(data.Database); var preserved = await PreservedAsync(data.Database);
-        Assert.Equal("evidence_validation_integrity", (await Assert.ThrowsAsync<PersistenceConflictException>(() => new CollectionMigrations(data.Database, data.Catalog.Clock).ApplyAsync())).Code);
+        Assert.Equal("evidence_validation_integrity", (await Assert.ThrowsAsync<PersistenceConflictException>(() => UpgradeAsync(data.Database, data.Catalog.Clock))).Code);
         Assert.Equal(before, await DefinitionsAsync(data.Database)); Assert.Equal(preserved, await PreservedAsync(data.Database));
         Assert.False(await data.Rows("schemaMigrations").Find(new BsonDocument { { "_id", 66 }, { "state", "applied" } }).AnyAsync());
     }

@@ -100,11 +100,16 @@ public sealed partial class StockSourcePolicyMigrationTests
         await InstallDraft(data); var actors = await Seed(data);
         await UnitToko.Tests.Accounting.AccountingTestDocuments.ConfigureAsync(data.Database);
         await Rows(data, "journalEntries").InsertOneAsync(UnitToko.Tests.Accounting.AccountingTestDocuments.Journal());
-        await InventoryGraphTests.InstallBalances(data); await Rows(data, "lots").InsertOneAsync(InventoryGraphTests.Lot());
+        await InventoryGraphTests.InstallBalances(data, historicalFixtureVersion: 18); await Rows(data, "lots").InsertOneAsync(InventoryGraphTests.Lot());
         var balance = InventoryBson.Balance(new InventoryBalanceDocument(7000, actors.Pool,
             new(new(Owner, new(200), new(201), new(202)), 9007199254740993, 2, 3, 4, 1)));
         await Rows(data, "stockBalances").InsertOneAsync(balance);
-        var before = await Business(data); await new CollectionMigrations(data.Database, data.Clock).ApplyAsync();
+        var before = await Business(data);
+        var durable = data.Database.WithWriteConcern(WriteConcern.WMajority).WithReadPreference(ReadPreference.Primary);
+        var lease = await new MigrationGate(durable, data.Clock, 19).AcquireAsync(19, default)
+            ?? throw new InvalidOperationException("The isolated version-18 fixture must require migration 19");
+        try { await new StockSourcePolicyMigration(durable, data.Clock).ApplyAsync(lease, default); await lease.CompleteAsync(default); }
+        catch { await lease.ReleaseAsync(); throw; }
         Assert.Equal(before, await Business(data)); Assert.Equal(balance, await Rows(data, "stockBalances").Find(new BsonDocument("_id", 7000L)).SingleAsync());
     }
     [Theory]

@@ -30,13 +30,7 @@ public sealed class InventoryLedgerTests(MongoFixture fixture)
             await data.Database.GetCollection<BsonDocument>("inventoryPools").InsertOneAsync(InventoryGraphTests.Pool());
             await data.Database.GetCollection<BsonDocument>("lots").InsertOneAsync(InventoryGraphTests.Lot());
             await data.Database.GetCollection<BsonDocument>("stockBalances").InsertOneAsync(InventoryBson.Balance(InventoryGraphTests.Balance()));
-            var definition = await (await data.Database.ListCollectionsAsync(new ListCollectionsOptions { Filter = new BsonDocument("name", "movements") })).SingleAsync();
-            await data.Database.RunCommandAsync<BsonDocument>(new BsonDocument
-            {
-                { "collMod", "movements" }, { "validator", new BsonDocument("$and", new BsonArray { definition["options"]["validator"], InventoryMovementSchemas.Validator() }) },
-                { "validationLevel", "strict" }, { "validationAction", "error" }
-            });
-            await data.Database.GetCollection<BsonDocument>("movements").Indexes.CreateOneAsync(new CreateIndexModel<BsonDocument>(new BsonDocument("sourceEvent", 1), new CreateIndexOptions { Unique = true, Name = "ux_inventory_source_event" }));
+            await InventoryRepository.RequireStorageAsync(data.Database, "movements", InventoryMovementSchemas.Validator(), InventoryMovementSchemas.Key(), default);
             await data.Database.GetCollection<BsonDocument>("inventoryTestSources").InsertOneAsync(new BsonDocument
             {
                 { "_id", 5000L }, { "namespace", Source.Namespace }, { "eventKind", Source.EventKind }, { "occurrence", 1L },
@@ -132,7 +126,9 @@ public sealed class InventoryLedgerTests(MongoFixture fixture)
         await using var data = await Data();
         if (fault is "missing-index" or "sparse-index")
         {
-            await data.Database.GetCollection<BsonDocument>("movements").Indexes.DropOneAsync("ux_inventory_source_event");
+            var indexes = await (await data.Database.GetCollection<BsonDocument>("movements").Indexes.ListAsync()).ToListAsync();
+            var index = Assert.Single(indexes, value => value["key"] == InventoryMovementSchemas.Key() && value.GetValue("unique", false).AsBoolean);
+            await data.Database.GetCollection<BsonDocument>("movements").Indexes.DropOneAsync(index["name"].AsString);
             if (fault == "sparse-index") await data.Database.GetCollection<BsonDocument>("movements").Indexes.CreateOneAsync(
                 new CreateIndexModel<BsonDocument>(InventoryMovementSchemas.Key(), new CreateIndexOptions { Name = "ux_inventory_source_event", Unique = true, Sparse = true }));
         }
@@ -284,7 +280,7 @@ public sealed class InventoryLedgerTests(MongoFixture fixture)
     }
     [Theory]
     [InlineData("Receive")] [InlineData("Reserve")] [InlineData("Release")] [InlineData("Dispatch")]
-    [InlineData("Hold")] [InlineData("ReleaseHold")] [InlineData("Expire")] [InlineData("ExpireHeld")]
+    [InlineData("Hold")] [InlineData("ReleaseHold")] [InlineData("Expire")] [InlineData("ExpireHeld")] [InlineData("ReceiveHeld")]
     public async Task Every_supported_transition_has_a_valid_exact_database_movement(string action)
     {
         await using var data = await Data();
@@ -296,6 +292,7 @@ public sealed class InventoryLedgerTests(MongoFixture fixture)
         var expected = action switch
         {
             "Receive" => before.Balance with { OnHand = 103, Revision = 2 },
+            "ReceiveHeld" => before.Balance with { OnHand = 103, Held = 23, Revision = 2 },
             "Reserve" => before.Balance with { Reserved = 23, Revision = 2 },
             "Release" => before.Balance with { Reserved = 17, Revision = 2 },
             "Dispatch" => before.Balance with { OnHand = 97, Reserved = 17, Revision = 2 },
@@ -311,17 +308,18 @@ public sealed class InventoryLedgerTests(MongoFixture fixture)
         Assert.Equal(InventoryBson.Balance(before with { Balance = expected }), movement["legs"][0]["after"]);
     }
     [Theory]
-    [InlineData("Receive")] [InlineData("Reserve")]
+    [InlineData("Receive")] [InlineData("Reserve")] [InlineData("ReceiveHeld")]
     public async Task Exact_Int64_boundary_quantities_remain_valid_without_double_rounding(string action)
     {
         await using var data = await Data();
         var original = InventoryGraphTests.Balance();
-        var before = original with { Balance = original.Balance with { OnHand = action == "Receive" ? long.MaxValue - 3 : long.MaxValue,
-            Reserved = action == "Reserve" ? long.MaxValue - 3 : 0 } };
+        var before = original with { Balance = original.Balance with { OnHand = action == "Reserve" ? long.MaxValue : long.MaxValue - 3,
+            Reserved = action == "Reserve" ? long.MaxValue - 3 : 0, Held = action == "ReceiveHeld" ? long.MaxValue - 3 : 0 } };
         await data.Database.GetCollection<BsonDocument>("stockBalances").ReplaceOneAsync(new BsonDocument("_id", before.Id), InventoryBson.Balance(before));
         await data.Database.GetCollection<BsonDocument>("inventoryTestSources").UpdateOneAsync(new BsonDocument(), new BsonDocument("$set", new BsonDocument("action", action)));
         var result = await Unit.ExecuteAsync((tx, ct) => Ledger(data, Reader(data)).ApplyAsync(tx, Actor, Source, 1, Metadata, ct), default);
-        Assert.Equal(long.MaxValue, action == "Receive" ? result.Balances[0].Balance.OnHand : result.Balances[0].Balance.Reserved);
+        Assert.Equal(long.MaxValue, action == "Reserve" ? result.Balances[0].Balance.Reserved : result.Balances[0].Balance.OnHand);
+        if (action == "ReceiveHeld") { Assert.Equal(long.MaxValue, result.Balances[0].Balance.Held); Assert.Equal(0, StockBalancePolicy.AvailablePackages(result.Balances[0].Balance)); }
         Assert.Equal(1, await data.Database.GetCollection<BsonDocument>("movements").CountDocumentsAsync(new BsonDocument()));
     }
     [Fact]

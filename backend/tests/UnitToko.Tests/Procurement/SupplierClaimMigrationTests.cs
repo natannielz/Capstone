@@ -51,7 +51,7 @@ public sealed class SupplierClaimMigrationTests(MongoFixture fixture)
         // The retained operator policy has no allocator yet. M71 establishes its exact high-water value only after every preflight succeeds.
         var policyCounter = new BsonDocument { { "_id", SupplierTestData.Policies }, { "value", policy["_id"] } };
         expected["idCounters"] = new BsonArray(before["idCounters"].AsBsonArray.Append(policyCounter).OrderBy(row => row["_id"].AsString, StringComparer.Ordinal));
-        await new CollectionMigrations(data.Database, data.Clock).ApplyAsync();
+        await ApplyHistorical71Async(data.Database, data.Clock);
         AssertStateEqual(expected, await StateAsync(data.Database)); Assert.Equal(definitions, await DefinitionsAsync(data.Database)); Assert.Equal(indexes, await IndexesAsync(data.Database));
         await EmptyAsync(data.Database); Assert.Equal(match, await data.Service.LookupAsync(data.Matcher, SupplierDocumentTestData.MatchOperation, "retained-invoice-match"));
         var after = await data.Evidence.ReadExtractionAsync(data.EvidenceReader, data.DraftId, 1, data.Reference, new("supplier-document-ocr-view", "claim-upgrade-after"));
@@ -76,13 +76,14 @@ public sealed class SupplierClaimMigrationTests(MongoFixture fixture)
         try { await RefusesAsync(data.Database, data.Clock); }
         finally { Assert.Equal(1, (await data.Database.GetCollection<BsonDocument>("outboxEvents").DeleteOneAsync(new BsonDocument("_id", orphan["_id"]))).DeletedCount); }
         var before = await StateAsync(data.Database); var definitions = await DefinitionsAsync(data.Database); var indexes = await IndexesAsync(data.Database);
-        await new CollectionMigrations(data.Database, data.Clock).ApplyAsync();
+        await ApplyHistorical71Async(data.Database, data.Clock);
         Assert.Equal(before, await StateAsync(data.Database)); Assert.Equal(definitions, await DefinitionsAsync(data.Database)); Assert.Equal(indexes, await IndexesAsync(data.Database));
         Assert.True(InventorySchemas.Contains((await DefinitionAsync(data.Database, table))["options"]["validator"].AsBsonDocument, guard)); await EmptyAsync(data.Database);
-        await new CollectionMigrations(data.Database, data.Clock).ApplyAsync(); Assert.Equal(definitions, await DefinitionsAsync(data.Database));
+        await ApplyHistorical71Async(data.Database, data.Clock); Assert.Equal(definitions, await DefinitionsAsync(data.Database));
     }
 
     internal static async Task RestoreV70Async(IMongoDatabase db) {
+        await ProcurementStockReceiptMigrationTests.RestoreV71Async(db);
         var history = await HistoryAsync(db); if (history.Count <= 70) { Assert.All(history, row => Assert.Equal("applied", row["state"])); return; }
         Assert.Equal(71, history.Count); Assert.All(history, row => Assert.Equal("applied", row["state"])); await EmptyAsync(db);
         foreach (var (table, field) in new[] { ("idempotencyRecords", "operation"), ("auditEvents", "kind"), ("auditEvents", "operation"),
@@ -91,6 +92,13 @@ public sealed class SupplierClaimMigrationTests(MongoFixture fixture)
         // No prior validator is changed by M71. Only the proven empty suffix receipt is removed.
         Assert.Equal(1, (await db.GetCollection<BsonDocument>("schemaMigrations").DeleteOneAsync(new BsonDocument { { "_id", 71 }, { "state", "applied" } })).DeletedCount);
         Assert.Equal(new BsonArray(history.Take(70)), await HistoryAsync(db));
+    }
+    // Exercise the historical migration under test; successor index transitions are validated by their own migration cases.
+    private static async Task ApplyHistorical71Async(IMongoDatabase db, IClock clock) {
+        var lease = await new MigrationGate(db, clock, 71).AcquireAsync(71, CancellationToken.None);
+        if (lease is null) return;
+        try { await new SupplierClaimMigration(db, clock).ApplyAsync(lease, CancellationToken.None); await lease.CompleteAsync(CancellationToken.None); }
+        catch { await lease.ReleaseAsync(); throw; }
     }
     private static async Task EmptyAsync(IMongoDatabase db) {
         foreach (var name in SupplierClaimSchemas.Collections) {
