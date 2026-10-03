@@ -45,7 +45,7 @@ internal static class SupplierDocumentSchemas
                 { "externalItemCode", S.Text(128) }, { "netPricePerPackage", Money }, { "taxAmount", Money }, { "supplierChargeAmount", Money }, { "netAmount", Money }, { "totalAmount", Money },
                 { "baseUnits", S.Number(1) } })) } });
     }
-    private static BsonDocument ResolvedLine() {
+    internal static BsonDocument ResolvedLine() {
         var fields = MatchLineFields(); fields.AddRange(new BsonDocument { { "state", S.Choice("matched", "discrepancy_pending") },
             { "order", Nullable(OrderView()) }, { "inspectionLine", Nullable(ProcurementInspectionSchemas.Line()) }, { "invoiceDocumentReference", Nullable(S.Text(128)) },
             { "invoiceMatchedAmount", Nullable(Money) } }); return S.Object(fields);

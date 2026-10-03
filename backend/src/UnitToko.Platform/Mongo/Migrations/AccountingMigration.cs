@@ -18,6 +18,38 @@ internal sealed class AccountingMigration(IMongoDatabase database) : IMigrationS
         "accountingPeriodHistory" => [new("ux_period_version", new() { { "periodId", 1 }, { "version", 1 } }, true)],
         "accountingAuditEvents" => [new("ux_accounting_event", new("eventKey", 1), true)],
         _ => throw new ArgumentOutOfRangeException(nameof(name))};
+    // Read-only admission for actual journal owners and later deployment preflights.
+    // Reuse the installed contract, including the exact historical source-key partial index.
+    internal static async Task RequireInstalledStorageAsync(IMongoDatabase database, CancellationToken ct) {
+        foreach (var name in AccountingSchemas.Collections) {
+            var definition = await (await database.ListCollectionsAsync(new ListCollectionsOptions { Filter = new BsonDocument("name", name) }, ct)).SingleOrDefaultAsync(ct);
+            var options = definition?.GetValue("options", new BsonDocument()).AsBsonDocument;
+            if (definition is null || definition.GetValue("type", "") != "collection" || options is null ||
+                options.GetValue("capped", false).AsBoolean || options.Contains("timeseries") || options.Contains("expireAfterSeconds") || options.Contains("encryptedFields") ||
+                options.GetValue("validationLevel", "strict") != "strict" || options.GetValue("validationAction", "error") != "error" ||
+                options.TryGetValue("collation", out var collation) && !Simple(collation) ||
+                !options.TryGetValue("validator", out var validator) || !validator.IsBsonDocument || !Contains(validator.AsBsonDocument, AccountingSchemas.Validator(name))) throw Unavailable();
+            var indexes = await (await database.GetCollection<BsonDocument>(name).Indexes.ListAsync(ct)).ToListAsync(ct);
+            var required = RequiredIndexes(name);
+            bool Compatible(Index expected, BsonDocument actual) {
+                if (actual["key"] != expected.Key || actual.GetValue("unique", false).AsBoolean != expected.Unique) return false;
+                var copy = actual.DeepClone().AsBsonDocument;
+                if (copy.TryGetValue("partialFilterExpression", out var partial)) {
+                    var legacy = new BsonDocument("$and", new BsonArray { new BsonDocument("sourceEvent", new BsonDocument("$exists", true)) });
+                    if (expected.Partial is not null && CatalogSchemas.SemanticEquals(partial, expected.Partial) ||
+                        name == "journalEntries" && expected.Name == "uq_sourceEvent" && CatalogSchemas.SemanticEquals(partial, legacy)) copy.Remove("partialFilterExpression");
+                } else if (expected.Partial is not null) return false;
+                return !Unsafe(copy);
+            }
+            if (!indexes.Any(index => index["name"] == "_id_" && index["key"] == new BsonDocument("_id", 1) && !Unsafe(index))) throw Unavailable();
+            foreach (var index in indexes.Where(index => index["name"] != "_id_")) {
+                var known = required.Where(expected => index["key"] == expected.Key || index["name"] == expected.Name).ToArray();
+                if (known.Length > 0 ? known.Any(expected => !Compatible(expected, index)) : Unsafe(index) || index.GetValue("unique", false).AsBoolean) throw Unavailable();
+            }
+            foreach (var expected in required) if (!indexes.Any(index => Compatible(expected, index))) throw Unavailable();
+        }
+        static UnitToko.Modules.Contracts.DomainValidationException Unavailable() => new("accounting_storage_unavailable", "The complete installed accounting storage and journal uniqueness are required");
+    }
     public async Task ApplyAsync(MigrationLease lease, CancellationToken token)
     {
         var targets = new List<Target>();

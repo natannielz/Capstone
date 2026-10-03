@@ -71,6 +71,7 @@ public sealed class ProcurementStockReceiptMigrationTests(MongoFixture fixture)
         Assert.Equal(dispositionDefinition, await DefinitionAsync(data.Database, SupplierClaimSchemas.PhysicalAllocations));
         Assert.Equal(saved, await data.Rows("procurementStockReceipts").Find(new BsonDocument("_id", receipt["receiptId"])).SingleAsync());
         // Explicit retry rehearsal after real completed-owner verification; the ordinary predecessor helper refuses populated suffixes.
+        await ProcurementStockValuationMigrationTests.RestoreV72Async(data.Database);
         Assert.Equal(1, (await data.Rows("schemaMigrations").DeleteOneAsync(new BsonDocument { { "_id", 72 }, { "state", "applied" } })).DeletedCount);
         foreach (var (table, filter) in new[] { ("procurementStockReceipts", new BsonDocument("_id", receipt["receiptId"])),
             ("movements", new BsonDocument("_id", receipt["movementId"])), ("stockBalances", new BsonDocument("_id", receipt["balanceId"])),
@@ -95,7 +96,7 @@ public sealed class ProcurementStockReceiptMigrationTests(MongoFixture fixture)
 
     internal static async Task RestoreV71Async(IMongoDatabase db) {
         var history = await HistoryAsync(db); if (history.Count <= 71) { Assert.All(history, row => Assert.Equal("applied", row["state"])); return; }
-        Assert.Equal(72, history.Count); Assert.All(history, row => Assert.Equal("applied", row["state"]));
+        Assert.InRange(history.Count, 72, 73); Assert.All(history, row => Assert.Equal("applied", row["state"]));
         Assert.False(await db.GetCollection<BsonDocument>("procurementStockReceipts").Find(new BsonDocument()).AnyAsync());
         // Historical order fixtures insert shared lots/balances directly; their real reserve/dispatch
         // movements use the shared movement allocator. None proves or substitutes for an M72 receipt.
@@ -117,6 +118,9 @@ public sealed class ProcurementStockReceiptMigrationTests(MongoFixture fixture)
             return copy;
         }
         var restored = Restore(definition["options"]["validator"].AsBsonDocument); Assert.True(found);
+        // Prove the older suffix is empty before removing any newer migration receipt.
+        await ProcurementStockValuationMigrationTests.RestoreV72Async(db);
+        Assert.Equal(new BsonArray(history.Take(72)), await HistoryAsync(db));
         await SetValidatorAsync(db, SupplierClaimSchemas.PhysicalAllocations, restored);
         var allocations = db.GetCollection<BsonDocument>(SupplierClaimSchemas.PhysicalAllocations);
         await allocations.Indexes.CreateOneAsync(new CreateIndexModel<BsonDocument>(ProcurementStockReceiptSchemas.V1Key, new CreateIndexOptions { Unique = true, Name = "ux_" + SupplierClaimSchemas.PhysicalAllocations + "_0" }));

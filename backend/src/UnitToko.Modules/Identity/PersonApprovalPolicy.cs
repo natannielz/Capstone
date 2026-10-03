@@ -8,7 +8,7 @@ namespace UnitToko.Modules.Identity;
 public static class PersonApprovalPolicy
 {
     public static bool RequiresEvidence(string permission) => permission is
-        Permissions.ProcurementApprove or Permissions.SupplierClaimApprove or Permissions.OrderSpendApprove or Permissions.OrderSpendingPolicyApprove or Permissions.AccountingBookApprove or Permissions.ReceivingAccountApprove or Permissions.ReceivingAccountVerify or Permissions.PricingApprove or Permissions.SupplierChangeApprove or Permissions.SupplierBankApprove or Permissions.StockSourceApprove or Permissions.StockSourcePolicyApprove or
+        Permissions.ProcurementApprove or Permissions.SupplierClaimApprove or Permissions.ProcurementStockValuationDecide or Permissions.OrderSpendApprove or Permissions.OrderSpendingPolicyApprove or Permissions.AccountingBookApprove or Permissions.ReceivingAccountApprove or Permissions.ReceivingAccountVerify or Permissions.PricingApprove or Permissions.SupplierChangeApprove or Permissions.SupplierBankApprove or Permissions.StockSourceApprove or Permissions.StockSourcePolicyApprove or
         Permissions.BankReceiptConfirm or Permissions.PaymentReviewManual or Permissions.PaymentReviewManage or Permissions.PaymentVerify or Permissions.PaymentAllocate or Permissions.DisbursementVerify or Permissions.ReconciliationVerify or
         Permissions.CaseManage or Permissions.CreditApprove or Permissions.RefundApprove or Permissions.FundingApprove or
         Permissions.ExpenseApprove or Permissions.StockAdjustApprove or Permissions.DisbursementRecord or
@@ -32,6 +32,7 @@ public static class PersonApprovalPolicy
             Permissions.BankReceiptConfirm or Permissions.PaymentReviewManual or Permissions.PaymentReviewManage or Permissions.PaymentVerify or Permissions.PaymentAllocate or Permissions.DisbursementVerify or
                 Permissions.ReconciliationVerify => [evidence!.RecordedBy],
             Permissions.StockAdjustApprove => [evidence!.CountedBy, evidence.ProposedBy],
+            Permissions.ProcurementStockValuationDecide => [evidence!.RequestedBy, evidence.RecordedBy],
             Permissions.DisbursementRecord => [evidence!.ApprovedBy],
             Permissions.PeriodApprove => [evidence!.SubmittedBy],
             Permissions.PeriodClose => [evidence!.SubmittedBy, evidence.ApprovedBy],

@@ -44,9 +44,7 @@ internal sealed partial class ProcurementStockReceiptMigration(IMongoDatabase da
             targets.Add(new(name, definition is not null, validator, missing.ToArray())); await CounterAsync(name, maxima, ct);
         }
         var disposition = await ProcurementStockReceiptSchemas.PreflightAsync(database, ct);
-        foreach (var (name, maximum) in await new SupplierClaimMigration(database, clock).PreflightRetainedForStockAsync(lease, ct)) maxima.Add(name, maximum);
-        await RequireSourcePoliciesAsync(lease, maxima, ct);
-        await RequireOwnersAsync(lease, maxima, ct);
+        foreach (var (name, maximum) in await PreflightRetainedOwnersAsync(lease, ct)) maxima.Add(name, maximum);
         // No DDL, index removal, allocator update or synthetic stock is permitted before the complete proof above.
         foreach (var target in targets) {
             await lease.RenewAsync(ct);
@@ -60,6 +58,14 @@ internal sealed partial class ProcurementStockReceiptMigration(IMongoDatabase da
             await lease.RenewAsync(ct); await Rows("idCounters").WithWriteConcern(WriteConcern.WMajority).UpdateOneAsync(new BsonDocument("_id", name),
                 Builders<BsonDocument>.Update.Max("value", maximum), new UpdateOptions { IsUpsert = true }, ct);
         }
+    }
+    // Later owners reuse the actual receipt/source/disposition proof without replaying M72 DDL.
+    // Their caller must also verify the installed lot, balance, movement and receipt storage.
+    internal async Task<Dictionary<string, long>> PreflightRetainedOwnersAsync(MigrationLease lease, CancellationToken ct) {
+        var maxima = new Dictionary<string, long>(await new SupplierClaimMigration(database, clock).PreflightRetainedForStockAsync(lease, ct));
+        await RequireSourcePoliciesAsync(lease, maxima, ct);
+        await RequireOwnersAsync(lease, maxima, ct);
+        return maxima;
     }
     private IMongoCollection<BsonDocument> Rows(string name) => database.GetCollection<BsonDocument>(name).WithReadConcern(ReadConcern.Majority);
     private async Task<BsonDocument?> DefinitionAsync(string name, CancellationToken ct) {

@@ -1,0 +1,281 @@
+using System.Runtime.Versioning;
+using MongoDB.Bson;
+using MongoDB.Driver;
+using MongoDB.Driver.Core.Events;
+using UnitToko.Modules.Accounting;
+using UnitToko.Modules.Contracts;
+using UnitToko.Modules.Identity;
+using UnitToko.Modules.Procurement;
+using UnitToko.Platform.Accounting;
+using UnitToko.Platform.Authorization;
+using UnitToko.Platform.Catalog;
+using UnitToko.Platform.Mongo;
+using UnitToko.Platform.Procurement;
+using UnitToko.Tests.Authorization;
+using UnitToko.Tests.Documents;
+using UnitToko.Tests.Organizations;
+using D = UnitToko.Tests.Procurement.ProcurementStockValuationTestData;
+
+namespace UnitToko.Tests.Procurement;
+
+[Collection("Mongo")]
+[SupportedOSPlatform("windows")]
+public sealed class ProcurementStockValuationTests(MongoFixture fixture)
+{
+    [WindowsStorageFact]
+    public async Task Real_scanned_invoice_partial_approval_posts_exact_receipt_accrual_once_without_releasing_held_goods()
+    {
+        await using var data = await D.CreateAsync(fixture); var preserved = await data.PreservedAsync(); var input = data.Input();
+        foreach (var invalid in new[] { input with { NetAmount = new Money(9999), CapitalizedAmount = new Money(11249) },
+            input with { CapitalizedAmount = new Money(10000) }, input with { TaxAmount = new Money(2001), CapitalizedAmount = new Money(12251) },
+            data.Input(2) with { TaxAmount = new Money(1000), CapitalizedAmount = new Money(21500) } })
+            await DeniedAsync(() => data.Service.PreviewAsync(data.Maker, invalid));
+        var proposal = await data.ProposeAsync("valuation-first"); var id = proposal["proposalId"].AsInt64;
+        Assert.Equal("proposed", proposal["status"].AsString);
+        await NoAllocationAsync(data); Assert.Equal(preserved, await data.PreservedAsync());
+        var rejected = await data.ProposeAsync("valuation-rejected");
+        var rejection = await data.DecideAsync(rejected["proposalId"].AsInt64, "valuation-rejected-decision", ProcurementStockValuationDecision.Reject);
+        Assert.Equal("rejected", rejection["status"].AsString); Assert.True(rejection["allocationId"].IsBsonNull); Assert.True(rejection["journalId"].IsBsonNull);
+        await NoAllocationAsync(data);
+        var preview = await data.Service.PreviewDecisionAsync(data.Checker, id, ProcurementStockValuationDecision.Approve);
+        var approved = await data.Service.DecideAsync(data.Checker, id, 1, ProcurementStockValuationDecision.Approve, preview["binding"].AsString, D.Meta("valuation-first-approved"));
+        Assert.Equal("approved", approved["status"].AsString); var after = await data.StateAsync();
+        Assert.Equal("procurement_stock_valuation_lookup_required", (await Assert.ThrowsAsync<PersistenceConflictException>(() =>
+            data.Service.DecideAsync(data.Checker, id, 1, ProcurementStockValuationDecision.Approve, preview["binding"].AsString, D.Meta("valuation-first-approved")))).Code);
+        Assert.Equal(approved, await data.Service.LookupAsync(data.Checker, D.DecideOperation, "valuation-first-approved"));
+        Assert.Equal(proposal, await data.Service.LookupAsync(data.Maker, D.ProposeOperation, "valuation-first"));
+        Assert.Null(await data.Service.LookupAsync(data.Maker, D.DecideOperation, "valuation-first-approved"));
+        Assert.Null(await data.Service.LookupAsync(data.Checker, D.ProposeOperation, "valuation-first"));
+        Assert.Equal(after, await data.StateAsync()); Assert.Equal(preserved, await data.PreservedAsync());
+        await JournalAsync(data, approved["journalId"].AsInt64, 11250m);
+        var receiptHead = await data.Rows(D.ReceiptHeads).Find(new BsonDocument()).SingleAsync();
+        var matchHead = await data.Rows(D.MatchHeads).Find(new BsonDocument()).SingleAsync();
+        Assert.Equal(1L, receiptHead["allocatedPackages"].AsInt64); Assert.Equal(2L, receiptHead["remainingPackages"].AsInt64);
+        Assert.Equal(1L, matchHead["allocatedPackages"].AsInt64); Assert.Equal(1L, matchHead["remainingPackages"].AsInt64);
+        Assert.Equal("10000.00", matchHead["remainingNetAmount"].AsString); Assert.Equal("1000.00", matchHead["remainingTaxAmount"].AsString);
+        Assert.Equal("250.00", matchHead["remainingChargeAmount"].AsString);
+        var second = await data.ProposeAsync("valuation-final"); var final = await data.DecideAsync(second["proposalId"].AsInt64, "valuation-final-approved");
+        await JournalAsync(data, final["journalId"].AsInt64, 11250m);
+        Assert.Equal(2L, await data.Rows(D.Allocations).CountDocumentsAsync(new BsonDocument()));
+        matchHead = await data.Rows(D.MatchHeads).Find(new BsonDocument()).SingleAsync();
+        Assert.Equal(0L, matchHead["remainingPackages"].AsInt64); Assert.Equal("0.00", matchHead["remainingTaxAmount"].AsString); Assert.Equal("0.00", matchHead["remainingChargeAmount"].AsString);
+        await DeniedAsync(() => data.Service.PreviewAsync(data.Maker, input));
+        Assert.Equal(preserved, await data.PreservedAsync()); await data.NoPaymentOrReleaseAsync();
+    }
+
+    [WindowsStorageFact]
+    public async Task Failed_posting_rolls_back_both_capacities_and_competing_approvals_cannot_consume_the_same_invoice_value()
+    {
+        await using var data = await D.CreateAsync(fixture); var preserved = await data.PreservedAsync();
+        var first = await data.ProposeAsync("valuation-race-one", data.Input(2)); var second = await data.ProposeAsync("valuation-race-two", data.Input(2));
+        var one = await data.Service.PreviewDecisionAsync(data.Checker, first["proposalId"].AsInt64, ProcurementStockValuationDecision.Approve);
+        var two = await data.Service.PreviewDecisionAsync(data.Checker, second["proposalId"].AsInt64, ProcurementStockValuationDecision.Approve);
+        var journalIndexes = await (await data.Rows("journalEntries").Indexes.ListAsync()).ToListAsync();
+        var sourceIndex = Assert.Single(journalIndexes, row => row["key"].Equals(new BsonDocument("sourceEvent", 1)));
+        Assert.True(sourceIndex["unique"].AsBoolean);
+        var withoutIndexState = await data.StateAsync();
+        await data.Rows("journalEntries").Indexes.DropOneAsync(sourceIndex["name"].AsString);
+        try {
+            Assert.Equal("accounting_storage_unavailable", (await Assert.ThrowsAsync<DomainValidationException>(() =>
+                data.Service.DecideAsync(data.Checker, first["proposalId"].AsInt64, 1, ProcurementStockValuationDecision.Approve,
+                    one["binding"].AsString, D.Meta("valuation-missing-journal-uniqueness")))).Code);
+            Assert.Equal(withoutIndexState, await data.StateAsync()); Assert.Equal(preserved, await data.PreservedAsync()); await NoAllocationAsync(data);
+        } finally {
+            var options = new CreateIndexOptions<BsonDocument> { Name = sourceIndex["name"].AsString, Unique = true };
+            if (sourceIndex.TryGetValue("partialFilterExpression", out var partial)) options.PartialFilterExpression = partial.AsBsonDocument;
+            await data.Rows("journalEntries").Indexes.CreateOneAsync(new CreateIndexModel<BsonDocument>(sourceIndex["key"].AsBsonDocument, options));
+        }
+        Assert.Equal(new BsonArray(journalIndexes.OrderBy(row => row["name"].AsString, StringComparer.Ordinal)),
+            new BsonArray((await (await data.Rows("journalEntries").Indexes.ListAsync()).ToListAsync()).OrderBy(row => row["name"].AsString, StringComparer.Ordinal)));
+        var definition = await (await data.Database.ListCollectionsAsync(new ListCollectionsOptions { Filter = new BsonDocument("name", "outboxEvents") })).SingleAsync();
+        var validator = definition["options"]["validator"].DeepClone(); var before = await data.StateAsync();
+        await data.Database.RunCommandAsync<BsonDocument>(new BsonDocument { { "collMod", "outboxEvents" },
+            { "validator", new BsonDocument("$and", new BsonArray { validator, new BsonDocument("kind", new BsonDocument("$ne", D.DecideOperation)) }) } });
+        try {
+            Assert.IsAssignableFrom<MongoException>(await Record.ExceptionAsync(() => data.Service.DecideAsync(data.Checker, first["proposalId"].AsInt64, 1,
+                ProcurementStockValuationDecision.Approve, one["binding"].AsString, D.Meta("valuation-rolled-back"))));
+            Assert.Equal(before, await data.StateAsync()); Assert.Equal(preserved, await data.PreservedAsync());
+            Assert.Null(await data.Service.LookupAsync(data.Checker, D.DecideOperation, "valuation-rolled-back")); await NoAllocationAsync(data);
+        } finally { await data.Database.RunCommandAsync<BsonDocument>(new BsonDocument { { "collMod", "outboxEvents" }, { "validator", validator } }); }
+        var outcomes = await Task.WhenAll(
+            Record.ExceptionAsync(() => data.Service.DecideAsync(data.Checker, first["proposalId"].AsInt64, 1, ProcurementStockValuationDecision.Approve, one["binding"].AsString, D.Meta("valuation-race-one-approved"))),
+            Record.ExceptionAsync(() => data.Service.DecideAsync(data.Checker, second["proposalId"].AsInt64, 1, ProcurementStockValuationDecision.Approve, two["binding"].AsString, D.Meta("valuation-race-two-approved"))));
+        Assert.Single(outcomes, value => value is null); Assert.IsType<PersistenceConflictException>(Assert.Single(outcomes, value => value is not null));
+        Assert.Equal(1L, await data.Rows(D.Allocations).CountDocumentsAsync(new BsonDocument())); Assert.Equal(1L, await data.Rows("journalEntries").CountDocumentsAsync(new BsonDocument()));
+        var decision = await data.Rows(D.Decisions).Find(new BsonDocument("decision", "approve")).SingleAsync();
+        await JournalAsync(data, decision["journalId"].AsInt64, 22500m);
+        Assert.Equal(2L, (await data.Rows(D.ReceiptHeads).Find(new BsonDocument()).SingleAsync())["allocatedPackages"].AsInt64);
+        Assert.Equal(0L, (await data.Rows(D.MatchHeads).Find(new BsonDocument()).SingleAsync())["remainingPackages"].AsInt64);
+        Assert.Equal(preserved, await data.PreservedAsync()); await data.NoPaymentOrReleaseAsync();
+    }
+
+    [WindowsStorageFact]
+    public async Task Current_policy_people_grants_and_period_are_required_and_excluded_components_are_never_invented()
+    {
+        await using var data = await D.CreateAsync(fixture); var input = data.Input();
+        await Assert.ThrowsAsync<AuthorizationDeniedException>(() => data.Service.PreviewAsync(data.Reader, input));
+        await Assert.ThrowsAsync<AuthorizationDeniedException>(() => data.Service.PreviewAsync(data.Outsider, input));
+        Assert.Equal("step_up_required", (await Assert.ThrowsAsync<AuthorizationDeniedException>(() => data.Service.PreviewAsync(data.Maker with { AuthenticatedAt = data.Clock.UtcNow.AddMinutes(-6) }, input))).Code);
+        await data.Rows(D.Policies).UpdateOneAsync(new BsonDocument("_id", data.PolicyId), new BsonDocument("$set", new BsonDocument("capitalizeTax", false)));
+        try {
+            var excluded = await Assert.ThrowsAsync<DomainValidationException>(() => data.Service.PreviewAsync(data.Maker, input));
+            Assert.Equal("procurement_stock_valuation_noncapitalized_component", excluded.Code);
+        } finally { await data.Rows(D.Policies).ReplaceOneAsync(new BsonDocument("_id", data.PolicyId), data.Policy); }
+        var proposed = await data.ProposeAsync("valuation-revalidate"); var id = proposed["proposalId"].AsInt64;
+        foreach (var (table, selected, field, replacement) in new[] {
+            (D.Policies, (BsonValue)data.PolicyId, "active", (BsonValue)false),
+            ("authorizationGrants", (BsonValue)data.Checker.UserId, "status", (BsonValue)"revoked"),
+            ("personAccountBindings", (BsonValue)data.Checker.UserId, "status", (BsonValue)"revoked"),
+            ("accountingBooks", data.Book["bookId"], "closedThrough", (BsonValue)input.PostingDate.ToString("yyyy-MM", System.Globalization.CultureInfo.InvariantCulture)) }) {
+            var review = await data.Service.PreviewDecisionAsync(data.Checker, id, ProcurementStockValuationDecision.Approve);
+            var filter = new BsonDocument("_id", selected); var original = await data.Rows(table).Find(filter).SingleAsync();
+            var before = await data.StateAsync();
+            Assert.Equal(1L, (await data.Rows(table).UpdateOneAsync(filter, new BsonDocument("$set", new BsonDocument(field, replacement)))).ModifiedCount);
+            try { await DeniedAsync(() => data.Service.DecideAsync(data.Checker, id, 1, ProcurementStockValuationDecision.Approve, review["binding"].AsString, D.Meta("denied-" + table))); }
+            finally { await data.Rows(table).ReplaceOneAsync(filter, original); }
+            Assert.Equal(before, await data.StateAsync()); await NoAllocationAsync(data);
+        }
+        var chartReview = await data.Service.PreviewDecisionAsync(data.Checker, id, ProcurementStockValuationDecision.Approve);
+        var chartFilter = new BsonDocument("_id", data.Book["chartId"]); var chart = await data.Rows("accountingChartVersions").Find(chartFilter).SingleAsync();
+        var beforeChart = await data.StateAsync();
+        Assert.Equal(1L, (await data.Rows("accountingChartVersions").DeleteOneAsync(chartFilter)).DeletedCount);
+        try {
+            await DeniedAsync(() => data.Service.DecideAsync(data.Checker, id, 1, ProcurementStockValuationDecision.Approve,
+                chartReview["binding"].AsString, D.Meta("valuation-chart-withdrawn")));
+            Assert.Equal(beforeChart, await data.StateAsync()); await NoAllocationAsync(data);
+        } finally { await data.Rows("accountingChartVersions").InsertOneAsync(chart); }
+        var at = data.Clock.UtcNow; var policyBeforeExpiry = await data.Rows(D.Policies).Find(new BsonDocument("_id", data.PolicyId)).SingleAsync();
+        await data.Rows(D.Policies).UpdateOneAsync(new BsonDocument("_id", data.PolicyId), new BsonDocument("$set", new BsonDocument("expiresAt", at.AddSeconds(1).UtcDateTime)));
+        try {
+            var expiring = await data.ProposeAsync("valuation-expiring-policy");
+            var expiryReview = await data.Service.PreviewDecisionAsync(data.Checker, expiring["proposalId"].AsInt64, ProcurementStockValuationDecision.Approve);
+            var beforeExpiry = await data.StateAsync(); data.Clock.UtcNow = at.AddSeconds(2);
+            Assert.Equal("procurement_stock_valuation_policy_unavailable", (await Assert.ThrowsAsync<PersistenceConflictException>(() =>
+                data.Service.DecideAsync(data.Checker, expiring["proposalId"].AsInt64, 1, ProcurementStockValuationDecision.Approve,
+                    expiryReview["binding"].AsString, D.Meta("valuation-expired-policy")))).Code);
+            Assert.Equal(beforeExpiry, await data.StateAsync()); await NoAllocationAsync(data);
+        } finally { data.Clock.UtcNow = at; await data.Rows(D.Policies).ReplaceOneAsync(new BsonDocument("_id", data.PolicyId), policyBeforeExpiry); }
+        // Pause a real snapshot immediately after its policy read, before it can serialize that source.
+        using var release = new ManualResetEventSlim(); var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var requestId = 0; var observed = 0;
+        var settings = MongoClientSettings.FromConnectionString(Environment.GetEnvironmentVariable("UNITTOKO_TEST_MONGO_URI") ?? "mongodb://127.0.0.1:27028/?replicaSet=rs0");
+        settings.ClusterConfigurator = cluster => {
+            cluster.Subscribe<CommandStartedEvent>(value => {
+                if (requestId == 0 && value.DatabaseNamespace.DatabaseName == data.Database.DatabaseNamespace.DatabaseName &&
+                    value.Command.GetValue("find", BsonNull.Value) == D.Policies && value.Command.TryGetValue("filter", out var filter) &&
+                    filter.IsBsonDocument && filter.AsBsonDocument.GetValue("_id", BsonNull.Value) == data.PolicyId) requestId = value.RequestId;
+            });
+            cluster.Subscribe<CommandSucceededEvent>(value => {
+                if (requestId != 0 && value.RequestId == requestId && Interlocked.CompareExchange(ref observed, 1, 0) == 0) {
+                    entered.TrySetResult(); if (!release.Wait(TimeSpan.FromSeconds(30))) throw new TimeoutException("Valuation policy withdrawal did not complete");
+                }
+            });
+        };
+        var client = new MongoClient(settings); var db = client.GetDatabase(data.Database.DatabaseNamespace.DatabaseName); var unit = new MongoUnitOfWork(client);
+        var catalog = new CatalogAuthoringService(db, unit, new(db), data.Clock); var requests = new ProcurementRequestService(db, unit, new(db), data.Clock, catalog);
+        var orders = new PurchaseOrderService(db, unit, new(db), data.Clock, catalog, requests, new(db, unit, new(db), data.Clock, catalog));
+        var service = new ProcurementStockValuationService(db, unit, new(db), data.Clock, catalog, orders,
+            new(db, unit, new(db), data.Clock, catalog, orders, requests), new(db, unit, new(db), data.Clock));
+        var originalPolicy = await data.Rows(D.Policies).Find(new BsonDocument("_id", data.PolicyId)).SingleAsync(); var beforeRace = await data.StateAsync();
+        var pending = Task.Run(() => service.PreviewAsync(data.Maker, input));
+        try {
+            try {
+                await entered.Task.WaitAsync(TimeSpan.FromSeconds(30));
+                Assert.Equal(1L, (await data.Rows(D.Policies).UpdateOneAsync(new BsonDocument("_id", data.PolicyId), new BsonDocument("$set", new BsonDocument("active", false)))).ModifiedCount);
+                Assert.False((await data.Rows(D.Policies).Find(new BsonDocument("_id", data.PolicyId)).SingleAsync())["active"].AsBoolean);
+            } finally { release.Set(); }
+            await DeniedAsync(async () => await pending.WaitAsync(TimeSpan.FromSeconds(90))); Assert.Equal(1, observed);
+        } finally { await data.Rows(D.Policies).ReplaceOneAsync(new BsonDocument("_id", data.PolicyId), originalPolicy); }
+        Assert.Equal(beforeRace, await data.StateAsync()); await NoAllocationAsync(data);
+        var alias = await data.Base.AddActorAsync(738, ProcurementRequestTestData.Scope, Permissions.ProcurementRead, Permissions.StockRead,
+            Permissions.ProcurementStockValuationRead, Permissions.ProcurementStockValuationDecide, Permissions.JournalPost);
+        await PersonTestData.SeedDistinctPeopleAsync(data.Database, data.Clock, alias.UserId);
+        await OrganizationAddressTests.MergePeopleAsync(data.Inspection.Receiving.Procurement.Organizations, data.Documents.Matcher.UserId, alias.UserId);
+        await Assert.ThrowsAsync<AuthorizationDeniedException>(() => data.Service.PreviewDecisionAsync(alias, id, ProcurementStockValuationDecision.Approve));
+        await NoAllocationAsync(data); await data.NoPaymentOrReleaseAsync();
+    }
+
+    [WindowsStorageFact]
+    public async Task Missing_allocation_heads_owner_or_posted_journal_never_becomes_unconsumed_value_or_replays_another_posting()
+    {
+        await using var data = await D.CreateAsync(fixture); var proposal = await data.ProposeAsync("valuation-proof"); var id = proposal["proposalId"].AsInt64;
+        var approved = await data.DecideAsync(id, "valuation-proof-approved"); var preserved = await data.PreservedAsync(); var state = await data.StateAsync();
+        foreach (var (table, sourceFilter) in new[] {
+            (D.ReceiptHeads, new BsonDocument("_id", data.ReceiptId)),
+            (D.MatchHeads, new BsonDocument("_id", ProcurementStockValuationCapacityReader.MatchKey(data.MatchId, 1))),
+            (D.Allocations, new BsonDocument("_id", approved["allocationId"])),
+            (D.Decisions, new BsonDocument("_id", approved["decisionId"])),
+            ("journalEntries", new BsonDocument("_id", approved["journalId"])),
+            ("accountingAuditEvents", new BsonDocument { { "journalId", approved["journalId"] }, { "kind", "journal.posted" } }),
+            ("supplierDocumentMatches", new BsonDocument("_id", data.MatchId)) }) {
+            var row = await data.Rows(table).Find(sourceFilter).SingleAsync(); var filter = new BsonDocument("_id", row["_id"]);
+            Assert.Equal(1L, (await data.Rows(table).DeleteOneAsync(filter)).DeletedCount);
+            try {
+                await DeniedAsync(() => data.Service.ReadAsync(data.Reader, id));
+                await DeniedAsync(() => data.Service.LookupAsync(data.Checker, D.DecideOperation, "valuation-proof-approved"));
+                await DeniedAsync(() => data.Service.PreviewAsync(data.Maker, data.Input()));
+            } finally { await data.Rows(table).InsertOneAsync(row); }
+            Assert.Equal(state, await data.StateAsync()); Assert.Equal(preserved, await data.PreservedAsync());
+        }
+        foreach (var operation in new[] { D.ProposeOperation, D.DecideOperation })
+            foreach (var (table, field) in new[] { ("auditEvents", "kind"), ("idempotencyRecords", "operation"), ("outboxEvents", "kind") }) {
+                var proof = await data.Rows(table).Find(new BsonDocument(field, operation)).SingleAsync(); var filter = new BsonDocument("_id", proof["_id"]);
+                Assert.Equal(1L, (await data.Rows(table).DeleteOneAsync(filter)).DeletedCount);
+                try {
+                    var missingProofState = await data.StateAsync();
+                    await DeniedAsync(() => data.Service.PreviewAsync(data.Maker, data.Input()));
+                    await DeniedAsync(() => data.Service.LookupAsync(data.Checker, D.DecideOperation, "valuation-proof-approved"));
+                    Assert.Equal(missingProofState, await data.StateAsync()); Assert.Equal(preserved, await data.PreservedAsync());
+                } finally { await data.Rows(table).InsertOneAsync(proof); }
+                Assert.Equal(state, await data.StateAsync());
+            }
+        var journalFilter = new BsonDocument("_id", approved["journalId"]); var originalJournal = await data.Rows("journalEntries").Find(journalFilter).SingleAsync();
+        var originalDraft = AccountingBson.ReadDraft(originalJournal);
+        var alteredDraft = JournalDraft.FromResolved(originalDraft.Source, originalDraft.SourceRevision, originalDraft.Book, originalDraft.Dimensions,
+            originalDraft.Date, originalDraft.ChartId, originalDraft.ChartVersion, originalDraft.Lines.Select(line => new ResolvedJournalLine(
+                line.MappingKey, line.AccountId, line.AccountCode, new Money(line.Debit.Value == 0 ? 0 : line.Debit.Value + 1),
+                new Money(line.Credit.Value == 0 ? 0 : line.Credit.Value + 1))), originalDraft.ReversalOf);
+        var alteredJournal = originalJournal.DeepClone().AsBsonDocument;
+        alteredJournal["lines"] = new BsonArray(alteredDraft.Lines.Select(AccountingBson.Line)); alteredJournal["total"] = new BsonDecimal128(alteredDraft.Total.Value);
+        alteredJournal["fingerprint"] = alteredDraft.Fingerprint;
+        Assert.Equal(alteredDraft.Fingerprint, AccountingBson.ReadDraft(alteredJournal).Fingerprint);
+        Assert.Equal(1L, (await data.Rows("journalEntries").ReplaceOneAsync(journalFilter, alteredJournal)).ModifiedCount);
+        try {
+            var alteredState = await data.StateAsync();
+            await DeniedAsync(() => data.Service.PreviewAsync(data.Maker, data.Input()));
+            await DeniedAsync(() => data.Service.LookupAsync(data.Checker, D.DecideOperation, "valuation-proof-approved"));
+            Assert.Equal(alteredState, await data.StateAsync()); Assert.Equal(preserved, await data.PreservedAsync());
+        } finally { await data.Rows("journalEntries").ReplaceOneAsync(journalFilter, originalJournal); }
+        Assert.Equal(state, await data.StateAsync());
+        Assert.Equal(approved, await data.Service.LookupAsync(data.Checker, D.DecideOperation, "valuation-proof-approved"));
+        var second = await data.ProposeAsync("valuation-proof-restored");
+        var secondApproval = await data.DecideAsync(second["proposalId"].AsInt64, "valuation-proof-restored-approved");
+        await JournalAsync(data, secondApproval["journalId"].AsInt64, 11250m);
+        Assert.Equal(2L, await data.Rows(D.Allocations).CountDocumentsAsync(new BsonDocument()));
+        Assert.Equal(2L, await data.Rows("journalEntries").CountDocumentsAsync(new BsonDocument()));
+        Assert.Equal(preserved, await data.PreservedAsync()); await data.NoPaymentOrReleaseAsync();
+    }
+
+    internal static async Task JournalAsync(D data, long journalId, decimal total)
+    {
+        var journal = await data.Rows("journalEntries").Find(new BsonDocument("_id", journalId)).SingleAsync();
+        Assert.Equal(total, journal["total"].AsDecimal); Assert.Equal(data.Book["bookId"], journal["bookId"]);
+        var lines = journal["lines"].AsBsonArray; Assert.Equal(2, lines.Count);
+        var inventory = Assert.Single(lines, row => row["mappingKey"] == "inventory");
+        var accrual = Assert.Single(lines, row => row["mappingKey"] == "receipt_accrual");
+        Assert.Equal(total, inventory["debit"].AsDecimal); Assert.Equal(0m, inventory["credit"].AsDecimal);
+        Assert.Equal(0m, accrual["debit"].AsDecimal); Assert.Equal(total, accrual["credit"].AsDecimal);
+        Assert.Equal(data.Policy["inventoryAccountId"], inventory["accountId"]); Assert.Equal(data.Policy["receiptAccrualAccountId"], accrual["accountId"]);
+        Assert.Equal(lines.Sum(row => row["debit"].AsDecimal), lines.Sum(row => row["credit"].AsDecimal));
+    }
+    private static async Task NoAllocationAsync(D data)
+    {
+        foreach (var table in new[] { D.Allocations, D.ReceiptHeads, D.MatchHeads, "journalEntries", "accountingAuditEvents", "accountingPeriodHistory" })
+            Assert.False(await data.Rows(table).Find(new BsonDocument()).AnyAsync());
+    }
+    private static async Task DeniedAsync(Func<Task> action)
+    {
+        var failure = await Record.ExceptionAsync(action);
+        Assert.True(failure is DomainValidationException or AuthorizationDeniedException or PersistenceConflictException, failure?.ToString() ?? "Unexpected success");
+    }
+}

@@ -47,7 +47,8 @@ public static class RoleTemplates
             ["finance"] = [Permissions.OrganizationAddressRead, Permissions.BankReceiptRead, Permissions.BankReceiptConfirm, Permissions.BankStatementRead, Permissions.BankStatementStage, Permissions.PaymentReviewRead, Permissions.PaymentReviewCorrect, Permissions.ReceivingAccountRead, Permissions.ReceivingAccountDetailsRead,
                 Permissions.ReceivingAccountPropose, Permissions.ReceivingAccountVerify, Permissions.ReceivingAccountApprove, Permissions.FundingRead,
                 Permissions.SupplierBankRead, Permissions.SupplierBankDetailsRead, Permissions.SupplierBankPropose, Permissions.SupplierBankApprove,
-                Permissions.ProcurementDisbursementRead, Permissions.ProcurementDisbursementEvidenceRead],
+                Permissions.ProcurementDisbursementRead, Permissions.ProcurementDisbursementEvidenceRead,
+                Permissions.ProcurementStockValuationRead, Permissions.ProcurementStockValuationPropose, Permissions.ProcurementStockValuationDecide],
             ["system-admin"] = []
         }.ToImmutableDictionary(StringComparer.Ordinal);
 

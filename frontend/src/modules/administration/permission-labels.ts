@@ -1,4 +1,7 @@
 const labels: Record<string, string> = {
+  "procurement.stockvaluation.read": "Lihat penilaian stok ditahan",
+  "procurement.stockvaluation.propose": "Ajukan penilaian stok ditahan dengan verifikasi terbaru",
+  "procurement.stockvaluation.decide": "Putuskan penilaian stok secara independen dengan verifikasi terbaru",
   "supplier.claim.approve": "Putuskan klaim pemasok secara independen dengan verifikasi terbaru",
   "procurement.supplier.document.record": "Catat invoice atau SPH pemasok",
   "procurement.supplier.document.evidence.read": "Lihat gambar asli dan saran pembacaan dokumen pemasok",
