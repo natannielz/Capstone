@@ -78,6 +78,11 @@ internal abstract record OpenOutcome
     internal sealed record Opened(VerifiedOriginalHandle Handle) : OpenOutcome;
     internal sealed record Rejected(StorageInspection Inspection) : OpenOutcome;
 }
+internal abstract record NativeOpenOutcome
+{
+    internal sealed record Opened(VerifiedNativeOriginalHandle Handle) : NativeOpenOutcome;
+    internal sealed record Rejected(StorageInspection Inspection) : NativeOpenOutcome;
+}
 internal sealed record StoreActivation(IPrivateEvidenceStore? Store, string Reason);
 internal interface IPrivateEvidenceStore
 {
@@ -86,6 +91,7 @@ internal interface IPrivateEvidenceStore
     ValueTask<PublishOutcome> PublishAsync(ExpectedPublication expected, StorageIoBudget budget, CancellationToken cancellationToken);
     ValueTask<StorageInspection> InspectOriginalAsync(ExpectedPublication expected, StorageIoBudget budget, CancellationToken cancellationToken);
     ValueTask<OpenOutcome> OpenVerifiedAsync(ExpectedPublication expected, StorageIoBudget budget, CancellationToken cancellationToken);
+    ValueTask<NativeOpenOutcome> OpenVerifiedForNativeValidationAsync(ExpectedPublication expected, StorageIoBudget budget, CancellationToken cancellationToken);
 }
 /// <summary>No files, source reads, scanner verdicts or production activation.</summary>
 internal sealed class UnavailablePrivateEvidenceStore : IPrivateEvidenceStore
@@ -100,6 +106,8 @@ internal sealed class UnavailablePrivateEvidenceStore : IPrivateEvidenceStore
         ValueTask.FromResult(new StorageInspection(InspectionState.Unavailable, "storage_unavailable"));
     public ValueTask<OpenOutcome> OpenVerifiedAsync(ExpectedPublication expected, StorageIoBudget budget, CancellationToken cancellationToken) =>
         ValueTask.FromResult<OpenOutcome>(new OpenOutcome.Rejected(new StorageInspection(InspectionState.Unavailable, "storage_unavailable")));
+    public ValueTask<NativeOpenOutcome> OpenVerifiedForNativeValidationAsync(ExpectedPublication expected, StorageIoBudget budget, CancellationToken cancellationToken) =>
+        ValueTask.FromResult<NativeOpenOutcome>(new NativeOpenOutcome.Rejected(new StorageInspection(InspectionState.Unavailable, "storage_unavailable")));
 }
 internal static class StorageValidation
 {

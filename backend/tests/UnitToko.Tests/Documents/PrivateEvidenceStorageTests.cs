@@ -1,8 +1,13 @@
 using System.Diagnostics;
 using System.Runtime.Versioning;
+using System.Runtime.InteropServices;
+using System.Reflection;
 using System.Security.AccessControl;
 using System.Security.Principal;
 using System.Text;
+using System.Text.Json;
+using Microsoft.Win32.SafeHandles;
+using UnitToko.Platform.DocumentProcessing;
 using UnitToko.Platform.Storage;
 
 namespace UnitToko.Tests.Documents;
@@ -193,12 +198,143 @@ public sealed class PrivateEvidenceStorageTests
         using var root = new StorageRoot();
         File.WriteAllText(root.Original, "abc");
         var opened = Assert.IsType<OpenOutcome.Opened>(await root.Open().OpenVerifiedAsync(Expected(), Budget(), default));
+        Assert.Throws<IOException>(() => File.Open(root.Original, FileMode.Open, FileAccess.Read, FileShare.Read).Dispose());
         Assert.Throws<IOException>(() => File.Open(root.Original, FileMode.Open, FileAccess.Write, FileShare.ReadWrite).Dispose());
         Assert.Throws<IOException>(() => File.Delete(root.Original));
         await opened.Handle.DisposeAsync();
         Assert.Equal("abc", File.ReadAllText(root.Original));
         Assert.Throws<ObjectDisposedException>(() => opened.Handle.Stream.ReadByte());
     }
+
+    [WindowsStorageFact]
+    public async Task Native_capability_preserves_exact_original_identity_readonly_inheritance_and_independent_seek_positions()
+    {
+        using var root = new StorageRoot(); var store = root.Open();
+        Assert.IsType<StageOutcome.Sealed>(await store.StageAsync(Attempt(), new MemoryStream("abc"u8.ToArray()), Budget(), default));
+        Assert.Equal(PublishState.Published, (await store.PublishAsync(Expected(), Budget(), default)).State);
+        var opened = Assert.IsType<NativeOpenOutcome.Opened>(await store.OpenVerifiedForNativeValidationAsync(Expected(), Budget(), default));
+        await using var capability = opened.Handle;
+        Assert.Equal(Expected(), capability.Publication); Assert.Equal(Expected().Content, capability.Content); Assert.Equal(Attempt(), capability.Attempt);
+        Assert.Empty(typeof(VerifiedNativeOriginalHandle).GetConstructors(BindingFlags.Public | BindingFlags.Instance));
+        Assert.Equal(new[] { "Attempt", "Content", "Publication" }, typeof(VerifiedNativeOriginalHandle).GetProperties(BindingFlags.Public | BindingFlags.Instance).Select(property => property.Name).Order().ToArray());
+        Assert.DoesNotContain(typeof(VerifiedNativeOriginalHandle).GetProperties(BindingFlags.Public | BindingFlags.Instance), property => property.SetMethod is not null);
+        string identity;
+        using (var inspect = File.Open(root.Original, FileMode.Open, FileAccess.Read, FileShare.Read)) identity = NativeIdentity(inspect.SafeFileHandle);
+        Assert.Throws<IOException>(() => File.Open(root.Original, FileMode.Open, FileAccess.Write, FileShare.ReadWrite).Dispose());
+        Assert.Throws<IOException>(() => File.Delete(root.Original));
+        for (var run = 0; run < 2; run++) {
+            var result = await NativeRun(root, capability, "verify");
+            Assert.Equal("exited", result.Status); Assert.Equal(0, result.ExitCode); Assert.Equal(3, result.InputLength); Assert.Equal(AbcHash, result.InputSha256);
+            using var parsed = JsonDocument.Parse(result.Output); AssertNativeProof(parsed.RootElement, identity);
+            Assert.True(result.PeakJobMemoryBytes is > 0 and <= 268435456);
+            AssertProcessStopped(parsed.RootElement.GetProperty("pid").GetInt32());
+            File.Delete(System.IO.Path.Combine(root.Path, "native-ready.json"));
+        }
+        await capability.DisposeAsync();
+        using (var writable = File.Open(root.Original, FileMode.Open, FileAccess.ReadWrite, FileShare.None)) Assert.Equal(3, writable.Length);
+        Assert.Equal("abc", File.ReadAllText(root.Original));
+    }
+
+    [WindowsStorageFact]
+    public async Task Native_capability_rejects_corrupt_original_budget_tuple_or_disposal_before_spawning()
+    {
+        using var root = new StorageRoot(); var store = root.Open(); File.WriteAllText(root.Original, "abc");
+        var corrupt = new ExpectedPublication(Attempt(), 1, new StorageContent(3, new string('0', 64)));
+        var denied = Assert.IsType<NativeOpenOutcome.Rejected>(await store.OpenVerifiedForNativeValidationAsync(corrupt, Budget(), default));
+        Assert.Equal(InspectionState.Conflict, denied.Inspection.State);
+        Assert.IsType<NativeOpenOutcome.Rejected>(await store.OpenVerifiedForNativeValidationAsync(Expected(), Budget(2), default));
+        Assert.IsType<NativeOpenOutcome.Rejected>(await store.OpenVerifiedForNativeValidationAsync(Expected(Attempt(OtherStore)), Budget(), default));
+        using var canceled = new CancellationTokenSource(); canceled.Cancel();
+        Assert.IsType<NativeOpenOutcome.Rejected>(await store.OpenVerifiedForNativeValidationAsync(Expected(), Budget(), canceled.Token));
+        var opened = Assert.IsType<NativeOpenOutcome.Opened>(await store.OpenVerifiedForNativeValidationAsync(Expected(), Budget(), default));
+        await using var capability = opened.Handle;
+        foreach (var expected in new[] { corrupt, new ExpectedPublication(Attempt(), 2, Expected().Content), Expected(Attempt(OtherStore)) })
+            Assert.Equal("invalid_media", (await NativeRun(root, capability, "verify", expected: expected)).Status);
+        Assert.Equal("invalid_media", (await NativeRun(root, capability, "verify", maximumBytes: 0)).Status);
+        Assert.Equal("invalid_media", (await NativeRun(root, capability, "verify", maximumBytes: 2)).Status);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => NativeRun(root, capability, "verify", canceled.Token));
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => NativeRun(root, capability, "verify", maximumOutput: 16 * 1024 * 1024 + 1));
+        using var streamed = new MemoryStream("abc"u8.ToArray());
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => WindowsBoundedProcess.RunAsync("unused-before-admission", [],
+            256 * 1024 * 1024, TimeSpan.FromSeconds(20), streamed, 3, default, 128 * 1024 + 1));
+        Assert.Equal(0, streamed.Position);
+        await capability.DisposeAsync();
+        Assert.Equal("invalid_media", (await NativeRun(root, capability, "verify")).Status);
+        Assert.False(File.Exists(System.IO.Path.Combine(root.Path, "native-ready.json")));
+        using var unlocked = File.Open(root.Original, FileMode.Open, FileAccess.ReadWrite, FileShare.None); Assert.Equal(3, unlocked.Length);
+    }
+
+    [WindowsStorageFact]
+    public async Task Native_child_retains_original_after_caller_disposal_and_job_cleans_up_cancellation_deadline_and_output_overflow()
+    {
+        foreach (var mode in new[] { "hold", "cancel", "timeout", "flood" }) {
+            using var root = new StorageRoot(); File.WriteAllText(root.Original, "abc");
+            var opened = Assert.IsType<NativeOpenOutcome.Opened>(await root.Open().OpenVerifiedForNativeValidationAsync(Expected(), Budget(), default));
+            await using var capability = opened.Handle; using var cancellation = new CancellationTokenSource();
+            var run = NativeRun(root, capability, mode == "flood" ? "flood" : "hold", cancellation.Token,
+                timeout: mode == "timeout" ? TimeSpan.FromSeconds(6) : TimeSpan.FromSeconds(20), maximumOutput: mode == "flood" ? 64 : 4096);
+            int? pid = null;
+            try {
+                using var ready = await NativeReady(root, run); pid = ready.RootElement.GetProperty("pid").GetInt32();
+                Assert.True(ready.RootElement.GetProperty("inJob").GetBoolean()); Assert.False(run.IsCompleted);
+                await capability.DisposeAsync();
+                Assert.Throws<IOException>(() => File.Open(root.Original, FileMode.Open, FileAccess.Write, FileShare.ReadWrite).Dispose());
+                Assert.Throws<IOException>(() => File.Delete(root.Original));
+                if (mode == "cancel") {
+                    cancellation.Cancel(); await Assert.ThrowsAnyAsync<OperationCanceledException>(() => run);
+                } else {
+                    var finishing = Stopwatch.StartNew();
+                    if (mode != "timeout") File.WriteAllText(System.IO.Path.Combine(root.Path, "native-release"), "release");
+                    var result = await run;
+                    Assert.Equal(mode switch { "timeout" => "decode_timeout", "flood" => "decoder_error", _ => "exited" }, result.Status);
+                    if (mode == "hold") { Assert.Equal(0, result.ExitCode); Assert.Equal(AbcHash, result.InputSha256); }
+                    else { Assert.Equal(-1, result.ExitCode); Assert.Equal(0, result.InputLength); Assert.Null(result.InputSha256); }
+                    if (mode == "flood") Assert.True(finishing.Elapsed < TimeSpan.FromSeconds(8), "Output overflow waited for the overall child deadline");
+                }
+                AssertProcessStopped(pid.Value);
+                using (var unlocked = File.Open(root.Original, FileMode.Open, FileAccess.ReadWrite, FileShare.None)) Assert.Equal(3, unlocked.Length);
+                Assert.Equal("abc", File.ReadAllText(root.Original)); File.Delete(root.Original); Assert.False(File.Exists(root.Original));
+            } finally {
+                cancellation.Cancel(); try { await run; } catch (OperationCanceledException) { }
+                if (pid.HasValue) AssertProcessStopped(pid.Value);
+            }
+        }
+    }
+
+    private static Task<BoundedProcessResult> NativeRun(StorageRoot root, VerifiedNativeOriginalHandle capability, string mode, CancellationToken ct = default,
+        ExpectedPublication? expected = null, long maximumBytes = 3, TimeSpan? timeout = null, int maximumOutput = 4096) {
+        var runtime = Environment.GetEnvironmentVariable("UNITTOKO_DECODER_DOTNET") ?? throw new InvalidOperationException("Set the approved local .NET runtime for actual native handle tests");
+        var probe = System.IO.Path.Combine(AppContext.BaseDirectory, "PersistenceProbe", "UnitToko.PersistenceProbe.dll");
+        Assert.True(File.Exists(probe));
+        return WindowsBoundedProcess.RunAsync(runtime, [probe, "native-private-input", mode, root.Path], 256 * 1024 * 1024,
+            timeout ?? TimeSpan.FromSeconds(20), capability, expected ?? Expected(), maximumBytes, ct, maximumOutput);
+    }
+    private static async Task<JsonDocument> NativeReady(StorageRoot root, Task<BoundedProcessResult> run) {
+        var path = System.IO.Path.Combine(root.Path, "native-ready.json"); var started = Stopwatch.StartNew();
+        while (!File.Exists(path)) {
+            if (run.IsCompleted) { var result = await run; throw new InvalidOperationException($"Native test child stopped before ready: {result.Status}/{result.ExitCode}/{result.Error}"); }
+            if (started.Elapsed > TimeSpan.FromSeconds(15)) throw new TimeoutException("Native test child did not signal readiness");
+            await Task.Delay(20);
+        }
+        return JsonDocument.Parse(await File.ReadAllTextAsync(path));
+    }
+    private static void AssertNativeProof(JsonElement proof, string identity) {
+        Assert.Equal(0, proof.GetProperty("initialPosition").GetInt64()); Assert.Equal(3, proof.GetProperty("length").GetInt64());
+        Assert.Equal((int)'c', proof.GetProperty("last").GetInt32()); Assert.Equal(AbcHash, proof.GetProperty("hash").GetString());
+        Assert.Equal(identity, proof.GetProperty("identity").GetString()); Assert.True(proof.GetProperty("inJob").GetBoolean());
+        Assert.False(proof.GetProperty("writeSucceeded").GetBoolean()); Assert.Equal(0u, proof.GetProperty("written").GetUInt32()); Assert.Equal(5, proof.GetProperty("writeError").GetInt32());
+    }
+    private static void AssertProcessStopped(int pid) {
+        try { using var process = Process.GetProcessById(pid); Assert.True(process.WaitForExit(2000), "Bounded native child survived cleanup"); }
+        catch (ArgumentException) { /* An exited child may already be absent from the process table. */ }
+    }
+    private static string NativeIdentity(SafeFileHandle handle) {
+        Assert.True(GetFileInformationByHandle(handle, out var info)); return $"{info.VolumeSerialNumber:x8}:{info.FileIndexHigh:x8}:{info.FileIndexLow:x8}";
+    }
+    [StructLayout(LayoutKind.Sequential)] private struct NativeFileInformation {
+        public uint Attributes, CreationLow, CreationHigh, AccessLow, AccessHigh, WriteLow, WriteHigh, VolumeSerialNumber, SizeHigh, SizeLow, Links, FileIndexHigh, FileIndexLow;
+    }
+    [DllImport("kernel32.dll", SetLastError = true)] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool GetFileInformationByHandle(SafeFileHandle handle, out NativeFileInformation information);
 
     [WindowsStorageFact]
     public async Task Failed_integrity_open_returns_no_stream()
@@ -375,6 +511,9 @@ public sealed class PrivateEvidenceStorageTests
         if (result is OpenOutcome.Opened unexpected) await unexpected.Handle.DisposeAsync();
         var outcome = Assert.IsType<OpenOutcome.Rejected>(result);
         Assert.Equal(InspectionState.Unavailable, outcome.Inspection.State);
+        var native = await root.Open().OpenVerifiedForNativeValidationAsync(Expected(), Budget(), default);
+        if (native is NativeOpenOutcome.Opened unexpectedNative) await unexpectedNative.Handle.DisposeAsync();
+        Assert.Equal(InspectionState.Unavailable, Assert.IsType<NativeOpenOutcome.Rejected>(native).Inspection.State);
         Assert.Equal("abc", File.ReadAllText(root.Original));
     }
 
@@ -408,7 +547,7 @@ public sealed class PrivateEvidenceStorageTests
         Assert.Equal(InspectionState.Unavailable, outcome.Inspection.State);
     }
 
-    private sealed class StorageRoot : IDisposable
+    internal sealed class StorageRoot : IDisposable
     {
         private readonly string parent;
         private readonly string marker = Guid.NewGuid().ToString("N");
@@ -423,13 +562,25 @@ public sealed class PrivateEvidenceStorageTests
 
         public StorageRoot()
         {
-            parent = System.IO.Path.GetFullPath(System.IO.Path.Combine(AppContext.BaseDirectory, "../../../../../"));
-            if (!File.Exists(System.IO.Path.Combine(parent, "Directory.Build.props")))
-                throw new InvalidOperationException("Fixture parent is not the isolated backend checkout.");
+            var configured = Environment.GetEnvironmentVariable("UNITTOKO_EVIDENCE_TEST_PARENT");
+            if (configured is null) {
+                parent = System.IO.Path.GetFullPath(System.IO.Path.Combine(AppContext.BaseDirectory, "../../../../../"));
+                if (!File.Exists(System.IO.Path.Combine(parent, "Directory.Build.props")))
+                    throw new InvalidOperationException("Fixture parent is not the isolated backend checkout.");
+            } else {
+                if (!System.IO.Path.IsPathFullyQualified(configured) || !Directory.Exists(configured))
+                    throw new InvalidOperationException("Evidence test parent must be an existing absolute directory.");
+                parent = System.IO.Path.GetFullPath(configured);
+            }
+            // Only synthetic fixture bytes move. The production store still validates the
+            // actual private leaf and every ancestor; no ACL or trusted-operator rule changes.
+            for (DirectoryInfo? ancestor = new(parent); ancestor is not null; ancestor = ancestor.Parent)
+                if ((ancestor.Attributes & FileAttributes.ReparsePoint) != 0) throw new InvalidOperationException("Evidence test parent contains a link.");
             Path = System.IO.Path.Combine(parent, ".storage-test-" + marker);
             if (Directory.Exists(Path)) throw new InvalidOperationException("Fixture collision.");
             CreatePrivateDirectory(Path);
             File.WriteAllText(System.IO.Path.Combine(Path, ".fixture-id"), marker);
+            File.WriteAllText(System.IO.Path.Combine(Path, ".fixture-parent"), parent);
         }
 
         public static void CreatePrivateDirectory(string path)
@@ -467,7 +618,8 @@ public sealed class PrivateEvidenceStorageTests
             if (System.IO.Path.GetDirectoryName(exact) != parent.TrimEnd(System.IO.Path.DirectorySeparatorChar) ||
                 System.IO.Path.GetFileName(exact) != ".storage-test-" + marker ||
                 (File.GetAttributes(exact) & FileAttributes.ReparsePoint) != 0 ||
-                File.ReadAllText(System.IO.Path.Combine(exact, ".fixture-id")) != marker)
+                File.ReadAllText(System.IO.Path.Combine(exact, ".fixture-id")) != marker ||
+                File.ReadAllText(System.IO.Path.Combine(exact, ".fixture-parent")) != parent)
                 throw new InvalidOperationException("Fixture cleanup identity mismatch.");
             RemoveLinks(exact);
             Directory.Delete(exact, true);

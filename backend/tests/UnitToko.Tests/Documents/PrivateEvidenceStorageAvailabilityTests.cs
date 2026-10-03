@@ -20,6 +20,8 @@ public sealed class PrivateEvidenceStorageAvailabilityTests
         Assert.Equal(InspectionState.Unavailable, (await store.InspectOriginalAsync(expected, budget, default)).State);
         Assert.Equal(PublishState.Unavailable, (await store.PublishAsync(expected, budget, default)).State);
         Assert.IsType<OpenOutcome.Rejected>(await store.OpenVerifiedAsync(expected, budget, default));
+        var native = Assert.IsType<NativeOpenOutcome.Rejected>(await store.OpenVerifiedForNativeValidationAsync(expected, budget, default));
+        Assert.Equal(InspectionState.Unavailable, native.Inspection.State);
     }
 
     [UnsupportedStorageHostFact]

@@ -149,6 +149,37 @@ internal sealed class WindowsLocalEvidenceStore : IPrivateEvidenceStore
         finally { if (file is not null) await file.DisposeAsync(); }
     }
 
+    public async ValueTask<NativeOpenOutcome> OpenVerifiedForNativeValidationAsync(ExpectedPublication expected, StorageIoBudget budget, CancellationToken cancellationToken)
+    {
+        if (!Valid(expected, budget)) return new NativeOpenOutcome.Rejected(new(InspectionState.Unavailable, "storage_input_invalid"));
+        using var operation = new StorageOperation(budget, cancellationToken);
+        FileStream? file = null;
+        try
+        {
+            CheckNamespace(operation);
+            var path = OriginalPath(expected.Attempt);
+            if (!root.ValidateLeaf(path)) return new NativeOpenOutcome.Rejected(new(InspectionState.Absent));
+            // Only this acquisition permits another reader. Write/delete sharing stays denied throughout verification and native use.
+            file = new FileStream(path, new FileStreamOptions
+            {
+                Mode = FileMode.Open, Access = FileAccess.Read, Share = FileShare.Read, BufferSize = operation.Budget.BufferBytes,
+                Options = FileOptions.Asynchronous | FileOptions.SequentialScan, PreallocationSize = 0
+            });
+            root.ValidateFile(file); operation.Check();
+            var inspection = await VerifyAsync(file, expected.Content, operation);
+            if (inspection.State != InspectionState.Matching) return new NativeOpenOutcome.Rejected(inspection);
+            CheckNamespace(operation); root.ValidateLeaf(path); root.ValidateFile(file); operation.Check();
+            var owned = new VerifiedNativeOriginalHandle(file, expected);
+            operation.Check();
+            file = null;
+            return new NativeOpenOutcome.Opened(owned);
+        }
+        catch (FileNotFoundException) { return new NativeOpenOutcome.Rejected(new(InspectionState.Absent)); }
+        catch (StorageUnavailableException exception) { return new NativeOpenOutcome.Rejected(new(InspectionState.Unavailable, Reason(exception), exception)); }
+        catch (Exception exception) when (IsStorageFailure(exception)) { return new NativeOpenOutcome.Rejected(new(InspectionState.Unknown, Reason(exception), exception)); }
+        finally { if (file is not null) await file.DisposeAsync(); }
+    }
+
     private bool Valid(ExpectedPublication? expected, StorageIoBudget? budget) =>
         expected is not null && budget is not null && expected.Attempt.StoreId == storeId && expected.Content.Length <= budget.MaximumBytes;
     private void CheckNamespace(StorageOperation operation) { operation.Check(); root.Validate(); operation.Check(); }

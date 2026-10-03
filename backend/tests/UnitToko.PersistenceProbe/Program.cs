@@ -7,6 +7,9 @@ using UnitToko.Platform.Mongo;
 
 // This is a disposable integration-test process, never a deployable worker.
 // It has no configurable destination and can only write to this local test namespace.
+if (args.Length == 3 && args[0] == "native-private-input" && OperatingSystem.IsWindows())
+    return await NativeInputProbe.RunAsync(args[1], args[2]);
+
 if (args.Length != 3 ||
     !Regex.IsMatch(args[0], "\\Aunittoko_test_[a-f0-9]{32}_outboxprocess\\z", RegexOptions.CultureInvariant) ||
     !DateTimeOffset.TryParseExact(args[1], "O", CultureInfo.InvariantCulture,
