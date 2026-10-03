@@ -52,7 +52,7 @@ public sealed partial class BankReceiptService
                 keys.Any(key=>!indexes.Any(index=>Matches(index,key))) || indexes.Any(index=>InvoiceStorage.Unsafe(index) || index.Contains("partialFilterExpression") ||
                     index.GetValue("unique",false).AsBoolean && index["name"]!="_id_" && !keys.Any(key=>Matches(index,key)))) throw B.Broken();
         }
-        await BankTransactionClaimSchemas.RequireStorageAsync(database, ct);
+        await ProcurementBankClaimSchemas.RequireStorageAsync(database, ct);
     }
 
     private async Task FenceAsync(Context context,CancellationToken ct) {

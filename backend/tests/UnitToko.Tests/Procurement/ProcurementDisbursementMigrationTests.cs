@@ -61,16 +61,22 @@ public sealed class ProcurementDisbursementMigrationTests(MongoFixture fixture)
         }
         Assert.Equal(retained, await RetainedAsync());
         await new CollectionMigrations(data.Database, data.Clock).ApplyAsync();
-        Assert.Equal(retained, await RetainedAsync()); Assert.Equal(indexes, await IndexesAsync());
+        Assert.Equal(retained, await RetainedAsync());
+        var upgradedIndexes = await IndexesAsync();
+        foreach (var entry in indexes.Where(entry => entry.Name != BankTransactionClaims.Collection)) Assert.Equal(entry.Value, upgradedIndexes[entry.Name]);
+        await ProcurementSettlementMigrationTests.RequireInstalledIndexesAsync(data.Database);
         var upgraded = await HistoryAsync(data.Database);
         Assert.Equal(history, new BsonArray(upgraded.Take(65)));
-        Assert.Equal(66, upgraded.Count); Assert.Equal("applied", upgraded[^1]["state"].AsString);
+        Assert.Equal(CollectionMigrations.CurrentVersion, upgraded.Count); Assert.Equal("applied", upgraded.Single(row => row["_id"] == 66)["state"].AsString);
+        Assert.Equal("applied", upgraded[^1]["state"].AsString);
         var after = await DefinitionsAsync(data.Database); Assert.Equal(definitions.Count, after.Count);
         foreach (var before in definitions) {
             var name = before["name"].AsString;
             var expected = before.DeepClone().AsBsonDocument;
             if (ProcurementDisbursementEvidenceSchemas.Collections.Contains(name))
                 expected["options"]["validator"] = ProcurementDisbursementEvidenceSchemas.Extend(name, before["options"]["validator"].AsBsonDocument);
+            if (name == BankTransactionClaims.Collection)
+                expected["options"]["validator"] = ProcurementBankClaimSchemas.Extend(before["options"]["validator"].AsBsonDocument);
             Assert.Equal(expected, Assert.Single(after, row => row["name"] == name));
         }
         foreach (var name in ProcurementDisbursementSchemas.Collections) Assert.False(await data.Rows(name).Find(new BsonDocument()).AnyAsync());
@@ -119,13 +125,14 @@ public sealed class ProcurementDisbursementMigrationTests(MongoFixture fixture)
         await new CollectionMigrations(data.Database, data.Catalog.Clock).ApplyAsync();
         Assert.Equal(history, new BsonArray((await HistoryAsync(data.Database)).Take(65))); Assert.Equal(preserved, await PreservedAsync(data.Database));
         var after = await DefinitionsAsync(data.Database);
-        var changed = ProcurementDisbursementSchemas.Collections.Concat(ProcurementDisbursementEvidenceSchemas.Collections).ToHashSet(StringComparer.Ordinal);
+        var changed = ProcurementDisbursementSchemas.Collections.Concat(ProcurementDisbursementEvidenceSchemas.Collections).Append(BankTransactionClaims.Collection).ToHashSet(StringComparer.Ordinal);
         Assert.Equal(before.Where(row => !changed.Contains(row["name"].AsString)), after.Where(row => !changed.Contains(row["name"].AsString)));
         foreach (var name in changed) {
             var current = Assert.Single(after, row => row["name"] == name);
             Assert.Equal(Assert.Single(before, row => row["name"] == name)["info"]["uuid"], current["info"]["uuid"]);
             Assert.Equal("strict", current["options"]["validationLevel"]); Assert.Equal("error", current["options"]["validationAction"]);
-            var expected = ProcurementDisbursementEvidenceSchemas.Collections.Contains(name) ? ProcurementDisbursementEvidenceSchemas.Validator(name) : ProcurementDisbursementSchemas.Validator(name);
+            var expected = name == BankTransactionClaims.Collection ? ProcurementBankClaimSchemas.Validator() :
+                ProcurementDisbursementEvidenceSchemas.Collections.Contains(name) ? ProcurementDisbursementEvidenceSchemas.Validator(name) : ProcurementDisbursementSchemas.Validator(name);
             Assert.True(InventorySchemas.Contains(current["options"]["validator"].AsBsonDocument, expected));
         }
         foreach (var name in ProcurementDisbursementSchemas.Collections) {
@@ -176,10 +183,11 @@ public sealed class ProcurementDisbursementMigrationTests(MongoFixture fixture)
 
     internal static async Task RestoreV65Async(IMongoDatabase database, bool restoreSharedValidators = true)
     {
+        await ProcurementSettlementMigrationTests.RestoreV66Async(database);
         IMongoCollection<BsonDocument> Rows(string name) => database.GetCollection<BsonDocument>(name);
         var history = await HistoryAsync(database);
         if (history.Count == 65) { Assert.All(history, row => Assert.Equal("applied", row["state"])); return; }
-        Assert.Equal(CollectionMigrations.CurrentVersion, history.Count); Assert.All(history, row => Assert.Equal("applied", row["state"]));
+        Assert.Equal(66, history.Count); Assert.All(history, row => Assert.Equal("applied", row["state"]));
         Assert.Equal(new[] { 66 }, history.Skip(65).Select(row => row["_id"].AsInt32));
         foreach (var name in ProcurementDisbursementSchemas.Collections) {
             Assert.False(await Rows(name).Find(new BsonDocument()).AnyAsync()); Assert.False(await Rows("idCounters").Find(new BsonDocument("_id", name)).AnyAsync());

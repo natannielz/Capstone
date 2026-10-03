@@ -23112,6 +23112,1176 @@
         ]
       }
     },
+    "/api/v1/procurement/settlements/targets/query": {
+      "post": {
+        "tags": [
+          "UnitToko.Api"
+        ],
+        "operationId": "ProcurementSettlementTargets",
+        "parameters": [
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "required": true,
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProcurementSettlementReadInputDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProcurementTargetsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
+    "/api/v1/procurement/settlements/disbursements/query": {
+      "post": {
+        "tags": [
+          "UnitToko.Api"
+        ],
+        "operationId": "ProcurementSettlementDisbursements",
+        "parameters": [
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "required": true,
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProcurementSettlementListInputDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProcurementSettlementDisbursementsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
+    "/api/v1/procurement/settlements/history/query": {
+      "post": {
+        "tags": [
+          "UnitToko.Api"
+        ],
+        "operationId": "ProcurementSettlementHistory",
+        "parameters": [
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "required": true,
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProcurementSettlementListInputDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProcurementSettlementHistoryDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
+    "/api/v1/procurement/settlements/operations/query": {
+      "post": {
+        "tags": [
+          "UnitToko.Api"
+        ],
+        "operationId": "RecoverProcurementSettlement",
+        "parameters": [
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "required": true,
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProcurementSettlementRecoveryInputDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProcurementSettlementRecoveryDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
+    "/api/v1/procurement/settlements/disbursements/{id}/query": {
+      "post": {
+        "tags": [
+          "UnitToko.Api"
+        ],
+        "operationId": "ReadProcurementSettlement",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "required": true,
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProcurementSettlementReadInputDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProcurementSettlementReadDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
+    "/api/v1/procurement/settlements/disbursements/{id}/options/query": {
+      "post": {
+        "tags": [
+          "UnitToko.Api"
+        ],
+        "operationId": "ProcurementSettlementOptions",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "required": true,
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProcurementSettlementReadInputDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProcurementSettlementOptionsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
+    "/api/v1/procurement/settlements/disbursements/{id}/bank-imports/query": {
+      "post": {
+        "tags": [
+          "UnitToko.Api"
+        ],
+        "operationId": "ProcurementSettlementBankImports",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "required": true,
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProcurementSettlementImportsInputDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProcurementSettlementImportsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
+    "/api/v1/procurement/settlements/disbursements/{id}/bank-imports/{importId}/debits/query": {
+      "post": {
+        "tags": [
+          "UnitToko.Api"
+        ],
+        "operationId": "ProcurementSettlementDebits",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "importId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "required": true,
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProcurementSettlementReadInputDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProcurementSettlementDebitsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
+    "/api/v1/procurement/settlements/disbursements/{id}/preview/query": {
+      "post": {
+        "tags": [
+          "UnitToko.Api"
+        ],
+        "operationId": "PreviewProcurementSettlement",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "description": "One quoted nonnegative Int64 resource version from the latest response; never a JavaScript number.",
+            "required": true,
+            "schema": {
+              "maxLength": 21,
+              "minLength": 3,
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "required": true,
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProcurementSettlementPreviewInputDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProcurementSettlementPreviewDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
+    "/api/v1/procurement/settlements/disbursements/{id}/verify": {
+      "post": {
+        "tags": [
+          "UnitToko.Api"
+        ],
+        "operationId": "VerifyProcurementSettlement",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "description": "One quoted nonnegative Int64 resource version from the latest response; never a JavaScript number.",
+            "required": true,
+            "schema": {
+              "maxLength": 21,
+              "minLength": 3,
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "Reuse this key only for an unchanged logical command, including after an uncertain response.",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "required": true,
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProcurementSettlementVerifyDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProcurementSettlementSummaryDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
     "/api/v1/ordering/drafts/query": {
       "post": {
         "tags": [
@@ -52301,11 +53471,7 @@
             "$ref": "#/components/schemas/LongId"
           },
           "rowNumber": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
+            "type": "integer",
             "format": "int32"
           },
           "binding": {
@@ -52484,11 +53650,7 @@
             "$ref": "#/components/schemas/LongId"
           },
           "rowNumber": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
+            "type": "integer",
             "format": "int32"
           }
         },
@@ -64448,6 +65610,888 @@
         },
         "additionalProperties": false
       },
+      "ProcurementSettlementAccountDto": {
+        "required": [
+          "mappingKey",
+          "accountId",
+          "accountCode"
+        ],
+        "type": "object",
+        "properties": {
+          "mappingKey": {
+            "type": "string"
+          },
+          "accountId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "accountCode": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProcurementSettlementAccountingDto": {
+        "required": [
+          "bookId",
+          "chartVersionId",
+          "periodId",
+          "periodMonth",
+          "supplierAdvance",
+          "cash"
+        ],
+        "type": "object",
+        "properties": {
+          "bookId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "chartVersionId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "periodId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "periodMonth": {
+            "type": "string"
+          },
+          "supplierAdvance": {
+            "$ref": "#/components/schemas/ProcurementSettlementAccountDto"
+          },
+          "cash": {
+            "$ref": "#/components/schemas/ProcurementSettlementAccountDto"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProcurementSettlementDebitChoiceDto": {
+        "required": [
+          "rowNumber",
+          "transactionId",
+          "bookedDate",
+          "amount",
+          "direction",
+          "reference",
+          "eligible",
+          "issue"
+        ],
+        "type": "object",
+        "properties": {
+          "rowNumber": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "transactionId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "bookedDate": {
+            "type": "string"
+          },
+          "amount": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "direction": {
+            "type": "string"
+          },
+          "reference": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "eligible": {
+            "type": "boolean"
+          },
+          "issue": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProcurementSettlementDebitDto": {
+        "required": [
+          "importId",
+          "rowNumber",
+          "transactionId",
+          "bookedDate",
+          "amount",
+          "direction",
+          "reference"
+        ],
+        "type": "object",
+        "properties": {
+          "importId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "rowNumber": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "transactionId": {
+            "type": "string"
+          },
+          "bookedDate": {
+            "type": "string"
+          },
+          "amount": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "direction": {
+            "type": "string"
+          },
+          "reference": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProcurementSettlementDebitsDto": {
+        "required": [
+          "disbursementId",
+          "importId",
+          "payingAccountId",
+          "payingAccountVersionId",
+          "items"
+        ],
+        "type": "object",
+        "properties": {
+          "disbursementId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "importId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "payingAccountId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "payingAccountVersionId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProcurementSettlementDebitChoiceDto"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProcurementSettlementDisbursementChoiceDto": {
+        "required": [
+          "disbursement",
+          "settlement"
+        ],
+        "type": "object",
+        "properties": {
+          "disbursement": {
+            "$ref": "#/components/schemas/ProcurementSettlementDisbursementDto"
+          },
+          "settlement": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ProcurementSettlementSummaryDto"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProcurementSettlementDisbursementDto": {
+        "required": [
+          "id",
+          "version",
+          "draftId",
+          "location",
+          "authorization",
+          "amount",
+          "transferDate",
+          "transferReference",
+          "recordedAt",
+          "beneficiary",
+          "payingAccount",
+          "original"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "version": {
+            "type": "string"
+          },
+          "draftId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "location": {
+            "$ref": "#/components/schemas/ProcurementLocationDto"
+          },
+          "authorization": {
+            "$ref": "#/components/schemas/ProcurementDisbursementAuthorizationDto"
+          },
+          "amount": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "transferDate": {
+            "type": "string"
+          },
+          "transferReference": {
+            "type": "string"
+          },
+          "recordedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "beneficiary": {
+            "$ref": "#/components/schemas/ProcurementDisbursementBeneficiaryDto"
+          },
+          "payingAccount": {
+            "$ref": "#/components/schemas/ProcurementDisbursementAccountDto"
+          },
+          "original": {
+            "$ref": "#/components/schemas/ProcurementSettlementOriginalDto"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProcurementSettlementDisbursementsDto": {
+        "required": [
+          "location",
+          "items",
+          "nextDisbursementId"
+        ],
+        "type": "object",
+        "properties": {
+          "location": {
+            "$ref": "#/components/schemas/ProcurementLocationDto"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProcurementSettlementDisbursementChoiceDto"
+            }
+          },
+          "nextDisbursementId": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LongId"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProcurementSettlementHistoryDto": {
+        "required": [
+          "location",
+          "items",
+          "nextSettlementId"
+        ],
+        "type": "object",
+        "properties": {
+          "location": {
+            "$ref": "#/components/schemas/ProcurementLocationDto"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProcurementSettlementViewDto"
+            }
+          },
+          "nextSettlementId": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LongId"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProcurementSettlementImportDto": {
+        "required": [
+          "id",
+          "filename",
+          "profileName",
+          "recordedAt",
+          "rowCount"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "filename": {
+            "type": "string"
+          },
+          "profileName": {
+            "type": "string"
+          },
+          "recordedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "rowCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProcurementSettlementImportsDto": {
+        "required": [
+          "disbursementId",
+          "payingAccountId",
+          "payingAccountVersionId",
+          "items",
+          "nextImportId"
+        ],
+        "type": "object",
+        "properties": {
+          "disbursementId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "payingAccountId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "payingAccountVersionId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProcurementSettlementImportDto"
+            }
+          },
+          "nextImportId": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LongId"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProcurementSettlementImportsInputDto": {
+        "required": [
+          "purpose"
+        ],
+        "type": "object",
+        "properties": {
+          "purpose": {
+            "type": "string"
+          },
+          "beforeId": {
+            "maxLength": 19,
+            "pattern": "^(?:[1-9][0-9]{0,17}|[1-8][0-9]{18}|9[0-1][0-9]{17}|92[0-1][0-9]{16}|922[0-2][0-9]{15}|9223[0-2][0-9]{14}|92233[0-6][0-9]{13}|922337[0-1][0-9]{12}|92233720[0-2][0-9]{10}|922337203[0-5][0-9]{9}|9223372036[0-7][0-9]{8}|92233720368[0-4][0-9]{7}|922337203685[0-3][0-9]{6}|9223372036854[0-6][0-9]{5}|92233720368547[0-6][0-9]{4}|922337203685477[0-4][0-9]{3}|9223372036854775[0-7][0-9]{2}|922337203685477580[0-6]|9223372036854775807)$(?![\\s\\S])",
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Positive decimal Int64 string, from 1 through 9223372036854775807. JSON numbers are invalid."
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProcurementSettlementInputDto": {
+        "required": [
+          "policyId",
+          "policyRevision",
+          "bankImportId",
+          "bankRowNumber",
+          "observedBeneficiary",
+          "beneficiaryVerificationReference",
+          "transferVerificationReference"
+        ],
+        "type": "object",
+        "properties": {
+          "policyId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "policyRevision": {
+            "type": "string"
+          },
+          "bankImportId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "bankRowNumber": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "observedBeneficiary": {
+            "$ref": "#/components/schemas/ReceivingAccountDetailsDto"
+          },
+          "beneficiaryVerificationReference": {
+            "type": "string"
+          },
+          "transferVerificationReference": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProcurementSettlementListInputDto": {
+        "required": [
+          "purpose",
+          "location"
+        ],
+        "type": "object",
+        "properties": {
+          "purpose": {
+            "type": "string"
+          },
+          "location": {
+            "$ref": "#/components/schemas/ProcurementLocationDto"
+          },
+          "beforeId": {
+            "maxLength": 19,
+            "pattern": "^(?:[1-9][0-9]{0,17}|[1-8][0-9]{18}|9[0-1][0-9]{17}|92[0-1][0-9]{16}|922[0-2][0-9]{15}|9223[0-2][0-9]{14}|92233[0-6][0-9]{13}|922337[0-1][0-9]{12}|92233720[0-2][0-9]{10}|922337203[0-5][0-9]{9}|9223372036[0-7][0-9]{8}|92233720368[0-4][0-9]{7}|922337203685[0-3][0-9]{6}|9223372036854[0-6][0-9]{5}|92233720368547[0-6][0-9]{4}|922337203685477[0-4][0-9]{3}|9223372036854775[0-7][0-9]{2}|922337203685477580[0-6]|9223372036854775807)$(?![\\s\\S])",
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Positive decimal Int64 string, from 1 through 9223372036854775807. JSON numbers are invalid."
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProcurementSettlementOptionsDto": {
+        "required": [
+          "disbursement",
+          "items"
+        ],
+        "type": "object",
+        "properties": {
+          "disbursement": {
+            "$ref": "#/components/schemas/ProcurementSettlementDisbursementDto"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProcurementSettlementPolicyDto"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProcurementSettlementOriginalDto": {
+        "required": [
+          "draftId",
+          "draftRevision",
+          "reservationId",
+          "reference"
+        ],
+        "type": "object",
+        "properties": {
+          "draftId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "draftRevision": {
+            "type": "string"
+          },
+          "reservationId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "reference": {
+            "$ref": "#/components/schemas/PaymentEvidenceReferenceDto"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProcurementSettlementPolicyDto": {
+        "required": [
+          "id",
+          "location",
+          "revision",
+          "active",
+          "approvedAt",
+          "expiresAt",
+          "rule",
+          "allowReferenceOnly",
+          "payingAccountId",
+          "payingAccountVersionId",
+          "currency",
+          "bookId",
+          "chartVersionId",
+          "supplierAdvanceMapping",
+          "supplierAdvanceAccountId",
+          "supplierAdvanceAccountCode",
+          "cashMapping",
+          "cashAccountId",
+          "cashAccountCode",
+          "bankDebitVerificationProcedureReference",
+          "beneficiaryVerificationProcedureReference",
+          "trustedBankChannelReference",
+          "operatingOwnerReference",
+          "approvalReference"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "location": {
+            "$ref": "#/components/schemas/ProcurementLocationDto"
+          },
+          "revision": {
+            "type": "string"
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "approvedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "rule": {
+            "type": "string"
+          },
+          "allowReferenceOnly": {
+            "type": "boolean"
+          },
+          "payingAccountId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "payingAccountVersionId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "bookId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "chartVersionId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "supplierAdvanceMapping": {
+            "type": "string"
+          },
+          "supplierAdvanceAccountId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "supplierAdvanceAccountCode": {
+            "type": "string"
+          },
+          "cashMapping": {
+            "type": "string"
+          },
+          "cashAccountId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "cashAccountCode": {
+            "type": "string"
+          },
+          "bankDebitVerificationProcedureReference": {
+            "type": "string"
+          },
+          "beneficiaryVerificationProcedureReference": {
+            "type": "string"
+          },
+          "trustedBankChannelReference": {
+            "type": "string"
+          },
+          "operatingOwnerReference": {
+            "type": "string"
+          },
+          "approvalReference": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProcurementSettlementPreviewDto": {
+        "required": [
+          "disbursement",
+          "input",
+          "policy",
+          "debit",
+          "accounting",
+          "postingDate",
+          "binding",
+          "observedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "disbursement": {
+            "$ref": "#/components/schemas/ProcurementSettlementDisbursementDto"
+          },
+          "input": {
+            "$ref": "#/components/schemas/ProcurementSettlementInputDto"
+          },
+          "policy": {
+            "$ref": "#/components/schemas/ProcurementSettlementPolicyDto"
+          },
+          "debit": {
+            "$ref": "#/components/schemas/ProcurementSettlementDebitDto"
+          },
+          "accounting": {
+            "$ref": "#/components/schemas/ProcurementSettlementAccountingDto"
+          },
+          "postingDate": {
+            "type": "string"
+          },
+          "binding": {
+            "type": "string"
+          },
+          "observedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProcurementSettlementPreviewInputDto": {
+        "required": [
+          "purpose",
+          "input"
+        ],
+        "type": "object",
+        "properties": {
+          "purpose": {
+            "type": "string"
+          },
+          "input": {
+            "$ref": "#/components/schemas/ProcurementSettlementInputDto"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProcurementSettlementReadDto": {
+        "required": [
+          "disbursement",
+          "settlement"
+        ],
+        "type": "object",
+        "properties": {
+          "disbursement": {
+            "$ref": "#/components/schemas/ProcurementSettlementDisbursementDto"
+          },
+          "settlement": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ProcurementSettlementViewDto"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProcurementSettlementReadInputDto": {
+        "required": [
+          "purpose"
+        ],
+        "type": "object",
+        "properties": {
+          "purpose": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProcurementSettlementRecoveryDto": {
+        "required": [
+          "status",
+          "result"
+        ],
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string"
+          },
+          "result": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ProcurementSettlementSummaryDto"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProcurementSettlementRecoveryInputDto": {
+        "required": [
+          "purpose",
+          "operation",
+          "key"
+        ],
+        "type": "object",
+        "properties": {
+          "purpose": {
+            "type": "string"
+          },
+          "operation": {
+            "type": "string"
+          },
+          "key": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProcurementSettlementSummaryDto": {
+        "required": [
+          "id",
+          "disbursementId",
+          "amount",
+          "status",
+          "recordedAt",
+          "postingDate",
+          "journalId"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "disbursementId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "amount": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "status": {
+            "type": "string"
+          },
+          "recordedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "postingDate": {
+            "type": "string"
+          },
+          "journalId": {
+            "$ref": "#/components/schemas/LongId"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProcurementSettlementVerifyDto": {
+        "required": [
+          "input",
+          "binding",
+          "attested",
+          "reason"
+        ],
+        "type": "object",
+        "properties": {
+          "input": {
+            "$ref": "#/components/schemas/ProcurementSettlementInputDto"
+          },
+          "binding": {
+            "type": "string"
+          },
+          "attested": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProcurementSettlementViewDto": {
+        "required": [
+          "id",
+          "disbursementId",
+          "amount",
+          "status",
+          "recordedAt",
+          "postingDate",
+          "journalId",
+          "debit",
+          "policy",
+          "accounting",
+          "beneficiaryVerificationReference",
+          "transferVerificationReference",
+          "reason"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "disbursementId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "amount": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "status": {
+            "type": "string"
+          },
+          "recordedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "postingDate": {
+            "type": "string"
+          },
+          "journalId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "debit": {
+            "$ref": "#/components/schemas/ProcurementSettlementDebitDto"
+          },
+          "policy": {
+            "$ref": "#/components/schemas/ProcurementSettlementPolicyDto"
+          },
+          "accounting": {
+            "$ref": "#/components/schemas/ProcurementSettlementAccountingDto"
+          },
+          "beneficiaryVerificationReference": {
+            "type": "string"
+          },
+          "transferVerificationReference": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
       "ProcurementSourceDto": {
         "required": [
           "organization",
@@ -67030,11 +69074,7 @@
             "$ref": "#/components/schemas/LongId"
           },
           "bankRowNumber": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
+            "type": "integer",
             "format": "int32"
           },
           "beneficiaryVerificationReference": {

@@ -1,4 +1,5 @@
 export function recoveryPage(operation: string) {
+  if (operation === 'procurement.settlement.verify') return { href: '/procurement/settlements', label: 'halaman verifikasi debit pemasok' };
   if (/^procurement\.disbursement\.(draft|record)$(?![\s\S])/.test(operation) || operation === 'evidence.procurement-disbursement-image.reserve') return { href: '/procurement/disbursements', label: 'halaman bukti uang muka pemasok' };
   if (/^procurement\.supplierbank\.(propose|observe|approve|reject)$(?![\s\S])/.test(operation)) return { href: '/procurement/supplier-banks', label: 'halaman rekening pemasok' };
   if (/^procurement\.funding\.(request|approve|reject)$(?![\s\S])/.test(operation)) return { href: '/procurement/funding', label: 'halaman otorisasi uang muka' };
@@ -50,6 +51,7 @@ export function recoveryPage(operation: string) {
     : { href: "/administration/person-reviews", label: "halaman peninjauan orang" };
 }
 export function operationLabel(operation: string) {
+  if (operation === 'procurement.settlement.verify') return 'Verifikasi debit bank pemasok';
   if (operation === 'procurement.disbursement.draft') return 'Draf bukti uang muka pemasok';
   if (operation === 'procurement.disbursement.record') return 'Pencatatan uang muka belum diverifikasi';
   if (operation === 'evidence.procurement-disbursement-image.reserve') return 'Persiapan unggah bukti uang muka pemasok';

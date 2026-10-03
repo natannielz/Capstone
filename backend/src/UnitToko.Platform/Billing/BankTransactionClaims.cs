@@ -2,6 +2,7 @@ using MongoDB.Bson;
 using MongoDB.Driver;
 using UnitToko.Modules.Billing;
 using UnitToko.Platform.Mongo.Migrations;
+using UnitToko.Platform.Procurement;
 using B = UnitToko.Platform.Billing.BankReceiptBson;
 
 namespace UnitToko.Platform.Billing;
@@ -33,25 +34,32 @@ internal sealed class BankTransactionClaims(IMongoDatabase database)
         if (rows.Count == 0) return null;
         if (rows.Count != 1) throw B.Broken();
         var row = await database.GetCollection<BsonDocument>(Collection).Find(tx, new BsonDocument("$and", new BsonArray {
-            new BsonDocument("_id", canonicalIdentity), BankTransactionClaimSchemas.Validator() })).SingleOrDefaultAsync(ct) ?? throw B.Broken();
+            new BsonDocument("_id", canonicalIdentity), ProcurementBankClaimSchemas.Validator() })).SingleOrDefaultAsync(ct) ?? throw B.Broken();
         if (row["snapshotHash"] != B.Hash(row) || row["canonicalIdentity"] != BankStatementParser.Candidate(row["physicalIdentity"].AsString,
             row["identityNamespace"].AsString, row["transactionId"].AsString)) throw B.Broken();
         _ = InvoiceBson.Date(row["bookedDate"]);
         if (row["direction"] == "credit") {
             var receipt = await database.GetCollection<BsonDocument>(B.Receipts).Find(tx, new BsonDocument("_id", row["ownerId"])).SingleOrDefaultAsync(ct) ?? throw B.Broken();
             BankReceiptRecords.Equal(row, Credit(receipt));
-        } else {
+        } else if (row["schemaVersion"] == 1) {
             var owners = await database.GetCollection<BsonDocument>(Settlements).Find(tx, new BsonDocument("canonicalIdentity", canonicalIdentity)).Limit(2).ToListAsync(ct);
             if (owners.Count != 1 || owners[0]["_id"] != row["ownerId"]) throw B.Broken(); var settlement = owners[0];
             BankReceiptRecords.Equal(row, Debit(settlement));
             await BankReceiptService.ReadSettlementDebitHistoryAsync(database, tx, settlement["debit"].AsBsonDocument, ct);
+        } else {
+            if (row["ownerKind"] != ProcurementSettlementBson.ClaimOwner) throw B.Broken();
+            var owners = await database.GetCollection<BsonDocument>(ProcurementSettlementBson.Events).Find(tx, new BsonDocument("canonicalIdentity", canonicalIdentity)).Limit(2).ToListAsync(ct);
+            if (owners.Count != 1 || owners[0]["_id"] != row["ownerId"]) throw B.Broken();
+            BankReceiptRecords.Equal(row, ProcurementSettlementBson.Claim(owners[0]));
+            await BankReceiptService.ReadSettlementDebitHistoryAsync(database, tx, owners[0]["debit"].AsBsonDocument, ct);
         }
         return row;
     }
     internal async Task RequireCreditAsync(IClientSessionHandle tx, BsonDocument receipt, CancellationToken ct) {
         var actual = await ReadAsync(tx, receipt["canonicalIdentity"].AsString, ct) ?? throw B.Broken();
         BankReceiptRecords.Equal(actual, Credit(receipt));
-        if (await database.GetCollection<BsonDocument>(Settlements).Find(tx, new BsonDocument("canonicalIdentity", receipt["canonicalIdentity"])).AnyAsync(ct)) throw B.Broken();
+        if (await database.GetCollection<BsonDocument>(Settlements).Find(tx, new BsonDocument("canonicalIdentity", receipt["canonicalIdentity"])).AnyAsync(ct) ||
+            await database.GetCollection<BsonDocument>(ProcurementSettlementBson.Events).Find(tx, new BsonDocument("canonicalIdentity", receipt["canonicalIdentity"])).AnyAsync(ct)) throw B.Broken();
     }
     internal async Task ClaimCreditAsync(IClientSessionHandle tx, BsonDocument receipt, CancellationToken ct) {
         RequireTransaction(database, tx);
@@ -62,19 +70,22 @@ internal sealed class BankTransactionClaims(IMongoDatabase database)
     }
     internal async Task RequireUnclaimedAsync(IClientSessionHandle tx, string canonicalIdentity, CancellationToken ct) {
         if (await ReadAsync(tx, canonicalIdentity, ct) is not null) throw B.Changed("bank_transaction_already_claimed");
-        if (await database.GetCollection<BsonDocument>(Settlements).Find(tx, new BsonDocument("canonicalIdentity", canonicalIdentity)).AnyAsync(ct)) throw B.Broken();
+        if (await database.GetCollection<BsonDocument>(Settlements).Find(tx, new BsonDocument("canonicalIdentity", canonicalIdentity)).AnyAsync(ct) ||
+            await database.GetCollection<BsonDocument>(ProcurementSettlementBson.Events).Find(tx, new BsonDocument("canonicalIdentity", canonicalIdentity)).AnyAsync(ct)) throw B.Broken();
     }
     // Admission runs before its command receipt is inserted. A surviving outgoing
     // effect/journal cannot be adopted after the actual settlement owner was deleted.
     // This reverse proof never invokes the aggregate financial owner or grants authority.
     internal async Task RequireNoOrphanSettlementAsync(IClientSessionHandle tx, CancellationToken ct) {
         RequireTransaction(database, tx);
+        foreach (var (owner, operation) in new[] { (Settlements, SettlementOperation), (ProcurementSettlementBson.Events, ProcurementSettlementBson.Operation) })
         foreach (var (table, field, ownerField) in new[] { ("auditEvents", "kind", "result.settlementId"),
             ("idempotencyRecords", "operation", "result.settlementId"), ("outboxEvents", "kind", "payload.settlementId"),
             ("journalEntries", "source.namespace", "source.documentId") }) {
+            var exactOwnerField = owner == ProcurementSettlementBson.Events ? ownerField.Replace("settlementId", "id", StringComparison.Ordinal) : ownerField;
             var orphan = await database.GetCollection<BsonDocument>(table).Aggregate<BsonDocument>(tx, new BsonDocument[] {
-                new("$match", new BsonDocument(field, SettlementOperation)),
-                new("$lookup", new BsonDocument { { "from", Settlements }, { "localField", ownerField }, { "foreignField", "_id" }, { "as", "retainedSettlement" } }),
+                new("$match", new BsonDocument(field, operation)),
+                new("$lookup", new BsonDocument { { "from", owner }, { "localField", exactOwnerField }, { "foreignField", "_id" }, { "as", "retainedSettlement" } }),
                 new("$match", new BsonDocument("retainedSettlement", new BsonDocument("$size", 0))), new("$limit", 1)
             }).ToListAsync(ct);
             if (orphan.Count != 0) throw B.Broken();
@@ -125,6 +136,13 @@ internal sealed class BankTransactionClaims(IMongoDatabase database)
         var claim = await ReadAsync(tx, settlement["canonicalIdentity"].AsString, ct) ?? throw B.Broken();
         BankReceiptRecords.Equal(claim, Debit(settlement));
         if (await database.GetCollection<BsonDocument>(B.Receipts).Find(tx, new BsonDocument("canonicalIdentity", settlement["canonicalIdentity"])).AnyAsync(ct) ||
-            await database.GetCollection<BsonDocument>(B.Confirmations).Find(tx, new BsonDocument("canonicalIdentity", settlement["canonicalIdentity"])).AnyAsync(ct)) throw B.Broken();
+            await database.GetCollection<BsonDocument>(B.Confirmations).Find(tx, new BsonDocument("canonicalIdentity", settlement["canonicalIdentity"])).AnyAsync(ct) ||
+            await database.GetCollection<BsonDocument>(ProcurementSettlementBson.Events).Find(tx, new BsonDocument("canonicalIdentity", settlement["canonicalIdentity"])).AnyAsync(ct)) throw B.Broken();
+    }
+    internal async Task RequireProcurementDebitAsync(IClientSessionHandle tx, BsonDocument settlement, CancellationToken ct) {
+        var claim = await ReadAsync(tx, settlement["canonicalIdentity"].AsString, ct) ?? throw B.Broken();
+        BankReceiptRecords.Equal(claim, ProcurementSettlementBson.Claim(settlement));
+        foreach (var name in new[] { B.Receipts, B.Confirmations, Settlements })
+            if (await database.GetCollection<BsonDocument>(name).Find(tx, new BsonDocument("canonicalIdentity", settlement["canonicalIdentity"])).AnyAsync(ct)) throw B.Broken();
     }
 }

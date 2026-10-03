@@ -13,7 +13,7 @@ using A = UnitToko.Api.Billing.PaymentAllocationEndpoints;
 namespace UnitToko.Api.Billing;
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed record RefundSettlementInputDto([property: JsonRequired] LongId BankImportId, [property: JsonRequired] int BankRowNumber,
+public sealed record RefundSettlementInputDto([property: JsonRequired] LongId BankImportId, [property: JsonRequired, JsonNumberHandling(JsonNumberHandling.Strict)] int BankRowNumber,
     [property: JsonRequired] string BeneficiaryVerificationReference, [property: JsonRequired] string TransferVerificationReference) {
     internal RefundSettlementInput Domain() => RefundSettlementPolicy.Copy(new(BankImportId.Value, BankRowNumber, BeneficiaryVerificationReference, TransferVerificationReference));
 }

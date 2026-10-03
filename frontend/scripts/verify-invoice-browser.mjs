@@ -19,6 +19,7 @@ import { verifyPurchaseOrdersBrowser } from './verify-purchase-orders-browser.mj
 import { verifyProcurementFundingBrowser } from './verify-procurement-funding-browser.mjs';
 import { verifySupplierBankBrowser } from './verify-supplier-bank-browser.mjs';
 import { verifyProcurementDisbursementBrowser } from './verify-procurement-disbursement-browser.mjs';
+import { verifyProcurementSettlementBrowser } from './verify-procurement-settlement-browser.mjs';
 
 const chunks = []; for await (const chunk of process.stdin) chunks.push(chunk);
 const config = JSON.parse(Buffer.concat(chunks).toString('utf8')), api = new URL(config.apiAddress), origin = new URL(config.origin);
@@ -39,7 +40,8 @@ const purchaseOrderWrites = [], purchaseOrderRecoveries = [], purchaseOrderTrace
 const fundingWrites = [], fundingRecoveries = [], fundingTracePath = config.procurementFunding ? resolve(directory, 'procurement-funding-flow-' + Date.now() + '.jsonl') : null;
 const supplierBankWrites = [], supplierBankRecoveries = [], supplierBankTracePath = config.supplierBanks ? resolve(directory, 'supplier-bank-flow-' + Date.now() + '.jsonl') : null;
 const disbursementWrites = [], disbursementRecoveries = [], disbursementUploads = [], disbursementTracePath = config.procurementDisbursement ? resolve(directory, 'procurement-disbursement-flow-' + Date.now() + '.jsonl') : null;
-function traceFinancial(type, value) { for (const path of [financialTracePath, payoutTracePath, settlementTracePath, addressTracePath, spendingTracePath, bookTracePath, procurementTracePath, supplierTracePath, purchaseOrderTracePath, fundingTracePath, supplierBankTracePath, disbursementTracePath]) if (path) appendFileSync(path, JSON.stringify({ at: new Date().toISOString(), type, ...value }) + '\n'); }
+const procurementSettlementWrites = [], procurementSettlementRecoveries = [], procurementSettlementOriginals = [], procurementSettlementTracePath = config.procurementSettlement ? resolve(directory, 'procurement-settlement-flow-' + Date.now() + '.jsonl') : null;
+function traceFinancial(type, value) { for (const path of [financialTracePath, payoutTracePath, settlementTracePath, addressTracePath, spendingTracePath, bookTracePath, procurementTracePath, supplierTracePath, purchaseOrderTracePath, fundingTracePath, supplierBankTracePath, disbursementTracePath, procurementSettlementTracePath]) if (path) appendFileSync(path, JSON.stringify({ at: new Date().toISOString(), type, ...value }) + '\n'); }
 traceFinancial('host-start', {});
 let browser, frontend, edge, tunnel, dropNext = false, dropped = 0;
 function track(server) { server.on('connection', socket => { sockets.add(socket); socket.on('close', () => sockets.delete(socket)); }); return server; }
@@ -91,18 +93,22 @@ function forward(req, res, port, isApi) {
   const disbursementRecovery = req.method === 'POST' && /^\/api\/v1\/procurement\/disbursements\/(?:operations\/query|drafts\/[1-9][0-9]*\/evidence\/operations\/query)$/.test(req.url);
   const disbursementPath = config.procurementDisbursement && req.url.startsWith('/api/v1/procurement/disbursements/');
   const disbursementUpload = disbursementPath && req.method === 'POST' && /^\/api\/v1\/procurement\/disbursements\/drafts\/[1-9][0-9]*\/evidence\/[1-9][0-9]*\/content$/.test(req.url);
+  const procurementSettlementWrite = req.method === 'POST' && /^\/api\/v1\/procurement\/settlements\/disbursements\/[1-9][0-9]*\/verify$/.test(req.url);
+  const procurementSettlementRecovery = req.method === 'POST' && req.url === '/api/v1/procurement/settlements/operations/query';
+  const procurementSettlementOriginal = config.procurementSettlement && req.method === 'POST' && /^\/api\/v1\/procurement\/disbursements\/drafts\/[1-9][0-9]*\/evidence\/[1-9][0-9]*\/original\/query$/.test(req.url);
+  const procurementSettlementPath = config.procurementSettlement && (req.url.startsWith('/api/v1/procurement/settlements/') || procurementSettlementOriginal);
   const supplierBankWrite = req.method === 'POST' && /^\/api\/v1\/procurement\/suppliers\/bank-beneficiaries\/(?:proposals|proposals\/[1-9][0-9]*\/(?:observations|decisions))$/.test(req.url);
   const supplierBankRecovery = req.method === 'POST' && req.url === '/api/v1/procurement/suppliers/bank-beneficiaries/operations/query';
   const supplierBankPath = config.supplierBanks && req.url.startsWith('/api/v1/procurement/suppliers/bank-beneficiaries/');
-  if (financialPath || payoutPath || settlementPath || addressPath || spendingPath || bookPath || procurementPath || supplierPath || purchaseOrderPath || fundingPath || supplierBankPath || disbursementPath) traceFinancial('request-begin', { path: req.url, method: req.method, actor: req.headers['x-expected-actor-id'] });
+  if (financialPath || payoutPath || settlementPath || addressPath || spendingPath || bookPath || procurementPath || supplierPath || purchaseOrderPath || fundingPath || supplierBankPath || disbursementPath || procurementSettlementPath) traceFinancial('request-begin', { path: req.url, method: req.method, actor: req.headers['x-expected-actor-id'] });
   let financialReference;
-  if (financialWrite || financialRecovery || draftWrite || payoutWrite || payoutRecovery || settlementWrite || settlementRecovery || settlementOriginal || addressWrite || addressRecovery || spendingWrite || spendingRecovery || bookWrite || bookRecovery || procurementWrite || procurementRecovery || supplierWrite || supplierRecovery || purchaseOrderWrite || purchaseOrderRecovery || fundingWrite || fundingRecovery || supplierBankWrite || supplierBankRecovery || disbursementWrite || disbursementRecovery) {
-    const reference = { path: req.url, key: req.headers['idempotency-key'], actor: req.headers['x-expected-actor-id'], ...(addressWrite || spendingWrite || bookWrite || procurementWrite || supplierWrite || purchaseOrderWrite || fundingWrite || supplierBankWrite || disbursementWrite ? { version: req.headers['if-match'] } : {}) }, body = [];
+  if (financialWrite || financialRecovery || draftWrite || payoutWrite || payoutRecovery || settlementWrite || settlementRecovery || settlementOriginal || addressWrite || addressRecovery || spendingWrite || spendingRecovery || bookWrite || bookRecovery || procurementWrite || procurementRecovery || supplierWrite || supplierRecovery || purchaseOrderWrite || purchaseOrderRecovery || fundingWrite || fundingRecovery || supplierBankWrite || supplierBankRecovery || disbursementWrite || disbursementRecovery || procurementSettlementWrite || procurementSettlementRecovery || procurementSettlementOriginal) {
+    const reference = { path: req.url, key: req.headers['idempotency-key'], actor: req.headers['x-expected-actor-id'], ...(addressWrite || spendingWrite || bookWrite || procurementWrite || supplierWrite || purchaseOrderWrite || fundingWrite || supplierBankWrite || disbursementWrite || procurementSettlementWrite || procurementSettlementOriginal ? { version: req.headers['if-match'] } : {}) }, body = [];
     financialReference = reference;
-    (disbursementWrite ? disbursementWrites : disbursementRecovery ? disbursementRecoveries : supplierBankWrite ? supplierBankWrites : supplierBankRecovery ? supplierBankRecoveries : fundingWrite ? fundingWrites : fundingRecovery ? fundingRecoveries : purchaseOrderWrite ? purchaseOrderWrites : purchaseOrderRecovery ? purchaseOrderRecoveries : supplierWrite ? supplierWrites : supplierRecovery ? supplierRecoveries : procurementWrite ? procurementWrites : procurementRecovery ? procurementRecoveries : bookWrite ? bookWrites : bookRecovery ? bookRecoveries : spendingWrite ? spendingWrites : spendingRecovery ? spendingRecoveries : addressWrite ? addressWrites : addressRecovery ? addressRecoveries : financialWrite ? financialWrites : financialRecovery ? financialRecoveries : draftWrite ? draftWrites : payoutWrite ? payoutWrites : payoutRecovery ? payoutRecoveries : settlementWrite ? settlementWrites : settlementRecovery ? settlementRecoveries : settlementOriginalReads).push(reference);
+    (procurementSettlementWrite ? procurementSettlementWrites : procurementSettlementRecovery ? procurementSettlementRecoveries : procurementSettlementOriginal ? procurementSettlementOriginals : disbursementWrite ? disbursementWrites : disbursementRecovery ? disbursementRecoveries : supplierBankWrite ? supplierBankWrites : supplierBankRecovery ? supplierBankRecoveries : fundingWrite ? fundingWrites : fundingRecovery ? fundingRecoveries : purchaseOrderWrite ? purchaseOrderWrites : purchaseOrderRecovery ? purchaseOrderRecoveries : supplierWrite ? supplierWrites : supplierRecovery ? supplierRecoveries : procurementWrite ? procurementWrites : procurementRecovery ? procurementRecoveries : bookWrite ? bookWrites : bookRecovery ? bookRecoveries : spendingWrite ? spendingWrites : spendingRecovery ? spendingRecoveries : addressWrite ? addressWrites : addressRecovery ? addressRecoveries : financialWrite ? financialWrites : financialRecovery ? financialRecoveries : draftWrite ? draftWrites : payoutWrite ? payoutWrites : payoutRecovery ? payoutRecoveries : settlementWrite ? settlementWrites : settlementRecovery ? settlementRecoveries : settlementOriginalReads).push(reference);
     req.on('data', chunk => body.push(chunk)); req.on('end', () => { reference.body = JSON.parse(Buffer.concat(body).toString('utf8')); });
   }
-  const drop = (write || caseWrite || decisionWrite || returnWrite || inspectionWrite || resolutionWrite || entitlementWrite || financialWrite || payoutWrite || settlementWrite || addressWrite || spendingWrite || bookWrite || procurementWrite || supplierWrite || purchaseOrderWrite || fundingWrite || supplierBankWrite || disbursementWrite) && dropNext; if (drop) dropNext = false;
+  const drop = (write || caseWrite || decisionWrite || returnWrite || inspectionWrite || resolutionWrite || entitlementWrite || financialWrite || payoutWrite || settlementWrite || addressWrite || spendingWrite || bookWrite || procurementWrite || supplierWrite || purchaseOrderWrite || fundingWrite || supplierBankWrite || disbursementWrite || procurementSettlementWrite) && dropNext; if (drop) dropNext = false;
   const startedAt = performance.now(); let upstreamCompleted = false;
   const upstream = http.request({ hostname: '127.0.0.1', port, path: req.url, method: req.method, headers }, response => {
     response.once('end', () => { upstreamCompleted = true; });
@@ -118,9 +124,9 @@ function forward(req, res, port, isApi) {
         traceFinancial('actual-procurement-upload-response-ended', { path: receipt.path, status: receipt.status, elapsedMs: receipt.elapsedMs, bodyBytes, state: receipt.body?.state, error: receipt.error });
       });
     }
-    if (financialPath || payoutPath || settlementPath || addressPath || spendingPath || bookPath || procurementPath || supplierPath || purchaseOrderPath || fundingPath || supplierBankPath || disbursementPath) traceFinancial('response-headers', { path: req.url, status: response.statusCode, elapsedMs: Math.round(performance.now() - startedAt) });
+    if (financialPath || payoutPath || settlementPath || addressPath || spendingPath || bookPath || procurementPath || supplierPath || purchaseOrderPath || fundingPath || supplierBankPath || disbursementPath || procurementSettlementPath) traceFinancial('response-headers', { path: req.url, status: response.statusCode, elapsedMs: Math.round(performance.now() - startedAt) });
     if (financialReference) { financialReference.status = response.statusCode; financialReference.elapsedMs = Math.round(performance.now() - startedAt); }
-    if (drop && response.statusCode === 200) { response.resume(); response.once('end', () => { dropped++; if (financialWrite || payoutWrite || settlementWrite || addressWrite || spendingWrite || bookWrite || procurementWrite || supplierWrite || purchaseOrderWrite || fundingWrite || supplierBankWrite || disbursementWrite) traceFinancial('actual-200-response-ended-before-intentional-loss', { path: req.url, elapsedMs: Math.round(performance.now() - startedAt) }); res.writeHead(200, { 'content-type': 'application/json', 'content-length': '64', 'cache-control': 'no-store' }); res.flushHeaders(); res.write('{'); setTimeout(() => res.destroy(), 25); }); return; }
+    if (drop && response.statusCode === 200) { response.resume(); response.once('end', () => { dropped++; if (financialWrite || payoutWrite || settlementWrite || addressWrite || spendingWrite || bookWrite || procurementWrite || supplierWrite || purchaseOrderWrite || fundingWrite || supplierBankWrite || disbursementWrite || procurementSettlementWrite) traceFinancial('actual-200-response-ended-before-intentional-loss', { path: req.url, elapsedMs: Math.round(performance.now() - startedAt) }); res.writeHead(200, { 'content-type': 'application/json', 'content-length': '64', 'cache-control': 'no-store' }); res.flushHeaders(); res.write('{'); setTimeout(() => res.destroy(), 25); }); return; }
     res.writeHead(response.statusCode ?? 502, response.headers); response.pipe(res);
   }); upstream.on('error', () => { if (res.destroyed || res.writableEnded) return; if (!res.headersSent) res.writeHead(502); res.end(); });
   res.once('close', () => { if (!res.writableEnded && !upstreamCompleted) { if (isApi) traceFinancial('downstream-cancelled', { path: req.url, method: req.method, elapsedMs: Math.round(performance.now() - startedAt) }); upstream.destroy(); } });
@@ -147,7 +153,12 @@ try {
   }); const proxyPort = await listen(tunnel);
   browser = await chromium.launch({ ...(channel === 'msedge' ? { channel: 'msedge' } : {}), headless: true, proxy: { server: 'http://127.0.0.1:' + proxyPort } });
   const finance = await user(config.financeToken), page = finance.page;
-  if (config.procurementDisbursement) {
+  if (config.procurementSettlement) {
+    assert.equal(config.financeToken, config.verifierToken);
+    await verifyProcurementSettlementBrowser({ config, verifier: finance, user, origin, directory, settlementWrites: procurementSettlementWrites, settlementRecoveries: procurementSettlementRecoveries, originalReads: procurementSettlementOriginals, dropNext: () => { dropNext = true; }, dropped: () => dropped });
+    assert.equal(writes.length + caseWrites.length + decisionWrites.length + returnWrites.length + inspectionWrites.length + resolutionWrites.length + entitlementWrites.length + financialWrites.length + payoutWrites.length + draftWrites.length + settlementWrites.length + addressWrites.length + spendingWrites.length + bookWrites.length + procurementWrites.length + supplierWrites.length + purchaseOrderWrites.length + fundingWrites.length + supplierBankWrites.length + disbursementWrites.length, 0);
+    assert.deepEqual(errors, []);
+  } else if (config.procurementDisbursement) {
     assert.equal(config.financeToken, config.makerToken); assert.equal(typeof config.validationReadyPath, 'string');
     await verifyProcurementDisbursementBrowser({ config, maker: finance, user, origin, directory, disbursementWrites, disbursementRecoveries, disbursementUploads,
       dropNext: () => { dropNext = true; }, dropped: () => dropped,
@@ -420,6 +431,10 @@ try {
   for (const [index, page] of pages.entries()) if (!page.isClosed()) { console.error('FIXTURE PAGE ' + index + ': ' + (await page.locator('main').innerText().catch(() => 'unavailable')).slice(0, 5000)); await page.screenshot({ path: resolve(directory, 'failure-' + index + '.png'), fullPage: true }).catch(() => {}); }
   console.error(error.stack ?? String(error)); process.exitCode = 1;
 } finally {
+  if (config.procurementSettlement) console.log('FIXTURE PROCUREMENT SETTLEMENT FLOW ' + JSON.stringify({
+    writes: procurementSettlementWrites.map(({ path, key, actor, status, elapsedMs }) => ({ path, key, actor, status, elapsedMs })),
+    recoveries: procurementSettlementRecoveries.map(({ path, actor, status, elapsedMs }) => ({ path, actor, status, elapsedMs })),
+    originals: procurementSettlementOriginals.map(({ path, actor, status, elapsedMs }) => ({ path, actor, status, elapsedMs })), dropped, tracePath: procurementSettlementTracePath }));
   if (config.procurementDisbursement) console.log('FIXTURE PROCUREMENT DISBURSEMENT FLOW ' + JSON.stringify({
     writes: disbursementWrites.map(({ path, key, actor, status, elapsedMs }) => ({ path, key, actor, status, elapsedMs })),
     uploads: disbursementUploads.map(({ path, key, actor, status, elapsedMs, completed, bodyBytes, body, error }) => ({ path, key, actor, status, elapsedMs, completed, bodyBytes, state: body?.state, error })),

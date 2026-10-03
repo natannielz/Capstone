@@ -5923,6 +5923,166 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/procurement/settlements/disbursements/{id}/bank-imports/{importId}/debits/query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ProcurementSettlementDebits"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/procurement/settlements/disbursements/{id}/bank-imports/query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ProcurementSettlementBankImports"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/procurement/settlements/disbursements/{id}/options/query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ProcurementSettlementOptions"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/procurement/settlements/disbursements/{id}/preview/query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["PreviewProcurementSettlement"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/procurement/settlements/disbursements/{id}/query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ReadProcurementSettlement"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/procurement/settlements/disbursements/{id}/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["VerifyProcurementSettlement"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/procurement/settlements/disbursements/query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ProcurementSettlementDisbursements"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/procurement/settlements/history/query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ProcurementSettlementHistory"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/procurement/settlements/operations/query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["RecoverProcurementSettlement"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/procurement/settlements/targets/query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ProcurementSettlementTargets"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/procurement/suppliers/bank-beneficiaries/current/query": {
         parameters: {
             query?: never;
@@ -6926,7 +7086,7 @@ export interface components {
             observed: components["schemas"]["BankReceiptObservationDto"];
             reason: string;
             /** Format: int32 */
-            rowNumber: number | string;
+            rowNumber: number;
             sourceReference: string;
         };
         BankReceiptImportDto: {
@@ -6966,7 +7126,7 @@ export interface components {
         BankReceiptPreviewInputDto: {
             importId: components["schemas"]["LongId"];
             /** Format: int32 */
-            rowNumber: number | string;
+            rowNumber: number;
         };
         BankReceiptRecoveryDto: {
             result: null | components["schemas"]["BankReceiptResultDto"];
@@ -9772,6 +9932,214 @@ export interface components {
             requestVersion: string;
             status: string;
         };
+        ProcurementSettlementAccountDto: {
+            accountCode: string;
+            accountId: components["schemas"]["LongId"];
+            mappingKey: string;
+        };
+        ProcurementSettlementAccountingDto: {
+            bookId: components["schemas"]["LongId"];
+            cash: components["schemas"]["ProcurementSettlementAccountDto"];
+            chartVersionId: components["schemas"]["LongId"];
+            periodId: components["schemas"]["LongId"];
+            periodMonth: string;
+            supplierAdvance: components["schemas"]["ProcurementSettlementAccountDto"];
+        };
+        ProcurementSettlementDebitChoiceDto: {
+            amount: components["schemas"]["Money"];
+            bookedDate: string;
+            direction: string;
+            eligible: boolean;
+            issue: null | string;
+            reference: null | string;
+            /** Format: int32 */
+            rowNumber: number | string;
+            transactionId: null | string;
+        };
+        ProcurementSettlementDebitDto: {
+            amount: components["schemas"]["Money"];
+            bookedDate: string;
+            direction: string;
+            importId: components["schemas"]["LongId"];
+            reference: null | string;
+            /** Format: int32 */
+            rowNumber: number | string;
+            transactionId: string;
+        };
+        ProcurementSettlementDebitsDto: {
+            disbursementId: components["schemas"]["LongId"];
+            importId: components["schemas"]["LongId"];
+            items: components["schemas"]["ProcurementSettlementDebitChoiceDto"][];
+            payingAccountId: components["schemas"]["LongId"];
+            payingAccountVersionId: components["schemas"]["LongId"];
+        };
+        ProcurementSettlementDisbursementChoiceDto: {
+            disbursement: components["schemas"]["ProcurementSettlementDisbursementDto"];
+            settlement: null | components["schemas"]["ProcurementSettlementSummaryDto"];
+        };
+        ProcurementSettlementDisbursementDto: {
+            amount: components["schemas"]["Money"];
+            authorization: components["schemas"]["ProcurementDisbursementAuthorizationDto"];
+            beneficiary: components["schemas"]["ProcurementDisbursementBeneficiaryDto"];
+            draftId: components["schemas"]["LongId"];
+            id: components["schemas"]["LongId"];
+            location: components["schemas"]["ProcurementLocationDto"];
+            original: components["schemas"]["ProcurementSettlementOriginalDto"];
+            payingAccount: components["schemas"]["ProcurementDisbursementAccountDto"];
+            /** Format: date-time */
+            recordedAt: string;
+            transferDate: string;
+            transferReference: string;
+            version: string;
+        };
+        ProcurementSettlementDisbursementsDto: {
+            items: components["schemas"]["ProcurementSettlementDisbursementChoiceDto"][];
+            location: components["schemas"]["ProcurementLocationDto"];
+            nextDisbursementId: null | components["schemas"]["LongId"];
+        };
+        ProcurementSettlementHistoryDto: {
+            items: components["schemas"]["ProcurementSettlementViewDto"][];
+            location: components["schemas"]["ProcurementLocationDto"];
+            nextSettlementId: null | components["schemas"]["LongId"];
+        };
+        ProcurementSettlementImportDto: {
+            filename: string;
+            id: components["schemas"]["LongId"];
+            profileName: string;
+            /** Format: date-time */
+            recordedAt: string;
+            /** Format: int32 */
+            rowCount: number | string;
+        };
+        ProcurementSettlementImportsDto: {
+            disbursementId: components["schemas"]["LongId"];
+            items: components["schemas"]["ProcurementSettlementImportDto"][];
+            nextImportId: null | components["schemas"]["LongId"];
+            payingAccountId: components["schemas"]["LongId"];
+            payingAccountVersionId: components["schemas"]["LongId"];
+        };
+        ProcurementSettlementImportsInputDto: {
+            /** @description Positive decimal Int64 string, from 1 through 9223372036854775807. JSON numbers are invalid. */
+            beforeId?: null | string;
+            purpose: string;
+        };
+        ProcurementSettlementInputDto: {
+            bankImportId: components["schemas"]["LongId"];
+            /** Format: int32 */
+            bankRowNumber: number;
+            beneficiaryVerificationReference: string;
+            observedBeneficiary: components["schemas"]["ReceivingAccountDetailsDto"];
+            policyId: components["schemas"]["LongId"];
+            policyRevision: string;
+            transferVerificationReference: string;
+        };
+        ProcurementSettlementListInputDto: {
+            /** @description Positive decimal Int64 string, from 1 through 9223372036854775807. JSON numbers are invalid. */
+            beforeId?: null | string;
+            location: components["schemas"]["ProcurementLocationDto"];
+            purpose: string;
+        };
+        ProcurementSettlementOptionsDto: {
+            disbursement: components["schemas"]["ProcurementSettlementDisbursementDto"];
+            items: components["schemas"]["ProcurementSettlementPolicyDto"][];
+        };
+        ProcurementSettlementOriginalDto: {
+            draftId: components["schemas"]["LongId"];
+            draftRevision: string;
+            reference: components["schemas"]["PaymentEvidenceReferenceDto"];
+            reservationId: components["schemas"]["LongId"];
+        };
+        ProcurementSettlementPolicyDto: {
+            active: boolean;
+            allowReferenceOnly: boolean;
+            approvalReference: string;
+            /** Format: date-time */
+            approvedAt: string;
+            bankDebitVerificationProcedureReference: string;
+            beneficiaryVerificationProcedureReference: string;
+            bookId: components["schemas"]["LongId"];
+            cashAccountCode: string;
+            cashAccountId: components["schemas"]["LongId"];
+            cashMapping: string;
+            chartVersionId: components["schemas"]["LongId"];
+            currency: string;
+            /** Format: date-time */
+            expiresAt: string;
+            id: components["schemas"]["LongId"];
+            location: components["schemas"]["ProcurementLocationDto"];
+            operatingOwnerReference: string;
+            payingAccountId: components["schemas"]["LongId"];
+            payingAccountVersionId: components["schemas"]["LongId"];
+            revision: string;
+            rule: string;
+            supplierAdvanceAccountCode: string;
+            supplierAdvanceAccountId: components["schemas"]["LongId"];
+            supplierAdvanceMapping: string;
+            trustedBankChannelReference: string;
+        };
+        ProcurementSettlementPreviewDto: {
+            accounting: components["schemas"]["ProcurementSettlementAccountingDto"];
+            binding: string;
+            debit: components["schemas"]["ProcurementSettlementDebitDto"];
+            disbursement: components["schemas"]["ProcurementSettlementDisbursementDto"];
+            input: components["schemas"]["ProcurementSettlementInputDto"];
+            /** Format: date-time */
+            observedAt: string;
+            policy: components["schemas"]["ProcurementSettlementPolicyDto"];
+            postingDate: string;
+        };
+        ProcurementSettlementPreviewInputDto: {
+            input: components["schemas"]["ProcurementSettlementInputDto"];
+            purpose: string;
+        };
+        ProcurementSettlementReadDto: {
+            disbursement: components["schemas"]["ProcurementSettlementDisbursementDto"];
+            settlement: null | components["schemas"]["ProcurementSettlementViewDto"];
+        };
+        ProcurementSettlementReadInputDto: {
+            purpose: string;
+        };
+        ProcurementSettlementRecoveryDto: {
+            result: null | components["schemas"]["ProcurementSettlementSummaryDto"];
+            status: string;
+        };
+        ProcurementSettlementRecoveryInputDto: {
+            key: string;
+            operation: string;
+            purpose: string;
+        };
+        ProcurementSettlementSummaryDto: {
+            amount: components["schemas"]["Money"];
+            disbursementId: components["schemas"]["LongId"];
+            id: components["schemas"]["LongId"];
+            journalId: components["schemas"]["LongId"];
+            postingDate: string;
+            /** Format: date-time */
+            recordedAt: string;
+            status: string;
+        };
+        ProcurementSettlementVerifyDto: {
+            attested: boolean;
+            binding: string;
+            input: components["schemas"]["ProcurementSettlementInputDto"];
+            reason: string;
+        };
+        ProcurementSettlementViewDto: {
+            accounting: components["schemas"]["ProcurementSettlementAccountingDto"];
+            amount: components["schemas"]["Money"];
+            beneficiaryVerificationReference: string;
+            debit: components["schemas"]["ProcurementSettlementDebitDto"];
+            disbursementId: components["schemas"]["LongId"];
+            id: components["schemas"]["LongId"];
+            journalId: components["schemas"]["LongId"];
+            policy: components["schemas"]["ProcurementSettlementPolicyDto"];
+            postingDate: string;
+            reason: string;
+            /** Format: date-time */
+            recordedAt: string;
+            status: string;
+            transferVerificationReference: string;
+        };
         ProcurementSourceDto: {
             channel: components["schemas"]["ProcurementLabelDto"];
             organization: components["schemas"]["ProcurementLabelDto"];
@@ -10361,7 +10729,7 @@ export interface components {
         RefundSettlementInputDto: {
             bankImportId: components["schemas"]["LongId"];
             /** Format: int32 */
-            bankRowNumber: number | string;
+            bankRowNumber: number;
             beneficiaryVerificationReference: string;
             transferVerificationReference: string;
         };
@@ -42065,6 +42433,765 @@ export interface operations {
             };
             /** @description Payload Too Large */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    ProcurementSettlementDebits: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
+                /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
+                "X-Expected-Actor-Id": string;
+            };
+            path: {
+                id: string;
+                importId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProcurementSettlementReadInputDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcurementSettlementDebitsDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    ProcurementSettlementBankImports: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
+                /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
+                "X-Expected-Actor-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProcurementSettlementImportsInputDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcurementSettlementImportsDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    ProcurementSettlementOptions: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
+                /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
+                "X-Expected-Actor-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProcurementSettlementReadInputDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcurementSettlementOptionsDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    PreviewProcurementSettlement: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description One quoted nonnegative Int64 resource version from the latest response; never a JavaScript number. */
+                "If-Match": string;
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
+                /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
+                "X-Expected-Actor-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProcurementSettlementPreviewInputDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcurementSettlementPreviewDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    ReadProcurementSettlement: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
+                /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
+                "X-Expected-Actor-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProcurementSettlementReadInputDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcurementSettlementReadDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    VerifyProcurementSettlement: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Reuse this key only for an unchanged logical command, including after an uncertain response. */
+                "Idempotency-Key": string;
+                /** @description One quoted nonnegative Int64 resource version from the latest response; never a JavaScript number. */
+                "If-Match": string;
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
+                /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
+                "X-Expected-Actor-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProcurementSettlementVerifyDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcurementSettlementSummaryDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    ProcurementSettlementDisbursements: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
+                /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
+                "X-Expected-Actor-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProcurementSettlementListInputDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcurementSettlementDisbursementsDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    ProcurementSettlementHistory: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
+                /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
+                "X-Expected-Actor-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProcurementSettlementListInputDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcurementSettlementHistoryDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    RecoverProcurementSettlement: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
+                /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
+                "X-Expected-Actor-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProcurementSettlementRecoveryInputDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcurementSettlementRecoveryDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    ProcurementSettlementTargets: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
+                /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
+                "X-Expected-Actor-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProcurementSettlementReadInputDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcurementTargetsDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

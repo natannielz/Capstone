@@ -113,6 +113,7 @@ builder.Services.AddSingleton<PurchaseOrderService>();
 builder.Services.AddSingleton<ProcurementFundingService>();
 builder.Services.AddSingleton<SupplierBankService>();
 builder.Services.AddSingleton<ProcurementDisbursementService>();
+builder.Services.AddSingleton<ProcurementSettlementService>();
 builder.Services.AddSingleton(sp => {
     var options = sp.GetRequiredService<IConfiguration>().GetSection("Evidence:PrivateWindows");
     var root = options["Root"]; var storeId = options["StoreId"]; var operators = options.GetSection("TrustedOperatorSids").Get<string[]>() ?? [];
@@ -368,6 +369,7 @@ app.MapPurchaseOrderEndpoints();
 app.MapProcurementFundingEndpoints();
 app.MapSupplierBankEndpoints();
 app.MapProcurementDisbursementEndpoints();
+app.MapProcurementSettlementEndpoints();
 app.MapOrderDraftEndpoints();
 app.MapOrderSubmissionEndpoints();
 app.MapOrderDecisionEndpoints();

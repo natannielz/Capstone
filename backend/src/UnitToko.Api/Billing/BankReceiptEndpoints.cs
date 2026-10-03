@@ -12,14 +12,14 @@ using UnitToko.Platform.Billing;
 namespace UnitToko.Api.Billing;
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed record BankReceiptPreviewInputDto([property:JsonRequired] LongId ImportId,[property:JsonRequired] int RowNumber);
+public sealed record BankReceiptPreviewInputDto([property:JsonRequired] LongId ImportId,[property:JsonRequired, JsonNumberHandling(JsonNumberHandling.Strict)] int RowNumber);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record BankReceiptObservationDto([property:JsonRequired] string AccountNumber,[property:JsonRequired] string TransactionId,[property:JsonRequired] string BookedDate,[property:JsonRequired] Money Amount) {
     internal BankReceiptObservation Domain() => DateOnly.TryParseExact(BookedDate,"yyyy-MM-dd",CultureInfo.InvariantCulture,DateTimeStyles.None,out var date)
         ? new(AccountNumber,TransactionId,date,Amount) : throw BankReceiptPolicy.Invalid();
 }
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed record BankReceiptConfirmDto([property:JsonRequired] LongId ImportId,[property:JsonRequired] int RowNumber,[property:JsonRequired] string Binding,
+public sealed record BankReceiptConfirmDto([property:JsonRequired] LongId ImportId,[property:JsonRequired, JsonNumberHandling(JsonNumberHandling.Strict)] int RowNumber,[property:JsonRequired] string Binding,
     [property:JsonRequired] BankReceiptObservationDto Observed,[property:JsonRequired] string SourceReference,[property:JsonRequired] bool Attested,[property:JsonRequired] string Reason);
 public sealed record BankReceiptPolicyDto(LongId Id,string Revision,string TrustedSourceReference,string OperatingOwnerReference,string ApprovalReference,string CashMapping,string SuspenseMapping,DateTimeOffset ExpiresAt);
 public sealed record BankReceiptPreviewDto(LongId ImportId,int RowNumber,string Binding,StatementRowDto Row,StatementAccountDto Account,BankReceiptPolicyDto Policy,LongId? ExistingReceiptId);

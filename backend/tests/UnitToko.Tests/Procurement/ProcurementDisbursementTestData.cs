@@ -11,6 +11,7 @@ using UnitToko.Platform.DocumentProcessing;
 using UnitToko.Platform.Documents;
 using UnitToko.Platform.Mongo;
 using UnitToko.Platform.Procurement;
+using UnitToko.Tests.Accounting;
 using UnitToko.Tests.Authorization;
 using UnitToko.Tests.Catalog;
 using UnitToko.Tests.Documents;
@@ -62,7 +63,7 @@ internal sealed class ProcurementDisbursementTestData(ProcurementFundingTestData
         { "operatingOwnerReference", "SYNTHETIC-FINANCE-OWNER" }, { "approvalReference", "SYNTHETIC-DISBURSEMENT-POLICY-APPROVAL" },
         { "approvedAt", Clock.UtcNow.AddHours(-1).UtcDateTime }, { "expiresAt", Clock.UtcNow.AddDays(1).UtcDateTime }, { "active", true }
     };
-    internal static async Task<ProcurementDisbursementTestData> CreateAsync(MongoFixture fixture, bool createDraft = true) {
+    internal static async Task<ProcurementDisbursementTestData> CreateAsync(MongoFixture fixture, bool createDraft = true, bool includeSupplierAdvanceMapping = false) {
         var funding = await ProcurementFundingTestData.CreateAsync(fixture); var data = new ProcurementDisbursementTestData(funding, fixture.Client);
         try {
             data.FundingRequest = await funding.RequestAsync("disbursement-source-funding", funding.Input(10000));
@@ -73,6 +74,10 @@ internal sealed class ProcurementDisbursementTestData(ProcurementFundingTestData
             data.Beneficiary = await data.Beneficiaries.DecideAsync(proposed, "disbursement-bank-approved", observed["recordId"].AsInt64);
             data.Bank = await BankReceiptTestData.AttachAsync(await BankStatementTestData.AttachAsync(await ReceivingAccountTestData.AttachAsync(data.Catalog)),
                 original: BankStatementTestData.Original(amount: "25000.00"));
+            // M67's synthetic Finance mapping precedes the first genuine cash journal.
+            if (includeSupplierAdvanceMapping)
+                await data.Rows("accountingChartVersions").UpdateOneAsync(new BsonDocument("_id", 20L),
+                    Builders<BsonDocument>.Update.Push("mappings", AccountingTestDocuments.Mapping("supplier_advance", 803, "A1201")));
             _ = await data.Bank.ConfirmAsync(await data.Bank.PreviewAsync(), "disbursement-actual-cash-anchor", BankReceiptTestData.Observation(amount: 25000));
             string[] sources = [Permissions.FundingRead, Permissions.SupplierBankRead, Permissions.SupplierBankDetailsRead, Permissions.BankReceiptRead,
                 Permissions.BankStatementRead, Permissions.ReceivingAccountRead, Permissions.ReceivingAccountDetailsRead];
