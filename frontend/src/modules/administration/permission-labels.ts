@@ -1,4 +1,6 @@
 const labels: Record<string, string> = {
+  "procurement.inspection.record": "Catat pemeriksaan barang pengadaan dengan verifikasi terbaru",
+  "procurement.inspection.evidence.read": "Lihat video asli pemeriksaan pengadaan dalam cakupan",
   "bank.receipt.read": "Membaca riwayat penerimaan bank",
   "bank.receipt.confirm": "Mengonfirmasi kredit bank secara independen dengan verifikasi terbaru",
   "bank.statement.read": "Membaca mutasi bank privat",

@@ -22,15 +22,18 @@ internal sealed partial class EvidenceService
     private async Task<ReadEligibility> ReadEligibilityAsync(IClientSessionHandle tx, Bundle bundle, CancellationToken ct) {
         await CompletionAsync(tx, bundle, ct); await TouchPolicyAsync(tx, bundle, ct);
         var job = await Rows("outboxEvents").Find(tx, F.Eq("sourceKey", SourceKey(bundle))).SingleAsync(ct);
-        var validation = await EvidenceValidationRecords.ReadAsync(database, tx, job, Publication(bundle), Payload(bundle), ct);
+        var video = IsVideo(bundle);
+        var validation = video ? await VideoValidationRecords.ReadAsync(database, tx, job, Publication(bundle), Payload(bundle), ct)
+            : await EvidenceValidationRecords.ReadAsync(database, tx, job, Publication(bundle), Payload(bundle), ct);
         if (validation is null || validation["status"] != "passed") throw Conflict("evidence_read_not_eligible");
-        var policy = await TouchReadPolicyAsync(tx, bundle.Version["storeId"].AsString, ct);
+        var policy = await TouchReadPolicyAsync(tx, bundle.Version["storeId"].AsString, video, ct);
         if (bundle.Version["length"].AsInt64 > policy["maximumBytes"].AsInt64 ||
             Date(validation["checkedAt"]) > clock.UtcNow || Date(validation["checkedAt"]).AddMilliseconds(policy["maximumValidationAgeMs"].AsInt64) <= clock.UtcNow ||
             Date(validation["scannerDefinitionsAt"]) > clock.UtcNow || Date(validation["scannerDefinitionsAt"]).AddMilliseconds(policy["maximumSignatureAgeMs"].AsInt64) <= clock.UtcNow)
             throw Conflict("evidence_read_not_eligible");
-        var validationPolicy = await Rows("evidenceValidationPolicies").FindOneAndUpdateAsync(tx,
-            new BsonDocument("$and", new BsonArray { EvidenceValidationSchemas.Validator("evidenceValidationPolicies"), new BsonDocument {
+        var validationPolicies = video ? "evidenceVideoValidationPolicies" : "evidenceValidationPolicies";
+        var validationPolicy = await Rows(validationPolicies).FindOneAndUpdateAsync(tx,
+            new BsonDocument("$and", new BsonArray { video ? VideoValidationSchemas.Validator(validationPolicies) : EvidenceValidationSchemas.Validator(validationPolicies), new BsonDocument {
                 { "_id", validation["policyId"] }, { "revision", validation["policyRevision"] }, { "storeId", validation["storeId"] }, { "consumerId", validation["consumerId"] },
                 { "pipelineId", validation["pipelineId"] }, { "active", true }, { "approvedAt", new BsonDocument("$lte", validation["checkedAt"]) },
                 { "expiresAt", new BsonDocument("$gt", Now) }, { "fence", new BsonDocument("$lt", long.MaxValue) } } }),
@@ -42,9 +45,10 @@ internal sealed partial class EvidenceService
         await ReplaceAsync(tx, "documentVersions", bundle.Version, version, ct);
         return new(bundle, validation, lifecycle, policy, validationPolicy);
     }
-    private async Task<BsonDocument> TouchReadPolicyAsync(IClientSessionHandle tx, string storeId, CancellationToken ct) =>
-        await Rows("evidenceReadPolicies").FindOneAndUpdateAsync(tx, new BsonDocument("$and", new BsonArray {
-            EvidenceAccessSchemas.Validator("evidenceReadPolicies"), new BsonDocument { { "storeId", storeId }, { "active", true }, { "fence", new BsonDocument("$lt", long.MaxValue) } } }),
+    private async Task<BsonDocument> TouchReadPolicyAsync(IClientSessionHandle tx, string storeId, bool video, CancellationToken ct) =>
+        await Rows(video ? "evidenceVideoReadPolicies" : "evidenceReadPolicies").FindOneAndUpdateAsync(tx, new BsonDocument("$and", new BsonArray {
+            video ? ProcurementInspectionEvidenceSchemas.Validator("evidenceVideoReadPolicies") : EvidenceAccessSchemas.Validator("evidenceReadPolicies"),
+            new BsonDocument { { "storeId", storeId }, { "active", true }, { "fence", new BsonDocument("$lt", long.MaxValue) } } }),
             new BsonDocument("$inc", new BsonDocument("fence", 1L)), new FindOneAndUpdateOptions<BsonDocument> { ReturnDocument = ReturnDocument.After }, ct)
             ?? throw Conflict("evidence_read_policy_unavailable");
     internal Task<EvidenceReadClaim> AcquirePaymentReadAsync(IClientSessionHandle tx, ActorContext actor, EvidenceTargetRef target, long expectedRevision,
@@ -59,6 +63,9 @@ internal sealed partial class EvidenceService
     internal Task<EvidenceReadClaim> AcquireProcurementDisbursementReadAsync(IClientSessionHandle tx, ActorContext actor, EvidenceTargetRef target, long expectedRevision,
         long reservationId, EvidenceRef reference, AuthorizationReadMetadata metadata, CancellationToken ct) =>
         AcquireBoundReadAsync(tx, actor, target, EvidenceTargetKind.ProcurementDisbursement, "procurement-disbursement-evidence-view", expectedRevision, reservationId, reference, metadata, ct);
+    internal Task<EvidenceReadClaim> AcquireProcurementInspectionReadAsync(IClientSessionHandle tx, ActorContext actor, EvidenceTargetRef target, long expectedRevision,
+        long reservationId, EvidenceRef reference, AuthorizationReadMetadata metadata, CancellationToken ct) =>
+        AcquireBoundReadAsync(tx, actor, target, EvidenceTargetKind.ProcurementInspection, "procurement-inspection-evidence-view", expectedRevision, reservationId, reference, metadata, ct);
     private Task<EvidenceReadClaim> AcquireBoundReadAsync(IClientSessionHandle tx, ActorContext actor, EvidenceTargetRef target,
         EvidenceTargetKind requiredKind, string requiredPurpose, long expectedRevision, long reservationId, EvidenceRef reference,
         AuthorizationReadMetadata metadata, CancellationToken ct) => GuardAsync<EvidenceReadClaim>(tx, async () => {
@@ -101,6 +108,9 @@ internal sealed partial class EvidenceService
     internal Task<EvidenceReadWindow> AuthorizeProcurementDisbursementReadAsync(IClientSessionHandle tx, ActorContext actor, EvidenceReadClaim claim,
         VerifiedOriginalHandle handle, bool renew, CancellationToken ct) =>
         AuthorizeBoundReadAsync(tx, actor, claim, EvidenceTargetKind.ProcurementDisbursement, handle, renew, ct);
+    internal Task<EvidenceReadWindow> AuthorizeProcurementInspectionReadAsync(IClientSessionHandle tx, ActorContext actor, EvidenceReadClaim claim,
+        VerifiedOriginalHandle handle, bool renew, CancellationToken ct) =>
+        AuthorizeBoundReadAsync(tx, actor, claim, EvidenceTargetKind.ProcurementInspection, handle, renew, ct);
     private Task<EvidenceReadWindow> AuthorizeBoundReadAsync(IClientSessionHandle tx, ActorContext actor, EvidenceReadClaim claim,
         EvidenceTargetKind requiredKind, VerifiedOriginalHandle handle, bool renew, CancellationToken ct) => GuardAsync<EvidenceReadWindow>(tx, async () => {
         if (claim.Target.Kind != requiredKind) throw Invalid();
@@ -136,10 +146,11 @@ internal sealed partial class EvidenceService
         var payment = target.ReviewUploaderId is not null || target.SubmittedReservationId is not null || target.SubmittedSubmissionId is not null;
         var payout = target.PayoutUploaderId is not null || target.PayoutReservationId is not null || target.PayoutId is not null;
         var disbursement = target.DisbursementUploaderId is not null || target.DisbursementReservationId is not null || target.DisbursementId is not null;
-        if ((payment ? 1 : 0) + (payout ? 1 : 0) + (disbursement ? 1 : 0) > 1) throw Invalid("evidence_actor_or_owner_denied");
+        var inspection = target.InspectionUploaderId is not null || target.InspectionReservationId is not null || target.InspectionId is not null;
+        if ((payment ? 1 : 0) + (payout ? 1 : 0) + (disbursement ? 1 : 0) + (inspection ? 1 : 0) > 1) throw Invalid("evidence_actor_or_owner_denied");
         // A submitted payment also carries its immutable association for the original
         // uploader. Only a separately authorized reader supplies an uploader override.
-        RequireAuthority(bundle, target, actor, target.ReviewUploaderId is null && target.PayoutUploaderId is null && target.DisbursementUploaderId is null);
+        RequireAuthority(bundle, target, actor, target.ReviewUploaderId is null && target.PayoutUploaderId is null && target.DisbursementUploaderId is null && target.InspectionUploaderId is null);
         if (payment && (target.Target.Kind != EvidenceTargetKind.PaymentDeclaration ||
             target.SubmittedSubmissionId is not > 0 || target.SubmittedReservationId != bundle.Reservation["_id"].AsInt64 ||
             target.ReviewUploaderId is { } uploader && (uploader <= 0 || bundle.Reservation["uploader"]["userId"] != uploader)))
@@ -150,12 +161,15 @@ internal sealed partial class EvidenceService
         if (disbursement && (target.DisbursementUploaderId is not > 0 || target.Target.Kind != EvidenceTargetKind.ProcurementDisbursement ||
             target.DisbursementId is not > 0 || target.DisbursementReservationId != bundle.Reservation["_id"].AsInt64 || bundle.Reservation["uploader"]["userId"] != target.DisbursementUploaderId.Value))
             throw Invalid("evidence_actor_or_owner_denied");
+        if (inspection && (target.InspectionUploaderId is not > 0 || target.Target.Kind != EvidenceTargetKind.ProcurementInspection ||
+            target.InspectionId is not > 0 || target.InspectionReservationId != bundle.Reservation["_id"].AsInt64 || bundle.Reservation["uploader"]["userId"] != target.InspectionUploaderId.Value))
+            throw Invalid("evidence_actor_or_owner_denied");
     }
     private Task<BsonDocument> LoadReadLeaseAsync(IClientSessionHandle tx, EvidenceReadClaim claim, CancellationToken ct) =>
         LoadReadLeaseAsync(tx, claim.Id, claim.Token, claim.ReservationId, ct);
     private async Task<BsonDocument> LoadReadLeaseAsync(IClientSessionHandle tx, long id, string token, long reservationId, CancellationToken ct) {
         var row = await Rows("evidenceReadLeases").Find(tx, new BsonDocument("$and", new BsonArray {
-            new BsonDocument { { "_id", id }, { "token", token }, { "reservationId", reservationId } }, ProcurementDisbursementEvidenceSchemas.Validator("evidenceReadLeases") })).SingleOrDefaultAsync(ct)
+            new BsonDocument { { "_id", id }, { "token", token }, { "reservationId", reservationId } }, ProcurementInspectionEvidenceSchemas.Validator("evidenceReadLeases") })).SingleOrDefaultAsync(ct)
             ?? throw Conflict("evidence_read_lease_expired");
         var audit = await Rows("evidenceReadAudits").Find(tx, F.Eq("_id", row["lastAuditId"])).SingleOrDefaultAsync(ct);
         var kind = row["state"] == "provisional" ? "acquired" : row["state"] == "released" ? "released" : row["revision"] == 2L ? "activated" : "renewed";

@@ -14,7 +14,7 @@ internal static class DocumentProcessingStorage
         foreach (var name in DocumentProcessingSchemas.Collections)
             await InventoryRepository.RequireStorageAsync(database, name, DocumentProcessingSchemas.Validator(name), DocumentProcessingSchemas.Key(name), ct);
         foreach (var name in EvidenceAccessSchemas.Collections)
-            await ProcurementDisbursementEvidenceSchemas.RequireCompatibleStorageAsync(database, name, EvidenceAccessSchemas.Validator(name), EvidenceAccessSchemas.Key(name), ct);
+            await ProcurementInspectionEvidenceSchemas.RequireCompatibleStorageAsync(database, name, EvidenceAccessSchemas.Validator(name), EvidenceAccessSchemas.Key(name), ct);
         await RequireOutboxAsync(database, DocumentProcessingSchemas.OutboxValidator(), ct);
     }
     internal static async Task RequireOutboxAsync(IMongoDatabase database, BsonDocument required, CancellationToken ct) {

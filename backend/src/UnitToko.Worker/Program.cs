@@ -23,6 +23,7 @@ builder.Services.AddSingleton<IdempotencyStore>();
 builder.Services.AddSingleton<OutboxStore>();
 builder.Services.AddSingleton<CollectionMigrations>();
 var evidenceOptions = migrate ? null : builder.Configuration.GetSection("Evidence:Validation").Get<EvidenceValidationRuntimeOptions>();
+var videoOptions = migrate ? null : builder.Configuration.GetSection("Evidence:VideoValidation").Get<VideoValidationRuntimeOptions>();
 var ocrOptions = migrate ? null : builder.Configuration.GetSection("Evidence:PaymentOcr").Get<PaymentOcrRuntimeOptions>();
 var paymentNotices = !migrate && builder.Configuration.GetValue<bool>("Notifications:PaymentReviewInApp:Enabled");
 if (evidenceOptions is not null) {
@@ -34,6 +35,11 @@ if (ocrOptions is not null) {
     builder.Services.AddSingleton(sp => PaymentOcrRuntime.Create(sp.GetRequiredService<IMongoDatabase>(), sp.GetRequiredService<MongoUnitOfWork>(),
         sp.GetRequiredService<IdAllocator>(), sp.GetRequiredService<IClock>(), ocrOptions));
     builder.Services.AddHostedService<PaymentOcrWorker>();
+}
+if (videoOptions is not null) {
+    builder.Services.AddSingleton(sp => VideoValidationRuntime.Create(sp.GetRequiredService<IMongoDatabase>(), sp.GetRequiredService<MongoUnitOfWork>(),
+        sp.GetRequiredService<IdAllocator>(), sp.GetRequiredService<IClock>(), videoOptions));
+    builder.Services.AddHostedService<VideoValidationWorker>();
 }
 if (paymentNotices) {
     builder.Services.AddSingleton<PaymentReviewNotifications>();
@@ -51,6 +57,8 @@ if (migrate)
 
 if (evidenceOptions is null) logger.LogWarning("Evidence validation is unconfigured; validation jobs will not be claimed.");
 else logger.LogInformation("Evidence validation pipeline configured: {PipelineId}; current store and worker approvals remain required", host.Services.GetRequiredService<EvidenceValidationRuntime>().PipelineId);
+if (videoOptions is null) logger.LogWarning("Private video validation is unconfigured; video jobs will not be claimed.");
+else logger.LogInformation("Private video validation pipeline configured: {PipelineId}; current host, scanner and worker approvals remain required", host.Services.GetRequiredService<VideoValidationRuntime>().PipelineId);
 if (ocrOptions is null) logger.LogWarning("Payment OCR is unconfigured; OCR jobs will not be claimed.");
 else logger.LogInformation("Payment OCR pipeline configured: {PipelineId}; current host and model approvals remain required", host.Services.GetRequiredService<PaymentOcrRuntime>().PipelineId);
 if (!paymentNotices) logger.LogWarning("Payment in-app notices are unconfigured; review events will remain pending.");

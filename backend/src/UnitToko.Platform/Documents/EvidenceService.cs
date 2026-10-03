@@ -32,10 +32,12 @@ internal sealed partial class EvidenceService
     private readonly IPaymentEvidenceUploadTarget? paymentTargets;
     private readonly IRefundPayoutEvidenceUploadTarget? refundPayoutTargets;
     private readonly IProcurementDisbursementEvidenceUploadTarget? procurementDisbursementTargets;
+    private readonly IProcurementInspectionEvidenceUploadTarget? procurementInspectionTargets;
     internal EvidenceService(IMongoDatabase database, MongoUnitOfWork unit, IdAllocator ids, IClock clock,
         EvidenceStoreRegistration? registration = null, IPaymentEvidenceUploadTarget? paymentTargets = null,
         IRefundPayoutEvidenceUploadTarget? refundPayoutTargets = null,
-        IProcurementDisbursementEvidenceUploadTarget? procurementDisbursementTargets = null)
+        IProcurementDisbursementEvidenceUploadTarget? procurementDisbursementTargets = null,
+        IProcurementInspectionEvidenceUploadTarget? procurementInspectionTargets = null)
     {
         this.database = database; this.unit = unit; this.ids = ids; this.clock = clock;
         this.registration = registration ?? EvidenceStoreRegistration.Unavailable();
@@ -48,6 +50,9 @@ internal sealed partial class EvidenceService
         if (procurementDisbursementTargets is not null && (!ReferenceEquals(procurementDisbursementTargets.Database.Client, database.Client) || !procurementDisbursementTargets.Database.DatabaseNamespace.Equals(database.DatabaseNamespace)))
             throw new ArgumentException("Evidence targets must join the same owning transaction");
         this.procurementDisbursementTargets = procurementDisbursementTargets;
+        if (procurementInspectionTargets is not null && (!ReferenceEquals(procurementInspectionTargets.Database.Client, database.Client) || !procurementInspectionTargets.Database.DatabaseNamespace.Equals(database.DatabaseNamespace)))
+            throw new ArgumentException("Evidence targets must join the same owning transaction");
+        this.procurementInspectionTargets = procurementInspectionTargets;
         catalog = new(database, unit, ids, clock);
     }
 
@@ -58,9 +63,22 @@ internal sealed partial class EvidenceService
         });
 
     internal Task<ReservationResult> ReserveImageAsync(IClientSessionHandle tx, ActorContext actor, ReserveEvidenceImage request,
-        AuthorizationCommandMetadata metadata, CancellationToken ct = default) => GuardAsync(tx, async () =>
+        AuthorizationCommandMetadata metadata, CancellationToken ct = default) => GuardAsync(tx, () => {
+            ArgumentNullException.ThrowIfNull(request);
+            return ReserveMediaAsync(tx, actor, (request.Target, request.Purpose, request.ExpectedTargetRevision), metadata, ct);
+        });
+
+    internal Task<ReservationResult> ReserveVideoAsync(IClientSessionHandle tx, ActorContext actor, ReserveEvidenceVideo request,
+        AuthorizationCommandMetadata metadata, CancellationToken ct = default) => GuardAsync(tx, () => {
+            ArgumentNullException.ThrowIfNull(request);
+            return ReserveMediaAsync(tx, actor, (request.Target, request.Purpose, request.ExpectedTargetRevision), metadata, ct);
+        });
+
+    private async Task<ReservationResult> ReserveMediaAsync(IClientSessionHandle tx, ActorContext actor,
+        (EvidenceTargetRef Target, EvidencePurpose Purpose, long? ExpectedTargetRevision) request,
+        AuthorizationCommandMetadata metadata, CancellationToken ct)
     {
-        ValidateMetadata(metadata); ArgumentNullException.ThrowIfNull(request);
+        ValidateMetadata(metadata);
         var operation = ReserveOperation(request.Purpose);
         var hash = Hash(JsonSerializer.Serialize(new { Format = operation + ":v1",
             Kind = request.Target.Kind.ToString(), request.Target.Id, Purpose = request.Purpose.ToString(),
@@ -80,7 +98,8 @@ internal sealed partial class EvidenceService
             if (request.Purpose != Purpose(target.Target)) throw Invalid();
             if (request.ExpectedTargetRevision is { } expected && expected != target.Revision) throw Conflict("evidence_target_revision_conflict");
             RequireStore();
-            var policy = await Rows("evidenceStorePolicies").Find(tx, F.Eq("storeId", registration.StoreId)).SingleOrDefaultAsync(token);
+            var policyCollection = StorePolicyCollection(request.Purpose);
+            var policy = await Rows(policyCollection).Find(tx, F.Eq("storeId", registration.StoreId)).SingleOrDefaultAsync(token);
             RequirePolicy(policy);
             var charge = checked(3 * policy!["maximumContentBytes"].AsInt64);
             var bytes = policy["chargedBytes"].AsInt64; var count = policy["chargedReservations"].AsInt64;
@@ -90,7 +109,7 @@ internal sealed partial class EvidenceService
             policyAfter["chargedBytes"] = checked(bytes + charge); policyAfter["chargedReservations"] = checked(count + 1);
             policyAfter["revision"] = Next(policy["revision"]); policyAfter["fence"] = NextFence(policy["fence"]);
             policyAfter["updatedAt"] = Now;
-            await ReplaceAsync(tx, "evidenceStorePolicies", policy, policyAfter, token);
+            await ReplaceAsync(tx, policyCollection, policy, policyAfter, token);
             var lineageId = (await ids.NextAsync("evidenceIds", token)).Value;
             var versionId = (await ids.NextAsync("evidenceIds", token)).Value;
             var reservationId = (await ids.NextAsync("evidenceIds", token)).Value;
@@ -136,7 +155,7 @@ internal sealed partial class EvidenceService
         }, ct);
         FinalCheck(deadline, ct);
         return result;
-    });
+    }
     internal Task<SafeStatus> GetStatusAsync(IClientSessionHandle tx, ActorContext actor, long reservationId,
         AuthorizationReadMetadata readMetadata, CancellationToken ct = default) => GuardAsync(tx, async () =>
     {
@@ -251,12 +270,13 @@ internal sealed partial class EvidenceService
     private async Task<BsonDocument> TouchPolicyAsync(IClientSessionHandle tx, Bundle bundle, CancellationToken ct)
     {
         RequireStore();
-        var row = await Rows("evidenceStorePolicies").Find(tx, F.Eq("_id", bundle.Reservation["policyId"])).SingleOrDefaultAsync(ct);
+        var policyCollection = StorePolicyCollection(Purpose(ReadTarget(bundle.Reservation)));
+        var row = await Rows(policyCollection).Find(tx, F.Eq("_id", bundle.Reservation["policyId"])).SingleOrDefaultAsync(ct);
         RequirePolicy(row);
         if (row!["storeId"] != registration.StoreId || row["storeId"] != bundle.Attempt["storeId"] || row["policyVersion"] != bundle.Reservation["policyVersion"] ||
             !LimitFields.All(name => row[name] == bundle.Reservation["admittedLimits"][name])) throw Conflict("evidence_policy_changed");
         var after = Clone(row); after["fence"] = NextFence(row["fence"]); after["revision"] = Next(row["revision"]); after["updatedAt"] = Now;
-        await ReplaceAsync(tx, "evidenceStorePolicies", row, after, ct);
+        await ReplaceAsync(tx, policyCollection, row, after, ct);
         FinalCheck(Date(bundle.Reservation["expiresAt"]), ct); return row;
     }
     private async Task ReplaceAsync(IClientSessionHandle tx, string collection, BsonDocument before, BsonDocument after, CancellationToken ct)
@@ -319,7 +339,7 @@ internal sealed partial class EvidenceService
             CompleteOperation(bundle), CompletionKey(bundle))).SingleOrDefaultAsync(ct) ?? throw Invalid();
         await RequireReceiptAsync(tx, bundle, receipt, true, ct);
         var outbox = await Rows("outboxEvents").Find(tx, F.Eq("sourceKey", SourceKey(bundle))).SingleOrDefaultAsync(ct);
-        if (outbox is null || outbox["kind"] != "evidence.validation.requested" || !outbox["payload"].Equals(Payload(bundle))) throw Invalid();
+        if (outbox is null || outbox["kind"] != ValidationKind(bundle) || !outbox["payload"].Equals(Payload(bundle))) throw Invalid();
         return new(bundle.Reservation["_id"].AsInt64, Reference(bundle)!, bundle.Version["lifecycleRevision"].AsInt64);
     }
     private static string SourceKey(Bundle b) => $"evidence.quarantined:{b.Version["_id"].AsInt64}:1";

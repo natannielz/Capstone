@@ -343,11 +343,17 @@ public sealed partial class AccessHttpTests(MongoFixture fixture)
         var maker = await data.AddActorAsync(7681, scope, Permissions.ProcurementRead, Permissions.ProcurementPrepare);
         var checker = await data.AddActorAsync(7682, scope, Permissions.ProcurementRead, Permissions.ProcurementApprove);
         var reader = await data.AddActorAsync(7683, scope, Permissions.ProcurementRead);
+        var receiver = await data.AddActorAsync(7684, scope, Permissions.ProcurementRead, Permissions.ProcurementContainerReceive);
+        var inspector = await data.AddActorAsync(7685, scope, Permissions.ProcurementRead, Permissions.ProcurementInspect, Permissions.ProcurementInspectionEvidenceRead);
+        var evidenceReader = await data.AddActorAsync(7686, scope, Permissions.ProcurementRead, Permissions.ProcurementInspectionEvidenceRead);
         var assignments = new[]
         {
             (Actor: maker, Tasks: new[] { Permissions.ProcurementRead, Permissions.ProcurementPrepare }),
             (Actor: checker, Tasks: new[] { Permissions.ProcurementRead, Permissions.ProcurementApprove }),
-            (Actor: reader, Tasks: new[] { Permissions.ProcurementRead })
+            (Actor: reader, Tasks: new[] { Permissions.ProcurementRead }),
+            (Actor: receiver, Tasks: new[] { Permissions.ProcurementRead, Permissions.ProcurementContainerReceive }),
+            (Actor: inspector, Tasks: new[] { Permissions.ProcurementRead, Permissions.ProcurementInspect, Permissions.ProcurementInspectionEvidenceRead }),
+            (Actor: evidenceReader, Tasks: new[] { Permissions.ProcurementRead, Permissions.ProcurementInspectionEvidenceRead })
         };
         async Task<string[]> Actions(ActorContext actor)
         {
@@ -368,6 +374,7 @@ public sealed partial class AccessHttpTests(MongoFixture fixture)
             Assert.True(ScopePolicy.Compile(assignment.Actor, current, Permissions.ProcurementRead, data.Clock.UtcNow).IsAllowed);
             foreach (var permission in assignment.Tasks.Where(value => value != Permissions.ProcurementRead)) {
                 var policy = ScopePolicy.Compile(assignment.Actor, current, permission, data.Clock.UtcNow);
+                if (permission == Permissions.ProcurementInspectionEvidenceRead) { Assert.True(policy.IsAllowed); continue; }
                 Assert.False(policy.IsAllowed); Assert.Equal("step_up_required", policy.DenialCode);
                 Assert.True(ScopePolicy.CanRequestStepUp(assignment.Actor, current, permission, data.Clock.UtcNow));
             }

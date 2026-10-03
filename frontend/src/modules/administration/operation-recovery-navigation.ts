@@ -1,4 +1,5 @@
 export function recoveryPage(operation: string) {
+  if (/^procurement\.inspection\.(draft|submit)$(?![\s\S])/.test(operation) || operation === 'evidence.procurement-unboxing-video.reserve') return { href: '/procurement/inspections', label: 'halaman pemeriksaan barang pengadaan' };
   if (/^procurement\.receiving\.(notice|intake)$(?![\s\S])/.test(operation)) return { href: "/procurement/receiving", label: "halaman penerimaan pengadaan" };
   if (operation === 'procurement.settlement.verify') return { href: '/procurement/settlements', label: 'halaman verifikasi debit pemasok' };
   if (/^procurement\.disbursement\.(draft|record)$(?![\s\S])/.test(operation) || operation === 'evidence.procurement-disbursement-image.reserve') return { href: '/procurement/disbursements', label: 'halaman bukti uang muka pemasok' };
@@ -52,6 +53,9 @@ export function recoveryPage(operation: string) {
     : { href: "/administration/person-reviews", label: "halaman peninjauan orang" };
 }
 export function operationLabel(operation: string) {
+  if (operation === 'procurement.inspection.draft') return 'Draf pemeriksaan barang pengadaan';
+  if (operation === 'procurement.inspection.submit') return 'Pengajuan hasil pemeriksaan dalam karantina';
+  if (operation === 'evidence.procurement-unboxing-video.reserve') return 'Persiapan unggah video pembukaan koli';
   if (operation === "procurement.receiving.notice") return "Pencatatan pemberitahuan pemasok";
   if (operation === "procurement.receiving.intake") return "Penerimaan fisik koli";
   if (operation === 'procurement.settlement.verify') return 'Verifikasi debit bank pemasok';

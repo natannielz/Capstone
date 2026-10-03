@@ -1,6 +1,6 @@
 # Local private video validation
 
-This recipe exercises the Windows native video helper with synthetic originals. It does **not** enable video uploads, approve evidence, inspect received items or change stock. The intake owner, video admission/validation policy, worker consumption and migration 69 are not implemented by this helper checkpoint. Production runtime approval, operating limits and host acceptance remain outstanding.
+This recipe exercises the Windows native video helper with synthetic originals. Running it does **not** enable video uploads, approve evidence, inspect received items or change stock. The inspection owner and migration 69 now have separate integration work, described below; its current acceptance state is recorded in the [production ledger](../quality/production-progress.md). Production runtime approval, operating limits and host acceptance remain outstanding.
 
 Local candidate 4 passed all 17 selected native storage/image/video checks, including all four `VideoDecoderTests`. Evidence is retained in `tmp/production/ocr-results/unboxing-video-native-boundary-release4.log` and `.trx`; the failed release 3 result is also retained. This establishes local helper validation only, not workflow, staging or production acceptance.
 
@@ -122,3 +122,25 @@ The four tests cover real private MP4/WebM decoding, publication/hash mismatches
 The test-only limits are 1,000,000 input bytes, 128×128/16,384 pixels, one second, 20 video frames, two audio channels, 48 kHz, 48,000 scalar samples and 100 audio frames. The test process budget is 256 MiB, 20 seconds and 256 KiB probe output. They must not become automatic production defaults. Job resource confinement does not establish a restricted service identity, denied network access, scanner acceptance or permission to access unrelated files.
 
 Retain each candidate's source/assembly hashes, complete log/TRX and original fixtures. The inspected runtime and successful direct probe do not by themselves establish a passing helper test; earlier failed native results remain evidence. Claim local helper validation only after the exact current-source Windows test run passes without skips. Upload admission, owner binding, worker/policy integration, migration/restore and actual host/provider acceptance require their own later results.
+
+## Procurement inspection integration
+
+The `/procurement/inspections` workspace uses actual supplier-notice/container-intake history. A draft records the exact purchase-order package definition, observed package counts, lot/expiry/putaway details when known, and discrepancies. Damaged, expired and opened counts can overlap. They are observations, not a calculated quantity of healthy stock. Submission consumes the selected intake's remaining container-inspection capacity and remains `submitted_quarantine`; it neither releases items for sale nor posts money.
+
+The author needs current scoped `procurement.read`, `procurement.inspection.record` and `procurement.inspection.evidence.read` authority, including the record permission's fresh MFA. Separate readers require the applicable read grants. A draft binds its original author; submitting or viewing an unrelated reservation is denied. No new grant is installed automatically.
+
+Before submission, the exact original must be uploaded under `ProcurementUnboxingVideo`, scanned and fully decoded by the private worker, then verified and pinned in the owner's transaction. Upload completion alone is insufficient. The video remains private; reads recheck current authority, validation policy and retention under a finite lease. A successful media verdict does not establish what the video depicts. Operators still review the actual receipt and discrepancies.
+
+Migration 69 preserves prior image/payment/refund/disbursement evidence branches and adds separate video admission, read and validation policy stores. It checks retained histories before changing guards and seeds no approvals. Existing image byte limits remain unchanged. Missing or expired video approvals leave the dependent operations unavailable.
+
+| Host input | Required operational decision |
+| --- | --- |
+| API `Evidence:PrivateVideoWindows` | Private root, store identity and trusted operator SIDs accepted on the actual host |
+| Worker `Evidence:VideoValidation` | Same exact store plus consumer identity, host acceptance reference, scanner configuration acceptance reference and claim policy for `evidence.video-validation.requested` |
+| `Limits` and `Decoder` | Explicit finite byte, duration, video/audio dimensions/counts, process time/memory/output limits and approved executable hashes |
+| `Scanner`, `AcceptedClamdStreamCeiling` | Accepted local scanner endpoint, current real signatures and an independently accepted clamd stream ceiling covering the configured video byte limit |
+| `evidenceVideoStorePolicies`, `evidenceVideoReadPolicies`, `evidenceVideoValidationPolicies` | Current approved store quotas, verification/read budgets and exact worker pipeline identity |
+
+Do not copy synthetic fixture approval references into these policies. The local workflow tests use real Mongo, private files and native decoders, but a loopback scanner protocol fixture; they do not accept a production antivirus installation. The real host still needs service-identity, ACL, scanner/signature, resource, network-isolation, retention and restore acceptance.
+
+The video upload endpoint obtains its currently authorized finite byte cap before reading the request, then applies both server and stream limits. There is no global unlimited body setting. Inspect the exact API/worker deployment configuration and current policy records before operational use; source publication and local fixtures do not establish those connections.

@@ -106,7 +106,7 @@ internal sealed partial class EvidenceService
             var hash = Hash(CompletionKey(bundle) + ":" + bundle.Version["sha256"].AsString);
             await SaveMutationAsync(tx, actor, bundle, before, "evidence.quarantine", metadata, hash, token, auditId);
             await WriteReceiptAsync(tx, actor, bundle, true, auditId, CompletionKey(bundle), hash, token);
-            await new OutboxStore(database, clock).EnqueueAsync(tx, SourceKey(bundle), "evidence.validation.requested", Payload(bundle), token);
+            await new OutboxStore(database, clock).EnqueueAsync(tx, SourceKey(bundle), ValidationKind(bundle), Payload(bundle), token);
             return new EvidenceResult(bundle.Reservation["_id"].AsInt64, Reference(bundle)!, bundle.Version["lifecycleRevision"].AsInt64);
         }, ct);
         FinalCheck(deadline, ct); return result;

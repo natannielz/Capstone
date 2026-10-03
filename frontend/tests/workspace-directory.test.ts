@@ -8,7 +8,7 @@ const links = (actions: readonly string[], query = '') => workspaceDirectory(act
 test('workspace groups preserve real discovery and do not grant tasks from role names or unrelated permissions', () => {
   assert.deepEqual(workspaceDirectory([]), []);
   for (const role of ['admin', 'finance', 'customer', 'store-staff', '680', 'procurement.container.receive']) assert.deepEqual(workspaceDirectory([role]), []);
-  assert.deepEqual(links(['procurement.read']), ['/procurement/receiving', '/procurement/purchase-orders', '/procurement/requests']);
+  assert.deepEqual(links(['procurement.read']), ['/procurement/inspections', '/procurement/receiving', '/procurement/purchase-orders', '/procurement/requests']);
   assert.deepEqual(links(['payment.evidence']), []); assert.deepEqual(links(['payment.evidence', 'invoice.read']).sort(), ['/billing/invoices', '/billing/payments']);
   assert.deepEqual(links(['procurement.read', 'procurement.read']), links(['procurement.read']));
   assert.deepEqual(links(['procurement.read'], 'rekening'), []);
@@ -26,7 +26,7 @@ test('available routes appear exactly once under their business area, including 
 test('local search matches user-facing words across case and spacing without exposing identifiers or unavailable tasks', () => {
   const actions = ['procurement.read', 'invoice.read', 'catalog.manage'];
   assert.deepEqual(links(actions, '   PENERIMAAN   '), ['/procurement/receiving', '/billing/invoices']);
-  assert.deepEqual(links(actions, 'pengadaan kemasan').sort(), ['/procurement/purchase-orders', '/procurement/requests']);
+  assert.deepEqual(links(actions, 'pengadaan kemasan').sort(), ['/procurement/inspections', '/procurement/purchase-orders', '/procurement/requests']);
   assert.deepEqual(links(actions, 'penerimaan gudang'), []);
   assert.deepEqual(links(actions, 'procurement.read'), []);
   assert.deepEqual(links(actions, 'supplier.bank.read'), []);

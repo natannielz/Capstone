@@ -27,11 +27,13 @@ internal sealed partial class EvidenceService
         var validation = await HistoricalValidationAsync(tx, bundle, ct) ?? throw EvidenceValidationRecords.Broken();
         var lifecycle = await RequireHistoricalLifecycleAsync(tx, bundle, validation, ct) ?? throw EvidenceValidationRecords.Broken();
         if (validation["status"] != "passed" || lease["validationHash"] != validation["resultHash"] || lease["lifecycleRevision"] != lifecycle["revision"]) throw EvidenceValidationRecords.Broken();
+        var readPolicies = IsVideo(bundle) ? "evidenceVideoReadPolicies" : "evidenceReadPolicies";
+        var validationPolicies = IsVideo(bundle) ? "evidenceVideoValidationPolicies" : "evidenceValidationPolicies";
         foreach (var (collection, id, revision) in new[] {
-            ("evidenceReadPolicies", "readPolicyId", "readPolicyRevision"), ("evidenceValidationPolicies", "validationPolicyId", "validationPolicyRevision") }) {
+            (readPolicies, "readPolicyId", "readPolicyRevision"), (validationPolicies, "validationPolicyId", "validationPolicyRevision") }) {
             var policy = await Rows(collection).Find(tx, F.Eq("_id", lease[id])).SingleOrDefaultAsync(ct) ?? throw EvidenceValidationRecords.Broken();
             if (policy["storeId"] != lease["storeId"] || policy["revision"].AsInt64 < lease[revision].AsInt64 ||
-                collection == "evidenceValidationPolicies" && (validation["policyId"] != lease[id] || validation["policyRevision"] != lease[revision])) throw EvidenceValidationRecords.Broken();
+                collection == validationPolicies && (validation["policyId"] != lease[id] || validation["policyRevision"] != lease[revision])) throw EvidenceValidationRecords.Broken();
         }
         var saved = await LoadReadLeaseAsync(tx, lease["_id"].AsInt64, lease["token"].AsString, lease["reservationId"].AsInt64, ct);
         if (!saved.Equals(lease)) throw EvidenceValidationRecords.Broken();
@@ -54,23 +56,27 @@ internal sealed partial class EvidenceService
             "PaymentSubmission" => target.Kind == EvidenceTargetKind.PaymentDeclaration && target.Id == pin["declarationId"].AsInt64,
             "RefundPayout" => target.Kind == EvidenceTargetKind.RefundPayout && target.Id == pin["refundPayoutDraftId"].AsInt64,
             "ProcurementDisbursement" => target.Kind == EvidenceTargetKind.ProcurementDisbursement && target.Id == pin["procurementDisbursementDraftId"].AsInt64,
+            "ProcurementInspection" => target.Kind == EvidenceTargetKind.ProcurementInspection && target.Id == pin["procurementInspectionDraftId"].AsInt64,
             _ => false };
         if (!bound || !pin["reference"].Equals(ReadReference(reference)) || pin["actorId"] != bundle.Reservation["uploader"]["userId"] ||
             pin["versionRowId"] != bundle.Version["_id"] || pin["storeId"] != bundle.Version["storeId"] || pin["generation"] != bundle.Version["generation"] ||
             validation["status"] != "passed" || pin["validationHash"] != validation["resultHash"] || pin["lifecycleRevision"] != lifecycle["revision"] ||
             Date(pin["createdAt"]) < Date(validation["checkedAt"])) throw EvidenceValidationRecords.Broken();
+        var readPolicies = IsVideo(bundle) ? "evidenceVideoReadPolicies" : "evidenceReadPolicies";
+        var validationPolicies = IsVideo(bundle) ? "evidenceVideoValidationPolicies" : "evidenceValidationPolicies";
         foreach (var (collection, id, revision) in new[] {
-            ("evidenceReadPolicies", "readPolicyId", "readPolicyRevision"), ("evidenceValidationPolicies", "validationPolicyId", "validationPolicyRevision") }) {
+            (readPolicies, "readPolicyId", "readPolicyRevision"), (validationPolicies, "validationPolicyId", "validationPolicyRevision") }) {
             var policy = await Rows(collection).Find(tx, F.Eq("_id", pin[id])).SingleOrDefaultAsync(ct) ?? throw EvidenceValidationRecords.Broken();
             if (policy["storeId"] != pin["storeId"] || policy["revision"].AsInt64 < pin[revision].AsInt64 ||
-                collection == "evidenceValidationPolicies" && (validation["policyId"] != pin[id] || validation["policyRevision"] != pin[revision])) throw EvidenceValidationRecords.Broken();
+                collection == validationPolicies && (validation["policyId"] != pin[id] || validation["policyRevision"] != pin[revision])) throw EvidenceValidationRecords.Broken();
         }
         return true;
     });
     private async Task<BsonDocument?> HistoricalValidationAsync(IClientSessionHandle tx, Bundle bundle, CancellationToken ct) {
         await CompletionAsync(tx, bundle, ct);
         var job = await Rows("outboxEvents").Find(tx, F.Eq("sourceKey", SourceKey(bundle))).SingleAsync(ct);
-        var validation = await EvidenceValidationRecords.ReadAsync(database, tx, job, Publication(bundle), Payload(bundle), ct);
+        var validation = IsVideo(bundle) ? await VideoValidationRecords.ReadAsync(database, tx, job, Publication(bundle), Payload(bundle), ct)
+            : await EvidenceValidationRecords.ReadAsync(database, tx, job, Publication(bundle), Payload(bundle), ct);
         if (validation is not null) _ = await RequireHistoricalLifecycleAsync(tx, bundle, validation, ct);
         return validation;
     }

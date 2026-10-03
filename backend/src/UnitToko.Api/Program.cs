@@ -115,6 +115,18 @@ builder.Services.AddSingleton<SupplierBankService>();
 builder.Services.AddSingleton<ProcurementDisbursementService>();
 builder.Services.AddSingleton<ProcurementSettlementService>();
 builder.Services.AddSingleton<ProcurementReceivingService>();
+builder.Services.AddSingleton<ProcurementInspectionService>();
+builder.Services.AddSingleton(sp => {
+    var options = sp.GetRequiredService<IConfiguration>().GetSection("Evidence:PrivateVideoWindows");
+    var root = options["Root"]; var storeId = options["StoreId"]; var operators = options.GetSection("TrustedOperatorSids").Get<string[]>() ?? [];
+    PaymentEvidenceStorageOptions? storage = null;
+    if (root is not null || storeId is not null || operators.Length > 0) {
+        if (string.IsNullOrWhiteSpace(root) || string.IsNullOrWhiteSpace(storeId)) throw new InvalidOperationException("Complete private video storage settings are required");
+        storage = new(root, storeId, operators);
+    }
+    return new ProcurementInspectionEvidenceService(sp.GetRequiredService<IMongoDatabase>(), sp.GetRequiredService<MongoUnitOfWork>(), sp.GetRequiredService<IdAllocator>(),
+        sp.GetRequiredService<IClock>(), sp.GetRequiredService<ProcurementInspectionService>(), storage);
+});
 builder.Services.AddSingleton(sp => {
     var options = sp.GetRequiredService<IConfiguration>().GetSection("Evidence:PrivateWindows");
     var root = options["Root"]; var storeId = options["StoreId"]; var operators = options.GetSection("TrustedOperatorSids").Get<string[]>() ?? [];
@@ -247,14 +259,17 @@ app.Use(async (context, next) =>
     try
     {
         var evidenceStream = context.GetEndpoint()?.Metadata.GetMetadata<PaymentEvidenceBodyStream.UploadMetadata>() is not null;
-        if (context.Request.ContentLength > (evidenceStream ? PaymentEvidenceBodyStream.MaximumBytes : 65_536))
+        var videoStream = context.GetEndpoint()?.Metadata.GetMetadata<ProcurementInspectionEvidenceBodyStream.UploadMetadata>() is not null;
+        // The video endpoint obtains its authorized finite policy and sets its request/source
+        // bound before reading bytes. Image and JSON ceilings stay unchanged here.
+        if (!videoStream && context.Request.ContentLength > (evidenceStream ? PaymentEvidenceBodyStream.MaximumBytes : 65_536))
         {
             await Problems.WriteAsync(context, 413, "request_too_large", "Request body is too large");
             return;
         }
         // JSON stays bounded on every method; the exact upload endpoint streams through its
         // separate bounded source after authorization, including requests without Content-Length.
-        if (!evidenceStream)
+        if (!evidenceStream && !videoStream)
         {
             await using var buffer = new MemoryStream();
             var chunk = new byte[8192];
@@ -372,6 +387,7 @@ app.MapSupplierBankEndpoints();
 app.MapProcurementDisbursementEndpoints();
 app.MapProcurementSettlementEndpoints();
 app.MapProcurementReceivingEndpoints();
+app.MapProcurementInspectionEndpoints();
 app.MapOrderDraftEndpoints();
 app.MapOrderSubmissionEndpoints();
 app.MapOrderDecisionEndpoints();

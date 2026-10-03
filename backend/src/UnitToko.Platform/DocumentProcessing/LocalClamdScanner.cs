@@ -18,13 +18,29 @@ public sealed record LocalClamdOptions(int Port, string EngineVersion, long Mini
 
 // Loopback only, without DNS, cloud upload, file-path commands or quarantine/delete commands.
 // The listener identity, definitions and service confinement still require real host acceptance.
-internal sealed class LocalClamdScanner(LocalClamdOptions options, IClock clock) : IContentScanner
+internal sealed class LocalClamdScanner : IContentScanner
 {
+    private readonly LocalClamdOptions options;
+    private readonly IClock clock;
+    private readonly long acceptedStreamCeiling;
+    internal LocalClamdScanner(LocalClamdOptions options, IClock clock) : this(options, clock, 10L * 1024 * 1024) { }
+    private LocalClamdScanner(LocalClamdOptions options, IClock clock, long acceptedStreamCeiling) {
+        this.options = options; this.clock = clock; this.acceptedStreamCeiling = acceptedStreamCeiling;
+    }
+    // An explicit reviewed clamd StreamMaxLength is required for video. Existing image callers retain their 10 MiB ceiling.
+    internal static LocalClamdScanner ForVideo(LocalClamdOptions options, IClock clock, long acceptedStreamCeiling, string configurationAcceptanceReference) {
+        ArgumentNullException.ThrowIfNull(options); ArgumentNullException.ThrowIfNull(clock);
+        if (acceptedStreamCeiling <= 0 || acceptedStreamCeiling == long.MaxValue || options.MaximumBytes <= 0 ||
+            options.MaximumBytes > acceptedStreamCeiling || string.IsNullOrWhiteSpace(configurationAcceptanceReference) ||
+            configurationAcceptanceReference.Length > 256 || configurationAcceptanceReference != configurationAcceptanceReference.Trim() ||
+            configurationAcceptanceReference.Any(char.IsControl)) throw new ArgumentException("Video scanning requires explicit accepted local stream limits");
+        return new(options, clock, acceptedStreamCeiling);
+    }
     public async Task<ContentScanResult> ScanAsync(Stream original, CancellationToken ct) {
         ct.ThrowIfCancellationRequested();
         if (options.Port is <= 0 or > 65535 || options.EngineVersion.Length is < 3 or > 40 || options.EngineVersion.Any(c => c is not (>= '0' and <= '9') and not '.') ||
             options.MinimumSignatureVersion <= 0 || options.MaximumSignatureAge <= TimeSpan.Zero || options.MaximumSignatureAge > TimeSpan.FromDays(7) ||
-            options.MaximumBytes is <= 0 or > 10 * 1024 * 1024 || options.Timeout < TimeSpan.FromMilliseconds(100) || options.Timeout > TimeSpan.FromMinutes(1)) return new("scanner_unavailable");
+            options.MaximumBytes <= 0 || options.MaximumBytes > acceptedStreamCeiling || options.Timeout < TimeSpan.FromMilliseconds(100) || options.Timeout > TimeSpan.FromMinutes(1)) return new("scanner_unavailable");
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct); timeout.CancelAfter(options.Timeout);
         try {
             var before = await VersionAsync(timeout.Token);

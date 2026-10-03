@@ -45,7 +45,7 @@ public sealed partial class PaymentEvidenceService
                 options.GetValue("validationLevel", "") != "strict" || options.GetValue("validationAction", "") != "error" ||
                 options.GetValue("capped", false).AsBoolean || options.Contains("timeseries") || options.Contains("expireAfterSeconds") || options.Contains("encryptedFields") ||
                 options.TryGetValue("collation", out var collation) && !InvoiceStorage.Simple(collation) ||
-                !ProcurementDisbursementEvidenceSchemas.Supports(name, options.GetValue("validator", new BsonDocument()).AsBsonDocument, validator)) throw Unavailable();
+                !ProcurementInspectionEvidenceSchemas.Supports(name, options.GetValue("validator", new BsonDocument()).AsBsonDocument, validator)) throw Unavailable();
             try { PaymentEvidenceMigration.RequireIndexes(name, await (await database.GetCollection<BsonDocument>(name).Indexes.ListAsync(ct)).ToListAsync(ct)); }
             catch (InvalidOperationException) { throw Unavailable(); }
         }
@@ -99,7 +99,7 @@ public sealed partial class PaymentEvidenceService
         EvidenceRef reference, AuthorizationReadMetadata metadata, CancellationToken ct) {
         await StorageAsync(ct);
         foreach (var name in EvidenceAccessSchemas.Collections)
-            await ProcurementDisbursementEvidenceSchemas.RequireCompatibleStorageAsync(database, name, EvidenceAccessSchemas.Validator(name), EvidenceAccessSchemas.Key(name), ct);
+            await ProcurementInspectionEvidenceSchemas.RequireCompatibleStorageAsync(database, name, EvidenceAccessSchemas.Validator(name), EvidenceAccessSchemas.Key(name), ct);
         if (registration.Store is null) throw Unavailable();
         var started = Stopwatch.GetTimestamp();
         var claim = await unit.ExecuteAsync((tx, token) => reader.AcquirePaymentReadAsync(tx, actor, Target(declarationId), expectedRevision, reservationId, reference, metadata, token), ct);

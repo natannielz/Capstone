@@ -47,6 +47,8 @@ internal sealed partial class EvidenceService
                 RefundPayoutPinObserver?.Invoke(Stopwatch.GetElapsedTime(verificationStarted).TotalMilliseconds, handle.Stream.CanRead);
             if (claim.Target.Kind == EvidenceTargetKind.ProcurementDisbursement)
                 ProcurementDisbursementPinObserver?.Invoke(Stopwatch.GetElapsedTime(verificationStarted).TotalMilliseconds, handle.Stream.CanRead);
+            if (claim.Target.Kind == EvidenceTargetKind.ProcurementInspection)
+                ProcurementInspectionPinObserver?.Invoke(Stopwatch.GetElapsedTime(verificationStarted).TotalMilliseconds, handle.Stream.CanRead);
             if (!handle.Stream.CanRead || Stopwatch.GetElapsedTime(claim.LeaseStarted) >= claim.InitialLeaseDuration ||
                 Stopwatch.GetElapsedTime(verificationStarted) >= claim.RequestDuration) throw Conflict("evidence_read_lease_expired");
         }

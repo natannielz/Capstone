@@ -2,7 +2,20 @@ using UnitToko.Modules.Contracts;
 
 namespace UnitToko.Modules.Documents;
 
-public enum EvidencePurpose { CatalogImage = 1, PaymentImage = 2, RefundPayoutImage = 3, ProcurementDisbursementImage = 4 }
+public enum EvidencePurpose { CatalogImage = 1, PaymentImage = 2, RefundPayoutImage = 3, ProcurementDisbursementImage = 4, ProcurementUnboxingVideo = 5 }
+
+/// <summary>Video admission is separate from image limits and requires its actual inspection owner.</summary>
+public sealed record ReserveEvidenceVideo
+{
+    public EvidenceTargetRef Target { get; }
+    public EvidencePurpose Purpose => EvidencePurpose.ProcurementUnboxingVideo;
+    public long ExpectedTargetRevision { get; }
+    public ReserveEvidenceVideo(EvidenceTargetRef target, long expectedTargetRevision) {
+        if (target is null || target.Kind != EvidenceTargetKind.ProcurementInspection || expectedTargetRevision <= 0)
+            throw new DomainValidationException("evidence_invalid_admission", "Use the actual inspection draft and its current revision");
+        Target = target; ExpectedTargetRevision = expectedTargetRevision;
+    }
+}
 
 public sealed record ReserveEvidenceImage
 {

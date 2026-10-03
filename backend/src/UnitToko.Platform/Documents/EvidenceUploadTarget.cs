@@ -6,7 +6,8 @@ using UnitToko.Modules.Organizations;
 namespace UnitToko.Platform.Documents;
 internal sealed record EvidenceUploadTarget(EvidenceTargetRef Target, GrantScope Owner, long Revision, long? DefinitionId, long? DefinitionVersion, long? SubmittedReservationId = null, long? SubmittedSubmissionId = null, long? ReviewUploaderId = null,
     long? PayoutReservationId = null, long? PayoutId = null, long? PayoutUploaderId = null,
-    long? DisbursementReservationId = null, long? DisbursementId = null, long? DisbursementUploaderId = null);
+    long? DisbursementReservationId = null, long? DisbursementId = null, long? DisbursementUploaderId = null,
+    long? InspectionReservationId = null, long? InspectionId = null, long? InspectionUploaderId = null);
 internal interface IPaymentEvidenceUploadTarget
 {
     IMongoDatabase Database { get; }
@@ -40,6 +41,17 @@ internal interface IProcurementDisbursementEvidenceUploadTarget
 }
 internal sealed record ProcurementDisbursementEvidenceAssociation(long Id, long PinId, long DraftId, long DraftRevision,
     string Hash, string Reason, string CorrelationId, DateTimeOffset RecordedAt, GrantScope Owner);
+internal interface IProcurementInspectionEvidenceUploadTarget
+{
+    IMongoDatabase Database { get; }
+    Task<T> WithTargetAsync<T>(IClientSessionHandle tx, ActorContext actor, EvidenceTargetRef target, long? expectedRevision,
+        Func<EvidenceUploadTarget, CancellationToken, Task<T>> action, CancellationToken ct);
+    Task<T> WithReadTargetAsync<T>(IClientSessionHandle tx, ActorContext actor, EvidenceTargetRef target, long? expectedRevision, EvidenceRef? reference,
+        Func<EvidenceUploadTarget, CancellationToken, Task<T>> action, CancellationToken ct);
+    Task<ProcurementInspectionEvidenceAssociation> RequireInspectionAssociationAsync(IClientSessionHandle tx, ActorContext actor, long inspectionId, EvidenceReadClaim claim, CancellationToken ct);
+}
+internal sealed record ProcurementInspectionEvidenceAssociation(long Id, long PinId, long DraftId, long DraftRevision,
+    string Hash, string Reason, string CorrelationId, DateTimeOffset RecordedAt, GrantScope Owner);
 internal sealed partial class EvidenceService
 {
     private Task<T> WithReadTargetAsync<T>(IClientSessionHandle tx, ActorContext actor, EvidenceTargetRef target, long? expectedRevision, EvidenceRef? reference,
@@ -50,7 +62,9 @@ internal sealed partial class EvidenceService
                 ? refundPayoutTargets.WithReadTargetAsync(tx, actor, target, expectedRevision, reference, action, ct)
                 : target.Kind == EvidenceTargetKind.ProcurementDisbursement && procurementDisbursementTargets is not null
                     ? procurementDisbursementTargets.WithReadTargetAsync(tx, actor, target, expectedRevision, reference, action, ct)
-                    : WithTargetAsync(tx, actor, target, expectedRevision, action, ct);
+                    : target.Kind == EvidenceTargetKind.ProcurementInspection && procurementInspectionTargets is not null
+                        ? procurementInspectionTargets.WithReadTargetAsync(tx, actor, target, expectedRevision, reference, action, ct)
+                        : WithTargetAsync(tx, actor, target, expectedRevision, action, ct);
     private Task<T> WithTargetAsync<T>(IClientSessionHandle tx, ActorContext actor, EvidenceTargetRef target, long? expectedRevision,
         Func<EvidenceUploadTarget, CancellationToken, Task<T>> action, CancellationToken ct) {
         if (target.Kind is EvidenceTargetKind.CatalogFamily or EvidenceTargetKind.CatalogSku)
@@ -62,20 +76,29 @@ internal sealed partial class EvidenceService
             return refundPayoutTargets.WithTargetAsync(tx, actor, target, expectedRevision, action, ct);
         if (target.Kind == EvidenceTargetKind.ProcurementDisbursement && procurementDisbursementTargets is not null)
             return procurementDisbursementTargets.WithTargetAsync(tx, actor, target, expectedRevision, action, ct);
+        if (target.Kind == EvidenceTargetKind.ProcurementInspection && procurementInspectionTargets is not null)
+            return procurementInspectionTargets.WithTargetAsync(tx, actor, target, expectedRevision, action, ct);
         throw Invalid("evidence_target_unsupported");
     }
     private static EvidencePurpose Purpose(EvidenceTargetRef target) => target.Kind switch {
         EvidenceTargetKind.CatalogFamily or EvidenceTargetKind.CatalogSku => EvidencePurpose.CatalogImage,
         EvidenceTargetKind.PaymentDeclaration => EvidencePurpose.PaymentImage,
         EvidenceTargetKind.RefundPayout => EvidencePurpose.RefundPayoutImage,
-        EvidenceTargetKind.ProcurementDisbursement => EvidencePurpose.ProcurementDisbursementImage, _ => throw Invalid("evidence_target_unsupported") };
+        EvidenceTargetKind.ProcurementDisbursement => EvidencePurpose.ProcurementDisbursementImage,
+        EvidenceTargetKind.ProcurementInspection => EvidencePurpose.ProcurementUnboxingVideo, _ => throw Invalid("evidence_target_unsupported") };
+    private static string StorePolicyCollection(EvidencePurpose purpose) => purpose == EvidencePurpose.ProcurementUnboxingVideo
+        ? "evidenceVideoStorePolicies" : "evidenceStorePolicies";
     private static string ReserveOperation(EvidencePurpose purpose) => purpose switch {
         EvidencePurpose.CatalogImage => "evidence.catalog-image.reserve", EvidencePurpose.PaymentImage => "evidence.payment-image.reserve",
         EvidencePurpose.RefundPayoutImage => "evidence.refund-payout-image.reserve",
-        EvidencePurpose.ProcurementDisbursementImage => "evidence.procurement-disbursement-image.reserve", _ => throw Invalid() };
+        EvidencePurpose.ProcurementDisbursementImage => "evidence.procurement-disbursement-image.reserve",
+        EvidencePurpose.ProcurementUnboxingVideo => "evidence.procurement-unboxing-video.reserve", _ => throw Invalid() };
     private static string ReserveOperation(MongoDB.Bson.BsonDocument reservation) => ReserveOperation(Purpose(ReadTarget(reservation)));
     private static string CompleteOperation(Bundle bundle) => Purpose(ReadTarget(bundle.Reservation)) switch {
         EvidencePurpose.PaymentImage => "evidence.payment-image.complete", EvidencePurpose.RefundPayoutImage => "evidence.refund-payout-image.complete",
         EvidencePurpose.ProcurementDisbursementImage => "evidence.procurement-disbursement-image.complete",
+        EvidencePurpose.ProcurementUnboxingVideo => "evidence.procurement-unboxing-video.complete",
         EvidencePurpose.CatalogImage => "evidence.catalog-image.complete", _ => throw Invalid() };
+    private static bool IsVideo(Bundle bundle) => Purpose(ReadTarget(bundle.Reservation)) == EvidencePurpose.ProcurementUnboxingVideo;
+    private static string ValidationKind(Bundle bundle) => IsVideo(bundle) ? "evidence.video-validation.requested" : "evidence.validation.requested";
 }

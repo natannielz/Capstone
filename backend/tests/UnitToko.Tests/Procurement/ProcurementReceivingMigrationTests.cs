@@ -49,7 +49,8 @@ public sealed class ProcurementReceivingMigrationTests(MongoFixture fixture)
         }
         var retained = await StateAsync(data.Database); var counters = await CountersAsync(data.Database);
         await new CollectionMigrations(data.Database, data.Clock).ApplyAsync();
-        Assert.Equal(retained, await StateAsync(data.Database)); Assert.Equal(definitions, await DefinitionsAsync(data.Database));
+        Assert.Equal(retained, await StateAsync(data.Database));
+        await ProcurementInspectionMigrationTests.RequireExpectedDefinitionsAsync(data.Database, definitions);
         Assert.Equal(indexes, await IndexesAsync(data.Database)); await RequireHighWaterAsync(data.Database, counters);
         await ProcurementSettlementMigrationTests.RequireInstalledIndexesAsync(data.Database); await RequireEmptyInstalledAsync(data.Database);
         Assert.Equal(history, new BsonArray((await HistoryAsync(data.Database)).Take(67)));
@@ -70,7 +71,9 @@ public sealed class ProcurementReceivingMigrationTests(MongoFixture fixture)
         await RestoreV67Async(data.Database);
         var retained = await StateAsync(data.Database); var definitions = await DefinitionsAsync(data.Database); var indexes = await IndexesAsync(data.Database);
         await new CollectionMigrations(data.Database, data.Clock).ApplyAsync();
-        Assert.Equal(retained, await StateAsync(data.Database)); Assert.Equal(definitions, await DefinitionsAsync(data.Database)); Assert.Equal(indexes, await IndexesAsync(data.Database));
+        Assert.Equal(retained, await StateAsync(data.Database));
+        await ProcurementInspectionMigrationTests.RequireExpectedDefinitionsAsync(data.Database, definitions);
+        Assert.Equal(indexes, await IndexesAsync(data.Database));
         Assert.Equal(BankTransactionClaimSchemas.Validator(), ProcurementBankClaimSchemas.Validator()["$or"][0]);
         await ProcurementSettlementMigrationTests.RequireInstalledIndexesAsync(data.Database); await RequireEmptyInstalledAsync(data.Database);
         Assert.Equal(saved, await data.Service.RecoverSettlementAsync(data.Verifier, data.PayoutId, "refund-before68"));
@@ -126,6 +129,7 @@ public sealed class ProcurementReceivingMigrationTests(MongoFixture fixture)
 
     internal static async Task RestoreV67Async(IMongoDatabase database)
     {
+        await ProcurementInspectionMigrationTests.RestoreV68Async(database);
         var history = await HistoryAsync(database);
         if (history.Count <= 67) { Assert.All(history, row => Assert.Equal("applied", row["state"])); return; }
         Assert.Equal(68, history.Count); Assert.All(history, row => Assert.Equal("applied", row["state"]));

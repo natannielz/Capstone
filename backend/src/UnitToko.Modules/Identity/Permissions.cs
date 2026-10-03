@@ -36,6 +36,7 @@ public static class Permissions
     public const string ProcurementDisbursementRead = "procurement.disbursement.read", ProcurementDisbursementEvidenceRead = "procurement.disbursement.evidence.read";
     public const string ProcurementSettlementRead = "procurement.settlement.read";
     public const string ProcurementContainerReceive = "procurement.container.receive";
+    public const string ProcurementInspect = "procurement.inspection.record", ProcurementInspectionEvidenceRead = "procurement.inspection.evidence.read";
     public const string ReconciliationVerify = "reconciliation.verify", JournalPost = "journal.post", JournalReverse = "journal.reverse";
     public const string AccountingBookRead = "accounting.book.read", AccountingBookPropose = "accounting.book.propose", AccountingBookApprove = "accounting.book.approve";
     public const string InviteManage = "invite.manage", MembershipPropose = "membership.propose", MembershipApprove = "membership.approve", AccessPropose = "access.propose", AccessApprove = "access.approve", AccessRevoke = "access.revoke", RecoveryInitiate = "recovery.initiate", TechnicalConfigure = "technical.configure", AccessAuditRead = "access.audit.read";
@@ -93,6 +94,8 @@ public static class Permissions
         Add(ProcurementDisbursementEvidenceRead, Operations);
         Add(ProcurementSettlementRead, Operations);
         Add(ProcurementContainerReceive, Operations, true);
+        Add(ProcurementInspect, Operations, true);
+        Add(ProcurementInspectionEvidenceRead, Operations);
         result[FundingRequest] = result[FundingRequest] with { Assurance = new(true, TimeSpan.FromMinutes(5)) };
         result[FundingApprove] = result[FundingApprove] with { Assurance = new(true, TimeSpan.FromMinutes(5)) };
         result[PaymentVerify] = result[PaymentVerify] with { Assurance = new(true, TimeSpan.FromMinutes(5)) };
