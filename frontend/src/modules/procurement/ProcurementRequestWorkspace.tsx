@@ -158,7 +158,7 @@ function RequestDesk({ account, fresh, onDenied }: { account: Account; fresh: bo
   function reconcile() { ledger.current?.resetAfterReconciliation(); clearSelection(); recovery.refresh(); setRevision(value => value + 1); }
   return <>
     {(canPrepare || canDecide) && !fresh && <div className={styles.alert}><p>Perbarui verifikasi kedua sebelum mengirim atau memutuskan permintaan.</p>
-      {[preparePermission, approvePermission].filter(permission => account.actions.includes(permission) && account.session.stepUpOperations.includes(permission)).map(permission => <p key={permission}><Link href={`/identity/step-up?operation=${permission}&returnPath=${encodeURIComponent(path)}`}>{permission === preparePermission ? 'Verifikasi untuk mengirim permintaan' : 'Verifikasi untuk memutuskan permintaan'}</Link></p>)}</div>}
+      {[preparePermission, approvePermission].filter(permission => account.actions.includes(permission) && account.session.stepUpOperations.includes(permission)).map(permission => <p key={permission}><Link href={`/identity/account?operation=${permission}&returnPath=${encodeURIComponent(path)}`}>{permission === preparePermission ? 'Verifikasi untuk mengirim permintaan' : 'Verifikasi untuk memutuskan permintaan'}</Link></p>)}</div>}
     {offline && <p role="status" className={styles.alert}>Koneksi terputus. Pengiriman dan keputusan ditahan sampai koneksi kembali.</p>}
     {error !== null && <p role="alert" className={styles.alert}>{message(error)}</p>}{notice && <p role="status" className={styles.success}>{notice}</p>}
     {recovery.error !== null && <p role="alert" className={styles.alert}>{message(recovery.error)}</p>}

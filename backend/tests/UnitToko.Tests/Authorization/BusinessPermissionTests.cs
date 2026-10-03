@@ -143,6 +143,33 @@ public sealed class BusinessPermissionTests
     }
 
     [Fact]
+    public void Supplier_payable_authorities_are_explicit_scoped_and_independent_of_posting()
+    {
+        foreach (var permission in new[] { Permissions.ProcurementPayableRead, Permissions.ProcurementPayablePropose, Permissions.ProcurementPayableDecide }) {
+            Assert.Equal(new[] { GrantScopeKind.FulfillmentShop, GrantScopeKind.FulfillmentWarehouse }, Permissions.Find(permission)!.AllowedScopes.ToArray());
+            Assert.All(RoleTemplates.Templates.Values, role => Assert.DoesNotContain(permission, role.Permissions));
+            Assert.DoesNotContain(permission, RoleTemplates.Materialize("finance", RoleTemplates.FinancePacks.Keys, []).Permissions);
+            var policy = Snapshot("finance", Shop, [permission]);
+            Assert.True(ScopePolicy.Compile(Actor, policy, permission, Now).Matches(Order));
+            Assert.False(ScopePolicy.Compile(Actor, policy, permission, Now).Matches(Order with { ShopId = 22 }));
+            Assert.False(ScopePolicy.Compile(Actor, policy, Permissions.JournalPost, Now).IsAllowed);
+            Assert.False(ScopePolicy.Compile(Actor, Snapshot("finance", Shop, [Permissions.JournalPost]), permission, Now).IsAllowed);
+            foreach (var other in new[] { Permissions.ProcurementPayableRead, Permissions.ProcurementPayablePropose, Permissions.ProcurementPayableDecide }.Where(value => value != permission))
+                Assert.False(ScopePolicy.Compile(Actor, policy, other, Now).IsAllowed);
+            if (permission != Permissions.ProcurementPayableRead) {
+                Assert.Equal(TimeSpan.FromMinutes(5), Permissions.Find(permission)!.Assurance.MaximumAge);
+                Assert.False(ScopePolicy.Compile(Actor with { AuthenticatedAt = Now.AddMinutes(-6) }, policy, permission, Now).IsAllowed);
+            }
+        }
+        const string approval = Permissions.ProcurementPayableDecide;
+        Assert.True(ApprovalPolicy.RequiresEvidence(approval)); Assert.True(PersonApprovalPolicy.RequiresEvidence(approval));
+        Assert.False(ApprovalPolicy.Evaluate(101, approval, new(1, 1, RequestedBy: 101)).Allowed);
+        Assert.False(ApprovalPolicy.Evaluate(101, approval, new(1, 2, RequestedBy: 102)).Allowed);
+        Assert.False(ApprovalPolicy.Evaluate(101, approval, new(1, 1)).Allowed);
+        Assert.Equal(new long[] { 101, 102 }, PersonApprovalPolicy.RequiredAccounts(101, approval, new(1, 1, RequestedBy: 102)).ToArray());
+    }
+
+    [Fact]
     public void Supplier_bank_authorities_are_shop_only_private_explicit_and_independent_without_transfer_rights()
     {
         foreach (var permission in new[] { Permissions.SupplierBankRead, Permissions.SupplierBankDetailsRead, Permissions.SupplierBankPropose, Permissions.SupplierBankApprove }) {
@@ -275,7 +302,8 @@ public sealed class BusinessPermissionTests
             Permissions.ReceivingAccountRead, Permissions.ReceivingAccountDetailsRead,
             Permissions.ReceivingAccountPropose, Permissions.ReceivingAccountVerify, Permissions.ReceivingAccountApprove, Permissions.FundingRead,
             Permissions.SupplierBankRead, Permissions.SupplierBankDetailsRead, Permissions.SupplierBankPropose, Permissions.SupplierBankApprove,
-            Permissions.ProcurementDisbursementRead, Permissions.ProcurementDisbursementEvidenceRead };
+            Permissions.ProcurementDisbursementRead, Permissions.ProcurementDisbursementEvidenceRead,
+            Permissions.ProcurementStockValuationRead, Permissions.ProcurementStockValuationPropose, Permissions.ProcurementStockValuationDecide };
         Assert.Equal(financeSuggestions, RoleTemplates.Suggestions["finance"].ToArray());
         var allFinancePacks = RoleTemplates.Materialize("finance", RoleTemplates.FinancePacks.Keys, []).Permissions;
         foreach (var suggestion in financeSuggestions)

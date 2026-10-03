@@ -43,7 +43,7 @@ internal sealed class ProcurementReceivingTestData(PurchaseOrderTestData orders)
         "One unannounced excess container held pending separate item inspection");
 
     internal static async Task<ProcurementReceivingTestData> CreateAsync(MongoFixture fixture,
-        ProcurementRoute route = ProcurementRoute.Ddo, bool onReceipt = false)
+        ProcurementRoute route = ProcurementRoute.Ddo, bool onReceipt = false, decimal requiredAdvance = 0)
     {
         var orders = await PurchaseOrderTestData.CreateAsync(fixture);
         try {
@@ -57,6 +57,7 @@ internal sealed class ProcurementReceivingTestData(PurchaseOrderTestData orders)
             var input = orders.Input();
             if (route == ProcurementRoute.OmiRegular) input = input with { ExternalOrderReference = "SYNTHETIC-OMI-ORDER-001" };
             if (onReceipt) input = input with { PaymentTerms = new("on_receipt", "Synthetic approved on-receipt terms", new Money(0), "on_receipt", null) };
+            if (requiredAdvance > 0) input = input with { PaymentTerms = new("deposit", "Synthetic independently approved deposit; balance on receipt", new Money(requiredAdvance), "on_receipt", null) };
             data.Proposal = await orders.ProposeAsync("receiving-fixture-po", input);
             data.Order = await orders.DecideAsync(data.Proposal, "receiving-fixture-po-approved");
             data.Maker = await data.Base.AddActorAsync(680, ProcurementRequestTestData.Scope, Permissions.ProcurementRead, Permissions.ProcurementPrepare);

@@ -77,6 +77,7 @@ public sealed class StockSourceReconciliationMigrationTests(MongoFixture fixture
 
     internal static async Task RestoreV73Async(IMongoDatabase db)
     {
+        await ProcurementSupplierPayableMigrationTests.RestoreV74Async(db);
         var history = await HistoryAsync(db);
         if (history.Count <= 73) { Assert.All(history, row => Assert.Equal("applied", row["state"])); return; }
         Assert.Equal(74, history.Count); Assert.All(history, row => Assert.Equal("applied", row["state"]));

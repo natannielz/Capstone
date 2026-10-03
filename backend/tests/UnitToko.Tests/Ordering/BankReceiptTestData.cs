@@ -28,7 +28,8 @@ internal sealed class BankReceiptTestData(BankStatementTestData statements) : IA
     }
     internal static AuthorizationCommandMetadata Meta(string key)=>new(key,"Synthetic independent credit review","synthetic-bank-receipt");
     internal static async Task<BankReceiptTestData> CreateAsync(MongoFixture fixture) => await AttachAsync(await BankStatementTestData.CreateAsync(fixture));
-    internal static async Task<BankReceiptTestData> AttachAsync(BankStatementTestData statements, bool configureAccounting = true, byte[]? original = null) {
+    internal static async Task<BankReceiptTestData> AttachAsync(BankStatementTestData statements, bool configureAccounting = true, byte[]? original = null,
+        bool preserveApprovedAccounting = false) {
         var data=new BankReceiptTestData(statements); var catalog=data.Statements.Accounts.Catalog;
         try {
             string[] read=[Permissions.BankReceiptRead,Permissions.BankStatementRead,Permissions.ReceivingAccountRead,Permissions.ReceivingAccountDetailsRead];
@@ -43,7 +44,15 @@ internal sealed class BankReceiptTestData(BankStatementTestData statements) : IA
                 { "cashMapping","bank_cash" }, { "suspenseMapping","unidentified_cash" }, { "trustedSourceReference","synthetic-independent-bank-portal" },
                 { "operatingOwnerReference","synthetic-finance-owner" }, { "approvalReference","synthetic-cash-policy-approval" },
                 { "approvedAt",catalog.Clock.UtcNow.AddDays(-1).UtcDateTime }, { "expiresAt",catalog.Clock.UtcNow.AddDays(1).UtcDateTime }, { "active",true }, { "fence",0L } });
-            if (configureAccounting) {
+            // Integrated procurement fixtures have already used the genuine independent book-setup owner.
+            // Its immutable chart must not be replaced by this older standalone accounting fixture.
+            if (preserveApprovedAccounting) {
+                var books = await data.Rows("accountingBooks").Find(new BsonDocument()).ToListAsync();
+                var book = Assert.Single(books);
+                var chart = await data.Rows("accountingChartVersions").Find(new BsonDocument("_id", book["chartVersionId"])).SingleAsync();
+                foreach (var mapping in new[] { "bank_cash", "unidentified_cash" })
+                    Assert.Single(chart["mappings"].AsBsonArray, row => row["mappingKey"] == mapping);
+            } else if (configureAccounting) {
                 await AccountingTestDocuments.ConfigureAsync(catalog.Database);
                 await data.Rows("accountingChartVersions").UpdateOneAsync(new BsonDocument("_id",20L),Builders<BsonDocument>.Update.Set("mappings",new BsonArray {
                     AccountingTestDocuments.Mapping("bank_cash",801,"A1101"),AccountingTestDocuments.Mapping("unidentified_cash",802,"A2101") }));

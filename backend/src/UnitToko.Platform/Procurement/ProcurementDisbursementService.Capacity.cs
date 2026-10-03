@@ -7,6 +7,16 @@ namespace UnitToko.Platform.Procurement;
 
 public sealed partial class ProcurementDisbursementService
 {
+    // A RecordAsync result may be reused only in the transaction which proved it.
+    // Other allocations still take the full retained-owner verification path.
+    private sealed class VerifiedCapacityRecord(IClientSessionHandle session, BsonDocument row) {
+        private readonly long transaction = session.WrappedCoreSession.CurrentTransaction.TransactionNumber;
+        internal BsonDocument? For(IClientSessionHandle tx, long id) {
+            if (!ReferenceEquals(session, tx) || !tx.IsInTransaction ||
+                tx.WrappedCoreSession.CurrentTransaction.TransactionNumber != transaction) throw B.Broken();
+            return row["_id"].AsInt64 == id ? row : null;
+        }
+    }
     private sealed class DisbursementCapacityState(BsonDocument funding, BsonDocument? head, BsonDocument? previous, Money recorded) {
         internal BsonDocument Funding = funding;
         internal BsonDocument? Head = head, Previous = previous;
@@ -18,7 +28,7 @@ public sealed partial class ProcurementDisbursementService
                 { "remainingAmount", new Money(total.Value - Recorded.Value).ToString() }, { "version", Head?["version"] ?? new BsonInt64(0) } };
         }
     }
-    private async Task<DisbursementCapacityState> CapacityAsync(IClientSessionHandle tx, BsonDocument source, CancellationToken ct, ProcurementDisbursementProof? proof = null, ProcurementDisbursementRecords.HistoricalSources? history = null) {
+    private async Task<DisbursementCapacityState> CapacityAsync(IClientSessionHandle tx, BsonDocument source, CancellationToken ct, ProcurementDisbursementProof? proof = null, ProcurementDisbursementRecords.HistoricalSources? history = null, VerifiedCapacityRecord? verifiedRecord = null) {
         var id = source["authorization"]["_id"]; var filter = new BsonDocument("authorizationId", id);
         var raw = await Rows(B.Heads).Find(tx, filter).SingleOrDefaultAsync(ct); var head = raw is null ? null : await records.RowAsync(tx, B.Heads, raw["_id"].AsInt64, ct);
         var allocations = await Rows(B.Allocations).Find(tx, filter).Sort(new BsonDocument("sequence", 1)).ToListAsync(ct);
@@ -32,7 +42,8 @@ public sealed partial class ProcurementDisbursementService
             ProcurementDisbursementRecords.Equal(row["authorizationHash"], source["authorization"]["snapshotHash"]); ProcurementDisbursementRecords.Equal(row["sequence"], ++sequence);
             ProcurementDisbursementRecords.Equal(row["previousAllocationId"], state.Previous?["_id"] ?? BsonNull.Value); ProcurementDisbursementRecords.Equal(row["previousHash"], state.Previous?["snapshotHash"] ?? BsonNull.Value);
             var candidates = claims.Where(claim => claim["_id"] == row["disbursementId"]).ToArray(); if (candidates.Length != 1) throw B.Broken();
-            var claim = await records.RecordAsync(tx, row["disbursementId"].AsInt64, false, ct, proof, history);
+            var claim = verifiedRecord?.For(tx, row["disbursementId"].AsInt64) ??
+                await records.RecordAsync(tx, row["disbursementId"].AsInt64, false, ct, proof, history);
             state.Claims.Add(claim["_id"].AsInt64, claim);
             ProcurementDisbursementRecords.Equal(row["disbursementHash"], claim["snapshotHash"]); ProcurementDisbursementRecords.Equal(row["amount"], claim["input"]["amount"]);
             ProcurementDisbursementRecords.Equal(row["recordedAt"], claim["recordedAt"]); ProcurementDisbursementRecords.Equal(row["_id"], claim["allocationId"]);

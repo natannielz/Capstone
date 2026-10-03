@@ -36,11 +36,15 @@ internal sealed class ProcurementFundingTestData(PurchaseOrderTestData orders) :
     internal static async Task<ProcurementFundingTestData> CreateAsync(MongoFixture fixture, bool positiveAdvance = true) {
         var orders = await PurchaseOrderTestData.CreateAsync(fixture);
         try {
-            var data = new ProcurementFundingTestData(orders);
             var input = orders.Input(6);
             if (positiveAdvance) input = input with { PaymentTerms = new("deposit", "Explicit synthetic deposit; balance on receipt", new Money(20000), "on_receipt", null) };
-            data.Proposal = await orders.ProposeAsync("funding-fixture-po", input);
-            data.Order = await orders.DecideAsync(data.Proposal, "funding-fixture-po-approved");
+            var proposal = await orders.ProposeAsync("funding-fixture-po", input);
+            var order = await orders.DecideAsync(proposal, "funding-fixture-po-approved");
+            return await AttachAsync(orders, proposal, order);
+        } catch { await orders.DisposeAsync(); throw; }
+    }
+    internal static async Task<ProcurementFundingTestData> AttachAsync(PurchaseOrderTestData orders, BsonDocument proposal, BsonDocument order) {
+            var data = new ProcurementFundingTestData(orders) { Proposal = proposal, Order = order };
             data.Maker = await data.Base.AddActorAsync(640, ProcurementRequestTestData.Scope, Permissions.FundingRead, Permissions.FundingRequest);
             data.Checker = await data.Base.AddActorAsync(641, ProcurementRequestTestData.Scope, Permissions.FundingRead, Permissions.FundingApprove);
             data.Reader = await data.Base.AddActorAsync(642, ProcurementRequestTestData.Scope, Permissions.FundingRead);
@@ -54,7 +58,6 @@ internal sealed class ProcurementFundingTestData(PurchaseOrderTestData orders) :
                 { "approvalReference", "SYNTHETIC-LOCAL-POLICY-APPROVAL" }, { "approvedAt", data.Clock.UtcNow.AddHours(-1).UtcDateTime },
                 { "expiresAt", data.Clock.UtcNow.AddDays(30).UtcDateTime }, { "active", true } });
             return data;
-        } catch { await orders.DisposeAsync(); throw; }
     }
     internal async Task<BsonDocument> RequestAsync(string key, ProcurementFundingInput? input = null) {
         input ??= Input(); var preview = await Service.PreviewAsync(Maker, input);

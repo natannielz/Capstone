@@ -42,6 +42,7 @@ public static class Permissions
     public const string ProcurementSupplierDocumentRecord = "procurement.supplier.document.record", ProcurementSupplierDocumentMatch = "procurement.supplier.document.match";
     public const string ProcurementSupplierDocumentEvidenceRead = "procurement.supplier.document.evidence.read";
     public const string ProcurementStockValuationRead = "procurement.stockvaluation.read", ProcurementStockValuationPropose = "procurement.stockvaluation.propose", ProcurementStockValuationDecide = "procurement.stockvaluation.decide";
+    public const string ProcurementPayableRead = "procurement.payable.read", ProcurementPayablePropose = "procurement.payable.propose", ProcurementPayableDecide = "procurement.payable.decide";
     public const string ReconciliationVerify = "reconciliation.verify", JournalPost = "journal.post", JournalReverse = "journal.reverse";
     public const string AccountingBookRead = "accounting.book.read", AccountingBookPropose = "accounting.book.propose", AccountingBookApprove = "accounting.book.approve";
     public const string InviteManage = "invite.manage", MembershipPropose = "membership.propose", MembershipApprove = "membership.approve", AccessPropose = "access.propose", AccessApprove = "access.approve", AccessRevoke = "access.revoke", RecoveryInitiate = "recovery.initiate", TechnicalConfigure = "technical.configure", AccessAuditRead = "access.audit.read";
@@ -108,6 +109,9 @@ public static class Permissions
         Add(ProcurementStockValuationRead, Operations);
         Add(ProcurementStockValuationPropose, Operations, true);
         Add(ProcurementStockValuationDecide, Operations, true);
+        Add(ProcurementPayableRead, Operations);
+        Add(ProcurementPayablePropose, Operations, true);
+        Add(ProcurementPayableDecide, Operations, true);
         result[SupplierClaim] = result[SupplierClaim] with { Assurance = new(true, TimeSpan.FromMinutes(5)) };
         Add(SupplierClaimApprove, Operations, true);
         result[FundingRequest] = result[FundingRequest] with { Assurance = new(true, TimeSpan.FromMinutes(5)) };

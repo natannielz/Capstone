@@ -146,7 +146,7 @@ function PolicyDesk({ account, elapsed, fresh, onDenied }: { account: Account; e
   function reconcile() { ledger.current?.resetAfterReconciliation(); clearSelection(); recovery.refresh(); setRevision(value => value + 1); }
   return <>
     {canDecide && !fresh && <p className={styles.alert}>Perbarui verifikasi kedua sebelum memutuskan pengajuan.
-      {account.session.stepUpOperations.includes(approvePermission) && <Link href={`/identity/step-up?operation=${approvePermission}&returnPath=${encodeURIComponent(path)}`}>Perbarui verifikasi</Link>}</p>}
+      {account.session.stepUpOperations.includes(approvePermission) && <Link href={`/identity/account?operation=${approvePermission}&returnPath=${encodeURIComponent(path)}`}>Perbarui verifikasi</Link>}</p>}
     {offline && <p role="status" className={styles.alert}>Koneksi terputus. Pengajuan dan keputusan ditahan sampai koneksi kembali.</p>}
     {error !== null && <p role="alert" className={styles.alert}>{message(error)}</p>}{notice && <p role="status" className={styles.success}>{notice}</p>}
     {recovery.error !== null && <p role="alert" className={styles.alert}>{message(recovery.error)}</p>}

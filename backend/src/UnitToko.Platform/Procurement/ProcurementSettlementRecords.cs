@@ -50,7 +50,9 @@ internal sealed class ProcurementSettlementRecords(IMongoDatabase database, IClo
             if (orphan.Count > 0) throw B.Broken();
         }
     }
-    internal async Task<BsonDocument> ReadAsync(IClientSessionHandle tx, long id, CancellationToken ct, ProcurementDisbursementSettlementCapture? captured = null) {
+    internal async Task<BsonDocument> ReadAsync(IClientSessionHandle tx, long id, CancellationToken ct, ProcurementDisbursementSettlementCapture? captured = null) =>
+        (await ReadWithSourceAsync(tx, id, ct, captured)).Settlement;
+    internal async Task<(BsonDocument Settlement, BsonDocument Disbursement)> ReadWithSourceAsync(IClientSessionHandle tx, long id, CancellationToken ct, ProcurementDisbursementSettlementCapture? captured = null) {
         BankTransactionClaims.RequireTransaction(database, tx); var row = await RowAsync(tx, B.Events, id, ct); Equal(row["snapshotHash"], B.Hash(row));
         BsonDocument record;
         if (captured is null) record = await disbursements.ReadSettlementHistoryAsync(tx, row["disbursementId"].AsInt64, ct);
@@ -77,7 +79,7 @@ internal sealed class ProcurementSettlementRecords(IMongoDatabase database, IClo
         Equal(receipt[PersonApprovalReceipt.Field], PersonApprovalReceipt.Create(Permissions.DisbursementVerify, new(1, 1, RecordedBy: recorder, SubmittedBy: importer)));
         var effect = await Rows("outboxEvents").Find(tx, new BsonDocument("sourceKey", B.SourceKey(row))).SingleOrDefaultAsync(ct) ?? throw B.Broken();
         foreach (var field in new[] { "actorId", "requestKey", "location", "disbursementId" }) Equal(effect[field], row[field]); Equal(effect["kind"], B.Operation); Equal(effect["payload"], B.Result(row)); Equal(effect["createdAt"], row["recordedAt"]);
-        await JournalAsync(tx, row, record, cash, ct); return row;
+        await JournalAsync(tx, row, record, cash, ct); return (row, record);
     }
     private async Task JournalAsync(IClientSessionHandle tx, BsonDocument row, BsonDocument record, BsonDocument cash, CancellationToken ct) {
         var accounting = row["accounting"]; var policy = row["policy"]; Equal(accounting["cash"], cash);

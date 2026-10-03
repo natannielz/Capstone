@@ -120,6 +120,7 @@ builder.Services.AddSingleton<SupplierDocumentService>();
 builder.Services.AddSingleton<SupplierClaimService>();
 builder.Services.AddSingleton<ProcurementStockReceiptService>();
 builder.Services.AddSingleton<ProcurementStockValuationService>();
+builder.Services.AddSingleton<ProcurementSupplierPayableService>();
 builder.Services.AddSingleton(sp => {
     var options = sp.GetRequiredService<IConfiguration>().GetSection("Evidence:PrivateWindows");
     var root = options["Root"]; var storeId = options["StoreId"]; var operators = options.GetSection("TrustedOperatorSids").Get<string[]>() ?? [];
@@ -159,6 +160,13 @@ builder.Services.AddAuthorization(options =>
 builder.Services.AddOpenApi("v1", options =>
 {
     options.AddSchemaTransformer<NumericStringSchemaTransformer>();
+    options.AddSchemaTransformer((schema, context, _) =>
+    {
+        // Output-only native unions have no discriminator on the actual JSON wire.
+        if (context.JsonTypeInfo.PolymorphismOptions is { DerivedTypes.Count: > 0 } polymorphism &&
+            polymorphism.DerivedTypes.All(derived => derived.TypeDiscriminator is null)) schema.Discriminator = null;
+        return Task.CompletedTask;
+    });
     options.AddDocumentTransformer((document, _, _) =>
     {
         document.Components ??= new OpenApiComponents();
@@ -407,6 +415,7 @@ app.MapSupplierDocumentEndpoints();
 app.MapSupplierClaimEndpoints();
 app.MapProcurementStockReceiptEndpoints();
 app.MapProcurementStockValuationEndpoints();
+app.MapProcurementSupplierPayableEndpoints();
 app.MapOrderDraftEndpoints();
 app.MapOrderSubmissionEndpoints();
 app.MapOrderDecisionEndpoints();

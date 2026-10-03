@@ -154,7 +154,7 @@ function AddressDesk({ account, fresh, onDenied }: { account: Account; fresh: bo
   return <>
     <AdministrationNavigation current="organization-addresses" actions={account.actions} locked={locked || recovery.locked} />
     {canDecide && !fresh && <p className={styles.alert}>Verifikasi kedua perlu diperbarui sebelum memeriksa atau memutuskan pengajuan alamat.
-      {account.session.stepUpOperations.includes('organization.approve') && <Link href={`/identity/step-up?operation=organization.approve&returnPath=${encodeURIComponent(path)}`}>Perbarui verifikasi</Link>}</p>}
+      {account.session.stepUpOperations.includes('organization.approve') && <Link href={`/identity/account?operation=organization.approve&returnPath=${encodeURIComponent(path)}`}>Perbarui verifikasi</Link>}</p>}
     {offline && <p role="status" className={styles.alert}>Koneksi terputus. Rincian dapat dibaca; pengajuan dan keputusan ditahan.</p>}
     {error !== null && <p role="alert" className={styles.alert}>{message(error)}</p>}{notice && <p role="status" className={styles.success}>{notice}</p>}
     {recovery.error !== null && <p role="alert" className={styles.alert}>{message(recovery.error)}</p>}
@@ -200,7 +200,7 @@ function AddressDesk({ account, fresh, onDenied }: { account: Account; fresh: bo
           {proposal.state === 'approved' && <p role="status">Keputusan menghasilkan alamat versi {proposal.addressVersion}. Pengajuan asli tetap tersimpan.</p>}
           {proposal.state === 'pending' && !proposal.bindingCurrent && <p className={styles.alert}>Sumber organisasi atau alamat dasar telah berubah. Pengajuan ini tidak dapat disetujui; pemeriksa tetap dapat mencatat penolakan.</p>}
           {proposal.state === 'pending' && canDecide && <><p className={styles.help}>Keputusan memerlukan pemeriksa yang berbeda dari pengaju dan verifikasi kedua yang masih baru.</p>
-            {!fresh && <p className={styles.alert}>Verifikasi kedua perlu diperbarui sebelum keputusan.{account.session.stepUpOperations.includes('organization.approve') && <Link href={`/identity/step-up?operation=organization.approve&returnPath=${encodeURIComponent(path)}`}>Perbarui verifikasi</Link>}</p>}
+            {!fresh && <p className={styles.alert}>Verifikasi kedua perlu diperbarui sebelum keputusan.{account.session.stepUpOperations.includes('organization.approve') && <Link href={`/identity/account?operation=organization.approve&returnPath=${encodeURIComponent(path)}`}>Perbarui verifikasi</Link>}</p>}
             <label>Alasan keputusan<textarea rows={3} maxLength={1000} required disabled={commandLocked || decisionReview !== null} value={decisionReason} onChange={event => { setDecisionReason(event.target.value); setDecisionReview(null); }} /></label>
             {!decisionReview && <div className={styles.actions}><button className={styles.primary} disabled={commandLocked || !fresh || !decisionReason.trim() || !proposal.bindingCurrent} onClick={() => void previewDecision('approve')}>Tinjau persetujuan alamat</button>
               <button className={styles.secondary} disabled={commandLocked || !fresh || !decisionReason.trim()} onClick={() => void previewDecision('reject')}>Tinjau penolakan alamat</button></div>}

@@ -35492,6 +35492,1862 @@
         ]
       }
     },
+    "/api/v1/procurement/supplier-payables/targets/query": {
+      "post": {
+        "tags": [
+          "UnitToko.Api"
+        ],
+        "operationId": "ProcurementSupplierPayableTargets",
+        "parameters": [
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "required": true,
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProcurementSupplierPayableQueryDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload Too Large",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProcurementTargetsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
+    "/api/v1/procurement/supplier-payables/policies/query": {
+      "post": {
+        "tags": [
+          "UnitToko.Api"
+        ],
+        "operationId": "ProcurementSupplierPayablePolicies",
+        "parameters": [
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "required": true,
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProcurementSupplierPayablePoliciesQueryDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload Too Large",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProcurementSupplierPayablePoliciesDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
+    "/api/v1/procurement/supplier-payables/valuation-allocations/query": {
+      "post": {
+        "tags": [
+          "UnitToko.Api"
+        ],
+        "operationId": "ProcurementSupplierPayableValuations",
+        "parameters": [
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "required": true,
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProcurementSupplierPayableValuationsQueryDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload Too Large",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProcurementSupplierPayableValuationsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
+    "/api/v1/procurement/supplier-payables/payables/query": {
+      "post": {
+        "tags": [
+          "UnitToko.Api"
+        ],
+        "operationId": "ProcurementSupplierPayables",
+        "parameters": [
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "required": true,
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProcurementSupplierPayableListQueryDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload Too Large",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProcurementSupplierPayablesDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
+    "/api/v1/procurement/supplier-payables/payables/{id}/query": {
+      "post": {
+        "tags": [
+          "UnitToko.Api"
+        ],
+        "operationId": "ProcurementSupplierPayableCurrent",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "required": true,
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProcurementSupplierPayableQueryDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload Too Large",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProcurementSupplierPayableChoiceDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
+    "/api/v1/procurement/supplier-payables/verified-advances/query": {
+      "post": {
+        "tags": [
+          "UnitToko.Api"
+        ],
+        "operationId": "ProcurementSupplierPayableVerifiedAdvances",
+        "parameters": [
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "required": true,
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProcurementSupplierPayableAdvancesQueryDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload Too Large",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProcurementSupplierAdvancesDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
+    "/api/v1/procurement/supplier-payables/verified-advances/{id}/query": {
+      "post": {
+        "tags": [
+          "UnitToko.Api"
+        ],
+        "operationId": "ProcurementSupplierPayableVerifiedAdvance",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "required": true,
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProcurementSupplierPayableQueryDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload Too Large",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProcurementSupplierAdvanceChoiceDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
+    "/api/v1/procurement/supplier-payables/preview/query": {
+      "post": {
+        "tags": [
+          "UnitToko.Api"
+        ],
+        "operationId": "PreviewProcurementSupplierPayable",
+        "parameters": [
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "required": true,
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProcurementSupplierPayablePreviewInputDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload Too Large",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProcurementSupplierPayablePreviewDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
+    "/api/v1/procurement/supplier-payables/proposals": {
+      "post": {
+        "tags": [
+          "UnitToko.Api"
+        ],
+        "operationId": "ProposeProcurementSupplierPayable",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "Reuse this key only for an unchanged logical command, including after an uncertain response.",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "required": true,
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProcurementSupplierPayableProposeDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload Too Large",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProcurementSupplierPayableResultDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
+    "/api/v1/procurement/supplier-payables/proposals/{id}/query": {
+      "post": {
+        "tags": [
+          "UnitToko.Api"
+        ],
+        "operationId": "ProcurementSupplierPayableProposal",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "required": true,
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProcurementSupplierPayableQueryDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload Too Large",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProcurementSupplierPayableReadDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
+    "/api/v1/procurement/supplier-payables/proposals/{id}/decision-preview/query": {
+      "post": {
+        "tags": [
+          "UnitToko.Api"
+        ],
+        "operationId": "PreviewProcurementSupplierPayableDecision",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "required": true,
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProcurementSupplierPayableDecisionPreviewInputDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload Too Large",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProcurementSupplierPayableDecisionPreviewDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
+    "/api/v1/procurement/supplier-payables/proposals/{id}/decisions": {
+      "post": {
+        "tags": [
+          "UnitToko.Api"
+        ],
+        "operationId": "DecideProcurementSupplierPayable",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "Reuse this key only for an unchanged logical command, including after an uncertain response.",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "required": true,
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProcurementSupplierPayableDecideDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload Too Large",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProcurementSupplierPayableResultDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
+    "/api/v1/procurement/supplier-payables/history/query": {
+      "post": {
+        "tags": [
+          "UnitToko.Api"
+        ],
+        "operationId": "ProcurementSupplierPayableHistory",
+        "parameters": [
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "required": true,
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProcurementSupplierPayableHistoryQueryDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload Too Large",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProcurementSupplierPayableHistoryDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
+    "/api/v1/procurement/supplier-payables/operations/query": {
+      "post": {
+        "tags": [
+          "UnitToko.Api"
+        ],
+        "operationId": "RecoverProcurementSupplierPayable",
+        "parameters": [
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "required": true,
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProcurementSupplierPayableRecoveryInputDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload Too Large",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProcurementSupplierPayableRecoveryDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
     "/api/v1/ordering/drafts/query": {
       "post": {
         "tags": [
@@ -81788,6 +83644,1531 @@
           "recordedAt": {
             "type": "string",
             "format": "date-time"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProcurementSupplierAdvanceBalanceDto": {
+        "required": [
+          "settlementId",
+          "version",
+          "totalAmount",
+          "appliedAmount",
+          "remainingAmount",
+          "lastApplicationId",
+          "lastHash"
+        ],
+        "type": "object",
+        "properties": {
+          "settlementId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "version": {
+            "type": "string"
+          },
+          "totalAmount": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "appliedAmount": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "remainingAmount": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "lastApplicationId": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LongId"
+              }
+            ]
+          },
+          "lastHash": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProcurementSupplierAdvanceChoiceDto": {
+        "required": [
+          "advance",
+          "capacity"
+        ],
+        "type": "object",
+        "properties": {
+          "advance": {
+            "$ref": "#/components/schemas/ProcurementSupplierAdvanceItemDto"
+          },
+          "capacity": {
+            "$ref": "#/components/schemas/ProcurementSupplierAdvanceBalanceDto"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProcurementSupplierAdvanceItemDto": {
+        "required": [
+          "settlementId",
+          "disbursementId",
+          "orderId",
+          "commercialReference",
+          "supplierId",
+          "supplierName",
+          "location",
+          "amount",
+          "journalId",
+          "recordedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "settlementId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "disbursementId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "orderId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "commercialReference": {
+            "type": "string"
+          },
+          "supplierId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "supplierName": {
+            "type": "string"
+          },
+          "location": {
+            "$ref": "#/components/schemas/ProcurementLocationDto"
+          },
+          "amount": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "journalId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "recordedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProcurementSupplierAdvancesDto": {
+        "required": [
+          "items",
+          "nextSettlementId"
+        ],
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProcurementSupplierAdvanceChoiceDto"
+            }
+          },
+          "nextSettlementId": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LongId"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProcurementSupplierPayableAccountingDto": {
+        "required": [
+          "bookId",
+          "chartVersionId",
+          "periodId",
+          "periodMonth",
+          "receiptAccrual",
+          "supplierPayable",
+          "supplierAdvance"
+        ],
+        "type": "object",
+        "properties": {
+          "bookId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "chartVersionId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "periodId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "periodMonth": {
+            "type": "string"
+          },
+          "receiptAccrual": {
+            "$ref": "#/components/schemas/ProcurementStockValuationAccountDto"
+          },
+          "supplierPayable": {
+            "$ref": "#/components/schemas/ProcurementStockValuationAccountDto"
+          },
+          "supplierAdvance": {
+            "$ref": "#/components/schemas/ProcurementStockValuationAccountDto"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProcurementSupplierPayableAdvancesQueryDto": {
+        "required": [
+          "purpose",
+          "location",
+          "payableId"
+        ],
+        "type": "object",
+        "properties": {
+          "purpose": {
+            "type": "string"
+          },
+          "location": {
+            "$ref": "#/components/schemas/ProcurementLocationDto"
+          },
+          "payableId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "beforeSettlementId": {
+            "maxLength": 19,
+            "pattern": "^(?:[1-9][0-9]{0,17}|[1-8][0-9]{18}|9[0-1][0-9]{17}|92[0-1][0-9]{16}|922[0-2][0-9]{15}|9223[0-2][0-9]{14}|92233[0-6][0-9]{13}|922337[0-1][0-9]{12}|92233720[0-2][0-9]{10}|922337203[0-5][0-9]{9}|9223372036[0-7][0-9]{8}|92233720368[0-4][0-9]{7}|922337203685[0-3][0-9]{6}|9223372036854[0-6][0-9]{5}|92233720368547[0-6][0-9]{4}|922337203685477[0-4][0-9]{3}|9223372036854775[0-7][0-9]{2}|922337203685477580[0-6]|9223372036854775807)$(?![\\s\\S])",
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Positive decimal Int64 string, from 1 through 9223372036854775807. JSON numbers are invalid."
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProcurementSupplierPayableBalanceDto": {
+        "required": [
+          "payableId",
+          "version",
+          "totalAmount",
+          "appliedAmount",
+          "remainingAmount",
+          "lastApplicationId",
+          "lastHash"
+        ],
+        "type": "object",
+        "properties": {
+          "payableId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "version": {
+            "type": "string"
+          },
+          "totalAmount": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "appliedAmount": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "remainingAmount": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "lastApplicationId": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LongId"
+              }
+            ]
+          },
+          "lastHash": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProcurementSupplierPayableCapacityDto": {
+        "type": "object",
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/ProcurementSupplierPayableCapacityDtoProcurementSupplierPayableRecognitionCapacityDto"
+          },
+          {
+            "$ref": "#/components/schemas/ProcurementSupplierPayableCapacityDtoProcurementSupplierPayableApplicationCapacityDto"
+          }
+        ]
+      },
+      "ProcurementSupplierPayableCapacityDtoProcurementSupplierPayableApplicationCapacityDto": {
+        "required": [
+          "payable",
+          "advance"
+        ],
+        "properties": {
+          "payable": {
+            "$ref": "#/components/schemas/ProcurementSupplierPayableBalanceDto"
+          },
+          "advance": {
+            "$ref": "#/components/schemas/ProcurementSupplierAdvanceBalanceDto"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProcurementSupplierPayableCapacityDtoProcurementSupplierPayableRecognitionCapacityDto": {
+        "required": [
+          "valuationAllocationId",
+          "amount",
+          "recognized",
+          "payableId"
+        ],
+        "properties": {
+          "valuationAllocationId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "amount": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "recognized": {
+            "type": "boolean"
+          },
+          "payableId": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LongId"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProcurementSupplierPayableChoiceDto": {
+        "required": [
+          "payable",
+          "capacity"
+        ],
+        "type": "object",
+        "properties": {
+          "payable": {
+            "$ref": "#/components/schemas/ProcurementSupplierPayableItemDto"
+          },
+          "capacity": {
+            "$ref": "#/components/schemas/ProcurementSupplierPayableBalanceDto"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProcurementSupplierPayableDecideDto": {
+        "required": [
+          "decision",
+          "binding",
+          "reason"
+        ],
+        "type": "object",
+        "properties": {
+          "decision": {
+            "type": "string"
+          },
+          "binding": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProcurementSupplierPayableDecisionPreviewDto": {
+        "required": [
+          "proposal",
+          "decision",
+          "source",
+          "capacity",
+          "policy",
+          "accounting",
+          "binding",
+          "observedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "proposal": {
+            "$ref": "#/components/schemas/ProcurementSupplierPayableProposalDto"
+          },
+          "decision": {
+            "type": "string"
+          },
+          "source": {
+            "$ref": "#/components/schemas/ProcurementSupplierPayableSourceDto"
+          },
+          "capacity": {
+            "$ref": "#/components/schemas/ProcurementSupplierPayableCapacityDto"
+          },
+          "policy": {
+            "$ref": "#/components/schemas/ProcurementSupplierPayablePolicyDto"
+          },
+          "accounting": {
+            "$ref": "#/components/schemas/ProcurementSupplierPayableAccountingDto"
+          },
+          "binding": {
+            "type": "string"
+          },
+          "observedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProcurementSupplierPayableDecisionPreviewInputDto": {
+        "required": [
+          "purpose",
+          "decision"
+        ],
+        "type": "object",
+        "properties": {
+          "purpose": {
+            "type": "string"
+          },
+          "decision": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProcurementSupplierPayableDecisionResultDto": {
+        "required": [
+          "proposalId",
+          "decisionId",
+          "version",
+          "status",
+          "payableId",
+          "applicationId",
+          "journalId",
+          "recordedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "proposalId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "decisionId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "version": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "payableId": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LongId"
+              }
+            ]
+          },
+          "applicationId": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LongId"
+              }
+            ]
+          },
+          "journalId": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LongId"
+              }
+            ]
+          },
+          "recordedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProcurementSupplierPayableHistoryDto": {
+        "required": [
+          "location",
+          "items",
+          "nextProposalId"
+        ],
+        "type": "object",
+        "properties": {
+          "location": {
+            "$ref": "#/components/schemas/ProcurementLocationDto"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProcurementSupplierPayableReadDto"
+            }
+          },
+          "nextProposalId": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LongId"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProcurementSupplierPayableHistoryQueryDto": {
+        "required": [
+          "purpose",
+          "location"
+        ],
+        "type": "object",
+        "properties": {
+          "purpose": {
+            "type": "string"
+          },
+          "location": {
+            "$ref": "#/components/schemas/ProcurementLocationDto"
+          },
+          "beforeProposalId": {
+            "maxLength": 19,
+            "pattern": "^(?:[1-9][0-9]{0,17}|[1-8][0-9]{18}|9[0-1][0-9]{17}|92[0-1][0-9]{16}|922[0-2][0-9]{15}|9223[0-2][0-9]{14}|92233[0-6][0-9]{13}|922337[0-1][0-9]{12}|92233720[0-2][0-9]{10}|922337203[0-5][0-9]{9}|9223372036[0-7][0-9]{8}|92233720368[0-4][0-9]{7}|922337203685[0-3][0-9]{6}|9223372036854[0-6][0-9]{5}|92233720368547[0-6][0-9]{4}|922337203685477[0-4][0-9]{3}|9223372036854775[0-7][0-9]{2}|922337203685477580[0-6]|9223372036854775807)$(?![\\s\\S])",
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Positive decimal Int64 string, from 1 through 9223372036854775807. JSON numbers are invalid."
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProcurementSupplierPayableInputDto": {
+        "required": [
+          "kind",
+          "location",
+          "valuationAllocationId",
+          "payableId",
+          "settlementId",
+          "amount",
+          "policyId",
+          "policyRevision",
+          "postingDate",
+          "reason"
+        ],
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "location": {
+            "$ref": "#/components/schemas/ProcurementLocationDto"
+          },
+          "valuationAllocationId": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LongId"
+              }
+            ]
+          },
+          "payableId": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LongId"
+              }
+            ]
+          },
+          "settlementId": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LongId"
+              }
+            ]
+          },
+          "amount": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Money"
+              }
+            ]
+          },
+          "policyId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "policyRevision": {
+            "type": "string"
+          },
+          "postingDate": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProcurementSupplierPayableItemDto": {
+        "required": [
+          "id",
+          "valuationAllocationId",
+          "orderId",
+          "commercialReference",
+          "invoiceDocumentReference",
+          "supplierId",
+          "supplierName",
+          "location",
+          "amount",
+          "journalId",
+          "recordedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "valuationAllocationId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "orderId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "commercialReference": {
+            "type": "string"
+          },
+          "invoiceDocumentReference": {
+            "type": "string"
+          },
+          "supplierId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "supplierName": {
+            "type": "string"
+          },
+          "location": {
+            "$ref": "#/components/schemas/ProcurementLocationDto"
+          },
+          "amount": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "journalId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "recordedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProcurementSupplierPayableListQueryDto": {
+        "required": [
+          "purpose",
+          "location"
+        ],
+        "type": "object",
+        "properties": {
+          "purpose": {
+            "type": "string"
+          },
+          "location": {
+            "$ref": "#/components/schemas/ProcurementLocationDto"
+          },
+          "beforePayableId": {
+            "maxLength": 19,
+            "pattern": "^(?:[1-9][0-9]{0,17}|[1-8][0-9]{18}|9[0-1][0-9]{17}|92[0-1][0-9]{16}|922[0-2][0-9]{15}|9223[0-2][0-9]{14}|92233[0-6][0-9]{13}|922337[0-1][0-9]{12}|92233720[0-2][0-9]{10}|922337203[0-5][0-9]{9}|9223372036[0-7][0-9]{8}|92233720368[0-4][0-9]{7}|922337203685[0-3][0-9]{6}|9223372036854[0-6][0-9]{5}|92233720368547[0-6][0-9]{4}|922337203685477[0-4][0-9]{3}|9223372036854775[0-7][0-9]{2}|922337203685477580[0-6]|9223372036854775807)$(?![\\s\\S])",
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Positive decimal Int64 string, from 1 through 9223372036854775807. JSON numbers are invalid."
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProcurementSupplierPayablePoliciesDto": {
+        "required": [
+          "items",
+          "nextPolicyId"
+        ],
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProcurementSupplierPayablePolicyDto"
+            }
+          },
+          "nextPolicyId": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LongId"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProcurementSupplierPayablePoliciesQueryDto": {
+        "required": [
+          "purpose",
+          "location"
+        ],
+        "type": "object",
+        "properties": {
+          "purpose": {
+            "type": "string"
+          },
+          "location": {
+            "$ref": "#/components/schemas/ProcurementLocationDto"
+          },
+          "beforePolicyId": {
+            "maxLength": 19,
+            "pattern": "^(?:[1-9][0-9]{0,17}|[1-8][0-9]{18}|9[0-1][0-9]{17}|92[0-1][0-9]{16}|922[0-2][0-9]{15}|9223[0-2][0-9]{14}|92233[0-6][0-9]{13}|922337[0-1][0-9]{12}|92233720[0-2][0-9]{10}|922337203[0-5][0-9]{9}|9223372036[0-7][0-9]{8}|92233720368[0-4][0-9]{7}|922337203685[0-3][0-9]{6}|9223372036854[0-6][0-9]{5}|92233720368547[0-6][0-9]{4}|922337203685477[0-4][0-9]{3}|9223372036854775[0-7][0-9]{2}|922337203685477580[0-6]|9223372036854775807)$(?![\\s\\S])",
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Positive decimal Int64 string, from 1 through 9223372036854775807. JSON numbers are invalid."
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProcurementSupplierPayablePolicyDto": {
+        "required": [
+          "id",
+          "revision",
+          "active",
+          "location",
+          "currency",
+          "approvedAt",
+          "expiresAt",
+          "sourceTreatment",
+          "applicationTreatment",
+          "bookId",
+          "chartVersionId",
+          "receiptAccrual",
+          "supplierPayable",
+          "supplierAdvance",
+          "operatingOwnerReference",
+          "approvalReference"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "revision": {
+            "type": "string"
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "location": {
+            "$ref": "#/components/schemas/ProcurementLocationDto"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "approvedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "sourceTreatment": {
+            "type": "string"
+          },
+          "applicationTreatment": {
+            "type": "string"
+          },
+          "bookId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "chartVersionId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "receiptAccrual": {
+            "$ref": "#/components/schemas/ProcurementStockValuationAccountDto"
+          },
+          "supplierPayable": {
+            "$ref": "#/components/schemas/ProcurementStockValuationAccountDto"
+          },
+          "supplierAdvance": {
+            "$ref": "#/components/schemas/ProcurementStockValuationAccountDto"
+          },
+          "operatingOwnerReference": {
+            "type": "string"
+          },
+          "approvalReference": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProcurementSupplierPayablePreviewDto": {
+        "required": [
+          "input",
+          "source",
+          "capacity",
+          "policy",
+          "accounting",
+          "amount",
+          "binding",
+          "observedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "input": {
+            "$ref": "#/components/schemas/ProcurementSupplierPayableInputDto"
+          },
+          "source": {
+            "$ref": "#/components/schemas/ProcurementSupplierPayableSourceDto"
+          },
+          "capacity": {
+            "$ref": "#/components/schemas/ProcurementSupplierPayableCapacityDto"
+          },
+          "policy": {
+            "$ref": "#/components/schemas/ProcurementSupplierPayablePolicyDto"
+          },
+          "accounting": {
+            "$ref": "#/components/schemas/ProcurementSupplierPayableAccountingDto"
+          },
+          "amount": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "binding": {
+            "type": "string"
+          },
+          "observedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProcurementSupplierPayablePreviewInputDto": {
+        "required": [
+          "purpose",
+          "input"
+        ],
+        "type": "object",
+        "properties": {
+          "purpose": {
+            "type": "string"
+          },
+          "input": {
+            "$ref": "#/components/schemas/ProcurementSupplierPayableInputDto"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProcurementSupplierPayableProposalDto": {
+        "required": [
+          "id",
+          "version",
+          "input",
+          "source",
+          "capacity",
+          "policy",
+          "accounting",
+          "amount",
+          "recordedAt",
+          "reason"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "version": {
+            "type": "string"
+          },
+          "input": {
+            "$ref": "#/components/schemas/ProcurementSupplierPayableInputDto"
+          },
+          "source": {
+            "$ref": "#/components/schemas/ProcurementSupplierPayableSourceDto"
+          },
+          "capacity": {
+            "$ref": "#/components/schemas/ProcurementSupplierPayableCapacityDto"
+          },
+          "policy": {
+            "$ref": "#/components/schemas/ProcurementSupplierPayablePolicyDto"
+          },
+          "accounting": {
+            "$ref": "#/components/schemas/ProcurementSupplierPayableAccountingDto"
+          },
+          "amount": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "recordedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProcurementSupplierPayableProposeDto": {
+        "required": [
+          "input",
+          "binding"
+        ],
+        "type": "object",
+        "properties": {
+          "input": {
+            "$ref": "#/components/schemas/ProcurementSupplierPayableInputDto"
+          },
+          "binding": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProcurementSupplierPayableQueryDto": {
+        "required": [
+          "purpose"
+        ],
+        "type": "object",
+        "properties": {
+          "purpose": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProcurementSupplierPayableReadDto": {
+        "required": [
+          "proposal",
+          "decision",
+          "decisionReason"
+        ],
+        "type": "object",
+        "properties": {
+          "proposal": {
+            "$ref": "#/components/schemas/ProcurementSupplierPayableProposalDto"
+          },
+          "decision": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ProcurementSupplierPayableDecisionResultDto"
+              }
+            ]
+          },
+          "decisionReason": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProcurementSupplierPayableRecognitionCapacityDto": {
+        "required": [
+          "valuationAllocationId",
+          "amount",
+          "recognized",
+          "payableId"
+        ],
+        "type": "object",
+        "properties": {
+          "valuationAllocationId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "amount": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "recognized": {
+            "type": "boolean"
+          },
+          "payableId": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LongId"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProcurementSupplierPayableRecognitionSourceDto": {
+        "required": [
+          "kind",
+          "valuationAllocationId",
+          "valuationAllocationHash",
+          "valuationDecisionId",
+          "valuationJournalId",
+          "receiptId",
+          "invoiceDocumentId",
+          "invoiceMatchId",
+          "matchLineNumber",
+          "packages",
+          "orderId",
+          "commercialReference",
+          "invoiceDocumentReference",
+          "supplierId",
+          "supplierName",
+          "location",
+          "amount",
+          "netAmount",
+          "taxAmount",
+          "chargeAmount",
+          "sourceAccount",
+          "sourceBookId"
+        ],
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "valuationAllocationId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "valuationAllocationHash": {
+            "type": "string"
+          },
+          "valuationDecisionId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "valuationJournalId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "receiptId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "invoiceDocumentId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "invoiceMatchId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "matchLineNumber": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "packages": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "orderId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "commercialReference": {
+            "type": "string"
+          },
+          "invoiceDocumentReference": {
+            "type": "string"
+          },
+          "supplierId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "supplierName": {
+            "type": "string"
+          },
+          "location": {
+            "$ref": "#/components/schemas/ProcurementLocationDto"
+          },
+          "amount": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "netAmount": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "taxAmount": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "chargeAmount": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "sourceAccount": {
+            "$ref": "#/components/schemas/ProcurementStockValuationAccountDto"
+          },
+          "sourceBookId": {
+            "$ref": "#/components/schemas/LongId"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProcurementSupplierPayableRecoveryDto": {
+        "required": [
+          "state",
+          "result"
+        ],
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "string"
+          },
+          "result": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ProcurementSupplierPayableResultDto"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProcurementSupplierPayableRecoveryInputDto": {
+        "required": [
+          "purpose",
+          "operation",
+          "key"
+        ],
+        "type": "object",
+        "properties": {
+          "purpose": {
+            "type": "string"
+          },
+          "operation": {
+            "type": "string"
+          },
+          "key": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProcurementSupplierPayableResultDto": {
+        "type": "object",
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/ProcurementSupplierPayableResultDtoProcurementSupplierPayableProposalResultDto"
+          },
+          {
+            "$ref": "#/components/schemas/ProcurementSupplierPayableResultDtoProcurementSupplierPayableDecisionResultDto"
+          }
+        ]
+      },
+      "ProcurementSupplierPayableResultDtoProcurementSupplierPayableDecisionResultDto": {
+        "required": [
+          "proposalId",
+          "decisionId",
+          "version",
+          "status",
+          "payableId",
+          "applicationId",
+          "journalId",
+          "recordedAt"
+        ],
+        "properties": {
+          "proposalId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "decisionId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "version": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "payableId": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LongId"
+              }
+            ]
+          },
+          "applicationId": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LongId"
+              }
+            ]
+          },
+          "journalId": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LongId"
+              }
+            ]
+          },
+          "recordedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProcurementSupplierPayableResultDtoProcurementSupplierPayableProposalResultDto": {
+        "required": [
+          "proposalId",
+          "version",
+          "status",
+          "recordedAt"
+        ],
+        "properties": {
+          "proposalId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "version": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "recordedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProcurementSupplierPayablesDto": {
+        "required": [
+          "items",
+          "nextPayableId"
+        ],
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProcurementSupplierPayableChoiceDto"
+            }
+          },
+          "nextPayableId": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LongId"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProcurementSupplierPayableSourceDto": {
+        "type": "object",
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/ProcurementSupplierPayableSourceDtoProcurementSupplierPayableRecognitionSourceDto"
+          },
+          {
+            "$ref": "#/components/schemas/ProcurementSupplierPayableSourceDtoProcurementSupplierPayableApplicationSourceDto"
+          }
+        ]
+      },
+      "ProcurementSupplierPayableSourceDtoProcurementSupplierPayableApplicationSourceDto": {
+        "required": [
+          "kind",
+          "payableId",
+          "payableHash",
+          "settlementId",
+          "settlementHash",
+          "disbursementId",
+          "settlementJournalId",
+          "valuationAllocationId",
+          "orderId",
+          "commercialReference",
+          "invoiceDocumentReference",
+          "supplierId",
+          "supplierName",
+          "location",
+          "amount",
+          "sourcePayableAccount",
+          "sourceAdvanceAccount",
+          "sourceBookId",
+          "advanceBookId"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "payableId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "payableHash": {
+            "type": "string"
+          },
+          "settlementId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "settlementHash": {
+            "type": "string"
+          },
+          "disbursementId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "settlementJournalId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "valuationAllocationId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "orderId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "commercialReference": {
+            "type": "string"
+          },
+          "invoiceDocumentReference": {
+            "type": "string"
+          },
+          "supplierId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "supplierName": {
+            "type": "string"
+          },
+          "location": {
+            "$ref": "#/components/schemas/ProcurementLocationDto"
+          },
+          "amount": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "sourcePayableAccount": {
+            "$ref": "#/components/schemas/ProcurementStockValuationAccountDto"
+          },
+          "sourceAdvanceAccount": {
+            "$ref": "#/components/schemas/ProcurementStockValuationAccountDto"
+          },
+          "sourceBookId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "advanceBookId": {
+            "$ref": "#/components/schemas/LongId"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProcurementSupplierPayableSourceDtoProcurementSupplierPayableRecognitionSourceDto": {
+        "required": [
+          "kind",
+          "valuationAllocationId",
+          "valuationAllocationHash",
+          "valuationDecisionId",
+          "valuationJournalId",
+          "receiptId",
+          "invoiceDocumentId",
+          "invoiceMatchId",
+          "matchLineNumber",
+          "packages",
+          "orderId",
+          "commercialReference",
+          "invoiceDocumentReference",
+          "supplierId",
+          "supplierName",
+          "location",
+          "amount",
+          "netAmount",
+          "taxAmount",
+          "chargeAmount",
+          "sourceAccount",
+          "sourceBookId"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "valuationAllocationId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "valuationAllocationHash": {
+            "type": "string"
+          },
+          "valuationDecisionId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "valuationJournalId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "receiptId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "invoiceDocumentId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "invoiceMatchId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "matchLineNumber": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "packages": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "orderId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "commercialReference": {
+            "type": "string"
+          },
+          "invoiceDocumentReference": {
+            "type": "string"
+          },
+          "supplierId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "supplierName": {
+            "type": "string"
+          },
+          "location": {
+            "$ref": "#/components/schemas/ProcurementLocationDto"
+          },
+          "amount": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "netAmount": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "taxAmount": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "chargeAmount": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "sourceAccount": {
+            "$ref": "#/components/schemas/ProcurementStockValuationAccountDto"
+          },
+          "sourceBookId": {
+            "$ref": "#/components/schemas/LongId"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProcurementSupplierPayableValuationChoiceDto": {
+        "required": [
+          "source",
+          "capacity"
+        ],
+        "type": "object",
+        "properties": {
+          "source": {
+            "$ref": "#/components/schemas/ProcurementSupplierPayableRecognitionSourceDto"
+          },
+          "capacity": {
+            "$ref": "#/components/schemas/ProcurementSupplierPayableRecognitionCapacityDto"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProcurementSupplierPayableValuationsDto": {
+        "required": [
+          "items",
+          "nextValuationAllocationId"
+        ],
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProcurementSupplierPayableValuationChoiceDto"
+            }
+          },
+          "nextValuationAllocationId": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LongId"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProcurementSupplierPayableValuationsQueryDto": {
+        "required": [
+          "purpose",
+          "location"
+        ],
+        "type": "object",
+        "properties": {
+          "purpose": {
+            "type": "string"
+          },
+          "location": {
+            "$ref": "#/components/schemas/ProcurementLocationDto"
+          },
+          "beforeValuationAllocationId": {
+            "maxLength": 19,
+            "pattern": "^(?:[1-9][0-9]{0,17}|[1-8][0-9]{18}|9[0-1][0-9]{17}|92[0-1][0-9]{16}|922[0-2][0-9]{15}|9223[0-2][0-9]{14}|92233[0-6][0-9]{13}|922337[0-1][0-9]{12}|92233720[0-2][0-9]{10}|922337203[0-5][0-9]{9}|9223372036[0-7][0-9]{8}|92233720368[0-4][0-9]{7}|922337203685[0-3][0-9]{6}|9223372036854[0-6][0-9]{5}|92233720368547[0-6][0-9]{4}|922337203685477[0-4][0-9]{3}|9223372036854775[0-7][0-9]{2}|922337203685477580[0-6]|9223372036854775807)$(?![\\s\\S])",
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Positive decimal Int64 string, from 1 through 9223372036854775807. JSON numbers are invalid."
           }
         },
         "additionalProperties": false

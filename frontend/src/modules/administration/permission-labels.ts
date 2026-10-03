@@ -1,4 +1,7 @@
 const labels: Record<string, string> = {
+  "procurement.payable.read": "Lihat utang pemasok dan penerapan uang muka",
+  "procurement.payable.propose": "Ajukan pengakuan utang atau penerapan uang muka dengan verifikasi terbaru",
+  "procurement.payable.decide": "Putuskan pengakuan utang atau penerapan uang muka secara independen",
   "stock.source.reconciliation.read": "Lihat rekonsiliasi jumlah fisik",
   "stock.source.reconciliation.propose": "Ajukan pengamatan jumlah fisik dengan verifikasi terbaru",
   "stock.source.reconciliation.decide": "Periksa rekonsiliasi secara independen dengan verifikasi terbaru",
