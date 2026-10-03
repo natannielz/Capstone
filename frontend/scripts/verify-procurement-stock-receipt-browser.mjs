@@ -17,7 +17,7 @@ export async function verifyProcurementStockReceiptBrowser({ config, maker, user
     await choice.locator(`option[value="${canonical}"]`).waitFor({ state: 'attached', timeout: 60000 }); await choice.selectOption(canonical); await current.getByRole('heading', { name: 'Riwayat penerimaan stok', exact: true }).waitFor({ timeout: 60000 });
   }
   const row = current => current.getByRole('button').filter({ has: current.locator('strong').filter({ hasText: input.receiptReference + ' · ' }) });
-  async function open(current) { await row(current).click(); const detail = current.getByRole('region', { name: 'Rincian penerimaan stok', exact: true }); await detail.getByRole('heading', { name: 'Stok diterima · ditahan dan belum dinilai', exact: true }).waitFor({ timeout: 60000 }); return detail; }
+  async function open(current) { await row(current).click(); const detail = current.getByRole('region', { name: 'Rincian penerimaan stok', exact: true }); await detail.getByRole('heading', { name: 'Saat penerimaan · stok ditahan dan belum dinilai', exact: true }).waitFor({ timeout: 60000 }); return detail; }
   async function facts(current, region, source, pool) {
     const text = await region.innerText(); for (const value of [input.receiptReference, input.lotReference, input.reason, source.inspectionReference, pool.label, pool.physicalKey, pool.reconciliationProcedureReference, pool.outageProcedureReference, 'tersedia untuk dijual 0', 'Harga pesanan tidak otomatis menjadi biaya persediaan']) assert.ok(text.includes(value), value);
     const observed = source.lines.find(item => item.lineNumber === input.inspectionLineNumber).input, list = region.getByRole('list', { name: 'Rincian kondisi dan lot', exact: true });

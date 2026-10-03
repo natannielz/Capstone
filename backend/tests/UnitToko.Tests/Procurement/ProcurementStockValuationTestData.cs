@@ -41,6 +41,7 @@ internal sealed class ProcurementStockValuationTestData(SupplierDocumentTestData
     internal long MatchId => Match["matchId"].AsInt64;
     internal long PolicyId => Policy["_id"].AsInt64;
     internal long PoolId;
+    internal int ReceiptPackages { get; private init; } = 3;
     internal StockSourceSetupService Sources => new(Database, Unit, new(Database), Clock);
     internal ProcurementStockReceiptService Receipts => new(Database, Unit, new(Database), Clock, Inspection.Receiving.Procurement.Catalog,
         Inspection.Receiving.Orders.Service, Inspection.Receiving.Service, Sources);
@@ -52,10 +53,11 @@ internal sealed class ProcurementStockValuationTestData(SupplierDocumentTestData
         packages, new Money(10000 * packages), new Money(1000 * packages), new Money(250 * packages), new Money(11250 * packages), PolicyId, 1,
         AccountingCalendar.BusinessDate(Clock.UtcNow), Reason);
 
-    internal static async Task<ProcurementStockValuationTestData> CreateAsync(MongoFixture fixture, bool createValuationPolicy = true)
+    internal static async Task<ProcurementStockValuationTestData> CreateAsync(MongoFixture fixture, bool createValuationPolicy = true, int receiptPackages = 3)
     {
+        Assert.InRange(receiptPackages, 1, 3);
         var documents = await SupplierDocumentTestData.CreateAsync(fixture);
-        var data = new ProcurementStockValuationTestData(documents);
+        var data = new ProcurementStockValuationTestData(documents) { ReceiptPackages = receiptPackages };
         try
         {
             // The shared synthetic OCR installer uses policy ID 1; reserve its real allocator ID before installation.
@@ -107,7 +109,7 @@ internal sealed class ProcurementStockValuationTestData(SupplierDocumentTestData
         var line = inspection["input"]["lines"][0];
         Assert.Equal(0, line["damagedPackages"].AsInt32); Assert.Equal(0, line["expiredPackages"].AsInt32); Assert.Equal(0, line["openedPackages"].AsInt32);
         var input = new ProcurementStockReceiptInput(ProcurementRequestTestData.Location, Inspection.Receiving.OrderId, 1, Inspection.Receiving.ApprovalId,
-            Documents.InspectionId, 1, 3, PoolId, 1, "SYNTHETIC-VALUATION-RECEIPT", line["lotCode"].AsString,
+            Documents.InspectionId, 1, ReceiptPackages, PoolId, 1, "SYNTHETIC-VALUATION-RECEIPT", line["lotCode"].AsString,
             DateOnly.ParseExact(line["expiryDate"].AsString, "yyyy-MM-dd", CultureInfo.InvariantCulture), Reason);
         var receiptPreview = await Receipts.PreviewAsync(Maker, input);
         Receipt = await Receipts.ReceiveAsync(Maker, input, receiptPreview["binding"].AsString, Meta("valuation-held-receipt"));
@@ -177,7 +179,7 @@ internal sealed class ProcurementStockValuationTestData(SupplierDocumentTestData
         foreach (var table in new[] { "cashMovements", "paymentAllocations", "procurementFundingAllocations", "procurementDisbursements", "procurementSettlements", "reservations" })
             Assert.False(await Rows(table).Find(new BsonDocument()).AnyAsync());
         var balance = await Rows("stockBalances").Find(new BsonDocument("_id", Receipt["balanceId"])).SingleAsync();
-        Assert.Equal(3L, balance["onHand"].AsInt64); Assert.Equal(3L, balance["held"].AsInt64); Assert.Equal(0L, balance["reserved"].AsInt64);
+        Assert.Equal((long)ReceiptPackages, balance["onHand"].AsInt64); Assert.Equal((long)ReceiptPackages, balance["held"].AsInt64); Assert.Equal(0L, balance["reserved"].AsInt64);
     }
     public ValueTask DisposeAsync() => Documents.DisposeAsync();
 }

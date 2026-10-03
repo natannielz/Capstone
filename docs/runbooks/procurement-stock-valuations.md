@@ -18,6 +18,14 @@ Select the location and held receipt, inspect its matched invoice line and choos
 
 If a response is lost, recover using the original actor's operation key. Do not submit a second command to discover whether the first one committed. Changed or incomplete historical evidence causes refusal rather than a success inferred from a journal alone.
 
+## Current lot cost
+
+The original receipt records the stock state at receipt time, before valuation. The current cost view separately reconstructs approved valuation allocations for that receipt and lot. It shows how many packages have an approved value, how many remain unvalued, and the exact net, tax, charge and capitalized totals. Unvalued packages have unknown cost; a zero approved total does not mean that the goods are free. No rounded per-package cost is inferred.
+
+Each approved allocation links back to its proposal, independent decision, matched invoice line and journal. Detail pages show only a bounded part of the history; the totals cover the complete verified history. Use refresh to obtain a new snapshot. A historical policy expiry or accounting-period closure does not erase an approved value, but missing or inconsistent retained proof prevents the view from reporting a total. The read requires the same scoped valuation/procurement/stock permissions as the workspace.
+
+This view uses existing valuation records, without another cost ledger or migration. It does not release held stock, activate a source, recognize a supplier payable or allocate cost to a conversion. Those owners remain separate required work. Verification status for this connection is recorded in the production progress ledger.
+
 ## Storage and release acceptance
 
 Migration 73 preflights retained receipt/source ownership, accounting records, valuation effects and capacities before installing its strict validators and unique indexes. It preserves stronger validators, source records, collection identities and monotonic counters. Use the normal single-writer migration and restore process; this document does not authorize a production migration or cutover.

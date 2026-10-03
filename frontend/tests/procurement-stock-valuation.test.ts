@@ -5,7 +5,7 @@ import { AccessFailure, MutationLedger } from '../src/modules/administration/wor
 import { OperationJournal, reconcileOperationRecovery, submitTrackedRequest } from '../src/modules/administration/operation-journal';
 import { recoveryPage, operationLabel } from '../src/modules/administration/operation-recovery-navigation';
 import { identityDestinations, identityReturnPath, parseIdentitySession, stepUpFields } from '../src/modules/identity/identity-workflow';
-import { createProcurementStockValuationGateway, stockValuationInput, stockValuationTotal, parseStockValuationRead, parseStockValuationMatches, parseStockValuationResult, prepareStockValuation, prepareStockValuationDecision, stockValuationKeyOwner } from '../src/modules/procurement/procurement-stock-valuation-client';
+import { createProcurementStockValuationGateway, stockValuationInput, stockValuationTotal, parseStockValuationRead, parseStockValuationMatches, parseStockValuationResult, parseStockValuationCost, prepareStockValuation, prepareStockValuationDecision, stockValuationKeyOwner } from '../src/modules/procurement/procurement-stock-valuation-client';
 import { SourceMemoryStorage, sourceSession } from './stock-source-fixtures';
 import { actor, location, target, order, observedLine, noticeId, intakeId } from './supplier-document-fixtures';
 
@@ -67,4 +67,30 @@ test('lost proposal and decision replies recover only original actor/key and ver
 test('directory and renewal require actual grants and the exact safe valuation return path', () => {
   const path = '/procurement/stock-valuations', read = ['procurement.stockvaluation.read', 'procurement.read', 'stock.read']; assert.equal(identityReturnPath(path), path); assert.ok(identityDestinations(read).some(item => item.href === path)); for (const grants of [[], read.slice(1), [read[0]], ['procurement.stockvaluation.propose']]) assert.ok(!identityDestinations(grants).some(item => item.href === path));
   const session = parseIdentitySession({ ...sourceSession, stepUpOperations: ['procurement.stockvaluation.propose', 'procurement.stockvaluation.decide'] }); assert.equal(stepUpFields(session, 'procurement.stockvaluation.decide', path).returnPath, path); assert.equal(recoveryPage(decideOp).href, path); assert.equal(operationLabel(proposeOp), 'Pengajuan penilaian stok ditahan');
+});
+
+const costRow = { id: '1000', proposalId, decisionId: approved.decisionId, invoiceDocumentId: input.invoiceDocumentId, invoiceMatchId: input.invoiceMatchId, matchLineNumber: 1, journalId: approved.journalId, packages: 1, netAmount: input.netAmount, taxAmount: input.taxAmount, chargeAmount: input.chargeAmount, capitalizedAmount: input.capitalizedAmount, postingDate: input.postingDate, recordedAt: approved.recordedAt };
+const costView = { receiptId, lotId: receipt.lotId, balanceId: receipt.balanceId, packageCount: 3, valuedPackages: 1, unvaluedPackages: 2, currency: 'IDR', state: 'partially_valued', netAmount: input.netAmount, taxAmount: input.taxAmount, chargeAmount: input.chargeAmount, capitalizedAmount: input.capitalizedAmount, items: [costRow], nextAllocationId: null };
+test('receipt cost view distinguishes cumulative approved value from the historical unvalued receipt', () => {
+  const checked = parseStockValuationCost(costView, receipt); assert.equal(checked.valuedPackages, 1); assert.equal(checked.capitalizedAmount, '11250.00'); assert.equal(receipt.valuationState, 'pending'); assert.equal(receipt.valuation, null); assert.equal(receipt.available, '0');
+  const empty = { ...costView, state: 'unvalued', valuedPackages: 0, unvaluedPackages: 3, netAmount: '0.00', taxAmount: '0.00', chargeAmount: '0.00', capitalizedAmount: '0.00', items: [] }; assert.equal(parseStockValuationCost(empty, receipt).state, 'unvalued');
+  const full = { ...costView, state: 'fully_valued', valuedPackages: 3, unvaluedPackages: 0, items: [{ ...costRow, packages: 3 }] }; assert.equal(parseStockValuationCost(full, receipt).state, 'fully_valued');
+  for (const invalid of [{ ...costView, receiptId: '1' }, { ...costView, lotId: '1' }, { ...costView, balanceId: '1' }, { ...costView, packageCount: 4 }, { ...costView, valuedPackages: '1' }, { ...costView, unvaluedPackages: 3 }, { ...costView, state: 'fully_valued' }, { ...costView, capitalizedAmount: '11250.01' }, { ...costView, items: [{ ...costRow, journalId: null }] }, { ...costView, items: [{ ...costRow, capitalizedAmount: '1.00' }] }, { ...costView, items: [{ ...costRow, recordedAt: '2026-10-02T23:59:00Z' }] }, { ...costView, privateEvidence: 'not permitted' }, { ...empty, capitalizedAmount: '1.00' }]) assert.throws(() => parseStockValuationCost(invalid, receipt), AccessFailure);
+});
+test('cost pages retain complete totals while validating descending cursor, row references and visible component sums', () => {
+  const older = { ...costRow, id: '900', proposalId: '901', decisionId: '902', journalId: '903' }, total = { ...costView, valuedPackages: 2, unvaluedPackages: 1, netAmount: '20000.00', taxAmount: '2000.00', chargeAmount: '500.00', capitalizedAmount: '22500.00' };
+  assert.equal(parseStockValuationCost({ ...total, nextAllocationId: costRow.id }, receipt).capitalizedAmount, '22500.00');
+  assert.equal(parseStockValuationCost({ ...total, items: [older] }, receipt, costRow.id).items[0].id, older.id);
+  assert.equal(parseStockValuationCost({ ...total, items: [] }, receipt, older.id).valuedPackages, 2);
+  assert.equal(parseStockValuationCost({ ...total, items: [costRow, older] }, receipt).items.length, 2);
+  for (const invalid of [{ ...total }, { ...total, nextAllocationId: older.id }, { ...total, items: [costRow, { ...older, journalId: costRow.journalId }] }, { ...total, items: [older, costRow] }, { ...costView, items: [costRow, older] }]) assert.throws(() => parseStockValuationCost(invalid, receipt));
+  assert.throws(() => parseStockValuationCost({ ...total, items: [costRow] }, receipt, costRow.id));
+});
+test('cost query is read-only, actor-bound and rejects a response for another receipt without retry', async () => {
+  let calls = 0; const gateway = createProcurementStockValuationGateway(createUnitTokoClient({ baseUrl: 'https://unit-toko.test', fetch: async request => {
+    assert.ok(request instanceof Request); if (request.url.endsWith('/csrf')) return Response.json({ requestToken: 'csrf' }); calls++;
+    assert.equal(new URL(request.url).pathname, `/api/v1/procurement/stock-valuations/receipts/${receiptId}/cost/query`); assert.equal(request.headers.get('X-Expected-Actor-Id'), actor); assert.equal(request.headers.get('X-CSRF-Token'), 'csrf'); assert.equal(request.headers.get('Idempotency-Key'), null); assert.equal(request.cache, 'no-store'); assert.equal(request.redirect, 'error'); assert.deepEqual(await request.json(), { purpose: 'procurement-stock-valuation-review', beforeAllocationId: null });
+    return Response.json(calls === 1 ? costView : { ...costView, lotId: '999' });
+  } }));
+  assert.equal((await gateway.cost(actor, receipt)).capitalizedAmount, '11250.00'); await assert.rejects(gateway.cost(actor, receipt), { code: 'procurement_stock_valuation_response_invalid' }); assert.equal(calls, 2);
 });

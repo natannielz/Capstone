@@ -46,6 +46,8 @@ public sealed record ProcurementStockValuationDecisionPreviewDto([property: Json
 public sealed record ProcurementStockValuationDecideDto([property: JsonRequired] string Decision, [property: JsonRequired] string Binding, [property: JsonRequired] string Reason);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record ProcurementStockValuationRecoveryInputDto([property: JsonRequired] string Purpose, [property: JsonRequired] string Operation, [property: JsonRequired] string Key);
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record ProcurementStockValuationCostQueryDto([property: JsonRequired] string Purpose, LongId? BeforeAllocationId = null);
 
 public sealed record ProcurementStockValuationCapacityDto(string Version, long AllocatedPackages, long RemainingPackages,
     LongId? LastAllocationId, string? LastHash);
@@ -82,6 +84,13 @@ public sealed record ProcurementStockValuationDecisionReviewDto(ProcurementStock
     ProcurementStockValuationPolicyDto Policy, ProcurementStockValuationAccountingDto Accounting, string Binding, DateTimeOffset ObservedAt);
 public sealed record ProcurementStockValuationHistoryDto(ProcurementLocationDto Location, ProcurementStockValuationReadDto[] Items, LongId? NextProposalId);
 public sealed record ProcurementStockValuationRecoveryDto(string Status, ProcurementStockValuationResultDto? Result);
+public sealed record ProcurementStockValuationCostAllocationDto(LongId Id, LongId ProposalId, LongId DecisionId,
+    LongId InvoiceDocumentId, LongId InvoiceMatchId, int MatchLineNumber, LongId JournalId, int Packages,
+    Money NetAmount, Money TaxAmount, Money ChargeAmount, Money CapitalizedAmount, string PostingDate, DateTimeOffset RecordedAt);
+public sealed record ProcurementStockValuationCostDto(LongId ReceiptId, LongId LotId, LongId BalanceId,
+    long PackageCount, long ValuedPackages, long UnvaluedPackages, string Currency, string State,
+    Money NetAmount, Money TaxAmount, Money ChargeAmount, Money CapitalizedAmount,
+    ProcurementStockValuationCostAllocationDto[] Items, LongId? NextAllocationId);
 
 public static class ProcurementStockValuationEndpoints
 {
@@ -97,6 +106,16 @@ public static class ProcurementStockValuationEndpoints
             return TypedResults.Ok(new ProcurementStockValuationReceiptsDto(R.Location(row["location"]),
                 [.. row["items"].AsBsonArray.Select(item => new ProcurementStockValuationReceiptChoiceDto(Receipt(item["receipt"]), ReceiptCapacity(item["receiptCapacity"])))], Id(row["nextReceiptId"])));
         }).WithName("ProcurementStockValuationReceipts");
+        group.MapPost("/receipts/{id}/cost/query", async (string id, ProcurementStockValuationCostQueryDto request, HttpContext http,
+            [FromServices] ProcurementStockValuationService service, CancellationToken ct) => {
+            Purpose(request.Purpose); var row = await service.CostAsync(Actor(http), LongId.Parse(id).Value, request.BeforeAllocationId?.Value, ct);
+            return TypedResults.Ok(new ProcurementStockValuationCostDto(new(row["receiptId"].AsInt64), new(row["lotId"].AsInt64),
+                new(row["balanceId"].AsInt64), row["packageCount"].AsInt64, row["valuedPackages"].AsInt64,
+                row["unvaluedPackages"].AsInt64, row["currency"].AsString, row["state"].AsString,
+                Money.Parse(row["netAmount"].AsString), Money.Parse(row["taxAmount"].AsString),
+                Money.Parse(row["chargeAmount"].AsString), Money.Parse(row["capitalizedAmount"].AsString),
+                [.. row["items"].AsBsonArray.Select(CostAllocation)], Id(row["nextAllocationId"])));
+        }).WithName("ProcurementStockValuationReceiptCost");
         group.MapPost("/matches/query", async (ProcurementStockValuationMatchesQueryDto request, HttpContext http, [FromServices] ProcurementStockValuationService service, CancellationToken ct) => {
             Purpose(request.Purpose); var row = await service.MatchesAsync(Actor(http), request.ReceiptId.Value, request.BeforeMatchId?.Value, ct);
             return TypedResults.Ok(new ProcurementStockValuationMatchesDto(new(row["receiptId"].AsInt64), [.. row["items"].AsBsonArray.Select(Match)], Id(row["nextMatchId"])));
@@ -182,6 +201,12 @@ public static class ProcurementStockValuationEndpoints
     private static ProcurementStockValuationResultDto Result(BsonValue row) => new(new(row["proposalId"].AsInt64),
         row.AsBsonDocument.Contains("decisionId") ? new(row["decisionId"].AsInt64) : null, Number(row["version"]), row["status"].AsString,
         row.AsBsonDocument.Contains("allocationId") ? Id(row["allocationId"]) : null, row.AsBsonDocument.Contains("journalId") ? Id(row["journalId"]) : null, Date(row["recordedAt"]));
+    private static ProcurementStockValuationCostAllocationDto CostAllocation(BsonValue row) => new(new(row["id"].AsInt64),
+        new(row["proposalId"].AsInt64), new(row["decisionId"].AsInt64), new(row["invoiceDocumentId"].AsInt64),
+        new(row["invoiceMatchId"].AsInt64), row["matchLineNumber"].AsInt32, new(row["journalId"].AsInt64),
+        row["packages"].AsInt32, Money.Parse(row["netAmount"].AsString), Money.Parse(row["taxAmount"].AsString),
+        Money.Parse(row["chargeAmount"].AsString), Money.Parse(row["capitalizedAmount"].AsString),
+        row["postingDate"].AsString, Date(row["recordedAt"]));
     private static ProcurementStockValuationProposalDto Proposal(BsonValue row) => new(new(row["id"].AsInt64), Number(row["version"]), Input(row["input"]),
         Receipt(row["receipt"]), Match(row["match"]), Policy(row["policy"]), Accounting(row["accounting"]),
         Date(row["recordedAt"]), row["reason"].AsString);

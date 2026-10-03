@@ -91,17 +91,23 @@ public sealed class ProcurementStockValuationBrowserTests(MongoFixture fixture, 
             RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true };
         start.ArgumentList.Add(Path.Combine(root, "frontend", "scripts", "verify-invoice-browser.mjs")); start.Environment["NODE_ENV"] = "production"; start.Environment["NEXT_TELEMETRY_DISABLED"] = "1";
         using var process = Process.Start(start) ?? throw new InvalidOperationException("Stock valuation browser child did not start");
+        var elapsed = Stopwatch.StartNew();
+        // Actual full journeys reached successful reader cost responses at 357 seconds before the former six-minute cutoff.
+        var journeyBudget = TimeSpan.FromMinutes(8);
         var lines = new StringBuilder();
         async Task ReadAsync(StreamReader stream) { while (await stream.ReadLineAsync() is { } line) lock (lines) { lines.AppendLine(line); File.AppendAllText(logPath, line + Environment.NewLine); } }
         var stdout = ReadAsync(process.StandardOutput); var stderr = ReadAsync(process.StandardError);
         try {
             await process.StandardInput.WriteAsync(JsonSerializer.Serialize(input, new JsonSerializerOptions(JsonSerializerDefaults.Web))); process.StandardInput.Close();
-            var exit = process.WaitForExitAsync().WaitAsync(TimeSpan.FromMinutes(6)); var first = await Task.WhenAny(exit, stdout, stderr); if (first.IsFaulted) await first;
+            var exit = process.WaitForExitAsync().WaitAsync(journeyBudget); var first = await Task.WhenAny(exit, stdout, stderr); if (first.IsFaulted) await first;
             await exit; await Task.WhenAll(stdout, stderr); output.WriteLine(lines.ToString());
             Assert.True(process.ExitCode == 0, lines.ToString()); Assert.Contains("REAL_PROCUREMENT_STOCK_VALUATION_BROWSER_PASS", lines.ToString());
         } finally {
             if (!process.HasExited) { process.Kill(true); await process.WaitForExitAsync(); }
-            try { await Task.WhenAll(stdout, stderr); } finally { output.WriteLine("Actual browser child log: " + logPath); }
+            try { await Task.WhenAll(stdout, stderr); } finally {
+                output.WriteLine($"Actual browser journey: {elapsed.Elapsed.TotalSeconds:F3}s; overall budget: {journeyBudget.TotalSeconds:F0}s");
+                output.WriteLine("Actual browser child log: " + logPath);
+            }
         }
         Assert.Equal(preserved, await data.PreservedAsync()); await data.NoPaymentOrReleaseAsync();
         var proposal = await data.Rows(D.Proposals).Find(new BsonDocument()).SingleAsync(); var decision = await data.Rows(D.Decisions).Find(new BsonDocument()).SingleAsync();

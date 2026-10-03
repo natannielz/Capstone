@@ -12,6 +12,8 @@ namespace UnitToko.Platform.Procurement;
 
 internal sealed record ProcurementStockValuationCapacity(BsonDocument Receipt, BsonDocument Match,
     BsonDocument? ReceiptHead, BsonDocument? MatchHead);
+internal sealed record ProcurementStockValuationReceiptCapacity(BsonDocument State, BsonDocument? Head,
+    IReadOnlyList<BsonDocument> Allocations);
 
 internal sealed class ProcurementStockValuationCapacityReader(IMongoDatabase database)
 {
@@ -43,7 +45,9 @@ internal sealed class ProcurementStockValuationCapacityReader(IMongoDatabase dat
             { "$and", new BsonArray { SupplierDocumentSchemas.Validator(SupplierDocumentBson.Matches) } } }).SingleOrDefaultAsync(ct) ?? throw B.Broken();
         if (input.MatchLineNumber <= 0 || input.MatchLineNumber > match["lines"].AsBsonArray.Count ||
             input.MatchLineNumber > match["links"].AsBsonArray.Count || match["links"][input.MatchLineNumber - 1].IsBsonNull) throw B.Broken();
-        if (receipt["snapshotHash"] != proposal["receiptHash"] || invoice["snapshotHash"] != proposal["invoiceHash"] ||
+        if (receipt["snapshotHash"] != ProcurementStockReceiptBson.Hash(receipt) ||
+            invoice["snapshotHash"] != SupplierDocumentBson.Hash(invoice) || match["snapshotHash"] != SupplierDocumentBson.Hash(match) ||
+            receipt["snapshotHash"] != proposal["receiptHash"] || invoice["snapshotHash"] != proposal["invoiceHash"] ||
             match["snapshotHash"] != proposal["matchHash"] || match["documentId"] != invoice["_id"] ||
             invoice["input"]["kind"] != "invoice" || receipt["location"] != invoice["location"] ||
             receipt["supplierId"] != invoice["supplierId"] || match["lines"][input.MatchLineNumber - 1]["state"] != "matched" ||
@@ -114,11 +118,15 @@ internal sealed class ProcurementStockValuationCapacityReader(IMongoDatabase dat
     private static BsonDocument State(BsonDocument head, bool match) { var state = head.DeepClone().AsBsonDocument;
         foreach (var name in new[] { "_id", "schemaVersion", "receiptId", "matchId", "matchLineNumber", "sourceHash", "createdAt", "updatedAt", "fence" }) state.Remove(name);
         if (match && !state.Contains("remainingNetAmount")) throw B.Broken(); return state; }
-    internal async Task<(BsonDocument State, BsonDocument? Head)> ReceiptAsync(IClientSessionHandle tx, BsonDocument receipt, CancellationToken ct) {
+    internal async Task<ProcurementStockValuationReceiptCapacity> ReceiptAsync(IClientSessionHandle tx, BsonDocument receipt, CancellationToken ct) {
         var receiptId = receipt["_id"].AsInt64;
         var head = await Rows(B.ReceiptHeads).Find(tx, new BsonDocument("_id", receiptId)).SingleOrDefaultAsync(ct);
         var state = EmptyReceipt(receipt["input"]["packages"].AsInt32);
         var allocations = await Rows(B.Allocations).Find(tx, new BsonDocument("receiptId", receiptId)).Sort(new BsonDocument("receiptSequence", 1)).ToListAsync(ct);
+        var approvals = await Rows(B.Decisions).Find(tx, new BsonDocument { { "decision", "approve" },
+            { "input.receiptId", receiptId } }).ToListAsync(ct);
+        if (approvals.Count != allocations.Count || approvals.Select(row => row["allocationId"]).Distinct().Count() != approvals.Count ||
+            !approvals.Select(row => row["allocationId"]).ToHashSet().SetEquals(allocations.Select(row => row["_id"]))) throw B.Broken();
         foreach (var allocation in allocations) {
             await OwnerAsync(tx, allocation, ct);
             if (allocation["receiptHash"] != receipt["snapshotHash"] || allocation["receiptBefore"] != state || allocation["snapshotHash"] != B.Hash(allocation)) throw B.Broken();
@@ -126,17 +134,22 @@ internal sealed class ProcurementStockValuationCapacityReader(IMongoDatabase dat
             if (allocation["receiptAfter"] != state || allocation["receiptSequence"] != state["version"]) throw B.Broken();
         }
         if ((head is null) != (allocations.Count == 0) || head is not null && (head["sourceHash"] != receipt["snapshotHash"] || State(head, false) != state)) throw B.Broken();
-        return (state, head);
+        return new(state, head, allocations);
     }
-    internal async Task<ProcurementStockValuationCapacity> ReadAsync(IClientSessionHandle tx, BsonDocument receipt, BsonDocument match, int lineNumber, CancellationToken ct) {
-        var receiptId = receipt["_id"].AsInt64; var matchId = match["_id"].AsInt64; var line = match["lines"][lineNumber - 1].AsBsonDocument;
-        var receiptCapacity = await ReceiptAsync(tx, receipt, ct); var receiptHead = receiptCapacity.Head;
+    private async Task<(BsonDocument State, BsonDocument? Head, IReadOnlyList<BsonDocument> Allocations)> MatchAsync(
+        IClientSessionHandle tx, BsonDocument match, int lineNumber, HashSet<BsonValue> provenAllocations, CancellationToken ct) {
+        var matchId = match["_id"].AsInt64;
+        if (lineNumber <= 0 || lineNumber > match["lines"].AsBsonArray.Count) throw B.Broken();
+        var line = match["lines"][lineNumber - 1].AsBsonDocument;
         var matchHead = await Rows(B.MatchHeads).Find(tx, new BsonDocument("_id", MatchKey(matchId, lineNumber))).SingleOrDefaultAsync(ct);
-        var receiptState = receiptCapacity.State;
         var matchState = EmptyMatch(line);
         var matchAllocations = await Rows(B.Allocations).Find(tx, new BsonDocument { { "invoiceMatchId", matchId }, { "matchLineNumber", lineNumber } }).Sort(new BsonDocument("matchSequence", 1)).ToListAsync(ct);
+        var approvals = await Rows(B.Decisions).Find(tx, new BsonDocument { { "decision", "approve" },
+            { "input.invoiceMatchId", matchId }, { "input.matchLineNumber", lineNumber } }).ToListAsync(ct);
+        if (approvals.Count != matchAllocations.Count || approvals.Select(row => row["allocationId"]).Distinct().Count() != approvals.Count ||
+            !approvals.Select(row => row["allocationId"]).ToHashSet().SetEquals(matchAllocations.Select(row => row["_id"]))) throw B.Broken();
         foreach (var allocation in matchAllocations) {
-            await OwnerAsync(tx, allocation, ct);
+            if (!provenAllocations.Contains(allocation["_id"])) await OwnerAsync(tx, allocation, ct);
             if (allocation["matchHash"] != match["snapshotHash"] || allocation["matchBefore"] != matchState || allocation["snapshotHash"] != B.Hash(allocation)) throw B.Broken();
             matchState = AfterMatch(matchState, allocation["packages"].AsInt32, Money.Parse(allocation["netAmount"].AsString),
                 Money.Parse(allocation["taxAmount"].AsString), Money.Parse(allocation["chargeAmount"].AsString), allocation["_id"].AsInt64,
@@ -144,9 +157,22 @@ internal sealed class ProcurementStockValuationCapacityReader(IMongoDatabase dat
             if (allocation["matchAfter"] != matchState || allocation["matchSequence"] != matchState["version"]) throw B.Broken();
         }
         if ((matchHead is null) != (matchAllocations.Count == 0)) throw B.Broken();
-        if (receiptHead is not null && (receiptHead["sourceHash"] != receipt["snapshotHash"] || State(receiptHead, false) != receiptState)) throw B.Broken();
         if (matchHead is not null && (matchHead["sourceHash"] != match["snapshotHash"] || State(matchHead, true) != matchState)) throw B.Broken();
-        return new(receiptState, matchState, receiptHead, matchHead);
+        return (matchState, matchHead, matchAllocations);
+    }
+    internal async Task VerifyMatchesAsync(IClientSessionHandle tx, ProcurementStockValuationReceiptCapacity receipt,
+        IReadOnlyDictionary<long, BsonDocument> verifiedMatches, CancellationToken ct) {
+        var proven = receipt.Allocations.Select(row => row["_id"]).ToHashSet();
+        foreach (var group in receipt.Allocations.GroupBy(row => (MatchId: row["invoiceMatchId"].AsInt64, LineNumber: row["matchLineNumber"].AsInt32))) {
+            if (!verifiedMatches.TryGetValue(group.Key.MatchId, out var match)) throw B.Broken();
+            var capacity = await MatchAsync(tx, match, group.Key.LineNumber, proven, ct);
+            if (!group.Select(row => row["_id"]).ToHashSet().IsSubsetOf(capacity.Allocations.Select(row => row["_id"]))) throw B.Broken();
+        }
+    }
+    internal async Task<ProcurementStockValuationCapacity> ReadAsync(IClientSessionHandle tx, BsonDocument receipt, BsonDocument match, int lineNumber, CancellationToken ct) {
+        var receiptCapacity = await ReceiptAsync(tx, receipt, ct);
+        var matchCapacity = await MatchAsync(tx, match, lineNumber, receiptCapacity.Allocations.Select(row => row["_id"]).ToHashSet(), ct);
+        return new(receiptCapacity.State, matchCapacity.State, receiptCapacity.Head, matchCapacity.Head);
     }
     internal static BsonDocument Head(BsonDocument state, BsonValue id, BsonDocument source, DateTimeOffset now, BsonDocument? previous,
         long? receiptId = null, long? matchId = null, int? lineNumber = null) {

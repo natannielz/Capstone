@@ -1,5 +1,6 @@
 using MongoDB.Bson;
 using MongoDB.Driver;
+using UnitToko.Modules.Accounting;
 using UnitToko.Modules.Identity;
 using UnitToko.Modules.Identity.Contracts;
 using UnitToko.Modules.Procurement;
@@ -36,6 +37,70 @@ public sealed partial class ProcurementStockValuationService
         var receipt = await new ProcurementStockReceiptRecords(database, unit, clock, catalog, orders, sources).ReadAsync(tx, id, ct);
         if (location is not null) ProcurementStockValuationRecords.Equal(receipt["location"], R.Location(location));
         return receipt;
+    }
+    public async Task<BsonDocument> CostAsync(ActorContext actor, long receiptId, long? beforeAllocationId = null,
+        CancellationToken ct = default) {
+        if (receiptId <= 0 || beforeAllocationId is <= 0) throw ProcurementStockValuationRules.Invalid();
+        await StorageAsync(ct);
+        return await authorization.ReadAsync<BsonDocument>(actor, async (authority, tx, token) => {
+            var receipt = await ReceiptAsync(tx, receiptId, null, token);
+            var context = new Context(actor, authority, tx, R.Location(receipt["location"]), Permissions.ProcurementStockValuationRead);
+            _ = Require(context);
+            var capacityReader = new ProcurementStockValuationCapacityReader(database);
+            var coverage = await capacityReader.ReceiptAsync(tx, receipt, token);
+            var documents = new SupplierDocumentRecords(database, unit, clock, catalog, orders);
+            var verifiedMatches = new Dictionary<long, BsonDocument>();
+            foreach (var group in coverage.Allocations.GroupBy(row => row["invoiceDocumentId"].AsInt64)) {
+                var invoice = await documents.SubmissionAsync(tx, group.Key, token);
+                var history = await documents.HistoryAsync(tx, invoice["draftId"].AsInt64, token);
+                if (history.Identity["draftCount"].AsInt64 != 1 || history.Document is null ||
+                    history.Document["_id"] != invoice["_id"] || invoice["input"]["kind"] != "invoice" ||
+                    invoice["location"] != receipt["location"] || invoice["supplierId"] != receipt["supplierId"]) throw B.Broken();
+                foreach (var matchGroup in group.GroupBy(row => row["invoiceMatchId"].AsInt64)) {
+                    var match = history.Matches.SingleOrDefault(row => row["_id"] == matchGroup.Key) ?? throw B.Broken();
+                    if (match["documentId"] != invoice["_id"] || matchGroup.Any(row => row["matchHash"] != match["snapshotHash"]))
+                        throw B.Broken();
+                    if (!verifiedMatches.TryAdd(matchGroup.Key, match)) throw B.Broken();
+                }
+            }
+            await capacityReader.VerifyMatchesAsync(tx, coverage, verifiedMatches, token);
+            var count = receipt["input"]["packages"].AsInt32;
+            var valued = coverage.State["allocatedPackages"].AsInt64;
+            var unvalued = coverage.State["remainingPackages"].AsInt64;
+            if (valued < 0 || unvalued < 0 || checked(valued + unvalued) != count) throw B.Broken();
+            var net = new Money(0m); var tax = new Money(0m); var charge = new Money(0m); var capitalized = new Money(0m);
+            foreach (var allocation in coverage.Allocations) {
+                net = Money.Add(net, Money.Parse(allocation["netAmount"].AsString));
+                tax = Money.Add(tax, Money.Parse(allocation["taxAmount"].AsString));
+                charge = Money.Add(charge, Money.Parse(allocation["chargeAmount"].AsString));
+                capitalized = Money.Add(capitalized, Money.Parse(allocation["capitalizedAmount"].AsString));
+            }
+            if (capitalized != Money.Add(Money.Add(net, tax), charge)) throw B.Broken();
+            if (beforeAllocationId is { } before && !coverage.Allocations.Any(row => row["_id"] == before))
+                throw B.Changed("procurement_stock_valuation_cursor_unavailable");
+            var sorted = coverage.Allocations.Where(row => beforeAllocationId is null || row["_id"].AsInt64 < beforeAllocationId)
+                .OrderByDescending(row => row["_id"].AsInt64).Take(26).ToArray();
+            var items = new BsonArray();
+            foreach (var allocation in sorted.Take(25)) {
+                var proposal = await Rows(B.Proposals).Find(tx, new BsonDocument("_id", allocation["proposalId"])).SingleOrDefaultAsync(token) ?? throw B.Broken();
+                if (proposal["snapshotHash"] != allocation["proposalHash"] || proposal["input"]["receiptId"] != receiptId) throw B.Broken();
+                items.Add(new BsonDocument { { "id", allocation["_id"] }, { "proposalId", allocation["proposalId"] },
+                    { "decisionId", allocation["decisionId"] }, { "invoiceDocumentId", allocation["invoiceDocumentId"] },
+                    { "invoiceMatchId", allocation["invoiceMatchId"] }, { "matchLineNumber", allocation["matchLineNumber"] },
+                    { "journalId", allocation["journalId"] }, { "packages", allocation["packages"] },
+                    { "netAmount", allocation["netAmount"] }, { "taxAmount", allocation["taxAmount"] },
+                    { "chargeAmount", allocation["chargeAmount"] }, { "capitalizedAmount", allocation["capitalizedAmount"] },
+                    { "postingDate", proposal["input"]["postingDate"] }, { "recordedAt", allocation["recordedAt"] } });
+            }
+            var result = new BsonDocument { { "receiptId", receiptId }, { "lotId", receipt["lotId"] },
+                { "balanceId", receipt["balanceId"] }, { "packageCount", (long)count }, { "valuedPackages", valued },
+                { "unvaluedPackages", unvalued }, { "currency", "IDR" },
+                { "state", valued == 0 ? "unvalued" : unvalued == 0 ? "fully_valued" : "partially_valued" },
+                { "netAmount", net.ToString() }, { "taxAmount", tax.ToString() }, { "chargeAmount", charge.ToString() },
+                { "capitalizedAmount", capitalized.ToString() }, { "items", items },
+                { "nextAllocationId", sorted.Length > 25 ? sorted[24]["_id"] : BsonNull.Value } };
+            await FenceAsync(context, token); return result;
+        }, ct);
     }
     public async Task<BsonDocument> ReceiptsAsync(ActorContext actor, ProcurementLocation location, long? beforeId = null, CancellationToken ct = default) {
         ProcurementRequestRules.Location(location); if (beforeId is <= 0) throw ProcurementStockValuationRules.Invalid(); await StorageAsync(ct);

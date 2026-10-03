@@ -6803,6 +6803,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/procurement/stock-valuations/receipts/{id}/cost/query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ProcurementStockValuationReceiptCost"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/procurement/stock-valuations/receipts/query": {
         parameters: {
             query?: never;
@@ -11922,6 +11938,49 @@ export interface components {
             /** Format: int64 */
             remainingPackages: number | string;
             version: string;
+        };
+        ProcurementStockValuationCostAllocationDto: {
+            capitalizedAmount: components["schemas"]["Money"];
+            chargeAmount: components["schemas"]["Money"];
+            decisionId: components["schemas"]["LongId"];
+            id: components["schemas"]["LongId"];
+            invoiceDocumentId: components["schemas"]["LongId"];
+            invoiceMatchId: components["schemas"]["LongId"];
+            journalId: components["schemas"]["LongId"];
+            /** Format: int32 */
+            matchLineNumber: number | string;
+            netAmount: components["schemas"]["Money"];
+            /** Format: int32 */
+            packages: number | string;
+            postingDate: string;
+            proposalId: components["schemas"]["LongId"];
+            /** Format: date-time */
+            recordedAt: string;
+            taxAmount: components["schemas"]["Money"];
+        };
+        ProcurementStockValuationCostDto: {
+            balanceId: components["schemas"]["LongId"];
+            capitalizedAmount: components["schemas"]["Money"];
+            chargeAmount: components["schemas"]["Money"];
+            currency: string;
+            items: components["schemas"]["ProcurementStockValuationCostAllocationDto"][];
+            lotId: components["schemas"]["LongId"];
+            netAmount: components["schemas"]["Money"];
+            nextAllocationId: null | components["schemas"]["LongId"];
+            /** Format: int64 */
+            packageCount: number | string;
+            receiptId: components["schemas"]["LongId"];
+            state: string;
+            taxAmount: components["schemas"]["Money"];
+            /** Format: int64 */
+            unvaluedPackages: number | string;
+            /** Format: int64 */
+            valuedPackages: number | string;
+        };
+        ProcurementStockValuationCostQueryDto: {
+            /** @description Positive decimal Int64 string, from 1 through 9223372036854775807. JSON numbers are invalid. */
+            beforeAllocationId?: null | string;
+            purpose: string;
         };
         ProcurementStockValuationDecideDto: {
             binding: string;
@@ -49766,6 +49825,100 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProcurementStockValuationReadDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Payload Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    ProcurementStockValuationReceiptCost: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
+                /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
+                "X-Expected-Actor-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProcurementStockValuationCostQueryDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcurementStockValuationCostDto"];
                 };
             };
             /** @description Bad Request */
