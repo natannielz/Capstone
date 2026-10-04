@@ -1,76 +1,65 @@
 # Unit Toko — platform operasional koperasi BNI
 
-Unit Toko dikembangkan untuk pemesanan barang oleh cabang BNI dan akun bisnis yang disetujui, beserta persediaan, pengadaan, pengiriman, penerimaan, penagihan, pembayaran, retur/refund, laporan dan tutup periode. Migrasi penuh masih berjalan; persyaratan asli, hasil rapat/manual dan seluruh [97 butir laporan](docs/requirements/unit-toko-report-2026-09-28.md) tetap berlaku.
+Unit Toko melayani pemesanan cabang BNI dan akun bisnis yang disetujui. Cakupan lengkapnya mencakup katalog/kemasan, persediaan, pengadaan, pengiriman dan bukti penerimaan, invoice, bukti pembayaran/OCR, peninjauan bank, alokasi, retur/refund, peran, notifikasi, laporan dan tutup periode. Migrasi penuh masih berjalan; hasil rapat/manual dan seluruh [97 butir laporan](docs/requirements/unit-toko-report-2026-09-28.md) tetap berlaku.
 
-Acuan pekerjaan saat ini adalah [rencana M0–M6](docs/superpowers/plans/2026-09-29-accelerated-completion.md) dan [ledger kemajuan serta pemetaan persyaratan](docs/quality/production-progress.md). Ledger membedakan implementasi, verifikasi lokal, staging dan penerimaan produksi. Checklist Release 1 yang sudah selesai tidak berarti seluruh proyek selesai.
+Status dan pekerjaan tersisa dicatat dalam satu [ledger kemajuan, checklist dan pemetaan persyaratan](docs/quality/production-progress.md). [Urutan pelaksanaan M0–M6](docs/superpowers/plans/2026-09-29-accelerated-completion.md) tetap menjadi acuan; checklist Release 1 yang selesai tidak berarti proyek lengkap selesai.
 
-## Yang dapat digunakan sekarang
+## Status yang dapat digunakan
 
-| Lingkungan | Status dan cakupan |
+| Lingkungan | Batas yang sudah diketahui |
 | --- | --- |
-| Pilot lokal Release 1 | Alur browser → API .NET → MongoDB telah diverifikasi: akun cabang → katalog/kemasan → permintaan tersimpan → keputusan petugas → riwayat pemohon. Pemisahan cabang, pemulihan respons yang hilang, pengelolaan katalog dan persistensi setelah restart juga diperiksa. Akun dan katalog bersifat sintetis. |
-| [Frontend Vercel](https://unit-toko-bni.vercel.app/) | Frontend telah dipublikasikan dengan tampilan awal, katalog dan halaman masuk yang dipulihkan. Koneksi layanan akun/API sebenarnya belum tersedia; halaman menyatakan keterbatasan tersebut. |
-| Sistem produksi lengkap | Belum diterima. Koneksi hosted API/worker, MongoDB, Auth0, penyimpanan privat, migrasi/restore dan pilot operasional dengan pengguna sebenarnya masih memerlukan implementasi atau validasi. |
+| Pilot lokal Release 1 | Browser → API .NET → MongoDB telah diverifikasi untuk akun cabang, katalog/kemasan, permintaan, keputusan petugas dan riwayat. Bukti lokal juga mencakup isolasi cabang, pemulihan respons hilang, pemeliharaan katalog serta persistensi setelah restart. Identitas dan data contoh bersifat sintetis. |
+| [Frontend Vercel](https://unit-toko-bni.vercel.app/) | Frontend dipublikasikan sebagai pratinjau dengan pemberitahuan layanan belum tersedia. Publikasi dan tampilan publik tercatat dalam ledger; koneksi akun/API bisnis hosted belum diterima. |
+| Sistem produksi lengkap | Belum diterima. Hosted API/worker, MongoDB, Auth0, penyimpanan privat, kebijakan bisnis, migrasi/restore dan pilot pengguna sebenarnya masih memerlukan koneksi atau penerimaan yang sesuai. |
 
-Dalam Release 1, **“Diterima untuk diproses” hanya keputusan atas permintaan**. Keputusan ini tidak mereservasi stok, menetapkan harga, membuat invoice, menerima pembayaran atau menjanjikan pengiriman. Foto editorial bukan foto barang katalog yang telah disetujui; foto produk yang belum tersedia ditampilkan secara jujur. Rincian bukti dan batasnya ada pada [catatan Release 1](docs/releases/release-1.md).
+Release 1 mencakup katalog dan permintaan cabang. **“Diterima untuk diproses” tidak mereservasi stok, menetapkan harga, membuat invoice, menerima pembayaran atau menjanjikan pengiriman.** Foto editorial bukan foto produk katalog yang telah disetujui. Lihat [cakupan dan bukti Release 1](docs/releases/release-1.md).
+
+Pilot yang dipertahankan tetap memakai Release 1 dengan skema migrasi **78**. Pekerjaan migrasi **79** untuk pencocokan invoice pemasok berbasis penerimaan mutu dan penilaian parsial berada dalam validasi terpisah; belum dipasang atau diterima di pilot.
 
 ## Struktur dan teknologi
 
-| Direktori | Isi |
+| Direktori | Tanggung jawab |
 | --- | --- |
-| `frontend/` | Next.js, React dan TypeScript; halaman pelanggan/staf, komponen, aset, klien API serta pemeriksaan frontend |
-| `backend/` | API dan worker C#/.NET 10, modul domain, MongoDB transaksional, migrasi, bukti privat dan alat pilot lokal; `backend/legacy/` menyimpan kode TypeScript lama yang masih dalam migrasi |
-| `docs/` | Persyaratan, arsitektur, rencana pelaksanaan, bukti penerimaan, panduan operator dan deployment |
+| [frontend/](frontend/) | Next.js 16, React dan TypeScript; halaman, komponen, [modul UI](frontend/src/modules/), klien API dan pemeriksaan frontend |
+| [backend/](backend/) | C#/.NET 10 API dan worker, modul bisnis, MongoDB transaksional, migrasi, bukti privat, kontrak API dan alat pilot |
+| [docs/](docs/) | Persyaratan, arsitektur, runbook operator, bukti penerimaan, rencana pelaksanaan dan deployment |
 
-API baru mengelola data bisnis di MongoDB. Identitas produksi disiapkan untuk Auth0 dengan sesi server, verifikasi email, MFA dan izin sesuai lingkup. Bukti keuangan/dokumen menggunakan penyimpanan privat dan pemeriksaan akses; OCR memakai satu mesin lokal Tesseract/tesserocr yang versinya dipatok dan tidak menjadi otoritas persetujuan keuangan. Integrasi layanan sebenarnya tetap perlu diterima sebelum peluncuran.
+Identitas produksi disiapkan untuk **Auth0**, verifikasi email, MFA, sesi server dan izin sesuai lingkup; penerimaan tenant sebenarnya masih terbuka. Dokumen keuangan memakai penyimpanan privat dengan akses terotorisasi. OCR memakai satu mesin lokal yang dipatok: **Tesseract 5.5.3 / tesserocr 2.11.0**, model `ind+eng`. Saat ini input OCR hanya PNG/JPEG; hasilnya saran untuk pemeriksaan manusia, bukan persetujuan atau bukti uang diterima. PDF dan OCR dokumen pengiriman masih pending.
 
-Dependensi Turso/SQLite dan backend lama masih memiliki pemanggil yang harus dimigrasikan dan diverifikasi sebelum dihapus. Keduanya **bukan penulis data pilot Release 1**. Lihat [batas modul selama transisi](docs/architecture/module-boundaries.md).
+**Penghentian runtime dan build legacy belum selesai.** `backend/legacy`, dependensi libSQL/Turso/SQLite, adapter dan pemeriksaan regresinya masih dipertahankan sampai pengganti serta penghapusannya diverifikasi. Legacy bukan penulis data pilot Release 1. [Peta transisi modul](docs/architecture/module-boundaries.md) menyimpan konteks migrasi; status aktual tiap alur mengikuti ledger.
 
-Profil bawaan adalah `release1`: `NEXT_PUBLIC_UNIT_TOKO_RELEASE=release1` pada frontend dan `Release__Profile=release1` pada API. Halaman serta API fitur lanjutan dibatasi. Profil `full` digunakan secara eksplisit untuk pengembangan/pemeriksaan terisolasi; jangan mengaktifkannya pada pilot atau deployment sebelum alur, izin dan dependensi terkait selesai divalidasi.
+Profil bawaan tetap `release1`: frontend `NEXT_PUBLIC_UNIT_TOKO_RELEASE=release1`, API `Release__Profile=release1`. Halaman dan API di luar cakupan pilot dibatasi. Profil `full` hanya untuk validasi terisolasi sampai prasyaratnya diterima; jangan mengaktifkannya pada pilot/deployment untuk melewati batas tersebut. Build frontend penuh memakai `.next-full`, sedangkan pilot memakai `.next`. Build dan pemeriksaan tipe tetap dijalankan berurutan karena Next memperbarui berkas tipe bersama.
 
-## Menjalankan pilot lokal
+## Membuka pilot lokal
 
-Pilot persisten ini khusus Windows. Siapkan PowerShell 7, Node.js 24, SDK .NET 10 sesuai `backend/global.json`, `mongod.exe` yang telah diperiksa, serta Microsoft Edge. Dari direktori repositori:
+Pilot persisten ini khusus Windows: PowerShell 7, Node.js 24, SDK sesuai [backend/global.json](backend/global.json), MongoDB yang telah diperiksa dan Microsoft Edge. Ikuti [penyiapan dependensi, build dan jalur alat](docs/runbooks/local-pilot-release1.md) terlebih dahulu. Setelah build Release 1 tersedia, jalankan dari root repositori:
 
 ```powershell
-npm ci --prefix backend/legacy
-npm ci --prefix frontend
-$env:NEXT_PUBLIC_UNIT_TOKO_RELEASE = 'release1'
-npm run build --prefix frontend
-dotnet build backend/tools/UnitToko.LocalPilot/UnitToko.LocalPilot.csproj -c Release
-./backend/tools/UnitToko.LocalPilot/start-local-pilot.ps1 -MongoPath 'C:\path\to\mongod.exe'
+./backend/tools/UnitToko.LocalPilot/start-local-pilot.ps1 -MongoPath 'C:\lokasi\mongod.exe'
 ```
 
-Ganti jalur MongoDB dengan lokasi sebenarnya. Instalasi dependensi lama masih diperlukan oleh build selama migrasi; perintah di atas tidak menjalankan server demo lama. Launcher tidak mengunduh alat atau membuat build secara diam-diam. Jalur alat yang telah diperiksa pada komputer penyerahan dan prosedur lengkap ada di [panduan pilot lokal](docs/runbooks/local-pilot-release1.md).
+Ganti jalur tersebut dengan executable sebenarnya; parameter `-DotnetPath` dan `-NodePath` tersedia jika diperlukan. [Launcher](backend/tools/UnitToko.LocalPilot/start-local-pilot.ps1) tidak mengunduh alat atau membuat build diam-diam. Jangan membangun ulang `.next` yang sedang dipakai pilot.
 
-Setelah launcher menampilkan **SYNTHETIC LOCAL PILOT**, jalankan `tmp/pilot/release1/open-browser.ps1` dari jendela PowerShell 7 lain. Pintasan membuka Edge khusus pilot dengan pemetaan loopback dan pin sertifikat; gunakan pintasan tersebut agar batas HTTPS lokal tetap benar.
+Setelah muncul **SYNTHETIC LOCAL PILOT**, jalankan `tmp/pilot/release1/open-browser.ps1` di jendela PowerShell 7 lain. Pintasan memakai Edge khusus pilot, loopback dan pin sertifikat. Buka `tmp/pilot/release1/ACCOUNTS-PRIVATE.txt` **secara privat** untuk akun `pemohon-a`, `pemohon-b` atau `petugas`, password acak dan kode faktor simulasi masing-masing. Keluar sebelum berganti akun; faktor simulasi ini bukan enrollment MFA/Auth0 sebenarnya.
 
-Buka `tmp/pilot/release1/ACCOUNTS-PRIVATE.txt` secara privat. Gunakan `pemohon-a`, `pemohon-b` atau `petugas` dengan password acak dan kode faktor **simulasi** masing-masing; keluar sebelum berganti akun. Ini bukan enrollment MFA/Auth0 sebenarnya. Jangan membagikan atau memasukkan berkas kredensial, kunci, profil browser maupun data MongoDB ke Git.
+Permintaan dan perubahan katalog tersimpan di MongoDB lokal terpisah. `Ctrl+C` menghentikan API/Next; MongoDB dan state privat tetap dipertahankan. Jalankan launcher yang sama untuk melanjutkan. Jangan membagikan, memasukkan ke Git, menghapus atau memisahkan database dari `tmp/pilot/release1` dan berkas kuncinya. Prosedur lengkap serta batas akun sintetis tersedia dalam panduan pilot.
 
-Permintaan dan perubahan katalog tersimpan di MongoDB lokal terpisah. `Ctrl+C` menghentikan API dan Next; MongoDB serta berkasnya tetap dipertahankan. Jalankan launcher yang sama untuk melanjutkan. Jangan menghapus `tmp/pilot/release1`: database dan state privatnya harus tetap berpasangan. Alur langkah demi langkah dan batas kedaluwarsa akun sintetis tersedia dalam panduan pilot.
+## Panduan pengembangan dan operasi
 
-## Pemeriksaan dan publikasi
-
-CI push menjalankan pemeriksaan terfokus sesuai sumber yang berubah. Suite lengkap tetap tersedia melalui workflow manual **Release validation** untuk kandidat rilis terintegrasi. Gunakan database terisolasi untuk pemeriksaan yang mengubah data; skrip HTTP demo lama bukan penerimaan pilot baru. [Ledger](docs/quality/production-progress.md) mencatat hasil dan batas pemeriksaan yang berlaku.
-
-Vercel memakai root `frontend` dan Node.js 24. Konfigurasi [frontend/vercel.json](frontend/vercel.json) mengaktifkan deployment Git otomatis hanya dari `main`; dependensi/build mengikuti berkas tersebut. Publikasi frontend sudah terjadi, tetapi push GitHub atau status Ready Vercel belum membuktikan layanan bisnis berjalan.
-
-Aktivasi hosted memerlukan host .NET/worker, MongoDB replica set, tenant Auth0 dan identitas yang disetujui, penyimpanan privat serta `UNIT_TOKO_API_ORIGIN` menuju ingress HTTPS yang benar. Verifikasi browser, cookie/origin, izin, persistensi, worker dan restore harus menggunakan koneksi sebenarnya. Ikuti [prasyarat deployment Release 1](docs/runbooks/release1-deployment.md), [panduan identitas/hosting](docs/runbooks/identity-hosting.md) dan [gerbang penerimaan produksi](docs/quality/production-acceptance.md).
-
-## Arsip desain dan demo
-
-Catatan berikut mempertahankan konteks desain asli dan perilaku lama untuk migrasi/regresi. Daftar fitur, akun, rute, database dan instruksi deployment di dalam arsip tidak menggantikan cakupan atau cara menjalankan pilot saat ini.
-
-| Versi | Dokumen historis |
+| Kebutuhan | Mulai dari sini |
 | --- | --- |
-| v15 — daftar operasional dan profil | [Rencana](docs/plan-ui-ux-v15.md), [hasil dan batas](docs/rilis-v15.md) |
-| v14 — autoplay, footer, belanja dan ruang kerja | [Rencana/riset](docs/plan-ui-ux-v14.md), [hasil dan batas](docs/rilis-v14.md) |
-| v13 — landing editorial dan portal masuk | [Rilis](docs/rilis-v13.md), [desain/gerakan](docs/research-motion-v13.md) |
-| v12 — desain dan animasi | [Rilis](docs/rilis-v12.md), [riset](docs/research-experience-v12.md) |
-| v11 — pengalaman belanja dan audit proses | [Rilis](docs/rilis-v11.md), [audit penjualan](docs/gap-sales-v11.md), [audit pengadaan](docs/gap-operations-v11.md) |
-| v10 — katalog ilustrasi dan akun | [Rilis](docs/rilis-v10.md), [data dummy](docs/data-dummy-v10.md) |
-| v8 — beranda dan akses terpisah | [Rilis](docs/rilis-v8.md) |
-| v7 — etalase dan akun pelanggan | [Rilis](docs/rilis-v7.md), [rencana/cakupan](docs/plan-customer-marketplace-v7.md), [pengujian](docs/testing-customer-v7.md) |
-| v6 — alur staf dan divisi | [Baseline regresi](docs/rilis-v6.md) |
+| Setup dan kontrak API | [Pengembangan lokal](docs/runbooks/local-development.md), [skrip frontend](frontend/package.json), [kontrak API](backend/contracts/) |
+| Modul dan alur terpelihara | [Identitas](frontend/src/modules/identity/README.md), [katalog](frontend/src/modules/catalog/README.md), [ordering](frontend/src/modules/ordering/README.md), [fulfillment](frontend/src/modules/fulfillment/README.md), [purchase order](docs/runbooks/purchase-orders.md), [alokasi pembayaran](docs/runbooks/payment-allocation.md) |
+| Keamanan dan bukti privat | [Izin](docs/architecture/permissions.md), [otoritas orang](docs/architecture/person-authority.md), [hosting Auth0/sesi](docs/runbooks/identity-hosting.md), [admission bukti](docs/runbooks/private-evidence-admission.md), [penyimpanan privat](docs/runbooks/private-evidence-storage.md) |
+| OCR lokal | [Engine, preprocessing dan kebijakan worker](docs/runbooks/document-processing.md), [konfigurasi lokal](docs/runbooks/local-document-processing.md), [invoice/SPH pemasok](docs/runbooks/supplier-documents.md) |
+| Pengujian | [Browser/API/Mongo terisolasi](docs/runbooks/stock-count-browser-rehearsal.md), [CI terfokus](.github/workflows/quality.yml), [validasi rilis lengkap](.github/workflows/release-validation.yml), [bukti dan batas hasil](docs/quality/production-progress.md) |
+| Deployment, migrasi dan restore | [Deployment Release 1](docs/runbooks/release1-deployment.md), [penerimaan produksi dan backup/restore](docs/quality/production-acceptance.md), [pemulihan akses](docs/runbooks/account-recovery.md) |
+| Seluruh backlog | [97 persyaratan asli](docs/requirements/unit-toko-report-2026-09-28.md), [traceability dan pekerjaan tersisa](docs/quality/production-progress.md#current-traceability--all-97-report-items) |
 
-[README frontend](frontend/README.md) dan [panduan publikasi lama](docs/publikasi-github.md) juga menyimpan konteks transisi; untuk menjalankan atau menerbitkan kandidat saat ini, gunakan panduan pilot/deployment di atas. Data demo, transaksi dan pembayaran sintetis bukan operasi resmi BNI. Arsip studi kasus, kredensial, database, unggahan privat dan log tidak disertakan dalam repositori.
+Skrip frontend yang tersedia mencakup `typecheck`, `lint`, `test` dan `build`; sebagian regresi masih menguji legacy. Pemeriksaan yang menulis data memakai database terisolasi, bukan database pilot. CI push menjalankan pemeriksaan terfokus; workflow manual **Release validation** menyimpan suite rilis lengkap. Hasil fixture lokal tidak membuktikan penerimaan hosted.
+
+Vercel memakai root `frontend`, Node.js 24 dan [konfigurasi deployment](frontend/vercel.json) dengan Git otomatis hanya dari `main`. Publikasi frontend tidak menjalankan API/worker .NET. Peluncuran sebenarnya memerlukan ingress HTTPS/API yang disetujui, MongoDB replica set, Auth0, private storage dan operator/kebijakan bisnis, lalu verifikasi browser, izin, persistensi, worker dan restore pada koneksi sebenarnya. Push GitHub atau status Ready Vercel saja belum memenuhi gerbang itu.
+
+## Arsip yang tetap dipertahankan
+
+[README demo lama](frontend/README.md), [rilis visual v15](docs/rilis-v15.md), [landing editorial v13](docs/rilis-v13.md) dan [panduan publikasi lama](docs/publikasi-github.md) menyimpan konteks desain/regresi. Instruksi akun, database dan deployment historis di dalamnya tidak menggantikan panduan pilot saat ini. Seluruh dokumen dan bukti lama tetap dipertahankan; data sintetis bukan operasi resmi BNI.
