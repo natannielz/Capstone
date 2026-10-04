@@ -9,11 +9,9 @@ import { runCommand } from "../../backend/legacy/domain/engine";
 import { seedState } from "../../backend/legacy/domain/seed";
 import { financialReport, productAvailable, scopeState, today } from "../../backend/legacy/domain/selectors";
 import { DomainError, type Product, type State } from "../../backend/legacy/domain/model";
-import { migrateDatabase, setTestDatabase, type Database, type Statement } from "../../backend/legacy/server/database";
+import { migrateDatabase, type Database, type Statement } from "../../backend/legacy/server/database";
 import { DEMO_CATALOG_MIGRATION, provisionDemoCatalog } from "../../backend/legacy/server/demo-catalog";
 import { TABLES } from "../../backend/legacy/server/repository";
-import { GET as catalogGET } from "../src/app/api/catalog/route";
-import { inShopCollection, shopCategory, shopFamilies, type PublicProduct } from "../src/components/shop/shop-data";
 
 // Every test uses isolated SQLite memory. No live database URL, credential or file is read.
 class Query implements Statement {
@@ -244,24 +242,4 @@ test("v10 catalog pagination covers every family exactly once and clamps stale o
   assert.deepEqual(paginateCatalog(items, "999999").items, items.slice(192));
   for (const input of [null, "0", "-1", "NaN", "1.5", "1e3", "9999999"]) assert.equal(catalogPage(input), 1);
   assert.deepEqual(paginateCatalog([], "9"), {page: 1, pages: 1, total: 0, start: 0, end: 0, items: []});
-});
-
-test("v10 public catalog exposes all 200 images, descriptions and collection filters without stock costs or prompts", async () => {
-  const f = await fixture();
-  try {
-    setTestDatabase(f.db);
-    const response = await catalogGET(); assert.equal(response.status, 200);
-    const {products} = await response.json() as {products: PublicProduct[]};
-    assert.equal(products.length, 236); assert.equal(shopFamilies(products).length, 212);
-    const keys = ["id", "familyId", "sku", "name", "unit", "price", "active", "category", "group", "collections", "image", "description", "packaging", "available"].sort();
-    for (const item of manifest) {
-      const product = products.find((row) => row.id === item.id)!;
-      assert.deepEqual(Object.keys(product).sort(), keys);
-      assert.equal(product.image, item.image); assert.equal(product.description, item.description);
-      assert.equal(shopCategory(product), item.group); assert.equal(inShopCollection(product, item.collection), true);
-      assert.ok(product.available > 0);
-    }
-    assert.equal(inShopCollection(products.find((item) => item.id === "kopi")!, "pantry"), true);
-    assert.equal(inShopCollection(products.find((item) => item.id === "kopi")!, "rapat"), true);
-  } finally {f.client.close();}
 });

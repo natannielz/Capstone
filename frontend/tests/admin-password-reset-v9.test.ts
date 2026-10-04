@@ -6,7 +6,6 @@ import {ensureSeed} from "../../backend/legacy/server/repository";
 import {demoPassword} from "../../backend/legacy/server/demo-credentials";
 import {digest, hashPassword} from "../../backend/legacy/server/security";
 import {POST as resetPassword} from "../src/app/api/admin/password-reset/route";
-import {POST as login} from "../src/app/api/auth/login/route";
 import {POST as changePassword} from "../src/app/api/profile/route";
 
 class Query implements Statement {
@@ -74,9 +73,11 @@ test("v9 administrator recovery is scoped, atomic, audited and safe to retry", a
       const saved = (await db.execute({sql: "SELECT fingerprint FROM commands WHERE id=?", args: [`admin-password-reset:${valid.id}`]})).rows[0];
       const fastVerifier = await digest(JSON.stringify({id: valid.id, targetId: valid.targetId, newPassword, reason: valid.reason}));
       assert.notEqual(saved.fingerprint, fastVerifier, "Command logs must not introduce a fast offline password verifier");
-      const authenticate = (password: string) => login(new Request("https://unit-toko.test/api/auth/login", {method: "POST", headers: {origin: "https://unit-toko.test"}, body: JSON.stringify({email: "customer@unit-toko.demo", password, portal: "customer"})}));
-      assert.equal((await authenticate(demoPassword("customer-demo"))).status, 401);
-      assert.equal((await authenticate(newPassword)).status, 200);
+      const replaced = await credential();
+      assert.notEqual(await hashPassword(demoPassword("customer-demo"), String(replaced.salt)), replaced.hash);
+      assert.equal(await hashPassword(newPassword, String(replaced.salt)), replaced.hash);
+      // A later isolated legacy session must survive an idempotent reset retry.
+      await session("v9-customer-after-reset", "customer-demo");
     });
     await t.test("lost-response retries do not reset again or revoke later sessions; changed payload is rejected", async () => {
       const before = {credential: await credential(), revision: await revision(), sessions: await count("sessions"), audits: await count("audits")};

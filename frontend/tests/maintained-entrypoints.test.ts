@@ -1,10 +1,19 @@
 import {test} from "node:test";
 import assert from "node:assert/strict";
+import {existsSync} from "node:fs";
 import {fileURLToPath} from "node:url";
 import {build} from "esbuild";
 
 type Page = (props: {searchParams: Promise<{next?: string | string[]}>; params: Promise<{id: string}>}) => unknown;
 type Routes = Record<"login" | "customerLogin" | "staffLogin" | "account" | "orders" | "order" | "cart" | "checkout", Page>;
+
+test("retired state, command, catalog and session endpoints cannot expose a second business or identity runtime", () => {
+  for (const route of ["state", "commands", "catalog", "session", "auth/login", "auth/logout"]) {
+    for (const extension of ["ts", "tsx", "js", "jsx"]) {
+      assert.equal(existsSync(new URL(`../src/app/api/${route}/route.${extension}`, import.meta.url)), false, `/api/${route}`);
+    }
+  }
+});
 
 async function loadRoutes(profile: "pilot" | "full"): Promise<Routes> {
   // Execute the actual server pages in both release profiles. Only Next's redirect

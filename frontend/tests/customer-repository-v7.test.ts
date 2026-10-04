@@ -5,10 +5,8 @@ import { createClient, type Client, type InValue } from "@libsql/client";
 import { migrateDatabase, setTestDatabase, type Database, type Statement } from "../../backend/legacy/server/database";
 import { TABLES, ensureSeed, execute, loadState, provisionCustomerDemo } from "../../backend/legacy/server/repository";
 import { demoPassword } from "../../backend/legacy/server/demo-credentials";
-import { hashPassword } from "../../backend/legacy/server/security";
+import { digest, hashPassword } from "../../backend/legacy/server/security";
 import { seedState } from "../../backend/legacy/domain/seed";
-import { GET as catalogGET } from "../src/app/api/catalog/route";
-import { POST as loginPOST } from "../src/app/api/auth/login/route";
 import { PATCH as profilePATCH } from "../src/app/api/profile/route";
 
 // Every client in this file is an isolated in-memory database. No environment URL,
@@ -143,7 +141,7 @@ test("customer provisioning stops on email and identity conflicts without changi
   }
 });
 
-test("fresh repository keeps customer buyer keys consistent, authenticates explicit email, and exposes only sale catalog fields", async () => {
+test("fresh repository keeps customer buyer keys consistent and preserves scoped profile edits", async () => {
   const oldSeed=process.env.DEMO_PASSWORD_SEED;
   process.env.DEMO_PASSWORD_SEED="isolated-v7-test-password-seed-not-a-live-secret";
   const client=createClient({url:":memory:"});
@@ -154,9 +152,11 @@ test("fresh repository keeps customer buyer keys consistent, authenticates expli
     const state=await loadState();
     const customer=state.users.find(user=>user.id==="customer-demo")!;
     assert.equal(customer.email,"customer@unit-toko.demo");
-    const login=await loginPOST(new Request("http://localhost/api/auth/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:customer.email,password:demoPassword(customer.id)})}));
-    assert.equal(login.status,200);
-    const cookie=login.headers.get("set-cookie")!.split(";")[0];
+    // This retained profile route uses an isolated legacy session; maintained
+    // sign-in/session issuance is covered by the .NET identity lifecycle tests.
+    const token="v7-customer-profile-session";
+    await client.execute({sql:"INSERT INTO sessions(id,user_id,expires_at) VALUES(?,?,?)",args:[await digest(token),customer.id,Date.now()+60_000]});
+    const cookie=`toko_session=${token}`;
     const profile=await profilePATCH(new Request("http://localhost/api/profile",{method:"PATCH",headers:{cookie,"Content-Type":"application/json"},body:JSON.stringify({name:customer.name,phone:customer.phone||"",position:customer.position||"",address:"  Alamat pelanggan baru  "})}));
     assert.equal(profile.status,200);
     assert.equal((await loadState()).users.find(user=>user.id===customer.id)?.address,"Alamat pelanggan baru");
@@ -167,12 +167,5 @@ test("fresh repository keeps customer buyer keys consistent, authenticates expli
     assert.equal(stored.division_id,null);
     assert.equal(stored.customer_id,customer.id);
     assert.equal(JSON.parse(String(stored.payload)).customerId,customer.id);
-    const response=await catalogGET();
-    assert.equal(response.status,200);
-    assert.equal(response.headers.get("cache-control"),"no-store");
-    const catalog=await response.json() as {products:Record<string,unknown>[];revision:number};
-    assert.ok(catalog.products.length>0);
-    const keys=["id","familyId","sku","name","unit","price","active","category","group","collections","image","description","packaging","available"].sort();
-    for(const product of catalog.products){assert.deepEqual(Object.keys(product).sort(),keys);assert.equal(product.active,true);assert.ok(Number(product.available)>=0);}
   } finally { client.close(); if(oldSeed===undefined)delete process.env.DEMO_PASSWORD_SEED;else process.env.DEMO_PASSWORD_SEED=oldSeed; }
 });

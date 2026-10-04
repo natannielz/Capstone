@@ -80,8 +80,54 @@ public sealed class IdentityFullHostTests(MongoFixture fixture)
         using var stolenOld = factory.CreateClient(new() { BaseAddress = new(configured.PublicOrigin), AllowAutoRedirect = false, HandleCookies = false });
         stolenOld.DefaultRequestHeaders.Add("Cookie", firstCookie.Split(';')[0]);
         Assert.Equal(HttpStatusCode.Unauthorized, (await stolenOld.GetAsync("/api/v1/access/current")).StatusCode);
+        var sessions = data.Database.GetCollection<BsonDocument>("identitySessions");
+        using (var crossOrigin = new HttpRequestMessage(HttpMethod.Post, "/auth/logout"))
+        {
+            crossOrigin.Headers.Add("Origin", "https://outside.invalid");
+            crossOrigin.Content = new FormUrlEncodedContent([
+                new("__RequestVerificationToken", await Csrf()), new("expectedActorId", actor.UserId.ToString())]);
+            var denied = await client.SendAsync(crossOrigin);
+            Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
+            Assert.False(denied.Headers.Contains("Set-Cookie"));
+            Assert.Equal(0, await sessions.CountDocumentsAsync(new BsonDocument("status", "revoked")));
+        }
+        using var definitions = await data.Database.ListCollectionsAsync(new ListCollectionsOptions
+        {
+            Filter = new BsonDocument("name", "identitySessions")
+        });
+        var originalValidator = (await definitions.SingleAsync())["options"]["validator"].AsBsonDocument.DeepClone();
+        // Fail the real revocation write in this isolated database, while permitting
+        // authentication's active-session fence. No global Mongo failpoint is used.
+        var denyRevocation = new BsonDocument("$and", new BsonArray
+        {
+            originalValidator, new BsonDocument("revocationReason", new BsonDocument("$ne", "owner_logout"))
+        });
+        await data.Database.RunCommandAsync<BsonDocument>(new BsonDocument
+        {
+            { "collMod", "identitySessions" }, { "validator", denyRevocation }
+        });
+        try
+        {
+            var failed = await Form("/auth/logout", await Csrf(), new KeyValuePair<string, string>("expectedActorId", actor.UserId.ToString()));
+            Assert.Equal(HttpStatusCode.InternalServerError, failed.StatusCode);
+            Assert.False(failed.Headers.Contains("Set-Cookie"));
+            using var failure = JsonDocument.Parse(await failed.Content.ReadAsStringAsync());
+            Assert.Equal("internal_error", failure.RootElement.GetProperty("code").GetString());
+            Assert.Equal(0, await sessions.CountDocumentsAsync(new BsonDocument("status", "revoked")));
+            Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/v1/access/current")).StatusCode);
+        }
+        finally
+        {
+            await data.Database.RunCommandAsync<BsonDocument>(new BsonDocument
+            {
+                { "collMod", "identitySessions" }, { "validator", originalValidator }
+            });
+        }
         var logout = await Form("/auth/logout", await Csrf(), new KeyValuePair<string, string>("expectedActorId", actor.UserId.ToString()));
         Assert.Equal(HttpStatusCode.Redirect, logout.StatusCode);
+        var clearedCookie = Assert.Single(logout.Headers.GetValues("Set-Cookie"), cookie => cookie.StartsWith(OpaqueSessionCookie.Name + "=;", StringComparison.Ordinal));
+        Assert.Contains("secure", clearedCookie, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("httponly", clearedCookie, StringComparison.OrdinalIgnoreCase);
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/v1/access/current")).StatusCode);
         using var stolenNew = factory.CreateClient(new() { BaseAddress = new(configured.PublicOrigin), AllowAutoRedirect = false, HandleCookies = false });
         stolenNew.DefaultRequestHeaders.Add("Cookie", secondCookie.Split(';')[0]);
