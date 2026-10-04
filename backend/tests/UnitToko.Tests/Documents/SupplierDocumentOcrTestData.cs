@@ -27,8 +27,10 @@ internal static class SupplierDocumentOcrTestData
                 new(data.Scanner.Port, "1.5.1", 30000, TimeSpan.FromDays(2), maximum, TimeSpan.FromSeconds(3))));
         Assert.Equal(1, (await data.Rows("evidenceValidationPolicies").UpdateOneAsync(new BsonDocument("consumerId", D.Consumer),
             new BsonDocument("$set", new BsonDocument { { "pipelineId", data.Runtime.PipelineId }, { "revision", 2L } }))).ModifiedCount);
+        // Explicit synthetic native-OCR approval: bounded preprocessing and both owner proofs
+        // share this ten-second private-read budget, within the unchanged production schema cap.
         Assert.Equal(1, (await data.Rows("evidenceReadPolicies").UpdateOneAsync(new BsonDocument("storeId", data.Registration.StoreId),
-            new BsonDocument("$set", new BsonDocument { { "maximumBytes", maximum }, { "revision", 2L } }))).ModifiedCount);
+            new BsonDocument("$set", new BsonDocument { { "maximumBytes", maximum }, { "leaseDurationMs", 10000L }, { "revision", 2L } }))).ModifiedCount);
     }
     internal static SupplierDocumentOcrRuntime CreateRuntime(D data) => SupplierDocumentOcrRuntime.Create(data.Database, data.Unit, new(data.Database), data.Clock,
         new(data.Files.Path, data.Registration.StoreId, StorageRoot.TrustedOperators, Consumer, HostReference, ModelReference, LocalOcrTests.Options()));

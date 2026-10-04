@@ -92,6 +92,8 @@ internal sealed class SupplierDocumentOcrProcessor
                 var prior = await records.ResultAsync(tx, live, token);
                 if (prior is not null) { RequireExisting(prior, policy, original); Final(live, policy, Minimum(until, original.Until), handle, started, token); return "succeeded"; }
                 var deadline = Minimum(until, original.Until);
+                // Current revalidates the source; it cannot renew the private window already consumed by OCR.
+                Final(live, policy, deadline, handle, started, token);
                 if (failureCode is not null) {
                     var failed = Common((await ids.NextAsync("supplierDocumentProcessingFailures", token)).Value, live, policy, deadline);
                     failed.Add("readAuditId", start.Read["_id"]).Add("bindingHash", SupplierDocumentExtractionRecords.Hash(original.Binding)).Add("safeFailure", failureCode);
@@ -152,9 +154,14 @@ internal sealed class SupplierDocumentOcrProcessor
     private static void RequireHandle(VerifiedOriginalHandle handle, SupplierDocumentProcessingOriginal original) {
         if (!handle.Stream.CanRead || handle.Attempt != original.Publication.Attempt || handle.Content != original.Publication.Content) throw SupplierDocumentExtractionRecords.Broken();
     }
-    private BsonDocument Common(long id, BsonDocument live, BsonDocument policy, DateTimeOffset until) => new() { { "_id", id }, { "schemaVersion", 1 }, { "outboxId", live["_id"] },
-        { "consumerId", consumer }, { "pipelineId", PipelineId }, { "policyId", policy["_id"] }, { "policyRevision", policy["revision"] }, { "claimToken", live["leaseToken"] },
-        { "claimAttempt", live["attempts"] }, { "createdAt", clock.UtcNow.UtcDateTime }, { "until", until.UtcDateTime } };
+    private BsonDocument Common(long id, BsonDocument live, BsonDocument policy, DateTimeOffset until) {
+        var createdAt = clock.UtcNow;
+        // ID allocation awaits after the admission check, so validate this exact persisted timestamp too.
+        if (createdAt >= until) throw Lost();
+        return new() { { "_id", id }, { "schemaVersion", 1 }, { "outboxId", live["_id"] },
+            { "consumerId", consumer }, { "pipelineId", PipelineId }, { "policyId", policy["_id"] }, { "policyRevision", policy["revision"] }, { "claimToken", live["leaseToken"] },
+            { "claimAttempt", live["attempts"] }, { "createdAt", createdAt.UtcDateTime }, { "until", until.UtcDateTime } };
+    }
     private BsonDocument PolicyFilter() {
         var filter = new BsonDocument { { "consumerId", consumer }, { "storeId", registration.StoreId }, { "pipelineId", PipelineId },
             { "active", true }, { "approvedAt", new BsonDocument("$lte", clock.UtcNow.UtcDateTime) }, { "expiresAt", new BsonDocument("$gt", clock.UtcNow.UtcDateTime) }, { "fence", new BsonDocument("$lt", long.MaxValue) } };

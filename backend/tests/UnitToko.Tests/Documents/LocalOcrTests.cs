@@ -28,6 +28,38 @@ public sealed class LocalOcrTests
         Assert.Equal("succeeded", result.Status); Assert.All(result.Fields, field => Assert.Null(field.Value)); Assert.Contains("no_text", result.QualityFlags);
     }
     [LocalOcrFact]
+    public async Task Bounded_preprocessing_recovers_rotations_and_contrast_with_boxes_on_the_unchanged_original() {
+        var engine = new WindowsLocalOcrEngine(Options());
+        foreach (var (file, rotation) in new[] { ("quarter-turn.png", 270), ("upside-down.png", 180), ("clockwise.png", 90), ("rotated.png", 0), ("low-contrast.png", 0) }) {
+            var bytes = await File.ReadAllBytesAsync(Path.Combine(Environment.GetEnvironmentVariable("UNITTOKO_OCR_FIXTURES")!, file));
+            using var input = new MemoryStream(bytes);
+            var result = await engine.ExtractAsync(file, Ref(bytes), ExtractionPurpose.Payment, input, default);
+            Assert.Equal("succeeded", result.Status); Assert.Equal(Ref(bytes), result.Evidence);
+            Assert.Equal("1234567.89", Field(result, "amount").Value); Assert.Equal("DEMO-20260930-1", Field(result, "reference").Value);
+            var diagnostics = Assert.IsType<LocalOcrPreprocessing>(engine.LastPreprocessing);
+            Assert.Equal(rotation, diagnostics.OrientationDegrees);
+            Assert.StartsWith(WindowsLocalOcrEngine.ImagePreprocessing + "/", result.Provenance.PreprocessingVersion);
+            Assert.InRange((long)diagnostics.WorkingWidth * diagnostics.WorkingHeight, 1, 5_500_000);
+            var reference = Assert.Single(result.Lines, line => line.Text.Contains("DEMO-20260930-1", StringComparison.Ordinal)).Box;
+            // The reference is near the bottom of the upright original; these assertions are against
+            // the generated INPUT orientation, not the internally upright image returned by Tesseract.
+            if (file == "quarter-turn.png") Assert.InRange(reference.X, .70m, .83m);
+            if (file == "clockwise.png") Assert.InRange(reference.X, .15m, .30m);
+            if (file == "upside-down.png") Assert.InRange(reference.Y, .15m, .30m);
+            if (file == "rotated.png") Assert.InRange(diagnostics.DeskewDegrees, -9m, -7m);
+            if (file == "low-contrast.png") Assert.True(diagnostics.ContrastApplied);
+        }
+    }
+    [LocalOcrFact]
+    public async Task Ambiguous_orientation_keeps_all_fields_unknown_for_manual_review() {
+        var bytes = await File.ReadAllBytesAsync(Path.Combine(Environment.GetEnvironmentVariable("UNITTOKO_OCR_FIXTURES")!, "ambiguous-orientation.png"));
+        var engine = new WindowsLocalOcrEngine(Options()); using var input = new MemoryStream(bytes);
+        var result = await engine.ExtractAsync("ambiguous-orientation", Ref(bytes), ExtractionPurpose.Payment, input, default);
+        Assert.Equal("succeeded", result.Status); Assert.Empty(result.Lines); Assert.All(result.Fields, field => Assert.Null(field.Value));
+        Assert.Contains("orientation_unresolved", Assert.IsType<LocalOcrPreprocessing>(engine.LastPreprocessing).ReviewReasons);
+        Assert.Equal(Ref(bytes), result.Evidence);
+    }
+    [LocalOcrFact]
     public async Task Pin_mismatch_and_missing_pin_refuse_before_reading_private_stream() {
         var options = Options();
         foreach (var path in new[] { options.HelperPath, options.PythonExecutable, Path.Combine(options.ModelRoot, "ind.traineddata") }) {
@@ -69,9 +101,13 @@ public sealed class LocalOcrTests
     public async Task Duplicate_json_keys_wrong_engine_and_excess_output_never_escape_the_private_protocol() {
         var options = Options(); var directory = Path.Combine(Environment.GetEnvironmentVariable("UNITTOKO_OCR_FIXTURES")!, "protocol-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory); var helper = Path.Combine(directory, "local_ocr.py"); var bytes = new byte[] { 1, 2, 3 };
-        var valid = "{\"engine\":\"" + WindowsLocalOcrEngine.Engine + "\",\"height\":1,\"width\":1,\"length\":3,\"lines\":[],\"sha256\":\"" + Hash(bytes) + "\",\"status\":\"succeeded\"}";
+        var diagnostics = "{\"version\":\"" + WindowsLocalOcrEngine.ImagePreprocessing + "\",\"orientationDegrees\":0,\"deskewDegrees\":0,\"contrastApplied\":false,\"workingWidth\":0,\"workingHeight\":0,\"orientationScore\":0,\"orientationMargin\":0,\"reviewReasons\":[\"no_text\"]}";
+        var valid = "{\"engine\":\"" + WindowsLocalOcrEngine.Engine + "\",\"height\":1,\"width\":1,\"length\":3,\"lines\":[],\"preprocessing\":" + diagnostics + ",\"sha256\":\"" + Hash(bytes) + "\",\"status\":\"succeeded\"}";
         try {
-            foreach (var output in new[] { valid.Replace("\"lines\":[]", "\"lines\":[],\"lines\":[]", StringComparison.Ordinal), valid.Replace(WindowsLocalOcrEngine.Engine, "unapproved-engine", StringComparison.Ordinal), new string('a', 131073) }) {
+            foreach (var output in new[] { valid.Replace("\"lines\":[]", "\"lines\":[],\"lines\":[]", StringComparison.Ordinal), valid.Replace(WindowsLocalOcrEngine.Engine, "unapproved-engine", StringComparison.Ordinal),
+                valid.Replace("\"orientationDegrees\":0", "\"orientationDegrees\":45", StringComparison.Ordinal),
+                valid.Replace("\"deskewDegrees\":0", "\"deskewDegrees\":11", StringComparison.Ordinal),
+                valid.Replace("\"reviewReasons\":[\"no_text\"]", "\"reviewReasons\":[\"unknown\"]", StringComparison.Ordinal), new string('a', 131073) }) {
                 await File.WriteAllTextAsync(helper, "import sys,base64\nsys.stdin.buffer.read()\nsys.stdout.buffer.write(base64.b64decode('" + Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(output)) + "'))\n");
                 var pins = options.Files.Where(p => p.Path != options.HelperPath).Append(new OcrFilePin(helper, Hash(await File.ReadAllBytesAsync(helper)))).ToArray();
                 using var source = new MemoryStream(bytes);

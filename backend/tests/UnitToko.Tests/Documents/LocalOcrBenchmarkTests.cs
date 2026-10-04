@@ -34,12 +34,13 @@ public sealed class LocalOcrBenchmarkTests
                 }
                 observations.Add(new { fixture = sample.GetProperty("id").GetString(), sha256 = hash, repetition,
                     processSample = sequence++ == 0 ? "first_process" : "subsequent_process_fresh_model", result.Status, result.FailureCode,
-                    elapsedMs = measurement.Elapsed.TotalMilliseconds, peakJobCommittedBytes = measurement.PeakJobMemoryBytes, matches });
+                    elapsedMs = measurement.Elapsed.TotalMilliseconds, peakJobCommittedBytes = measurement.PeakJobMemoryBytes,
+                    preprocessing = engine.LastPreprocessing, matches });
             }
         }
-        Assert.Equal(16, observations.Count);
+        Assert.Equal(manifest.RootElement.GetProperty("cases").GetArrayLength() * 2, observations.Count);
         var report = new { schemaVersion = 1, synthetic = true, heldOut = false, productionAccepted = false, modelSelected = false,
-            comparisonComplete = false, missingComparisons = new[] { "PP-OCRv6_tiny", "PP-OCRv6_small" }, corpus = "generated-identifiable-smoke-v1",
+            engineStandard = WindowsLocalOcrEngine.Engine, corpus = "generated-identifiable-smoke-v2",
             provenance = engine.Provenance, environment = new { os = System.Runtime.InteropServices.RuntimeInformation.OSDescription,
                 cpu = Environment.GetEnvironmentVariable("PROCESSOR_IDENTIFIER"), logicalProcessors = Environment.ProcessorCount },
             semantics = new { timeIncludes = "pin verification + fresh Python process + model initialization + recognition + bounded output",

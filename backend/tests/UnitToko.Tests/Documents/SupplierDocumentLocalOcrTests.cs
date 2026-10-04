@@ -26,6 +26,8 @@ public sealed class SupplierDocumentLocalOcrTests
         Assert.Equal("PROC-PENCIL-12", Assert.Single(suggestions.Fields, field => field.Field == "source_sku").Value);
         Assert.Contains("human_line_matching_required", suggestions.QualityFlags); Assert.Equal(engine.Provenance, result.Provenance);
         Assert.EndsWith(SupplierDocumentFieldExtractor.Version, result.Provenance.PreprocessingVersion);
+        Assert.StartsWith(WindowsLocalOcrEngine.ImagePreprocessing + "/", result.Provenance.PreprocessingVersion);
+        Assert.IsType<LocalOcrPreprocessing>(engine.LastPreprocessing);
     }
     [LocalOcrFact]
     public async Task Supplier_purpose_is_explicit_and_pins_original_hash_media_and_cancellation_still_fail_closed() {

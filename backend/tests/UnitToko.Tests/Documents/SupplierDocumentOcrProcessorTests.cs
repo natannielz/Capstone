@@ -71,9 +71,21 @@ public sealed class SupplierDocumentOcrProcessorTests(MongoFixture fixture)
                 await NoOutputAsync(data); Assert.Equal(owner, await OwnerStateAsync(data));
             } finally { await data.Rows(Policies).UpdateOneAsync(new BsonDocument("consumerId", Consumer), new BsonDocument("$set", new BsonDocument(field, original))); }
         }
+        var beforeExpiry = data.Clock.UtcNow;
+        var readPolicy = await data.Rows("evidenceReadPolicies").Find(new BsonDocument("storeId", data.Registration.StoreId)).SingleAsync();
+        engine.Before = () => {
+            Assert.Equal(data.Bytes, engine.Bytes);
+            data.Clock.UtcNow = beforeExpiry.AddMilliseconds(readPolicy["leaseDurationMs"].AsInt64 + 1);
+            return Task.CompletedTask;
+        };
+        try {
+            var error = await Assert.ThrowsAsync<PersistenceConflictException>(() => processor.ProcessClaimAsync(claim));
+            Assert.Equal("document_processing_lease_lost", error.Code);
+            await NoOutputAsync(data); Assert.Equal(owner, await OwnerStateAsync(data));
+        } finally { data.Clock.UtcNow = beforeExpiry; }
         engine.Before = null;
-        // A successful later admission proves that both previous exclusive original handles were disposed.
-        Assert.Equal("succeeded", await processor.ProcessClaimAsync(claim)); Assert.Equal(3, engine.Calls);
+        // A successful later admission proves that all rejected exclusive original handles were disposed.
+        Assert.Equal("succeeded", await processor.ProcessClaimAsync(claim)); Assert.Equal(4, engine.Calls);
         Assert.True(await queue.CompleteAsync(claim)); Assert.Equal(owner, await OwnerStateAsync(data)); await data.Inspection.Receiving.Orders.NoFinancialOrReceiptEffectsAsync();
     }
 

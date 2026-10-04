@@ -12,17 +12,22 @@ public sealed record OcrFilePin(string Path, string Sha256);
 public sealed record LocalOcrOptions(string PythonExecutable, string HelperPath, string PackageRoot, string PillowRoot,
     string ModelRoot, string ModelVersion, IReadOnlyList<OcrFilePin> Files, EvidenceLimits Limits, long MaximumMemoryBytes, TimeSpan Timeout);
 internal sealed record LocalOcrMeasurement(TimeSpan Elapsed, long? PeakJobMemoryBytes);
+internal sealed record LocalOcrPreprocessing(int OrientationDegrees, decimal DeskewDegrees, bool ContrastApplied,
+    int WorkingWidth, int WorkingHeight, decimal OrientationScore, decimal OrientationMargin, IReadOnlyList<string> ReviewReasons);
 
 /// <summary>Offline Tesseract candidate. Not production selected: benchmark and host/egress acceptance are separate release gates.</summary>
 [SupportedOSPlatform("windows")]
 internal sealed class WindowsLocalOcrEngine : ILocalOcrEngine
 {
     internal const string Engine = "tesseract-5.5.3/tesserocr-2.11.0";
-    internal const string Preprocessing = "original-rgb-psm6-ind+eng-v1/" + PaymentFieldExtractor.Version;
+    internal const string ImagePreprocessing = "bounded-gray-orient4-deskew10-contrast1-psm6-ind+eng-v2";
+    internal const string Preprocessing = ImagePreprocessing + "/" + PaymentFieldExtractor.Version;
     private readonly LocalOcrOptions options;
     private readonly ExtractionPurpose purpose;
     public ExtractionProvenance Provenance { get; }
     internal LocalOcrMeasurement? LastMeasurement { get; private set; }
+    // Private protocol diagnostics for local measurements; not business facts or persisted reviewed fields.
+    internal LocalOcrPreprocessing? LastPreprocessing { get; private set; }
     internal WindowsLocalOcrEngine(LocalOcrOptions options, ExtractionPurpose purpose = ExtractionPurpose.Payment) {
         ArgumentNullException.ThrowIfNull(options);
         if (purpose is not (ExtractionPurpose.Payment or ExtractionPurpose.SupplierInvoice)) throw new ArgumentException("Unsupported OCR purpose", nameof(purpose));
@@ -33,11 +38,12 @@ internal sealed class WindowsLocalOcrEngine : ILocalOcrEngine
         if (models.Length != 2 || !models.Select(f => Path.GetFileName(f.Path)).SequenceEqual(new[] { "eng.traineddata", "ind.traineddata" })) throw new ArgumentException("OCR language pins are incomplete");
         Provenance = new(Engine, options.ModelVersion, Digest(models.Select(f => Path.GetFileName(f.Path) + ":" + f.Sha256)),
             Digest(this.options.Files.OrderBy(f => f.Path, StringComparer.OrdinalIgnoreCase).Select(f => f.Path + ":" + f.Sha256)),
-            purpose == ExtractionPurpose.Payment ? Preprocessing : "original-rgb-psm6-ind+eng-v1/" + SupplierDocumentFieldExtractor.Version);
+            purpose == ExtractionPurpose.Payment ? Preprocessing : ImagePreprocessing + "/" + SupplierDocumentFieldExtractor.Version);
     }
     public async Task<ExtractionResult> ExtractAsync(string jobId, EvidenceRef evidence, ExtractionPurpose purpose, Stream validatedBytes, CancellationToken cancellationToken) {
         cancellationToken.ThrowIfCancellationRequested();
         LastMeasurement = null;
+        LastPreprocessing = null;
         if (purpose != this.purpose) return Failed("ocr_unsupported_purpose");
         if (!OperatingSystem.IsWindows() || RuntimeInformation.ProcessArchitecture != Architecture.X64) return Failed("ocr_unavailable");
         var pins = new List<FileStream>(); var elapsed = Stopwatch.StartNew();
@@ -74,11 +80,12 @@ internal sealed class WindowsLocalOcrEngine : ILocalOcrEngine
         ExtractionResult Parse(BoundedProcessResult result) {
             try {
                 using var json = JsonDocument.Parse(result.Output, new() { MaxDepth = 6 }); var root = json.RootElement;
-                Shape(root, "engine", "height", "length", "lines", "sha256", "status", "width");
+                Shape(root, "engine", "height", "length", "lines", "preprocessing", "sha256", "status", "width");
                 if (root.GetProperty("status").GetString() != "succeeded" || root.GetProperty("engine").GetString() != Engine ||
                     root.GetProperty("length").GetInt64() != result.InputLength || root.GetProperty("sha256").GetString() != evidence.Sha256 ||
                     !options.Limits.AcceptsImage(result.InputLength, root.GetProperty("width").GetInt32(), root.GetProperty("height").GetInt32(), 1, 1)) return Failed("ocr_invalid_output");
                 var values = root.GetProperty("lines"); if (values.ValueKind != JsonValueKind.Array || values.GetArrayLength() > 128) return Failed("ocr_invalid_output");
+                var preprocessing = ParsePreprocessing(root.GetProperty("preprocessing"), values.GetArrayLength());
                 var lines = new List<RecognizedLine>();
                 foreach (var line in values.EnumerateArray()) {
                     Shape(line, "box", "confidence", "text"); var box = line.GetProperty("box");
@@ -86,9 +93,26 @@ internal sealed class WindowsLocalOcrEngine : ILocalOcrEngine
                     lines.Add(new(line.GetProperty("text").GetString()!, line.GetProperty("confidence").GetDecimal(),
                         new(box[0].GetDecimal(), box[1].GetDecimal(), box[2].GetDecimal(), box[3].GetDecimal())));
                 }
-                return new(jobId, evidence, purpose, Provenance, "succeeded", null, lines);
+                var parsed = new ExtractionResult(jobId, evidence, purpose, Provenance, "succeeded", null, lines);
+                LastPreprocessing = preprocessing;
+                return parsed;
             } catch { return Failed("ocr_invalid_output"); }
         }
+    }
+    private static LocalOcrPreprocessing ParsePreprocessing(JsonElement value, int lineCount) {
+        Shape(value, "contrastApplied", "deskewDegrees", "orientationDegrees", "orientationMargin", "orientationScore", "reviewReasons", "version", "workingHeight", "workingWidth");
+        var orientation = value.GetProperty("orientationDegrees").GetInt32(); var angle = value.GetProperty("deskewDegrees").GetDecimal();
+        var width = value.GetProperty("workingWidth").GetInt32(); var height = value.GetProperty("workingHeight").GetInt32();
+        var score = value.GetProperty("orientationScore").GetDecimal(); var margin = value.GetProperty("orientationMargin").GetDecimal();
+        var reasons = value.GetProperty("reviewReasons").EnumerateArray().Select(item => item.GetString() ?? "").ToArray();
+        if (value.GetProperty("version").GetString() != ImagePreprocessing || orientation is not (0 or 90 or 180 or 270) ||
+            angle is < -10 or > 10 || angle * 4 != decimal.Truncate(angle * 4) || width is < 0 or > 4800 || height is < 0 or > 4800 ||
+            (long)width * height > 5_500_000 || score is < 0 or > 1 || margin < 0 || margin > score || reasons.Length > 1 ||
+            reasons.Any(reason => reason is not ("no_text" or "orientation_unresolved" or "skew_out_of_range" or "low_text_confidence"))) throw new InvalidDataException();
+        var fallback = reasons.Any(reason => reason is "orientation_unresolved" or "skew_out_of_range") || width == 0 || height == 0;
+        if (fallback ? lineCount != 0 || width != 0 || height != 0 || orientation != 0 || angle != 0 || reasons.Length != 1 :
+            score < .65m || margin < .10m || (lineCount == 0) != reasons.Contains("no_text")) throw new InvalidDataException();
+        return new(orientation, angle, value.GetProperty("contrastApplied").GetBoolean(), width, height, score, margin, Array.AsReadOnly(reasons));
     }
     private void ValidateConfiguration() {
         if (options.Limits.MaximumBytes > 10 * 1024 * 1024 || options.Limits.MaximumWidth > 32768 || options.Limits.MaximumHeight > 32768 || options.Limits.MaximumPixels > 25_000_000 ||

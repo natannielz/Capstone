@@ -130,6 +130,34 @@ public sealed class PaymentOcrProcessorTests(MongoFixture fixture)
     }
 
     [WindowsStorageFact]
+    public async Task Expired_captured_original_deadline_refuses_before_result_persistence_and_preserves_money() {
+        await using var data = await PaymentEvidenceReadTests.ReadData.CreateAsync(fixture); await Submit(data);
+        var journal = await data.Rows("journalEntries").Find(new BsonDocument()).SingleAsync();
+        var engine = new FixtureEngine(); var processor = Processor(data, engine); await Policy(data, processor);
+        var queue = new OutboxStore(data.Database, data.Catalog.Clock);
+        var claim = await queue.ClaimAsync(Consumer, PaymentOcrProcessor.ClaimPolicy); Assert.NotNull(claim);
+        var beforeExpiry = data.Catalog.Clock.UtcNow;
+        engine.Before = async () => {
+            // FixtureEngine invokes this only after reading the actual protected original stream.
+            var read = await data.Rows("documentProcessingReadAudits").Find(new BsonDocument()).SingleAsync();
+            data.Catalog.Clock.UtcNow = DateTimeOffset.FromUnixTimeMilliseconds(read["until"].AsBsonDateTime.MillisecondsSinceEpoch + 1);
+        };
+        try {
+            var error = await Assert.ThrowsAsync<PersistenceConflictException>(() => processor.ProcessClaimAsync(claim));
+            Assert.Equal("document_processing_lease_lost", error.Code);
+            foreach (var table in new[] { "documentExtractionResults", "documentExtractionAudits", "documentProcessingFailures" })
+                Assert.Equal(0, await data.Rows(table).CountDocumentsAsync(new BsonDocument()));
+            Assert.False((await data.Rows("outboxEvents").Find(new BsonDocument("_id", claim["_id"])).SingleAsync()).Contains("processingReceipt"));
+        } finally { data.Catalog.Clock.UtcNow = beforeExpiry; }
+        engine.Before = null;
+        Assert.Equal("succeeded", await processor.ProcessClaimAsync(claim)); Assert.Equal(2, engine.Calls);
+        Assert.Equal(journal, await data.Rows("journalEntries").Find(new BsonDocument()).SingleAsync());
+        Assert.Equal(0, await data.Rows("payments").CountDocumentsAsync(new BsonDocument()));
+        Assert.Equal(0, await data.Rows("bankReceipts").CountDocumentsAsync(new BsonDocument()));
+        Assert.Equal("submitted", (await data.Payment.Service.ReadAsync(data.Actor, data.DeclarationId)).State);
+    }
+
+    [WindowsStorageFact]
     public async Task Required_result_audit_failure_rolls_back_result_receipt_and_money() {
         await using var data = await PaymentEvidenceReadTests.ReadData.CreateAsync(fixture); await Submit(data);
         var engine = new FixtureEngine(); var processor = Processor(data, engine); await Policy(data, processor);
