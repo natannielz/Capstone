@@ -40,13 +40,40 @@ internal sealed partial class EvidenceService
         var job = await Rows("outboxEvents").Find(tx, F.Eq("sourceKey", SourceKey(bundle))).SingleOrDefaultAsync(ct)
             ?? throw Conflict("catalog_photo_source_unavailable");
         var publication = Publication(bundle);
-        var validation = await EvidenceValidationRecords.ReadAsync(database, tx, job, publication, Payload(bundle), ct);
-        if (validation is null || validation["status"] != "passed" ||
-            validation["mime"].AsString is not ("image/png" or "image/jpeg") ||
-            validation["resultHash"] != selected.Proof.ValidationHash ||
-            validation["mime"] != selected.Proof.Mime ||
+        var firstValidation = await EvidenceValidationRecords.ReadAsync(database, tx, job, publication, Payload(bundle), ct);
+        if (firstValidation is null || firstValidation["status"] != "passed" ||
+            firstValidation["mime"].AsString is not ("image/png" or "image/jpeg") ||
+            firstValidation["resultHash"] != selected.Proof.ValidationHash ||
+            firstValidation["mime"] != selected.Proof.Mime ||
             publication.Content.Sha256 != selected.Proof.Reference.Sha256)
             throw Conflict("catalog_photo_source_unavailable");
+        // M81 is an additive current-proof owner. Its pending/rejected head revokes a
+        // previous clean result; the original association/lifecycle retain firstValidation.
+        await EvidenceImageRevalidationStorage.RequireAsync(database, ct);
+        var (currentHead, currentResult) = await EvidenceImageRevalidationRecords.CurrentAsync(database, tx,
+            bundle.Version["_id"].AsInt64, ct);
+        var validation = firstValidation;
+        var currentPolicyCollection = "evidenceValidationPolicies";
+        if (currentHead is not null)
+        {
+            if (currentHead["status"] != "passed" || currentResult is null) throw Conflict("evidence_read_not_eligible");
+            var request = await Rows(EvidenceImageRevalidationSchemas.Requests).Find(tx,
+                F.Eq("_id", currentHead["requestId"])).SingleOrDefaultAsync(ct)
+                ?? throw EvidenceImageRevalidationRecords.Broken();
+            if (request["source"]["versionRowId"] != bundle.Version["_id"] ||
+                request["source"]["reservationId"] != selected.Proof.ReservationId ||
+                request["source"]["originalValidationHash"] != firstValidation["resultHash"] ||
+                request["source"]["storeId"] != bundle.Version["storeId"] ||
+                request["source"]["generation"] != bundle.Version["generation"] ||
+                request["source"]["reference"]["sha256"] != selected.Proof.Reference.Sha256 ||
+                currentResult["mime"] != firstValidation["mime"] ||
+                currentResult["source"]["skuId"] != selected.SkuId ||
+                currentResult["source"]["definitionId"] != selected.DefinitionId ||
+                currentResult["source"]["definitionVersion"] != selected.DefinitionVersion)
+                throw EvidenceImageRevalidationRecords.Broken();
+            validation = currentResult;
+            currentPolicyCollection = EvidenceImageRevalidationSchemas.Policies;
+        }
         var policy = await TouchReadPolicyAsync(tx, bundle.Version["storeId"].AsString, false, ct);
         if (bundle.Version["length"].AsInt64 > policy["maximumBytes"].AsInt64 ||
             Date(validation["checkedAt"]) > clock.UtcNow ||
@@ -54,8 +81,10 @@ internal sealed partial class EvidenceService
             Date(validation["scannerDefinitionsAt"]) > clock.UtcNow ||
             Date(validation["scannerDefinitionsAt"]).AddMilliseconds(policy["maximumSignatureAgeMs"].AsInt64) <= clock.UtcNow)
             throw Conflict("evidence_read_not_eligible");
-        var validationPolicy = await Rows("evidenceValidationPolicies").FindOneAndUpdateAsync(tx,
-            new BsonDocument("$and", new BsonArray { EvidenceValidationSchemas.Validator("evidenceValidationPolicies"), new BsonDocument {
+        var validationPolicy = await Rows(currentPolicyCollection).FindOneAndUpdateAsync(tx,
+            new BsonDocument("$and", new BsonArray {
+                currentHead is null ? EvidenceValidationSchemas.Validator("evidenceValidationPolicies") :
+                    EvidenceImageRevalidationSchemas.Validator(EvidenceImageRevalidationSchemas.Policies), new BsonDocument {
                 { "_id", validation["policyId"] }, { "revision", validation["policyRevision"] },
                 { "storeId", validation["storeId"] }, { "consumerId", validation["consumerId"] },
                 { "pipelineId", validation["pipelineId"] }, { "active", true },
@@ -64,7 +93,7 @@ internal sealed partial class EvidenceService
             new BsonDocument("$inc", new BsonDocument("fence", 1L)),
             new FindOneAndUpdateOptions<BsonDocument> { ReturnDocument = ReturnDocument.After }, ct)
             ?? throw Conflict("evidence_read_not_eligible");
-        var lifecycle = await new EvidenceLifecycleStore(database, ids, clock).EnsureAsync(tx, validation, publication, ct);
+        var lifecycle = await new EvidenceLifecycleStore(database, ids, clock).EnsureAsync(tx, firstValidation, publication, ct);
         if (lifecycle["state"] != "validated") throw Conflict("catalog_photo_source_unavailable");
         var version = Clone(bundle.Version);
         version["fence"] = NextFence(version["fence"]); version["revision"] = Next(version["revision"]); version["updatedAt"] = Now;

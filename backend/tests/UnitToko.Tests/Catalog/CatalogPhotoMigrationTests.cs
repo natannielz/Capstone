@@ -87,7 +87,7 @@ public sealed class CatalogPhotoMigrationTests(MongoFixture fixture)
         expected[CatalogPhotoRecords.Photos]["indexes"] = new BsonArray(expected[CatalogPhotoRecords.Photos]["indexes"].AsBsonArray
             .Append(index).OrderBy(row => row["name"].AsString, StringComparer.Ordinal));
         AssertExact(expected, after);
-        Assert.Equal(80, await data.Database.GetCollection<BsonDocument>("schemaMigrations").CountDocumentsAsync(new BsonDocument("state", "applied")));
+        Assert.Equal(CollectionMigrations.CurrentVersion, await data.Database.GetCollection<BsonDocument>("schemaMigrations").CountDocumentsAsync(new BsonDocument("state", "applied")));
         await new CollectionMigrations(data.Database, data.Clock).ApplyAsync();
         AssertExact(after, await SnapshotAsync(data.Database));
     }
@@ -118,6 +118,7 @@ public sealed class CatalogPhotoMigrationTests(MongoFixture fixture)
         inventedCurrent["purpose"] = "catalog-photo-current";
         await Assert.ThrowsAsync<MongoWriteException>(() => data.Rows(CatalogEvidenceReadSchemas.Leases)
             .ReplaceOneAsync(new BsonDocument("_id", photoLease["_id"]), inventedCurrent));
+        await EvidenceImageRevalidationMigrationTests.RestoreV80Async(data.DB);
         Assert.Equal(1L, (await data.Rows("schemaMigrations").DeleteOneAsync(new BsonDocument {
             { "_id", 80 }, { "state", "applied" } })).DeletedCount);
         await RefusesAsync(data.DB, data.Catalog.Clock);
@@ -161,6 +162,7 @@ public sealed class CatalogPhotoMigrationTests(MongoFixture fixture)
     // Existing photo rows are never reclassified as pre-80 history.
     internal static async Task RestoreV79Async(IMongoDatabase db)
     {
+        await EvidenceImageRevalidationMigrationTests.RestoreV80Async(db);
         var history = await db.GetCollection<BsonDocument>("schemaMigrations").Find(new BsonDocument())
             .Sort(new BsonDocument("_id", 1)).ToListAsync();
         if (history.Count <= 79) return;

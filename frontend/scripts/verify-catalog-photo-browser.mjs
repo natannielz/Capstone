@@ -21,8 +21,8 @@ assert.equal(metadata.name, 'playwright'); assert.equal(metadata.version, '1.62.
 const {chromium} = load('playwright'), channel = process.env.UNITTOKO_BROWSER_CHANNEL ?? 'chromium';
 assert.ok(['chromium', 'msedge'].includes(channel));
 const directory = resolve(config.directory); mkdirSync(directory, {recursive: true});
-const app = next({dev: false, dir: process.cwd(), quiet: true}), sockets = new Set(), pages = [], errors = [], writes = [], recoveries = [], buyerReads = [], imageResponses = [];
-let browser, frontend, edge, tunnel, dropAssociation = false, dropped = 0;
+const app = next({dev: false, dir: process.cwd(), quiet: true}), sockets = new Set(), pages = [], errors = [], writes = [], recoveries = [], buyerReads = [], imageResponses = [], rescans = [], rescanRecoveries = [];
+let browser, frontend, edge, tunnel, dropAssociation = false, dropped = 0, dropRescan = false, droppedRescan = 0;
 const staffRoot = `/api/v1/catalog/skus/${config.skuId}`, buyerRoute = `/api/v1/catalog/variants/${config.publicId}/primary-photo/query`;
 function track(server) { server.on('connection', socket => { sockets.add(socket); socket.on('close', () => sockets.delete(socket)); }); return server; }
 async function listen(server) { await new Promise((yes, no) => { server.once('error', no); server.listen(0, '127.0.0.1', yes); }); return server.address().port; }
@@ -32,24 +32,29 @@ function forward(req, res, port, isApi) {
   for (const name of Object.keys(headers)) if (name.startsWith('x-forwarded-') || name.startsWith('x-original-') || ['forwarded', 'connection'].includes(name)) delete headers[name];
   if (isApi) { headers['x-forwarded-for'] = req.socket.remoteAddress; headers['x-forwarded-host'] = origin.host; headers['x-forwarded-proto'] = 'https'; }
   const association = req.method === 'POST' && path === staffRoot + '/primary-photo';
+  const rescan = req.method === 'POST' && new RegExp('^' + staffRoot + '/photo-evidence/[1-9][0-9]*/revalidation$').test(path);
+  const rescanRecovery = req.method === 'POST' && path === '/api/v1/catalog/photo-revalidations/operations/query';
   const mutation = association || req.method === 'POST' && (path === staffRoot + '/photo-evidence' || new RegExp('^' + staffRoot + '/photo-evidence/[1-9][0-9]*/content$').test(path));
   const recovery = req.method === 'POST' && path === '/api/v1/catalog/primary-photos/operations/query';
   const buyerRead = req.method === 'POST' && path === buyerRoute;
   const observed = {path, actor: req.headers['x-expected-actor-id'], key: req.headers['idempotency-key'],
     csrfPresent: typeof req.headers['x-csrf-token'] === 'string', origin: req.headers.origin};
   if (mutation) writes.push(observed); if (recovery) recoveries.push(observed); if (buyerRead) buyerReads.push(observed);
-  if (association || recovery || buyerRead) {
+  if (rescan) rescans.push(observed); if (rescanRecovery) rescanRecoveries.push(observed);
+  if (association || recovery || buyerRead || rescan || rescanRecovery) {
     const body = []; req.on('data', chunk => body.push(chunk)); req.on('end', () => {
       try { observed.body = JSON.parse(Buffer.concat(body).toString('utf8')); } catch { observed.body = null; }
     });
   }
   const drop = association && dropAssociation; if (drop) dropAssociation = false;
+  const dropScan = rescan && dropRescan; if (dropScan) dropRescan = false;
   const upstream = http.request({hostname: '127.0.0.1', port, path: req.url, method: req.method, headers}, response => {
     observed.status = response.statusCode;
     if (buyerRead) observed.sha256 = response.headers['x-content-sha256'];
-    if (drop && response.statusCode === 200) {
+    if ((drop || dropScan) && response.statusCode === 200) {
       response.resume(); response.once('end', () => {
-        dropped++; res.writeHead(200, {'content-type': 'application/json', 'content-length': '64', 'cache-control': 'no-store'});
+        if (drop) dropped++; if (dropScan) droppedRescan++;
+        res.writeHead(200, {'content-type': 'application/json', 'content-length': '64', 'cache-control': 'no-store'});
         res.flushHeaders(); res.write('{'); setTimeout(() => res.destroy(), 25);
       }); return;
     }
@@ -198,6 +203,45 @@ try {
   await panel.getByRole('button', {name: 'Lihat foto yang tercatat', exact: true}).click();
   await verifiedImage(panel.getByRole('img', {name: `Foto asli ${config.skuCode}, ${config.packageLabel}`, exact: true}), config.secondHash, 17, 9);
   await staff.page.screenshot({path: resolve(directory, 'staff-replacement-persisted.png'), fullPage: true});
+  await panel.getByRole('button', {name: 'Tutup pratinjau foto', exact: true}).click();
+  await panel.getByText('Validasi awal tercatat; belum ada pemeriksaan ulang', {exact: true}).waitFor();
+  await panel.getByLabel('Alasan pemeriksaan ulang foto', {exact: true}).fill('Pemeriksaan keamanan ulang atas file SINTETIS yang sama; bukan penetapan foto baru');
+  await panel.getByRole('checkbox', {name: 'Saya meminta pemeriksaan keamanan dan format atas foto asli yang tercatat untuk varian ini.', exact: true}).check();
+  dropRescan = true;
+  await panel.getByRole('button', {name: 'Minta pemeriksaan ulang foto', exact: true}).click();
+  await panel.getByRole('button', {name: 'Periksa hasil permintaan pemeriksaan ulang', exact: true}).waitFor();
+  assert.equal(droppedRescan, 1); assert.equal(rescans.length, 1); assert.equal(rescans[0].status, 200);
+  const scanJournal = await journal(staff.page); assert.equal(scanJournal.length, 1);
+  const scanEntry = scanJournal[0]; assert.equal(scanEntry.operation, 'evidence.image-revalidation.request');
+  assert.equal(scanEntry.key, rescans[0].key); assert.equal(scanEntry.actorId, config.staffId);
+  assert.deepEqual(Object.keys(scanEntry).sort(), ['actorId', 'createdAt', 'key', 'operation']);
+  await staff.page.reload(); panel = await openPhoto(staff.page, true);
+  await panel.getByRole('button', {name: 'Periksa hasil permintaan pemeriksaan ulang', exact: true}).click();
+  await panel.getByText('Permintaan asli telah ditemukan. Status terbaru dimuat terpisah karena mungkin ada pemeriksaan yang lebih baru.', {exact: true}).waitFor();
+  await panel.getByText('Pemeriksaan ulang sedang menunggu hasil', {exact: true}).waitFor();
+  assert.equal(rescans.length, 1); assert.equal(rescanRecoveries.length, 1);
+  assert.deepEqual(rescanRecoveries[0].body, {purpose: 'catalog-image-revalidation', key: scanEntry.key});
+  assert.equal(rescanRecoveries[0].actor, config.staffId); assert.equal(rescanRecoveries[0].status, 200);
+  assert.deepEqual(await journal(staff.page), []);
+  assert.equal(await panel.getByRole('button', {name: 'Lihat foto yang tercatat', exact: true}).isDisabled(), true);
+  const pendingRead = await protectedRead(buyer.page, config.buyerId, buyerRoute);
+  assert.equal(pendingRead.status, 409); assert.equal(pendingRead.hash, null); assert.ok(!pendingRead.mime?.startsWith('image/'));
+  await staff.page.screenshot({path: resolve(directory, 'staff-revalidation-pending-desktop.png'), fullPage: true});
+  console.log('CATALOG_PHOTO_REVALIDATE_ORIGINAL');
+  for (let attempt = 0; attempt < 30 && !(await panel.getByText('Pemeriksaan ulang terakhir lulus', {exact: true}).isVisible()); attempt++) {
+    await panel.getByRole('button', {name: 'Periksa status pemeriksaan ulang', exact: true}).click();
+    if (!(await panel.getByText('Pemeriksaan ulang terakhir lulus', {exact: true}).isVisible())) await new Promise(yes => setTimeout(yes, 1000));
+  }
+  await panel.getByText('Pemeriksaan ulang terakhir lulus', {exact: true}).waitFor();
+  await staff.page.reload(); panel = await openPhoto(staff.page);
+  await panel.getByText('Pemeriksaan ulang terakhir lulus', {exact: true}).waitFor();
+  assert.equal(rescans.length, 1); assert.deepEqual(await journal(staff.page), []);
+  await panel.getByRole('button', {name: 'Lihat foto yang tercatat', exact: true}).click();
+  await verifiedImage(panel.getByRole('img', {name: `Foto asli ${config.skuCode}, ${config.packageLabel}`, exact: true}), config.secondHash, 17, 9);
+  await staff.page.screenshot({path: resolve(directory, 'staff-revalidation-passed-desktop.png'), fullPage: true});
+  await buyer.page.reload(); await buyerImage(buyer.page, config.secondHash, 17, 9, 'direct');
+  await buyer.page.screenshot({path: resolve(directory, 'buyer-revalidated-original-mobile.png'), fullPage: true});
+  assert.equal(await buyer.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
   const outsider = await user('outsider'); await outsider.page.goto(origin.origin + '/shop');
   const denied = await protectedRead(outsider.page, config.outsiderId, staffRoot + '/primary-photo/original/query');
   assert.equal(denied.status, 403); assert.equal(denied.hash, null); assert.ok(!denied.mime?.startsWith('image/'));
@@ -206,6 +250,9 @@ try {
   assert.equal(hidden.status, 403); assert.equal(hidden.hash, null); assert.ok(!hidden.mime?.startsWith('image/'));
   assert.equal(await outsider.page.getByRole('img', {name: `Foto ${config.familyName} — ${config.packageLabel}`, exact: true}).count(), 0);
   for (const write of writes) { assert.equal(write.actor, config.staffId); assert.equal(write.origin, origin.origin); assert.equal(write.csrfPresent, true); assert.equal(write.status, 200); }
+  for (const write of rescans) { assert.equal(write.actor, config.staffId); assert.equal(write.origin, origin.origin); assert.equal(write.csrfPresent, true);
+    assert.equal(write.body.purpose, 'catalog-image-revalidation'); assert.equal(write.body.expectedProofRevision, '0');
+    assert.equal(write.body.reference.sha256, config.secondHash); }
   for (const read of buyerReads) { assert.deepEqual(read.body, {purpose: 'catalog-photo'}); assert.equal(read.csrfPresent, true); }
   assert.ok(buyerReads.some(row => row.actor === config.buyerId && row.sha256 === config.firstHash));
   assert.ok(buyerReads.some(row => row.actor === config.buyerId && row.sha256 === config.secondHash));
@@ -218,7 +265,8 @@ try {
     assert.ok(Number(image.headers['content-length']) > 0);
   }
   assert.deepEqual(errors, []);
-  console.log('REAL_CATALOG_PHOTO_BROWSER_PASS ' + JSON.stringify({originals: 2, explicitConsent: true, originalKeyRecovery: true, noResend: true, buyerCurrentBytes: true, refreshPersistence: true, foreignScopeDenied: true, mobile: true}));
+  console.log('REAL_CATALOG_PHOTO_BROWSER_PASS ' + JSON.stringify({originals: 2, explicitConsent: true, originalKeyRecovery: true, noResend: true, buyerCurrentBytes: true, refreshPersistence: true, foreignScopeDenied: true, mobile: true,
+    exactOriginalRevalidation: true, rescanOriginalKeyRecovery: true, pendingContentDenied: true, firstProofUnchanged: true}));
 } catch (error) {
   for (const {page, who} of pages) if (!page.isClosed()) {
     console.error('PHOTO FIXTURE PAGE ' + who + ': ' + (await page.locator('main').innerText().catch(() => 'unavailable')).slice(0, 5000));

@@ -11,6 +11,7 @@ using MongoDB.Driver;
 using UnitToko.Modules.Contracts;
 using UnitToko.Platform;
 using UnitToko.Platform.Mongo;
+using UnitToko.Platform.DocumentProcessing;
 using UnitToko.Platform.Authorization;
 using UnitToko.Platform.Catalog;
 using UnitToko.Api.Authorization;
@@ -69,6 +70,14 @@ builder.Services.AddSingleton(sp => {
     return new CatalogPhotoWorkflow(sp.GetRequiredService<IMongoDatabase>(), sp.GetRequiredService<MongoUnitOfWork>(), sp.GetRequiredService<IdAllocator>(),
         sp.GetRequiredService<IClock>(), sp.GetRequiredService<CatalogAuthoringService>(), storage);
 });
+if (builder.Configuration.GetSection("Evidence:ImageRevalidation").Exists())
+    builder.Services.AddSingleton(sp => {
+        var options = sp.GetRequiredService<IConfiguration>().GetSection("Evidence:ImageRevalidation")
+            .Get<EvidenceImageRevalidationOptions>() ?? throw new InvalidOperationException("Image revalidation is unconfigured");
+        return EvidenceImageRevalidationRuntime.Create(sp.GetRequiredService<IMongoDatabase>(),
+            sp.GetRequiredService<MongoUnitOfWork>(), sp.GetRequiredService<IdAllocator>(),
+            sp.GetRequiredService<IClock>(), options);
+    });
 builder.Services.AddSingleton<OrderQuoteService>();
 builder.Services.AddSingleton<OrderDraftService>();
 builder.Services.AddSingleton<BranchOrderRequestService>();
@@ -427,6 +436,7 @@ if (!pilotRelease)
 {
 app.MapCatalogPriceEndpoints();
 app.MapCatalogPhotoEndpoints();
+app.MapCatalogPhotoRevalidationEndpoints();
 app.MapOrderQuoteEndpoints();
 app.MapOrderSpendingPolicyEndpoints();
 app.MapAccountingBookSetupEndpoints();

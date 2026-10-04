@@ -1,4 +1,5 @@
 export function recoveryPage(operation: string) {
+  if (operation === 'evidence.image-revalidation.request') return { href: '/administration/catalog', label: 'halaman pemeriksaan ulang foto katalog' };
   if (operation === 'catalog.photo.associate' || operation === 'evidence.catalog-image.reserve') return { href: '/administration/catalog', label: 'halaman foto katalog' };
   if (operation === 'ordering.branchrequest.submit') return { href: '/ordering/requests', label: 'halaman permintaan saya' };
   if (operation === 'ordering.branchrequest.decide') return { href: '/ordering/requests/incoming', label: 'halaman permintaan masuk' };
@@ -65,6 +66,7 @@ export function recoveryPage(operation: string) {
 }
 export function operationLabel(operation: string) {
   if (operation === 'catalog.photo.associate') return 'Pemilihan foto utama kemasan';
+  if (operation === 'evidence.image-revalidation.request') return 'Permintaan pemeriksaan ulang foto katalog';
   if (operation === 'evidence.catalog-image.reserve') return 'Persiapan unggah foto katalog';
   if (operation === 'ordering.branchrequest.submit') return 'Pengajuan kebutuhan cabang';
   if (operation === 'ordering.branchrequest.decide') return 'Peninjauan permintaan toko';

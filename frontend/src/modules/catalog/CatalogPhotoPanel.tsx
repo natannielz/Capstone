@@ -11,11 +11,15 @@ import {catalogPhotoOperation, createCatalogPhotoAssociationWorkflow, prepareCat
 import {catalogPhotoEvidenceLabel, catalogPhotoEvidenceReady, catalogPhotoReservationKey, catalogPhotoReservationOwner,
   catalogPhotoReserveOperation, validateCatalogPhotoFile, type CatalogPhotoEvidenceGateway,
   type CatalogPhotoEvidenceStatus, type CatalogPhotoReservation} from './catalog-photo-evidence-client';
+import {catalogPhotoRevalidationKeySku, catalogPhotoRevalidationLabel, catalogPhotoRevalidationOperation,
+  createCatalogPhotoRevalidationApiGateway, createCatalogPhotoRevalidationWorkflow, prepareCatalogPhotoRevalidation,
+  type CatalogPhotoRevalidationCurrent, type CatalogPhotoRevalidationGateway, type CatalogPhotoRevalidationResult} from './catalog-photo-revalidation-api';
 import common from '../administration/access.module.css';
 import styles from './catalog-photo.module.css';
 
 export type CatalogPhotoPanelProps = {
   actorId: string; sku: CatalogSku; journal: OperationJournal; gateway: CatalogPhotoGateway; evidenceGateway: CatalogPhotoEvidenceGateway;
+  revalidationGateway?: CatalogPhotoRevalidationGateway;
   locked: boolean; onClose: () => void; onChanged: (result: CatalogPhotoResult) => void; onFailure: (error: unknown) => void;
 };
 function message(error: unknown): string {
@@ -38,28 +42,46 @@ export function CatalogPhotoPanel(props: CatalogPhotoPanelProps) {
   return <PhotoEditor key={`${props.actorId}:${props.sku.id}:${props.sku.version}:${props.sku.definition.id}:${props.sku.definition.version}`} {...props}/>;
 }
 
-function PhotoEditor({actorId, sku, journal, gateway, evidenceGateway, onClose, onChanged, onFailure}: CatalogPhotoPanelProps) {
+function PhotoEditor({actorId, sku, journal, gateway, evidenceGateway, revalidationGateway, onClose, onChanged, onFailure}: CatalogPhotoPanelProps) {
   const [source] = useState<CatalogPhotoTarget>(() => ({skuId: sku.id, skuRevision: sku.version, definitionId: sku.definition.id, definitionVersion: sku.definition.version}));
-  const [services] = useState(() => ({journal, gateway, evidenceGateway, onChanged, onFailure}));
+  const [services] = useState(() => ({journal, gateway, evidenceGateway, revalidationGateway: revalidationGateway ?? createCatalogPhotoRevalidationApiGateway(), onChanged, onFailure}));
   const [workflow] = useState(() => createCatalogPhotoAssociationWorkflow(gateway, journal));
+  const [revalidation] = useState(() => createCatalogPhotoRevalidationWorkflow(services.revalidationGateway, journal));
   const [metadata, setMetadata] = useState<CatalogPhotoCurrent | null>(null), [entries, setEntries] = useState<OperationReference[]>([]);
   const [reservation, setReservation] = useState<CatalogPhotoReservation | null>(null), [status, setStatus] = useState<CatalogPhotoEvidenceStatus | null>(null);
   const [file, setFile] = useState<File | null>(null), [reason, setReason] = useState(''), [consent, setConsent] = useState(false);
   const [preview, setPreview] = useState<{url: string; kind: 'current' | 'upload'; identity: string; loaded: boolean} | null>(null);
   const [busy, setBusy] = useState(true), [offline, setOffline] = useState(false), [blocked, setBlocked] = useState(false);
   const [error, setError] = useState<unknown>(null), [notice, setNotice] = useState('');
+  const [proof, setProof] = useState<CatalogPhotoRevalidationCurrent | null>(null), [proofError, setProofError] = useState<unknown>(null);
+  const [scanReason, setScanReason] = useState(''), [scanConsent, setScanConsent] = useState(false);
+  const [scanResult, setScanResult] = useState<CatalogPhotoRevalidationResult | null>(null);
   const alive = useRef(false), inFlight = useRef(false), controller = useRef<AbortController | null>(null), imageUrl = useRef<string | null>(null);
   const selectedReservationEntry = useRef<OperationReference | null>(null), fileInput = useRef<HTMLInputElement>(null), previewHeading = useRef<HTMLHeadingElement>(null);
   const current = useCallback(() => alive.current && navigator.onLine, []);
   const closePreview = useCallback(() => {
     if (imageUrl.current) URL.revokeObjectURL(imageUrl.current);
-    imageUrl.current = null; setPreview(null); setConsent(false);
+    imageUrl.current = null; setPreview(null); setConsent(false); setScanConsent(false);
   }, []);
   const refreshEntries = useCallback(() => {
     const loaded = services.journal.list(actorId).filter(entry => entry.operation === catalogPhotoOperation ||
-      entry.operation === catalogPhotoReserveOperation && catalogPhotoReservationOwner(entry.key) === source.skuId);
+      entry.operation === catalogPhotoReserveOperation && catalogPhotoReservationOwner(entry.key) === source.skuId ||
+      entry.operation === catalogPhotoRevalidationOperation && catalogPhotoRevalidationKeySku(entry.key) === source.skuId);
     setEntries(loaded); return loaded;
   }, [actorId, services, source]);
+  const loadProof = useCallback(async (shown: CatalogPhotoCurrent, signal: AbortSignal) => {
+    setProof(null); setProofError(null); closePreview();
+    if (!shown.photo?.matchesCurrentDefinition) return;
+    try {
+      const next = await services.revalidationGateway.current(actorId, source, shown, current, signal);
+      if (current() && !signal.aborted) setProof(next);
+    } catch (failure) {
+      if (current() && !signal.aborted) {
+        setProofError(failure);
+        if (failure instanceof AccessFailure && (failure.status === 401 || failure.status === 403 || failure.code === 'actor_changed')) services.onFailure(failure);
+      }
+    }
+  }, [actorId, closePreview, current, services, source]);
 
   useEffect(() => {
     alive.current = true;
@@ -69,12 +91,12 @@ function PhotoEditor({actorId, sku, journal, gateway, evidenceGateway, onClose, 
         refreshEntries();
         if (!sku.active) { setBlocked(true); setNotice('Varian sudah dihentikan. Pemeriksaan hasil permintaan lama tetap tersedia; foto baru tidak dapat ditetapkan.'); return; }
         const shown = await services.gateway.current(actorId, source, current, abort.signal);
-        if (current()) setMetadata(shown);
+        if (current()) { setMetadata(shown); await loadProof(shown, abort.signal); }
       } catch (failure) { if (alive.current && !abort.signal.aborted) { setError(failure); services.onFailure(failure); } }
       finally { if (alive.current && !abort.signal.aborted) setBusy(false); }
     })();
     const disconnected = () => {
-      controller.current?.abort(); closePreview(); setMetadata(null); setStatus(null); setFile(null); setConsent(false); setOffline(true); setBusy(false);
+      controller.current?.abort(); closePreview(); setMetadata(null); setStatus(null); setProof(null); setProofError(null); setScanResult(null); setFile(null); setConsent(false); setOffline(true); setBusy(false);
       if (fileInput.current) fileInput.current.value = '';
     };
     const connected = () => { setOffline(false); setNotice('Koneksi kembali. Muat ulang sumber foto sebelum melanjutkan.'); };
@@ -86,7 +108,7 @@ function PhotoEditor({actorId, sku, journal, gateway, evidenceGateway, onClose, 
       imageUrl.current = null;
       window.removeEventListener('offline', disconnected); window.removeEventListener('online', connected);
     };
-  }, [actorId, closePreview, current, refreshEntries, services, source, sku.active]);
+  }, [actorId, closePreview, current, loadProof, refreshEntries, services, source, sku.active]);
 
   async function run(action: (signal: AbortSignal) => Promise<void>) {
     if (inFlight.current || !current()) return;
@@ -107,10 +129,10 @@ function PhotoEditor({actorId, sku, journal, gateway, evidenceGateway, onClose, 
     }
   }
   async function load(signal: AbortSignal) {
-    closePreview(); setMetadata(null); setStatus(null);
+    closePreview(); setMetadata(null); setStatus(null); setProof(null); setProofError(null);
     if (!sku.active) { refreshEntries(); return; }
     const shown = await services.gateway.current(actorId, source, current, signal);
-    if (current()) { setMetadata(shown); setBlocked(false); refreshEntries(); }
+    if (current()) { setMetadata(shown); setBlocked(false); refreshEntries(); await loadProof(shown, signal); }
   }
   async function loadStatus(saved: CatalogPhotoReservation, signal: AbortSignal) {
     const shown = await services.evidenceGateway.status(actorId, source.skuId, saved.reservationId, current, signal);
@@ -164,8 +186,17 @@ function PhotoEditor({actorId, sku, journal, gateway, evidenceGateway, onClose, 
   async function showOriginal(kind: 'current' | 'upload', signal: AbortSignal) {
     closePreview();
     if (!metadata || kind === 'upload' && (!status || !catalogPhotoEvidenceReady(status))) return;
-    const blob = kind === 'current' ? await services.evidenceGateway.currentOriginal(actorId, metadata, current, signal) :
-      await services.evidenceGateway.original(actorId, source, status!, current, signal);
+    let blob: Blob | null;
+    try {
+      blob = kind === 'current' ? await services.evidenceGateway.currentOriginal(actorId, metadata, current, signal) :
+        await services.evidenceGateway.original(actorId, source, status!, current, signal);
+    } catch (failure) {
+      if (kind === 'current' && failure instanceof AccessFailure && ['evidence_read_not_eligible', 'evidence_read_lease_expired'].includes(failure.code)) {
+        if (current()) setNotice('Foto belum dapat ditampilkan karena bukti pemeriksaan atau izin baca tidak lagi berlaku. Metadata tetap tersedia untuk meminta pemeriksaan ulang.');
+        return;
+      }
+      throw failure;
+    }
     if (!current() || signal.aborted) return;
     if (blob === null) { setMetadata(null); setNotice('Belum ada foto yang berlaku saat ini. Muat ulang sumber foto untuk memeriksa perubahan.'); return; }
     const url = URL.createObjectURL(blob); imageUrl.current = url;
@@ -195,10 +226,34 @@ function PhotoEditor({actorId, sku, journal, gateway, evidenceGateway, onClose, 
     }
     services.onChanged(result); setNotice('Hasil penyimpanan foto utama telah terkonfirmasi tanpa mengirim ulang.');
   }
+  async function requestRevalidation(signal: AbortSignal) {
+    if (!metadata || !proof || !scanConsent || entries.length || reservation !== null) return;
+    const command = prepareCatalogPhotoRevalidation(actorId, source, metadata, proof, scanReason);
+    closePreview();
+    const result = await revalidation.request(command, current, signal);
+    if (!current()) return;
+    setScanResult(result); setScanReason('');
+    await load(signal);
+    if (current()) setNotice('Permintaan pemeriksaan ulang tercatat. Periksa status terbaru untuk melihat hasil; foto tidak ditetapkan ulang.');
+  }
+  async function recoverRevalidation(entry: OperationReference, signal: AbortSignal) {
+    closePreview();
+    const result = await revalidation.recover(actorId, entry, current, signal);
+    if (!current()) return;
+    if (result === null) { setNotice('Permintaan pemeriksaan ulang belum terkonfirmasi. Referensi tetap disimpan; pemeriksaan hasil tidak mengirim ulang.'); return; }
+    setScanResult(result);
+    await load(signal);
+    if (current()) setNotice('Permintaan asli telah ditemukan. Status terbaru dimuat terpisah karena mungkin ada pemeriksaan yang lebih baru.');
+  }
 
   const reservePending = entries.filter(entry => entry.operation === catalogPhotoReserveOperation);
   const associationPending = entries.filter(entry => entry.operation === catalogPhotoOperation);
-  const disabled = busy || offline || blocked || !metadata || associationPending.length > 0;
+  const revalidationPending = entries.filter(entry => entry.operation === catalogPhotoRevalidationOperation);
+  const disabled = busy || offline || blocked || !metadata || associationPending.length > 0 || revalidationPending.length > 0;
+  const canRevalidate = !disabled && entries.length === 0 && reservation === null && proof !== null && proof.state !== 'pending' && BigInt(proof.proofRevision) < BigInt(256);
+  // A missing rescan worker must not disable an otherwise eligible original reader.
+  // That reader still proves current finite policy/age before returning any bytes.
+  const canOpenCurrent = proof !== null ? proof.state === 'first_validation' || proof.state === 'passed' : proofError instanceof AccessFailure && proofError.status === 503;
   const ready = status !== null && catalogPhotoEvidenceReady(status);
   const reviewed = ready && preview?.kind === 'upload' && preview.loaded && preview.identity === evidenceIdentity(status!);
   return <section className={styles.panel} aria-labelledby="catalog-photo-heading" aria-busy={busy}>
@@ -213,14 +268,32 @@ function PhotoEditor({actorId, sku, journal, gateway, evidenceGateway, onClose, 
       {!metadata ? <p>{busy ? 'Memuat sumber foto…' : 'Sumber foto belum tersedia.'}</p> : metadata.photo ? <>
         <p>{metadata.photo.matchesCurrentDefinition ? 'Foto utama sudah tercatat untuk kemasan ini.' : 'Foto sebelumnya berasal dari definisi kemasan lain. Tinjau dan tetapkan foto baru untuk kemasan ini.'}</p>
         <p className={styles.help}>Revisi foto {metadata.photoRevision} · tersimpan {new Date(metadata.photo.recordedAt).toLocaleString('id-ID')}</p>
-        {metadata.photo.matchesCurrentDefinition && <button type="button" className={common.secondary} disabled={disabled} onClick={() => void run(signal => showOriginal('current', signal))}>Lihat foto yang tercatat</button>}
+        {metadata.photo.matchesCurrentDefinition && <button type="button" className={common.secondary} disabled={disabled || !canOpenCurrent} onClick={() => void run(signal => showOriginal('current', signal))}>Lihat foto yang tercatat</button>}
       </> : <p>Belum ada foto utama. Tidak ada gambar pengganti yang diasumsikan.</p>}
       <button type="button" className={common.secondary} disabled={busy || offline || !sku.active} onClick={() => void run(load)}>Muat ulang sumber foto</button>
     </div>
-    {entries.length > 0 && <section className={styles.recovery} aria-label="Pemulihan foto katalog"><h4>Referensi unggah dan penyimpanan</h4>
-      <p>Periksa dengan akun pemilik permintaan. Pemeriksaan hasil tidak mengirim ulang foto atau penetapan.</p>
+    {metadata?.photo?.matchesCurrentDefinition && <section className={styles.status} aria-labelledby="catalog-photo-revalidation-heading">
+      <h4 id="catalog-photo-revalidation-heading">Pemeriksaan ulang keamanan foto</h4>
+      <p className={styles.help}>Periksa kembali file asli yang sama tanpa mengunggah atau menetapkan foto baru. Pemeriksaan yang lulus tetap harus memenuhi kebijakan dan masa berlaku saat foto dibuka.</p>
+      {proof ? <><p role="status"><strong>{catalogPhotoRevalidationLabel(proof)}</strong></p>
+        <p className={styles.help}>Revisi pemeriksaan {proof.proofRevision}{proof.checkedAt ? ` · diperiksa ${new Date(proof.checkedAt).toLocaleString('id-ID')}` : ''}</p>
+        {proof.state === 'pending' && <p>Foto belum dapat ditampilkan selama pemeriksaan terbaru menunggu hasil.</p>}
+        {proof.state === 'rejected' && <p>Foto ini ditolak dan tidak dapat ditampilkan. Tinjau penyebab bersama penanggung jawab atau pilih foto pengganti.</p>}
+        {proof.proofRevision === '256' && <p>Batas pemeriksaan ulang file ini telah tercapai. Hubungi penanggung jawab atau siapkan foto pengganti.</p>}
+      </> : <p role={proofError ? 'alert' : 'status'}>{proofError instanceof AccessFailure && proofError.status === 503
+        ? 'Pemeriksaan ulang belum tersedia. Konfigurasi atau persetujuan pemeriksa harus disiapkan oleh penanggung jawab.'
+        : proofError ? 'Status pemeriksaan belum dapat digunakan. Muat ulang status sebelum melanjutkan.' : 'Memuat status pemeriksaan…'}</p>}
+      <button type="button" className={common.secondary} disabled={busy || offline} onClick={() => void run(signal => loadProof(metadata, signal))}>Periksa status pemeriksaan ulang</button>
+      {scanResult && <p className={styles.help}>Permintaan {scanResult.requestId} tercatat ({({pending: 'menunggu hasil', passed: 'lulus', rejected: 'ditolak'} as const)[scanResult.state]}). Ini adalah hasil permintaan tersebut; gunakan status terbaru di atas untuk file saat ini.</p>}
+      <div className={styles.fields}><label className={common.field}><span>Alasan pemeriksaan ulang foto</span><textarea rows={2} maxLength={1000} value={scanReason} disabled={!canRevalidate} onChange={event => { setScanReason(event.target.value); setScanConsent(false); }}/></label></div>
+      <label className={styles.consent}><input type="checkbox" checked={scanConsent} disabled={!canRevalidate} onChange={event => setScanConsent(event.target.checked)}/><span>Saya meminta pemeriksaan keamanan dan format atas foto asli yang tercatat untuk varian ini.</span></label>
+      <button type="button" className={common.primary} disabled={!canRevalidate || !scanConsent || !scanReason} onClick={() => void run(requestRevalidation)}>Minta pemeriksaan ulang foto</button>
+    </section>}
+    {entries.length > 0 && <section className={styles.recovery} aria-label="Pemulihan foto katalog"><h4>Referensi pengelolaan foto</h4>
+      <p>Periksa dengan akun pemilik permintaan. Pemeriksaan hasil tidak mengirim ulang unggahan, penetapan, atau permintaan pemeriksaan keamanan.</p>
       {reservePending.map(entry => <button type="button" key={entry.key} className={common.secondary} disabled={busy || offline} onClick={() => void run(signal => recoverReservation(entry, signal))}>Periksa tempat unggah foto</button>)}
       {associationPending.map(entry => <button type="button" key={entry.key} className={common.secondary} disabled={busy || offline} onClick={() => void run(signal => recoverAssociation(entry, signal))}>Periksa hasil foto utama</button>)}
+      {revalidationPending.map(entry => <button type="button" key={entry.key} className={common.secondary} disabled={busy || offline} onClick={() => void run(signal => recoverRevalidation(entry, signal))}>Periksa hasil permintaan pemeriksaan ulang</button>)}
     </section>}
     <div className={styles.fields}>
       <label className={common.field}><span>Foto asli PNG atau JPEG</span><input ref={fileInput} type="file" accept="image/png,image/jpeg" disabled={disabled || reservation !== null && status?.state !== 'fresh'} onChange={event => chooseFile(event.target.files?.[0])}/><span className={styles.help}>Satu foto, maksimal 10 MiB. File tetap di perangkat sampai Anda memilih unggah.</span></label>

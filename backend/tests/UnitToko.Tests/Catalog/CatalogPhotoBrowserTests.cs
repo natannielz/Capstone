@@ -19,8 +19,11 @@ using UnitToko.Api.Identity;
 using UnitToko.Modules.Identity.Contracts;
 using UnitToko.Platform;
 using UnitToko.Platform.Catalog;
+using UnitToko.Platform.DocumentProcessing;
+using UnitToko.Platform.Documents;
 using UnitToko.Platform.Identity;
 using UnitToko.Platform.Mongo;
+using UnitToko.Platform.Mongo.Migrations;
 using UnitToko.Tests.Documents;
 using UnitToko.Tests.Identity;
 using UnitToko.Tests.Inventory;
@@ -55,6 +58,23 @@ public sealed class CatalogPhotoBrowserTests(MongoFixture fixture, ITestOutputHe
         var scanner = new EvidenceValidationTests.FixtureScanner(signaturesAt: data.Catalog.Clock.UtcNow.AddHours(-1));
         var processor = EvidenceValidationTests.Processor(data, scanner);
         await EvidenceValidationTests.Policy(data, processor.PipelineId);
+        const string rescanConsumer = "synthetic-catalog-photo-browser-rescanner";
+        var rescanPipeline = new string('d', 64);
+        var rescanScanner = new EvidenceValidationTests.FixtureScanner(signaturesAt: data.Catalog.Clock.UtcNow.AddHours(-1));
+        var rescanRequests = new EvidenceImageRevalidationService(data.DB, data.Unit, new(data.DB), data.Catalog.Clock,
+            data.Registration, data.Catalog.Service, rescanConsumer, rescanPipeline);
+        var rescanProcessor = new EvidenceImageRevalidationProcessor(data.DB, data.Unit, new(data.DB), data.Catalog.Clock,
+            data.Registration, rescanConsumer, rescanPipeline, new(1024, 100, 100, 10000), rescanScanner,
+            new WindowsImageDecoder(ImageDecoderTests.Options()));
+        var rescanRuntime = new EvidenceImageRevalidationRuntime(rescanRequests, rescanProcessor,
+            new CollectionMigrations(data.DB, data.Catalog.Clock), rescanPipeline);
+        var approvalAt = data.Catalog.Clock.UtcNow;
+        await data.Rows(EvidenceImageRevalidationSchemas.Policies).InsertOneAsync(new BsonDocument {
+            { "_id", (await new IdAllocator(data.DB).NextAsync(EvidenceImageRevalidationSchemas.Policies)).Value },
+            { "schemaVersion", 1 }, { "consumerId", rescanConsumer }, { "storeId", data.StoreId },
+            { "pipelineId", rescanPipeline }, { "active", true }, { "revision", 1L }, { "fence", 0L },
+            { "approvedAt", approvalAt.AddMinutes(-1).UtcDateTime }, { "expiresAt", approvalAt.AddMinutes(10).UtcDateTime },
+            { "hostAcceptanceRef", "synthetic-browser-only-not-production-acceptance" } });
         await data.Rows("evidenceReadPolicies").InsertOneAsync(new BsonDocument {
             { "_id", (await new IdAllocator(data.DB).NextAsync("evidenceReadPolicies")).Value },
             { "schemaVersion", 1 }, { "storeId", data.StoreId }, { "active", true }, { "revision", 1L }, { "fence", 0L },
@@ -81,6 +101,7 @@ public sealed class CatalogPhotoBrowserTests(MongoFixture fixture, ITestOutputHe
         using var factory = IdentityRuntimeTests.Factory(settings).WithWebHostBuilder(web => web.UseEnvironment("Production").ConfigureTestServices(services => {
             services.RemoveAll<IClock>(); services.AddSingleton<IClock>(data.Catalog.Clock);
             services.RemoveAll<CatalogPhotoWorkflow>(); services.AddSingleton(workflow);
+            services.RemoveAll<EvidenceImageRevalidationRuntime>(); services.AddSingleton(rescanRuntime);
         }));
         factory.UseKestrel(options => options.Listen(IPAddress.Loopback, 0)); factory.StartServer();
         var apiAddress = Assert.Single(factory.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!.Addresses);
@@ -117,7 +138,10 @@ public sealed class CatalogPhotoBrowserTests(MongoFixture fixture, ITestOutputHe
         start.ArgumentList.Add(Path.Combine(root, "frontend", "scripts", "verify-catalog-photo-browser.mjs"));
         start.Environment["NODE_ENV"] = "production"; start.Environment["NEXT_TELEMETRY_DISABLED"] = "1"; start.Environment["NEXT_PUBLIC_UNIT_TOKO_RELEASE"] = "full";
         using var process = Process.Start(start) ?? throw new InvalidOperationException("Catalog photo browser child did not start");
-        var lines = new StringBuilder(); var validations = 0; var elapsed = Stopwatch.StartNew();
+        var lines = new StringBuilder(); var validations = 0; var revalidations = 0; var elapsed = Stopwatch.StartNew();
+        byte[]? firstValidationBytes = null;
+        async Task<byte[]> ValidationSnapshotAsync() => new BsonDocument("rows", new BsonArray(
+            await data.Rows("evidenceValidationResults").Find(new BsonDocument()).Sort(new BsonDocument("_id", 1)).ToListAsync())).ToBson();
         async Task ReadAsync(StreamReader stream, bool canValidate) {
             while (await stream.ReadLineAsync() is { } line) {
                 lock (lines) { lines.AppendLine(line); File.AppendAllText(logPath, line + Environment.NewLine); }
@@ -125,6 +149,15 @@ public sealed class CatalogPhotoBrowserTests(MongoFixture fixture, ITestOutputHe
                     Assert.InRange(++validations, 1, 2);
                     // This is the actual outbox worker after an actual HTTP upload. Only its scanner is a named synthetic fixture.
                     Assert.Equal("completed", await processor.RunOnceAsync());
+                }
+                if (canValidate && line == "CATALOG_PHOTO_REVALIDATE_ORIGINAL") {
+                    Assert.Equal(1, ++revalidations);
+                    firstValidationBytes = await ValidationSnapshotAsync();
+                    var pendingHead = await data.Rows(EvidenceImageRevalidationSchemas.Heads).Find(new BsonDocument()).SingleAsync();
+                    Assert.Equal("pending", pendingHead["status"]);
+                    Assert.Equal(0, await data.Rows(EvidenceImageRevalidationSchemas.Results).CountDocumentsAsync(new BsonDocument()));
+                    Assert.Equal("completed", await rescanRuntime.RunOnceAsync());
+                    Assert.Equal(firstValidationBytes, await ValidationSnapshotAsync());
                 }
             }
         }
@@ -141,6 +174,9 @@ public sealed class CatalogPhotoBrowserTests(MongoFixture fixture, ITestOutputHe
             finally { output.WriteLine($"Actual catalog photo browser: {elapsed.Elapsed.TotalSeconds:F3}s"); output.WriteLine("Browser artifacts: " + directory); }
         }
         Assert.Equal(2, validations); Assert.Equal(2, scanner.Calls);
+        Assert.Equal(1, revalidations); Assert.Equal(1, rescanScanner.Calls);
+        Assert.NotNull(firstValidationBytes);
+        Assert.Equal(firstValidationBytes, await ValidationSnapshotAsync());
         var photos = await data.Rows(CatalogPhotoRecords.Photos).Find(new BsonDocument()).Sort(new BsonDocument("photoRevision", 1)).ToListAsync();
         Assert.Equal(2, photos.Count); Assert.Equal(new[] { firstHash, secondHash }, photos.Select(row => row["reference"]["sha256"].AsString));
         Assert.Equal(new long[] { 1, 2 }, photos.Select(row => row["photoRevision"].AsInt64));
@@ -165,6 +201,15 @@ public sealed class CatalogPhotoBrowserTests(MongoFixture fixture, ITestOutputHe
         Assert.Equal(2L, await data.Rows("documentVersions").CountDocumentsAsync(new BsonDocument()));
         Assert.Equal(2L, await data.Rows("evidenceValidationResults").CountDocumentsAsync(new BsonDocument("status", "passed")));
         Assert.Equal(2L, await data.Rows("evidenceValidationAudits").CountDocumentsAsync(new BsonDocument()));
+        Assert.Equal(1L, await data.Rows(EvidenceImageRevalidationSchemas.Requests).CountDocumentsAsync(new BsonDocument()));
+        Assert.Equal(1L, await data.Rows(EvidenceImageRevalidationSchemas.Receipts).CountDocumentsAsync(new BsonDocument()));
+        Assert.Equal(1L, await data.Rows(EvidenceImageRevalidationSchemas.Results).CountDocumentsAsync(new BsonDocument()));
+        Assert.Equal(1L, await data.Rows(EvidenceImageRevalidationSchemas.Audits).CountDocumentsAsync(new BsonDocument()));
+        var rescanHead = await data.Rows(EvidenceImageRevalidationSchemas.Heads).Find(new BsonDocument()).SingleAsync();
+        Assert.Equal(photos[1]["versionRowId"], rescanHead["_id"]);
+        Assert.Equal(1L, rescanHead["revision"]); Assert.Equal("passed", rescanHead["status"]);
+        var rescanJob = await data.Rows(EvidenceImageRevalidationSchemas.Jobs).Find(new BsonDocument()).SingleAsync();
+        Assert.Equal("completed", rescanJob["status"]); Assert.Equal(1, rescanJob["attempts"]);
         var reads = await data.Rows("evidenceReadAudits").Find(new BsonDocument()).ToListAsync();
         Assert.NotEmpty(reads); Assert.DoesNotContain(reads, row => row["actorId"].AsInt64 == data.Catalog.Other.UserId);
         Assert.Equal(before, await UnchangedAsync());

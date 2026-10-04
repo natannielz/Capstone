@@ -23,6 +23,7 @@ builder.Services.AddSingleton<IdempotencyStore>();
 builder.Services.AddSingleton<OutboxStore>();
 builder.Services.AddSingleton<CollectionMigrations>();
 var evidenceOptions = migrate ? null : builder.Configuration.GetSection("Evidence:Validation").Get<EvidenceValidationRuntimeOptions>();
+var imageRevalidationOptions = migrate ? null : builder.Configuration.GetSection("Evidence:ImageRevalidation").Get<EvidenceImageRevalidationOptions>();
 var videoOptions = migrate ? null : builder.Configuration.GetSection("Evidence:VideoValidation").Get<VideoValidationRuntimeOptions>();
 var ocrOptions = migrate ? null : builder.Configuration.GetSection("Evidence:PaymentOcr").Get<PaymentOcrRuntimeOptions>();
 var supplierOcrOptions = migrate ? null : builder.Configuration.GetSection("Evidence:SupplierDocumentOcr").Get<SupplierDocumentOcrRuntimeOptions>();
@@ -31,6 +32,12 @@ if (evidenceOptions is not null) {
     builder.Services.AddSingleton(sp => EvidenceValidationRuntime.Create(sp.GetRequiredService<IMongoDatabase>(), sp.GetRequiredService<MongoUnitOfWork>(),
         sp.GetRequiredService<IdAllocator>(), sp.GetRequiredService<IClock>(), evidenceOptions));
     builder.Services.AddHostedService<EvidenceValidationWorker>();
+}
+if (imageRevalidationOptions is not null) {
+    builder.Services.AddSingleton(sp => EvidenceImageRevalidationRuntime.Create(sp.GetRequiredService<IMongoDatabase>(),
+        sp.GetRequiredService<MongoUnitOfWork>(), sp.GetRequiredService<IdAllocator>(),
+        sp.GetRequiredService<IClock>(), imageRevalidationOptions));
+    builder.Services.AddHostedService<EvidenceImageRevalidationWorker>();
 }
 if (ocrOptions is not null) {
     builder.Services.AddSingleton(sp => PaymentOcrRuntime.Create(sp.GetRequiredService<IMongoDatabase>(), sp.GetRequiredService<MongoUnitOfWork>(),
@@ -64,6 +71,8 @@ if (migrate)
 
 if (evidenceOptions is null) logger.LogWarning("Evidence validation is unconfigured; validation jobs will not be claimed.");
 else logger.LogInformation("Evidence validation pipeline configured: {PipelineId}; current store and worker approvals remain required", host.Services.GetRequiredService<EvidenceValidationRuntime>().PipelineId);
+if (imageRevalidationOptions is null) logger.LogWarning("Image revalidation is unconfigured; revalidation jobs will not be claimed.");
+else logger.LogInformation("Image revalidation pipeline configured: {PipelineId}; separate current policy, store and worker approvals remain required", host.Services.GetRequiredService<EvidenceImageRevalidationRuntime>().PipelineId);
 if (videoOptions is null) logger.LogWarning("Private video validation is unconfigured; video jobs will not be claimed.");
 else logger.LogInformation("Private video validation pipeline configured: {PipelineId}; current host, scanner and worker approvals remain required", host.Services.GetRequiredService<VideoValidationRuntime>().PipelineId);
 if (ocrOptions is null) logger.LogWarning("Payment OCR is unconfigured; OCR jobs will not be claimed.");
@@ -73,3 +82,23 @@ else logger.LogInformation("Supplier document OCR pipeline configured: {Pipeline
 if (!paymentNotices) logger.LogWarning("Payment in-app notices are unconfigured; review events will remain pending.");
 else logger.LogInformation("Payment in-app notice worker enabled; availability is private and sends no external messages");
 await host.RunAsync();
+
+internal sealed class EvidenceImageRevalidationWorker(EvidenceImageRevalidationRuntime runtime,
+    ILogger<EvidenceImageRevalidationWorker> logger) : BackgroundService
+{
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        string? previous = null;
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            string status;
+            try { status = await runtime.RunOnceAsync(stoppingToken); }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
+            catch (PersistenceConflictException) { status = "claim_or_policy_changed"; }
+            catch (UncertainCommitException) { status = "commit_unknown_recover_same_job"; }
+            catch { status = "processing_error"; } // Never log original content, paths, adapter details or configuration.
+            if (status != previous) { logger.LogInformation("Image revalidation worker status: {Status}", status); previous = status; }
+            await Task.Delay(status == "completed" ? TimeSpan.FromMilliseconds(100) : TimeSpan.FromSeconds(10), stoppingToken);
+        }
+    }
+}
