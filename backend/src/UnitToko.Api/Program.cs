@@ -122,6 +122,7 @@ builder.Services.AddSingleton<ProcurementStockReceiptService>();
 builder.Services.AddSingleton<ProcurementStockValuationService>();
 builder.Services.AddSingleton<ProcurementSupplierPayableService>();
 builder.Services.AddSingleton<ProcurementAdvanceReturnService>();
+builder.Services.AddSingleton<ProcurementQualityAcceptanceService>();
 builder.Services.AddSingleton(sp => {
     var options = sp.GetRequiredService<IConfiguration>().GetSection("Evidence:PrivateWindows");
     var root = options["Root"]; var storeId = options["StoreId"]; var operators = options.GetSection("TrustedOperatorSids").Get<string[]>() ?? [];
@@ -418,6 +419,7 @@ app.MapProcurementStockReceiptEndpoints();
 app.MapProcurementStockValuationEndpoints();
 app.MapProcurementSupplierPayableEndpoints();
 app.MapProcurementAdvanceReturnEndpoints();
+app.MapProcurementQualityAcceptanceEndpoints();
 app.MapOrderDraftEndpoints();
 app.MapOrderSubmissionEndpoints();
 app.MapOrderDecisionEndpoints();

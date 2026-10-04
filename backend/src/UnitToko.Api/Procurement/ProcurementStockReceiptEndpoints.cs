@@ -130,7 +130,7 @@ public static class ProcurementStockReceiptEndpoints
         R.Location(row["location"]), R.Location(row["requestedLocation"]), row["physicalKey"].AsString, row["label"].AsString,
         row["mode"].AsString, row["control"].AsString, row["configurationHash"].AsString, new(row["policyId"].AsInt64), Number(row["policyRevision"]),
         row["policyHash"].AsString, row["writer"].AsString, row["reconciliationProcedureReference"].AsString, row["outageProcedureReference"].AsString);
-    private static ProcurementStockReceiptDto Receipt(BsonValue row) => new(new(row["id"].AsInt64), Number(row["revision"]), Input(row["input"]), Source(row["source"]), Pool(row["pool"]),
+    internal static ProcurementStockReceiptDto Receipt(BsonValue row) => new(new(row["id"].AsInt64), Number(row["revision"]), Input(row["input"]), Source(row["source"]), Pool(row["pool"]),
         Capacity(row["before"]), Capacity(row["after"]), new(row["lotId"].AsInt64), new(row["balanceId"].AsInt64), new(row["movementId"].AsInt64),
         Number(row["onHand"]), Number(row["held"]), Number(row["reserved"]), Number(row["expired"]), Number(row["available"]), row["valuationState"].AsString,
         row["valuation"].IsBsonNull ? null : Money.Parse(row["valuation"].AsString), row["state"].AsString, new(row["recordedBy"].AsInt64), Date(row["recordedAt"]));

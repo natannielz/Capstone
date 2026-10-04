@@ -145,6 +145,7 @@ public sealed class BusinessPermissionTests
     [Theory]
     [InlineData(Permissions.ProcurementPayableRead, Permissions.ProcurementPayablePropose, Permissions.ProcurementPayableDecide)]
     [InlineData(Permissions.ProcurementAdvanceReturnRead, Permissions.ProcurementAdvanceReturnPropose, Permissions.ProcurementAdvanceReturnDecide)]
+    [InlineData(Permissions.ProcurementQualityAcceptanceRead, Permissions.ProcurementQualityAcceptancePropose, Permissions.ProcurementQualityAcceptanceDecide)]
     public void Supplier_payable_and_return_authorities_are_explicit_scoped_and_independent_of_posting(string read, string propose, string decide)
     {
         foreach (var permission in new[] { read, propose, decide }) {

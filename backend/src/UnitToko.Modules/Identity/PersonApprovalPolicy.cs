@@ -8,6 +8,7 @@ namespace UnitToko.Modules.Identity;
 public static class PersonApprovalPolicy
 {
     public static bool RequiresEvidence(string permission) => permission is
+        Permissions.ProcurementQualityAcceptanceDecide or
         Permissions.ProcurementApprove or Permissions.SupplierClaimApprove or Permissions.ProcurementStockValuationDecide or Permissions.ProcurementPayableDecide or Permissions.ProcurementAdvanceReturnDecide or Permissions.OrderSpendApprove or Permissions.OrderSpendingPolicyApprove or Permissions.AccountingBookApprove or Permissions.ReceivingAccountApprove or Permissions.ReceivingAccountVerify or Permissions.PricingApprove or Permissions.SupplierChangeApprove or Permissions.SupplierBankApprove or Permissions.StockSourceApprove or Permissions.StockSourcePolicyApprove or Permissions.StockSourceReconciliationDecide or
         Permissions.BankReceiptConfirm or Permissions.PaymentReviewManual or Permissions.PaymentReviewManage or Permissions.PaymentVerify or Permissions.PaymentAllocate or Permissions.DisbursementVerify or Permissions.ReconciliationVerify or
         Permissions.CaseManage or Permissions.CreditApprove or Permissions.RefundApprove or Permissions.FundingApprove or
@@ -35,6 +36,7 @@ public static class PersonApprovalPolicy
             Permissions.ProcurementStockValuationDecide => [evidence!.RequestedBy, evidence.RecordedBy],
             Permissions.ProcurementPayableDecide => [evidence!.RequestedBy],
             Permissions.ProcurementAdvanceReturnDecide => [evidence!.RequestedBy],
+            Permissions.ProcurementQualityAcceptanceDecide => [evidence!.RequestedBy],
             Permissions.DisbursementRecord => [evidence!.ApprovedBy],
             Permissions.PeriodApprove => [evidence!.SubmittedBy],
             Permissions.PeriodClose => [evidence!.SubmittedBy, evidence.ApprovedBy],

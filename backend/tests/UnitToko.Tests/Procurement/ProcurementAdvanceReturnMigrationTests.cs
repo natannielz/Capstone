@@ -106,6 +106,7 @@ public sealed class ProcurementAdvanceReturnMigrationTests(MongoFixture fixture)
     // Test-only empty-suffix removal. It never edits legacy rows, indexes, counters or source owners.
     internal static async Task RestoreV75Async(IMongoDatabase db)
     {
+        await ProcurementQualityAcceptanceMigrationTests.RestoreV76Async(db);
         var history = await HistoryAsync(db);
         if (history.Count <= 75) { Assert.All(history, row => Assert.Equal("applied", row["state"])); return; }
         Assert.Equal(76, history.Count); Assert.All(history, row => Assert.Equal("applied", row["state"]));

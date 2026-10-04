@@ -44,6 +44,7 @@ public static class Permissions
     public const string ProcurementStockValuationRead = "procurement.stockvaluation.read", ProcurementStockValuationPropose = "procurement.stockvaluation.propose", ProcurementStockValuationDecide = "procurement.stockvaluation.decide";
     public const string ProcurementPayableRead = "procurement.payable.read", ProcurementPayablePropose = "procurement.payable.propose", ProcurementPayableDecide = "procurement.payable.decide";
     public const string ProcurementAdvanceReturnRead = "procurement.advancereturn.read", ProcurementAdvanceReturnPropose = "procurement.advancereturn.propose", ProcurementAdvanceReturnDecide = "procurement.advancereturn.decide";
+    public const string ProcurementQualityAcceptanceRead = "procurement.qualityacceptance.read", ProcurementQualityAcceptancePropose = "procurement.qualityacceptance.propose", ProcurementQualityAcceptanceDecide = "procurement.qualityacceptance.decide";
     public const string ReconciliationVerify = "reconciliation.verify", JournalPost = "journal.post", JournalReverse = "journal.reverse";
     public const string AccountingBookRead = "accounting.book.read", AccountingBookPropose = "accounting.book.propose", AccountingBookApprove = "accounting.book.approve";
     public const string InviteManage = "invite.manage", MembershipPropose = "membership.propose", MembershipApprove = "membership.approve", AccessPropose = "access.propose", AccessApprove = "access.approve", AccessRevoke = "access.revoke", RecoveryInitiate = "recovery.initiate", TechnicalConfigure = "technical.configure", AccessAuditRead = "access.audit.read";
@@ -116,6 +117,9 @@ public static class Permissions
         Add(ProcurementAdvanceReturnRead, Operations);
         Add(ProcurementAdvanceReturnPropose, Operations, true);
         Add(ProcurementAdvanceReturnDecide, Operations, true);
+        Add(ProcurementQualityAcceptanceRead, Operations);
+        Add(ProcurementQualityAcceptancePropose, Operations, true);
+        Add(ProcurementQualityAcceptanceDecide, Operations, true);
         result[SupplierClaim] = result[SupplierClaim] with { Assurance = new(true, TimeSpan.FromMinutes(5)) };
         Add(SupplierClaimApprove, Operations, true);
         result[FundingRequest] = result[FundingRequest] with { Assurance = new(true, TimeSpan.FromMinutes(5)) };

@@ -25,6 +25,7 @@ internal sealed class ProcurementStockReceiptTestData : IAsyncDisposable
     internal MutableAuthorizationClock Clock => Claims.Clock;
     internal ActorContext Maker = null!, Reader = null!, Outsider = null!, SourceMaker = null!, SourceChecker = null!;
     internal long PoolId, PolicyId;
+    internal ProcurementInspectionLineInput InspectionLine = null!;
     internal long InspectionId => Claims.InspectionId;
     internal const string Operation = "procurement.stockreceipt.receive", Reason = "Synthetic physical receipt kept entirely held; valuation and release are pending";
     internal StockSourceSetupService Sources => new(Database, Unit, new(Database), Clock);
@@ -34,11 +35,16 @@ internal sealed class ProcurementStockReceiptTestData : IAsyncDisposable
     internal static AuthorizationCommandMetadata Meta(string key, string reason = Reason) => new(key, reason, "held-stock-receipt-test");
     internal ProcurementStockReceiptInput Input(string reference = "SYNTHETIC-STOCK-001", int packages = 1) => new(ProcurementRequestTestData.Location,
         Inspection.Receiving.OrderId, 1, Inspection.Receiving.ApprovalId, InspectionId, 1, packages, PoolId, 1, reference,
-        Inspection.Input().Lines[0].LotCode ?? "SYNTHETIC-LOT-UNKNOWN-EXPIRY", Inspection.Input().Lines[0].ExpiryDate, Reason);
-    internal static async Task<ProcurementStockReceiptTestData> CreateAsync(MongoFixture fixture, ProcurementRoute route = ProcurementRoute.Ddo) {
+        InspectionLine.LotCode ?? "SYNTHETIC-LOT-UNKNOWN-EXPIRY", InspectionLine.ExpiryDate, Reason);
+    internal static async Task<ProcurementStockReceiptTestData> CreateAsync(MongoFixture fixture, ProcurementRoute route = ProcurementRoute.Ddo,
+        Func<ProcurementInspectionInput, ProcurementInspectionInput>? inspectionInput = null) {
         var data = new ProcurementStockReceiptTestData();
         try {
-            data.Claims = await SupplierClaimTestData.CreateAsync(fixture, route);
+            data.Claims = await SupplierClaimTestData.CreateAsync(fixture, route, inspectionInput: input => {
+                var observed = inspectionInput is null ? input : inspectionInput(input);
+                data.InspectionLine = observed.Lines[0];
+                return observed;
+            });
             var scope = ProcurementRequestTestData.Scope;
             data.Maker = await data.Base.AddActorAsync(720, scope, Permissions.ProcurementRead, Permissions.StockRead, Permissions.StockReceive);
             data.Reader = await data.Base.AddActorAsync(721, scope, Permissions.ProcurementRead, Permissions.StockRead);

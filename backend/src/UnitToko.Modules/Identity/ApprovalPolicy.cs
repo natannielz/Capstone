@@ -14,6 +14,7 @@ public sealed record ApprovalRequest(
 public static class ApprovalPolicy
 {
     public static bool RequiresEvidence(string permission) => permission is
+        Permissions.ProcurementQualityAcceptanceDecide or
         Permissions.ProcurementApprove or Permissions.SupplierClaimApprove or Permissions.ProcurementStockValuationDecide or Permissions.ProcurementPayableDecide or Permissions.ProcurementAdvanceReturnDecide or Permissions.OrderSpendApprove or Permissions.OrderSpendingPolicyApprove or Permissions.AccountingBookApprove or Permissions.OrderAccept or Permissions.SubstitutionAccept or
         Permissions.ReceivingAccountApprove or Permissions.ReceivingAccountVerify or Permissions.PricingApprove or Permissions.SupplierChangeApprove or Permissions.SupplierBankApprove or Permissions.StockSourceApprove or Permissions.StockSourcePolicyApprove or Permissions.StockSourceReconciliationDecide or
         Permissions.CaseManage or Permissions.BankReceiptConfirm or Permissions.PaymentVerify or Permissions.PaymentReviewManual or Permissions.PaymentReviewManage or Permissions.PaymentAllocate or Permissions.CreditApprove or Permissions.RefundApprove or
@@ -34,6 +35,7 @@ public static class ApprovalPolicy
             Permissions.ProcurementStockValuationDecide => Independent(evidence.RequestedBy, evidence.RecordedBy),
             Permissions.ProcurementPayableDecide => Independent(evidence.RequestedBy),
             Permissions.ProcurementAdvanceReturnDecide => Independent(evidence.RequestedBy),
+            Permissions.ProcurementQualityAcceptanceDecide => Independent(evidence.RequestedBy),
             Permissions.AccountingBookApprove or Permissions.OrderSpendingPolicyApprove or Permissions.ReceivingAccountApprove or Permissions.ReceivingAccountVerify or Permissions.PricingApprove or Permissions.SupplierChangeApprove or Permissions.SupplierBankApprove or Permissions.StockSourceApprove or Permissions.StockSourcePolicyApprove or Permissions.StockSourceReconciliationDecide => Independent(evidence.ProposedBy),
             Permissions.OrderAccept => evidence.RequestedBy is > 0,
             Permissions.SubstitutionAccept => evidence.RequestedBy is > 0 && evidence.ProposedBy is > 0,

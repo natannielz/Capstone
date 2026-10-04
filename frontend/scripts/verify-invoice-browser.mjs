@@ -26,6 +26,7 @@ import { verifyProcurementStockReceiptBrowser } from './verify-procurement-stock
 import { verifyProcurementStockValuationBrowser } from './verify-procurement-stock-valuation-browser.mjs';
 import { verifyProcurementSupplierPayableBrowser } from './verify-procurement-supplier-payable-browser.mjs';
 import { verifyProcurementAdvanceReturnBrowser } from './verify-procurement-advance-return-browser.mjs';
+import { verifyProcurementQualityAcceptanceBrowser } from './verify-procurement-quality-acceptance-browser.mjs';
 import { verifyStockSourceReconciliationBrowser } from './verify-stock-source-reconciliation-browser.mjs';
 import { verifyProcurementInspectionBrowser } from './verify-procurement-inspection-browser.mjs';
 import { verifyProcurementSettlementBrowser } from './verify-procurement-settlement-browser.mjs';
@@ -33,7 +34,7 @@ import { verifyProcurementSettlementBrowser } from './verify-procurement-settlem
 const chunks = []; for await (const chunk of process.stdin) chunks.push(chunk);
 const config = JSON.parse(Buffer.concat(chunks).toString('utf8')), api = new URL(config.apiAddress), origin = new URL(config.origin);
 assert.equal(process.versions.node.split('.')[0], '24'); assert.equal(api.protocol, 'http:'); assert.equal(api.hostname, '127.0.0.1'); assert.ok(Number(api.port) > 0); assert.equal(origin.href, 'https://portal.unit-toko.co.id/');
-const providerIssuer = config.procurementSupplierPayable || config.procurementAdvanceReturn ? new URL(config.providerIssuer) : null;
+const providerIssuer = config.procurementSupplierPayable || config.procurementAdvanceReturn || config.procurementQualityAcceptance ? new URL(config.providerIssuer) : null;
 if (providerIssuer) assert.equal(providerIssuer.href, 'https://login.unit-toko.co.id/');
 const load = createRequire(config.playwrightPackage), metadata = load(config.playwrightPackage); assert.equal(metadata.name, 'playwright'); assert.equal(metadata.version, '1.62.1');
 const { chromium } = load('playwright'), channel = process.env.UNITTOKO_BROWSER_CHANNEL ?? 'chromium'; assert.ok(['chromium', 'msedge'].includes(channel));
@@ -60,7 +61,7 @@ const stockReceiptWrites = [], stockReceiptRecoveries = [], stockReceiptTracePat
 const valuationWrites = [], valuationRecoveries = [], valuationTracePath = config.procurementStockValuation ? resolve(directory, 'procurement-stock-valuation-flow-' + Date.now() + '.jsonl') : null;
 const reconciliationWrites = [], reconciliationRecoveries = [], reconciliationTracePath = config.stockSourceReconciliation ? resolve(directory, 'stock-source-reconciliation-flow-' + Date.now() + '.jsonl') : null;
 // These journeys run separately and share the same real write/recovery/lost-response observer.
-const payableWrites = [], payableRecoveries = [], payableTracePath = config.procurementSupplierPayable || config.procurementAdvanceReturn ? resolve(directory, (config.procurementAdvanceReturn ? 'procurement-advance-return-flow-' : 'procurement-supplier-payable-flow-') + Date.now() + '.jsonl') : null;
+const payableWrites = [], payableRecoveries = [], payableTracePath = config.procurementSupplierPayable || config.procurementAdvanceReturn || config.procurementQualityAcceptance ? resolve(directory, (config.procurementQualityAcceptance ? 'procurement-quality-acceptance-flow-' : config.procurementAdvanceReturn ? 'procurement-advance-return-flow-' : 'procurement-supplier-payable-flow-') + Date.now() + '.jsonl') : null;
 function traceFinancial(type, value) { for (const path of [financialTracePath, payoutTracePath, settlementTracePath, addressTracePath, spendingTracePath, bookTracePath, procurementTracePath, supplierTracePath, purchaseOrderTracePath, fundingTracePath, supplierBankTracePath, disbursementTracePath, procurementSettlementTracePath, receivingTracePath, procurementInspectionTracePath, documentTracePath, claimTracePath, stockReceiptTracePath, valuationTracePath, reconciliationTracePath, payableTracePath]) if (path) appendFileSync(path, JSON.stringify({ at: new Date().toISOString(), type, ...value }) + '\n'); }
 traceFinancial('host-start', {});
 let browser, frontend, edge, tunnel, dropNext = false, dropped = 0;
@@ -125,9 +126,9 @@ function forward(req, res, port, isApi) {
   const stockReceiptWrite = req.method === 'POST' && req.url === '/api/v1/procurement/stock-receipts/receipts';
   const stockReceiptRecovery = req.method === 'POST' && req.url === '/api/v1/procurement/stock-receipts/operations/query';
   const stockReceiptPath = config.procurementStockReceipt && req.url.startsWith('/api/v1/procurement/stock-receipts/');
-  const payableWrite = req.method === 'POST' && /^\/api\/v1\/procurement\/(?:supplier-payables|advance-returns)\/(?:proposals|proposals\/[1-9][0-9]*\/decisions)$/.test(req.url);
-  const payableRecovery = req.method === 'POST' && ['/api/v1/procurement/supplier-payables/operations/query', '/api/v1/procurement/advance-returns/operations/query'].includes(req.url);
-  const payablePath = config.procurementSupplierPayable && req.url.startsWith('/api/v1/procurement/supplier-payables/') || config.procurementAdvanceReturn && req.url.startsWith('/api/v1/procurement/advance-returns/');
+  const payableWrite = req.method === 'POST' && /^\/api\/v1\/procurement\/(?:supplier-payables|advance-returns|quality-acceptances)\/(?:proposals|proposals\/[1-9][0-9]*\/decisions)$/.test(req.url);
+  const payableRecovery = req.method === 'POST' && ['/api/v1/procurement/supplier-payables/operations/query', '/api/v1/procurement/advance-returns/operations/query', '/api/v1/procurement/quality-acceptances/operations/query'].includes(req.url);
+  const payablePath = config.procurementSupplierPayable && req.url.startsWith('/api/v1/procurement/supplier-payables/') || config.procurementAdvanceReturn && req.url.startsWith('/api/v1/procurement/advance-returns/') || config.procurementQualityAcceptance && req.url.startsWith('/api/v1/procurement/quality-acceptances/');
   const reconciliationWrite = req.method === 'POST' && /^\/api\/v1\/inventory\/source-reconciliations\/(?:proposals|proposals\/[1-9][0-9]*\/decide)$/.test(req.url);
   const reconciliationRecovery = req.method === 'POST' && req.url === '/api/v1/inventory/source-reconciliations/operations/query';
   const reconciliationPath = config.stockSourceReconciliation && req.url.startsWith('/api/v1/inventory/source-reconciliations/');
@@ -224,7 +225,13 @@ try {
   }); const proxyPort = await listen(tunnel);
   browser = await chromium.launch({ ...(channel === 'msedge' ? { channel: 'msedge' } : {}), headless: true, proxy: { server: 'http://127.0.0.1:' + proxyPort } });
   const finance = await user(config.financeToken), page = finance.page;
-  if (config.procurementAdvanceReturn) {
+  if (config.procurementQualityAcceptance) {
+    assert.equal(config.financeToken, config.makerToken);
+    await verifyProcurementQualityAcceptanceBrowser({ config, maker: finance, user, origin, directory, qualityWrites: payableWrites, qualityRecoveries: payableRecoveries,
+      dropNext: () => { dropNext = true; }, dropped: () => dropped });
+    assert.equal(writes.length + caseWrites.length + decisionWrites.length + returnWrites.length + inspectionWrites.length + resolutionWrites.length + entitlementWrites.length + financialWrites.length + payoutWrites.length + draftWrites.length + settlementWrites.length + addressWrites.length + spendingWrites.length + bookWrites.length + procurementWrites.length + supplierWrites.length + purchaseOrderWrites.length + fundingWrites.length + supplierBankWrites.length + disbursementWrites.length + procurementSettlementWrites.length + receivingWrites.length + procurementInspectionWrites.length + documentWrites.length + claimWrites.length + stockReceiptWrites.length + valuationWrites.length + reconciliationWrites.length, 0);
+    assert.deepEqual(errors, []);
+  } else if (config.procurementAdvanceReturn) {
     assert.equal(config.financeToken, config.makerToken);
     await verifyProcurementAdvanceReturnBrowser({ config, maker: finance, user, origin, directory, advanceReturnWrites: payableWrites, advanceReturnRecoveries: payableRecoveries,
       dropNext: () => { dropNext = true; }, dropped: () => dropped });

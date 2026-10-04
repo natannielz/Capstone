@@ -1,4 +1,7 @@
 const labels: Record<string, string> = {
+  "procurement.qualityacceptance.read": "Lihat penerimaan mutu barang ditahan",
+  "procurement.qualityacceptance.propose": "Ajukan penerimaan mutu dengan verifikasi terbaru",
+  "procurement.qualityacceptance.decide": "Putuskan penerimaan mutu secara independen",
   "procurement.advancereturn.read": "Lihat pengembalian uang muka pemasok",
   "procurement.advancereturn.propose": "Ajukan pengembalian uang muka pemasok dengan verifikasi terbaru",
   "procurement.advancereturn.decide": "Putuskan pengembalian uang muka pemasok secara independen",
