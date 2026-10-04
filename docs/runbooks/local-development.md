@@ -48,7 +48,7 @@ try {
 
 The explicit worker migration command creates validators/indexes and records its schema version. API startup never applies migrations or seeds business data. `/health/live` checks that the process is running. `/health/ready` additionally checks that MongoDB is a writable replica-set member and has the current completed schema migration. The protected `/api/v1/system/status` currently returns 401: production identity is a later implementation gate. The test authentication adapter exists only in the test assembly. Do not turn it into a development or production login bypass. The worker foundation deliberately has no external message processors yet.
 
-The existing frontend continues through its legacy adapters during migration. It is not connected to the new service's stock or finance writes. Keep one authoritative writer until the coordinated migration gate passes.
+The maintained frontend connects to the .NET API and MongoDB for the locally verified journeys recorded in the [progress ledger](../quality/production-progress.md). The default Release 1 pilot exposes only catalog, branch requests and identity; full-workflow builds use `.next-full`. Remaining legacy callers and incomplete source producers still require migration. Keep one authoritative business-data writer and obtain the actual provider, policy and cutover acceptance before activating real stock or finance operations.
 
 ## Regenerate API contracts
 
