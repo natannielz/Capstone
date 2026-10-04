@@ -14,7 +14,7 @@ Authoritative checkout: `C:/Users/User/Documents/Capstone`, branch `main`. All o
 - [x] Verify service permission/isolation, validation, retry/concurrency and Mongo persistence checks.
 - [x] Demonstrate actual browser → .NET → Mongo journey, desktop/mobile and restart persistence.
 - [x] Production frontend build and relevant local checks; inspected GitHub rules permit normal main push.
-- [ ] Commit and push coherent release; publish verified frontend and verify deployment status honestly.
+- [x] Commit and push coherent release; publish verified frontend and verify deployment status honestly.
 - [x] Provide [local startup and private synthetic access](../runbooks/local-pilot-release1.md) and [exact external deployment prerequisites](../runbooks/release1-deployment.md).
 
 ## Evidence and status
@@ -34,7 +34,9 @@ Browser acceptance caught and corrected two integration defects: the synthetic p
 
 Integrated browser evidence, 4 October 2026: `tmp/production/release1-browser-results/attempt8` records actual submission, lost response, original-key lookup and staff decisions; `attempt10` resumes the same references and completes catalog maintenance; `after-restart` confirms both decisions and the catalog description after stopping/restarting the real API and Next processes. Pass logs: `release1-browser-before-10.log`, `release1-browser-after-restart.log`. The receipt is `tmp/production/release1-pilot-browser-receipt.json`. No requests were resubmitted during resumption/restart checks. Empty, loading, denied, invalid-quantity and uncertain-result states were inspected.
 
-Publication is the remaining delivery step. Hosted operation still requires the inputs below; the Vercel frontend must show an explicit inactive-preview banner until an API origin is configured. Private accounts, keys, database files and browser credentials are ignored by Git.
+Published application checkpoint: [`5127a7da1eeebd71666a01b51d52bbf3a61d6557`](https://github.com/natannielz/Capstone/commit/5127a7da1eeebd71666a01b51d52bbf3a61d6557). Vercel built that exact commit as `dpl_EPvnwVREatVP6HJJckdX9HBN5oHK` and reports Ready. The public [Release 1 frontend](https://unit-toko-bni.vercel.app/) shows the inactive-preview banner. Actual browser sign-in reports the unavailable account service; live probes return no-store 503 for `/api/v1/identity/session` and no-store 404 for legacy `/api/products` and deferred `/billing/invoices`. This is frontend publication, **not hosted journey acceptance**. GitHub's [Focused quality run](https://github.com/natannielz/Capstone/actions/runs/37180570201) completed successfully: frontend types/lint/module boundaries and backend compile/contracts/shared-authority regression passed. Existing non-failing lint warnings remain recorded in that run.
+
+Hosted operation still requires the external inputs listed in the deployment runbook. Private accounts, keys, database files and browser credentials are ignored by Git. The preserved 97-item project and mixed-receipt costing are not complete and have not resumed.
 
 ## Cleanup record
 

@@ -22,7 +22,8 @@ After deploying the pinned GitHub commit, verify the requester submission, staff
 
 - GitHub `natannielz/Capstone`: main has no branch protection or applicable rules returned by the API. Normal verified main pushes are permitted; no force push is needed.
 - Connected Railway account: no projects found. No paid resource was provisioned.
-- Vercel project exists, but inspected environment names are the old demo/Turso settings; there is no configured Release 1 API origin or supplied Auth0/API/Mongo host configuration.
+- Vercel `unit-toko-bni` is connected to the existing `natannielz/Capstone` GitHub repository, root `frontend`, Node 24. The verified application commit `5127a7da1eeebd71666a01b51d52bbf3a61d6557` is published at https://unit-toko-bni.vercel.app/ as a clearly inactive preview. Main is the only branch configured for automatic deployment. Existing deployment protection remains enabled.
+- Inspected environment names still contain the old demo/Turso settings; there is no configured Release 1 API origin or supplied Auth0/API/Mongo host configuration. Live sign-in returns an understandable unavailable-service state; no demo identity fallback is offered.
 - No Auth0 tenant credentials or approved provider subjects/catalog were supplied. User delegated preparation choices; the local fallback therefore uses explicit synthetic data.
 
 Until the above inputs and real hosted checks are complete, the working deliverable is the persistent local pilot. A published frontend candidate must remain labelled as a candidate with hosted sign-in unavailable.
