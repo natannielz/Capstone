@@ -1,0 +1,87 @@
+.page {
+  min-height: 100dvh;
+  background: #f7f6f1;
+  color: #073b45;
+  font: 16px/1.6 var(--font-body), sans-serif;
+}
+
+.page :is(h1, h2, h3, p, figure) { margin: 0; }
+.page :is(a, button, input):focus-visible { outline: 3px solid #b26842; outline-offset: 4px; }
+.page button, .page input { font: inherit; }
+.page button:disabled { opacity: .6; cursor: not-allowed; }
+.skip { position: fixed; top: 12px; left: 12px; z-index: 100; padding: 12px 18px; background: #073b45; color: #fff; border-radius: 8px; transform: translateY(-180%); }
+.skip:focus { transform: translateY(0); }
+
+.loginGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(340px, .85fr);
+  align-items: center;
+  gap: clamp(40px, 6vw, 88px);
+  max-width: 1296px;
+  margin: 0 auto;
+  padding: 64px clamp(22px, 4vw, 56px) 76px;
+}
+
+.introduction, .formSide { min-width: 0; }
+.eyebrow { display: block; color: #52746d; font-size: 11px; font-weight: 750; letter-spacing: .14em; line-height: 1.5; }
+.introduction h1 { margin: 17px 0 22px; font: 400 clamp(35px, 4vw, 57px)/1.08 var(--font-display), sans-serif; letter-spacing: -.045em; }
+.introduction h1 span { color: #59796f; }
+.introduction > p { max-width: 44ch; color: #536866; font-size: 16px; line-height: 1.75; }
+.introduction .art { margin-top: 32px; padding: 9px; border: 1px solid #d4ded5; border-radius: 20px; background: #edf4f1; }
+.art img { display: block; width: 100%; height: clamp(235px, 24vw, 320px); object-fit: cover; object-position: 60% center; border-radius: 13px; }
+.art figcaption { display: flex; justify-content: space-between; align-items: center; gap: 14px; padding: 13px 9px 6px; color: #49645e; font-size: 11px; }
+.art figcaption > span:last-child { flex-shrink: 0; font-size: 9px; font-weight: 750; letter-spacing: .13em; }
+
+.formSide { width: 100%; max-width: 460px; justify-self: end; }
+.card { display: grid; gap: 22px; padding: clamp(26px, 3vw, 40px); border: 1px solid #d8e0da; border-radius: 24px; background: #fff; box-shadow: 0 18px 50px -35px #173c403d; }
+.cardHeader .symbol { display: grid; place-items: center; width: 52px; height: 52px; margin-bottom: 25px; background: #edf4f1; border: 1px solid #dce8df; border-radius: 16px; }
+.cardHeader .eyebrow { font-size: 10px; letter-spacing: .12em; }
+.cardHeader h2 { margin-top: 11px; font: 400 clamp(25px, 2.5vw, 31px)/1.2 var(--font-display), sans-serif; letter-spacing: -.035em; color: #073b45; }
+.cardHeader > p { margin-top: 13px; color: #62726e; font-size: 14px; line-height: 1.7; }
+.signinCopy { color: #465e58; font-size: 14px; line-height: 1.75; }
+.card .help { color: #62726e; font-size: 13px; line-height: 1.7; }
+.card .checkbox { display: flex; align-items: flex-start; gap: 11px; color: #365951; font-size: 14px; }
+.checkbox input { width: 19px; height: 19px; margin: 2px 0 0; flex-shrink: 0; accent-color: #073b45; }
+.invitationFields { display: grid; gap: 17px; padding-top: 20px; border-top: 1px solid #e1e8e1; }
+.invitationFields label { display: grid; gap: 8px; font-size: 14px; font-weight: 650; }
+.invitationFields input { width: 100%; min-width: 0; min-height: 48px; padding: 10px 12px; border: 1px solid #99afa4; border-radius: 8px; background: #fff; color: #073b45; }
+.primary, .secondary, .action button[type="submit"] { display: inline-flex; align-items: center; justify-content: center; min-height: 52px; padding: 13px 20px; border: 1px solid #073b45; border-radius: 100px; font: 650 14px/1.5 var(--font-body), sans-serif; text-align: center; text-decoration: none; cursor: pointer; }
+.primary, .action button[type="submit"] { width: 100%; background: #073b45; color: #fff; }
+.primary:hover, .action button[type="submit"]:hover:not(:disabled) { background: #18505a; }
+.secondary { background: #fff; color: #073b45; border-color: #a9bcb3; }
+.secondary:hover:not(:disabled) { background: #edf4f1; }
+.action form { margin: 0; }
+.action button[type="submit"] { text-wrap: balance; }
+.support { display: grid; gap: 8px; padding-top: 23px; border-top: 1px solid #e1e8e1; }
+.support h3 { color: #365951; font-size: 14px; font-weight: 700; }
+.support p { color: #62726e; font-size: 13px; line-height: 1.75; }
+.accessNote { display: flex; align-items: flex-start; justify-content: center; gap: 8px; padding: 20px 7px 4px; color: #5b7168; font-size: 12px; text-align: center; }
+.accessNote svg { flex-shrink: 0; margin-top: 2px; }
+.backLink { display: flex; align-items: center; justify-content: center; gap: 8px; width: fit-content; min-height: 44px; margin: 4px auto 0; color: #365951; font-size: 13px; font-weight: 650; text-decoration: none; }
+.backLink:hover { text-decoration: underline; text-underline-offset: 4px; }
+.alert, .success { display: grid; gap: 12px; padding: 16px; border-left: 3px solid #ae533e; border-radius: 0 9px 9px 0; color: #7c3024; background: #fff2eb; overflow-wrap: anywhere; font-size: 14px; }
+.alert small { font-size: 12px; }
+.success { color: #205b44; background: #edf4f1; border-color: #438469; }
+.loading { display: flex; align-items: center; gap: 11px; padding: 16px; color: #466358; border-radius: 9px; background: #edf4f1; font-size: 14px; }
+.loading > span { width: 8px; height: 8px; flex-shrink: 0; background: #59796f; border-radius: 50%; }
+
+@media (max-width: 900px) {
+  .loginGrid { grid-template-columns: minmax(0, 1fr) minmax(320px, 1fr); gap: 30px; padding-top: 44px; }
+  .introduction h1 { font-size: 38px; }
+  .art figcaption > span:last-child { display: none; }
+  .card { padding: 28px; }
+}
+
+@media (max-width: 760px) {
+  .loginGrid { grid-template-columns: minmax(0, 1fr); max-width: 550px; gap: 28px; padding: 32px 20px 42px; }
+  .introduction h1 { margin: 13px 0 15px; font-size: clamp(32px, 7.7vw, 41px); }
+  .introduction > p { font-size: 14px; }
+  .introduction .art { margin-top: 22px; padding: 7px; border-radius: 15px; }
+  .art img { height: 160px; border-radius: 9px; }
+  .art figcaption { padding: 9px 5px 3px; font-size: 10px; }
+  .formSide { max-width: none; }
+  .card { gap: 20px; padding: 25px; border-radius: 19px; }
+  .cardHeader .symbol { width: 44px; height: 44px; margin-bottom: 19px; border-radius: 12px; }
+  .cardHeader h2 { font-size: 27px; }
+  .accessNote { font-size: 11px; }
+}

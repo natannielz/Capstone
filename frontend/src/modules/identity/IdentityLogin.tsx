@@ -2,10 +2,13 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { ArrowUpRight, ShieldCheck } from "lucide-react";
+import { Art } from "../../components/art";
+import { PilotSiteFooter, PilotSiteHeader } from "../../components/pilot-site-chrome";
 import { createIdentityGateway } from "./identity-client";
 import { IdentityFailure, identityMessage, identityReturnPath, loginFields, type IdentitySession } from "./identity-workflow";
 import { ProtectedNavigationForm } from "./ProtectedNavigationForm";
-import styles from "./identity.module.css";
+import styles from "./identity-login.module.css";
 import { isPilotRelease } from '../../lib/release-scope';
 
 export function IdentityLogin() {
@@ -44,25 +47,29 @@ export function IdentityLogin() {
   let fields: Record<string, string> | null = null;
   try { fields = loginFields(returnPath, invited ? invitationId.trim() : "", invited ? invitationSecret.trim() : "", invited); } catch { /* Incomplete form remains disabled. */ }
 
-  return <main className={styles.page}>
+  return <div className={styles.page}>
     <a className={styles.skip} href="#identity-content">Langsung ke akun</a>
-    <header className={styles.masthead}><span className={styles.brand}>Unit Toko</span><span className={styles.kicker}>Layanan organisasi</span></header>
-    <div className={styles.loginGrid} id="identity-content">
+    <PilotSiteHeader active="account" />
+    <main className={styles.loginGrid} id="identity-content" tabIndex={-1}>
       <section className={styles.introduction} aria-labelledby="login-heading">
-        <span className={styles.eyebrow}>AKSES TERDAFTAR</span>
-        <h1 id="login-heading">Satu akun untuk kebutuhan organisasi Anda.</h1>
-        <p>Akses Unit Toko untuk cabang BNI dan mitra usaha yang telah disetujui.</p>
-        <ol className={styles.steps}>
-          <li><span>01</span><div><h2>Gunakan email terdaftar</h2><p>Masuk dengan alamat email yang telah diverifikasi.</p></div></li>
-          <li><span>02</span><div><h2>Selesaikan verifikasi dua langkah</h2><p>Verifikasi tambahan membantu melindungi akun dan setiap tindakan penting.</p></div></li>
-          <li><span>03</span><div><h2>Bekerja sesuai penugasan</h2><p>Halaman dan tindakan tersedia berdasarkan keanggotaan serta izin yang disetujui.</p></div></li>
-        </ol>
+        <span className={styles.eyebrow}>RUANG KERJA UNIT TOKO</span>
+        <h1 id="login-heading">Kebutuhan cabang.<br /><span>Lebih tertata.</span></h1>
+        <p>Mulai dari pilihan kemasan hingga permintaan cabang. Terhubung dengan kebutuhan organisasi Anda, dalam satu tempat.</p>
+        <figure className={styles.art}>
+          <Art src="/images/editorial/hero-still-life-v3.png" alt="Tumbler, tas kanvas, kopi, dan perlengkapan untuk keseharian" loading="eager" fetchPriority="high" sizes="(max-width: 760px) 100vw, 50vw" />
+          <figcaption><span>Untuk keseharian yang lebih tertata.</span><span aria-hidden="true">UNIT TOKO</span></figcaption>
+        </figure>
       </section>
+      <div className={styles.formSide}>
       <section className={styles.card} aria-labelledby="signin-heading" aria-busy={loading}>
-        <span className={styles.cardAccent} aria-hidden="true" />
-        <h2 id="signin-heading">Masuk ke Unit Toko</h2>
+        <header className={styles.cardHeader}>
+          <span className={styles.symbol}><ShieldCheck size={25} aria-hidden="true" /></span>
+          <span className={styles.eyebrow}>AKUN ORGANISASI ANDA</span>
+          <h2 id="signin-heading">Masuk ke Unit Toko</h2>
+          <p>Untuk cabang BNI dan mitra usaha yang telah disetujui.</p>
+        </header>
         {loggedOut && session && !session.authenticated && <p className={styles.success} role="status">Tidak ada sesi Unit Toko aktif di peramban ini.</p>}
-        {loading && <p role="status">Memeriksa layanan akun…</p>}
+        {loading && <p className={styles.loading} role="status"><span aria-hidden="true" />Memeriksa layanan akun…</p>}
         {error !== null && <div className={styles.alert} role="alert"><p>{identityMessage(error)}</p>
           {error instanceof IdentityFailure && error.traceId && <small>Referensi bantuan: {error.traceId}</small>}
           <button type="button" className={styles.secondary} onClick={() => { setLoading(true); setError(null); setAttempt(value => value + 1); }}>Periksa kembali</button>
@@ -71,7 +78,7 @@ export function IdentityLogin() {
           <Link href="/identity/account" className={styles.primary}>Buka akun saya</Link>
           <p className={styles.help}>Untuk menggunakan akun lain, keluar terlebih dahulu melalui halaman akun.</p></>}
         {!loading && session && !session.authenticated && <>
-          <p>Masuk melalui layanan akun resmi. Siapkan perangkat verifikasi Anda.</p>
+          <p className={styles.signinCopy}>Anda akan diarahkan ke layanan akun untuk masuk dan menyelesaikan verifikasi.</p>
           {!isPilotRelease && <label className={styles.checkbox}><input type="checkbox" checked={invited} onChange={event => {
             setInvited(event.target.checked); setInvitationId(""); setInvitationSecret("");
           }} />Saya menerima undangan akun baru</label>}
@@ -82,12 +89,15 @@ export function IdentityLogin() {
             <p className={styles.help} id="invite-secret-help">Kode bersifat pribadi dan hanya digunakan untuk mengaktifkan undangan ini.</p>
             {(!fields && (invitationId || invitationSecret)) && <p className={styles.help}>Lengkapi nomor undangan dan kode 64 karakter yang Anda terima.</p>}
           </div>}
-          <ProtectedNavigationForm action="/auth/login" fields={fields ?? { returnPath }} disabled={!fields} label={invited ? "Terima undangan dan masuk" : "Lanjutkan ke layanan akun"} />
+          <div className={styles.action}><ProtectedNavigationForm action="/auth/login" fields={fields ?? { returnPath }} disabled={!fields} label={invited ? "Terima undangan dan masuk" : "Lanjutkan ke layanan akun"} /></div>
         </>}
-        <div className={styles.support}><h3>Belum memiliki akses atau sulit masuk?</h3><p>Hubungi pengelola cabang atau organisasi Anda untuk memeriksa undangan dan keanggotaan. Untuk pemulihan akun, ikuti proses resmi dari pengelola; jangan membagikan kata sandi atau kode verifikasi.</p></div>
+        <div className={styles.support}><h3>Perlu bantuan masuk?</h3><p>Hubungi pengelola cabang atau organisasi untuk memeriksa akses dan undangan, atau ikuti proses pemulihan akun resmi. Jangan bagikan kata sandi atau kode verifikasi Anda.</p></div>
         <noscript><p className={styles.alert}>Aktifkan JavaScript untuk menyiapkan perlindungan formulir masuk.</p></noscript>
       </section>
-    </div>
-    <footer className={styles.footer}>Unit Toko · Akses khusus organisasi yang disetujui</footer>
-  </main>;
+      <p className={styles.accessNote}><ShieldCheck size={16} aria-hidden="true" />Akses mengikuti keanggotaan dan penugasan Anda.</p>
+      <Link className={styles.backLink} href="/">Kembali ke beranda<ArrowUpRight size={16} aria-hidden="true" /></Link>
+      </div>
+    </main>
+    <PilotSiteFooter />
+  </div>;
 }

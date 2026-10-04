@@ -2,6 +2,9 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { ArrowRight, ArrowUpRight, ClipboardList, PackageOpen, Search, ShieldCheck } from 'lucide-react';
+import { Art } from '../../components/art';
+import { PilotSiteHeader, PilotSiteFooter } from '../../components/pilot-site-chrome';
 import { createAccessGateway } from '../administration/access-client';
 import { AccessFailure } from '../administration/workflow';
 import { createIdentityGateway } from '../identity/identity-client';
@@ -22,19 +25,20 @@ function message(error: unknown) {
     if (error.status === 401) return 'Sesi telah berakhir. Masuk kembali untuk membuka katalog.';
     if (error.status === 403) return 'Katalog ini belum tersedia untuk akun Anda. Hubungi pengelola akun.';
     if (error.status === 409) return 'Data berubah saat dimuat. Muat kembali untuk melihat informasi terbaru.';
+    if (error.status >= 500) return 'Layanan katalog belum tersedia. Coba lagi nanti atau hubungi pengelola organisasi Anda.';
   }
   return 'Katalog belum dapat dimuat. Periksa koneksi, lalu coba lagi.';
 }
 type Account = { actorId: string; name: string; actions: readonly string[]; session: IdentitySession; observedAt: number };
 function PackageReview({ item, account, isCurrent, requestOnly }: { item: BuyerVariant; account: Account; isCurrent: () => boolean; requestOnly: boolean }) {
   return <div className={styles.packageLayout}><div className={styles.packageFacts}>
-    {requestOnly && <div className={styles.photoPlaceholder}><span aria-hidden="true">▧</span><p>Foto belum tersedia</p></div>}
+    {requestOnly && <div className={styles.photoPlaceholder}><PackageOpen size={42} strokeWidth={1} aria-hidden="true" /><p>Foto belum tersedia</p></div>}
     <span className={styles.category}>{item.categoryCode}</span><h2 id="buyer-package-title" className={styles.packageTitle}>{item.familyName} — {item.definition.packageLabel}</h2>
     <p className={styles.code}>{item.code}</p>{item.description && <p className={styles.description}>{item.description}</p>}
     <p className={styles.contents}>{item.definition.baseUnitsPerPackage.toLocaleString('id-ID')} <span>{item.definition.baseUnitCode} per kemasan</span></p>
     {!requestOnly && <p className={styles.price}>{price(item.currentPrice)}<span> per {item.definition.packageLabel}</span></p>}
     <dl className={shared.facts}><div><dt>Jenis kemasan</dt><dd>{{ sealed: 'Kemasan tersegel', loose: 'Satuan lepas', other: 'Kemasan lain' }[item.definition.packageKind]}</dd></div>
-      <div><dt>Minimum pembelian</dt><dd>{item.definition.minimumOrderPackages} kemasan</dd></div><div><dt>Kelipatan pemesanan</dt><dd>{item.definition.orderIncrementPackages} kemasan</dd></div>
+      <div><dt>{requestOnly ? 'Minimum permintaan' : 'Minimum pembelian'}</dt><dd>{item.definition.minimumOrderPackages} kemasan</dd></div><div><dt>Kelipatan jumlah</dt><dd>{item.definition.orderIncrementPackages} kemasan</dd></div>
       {item.definition.attributes.map(attribute => <div key={attribute.key}><dt>{attribute.key}</dt><dd>{attribute.value}</dd></div>)}</dl>
     <p className={shared.help}>{requestOnly ? 'Pilih kemasan ini untuk menyusun permintaan kebutuhan cabang. Petugas toko akan meninjau permintaan Anda.' : 'Harga dan ketersediaan akan diperiksa kembali saat pesanan disiapkan.'}</p>
   </div>{requestOnly ? <div className={styles.quoteArea}><h3>Siapkan permintaan cabang</h3>{account.actions.includes('order.request.submit') ? <><p>Pilih cabang dan jumlah kemasan, lalu tinjau permintaan sebelum mengirim.</p><Link className={shared.primary} href={'/ordering/requests?package=' + item.publicId}>Pilih untuk permintaan</Link></> : <p>Akun Anda dapat melihat katalog. Hubungi pengelola jika Anda memerlukan akses untuk mengajukan kebutuhan cabang.</p>}</div> : item.currentPrice && <div className={styles.quoteArea}><OrderQuotePanel key={account.actorId + ':' + item.skuId + ':' + item.definition.id + ':' + item.currentPrice.id}
@@ -93,20 +97,32 @@ export function BuyerCatalog({ publicId, returnPath = '/catalog/browse', request
     } finally { if (request.current() && alive.current) setDetailBusy(null); }
   }
   function close() { dialog.current?.close(); setSelected(null); opener.current?.focus(); }
-  return <main className={`${shared.page} ${styles.page}`}><header className={shared.header}><div><Link className={shared.brand} href="/identity/account">Unit Toko</Link><h1>{publicId === undefined ? 'Katalog kemasan' : 'Rincian kemasan'}</h1>
-    <p>{requestOnly ? 'Periksa isi dan satuan setiap kemasan sebelum mengajukan kebutuhan cabang.' : 'Periksa isi, satuan, dan harga setiap kemasan sebelum menyusun pesanan.'}</p></div><nav className={shared.actions} aria-label="Navigasi belanja">{publicId !== undefined && <Link className={shared.secondary} href={returnPath}>Katalog kemasan</Link>}<Link className={shared.secondary} href={requestOnly ? '/ordering/requests' : '/ordering/drafts'}>{requestOnly ? 'Permintaan saya' : 'Draf pesanan'}</Link><Link className={shared.secondary} href="/identity/account">Akun saya</Link></nav></header>
+  const needsSignIn = error instanceof IdentityFailure && error.status === 401;
+  return <div className={styles.storefront}>{requestOnly && <><a className={styles.skip} href="#catalog-main">Langsung ke katalog</a><PilotSiteHeader active="catalog" /></>}
+    <main id="catalog-main" tabIndex={-1} className={`${shared.page} ${styles.page}`}>
+    {requestOnly ? <>
+      <nav className={styles.breadcrumb} aria-label="Jejak halaman"><Link href="/">Beranda</Link><span aria-hidden="true">/</span><span>{publicId === undefined ? 'Katalog' : 'Rincian kemasan'}</span></nav>
+      {publicId === undefined ? <section className={styles.editorial} aria-labelledby="catalog-title">
+        <div className={styles.editorialCopy}><p className={styles.eyebrow}>KEBUTUHAN CABANG & ORGANISASI</p><h1 id="catalog-title">Pilihan tepat.<br /><em>Hari lebih siap.</em></h1><p>Temukan kebutuhan tim, periksa isi kemasannya, lalu ajukan dalam satu permintaan yang tercatat.</p><a className={styles.editorialLink} href="#catalog-list">Jelajahi katalog <ArrowRight size={18} aria-hidden="true" /></a></div>
+        <figure className={styles.editorialPhoto}><Art src="/images/editorial/hero-still-life-v3.png" alt="Ilustrasi kebutuhan kerja: tas, tumbler, kopi, dan camilan" loading="eager" fetchPriority="high" sizes="(max-width: 720px) 100vw, 50vw" /><figcaption>Ilustrasi kebutuhan · pilihan tersedia mengikuti katalog akun Anda</figcaption></figure>
+      </section> : <header className={styles.detailHeading}><p className={styles.eyebrow}>KENALI PILIHAN ANDA</p><h1>Rincian kemasan</h1><p>Periksa isi dan satuan sebelum mengajukan kebutuhan cabang.</p></header>}
+      <div className={styles.assurances}><p><PackageOpen size={20} aria-hidden="true" /><span>Isi & satuan kemasan jelas</span></p><p><ShieldCheck size={20} aria-hidden="true" /><span>Akses sesuai akun organisasi</span></p><p><ClipboardList size={20} aria-hidden="true" /><span>Permintaan dapat ditelusuri</span></p></div>
+      <div className={styles.sectionHeading} id="catalog-list"><div><p className={styles.eyebrow}>KATALOG UNIT TOKO</p><h2>{publicId === undefined ? 'Katalog kemasan' : 'Informasi kemasan'}</h2></div><Link href="/ordering/requests">Permintaan saya <ArrowUpRight size={18} aria-hidden="true" /></Link></div>
+      <p className={styles.availability}>Harga, stok, dan pemenuhan dikonfirmasi petugas. Permintaan yang diterima belum menjadi pemesanan dengan harga mengikat, reservasi stok, pembayaran, atau invoice.</p>
+    </> : <header className={shared.header}><div><Link className={shared.brand} href="/identity/account">Unit Toko</Link><h1>{publicId === undefined ? 'Katalog kemasan' : 'Rincian kemasan'}</h1>
+    <p>Periksa isi, satuan, dan harga setiap kemasan sebelum menyusun pesanan.</p></div><nav className={shared.actions} aria-label="Navigasi belanja">{publicId !== undefined && <Link className={shared.secondary} href={returnPath}>Katalog kemasan</Link>}<Link className={shared.secondary} href="/ordering/drafts">Draf pesanan</Link><Link className={shared.secondary} href="/identity/account">Akun saya</Link></nav></header>}
     {publicId === undefined ? <section className={styles.toolbar} aria-label="Pencarian katalog"><form className={styles.search} onSubmit={event => { event.preventDefault(); detailGate.cancel(); setSelected(null); setOffset(0); setQuery(search.trim()); refresh(); }}>
-      <label>Cari kode atau kemasan<input value={search} maxLength={128} disabled={busy || detailBusy !== null} onChange={event => setSearch(event.target.value)} /></label><button className={shared.primary} disabled={busy || detailBusy !== null}>Cari</button></form>
+      <label>Cari kode atau kemasan<input value={search} placeholder="Nama barang, kode, atau jenis kemasan" maxLength={128} disabled={busy || detailBusy !== null || !account} onChange={event => setSearch(event.target.value)} /></label><button className={shared.primary} disabled={busy || detailBusy !== null || !account}><Search size={17} aria-hidden="true" /> Cari</button></form>
       <button className={shared.secondary} disabled={busy || detailBusy !== null} onClick={refresh}>Muat kembali katalog</button></section> : <div className={styles.detailToolbar}><Link href={returnPath}>Kembali ke katalog</Link><button className={shared.secondary} disabled={busy} onClick={refresh}>Muat kembali kemasan</button></div>}
-    {error !== null && <p role="alert" className={shared.alert}>{message(error)}</p>}
+    {error !== null && <div role={needsSignIn ? 'status' : 'alert'} className={styles.accessState}><div className={styles.stateIcon}><ShieldCheck size={27} strokeWidth={1.5} aria-hidden="true" /></div><div><h2>{needsSignIn ? 'Katalog khusus untuk akun Anda.' : 'Katalog belum dapat ditampilkan.'}</h2><p>{needsSignIn ? 'Masuk dengan akun yang telah disetujui untuk melihat pilihan kemasan dan mengajukan kebutuhan cabang Anda.' : message(error)}</p>{!needsSignIn && <p className={styles.stateHint}>Daftar barang akan tampil setelah layanan tersedia dan akses akun Anda terverifikasi.</p>}<Link className={styles.stateAction} href={'/identity/login?returnPath=' + encodeURIComponent(returnPath)}>Masuk atau periksa akun <ArrowRight size={17} aria-hidden="true" /></Link></div></div>}
     {expired && <p role="alert" className={shared.alert}>Sesi telah berakhir. Masuk kembali untuk membuka katalog.</p>}
-    {(expired || !account && !busy) && <Link href={'/identity/login?returnPath=' + encodeURIComponent(returnPath)}>Masuk atau periksa akun</Link>}
+    {(expired || !account && !busy && error === null) && <Link className={styles.stateAction} href={'/identity/login?returnPath=' + encodeURIComponent(returnPath)}>Masuk atau periksa akun <ArrowRight size={17} aria-hidden="true" /></Link>}
     {notice && <p role="status">{notice}</p>}
     {publicId !== undefined ? <section className={styles.packagePage} aria-busy={busy} aria-label="Rincian kemasan">{busy ? <p role="status">Memuat kemasan untuk akun Anda…</p> : account && !expired && selected && <PackageReview item={selected} account={account} isCurrent={current} requestOnly={requestOnly} />}</section>
-      : <section aria-busy={busy} aria-label="Kemasan yang tersedia">{busy ? <p role="status">Memuat katalog untuk akun Anda…</p> : account && !expired && <>
+      : <section aria-busy={busy} aria-label="Kemasan yang tersedia">{busy ? <div className={styles.loading}><p role="status">Memuat katalog untuk akun Anda…</p><div className={styles.skeletonGrid} aria-hidden="true"><span /><span /><span /></div></div> : account && !expired && <>
       <p className={shared.help}>{account.name} · {BigInt(total).toLocaleString('id-ID')} kemasan dalam katalog</p>
-      {items.length === 0 ? <p>Belum ada kemasan yang sesuai. Ubah pencarian atau periksa kembali nanti.</p> : <ul className={styles.grid}>{items.map(item => <li className={styles.card} key={item.skuId}>
-        {requestOnly && <div className={styles.photoPlaceholder}><span aria-hidden="true">▧</span><p>Foto belum tersedia</p></div>}
+      {items.length === 0 ? <div className={styles.empty}><PackageOpen size={36} strokeWidth={1.25} aria-hidden="true" /><h3>Belum ada kemasan yang sesuai.</h3><p>Ubah pencarian atau periksa kembali nanti.</p></div> : <ul className={styles.grid}>{items.map(item => <li className={styles.card} key={item.skuId}>
+        {requestOnly && <div className={styles.photoPlaceholder}><PackageOpen size={48} strokeWidth={1} aria-hidden="true" /><p>Foto belum tersedia</p></div>}
         <span className={styles.category}>{item.categoryCode}</span><h2>{item.familyName}</h2><p className={styles.code}>{item.code}</p><h3>{item.definition.packageLabel}</h3>
         <p className={styles.contents}>{item.definition.baseUnitsPerPackage.toLocaleString('id-ID')} <span>{item.definition.baseUnitCode} per kemasan</span></p>
         {!requestOnly && <p className={styles.price}>{price(item.currentPrice)}<span> per {item.definition.packageLabel}</span></p>}
@@ -121,5 +137,5 @@ export function BuyerCatalog({ publicId, returnPath = '/catalog/browse', request
       {selected && !expired && <><div className={styles.dialogHeader}><p className={styles.code}>{selected.code}</p><button className={shared.secondary} onClick={close}>Tutup rincian</button></div>
         {account && <PackageReview item={selected} account={account} isCurrent={current} requestOnly={requestOnly} />}</>}
     </dialog>}
-  </main>;
+  </main>{requestOnly && <PilotSiteFooter />}</div>;
 }

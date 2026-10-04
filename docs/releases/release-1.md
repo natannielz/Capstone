@@ -38,6 +38,12 @@ Published application checkpoint: [`5127a7da1eeebd71666a01b51d52bbf3a61d6557`](h
 
 Hosted operation still requires the external inputs listed in the deployment runbook. Private accounts, keys, database files and browser credentials are ignored by Git. The preserved 97-item project and mixed-receipt costing are not complete and have not resumed.
 
+## Visual restoration — 4 October 2026
+
+Restored the original demo's editorial landing composition, bundled photographs, typography, motion, and branded navigation/footer for Release 1. Catalog and sign-in now share that visual identity, including understandable unavailable/account states. Editorial illustrations remain labelled and are not presented as approved catalog inventory. Navigation uses only the supported request/account routes; API clients, session/CSRF handling, permissions, retry protection, and deferred-feature boundaries remain intact.
+
+Validation: production frontend build, TypeScript, focused ESLint, import boundaries and the existing catalog/request/identity/release-scope checks passed. Actual browser checks cover landing/catalog/sign-in at desktop and 390px mobile width, images and navigation. The restarted real .NET/Mongo local pilot passed the existing read-only browser acceptance again, including both saved decisions, cross-branch denial and the persistent catalog description. Evidence: `tmp/production/release1-visual-build.log`, `release1-visual-browser.log` and `release1-browser-results/visual-restoration`. No new requests or financial/inventory writes were created by this check. Hosted-service activation remains subject to the external deployment inputs above; restoring the design does not imply production acceptance.
+
 ## Cleanup record
 
 - Removed disconnected duplicate storefront and its sole carousel component after source/script/test reference checks: `frontend/src/components/shop/storefront.tsx`, `frontend/src/components/collection-carousel.tsx`.
