@@ -29,10 +29,19 @@ namespace UnitToko.Tests.Ordering;
 public sealed class PaymentAllocationBrowserTests(MongoFixture fixture, ITestOutputHelper output)
 {
     [WindowsPaymentBrowserFact]
-    public async Task Browser_allocates_and_independently_corrects_linked_funds_recovers_lost_replies_and_preserves_original_cash() {
+    public async Task Browser_allocates_and_independently_corrects_linked_funds_recovers_lost_replies_and_preserves_original_cash() => await RunAsync(false);
+
+    [WindowsPaymentBrowserFact]
+    public async Task Browser_chooses_a_genuine_non_declaration_invoice_and_independently_corrects_its_original_allocation() => await RunAsync(true);
+
+    private async Task RunAsync(bool useInvoiceChoice) {
         var root = Root(); var node = Environment.GetEnvironmentVariable("UNITTOKO_BROWSER_NODE"); var playwright = Environment.GetEnvironmentVariable("UNITTOKO_BROWSER_PLAYWRIGHT_PACKAGE");
         Assert.True(Path.IsPathFullyQualified(node ?? "") && File.Exists(node)); Assert.True(Path.IsPathFullyQualified(playwright ?? "") && File.Exists(playwright)); Assert.True(File.Exists(Path.Combine(root, "frontend", ".next-full", "BUILD_ID")));
         await using var data = await PaymentAllocationTests.Data.CreateAsync(fixture);
+        var declarationInvoice = await data.Rows(InvoiceBson.Invoices).Find(new BsonDocument("_id", data.InvoiceId)).SingleAsync();
+        var allocationInvoiceId = useInvoiceChoice ? await PaymentAllocationInvoiceChoiceTests.IssueSecondInvoiceAsync(data) : data.InvoiceId;
+        var allocationInvoice = await data.Rows(InvoiceBson.Invoices).Find(new BsonDocument("_id", allocationInvoiceId)).SingleAsync();
+        var allocationInvoiceNumber = FormattableString.Invariant($"{allocationInvoice["numberEntity"].AsInt64}/{allocationInvoice["numberChannel"].AsInt64}/{allocationInvoice["numberYear"].AsInt64}/{allocationInvoice["number"].AsInt64}");
         var checker = await PaymentAllocationCorrectionTests.Checker(data);
         var originalCash = await data.Rows("journalEntries").Find(new BsonDocument("source.namespace", "billing.bank-receipt")).SingleAsync();
         var duplicate = await PaymentDuplicateTests.AdditionalAsync(data.Source.Read, "browser-duplicate", data.Source.Read.Payment.Input);
@@ -64,7 +73,10 @@ public sealed class PaymentAllocationBrowserTests(MongoFixture fixture, ITestOut
             reviewerToken = data.Source.Read.Catalog.Issued[data.Actor.UserId].OpaqueToken, readerToken = data.Source.Read.Catalog.Issued[data.Source.Reader.UserId].OpaqueToken,
             checkerToken = data.Source.Read.Catalog.Issued[checker.UserId].OpaqueToken,
             otherToken = data.Source.Read.Catalog.Issued[outside.UserId].OpaqueToken, otherId = outside.UserId.ToString(),
-            duplicateId = duplicate.Id.ToString(), verificationId = data.VerificationId.ToString(), invoiceId = data.InvoiceId.ToString(), declarationId = data.Source.Read.DeclarationId.ToString(), receiptId = data.Source.ReceiptId.ToString(), imageBase64 = Convert.ToBase64String(data.Source.Read.Bytes) };
+            duplicateId = duplicate.Id.ToString(), verificationId = data.VerificationId.ToString(), invoiceId = allocationInvoiceId.ToString(),
+            declarationInvoiceId = data.InvoiceId.ToString(), additionalInvoiceId = useInvoiceChoice ? allocationInvoiceId.ToString() : null,
+            additionalInvoiceNumber = useInvoiceChoice ? allocationInvoiceNumber : null,
+            declarationId = data.Source.Read.DeclarationId.ToString(), receiptId = data.Source.ReceiptId.ToString(), imageBase64 = Convert.ToBase64String(data.Source.Read.Bytes) };
         var start = new ProcessStartInfo(node!) { WorkingDirectory = Path.Combine(root, "frontend"), UseShellExecute = false, CreateNoWindow = true, RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true };
         start.ArgumentList.Add(Path.Combine(root, "frontend", "scripts", "verify-payment-allocation-browser.mjs")); start.Environment["NODE_ENV"] = "production"; start.Environment["NEXT_TELEMETRY_DISABLED"] = "1"; start.Environment["NEXT_PUBLIC_UNIT_TOKO_RELEASE"] = "full";
         using var process = Process.Start(start) ?? throw new InvalidOperationException("Browser child did not start");
@@ -76,20 +88,26 @@ public sealed class PaymentAllocationBrowserTests(MongoFixture fixture, ITestOut
         Assert.Equal(1, await data.Rows(B.Events).CountDocumentsAsync(new BsonDocument()));
         Assert.Equal(1, await data.Rows("bankReceipts").CountDocumentsAsync(new BsonDocument()));
         Assert.Equal(1, await data.Rows(C.Events).CountDocumentsAsync(new BsonDocument()));
-        Assert.Equal(4, await data.Rows("journalEntries").CountDocumentsAsync(new BsonDocument()));
+        Assert.Equal(useInvoiceChoice ? 5 : 4, await data.Rows("journalEntries").CountDocumentsAsync(new BsonDocument()));
         Assert.Equal(originalCash, await data.Rows("journalEntries").Find(new BsonDocument("_id", originalCash["_id"])).SingleAsync());
         var original = await data.Rows(B.Events).Find(new BsonDocument()).SingleAsync();
         Assert.Equal(1000m, original["amount"].AsDecimal); Assert.Equal(1L, original["receiptVersion"].AsInt64);
+        Assert.Equal(allocationInvoiceId, Assert.Single(original["lines"].AsBsonArray)["invoiceId"].AsInt64);
         var correction = await data.Rows(C.Events).Find(new BsonDocument()).SingleAsync();
         Assert.Equal(original["_id"], correction["originalAllocationId"]); Assert.Equal(original["snapshotHash"], correction["originalAllocationHash"]); Assert.Equal(400m, correction["amount"].AsDecimal);
         Assert.Equal(1, await data.Rows("auditEvents").CountDocumentsAsync(new BsonDocument("kind", C.Operation)));
         Assert.Equal(1, await data.Rows("outboxEvents").CountDocumentsAsync(new BsonDocument("kind", C.Operation)));
         Assert.Equal(1, await data.Rows("idempotencyRecords").CountDocumentsAsync(new BsonDocument("operation", C.Operation)));
         var receipt = await data.Rows(B.Receipts).Find(new BsonDocument()).SingleAsync();
-        var invoice = await data.Rows(B.Invoices).Find(new BsonDocument()).SingleAsync();
+        var invoice = await data.Rows(B.Invoices).Find(new BsonDocument("_id", allocationInvoiceId)).SingleAsync();
         Assert.Equal(600m, receipt["allocated"].AsDecimal); Assert.Equal(600m, invoice["paid"].AsDecimal);
         Assert.Equal(0m, receipt["reservedForRefund"].AsDecimal); Assert.Equal(0m, invoice["credited"].AsDecimal);
         Assert.Equal(2L, receipt["version"].AsInt64); Assert.Equal(2L, invoice["version"].AsInt64);
+        if (useInvoiceChoice) {
+            Assert.Equal(declarationInvoice, await data.Rows(InvoiceBson.Invoices).Find(new BsonDocument("_id", data.InvoiceId)).SingleAsync());
+            var untouched = await data.Rows(B.Invoices).Find(new BsonDocument("_id", data.InvoiceId)).SingleOrDefaultAsync();
+            if (untouched is not null) { Assert.Equal(0m, untouched["paid"].AsDecimal); Assert.Equal(0m, untouched["credited"].AsDecimal); Assert.Equal(0L, untouched["version"].AsInt64); }
+        }
     }
     private static string Root() {
         for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)

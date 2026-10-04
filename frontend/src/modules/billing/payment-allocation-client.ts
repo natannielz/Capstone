@@ -36,14 +36,33 @@ const result = z.object({ allocationId: id, verificationId: id, receiptId: id, r
   value.invoices.reduce((sum, line) => sum + cents(line.amount), BigInt(0)) === cents(value.amount));
 const input = z.object({ expectedReceiptVersion: revision, lines: z.array(z.object({ invoiceId: id, expectedVersion: revision, amount: positive }).strict()).min(1).max(100)
   .refine(value => new Set(value.map(line => line.invoiceId)).size === value.length) }).strict();
+const invoiceChoice = z.object({ invoiceId: id, number: text(100), version: revision, total: positive, paid: money, credited: money,
+  outstanding: positive, buyerName: text(1000), sellerName: text(1000), dueDate: day }).strict().refine(value =>
+  cents(value.paid) + cents(value.credited) + cents(value.outstanding) === cents(value.total));
+const invoiceChoices = z.object({ items: z.array(invoiceChoice).max(10), nextBeforeInvoiceId: id.nullable() }).strict().refine(value =>
+  value.items.every((item, index) => (index === 0 || BigInt(item.invoiceId) < BigInt(value.items[index - 1].invoiceId)) &&
+    (value.nextBeforeInvoiceId === null || BigInt(item.invoiceId) >= BigInt(value.nextBeforeInvoiceId))));
 export type PaymentAllocationView = z.infer<typeof view>;
 export type PaymentAllocationPreview = z.infer<typeof preview>;
 export type PaymentAllocationResult = z.infer<typeof result>;
 export type PaymentAllocationInput = z.infer<typeof input>;
-function ownerCheck(value: PaymentAllocationView, owner: PaymentDraft, verified: PaymentVerificationDetail) {
+export type PaymentAllocationInvoiceChoice = z.infer<typeof invoiceChoice>;
+export type PaymentAllocationInvoiceChoices = z.infer<typeof invoiceChoices>;
+function verificationOwner(owner: PaymentDraft, verified: PaymentVerificationDetail) {
+  if (verified.result.declarationId !== owner.id || verified.declarationRevision !== owner.revision) return invalid();
+}
+export function assertPaymentAllocationSource(value: PaymentAllocationView, owner: PaymentDraft, verified: PaymentVerificationDetail) {
+  verificationOwner(owner, verified);
   if (value.verificationId !== verified.result.verificationId || value.receiptId !== verified.result.receiptId || value.declarationId !== owner.id ||
-    value.received !== owner.input.declaredAmount || value.invoices.some(line => !owner.invoices.some(item => item.invoiceId === line.invoiceId && item.total === line.total))) return invalid();
+    value.received !== owner.input.declaredAmount) return invalid();
   return value;
+}
+export function assertPaymentAllocationInvoices(value: PaymentAllocationView, known: readonly { invoiceId: string; total: string }[]) {
+  if (value.invoices.some(line => !known.some(item => item.invoiceId === line.invoiceId && item.total === line.total))) return invalid();
+  return value;
+}
+function ownerCheck(value: PaymentAllocationView, owner: PaymentDraft, verified: PaymentVerificationDetail) {
+  return assertPaymentAllocationInvoices(assertPaymentAllocationSource(value, owner, verified), owner.invoices);
 }
 export { ownerCheck as assertPaymentAllocationOwner };
 export const paymentAllocationSchemas = { id, text, money, positive, hash, cents, lines, input, view };
@@ -69,15 +88,41 @@ function data<T>(value: { data?: T; error?: unknown; response: Response }): T {
 export function createPaymentAllocationGateway(client: ReturnType<typeof createUnitTokoClient> = createUnitTokoClient()) {
   const header = (actorId: string) => ({ 'X-Expected-Actor-Id': parse(id, actorId) });
   return {
-    async read(actorId: string, owner: PaymentDraft, verified: PaymentVerificationDetail) {
-      const saved = ownerCheck(parse(view, data(await client.POST('/api/v1/billing/payment-verifications/{id}/allocations/query', {
-        body: { purpose: 'payment-allocation', invoiceIds: owner.invoices.map(line => line.invoiceId) }, params: { path: { id: verified.result.verificationId }, header: header(actorId) }, cache: 'no-store' }))), owner, verified);
-      if (saved.invoices.length !== owner.invoices.length) return invalid(); return saved;
+    async choices(actorId: string, owner: PaymentDraft, verified: PaymentVerificationDetail, beforeInvoiceId: string | null = null) {
+      verificationOwner(owner, verified); const cursor = beforeInvoiceId === null ? null : parse(id, beforeInvoiceId);
+      const saved = parse(invoiceChoices, data(await client.POST('/api/v1/billing/payment-verifications/{id}/allocations/invoices/query', {
+        body: { purpose: 'payment-allocation', beforeInvoiceId: cursor }, params: { path: { id: verified.result.verificationId }, header: header(actorId) }, cache: 'no-store' })));
+      if (cursor !== null && (saved.items.some(item => BigInt(item.invoiceId) >= BigInt(cursor)) ||
+        saved.nextBeforeInvoiceId !== null && BigInt(saved.nextBeforeInvoiceId) >= BigInt(cursor))) return invalid();
+      for (const item of saved.items) {
+        const declared = owner.invoices.find(line => line.invoiceId === item.invoiceId);
+        if (declared && declared.total !== item.total) return invalid();
+      }
+      return saved;
     },
-    async preview(actorId: string, owner: PaymentDraft, verified: PaymentVerificationDetail, values: PaymentAllocationInput) {
-      const request = parse(input, values), saved = parse(preview, data(await client.POST('/api/v1/billing/payment-verifications/{id}/allocations/preview', {
+    async read(actorId: string, owner: PaymentDraft, verified: PaymentVerificationDetail, additional: readonly PaymentAllocationInvoiceChoice[] = []) {
+      verificationOwner(owner, verified);
+      const choices = parse(z.array(invoiceChoice).max(100).refine(items => new Set(items.map(item => item.invoiceId)).size === items.length), additional);
+      const known = new Map(owner.invoices.map(item => [item.invoiceId, { invoiceId: item.invoiceId, total: item.total }]));
+      for (const item of choices) {
+        if (known.has(item.invoiceId) && known.get(item.invoiceId)!.total !== item.total) return invalid();
+        known.set(item.invoiceId, item);
+      }
+      if (known.size < 1 || known.size > 100) return invalid();
+      const saved = assertPaymentAllocationSource(parse(view, data(await client.POST('/api/v1/billing/payment-verifications/{id}/allocations/query', {
+        body: { purpose: 'payment-allocation', invoiceIds: [...known.keys()] }, params: { path: { id: verified.result.verificationId }, header: header(actorId) }, cache: 'no-store' }))), owner, verified);
+      assertPaymentAllocationInvoices(saved, [...known.values()]);
+      if (saved.invoices.length !== known.size) return invalid(); return saved;
+    },
+    async preview(actorId: string, owner: PaymentDraft, verified: PaymentVerificationDetail, values: PaymentAllocationInput, loaded?: PaymentAllocationView) {
+      verificationOwner(owner, verified);
+      const request = parse(input, values), selected = loaded ? assertPaymentAllocationSource(parse(view, loaded), owner, verified) : null;
+      const known = selected?.invoices ?? owner.invoices;
+      if (request.lines.some(line => !known.some(item => item.invoiceId === line.invoiceId)) || selected &&
+        (selected.receiptVersion !== request.expectedReceiptVersion || request.lines.some(line => selected.invoices.find(item => item.invoiceId === line.invoiceId)!.version !== line.expectedVersion))) return invalid();
+      const saved = parse(preview, data(await client.POST('/api/v1/billing/payment-verifications/{id}/allocations/preview', {
         body: request, params: { path: { id: verified.result.verificationId }, header: header(actorId) }, cache: 'no-store' })));
-      ownerCheck(saved.view, owner, verified);
+      assertPaymentAllocationInvoices(assertPaymentAllocationSource(saved.view, owner, verified), known);
       if (saved.view.receiptVersion !== request.expectedReceiptVersion || saved.invoices.length !== request.lines.length || request.lines.some(line => {
         const before = saved.view.invoices.find(item => item.invoiceId === line.invoiceId), after = saved.invoices.find(item => item.invoiceId === line.invoiceId);
         return !before || !after || before.version !== line.expectedVersion || after.amount !== line.amount;

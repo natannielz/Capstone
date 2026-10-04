@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { createUnitTokoClient, RequestNotSentError } from '../../api/client';
 import { AccessFailure } from '../administration/workflow';
-import { assertPaymentAllocationOwner, paymentAllocationSchemas as shared, type PaymentAllocationInput } from './payment-allocation-client';
+import { assertPaymentAllocationSource, assertPaymentAllocationInvoices, paymentAllocationSchemas as shared, type PaymentAllocationInput } from './payment-allocation-client';
 import type { PaymentDraft } from './payment-client';
 import type { PaymentVerificationDetail } from './payment-verification-client';
 
@@ -38,7 +38,14 @@ function verificationOwner(owner: PaymentDraft, verified: PaymentVerificationDet
 }
 function ownerCheck(value: z.infer<typeof view>, owner: PaymentDraft, verified: PaymentVerificationDetail) {
   verificationOwner(owner, verified);
-  return assertPaymentAllocationOwner(value, owner, verified);
+  // These invoices belong to the authenticated original allocation, which may
+  // include staff-selected invoices beyond the buyer's declaration.
+  assertPaymentAllocationSource(value, owner, verified);
+  for (const line of value.invoices) {
+    const declared = owner.invoices.find(item => item.invoiceId === line.invoiceId);
+    if (declared && declared.total !== line.total) return invalid();
+  }
+  return value;
 }
 export type PaymentAllocationCorrectionView = z.infer<typeof correctionView>;
 export type PaymentAllocationCorrectionPreview = z.infer<typeof preview>;
@@ -80,14 +87,24 @@ export function createPaymentAllocationCorrectionGateway(client: ReturnType<type
         body: { purpose: 'payment-allocation-correction' }, params: { path: { id: original }, header: header(actorId) }, cache: 'no-store' })));
       ownerCheck(saved.view, owner, verified); if (saved.originalAllocationId !== original) return invalid(); return saved;
     },
-    async preview(actorId: string, owner: PaymentDraft, verified: PaymentVerificationDetail, originalAllocationId: string, values: PaymentAllocationInput) {
+    async preview(actorId: string, owner: PaymentDraft, verified: PaymentVerificationDetail, loaded: PaymentAllocationCorrectionView, values: PaymentAllocationInput) {
       verificationOwner(owner, verified);
-      const original = parse(id, originalAllocationId), request = parse(input, values), saved = parse(preview, data(await client.POST('/api/v1/billing/payment-allocations/{id}/corrections/preview', {
+      const selected = parse(correctionView, loaded), original = selected.originalAllocationId, request = parse(input, values);
+      ownerCheck(selected.view, owner, verified);
+      if (selected.view.receiptVersion !== request.expectedReceiptVersion || request.lines.some(line => {
+        const invoice = selected.view.invoices.find(item => item.invoiceId === line.invoiceId), capacity = selected.capacities.find(item => item.invoiceId === line.invoiceId);
+        return !invoice || !capacity || invoice.version !== line.expectedVersion || cents(line.amount) > cents(capacity.originallyAllocated) - cents(capacity.previouslyReversed);
+      })) return invalid();
+      const saved = parse(preview, data(await client.POST('/api/v1/billing/payment-allocations/{id}/corrections/preview', {
         body: request, params: { path: { id: original }, header: header(actorId) }, cache: 'no-store' })));
       ownerCheck(saved.view, owner, verified);
+      assertPaymentAllocationInvoices(saved.view, selected.view.invoices);
       if (saved.originalAllocationId !== original || saved.view.receiptVersion !== request.expectedReceiptVersion || saved.invoices.length !== request.lines.length || request.lines.some(line => {
         const before = saved.view.invoices.find(invoice => invoice.invoiceId === line.invoiceId), after = saved.invoices.find(invoice => invoice.invoiceId === line.invoiceId);
         return !before || !after || before.version !== line.expectedVersion || after.amount !== line.amount;
+      }) || saved.capacities.some(capacity => {
+        const previous = selected.capacities.find(item => item.invoiceId === capacity.invoiceId);
+        return !previous || previous.originallyAllocated !== capacity.originallyAllocated || previous.previouslyReversed !== capacity.previouslyReversed;
       })) return invalid(); return saved;
     },
     async correct(command: ReturnType<typeof preparePaymentAllocationCorrection>, key: string, current: () => boolean) {

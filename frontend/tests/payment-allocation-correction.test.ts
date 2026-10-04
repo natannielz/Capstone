@@ -69,8 +69,44 @@ test('candidate, detail and preview reads stay on the owning verified declaratio
   assert.deepEqual(await client.candidates(actor, owner, verified), { items: [correctionView], hasMore: false }); wrong = true; await assert.rejects(() => client.candidates(actor, owner, verified));
   wrong = false; mode = 'read'; assert.deepEqual(await client.read(actor, owner, verified, preview.originalAllocationId), correctionView); wrong = true; await assert.rejects(() => client.read(actor, owner, verified, preview.originalAllocationId));
   wrong = false; mode = 'preview'; const values = preparePaymentAllocationCorrection(actor, preview, 'Checked').body.input;
-  assert.deepEqual(await client.preview(actor, owner, verified, preview.originalAllocationId, values), preview);
-  await assert.rejects(() => client.preview(actor, owner, { ...verified, declarationRevision: '2' }, preview.originalAllocationId, values));
+  assert.deepEqual(await client.preview(actor, owner, verified, correctionView, values), preview);
+  await assert.rejects(() => client.preview(actor, owner, { ...verified, declarationRevision: '2' }, correctionView, values));
+});
+
+test('correction of a staff-selected invoice uses its authenticated original allocation, never the current choice list', async () => {
+  const selectedView: PaymentAllocationCorrectionView = { ...correctionView,
+    view: { ...correctionView.view, invoices: [{ ...correctionView.view.invoices[0], invoiceId: '93', number: '2' }] },
+    capacities: [{ ...correctionView.capacities[0], invoiceId: '93' }] };
+  const selectedPreview: PaymentAllocationCorrectionPreview = { ...preview, view: selectedView.view, capacities: selectedView.capacities,
+    invoices: [{ ...preview.invoices[0], invoiceId: '93' }] };
+  let mode: 'candidates' | 'read' | 'preview' = 'candidates', response: unknown = selectedPreview, calls = 0;
+  const client = gateway(async request => {
+    calls++; const path = new URL(request.url).pathname;
+    assert.doesNotMatch(path, /invoices\/query/);
+    if (mode === 'candidates') return Response.json({ items: [selectedView], hasMore: false });
+    if (mode === 'read') return Response.json(selectedView);
+    assert.equal(path, `/api/v1/billing/payment-allocations/${selectedView.originalAllocationId}/corrections/preview`);
+    assert.deepEqual(await request.json(), { expectedReceiptVersion: '9', lines: [{ invoiceId: '93', expectedVersion: '7', amount: '400.25' }] });
+    return Response.json(response);
+  });
+  const candidate = (await client.candidates(actor, owner, verified)).items[0];
+  mode = 'read'; const loaded = await client.read(actor, owner, verified, candidate.originalAllocationId); assert.deepEqual(loaded, selectedView);
+  mode = 'preview'; const values = { expectedReceiptVersion: '9', lines: [{ invoiceId: '93', expectedVersion: '7', amount: '400.25' }] };
+  assert.deepEqual(await client.preview(actor, owner, verified, loaded, values), selectedPreview);
+  const before = calls;
+  // The declaration's invoice is not in this original allocation and cannot be substituted.
+  await assert.rejects(() => client.preview(actor, owner, verified, loaded, { ...values, lines: [{ ...values.lines[0], invoiceId: '91' }] }));
+  await assert.rejects(() => client.preview(actor, owner, verified, loaded, { ...values, lines: [{ ...values.lines[0], expectedVersion: '8' }] }));
+  await assert.rejects(() => client.preview(actor, owner, verified, loaded, { ...values, lines: [{ ...values.lines[0], amount: '801.00' }] }));
+  await assert.rejects(() => client.preview(actor, owner, { ...verified, declarationRevision: '2' }, loaded, values));
+  assert.equal(calls, before);
+  for (const changed of [
+    { ...selectedPreview, originalAllocationId: '94' },
+    { ...selectedPreview, view: { ...selectedPreview.view, declarationId: '94' } },
+    { ...selectedPreview, view: { ...selectedPreview.view, receiptId: '94' } },
+    { ...selectedPreview, capacities: [{ ...selectedPreview.capacities[0], originallyAllocated: '1001.25' }] },
+    { ...selectedPreview, capacities: [{ ...selectedPreview.capacities[0], previouslyReversed: '199.00' }] },
+  ]) { response = changed; await assert.rejects(() => client.preview(actor, owner, verified, loaded, values)); }
 });
 
 test('correction history pagination keeps exact descending original identifiers and refuses duplicate or crossed cursors', async () => {

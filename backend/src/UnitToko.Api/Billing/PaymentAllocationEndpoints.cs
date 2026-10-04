@@ -16,6 +16,8 @@ namespace UnitToko.Api.Billing;
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record PaymentAllocationQueryDto([property: JsonRequired] string Purpose, [property: JsonRequired] LongId[] InvoiceIds);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record PaymentAllocationInvoiceChoicesQueryDto([property: JsonRequired] string Purpose, LongId? BeforeInvoiceId = null);
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record PaymentAllocationLineDto([property: JsonRequired] LongId InvoiceId, [property: JsonRequired] string ExpectedVersion, [property: JsonRequired] Money Amount);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record PaymentAllocationInputDto([property: JsonRequired] string ExpectedReceiptVersion, [property: JsonRequired] PaymentAllocationLineDto[] Lines) {
@@ -39,6 +41,9 @@ public sealed record PaymentAllocationInvoiceResultDto(LongId InvoiceId, string 
 public sealed record PaymentAllocationResultDto(LongId AllocationId, LongId VerificationId, LongId ReceiptId, string ReceiptVersion, string Amount, string Unapplied,
     DateTimeOffset RecordedAt, string Operation, ImmutableArray<PaymentAllocationInvoiceResultDto> Invoices);
 public sealed record PaymentAllocationRecoveryDto(string Status, PaymentAllocationResultDto? Result);
+public sealed record PaymentAllocationInvoiceChoiceDto(LongId InvoiceId, string Number, string Version, string Total,
+    string Paid, string Credited, string Outstanding, string BuyerName, string SellerName, string DueDate);
+public sealed record PaymentAllocationInvoiceChoicesDto(ImmutableArray<PaymentAllocationInvoiceChoiceDto> Items, LongId? NextBeforeInvoiceId);
 
 public static class PaymentAllocationEndpoints
 {
@@ -49,6 +54,14 @@ public static class PaymentAllocationEndpoints
             if (request.Purpose != "payment-allocation" || request.InvoiceIds is null) throw PaymentAllocationPolicy.Invalid(); Private(http);
             return TypedResults.Ok(View(await service.ReadAsync(http.Features.Get<ResolvedActor>()!.Actor, LongId.Parse(id).Value, [.. request.InvoiceIds.Select(value => value.Value)], ct), clock));
         }).WithName("ReadPaymentAllocationBalances");
+        group.MapPost("/invoices/query", async (string id, PaymentAllocationInvoiceChoicesQueryDto request, HttpContext http, PaymentAllocationService service, CancellationToken ct) => {
+            if (request.Purpose != "payment-allocation") throw PaymentAllocationPolicy.Invalid(); Private(http);
+            var page = await service.InvoiceChoicesAsync(http.Features.Get<ResolvedActor>()!.Actor, LongId.Parse(id).Value, request.BeforeInvoiceId?.Value, ct: ct);
+            return TypedResults.Ok(new PaymentAllocationInvoiceChoicesDto([.. page.Items.Select(item => new PaymentAllocationInvoiceChoiceDto(
+                new(item.InvoiceId), item.Number, Number(item.Version), item.Total.ToString(), item.Paid.ToString(), item.Credited.ToString(),
+                item.Outstanding.ToString(), item.BuyerName, item.SellerName, item.DueDate))],
+                page.NextBeforeInvoiceId is { } next ? new LongId(next) : null));
+        }).WithName("ChoosePaymentAllocationInvoices");
         group.MapPost("/preview", async (string id, PaymentAllocationInputDto request, HttpContext http, PaymentAllocationService service, IClock clock, CancellationToken ct) => {
             Private(http); var preview = await service.PreviewAsync(http.Features.Get<ResolvedActor>()!.Actor, LongId.Parse(id).Value, request.Domain(), ct);
             return TypedResults.Ok(new PaymentAllocationPreviewDto(preview.Binding, View(preview.View, clock), preview.Policy["procedureReference"].AsString,

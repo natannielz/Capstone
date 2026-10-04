@@ -1681,6 +1681,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/billing/payment-verifications/{id}/allocations/invoices/query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ChoosePaymentAllocationInvoices"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/billing/payment-verifications/{id}/allocations/operations/query": {
         parameters: {
             query?: never;
@@ -11080,6 +11096,27 @@ export interface components {
         PaymentAllocationInputDto: {
             expectedReceiptVersion: string;
             lines: components["schemas"]["PaymentAllocationLineDto"][];
+        };
+        PaymentAllocationInvoiceChoiceDto: {
+            buyerName: string;
+            credited: string;
+            dueDate: string;
+            invoiceId: components["schemas"]["LongId"];
+            number: string;
+            outstanding: string;
+            paid: string;
+            sellerName: string;
+            total: string;
+            version: string;
+        };
+        PaymentAllocationInvoiceChoicesDto: {
+            items: components["schemas"]["PaymentAllocationInvoiceChoiceDto"][];
+            nextBeforeInvoiceId: null | components["schemas"]["LongId"];
+        };
+        PaymentAllocationInvoiceChoicesQueryDto: {
+            /** @description Positive decimal Int64 string, from 1 through 9223372036854775807. JSON numbers are invalid. */
+            beforeInvoiceId?: null | string;
+            purpose: string;
         };
         PaymentAllocationInvoiceDto: {
             aging: string;
@@ -25385,6 +25422,82 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PaymentAllocationCorrectionCandidatesDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    ChoosePaymentAllocationInvoices: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
+                /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
+                "X-Expected-Actor-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PaymentAllocationInvoiceChoicesQueryDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentAllocationInvoiceChoicesDto"];
                 };
             };
             /** @description Bad Request */

@@ -10,10 +10,11 @@ import next from 'next';
 
 const chunks = []; for await (const chunk of process.stdin) chunks.push(chunk);
 const config = JSON.parse(Buffer.concat(chunks).toString('utf8')), api = new URL(config.apiAddress), origin = new URL(config.origin);
+const additionalInvoiceDisplayNumber = config.additionalInvoiceNumber?.split('/').map((part, index) => index === 3 ? part.padStart(6, '0') : part).join('/');
 assert.equal(process.versions.node.split('.')[0], '24'); assert.equal(api.protocol, 'http:'); assert.equal(api.hostname, '127.0.0.1'); assert.ok(Number(api.port) > 0); assert.equal(origin.href, 'https://portal.unit-toko.co.id/');
 const load = createRequire(config.playwrightPackage), metadata = load(config.playwrightPackage); assert.equal(metadata.name, 'playwright'); assert.equal(metadata.version, '1.62.1');
 const { chromium } = load('playwright'), channel = process.env.UNITTOKO_BROWSER_CHANNEL ?? 'chromium'; assert.ok(['chromium', 'msedge'].includes(channel));
-const app = next({ dev: false, dir: process.cwd(), quiet: true }), sockets = new Set(), writes = [], errors = [], pages = [];
+const app = next({ dev: false, dir: process.cwd(), quiet: true }), sockets = new Set(), writes = [], errors = [], pages = [], choiceReads = [];
 const directory = resolve('../tmp/production/payment-allocation-browser-results'); mkdirSync(directory, { recursive: true });
 let browser, frontend, edge, tunnel, dropNext = null, dropped = 0;
 function track(server) { server.on('connection', socket => { sockets.add(socket); socket.on('close', () => sockets.delete(socket)); }); return server; }
@@ -33,6 +34,7 @@ async function user(token) {
   const context = await browser.newContext({ ignoreHTTPSErrors: true, viewport: { width: 360, height: 800 }, locale: 'id-ID', timezoneId: 'Asia/Jakarta' });
   await context.addCookies([{ name: '__Host-ut_session', value: token, domain: origin.hostname, path: '/', secure: true, httpOnly: true, sameSite: 'Lax' }]);
   const page = await context.newPage(); pages.push(page); page.setDefaultTimeout(15000); page.on('pageerror', error => errors.push(error.message));
+  page.on('response', response => { if (response.status() === 200 && new URL(response.url()).pathname.endsWith('/allocations/invoices/query')) choiceReads.push(response.headers()['cache-control'] ?? ''); });
   page.on('response', async response => { if (response.url().includes('/api/v1/') && response.status() >= 400) { const value = await response.json().catch(() => ({})); console.log('FIXTURE API ' + JSON.stringify({ path: new URL(response.url()).pathname, status: response.status(), code: value?.code })); } }); return { context, page };
 }
 try {
@@ -73,11 +75,19 @@ try {
     await page.getByRole('button', { name: 'Muat hasil verifikasi', exact: true }).click();
     const panel = page.getByRole('region', { name: 'Alokasi pembayaran', exact: true });
     await panel.getByRole('button', { name: 'Muat saldo alokasi', exact: true }).click();
-    await panel.getByRole('heading', { name: 'Saldo dana dan tagihan', exact: true }).waitFor(); return panel;
+    await panel.getByRole('heading', { name: 'Saldo dana dan tagihan', exact: true }).waitFor();
+    if (config.additionalInvoiceId && await panel.getByRole('button', { name: 'Cari invoice lain pembeli ini', exact: true }).count()) {
+      await panel.getByRole('button', { name: 'Cari invoice lain pembeli ini', exact: true }).click();
+      await panel.getByRole('button', { name: 'Tambahkan invoice ' + config.additionalInvoiceNumber, exact: true }).click();
+      await panel.getByRole('checkbox', { name: 'Pilih invoice ' + additionalInvoiceDisplayNumber, exact: true }).waitFor();
+    }
+    return panel;
   }
   const panel = await balances(page);
   assert.equal(await panel.getByRole('heading', { name: 'Saldo dana dan tagihan', exact: true }).evaluate(element => document.activeElement === element), true);
-  const selected = panel.getByRole('checkbox'); assert.equal(await selected.count(), 1); assert.equal(await selected.isChecked(), false);
+  assert.equal(await panel.getByRole('checkbox').count(), config.additionalInvoiceId ? 2 : 1);
+  const selected = config.additionalInvoiceId ? panel.getByRole('checkbox', { name: 'Pilih invoice ' + additionalInvoiceDisplayNumber, exact: true }) : panel.getByRole('checkbox');
+  assert.equal(await selected.isChecked(), false);
   await selected.check(); const amountField = panel.getByLabel('Nominal alokasi (IDR)', { exact: true });
   assert.ok((await amountField.boundingBox()).width >= 150, 'Amount input must remain readable at mobile width');
   await amountField.fill('1000,00');
@@ -144,12 +154,14 @@ try {
   await checker.page.setViewportSize({ width: 1440, height: 1000 }); await checker.page.screenshot({ path: resolve(directory, 'payment-allocation-correction-desktop.png'), fullPage: true });
   const reader = await desk(config.readerToken); await open(reader.page); const readPanel = await balances(reader.page);
   assert.equal(await readPanel.getByRole('checkbox').count(), 0); assert.equal(await readPanel.getByRole('button', { name: /Periksa alokasi|Simpan alokasi/ }).count(), 0);
+  assert.equal(await readPanel.getByRole('button', { name: 'Cari invoice lain pembeli ini', exact: true }).count(), 0);
   const readCorrections = reader.page.getByRole('region', { name: 'Koreksi alokasi pembayaran', exact: true });
   await readCorrections.getByRole('button', { name: 'Muat alokasi asli', exact: true }).click();
   await readCorrections.getByRole('button', { name: /^Tinjau alokasi/ }).click();
   await readCorrections.getByRole('heading', { name: /^Saldo untuk koreksi alokasi/ }).waitFor();
   assert.equal(await readCorrections.getByRole('checkbox').count(), 0); assert.equal(await readCorrections.getByRole('button', { name: /Periksa koreksi|Simpan koreksi/ }).count(), 0);
-  await readPanel.getByText(/Dibayar sebagian/).waitFor();
+  await readPanel.getByText(config.additionalInvoiceId ? 'Belum dibayar' : /Dibayar sebagian/, config.additionalInvoiceId ? { exact: false } : undefined).waitFor();
+  if (config.additionalInvoiceId) await readCorrections.getByText('Invoice ' + additionalInvoiceDisplayNumber, { exact: true }).waitFor();
   const outsider = await desk(config.otherToken); await outsider.page.getByRole('button', { name: 'Muat pengajuan terbaru', exact: true }).waitFor();
   assert.equal(await outsider.page.getByRole('button', { name: 'Periksa pengajuan ' + config.declarationId, exact: true }).count(), 0);
   const denied = await outsider.page.evaluate(async ({ verificationId, invoiceId, actorId }) => {
@@ -157,9 +169,15 @@ try {
     return (await fetch('/api/v1/billing/payment-verifications/' + verificationId + '/allocations/query', { method: 'POST', credentials: 'include',
       headers: { 'content-type': 'application/json', 'X-CSRF-Token': csrf.requestToken, 'X-Expected-Actor-Id': actorId }, body: JSON.stringify({ purpose: 'payment-allocation', invoiceIds: [invoiceId] }) })).status;
   }, { verificationId: config.verificationId, invoiceId: config.invoiceId, actorId: config.otherId }); assert.equal(denied, 403);
+  const choiceDenied = await outsider.page.evaluate(async ({ verificationId, actorId }) => {
+    const csrf = await (await fetch('/api/v1/identity/csrf', { credentials: 'include' })).json();
+    return (await fetch('/api/v1/billing/payment-verifications/' + verificationId + '/allocations/invoices/query', { method: 'POST', credentials: 'include',
+      headers: { 'content-type': 'application/json', 'X-CSRF-Token': csrf.requestToken, 'X-Expected-Actor-Id': actorId }, body: JSON.stringify({ purpose: 'payment-allocation' }) })).status;
+  }, { verificationId: config.verificationId, actorId: config.otherId }); assert.equal(choiceDenied, 403);
   assert.equal(writes.length, 2); assert.deepEqual(writes.map(item => item.kind), ['allocate', 'correct']); assert.equal(dropped, 2); assert.deepEqual(errors, []);
+  if (config.additionalInvoiceId) { assert.ok(choiceReads.length >= 3); assert.ok(choiceReads.every(value => /(?:^|[,\s])no-store(?:$|[,\s])/i.test(value))); }
   console.log('REAL_PAYMENT_ALLOCATION_BROWSER_PASS ' + JSON.stringify({ exactDuplicateHintsAndComparisonNavigation: true, explicitInvoiceAndAmountReview: true, lostResponseRecovered: true, currentInvoiceBalance: true,
-    independentLinkedCorrection: true, correctionLostResponseRecovered: true, exactOriginalCorrectionKey: true, readerCannotAllocateOrCorrect: true, outsiderDenied: true, offlineUnsent: true, mobile: true, syntheticBankAndPayerPolicy: true, syntheticOcrEngine: true, productionAccepted: false }));
+    nonDeclarationInvoiceChoice: !!config.additionalInvoiceId, independentLinkedCorrection: true, correctionLostResponseRecovered: true, exactOriginalCorrectionKey: true, readerCannotAllocateOrCorrect: true, outsiderDenied: true, outsiderCannotListChoices: true, offlineUnsent: true, mobile: true, syntheticBankAndPayerPolicy: true, syntheticOcrEngine: true, productionAccepted: false }));
 
 } catch (error) {
   for (const [index, page] of pages.entries()) if (!page.isClosed()) { console.error('FIXTURE PAGE ' + index + ': ' + (await page.locator('main').innerText().catch(() => 'unavailable')).slice(0, 5000)); await page.screenshot({ path: resolve(directory, 'failure-' + index + '.png'), fullPage: true }).catch(() => {}); }

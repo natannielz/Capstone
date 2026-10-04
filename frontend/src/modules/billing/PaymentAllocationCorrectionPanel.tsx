@@ -68,7 +68,7 @@ export function PaymentAllocationCorrectionPanel({ actorId, owner, verified, all
       <form onSubmit={event => { event.preventDefault(); if (!canCorrect) return; void work(async () => {
         const lines = selected.view.invoices.filter(item => Object.hasOwn(values, item.invoiceId)).map(item => ({ invoiceId: item.invoiceId, expectedVersion: item.version, amount: allocationAmount(values[item.invoiceId]) }));
         if (!lines.length) throw new AccessFailure(400, 'invalid_payment_allocation');
-        const preview = await gateway.preview(actorId, owner, verified, selected.originalAllocationId, { expectedReceiptVersion: selected.view.receiptVersion, lines });
+        const preview = await gateway.preview(actorId, owner, verified, selected, { expectedReceiptVersion: selected.view.receiptVersion, lines });
         if (active()) { setShown(preview); setConfirm(preparePaymentAllocationCorrection(actorId, preview, reason.trim())); }
       }); }}><ul className={invoice.candidates}>{selected.view.invoices.map(item => {
         const capacity = selected.capacities.find(line => line.invoiceId === item.invoiceId)!;

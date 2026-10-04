@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { AccessFailure, MutationLedger, accessMessage } from '../administration/workflow';
 import { submitTrackedRequest, type OperationJournal } from '../administration/operation-journal';
 import { orderAmount } from '../ordering/order-quote-client';
-import { createPaymentAllocationGateway, preparePaymentAllocation, type PaymentAllocationPreview, type PaymentAllocationResult, type PaymentAllocationView } from './payment-allocation-client';
+import { createPaymentAllocationGateway, preparePaymentAllocation, type PaymentAllocationInvoiceChoice, type PaymentAllocationInvoiceChoices, type PaymentAllocationPreview, type PaymentAllocationResult, type PaymentAllocationView } from './payment-allocation-client';
 import type { PaymentDraft } from './payment-client';
 import type { PaymentVerificationDetail } from './payment-verification-client';
 import styles from '../administration/access.module.css';
@@ -40,6 +40,7 @@ export function PaymentAllocationPanel({ actorId, owner, verified, allowed, fres
   const [gateway] = useState(createPaymentAllocationGateway), [view, setView] = useState<PaymentAllocationView | null>(null), [shown, setShown] = useState<PaymentAllocationPreview | null>(null);
   const [values, setValues] = useState<Record<string, string>>({}), [reason, setReason] = useState(''), [confirm, setConfirm] = useState<ReturnType<typeof preparePaymentAllocation> | null>(null);
   const [saved, setSaved] = useState<PaymentAllocationResult | null>(null), [busy, setBusy] = useState(false), [error, setError] = useState<unknown>(null);
+  const [additional, setAdditional] = useState<PaymentAllocationInvoiceChoice[]>([]), [choices, setChoices] = useState<PaymentAllocationInvoiceChoices | null>(null);
   const alive = useRef(false), pending = useRef(false), balanceHeading = useRef<HTMLHeadingElement>(null), reviewHeading = useRef<HTMLHeadingElement>(null);
   useEffect(() => { alive.current = true; return () => { alive.current = false; onBusyChange(false); }; }, [onBusyChange]);
   useEffect(() => { if (view) balanceHeading.current?.focus(); }, [view]);
@@ -52,8 +53,20 @@ export function PaymentAllocationPanel({ actorId, owner, verified, allowed, fres
     finally { pending.current = false; onBusyChange(false); onSettled(); if (alive.current) setBusy(false); }
   }
   async function read() {
-    const result = await gateway.read(actorId, owner, verified);
+    setChoices(null);
+    const result = await gateway.read(actorId, owner, verified, additional);
     if (active()) { setView(result); setShown(null); setConfirm(null); setValues({}); }
+  }
+  async function findInvoices(before: string | null = null) {
+    if (!allowed || !fresh) return;
+    setChoices(null);
+    const result = await gateway.choices(actorId, owner, verified, before);
+    if (active()) setChoices(result);
+  }
+  async function addInvoice(item: PaymentAllocationInvoiceChoice) {
+    if (!canAllocate || confirm || !view || view.invoices.length >= 100 || view.invoices.some(line => line.invoiceId === item.invoiceId)) return;
+    const next = [...additional, item], result = await gateway.read(actorId, owner, verified, next);
+    if (active()) { setAdditional(next); setView(result); setShown(null); setConfirm(null); }
   }
   return <section className={invoice.correctionPanel} aria-label="Alokasi pembayaran"><h3>Alokasi dana ke invoice</h3>
     <p>Dana bank dibukukan satu kali. Pilih bagian dana yang digunakan untuk setiap invoice; sisanya tetap tersedia sebagai dana belum dialokasikan.</p>
@@ -64,14 +77,28 @@ export function PaymentAllocationPanel({ actorId, owner, verified, allowed, fres
     {view && <><h4 ref={balanceHeading} tabIndex={-1}>Saldo dana dan tagihan</h4><p>{view.buyerName} · Transfer bank {view.transactionId} · {view.bookedDate}</p>
       <dl className={invoice.facts}><div><dt>Dana diterima</dt><dd>{rupiah(view.received)}</dd></div><div><dt>Sudah dialokasikan</dt><dd>{rupiah(view.allocated)}</dd></div>
         <div><dt>Dicadangkan untuk pengembalian</dt><dd>{rupiah(view.reservedForRefund)}</dd></div><div><dt>Dana tersedia</dt><dd>{rupiah(view.available)}</dd></div></dl>
+      {allowed && <section aria-label="Pilihan invoice pembeli"><h4>Invoice lain untuk pembeli ini</h4>
+        <p>Invoice dari pengajuan tetap tersedia di bawah. Pilihan tambahan berasal dari pihak pembeli dan toko yang sama; pilih invoice dan nominalnya secara terpisah.</p>
+        <button type="button" className={styles.secondary} disabled={!canAllocate || !!confirm} onClick={() => void work(() => findInvoices())}>Cari invoice lain pembeli ini</button>
+        {choices && <><ul className={invoice.candidates}>{choices.items.map(item => {
+          const included = view.invoices.some(line => line.invoiceId === item.invoiceId);
+          return <li key={item.invoiceId}><strong>Invoice {item.number}</strong><p>{item.buyerName} · {item.sellerName}</p>
+            <p>Total {rupiah(item.total)} · Dibayar {rupiah(item.paid)} · Kredit {rupiah(item.credited)} · Sisa tagihan {rupiah(item.outstanding)}</p>
+            <p>Jatuh tempo {item.dueDate}</p>{included ? <p>Sudah ada dalam daftar alokasi.</p> :
+              <button type="button" className={styles.secondary} disabled={!canAllocate || !!confirm || view.invoices.length >= 100} onClick={() => void work(() => addInvoice(item))}>Tambahkan invoice {item.number}</button>}</li>;
+        })}</ul>{choices.items.length === 0 && <p>{choices.nextBeforeInvoiceId ? 'Tidak ada invoice dengan sisa tagihan pada halaman ini. Lanjutkan ke halaman berikutnya.' : 'Tidak ada invoice lain dengan sisa tagihan pada halaman ini.'}</p>}
+          {choices.nextBeforeInvoiceId && <button type="button" className={styles.secondary} disabled={!canAllocate || !!confirm} onClick={() => void work(() => findInvoices(choices.nextBeforeInvoiceId))}>Invoice berikutnya</button>}</>}
+        {view.invoices.length >= 100 && <p>Daftar alokasi sudah mencapai batas 100 invoice.</p>}
+      </section>}
       <form onSubmit={event => { event.preventDefault(); if (!canAllocate) return; void work(async () => {
         const lines = view.invoices.filter(item => Object.hasOwn(values, item.invoiceId)).map(item => ({ invoiceId: item.invoiceId, expectedVersion: item.version, amount: allocationAmount(values[item.invoiceId]) }));
         if (!lines.length) throw new AccessFailure(400, 'invalid_payment_allocation');
-        const result = await gateway.preview(actorId, owner, verified, { expectedReceiptVersion: view.receiptVersion, lines });
+        const result = await gateway.preview(actorId, owner, verified, { expectedReceiptVersion: view.receiptVersion, lines }, view);
         if (active()) { setShown(result); setConfirm(preparePaymentAllocation(actorId, result, reason.trim())); }
       }); }}>
         <ul className={invoice.candidates}>{view.invoices.map(item => <li key={item.invoiceId}>
           <strong>Invoice {number(item)}</strong><p>{statuses[item.paymentState]} · {statuses[item.aging]}{item.daysOverdue ? ` (${item.daysOverdue} hari)` : ''}</p>
+          <p>{owner.invoices.some(line => line.invoiceId === item.invoiceId) ? 'Dari pengajuan pembeli' : 'Dipilih petugas dari invoice pembeli yang sama'}</p>
           <p>Total {rupiah(item.total)} · Dibayar {rupiah(item.paid)} · Kredit {rupiah(item.credited)} · Sisa tagihan {rupiah(item.outstanding)}</p>
           {allowed && <><label><input type="checkbox" checked={Object.hasOwn(values, item.invoiceId)} disabled={!canAllocate || !!confirm || item.outstanding === '0.00'} onChange={event => {
             setShown(null); setValues(previous => { const next = { ...previous }; if (event.target.checked) next[item.invoiceId] = ''; else delete next[item.invoiceId]; return next; });
