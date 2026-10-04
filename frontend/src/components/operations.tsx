@@ -1,7 +1,7 @@
 "use client";
 import {buyerKey,sameBuyer} from "@/lib/domain/buyers";
 import {buyerOptions} from "@/lib/domain/buyer-views";
-import { PurchaseEditor } from "./purchase-editor";
+
 import {purchaseLineRemaining,purchaseSummary} from "@/lib/domain/procurement";
 import { AdminPasswordReset } from "./admin-password-reset";
 import { Children, useEffect, useState, type ReactNode } from "react";
@@ -60,19 +60,19 @@ export function Attachments({ctx,scope,targetId}:{ctx:WorkspaceContext;scope:str
 
 export function Procurement({query:suppliedQuery,onQueryChange:suppliedChange,...ctx}:WorkspaceContext & Partial<OperationsQueryProps>){
  const {s,actor,ask}=ctx;
- const [creating,setCreating]=useState(false);
+
  const {query,onQueryChange}=useOperationsQuery(suppliedQuery,suppliedChange);
  const filters=readPurchaseListQuery(query),results=paginateOperations(purchaseListRows(s,filters),filters.page,6);
  const filtered=!!filters.search.trim()||filters.status!=="all";
  const resetFilters=()=>onQueryChange({purchaseQ:null,purchaseStatus:null,purchasePage:null});
  return <div className="procurement-v6">
-  {creating&&<PurchaseEditor ctx={ctx} close={()=>setCreating(false)}/>}
-  <section className="panel ready-billing"><div><h2>Pesanan pemasok</h2><p>Pantau penerimaan barang, pembayaran, dan kebutuhan dana.</p></div>{["kepala","staf"].includes(actor.role)&&<Button onClick={()=>setCreating(true)}><Plus/>Buat pengadaan</Button>}</section>
+
+  <section className="panel ready-billing"><div><h2>Pesanan pemasok</h2><p>Pantau penerimaan barang, pembayaran, dan kebutuhan dana.</p></div></section>
   <section className="panel operations-list-controls" aria-label="Cari dan saring pengadaan">
    <div className="operations-list-toolbar"><form role="search" aria-label="Cari pengadaan" onSubmit={event=>{event.preventDefault();onQueryChange({purchaseQ:String(new FormData(event.currentTarget).get("purchaseQ")||"").trim(),purchasePage:null});}}><Field><FieldLabel htmlFor="purchase-search">Cari pengadaan</FieldLabel><div className="operations-list-search"><Input key={filters.search} id="purchase-search" name="purchaseQ" defaultValue={filters.search} placeholder="Nomor, pemasok, atau barang" type="search"/><Button type="submit" variant="outline"><Search aria-hidden="true"/>Cari</Button></div></Field></form><Field className="operations-list-filter"><FieldLabel htmlFor="purchase-status">Status pengadaan</FieldLabel><select id="purchase-status" className="native-select" value={filters.status} onChange={event=>onQueryChange({purchaseStatus:event.target.value,purchasePage:null})}><option value="all">Semua pengadaan</option><option value="open">Masih terbuka</option><option value="draft">Draf</option><option value="ordered">Dipesan</option><option value="complete">Diterima lengkap</option><option value="closed">Sisa ditutup</option></select></Field></div>
    <div className="operations-list-summary"><p id="purchase-list-summary" tabIndex={-1} role="status">{results.total?`${results.first}–${results.last} dari ${results.total} pengadaan`:"0 pengadaan"}{filtered&&" sesuai filter"}</p>{filtered&&results.total>0&&<Button type="button" variant="ghost" size="sm" onClick={resetFilters}>Hapus filter</Button>}</div>
   </section>
-  {!results.total&&<section className="panel"><Empty><EmptyHeader><EmptyTitle>{filtered?"Tidak ada pengadaan yang cocok":"Belum ada pengadaan"}</EmptyTitle><EmptyDescription>{filtered?"Coba kata kunci lain atau hapus filter untuk melihat semua pengadaan.":["kepala","staf"].includes(actor.role)?"Buat pengadaan untuk mencatat pesanan pemasok, penerimaan barang, dan pembayaran.":"Pengadaan yang dibuat Staf atau Kepala Toko akan tampil di sini untuk ditinjau sesuai peran Anda."}</EmptyDescription></EmptyHeader>{filtered?<Button variant="outline" onClick={resetFilters}>Hapus filter</Button>:["kepala","staf"].includes(actor.role)&&<Button onClick={()=>setCreating(true)}><Plus aria-hidden="true"/>Buat pengadaan pertama</Button>}</Empty></section>}
+  {!results.total&&<section className="panel"><Empty><EmptyHeader><EmptyTitle>{filtered?"Tidak ada pengadaan yang cocok":"Belum ada pengadaan"}</EmptyTitle><EmptyDescription>{filtered?"Coba kata kunci lain atau hapus filter untuk melihat semua pengadaan.":["kepala","staf"].includes(actor.role)?"Buat pengadaan untuk mencatat pesanan pemasok, penerimaan barang, dan pembayaran.":"Pengadaan yang dibuat Staf atau Kepala Toko akan tampil di sini untuk ditinjau sesuai peran Anda."}</EmptyDescription></EmptyHeader>{filtered&&<Button variant="outline" onClick={resetFilters}>Hapus filter</Button>}</Empty></section>}
   {results.rows.map(p=>{
    const summary=purchaseSummary(s,p),{lines:ls,ordered,retained,received,paid,advance,unpaid,paymentRemaining,unusedFunding}=summary;
    const remaining=ls.filter(l=>purchaseLineRemaining(l)>0),canManage=["OMI reguler","DDO"].includes(p.kind)?["staf","kepala"].includes(actor.role):actor.role==="kepala",canPay=["OMI reguler","DDO"].includes(p.kind)?actor.role==="staf":actor.role==="kepala";
