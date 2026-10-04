@@ -44,6 +44,8 @@ Restored the original demo's editorial landing composition, bundled photographs,
 
 Validation: production frontend build, TypeScript, focused ESLint, import boundaries and the existing catalog/request/identity/release-scope checks passed. Actual browser checks cover landing/catalog/sign-in at desktop and 390px mobile width, images and navigation. The restarted real .NET/Mongo local pilot passed the existing read-only browser acceptance again, including both saved decisions, cross-branch denial and the persistent catalog description. Evidence: `tmp/production/release1-visual-build.log`, `release1-visual-browser.log` and `release1-browser-results/visual-restoration`. No new requests or financial/inventory writes were created by this check. Hosted-service activation remains subject to the external deployment inputs above; restoring the design does not imply production acceptance.
 
+Published visual checkpoint: [`b0854bb74ea031e4db2f1022425d95ef89715a45`](https://github.com/natannielz/Capstone/commit/b0854bb74ea031e4db2f1022425d95ef89715a45), Vercel `dpl_DVbKrce3cxrvT4wdkEqfJtwgg75v`, Ready on the production frontend domain. The actual public browser verified `/`, `/shop`, and `/identity/login` with the restored design and honest inactive-service states. [GitHub frontend types, lint and boundary checks](https://github.com/natannielz/Capstone/actions/runs/37182214246) passed; unchanged backend checks were correctly not selected. Local is verified; staging and the hosted business journey remain unaccepted.
+
 ## Cleanup record
 
 - Removed disconnected duplicate storefront and its sole carousel component after source/script/test reference checks: `frontend/src/components/shop/storefront.tsx`, `frontend/src/components/collection-carousel.tsx`.
