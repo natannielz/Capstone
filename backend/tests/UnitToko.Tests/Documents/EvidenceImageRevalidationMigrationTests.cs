@@ -65,6 +65,7 @@ public sealed class EvidenceImageRevalidationMigrationTests(MongoFixture fixture
     // Test-only predecessor rehearsal, with no M81 business row, queue effect, or allocator.
     internal static async Task RestoreV80Async(IMongoDatabase db)
     {
+        await UnitToko.Tests.Identity.AccountContactMigrationTests.RestoreV81Async(db);
         var history = await db.GetCollection<BsonDocument>("schemaMigrations").Find(new BsonDocument())
             .Sort(new BsonDocument("_id", 1)).ToListAsync();
         if (history.Count <= 80) return;

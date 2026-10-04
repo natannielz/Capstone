@@ -6,15 +6,16 @@
 .page h3 { font: 650 17px/1.4 var(--font-body), "Segoe UI", sans-serif; color: var(--workspace-ink); }
 .page h1, .page h2, .page h3, .page p { overflow-wrap: anywhere; }
 .page p { max-width: 72ch; }
-.page button, .page input, .page select { font: inherit; }
+.page button, .page input, .page select, .page textarea { font: inherit; }
 .page a { text-underline-offset: 4px; }
-.page a:focus-visible, .page button:focus-visible, .page input:focus-visible, .page select:focus-visible, .page summary:focus-visible { outline: 3px solid var(--workspace-accent); outline-offset: 4px; }
+.page a:focus-visible, .page button:focus-visible, .page input:focus-visible, .page select:focus-visible, .page textarea:focus-visible, .page summary:focus-visible { outline: 3px solid var(--workspace-accent); outline-offset: 4px; }
 .page button:disabled { opacity: .6; cursor: not-allowed; }
 .page label { display: grid; gap: 7px; min-width: 0; font-weight: 650; font-size: 14px; overflow-wrap: anywhere; }
-.page input:not([type=checkbox]), .page select { border: 1px solid var(--workspace-border-input); border-radius: 4px; min-height: 48px; width: 100%; min-width: 0; max-width: 100%; background: var(--workspace-surface); color: var(--workspace-ink); padding: 10px 12px; font-weight: 400; }
-.page input:disabled, .page select:disabled { background: var(--workspace-surface-disabled); color: var(--workspace-text-muted); }
-.page input::placeholder { color: var(--workspace-text-placeholder); opacity: 1; }
-.page input[aria-invalid="true"], .page select[aria-invalid="true"] { border-color: var(--workspace-critical-border); }
+.page input:not([type=checkbox]), .page select, .page textarea { border: 1px solid var(--workspace-border-input); border-radius: 4px; min-height: 48px; width: 100%; min-width: 0; max-width: 100%; background: var(--workspace-surface); color: var(--workspace-ink); padding: 10px 12px; font-weight: 400; }
+.page textarea { resize: vertical; }
+.page input:disabled, .page select:disabled, .page textarea:disabled { background: var(--workspace-surface-disabled); color: var(--workspace-text-muted); }
+.page input::placeholder, .page textarea::placeholder { color: var(--workspace-text-placeholder); opacity: 1; }
+.page input[aria-invalid="true"], .page select[aria-invalid="true"], .page textarea[aria-invalid="true"] { border-color: var(--workspace-critical-border); }
 .masthead { max-width: 1280px; margin: 0 auto; padding: 24px 0; border-bottom: 1px solid var(--workspace-border); display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 20px; }
 .brand { display: inline-flex; align-items: center; min-height: 44px; font: 400 25px/1.2 var(--font-display), var(--font-body), sans-serif; letter-spacing: -.035em; color: var(--workspace-ink); text-decoration: none; }
 .brand:hover { color: var(--workspace-accent); }

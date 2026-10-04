@@ -1,4 +1,5 @@
 export function recoveryPage(operation: string) {
+  if (operation === 'account.contact.update') return {href: '/identity/account#account-contact', label: 'halaman kontak pribadi'};
   if (operation === 'evidence.image-revalidation.request') return { href: '/administration/catalog', label: 'halaman pemeriksaan ulang foto katalog' };
   if (operation === 'catalog.photo.associate' || operation === 'evidence.catalog-image.reserve') return { href: '/administration/catalog', label: 'halaman foto katalog' };
   if (operation === 'ordering.branchrequest.submit') return { href: '/ordering/requests', label: 'halaman permintaan saya' };
@@ -65,6 +66,7 @@ export function recoveryPage(operation: string) {
     : { href: "/administration/person-reviews", label: "halaman peninjauan orang" };
 }
 export function operationLabel(operation: string) {
+  if (operation === 'account.contact.update') return 'Perubahan kontak pribadi';
   if (operation === 'catalog.photo.associate') return 'Pemilihan foto utama kemasan';
   if (operation === 'evidence.image-revalidation.request') return 'Permintaan pemeriksaan ulang foto katalog';
   if (operation === 'evidence.catalog-image.reserve') return 'Persiapan unggah foto katalog';

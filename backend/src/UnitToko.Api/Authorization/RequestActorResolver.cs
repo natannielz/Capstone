@@ -50,6 +50,8 @@ public sealed class ActorRequiredFilter : IEndpointFilter
          path.StartsWith("/api/v1/billing/", StringComparison.OrdinalIgnoreCase) ||
          path.StartsWith("/api/v1/inventory/", StringComparison.OrdinalIgnoreCase) ||
          path.StartsWith("/api/v1/identity/administration/", StringComparison.OrdinalIgnoreCase) ||
+         (path.Equals("/api/v1/identity/contact", StringComparison.OrdinalIgnoreCase) ||
+          path.StartsWith("/api/v1/identity/contact/", StringComparison.OrdinalIgnoreCase)) ||
          ((path.StartsWith("/api/v1/access/", StringComparison.OrdinalIgnoreCase) || path.StartsWith("/api/v1/organizations", StringComparison.OrdinalIgnoreCase)) &&
           !path.EndsWith("/preview", StringComparison.OrdinalIgnoreCase) && !path.EndsWith("/query", StringComparison.OrdinalIgnoreCase)));
 }

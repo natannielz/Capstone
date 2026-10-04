@@ -12,6 +12,7 @@ using UnitToko.Modules.Contracts;
 using UnitToko.Platform;
 using UnitToko.Platform.Mongo;
 using UnitToko.Platform.DocumentProcessing;
+using UnitToko.Platform.Identity;
 using UnitToko.Platform.Authorization;
 using UnitToko.Platform.Catalog;
 using UnitToko.Api.Authorization;
@@ -57,6 +58,7 @@ builder.Services.AddSingleton<CollectionMigrations>();
 builder.Services.AddSingleton<AuthorizationStore>();
 builder.Services.AddSingleton<CatalogVisibilityStore>();
 builder.Services.AddSingleton<CatalogAuthoringService>();
+builder.Services.AddSingleton<AccountContactService>();
 builder.Services.AddSingleton<CatalogPriceService>();
 builder.Services.AddSingleton<CatalogDefinitionQueryService>();
 builder.Services.AddSingleton(sp => {
@@ -235,6 +237,7 @@ builder.Services.AddOpenApi("v1", options =>
                 }
                 if ((path.Key.StartsWith("/api/v1/access", StringComparison.Ordinal) || path.Key.StartsWith("/api/v1/organizations", StringComparison.Ordinal) ||
                      path.Key.StartsWith("/api/v1/identity/administration/", StringComparison.Ordinal) ||
+                     path.Key.StartsWith("/api/v1/identity/contact", StringComparison.Ordinal) ||
                      path.Key.StartsWith("/api/v1/catalog/", StringComparison.Ordinal) ||
                      path.Key.StartsWith("/api/v1/ordering/", StringComparison.Ordinal) ||
                       path.Key.StartsWith("/api/v1/accounting/", StringComparison.Ordinal) ||
@@ -434,6 +437,7 @@ app.MapCatalogEndpoints();
 app.MapBranchOrderRequestEndpoints();
 if (!pilotRelease)
 {
+app.MapAccountContactEndpoints();
 app.MapCatalogPriceEndpoints();
 app.MapCatalogPhotoEndpoints();
 app.MapCatalogPhotoRevalidationEndpoints();

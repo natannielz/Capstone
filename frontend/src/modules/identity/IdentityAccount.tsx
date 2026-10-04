@@ -9,6 +9,7 @@ import { createIdentityGateway } from "./identity-client";
 import { IdentityFailure, identityMessage, identityReturnPath, sessionTiming, stepUpFields, type IdentitySession } from "./identity-workflow";
 import { ProtectedNavigationForm } from "./ProtectedNavigationForm";
 import { WorkspaceDirectory } from "./WorkspaceDirectory";
+import { AccountContactPanel } from "./AccountContactPanel";
 import styles from "./identity.module.css";
 import { isPilotRelease } from '../../lib/release-scope';
 
@@ -115,6 +116,7 @@ export function IdentityAccount() {
             </> : <p className={styles.help}>Belum ada tindakan dalam penugasan Anda yang memerlukan verifikasi tambahan melalui halaman ini.</p>}
           </section>
         </div>
+        {!isPilotRelease && <AccountContactPanel key={session.account.userId} actorId={session.account.userId} />}
         <aside className={styles.support}><h2>Perlu memulihkan akses?</h2><p>Hubungi pengelola organisasi untuk memulai pemulihan melalui proses resmi. Anda sendiri yang menetapkan kembali akses di layanan akun. Pengelola tidak perlu mengetahui kata sandi atau kode verifikasi Anda.</p></aside>
       </>}
     </div>

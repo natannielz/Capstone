@@ -54,6 +54,7 @@ import { parseShipmentDocument, type ShipmentDocument } from "../fulfillment/shi
 import { catalogPhotoOperation, catalogPhotoKeySku, parseCatalogPhotoResult, type CatalogPhotoResult } from "../catalog/catalog-photo-workflow";
 import { catalogPhotoReserveOperation, catalogPhotoReservationOwner, parseCatalogPhotoReservation, type CatalogPhotoReservation } from "../catalog/catalog-photo-evidence-client";
 import { catalogPhotoRevalidationOperation, catalogPhotoRevalidationKeySku, parseCatalogPhotoRevalidationResult, type CatalogPhotoRevalidationResult } from "../catalog/catalog-photo-revalidation-api";
+import { accountContactOperation, accountContactKeyActor, parseAccountContactResult, type AccountContactResult } from "../identity/account-contact-client";
 
 export type OperationReference = Readonly<{ actorId: string; operation: string; key: string; createdAt: string }>;
 type JournalStorage = Pick<Storage, "length" | "key" | "getItem" | "setItem" | "removeItem">;
@@ -62,12 +63,13 @@ const keyPattern = /^[A-Za-z0-9._:-]{1,128}$/;
 const operationPattern = /^(?:procurement\.qualityacceptance\.(?:propose|decide)|procurement\.advancereturn\.(?:propose|decide)|procurement\.payable\.(?:propose|decide)|stock\.source\.reconciliation\.(?:propose|decide)|procurement\.stockvaluation\.(?:propose|decide)|procurement\.stockreceipt\.receive|procurement\.supplierclaim\.(?:request|approve|reject)|procurement\.supplierdocument\.(?:draft|submit|match)|evidence\.supplier-document-image\.reserve|procurement\.inspection\.(?:draft|submit)|evidence\.procurement-unboxing-video\.reserve|procurement\.receiving\.(?:notice|intake)|procurement\.settlement\.verify|procurement\.disbursement\.(?:draft|record)|evidence\.procurement-disbursement-image\.reserve|procurement\.supplierbank\.(?:propose|observe|approve|reject)|procurement\.funding\.(?:request|approve|reject)|procurement\.purchase\.order\.(?:propose|approve|reject)|procurement\.supplier\.(?:propose|observe|approve|reject)|procurement\.request\.(?:submit|approve|reject)|accounting\.book\.(?:propose|approve|reject)|billing\.refund\.payout\.(?:draft|record|verify)|evidence\.refund-payout-image\.reserve|billing\.return\.financial\.approve|billing\.return\.entitlement\.request|billing\.bank-receipt\.confirm|billing\.bank-statement\.stage|billing\.receiving-account\.(?:propose|observe|approve|reject|withdraw)|billing\.payment\.(?:draft\.save|replacement\.create|submit|verify|allocate|allocation\.correct|review\.(?:correct|manual|manage))|evidence\.payment-image\.reserve|billing\.invoice\.issue|(access|organization)\.[a-z.]{1,100}|identity\.(?:invitation\.(?:propose|approve|rejected|withdrawn|revoked)|recovery\.request)|person\.review\.(?:propose|approve|reject|withdraw)|fulfillment\.(?:case\.(?:request|decide|return_receive|return_inspect|resolution_request)|preparation\.save|shipment\.dispatch|surat-jalan\.issue|delivery-attempt\.record|receipt-proof\.issue|receipt\.(?:challenge\.issue|confirm))|ordering\.(?:spending\.policy\.(?:propose|approve|reject)|draft\.save|order\.(?:submit|cancel|spending\.(?:approve|reject)|store\.(?:accept|reject)))|catalog\.(?:price\.(?:propose|approve|reject|withdraw)|category\.save|family\.(?:create|edit)|sku\.(?:create|revise|replace|retire|publish))|inventory\.stock-count\.record|stock\.source\.(?:suspend|(?:(?:revision|alias|policy)\.)?(?:propose|approve|reject|withdraw)))$(?![\s\S])/;
 const storageKey = (entry: OperationReference) => `${prefix}${entry.actorId}:${entry.operation}:${entry.key}`;
 const recognizedOperation = (operation: string) => operationPattern.test(operation) || /^ordering\.branchrequest\.(?:submit|decide)$(?![\s\S])/u.test(operation) ||
-  operation === catalogPhotoOperation || operation === catalogPhotoReserveOperation || operation === catalogPhotoRevalidationOperation;
-function validPhotoKey(operation: string, key: string): boolean {
+  operation === catalogPhotoOperation || operation === catalogPhotoReserveOperation || operation === catalogPhotoRevalidationOperation || operation === accountContactOperation;
+function validPhotoKey(operation: string, key: string, actorId: string): boolean {
   try {
     if (operation === catalogPhotoOperation) catalogPhotoKeySku(key);
     else if (operation === catalogPhotoReserveOperation) catalogPhotoReservationOwner(key);
     else if (operation === catalogPhotoRevalidationOperation) catalogPhotoRevalidationKeySku(key);
+    else if (operation === accountContactOperation && accountContactKeyActor(key) !== actorId) return false;
     return true;
   } catch { return false; }
 }
@@ -124,7 +126,7 @@ function validEntry(value: unknown): value is OperationReference {
   return Object.keys(entry).sort().join(",") === "actorId,createdAt,key,operation" &&
     typeof entry.actorId === "string" && validReference(entry.actorId) &&
     typeof entry.operation === "string" && recognizedOperation(entry.operation) &&
-    typeof entry.key === "string" && keyPattern.test(entry.key) && validPhotoKey(entry.operation, entry.key) &&
+    typeof entry.key === "string" && keyPattern.test(entry.key) && validPhotoKey(entry.operation, entry.key, entry.actorId) &&
     typeof entry.createdAt === "string" && entry.createdAt.length <= 30 && Number.isFinite(Date.parse(entry.createdAt));
 }
 
@@ -181,6 +183,7 @@ export type LegacyRecoveryAdapter = Readonly<{
 
 /** Supply this only from the owning client screen. A missing receipt is never a failed or closed request. */
 export type OperationRecoveryAdapters = Readonly<{
+  "account.contact"?: Readonly<{ lookup: (entry: OperationReference) => Promise<Readonly<{ state: "committed"; result: AccountContactResult }> | null> }>;
   "catalog.photo"?: Readonly<{ lookup: (entry: OperationReference) => Promise<Readonly<{ state: "committed"; result: CatalogPhotoResult }> | null> }>;
   "evidence.catalog-image"?: Readonly<{ lookup: (entry: OperationReference) => Promise<Readonly<{ state: "committed"; result: CatalogPhotoReservation }> | null> }>;
   "evidence.image-revalidation"?: Readonly<{ lookup: (entry: OperationReference) => Promise<Readonly<{ state: "committed"; result: CatalogPhotoRevalidationResult }> | null> }>;
@@ -326,6 +329,8 @@ function recoveryNamespace(operation: string): "catalog.photo" | "evidence.catal
 
 export function operationRecoveryCapabilities(operation: string, adapters: OperationRecoveryAdapters = {}):
   Readonly<{ canCheck: boolean; canClose: boolean; unavailable: "adapter" | "operation" | null }> {
+  if (operation === accountContactOperation) return typeof adapters['account.contact']?.lookup === 'function'
+    ? {canCheck: true, canClose: false, unavailable: null} : {canCheck: false, canClose: false, unavailable: 'adapter'};
   const namespace = recoveryNamespace(operation);
   if (!namespace) return { canCheck: false, canClose: false, unavailable: "operation" };
   if (namespace === 'catalog.photo' || namespace === 'evidence.catalog-image' || namespace === 'evidence.image-revalidation' || namespace === 'ordering.branchrequest') return typeof adapters[namespace]?.lookup === 'function'
@@ -343,6 +348,21 @@ export function operationRecoveryCapabilities(operation: string, adapters: Opera
 /** Reconcile one immutable reference; never rebuild or retry its original command from persisted metadata. */
 export async function reconcileOperationRecovery(entry: OperationReference, journal: OperationJournal,
   legacy: LegacyRecoveryAdapter, adapters: OperationRecoveryAdapters = {}, closeReason?: string, isCurrent: () => boolean = () => true): Promise<RecoveryOutcome> {
+  if (entry.operation === accountContactOperation) {
+    if (!validEntry(entry)) throw new AccessFailure(400, 'recovery_reference_invalid');
+    if (closeReason !== undefined) throw new AccessFailure(400, 'recovery_close_unsupported');
+    const requireCurrent = () => {if (!isCurrent()) throw new AccessFailure(409, 'recovery_request_stale');};
+    requireCurrent();
+    const adapter = adapters['account.contact'];
+    if (typeof adapter?.lookup !== 'function') throw new AccessFailure(503, 'recovery_adapter_unavailable');
+    const reference = Object.freeze({...entry}), recovered = await adapter.lookup(reference); requireCurrent();
+    if (recovered === null) return {state: 'unconfirmed'};
+    if (!recovered || recovered.state !== 'committed' || Object.keys(recovered).sort().join(',') !== 'result,state')
+      throw new AccessFailure(502, 'recovery_receipt_invalid');
+    const result = parseAccountContactResult(recovered.result, reference.actorId); requireCurrent();
+    try {journal.confirmed(reference);} catch {throw new AccessFailure(400, 'recovery_cleanup_failed');}
+    return {state: 'committed', result: {id: result.historyId, version: result.revision}};
+  }
   const namespace = recoveryNamespace(entry.operation);
   if (!namespace) throw new AccessFailure(400, "recovery_operation_unsupported");
   if (!validEntry(entry)) throw new AccessFailure(400, "recovery_reference_invalid");
