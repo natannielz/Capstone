@@ -16,6 +16,8 @@ npm run build --prefix frontend
 dotnet build backend/tools/UnitToko.LocalPilot/UnitToko.LocalPilot.csproj -c Release
 ```
 
+Release 1 uses `frontend/.next`; full-workflow browser validation uses `frontend/.next-full` when built with `NEXT_PUBLIC_UNIT_TOKO_RELEASE=full`. The launcher always starts the Release 1 profile and checks its `.next/BUILD_ID`. Do not rebuild or clean `.next` while the pilot is serving it. A full validation build may run while the existing pilot stays online, but serialize frontend builds and type checks because Next still updates shared `next-env.d.ts` and generated TypeScript includes. A build that predates this separation must be rebuilt with `release1` during a coordinated pilot restart; the presence of `BUILD_ID` alone does not prove its profile.
+
 Run in a terminal (pass explicit paths if tools are not on PATH):
 
 ```powershell

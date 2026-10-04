@@ -34,10 +34,11 @@ Prerequisites: Node 24 on PATH, the SDK pinned by backend/global.json, the exist
 
     npm ci --prefix frontend/tests/browser --ignore-scripts
     node frontend/tests/browser/node_modules/playwright/cli.js install --with-deps chromium
-    npm run build --prefix frontend
 
 For PowerShell, from the repository root:
 
+    $env:NEXT_PUBLIC_UNIT_TOKO_RELEASE = 'full'
+    npm run build --prefix frontend
     $env:UNITTOKO_STOCK_BROWSER = '1'
     $env:UNITTOKO_BROWSER_NODE = (Get-Command node).Source
     $env:UNITTOKO_BROWSER_PLAYWRIGHT_PACKAGE = (Resolve-Path 'frontend/tests/browser/node_modules/playwright/package.json').Path
@@ -48,6 +49,8 @@ For PowerShell, from the repository root:
     } finally {
         Pop-Location
     }
+
+The full profile builds into `frontend/.next-full`. Native full-workflow browser tests require that directory's `BUILD_ID` and explicitly start their Next child with the same `full` profile. The persistent Release 1 pilot keeps `frontend/.next`; these rehearsals must not rebuild or delete its output. Serialize frontend builds and type checks because Next still writes the shared `next-env.d.ts` and TypeScript includes. Set the profile back to `release1` before any later pilot build or start command. GitHub's browser job sets `full` only for that job; deployment defaults remain unchanged.
 
 Set UNITTOKO_BROWSER_CHANNEL to msedge to use an installed Edge browser on Windows. Chromium uses the driver pinned by frontend/tests/browser/package-lock.json (Playwright 1.62.1). PLAYWRIGHT_BROWSERS_PATH may point to an isolated local runtime cache; use the same value for installation and execution. No real credentials are required.
 

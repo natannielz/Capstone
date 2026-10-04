@@ -37,7 +37,7 @@ public sealed class ProcurementSettlementBrowserTests(MongoFixture fixture, ITes
         var root = Root(); var node = Environment.GetEnvironmentVariable("UNITTOKO_BROWSER_NODE");
         var playwright = Environment.GetEnvironmentVariable("UNITTOKO_BROWSER_PLAYWRIGHT_PACKAGE");
         Assert.True(Path.IsPathFullyQualified(node ?? "") && File.Exists(node)); Assert.True(Path.IsPathFullyQualified(playwright ?? "") && File.Exists(playwright));
-        Assert.True(File.Exists(Path.Combine(root, "frontend", ".next", "BUILD_ID")));
+        Assert.True(File.Exists(Path.Combine(root, "frontend", ".next-full", "BUILD_ID")));
         await using var data = await D.CreateAsync(fixture); var source = data.Disbursement;
         var recorder = source.Actor; var importer = source.Bank.Statements.Maker;
         string[] actionGrants = [Permissions.ProcurementSettlementRead, Permissions.DisbursementVerify, Permissions.ProcurementDisbursementRead,
@@ -101,7 +101,7 @@ public sealed class ProcurementSettlementBrowserTests(MongoFixture fixture, ITes
             originalSha256 = source.Reference.Sha256, originalWidth = 13, originalHeight = 7, supplierAdvanceAccountCode = "A1201", cashAccountCode = "A1101" };
         var start = new ProcessStartInfo(node!) { WorkingDirectory = Path.Combine(root, "frontend"), UseShellExecute = false, CreateNoWindow = true,
             RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true };
-        start.ArgumentList.Add(Path.Combine(root, "frontend", "scripts", "verify-invoice-browser.mjs")); start.Environment["NODE_ENV"] = "production"; start.Environment["NEXT_TELEMETRY_DISABLED"] = "1";
+        start.ArgumentList.Add(Path.Combine(root, "frontend", "scripts", "verify-invoice-browser.mjs")); start.Environment["NODE_ENV"] = "production"; start.Environment["NEXT_TELEMETRY_DISABLED"] = "1"; start.Environment["NEXT_PUBLIC_UNIT_TOKO_RELEASE"] = "full";
         using var process = Process.Start(start) ?? throw new InvalidOperationException("Procurement settlement browser did not start"); var lines = new StringBuilder();
         async Task ReadAsync(StreamReader stream) { while (await stream.ReadLineAsync() is { } line) lock (lines) { lines.AppendLine(line); File.AppendAllText(logPath, line + Environment.NewLine); } }
         var stdout = ReadAsync(process.StandardOutput); var stderr = ReadAsync(process.StandardError);

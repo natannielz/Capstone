@@ -34,7 +34,7 @@ public sealed class OrderSubmissionBrowserTests(MongoFixture fixture, ITestOutpu
         var root = Root(); var node = Environment.GetEnvironmentVariable("UNITTOKO_BROWSER_NODE");
         var playwright = Environment.GetEnvironmentVariable("UNITTOKO_BROWSER_PLAYWRIGHT_PACKAGE");
         Assert.True(Path.IsPathFullyQualified(node ?? "") && File.Exists(node)); Assert.True(Path.IsPathFullyQualified(playwright ?? "") && File.Exists(playwright));
-        Assert.True(File.Exists(Path.Combine(root, "frontend", ".next", "BUILD_ID")));
+        Assert.True(File.Exists(Path.Combine(root, "frontend", ".next-full", "BUILD_ID")));
         await using var data = await OrderSubmissionTestData.CreateAsync(fixture, 2);
         await data.Prices.Catalog.Base.AddGrantAsync(data.Buyer, 6500, CatalogAuthoringTestData.Audience, [Permissions.OrderCancel]);
         var approver = await data.Prices.Catalog.ActorAsync(8100, new(GrantScopeKind.BuyingBranch, 10, 11), Permissions.OrderSpendApprove, Permissions.BranchPic);
@@ -68,7 +68,7 @@ public sealed class OrderSubmissionBrowserTests(MongoFixture fixture, ITestOutpu
         var start = new ProcessStartInfo(node!) { WorkingDirectory = Path.Combine(root, "frontend"), UseShellExecute = false, CreateNoWindow = true,
             RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true };
         start.ArgumentList.Add(Path.Combine(root, "frontend", "scripts", "verify-order-submission-browser.mjs"));
-        start.Environment["NODE_ENV"] = "production"; start.Environment["NEXT_TELEMETRY_DISABLED"] = "1";
+        start.Environment["NODE_ENV"] = "production"; start.Environment["NEXT_TELEMETRY_DISABLED"] = "1"; start.Environment["NEXT_PUBLIC_UNIT_TOKO_RELEASE"] = "full";
         using var process = Process.Start(start) ?? throw new InvalidOperationException("Browser child did not start");
         try {
             var stdout = process.StandardOutput.ReadToEndAsync(); var stderr = process.StandardError.ReadToEndAsync();

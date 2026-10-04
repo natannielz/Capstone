@@ -30,7 +30,7 @@ public sealed class PaymentBrowserTests(MongoFixture fixture, ITestOutputHelper 
     [WindowsPaymentBrowserFact]
     public async Task Browser_recovers_draft_reservation_and_original_upload_without_duplicate_financial_effects() {
         var root = Root(); var node = Environment.GetEnvironmentVariable("UNITTOKO_BROWSER_NODE"); var playwright = Environment.GetEnvironmentVariable("UNITTOKO_BROWSER_PLAYWRIGHT_PACKAGE");
-        Assert.True(Path.IsPathFullyQualified(node ?? "") && File.Exists(node)); Assert.True(Path.IsPathFullyQualified(playwright ?? "") && File.Exists(playwright)); Assert.True(File.Exists(Path.Combine(root, "frontend", ".next", "BUILD_ID")));
+        Assert.True(Path.IsPathFullyQualified(node ?? "") && File.Exists(node)); Assert.True(Path.IsPathFullyQualified(playwright ?? "") && File.Exists(playwright)); Assert.True(File.Exists(Path.Combine(root, "frontend", ".next-full", "BUILD_ID")));
         await using var files = await EvidenceAdmissionTestData.CreateAsync(fixture); await using var data = await PaymentDraftData.CreateAsync(fixture); var order = data.Invoice.Order;
         var policy = EvidenceAdmissionSchemaTests.Policy(); policy["_id"] = (await new IdAllocator(order.Database).NextAsync("evidenceStorePolicies")).Value; await data.Invoice.Rows("evidenceStorePolicies").InsertOneAsync(policy);
         var evidence = new PaymentEvidenceService(order.Database, new(order.Prices.Catalog.Client), new(order.Database), order.Prices.Catalog.Clock, data.Service, files.Registration);
@@ -71,7 +71,7 @@ public sealed class PaymentBrowserTests(MongoFixture fixture, ITestOutputHelper 
             reviewerToken = order.Prices.Catalog.Issued[reviewer.UserId].OpaqueToken,
             buyerId = order.Buyer.UserId.ToString(), transferDate = data.Input.TransferDate.ToString("yyyy-MM-dd"), imageBase64 = Convert.ToBase64String(ImageDecoderTests.Png(13, 7)) };
         var start = new ProcessStartInfo(node!) { WorkingDirectory = Path.Combine(root, "frontend"), UseShellExecute = false, CreateNoWindow = true, RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true };
-        start.ArgumentList.Add(Path.Combine(root, "frontend", "scripts", "verify-payment-browser.mjs")); start.Environment["NODE_ENV"] = "production"; start.Environment["NEXT_TELEMETRY_DISABLED"] = "1";
+        start.ArgumentList.Add(Path.Combine(root, "frontend", "scripts", "verify-payment-browser.mjs")); start.Environment["NODE_ENV"] = "production"; start.Environment["NEXT_TELEMETRY_DISABLED"] = "1"; start.Environment["NEXT_PUBLIC_UNIT_TOKO_RELEASE"] = "full";
         using var process = Process.Start(start) ?? throw new InvalidOperationException("Browser child did not start");
         var validationStarted = false; var ocrStarted = false;
         try {

@@ -40,7 +40,7 @@ public sealed class SupplierClaimBrowserTests(MongoFixture fixture, ITestOutputH
         var playwright = Environment.GetEnvironmentVariable("UNITTOKO_BROWSER_PLAYWRIGHT_PACKAGE");
         Assert.True(Path.IsPathFullyQualified(node ?? "") && File.Exists(node));
         Assert.True(Path.IsPathFullyQualified(playwright ?? "") && File.Exists(playwright));
-        Assert.True(File.Exists(Path.Combine(root, "frontend", ".next", "BUILD_ID")));
+        Assert.True(File.Exists(Path.Combine(root, "frontend", ".next-full", "BUILD_ID")));
         await using var data = await D.CreateAsync(fixture); data.Clock.UseSystemClock = true;
         var protector = SessionPayloadProtector.FromTestProvider(new EphemeralDataProtectionProvider());
         var sessions = new MongoIdentitySessionStore(data.Database, data.Unit, data.Clock, new("https://approved.example/", "fixture-connection", "fixture-policy"), protector);
@@ -101,7 +101,7 @@ public sealed class SupplierClaimBrowserTests(MongoFixture fixture, ITestOutputH
         var start = new ProcessStartInfo(node!) { WorkingDirectory = Path.Combine(root, "frontend"), UseShellExecute = false, CreateNoWindow = true,
             RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true };
         start.ArgumentList.Add(Path.Combine(root, "frontend", "scripts", "verify-invoice-browser.mjs"));
-        start.Environment["NODE_ENV"] = "production"; start.Environment["NEXT_TELEMETRY_DISABLED"] = "1";
+        start.Environment["NODE_ENV"] = "production"; start.Environment["NEXT_TELEMETRY_DISABLED"] = "1"; start.Environment["NEXT_PUBLIC_UNIT_TOKO_RELEASE"] = "full";
         using var process = Process.Start(start) ?? throw new InvalidOperationException("Supplier claim browser child did not start");
         var lines = new StringBuilder();
         async Task ReadAsync(StreamReader stream) {

@@ -12,6 +12,8 @@ if (apiOrigin) {
 }
 
 const config: NextConfig = {
+  // Full-workflow rehearsals must not replace the persistent Release 1 pilot build.
+  distDir: process.env.NEXT_PUBLIC_UNIT_TOKO_RELEASE === "full" ? ".next-full" : ".next",
   async rewrites() {
     return { beforeFiles: apiOrigin ? [
       { source: "/api/v1/:path*", destination: `${apiOrigin}/api/v1/:path*` },

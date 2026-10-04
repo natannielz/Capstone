@@ -41,7 +41,7 @@ public sealed class PaymentVerificationBrowserTests(MongoFixture fixture, ITestO
     public Task Browser_creates_linked_replacement_recovers_without_resending_and_submits_new_checked_original() => Run(false, workflow: true, replacement: true);
     private async Task Run(bool manual, bool manualRecovery = false, bool workflow = false, bool replacement = false) {
         var root = Root(); var node = Environment.GetEnvironmentVariable("UNITTOKO_BROWSER_NODE"); var playwright = Environment.GetEnvironmentVariable("UNITTOKO_BROWSER_PLAYWRIGHT_PACKAGE");
-        Assert.True(Path.IsPathFullyQualified(node ?? "") && File.Exists(node)); Assert.True(Path.IsPathFullyQualified(playwright ?? "") && File.Exists(playwright)); Assert.True(File.Exists(Path.Combine(root, "frontend", ".next", "BUILD_ID")));
+        Assert.True(Path.IsPathFullyQualified(node ?? "") && File.Exists(node)); Assert.True(Path.IsPathFullyQualified(playwright ?? "") && File.Exists(playwright)); Assert.True(File.Exists(Path.Combine(root, "frontend", ".next-full", "BUILD_ID")));
         await using var data = await PaymentVerificationTestData.CreateAsync(fixture, manual ? "ocr_unavailable" : null);
         if (manual) await PaymentManualReviewTests.Policy(data);
         if (workflow) await PaymentReviewActionTests.Grant(data);
@@ -82,7 +82,7 @@ public sealed class PaymentVerificationBrowserTests(MongoFixture fixture, ITestO
             declarationId = data.Read.DeclarationId.ToString(), receiptId = data.ReceiptId.ToString(), imageBase64 = Convert.ToBase64String(data.Read.Bytes),
             replacementImageBase64 = replacement ? Convert.ToBase64String(ImageDecoderTests.Png(14, 7)) : null, manual = manual && !manualRecovery, manualRecovery, workflow, replacement };
         var start = new ProcessStartInfo(node!) { WorkingDirectory = Path.Combine(root, "frontend"), UseShellExecute = false, CreateNoWindow = true, RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true };
-        start.ArgumentList.Add(Path.Combine(root, "frontend", "scripts", "verify-payment-verification-browser.mjs")); start.Environment["NODE_ENV"] = "production"; start.Environment["NEXT_TELEMETRY_DISABLED"] = "1";
+        start.ArgumentList.Add(Path.Combine(root, "frontend", "scripts", "verify-payment-verification-browser.mjs")); start.Environment["NODE_ENV"] = "production"; start.Environment["NEXT_TELEMETRY_DISABLED"] = "1"; start.Environment["NEXT_PUBLIC_UNIT_TOKO_RELEASE"] = "full";
         using var process = Process.Start(start) ?? throw new InvalidOperationException("Browser child did not start");
         var replacementValidated = false; var noticesProcessed = false;
         try {

@@ -43,7 +43,7 @@ public sealed partial class InvoiceBrowserTests(MongoFixture fixture, ITestOutpu
         if (!OperatingSystem.IsWindows()) throw new PlatformNotSupportedException("The configured native evidence and browser fixture requires Windows");
         var root = Root(); var node = Environment.GetEnvironmentVariable("UNITTOKO_BROWSER_NODE"); var playwright = Environment.GetEnvironmentVariable("UNITTOKO_BROWSER_PLAYWRIGHT_PACKAGE");
         Assert.True(Path.IsPathFullyQualified(node ?? "") && File.Exists(node)); Assert.True(Path.IsPathFullyQualified(playwright ?? "") && File.Exists(playwright));
-        Assert.True(File.Exists(Path.Combine(root, "frontend", ".next", "BUILD_ID")));
+        Assert.True(File.Exists(Path.Combine(root, "frontend", ".next-full", "BUILD_ID")));
         await using var data = await ReturnFinancialApprovalTests.Data.CreateAsync(fixture, "refund");
         var source = data.Source; var invoice = source.Payment.Invoice; var order = invoice.Order; var catalog = order.Prices.Catalog;
         // Like the existing invoice/bank browser fixtures, seed the actual actor's persisted
@@ -80,7 +80,7 @@ public sealed partial class InvoiceBrowserTests(MongoFixture fixture, ITestOutpu
             caseId = source.CaseId.ToString(), returnId = source.ReturnId.ToString(), invoiceId = data.InvoiceId.ToString(), action = source.Action,
             originalAllocationId = data.Input.Releases[0].OriginalAllocationId.Value.ToString(), expectedInvoiceVersion = data.Input.ExpectedInvoiceVersion.ToString(), expectedReceiptVersion = data.Input.Releases[0].ExpectedReceiptVersion.ToString() };
         var start = new ProcessStartInfo(node!) { WorkingDirectory = Path.Combine(root, "frontend"), UseShellExecute = false, CreateNoWindow = true, RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true };
-        start.ArgumentList.Add(Path.Combine(root, "frontend", "scripts", "verify-invoice-browser.mjs")); start.Environment["NODE_ENV"] = "production"; start.Environment["NEXT_TELEMETRY_DISABLED"] = "1";
+        start.ArgumentList.Add(Path.Combine(root, "frontend", "scripts", "verify-invoice-browser.mjs")); start.Environment["NODE_ENV"] = "production"; start.Environment["NEXT_TELEMETRY_DISABLED"] = "1"; start.Environment["NEXT_PUBLIC_UNIT_TOKO_RELEASE"] = "full";
         using var process = Process.Start(start) ?? throw new InvalidOperationException("Financial approval browser child did not start");
         try {
             var stdout = process.StandardOutput.ReadToEndAsync(); var stderr = process.StandardError.ReadToEndAsync(); await process.StandardInput.WriteAsync(JsonSerializer.Serialize(input)); process.StandardInput.Close();
@@ -107,7 +107,7 @@ public sealed partial class InvoiceBrowserTests(MongoFixture fixture, ITestOutpu
         if (!OperatingSystem.IsWindows()) throw new PlatformNotSupportedException("This private evidence/browser fixture requires Windows");
         var root = Root(); var node = Environment.GetEnvironmentVariable("UNITTOKO_BROWSER_NODE"); var playwright = Environment.GetEnvironmentVariable("UNITTOKO_BROWSER_PLAYWRIGHT_PACKAGE");
         Assert.True(Path.IsPathFullyQualified(node ?? "") && File.Exists(node)); Assert.True(Path.IsPathFullyQualified(playwright ?? "") && File.Exists(playwright));
-        Assert.True(File.Exists(Path.Combine(root, "frontend", ".next", "BUILD_ID")));
+        Assert.True(File.Exists(Path.Combine(root, "frontend", ".next-full", "BUILD_ID")));
         await using var data = await RefundPayoutTests.Data.CreateAsync(fixture, createDraft: false);
         var source = data.Source; var catalog = data.Catalog; var invoice = source.Allocation.Source.Read.Payment.Invoice;
         // Persist the real synthetic users' current profiles before the HTTP host loads their
@@ -160,7 +160,7 @@ public sealed partial class InvoiceBrowserTests(MongoFixture fixture, ITestOutpu
             transferDate = data.Input.TransferDate.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture), transferReference = data.Input.TransferReference,
             reservedRefund = data.Input.Amount.ToString(), imagePath, validationReadyPath, refundPayout = true };
         var start = new ProcessStartInfo(node!) { WorkingDirectory = Path.Combine(root, "frontend"), UseShellExecute = false, CreateNoWindow = true, RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true };
-        start.ArgumentList.Add(Path.Combine(root, "frontend", "scripts", "verify-invoice-browser.mjs")); start.Environment["NODE_ENV"] = "production"; start.Environment["NEXT_TELEMETRY_DISABLED"] = "1";
+        start.ArgumentList.Add(Path.Combine(root, "frontend", "scripts", "verify-invoice-browser.mjs")); start.Environment["NODE_ENV"] = "production"; start.Environment["NEXT_TELEMETRY_DISABLED"] = "1"; start.Environment["NEXT_PUBLIC_UNIT_TOKO_RELEASE"] = "full";
         using var process = Process.Start(start) ?? throw new InvalidOperationException("Refund payout browser child did not start");
         var text = new StringBuilder(); var validationStarted = false; var stdout = ReadOutputAsync(); var stderr = process.StandardError.ReadToEndAsync();
         try {
@@ -207,7 +207,7 @@ public sealed partial class InvoiceBrowserTests(MongoFixture fixture, ITestOutpu
     private async Task RunAsync(bool afterSales, bool caseDecision = false, bool caseReturn = false, bool financialRequest = false) {
         var root = Root(); var node = Environment.GetEnvironmentVariable("UNITTOKO_BROWSER_NODE"); var playwright = Environment.GetEnvironmentVariable("UNITTOKO_BROWSER_PLAYWRIGHT_PACKAGE");
         Assert.True(Path.IsPathFullyQualified(node ?? "") && File.Exists(node)); Assert.True(Path.IsPathFullyQualified(playwright ?? "") && File.Exists(playwright));
-        Assert.True(File.Exists(Path.Combine(root, "frontend", ".next", "BUILD_ID")));
+        Assert.True(File.Exists(Path.Combine(root, "frontend", ".next-full", "BUILD_ID")));
         await using var data = await InvoiceData.CreateAsync(fixture); var order = data.Order;
         if (afterSales) await order.Prices.Catalog.Base.AddGrantAsync(order.Buyer, 99810, CatalogAuthoringTestData.Audience, [Permissions.CaseRead, Permissions.CaseRequest]);
         if (caseDecision) {
@@ -246,7 +246,7 @@ public sealed partial class InvoiceBrowserTests(MongoFixture fixture, ITestOutpu
             financeToken = order.Prices.Catalog.Issued[data.Finance.UserId].OpaqueToken, buyerToken = order.Prices.Catalog.Issued[order.Buyer.UserId].OpaqueToken,
             courierToken = order.Prices.Catalog.Issued[data.Dispatch.Courier.UserId].OpaqueToken, financeId = data.Finance.UserId.ToString(), buyerId = order.Buyer.UserId.ToString(), receiptId = data.Receipt.Id.ToString(), afterSales, caseDecision, caseReturn, financialRequest };
         var start = new ProcessStartInfo(node!) { WorkingDirectory = Path.Combine(root, "frontend"), UseShellExecute = false, CreateNoWindow = true, RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true };
-        start.ArgumentList.Add(Path.Combine(root, "frontend", "scripts", "verify-invoice-browser.mjs")); start.Environment["NODE_ENV"] = "production"; start.Environment["NEXT_TELEMETRY_DISABLED"] = "1";
+        start.ArgumentList.Add(Path.Combine(root, "frontend", "scripts", "verify-invoice-browser.mjs")); start.Environment["NODE_ENV"] = "production"; start.Environment["NEXT_TELEMETRY_DISABLED"] = "1"; start.Environment["NEXT_PUBLIC_UNIT_TOKO_RELEASE"] = "full";
         using var process = Process.Start(start) ?? throw new InvalidOperationException("Browser child did not start");
         try {
             var stdout = process.StandardOutput.ReadToEndAsync(); var stderr = process.StandardError.ReadToEndAsync(); await process.StandardInput.WriteAsync(JsonSerializer.Serialize(input)); process.StandardInput.Close();

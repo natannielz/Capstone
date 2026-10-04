@@ -44,7 +44,7 @@ public sealed class ProcurementQualityAcceptanceBrowserTests(MongoFixture fixtur
         var root = Root(); var node = Environment.GetEnvironmentVariable("UNITTOKO_BROWSER_NODE");
         var playwright = Environment.GetEnvironmentVariable("UNITTOKO_BROWSER_PLAYWRIGHT_PACKAGE");
         Assert.True(Path.IsPathFullyQualified(node ?? "") && File.Exists(node)); Assert.True(Path.IsPathFullyQualified(playwright ?? "") && File.Exists(playwright));
-        Assert.True(File.Exists(Path.Combine(root, "frontend", ".next", "BUILD_ID")));
+        Assert.True(File.Exists(Path.Combine(root, "frontend", ".next-full", "BUILD_ID")));
         await using var data = await D.CreateAsync(fixture); data.Clock.UseSystemClock = true;
         // This journey proves history-only access; the shared fixture also grants live-source reads.
         var readerGrant = Assert.Single(await data.Rows("authorizationGrants").Find(new BsonDocument("userId", data.Reader.UserId)).ToListAsync());
@@ -108,7 +108,7 @@ public sealed class ProcurementQualityAcceptanceBrowserTests(MongoFixture fixtur
             qualityInput, checkerObservation, receiptReference = data.Stock.Input().ReceiptReference, decisionReason = D.Reason };
         var start = new ProcessStartInfo(node!) { WorkingDirectory = Path.Combine(root, "frontend"), UseShellExecute = false, CreateNoWindow = true,
             RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true };
-        start.ArgumentList.Add(Path.Combine(root, "frontend", "scripts", "verify-invoice-browser.mjs")); start.Environment["NODE_ENV"] = "production"; start.Environment["NEXT_TELEMETRY_DISABLED"] = "1";
+        start.ArgumentList.Add(Path.Combine(root, "frontend", "scripts", "verify-invoice-browser.mjs")); start.Environment["NODE_ENV"] = "production"; start.Environment["NEXT_TELEMETRY_DISABLED"] = "1"; start.Environment["NEXT_PUBLIC_UNIT_TOKO_RELEASE"] = "full";
         using var process = Process.Start(start) ?? throw new InvalidOperationException("Supplier quality acceptance browser child did not start");
         var elapsed = Stopwatch.StartNew();
         // The established bounded journey keeps the actual session renewal and lookup-only recovery stages finite.

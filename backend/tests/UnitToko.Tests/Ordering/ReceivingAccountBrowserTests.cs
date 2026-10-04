@@ -27,7 +27,7 @@ public sealed class ReceivingAccountBrowserTests(MongoFixture fixture, ITestOutp
     [WindowsPaymentBrowserFact]
     public async Task Browser_proposes_independently_observes_approves_and_recovers_without_duplicate_versions() {
         var root = Root(); var node = Environment.GetEnvironmentVariable("UNITTOKO_BROWSER_NODE"); var playwright = Environment.GetEnvironmentVariable("UNITTOKO_BROWSER_PLAYWRIGHT_PACKAGE");
-        Assert.True(Path.IsPathFullyQualified(node ?? "") && File.Exists(node)); Assert.True(Path.IsPathFullyQualified(playwright ?? "") && File.Exists(playwright)); Assert.True(File.Exists(Path.Combine(root, "frontend", ".next", "BUILD_ID")));
+        Assert.True(Path.IsPathFullyQualified(node ?? "") && File.Exists(node)); Assert.True(Path.IsPathFullyQualified(playwright ?? "") && File.Exists(playwright)); Assert.True(File.Exists(Path.Combine(root, "frontend", ".next-full", "BUILD_ID")));
         await using var data = await ReceivingAccountTestData.CreateAsync(fixture);
         foreach (var actor in new[] { data.Maker, data.Checker, data.Approver, data.Masked, data.Other })
             await data.Rows("accountProfiles").InsertOneAsync(new BsonDocument { { "_id", actor.UserId }, { "schemaVersion", 1 }, { "version", 1L },
@@ -49,7 +49,7 @@ public sealed class ReceivingAccountBrowserTests(MongoFixture fixture, ITestOutp
             makerToken = data.Catalog.Issued[data.Maker.UserId].OpaqueToken, checkerToken = data.Catalog.Issued[data.Checker.UserId].OpaqueToken, approverToken = data.Catalog.Issued[data.Approver.UserId].OpaqueToken,
             maskedToken = data.Catalog.Issued[data.Masked.UserId].OpaqueToken, otherToken = data.Catalog.Issued[data.Other.UserId].OpaqueToken, otherId = data.Other.UserId.ToString() };
         var start = new ProcessStartInfo(node!) { WorkingDirectory = Path.Combine(root, "frontend"), UseShellExecute = false, CreateNoWindow = true, RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true };
-        start.ArgumentList.Add(Path.Combine(root, "frontend", "scripts", "verify-receiving-account-browser.mjs")); start.Environment["NODE_ENV"] = "production"; start.Environment["NEXT_TELEMETRY_DISABLED"] = "1";
+        start.ArgumentList.Add(Path.Combine(root, "frontend", "scripts", "verify-receiving-account-browser.mjs")); start.Environment["NODE_ENV"] = "production"; start.Environment["NEXT_TELEMETRY_DISABLED"] = "1"; start.Environment["NEXT_PUBLIC_UNIT_TOKO_RELEASE"] = "full";
         using var process = Process.Start(start) ?? throw new InvalidOperationException("Browser child did not start");
         try {
             var stdout = process.StandardOutput.ReadToEndAsync(); var stderr = process.StandardError.ReadToEndAsync(); await process.StandardInput.WriteAsync(JsonSerializer.Serialize(input)); process.StandardInput.Close();

@@ -31,7 +31,7 @@ public sealed class PaymentAllocationBrowserTests(MongoFixture fixture, ITestOut
     [WindowsPaymentBrowserFact]
     public async Task Browser_allocates_and_independently_corrects_linked_funds_recovers_lost_replies_and_preserves_original_cash() {
         var root = Root(); var node = Environment.GetEnvironmentVariable("UNITTOKO_BROWSER_NODE"); var playwright = Environment.GetEnvironmentVariable("UNITTOKO_BROWSER_PLAYWRIGHT_PACKAGE");
-        Assert.True(Path.IsPathFullyQualified(node ?? "") && File.Exists(node)); Assert.True(Path.IsPathFullyQualified(playwright ?? "") && File.Exists(playwright)); Assert.True(File.Exists(Path.Combine(root, "frontend", ".next", "BUILD_ID")));
+        Assert.True(Path.IsPathFullyQualified(node ?? "") && File.Exists(node)); Assert.True(Path.IsPathFullyQualified(playwright ?? "") && File.Exists(playwright)); Assert.True(File.Exists(Path.Combine(root, "frontend", ".next-full", "BUILD_ID")));
         await using var data = await PaymentAllocationTests.Data.CreateAsync(fixture);
         var checker = await PaymentAllocationCorrectionTests.Checker(data);
         var originalCash = await data.Rows("journalEntries").Find(new BsonDocument("source.namespace", "billing.bank-receipt")).SingleAsync();
@@ -66,7 +66,7 @@ public sealed class PaymentAllocationBrowserTests(MongoFixture fixture, ITestOut
             otherToken = data.Source.Read.Catalog.Issued[outside.UserId].OpaqueToken, otherId = outside.UserId.ToString(),
             duplicateId = duplicate.Id.ToString(), verificationId = data.VerificationId.ToString(), invoiceId = data.InvoiceId.ToString(), declarationId = data.Source.Read.DeclarationId.ToString(), receiptId = data.Source.ReceiptId.ToString(), imageBase64 = Convert.ToBase64String(data.Source.Read.Bytes) };
         var start = new ProcessStartInfo(node!) { WorkingDirectory = Path.Combine(root, "frontend"), UseShellExecute = false, CreateNoWindow = true, RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true };
-        start.ArgumentList.Add(Path.Combine(root, "frontend", "scripts", "verify-payment-allocation-browser.mjs")); start.Environment["NODE_ENV"] = "production"; start.Environment["NEXT_TELEMETRY_DISABLED"] = "1";
+        start.ArgumentList.Add(Path.Combine(root, "frontend", "scripts", "verify-payment-allocation-browser.mjs")); start.Environment["NODE_ENV"] = "production"; start.Environment["NEXT_TELEMETRY_DISABLED"] = "1"; start.Environment["NEXT_PUBLIC_UNIT_TOKO_RELEASE"] = "full";
         using var process = Process.Start(start) ?? throw new InvalidOperationException("Browser child did not start");
         try {
             var stdout = process.StandardOutput.ReadToEndAsync(); var stderr = process.StandardError.ReadToEndAsync(); await process.StandardInput.WriteAsync(JsonSerializer.Serialize(input)); process.StandardInput.Close();

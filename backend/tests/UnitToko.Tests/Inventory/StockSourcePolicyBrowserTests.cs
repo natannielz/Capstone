@@ -45,7 +45,7 @@ public sealed class StockSourcePolicyBrowserTests(MongoFixture fixture, ITestOut
         var playwright = Environment.GetEnvironmentVariable("UNITTOKO_BROWSER_PLAYWRIGHT_PACKAGE");
         Assert.True(Path.IsPathFullyQualified(node ?? "") && File.Exists(node), "Set the local Node 24 executable.");
         Assert.True(Path.IsPathFullyQualified(playwright ?? "") && File.Exists(playwright), "Install the pinned browser package.");
-        Assert.True(File.Exists(Path.Combine(root, "frontend", ".next", "BUILD_ID")), "Build the production frontend first.");
+        Assert.True(File.Exists(Path.Combine(root, "frontend", ".next-full", "BUILD_ID")), "Build the production frontend first.");
         await using var data = await StoreTestData.CreateAsync(fixture);
         data.Clock.UtcNow = DateTimeOffset.FromUnixTimeMilliseconds(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
         using var keys = new IdentityRuntimeTests.RuntimeKeys();
@@ -117,7 +117,7 @@ public sealed class StockSourcePolicyBrowserTests(MongoFixture fixture, ITestOut
         var start = new ProcessStartInfo(node!) { WorkingDirectory = Path.Combine(root, "frontend"), UseShellExecute = false,
             CreateNoWindow = true, RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true };
         start.ArgumentList.Add(Path.Combine(root, "frontend", "scripts", "verify-stock-source-policy-browser.mjs"));
-        start.Environment["NODE_ENV"] = "production"; start.Environment["NEXT_TELEMETRY_DISABLED"] = "1";
+        start.Environment["NODE_ENV"] = "production"; start.Environment["NEXT_TELEMETRY_DISABLED"] = "1"; start.Environment["NEXT_PUBLIC_UNIT_TOKO_RELEASE"] = "full";
         using var process = Process.Start(start) ?? throw new InvalidOperationException("Could not start browser rehearsal.");
         try
         {

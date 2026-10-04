@@ -36,7 +36,7 @@ public sealed class StockSourceReconciliationBrowserTests(MongoFixture fixture, 
         var root = Root(); var node = Environment.GetEnvironmentVariable("UNITTOKO_BROWSER_NODE");
         var playwright = Environment.GetEnvironmentVariable("UNITTOKO_BROWSER_PLAYWRIGHT_PACKAGE");
         Assert.True(Path.IsPathFullyQualified(node ?? "") && File.Exists(node)); Assert.True(Path.IsPathFullyQualified(playwright ?? "") && File.Exists(playwright));
-        Assert.True(File.Exists(Path.Combine(root, "frontend", ".next", "BUILD_ID")));
+        Assert.True(File.Exists(Path.Combine(root, "frontend", ".next-full", "BUILD_ID")));
         await using var data = await D.CreateAsync(fixture, browserObservationWindow: true); data.Clock.UseSystemClock = true;
         var protector = SessionPayloadProtector.FromTestProvider(new EphemeralDataProtectionProvider());
         var sessions = new MongoIdentitySessionStore(data.Database, data.Unit, data.Clock, new("https://approved.example/", "fixture-connection", "fixture-policy"), protector);
@@ -87,7 +87,7 @@ public sealed class StockSourceReconciliationBrowserTests(MongoFixture fixture, 
             checkerSourceReference = "SYNTHETIC-BROWSER-INDEPENDENT-COUNT", reason = D.Reason, decisionReason = "Synthetic independent physical count; goods remain held" };
         var start = new ProcessStartInfo(node!) { WorkingDirectory = Path.Combine(root, "frontend"), UseShellExecute = false, CreateNoWindow = true,
             RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true };
-        start.ArgumentList.Add(Path.Combine(root, "frontend", "scripts", "verify-invoice-browser.mjs")); start.Environment["NODE_ENV"] = "production"; start.Environment["NEXT_TELEMETRY_DISABLED"] = "1";
+        start.ArgumentList.Add(Path.Combine(root, "frontend", "scripts", "verify-invoice-browser.mjs")); start.Environment["NODE_ENV"] = "production"; start.Environment["NEXT_TELEMETRY_DISABLED"] = "1"; start.Environment["NEXT_PUBLIC_UNIT_TOKO_RELEASE"] = "full";
         using var process = Process.Start(start) ?? throw new InvalidOperationException("Stock reconciliation browser child did not start");
         var elapsed = Stopwatch.StartNew();
         // Same bounded full-journey allowance as the adjacent actual stock browser harness; per-step checks remain60s.

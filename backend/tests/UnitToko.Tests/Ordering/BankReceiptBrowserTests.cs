@@ -27,7 +27,7 @@ public sealed class BankReceiptBrowserTests(MongoFixture fixture, ITestOutputHel
     [WindowsPaymentBrowserFact]
     public async Task Browser_independently_confirms_and_recovers_one_cash_event_across_overlapping_sources() {
         var root = Root(); var node = Environment.GetEnvironmentVariable("UNITTOKO_BROWSER_NODE"); var playwright = Environment.GetEnvironmentVariable("UNITTOKO_BROWSER_PLAYWRIGHT_PACKAGE");
-        Assert.True(Path.IsPathFullyQualified(node ?? "") && File.Exists(node)); Assert.True(Path.IsPathFullyQualified(playwright ?? "") && File.Exists(playwright)); Assert.True(File.Exists(Path.Combine(root, "frontend", ".next", "BUILD_ID")));
+        Assert.True(Path.IsPathFullyQualified(node ?? "") && File.Exists(node)); Assert.True(Path.IsPathFullyQualified(playwright ?? "") && File.Exists(playwright)); Assert.True(File.Exists(Path.Combine(root, "frontend", ".next-full", "BUILD_ID")));
         await using var data = await BankReceiptTestData.CreateAsync(fixture);
         var overlap=(await data.Statements.StageAsync("browser-overlap",filename:"overlap.csv"))["importId"].AsInt64;
         await data.Statements.Accounts.Catalog.Base.AddGrantAsync(data.Statements.Maker,72999,UnitToko.Tests.Catalog.CatalogAuthoringTestData.Shop,
@@ -53,7 +53,7 @@ public sealed class BankReceiptBrowserTests(MongoFixture fixture, ITestOutputHel
             otherToken = data.Statements.Accounts.Catalog.Issued[data.Other.UserId].OpaqueToken, otherId = data.Other.UserId.ToString(),
             importId = data.ImportId.ToString(), overlapId=overlap.ToString(), importerToken=data.Statements.Accounts.Catalog.Issued[data.Statements.Maker.UserId].OpaqueToken };
         var start = new ProcessStartInfo(node!) { WorkingDirectory = Path.Combine(root, "frontend"), UseShellExecute = false, CreateNoWindow = true, RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true };
-        start.ArgumentList.Add(Path.Combine(root, "frontend", "scripts", "verify-bank-receipt-browser.mjs")); start.Environment["NODE_ENV"] = "production"; start.Environment["NEXT_TELEMETRY_DISABLED"] = "1";
+        start.ArgumentList.Add(Path.Combine(root, "frontend", "scripts", "verify-bank-receipt-browser.mjs")); start.Environment["NODE_ENV"] = "production"; start.Environment["NEXT_TELEMETRY_DISABLED"] = "1"; start.Environment["NEXT_PUBLIC_UNIT_TOKO_RELEASE"] = "full";
         using var process = Process.Start(start) ?? throw new InvalidOperationException("Browser child did not start");
         try {
             var stdout = process.StandardOutput.ReadToEndAsync(); var stderr = process.StandardError.ReadToEndAsync(); await process.StandardInput.WriteAsync(JsonSerializer.Serialize(input)); process.StandardInput.Close();

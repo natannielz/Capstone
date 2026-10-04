@@ -50,6 +50,31 @@ async function user(token) {
   } });
   return { context, page };
 }
+async function captureCheckout(page, name) {
+  const viewport = page.viewportSize(), scroll = await page.evaluate(() => ({ x: scrollX, y: scrollY }));
+  const observeSkipLink = async phase => console.log('CHECKOUT_CAPTURE ' + JSON.stringify({ name, phase,
+    ...(await page.locator('a[href="#checkout-main"]').evaluate(element => {
+      const rect = element.getBoundingClientRect(), style = getComputedStyle(element);
+      return { viewport: { width: innerWidth, height: innerHeight }, scrollY, focused: document.activeElement === element,
+        position: style.position, transform: style.transform, visibility: style.visibility,
+        bounds: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+        intersectsViewport: rect.bottom > 0 && rect.top < innerHeight && rect.right > 0 && rect.left < innerWidth };
+    })) }));
+  await observeSkipLink('before-capture');
+  try {
+    // A top-of-page capture avoids painting an offscreen fixed skip link into a scrolled full-page image.
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await observeSkipLink('mobile');
+    await page.screenshot({ path: resolve(directory, name + '-mobile.png'), fullPage: true });
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await observeSkipLink('desktop');
+    await page.screenshot({ path: resolve(directory, name + '-desktop.png'), fullPage: true });
+  } finally {
+    await page.setViewportSize(viewport);
+    await page.evaluate(value => window.scrollTo(value.x, value.y), scroll);
+  }
+}
 try {
   await app.prepare(); const handle = app.getRequestHandler();
   frontend = track(http.createServer((req, res) => { void handle(req, res).catch(() => { res.statusCode = 500; res.end(); }); })); const frontendPort = await listen(frontend);
@@ -71,7 +96,7 @@ try {
   assert.match(await review.innerText(), /2 Dus · 24 piece/); assert.match(await review.innerText(), /Total pesanan: IDR 25\.500,50/);
   assert.equal(await review.evaluate(element => element === document.activeElement), true);
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
-  await page.screenshot({ path: resolve(directory, 'checkout-mobile.png'), fullPage: true });
+  await captureCheckout(page, 'checkout');
   await page.getByRole('button', { name: 'Batal pengajuan', exact: true }).click(); assert.equal(writes.length, 0);
   await page.getByRole('button', { name: 'Tinjau pesanan dan biaya', exact: true }).click(); await review.waitFor();
   dropNext = true; await page.getByRole('button', { name: 'Konfirmasi ajukan pesanan', exact: true }).click();
@@ -90,7 +115,7 @@ try {
   assert.equal(await page.getByRole('button', { name: /Selesaikan dan tutup/ }).count(), 0);
   await page.getByRole('button', { name: 'Muat kembali pesanan', exact: true }).click(); await page.getByRole('heading', { name: 'Rincian pesanan tersimpan', exact: true }).waitFor();
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
-  await page.screenshot({ path: resolve(directory, 'submitted-mobile.png'), fullPage: true });
+  await captureCheckout(page, 'submitted');
   const orderId = (await confirmed.getByRole('heading').innerText()).match(/[0-9]+/)[0];
   const denied = await user(config.deniedToken); await denied.page.goto(origin.origin + '/ordering/checkout?draft=' + config.draftId);
   await denied.page.getByRole('heading', { name: 'Periksa sesi dan akses', exact: true }).waitFor();
