@@ -84,6 +84,7 @@ public sealed class PdfEvidenceValidationMigrationTests(MongoFixture fixture)
     }
     internal static async Task RestoreV82Async(IMongoDatabase db)
     {
+        await UnitToko.Tests.Reporting.AccountingReportMigrationTests.RestoreV83Async(db);
         var history = await HistoryAsync(db); if (history.Count <= 82) return;
         Assert.Equal(83, history.Count); Assert.All(history, row => Assert.Equal("applied", row["state"]));
         foreach (var table in PdfEvidenceValidationSchemas.Collections) {

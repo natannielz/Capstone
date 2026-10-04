@@ -79,6 +79,12 @@ internal sealed partial class EvidenceService
             return ReserveMediaAsync(tx, actor, (request.Target, request.Purpose, request.ExpectedTargetRevision), metadata, ct);
         });
 
+    internal Task<ReservationResult> ReservePdfAsync(IClientSessionHandle tx, ActorContext actor, ReserveEvidencePdf request,
+        AuthorizationCommandMetadata metadata, CancellationToken ct = default) => GuardAsync(tx, async () => {
+            ArgumentNullException.ThrowIfNull(request); await PdfEvidenceAdmissionSchemas.RequireAsync(database, ct);
+            return await ReserveMediaAsync(tx, actor, (request.Target, request.Purpose, request.ExpectedTargetRevision), metadata, ct);
+        });
+
     private async Task<ReservationResult> ReserveMediaAsync(IClientSessionHandle tx, ActorContext actor,
         (EvidenceTargetRef Target, EvidencePurpose Purpose, long? ExpectedTargetRevision) request,
         AuthorizationCommandMetadata metadata, CancellationToken ct)
@@ -100,12 +106,15 @@ internal sealed partial class EvidenceService
                 await RequireReceiptAsync(tx, saved, existing, false, token);
                 return Reservation(existing["result"].AsBsonDocument);
             }
-            if (request.Purpose != Purpose(target.Target)) throw Invalid();
+            if (!SupportsPurpose(target.Target, request.Purpose)) throw Invalid();
             if (request.ExpectedTargetRevision is { } expected && expected != target.Revision) throw Conflict("evidence_target_revision_conflict");
             RequireStore();
             var policyCollection = StorePolicyCollection(request.Purpose);
             var policy = await Rows(policyCollection).Find(tx, F.Eq("storeId", registration.StoreId)).SingleOrDefaultAsync(token);
             RequirePolicy(policy);
+            if (request.Purpose is EvidencePurpose.PaymentPdf or EvidencePurpose.SupplierDocumentPdf &&
+                policy!["maximumContentBytes"].AsInt64 > PdfEvidenceValidationContract.MaximumOriginalBytes)
+                throw Conflict("evidence_pdf_policy_unavailable");
             var charge = checked(3 * policy!["maximumContentBytes"].AsInt64);
             var bytes = policy["chargedBytes"].AsInt64; var count = policy["chargedReservations"].AsInt64;
             if (count >= policy["maximumHeldReservations"].AsInt64 || charge > policy["maximumHeldBytes"].AsInt64 - bytes)
@@ -162,11 +171,13 @@ internal sealed partial class EvidenceService
         return result;
     }
     internal Task<SafeStatus> GetStatusAsync(IClientSessionHandle tx, ActorContext actor, long reservationId,
-        AuthorizationReadMetadata readMetadata, CancellationToken ct = default, EvidenceTargetRef? requestedTarget = null) => GuardAsync(tx, async () =>
+        AuthorizationReadMetadata readMetadata, CancellationToken ct = default, EvidenceTargetRef? requestedTarget = null,
+        EvidencePurpose? requestedPurpose = null) => GuardAsync(tx, async () =>
     {
         if (readMetadata is null || readMetadata.Purpose != "evidence-status" || !Text(readMetadata.CorrelationId, 128)) throw Invalid();
         var bundle = await LoadAsync(tx, reservationId, ct);
         if (requestedTarget is not null && ReadTarget(bundle.Reservation) != requestedTarget) throw Invalid("evidence_actor_or_owner_denied");
+        if (requestedPurpose.HasValue && PersistedPurpose(bundle.Reservation) != requestedPurpose.Value) throw Invalid("evidence_format_mismatch");
         var result = await WithReadTargetAsync(tx, actor, ReadTarget(bundle.Reservation), null, null, async (target, token) =>
         {
             if (requestedTarget is not null) RequireReadAuthority(bundle, target, actor);
@@ -184,22 +195,37 @@ internal sealed partial class EvidenceService
     });
 
     internal Task<ReservationResult?> RecoverReservationAsync(IClientSessionHandle tx, ActorContext actor, EvidenceTargetRef requestedTarget,
-        string key, CancellationToken ct) => GuardAsync(tx, () => WithReadTargetAsync<ReservationResult?>(tx, actor, requestedTarget, null, null, async (target, token) => {
+        string key, CancellationToken ct) => RecoverReservationAsync(tx, actor, requestedTarget, Purpose(requestedTarget), key, ct);
+    internal Task<ReservationResult?> RecoverReservationAsync(IClientSessionHandle tx, ActorContext actor, EvidenceTargetRef requestedTarget,
+        EvidencePurpose requestedPurpose, string key, CancellationToken ct) => GuardAsync(tx, () => WithReadTargetAsync<ReservationResult?>(tx, actor, requestedTarget, null, null, async (target, token) => {
+            if (!SupportsPurpose(requestedTarget, requestedPurpose)) throw Invalid();
             ValidateMetadata(new(key, "Recover original upload reservation", "evidence-reservation-recovery"));
-            var receipt = await Rows("idempotencyRecords").Find(tx, ReceiptFilter(actor.UserId, ReserveOperation(Purpose(requestedTarget)), key)).SingleOrDefaultAsync(token);
+            var receipt = await Rows("idempotencyRecords").Find(tx, ReceiptFilter(actor.UserId, ReserveOperation(requestedPurpose), key)).SingleOrDefaultAsync(token);
             var reservations = await Rows("evidenceUploadReservations").Find(tx, new MongoDB.Bson.BsonDocument {
-                { "uploader.userId", actor.UserId }, { "operation", ReserveOperation(Purpose(requestedTarget)) }, { "key", key } }).Limit(2).ToListAsync(token);
+                { "uploader.userId", actor.UserId }, { "operation", ReserveOperation(requestedPurpose) }, { "key", key } }).Limit(2).ToListAsync(token);
             if (receipt is null && reservations.Count == 0) return null;
             if (receipt is null || reservations.Count != 1) throw Invalid();
             var bundle = await LoadAsync(tx, reservations[0]["_id"].AsInt64, token); RequireAuthority(bundle, target, actor, true);
+            if (PersistedPurpose(bundle.Reservation) != requestedPurpose) throw Invalid();
             await RequireReceiptAsync(tx, bundle, receipt, false, token); return Reservation(receipt["result"].AsBsonDocument);
         }, ct));
 
     internal async Task RequireBindingAsync(IClientSessionHandle tx, ActorContext actor, EvidenceTargetRef target, long reservationId, CancellationToken ct) {
         var row = await Rows("evidenceUploadReservations").Find(tx, F.Eq("_id", reservationId)).SingleOrDefaultAsync(ct);
         if (row is null || !row.GetValue("target", BsonNull.Value).Equals(Target(target)) ||
-            row.GetValue("purpose", BsonNull.Value) != Purpose(target).ToString() || !row.GetValue("uploader", BsonNull.Value).Equals(Uploader(actor))) throw Invalid("evidence_actor_or_owner_denied");
+            !SupportsPurpose(target, PersistedPurpose(row)) || !row.GetValue("uploader", BsonNull.Value).Equals(Uploader(actor))) throw Invalid("evidence_actor_or_owner_denied");
     }
+    // Format routing joins the actual current owner fence without creating a standalone status audit.
+    // The original-read acquisition and final byte authorization still repeat current permission/source checks.
+    internal Task<bool> RequireFormatBindingAsync(IClientSessionHandle tx, ActorContext actor, EvidenceTargetRef target,
+        long reservationId, EvidencePurpose purpose, CancellationToken ct) => GuardAsync(tx, async () => {
+        var bundle = await LoadAsync(tx, reservationId, ct);
+        if (ReadTarget(bundle.Reservation) != target) throw Invalid("evidence_actor_or_owner_denied");
+        if (PersistedPurpose(bundle.Reservation) != purpose) throw Invalid("evidence_format_mismatch");
+        return await WithReadTargetAsync(tx, actor, target, null, null, (owner, token) => {
+            RequireReadAuthority(bundle, owner, actor); return Task.FromResult(true);
+        }, ct);
+    });
 
     private IMongoCollection<BsonDocument> Rows(string name) => database.GetCollection<BsonDocument>(name);
     private BsonDateTime Now => new(clock.UtcNow.UtcDateTime);
@@ -261,7 +287,7 @@ internal sealed partial class EvidenceService
             attempt["reservationId"] != reservation["_id"] || version["reservationId"] != reservation["_id"] || version["attemptId"] != attempt["_id"] ||
             version["lineageId"] != lineage["_id"] || lineage["firstVersionRowId"] != version["_id"] ||
             !new[] { "target", "purpose", "owner", "uploader" }.All(k => lineage[k].Equals(reservation[k])) ||
-            reservation["purpose"] != Purpose(ReadTarget(reservation)).ToString() || reservation["operation"] != ReserveOperation(reservation) || reservation["contentVersion"] != 1L || version["contentVersion"] != 1L ||
+            !SupportsPurpose(ReadTarget(reservation), PersistedPurpose(reservation)) || reservation["operation"] != ReserveOperation(reservation) || reservation["contentVersion"] != 1L || version["contentVersion"] != 1L ||
             attempt["ticketRevision"] != 1L || version["state"] != reservation["state"] || attempt["storeId"] != version["storeId"] ||
             attempt["generation"] != version["generation"] || !new[] { "contentRevision", "length", "sha256" }.All(k => attempt[k] == version[k]) ||
             (reservation["state"] == "quarantined") != (attempt["state"] == "quarantined") ||
@@ -277,9 +303,11 @@ internal sealed partial class EvidenceService
     private async Task<BsonDocument> TouchPolicyAsync(IClientSessionHandle tx, Bundle bundle, CancellationToken ct)
     {
         RequireStore();
-        var policyCollection = StorePolicyCollection(Purpose(ReadTarget(bundle.Reservation)));
+        var policyCollection = StorePolicyCollection(PersistedPurpose(bundle.Reservation));
         var row = await Rows(policyCollection).Find(tx, F.Eq("_id", bundle.Reservation["policyId"])).SingleOrDefaultAsync(ct);
         RequirePolicy(row);
+        if (IsPdf(bundle) && row!["maximumContentBytes"].AsInt64 > PdfEvidenceValidationContract.MaximumOriginalBytes)
+            throw Conflict("evidence_pdf_policy_unavailable");
         if (row!["storeId"] != registration.StoreId || row["storeId"] != bundle.Attempt["storeId"] || row["policyVersion"] != bundle.Reservation["policyVersion"] ||
             !LimitFields.All(name => row[name] == bundle.Reservation["admittedLimits"][name])) throw Conflict("evidence_policy_changed");
         var after = Clone(row); after["fence"] = NextFence(row["fence"]); after["revision"] = Next(row["revision"]); after["updatedAt"] = Now;

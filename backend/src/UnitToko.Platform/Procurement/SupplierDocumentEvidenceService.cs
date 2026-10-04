@@ -11,7 +11,7 @@ using B = UnitToko.Platform.Procurement.SupplierDocumentBson;
 
 namespace UnitToko.Platform.Procurement;
 
-public sealed class SupplierDocumentEvidenceService
+public sealed partial class SupplierDocumentEvidenceService
 {
     private readonly IMongoDatabase database;
     private readonly MongoUnitOfWork unit;
@@ -39,12 +39,12 @@ public sealed class SupplierDocumentEvidenceService
         await StorageAsync(ct);
         // The shared reader validates the requested draft and exact submitted reservation under one owner fence.
         return await unit.ExecuteAsync((tx, token) => evidence.GetStatusAsync(tx, actor, reservationId,
-            new("evidence-status", "supplier-document-evidence-status"), token, Target(draftId)), ct);
+            new("evidence-status", "supplier-document-evidence-status"), token, Target(draftId), EvidencePurpose.SupplierDocumentImage), ct);
     }
     public async Task<ImmutableArray<SafeStatus>> ListAsync(ActorContext actor, long draftId, long? beforeId = null, CancellationToken ct = default) {
         if (beforeId is <= 0) throw B.Changed(); await StorageAsync(ct);
         var rows = await unit.ExecuteAsync((tx, token) => ((ISupplierDocumentEvidenceUploadTarget)documents).WithReadTargetAsync(tx, actor, Target(draftId), null, null, async (target, inner) => {
-            var filter = new BsonDocument { { "target.kind", "SupplierDocument" }, { "target.id", draftId } };
+            var filter = new BsonDocument { { "target.kind", "SupplierDocument" }, { "target.id", draftId }, { "purpose", "SupplierDocumentImage" } };
             if (target.SupplierDocumentReservationId is { } reserved) {
                 if (beforeId.HasValue && reserved >= beforeId.Value) return new List<BsonDocument>();
                 filter.Add("_id", reserved);
@@ -61,7 +61,9 @@ public sealed class SupplierDocumentEvidenceService
         _ = await StatusAsync(actor, draftId, reservationId, ct); return await evidence.RecoverAsync(actor, reservationId, metadata, ct);
     }
     public async Task<ProtectedEvidenceRead> OpenReadAsync(ActorContext actor, long draftId, long reservationId, long expectedRevision, EvidenceRef reference, AuthorizationReadMetadata metadata, CancellationToken ct = default) {
-        await StorageAsync(ct); return await evidence.OpenSupplierDocumentReadAsync(actor, Target(draftId), expectedRevision, reservationId, reference, metadata, ct);
+        await StorageAsync(ct);
+        await unit.ExecuteAsync((tx, token) => evidence.RequireFormatBindingAsync(tx, actor, Target(draftId), reservationId, EvidencePurpose.SupplierDocumentImage, token), ct);
+        return await evidence.OpenSupplierDocumentReadAsync(actor, Target(draftId), expectedRevision, reservationId, reference, metadata, ct);
     }
     public async Task<SupplierDocumentExtractionView> ReadExtractionAsync(ActorContext actor, long draftId, long expectedRevision, EvidenceRef reference, AuthorizationReadMetadata metadata, CancellationToken ct = default) {
         await StorageAsync(ct); return await unit.ExecuteAsync((tx, token) => evidence.ReadSupplierDocumentExtractionAsync(tx, actor, Target(draftId), expectedRevision, reference,

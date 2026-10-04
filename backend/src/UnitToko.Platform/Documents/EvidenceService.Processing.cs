@@ -17,6 +17,7 @@ internal sealed partial class EvidenceService
         var source = await sourceOwner.RequireAsync(tx, claim, ct);
         var pin = await EvidencePinRecords.ReadAsync(database, tx, source.PinId, ct);
         var bundle = await LoadAsync(tx, source.ReservationId, ct);
+        if (IsPdf(bundle)) throw Conflict("evidence_pdf_processing_not_connected");
         if (pin["associationKind"] != "SupplierDocument" || pin["associationId"] != source.SubmissionId || pin["associationHash"] != source.SubmissionHash ||
             pin["supplierDocumentDraftId"] != source.DraftId || pin["supplierDocumentDraftRevision"] != source.DraftRevision ||
             pin["reservationId"] != source.ReservationId || pin["actorId"] != source.UploaderId || !pin["reference"].Equals(ReadReference(source.Evidence)) ||
@@ -47,6 +48,7 @@ internal sealed partial class EvidenceService
         var source = await sourceOwner.RequireAsync(tx, claim, ct);
         var pin = await EvidencePinRecords.ReadAsync(database, tx, source.PinId, ct);
         var bundle = await LoadAsync(tx, source.ReservationId, ct);
+        if (IsPdf(bundle)) throw Conflict("evidence_pdf_processing_not_connected");
         if (pin["associationKind"] != "PaymentSubmission" || pin["associationId"] != source.SubmissionId || pin["associationHash"] != source.SubmissionHash || pin["declarationId"] != source.DeclarationId ||
             pin["declarationVersionId"] != source.DeclarationVersionId || pin["declarationRevision"] != source.DeclarationRevision || pin["reviewRevision"] != source.ReviewRevision ||
             pin["reservationId"] != source.ReservationId || pin["actorId"] != source.UploaderId || !pin["reference"].Equals(ReadReference(source.Evidence)) ||

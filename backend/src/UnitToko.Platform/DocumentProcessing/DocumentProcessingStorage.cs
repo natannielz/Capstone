@@ -25,7 +25,7 @@ internal static class DocumentProcessingStorage
         if (definition is null || definition.GetValue("type", "") != "collection" || options is null || options.GetValue("validationLevel", "") != "strict" || options.GetValue("validationAction", "") != "error" ||
             options.GetValue("capped", false).AsBoolean || options.Contains("timeseries") || options.Contains("expireAfterSeconds") || options.Contains("encryptedFields") ||
             options.TryGetValue("collation", out var collation) && !InvoiceStorage.Simple(collation) ||
-            !InventorySchemas.Contains(options.GetValue("validator", new BsonDocument()).AsBsonDocument, required)) throw Unavailable();
+            !SupplierDocumentEvidenceSchemas.Supports("outboxEvents", options.GetValue("validator", new BsonDocument()).AsBsonDocument, required)) throw Unavailable();
         try { PaymentEvidenceMigration.RequireIndexes("outboxEvents", await (await database.GetCollection<BsonDocument>("outboxEvents").Indexes.ListAsync(ct)).ToListAsync(ct)); }
         catch (InvalidOperationException) { throw Unavailable(); }
     }

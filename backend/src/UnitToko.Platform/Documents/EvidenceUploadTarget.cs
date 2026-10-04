@@ -110,14 +110,26 @@ internal sealed partial class EvidenceService
         EvidencePurpose.RefundPayoutImage => "evidence.refund-payout-image.reserve",
         EvidencePurpose.ProcurementDisbursementImage => "evidence.procurement-disbursement-image.reserve",
         EvidencePurpose.ProcurementUnboxingVideo => "evidence.procurement-unboxing-video.reserve",
-        EvidencePurpose.SupplierDocumentImage => "evidence.supplier-document-image.reserve", _ => throw Invalid() };
-    private static string ReserveOperation(MongoDB.Bson.BsonDocument reservation) => ReserveOperation(Purpose(ReadTarget(reservation)));
-    private static string CompleteOperation(Bundle bundle) => Purpose(ReadTarget(bundle.Reservation)) switch {
+        EvidencePurpose.SupplierDocumentImage => "evidence.supplier-document-image.reserve",
+        EvidencePurpose.PaymentPdf => "evidence.payment-pdf.reserve", EvidencePurpose.SupplierDocumentPdf => "evidence.supplier-document-pdf.reserve", _ => throw Invalid() };
+    private static EvidencePurpose PersistedPurpose(MongoDB.Bson.BsonDocument reservation) {
+        if (!reservation.TryGetValue("purpose", out var value) || !value.IsString ||
+            !Enum.TryParse<EvidencePurpose>(value.AsString, out var purpose) || value.AsString != purpose.ToString() ||
+            !SupportsPurpose(ReadTarget(reservation), purpose)) throw Invalid();
+        return purpose;
+    }
+    private static bool SupportsPurpose(EvidenceTargetRef target, EvidencePurpose purpose) => purpose == Purpose(target) ||
+        purpose == EvidencePurpose.PaymentPdf && target.Kind == EvidenceTargetKind.PaymentDeclaration ||
+        purpose == EvidencePurpose.SupplierDocumentPdf && target.Kind == EvidenceTargetKind.SupplierDocument;
+    private static string ReserveOperation(MongoDB.Bson.BsonDocument reservation) => ReserveOperation(PersistedPurpose(reservation));
+    private static string CompleteOperation(Bundle bundle) => PersistedPurpose(bundle.Reservation) switch {
         EvidencePurpose.PaymentImage => "evidence.payment-image.complete", EvidencePurpose.RefundPayoutImage => "evidence.refund-payout-image.complete",
         EvidencePurpose.ProcurementDisbursementImage => "evidence.procurement-disbursement-image.complete",
         EvidencePurpose.ProcurementUnboxingVideo => "evidence.procurement-unboxing-video.complete",
         EvidencePurpose.SupplierDocumentImage => "evidence.supplier-document-image.complete",
+        EvidencePurpose.PaymentPdf => "evidence.payment-pdf.complete", EvidencePurpose.SupplierDocumentPdf => "evidence.supplier-document-pdf.complete",
         EvidencePurpose.CatalogImage => "evidence.catalog-image.complete", _ => throw Invalid() };
-    private static bool IsVideo(Bundle bundle) => Purpose(ReadTarget(bundle.Reservation)) == EvidencePurpose.ProcurementUnboxingVideo;
-    private static string ValidationKind(Bundle bundle) => IsVideo(bundle) ? "evidence.video-validation.requested" : "evidence.validation.requested";
+    private static bool IsVideo(Bundle bundle) => PersistedPurpose(bundle.Reservation) == EvidencePurpose.ProcurementUnboxingVideo;
+    private static bool IsPdf(Bundle bundle) => PersistedPurpose(bundle.Reservation) is EvidencePurpose.PaymentPdf or EvidencePurpose.SupplierDocumentPdf;
+    private static string ValidationKind(Bundle bundle) => IsPdf(bundle) ? PdfEvidenceValidationRecords.Kind : IsVideo(bundle) ? "evidence.video-validation.requested" : "evidence.validation.requested";
 }

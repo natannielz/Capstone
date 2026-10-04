@@ -2,7 +2,21 @@ using UnitToko.Modules.Contracts;
 
 namespace UnitToko.Modules.Documents;
 
-public enum EvidencePurpose { CatalogImage = 1, PaymentImage = 2, RefundPayoutImage = 3, ProcurementDisbursementImage = 4, ProcurementUnboxingVideo = 5, SupplierDocumentImage = 6 }
+public enum EvidencePurpose { CatalogImage = 1, PaymentImage = 2, RefundPayoutImage = 3, ProcurementDisbursementImage = 4, ProcurementUnboxingVideo = 5, SupplierDocumentImage = 6, PaymentPdf = 7, SupplierDocumentPdf = 8 }
+
+/// <summary>PDF admission binds an explicit persisted purpose; an image request never becomes a PDF through MIME detection.</summary>
+public sealed record ReserveEvidencePdf
+{
+    public EvidenceTargetRef Target { get; }
+    public EvidencePurpose Purpose { get; }
+    public long ExpectedTargetRevision { get; }
+    public ReserveEvidencePdf(EvidenceTargetRef target, EvidencePurpose purpose, long expectedTargetRevision) {
+        if (target is null || expectedTargetRevision <= 0 || !((purpose == EvidencePurpose.PaymentPdf && target.Kind == EvidenceTargetKind.PaymentDeclaration) ||
+            (purpose == EvidencePurpose.SupplierDocumentPdf && target.Kind == EvidenceTargetKind.SupplierDocument && expectedTargetRevision == 1)))
+            throw new DomainValidationException("evidence_invalid_pdf_admission", "Use the payment declaration or supplier-document draft and its current PDF admission revision");
+        Target = target; Purpose = purpose; ExpectedTargetRevision = expectedTargetRevision;
+    }
+}
 
 /// <summary>Video admission is separate from image limits and requires its actual inspection owner.</summary>
 public sealed record ReserveEvidenceVideo

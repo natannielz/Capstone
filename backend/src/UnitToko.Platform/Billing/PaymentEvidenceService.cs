@@ -62,7 +62,8 @@ public sealed partial class PaymentEvidenceService
         await StorageAsync(ct);
         return await unit.ExecuteAsync(async (tx, token) => {
             await evidence.RequireBindingAsync(tx, actor, Target(declarationId), reservationId, token);
-            return await evidence.GetStatusAsync(tx, actor, reservationId, new("evidence-status", "payment-evidence-status"), token);
+            return await evidence.GetStatusAsync(tx, actor, reservationId, new("evidence-status", "payment-evidence-status"), token,
+                requestedPurpose: EvidencePurpose.PaymentImage);
         }, ct);
     }
     public async Task<ImmutableArray<SafeStatus>> ListAsync(ActorContext actor, long declarationId, long? beforeId = null, CancellationToken ct = default) {
@@ -90,8 +91,11 @@ public sealed partial class PaymentEvidenceService
         return await evidence.RecoverAsync(actor, reservationId, metadata, ct);
     }
     public async Task<ProtectedEvidenceRead> OpenReadAsync(ActorContext actor, long declarationId, long reservationId, long expectedRevision,
-        EvidenceRef reference, AuthorizationReadMetadata metadata, CancellationToken ct = default) =>
-        await OpenBoundReadAsync(evidence, actor, declarationId, reservationId, expectedRevision, reference, metadata, ct);
+        EvidenceRef reference, AuthorizationReadMetadata metadata, CancellationToken ct = default) {
+        await StorageAsync(ct);
+        await unit.ExecuteAsync((tx, token) => evidence.RequireFormatBindingAsync(tx, actor, Target(declarationId), reservationId, EvidencePurpose.PaymentImage, token), ct);
+        return await OpenBoundReadAsync(evidence, actor, declarationId, reservationId, expectedRevision, reference, metadata, ct);
+    }
     public async Task<ProtectedEvidenceRead> OpenReviewReadAsync(ActorContext actor, long declarationId, long reservationId, long expectedRevision,
         EvidenceRef reference, AuthorizationReadMetadata metadata, CancellationToken ct = default) =>
         await OpenBoundReadAsync(reviewEvidence, actor, declarationId, reservationId, expectedRevision, reference, metadata, ct);

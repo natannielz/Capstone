@@ -28,7 +28,7 @@ internal sealed partial class EvidenceService
         var lifecycle = await RequireHistoricalLifecycleAsync(tx, bundle, validation, ct) ?? throw EvidenceValidationRecords.Broken();
         if (validation["status"] != "passed" || lease["validationHash"] != validation["resultHash"] || lease["lifecycleRevision"] != lifecycle["revision"]) throw EvidenceValidationRecords.Broken();
         var readPolicies = IsVideo(bundle) ? "evidenceVideoReadPolicies" : "evidenceReadPolicies";
-        var validationPolicies = IsVideo(bundle) ? "evidenceVideoValidationPolicies" : "evidenceValidationPolicies";
+        var validationPolicies = IsPdf(bundle) ? PdfEvidenceValidationRecords.Policies : IsVideo(bundle) ? "evidenceVideoValidationPolicies" : "evidenceValidationPolicies";
         foreach (var (collection, id, revision) in new[] {
             (readPolicies, "readPolicyId", "readPolicyRevision"), (validationPolicies, "validationPolicyId", "validationPolicyRevision") }) {
             var policy = await Rows(collection).Find(tx, F.Eq("_id", lease[id])).SingleOrDefaultAsync(ct) ?? throw EvidenceValidationRecords.Broken();
@@ -48,6 +48,7 @@ internal sealed partial class EvidenceService
     });
     internal Task ValidateHistoricalPinAsync(IClientSessionHandle tx, BsonDocument pin, CancellationToken ct) => GuardAsync(tx, async () => {
         var bundle = await LoadAsync(tx, pin["reservationId"].AsInt64, ct);
+        if (IsPdf(bundle)) throw EvidenceValidationRecords.Broken();
         var reference = Reference(bundle) ?? throw EvidenceValidationRecords.Broken();
         var validation = await HistoricalValidationAsync(tx, bundle, ct) ?? throw EvidenceValidationRecords.Broken();
         var lifecycle = await RequireHistoricalLifecycleAsync(tx, bundle, validation, ct) ?? throw EvidenceValidationRecords.Broken();
@@ -64,7 +65,7 @@ internal sealed partial class EvidenceService
             validation["status"] != "passed" || pin["validationHash"] != validation["resultHash"] || pin["lifecycleRevision"] != lifecycle["revision"] ||
             Date(pin["createdAt"]) < Date(validation["checkedAt"])) throw EvidenceValidationRecords.Broken();
         var readPolicies = IsVideo(bundle) ? "evidenceVideoReadPolicies" : "evidenceReadPolicies";
-        var validationPolicies = IsVideo(bundle) ? "evidenceVideoValidationPolicies" : "evidenceValidationPolicies";
+        var validationPolicies = IsPdf(bundle) ? PdfEvidenceValidationRecords.Policies : IsVideo(bundle) ? "evidenceVideoValidationPolicies" : "evidenceValidationPolicies";
         foreach (var (collection, id, revision) in new[] {
             (readPolicies, "readPolicyId", "readPolicyRevision"), (validationPolicies, "validationPolicyId", "validationPolicyRevision") }) {
             var policy = await Rows(collection).Find(tx, F.Eq("_id", pin[id])).SingleOrDefaultAsync(ct) ?? throw EvidenceValidationRecords.Broken();
@@ -76,7 +77,8 @@ internal sealed partial class EvidenceService
     private async Task<BsonDocument?> HistoricalValidationAsync(IClientSessionHandle tx, Bundle bundle, CancellationToken ct) {
         await CompletionAsync(tx, bundle, ct);
         var job = await Rows("outboxEvents").Find(tx, F.Eq("sourceKey", SourceKey(bundle))).SingleAsync(ct);
-        var validation = IsVideo(bundle) ? await VideoValidationRecords.ReadAsync(database, tx, job, Publication(bundle), Payload(bundle), ct)
+        var validation = IsPdf(bundle) ? await PdfEvidenceValidationRecords.ReadAsync(database, tx, job, Publication(bundle), Payload(bundle), ct)
+            : IsVideo(bundle) ? await VideoValidationRecords.ReadAsync(database, tx, job, Publication(bundle), Payload(bundle), ct)
             : await EvidenceValidationRecords.ReadAsync(database, tx, job, Publication(bundle), Payload(bundle), ct);
         if (validation is not null) _ = await RequireHistoricalLifecycleAsync(tx, bundle, validation, ct);
         return validation;

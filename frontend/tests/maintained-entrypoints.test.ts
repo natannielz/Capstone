@@ -7,8 +7,8 @@ import {build} from "esbuild";
 type Page = (props: {searchParams: Promise<{next?: string | string[]}>; params: Promise<{id: string}>}) => unknown;
 type Routes = Record<"login" | "customerLogin" | "staffLogin" | "account" | "orders" | "order" | "cart" | "checkout", Page>;
 
-test("retired state, command, catalog and session endpoints cannot expose a second business or identity runtime", () => {
-  for (const route of ["state", "commands", "catalog", "session", "auth/login", "auth/logout"]) {
+test("retired business, identity and report endpoints cannot expose a second runtime", () => {
+  for (const route of ["state", "commands", "catalog", "session", "auth/login", "auth/logout", "reports"]) {
     for (const extension of ["ts", "tsx", "js", "jsx"]) {
       assert.equal(existsSync(new URL(`../src/app/api/${route}/route.${extension}`, import.meta.url)), false, `/api/${route}`);
     }

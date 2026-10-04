@@ -23,17 +23,20 @@ internal sealed partial class EvidenceService
         await CompletionAsync(tx, bundle, ct); await TouchPolicyAsync(tx, bundle, ct);
         var job = await Rows("outboxEvents").Find(tx, F.Eq("sourceKey", SourceKey(bundle))).SingleAsync(ct);
         var video = IsVideo(bundle);
-        var validation = video ? await VideoValidationRecords.ReadAsync(database, tx, job, Publication(bundle), Payload(bundle), ct)
+        var pdf = IsPdf(bundle);
+        var validation = pdf ? await PdfEvidenceValidationRecords.ReadAsync(database, tx, job, Publication(bundle), Payload(bundle), ct)
+            : video ? await VideoValidationRecords.ReadAsync(database, tx, job, Publication(bundle), Payload(bundle), ct)
             : await EvidenceValidationRecords.ReadAsync(database, tx, job, Publication(bundle), Payload(bundle), ct);
         if (validation is null || validation["status"] != "passed") throw Conflict("evidence_read_not_eligible");
+        if (pdf && validation["mime"] != PdfEvidenceValidationContract.Mime) throw Conflict("evidence_read_not_eligible");
         var policy = await TouchReadPolicyAsync(tx, bundle.Version["storeId"].AsString, video, ct);
         if (bundle.Version["length"].AsInt64 > policy["maximumBytes"].AsInt64 ||
             Date(validation["checkedAt"]) > clock.UtcNow || Date(validation["checkedAt"]).AddMilliseconds(policy["maximumValidationAgeMs"].AsInt64) <= clock.UtcNow ||
             Date(validation["scannerDefinitionsAt"]) > clock.UtcNow || Date(validation["scannerDefinitionsAt"]).AddMilliseconds(policy["maximumSignatureAgeMs"].AsInt64) <= clock.UtcNow)
             throw Conflict("evidence_read_not_eligible");
-        var validationPolicies = video ? "evidenceVideoValidationPolicies" : "evidenceValidationPolicies";
+        var validationPolicies = pdf ? PdfEvidenceValidationRecords.Policies : video ? "evidenceVideoValidationPolicies" : "evidenceValidationPolicies";
         var validationPolicy = await Rows(validationPolicies).FindOneAndUpdateAsync(tx,
-            new BsonDocument("$and", new BsonArray { video ? VideoValidationSchemas.Validator(validationPolicies) : EvidenceValidationSchemas.Validator(validationPolicies), new BsonDocument {
+            new BsonDocument("$and", new BsonArray { pdf ? PdfEvidenceValidationSchemas.Validator(validationPolicies) : video ? VideoValidationSchemas.Validator(validationPolicies) : EvidenceValidationSchemas.Validator(validationPolicies), new BsonDocument {
                 { "_id", validation["policyId"] }, { "revision", validation["policyRevision"] }, { "storeId", validation["storeId"] }, { "consumerId", validation["consumerId"] },
                 { "pipelineId", validation["pipelineId"] }, { "active", true }, { "approvedAt", new BsonDocument("$lte", validation["checkedAt"]) },
                 { "expiresAt", new BsonDocument("$gt", Now) }, { "fence", new BsonDocument("$lt", long.MaxValue) } } }),

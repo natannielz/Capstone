@@ -158,6 +158,7 @@ public sealed class Auth0ClaimsTests
     [InlineData("/administration/organizations/addresses")]
     [InlineData("/ordering/spending-policies")]
     [InlineData("/accounting/books")]
+    [InlineData("/reporting/accounts")]
     [InlineData("/procurement/requests")]
     [InlineData("/procurement/suppliers")]
     [InlineData("/procurement/purchase-orders")]

@@ -37,6 +37,8 @@ internal sealed partial class EvidenceService
         VerifiedOriginalHandle handle, long verificationStarted, PinAssociation association, CancellationToken ct) {
         await RequireBindingAsync(tx, actor, claim.Target, claim.ReservationId, ct);
         var bundle = await LoadAsync(tx, claim.ReservationId, ct);
+        if (IsPdf(bundle)) throw new UnitToko.Platform.Mongo.PersistenceConflictException("evidence_pdf_processing_not_connected",
+            "PDF sudah dapat diunggah dan diperiksa keamanannya; pengajuan untuk peninjauan bisnis menunggu pemrosesan seluruh halaman PDF.");
         RequireAuthority(bundle, new(claim.Target, association.Owner, association.TargetRevision, null, null), actor, true);
         var lease = await LoadReadLeaseAsync(tx, claim, ct);
         DateTimeOffset? policyUntil = null;

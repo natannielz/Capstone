@@ -25,6 +25,7 @@ builder.Services.AddSingleton<CollectionMigrations>();
 var evidenceOptions = migrate ? null : builder.Configuration.GetSection("Evidence:Validation").Get<EvidenceValidationRuntimeOptions>();
 var imageRevalidationOptions = migrate ? null : builder.Configuration.GetSection("Evidence:ImageRevalidation").Get<EvidenceImageRevalidationOptions>();
 var videoOptions = migrate ? null : builder.Configuration.GetSection("Evidence:VideoValidation").Get<VideoValidationRuntimeOptions>();
+var pdfOptions = migrate ? null : PdfEvidenceWorkerConfiguration.Read(builder.Configuration);
 var ocrOptions = migrate ? null : builder.Configuration.GetSection("Evidence:PaymentOcr").Get<PaymentOcrRuntimeOptions>();
 var supplierOcrOptions = migrate ? null : builder.Configuration.GetSection("Evidence:SupplierDocumentOcr").Get<SupplierDocumentOcrRuntimeOptions>();
 var paymentNotices = !migrate && builder.Configuration.GetValue<bool>("Notifications:PaymentReviewInApp:Enabled");
@@ -49,6 +50,11 @@ if (videoOptions is not null) {
     builder.Services.AddSingleton(sp => VideoValidationRuntime.Create(sp.GetRequiredService<IMongoDatabase>(), sp.GetRequiredService<MongoUnitOfWork>(),
         sp.GetRequiredService<IdAllocator>(), sp.GetRequiredService<IClock>(), videoOptions));
     builder.Services.AddHostedService<VideoValidationWorker>();
+}
+if (pdfOptions is not null) {
+    builder.Services.AddSingleton(sp => PdfEvidenceValidationRuntime.Create(sp.GetRequiredService<IMongoDatabase>(), sp.GetRequiredService<MongoUnitOfWork>(),
+        sp.GetRequiredService<IdAllocator>(), sp.GetRequiredService<IClock>(), pdfOptions));
+    builder.Services.AddHostedService<PdfEvidenceValidationWorker>();
 }
 if (supplierOcrOptions is not null) {
     builder.Services.AddSingleton(sp => SupplierDocumentOcrRuntime.Create(sp.GetRequiredService<IMongoDatabase>(), sp.GetRequiredService<MongoUnitOfWork>(),
@@ -75,6 +81,8 @@ if (imageRevalidationOptions is null) logger.LogWarning("Image revalidation is u
 else logger.LogInformation("Image revalidation pipeline configured: {PipelineId}; separate current policy, store and worker approvals remain required", host.Services.GetRequiredService<EvidenceImageRevalidationRuntime>().PipelineId);
 if (videoOptions is null) logger.LogWarning("Private video validation is unconfigured; video jobs will not be claimed.");
 else logger.LogInformation("Private video validation pipeline configured: {PipelineId}; current host, scanner and worker approvals remain required", host.Services.GetRequiredService<VideoValidationRuntime>().PipelineId);
+if (pdfOptions is null) logger.LogWarning("Private PDF validation is unconfigured; PDF jobs will not be claimed.");
+else logger.LogInformation("Private PDF validation pipeline configured: {PipelineId}; independent finite host, scanner and worker approvals remain required", host.Services.GetRequiredService<PdfEvidenceValidationRuntime>().PipelineId);
 if (ocrOptions is null) logger.LogWarning("Payment OCR is unconfigured; OCR jobs will not be claimed.");
 else logger.LogInformation("Payment OCR pipeline configured: {PipelineId}; current host and model approvals remain required", host.Services.GetRequiredService<PaymentOcrRuntime>().PipelineId);
 if (supplierOcrOptions is null) logger.LogWarning("Supplier document OCR is unconfigured; supplier OCR jobs will not be claimed.");

@@ -31,6 +31,9 @@ test("step-up binds the displayed actor and only offers actual server-permitted 
   assert.throws(() => stepUpFields({ ...parsed, account: null }, "access.approve", "/identity/account"));
   assert.equal(identityDestinations(["access.approve"]).some(item => item.href === "/administration/access"), true);
   assert.deepEqual(identityDestinations(["order.submit"]).map(item => item.href), ["/ordering/drafts"]);
+  assert.deepEqual(identityDestinations(["report.read"]).map(item => item.href), ["/reporting/accounts"]);
+  assert.equal(identityDestinations(["accounting.book.read"]).some(item => item.href === "/reporting/accounts"), false);
+  assert.deepEqual(loginFields("/reporting/accounts", "", ""), { returnPath: "/reporting/accounts" });
 });
 
 test("session timeout display uses server-relative elapsed time without background renewal", () => {

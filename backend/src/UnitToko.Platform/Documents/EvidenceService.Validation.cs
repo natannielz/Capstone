@@ -14,12 +14,14 @@ internal sealed partial class EvidenceService
         if (bundle.Reservation["state"] != "quarantined") return ("unavailable", "unavailable", bundle.Attempt["lastSafeFailure"].IsBsonNull ? null : bundle.Attempt["lastSafeFailure"].AsString);
         var job = await Rows("outboxEvents").Find(tx, F.Eq("sourceKey", SourceKey(bundle))).SingleAsync(ct);
         var video = IsVideo(bundle);
-        var row = video ? await VideoValidationRecords.ReadAsync(database, tx, job, Publication(bundle), Payload(bundle), ct)
+        var pdf = IsPdf(bundle);
+        var row = pdf ? await PdfEvidenceValidationRecords.ReadAsync(database, tx, job, Publication(bundle), Payload(bundle), ct)
+            : video ? await VideoValidationRecords.ReadAsync(database, tx, job, Publication(bundle), Payload(bundle), ct)
             : await EvidenceValidationRecords.ReadAsync(database, tx, job, Publication(bundle), Payload(bundle), ct);
         if (row is null) return ("unavailable", "unavailable", job.TryGetValue("lastFailureCode", out var failure) && failure.IsString ? failure.AsString : null);
-        var policies = video ? "evidenceVideoValidationPolicies" : "evidenceValidationPolicies";
+        var policies = pdf ? PdfEvidenceValidationRecords.Policies : video ? "evidenceVideoValidationPolicies" : "evidenceValidationPolicies";
         var policy = await Rows(policies).Find(tx, new BsonDocument("$and", new BsonArray {
-            video ? VideoValidationSchemas.Validator(policies) : EvidenceValidationSchemas.Validator(policies), new BsonDocument {
+            pdf ? PdfEvidenceValidationSchemas.Validator(policies) : video ? VideoValidationSchemas.Validator(policies) : EvidenceValidationSchemas.Validator(policies), new BsonDocument {
                 { "_id", row["policyId"] }, { "revision", row["policyRevision"] }, { "consumerId", row["consumerId"] }, { "pipelineId", row["pipelineId"] },
                 { "storeId", row["storeId"] }, { "active", true }, { "approvedAt", new BsonDocument("$lte", row["checkedAt"]) }, { "expiresAt", new BsonDocument("$gt", Now) } } })).SingleOrDefaultAsync(ct);
         if (policy is null || row["checkedAt"].CompareTo(Now) > 0) return ("unavailable", "unavailable", "processing_approval_unavailable");
