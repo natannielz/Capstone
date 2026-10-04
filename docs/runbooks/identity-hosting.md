@@ -25,7 +25,8 @@ Supply these through environment-specific secret/configuration storage, never a 
 | `Identity:Auth0:ConnectionId`, `ConnectionName` | Approved Auth0 database connection |
 | `Identity:Auth0:ClaimsNamespace` | Controlled HTTPS namespace for verified assurance evidence |
 | `Identity:Auth0:AssurancePolicyVersion` | Version matching both installed reviewed OTP Actions |
-| `Identity:Auth0:AllowedReturnPaths` | At most 64 unique exact local destinations, including `/identity/account`; no query, fragment or wildcard. An override must include `/ordering/spending-policies`, `/accounting/books`, `/procurement/requests`, `/procurement/suppliers`, `/procurement/purchase-orders`, `/procurement/funding`, `/procurement/supplier-banks` and `/procurement/disbursements` to return to their workspaces while retaining the other reviewed destinations. |
+| `Identity:Auth0:AllowedReturnPaths` | At most 64 unique exact local destinations, including `/identity/account`; no query, fragment or wildcard. Release 1 retains only `/`, `/identity/account`, `/shop`, `/catalog/browse`, `/ordering/requests`, `/ordering/requests/incoming` and `/administration/catalog`. A restricted override must include the destinations its users need. Deferred workspaces remain unavailable. |
+| `Release:Profile` | `release1` by default. `full` is reserved for retained backlog regression/development and must not be enabled on the pilot. |
 | `Identity:Keys:Directory` | Existing absolute persistent key directory shared by participating API instances |
 | `Identity:Keys:ApplicationName` | Stable discriminator unique to this application/environment |
 | `Identity:Keys:CertificatePath`, `CertificatePassword` | Absolute encrypted PKCS#12 file and separately managed password; current valid private RSA certificate, at least 2048 bits |
@@ -52,6 +53,6 @@ The two mapped POST receivers use separate rotating bearer credentials, the same
 
 ## Remaining activation gates
 
-Actual Auth0 tier, region, ownership, Action ordering/event semantics, verified email/enrollment/recovery behavior and authenticated deduplicated external security-change coverage are unproven. Invitation and recovery delivery intentions remain blocked. No tenant, email, live account, paid resource or production data is provisioned by these files. Keep the pilot/release gate closed until the plan's full identity, business and operations acceptance requirements pass.
+Actual Auth0 tier, region, ownership, Action ordering/event semantics, verified email/enrollment/recovery behavior and authenticated deduplicated external security-change coverage are unproven. Invitation and recovery delivery intentions remain blocked. No tenant, email, live account, paid resource or production data is provisioned by these files. Release 1 requires the sign-in, provisioning, session-revocation, catalog and request acceptance checks relevant to its exact scope; the full 97-item backlog is not its prerequisite. A local synthetic provider is a separate test tool and never production Auth0 acceptance.
 
 Implementation references: `backend/src/UnitToko.Api/Identity/IdentityRuntime.cs`, `IdentityBrowserSecurity.cs`, `IdentityKeyMaterial.cs` and `IdentityEndpoints.cs`. Official framework behavior: [anti-forgery](https://learn.microsoft.com/en-us/aspnet/core/security/anti-request-forgery?view=aspnetcore-10.0) and [trusted forwarding](https://learn.microsoft.com/en-us/aspnet/core/host-and-deploy/proxy-load-balancer?view=aspnetcore-10.0).

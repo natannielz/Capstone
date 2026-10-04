@@ -1,4 +1,7 @@
 .page { background: #f2f6f7; }
+.photoPlaceholder { width: 100%; min-height: 100px; display: grid; place-content: center; text-align: center; background: #f1f4ef; color: #53655c; border: 1px solid #dce3db; border-radius: 5px; margin-bottom: 18px; }
+.photoPlaceholder span { font-size: 26px; }
+.photoPlaceholder p { font-size: 13px; margin: 5px 0 0; }
 .toolbar, .search, .pagination, .dialogHeader, .detailToolbar { display: flex; gap: 16px; align-items: end; flex-wrap: wrap; }
 .toolbar { justify-content: space-between; padding: 22px; border: 1px solid #d7e3e7; background: white; margin-bottom: 28px; }
 .search { flex: 1; }

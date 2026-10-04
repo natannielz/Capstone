@@ -31,6 +31,7 @@ using UnitToko.Api.Accounting;
 using UnitToko.Platform.Accounting;
 using UnitToko.Api.Procurement;
 using UnitToko.Platform.Procurement;
+using UnitToko.Api;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.ConfigureHttpJsonOptions(options =>
@@ -59,6 +60,7 @@ builder.Services.AddSingleton<CatalogPriceService>();
 builder.Services.AddSingleton<CatalogDefinitionQueryService>();
 builder.Services.AddSingleton<OrderQuoteService>();
 builder.Services.AddSingleton<OrderDraftService>();
+builder.Services.AddSingleton<BranchOrderRequestService>();
 builder.Services.AddSingleton<OrderSubmissionService>();
 builder.Services.AddSingleton<ShipmentPreparationService>();
 builder.Services.AddSingleton<ShipmentDispatchService>();
@@ -157,6 +159,10 @@ builder.Services.AddSingleton(sp => {
         sp.GetRequiredService<IClock>(), sp.GetRequiredService<ProcurementDisbursementService>(), storage);
 });
 var identityEnabled = builder.Services.AddUnitTokoIdentityRuntime(builder.Configuration);
+builder.Services.PostConfigure<Auth0Options>(options => {
+    if (ReleaseProfile.IsPilot(builder.Configuration))
+        options.AllowedReturnPaths = options.AllowedReturnPaths.Intersect(ReleaseProfile.PilotReturnPaths, StringComparer.Ordinal).ToArray();
+});
 builder.Services.AddAuthorization(options =>
     options.FallbackPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
 builder.Services.AddOpenApi("v1", options =>
@@ -263,6 +269,7 @@ builder.Services.AddOpenApi("v1", options =>
 });
 
 var app = builder.Build();
+var pilotRelease = ReleaseProfile.IsPilot(app.Configuration);
 if (identityEnabled) _ = app.Services.GetRequiredService<IdentityKeyMaterial>();
 var mongoUri = app.Configuration["Mongo:Uri"];
 var mongoDatabase = app.Configuration["Mongo:Database"];
@@ -394,12 +401,18 @@ app.UseAuthorization();
 app.MapIdentitySecurityEndpoints();
 app.MapProviderSecurityEventEndpoints();
 app.MapIdentityEndpoints();
+app.MapAccessEndpoints(currentOnly: pilotRelease);
+if (!pilotRelease)
+{
 app.MapIdentityAdministrationEndpoints();
 app.MapPersonReviewEndpoints();
-app.MapAccessEndpoints();
 app.MapOrganizationEndpoints();
 app.MapOrganizationAddressEndpoints();
+}
 app.MapCatalogEndpoints();
+app.MapBranchOrderRequestEndpoints();
+if (!pilotRelease)
+{
 app.MapCatalogPriceEndpoints();
 app.MapOrderQuoteEndpoints();
 app.MapOrderSpendingPolicyEndpoints();
@@ -455,6 +468,7 @@ app.MapStockSourceAliasEndpoints();
 app.MapStockSourceSuspensionEndpoints();
 app.MapStockSourcePolicyEndpoints();
 app.MapStockSourceReconciliationEndpoints();
+}
 app.MapGet("/health/live", () => TypedResults.Ok(new HealthStatus("live"))).AllowAnonymous().WithName("Liveness");
 app.MapGet("/health/ready", async (HttpContext context, MongoConnection mongo,
     CollectionMigrations migrations, CancellationToken cancellationToken) =>

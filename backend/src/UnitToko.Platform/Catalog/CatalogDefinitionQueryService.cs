@@ -66,6 +66,30 @@ public sealed class CatalogDefinitionQueryService(IMongoDatabase database, Autho
             return new CatalogPage<CatalogPublishedVariant>(total, result.ToImmutable());
         }, cancellationToken);
     }
+    /// <summary>Request-only picker: the chosen buyer branch narrows publication entitlement in this transaction.</summary>
+    internal Task<CatalogPage<CatalogPublishedVariant>> QueryForBranchAsync(ActorContext actor, AuthorizationSnapshot snapshot,
+        IClientSessionHandle tx, GrantScope buyingScope, int offset, int limit, string? search,
+        Func<CancellationToken, Task> completeOwner, CancellationToken ct)
+    {
+        AuthorizationStore.ValidatePage(offset, limit);
+        var selector = F.Eq("active", true) & CatalogAuthoringService.SearchFilter("displayName", search);
+        return visibility.ReadWithinAsync(actor, snapshot, tx, selector, buyingScope, async (session, filter, token) => {
+            var pipeline = VisiblePipeline(filter);
+            pipeline.Add(new("$facet", new BsonDocument {
+                { "count", new BsonArray { new BsonDocument("$count", "total") } },
+                { "page", new BsonArray { new BsonDocument("$sort", new BsonDocument("_id", 1)), new BsonDocument("$skip", offset),
+                    new BsonDocument("$limit", limit), new BsonDocument("$project", new BsonDocument("_id", 1)) } } }));
+            var selection = await repository.Rows("skus").Aggregate<BsonDocument>(session, pipeline).SingleAsync(token);
+            var total = selection["count"].AsBsonArray.Count == 0 ? 0L : selection["count"][0]["total"].ToInt64();
+            var ids = selection["page"].AsBsonArray.Select(row => row["_id"].AsInt64).ToArray();
+            var rows = await repository.Rows("skus").Find(session, filter & F.In("_id", ids)).Sort(new BsonDocument("_id", 1)).ToListAsync(token);
+            var items = ImmutableArray.CreateBuilder<CatalogPublishedVariant>();
+            foreach (var row in rows) items.Add(await JoinAsync(session, row, token) ?? throw CatalogRepository.Invalid());
+            if (items.Count != ids.Length) throw CatalogRepository.Invalid();
+            await completeOwner(token);
+            return new CatalogPage<CatalogPublishedVariant>(total, items.ToImmutable());
+        }, ct);
+    }
     public Task<CatalogPublishedVariant?> ReadPublicAsync(ActorContext actor, string publicId, CancellationToken cancellationToken = default)
     {
         if (publicId is null || !Regex.IsMatch(publicId, "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\\z", RegexOptions.CultureInvariant))

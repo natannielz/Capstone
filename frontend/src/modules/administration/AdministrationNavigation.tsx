@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { isPilotPathAllowed, isPilotRelease } from '../../lib/release-scope';
 import { canManageAccounts, canReviewPeople, canUseStockCounts, canUseStockSources, canUseStockSourceSuspensions, canUseStockSourcePolicies, canUseStockSourceReconciliations, canUseOrganizationAddresses } from "../identity/identity-workflow";
 import styles from "./access.module.css";
 
@@ -6,6 +7,8 @@ export function AdministrationNavigation({ current, actions, locked = false }: {
   current: "source-reconciliations" | "organization-addresses" | "cases" | "access" | "organizations" | "history" | "accounts" | "person-reviews" | "catalog" | "prices" | "counts" | "sources" | "source-revisions" | "source-aliases" | "source-suspensions" | "source-policies" | "order-reviews" | "orders" | "preparations" | "dispatches" | "shipments" | "invoices" | "payments" | "payment-reviews" | "receiving-accounts" | "bank-statements" | "bank-receipts"; actions: readonly string[]; locked?: boolean;
 }) {
   const links = [
+    { id: "branch-requests", href: "/ordering/requests", label: "Permintaan saya", available: actions.some(action => ["order.request.read", "order.request.submit"].includes(action)) },
+    { id: "branch-requests-incoming", href: "/ordering/requests/incoming", label: "Permintaan masuk", available: actions.includes("order.request.decide") },
     { id: "source-reconciliations", href: "/inventory/source-reconciliations", label: "Rekonsiliasi jumlah fisik", available: canUseStockSourceReconciliations(actions) },
     { id: "cases", href: "/fulfillment/cases", label: "Keluhan barang", available: actions.some(action => ["case.read", "case.request"].includes(action)) },
     { id: "bank-receipts", href: "/billing/bank-receipts", label: "Penerimaan bank", available: actions.includes("bank.receipt.read") },
@@ -36,7 +39,7 @@ export function AdministrationNavigation({ current, actions, locked = false }: {
     { id: "history", href: "/administration/history", label: "Riwayat perubahan", available: actions.some(action => ["access.audit.read", "access.approve", "membership.approve", "access.revoke", "technical.configure", "organization.approve"].includes(action)) },
   ];
   return <nav className={styles.administrationNav} aria-label="Pengelolaan">
-    {links.filter(link => link.available || link.id === current).map(link => <Link key={link.id} href={link.href}
+    {links.filter(link => (link.available || link.id === current) && (!isPilotRelease || isPilotPathAllowed(link.href))).map(link => <Link key={link.id} href={link.href}
       aria-current={current === link.id ? "page" : undefined} aria-disabled={locked}
       onClick={event => { if (locked) event.preventDefault(); }}>{link.label}</Link>)}
   </nav>;

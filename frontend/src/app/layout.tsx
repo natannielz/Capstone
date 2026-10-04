@@ -24,15 +24,16 @@ import "./workspace-v14.css";
 import "./account-v14.css";
 import "./workspace-lists-v15.css";
 import "./operations-lists-v15.css";
+import { isPilotRelease } from "../lib/release-scope";
 
 const bodyFont = localFont({src:"../../public/fonts/dm-sans-variable.ttf",variable:"--font-body",display:"swap",weight:"100 1000"});
 const displayFont = localFont({src:"../../public/fonts/archivo-black.ttf",variable:"--font-display",display:"swap",weight:"400"});
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000")),
-  title: "Unit Toko | Pantry, Rapat & Merchandise",
-  description: "Pantry, rapat, dan merchandise di Unit Toko. Akses belanja pelanggan dan portal divisi serta petugas. Demo capstone dengan data simulasi.",
-  openGraph: {title:"Unit Toko | Pantry, Rapat & Merchandise", description:"Pilihan kebutuhan kerja dan harian, dengan akses pelanggan serta portal divisi dan petugas yang terpisah. Demo capstone.",images:["/images/og-v3.png"],locale:"id_ID",type:"website"},
+  title: "Unit Toko | Katalog dan Permintaan Cabang",
+  description: "Katalog kemasan dan permintaan kebutuhan untuk cabang BNI serta akun usaha yang telah disetujui.",
+  openGraph: {title:"Unit Toko | Kebutuhan cabang dan organisasi", description:"Pilih kemasan, ajukan kebutuhan cabang, dan ikuti peninjauan toko melalui akun organisasi Anda.",images:["/images/og-v3.png"],locale:"id_ID",type:"website"},
   icons: {
     icon: "/favicon.svg",
     shortcut: "/favicon.svg",
@@ -47,6 +48,12 @@ export default function RootLayout({
   return (
     <html lang="id" data-scroll-behavior="smooth" className={`${bodyFont.variable} ${displayFont.variable}`}>
       <body className="antialiased">
+        {isPilotRelease && process.env.VERCEL && !process.env.UNIT_TOKO_API_ORIGIN && (
+          <aside role="status" style={{ background: "#fff3d4", color: "#513d12", padding: "16px 24px", borderBottom: "1px solid #dbc48f", lineHeight: 1.6 }}>
+            <strong>Pratinjau Release 1 — layanan daring belum diaktifkan.</strong>{" "}
+            Masuk, katalog, dan pengajuan daring menunggu koneksi layanan serta persetujuan data. Pilot lokal tersedia melalui pengelola.
+          </aside>
+        )}
         {children}
         {process.env.NODE_ENV === "development" && process.env.FIGMA_CAPTURE === "1" && (
           <script src="https://mcp.figma.com/mcp/html-to-design/capture.js" async />

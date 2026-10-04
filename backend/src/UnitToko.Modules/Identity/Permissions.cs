@@ -11,6 +11,7 @@ public static class Permissions
     public const string CatalogRead = "catalog.read", CatalogManage = "catalog.manage", PricingManage = "pricing.manage", PricingApprove = "pricing.approve";
     public const string OrderRead = "order.read", OrderSubmit = "order.submit", OrderApprove = "order.approve", OrderSubstitute = "order.substitute", OrderCancel = "order.cancel";
     public const string OrderSpendApprove = "order.spend.approve", OrderAccept = "order.accept";
+    public const string BranchOrderRequestRead = "order.request.read", BranchOrderRequestSubmit = "order.request.submit", BranchOrderRequestDecide = "order.request.decide";
     public const string OrderSpendingPolicyRead = "order.spending.policy.read", OrderSpendingPolicyPropose = "order.spending.policy.propose", OrderSpendingPolicyApprove = "order.spending.policy.approve";
     public const string SubstitutionPropose = "substitution.propose", SubstitutionAccept = "substitution.accept";
     public const string BranchPic = "branch.pic", OrganizationWide = "organization.wide";
@@ -66,6 +67,9 @@ public static class Permissions
         void Add(string name, ImmutableArray<GrantScopeKind> scopes, bool fresh = false) =>
             result.Add(name, new(name, name.Replace('.', ' '), scopes, new(true, fresh ? TimeSpan.FromMinutes(5) : null)));
         foreach (var name in new[] { CatalogRead, OrderRead, ShipmentRead, CaseRead, InvoiceRead, OrganizationAddressRead }) Add(name, [.. Buying, .. Operations]);
+        Add(BranchOrderRequestRead, [.. Buying, .. Operations]);
+        Add(BranchOrderRequestSubmit, Buying);
+        Add(BranchOrderRequestDecide, Operations);
         foreach (var name in new[] { HistoryRead, ReportRead }) Add(name, [.. Buying, .. Operations]);
         result[ShipmentRead] = result[ShipmentRead] with { AllowedScopes = [.. Buying, .. Operations, .. Courier] };
         foreach (var name in new[] { OrderSubmit, OrderApprove, OrderSubstitute, OrderCancel, ReceiptAccept, CaseRequest, PaymentEvidence }) Add(name, Buying);

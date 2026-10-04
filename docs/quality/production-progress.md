@@ -1,14 +1,14 @@
 # Production implementation progress
 
-Current execution plan: [Accelerated completion, M0–M6](../superpowers/plans/2026-09-29-accelerated-completion.md).
+Immediate execution and status: [Release 1 — catalog and branch order requests](../releases/release-1.md). Finish that bounded release before resuming the [M0–M6 backlog](../superpowers/plans/2026-09-29-accelerated-completion.md).
 Authoritative checkout: `C:/Users/User/Documents/Capstone`, branch `main`.
 Scope: original production specification, meeting/manual outcomes, audit A01–A22 and the unchanged [97-item register](../requirements/unit-toko-report-2026-09-28.md).
 
 ## Current state — 4 October 2026
 
-The tables below supersede earlier sequencing and status summaries. The detailed historical evidence remains below; its former worktree paths and “next task” directions are historical, not execution instructions.
+The tables below are historical checkpoints for the retained full-system backlog. All former “next task” directions are superseded by Release 1. Mixed-receipt costing is preserved in `codex/preserved-mixed-costing-20261004`, with byte-exact files and a verified recovery bundle; it is not active release work.
 
-Current work: M4 independent physical quality acceptance (migration77) is locally verified through the production frontend, HTTPS API and isolated MongoDB. Accepted quantity, original lot/expiry, packaging and putaway require matching observations by independent people; goods remain held. The next connected slice links this accepted subset to supplier invoice matching and partial receipt valuation. Unused-advance returns remain published at `57bcca1b73fa205028de39746a7a1f20b3d8771f` with successful [focused CI](https://github.com/natannielz/Capstone/actions/runs/37165175332); supplier payables at `4eeb1276f02480c8dcaa1b0d16a939deaac09300` and manual quantity reconciliation at `52d4f72ce8b9bca1b53bae875d874af22817e1fe`. Physical release, stock activation, other accounting treatments and all retained M1–M6 scope remain required. Source publication is distinct from deployment; staging and production remain unaccepted.
+Historical checkpoint: M4 independent physical quality acceptance (migration77) is locally verified through the production frontend, HTTPS API and isolated MongoDB. Accepted quantity, original lot/expiry, packaging and putaway require matching observations by independent people; goods remain held. A later-release slice links this accepted subset to supplier invoice matching and partial receipt valuation. Unused-advance returns remain published at `57bcca1b73fa205028de39746a7a1f20b3d8771f` with successful [focused CI](https://github.com/natannielz/Capstone/actions/runs/37165175332); supplier payables at `4eeb1276f02480c8dcaa1b0d16a939deaac09300` and manual quantity reconciliation at `52d4f72ce8b9bca1b53bae875d874af22817e1fe`. Physical release, stock activation, other accounting treatments and all retained M1–M6 scope remain required. Source publication is distinct from deployment; staging and production remain unaccepted.
 
 | Milestone | Implemented | Connected locally | Staging validated | Production accepted |
 | --- | --- | --- | --- | --- |

@@ -8,9 +8,12 @@ $contract = Join-Path $PSScriptRoot 'openapi.json'
 $previousUri = $env:Mongo__Uri
 $previousDatabase = $env:Mongo__Database
 $previousEnvironment = $env:ASPNETCORE_ENVIRONMENT
+$previousRelease = $env:Release__Profile
 $env:Mongo__Uri = 'mongodb://127.0.0.1:27028/?replicaSet=rs0'
 $env:Mongo__Database = 'unittoko_openapi_export'
 $env:ASPNETCORE_ENVIRONMENT = 'Development'
+# Keep the complete future-release contract in source; runtime pilot routing remains restricted.
+$env:Release__Profile = 'full'
 $process = $null
 try {
   $listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, 0)
@@ -56,4 +59,5 @@ try {
   $env:Mongo__Uri = $previousUri
   $env:Mongo__Database = $previousDatabase
   $env:ASPNETCORE_ENVIRONMENT = $previousEnvironment
+  $env:Release__Profile = $previousRelease
 }

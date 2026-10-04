@@ -1,5 +1,7 @@
 # Local development and foundation checks
 
+For the usable Release 1 application and persistent requester/staff accounts, follow [the local pilot launcher](local-pilot-release1.md). The commands below are retained developer/regression tooling; disposable test databases and legacy demo accounts are not pilot access or production acceptance.
+
 Use Node 24 and the .NET SDK pinned by `backend/global.json` (currently 10.0.401). Commands below run from the repository root unless stated otherwise. Keep real credentials, databases and uploaded evidence outside Git.
 
 ## Install and verify

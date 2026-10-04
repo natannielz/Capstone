@@ -1,0 +1,46 @@
+# Release 1 — katalog dan permintaan cabang
+
+Immediate delivery: approved account → scoped catalog → persistent request → staff accepts/rejects → requester reads status/history. Acceptance means **accepted for processing only**: no stock reservation, binding price, payment, invoice or fulfillment commitment.
+
+Authoritative checkout: `C:/Users/User/Documents/Capstone`, branch `main`. All original requirements and the 97-item register remain the later-release backlog; accounting, refunds, OCR, procurement, valuation and notifications are outside this release.
+
+## Short release checklist
+
+- [x] Stop unrelated implementation and preserve unfinished mixed-receipt costing.
+- [x] Preserve tracked/untracked changes in `codex/preserved-mixed-costing-20261004`; byte-exact manifest and verified recovery bundle in `tmp/production/preserved-mixed-costing-20261004`.
+- [x] Implement branch-scoped catalog, packaging and request submission without financial/inventory writes.
+- [x] Implement staff review and persistent requester status/history; reuse catalog maintenance.
+- [x] Restrict pilot pages/navigation/API; remove proven unused duplicates.
+- [x] Verify service permission/isolation, validation, retry/concurrency and Mongo persistence checks.
+- [x] Demonstrate actual browser → .NET → Mongo journey, desktop/mobile and restart persistence.
+- [x] Production frontend build and relevant local checks; inspected GitHub rules permit normal main push.
+- [ ] Commit and push coherent release; publish verified frontend and verify deployment status honestly.
+- [x] Provide [local startup and private synthetic access](../runbooks/local-pilot-release1.md) and [exact external deployment prerequisites](../runbooks/release1-deployment.md).
+
+## Evidence and status
+
+| Layer | Current state |
+| --- | --- |
+| Implemented | Price-free request workflow, staff decisions/history, catalog maintenance and bounded pilot routes. Existing verified-provider session controls retained. |
+| Connected locally | Verified persistent synthetic pilot. Browser submitted PT-00000001 and PT-00000002 to .NET/Mongo; staff accepted the first and rejected the second; requester read both results. Lost-response recovery, cross-branch denial, catalog edit, mobile/desktop layout and actual application restart persistence passed. |
+| Staging validated | Not validated. |
+| Production accepted | Not accepted. |
+
+No real Auth0 application/API/Mongo environment was supplied or found in the connected Railway account (no projects). Vercel `unit-toko-bni` exists but contains the old demo/Turso settings, not the required production API connection. User delegated preparation choices on 4 October; sample accounts/catalog must remain explicitly synthetic. No purchase, external message or real-data cutover is authorized by that delegation.
+
+Focused evidence: native Mongo request/decision flow covers branch isolation, revoked permission, duplicate keys and competing decisions with no stock/money effects; default-pilot route tests pass; retained frontend regression, lint/module boundaries and production build pass. The local launcher has a real Windows TLS handshake test. Evidence logs are in ignored `tmp/production/release1-*`; these checks do not establish hosted acceptance.
+
+Browser acceptance caught and corrected two integration defects: the synthetic provider suppressed the form Origin, and account action discovery omitted the new request permissions. Origin validation remains strict; actual API/Mongo discovery checks now verify only the buyer/staff/reader actions each scope permits. The browser driver also retains non-secret progress so completed requests are inspected on resumption rather than submitted again.
+
+Integrated browser evidence, 4 October 2026: `tmp/production/release1-browser-results/attempt8` records actual submission, lost response, original-key lookup and staff decisions; `attempt10` resumes the same references and completes catalog maintenance; `after-restart` confirms both decisions and the catalog description after stopping/restarting the real API and Next processes. Pass logs: `release1-browser-before-10.log`, `release1-browser-after-restart.log`. The receipt is `tmp/production/release1-pilot-browser-receipt.json`. No requests were resubmitted during resumption/restart checks. Empty, loading, denied, invalid-quantity and uncertain-result states were inspected.
+
+Publication is the remaining delivery step. Hosted operation still requires the inputs below; the Vercel frontend must show an explicit inactive-preview banner until an API origin is configured. Private accounts, keys, database files and browser credentials are ignored by Git.
+
+## Cleanup record
+
+- Removed disconnected duplicate storefront and its sole carousel component after source/script/test reference checks: `frontend/src/components/shop/storefront.tsx`, `frontend/src/components/collection-carousel.tsx`.
+- Removed seven unused UI wrappers (chart, calendar, command, drawer, resizable panels, OTP input and carousel) and their seven dedicated packages plus unused `date-fns`, after checking imports across source, tests and scripts. Native controls and existing used components remain.
+- Pilot defaults to `release1`; deferred API endpoints are not mapped. Retained full-backlog regressions and contract export explicitly select `full`. Future work remains in source/recovery rather than being represented as pilot functionality.
+- Legacy database dependencies still have retained callers and are not blindly deleted. Pilot routes block legacy login/cart/checkout/account/API entry points.
+
+When resuming preserved costing, reconcile its migration 78 with the Release 1 request migration; do not apply both under the same sequence number.

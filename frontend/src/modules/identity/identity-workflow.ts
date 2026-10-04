@@ -1,5 +1,6 @@
 import type { components } from "../../api/generated/schema";
 import { RequestNotSentError } from "../../api/client";
+import { isPilotPathAllowed, isPilotRelease } from '../../lib/release-scope';
 
 export type IdentitySession = components["schemas"]["IdentitySessionDto"];
 
@@ -10,7 +11,8 @@ export class IdentityFailure extends Error {
 }
 
 const returnPaths = ["/identity/account", "/administration/access", "/administration/organizations", "/administration/organizations/addresses", "/administration/history", "/administration/person-reviews", "/administration/catalog", "/catalog/prices", "/catalog/browse", "/shop", "/ordering/drafts", "/ordering/checkout", "/ordering/reviews", "/ordering/orders", "/ordering/spending-policies", "/fulfillment/preparations", "/fulfillment/dispatches", "/fulfillment/shipments", "/fulfillment/receive", "/fulfillment/cases", "/billing/invoices", "/billing/payments", "/billing/payment-reviews", "/billing/receiving-accounts", "/billing/bank-statements", "/billing/bank-receipts", "/accounting/books", "/procurement/requests", "/procurement/suppliers", "/procurement/purchase-orders", "/procurement/funding", "/procurement/supplier-banks", "/procurement/disbursements", "/procurement/settlements", "/procurement/receiving", "/procurement/inspections", "/procurement/supplier-documents", "/procurement/supplier-claims", "/procurement/stock-receipts", "/procurement/stock-valuations", "/procurement/supplier-payables", "/procurement/advance-returns", "/procurement/quality-acceptances", "/inventory/counts", "/inventory/sources", "/inventory/sources/revisions", "/inventory/sources/aliases", "/inventory/sources/suspensions", "/inventory/sources/policies", "/inventory/source-reconciliations"];
-export const identityReturnPath = (value?: string | null) => value && returnPaths.includes(value) ? value : "/identity/account";
+const allowedReturnPath = (value: string) => (returnPaths.includes(value) || ['/ordering/requests', '/ordering/requests/incoming'].includes(value)) && (!isPilotRelease || isPilotPathAllowed(value));
+export const identityReturnPath = (value?: string | null) => value && allowedReturnPath(value) ? value : "/identity/account";
 const validId = (value: string) => /^[1-9][0-9]{0,18}$/.test(value) && (value.length < 19 || value <= "9223372036854775807");
 const validTime = (value: unknown): value is string => typeof value === "string" && value.length <= 40 && /^\d{4}-\d\d-\d\dT/.test(value) && Number.isFinite(Date.parse(value));
 const record = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === "object" && !Array.isArray(value);
@@ -42,7 +44,7 @@ export function parseIdentitySession(value: unknown): IdentitySession {
 }
 
 export function loginFields(returnPath: string, invitationId: string, invitationSecret: string, invitationRequired = false): Record<string, string> {
-  if (!returnPaths.includes(returnPath)) throw new IdentityFailure(400, "invalid_return_path");
+  if (!allowedReturnPath(returnPath)) throw new IdentityFailure(400, "invalid_return_path");
   if (!invitationRequired && !invitationId && !invitationSecret) return { returnPath };
   if (!validId(invitationId) || !/^[a-f0-9]{64}$/.test(invitationSecret)) throw new IdentityFailure(400, "invalid_invitation");
   return { returnPath, invitationId, invitationSecret };
@@ -51,7 +53,7 @@ export function loginFields(returnPath: string, invitationId: string, invitation
 export function stepUpFields(session: IdentitySession, operation: string, returnPath: string): Record<string, string> {
   if (!session.authenticated || !session.account) throw new IdentityFailure(401, "unauthenticated");
   if (!session.stepUpOperations.includes(operation)) throw new IdentityFailure(403, "step_up_not_allowed");
-  if (!returnPaths.includes(returnPath)) throw new IdentityFailure(400, "invalid_return_path");
+  if (!allowedReturnPath(returnPath)) throw new IdentityFailure(400, "invalid_return_path");
   return { expectedActorId: session.account.userId, operation, returnPath };
 }
 
@@ -80,6 +82,8 @@ export function canUseStockSourceReconciliations(actions: readonly string[]) { r
 
 export function identityDestinations(actions: readonly string[]) {
   return [
+    { href: '/ordering/requests', label: 'Permintaan saya', description: 'Susun kebutuhan cabang dan ikuti hasil peninjauan toko.', visible: actions.some(action => ['order.request.read', 'order.request.submit'].includes(action)) },
+    { href: '/ordering/requests/incoming', label: 'Permintaan masuk', description: 'Periksa kemasan dan catatan permintaan, lalu berikan keputusan toko.', visible: actions.includes('order.request.decide') },
     { href: "/inventory/source-reconciliations", label: "Rekonsiliasi jumlah fisik", description: actions.includes("stock.source.reconciliation.read") ? "Bandingkan pengamatan lengkap dengan catatan sumber stok dan pemeriksaan orang berbeda." : "Periksa hasil permintaan rekonsiliasi milik Anda yang belum terkonfirmasi.", visible: canUseStockSourceReconciliations(actions) },
     { href: "/fulfillment/cases", label: "Keluhan barang", description: "Laporkan masalah pada barang yang diterima dan ikuti pengajuannya.", visible: actions.some(action => ["case.read", "case.request"].includes(action)) },
     { href: "/fulfillment/preparations", label: "Persiapan kiriman", description: "Pilih kemasan dan jumlah yang akan disiapkan dari pesanan toko yang diterima.", visible: actions.includes("shipment.prepare") },
@@ -113,7 +117,7 @@ export function identityDestinations(actions: readonly string[]) {
     { href: "/ordering/orders", label: "Pesanan saya", description: "Lihat kemasan, tujuan, biaya dan perkembangan pesanan yang telah diajukan.", visible: actions.includes("order.read") },
     { href: "/ordering/reviews", label: "Peninjauan pesanan", description: "Tinjau persetujuan belanja cabang atau penerimaan toko sesuai penugasan.", visible: actions.some(action => ["order.spend.approve", "order.accept", "order.cancel"].includes(action)) },
     { href: "/ordering/spending-policies", label: "Persetujuan belanja", description: "Ajukan dan periksa aturan persetujuan untuk cabang atau divisi.", visible: actions.some(action => ["order.spending.policy.read", "order.spending.policy.propose", "order.spending.policy.approve"].includes(action)) },
-    { href: "/shop", label: "Katalog kemasan", description: "Lihat isi dan harga kemasan dalam katalog akun Anda.", visible: actions.includes("catalog.read") },
+    { href: "/shop", label: "Katalog kemasan", description: isPilotRelease ? "Periksa pilihan dan isi kemasan untuk kebutuhan organisasi Anda." : "Lihat isi dan harga kemasan dalam katalog akun Anda.", visible: actions.includes("catalog.read") },
     { href: "/catalog/prices", label: "Harga kemasan", description: "Ajukan harga per kemasan dan tinjau secara independen.", visible: actions.some(action => ["pricing.manage", "pricing.approve"].includes(action)) },
     { href: "/inventory/sources/policies", label: "Kebijakan operasional stok", description: "Tetapkan pencatat stok dan prosedur pengoperasian melalui peninjauan.", visible: canUseStockSourcePolicies(actions) },
     { href: "/inventory/sources/suspensions", label: "Penghentian sumber", description: "Periksa kanal terdampak dan catat penghentian sesuai penugasan.", visible: canUseStockSourceSuspensions(actions) },
@@ -128,7 +132,7 @@ export function identityDestinations(actions: readonly string[]) {
     { href: "/administration/organizations/addresses", label: "Alamat organisasi", description: "Ajukan dan periksa alamat penagihan, cabang dan gudang sesuai penugasan.", visible: canUseOrganizationAddresses(actions) },
     { href: "/administration/organizations", label: "Organisasi dan unit", description: "Kelola struktur organisasi melalui persetujuan.", visible: actions.some(action => ["technical.configure", "organization.approve", "access.audit.read"].includes(action)) },
     { href: "/administration/history", label: "Riwayat perubahan", description: "Periksa jejak pengajuan dan keputusan akses.", visible: actions.some(action => ["access.audit.read", "access.approve", "membership.approve", "access.revoke", "technical.configure", "organization.approve"].includes(action)) },
-  ].filter(item => item.visible);
+  ].filter(item => item.visible && (!isPilotRelease || isPilotPathAllowed(item.href)));
 }
 
 export function identityMessage(error: unknown): string {

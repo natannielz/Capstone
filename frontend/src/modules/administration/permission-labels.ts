@@ -1,4 +1,7 @@
 const labels: Record<string, string> = {
+  "order.request.read": "Lihat permintaan kebutuhan cabang",
+  "order.request.submit": "Ajukan permintaan kebutuhan cabang",
+  "order.request.decide": "Tinjau permintaan masuk toko",
   "procurement.qualityacceptance.read": "Lihat penerimaan mutu barang ditahan",
   "procurement.qualityacceptance.propose": "Ajukan penerimaan mutu dengan verifikasi terbaru",
   "procurement.qualityacceptance.decide": "Putuskan penerimaan mutu secara independen",

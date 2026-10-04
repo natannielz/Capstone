@@ -1,4 +1,5 @@
 import { parseSupplierPayableResult, type SupplierPayableResult } from '../procurement/procurement-supplier-payable-client';
+import { requestResult, type BranchRequestResult } from '../ordering/branch-request-state';
 import { parseSourceReconciliationResult, type SourceReconciliationResult } from '../inventory/stock-source-reconciliation-client';
 import { parseAdvanceReturnResult, type AdvanceReturnResult } from '../procurement/procurement-advance-return-client';
 import { parseQualityAcceptanceResult, type QualityAcceptanceResult } from '../procurement/procurement-quality-acceptance-client';
@@ -57,6 +58,7 @@ const prefix = "unit-toko:pending:v1:";
 const keyPattern = /^[A-Za-z0-9._:-]{1,128}$/;
 const operationPattern = /^(?:procurement\.qualityacceptance\.(?:propose|decide)|procurement\.advancereturn\.(?:propose|decide)|procurement\.payable\.(?:propose|decide)|stock\.source\.reconciliation\.(?:propose|decide)|procurement\.stockvaluation\.(?:propose|decide)|procurement\.stockreceipt\.receive|procurement\.supplierclaim\.(?:request|approve|reject)|procurement\.supplierdocument\.(?:draft|submit|match)|evidence\.supplier-document-image\.reserve|procurement\.inspection\.(?:draft|submit)|evidence\.procurement-unboxing-video\.reserve|procurement\.receiving\.(?:notice|intake)|procurement\.settlement\.verify|procurement\.disbursement\.(?:draft|record)|evidence\.procurement-disbursement-image\.reserve|procurement\.supplierbank\.(?:propose|observe|approve|reject)|procurement\.funding\.(?:request|approve|reject)|procurement\.purchase\.order\.(?:propose|approve|reject)|procurement\.supplier\.(?:propose|observe|approve|reject)|procurement\.request\.(?:submit|approve|reject)|accounting\.book\.(?:propose|approve|reject)|billing\.refund\.payout\.(?:draft|record|verify)|evidence\.refund-payout-image\.reserve|billing\.return\.financial\.approve|billing\.return\.entitlement\.request|billing\.bank-receipt\.confirm|billing\.bank-statement\.stage|billing\.receiving-account\.(?:propose|observe|approve|reject|withdraw)|billing\.payment\.(?:draft\.save|replacement\.create|submit|verify|allocate|allocation\.correct|review\.(?:correct|manual|manage))|evidence\.payment-image\.reserve|billing\.invoice\.issue|(access|organization)\.[a-z.]{1,100}|identity\.(?:invitation\.(?:propose|approve|rejected|withdrawn|revoked)|recovery\.request)|person\.review\.(?:propose|approve|reject|withdraw)|fulfillment\.(?:case\.(?:request|decide|return_receive|return_inspect|resolution_request)|preparation\.save|shipment\.dispatch|surat-jalan\.issue|delivery-attempt\.record|receipt-proof\.issue|receipt\.(?:challenge\.issue|confirm))|ordering\.(?:spending\.policy\.(?:propose|approve|reject)|draft\.save|order\.(?:submit|cancel|spending\.(?:approve|reject)|store\.(?:accept|reject)))|catalog\.(?:price\.(?:propose|approve|reject|withdraw)|category\.save|family\.(?:create|edit)|sku\.(?:create|revise|replace|retire|publish))|inventory\.stock-count\.record|stock\.source\.(?:suspend|(?:(?:revision|alias|policy)\.)?(?:propose|approve|reject|withdraw)))$(?![\s\S])/;
 const storageKey = (entry: OperationReference) => `${prefix}${entry.actorId}:${entry.operation}:${entry.key}`;
+const recognizedOperation = (operation: string) => operationPattern.test(operation) || /^ordering\.branchrequest\.(?:submit|decide)$(?![\s\S])/u.test(operation);
 
 /** Only recovery references are stored. Requests, reasons, grants and credentials never enter this journal. */
 export class OperationJournal {
@@ -109,7 +111,7 @@ function validEntry(value: unknown): value is OperationReference {
   const entry = value as Record<string, unknown>;
   return Object.keys(entry).sort().join(",") === "actorId,createdAt,key,operation" &&
     typeof entry.actorId === "string" && validReference(entry.actorId) &&
-    typeof entry.operation === "string" && operationPattern.test(entry.operation) &&
+    typeof entry.operation === "string" && recognizedOperation(entry.operation) &&
     typeof entry.key === "string" && keyPattern.test(entry.key) &&
     typeof entry.createdAt === "string" && entry.createdAt.length <= 30 && Number.isFinite(Date.parse(entry.createdAt));
 }
@@ -167,6 +169,7 @@ export type LegacyRecoveryAdapter = Readonly<{
 
 /** Supply this only from the owning client screen. A missing receipt is never a failed or closed request. */
 export type OperationRecoveryAdapters = Readonly<{
+  'ordering.branchrequest'?: Readonly<{ lookup: (entry: OperationReference) => Promise<Readonly<{ state: 'committed'; result: BranchRequestResult }> | null> }>;
   "procurement.qualityacceptance"?: Readonly<{ lookup: (entry: OperationReference) => Promise<Readonly<{ state: "committed"; result: QualityAcceptanceResult }> | null> }>;
   "procurement.advancereturn"?: Readonly<{ lookup: (entry: OperationReference) => Promise<Readonly<{ state: "committed"; result: AdvanceReturnResult }> | null> }>;
   "procurement.payable"?: Readonly<{ lookup: (entry: OperationReference) => Promise<Readonly<{ state: "committed"; result: SupplierPayableResult }> | null> }>;
@@ -233,13 +236,14 @@ export type OperationRecoveryAdapters = Readonly<{
   }>;
 }>;
 
-function recoveryNamespace(operation: string): "procurement.qualityacceptance" | "procurement.advancereturn" | "procurement.payable" | "stock.source.reconciliation" | "procurement.stockvaluation" | "procurement.stockreceipt" | "procurement.supplierclaim" | "procurement.supplierdocument" | "evidence.supplier-document-image" | "procurement.inspection" | "evidence.procurement-unboxing-video" | "procurement.receiving" | "procurement.settlement" | "procurement.disbursement" | "evidence.procurement-disbursement-image" | "procurement.supplierbank" | "procurement.funding" | "procurement.purchase.order" | "procurement.supplier" | "procurement.request" | "accounting.book" | "ordering.spending.policy" | "organization.address" | "billing.refund.payout.verify" | "billing.refund.payout" | "evidence.refund-payout-image" | "billing.return.financial.approve" | "billing.return.entitlement.request" | "fulfillment.case" | "billing.bank-receipt" | "billing.bank-statement" | "billing.receiving-account" | "access" | "organization" | "identity" | "person.review" | "catalog" | "catalog.price" | "inventory.stock-count" | "stock.source" | "stock.source.revision" | "stock.source.alias" | "stock.source.suspend" | "stock.source.policy" | "ordering.draft" | "ordering.order" | "ordering.decision" | "fulfillment.preparation" | "fulfillment.shipment" | "fulfillment.surat-jalan" | "fulfillment.receipt" | "fulfillment.receipt-proof" | "fulfillment.delivery-attempt" | "billing.invoice" | "billing.payment.allocate" | "billing.payment.allocation.correct" | "billing.payment.verify" | "billing.payment.review.correct" | "billing.payment.submit" | "billing.payment" | "evidence.payment-image" | "billing.payment.review.manual" | "billing.payment.review.manage" | "billing.payment.replacement.create" | null {
-  if (!operationPattern.test(operation)) return null;
+function recoveryNamespace(operation: string): "ordering.branchrequest" | "procurement.qualityacceptance" | "procurement.advancereturn" | "procurement.payable" | "stock.source.reconciliation" | "procurement.stockvaluation" | "procurement.stockreceipt" | "procurement.supplierclaim" | "procurement.supplierdocument" | "evidence.supplier-document-image" | "procurement.inspection" | "evidence.procurement-unboxing-video" | "procurement.receiving" | "procurement.settlement" | "procurement.disbursement" | "evidence.procurement-disbursement-image" | "procurement.supplierbank" | "procurement.funding" | "procurement.purchase.order" | "procurement.supplier" | "procurement.request" | "accounting.book" | "ordering.spending.policy" | "organization.address" | "billing.refund.payout.verify" | "billing.refund.payout" | "evidence.refund-payout-image" | "billing.return.financial.approve" | "billing.return.entitlement.request" | "fulfillment.case" | "billing.bank-receipt" | "billing.bank-statement" | "billing.receiving-account" | "access" | "organization" | "identity" | "person.review" | "catalog" | "catalog.price" | "inventory.stock-count" | "stock.source" | "stock.source.revision" | "stock.source.alias" | "stock.source.suspend" | "stock.source.policy" | "ordering.draft" | "ordering.order" | "ordering.decision" | "fulfillment.preparation" | "fulfillment.shipment" | "fulfillment.surat-jalan" | "fulfillment.receipt" | "fulfillment.receipt-proof" | "fulfillment.delivery-attempt" | "billing.invoice" | "billing.payment.allocate" | "billing.payment.allocation.correct" | "billing.payment.verify" | "billing.payment.review.correct" | "billing.payment.submit" | "billing.payment" | "evidence.payment-image" | "billing.payment.review.manual" | "billing.payment.review.manage" | "billing.payment.replacement.create" | null {
+  if (!recognizedOperation(operation)) return null;
   if (/^procurement\.qualityacceptance\.(propose|decide)$(?![\s\S])/.test(operation)) return "procurement.qualityacceptance";
   if (/^procurement\.advancereturn\.(propose|decide)$(?![\s\S])/.test(operation)) return "procurement.advancereturn";
   if (/^procurement\.payable\.(propose|decide)$(?![\s\S])/.test(operation)) return "procurement.payable";
   if (/^stock\.source\.reconciliation\.(propose|decide)$(?![\s\S])/.test(operation)) return "stock.source.reconciliation";
   if (/^procurement\.stockvaluation\.(propose|decide)$(?![\s\S])/.test(operation)) return "procurement.stockvaluation";
+  if (operation === 'ordering.branchrequest.submit' || operation === 'ordering.branchrequest.decide') return 'ordering.branchrequest';
   if (operation === "procurement.stockreceipt.receive") return "procurement.stockreceipt";
   if (/^procurement\.supplierclaim\.(request|approve|reject)$(?![\s\S])/.test(operation)) return "procurement.supplierclaim";
   if (/^procurement\.supplierdocument\.(draft|submit|match)$(?![\s\S])/.test(operation)) return "procurement.supplierdocument";
@@ -306,6 +310,8 @@ export function operationRecoveryCapabilities(operation: string, adapters: Opera
   Readonly<{ canCheck: boolean; canClose: boolean; unavailable: "adapter" | "operation" | null }> {
   const namespace = recoveryNamespace(operation);
   if (!namespace) return { canCheck: false, canClose: false, unavailable: "operation" };
+  if (namespace === 'ordering.branchrequest') return typeof adapters[namespace]?.lookup === 'function'
+    ? { canCheck: true, canClose: false, unavailable: null } : { canCheck: false, canClose: false, unavailable: 'adapter' };
   if (namespace === "procurement.qualityacceptance" || namespace === "procurement.advancereturn" || namespace === "procurement.payable" || namespace === "stock.source.reconciliation" || namespace === "procurement.stockvaluation" || namespace === "procurement.stockreceipt" || namespace === "procurement.supplierclaim" || namespace === "procurement.supplierdocument" || namespace === "evidence.supplier-document-image" || namespace === "procurement.inspection" || namespace === "evidence.procurement-unboxing-video" || namespace === "procurement.receiving" || namespace === "procurement.settlement" || namespace === "procurement.disbursement" || namespace === "evidence.procurement-disbursement-image" || namespace === "procurement.supplierbank" || namespace === "procurement.funding" || namespace === "procurement.purchase.order" || namespace === "procurement.supplier" || namespace === "procurement.request" || namespace === "accounting.book" || namespace === "ordering.spending.policy" || namespace === "organization.address" || namespace === "billing.refund.payout.verify" || namespace === "billing.refund.payout" || namespace === "evidence.refund-payout-image" || namespace === "billing.return.financial.approve" || namespace === "billing.return.entitlement.request" || namespace === "fulfillment.case") return typeof adapters[namespace]?.lookup === "function"
     ? { canCheck: true, canClose: false, unavailable: null } : { canCheck: false, canClose: false, unavailable: "adapter" };
   if (namespace === "billing.payment.replacement.create" || namespace === "billing.payment.review.manage" || namespace === "billing.payment.review.manual" || namespace === "billing.bank-receipt" || namespace === "billing.bank-statement" || namespace === "billing.receiving-account" || namespace === "billing.payment.allocation.correct" || namespace === "billing.payment.allocate" || namespace === "billing.payment.verify" || namespace === "billing.payment.review.correct" || namespace === "billing.payment.submit" || namespace === "billing.payment" || namespace === "evidence.payment-image" || namespace === "billing.invoice" || namespace === "fulfillment.delivery-attempt" || namespace === "fulfillment.receipt-proof" || namespace === "fulfillment.receipt" || namespace === "fulfillment.surat-jalan" || namespace === "fulfillment.shipment" || namespace === "fulfillment.preparation" || namespace === "ordering.decision" || namespace === "ordering.order" || namespace === "ordering.draft" || namespace === "catalog.price" || namespace === "catalog" || namespace === "inventory.stock-count" || namespace === "stock.source" || namespace === "stock.source.revision" || namespace === "stock.source.alias" || namespace === "stock.source.suspend" || namespace === "stock.source.policy") return typeof adapters[namespace]?.lookup === "function"
@@ -470,6 +476,18 @@ export async function reconcileOperationRecovery(entry: OperationReference, jour
       const selected = orderDecisionSelection(entry.operation);
       if (result.stage !== selected.stage || result.action !== selected.action) throw new AccessFailure(502, "recovery_receipt_invalid");
       receipt = { state: "committed", result: { id: result.orderId, version: result.revision } };
+    }
+  } else if (namespace === 'ordering.branchrequest') {
+    if (closeReason !== undefined) throw new AccessFailure(400, 'recovery_close_unsupported');
+    const adapter = adapters[namespace];
+    if (typeof adapter?.lookup !== 'function') throw new AccessFailure(503, 'recovery_adapter_unavailable');
+    const recovered = await adapter.lookup(reference); requireCurrent();
+    if (recovered === null) receipt = null;
+    else {
+      if (!recovered || recovered.state !== 'committed' || Object.keys(recovered).sort().join(',') !== 'result,state') throw new AccessFailure(502, 'recovery_receipt_invalid');
+      const result = requestResult(recovered.result);
+      if ((reference.operation === 'ordering.branchrequest.submit') !== (result.state === 'pending')) throw new AccessFailure(502, 'recovery_receipt_invalid');
+      receipt = { state: 'committed', result: { id: result.requestId, version: result.version } };
     }
   } else if (namespace === "ordering.order") {
     if (closeReason !== undefined) throw new AccessFailure(400, "recovery_close_unsupported");

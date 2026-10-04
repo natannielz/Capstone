@@ -16,7 +16,7 @@ public static partial class AccessEndpoints
         Permissions.TechnicalConfigure, Permissions.OrganizationApprove,
         Permissions.PersonReviewPropose, Permissions.PersonReviewApprove, Permissions.PersonReviewRead, Permissions.CatalogManage];
 
-    public static void MapAccessEndpoints(this WebApplication app)
+    public static void MapAccessEndpoints(this WebApplication app, bool currentOnly = false)
     {
         var group = app.MapGroup("/api/v1/access").RequireAuthorization().AddEndpointFilter<ActorRequiredFilter>();
         foreach (var status in new[] { 400, 401, 403, 409, 503 })
@@ -41,6 +41,8 @@ public static partial class AccessEndpoints
             http.Response.Headers.ETag = AccessRequestMetadata.VersionTag(snapshot.GrantVersion);
             return TypedResults.Ok(result);
         }).WithName("CurrentAccess");
+
+        if (currentOnly) return;
 
         group.MapGet("/catalog", async (HttpContext http, AuthorizationStore store, IClock clock, CancellationToken ct) =>
         {
@@ -143,7 +145,7 @@ public static partial class AccessEndpoints
     // UI task discovery is separate from administrative catalog admission. Reviewers retain
     // the verification entry when MFA ages; every protected read or command still enforces current assurance.
     private static string[] CurrentActions(ActorContext actor, AuthorizationSnapshot snapshot, DateTimeOffset now) =>
-        AvailableActions(actor, snapshot, now).Concat(new[] { Permissions.CaseRead, Permissions.CaseRequest, Permissions.JournalReverse, Permissions.PaymentAllocate, Permissions.PaymentVerify, Permissions.BankReceiptRead, Permissions.BankReceiptConfirm, Permissions.BankStatementRead, Permissions.BankStatementStage, Permissions.ReceivingAccountRead, Permissions.ReceivingAccountDetailsRead, Permissions.ReceivingAccountPropose, Permissions.ReceivingAccountVerify, Permissions.ReceivingAccountApprove, Permissions.PaymentReviewCorrect, Permissions.PaymentReviewRead, Permissions.PaymentEvidence, Permissions.InvoiceRead, Permissions.InvoiceIssue, Permissions.ShipmentRead, Permissions.ShipmentPrepare, Permissions.ShipmentDispatch, Permissions.ShipmentAssign, Permissions.DeliveryAttempt, Permissions.DeliveryEvidence, Permissions.ReceiptAccept, Permissions.OrderRead, Permissions.OrderSubmit, Permissions.OrderCancel, Permissions.OrderSpendApprove, Permissions.OrderAccept, Permissions.CatalogRead, Permissions.PricingManage, Permissions.PricingApprove, Permissions.StockRead, Permissions.StockCount,
+        AvailableActions(actor, snapshot, now).Concat(new[] { Permissions.CaseRead, Permissions.CaseRequest, Permissions.JournalReverse, Permissions.PaymentAllocate, Permissions.PaymentVerify, Permissions.BankReceiptRead, Permissions.BankReceiptConfirm, Permissions.BankStatementRead, Permissions.BankStatementStage, Permissions.ReceivingAccountRead, Permissions.ReceivingAccountDetailsRead, Permissions.ReceivingAccountPropose, Permissions.ReceivingAccountVerify, Permissions.ReceivingAccountApprove, Permissions.PaymentReviewCorrect, Permissions.PaymentReviewRead, Permissions.PaymentEvidence, Permissions.InvoiceRead, Permissions.InvoiceIssue, Permissions.ShipmentRead, Permissions.ShipmentPrepare, Permissions.ShipmentDispatch, Permissions.ShipmentAssign, Permissions.DeliveryAttempt, Permissions.DeliveryEvidence, Permissions.ReceiptAccept, Permissions.OrderRead, Permissions.OrderSubmit, Permissions.BranchOrderRequestRead, Permissions.BranchOrderRequestSubmit, Permissions.BranchOrderRequestDecide, Permissions.OrderCancel, Permissions.OrderSpendApprove, Permissions.OrderAccept, Permissions.CatalogRead, Permissions.PricingManage, Permissions.PricingApprove, Permissions.StockRead, Permissions.StockCount,
                 Permissions.StockSourceRead, Permissions.StockSourcePropose, Permissions.StockSourceApprove, Permissions.StockSourceSuspend, Permissions.StockSourcePolicyPropose, Permissions.StockSourcePolicyApprove, Permissions.StockSourceReconciliationRead, Permissions.StockSourceReconciliationPropose, Permissions.StockSourceReconciliationDecide, Permissions.PaymentReviewManual, Permissions.PaymentReviewManage, Permissions.CaseManage, Permissions.StockReceive, Permissions.CreditRequest, Permissions.RefundRequest, Permissions.CreditApprove, Permissions.RefundApprove, Permissions.DisbursementRecord, Permissions.DisbursementVerify, Permissions.OrganizationAddressRead, Permissions.OrganizationApprove,
                 Permissions.OrderSpendingPolicyRead, Permissions.OrderSpendingPolicyPropose, Permissions.OrderSpendingPolicyApprove,
                 Permissions.AccountingBookRead, Permissions.AccountingBookPropose, Permissions.AccountingBookApprove, Permissions.JournalPost,

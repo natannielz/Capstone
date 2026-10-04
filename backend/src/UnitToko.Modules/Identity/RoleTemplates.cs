@@ -39,10 +39,10 @@ public static class RoleTemplates
     public static ImmutableDictionary<string, ImmutableArray<string>> Suggestions { get; } =
         new Dictionary<string, ImmutableArray<string>>(StringComparer.Ordinal)
         {
-            ["buyer"] = [Permissions.SubstitutionAccept, Permissions.OrganizationAddressRead],
+            ["buyer"] = [Permissions.BranchOrderRequestRead, Permissions.BranchOrderRequestSubmit, Permissions.SubstitutionAccept, Permissions.OrganizationAddressRead],
             ["store-staff"] = [Permissions.OrganizationAddressRead, Permissions.SubstitutionPropose, Permissions.StockConvert,
                 Permissions.ReservationRelease, Permissions.SupplierChangePropose],
-            ["store-head"] = [Permissions.OrderAccept, Permissions.SupplierChangeApprove, Permissions.OrganizationAddressRead, Permissions.FundingRead],
+            ["store-head"] = [Permissions.BranchOrderRequestRead, Permissions.BranchOrderRequestDecide, Permissions.OrderAccept, Permissions.SupplierChangeApprove, Permissions.OrganizationAddressRead, Permissions.FundingRead],
             ["courier"] = [],
             ["finance"] = [Permissions.OrganizationAddressRead, Permissions.BankReceiptRead, Permissions.BankReceiptConfirm, Permissions.BankStatementRead, Permissions.BankStatementStage, Permissions.PaymentReviewRead, Permissions.PaymentReviewCorrect, Permissions.ReceivingAccountRead, Permissions.ReceivingAccountDetailsRead,
                 Permissions.ReceivingAccountPropose, Permissions.ReceivingAccountVerify, Permissions.ReceivingAccountApprove, Permissions.FundingRead,

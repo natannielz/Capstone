@@ -6,6 +6,7 @@ import { createIdentityGateway } from "./identity-client";
 import { IdentityFailure, identityMessage, identityReturnPath, loginFields, type IdentitySession } from "./identity-workflow";
 import { ProtectedNavigationForm } from "./ProtectedNavigationForm";
 import styles from "./identity.module.css";
+import { isPilotRelease } from '../../lib/release-scope';
 
 export function IdentityLogin() {
   const [gateway] = useState(() => createIdentityGateway());
@@ -71,9 +72,9 @@ export function IdentityLogin() {
           <p className={styles.help}>Untuk menggunakan akun lain, keluar terlebih dahulu melalui halaman akun.</p></>}
         {!loading && session && !session.authenticated && <>
           <p>Masuk melalui layanan akun resmi. Siapkan perangkat verifikasi Anda.</p>
-          <label className={styles.checkbox}><input type="checkbox" checked={invited} onChange={event => {
+          {!isPilotRelease && <label className={styles.checkbox}><input type="checkbox" checked={invited} onChange={event => {
             setInvited(event.target.checked); setInvitationId(""); setInvitationSecret("");
-          }} />Saya menerima undangan akun baru</label>
+          }} />Saya menerima undangan akun baru</label>}
           {invited && <div className={styles.invitationFields}>
             <p className={styles.help} id="invite-help">Masukkan nomor dan kode dari undangan yang disetujui pengelola. Setelah itu, masuk dengan email penerima undangan.</p>
             <label htmlFor="invitation-id">Nomor undangan<input id="invitation-id" value={invitationId} onChange={event => setInvitationId(event.target.value)} inputMode="numeric" maxLength={19} autoComplete="off" aria-describedby="invite-help" /></label>

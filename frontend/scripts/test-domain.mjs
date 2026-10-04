@@ -9,7 +9,8 @@ const outputs=await Promise.all(files.map(async file=>{
  await build({entryPoints:[`tests/${file}`],outfile,bundle:true,platform:"node",format:"esm",target:"node24",packages:"external",logLevel:"warning"});
  return outfile;
 }));
-const testEnv={...process.env,NODE_ENV:"test",UNIT_TOKO_LEGACY_MIGRATIONS:fileURLToPath(new URL("../../backend/legacy/drizzle/",import.meta.url))};
+// Retained full-workflow regressions run explicitly in full mode; pilot tests check the pure allowlist.
+const testEnv={...process.env,NODE_ENV:"test",NEXT_PUBLIC_UNIT_TOKO_RELEASE:"full",UNIT_TOKO_LEGACY_MIGRATIONS:fileURLToPath(new URL("../../backend/legacy/drizzle/",import.meta.url))};
 const result=spawnSync(process.execPath,["--test",...outputs],{stdio:"inherit",env:testEnv});
 if(result.status!==0){process.exitCode=result.status??1;}
 else {

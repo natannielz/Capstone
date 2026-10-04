@@ -10,8 +10,10 @@ import { IdentityFailure, identityMessage, identityReturnPath, sessionTiming, st
 import { ProtectedNavigationForm } from "./ProtectedNavigationForm";
 import { WorkspaceDirectory } from "./WorkspaceDirectory";
 import styles from "./identity.module.css";
+import { isPilotRelease } from '../../lib/release-scope';
 
 const displayTime = (value: string | null) => value ? new Intl.DateTimeFormat("id-ID", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Jakarta" }).format(new Date(value)) + " WIB" : "—";
+const availableStepUp = (session: IdentitySession) => session.stepUpOperations.filter(operation => !isPilotRelease || ['catalog.manage', 'order.request.submit', 'order.request.decide', 'order.request.read'].includes(operation));
 
 export function IdentityAccount() {
   const [gateway] = useState(() => createIdentityGateway());
@@ -35,7 +37,8 @@ export function IdentityAccount() {
         setSession(result); setObservedAt(performance.now()); setElapsed(0); setError(null);
         const params = new URL(window.location.href).searchParams;
         setReturnPath(identityReturnPath(params.get("returnPath")));
-        setOperation(result.stepUpOperations.includes(params.get("operation") ?? "") ? params.get("operation")! : result.stepUpOperations[0] ?? "");
+        const visibleOperations = availableStepUp(result);
+        setOperation(visibleOperations.includes(params.get("operation") ?? "") ? params.get("operation")! : visibleOperations[0] ?? "");
         if (result.authenticated && result.account) {
           try {
             const current = await access.current();
@@ -103,9 +106,9 @@ export function IdentityAccount() {
           </section>
           <section className={styles.card} aria-labelledby="factor-heading"><span className={timing.fresh ? styles.status : styles.neutralStatus}>{timing.fresh ? "Verifikasi masih baru" : "Verifikasi tambahan dapat diperlukan"}</span>
             <h2 id="factor-heading">Verifikasi tindakan penting</h2><p>Beberapa tindakan memerlukan verifikasi dua langkah terbaru. Pilih tindakan yang akan Anda kerjakan, lalu selesaikan verifikasi melalui layanan akun.</p>
-            {session.stepUpOperations.length > 0 ? <>
+            {availableStepUp(session).length > 0 ? <>
               <label htmlFor="step-up-operation">Tindakan<select id="step-up-operation" value={operation} onChange={event => setOperation(event.target.value)}>
-                {session.stepUpOperations.map(item => <option key={item} value={item}>{permissionLabel(item)}</option>)}
+                {availableStepUp(session).map(item => <option key={item} value={item}>{permissionLabel(item)}</option>)}
               </select></label>
               <ProtectedNavigationForm action="/auth/step-up" fields={verificationFields ?? {}} disabled={!verificationFields} label="Verifikasi dua langkah" />
               <p className={styles.help}>Verifikasi tidak menyetujui atau mengirim tindakan bisnis. Anda tetap perlu memeriksa dan mengirim tindakan tersebut setelah kembali.</p>
