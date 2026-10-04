@@ -1,6 +1,6 @@
 # Unggahan bukti PDF
 
-Status bagian ini: jalur API, MongoDB, penyimpanan privat dan renderer terpin sudah terhubung serta diverifikasi secara lokal, termasuk HTTP nyata. Pemeriksaan native memakai pemindai loopback sintetis yang dinyatakan jelas; penerimaan ClamAV, host produksi dan operasi nyata belum dibuktikan. Antarmuka unggahan PDF dan OCR bisnis seluruh halaman masih perlu dihubungkan.
+Status M85 yang sudah dipublikasikan: jalur API, MongoDB, penyimpanan privat dan renderer terpin sudah terhubung serta diverifikasi secara lokal, termasuk HTTP nyata. Pemeriksaan native memakai pemindai loopback sintetis yang dinyatakan jelas; penerimaan ClamAV, host produksi dan operasi nyata belum dibuktikan. Sambungan pengajuan, OCR bisnis seluruh halaman dan antarmuka M86 sedang diverifikasi; lihat [peninjauan PDF](pdf-document-ocr.md) serta ledger terkini.
 
 PDF pembayaran dan dokumen pemasok memakai jalur unggahan tersendiri. Nomor reservasi, tujuan bukti, kunci pemulihan, pemilik transaksi, cabang, dan versi sumber tersimpan di MongoDB. Mengirim MIME PDF ke jalur gambar tidak mengubah tujuan unggahannya.
 
@@ -8,7 +8,7 @@ Pemeriksaan keamanan PDF membaca berkas asli privat yang sudah diverifikasi. Pem
 
 Setelah pemeriksaan lengkap lolos, pemilik yang masih berwenang dapat membaca berkas PDF asli melalui unduhan privat. Bukti pemeriksaan, audit, penerimaan pekerjaan, persetujuan pemroses, versi sumber dan izin pengguna diperiksa kembali. Tautan penyimpanan publik tidak tersedia.
 
-**Batas saat ini:** pemeriksaan keamanan bukan pengajuan pembayaran, peninjauan faktur pemasok, hasil OCR bisnis, persetujuan uang, atau perubahan stok. Pengajuan PDF ke pemrosesan gambar tetap ditolak dengan kode `evidence_pdf_processing_not_connected`. Pengolahan dan peninjauan seluruh halaman perlu dihubungkan ke pemilik bisnis tersendiri sebelum batas ini dibuka.
+**Batas:** pemeriksaan keamanan bukan persetujuan uang atau perubahan stok. Checkpoint M85 menolak pengajuan bisnis PDF sebelum pemrosesan seluruh halaman terhubung. Sambungan M86 berlaku untuk dokumen pemasok dengan pekerjaan PDF tersendiri. Pengajuan pembayaran tetap wajib memakai gambar yang memenuhi P01; unggahan PDF pada draf belum merupakan lampiran tambahan yang terasosiasi dan tidak dapat menggantikan bukti utama. Pemilik asosiasi tambahan beserta persetujuan operasionalnya masih perlu diselesaikan. Jalur unggahan, pembacaan, dan OCR gambar tidak mengartikan PDF sebagai gambar. Penerimaan native/browser M86 belum selesai.
 
 ## Sambungan aplikasi
 

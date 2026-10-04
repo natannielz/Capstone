@@ -8,6 +8,7 @@ using UnitToko.Modules.Procurement;
 using UnitToko.Platform.Authorization;
 using UnitToko.Platform.Billing;
 using UnitToko.Platform.Documents;
+using UnitToko.Platform.DocumentProcessing;
 using UnitToko.Platform.Mongo;
 using B = UnitToko.Platform.Procurement.SupplierDocumentBson;
 using R = UnitToko.Platform.Procurement.ProcurementRequestBson;
@@ -83,7 +84,11 @@ public sealed partial class SupplierDocumentService
             await FenceAsync(context, token); return result;
         }, ct);
     }
+    internal Task<BsonDocument> SubmitWithProofAsync(ActorContext actor, long draftId, long expectedRevision, long reservationId, EvidenceRef reference, string binding, AuthorizationCommandMetadata metadata,
+        Func<IClientSessionHandle, long, ISupplierDocumentEvidenceUploadTarget, CancellationToken, Task<Action>> pin, CancellationToken ct) =>
+        SubmitWithProofAsync(actor, draftId, expectedRevision, reservationId, reference, binding, metadata, null, pin, ct);
     internal async Task<BsonDocument> SubmitWithProofAsync(ActorContext actor, long draftId, long expectedRevision, long reservationId, EvidenceRef reference, string binding, AuthorizationCommandMetadata metadata,
+        VerifiedPdfSubmissionOriginal? pdfOriginal,
         Func<IClientSessionHandle, long, ISupplierDocumentEvidenceUploadTarget, CancellationToken, Task<Action>> pin, CancellationToken ct) {
         Revision(draftId, expectedRevision, reservationId); Binding(binding); Metadata(metadata); await StorageAsync(ct);
         var id = (await ids.NextAsync(B.Submissions, ct)).Value; var audit = (await ids.NextAsync("auditEvents", ct)).Value; var pinId = (await ids.NextAsync("evidencePins", ct)).Value;
@@ -95,12 +100,21 @@ public sealed partial class SupplierDocumentService
             return Command(context);
         }, async (tx, token) => {
             var active = context ?? throw B.Broken(); Current(active); var draft = active.Draft!; var at = Now;
+            var actualOriginal = await new EvidenceSubmissionOriginalRecords(database).ReadAsync(tx,
+                new(EvidenceTargetKind.SupplierDocument, draftId), expectedRevision, reservationId, reference, actor.UserId, token);
+            if (actualOriginal is null ? pdfOriginal is not null : pdfOriginal is null) throw B.Broken();
+            if (actualOriginal is not null) {
+                pdfOriginal!.Require(actor, new(EvidenceTargetKind.SupplierDocument, draftId), expectedRevision, reservationId, reference, actualOriginal, clock);
+                await PdfDocumentExtractionRecords.RequireStorageAsync(database, token);
+            }
             var row = new BsonDocument { { "_id", id }, { "schemaVersion", 1 }, { "draftId", draftId }, { "version", 1L }, { "draftHash", draft["snapshotHash"] },
                 { "location", draft["location"] }, { "supplierId", draft["supplierId"] }, { "input", draft["input"] }, { "source", draft["source"] }, { "identityId", draft["identityId"] },
                 { "binding", binding }, { "people", new BsonArray(active.People!.Evidence.Select(R.Person)) }, { "reservationId", reservationId }, { "evidence", PaymentSubmissionBson.Reference(reference) }, { "pinId", pinId } };
             R.Metadata(row, B.SubmitOperation, audit, actor, metadata, body, at); await Rows(B.Submissions).InsertOneAsync(tx, row, cancellationToken: token); await EffectsAsync(tx, row, token);
-            await Rows("outboxEvents").InsertOneAsync(tx, new BsonDocument { { "_id", ObjectId.GenerateNewId() }, { "schemaVersion", 1 }, { "kind", "supplierdocument.ocr.requested" },
-                { "sourceKey", B.OcrKey(row) }, { "payload", B.OcrPayload(row) }, { "createdAt", at.UtcDateTime }, { "dueAt", at.UtcDateTime }, { "status", "pending" }, { "attempts", 0 } }, cancellationToken: token);
+            await Rows("outboxEvents").InsertOneAsync(tx, new BsonDocument { { "_id", ObjectId.GenerateNewId() }, { "schemaVersion", 1 },
+                { "kind", actualOriginal is null ? "supplierdocument.ocr.requested" : PdfDocumentExtractionContract.SupplierJobKind },
+                { "sourceKey", actualOriginal is null ? B.OcrKey(row) : B.DocumentOcrKey(row) }, { "payload", actualOriginal is null ? B.OcrPayload(row) : B.DocumentOcrPayload(row, actualOriginal) },
+                { "createdAt", at.UtcDateTime }, { "dueAt", at.UtcDateTime }, { "status", "pending" }, { "attempts", 0 } }, cancellationToken: token);
             if ((await Rows(B.Drafts).UpdateOneAsync(tx, draft, Builders<BsonDocument>.Update.Set("submittedDocumentId", id), cancellationToken: token)).ModifiedCount != 1) throw B.Changed(); draft["submittedDocumentId"] = id;
             var head = active.History!.Head; if ((await Rows(B.Heads).UpdateOneAsync(tx, head, Builders<BsonDocument>.Update.Set("documentId", id), cancellationToken: token)).ModifiedCount != 1) throw B.Changed(); head["documentId"] = id;
             active.Submission = row; active.History = active.History with { Document = row }; fresh = row; return B.Result(row);

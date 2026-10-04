@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using MongoDB.Bson;
+using UnitToko.Modules.Contracts;
 using UnitToko.Modules.Documents;
 using UnitToko.Modules.Identity.Contracts;
 using UnitToko.Platform.Authorization;
@@ -24,6 +25,14 @@ public sealed partial class PaymentEvidenceService
         var recovered = await declarations.RecoverSubmissionAsync(actor, declarationId, metadata.IdempotencyKey, bodyHash, ct);
         if (recovered is not null) return recovered;
         await StorageAsync(ct);
+        // P01 requires an eligible image as the primary evidence. PDF admission is a
+        // separate private draft capability; it cannot create a payment association.
+        try {
+            await unit.ExecuteAsync((tx, token) => evidence.RequireFormatBindingAsync(tx, actor, Target(declarationId),
+                reservationId, EvidencePurpose.PaymentImage, token), ct);
+        } catch (DomainValidationException error) when (error.Code == "evidence_format_mismatch") {
+            throw PaymentSubmissionBson.ImageRequired();
+        }
         foreach (var name in EvidenceAccessSchemas.Collections)
             await SupplierDocumentEvidenceSchemas.RequireCompatibleStorageAsync(database, name, EvidenceAccessSchemas.Validator(name), EvidenceAccessSchemas.Key(name), ct);
         if (registration.Store is null) throw Unavailable();

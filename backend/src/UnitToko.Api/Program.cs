@@ -479,6 +479,7 @@ app.MapAfterSalesCaseEndpoints();
 app.MapPaymentDraftEndpoints();
 app.MapPaymentEvidenceEndpoints();
 app.MapPdfEvidenceEndpoints();
+app.MapPdfDocumentOcrEndpoints();
 app.MapPaymentOcrEndpoints();
 app.MapPaymentReviewEndpoints();
 app.MapPaymentCorrectionEndpoints();

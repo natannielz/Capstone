@@ -218,11 +218,17 @@ internal sealed partial class EvidenceService
     // Format routing joins the actual current owner fence without creating a standalone status audit.
     // The original-read acquisition and final byte authorization still repeat current permission/source checks.
     internal Task<bool> RequireFormatBindingAsync(IClientSessionHandle tx, ActorContext actor, EvidenceTargetRef target,
-        long reservationId, EvidencePurpose purpose, CancellationToken ct) => GuardAsync(tx, async () => {
+        long reservationId, EvidencePurpose purpose, CancellationToken ct) =>
+        RequireFormatBindingCoreAsync(tx, actor, target, reservationId, purpose, null, null, ct);
+    internal Task<bool> RequireFormatBindingAsync(IClientSessionHandle tx, ActorContext actor, EvidenceTargetRef target,
+        long reservationId, EvidencePurpose purpose, long expectedRevision, EvidenceRef reference, CancellationToken ct) =>
+        RequireFormatBindingCoreAsync(tx, actor, target, reservationId, purpose, expectedRevision, reference, ct);
+    private Task<bool> RequireFormatBindingCoreAsync(IClientSessionHandle tx, ActorContext actor, EvidenceTargetRef target,
+        long reservationId, EvidencePurpose purpose, long? expectedRevision, EvidenceRef? reference, CancellationToken ct) => GuardAsync(tx, async () => {
         var bundle = await LoadAsync(tx, reservationId, ct);
         if (ReadTarget(bundle.Reservation) != target) throw Invalid("evidence_actor_or_owner_denied");
         if (PersistedPurpose(bundle.Reservation) != purpose) throw Invalid("evidence_format_mismatch");
-        return await WithReadTargetAsync(tx, actor, target, null, null, (owner, token) => {
+        return await WithReadTargetAsync(tx, actor, target, expectedRevision, reference, (owner, token) => {
             RequireReadAuthority(bundle, owner, actor); return Task.FromResult(true);
         }, ct);
     });

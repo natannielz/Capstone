@@ -1,6 +1,8 @@
 using MongoDB.Bson;
 using MongoDB.Driver;
+using UnitToko.Modules.Documents;
 using UnitToko.Platform.Documents;
+using UnitToko.Platform.Storage;
 using UnitToko.Platform.Mongo.Migrations;
 using B = UnitToko.Platform.Billing.PaymentSubmissionBson;
 
@@ -26,9 +28,20 @@ internal sealed class PaymentSubmissionRecords(IMongoDatabase database)
             pin["declarationVersionId"] != row["declarationVersionId"] || pin["declarationRevision"] != row["declarationRevision"] || pin["reviewRevision"] != row["reviewRevision"] ||
             !InvoiceRecords.Equal(pin["reference"], row["evidence"]) || pin["reservationId"] != row["reservationId"] || pin["actorId"] != row["submittedBy"] ||
             pin["actorGrantVersion"] != row["actorGrantVersion"] || pin["createdAt"] != row["submittedAt"] || pin["reason"] != row["reason"] || pin["correlationId"] != row["correlationId"]) throw PaymentDraftBson.Invalid();
+        _ = await OriginalAsync(tx, row, ct);
         var job = await Rows("outboxEvents").Find(tx, new BsonDocument("sourceKey", B.OcrKey(row))).SingleOrDefaultAsync(ct);
-        if (job is null || job["kind"] != "payment.ocr.requested" || !InvoiceRecords.Equal(job["payload"], B.OcrPayload(row)) || job["createdAt"] != row["submittedAt"]) throw PaymentDraftBson.Invalid();
+        if (job is null || job["kind"] != "payment.ocr.requested" ||
+            !InvoiceRecords.Equal(job["payload"], B.OcrPayload(row)) || job["createdAt"] != row["submittedAt"] ||
+            await Rows("outboxEvents").Find(tx, new BsonDocument("sourceKey", "payment.document-ocr.requested:" + row["_id"].AsInt64)).Limit(1).AnyAsync(ct)) throw PaymentDraftBson.Invalid();
         return row;
+    }
+    internal async Task<ExpectedPublication?> OriginalAsync(IClientSessionHandle tx, BsonDocument row, CancellationToken ct) {
+        var original = await new EvidenceSubmissionOriginalRecords(database).ReadAsync(tx,
+            new(EvidenceTargetKind.PaymentDeclaration, row["declarationId"].AsInt64), row["declarationRevision"].AsInt64, row["reservationId"].AsInt64,
+            B.Reference(row["evidence"].AsBsonDocument), row["uploaderId"].AsInt64, ct);
+        // Never reinterpret a previously persisted PDF-primary row as an image submission.
+        if (original is not null) throw B.ImageRequired();
+        return null;
     }
     internal async Task RequireHeadAsync(IClientSessionHandle tx, BsonDocument head, CancellationToken ct) {
         var rows = await Rows(B.Collection).Find(tx, new BsonDocument("declarationId", head["_id"])).Limit(2).ToListAsync(ct);

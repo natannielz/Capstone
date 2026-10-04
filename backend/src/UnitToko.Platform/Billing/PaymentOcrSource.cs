@@ -1,5 +1,6 @@
 using MongoDB.Bson;
 using MongoDB.Driver;
+using UnitToko.Modules.Documents;
 using UnitToko.Modules.Organizations;
 using UnitToko.Platform.DocumentProcessing;
 
@@ -14,8 +15,9 @@ internal sealed class PaymentOcrSource(IMongoDatabase database) : IPaymentOcrSou
             if (!tx.IsInTransaction || !ReferenceEquals(tx.Client, database.Client) || job.GetValue("kind", "") != "payment.ocr.requested" ||
                 !job.TryGetValue("payload", out var payload) || !payload.IsBsonDocument || !payload.AsBsonDocument.TryGetValue("submissionId", out var id) || !id.IsInt64 || id.AsInt64 <= 0)
                 throw PaymentDraftBson.Invalid();
-            var submission = await new PaymentSubmissionRecords(database).ReadAsync(tx, id.AsInt64, ct);
-            if (job.GetValue("sourceKey", "") != PaymentSubmissionBson.OcrKey(submission) || !InvoiceRecords.Equal(payload, PaymentSubmissionBson.OcrPayload(submission))) throw PaymentDraftBson.Invalid();
+            var owner = new PaymentSubmissionRecords(database); var submission = await owner.ReadAsync(tx, id.AsInt64, ct);
+            if (job.GetValue("sourceKey", "") != PaymentSubmissionBson.OcrKey(submission) ||
+                !InvoiceRecords.Equal(payload, PaymentSubmissionBson.OcrPayload(submission))) throw PaymentDraftBson.Invalid();
             var records = new PaymentDraftRecords(database); var head = await records.HeadAsync(tx, submission["recordedBy"].AsInt64, submission["declarationId"].AsInt64, ct);
             if (head["state"] != "submitted" || head["submissionId"] != id || head["reviewRevision"] != submission["reviewRevision"] || head["fence"].AsInt64 >= long.MaxValue) throw PaymentDraftRecords.Changed();
             // Submitted declarations are immutable in this workflow. Processing fences belong to Documents/outbox;

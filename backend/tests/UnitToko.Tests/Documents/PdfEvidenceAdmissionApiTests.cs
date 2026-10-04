@@ -12,6 +12,7 @@ using UnitToko.Api.Identity;
 using UnitToko.Modules.Documents;
 using UnitToko.Platform;
 using UnitToko.Platform.Billing;
+using UnitToko.Platform.DocumentProcessing;
 using UnitToko.Platform.Identity;
 using UnitToko.Tests.Identity;
 using Data = UnitToko.Tests.Documents.PdfEvidenceAdmissionTests.PaymentPdfData;
@@ -23,7 +24,7 @@ namespace UnitToko.Tests.Documents;
 public sealed class PdfEvidenceAdmissionApiTests(MongoFixture fixture)
 {
     [WindowsStorageFact]
-    public async Task Full_profile_actual_PDF_routes_keep_browser_boundary_format_identity_private_original_and_unconnected_review_honest() {
+    public async Task Full_profile_actual_PDF_routes_keep_private_draft_original_and_refuse_PDF_as_primary_payment_evidence() {
         await using var data = await Data.CreateAsync(fixture); using var keys = new IdentityRuntimeTests.RuntimeKeys();
         var settings = IdentityRuntimeTests.Settings(keys); settings["Mongo:Database"] = data.Database.DatabaseNamespace.DatabaseName; settings["Release:Profile"] = "full";
         using var factory = IdentityRuntimeTests.Factory(settings).WithWebHostBuilder(web => web.ConfigureTestServices(services => {
@@ -80,10 +81,59 @@ public sealed class PdfEvidenceAdmissionApiTests(MongoFixture fixture)
         Assert.Equal(id, (await list.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("items")[0].GetProperty("reservationId").GetString());
         using var imageRoute = await Send($"/api/v1/billing/payment-declarations/{data.DeclarationId}/evidence/{id}/original/query", readBody);
         Assert.Equal(HttpStatusCode.BadRequest, imageRoute.StatusCode); Assert.NotEqual("application/pdf", imageRoute.Content.Headers.ContentType?.MediaType);
-        using var submission = await Send($"/api/v1/billing/payment-declarations/{data.DeclarationId}/submit", new { reservationId = id,
-            evidence = readBody.reference, reason = "Bukti PDF harus menunggu pemrosesan seluruh halaman" }, "pdf-api-submit");
-        Assert.Equal(HttpStatusCode.Conflict, submission.StatusCode); Assert.Equal("evidence_pdf_processing_not_connected", (await submission.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString());
-        Assert.False(await data.Rows("paymentSubmissions").Find(new BsonDocument()).AnyAsync()); Assert.False(await data.Rows("payments").Find(new BsonDocument()).AnyAsync());
+        var financialBefore = await data.FinanceAsync();
+        var submitRoute = $"/api/v1/billing/payment-declarations/{data.DeclarationId}/submit";
+        var submitBody = new { reservationId = id, evidence = readBody.reference, reason = "PDF tidak boleh menggantikan bukti gambar wajib untuk pembayaran" };
+        data.Evidence.ReadObserver = new(() => throw new InvalidOperationException("HTTP primary-PDF refusal must precede original opening"));
+        using var submission = await Send(submitRoute, submitBody, "pdf-api-submit");
+        Assert.Equal(HttpStatusCode.BadRequest, submission.StatusCode);
+        Assert.Equal("payment_image_evidence_required", (await submission.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString());
+        using var submittedReplay = await Send(submitRoute, submitBody, "pdf-api-submit");
+        Assert.Equal(HttpStatusCode.BadRequest, submittedReplay.StatusCode);
+        Assert.Equal("payment_image_evidence_required", (await submittedReplay.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString());
+        using var submissionRecovery = await Send($"/api/v1/billing/payment-declarations/{data.DeclarationId}/submission/operations/query", new { purpose = "operation-recovery", key = "pdf-api-submit" });
+        Assert.True(submissionRecovery.IsSuccessStatusCode, await submissionRecovery.Content.ReadAsStringAsync());
+        var recoveredSubmission = await submissionRecovery.Content.ReadFromJsonAsync<JsonElement>(); Assert.Equal("not_confirmed", recoveredSubmission.GetProperty("status").GetString());
+        Assert.False(await data.Rows("paymentSubmissions").Find(new BsonDocument()).AnyAsync());
+        Assert.False(await data.Rows("evidencePins").Find(new BsonDocument("associationKind", "PaymentSubmission")).AnyAsync());
+        Assert.False(await data.Rows("idempotencyRecords").Find(new BsonDocument("operation", PaymentSubmissionBson.Operation)).AnyAsync());
+        Assert.False(await data.Rows("outboxEvents").Find(new BsonDocument("kind", PdfDocumentExtractionContract.PaymentJobKind)).AnyAsync());
+        Assert.False(await data.Rows("outboxEvents").Find(new BsonDocument("kind", "payment.ocr.requested")).AnyAsync());
+        Assert.Equal("draft", (await data.Payment.Service.ReadAsync(data.Actor, data.DeclarationId)).State);
+        Assert.Equal(financialBefore, await data.FinanceAsync()); Assert.False(await data.Rows("payments").Find(new BsonDocument()).AnyAsync());
+        // The same genuine declaration can proceed using its mandatory eligible image;
+        // the admitted draft PDF never becomes that association or an OCR source.
+        data.Evidence.ReadObserver = null;
+        var imageReservation = await data.Evidence.ReserveAsync(data.Actor, data.DeclarationId, 1, EvidenceAdmissionTestData.Meta("pdf-api-required-image"));
+        using var imageBytes = new MemoryStream(ImageDecoderTests.Png(13, 7));
+        var imageUpload = await data.Evidence.UploadAsync(data.Actor, data.DeclarationId, imageReservation.ReservationId, 1, imageBytes, EvidenceAdmissionTestData.Meta("pdf-api-image-upload"));
+        var imageReference = imageUpload.Evidence!.Reference;
+        var imageValidator = new EvidenceValidationProcessor(data.Database, new(data.Catalog.Client), new(data.Database), data.Clock, data.Files.Registration,
+            EvidenceValidationTests.Consumer, new string('c', 64), EvidenceValidationTests.ClaimPolicy, new(1024, 100, 100, 10000),
+            new EvidenceValidationTests.FixtureScanner("clean", signaturesAt: data.Clock.UtcNow.AddHours(-1)), new WindowsImageDecoder(ImageDecoderTests.Options()));
+        await EvidenceValidationTests.Policy(data.Database, data.Clock, data.Files.StoreId, imageValidator.PipelineId);
+        Assert.Equal("completed", await imageValidator.RunOnceAsync());
+        var imageDto = new { id = imageReference.Id.ToString(), version = "1", sha256 = imageReference.Sha256 };
+        using var imageSubmitted = await Send(submitRoute, new { reservationId = imageReservation.ReservationId.ToString(), evidence = imageDto, reason = "Pengajuan memakai gambar asli yang telah divalidasi" }, "pdf-api-real-image-submit");
+        Assert.True(imageSubmitted.IsSuccessStatusCode, await imageSubmitted.Content.ReadAsStringAsync());
+        Assert.Equal("submitted", (await imageSubmitted.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("state").GetString());
+        using var imageFormat = await Send($"/api/v1/billing/payment-declarations/{data.DeclarationId}/evidence-format/query",
+            new { purpose = "payment-evidence-format-view", reference = imageDto });
+        Assert.True(imageFormat.IsSuccessStatusCode, await imageFormat.Content.ReadAsStringAsync());
+        Assert.Equal("image", (await imageFormat.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("kind").GetString());
+        var storedImage = await data.Rows("paymentSubmissions").Find(new BsonDocument()).SingleAsync();
+        Assert.Equal(imageReference.Sha256, storedImage["evidence"]["sha256"]); Assert.NotEqual(reference.Sha256, storedImage["evidence"]["sha256"]);
+        Assert.Equal(1, await data.Rows("evidencePins").CountDocumentsAsync(new BsonDocument("associationKind", "PaymentSubmission")));
+        Assert.Equal(1, await data.Rows("outboxEvents").CountDocumentsAsync(new BsonDocument("kind", "payment.ocr.requested")));
+        Assert.False(await data.Rows("outboxEvents").Find(new BsonDocument("kind", PdfDocumentExtractionContract.PaymentJobKind)).AnyAsync());
+        foreach (var unsupported in new[] {
+            $"/api/v1/billing/payment-declarations/{data.DeclarationId}/pdf-ocr/query",
+            $"/api/v1/billing/payment-reviews/{data.DeclarationId}/pdf-ocr/query",
+            $"/api/v1/billing/payment-reviews/{data.DeclarationId}/pdf-evidence/{id}/original/query" }) {
+            using var absent = await Send(unsupported, new { purpose = "payment-pdf-ocr-view", reference = imageDto });
+            Assert.Equal(HttpStatusCode.NotFound, absent.StatusCode);
+        }
+        Assert.Equal(financialBefore, await data.FinanceAsync());
         var pilotSettings = new Dictionary<string, string?>(settings) { ["Release:Profile"] = "release1" };
         using var pilot = IdentityRuntimeTests.Factory(pilotSettings).WithWebHostBuilder(web => web.ConfigureTestServices(services => {
             services.RemoveAll<IClock>(); services.AddSingleton<IClock>(data.Clock);

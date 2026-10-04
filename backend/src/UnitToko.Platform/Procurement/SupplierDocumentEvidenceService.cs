@@ -75,8 +75,17 @@ public sealed partial class SupplierDocumentEvidenceService
         var recovered = await documents.RecoverSubmitBodyAsync(actor, draftId, metadata.IdempotencyKey, hash, ct); if (recovered is not null) return recovered;
         await StorageAsync(ct);
         return await evidence.WithSupplierDocumentPinAsync(actor, Target(draftId), expectedRevision, reservationId, reference, new("supplier-document-evidence-view", metadata.CorrelationId),
-            (claim, handle, started, token) => documents.SubmitWithProofAsync(actor, draftId, expectedRevision, reservationId, reference, binding, metadata,
-                (tx, id, target, inner) => new EvidenceService(database, unit, ids, clock, registration, supplierDocumentTargets: target)
-                    .PinSupplierDocumentAsync(tx, actor, id, claim, handle, started, inner), token), ct);
+            async (claim, handle, started, token) => {
+                var actualOriginal = await unit.ExecuteAsync((tx, inner) => evidence.SubmissionOriginalAsync(tx, Target(draftId), expectedRevision,
+                    reservationId, reference, actor.UserId, inner), token);
+                VerifiedPdfSubmissionOriginal? pdfOriginal = null;
+                if (actualOriginal is not null) {
+                    if (actualOriginal != claim.Original) throw B.Broken();
+                    pdfOriginal = VerifiedPdfSubmissionOriginal.FromVerifiedClaim(actor, EvidencePurpose.SupplierDocumentPdf, claim, handle);
+                }
+                return await documents.SubmitWithProofAsync(actor, draftId, expectedRevision, reservationId, reference, binding, metadata,
+                    pdfOriginal, (tx, id, target, inner) => new EvidenceService(database, unit, ids, clock, registration, supplierDocumentTargets: target)
+                        .PinSupplierDocumentAsync(tx, actor, id, claim, handle, started, inner), token);
+            }, ct);
     }
 }

@@ -1,5 +1,7 @@
 using System.Collections.Immutable;
 using MongoDB.Bson;
+using UnitToko.Platform.DocumentProcessing;
+using UnitToko.Platform.Storage;
 using UnitToko.Modules.Accounting;
 using UnitToko.Modules.Documents;
 using UnitToko.Modules.Identity;
@@ -92,6 +94,10 @@ internal static class SupplierDocumentBson
     internal static string OcrKey(BsonDocument row) => "supplierdocument.ocr:" + row["_id"].AsInt64 + ":1";
     internal static BsonDocument OcrPayload(BsonDocument row) => new() { { "submissionId", row["_id"] }, { "draftId", row["draftId"] }, { "draftRevision", 1L }, { "evidence", row["evidence"] },
         { "pinId", row["pinId"] }, { "submissionHash", row["snapshotHash"] }, { "draftHash", row["draftHash"] } };
+    internal static string DocumentOcrKey(BsonDocument row) => PdfDocumentExtractionRecords.SourceKey("SupplierInvoice", row["_id"].AsInt64);
+    internal static BsonDocument DocumentOcrPayload(BsonDocument row, ExpectedPublication original) => PdfDocumentExtractionRecords.Payload("SupplierInvoice", new() {
+        { "submissionId", row["_id"] }, { "draftId", row["draftId"] }, { "draftRevision", 1L }, { "uploaderId", row["actorId"] }, { "reservationId", row["reservationId"] },
+        { "reference", row["evidence"] }, { "pinId", row["pinId"] }, { "submissionHash", row["snapshotHash"] }, { "draftHash", row["draftHash"] } }, original);
     internal static BsonDocument DraftView(BsonDocument row) => new() { { "id", row["_id"] }, { "version", 1L }, { "input", row["input"] }, { "supplierId", row["supplierId"] },
         { "order", PurchaseOrderService.FundingOrderView(row["source"].AsBsonDocument) }, { "recordedAt", row["recordedAt"] }, { "reason", row["reason"] }, { "state", row["submittedDocumentId"].IsBsonNull ? "draft" : "submitted_unmatched" } };
     internal static BsonDocument SubmissionView(BsonDocument row, bool evidence) => new() { { "id", row["_id"] }, { "draftId", row["draftId"] }, { "version", 1L }, { "state", "submitted_unmatched" },

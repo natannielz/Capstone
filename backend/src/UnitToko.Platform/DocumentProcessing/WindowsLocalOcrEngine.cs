@@ -19,9 +19,9 @@ internal sealed record LocalOcrPreprocessing(int OrientationDegrees, decimal Des
 [SupportedOSPlatform("windows")]
 internal sealed class WindowsLocalOcrEngine : ILocalOcrEngine
 {
-    internal const string Engine = "tesseract-5.5.3/tesserocr-2.11.0";
-    internal const string ImagePreprocessing = "bounded-gray-orient4-deskew10-contrast1-psm6-ind+eng-v2";
-    internal const string Preprocessing = ImagePreprocessing + "/" + PaymentFieldExtractor.Version;
+    internal const string Engine = LocalOcrProtocol.Engine;
+    internal const string ImagePreprocessing = LocalOcrProtocol.ImagePreprocessing;
+    internal const string Preprocessing = LocalOcrProtocol.PaymentPreprocessing;
     private readonly LocalOcrOptions options;
     private readonly ExtractionPurpose purpose;
     public ExtractionProvenance Provenance { get; }

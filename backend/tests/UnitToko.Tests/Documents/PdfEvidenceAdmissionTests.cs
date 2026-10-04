@@ -8,6 +8,7 @@ using UnitToko.Platform.Billing;
 using UnitToko.Platform.DocumentProcessing;
 using UnitToko.Platform.Documents;
 using UnitToko.Platform.Mongo;
+using UnitToko.Platform.Procurement;
 using UnitToko.Tests.Authorization;
 using UnitToko.Tests.Catalog;
 using UnitToko.Tests.Ordering;
@@ -57,15 +58,24 @@ public sealed class PdfEvidenceAdmissionTests(MongoFixture fixture)
         await Assert.ThrowsAsync<PersistenceConflictException>(() => data.OpenAsync(reserved, reference));
         await data.Rows(PdfEvidenceValidationRecords.Results).ReplaceOneAsync(new BsonDocument("_id", proof["_id"]), proof);
         var financeBefore = await data.FinanceAsync();
-        var denied = await Assert.ThrowsAsync<PersistenceConflictException>(() => data.Evidence.SubmitAsync(data.Actor, data.DeclarationId, 1,
-            reserved.ReservationId, reference, EvidenceAdmissionTestData.Meta("pdf-cannot-submit")));
-        Assert.Equal("evidence_pdf_processing_not_connected", denied.Code); Assert.Equal(financeBefore, await data.FinanceAsync());
-        Assert.False(await data.Rows("outboxEvents").Find(new BsonDocument("kind", "payment.ocr.requested")).AnyAsync());
+        var metadata = EvidenceAdmissionTestData.Meta("pdf-verified-submit");
+        foreach (var attempt in Enumerable.Range(0, 2)) {
+            var refused = await Assert.ThrowsAsync<DomainValidationException>(() => data.Evidence.SubmitAsync(data.Actor, data.DeclarationId, 1, reserved.ReservationId, reference, metadata));
+            Assert.Equal("payment_image_evidence_required", refused.Code);
+            Assert.Null(await data.Evidence.RecoverSubmissionAsync(data.Actor, data.DeclarationId, metadata.IdempotencyKey));
+        }
+        Assert.False(await data.Rows("paymentSubmissions").Find(new BsonDocument()).AnyAsync());
+        Assert.False(await data.Rows("evidencePins").Find(new BsonDocument("associationKind", "PaymentSubmission")).AnyAsync());
+        Assert.False(await data.Rows("idempotencyRecords").Find(new BsonDocument("operation", PaymentSubmissionBson.Operation)).AnyAsync());
+        foreach (var kind in new[] { "payment.ocr.requested", PdfDocumentExtractionContract.PaymentJobKind })
+            Assert.False(await data.Rows("outboxEvents").Find(new BsonDocument("kind", kind)).AnyAsync());
         var policy = await data.Rows(PdfEvidenceValidationRecords.Policies).Find(new BsonDocument()).SingleAsync();
         await data.Rows(PdfEvidenceValidationRecords.Policies).UpdateOneAsync(new BsonDocument("_id", policy["_id"]), Builders<BsonDocument>.Update.Set("active", false));
         await Assert.ThrowsAsync<PersistenceConflictException>(() => data.OpenAsync(reserved, reference));
         Assert.Equal("unavailable", (await data.Evidence.PdfStatusAsync(data.Actor, data.DeclarationId, reserved.ReservationId)).DecoderStatus);
         Assert.Equal("draft", (await data.Payment.Service.ReadAsync(data.Actor, data.DeclarationId)).State);
+        Assert.Null(await data.Evidence.RecoverSubmissionAsync(data.Actor, data.DeclarationId, metadata.IdempotencyKey));
+        Assert.Equal(financeBefore, await data.FinanceAsync());
     }
     [WindowsStorageTheory]
     [InlineData("approval")]
@@ -164,7 +174,7 @@ public sealed class PdfEvidenceAdmissionTests(MongoFixture fixture)
         Assert.False(await data.Rows("payments").Find(new BsonDocument()).AnyAsync());
     }
     [WindowsStorageFact]
-    public async Task Actual_supplier_pdf_keeps_separate_image_admissions_current_source_scope_and_refuses_image_submission_or_ocr() {
+    public async Task Actual_supplier_pdf_keeps_separate_image_admissions_current_source_scope_and_submits_one_distinct_document_job() {
         await using var data = await SupplierDocumentTestData.CreateAsync(fixture);
         var bytes = PdfEvidenceAdmissionTestRuntime.Pdf(); const string key = "supplier-pdf-and-image-key";
         var reserved = await data.Evidence.ReservePdfAsync(data.Actor, data.DraftId, 1, SupplierDocumentTestData.Meta(key));
@@ -184,11 +194,21 @@ public sealed class PdfEvidenceAdmissionTests(MongoFixture fixture)
         }
         await Assert.ThrowsAsync<AuthorizationDeniedException>(() => data.Evidence.OpenPdfReadAsync(data.Outsider, data.DraftId, reserved.ReservationId, 1, reference, SupplierDocumentTestData.ReadMetadata));
         using var never = new MustNotRead(); await Assert.ThrowsAsync<DomainValidationException>(() => data.Evidence.UploadAsync(data.Actor, data.DraftId, reserved.ReservationId, 1, never, SupplierDocumentTestData.Meta("image-cannot-claim-pdf"))); Assert.Equal(0, never.Reads);
-        var before = await data.StateAsync(); var preview = await data.Service.PreviewSubmitAsync(data.Actor, data.DraftId, 1, reserved.ReservationId, reference);
-        Assert.Equal("evidence_pdf_processing_not_connected", (await Assert.ThrowsAsync<PersistenceConflictException>(() => data.Evidence.SubmitAsync(data.Actor,
-            data.DraftId, 1, reserved.ReservationId, reference, preview["binding"].AsString, SupplierDocumentTestData.Meta("supplier-pdf-not-submitted")))).Code);
-        Assert.Equal(before, await data.StateAsync());
+        var preview = await data.Service.PreviewSubmitAsync(data.Actor, data.DraftId, 1, reserved.ReservationId, reference);
+        var metadata = SupplierDocumentTestData.Meta("supplier-pdf-submitted");
+        var submitted = await data.Evidence.SubmitAsync(data.Actor, data.DraftId, 1, reserved.ReservationId, reference, preview["binding"].AsString, metadata);
+        Assert.Equal("submitted_unmatched", submitted["state"]);
+        var row = await data.Rows(SupplierDocumentBson.Submissions).Find(new BsonDocument()).SingleAsync();
+        var pdfJob = await data.Rows("outboxEvents").Find(new BsonDocument("kind", PdfDocumentExtractionContract.SupplierJobKind)).SingleAsync();
+        Assert.Equal(submitted["documentId"], row["_id"]); Assert.Equal(row["_id"], pdfJob["payload"]["submissionId"]);
+        Assert.Equal(row["pinId"], pdfJob["payload"]["pinId"]); Assert.Equal(row["draftHash"], pdfJob["payload"]["draftHash"]);
+        Assert.Equal(row["actorId"], pdfJob["payload"]["uploaderId"]); Assert.Equal(reference.Sha256, pdfJob["payload"]["original"]["sha256"]);
+        Assert.Equal("pending", pdfJob["status"]);
+        Assert.Equal(row["_id"], (await data.Rows("evidencePins").Find(new BsonDocument("associationKind", "SupplierDocument")).SingleAsync())["associationId"]);
+        Assert.Equal(submitted, await data.Evidence.SubmitAsync(data.Actor, data.DraftId, 1, reserved.ReservationId, reference, preview["binding"].AsString, metadata));
+        Assert.Equal(1, await data.Rows("outboxEvents").CountDocumentsAsync(new BsonDocument("kind", PdfDocumentExtractionContract.SupplierJobKind)));
         Assert.False(await data.Rows("outboxEvents").Find(new BsonDocument("kind", "supplierdocument.ocr.requested")).AnyAsync());
+        await Assert.ThrowsAsync<AuthorizationDeniedException>(() => data.Evidence.OpenPdfReadAsync(data.Outsider, data.DraftId, reserved.ReservationId, 1, reference, SupplierDocumentTestData.ReadMetadata));
         await data.Inspection.Receiving.Orders.NoFinancialOrReceiptEffectsAsync();
     }
     private sealed class MustNotRead : MemoryStream {
@@ -231,7 +251,7 @@ public sealed class PdfEvidenceAdmissionTests(MongoFixture fixture)
             reservation.ReservationId, 1, reference, new("payment-evidence-view", "synthetic-pdf-read"));
         internal Task<BsonDocument> JobAsync() => Rows("outboxEvents").Find(new BsonDocument("kind", PdfEvidenceValidationRecords.Kind)).SingleAsync();
         internal async Task<BsonDocument> FinanceAsync() {
-            var state = new BsonDocument(); foreach (var name in new[] { "payments", "bankReceipts", "journalEntries", "paymentSubmissions", "evidencePins", "evidencePinAudits" })
+            var state = new BsonDocument(); foreach (var name in new[] { "payments", "bankReceipts", "journalEntries", "stockBalances", "movements", "reservations", "paymentAllocations", "refundPayouts", "disbursements" })
                 state[name] = new BsonArray(await Rows(name).Find(new BsonDocument()).Sort(new BsonDocument("_id", 1)).ToListAsync());
             return state;
         }

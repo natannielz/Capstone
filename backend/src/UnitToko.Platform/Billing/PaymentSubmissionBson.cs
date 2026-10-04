@@ -1,4 +1,5 @@
 using MongoDB.Bson;
+using UnitToko.Modules.Contracts;
 using UnitToko.Modules.Documents;
 using UnitToko.Platform.Authorization;
 
@@ -7,6 +8,8 @@ namespace UnitToko.Platform.Billing;
 internal static class PaymentSubmissionBson
 {
     internal const string Operation = "billing.payment.submit", Collection = "paymentSubmissions";
+    internal static DomainValidationException ImageRequired() => new("payment_image_evidence_required",
+        "Pengajuan pembayaran wajib memakai bukti gambar yang telah divalidasi. PDF tidak dapat menggantikan bukti gambar.");
     internal static object Body(long id, long revision, long reservationId, EvidenceRef evidence) => new { id, revision, reservationId, evidence };
     internal static BsonDocument Reference(EvidenceRef value) => new() { { "id", value.Id }, { "version", value.Version }, { "sha256", value.Sha256 } };
     internal static EvidenceRef Reference(BsonDocument value) => new(value["id"].AsInt64, value["version"].AsInt64, value["sha256"].AsString);

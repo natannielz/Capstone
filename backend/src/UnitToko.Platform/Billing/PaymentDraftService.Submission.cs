@@ -56,6 +56,9 @@ public sealed partial class PaymentDraftService
             personProof = await new PersonRegistryService(database, clock).ResolveProofsAsync(tx, [actor.UserId], token);
             var person = personProof.Evidence.Single();
             if (person.Verification == PersonVerification.Verified) await new PersonAuthorizationFence(database, clock).TouchAsync(tx, personProof, token);
+            var actualOriginal = await new EvidenceSubmissionOriginalRecords(database).ReadAsync(tx,
+                new(EvidenceTargetKind.PaymentDeclaration, declarationId), revision, reservationId, reference, actor.UserId, token);
+            if (actualOriginal is not null) throw B.ImageRequired();
             // Unknown is explicit historical information, never authority for later approval.
             var row = new BsonDocument { { "_id", submissionId }, { "schemaVersion", 1 }, { "declarationId", declarationId },
                 { "declarationVersionId", version["_id"] }, { "declarationRevision", revision }, { "declarationHash", version["snapshotHash"] },
@@ -66,8 +69,10 @@ public sealed partial class PaymentDraftService
             row.Add("snapshotHash", B.Hash(row));
             await records.Rows(B.Collection).InsertOneAsync(tx, row, cancellationToken: token);
             await records.Rows("auditEvents").InsertOneAsync(tx, B.Audit(row), cancellationToken: token);
-            await records.Rows("outboxEvents").InsertOneAsync(tx, new BsonDocument { { "_id", ObjectId.GenerateNewId() }, { "schemaVersion", 1 }, { "kind", "payment.ocr.requested" },
-                { "sourceKey", B.OcrKey(row) }, { "payload", B.OcrPayload(row) }, { "createdAt", now.UtcDateTime }, { "dueAt", now.UtcDateTime }, { "status", "pending" }, { "attempts", 0 } }, cancellationToken: token);
+            await records.Rows("outboxEvents").InsertOneAsync(tx, new BsonDocument { { "_id", ObjectId.GenerateNewId() }, { "schemaVersion", 1 },
+                { "kind", "payment.ocr.requested" },
+                { "sourceKey", B.OcrKey(row) }, { "payload", B.OcrPayload(row) },
+                { "createdAt", now.UtcDateTime }, { "dueAt", now.UtcDateTime }, { "status", "pending" }, { "attempts", 0 } }, cancellationToken: token);
             finalPinCheck = await pin(tx, submissionId, token);
             var next = before.DeepClone().AsBsonDocument; next["schemaVersion"] = 2; next["state"] = "submitted"; next["submissionId"] = submissionId;
             next["reviewRevision"] = 1L; next["updatedAt"] = now.UtcDateTime; next["fence"] = checked(before["fence"].AsInt64 + 1);

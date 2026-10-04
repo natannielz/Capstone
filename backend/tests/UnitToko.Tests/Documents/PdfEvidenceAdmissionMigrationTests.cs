@@ -77,6 +77,7 @@ public sealed class PdfEvidenceAdmissionMigrationTests(MongoFixture fixture)
     }
     // Exact empty suffix only; this is test rehearsal, never a production downgrade.
     internal static async Task RestoreV84Async(IMongoDatabase db) {
+        await PdfDocumentExtractionMigrationTests.RestoreV85Async(db);
         var history = await db.GetCollection<BsonDocument>("schemaMigrations").Find(new BsonDocument()).Sort(new BsonDocument("_id", 1)).ToListAsync();
         if (history.Count <= 84) return; Assert.Equal(85, history.Count); Assert.All(history, row => Assert.Equal("applied", row["state"]));
         foreach (var table in new[] { PdfEvidenceValidationRecords.Results, PdfEvidenceValidationRecords.Audits })

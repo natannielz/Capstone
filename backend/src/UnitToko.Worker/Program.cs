@@ -28,6 +28,8 @@ var videoOptions = migrate ? null : builder.Configuration.GetSection("Evidence:V
 var pdfOptions = migrate ? null : PdfEvidenceWorkerConfiguration.Read(builder.Configuration);
 var ocrOptions = migrate ? null : builder.Configuration.GetSection("Evidence:PaymentOcr").Get<PaymentOcrRuntimeOptions>();
 var supplierOcrOptions = migrate ? null : builder.Configuration.GetSection("Evidence:SupplierDocumentOcr").Get<SupplierDocumentOcrRuntimeOptions>();
+if (!migrate) PdfDocumentOcrWorkerConfiguration.RejectUnsupportedPayment(builder.Configuration);
+var supplierPdfOcrOptions = migrate ? null : PdfDocumentOcrWorkerConfiguration.ReadSupplierInvoice(builder.Configuration);
 var paymentNotices = !migrate && builder.Configuration.GetValue<bool>("Notifications:PaymentReviewInApp:Enabled");
 if (evidenceOptions is not null) {
     builder.Services.AddSingleton(sp => EvidenceValidationRuntime.Create(sp.GetRequiredService<IMongoDatabase>(), sp.GetRequiredService<MongoUnitOfWork>(),
@@ -61,6 +63,9 @@ if (supplierOcrOptions is not null) {
         sp.GetRequiredService<IdAllocator>(), sp.GetRequiredService<IClock>(), supplierOcrOptions));
     builder.Services.AddHostedService<SupplierDocumentOcrWorker>();
 }
+if (supplierPdfOcrOptions is not null) builder.Services.AddSingleton(sp => PdfDocumentOcrRuntime.CreateSupplierInvoice(sp.GetRequiredService<IMongoDatabase>(),
+    sp.GetRequiredService<MongoUnitOfWork>(), sp.GetRequiredService<IdAllocator>(), sp.GetRequiredService<IClock>(), supplierPdfOcrOptions));
+if (supplierPdfOcrOptions is not null) builder.Services.AddHostedService<PdfDocumentOcrWorker>();
 if (paymentNotices) {
     builder.Services.AddSingleton<PaymentReviewNotifications>();
     builder.Services.AddHostedService<PaymentReviewNotificationWorker>();
@@ -87,6 +92,9 @@ if (ocrOptions is null) logger.LogWarning("Payment OCR is unconfigured; OCR jobs
 else logger.LogInformation("Payment OCR pipeline configured: {PipelineId}; current host and model approvals remain required", host.Services.GetRequiredService<PaymentOcrRuntime>().PipelineId);
 if (supplierOcrOptions is null) logger.LogWarning("Supplier document OCR is unconfigured; supplier OCR jobs will not be claimed.");
 else logger.LogInformation("Supplier document OCR pipeline configured: {PipelineId}; current host and model approvals remain required", host.Services.GetRequiredService<SupplierDocumentOcrRuntime>().PipelineId);
+if (supplierPdfOcrOptions is null) logger.LogWarning("Whole-PDF supplier OCR is unconfigured; its distinct document jobs will not be claimed.");
+foreach (var runtime in host.Services.GetServices<PdfDocumentOcrRuntime>())
+    logger.LogInformation("Whole-PDF {SourceKind} pipeline configured: {PipelineId}; independent finite host, raster, model and source policy approvals remain required", runtime.SourceKind, runtime.PipelineId);
 if (!paymentNotices) logger.LogWarning("Payment in-app notices are unconfigured; review events will remain pending.");
 else logger.LogInformation("Payment in-app notice worker enabled; availability is private and sends no external messages");
 await host.RunAsync();

@@ -1,4 +1,6 @@
 export function recoveryPage(operation: string) {
+  if (operation === 'evidence.payment-pdf.reserve') return {href: '/billing/payments', label: 'halaman bukti PDF pembayaran'};
+  if (operation === 'evidence.supplier-document-pdf.reserve') return {href: '/procurement/supplier-documents', label: 'halaman bukti PDF dokumen pemasok'};
   if (operation === 'account.contact.update') return {href: '/identity/account#account-contact', label: 'halaman kontak pribadi'};
   if (operation === 'evidence.image-revalidation.request') return { href: '/administration/catalog', label: 'halaman pemeriksaan ulang foto katalog' };
   if (operation === 'catalog.photo.associate' || operation === 'evidence.catalog-image.reserve') return { href: '/administration/catalog', label: 'halaman foto katalog' };
@@ -66,6 +68,8 @@ export function recoveryPage(operation: string) {
     : { href: "/administration/person-reviews", label: "halaman peninjauan orang" };
 }
 export function operationLabel(operation: string) {
+  if (operation === 'evidence.payment-pdf.reserve') return 'Unggah PDF pembayaran';
+  if (operation === 'evidence.supplier-document-pdf.reserve') return 'Unggah PDF dokumen pemasok';
   if (operation === 'account.contact.update') return 'Perubahan kontak pribadi';
   if (operation === 'catalog.photo.associate') return 'Pemilihan foto utama kemasan';
   if (operation === 'evidence.image-revalidation.request') return 'Permintaan pemeriksaan ulang foto katalog';

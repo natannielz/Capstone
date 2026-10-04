@@ -1105,6 +1105,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/billing/payment-declarations/{id}/evidence-format/query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ReadPaymentEvidenceFormat"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/billing/payment-declarations/{id}/evidence/{reservationId}/content": {
         parameters: {
             query?: never;
@@ -1345,6 +1361,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/billing/payment-declarations/{id}/pdf-ocr/query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ReadPaymentPdfOcr"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/billing/payment-declarations/{id}/query": {
         parameters: {
             query?: never;
@@ -1553,6 +1585,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/billing/payment-reviews/{id}/evidence-format/query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ReadPaymentReviewEvidenceFormat"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/billing/payment-reviews/{id}/evidence/{reservationId}/original/query": {
         parameters: {
             query?: never;
@@ -1627,6 +1675,38 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["ReadPaymentReviewOcr"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/billing/payment-reviews/{id}/pdf-evidence/{reservationId}/original/query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ReadPaymentReviewPdfEvidenceOriginal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/billing/payment-reviews/{id}/pdf-ocr/query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ReadPaymentReviewPdfOcr"];
         delete?: never;
         options?: never;
         head?: never;
@@ -8259,6 +8339,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/procurement/supplier-documents/drafts/{id}/evidence-format/query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ReadSupplierDocumentEvidenceFormat"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/procurement/supplier-documents/drafts/{id}/evidence/{reservationId}/content": {
         parameters: {
             query?: never;
@@ -8477,6 +8573,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["ListSupplierDocumentPdfEvidence"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/procurement/supplier-documents/drafts/{id}/pdf-ocr/query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ReadSupplierDocumentPdfOcr"];
         delete?: never;
         options?: never;
         head?: never;
@@ -10810,6 +10922,12 @@ export interface components {
             preparationId: components["schemas"]["LongId"];
             preparationRevision: string;
         };
+        EvidenceSubmissionFormatDto: {
+            evidence: components["schemas"]["PaymentEvidenceReferenceDto"];
+            kind: string;
+            sourceId: string;
+            sourceRevision: string;
+        };
         ExtractionProvenance: {
             engineVersion: string;
             modelSha256: string;
@@ -12444,6 +12562,107 @@ export interface components {
             recordedAt: string;
             reviewRevision: string;
             verificationId: components["schemas"]["LongId"];
+        };
+        PdfDocumentPoint: {
+            /** Format: double */
+            x: number | string;
+            /** Format: double */
+            y: number | string;
+        };
+        PdfDocumentPreprocessing: {
+            contrastApplied: boolean;
+            /** Format: double */
+            deskewDegrees: number | string;
+            /** Format: int32 */
+            orientationDegrees: number | string;
+            /** Format: double */
+            orientationMargin: number | string;
+            /** Format: double */
+            orientationScore: number | string;
+            reviewReasons?: null | string[];
+            /** Format: int32 */
+            workingHeight: number | string;
+            /** Format: int32 */
+            workingWidth: number | string;
+        };
+        PdfDocumentRasterPage: {
+            canvasSize?: null | (number | string)[];
+            /** Format: int32 */
+            height: number | string;
+            /** Format: int64 */
+            length: number | string;
+            /** Format: int32 */
+            pageIndex: number | string;
+            pixelCornersInPdfCanvas?: null | components["schemas"]["PdfDocumentPoint"][];
+            reviewReasons?: null | string[];
+            /** Format: int32 */
+            rotationDegrees: number | string;
+            sha256: string;
+            visibleBox?: null | (number | string)[];
+            /** Format: int32 */
+            width: number | string;
+        };
+        PdfDocumentRasterProvenance: {
+            pdfium: string;
+            pillow: string;
+            pipeline: string;
+            runtimeSha256: string;
+            wheelSha256: string;
+            wrapper: string;
+        };
+        PdfOcrCandidateDto: {
+            boundingBox: null | string[];
+            confidence: null | string;
+            field: string;
+            flags: string[];
+            pdfCanvasCorners: null | components["schemas"]["PdfDocumentPoint"][];
+            value: null | string;
+        };
+        PdfOcrFieldReviewDto: {
+            field: string;
+            observations: components["schemas"]["PdfOcrObservationDto"][];
+            reviewReasons: string[];
+        };
+        PdfOcrLineDto: {
+            boundingBox: string[];
+            confidence: string;
+            pdfCanvasCorners: components["schemas"]["PdfDocumentPoint"][];
+            text: string;
+        };
+        PdfOcrObservationDto: {
+            candidate: components["schemas"]["PdfOcrCandidateDto"];
+            /** Format: int32 */
+            pageIndex: number | string;
+        };
+        PdfOcrPageDto: {
+            fields: components["schemas"]["PdfOcrCandidateDto"][];
+            lines: components["schemas"]["PdfOcrLineDto"][];
+            ocrProvenance: components["schemas"]["ExtractionProvenance"];
+            preprocessing: components["schemas"]["PdfDocumentPreprocessing"];
+            raster: components["schemas"]["PdfDocumentRasterPage"];
+            reviewReasons: string[];
+        };
+        PdfOcrResultDto: {
+            /** Format: date-time */
+            extractedAt: string;
+            fields: components["schemas"]["PdfOcrFieldReviewDto"][];
+            id: components["schemas"]["LongId"];
+            ocrProvenance: components["schemas"]["ExtractionProvenance"];
+            pages: components["schemas"]["PdfOcrPageDto"][];
+            purpose: string;
+            rasterProvenance: components["schemas"]["PdfDocumentRasterProvenance"];
+            requiresHumanReview: boolean;
+            resultHash: string;
+        };
+        PdfOcrViewDto: {
+            evidence: components["schemas"]["PaymentEvidenceReferenceDto"];
+            failureCode: null | string;
+            result: null | components["schemas"]["PdfOcrResultDto"];
+            sourceId: components["schemas"]["LongId"];
+            sourceKind: string;
+            sourceRevision: string;
+            state: string;
+            submissionId: components["schemas"]["LongId"];
         };
         PersonReviewAccountDto: {
             displayName: null | string;
@@ -23303,6 +23522,84 @@ export interface operations {
             };
         };
     };
+    ReadPaymentEvidenceFormat: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description One quoted nonnegative Int64 resource version from the latest response; never a JavaScript number. */
+                "If-Match": string;
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
+                /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
+                "X-Expected-Actor-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PaymentEvidenceReadDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvidenceSubmissionFormatDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
     UploadPaymentEvidence: {
         parameters: {
             query?: never;
@@ -24719,6 +25016,84 @@ export interface operations {
             };
         };
     };
+    ReadPaymentPdfOcr: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description One quoted nonnegative Int64 resource version from the latest response; never a JavaScript number. */
+                "If-Match": string;
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
+                /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
+                "X-Expected-Actor-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PaymentEvidenceReadDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PdfOcrViewDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
     ReadPaymentDeclaration: {
         parameters: {
             query?: never;
@@ -25802,6 +26177,84 @@ export interface operations {
             };
         };
     };
+    ReadPaymentReviewEvidenceFormat: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description One quoted nonnegative Int64 resource version from the latest response; never a JavaScript number. */
+                "If-Match": string;
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
+                /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
+                "X-Expected-Actor-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PaymentEvidenceReadDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvidenceSubmissionFormatDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
     ReadPaymentReviewOriginal: {
         parameters: {
             query?: never;
@@ -26145,6 +26598,163 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PaymentOcrViewDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    ReadPaymentReviewPdfEvidenceOriginal: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description One quoted nonnegative Int64 resource version from the latest response; never a JavaScript number. */
+                "If-Match": string;
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
+                /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
+                "X-Expected-Actor-Id": string;
+            };
+            path: {
+                id: string;
+                reservationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PaymentEvidenceReadDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    ReadPaymentReviewPdfOcr: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description One quoted nonnegative Int64 resource version from the latest response; never a JavaScript number. */
+                "If-Match": string;
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
+                /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
+                "X-Expected-Actor-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PaymentEvidenceReadDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PdfOcrViewDto"];
                 };
             };
             /** @description Bad Request */
@@ -60896,6 +61506,84 @@ export interface operations {
             };
         };
     };
+    ReadSupplierDocumentEvidenceFormat: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description One quoted nonnegative Int64 resource version from the latest response; never a JavaScript number. */
+                "If-Match": string;
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
+                /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
+                "X-Expected-Actor-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PaymentEvidenceReadDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvidenceSubmissionFormatDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
     UploadSupplierDocumentEvidence: {
         parameters: {
             query?: never;
@@ -62225,6 +62913,84 @@ export interface operations {
             };
             /** @description Unsupported Media Type */
             415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    ReadSupplierDocumentPdfOcr: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description One quoted nonnegative Int64 resource version from the latest response; never a JavaScript number. */
+                "If-Match": string;
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
+                /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
+                "X-Expected-Actor-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PaymentEvidenceReadDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PdfOcrViewDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

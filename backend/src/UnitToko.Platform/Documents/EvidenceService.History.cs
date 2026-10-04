@@ -48,7 +48,7 @@ internal sealed partial class EvidenceService
     });
     internal Task ValidateHistoricalPinAsync(IClientSessionHandle tx, BsonDocument pin, CancellationToken ct) => GuardAsync(tx, async () => {
         var bundle = await LoadAsync(tx, pin["reservationId"].AsInt64, ct);
-        if (IsPdf(bundle)) throw EvidenceValidationRecords.Broken();
+        if (IsPdf(bundle) && pin["associationKind"] != "SupplierDocument") throw EvidenceValidationRecords.Broken();
         var reference = Reference(bundle) ?? throw EvidenceValidationRecords.Broken();
         var validation = await HistoricalValidationAsync(tx, bundle, ct) ?? throw EvidenceValidationRecords.Broken();
         var lifecycle = await RequireHistoricalLifecycleAsync(tx, bundle, validation, ct) ?? throw EvidenceValidationRecords.Broken();

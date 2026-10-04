@@ -18,7 +18,8 @@ public sealed class OutboxStore(IMongoDatabase database, IClock clock)
             throw new PersistenceConflictException("payment_manual_review_source_changed", "Reload the failed processing attempt before manual review");
     }
     internal async Task<BsonDocument> FenceProcessingAsync(IClientSessionHandle tx, BsonDocument claim, BsonDocument? receipt, CancellationToken ct) {
-        if (!tx.IsInTransaction || !ReferenceEquals(tx.Client, database.Client) || claim.GetValue("kind", "").AsString is not ("evidence.validation.requested" or "evidence.video-validation.requested" or "evidence.pdf-validation.requested" or "payment.ocr.requested" or "supplierdocument.ocr.requested")) throw Invalid("invalid_claim");
+        if (!tx.IsInTransaction || !ReferenceEquals(tx.Client, database.Client) || claim.GetValue("kind", "").AsString is not ("evidence.validation.requested" or "evidence.video-validation.requested" or "evidence.pdf-validation.requested" or "payment.ocr.requested" or "supplierdocument.ocr.requested" or
+            "supplierdocument.document-ocr.requested")) throw Invalid("invalid_claim");
         var filter = LiveClaim(claim, clock.UtcNow.UtcDateTime) & F.Eq("sourceKey", claim["sourceKey"]) & F.Eq("payload", claim["payload"]) &
             (F.Exists("processingFence", false) | (F.Type("processingFence", BsonType.Int64) & F.Gte("processingFence", 0L) & F.Lt("processingFence", long.MaxValue)));
         if (receipt is not null) filter &= F.Exists("processingReceipt", false) | F.Eq("processingReceipt", receipt);

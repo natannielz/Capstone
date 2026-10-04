@@ -13,6 +13,7 @@ using UnitToko.Platform.Inventory;
 using UnitToko.Modules.Organizations;
 using UnitToko.Platform.Mongo;
 using UnitToko.Platform.Mongo.Migrations;
+using UnitToko.Platform.Storage;
 using B = UnitToko.Platform.Procurement.SupplierDocumentBson;
 using R = UnitToko.Platform.Procurement.ProcurementRequestBson;
 
@@ -48,10 +49,23 @@ internal sealed partial class SupplierDocumentRecords(IMongoDatabase database, M
         var reference = PaymentSubmissionBson.Reference(row["evidence"].AsBsonDocument);
         Equal(row["binding"], B.SubmitBinding(row["actorId"].AsInt64, row["actorGrantVersion"].AsInt64, row["draftHash"].AsString, row["reservationId"].AsInt64, reference));
         await EffectsAsync(tx, row, B.SubmitBody(row["draftId"].AsInt64, 1, row["reservationId"].AsInt64, reference, row["binding"].AsString), ct);
-        var job = await Rows("outboxEvents").Find(tx, new BsonDocument("sourceKey", B.OcrKey(row))).SingleOrDefaultAsync(ct) ?? throw B.Broken();
-        Equal(job["kind"], "supplierdocument.ocr.requested"); Equal(job["payload"], B.OcrPayload(row)); Equal(job["createdAt"], row["recordedAt"]);
-        if (!pendingPin) await RequirePinAsync(tx, row, ct); return row;
+        var original = await OriginalAsync(tx, row, ct);
+        var job = await Rows("outboxEvents").Find(tx, new BsonDocument("sourceKey", original is null ? B.OcrKey(row) : B.DocumentOcrKey(row))).SingleOrDefaultAsync(ct) ?? throw B.Broken();
+        Equal(job["kind"], original is null ? "supplierdocument.ocr.requested" : PdfDocumentExtractionContract.SupplierJobKind);
+        Equal(job["payload"], original is null ? B.OcrPayload(row) : B.DocumentOcrPayload(row, original)); Equal(job["createdAt"], row["recordedAt"]);
+        if (await Rows("outboxEvents").Find(tx, new BsonDocument("sourceKey", original is null ? B.DocumentOcrKey(row) : B.OcrKey(row))).Limit(1).AnyAsync(ct)) throw B.Broken();
+        if (!pendingPin) {
+            await RequirePinAsync(tx, row, ct);
+            if (original is not null) {
+                var result = await new PdfDocumentExtractionRecords(database).ResultAsync(tx, job, ct);
+                if (job["status"] == "completed" && result is null) throw B.Broken();
+            }
+        } else if (original is not null && (job["status"] != "pending" || job["attempts"] != 0 || job.Contains("leaseToken") || job.Contains("processingReceipt") || job.Contains("processingFence"))) throw B.Broken();
+        return row;
     }
+    internal Task<ExpectedPublication?> OriginalAsync(IClientSessionHandle tx, BsonDocument row, CancellationToken ct) => new EvidenceSubmissionOriginalRecords(database).ReadAsync(tx,
+        new(EvidenceTargetKind.SupplierDocument, row["draftId"].AsInt64), 1, row["reservationId"].AsInt64,
+        PaymentSubmissionBson.Reference(row["evidence"].AsBsonDocument), row["actorId"].AsInt64, ct);
     internal async Task RequirePinAsync(IClientSessionHandle tx, BsonDocument row, CancellationToken ct) {
         var pin = await EvidencePinRecords.ReadAsync(database, tx, row["pinId"].AsInt64, ct); await new EvidenceService(database, unit, new(database), clock).ValidateHistoricalPinAsync(tx, pin, ct);
         foreach (var (key, value) in new (string, BsonValue)[] { ("associationKind", "SupplierDocument"), ("associationId", row["_id"]), ("supplierDocumentDraftId", row["draftId"]),

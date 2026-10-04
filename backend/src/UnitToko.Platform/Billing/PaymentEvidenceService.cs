@@ -97,8 +97,12 @@ public sealed partial class PaymentEvidenceService
         return await OpenBoundReadAsync(evidence, actor, declarationId, reservationId, expectedRevision, reference, metadata, ct);
     }
     public async Task<ProtectedEvidenceRead> OpenReviewReadAsync(ActorContext actor, long declarationId, long reservationId, long expectedRevision,
-        EvidenceRef reference, AuthorizationReadMetadata metadata, CancellationToken ct = default) =>
-        await OpenBoundReadAsync(reviewEvidence, actor, declarationId, reservationId, expectedRevision, reference, metadata, ct);
+        EvidenceRef reference, AuthorizationReadMetadata metadata, CancellationToken ct = default) {
+        await StorageAsync(ct);
+        await unit.ExecuteAsync((tx, token) => reviewEvidence.RequireFormatBindingAsync(tx, actor, Target(declarationId), reservationId,
+            EvidencePurpose.PaymentImage, expectedRevision, reference, token), ct);
+        return await OpenBoundReadAsync(reviewEvidence, actor, declarationId, reservationId, expectedRevision, reference, metadata, ct);
+    }
     private async Task<ProtectedEvidenceRead> OpenBoundReadAsync(EvidenceService reader, ActorContext actor, long declarationId, long reservationId, long expectedRevision,
         EvidenceRef reference, AuthorizationReadMetadata metadata, CancellationToken ct) {
         await StorageAsync(ct);
