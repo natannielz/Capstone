@@ -27,9 +27,9 @@ internal sealed class OrderSubmissionTestData(CatalogPriceTestData prices) : IAs
     internal IMongoDatabase Database => Prices.Catalog.Database;
     internal OrderSubmissionService Service => new(Database, new(Prices.Catalog.Client), new(Database), Prices.Catalog.Clock, Admission);
     internal IMongoCollection<BsonDocument> Rows(string name) => Database.GetCollection<BsonDocument>(name);
-    internal static async Task<OrderSubmissionTestData> CreateAsync(MongoFixture fixture, int stock = 10)
+    internal static async Task<OrderSubmissionTestData> CreateAsync(MongoFixture fixture, int stock = 10, CatalogPriceTestData? attachedPrices = null)
     {
-        var data = new OrderSubmissionTestData(await CatalogPriceTestData.CreateAsync(fixture));
+        var data = new OrderSubmissionTestData(attachedPrices ?? await CatalogPriceTestData.CreateAsync(fixture));
         try {
             var prices = data.Prices; var catalog = prices.Catalog;
             await catalog.Base.AddGrantAsync(catalog.Buyer, 6200, CatalogAuthoringTestData.Audience, [Permissions.OrderSubmit]);

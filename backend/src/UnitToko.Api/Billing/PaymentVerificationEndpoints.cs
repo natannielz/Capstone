@@ -27,12 +27,21 @@ public sealed record PaymentVerificationDetailDto(PaymentVerificationResultDto R
     LongId VerifiedBy, string PayerVerificationReference, string Reason, ImmutableArray<PaymentDiscrepancyResolution> Resolutions, string ReviewSource);
 public sealed record PaymentVerificationReadDto(string State, PaymentVerificationDetailDto? Verification);
 public sealed record PaymentVerificationRecoveryDto(string Status, PaymentVerificationResultDto? Result);
+public sealed record PaymentVerificationReceiptDto(LongId ReceiptId, string Amount, string BookedDate, string TransactionId);
+public sealed record PaymentVerificationReceiptPageDto(PaymentVerificationReceiptDto[] Items, LongId? NextAfterId);
 
 public static class PaymentVerificationEndpoints
 {
     public static void MapPaymentVerificationEndpoints(this WebApplication app) {
         var group = app.MapGroup("/api/v1/billing/payment-reviews/{id}/verification").RequireAuthorization().AddEndpointFilter<ActorRequiredFilter>();
         foreach (var status in new[] { 400, 401, 403, 409, 503 }) group.WithMetadata(new ProducesResponseTypeMetadata(status, typeof(ApiProblem), ["application/problem+json"]));
+        group.MapPost("/receipts/query", async (string id, ReceivingAccountQueryDto request, HttpContext http, PaymentVerificationService service, CancellationToken ct) => {
+            if (request.Purpose != "payment-review") throw PaymentVerificationPolicy.Invalid(); Private(http);
+            var page = await service.ReceiptCandidatesAsync(http.Features.Get<ResolvedActor>()!.Actor, LongId.Parse(id).Value, request.AfterId?.Value, ct);
+            return TypedResults.Ok(new PaymentVerificationReceiptPageDto([.. page.Items.Select(row => new PaymentVerificationReceiptDto(
+                new(row["_id"].AsInt64), new UnitToko.Modules.Accounting.Money(row["amount"].AsDecimal).ToString(), row["bookedDate"].AsString, row["transactionId"].AsString))],
+                page.NextAfterId is { } next ? new(next) : null));
+        }).WithName("ListPaymentVerificationReceipts");
         group.MapPost("/preview", async (string id, PaymentVerificationPreviewQueryDto request, HttpContext http, PaymentVerificationService service, CancellationToken ct) => {
             Private(http); var preview = await service.PreviewAsync(http.Features.Get<ResolvedActor>()!.Actor, LongId.Parse(id).Value, request.ReceiptId.Value, ct, request.ReviewSource);
             return TypedResults.Ok(Preview(preview));

@@ -10,15 +10,19 @@ namespace UnitToko.Platform.Billing;
 
 public sealed partial class BankReceiptService
 {
+    private async Task<List<BsonDocument>> ReceiptIdsAsync(Context context, long? afterId, CancellationToken ct) {
+        var queries = Require(context);
+        var scoped = new BsonDocument("$and", new BsonArray(queries.Select(query => ScopeQuery.Create(query).Render(new RenderArgs<BsonDocument>(BsonSerializer.SerializerRegistry.GetSerializer<BsonDocument>(), BsonSerializer.SerializerRegistry)))));
+        var pipeline = new List<BsonDocument> { new("$replaceRoot", new BsonDocument("newRoot", new BsonDocument("$mergeObjects", new BsonArray { "$scope", new BsonDocument("_id", "$_id") }))), new("$match", scoped) };
+        if (afterId.HasValue) pipeline.Add(new("$match", new BsonDocument("_id", new BsonDocument("$gt", afterId.Value))));
+        pipeline.Add(new("$sort", new BsonDocument("_id", 1))); pipeline.Add(new("$limit", 26));
+        return await records.Rows(B.Receipts).Aggregate<BsonDocument>(context.Tx, pipeline).ToListAsync(ct);
+    }
     public async Task<IReadOnlyList<BsonDocument>> ListAsync(ActorContext actor,long? afterId=null,CancellationToken ct=default) {
         if (afterId is <=0) throw BankReceiptPolicy.Invalid(); await StorageAsync(ct);
         return await authorization.ReadAsync<IReadOnlyList<BsonDocument>>(actor,async (authority,tx,token)=>{
-            var context=new Context(actor,authority,tx,false); var queries=Require(context);
-            var scoped=new BsonDocument("$and",new BsonArray(queries.Select(query=>ScopeQuery.Create(query).Render(new RenderArgs<BsonDocument>(BsonSerializer.SerializerRegistry.GetSerializer<BsonDocument>(),BsonSerializer.SerializerRegistry)))));
-            var pipeline=new List<BsonDocument> { new("$replaceRoot",new BsonDocument("newRoot",new BsonDocument("$mergeObjects",new BsonArray { "$scope",new BsonDocument("_id","$_id") }))),new("$match",scoped) };
-            if (afterId.HasValue) pipeline.Add(new("$match",new BsonDocument("_id",new BsonDocument("$gt",afterId.Value))));
-            pipeline.Add(new("$sort",new BsonDocument("_id",1))); pipeline.Add(new("$limit",26));
-            var selected=await records.Rows(B.Receipts).Aggregate<BsonDocument>(tx,pipeline).ToListAsync(token); var result=new List<BsonDocument>();
+            var context=new Context(actor,authority,tx,false);
+            var selected=await ReceiptIdsAsync(context,afterId,token); var result=new List<BsonDocument>();
             foreach (var item in selected) {
                 var raw=await records.RowAsync(tx,B.Receipts,item["_id"].AsInt64,token); _=Require(context with { Scope=raw["scope"].AsBsonDocument });
                 var row=await records.ReceiptAsync(actor,authority,tx,item["_id"].AsInt64,token); await records.TouchAsync(tx,B.Receipts,row,token); result.Add(row);

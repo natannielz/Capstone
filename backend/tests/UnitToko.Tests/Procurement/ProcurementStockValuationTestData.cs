@@ -54,7 +54,7 @@ internal sealed class ProcurementStockValuationTestData(SupplierDocumentTestData
         AccountingCalendar.BusinessDate(Clock.UtcNow), Reason);
 
     internal static async Task<ProcurementStockValuationTestData> CreateAsync(MongoFixture fixture, bool createValuationPolicy = true, int receiptPackages = 3,
-        decimal requiredAdvance = 0, bool includePayableMappings = false)
+        decimal requiredAdvance = 0, bool includePayableMappings = false, bool includeCustomerMappings = false)
     {
         Assert.InRange(receiptPackages, 1, 3);
         var documents = await SupplierDocumentTestData.CreateAsync(fixture, requiredAdvance: requiredAdvance);
@@ -86,7 +86,7 @@ internal sealed class ProcurementStockValuationTestData(SupplierDocumentTestData
             data.BookChecker = await data.Base.AddActorAsync(737, AccountingBookSetupTestData.Scope, Permissions.AccountingBookRead, Permissions.AccountingBookApprove);
             await PersonTestData.SeedDistinctPeopleAsync(data.Database, data.Clock, data.Maker.UserId, data.Checker.UserId, data.Reader.UserId, data.Outsider.UserId,
                 data.SourceMaker.UserId, data.SourceChecker.UserId, data.BookMaker.UserId, data.BookChecker.UserId);
-            await data.CreateHeldReceiptAsync(); await data.CreateBookAndPolicyAsync(createValuationPolicy, includePayableMappings);
+            await data.CreateHeldReceiptAsync(); await data.CreateBookAndPolicyAsync(createValuationPolicy, includePayableMappings, includeCustomerMappings);
             Assert.False(await data.Rows("journalEntries").Find(new BsonDocument()).AnyAsync());
             return data;
         }
@@ -116,7 +116,7 @@ internal sealed class ProcurementStockValuationTestData(SupplierDocumentTestData
         Receipt = await Receipts.ReceiveAsync(Maker, input, receiptPreview["binding"].AsString, Meta("valuation-held-receipt"));
     }
 
-    private async Task CreateBookAndPolicyAsync(bool createPolicy, bool includePayableMappings)
+    private async Task CreateBookAndPolicyAsync(bool createPolicy, bool includePayableMappings, bool includeCustomerMappings)
     {
         var setup = new AccountingBookSetupService(Database, Unit, new(Database), Clock);
         var input = new AccountingBookSetupInput(AccountingBookSetupTestData.Key, AccountingCalendar.BusinessDate(Clock.UtcNow).ToString("yyyy-MM", CultureInfo.InvariantCulture),
@@ -124,6 +124,9 @@ internal sealed class ProcurementStockValuationTestData(SupplierDocumentTestData
                 ? [new("inventory", "A1200"), new("receipt_accrual", "L2100"), new("supplier_payable", "L2200"),
                     new("supplier_advance", "A1201"), new("bank_cash", "A1101"), new("unidentified_cash", "L2900")]
                 : [new("inventory", "A1200"), new("receipt_accrual", "L2100")]);
+        if (includeCustomerMappings)
+            input = input with { Mappings = [.. input.Mappings, new("invoice_ar", "A1102"), new("invoice_revenue", "R4101"),
+                new("invoice_tax", "L2101"), new("invoice_charges", "R4102")] };
         var preview = await setup.PreviewAsync(BookMaker, input);
         var proposal = await setup.ProposeAsync(BookMaker, input, preview["binding"].AsString, Meta("valuation-book"));
         var review = await setup.PreviewDecisionAsync(BookChecker, proposal["proposalId"].AsInt64, AccountingBookSetupDecision.Approve);

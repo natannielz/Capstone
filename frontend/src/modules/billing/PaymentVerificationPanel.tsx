@@ -6,8 +6,7 @@ import { PaymentAllocationCorrectionPanel } from './PaymentAllocationCorrectionP
 import { useEffect, useRef, useState } from 'react';
 import { AccessFailure, MutationLedger, accessMessage } from '../administration/workflow';
 import { submitTrackedRequest, type OperationJournal } from '../administration/operation-journal';
-import { createBankReceiptGateway, type BankReceiptView } from './bank-receipt-client';
-import { createPaymentVerificationGateway, preparePaymentVerification, type PaymentVerificationDetail, type PaymentVerificationPreview } from './payment-verification-client';
+import { createPaymentVerificationGateway, preparePaymentVerification, type PaymentVerificationDetail, type PaymentVerificationPreview, type PaymentVerificationReceiptPage } from './payment-verification-client';
 import { orderAmount } from '../ordering/order-quote-client';
 import type { PaymentDraft } from './payment-client';
 import styles from '../administration/access.module.css';
@@ -23,6 +22,7 @@ function message(error: unknown) {
     if (error.code === 'payment_manual_review_required') return 'Belum ada pemeriksaan manual yang tersimpan untuk bukti ini.';
     if (error.code === 'payment_verification_changed' || error.code === 'payment_already_verified') return 'Pemeriksaan berubah atau sudah diverifikasi. Muat hasil terbaru sebelum melanjutkan.';
     if (error.code === 'payment_receipt_payer_conflict') return 'Penerimaan ini sudah dikaitkan dengan pihak lain. Hubungi penanggung jawab rekonsiliasi.';
+    if (error.code === 'bank_receipt_purpose_conflict') return 'Penerimaan ini sudah digunakan untuk pengembalian uang muka pemasok. Muat pilihan penerimaan terbaru.';
     if (error.code === 'independent_person_required') return 'Verifikator harus merupakan orang terverifikasi yang berbeda dari pembuat dan pengunggah pengajuan.';
     if (error.code === 'invalid_payment_verification') return 'Lengkapi pemeriksaan pembayar, ketiga pernyataan, alasan dan penyelesaian setiap perbedaan.';
   }
@@ -32,10 +32,10 @@ export function PaymentVerificationPanel({ actorId, owner, allowed, allocationAl
   actorId: string; owner: PaymentDraft; allowed: boolean; allocationAllowed: boolean; allocationCorrectionAllowed: boolean; fresh: boolean; locked: boolean; current: () => boolean;
   journal: OperationJournal; onSettled: () => void; onDenied: (failure: unknown) => void; onBusyChange: (busy: boolean) => void; manualReview?: React.ReactNode;
 }) {
-  const [gateway] = useState(createPaymentVerificationGateway), [bank] = useState(createBankReceiptGateway);
+  const [gateway] = useState(createPaymentVerificationGateway);
   const [allocationRevision, setAllocationRevision] = useState(0);
   const [saved, setSaved] = useState<PaymentVerificationDetail | null>(null), [checked, setChecked] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState<unknown>(null);
-  const [page, setPage] = useState<{ items: BankReceiptView[]; hasMore: boolean } | null>(null), [shown, setShown] = useState<PaymentVerificationPreview | null>(null);
+  const [page, setPage] = useState<PaymentVerificationReceiptPage | null>(null), [shown, setShown] = useState<PaymentVerificationPreview | null>(null);
   const [reviewSource, setReviewSource] = useState<'ocr' | 'manual' | null>(null);
   const [payerReference, setPayerReference] = useState(''), [reason, setReason] = useState(''), [image, setImage] = useState(false), [bankChecked, setBankChecked] = useState(false), [payer, setPayer] = useState(false);
   const [resolutions, setResolutions] = useState<Record<string, string>>({}), [confirm, setConfirm] = useState<ReturnType<typeof preparePaymentVerification> | null>(null);
@@ -50,8 +50,9 @@ export function PaymentVerificationPanel({ actorId, owner, allowed, allocationAl
     finally { pending.current = false; onBusyChange(false); onSettled(); if (alive.current) setBusy(false); }
   }
   async function read() { const result = await gateway.read(actorId, owner); if (active()) { setSaved(result); setChecked(true); setShown(null); setConfirm(null); setPage(null); } }
-  async function receipts(after: string | null) { const result = await bank.list(actorId, after); if (active()) setPage(result); }
+  async function receipts(after: string | null) { setShown(null); setConfirm(null); const result = await gateway.receipts(actorId, owner.id, after); if (active()) setPage(result); }
   async function choose(receiptId: string) {
+    setShown(null); setConfirm(null);
     const result = await gateway.preview(actorId, owner, receiptId, reviewSource);
     if (active()) { setShown(result); setConfirm(null); setPayerReference(''); setReason(''); setImage(false); setBankChecked(false); setPayer(false); setResolutions({}); }
   }
@@ -81,8 +82,8 @@ export function PaymentVerificationPanel({ actorId, owner, allowed, allocationAl
       <p>Jika dana belum dikonfirmasi, buka <Link href="/billing/bank-receipts">penerimaan bank</Link>. Nama atau referensi yang mirip bukan bukti identitas transfer.</p>
       {page && <><ul className={invoice.candidates}>{page.items.map(item => <li key={item.receiptId}><strong>Penerimaan {item.receiptId} · {orderAmount('IDR', item.amount)}</strong>
         <p>{item.bookedDate} · Identitas bank {item.transactionId}</p><button className={styles.secondary} disabled={!canVerify || confirm !== null} onClick={() => void work(() => choose(item.receiptId))}>Periksa penerimaan {item.receiptId}</button></li>)}</ul>
-        {page.items.length === 0 && <p>Belum ada penerimaan bank yang dapat diperiksa.</p>}
-        {page.hasMore && <button className={styles.secondary} disabled={!canVerify || confirm !== null} onClick={() => void work(() => receipts(page.items.at(-1)!.receiptId))}>Penerimaan berikutnya</button>}</>}
+        {page.items.length === 0 && <p>Tidak ada penerimaan yang sesuai pada halaman ini. Penerimaan untuk pemasok atau pembayar lain tidak ditampilkan.</p>}
+        {page.nextAfterId !== null && <button className={styles.secondary} disabled={!canVerify || confirm !== null} onClick={() => void work(() => receipts(page.nextAfterId))}>Penerimaan berikutnya</button>}</>}
       {shown && <form onSubmit={event => { event.preventDefault(); if (!canVerify) return; setError(null); try {
         setConfirm(preparePaymentVerification(actorId, shown, payerReference.trim(), image, bankChecked, payer,
           shown.discrepancies.map(item => ({ field: item.field, reason: resolutions[item.field]?.trim() ?? '' })), reason.trim()));

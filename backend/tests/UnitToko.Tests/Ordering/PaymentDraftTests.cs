@@ -78,8 +78,8 @@ internal sealed class PaymentDraftData(InvoiceData invoice, InvoiceView issued) 
     internal PaymentDraftInput Input => new([Issued.Id], new(4000m), AccountingCalendar.BusinessDate(Invoice.Order.Prices.Catalog.Clock.UtcNow), "Pembayar fixture", "SYNTHETIC-TRANSFER", null);
     internal PaymentDraftService Service => new(Invoice.Order.Database, new(Invoice.Order.Prices.Catalog.Client), new(Invoice.Order.Database), Invoice.Order.Prices.Catalog.Clock, Invoice.Service);
     internal Task<BsonDocument> Save(long? id, long revision, PaymentDraftInput input, string key) => Service.SaveAsync(Invoice.Order.Buyer, id, revision, input, CatalogPriceTestData.Meta(key));
-    internal static async Task<PaymentDraftData> CreateAsync(MongoFixture fixture) {
-        var invoice = await InvoiceData.CreateAsync(fixture);
+    internal static async Task<PaymentDraftData> CreateAsync(MongoFixture fixture, InvoiceData? attachedInvoice = null) {
+        var invoice = attachedInvoice ?? await InvoiceData.CreateAsync(fixture);
         try {
             await invoice.Order.Prices.Catalog.Base.AddGrantAsync(invoice.Order.Buyer, 99210, CatalogAuthoringTestData.Audience, [Permissions.PaymentEvidence]);
             var preview = await invoice.Service.PreviewAsync(invoice.Finance, invoice.Selection);

@@ -50,8 +50,9 @@ public sealed partial class ProcurementSupplierPayableService(
     {
         await valuations.RequirePayableSourceStorageAsync(ct); await settlements.RequirePayableSourceStorageAsync(ct);
         await AccountingMigration.RequireInstalledStorageAsync(database, ct);
+        await ProcurementAdvanceReturnService.RequireReturnStorageAsync(database, ct);
         foreach (var name in B.Collections) {
-            await InventoryRepository.RequireStorageAsync(database, name, ProcurementSupplierPayableSchemas.Validator(name),
+            await InventoryRepository.RequireStorageAsync(database, name, ProcurementAdvanceReturnSchemas.CurrentPayableValidator(name),
                 ProcurementSupplierPayableSchemas.Keys(name), ct);
             if ((await (await Rows(name).Indexes.ListAsync(ct)).ToListAsync(ct)).Any(index => InvoiceStorage.Unsafe(index) ||
                 index.Contains("partialFilterExpression"))) throw B.Broken();

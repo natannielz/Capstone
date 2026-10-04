@@ -23,9 +23,10 @@ internal sealed class CatalogPriceTestData(CatalogAuthoringTestData catalog) : I
         var database = selected.GetDatabase(Catalog.Database.DatabaseNamespace.DatabaseName);
         return new(database, new(selected), new(database), Catalog.Clock);
     }
-    internal static async Task<CatalogPriceTestData> CreateAsync(MongoFixture fixture, bool install = true, bool beforeMigration = false)
+    internal static async Task<CatalogPriceTestData> CreateAsync(MongoFixture fixture, bool install = true, bool beforeMigration = false,
+        CatalogAuthoringTestData? attachedCatalog = null)
     {
-        var data = new CatalogPriceTestData(await CatalogAuthoringTestData.CreateAsync(fixture, beforeMigration || !install));
+        var data = new CatalogPriceTestData(attachedCatalog ?? await CatalogAuthoringTestData.CreateAsync(fixture, beforeMigration || !install));
         try
         {
             // Draft storage only for predecessor upgrade fixtures. Current schema uses the real migration.
@@ -47,7 +48,8 @@ internal sealed class CatalogPriceTestData(CatalogAuthoringTestData catalog) : I
             await data.Catalog.Base.AddGrantAsync(data.Maker, 3100, CatalogAuthoringTestData.Shop, [Permissions.PricingManage]);
             data.Checker = await data.Catalog.ActorAsync(7000, CatalogAuthoringTestData.Shop, Permissions.PricingApprove);
             await PersonTestData.SeedDistinctPeopleAsync(data.Catalog.Database, data.Catalog.Clock, data.Maker.UserId, data.Checker.UserId);
-            data.SkuId = (await data.Catalog.SkuAsync()).Id.Value;
+            data.SkuId = (attachedCatalog is null ? await data.Catalog.SkuAsync() :
+                await data.Catalog.SkuAsync(code: "PURPOSE-PENCIL-12", categoryCode: "PURPOSEATK")).Id.Value;
             return data;
         }
         catch { await data.DisposeAsync(); throw; }

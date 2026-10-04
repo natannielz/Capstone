@@ -27,8 +27,8 @@ internal sealed class ShipmentDispatchTestData(OrderSubmissionTestData order) : 
         Order.Prices.Catalog.Clock, Order.Service, Preparations, Admission);
     internal ImmutableArray<ShipmentLotSelection> Lots { get; private set; }
     internal ShipmentDispatchPreparation Prepared { get; private set; } = null!;
-    internal static async Task<ShipmentDispatchTestData> CreateAsync(MongoFixture fixture, int packages = 1) {
-        var result = new ShipmentDispatchTestData(await OrderSubmissionTestData.CreateAsync(fixture));
+    internal static async Task<ShipmentDispatchTestData> CreateAsync(MongoFixture fixture, int packages = 1, OrderSubmissionTestData? attachedOrder = null) {
+        var result = new ShipmentDispatchTestData(attachedOrder ?? await OrderSubmissionTestData.CreateAsync(fixture));
         try {
             var data = result.Order; var catalog = data.Prices.Catalog; var ready = await ShipmentPreparationTests.Ready(data);
             result.Picker = ready.Picker; result.Source = ready.Source;

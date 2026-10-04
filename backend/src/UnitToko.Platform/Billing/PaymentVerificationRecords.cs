@@ -52,6 +52,13 @@ internal sealed class PaymentVerificationRecords(IMongoDatabase database)
         return null;
     }
     internal async Task<BsonDocument> RawAsync(IClientSessionHandle tx, long id, CancellationToken ct) {
+        var row = await RawCoreAsync(tx, id, ct);
+        _ = await new PaymentReceiptPurposeRecords(database).CustomerAsync(tx, row["receiptId"].AsInt64, row["receiptHash"], row["source"]["party"].AsBsonDocument, true, ct);
+        return row;
+    }
+    // The shared purpose owner validates this exact first decision without calling
+    // itself again. Every ordinary history reader uses RawAsync above.
+    internal async Task<BsonDocument> RawCoreAsync(IClientSessionHandle tx, long id, CancellationToken ct) {
         var row = await RowAsync(tx, B.Decisions, id, ct); Equal(row["snapshotHash"], B.Hash(row));
         var input = PaymentVerificationPolicy.Copy(B.Input(row));
         Equal(row["bodyHash"], AuthorizationStore.CommandHash(B.Body(row["declarationId"].AsInt64, row["receiptId"].AsInt64, input), row["reason"].AsString));
@@ -74,16 +81,8 @@ internal sealed class PaymentVerificationRecords(IMongoDatabase database)
         Equal(effect["payload"], B.Result(row)); Equal(effect["createdAt"], row["recordedAt"]); return row;
     }
     internal async Task<BsonDocument?> PartyAsync(IClientSessionHandle tx, BankReceiptPaymentSource bank, BsonDocument source, CancellationToken ct) {
-        var id = bank.Receipt["_id"].AsInt64;
-        var raw = await Rows(B.Parties).Find(tx, new BsonDocument("_id", id)).SingleOrDefaultAsync(ct);
-        if (raw is null) {
-            if (await Rows(B.Decisions).Find(tx, new BsonDocument("receiptId", id)).AnyAsync(ct)) throw B.Broken(); return null;
-        }
-        var row = await RowAsync(tx, B.Parties, id, ct); Equal(row["snapshotHash"], B.Hash(row)); Equal(row["receiptHash"], bank.Receipt["snapshotHash"]);
-        var first = await RawAsync(tx, row["firstVerificationId"].AsInt64, ct);
-        Equal(first["receiptId"], row["_id"]); Equal(first["source"]["party"], row["party"]); Equal(first["receiptHash"], row["receiptHash"]); Equal(first["recordedAt"], row["recordedAt"]);
-        if (!row["party"].Equals(source["party"])) throw B.Changed("payment_receipt_payer_conflict");
-        return row;
+        return await new PaymentReceiptPurposeRecords(database).CustomerAsync(tx, bank.Receipt["_id"].AsInt64,
+            bank.Receipt["snapshotHash"], source["party"].AsBsonDocument, false, ct);
     }
     internal async Task TouchAsync(IClientSessionHandle tx, string name, BsonDocument row, CancellationToken ct) {
         if (row["fence"].AsInt64 >= long.MaxValue - 1 || (await Rows(name).UpdateOneAsync(tx, row, new BsonDocument("$inc", new BsonDocument("fence", 1L)), cancellationToken: ct)).ModifiedCount != 1) throw B.Changed();

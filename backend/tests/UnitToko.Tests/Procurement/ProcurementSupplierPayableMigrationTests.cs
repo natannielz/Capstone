@@ -29,7 +29,7 @@ public sealed class ProcurementSupplierPayableMigrationTests(MongoFixture fixtur
         try { await RefusesAsync(data.Database, data.Clock); }
         finally { await proposals.Indexes.DropOneAsync("unknown_partial_payable"); }
         await data.Database.DropCollectionAsync(B.Applications); var before = await SnapshotAsync(data.Database);
-        await new CollectionMigrations(data.Database, data.Clock).ApplyAsync(); var after = await SnapshotAsync(data.Database);
+        await Upgrade75Async(data.Database, data.Clock); var after = await SnapshotAsync(data.Database);
         foreach (var table in before.Names) Assert.Equal(before[table], after[table]);
         Assert.True(InventorySchemas.Contains((await DefinitionAsync(data.Database, B.Proposals))["options"]["validator"].AsBsonDocument, guard));
         foreach (var table in B.Collections) {
@@ -38,7 +38,7 @@ public sealed class ProcurementSupplierPayableMigrationTests(MongoFixture fixtur
         }
         foreach (var table in new[] { "journalEntries", "accountingBooks", "bankTransactionClaims", "procurementSettlements", "lots", "stockBalances", "movements" })
             Assert.False(await data.Database.GetCollection<BsonDocument>(table).Find(new BsonDocument()).AnyAsync());
-        await new CollectionMigrations(data.Database, data.Clock).ApplyAsync(); Assert.Equal(after, await SnapshotAsync(data.Database));
+        await Upgrade75Async(data.Database, data.Clock); Assert.Equal(after, await SnapshotAsync(data.Database));
     }
 
     [WindowsStorageFact]
@@ -50,6 +50,8 @@ public sealed class ProcurementSupplierPayableMigrationTests(MongoFixture fixtur
         var settlement = await data.Rows("procurementSettlements").Find(new BsonDocument("_id", data.SettlementId)).SingleAsync();
         var submission = await data.Rows("supplierDocumentSubmissions").Find(new BsonDocument("_id", data.Documents.DocumentId)).SingleAsync();
         Assert.Equal(2, (await data.Rows("bankTransactionClaims").Find(new BsonDocument("_id", settlement["canonicalIdentity"])).SingleAsync())["schemaVersion"].AsInt32);
+        Assert.Equal(cost, await data.Valuation.Service.CostAsync(data.Valuation.Reader, data.Valuation.ReceiptId));
+        Assert.Equal(data.Settlement, await data.Settlements.LookupAsync(data.BankVerifier, "procurement.settlement.verify", "payable-source-settlement"));
         await RestoreV74Async(data.Database);
         foreach (var (table, filter) in new[] {
             ("procurementStockValuationAllocations", new BsonDocument("_id", data.AllocationId)),
@@ -63,15 +65,15 @@ public sealed class ProcurementSupplierPayableMigrationTests(MongoFixture fixtur
             finally { await data.Rows(table).InsertOneAsync(row); }
         }
         var before = await SnapshotAsync(data.Database);
-        await new CollectionMigrations(data.Database, data.Clock).ApplyAsync(); Assert.Equal(before, await SnapshotAsync(data.Database));
+        await Upgrade75Async(data.Database, data.Clock); Assert.Equal(before, await SnapshotAsync(data.Database));
         Assert.Equal(originals, await data.ProtectedAsync());
-        Assert.Equal(cost, await data.Valuation.Service.CostAsync(data.Valuation.Reader, data.Valuation.ReceiptId));
-        Assert.Equal(data.Settlement, await data.Settlements.LookupAsync(data.BankVerifier, "procurement.settlement.verify", "payable-source-settlement"));
+        // Exact unchanged owner rows, journals, effects and definitions preserve the current-runtime proofs above.
         foreach (var table in B.Collections) Assert.False(await data.Rows(table).Find(new BsonDocument()).AnyAsync());
     }
 
     internal static async Task RestoreV74Async(IMongoDatabase db)
     {
+        await ProcurementAdvanceReturnMigrationTests.RestoreV75Async(db);
         var history = await HistoryAsync(db);
         if (history.Count <= 74) { Assert.All(history, row => Assert.Equal("applied", row["state"])); return; }
         Assert.Equal(75, history.Count); Assert.All(history, row => Assert.Equal("applied", row["state"]));
@@ -90,10 +92,18 @@ public sealed class ProcurementSupplierPayableMigrationTests(MongoFixture fixtur
     private static async Task RefusesAsync(IMongoDatabase db, IClock clock)
     {
         var before = await SnapshotAsync(db); var history = new BsonArray((await HistoryAsync(db)).Take(74));
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => new CollectionMigrations(db, clock).ApplyAsync());
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => Upgrade75Async(db, clock));
         Assert.Equal("Procurement supplier payable migration preflight failed", error.Message);
         Assert.Equal(before, await SnapshotAsync(db)); Assert.Equal(history, new BsonArray((await HistoryAsync(db)).Take(74)));
         Assert.False(await db.GetCollection<BsonDocument>("schemaMigrations").Find(new BsonDocument { { "_id", 75 }, { "state", "applied" } }).AnyAsync());
+    }
+    private static async Task Upgrade75Async(IMongoDatabase database, IClock clock)
+    {
+        var db = database.WithWriteConcern(WriteConcern.WMajority).WithReadPreference(ReadPreference.Primary);
+        var lease = await new MigrationGate(db, clock, 75).AcquireAsync(75, default);
+        if (lease is null) return;
+        try { await new ProcurementSupplierPayableMigration(db, clock).ApplyAsync(lease, default); await lease.CompleteAsync(default); }
+        catch { await lease.ReleaseAsync(); throw; }
     }
     private static async Task<BsonDocument> SnapshotAsync(IMongoDatabase db)
     {

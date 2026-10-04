@@ -1553,6 +1553,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/billing/payment-reviews/{id}/verification/receipts/query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ListPaymentVerificationReceipts"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/billing/payment-reviews/{id}/workflow": {
         parameters: {
             query?: never;
@@ -5341,6 +5357,182 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["WithdrawOrganization"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/procurement/advance-returns/history/query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ProcurementAdvanceReturnHistory"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/procurement/advance-returns/operations/query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["RecoverProcurementAdvanceReturn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/procurement/advance-returns/policies/query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ProcurementAdvanceReturnPolicies"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/procurement/advance-returns/preview/query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["PreviewProcurementAdvanceReturn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/procurement/advance-returns/proposals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ProposeProcurementAdvanceReturn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/procurement/advance-returns/proposals/{id}/decision-preview/query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["PreviewProcurementAdvanceReturnDecision"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/procurement/advance-returns/proposals/{id}/decisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["DecideProcurementAdvanceReturn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/procurement/advance-returns/proposals/{id}/query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ProcurementAdvanceReturnProposal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/procurement/advance-returns/receipts/query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ProcurementAdvanceReturnReceipts"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/procurement/advance-returns/targets/query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ProcurementAdvanceReturnTargets"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/procurement/advance-returns/verified-advances/query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ProcurementAdvanceReturnAdvances"];
         delete?: never;
         options?: never;
         head?: never;
@@ -10926,6 +11118,16 @@ export interface components {
             state: string;
             verification: null | components["schemas"]["PaymentVerificationDetailDto"];
         };
+        PaymentVerificationReceiptDto: {
+            amount: string;
+            bookedDate: string;
+            receiptId: components["schemas"]["LongId"];
+            transactionId: string;
+        };
+        PaymentVerificationReceiptPageDto: {
+            items: components["schemas"]["PaymentVerificationReceiptDto"][];
+            nextAfterId: null | components["schemas"]["LongId"];
+        };
         PaymentVerificationRecoveryDto: {
             result: null | components["schemas"]["PaymentVerificationResultDto"];
             status: string;
@@ -11090,6 +11292,230 @@ export interface components {
             revision: string;
             suborderId: components["schemas"]["LongId"];
             versionId: components["schemas"]["LongId"];
+        };
+        ProcurementAdvanceReturnAccountingDto: {
+            bookId: components["schemas"]["LongId"];
+            chartVersionId: components["schemas"]["LongId"];
+            periodId: components["schemas"]["LongId"];
+            periodMonth: string;
+            supplierAdvance: components["schemas"]["ProcurementStockValuationAccountDto"];
+            suspense: components["schemas"]["ProcurementStockValuationAccountDto"];
+        };
+        ProcurementAdvanceReturnAdvancesDto: {
+            items: components["schemas"]["ProcurementSupplierAdvanceChoiceDto"][];
+            location: components["schemas"]["ProcurementLocationDto"];
+            nextSettlementId: null | components["schemas"]["LongId"];
+            receiptId: components["schemas"]["LongId"];
+        };
+        ProcurementAdvanceReturnAdvancesQueryDto: {
+            /** @description Positive decimal Int64 string, from 1 through 9223372036854775807. JSON numbers are invalid. */
+            beforeSettlementId?: null | string;
+            location: components["schemas"]["ProcurementLocationDto"];
+            purpose: string;
+            receiptId: components["schemas"]["LongId"];
+        };
+        ProcurementAdvanceReturnCapacityDto: {
+            lines: components["schemas"]["ProcurementAdvanceReturnCapacityLineDto"][];
+        };
+        ProcurementAdvanceReturnCapacityLineDto: {
+            advance: components["schemas"]["ProcurementSupplierAdvanceStateDto"];
+            settlementId: components["schemas"]["LongId"];
+        };
+        ProcurementAdvanceReturnDecideDto: {
+            binding: string;
+            decision: string;
+            reason: string;
+        };
+        ProcurementAdvanceReturnDecisionPreviewDto: {
+            accounting: components["schemas"]["ProcurementAdvanceReturnAccountingDto"];
+            binding: string;
+            capacity: components["schemas"]["ProcurementAdvanceReturnCapacityDto"];
+            decision: string;
+            /** Format: date-time */
+            observedAt: string;
+            policy: components["schemas"]["ProcurementAdvanceReturnPolicyDto"];
+            proposal: components["schemas"]["ProcurementAdvanceReturnProposalDto"];
+            source: components["schemas"]["ProcurementAdvanceReturnSourceDto"];
+        };
+        ProcurementAdvanceReturnDecisionPreviewInputDto: {
+            decision: string;
+            purpose: string;
+        };
+        ProcurementAdvanceReturnDecisionResultDto: {
+            decisionId: components["schemas"]["LongId"];
+            journalId: null | components["schemas"]["LongId"];
+            proposalId: components["schemas"]["LongId"];
+            receiptId: components["schemas"]["LongId"];
+            /** Format: date-time */
+            recordedAt: string;
+            returnLineIds: unknown[];
+            status: string;
+            version: string;
+        };
+        ProcurementAdvanceReturnHistoryDto: {
+            items: components["schemas"]["ProcurementAdvanceReturnReadDto"][];
+            location: components["schemas"]["ProcurementLocationDto"];
+            nextProposalId: null | components["schemas"]["LongId"];
+        };
+        ProcurementAdvanceReturnHistoryQueryDto: {
+            /** @description Positive decimal Int64 string, from 1 through 9223372036854775807. JSON numbers are invalid. */
+            beforeProposalId?: null | string;
+            location: components["schemas"]["ProcurementLocationDto"];
+            purpose: string;
+        };
+        ProcurementAdvanceReturnInputDto: {
+            lines: components["schemas"]["ProcurementAdvanceReturnLineInputDto"][];
+            location: components["schemas"]["ProcurementLocationDto"];
+            policyId: components["schemas"]["LongId"];
+            policyRevision: string;
+            postingDate: string;
+            reason: string;
+            receiptId: components["schemas"]["LongId"];
+        };
+        ProcurementAdvanceReturnLineInputDto: {
+            amount: components["schemas"]["Money"];
+            settlementId: components["schemas"]["LongId"];
+        };
+        ProcurementAdvanceReturnPoliciesDto: {
+            items: components["schemas"]["ProcurementAdvanceReturnPolicyDto"][];
+            nextPolicyId: null | components["schemas"]["LongId"];
+        };
+        ProcurementAdvanceReturnPoliciesQueryDto: {
+            /** @description Positive decimal Int64 string, from 1 through 9223372036854775807. JSON numbers are invalid. */
+            beforePolicyId?: null | string;
+            location: components["schemas"]["ProcurementLocationDto"];
+            purpose: string;
+        };
+        ProcurementAdvanceReturnPolicyDto: {
+            active: boolean;
+            approvalReference: string;
+            /** Format: date-time */
+            approvedAt: string;
+            bookId: components["schemas"]["LongId"];
+            chartVersionId: components["schemas"]["LongId"];
+            currency: string;
+            /** Format: date-time */
+            expiresAt: string;
+            id: components["schemas"]["LongId"];
+            location: components["schemas"]["ProcurementLocationDto"];
+            operatingOwnerReference: string;
+            revision: string;
+            supplierAdvance: components["schemas"]["ProcurementStockValuationAccountDto"];
+            suspense: components["schemas"]["ProcurementStockValuationAccountDto"];
+            treatment: string;
+        };
+        ProcurementAdvanceReturnPreviewDto: {
+            accounting: components["schemas"]["ProcurementAdvanceReturnAccountingDto"];
+            amount: components["schemas"]["Money"];
+            binding: string;
+            capacity: components["schemas"]["ProcurementAdvanceReturnCapacityDto"];
+            input: components["schemas"]["ProcurementAdvanceReturnInputDto"];
+            /** Format: date-time */
+            observedAt: string;
+            policy: components["schemas"]["ProcurementAdvanceReturnPolicyDto"];
+            source: components["schemas"]["ProcurementAdvanceReturnSourceDto"];
+        };
+        ProcurementAdvanceReturnPreviewInputDto: {
+            input: components["schemas"]["ProcurementAdvanceReturnInputDto"];
+            purpose: string;
+        };
+        ProcurementAdvanceReturnProposalDto: {
+            accounting: components["schemas"]["ProcurementAdvanceReturnAccountingDto"];
+            amount: components["schemas"]["Money"];
+            capacity: components["schemas"]["ProcurementAdvanceReturnCapacityDto"];
+            id: components["schemas"]["LongId"];
+            input: components["schemas"]["ProcurementAdvanceReturnInputDto"];
+            policy: components["schemas"]["ProcurementAdvanceReturnPolicyDto"];
+            reason: string;
+            /** Format: date-time */
+            recordedAt: string;
+            source: components["schemas"]["ProcurementAdvanceReturnSourceDto"];
+            version: string;
+        };
+        ProcurementAdvanceReturnProposeDto: {
+            binding: string;
+            input: components["schemas"]["ProcurementAdvanceReturnInputDto"];
+        };
+        ProcurementAdvanceReturnQueryDto: {
+            purpose: string;
+        };
+        ProcurementAdvanceReturnReadDto: {
+            decision: null | components["schemas"]["ProcurementAdvanceReturnDecisionResultDto"];
+            decisionReason: null | string;
+            proposal: components["schemas"]["ProcurementAdvanceReturnProposalDto"];
+        };
+        ProcurementAdvanceReturnReceiptDto: {
+            bankAccountId: components["schemas"]["LongId"];
+            bankAccountVersionId: components["schemas"]["LongId"];
+            bankReference: null | string;
+            bookedDate: string;
+            receiptAmount: components["schemas"]["Money"];
+            receiptHash: string;
+            receiptId: components["schemas"]["LongId"];
+        };
+        ProcurementAdvanceReturnReceiptsDto: {
+            items: components["schemas"]["ProcurementAdvanceReturnReceiptDto"][];
+            location: components["schemas"]["ProcurementLocationDto"];
+            nextReceiptId: null | components["schemas"]["LongId"];
+        };
+        ProcurementAdvanceReturnReceiptsQueryDto: {
+            /** @description Positive decimal Int64 string, from 1 through 9223372036854775807. JSON numbers are invalid. */
+            beforeReceiptId?: null | string;
+            location: components["schemas"]["ProcurementLocationDto"];
+            purpose: string;
+        };
+        ProcurementAdvanceReturnRecoveryDto: {
+            result: null | components["schemas"]["ProcurementAdvanceReturnResultDto"];
+            state: string;
+        };
+        ProcurementAdvanceReturnRecoveryInputDto: {
+            key: string;
+            operation: string;
+            purpose: string;
+        };
+        ProcurementAdvanceReturnResultDto: components["schemas"]["ProcurementAdvanceReturnResultDtoProcurementAdvanceReturnProposalResultDto"] | components["schemas"]["ProcurementAdvanceReturnResultDtoProcurementAdvanceReturnDecisionResultDto"];
+        ProcurementAdvanceReturnResultDtoProcurementAdvanceReturnDecisionResultDto: {
+            decisionId: components["schemas"]["LongId"];
+            journalId: null | components["schemas"]["LongId"];
+            proposalId: components["schemas"]["LongId"];
+            receiptId: components["schemas"]["LongId"];
+            /** Format: date-time */
+            recordedAt: string;
+            returnLineIds: unknown[];
+            status: string;
+            version: string;
+        };
+        ProcurementAdvanceReturnResultDtoProcurementAdvanceReturnProposalResultDto: {
+            proposalId: components["schemas"]["LongId"];
+            /** Format: date-time */
+            recordedAt: string;
+            status: string;
+            version: string;
+        };
+        ProcurementAdvanceReturnSourceDto: {
+            bankAccountId: components["schemas"]["LongId"];
+            bankAccountVersionId: components["schemas"]["LongId"];
+            bankReference: null | string;
+            bookedDate: string;
+            bookId: components["schemas"]["LongId"];
+            commercialReference: string;
+            lines: components["schemas"]["ProcurementAdvanceReturnSourceLineDto"][];
+            location: components["schemas"]["ProcurementLocationDto"];
+            orderId: components["schemas"]["LongId"];
+            receiptAmount: components["schemas"]["Money"];
+            receiptHash: string;
+            receiptId: components["schemas"]["LongId"];
+            supplierId: components["schemas"]["LongId"];
+            supplierName: string;
+            suspenseAccount: components["schemas"]["ProcurementStockValuationAccountDto"];
+        };
+        ProcurementAdvanceReturnSourceLineDto: {
+            disbursementId: components["schemas"]["LongId"];
+            returnAmount: components["schemas"]["Money"];
+            settlementAmount: components["schemas"]["Money"];
+            settlementHash: string;
+            settlementId: components["schemas"]["LongId"];
+            sourceAdvanceAccount: components["schemas"]["ProcurementStockValuationAccountDto"];
         };
         ProcurementArrivalNoticeDto: {
             id: components["schemas"]["LongId"];
@@ -12533,18 +12959,9 @@ export interface components {
             status: string;
             version: string;
         };
-        ProcurementSupplierAdvanceBalanceDto: {
-            appliedAmount: components["schemas"]["Money"];
-            lastApplicationId: null | components["schemas"]["LongId"];
-            lastHash: null | string;
-            remainingAmount: components["schemas"]["Money"];
-            settlementId: components["schemas"]["LongId"];
-            totalAmount: components["schemas"]["Money"];
-            version: string;
-        };
         ProcurementSupplierAdvanceChoiceDto: {
             advance: components["schemas"]["ProcurementSupplierAdvanceItemDto"];
-            capacity: components["schemas"]["ProcurementSupplierAdvanceBalanceDto"];
+            capacity: components["schemas"]["ProcurementSupplierAdvanceStateDto"];
         };
         ProcurementSupplierAdvanceItemDto: {
             amount: components["schemas"]["Money"];
@@ -12562,6 +12979,29 @@ export interface components {
         ProcurementSupplierAdvancesDto: {
             items: components["schemas"]["ProcurementSupplierAdvanceChoiceDto"][];
             nextSettlementId: null | components["schemas"]["LongId"];
+        };
+        ProcurementSupplierAdvanceStateDto: components["schemas"]["ProcurementSupplierAdvanceStateDtoProcurementSupplierAdvanceBalanceDto"] | components["schemas"]["ProcurementSupplierAdvanceStateDtoProcurementSupplierAdvanceReturnedBalanceDto"];
+        ProcurementSupplierAdvanceStateDtoProcurementSupplierAdvanceBalanceDto: {
+            appliedAmount: components["schemas"]["Money"];
+            lastApplicationId: null | components["schemas"]["LongId"];
+            lastHash: null | string;
+            remainingAmount: components["schemas"]["Money"];
+            settlementId: components["schemas"]["LongId"];
+            totalAmount: components["schemas"]["Money"];
+            version: string;
+        };
+        ProcurementSupplierAdvanceStateDtoProcurementSupplierAdvanceReturnedBalanceDto: {
+            appliedAmount: components["schemas"]["Money"];
+            lastEffectId: components["schemas"]["LongId"];
+            lastEffectKind: string;
+            lastHash: string;
+            remainingAmount: components["schemas"]["Money"];
+            returnedAmount: components["schemas"]["Money"];
+            settlementId: components["schemas"]["LongId"];
+            /** Format: int32 */
+            stateVersion: number | string;
+            totalAmount: components["schemas"]["Money"];
+            version: string;
         };
         ProcurementSupplierPayableAccountingDto: {
             bookId: components["schemas"]["LongId"];
@@ -12590,7 +13030,7 @@ export interface components {
         };
         ProcurementSupplierPayableCapacityDto: components["schemas"]["ProcurementSupplierPayableCapacityDtoProcurementSupplierPayableRecognitionCapacityDto"] | components["schemas"]["ProcurementSupplierPayableCapacityDtoProcurementSupplierPayableApplicationCapacityDto"];
         ProcurementSupplierPayableCapacityDtoProcurementSupplierPayableApplicationCapacityDto: {
-            advance: components["schemas"]["ProcurementSupplierAdvanceBalanceDto"];
+            advance: components["schemas"]["ProcurementSupplierAdvanceStateDto"];
             payable: components["schemas"]["ProcurementSupplierPayableBalanceDto"];
         };
         ProcurementSupplierPayableCapacityDtoProcurementSupplierPayableRecognitionCapacityDto: {
@@ -23604,6 +24044,82 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PaymentVerificationReadDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    ListPaymentVerificationReceipts: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
+                /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
+                "X-Expected-Actor-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReceivingAccountQueryDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentVerificationReceiptPageDto"];
                 };
             };
             /** @description Bad Request */
@@ -42584,6 +43100,1028 @@ export interface operations {
             };
             /** @description Conflict */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    ProcurementAdvanceReturnHistory: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
+                /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
+                "X-Expected-Actor-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProcurementAdvanceReturnHistoryQueryDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcurementAdvanceReturnHistoryDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Payload Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    RecoverProcurementAdvanceReturn: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
+                /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
+                "X-Expected-Actor-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProcurementAdvanceReturnRecoveryInputDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcurementAdvanceReturnRecoveryDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Payload Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    ProcurementAdvanceReturnPolicies: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
+                /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
+                "X-Expected-Actor-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProcurementAdvanceReturnPoliciesQueryDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcurementAdvanceReturnPoliciesDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Payload Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    PreviewProcurementAdvanceReturn: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
+                /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
+                "X-Expected-Actor-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProcurementAdvanceReturnPreviewInputDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcurementAdvanceReturnPreviewDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Payload Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    ProposeProcurementAdvanceReturn: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Reuse this key only for an unchanged logical command, including after an uncertain response. */
+                "Idempotency-Key": string;
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
+                /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
+                "X-Expected-Actor-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProcurementAdvanceReturnProposeDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcurementAdvanceReturnResultDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Payload Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    PreviewProcurementAdvanceReturnDecision: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
+                /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
+                "X-Expected-Actor-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProcurementAdvanceReturnDecisionPreviewInputDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcurementAdvanceReturnDecisionPreviewDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Payload Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    DecideProcurementAdvanceReturn: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Reuse this key only for an unchanged logical command, including after an uncertain response. */
+                "Idempotency-Key": string;
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
+                /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
+                "X-Expected-Actor-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProcurementAdvanceReturnDecideDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcurementAdvanceReturnResultDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Payload Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    ProcurementAdvanceReturnProposal: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
+                /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
+                "X-Expected-Actor-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProcurementAdvanceReturnQueryDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcurementAdvanceReturnReadDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Payload Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    ProcurementAdvanceReturnReceipts: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
+                /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
+                "X-Expected-Actor-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProcurementAdvanceReturnReceiptsQueryDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcurementAdvanceReturnReceiptsDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Payload Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    ProcurementAdvanceReturnTargets: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
+                /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
+                "X-Expected-Actor-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProcurementAdvanceReturnQueryDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcurementTargetsDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Payload Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    ProcurementAdvanceReturnAdvances: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
+                /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
+                "X-Expected-Actor-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProcurementAdvanceReturnAdvancesQueryDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcurementAdvanceReturnAdvancesDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Payload Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
                 headers: {
                     [name: string]: unknown;
                 };

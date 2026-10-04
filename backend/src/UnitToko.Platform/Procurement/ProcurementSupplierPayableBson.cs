@@ -92,7 +92,26 @@ internal static class ProcurementSupplierPayableBson
         result["version"] = before["version"].AsInt64 + 1;
         result["appliedAmount"] = Money.Add(Money.Parse(before["appliedAmount"].AsString), amount).ToString();
         result["remainingAmount"] = new Money(remaining.Value - amount.Value).ToString();
-        result["lastApplicationId"] = applicationId; result["lastHash"] = hash; return result;
+        if (before.Contains("stateVersion")) {
+            if (before["stateVersion"] != 2) throw Broken();
+            result["lastEffectKind"] = "apply_advance"; result["lastEffectId"] = applicationId;
+        } else result["lastApplicationId"] = applicationId;
+        result["lastHash"] = hash; return result;
+    }
+    internal static BsonDocument AfterReturn(BsonDocument before, Money amount, long returnLineId, string hash)
+    {
+        var remaining = Money.Parse(before["remainingAmount"].AsString);
+        if (amount.Value <= 0 || amount.Value > remaining.Value || before["version"].AsInt64 >= long.MaxValue - 1)
+            throw Changed("procurement_advance_return_capacity_exceeded");
+        var returned = before.Contains("stateVersion") ? Money.Parse(before["returnedAmount"].AsString) : new Money(0m);
+        var result = new BsonDocument { { "stateVersion", 2 }, { "settlementId", before["settlementId"] },
+            { "version", before["version"].AsInt64 + 1 }, { "totalAmount", before["totalAmount"] },
+            { "appliedAmount", before["appliedAmount"] }, { "returnedAmount", Money.Add(returned, amount).ToString() },
+            { "remainingAmount", new Money(remaining.Value - amount.Value).ToString() },
+            { "lastEffectKind", "return" }, { "lastEffectId", returnLineId }, { "lastHash", hash } };
+        if (Money.Add(Money.Add(Money.Parse(result["appliedAmount"].AsString), Money.Parse(result["returnedAmount"].AsString)),
+            Money.Parse(result["remainingAmount"].AsString)) != Money.Parse(result["totalAmount"].AsString)) throw Broken();
+        return result;
     }
     internal static PersistenceConflictException Changed(string code = "procurement_supplier_payable_changed") =>
         new(code, "Reload the approved valuation, payable, verified advance and Finance policy");

@@ -62,9 +62,11 @@ internal sealed class ProcurementSupplierPayableTestData(ProcurementStockValuati
     internal ProcurementSupplierPayableInput Apply(long payableId, decimal amount = 4000) => new(ProcurementSupplierPayableKind.ApplyAdvance,
         ProcurementRequestTestData.Location, null, payableId, SettlementId, new Money(amount), PolicyId, 1, AccountingCalendar.BusinessDate(Clock.UtcNow), Reason);
 
-    internal static async Task<ProcurementSupplierPayableTestData> CreateAsync(MongoFixture fixture, bool withAdvance = true, bool createPolicy = true, Action<string>? diagnostics = null)
+    internal static async Task<ProcurementSupplierPayableTestData> CreateAsync(MongoFixture fixture, bool withAdvance = true, bool createPolicy = true, Action<string>? diagnostics = null,
+        bool includeCustomerMappings = false)
     {
-        var valuation = await ProcurementStockValuationTestData.CreateAsync(fixture, requiredAdvance: withAdvance ? 10000 : 0, includePayableMappings: true);
+        var valuation = await ProcurementStockValuationTestData.CreateAsync(fixture, requiredAdvance: withAdvance ? 10000 : 0, includePayableMappings: true,
+            includeCustomerMappings: includeCustomerMappings);
         var data = new ProcurementSupplierPayableTestData(valuation, fixture.Client, diagnostics);
         try {
             data.ApprovedValuation = await valuation.DecideAsync((await valuation.ProposeAsync("payable-source-valuation"))["proposalId"].AsInt64, "payable-source-valuation-approved");
@@ -158,37 +160,8 @@ internal sealed class ProcurementSupplierPayableTestData(ProcurementStockValuati
         Assert.Equal("completed", await Documents.Runtime.RunOnceAsync());
         preview = await Disbursements.PreviewRecordAsync(Recorder, draftId, 1, reservation.ReservationId, upload.Evidence.Reference);
         var metadata = Meta("payable-source-record");
-        if (diagnostics is null) Recorded = await evidence.RecordAsync(Recorder, draftId, 1, reservation.ReservationId, upload.Evidence.Reference,
+        Recorded = await RecordWithDiagnosticsAsync(evidence, draftId, reservation.ReservationId, upload.Evidence.Reference,
             preview["binding"].AsString, metadata);
-        else {
-            var recordingOwner = Disbursements;
-            var originalReader = new EvidenceService(Database, Unit, new(Database), Clock, Documents.Registration, procurementDisbursementTargets: recordingOwner);
-            // Mirrors the facade's metadata/body recovery, storage admission and exact
-            // bound-owner pin composition; only the existing Final observer is added.
-            AuthorizationStore.ValidateMetadata(metadata);
-            var hash = AuthorizationStore.CommandHash(ProcurementDisbursementBson.RecordBody(draftId, 1, reservation.ReservationId,
-                upload.Evidence.Reference, preview["binding"].AsString), metadata.Reason);
-            var recovered = await recordingOwner.RecoverRecordBodyAsync(Recorder, draftId, metadata.IdempotencyKey, hash, default);
-            Assert.Null(recovered);
-            await recordingOwner.StorageAsync(default); await ProcurementDisbursementEvidenceSchemas.RequireStorageAsync(Database, default);
-            Recorded = await originalReader.WithProcurementDisbursementPinAsync(Recorder,
-                new(EvidenceTargetKind.ProcurementDisbursement, draftId), 1, reservation.ReservationId, upload.Evidence.Reference,
-                new("procurement-disbursement-evidence-view", metadata.CorrelationId), (claim, handle, started, ct) => {
-                    Assert.Equal(TimeSpan.FromSeconds(5), claim.InitialLeaseDuration);
-                    Assert.Equal(TimeSpan.FromSeconds(60), claim.RequestDuration);
-                    return recordingOwner.RecordWithProofAsync(Recorder, draftId, 1, reservation.ReservationId, upload.Evidence.Reference,
-                        preview["binding"].AsString, metadata, (tx, id, target, inner) => {
-                            var pin = new EvidenceService(Database, Unit, new(Database), Clock, Documents.Registration, procurementDisbursementTargets: target) {
-                                ProcurementDisbursementPinObserver = (elapsed, canRead) => diagnostics("PAYABLE_SOURCE_PIN_FINAL " + JsonSerializer.Serialize(new {
-                                    observedAt = DateTimeOffset.UtcNow, requestElapsedMs = elapsed,
-                                    leaseElapsedMs = Stopwatch.GetElapsedTime(claim.LeaseStarted).TotalMilliseconds,
-                                    canRead, initialLeaseMs = claim.InitialLeaseDuration.TotalMilliseconds, requestBudgetMs = claim.RequestDuration.TotalMilliseconds
-                                }))
-                            };
-                            return pin.PinProcurementDisbursementAsync(tx, Recorder, id, claim, handle, started, inner);
-                        }, ct);
-                });
-        }
         var original = Encoding.UTF8.GetBytes(string.Join(',', BankStatementParser.Fields) + "\r\nPAYABLE-ADV-DEBIT-0001," +
             AccountingCalendar.BusinessDate(Clock.UtcNow).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) +
             ",D,6000.00,Synthetic supplier,SYNTHETIC-TRANSFER-0001,0000123456789,IDR\r\n");
@@ -223,6 +196,94 @@ internal sealed class ProcurementSupplierPayableTestData(ProcurementStockValuati
     {
         input ??= Recognize(); var preview = await Service.PreviewAsync(Maker, input);
         return await Service.ProposeAsync(Maker, input, preview["binding"].AsString, Meta(key, input.Reason));
+    }
+
+    // Additional genuine payout against the same finite authorization/account/book.
+    // Used by supplier-return tests; default M75 setup and its immutable first payout stay unchanged.
+    internal async Task<BsonDocument> CreateAdditionalVerifiedAdvanceAsync(string key, decimal amount = 4000,
+        ProcurementDisbursementInput? sourceInput = null, ReceivingAccountDetails? observedBeneficiary = null)
+    {
+        var bank = Bank ?? throw new InvalidOperationException("Verified advance setup is required");
+        var firstDraft = await Rows(ProcurementDisbursementBson.Drafts).Find(new BsonDocument("_id", Recorded["draftId"])).SingleAsync();
+        var input = (sourceInput ?? ProcurementDisbursementBson.Input(firstDraft["input"])) with {
+            Amount = new Money(amount), TransferReference = "SYNTHETIC-TRANSFER-" + key,
+            TransferDate = AccountingCalendar.BusinessDate(Clock.UtcNow)
+        };
+        var preview = await TimedAsync(key + ":draft-preview", () => Disbursements.PreviewAsync(Recorder, input));
+        var draft = await TimedAsync(key + ":draft", () => Disbursements.CreateDraftAsync(Recorder, input, preview["binding"].AsString, Meta(key + "-draft")));
+        var draftId = draft["draftId"].AsInt64;
+        var evidence = new ProcurementDisbursementEvidenceService(Database, Unit, new(Database), Clock, Disbursements, Documents.Registration);
+        var reservation = await TimedAsync(key + ":reserve", () => evidence.ReserveAsync(Recorder, draftId, 1, Meta(key + "-reserve")));
+        using var bytes = new MemoryStream(ImageDecoderTests.Png(13, 7));
+        var upload = await TimedAsync(key + ":upload", () => evidence.UploadAsync(Recorder, draftId, reservation.ReservationId, 1, bytes, Meta(key + "-upload")));
+        Assert.NotNull(upload.Evidence); Assert.Equal("quarantined", upload.State);
+        Assert.Equal("completed", await TimedAsync(key + ":validate", () => Documents.Runtime.RunOnceAsync()));
+        preview = await TimedAsync(key + ":record-preview", () => Disbursements.PreviewRecordAsync(Recorder, draftId, 1, reservation.ReservationId, upload.Evidence.Reference));
+        var recorded = await RecordWithDiagnosticsAsync(evidence, draftId, reservation.ReservationId, upload.Evidence.Reference,
+            preview["binding"].AsString, Meta(key + "-record"));
+        var original = Encoding.UTF8.GetBytes(string.Join(',', BankStatementParser.Fields) + "\r\nDEBIT-" + key + "," +
+            input.TransferDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) + ",D," + input.Amount +
+            ",Synthetic supplier," + input.TransferReference + ",0000123456789,IDR\r\n");
+        var import = await bank.Statements.StageAsync(key + "-bank-import", original, "synthetic-" + key + ".csv");
+        var first = await Rows(ProcurementSettlementTestData.Events).Find(new BsonDocument("_id", SettlementId)).SingleAsync();
+        var settlementInput = new ProcurementSettlementInput(first["input"]["policyId"].AsInt64, first["input"]["policyRevision"].AsInt64,
+            import["importId"].AsInt64, 2, observedBeneficiary ?? SupplierBankTestData.Details, "SYNTHETIC-INDEPENDENT-BENEFICIARY-" + key, "SYNTHETIC-INDEPENDENT-DEBIT-" + key);
+        preview = await Settlements.PreviewAsync(BankVerifier, recorded["disbursementId"].AsInt64, 1, settlementInput);
+        return await Settlements.VerifyAsync(BankVerifier, recorded["disbursementId"].AsInt64, 1, settlementInput,
+            preview["binding"].AsString, true, Meta(key + "-settlement"));
+    }
+    private async Task<T> TimedAsync<T>(string stage, Func<Task<T>> action)
+    {
+        var started = Stopwatch.GetTimestamp();
+        try {
+            var result = await action();
+            diagnostics?.Invoke("PAYABLE_SOURCE_STAGE " + JsonSerializer.Serialize(new { stage, outcome = "completed", elapsedMs = Stopwatch.GetElapsedTime(started).TotalMilliseconds }));
+            return result;
+        } catch (Exception error) {
+            diagnostics?.Invoke("PAYABLE_SOURCE_STAGE " + JsonSerializer.Serialize(new { stage, outcome = "failed", elapsedMs = Stopwatch.GetElapsedTime(started).TotalMilliseconds, errorType = error.GetType().Name }));
+            throw;
+        }
+    }
+    private async Task<BsonDocument> RecordWithDiagnosticsAsync(ProcurementDisbursementEvidenceService facade, long draftId,
+        long reservationId, EvidenceRef reference, string binding, AuthorizationCommandMetadata metadata)
+    {
+        if (diagnostics is null) return await facade.RecordAsync(Recorder, draftId, 1, reservationId, reference, binding, metadata);
+        var recordingOwner = Disbursements;
+        var originalReader = new EvidenceService(Database, Unit, new(Database), Clock, Documents.Registration, procurementDisbursementTargets: recordingOwner);
+        // Same recovery, storage admission and bound-owner composition as the actual
+        // facade. Diagnostics observe existing stages; all proofs and budgets remain.
+        AuthorizationStore.ValidateMetadata(metadata);
+        var hash = AuthorizationStore.CommandHash(ProcurementDisbursementBson.RecordBody(draftId, 1, reservationId, reference, binding), metadata.Reason);
+        var recovered = await TimedAsync(metadata.IdempotencyKey + ":body-lookup", () => recordingOwner.RecoverRecordBodyAsync(Recorder, draftId, metadata.IdempotencyKey, hash, default));
+        if (recovered is not null) return recovered;
+        await TimedAsync(metadata.IdempotencyKey + ":storage", async () => {
+            await recordingOwner.StorageAsync(default); await ProcurementDisbursementEvidenceSchemas.RequireStorageAsync(Database, default); return true;
+        });
+        return await TimedAsync(metadata.IdempotencyKey + ":protected-record", () => originalReader.WithProcurementDisbursementPinAsync(Recorder,
+            new(EvidenceTargetKind.ProcurementDisbursement, draftId), 1, reservationId, reference,
+            new("procurement-disbursement-evidence-view", metadata.CorrelationId), async (claim, handle, started, ct) => {
+                Assert.Equal(TimeSpan.FromSeconds(5), claim.InitialLeaseDuration); Assert.Equal(TimeSpan.FromSeconds(60), claim.RequestDuration);
+                void Observe(string stage, double? requestElapsed = null, bool? readable = null) => diagnostics("PAYABLE_SOURCE_PIN_STAGE " + JsonSerializer.Serialize(new {
+                    operationKey = metadata.IdempotencyKey, stage, observedAt = DateTimeOffset.UtcNow,
+                    requestElapsedMs = requestElapsed ?? Stopwatch.GetElapsedTime(started).TotalMilliseconds,
+                    leaseElapsedMs = Stopwatch.GetElapsedTime(claim.LeaseStarted).TotalMilliseconds,
+                    canRead = readable ?? handle.Stream.CanRead,
+                    initialLeaseMs = claim.InitialLeaseDuration.TotalMilliseconds, requestBudgetMs = claim.RequestDuration.TotalMilliseconds
+                }));
+                Observe("original-verified");
+                try {
+                    var result = await recordingOwner.RecordWithProofAsync(Recorder, draftId, 1, reservationId, reference, binding, metadata,
+                        async (tx, id, target, inner) => {
+                            Observe("pin-enter");
+                            var pin = new EvidenceService(Database, Unit, new(Database), Clock, Documents.Registration, procurementDisbursementTargets: target) {
+                                ProcurementDisbursementPinObserver = (elapsed, canRead) => Observe("pin-final", elapsed, canRead)
+                            };
+                            var final = await pin.PinProcurementDisbursementAsync(tx, Recorder, id, claim, handle, started, inner);
+                            Observe("pin-created"); return final;
+                        }, ct);
+                    Observe("record-completed"); return result;
+                } catch { Observe("record-failed"); throw; }
+            }));
     }
     internal async Task<BsonDocument> DecideAsync(long proposalId, string key, ProcurementSupplierPayableDecision decision = ProcurementSupplierPayableDecision.Approve)
     {

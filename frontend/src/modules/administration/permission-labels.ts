@@ -1,4 +1,7 @@
 const labels: Record<string, string> = {
+  "procurement.advancereturn.read": "Lihat pengembalian uang muka pemasok",
+  "procurement.advancereturn.propose": "Ajukan pengembalian uang muka pemasok dengan verifikasi terbaru",
+  "procurement.advancereturn.decide": "Putuskan pengembalian uang muka pemasok secara independen",
   "procurement.payable.read": "Lihat utang pemasok dan penerapan uang muka",
   "procurement.payable.propose": "Ajukan pengakuan utang atau penerapan uang muka dengan verifikasi terbaru",
   "procurement.payable.decide": "Putuskan pengakuan utang atau penerapan uang muka secara independen",

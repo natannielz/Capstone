@@ -121,7 +121,7 @@ public sealed partial class ProcurementDisbursementService
             if (fresh is not null) await ConsumeAsync(context!, fresh, token);
             var row = await records.ForKeyAsync(tx, actor.UserId, B.RecordOperation, metadata.IdempotencyKey, token, context!.Proof) ?? throw B.Broken(); ProcurementDisbursementRecords.Equal(row["bodyHash"], AuthorizationStore.CommandHash(body, metadata.Reason));
             context.Capacity = await CapacityAsync(tx, row["source"]["funding"].AsBsonDocument, token, context.Proof,
-                verifiedRecord: new(tx, row)); await FenceAsync(context, token); finalPin?.Invoke();
+                verifiedRecord: new(tx, row, context.Capacity!)); await FenceAsync(context, token); finalPin?.Invoke();
         }, validateCurrent: () => { Current(context ?? throw B.Broken()); finalPin?.Invoke(); });
     }
     internal async Task<BsonDocument?> RecoverRecordBodyAsync(ActorContext actor, long draftId, string key, string bodyHash, CancellationToken ct) {

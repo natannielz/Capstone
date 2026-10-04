@@ -28,7 +28,7 @@ public sealed class ProcurementSupplierPayableDomainTests
         ProcurementSupplierPayableCapacityDto recognitionCapacity = new ProcurementSupplierPayableRecognitionCapacityDto(id, new(11250), false, null);
         ProcurementSupplierPayableCapacityDto applicationCapacity = new ProcurementSupplierPayableApplicationCapacityDto(
             new(id, "1", new(11250), new(4000), new(7250), new(20), hash),
-            new(new(16), "1", new(6000), new(4000), new(2000), new(20), hash));
+            new ProcurementSupplierAdvanceBalanceDto(new(16), "1", new(6000), new(4000), new(2000), new(20), hash));
         var input = new ProcurementSupplierPayableInputDto("recognize", location, id, null, null, null,
             new(21), "1", "2026-10-03", "Explicit synthetic review");
         var policy = new ProcurementSupplierPayablePolicyDto(new(21), "1", true, location, "IDR", at, at.AddDays(1),

@@ -13,6 +13,21 @@ const preview: PaymentVerificationPreview = { binding: 'a'.repeat(64), declarati
   payerVerificationProcedureReference: 'Synthetic approved procedure', fields: correctionFields.map(field => ({ field, value: null })), discrepancies: [{ field: 'transfer_time', declaration: null, image: null, bank: null }], reviewSource: 'ocr' };
 const result = { verificationId: '90', declarationId: preview.declarationId, receiptId: preview.receiptId, reviewRevision: '0', recordedAt: '2026-09-28T00:00:00Z', operation: 'billing.payment.verify' as const };
 const prepare = () => preparePaymentVerification(actor, preview, 'Independent payer source', true, true, true, [{ field: 'transfer_time', reason: 'Confirmed booking date; time unknown' }], 'Reviewed');
+
+test('customer receipt picker uses its declaration owner and advances empty filtered pages without accepting a backward cursor', async () => {
+  let response: unknown = { items: [], nextAfterId: '30' };
+  const gateway = createPaymentVerificationGateway(createUnitTokoClient({ baseUrl: 'https://unit-toko.test', fetch: async request => {
+    assert.ok(request instanceof Request); if (request.url.endsWith('/identity/csrf')) return Response.json({ requestToken: 'csrf' });
+    assert.ok(request.url.endsWith('/payment-reviews/' + preview.declarationId + '/verification/receipts/query'));
+    assert.equal(request.headers.get('X-Expected-Actor-Id'), actor); assert.equal(request.cache, 'no-store');
+    assert.deepEqual(await request.json(), { purpose: 'payment-review', afterId: '5' }); return Response.json(response);
+  } }));
+  assert.deepEqual(await gateway.receipts(actor, preview.declarationId, '5'), response);
+  for (const invalid of [{ items: [], nextAfterId: '5' }, { items: [], nextAfterId: 30 },
+    { items: [{ receiptId: '4', amount: '4000.00', bookedDate: '2026-09-27', transactionId: '0001' }], nextAfterId: null }]) {
+    response = invalid; await assert.rejects(() => gateway.receipts(actor, preview.declarationId, '5'));
+  }
+});
 test('verification requires each explicit attestation and discrepancy resolution and freezes the decision', () => {
   const resolutions = [{ field: 'transfer_time', reason: 'Confirmed booking date; time unknown' }];
   const command = preparePaymentVerification(actor, preview, 'Independent payer source', true, true, true, resolutions, 'Reviewed'); resolutions[0].reason = 'changed';

@@ -54,6 +54,8 @@ internal sealed partial class PaymentAllocationRecords(IMongoDatabase database, 
     internal Task<BsonDocument> RawAsync(IClientSessionHandle tx, long id, CancellationToken ct) => RawEventAsync(tx, false, id, ct);
     internal async Task<BsonDocument> RawEventAsync(IClientSessionHandle tx, bool correction, long id, CancellationToken ct) {
         var row = await RowAsync(tx, correction ? C.Events : B.Events, id, ct); Equal(row["snapshotHash"], B.Hash(row));
+        _ = await new PaymentReceiptPurposeRecords(database).CustomerAsync(tx, row["receiptId"].AsInt64,
+            row["receiptHash"], row["party"].AsBsonDocument, true, ct);
         Equal(row["operation"], correction ? C.Operation : B.Operation);
         if (await Rows(correction ? B.Events : C.Events).Find(tx, new BsonDocument("_id", id)).AnyAsync(ct)) throw B.Broken();
         if (await Rows(A.Events).Find(tx, new BsonDocument("_id", id)).AnyAsync(ct)) throw B.Broken();

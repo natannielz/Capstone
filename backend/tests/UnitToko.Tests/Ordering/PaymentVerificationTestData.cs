@@ -40,13 +40,22 @@ internal sealed class PaymentVerificationTestData(PaymentEvidenceReadTests.ReadD
     }
     internal IMongoCollection<BsonDocument> Rows(string name) => Read.Rows(name);
     internal static AuthorizationCommandMetadata Meta(string key) => new(key, "Synthetic independent payer and image review", "synthetic-payment-verification");
-    internal static async Task<PaymentVerificationTestData> CreateAsync(MongoFixture fixture, string? ocrFailure = null) {
-        var data = new PaymentVerificationTestData(await PaymentEvidenceReadTests.ReadData.CreateAsync(fixture));
+    internal static async Task<PaymentVerificationTestData> CreateAsync(MongoFixture fixture, string? ocrFailure = null,
+        PaymentEvidenceReadTests.ReadData? attachedRead = null, BankReceiptTestData? attachedBank = null, long? attachedReceiptId = null) {
+        if ((attachedRead is null) != (attachedBank is null) || (attachedRead is null) != (attachedReceiptId is null))
+            throw new ArgumentException("Attached customer evidence requires its actual bank and receipt");
+        var data = new PaymentVerificationTestData(attachedRead ?? await PaymentEvidenceReadTests.ReadData.CreateAsync(fixture));
         try {
-            var accounts = await ReceivingAccountTestData.AttachAsync(data.Read.Catalog);
-            var statements = await BankStatementTestData.AttachAsync(accounts);
-            data.Bank = await BankReceiptTestData.AttachAsync(statements, false, BankStatementTestData.Original(amount: "4000.00"));
-            data.ReceiptId = (await data.Bank.ConfirmAsync(await data.Bank.PreviewAsync(), observation: BankReceiptTestData.Observation(amount: 4000m)))["receiptId"].AsInt64;
+            if (attachedBank is not null) {
+                data.Bank = attachedBank; data.ReceiptId = attachedReceiptId!.Value;
+                if (!data.Bank.Statements.Accounts.Catalog.Database.DatabaseNamespace.Equals(data.Read.Database.DatabaseNamespace))
+                    throw new ArgumentException("Customer verification and bank receipt must share one database");
+            } else {
+                var accounts = await ReceivingAccountTestData.AttachAsync(data.Read.Catalog);
+                var statements = await BankStatementTestData.AttachAsync(accounts);
+                data.Bank = await BankReceiptTestData.AttachAsync(statements, false, BankStatementTestData.Original(amount: "4000.00"));
+                data.ReceiptId = (await data.Bank.ConfirmAsync(await data.Bank.PreviewAsync(), observation: BankReceiptTestData.Observation(amount: 4000m)))["receiptId"].AsInt64;
+            }
             string[] readPermissions = [Permissions.PaymentReviewRead, Permissions.InvoiceRead, Permissions.BankReceiptRead, Permissions.BankStatementRead, Permissions.ReceivingAccountRead, Permissions.ReceivingAccountDetailsRead];
             data.Reviewer = await data.Read.Catalog.ActorAsync(7410, CatalogAuthoringTestData.Shop, [.. readPermissions, Permissions.PaymentVerify, Permissions.PaymentReviewCorrect]);
             if (ocrFailure is not null) await data.Read.Catalog.Base.AddGrantAsync(data.Reviewer, 74500, CatalogAuthoringTestData.Shop, [Permissions.PaymentReviewManual]);

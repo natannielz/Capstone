@@ -36,7 +36,9 @@ const source = z.union([recognitionSource, applicationSource]);
 const remainingFields = { version: revision, totalAmount: positive, appliedAmount: money, remainingAmount: money, lastApplicationId: id.nullable(), lastHash: hash.nullable() };
 function remainingCoherent(value: { version: string; totalAmount: string; appliedAmount: string; remainingAmount: string; lastApplicationId: string | null; lastHash: string | null }) { return cents(value.appliedAmount) + cents(value.remainingAmount) === cents(value.totalAmount) && (value.version === '0' ? value.appliedAmount === '0.00' && value.lastApplicationId === null && value.lastHash === null : cents(value.appliedAmount) > BigInt(0) && value.lastApplicationId !== null && value.lastHash !== null); }
 const payableCapacity = z.object({ payableId: id, ...remainingFields }).strict().refine(remainingCoherent);
-const advanceCapacity = z.object({ settlementId: id, ...remainingFields }).strict().refine(remainingCoherent);
+const legacyAdvanceCapacity = z.object({ settlementId: id, ...remainingFields }).strict().refine(remainingCoherent);
+const returnedAdvanceCapacity = z.object({ stateVersion: z.literal(2), settlementId: id, version: id, totalAmount: positive, appliedAmount: money, returnedAmount: positive, remainingAmount: money, lastEffectKind: z.enum(['apply_advance', 'return']), lastEffectId: id, lastHash: hash }).strict().refine(value => cents(value.appliedAmount) + cents(value.returnedAmount) + cents(value.remainingAmount) === cents(value.totalAmount) && (value.lastEffectKind !== 'apply_advance' || cents(value.appliedAmount) > BigInt(0)));
+const advanceCapacity = z.union([legacyAdvanceCapacity, returnedAdvanceCapacity]);
 const recognitionCapacity = z.object({ valuationAllocationId: id, amount: positive, recognized: z.boolean(), payableId: id.nullable() }).strict().refine(value => value.recognized === (value.payableId !== null));
 const applicationCapacity = z.object({ payable: payableCapacity, advance: advanceCapacity }).strict();
 const capacity = z.union([recognitionCapacity, applicationCapacity]);
@@ -62,6 +64,7 @@ const payable = z.object({ id, valuationAllocationId: id, orderId: id, commercia
 const advance = z.object({ settlementId: id, disbursementId: id, orderId: id, commercialReference: text(128), supplierId: id, supplierName: text(160), location, amount: positive, journalId: id, recordedAt: time }).strict();
 const payableChoice = z.object({ payable, capacity: payableCapacity }).strict().refine(value => value.payable.id === value.capacity.payableId && value.payable.amount === value.capacity.totalAmount);
 const advanceChoice = z.object({ advance, capacity: advanceCapacity }).strict().refine(value => value.advance.settlementId === value.capacity.settlementId && value.advance.amount === value.capacity.totalAmount);
+export const supplierAdvanceSchemas = { text, day, time, location, account, capacity: advanceCapacity, choice: advanceChoice };
 const valuations = z.object({ items: z.array(valuationChoice).max(25), nextValuationAllocationId: id.nullable() }).strict().refine(value => descending(value.items.map(item => item.source.valuationAllocationId), value.nextValuationAllocationId));
 const payables = z.object({ items: z.array(payableChoice).max(25), nextPayableId: id.nullable() }).strict().refine(value => descending(value.items.map(item => item.payable.id), value.nextPayableId));
 const advances = z.object({ items: z.array(advanceChoice).max(25), nextSettlementId: id.nullable() }).strict().refine(value => descending(value.items.map(item => item.advance.settlementId), value.nextSettlementId));

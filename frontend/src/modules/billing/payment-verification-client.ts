@@ -15,6 +15,8 @@ const field = z.object({ field: z.enum(correctionFields), value: text(256).nulla
 const resolution = z.object({ field: text(40), reason: text(1000) }).strict();
 const discrepancy = z.object({ field: z.enum(['transfer_date', 'recipient', 'bank', 'reference', 'transfer_time']), declaration: text(256).nullable(), image: text(256).nullable(), bank: text(256).nullable() }).strict();
 const result = z.object({ verificationId: id, declarationId: id, receiptId: id, reviewRevision: revision, recordedAt: timestamp, operation: z.literal('billing.payment.verify') }).strict();
+const receiptCandidate = z.object({ receiptId: id, amount, bookedDate: day, transactionId: text(80) }).strict();
+const receiptPage = z.object({ items: z.array(receiptCandidate).max(25), nextAfterId: id.nullable() }).strict();
 const preview = z.object({ binding: hash, declarationId: id, declarationRevision: id, receiptId: id, reviewRevision: revision, buyingOrganizationId: id,
   buyerName: text(1000), declaredPayerName: text(160), amount, bookedDate: day, transactionId: text(80), accountNumber: z.string().regex(/^[0-9]{4,34}$(?![\s\S])/),
   accountHolder: text(160), bankCode: text(32), payerVerificationProcedureReference: text(256), fields: z.array(field).length(8).refine(values => values.every((item, index) => item.field === correctionFields[index])),
@@ -24,6 +26,7 @@ const detail = z.object({ result, declarationRevision: id, evidence: z.object({ 
 export type PaymentVerificationPreview = z.infer<typeof preview>;
 export type PaymentVerificationResult = z.infer<typeof result>;
 export type PaymentVerificationDetail = z.infer<typeof detail>;
+export type PaymentVerificationReceiptPage = z.infer<typeof receiptPage>;
 const invalid = (): never => { throw new AccessFailure(502, 'payment_verification_response_invalid'); };
 function parse<T>(schema: z.ZodType<T>, value: unknown): T { const parsed = schema.safeParse(value); return parsed.success ? parsed.data : invalid(); }
 export function paymentVerificationKey(key: string) {
@@ -49,6 +52,14 @@ function data<T>(value: { data?: T; error?: unknown; response: Response }): T {
 export function createPaymentVerificationGateway(client: ReturnType<typeof createUnitTokoClient> = createUnitTokoClient()) {
   const header = (actorId: string) => ({ 'X-Expected-Actor-Id': parse(id, actorId) });
   return {
+    async receipts(actorId: string, declarationId: string, afterId: string | null = null) {
+      const owner = parse(id, declarationId), after = afterId === null ? null : parse(id, afterId);
+      const page = parse(receiptPage, data(await client.POST('/api/v1/billing/payment-reviews/{id}/verification/receipts/query',
+        { body: { purpose: 'payment-review', afterId: after }, params: { path: { id: owner }, header: header(actorId) }, cache: 'no-store' })));
+      if (page.items.some((item, index) => BigInt(item.receiptId) <= BigInt(index ? page.items[index - 1].receiptId : after ?? '0')) ||
+        page.nextAfterId !== null && (BigInt(page.nextAfterId) <= BigInt(after ?? '0') || page.items.some(item => BigInt(item.receiptId) > BigInt(page.nextAfterId!)))) return invalid();
+      return page;
+    },
     async read(actorId: string, owner: PaymentDraft) {
       const saved = parse(z.object({ state: z.enum(['not_verified', 'verified']), verification: detail.nullable() }).strict(), data(await client.POST('/api/v1/billing/payment-reviews/{id}/verification/query',
         { body: { purpose: 'payment-review' }, params: { path: { id: owner.id }, header: header(actorId) }, cache: 'no-store' })));

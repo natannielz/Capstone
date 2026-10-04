@@ -148,18 +148,26 @@ internal sealed class InvoiceData(ShipmentDispatchTestData dispatch) : IAsyncDis
     internal InvoiceService Service => new(Order.Database, new(Order.Prices.Catalog.Client), new(Order.Database), Order.Prices.Catalog.Clock, ShipmentReceiptTests.Service(Dispatch), Admission);
     internal IMongoCollection<BsonDocument> Rows(string name) => Order.Rows(name);
     internal Task<long> Count(string name) => Rows(name).CountDocumentsAsync(new BsonDocument());
-    internal static async Task<InvoiceData> CreateAsync(MongoFixture fixture) {
-        var data = new InvoiceData(await ShipmentDispatchTestData.CreateAsync(fixture));
+    internal static async Task<InvoiceData> CreateAsync(MongoFixture fixture, ShipmentDispatchTestData? attachedDispatch = null,
+        bool preserveApprovedAccounting = false) {
+        var data = new InvoiceData(attachedDispatch ?? await ShipmentDispatchTestData.CreateAsync(fixture));
         try {
             data.Receipt = await ShipmentReceiptProofTests.Accept(data.Dispatch);
             data.Finance = await data.Order.Prices.Catalog.ActorAsync(9940, CatalogAuthoringTestData.Shop, Permissions.InvoiceRead, Permissions.InvoiceIssue);
             await data.Rows("accountProfiles").InsertOneAsync(new BsonDocument { { "_id", data.Finance.UserId }, { "schemaVersion", 1 }, { "version", 1L },
                 { "displayName", "Finance fixture" }, { "verifiedEmail", "finance@example.invalid" }, { "verifiedAt", data.Order.Prices.Catalog.Clock.UtcNow.UtcDateTime }, { "updatedAt", data.Order.Prices.Catalog.Clock.UtcNow.UtcDateTime } });
             await data.Order.Prices.Catalog.Base.AddGrantAsync(data.Order.Buyer, 99201, CatalogAuthoringTestData.Audience, [Permissions.InvoiceRead]);
-            await AccountingTestDocuments.ConfigureAsync(data.Order.Database);
-            await data.Rows("accountingChartVersions").UpdateOneAsync(new BsonDocument("_id", 20L), Builders<BsonDocument>.Update.Set("mappings", new BsonArray {
-                AccountingTestDocuments.Mapping("invoice_ar", 801, "A1101"), AccountingTestDocuments.Mapping("invoice_revenue", 802, "A4101"),
-                AccountingTestDocuments.Mapping("invoice_tax", 803, "A2101"), AccountingTestDocuments.Mapping("invoice_charges", 804, "A4102") }));
+            if (preserveApprovedAccounting) {
+                var book = Assert.Single(await data.Rows("accountingBooks").Find(new BsonDocument()).ToListAsync());
+                var chart = await data.Rows("accountingChartVersions").Find(new BsonDocument("_id", book["chartVersionId"])).SingleAsync();
+                foreach (var key in new[] { "invoice_ar", "invoice_revenue", "invoice_tax", "invoice_charges" })
+                    Assert.Single(chart["mappings"].AsBsonArray, mapping => mapping["mappingKey"] == key);
+            } else {
+                await AccountingTestDocuments.ConfigureAsync(data.Order.Database);
+                await data.Rows("accountingChartVersions").UpdateOneAsync(new BsonDocument("_id", 20L), Builders<BsonDocument>.Update.Set("mappings", new BsonArray {
+                    AccountingTestDocuments.Mapping("invoice_ar", 801, "A1101"), AccountingTestDocuments.Mapping("invoice_revenue", 802, "A4101"),
+                    AccountingTestDocuments.Mapping("invoice_tax", 803, "A2101"), AccountingTestDocuments.Mapping("invoice_charges", 804, "A4102") }));
+            }
             await data.Rows("fixtureInvoiceApprovals").InsertOneAsync(new BsonDocument { { "_id", 1L }, { "revision", 1L }, { "fence", 0L }, { "approved", true }, { "expiresAt", data.Order.Prices.Catalog.Clock.UtcNow.AddMinutes(30).UtcDateTime }, { "termDays", 30 } });
             data.Admission = new(data); return data;
         } catch { await data.DisposeAsync(); throw; }

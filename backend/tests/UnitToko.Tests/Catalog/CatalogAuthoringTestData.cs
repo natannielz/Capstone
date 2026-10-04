@@ -71,6 +71,15 @@ internal sealed class CatalogAuthoringTestData : IAsyncDisposable
         data.Buyer = await data.ActorAsync(6000, Audience, Permissions.CatalogRead);
         return data;
     }
+    internal static async Task<CatalogAuthoringTestData> AttachAsync(StoreTestData source, MongoClient client)
+    {
+        var data = new CatalogAuthoringTestData(source, client);
+        // Existing procurement setup already owns its directory and clock. This
+        // customer attachment creates only its actual author and buyer sessions.
+        data.Maker = await data.ActorAsync(3000, Shop, Permissions.CatalogManage, Permissions.CatalogRead);
+        data.Buyer = await data.ActorAsync(6000, Audience, Permissions.CatalogRead);
+        return data;
+    }
     internal async Task<ActorContext> ActorAsync(long id, GrantScope owner, params string[] permissions)
     {
         var actor = await Base.AddActorAsync(id, owner, permissions);
@@ -93,9 +102,9 @@ internal sealed class CatalogAuthoringTestData : IAsyncDisposable
         var category = await CategoryAsync(actor, owner, code);
         return await Service.CreateFamilyAsync(actor ?? Maker, new(owner ?? Shop, category.Id, "Pensil", "Deskripsi", []), Metadata("family-" + code));
     }
-    internal async Task<CatalogMutationResult> SkuAsync(int contents = 12, string code = "PENCIL-12")
+    internal async Task<CatalogMutationResult> SkuAsync(int contents = 12, string code = "PENCIL-12", string categoryCode = "ATK")
     {
-        var family = await FamilyAsync();
+        var family = await FamilyAsync(code: categoryCode);
         return await Service.CreateSkuAsync(Maker, new(family.Id, family.Version, code, "pencil-base", Definition(contents)), Metadata("sku-" + code));
     }
     internal async Task AssortmentsAsync()

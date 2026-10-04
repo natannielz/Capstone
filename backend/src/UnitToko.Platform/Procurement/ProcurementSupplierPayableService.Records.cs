@@ -62,7 +62,7 @@ public sealed partial class ProcurementSupplierPayableService
         (await ProposalWithProofAsync(tx, id, ct)).Proposal;
     private async Task<(BsonDocument Proposal, HistoricalProof Proof)> ProposalWithProofAsync(IClientSessionHandle tx, long id, CancellationToken ct)
     {
-        var row = await Rows(B.Proposals).Find(tx, F.Eq("_id", id) & new BsonDocument("$and", new BsonArray { ProcurementSupplierPayableSchemas.Validator(B.Proposals) }))
+        var row = await Rows(B.Proposals).Find(tx, F.Eq("_id", id) & new BsonDocument("$and", new BsonArray { ProcurementAdvanceReturnSchemas.CurrentPayableValidator(B.Proposals) }))
             .SingleOrDefaultAsync(ct) ?? throw B.Broken();
         Equal(row["snapshotHash"], B.Hash(row));
         var input = B.Input(row["input"]); Equal(row["input"], B.Input(input)); Equal(row["location"], R.Location(input.Location));

@@ -84,10 +84,16 @@ public sealed record ProcurementSupplierPayableRecognitionCapacityDto(LongId Val
     bool Recognized, LongId? PayableId) : ProcurementSupplierPayableCapacityDto;
 public sealed record ProcurementSupplierPayableBalanceDto(LongId PayableId, string Version, Money TotalAmount,
     Money AppliedAmount, Money RemainingAmount, LongId? LastApplicationId, string? LastHash);
+[JsonDerivedType(typeof(ProcurementSupplierAdvanceBalanceDto))]
+[JsonDerivedType(typeof(ProcurementSupplierAdvanceReturnedBalanceDto))]
+public abstract record ProcurementSupplierAdvanceStateDto;
 public sealed record ProcurementSupplierAdvanceBalanceDto(LongId SettlementId, string Version, Money TotalAmount,
-    Money AppliedAmount, Money RemainingAmount, LongId? LastApplicationId, string? LastHash);
+    Money AppliedAmount, Money RemainingAmount, LongId? LastApplicationId, string? LastHash) : ProcurementSupplierAdvanceStateDto;
+public sealed record ProcurementSupplierAdvanceReturnedBalanceDto(int StateVersion, LongId SettlementId, string Version,
+    Money TotalAmount, Money AppliedAmount, Money ReturnedAmount, Money RemainingAmount, string LastEffectKind,
+    LongId LastEffectId, string LastHash) : ProcurementSupplierAdvanceStateDto;
 public sealed record ProcurementSupplierPayableApplicationCapacityDto(ProcurementSupplierPayableBalanceDto Payable,
-    ProcurementSupplierAdvanceBalanceDto Advance) : ProcurementSupplierPayableCapacityDto;
+    ProcurementSupplierAdvanceStateDto Advance) : ProcurementSupplierPayableCapacityDto;
 public sealed record ProcurementSupplierPayablePolicyDto(LongId Id, string Revision, bool Active, ProcurementLocationDto Location,
     string Currency, DateTimeOffset ApprovedAt, DateTimeOffset ExpiresAt, string SourceTreatment, string ApplicationTreatment,
     LongId BookId, LongId ChartVersionId, ProcurementStockValuationAccountDto ReceiptAccrual,
@@ -127,7 +133,7 @@ public sealed record ProcurementSupplierAdvanceItemDto(LongId SettlementId, Long
     string CommercialReference, LongId SupplierId, string SupplierName, ProcurementLocationDto Location,
     Money Amount, LongId JournalId, DateTimeOffset RecordedAt);
 public sealed record ProcurementSupplierPayableChoiceDto(ProcurementSupplierPayableItemDto Payable, ProcurementSupplierPayableBalanceDto Capacity);
-public sealed record ProcurementSupplierAdvanceChoiceDto(ProcurementSupplierAdvanceItemDto Advance, ProcurementSupplierAdvanceBalanceDto Capacity);
+public sealed record ProcurementSupplierAdvanceChoiceDto(ProcurementSupplierAdvanceItemDto Advance, ProcurementSupplierAdvanceStateDto Capacity);
 public sealed record ProcurementSupplierPayableValuationChoiceDto(ProcurementSupplierPayableRecognitionSourceDto Source,
     ProcurementSupplierPayableRecognitionCapacityDto Capacity);
 public sealed record ProcurementSupplierPayableValuationsDto(ProcurementSupplierPayableValuationChoiceDto[] Items, LongId? NextValuationAllocationId);
@@ -166,8 +172,15 @@ internal static class ProcurementSupplierPayableDtos
     };
     internal static ProcurementSupplierPayableBalanceDto PayableBalance(BsonValue row) => new(Id(row["payableId"]), Number(row["version"]),
         Amount(row["totalAmount"]), Amount(row["appliedAmount"]), Amount(row["remainingAmount"]), OptionalId(row["lastApplicationId"]), OptionalText(row["lastHash"]));
-    internal static ProcurementSupplierAdvanceBalanceDto AdvanceBalance(BsonValue row) => new(Id(row["settlementId"]), Number(row["version"]),
-        Amount(row["totalAmount"]), Amount(row["appliedAmount"]), Amount(row["remainingAmount"]), OptionalId(row["lastApplicationId"]), OptionalText(row["lastHash"]));
+    internal static ProcurementSupplierAdvanceStateDto AdvanceBalance(BsonValue row)
+    {
+        if (!row.AsBsonDocument.Contains("stateVersion")) return new ProcurementSupplierAdvanceBalanceDto(Id(row["settlementId"]), Number(row["version"]),
+            Amount(row["totalAmount"]), Amount(row["appliedAmount"]), Amount(row["remainingAmount"]), OptionalId(row["lastApplicationId"]), OptionalText(row["lastHash"]));
+        if (row["stateVersion"].AsInt32 != 2) throw ProcurementSupplierPayableRules.Invalid();
+        return new ProcurementSupplierAdvanceReturnedBalanceDto(2, Id(row["settlementId"]), Number(row["version"]),
+            Amount(row["totalAmount"]), Amount(row["appliedAmount"]), Amount(row["returnedAmount"]), Amount(row["remainingAmount"]),
+            row["lastEffectKind"].AsString, Id(row["lastEffectId"]), row["lastHash"].AsString);
+    }
     internal static ProcurementSupplierPayableCapacityDto Capacity(BsonValue row) => row.AsBsonDocument.Contains("valuationAllocationId")
         ? new ProcurementSupplierPayableRecognitionCapacityDto(Id(row["valuationAllocationId"]), Amount(row["amount"]), row["recognized"].AsBoolean, OptionalId(row["payableId"]))
         : new ProcurementSupplierPayableApplicationCapacityDto(PayableBalance(row["payable"]), AdvanceBalance(row["advance"]));

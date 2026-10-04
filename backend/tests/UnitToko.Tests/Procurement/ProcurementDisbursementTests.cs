@@ -10,6 +10,7 @@ using UnitToko.Platform.Documents;
 using UnitToko.Platform.Mongo;
 using UnitToko.Tests.Documents;
 using UnitToko.Tests.Organizations;
+using B = UnitToko.Platform.Procurement.ProcurementDisbursementBson;
 using D = UnitToko.Tests.Procurement.ProcurementDisbursementTestData;
 
 namespace UnitToko.Tests.Procurement;
@@ -43,7 +44,44 @@ public sealed class ProcurementDisbursementTests(MongoFixture fixture) {
         Assert.Equal(result["disbursementId"], pin["associationId"]); Assert.False(pin.Contains("refundPayoutDraftId")); Assert.False(pin.Contains("declarationId"));
         data.Draft = await data.CreateDraftAsync("second-part-draft", data.Input(4000, "SYNTHETIC-TRANSFER-0002"));
         (data.Reservation, data.Reference) = await data.UploadForAsync(data.DraftId, "second-part-image"); await data.ValidateAsync();
-        var second = await data.RecordAsync(await data.PreviewRecordAsync(), D.Meta("record-second-part"));
+        var secondPreview = await data.PreviewRecordAsync();
+        var beforeMutation = await data.StateAsync();
+        var pinAudits = new BsonArray(await data.Rows("evidencePinAudits").Find(new BsonDocument()).Sort(new BsonDocument("_id", 1)).ToListAsync());
+        var prior = await data.Rows(D.Records).Find(new BsonDocument("_id", result["disbursementId"])).SingleAsync();
+        var owner = data.Service; var metadataMutation = D.Meta("record-with-changed-prior-claim");
+        AuthorizationStore.ValidateMetadata(metadataMutation);
+        var bodyHash = AuthorizationStore.CommandHash(B.RecordBody(data.DraftId, 1, data.Reservation.ReservationId,
+            data.Reference, secondPreview["binding"].AsString), metadataMutation.Reason);
+        Assert.Null(await owner.RecoverRecordBodyAsync(data.Actor, data.DraftId, metadataMutation.IdempotencyKey, bodyHash, default));
+        await owner.StorageAsync(default); await ProcurementDisbursementEvidenceSchemas.RequireStorageAsync(data.Database, default);
+        var core = new EvidenceService(data.Database, data.Unit, new(data.Database), data.Clock, data.Files.Registration, procurementDisbursementTargets: owner);
+        var pinned = 0; var mutated = 0;
+        var corruption = await Record.ExceptionAsync(() => core.WithProcurementDisbursementPinAsync(data.Actor,
+            new(EvidenceTargetKind.ProcurementDisbursement, data.DraftId), 1, data.Reservation.ReservationId, data.Reference, D.ReadMetadata,
+            (claim, handle, started, ct) => {
+                Assert.Equal(TimeSpan.FromSeconds(5), claim.InitialLeaseDuration); Assert.Equal(TimeSpan.FromSeconds(60), claim.RequestDuration);
+                return owner.RecordWithProofAsync(data.Actor, data.DraftId, 1, data.Reservation.ReservationId, data.Reference,
+                    secondPreview["binding"].AsString, metadataMutation, async (tx, id, target, inner) => {
+                        var final = await new EvidenceService(data.Database, data.Unit, new(data.Database), data.Clock,
+                            data.Files.Registration, procurementDisbursementTargets: target)
+                            .PinProcurementDisbursementAsync(tx, data.Actor, id, claim, handle, started, inner);
+                        pinned++;
+                        // Corrupt only within this real command's transaction, after the
+                        // historical proof and new pin. A cached proof cannot excuse changed bytes.
+                        var changed = prior.DeepClone().AsBsonDocument;
+                        changed["reason"] = "Synthetic prior claim changed after its complete source proof";
+                        changed["snapshotHash"] = B.Hash(changed);
+                        Assert.Equal(1L, (await data.Rows(D.Records).ReplaceOneAsync(tx, prior, changed, cancellationToken: inner)).ModifiedCount);
+                        mutated++; return final;
+                    }, ct);
+            }));
+        Assert.Equal(1, pinned); Assert.Equal(1, mutated);
+        Assert.Equal("procurement_disbursement_integrity_unavailable", Assert.IsType<PersistenceConflictException>(corruption).Code);
+        Assert.Equal(prior, await data.Rows(D.Records).Find(new BsonDocument("_id", prior["_id"])).SingleAsync());
+        Assert.Equal(beforeMutation, await data.StateAsync()); Assert.Equal(preserved, await data.PreservedAsync());
+        Assert.Equal(pinAudits, new BsonArray(await data.Rows("evidencePinAudits").Find(new BsonDocument()).Sort(new BsonDocument("_id", 1)).ToListAsync()));
+        Assert.Null(await data.Service.LookupAsync(data.Actor, D.Prefix + "record", metadataMutation.IdempotencyKey));
+        var second = await data.RecordAsync(secondPreview, D.Meta("record-second-part"));
         Assert.NotEqual(result["disbursementId"], second["disbursementId"]);
         var head = await data.Rows(D.Heads).Find(new BsonDocument()).SingleAsync();
         Assert.Equal(2L, head["version"].AsInt64);
