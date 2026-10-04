@@ -1,0 +1,51 @@
+/* Composed only by staff/account workspace roots and protected forms; no global theme overrides.
+   Preserve the existing palette, including distinct feedback and divider tones. */
+.palette {
+  --workspace-ink: var(--petroleum, #073b45);
+  --workspace-ink-hover: #062f36;
+  --workspace-canvas: #f2f6f4;
+  --workspace-surface: #fff;
+  --workspace-surface-selected: #edf4f1;
+  --workspace-surface-hover: #f3f7f5;
+  --workspace-surface-review: #f7faf8;
+  --workspace-surface-disabled: #edf3f0;
+  --workspace-accent: #c84513;
+
+  --workspace-text-muted: #526c70;
+  --workspace-text-meta: #526c76;
+  --workspace-text-caption: #4d6570;
+  --workspace-text-row: #45616c;
+  --workspace-text-support: #4b6667;
+  --workspace-text-placeholder: #617773;
+
+  --workspace-border: #cbdad5;
+  --workspace-border-interactive: #afc4be;
+  --workspace-border-input: #a3bcb4;
+  --workspace-border-divider: #d7e3e7;
+  --workspace-border-row: #d5e3dc;
+  --workspace-border-list: #e2eaee;
+  --workspace-border-history: #c5d7dc;
+  --workspace-border-support: #dae6e2;
+  --workspace-scope-marker: #799b8b;
+  --workspace-step-text: #20696a;
+  --workspace-step-border: #b8d0cc;
+
+  --workspace-critical-text: #7d2128;
+  --workspace-critical-surface: #fff0f1;
+  --workspace-critical-border: #a6373f;
+  --workspace-critical-action: #9c2931;
+  --workspace-critical-action-border: #ddb5b8;
+  --workspace-alert-text: #7c3024;
+  --workspace-alert-surface: #fff2ef;
+  --workspace-alert-border: #b9513b;
+  --workspace-success-text: #205b44;
+  --workspace-success-surface: #edf6f0;
+  --workspace-success-border: #347c5b;
+  --workspace-success-badge-border: #c2dece;
+  --workspace-success-strong-text: #195844;
+  --workspace-success-strong-surface: #e8f5ee;
+  --workspace-success-strong-border: #26745a;
+  --workspace-caution-text: #675023;
+  --workspace-caution-surface: #faf4e6;
+  --workspace-caution-border: #e6d6af;
+}

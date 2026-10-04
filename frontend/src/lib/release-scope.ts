@@ -11,6 +11,12 @@ export function isPilotPathAllowed(path: string): boolean {
   return pilotPages.has(path) || /^\/shop\/[A-Za-z0-9_-]+$/.test(path);
 }
 
+/** These pages only redirect to maintained journeys; no legacy API is admitted. */
+export function isMaintainedEntryAlias(path: string): boolean {
+  return ["/login", "/customer/login", "/staff/login", "/account", "/account/orders", "/cart", "/checkout"].includes(path) ||
+    /^\/account\/orders\/[0-9]{1,19}$/.test(path);
+}
+
 export function isPilotApiPathAllowed(path: string): boolean {
   return ["/api/v1/system/status", "/api/v1/access/current", "/api/v1/identity/session", "/api/v1/identity/csrf"].includes(path) || [
     "/api/v1/catalog/administration", "/api/v1/catalog/variants", "/api/v1/ordering/requests",

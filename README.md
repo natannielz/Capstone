@@ -1,71 +1,76 @@
-# Unit Toko — Demo Capstone BNI
+# Unit Toko — platform operasional koperasi BNI
 
-Pengembangan produksi dilanjutkan dari `main` pada `C:/Users/User/Documents/Capstone`, mengikuti [rencana M0–M6](docs/superpowers/plans/2026-09-29-accelerated-completion.md) dan [ledger kemajuan](docs/quality/production-progress.md). Persyaratan asli dan seluruh 97 butir laporan tetap berlaku. Situs demo di bawah belum menjadi bukti penerimaan sistem produksi baru.
+Unit Toko dikembangkan untuk pemesanan barang oleh cabang BNI dan akun bisnis yang disetujui, beserta persediaan, pengadaan, pengiriman, penerimaan, penagihan, pembayaran, retur/refund, laporan dan tutup periode. Migrasi penuh masih berjalan; persyaratan asli, hasil rapat/manual dan seluruh [97 butir laporan](docs/requirements/unit-toko-report-2026-09-28.md) tetap berlaku.
 
-CI push menjalankan pemeriksaan terfokus sesuai sumber yang berubah. Seluruh suite lama tetap tersedia melalui workflow manual **Release validation** untuk kandidat rilis M6. Push GitHub belum berarti deployment: deployment Git otomatis dinonaktifkan sementara dalam `frontend/vercel.json` sampai kandidat dan layanan sebenarnya siap divalidasi. Rilis harus memverifikasi Vercel, API/worker .NET, MongoDB, Auth0 dan penyimpanan privat.
+Acuan pekerjaan saat ini adalah [rencana M0–M6](docs/superpowers/plans/2026-09-29-accelerated-completion.md) dan [ledger kemajuan serta pemetaan persyaratan](docs/quality/production-progress.md). Ledger membedakan implementasi, verifikasi lokal, staging dan penerimaan produksi. Checklist Release 1 yang sudah selesai tidak berarti seluruh proyek selesai.
 
-Website demo dengan etalase pelanggan dan pemesanan divisi, persediaan, pengadaan, pengiriman, penerimaan, penagihan, pembayaran simulasi, laporan, dan tutup periode.
+## Yang dapat digunakan sekarang
 
-- Website: [unit-toko-bni.vercel.app](https://unit-toko-bni.vercel.app)
-- **v15 — daftar operasional dan profil**: pencarian/filter/pagination pembayaran, pengadaan dan akun; tujuan dashboard admin; tabel mobile; pemulihan draf profil dan perbaikan navigasi. [Rencana](docs/plan-ui-ux-v15.md), [hasil pemeriksaan dan batas](docs/rilis-v15.md).
-- **v14 — autoplay, footer, belanja, dan ruang kerja**: perbaikan timer carousel, footer terkelompok, landing mobile, filter/kemasan, tindakan pesanan pelanggan, pemulihan login/profil, serta prioritas dashboard sesuai peran. [Rencana terperinci dan lima bidang riset](docs/plan-ui-ux-v14.md), [hasil dan batas pemeriksaan](docs/rilis-v14.md).
-- **v13 — landing editorial dan dua portal masuk**: foto lebar dengan animasi pembukaan, tiga bab koleksi saat scroll, login pelanggan dan staf dengan komposisi berbeda, kontrol carousel ringkas, serta tombol dan filter yang dibedakan menurut fungsi. Lihat [catatan rilis](docs/rilis-v13.md) dan [riset desain/gerakan](docs/research-motion-v13.md).
-- **v12 — desain dan animasi yang terarah**: carousel koleksi otomatis dengan kontrol jeda, penghapusan titik dekoratif, komposisi baru beranda/login, dan detail produk yang lebih rapi. Lihat [catatan rilis](docs/rilis-v12.md) dan [riset sumber primer](docs/research-experience-v12.md).
-- **v11 — pengalaman belanja dan audit proses**: etalase bergambar, komposisi baru beranda/login, animasi yang mengikuti preferensi gerakan, serta kontrol bukti penerimaan dan penutupan sisa pengadaan. Lihat [catatan rilis](docs/rilis-v11.md), [audit penjualan](docs/gap-sales-v11.md), dan [audit pengadaan](docs/gap-operations-v11.md).
-- **v10 — 200 produk tambahan**, foto dan deskripsi unik, stok simulasi, serta katalog dengan pagination. Rilis ini juga menyertakan logo U–T baru, animasi landing/login, dan penyelesaian alur akun, stok, serta keuangan dari v9. Lihat [catatan rilis](docs/rilis-v10.md) dan [data katalog](docs/data-dummy-v10.md).
-- **v8 — beranda dan akses terpisah**: landing page publik, [toko pelanggan](https://unit-toko-bni.vercel.app/shop), [login pelanggan](https://unit-toko-bni.vercel.app/customer/login), dan [portal divisi/staf](https://unit-toko-bni.vercel.app/staff/login). Logo UT, warna, kontras, dan tampilan responsif diperbarui. Lihat [catatan rilis](docs/rilis-v8.md).
-- **v7 — etalase dan akun pelanggan**, dengan katalog publik, keranjang, checkout, pesanan pribadi, dan profil. Lihat [catatan rilis](docs/rilis-v7.md), [rencana dan cakupan](docs/plan-customer-marketplace-v7.md), serta [hasil pengujian customer](docs/testing-customer-v7.md).
-- Alur staf dan divisi v6 tetap tersedia. [Catatan rilis v6](docs/rilis-v6.md) menjadi baseline regresi.
+| Lingkungan | Status dan cakupan |
+| --- | --- |
+| Pilot lokal Release 1 | Alur browser → API .NET → MongoDB telah diverifikasi: akun cabang → katalog/kemasan → permintaan tersimpan → keputusan petugas → riwayat pemohon. Pemisahan cabang, pemulihan respons yang hilang, pengelolaan katalog dan persistensi setelah restart juga diperiksa. Akun dan katalog bersifat sintetis. |
+| [Frontend Vercel](https://unit-toko-bni.vercel.app/) | Frontend telah dipublikasikan dengan tampilan awal, katalog dan halaman masuk yang dipulihkan. Koneksi layanan akun/API sebenarnya belum tersedia; halaman menyatakan keterbatasan tersebut. |
+| Sistem produksi lengkap | Belum diterima. Koneksi hosted API/worker, MongoDB, Auth0, penyimpanan privat, migrasi/restore dan pilot operasional dengan pengguna sebenarnya masih memerlukan implementasi atau validasi. |
 
-## Struktur
+Dalam Release 1, **“Diterima untuk diproses” hanya keputusan atas permintaan**. Keputusan ini tidak mereservasi stok, menetapkan harga, membuat invoice, menerima pembayaran atau menjanjikan pengiriman. Foto editorial bukan foto barang katalog yang telah disetujui; foto produk yang belum tersedia ditampilkan secara jujur. Rincian bukti dan batasnya ada pada [catatan Release 1](docs/releases/release-1.md).
+
+## Struktur dan teknologi
 
 | Direktori | Isi |
 | --- | --- |
-| `frontend/` | Aplikasi Next.js/React/TypeScript, komponen, aset dan tes kompatibilitas |
-| `backend/` | Layanan C# yang sedang dibangun dan backend TypeScript lama di `backend/legacy/` |
-| `docs/` | Rencana, catatan implementasi, hasil validasi, dan panduan publikasi |
+| `frontend/` | Next.js, React dan TypeScript; halaman pelanggan/staf, komponen, aset, klien API serta pemeriksaan frontend |
+| `backend/` | API dan worker C#/.NET 10, modul domain, MongoDB transaksional, migrasi, bukti privat dan alat pilot lokal; `backend/legacy/` menyimpan kode TypeScript lama yang masih dalam migrasi |
+| `docs/` | Persyaratan, arsitektur, rencana pelaksanaan, bukti penerimaan, panduan operator dan deployment |
 
-## Menjalankan lokal
+API baru mengelola data bisnis di MongoDB. Identitas produksi disiapkan untuk Auth0 dengan sesi server, verifikasi email, MFA dan izin sesuai lingkup. Bukti keuangan/dokumen menggunakan penyimpanan privat dan pemeriksaan akses; OCR memakai satu mesin lokal Tesseract/tesserocr yang versinya dipatok dan tidak menjadi otoritas persetujuan keuangan. Integrasi layanan sebenarnya tetap perlu diterima sebelum peluncuran.
 
-Gunakan Node.js 24. Dari direktori repositori:
+Dependensi Turso/SQLite dan backend lama masih memiliki pemanggil yang harus dimigrasikan dan diverifikasi sebelum dihapus. Keduanya **bukan penulis data pilot Release 1**. Lihat [batas modul selama transisi](docs/architecture/module-boundaries.md).
+
+Profil bawaan adalah `release1`: `NEXT_PUBLIC_UNIT_TOKO_RELEASE=release1` pada frontend dan `Release__Profile=release1` pada API. Halaman serta API fitur lanjutan dibatasi. Profil `full` digunakan secara eksplisit untuk pengembangan/pemeriksaan terisolasi; jangan mengaktifkannya pada pilot atau deployment sebelum alur, izin dan dependensi terkait selesai divalidasi.
+
+## Menjalankan pilot lokal
+
+Pilot persisten ini khusus Windows. Siapkan PowerShell 7, Node.js 24, SDK .NET 10 sesuai `backend/global.json`, `mongod.exe` yang telah diperiksa, serta Microsoft Edge. Dari direktori repositori:
 
 ```powershell
 npm ci --prefix backend/legacy
-cd frontend
-npm ci
-Copy-Item .env.example .env.local
+npm ci --prefix frontend
+$env:NEXT_PUBLIC_UNIT_TOKO_RELEASE = 'release1'
+npm run build --prefix frontend
+dotnet build backend/tools/UnitToko.LocalPilot/UnitToko.LocalPilot.csproj -c Release
+./backend/tools/UnitToko.LocalPilot/start-local-pilot.ps1 -MongoPath 'C:\path\to\mongod.exe'
 ```
 
-Isi `DEMO_PASSWORD_SEED` pada `.env.local` dengan nilai acak privat minimal 32 karakter. Untuk pengembangan lokal, gunakan `TURSO_DATABASE_URL=file:.data/unit-toko.db` dari contoh konfigurasi. Lalu:
+Ganti jalur MongoDB dengan lokasi sebenarnya. Instalasi dependensi lama masih diperlukan oleh build selama migrasi; perintah di atas tidak menjalankan server demo lama. Launcher tidak mengunduh alat atau membuat build secara diam-diam. Jalur alat yang telah diperiksa pada komputer penyerahan dan prosedur lengkap ada di [panduan pilot lokal](docs/runbooks/local-pilot-release1.md).
 
-```powershell
-npm run demo:accounts
-npm run dev
-```
+Setelah launcher menampilkan **SYNTHETIC LOCAL PILOT**, jalankan `tmp/pilot/release1/open-browser.ps1` dari jendela PowerShell 7 lain. Pintasan membuka Edge khusus pilot dengan pemetaan loopback dan pin sertifikat; gunakan pintasan tersebut agar batas HTTPS lokal tetap benar.
 
-Akun awal disimpan privat di `frontend/.data/demo-accounts.json`. Database dan berkas unggahan lokal berada di `.data/` dan tidak masuk Git. Skema serta data demo dibuat otomatis pada akses pertama. [Panduan aplikasi](frontend/README.md) menjelaskan peran dan alur presentasi.
+Buka `tmp/pilot/release1/ACCOUNTS-PRIVATE.txt` secara privat. Gunakan `pemohon-a`, `pemohon-b` atau `petugas` dengan password acak dan kode faktor **simulasi** masing-masing; keluar sebelum berganti akun. Ini bukan enrollment MFA/Auth0 sebenarnya. Jangan membagikan atau memasukkan berkas kredensial, kunci, profil browser maupun data MongoDB ke Git.
 
-## Pemeriksaan
+Permintaan dan perubahan katalog tersimpan di MongoDB lokal terpisah. `Ctrl+C` menghentikan API dan Next; MongoDB serta berkasnya tetap dipertahankan. Jalankan launcher yang sama untuk melanjutkan. Jangan menghapus `tmp/pilot/release1`: database dan state privatnya harus tetap berpasangan. Alur langkah demi langkah dan batas kedaluwarsa akun sintetis tersedia dalam panduan pilot.
 
-Jalankan dari `frontend/`:
+## Pemeriksaan dan publikasi
 
-```powershell
-npm run typecheck
-npm run lint
-npm test
-npm run build
-```
+CI push menjalankan pemeriksaan terfokus sesuai sumber yang berubah. Suite lengkap tetap tersedia melalui workflow manual **Release validation** untuk kandidat rilis terintegrasi. Gunakan database terisolasi untuk pemeriksaan yang mengubah data; skrip HTTP demo lama bukan penerimaan pilot baru. [Ledger](docs/quality/production-progress.md) mencatat hasil dan batas pemeriksaan yang berlaku.
 
-`npm run test:api` memerlukan server lokal dan menambahkan skenario pada database demo lokal. Gunakan database terisolasi untuk pengujian mutasi. Validasi v11 lulus **224 tes regresi**, **14 kelompok pemeriksaan HTTP pemisahan akses**, dan **22 kelompok pemeriksaan HTTP customer**. Reproduksi pengujian customer tersedia pada [bukti v7](docs/testing-customer-v7.md); hasil pemeriksaan terbaru tercatat pada [rilis v11](docs/rilis-v11.md).
+Vercel memakai root `frontend` dan Node.js 24. Konfigurasi [frontend/vercel.json](frontend/vercel.json) mengaktifkan deployment Git otomatis hanya dari `main`; dependensi/build mengikuti berkas tersebut. Publikasi frontend sudah terjadi, tetapi push GitHub atau status Ready Vercel belum membuktikan layanan bisnis berjalan.
 
-## Deployment
+Aktivasi hosted memerlukan host .NET/worker, MongoDB replica set, tenant Auth0 dan identitas yang disetujui, penyimpanan privat serta `UNIT_TOKO_API_ORIGIN` menuju ingress HTTPS yang benar. Verifikasi browser, cookie/origin, izin, persistensi, worker dan restore harus menggunakan koneksi sebenarnya. Ikuti [prasyarat deployment Release 1](docs/runbooks/release1-deployment.md), [panduan identitas/hosting](docs/runbooks/identity-hosting.md) dan [gerbang penerimaan produksi](docs/quality/production-acceptance.md).
 
-Untuk Vercel, pilih root directory **`frontend`**, install `npm ci && npm ci --prefix ../backend/legacy`, build `npm run build`, dan Node.js 24. Aplikasi memakai Turso remote dan Vercel Blob privat; konfigurasi lokal tidak menjadi penyimpanan production. Lihat [panduan publikasi](docs/publikasi-github.md).
+## Arsip desain dan demo
 
-Lihat [batas modul selama transisi](docs/architecture/module-boundaries.md). Backend TypeScript di `backend/legacy/` masih menjadi satu-satunya penulis data demo selama layanan C# dipersiapkan.
+Catatan berikut mempertahankan konteks desain asli dan perilaku lama untuk migrasi/regresi. Daftar fitur, akun, rute, database dan instruksi deployment di dalam arsip tidak menggantikan cakupan atau cara menjalankan pilot saat ini.
 
-## Cakupan demo
+| Versi | Dokumen historis |
+| --- | --- |
+| v15 — daftar operasional dan profil | [Rencana](docs/plan-ui-ux-v15.md), [hasil dan batas](docs/rilis-v15.md) |
+| v14 — autoplay, footer, belanja dan ruang kerja | [Rencana/riset](docs/plan-ui-ux-v14.md), [hasil dan batas](docs/rilis-v14.md) |
+| v13 — landing editorial dan portal masuk | [Rilis](docs/rilis-v13.md), [desain/gerakan](docs/research-motion-v13.md) |
+| v12 — desain dan animasi | [Rilis](docs/rilis-v12.md), [riset](docs/research-experience-v12.md) |
+| v11 — pengalaman belanja dan audit proses | [Rilis](docs/rilis-v11.md), [audit penjualan](docs/gap-sales-v11.md), [audit pengadaan](docs/gap-operations-v11.md) |
+| v10 — katalog ilustrasi dan akun | [Rilis](docs/rilis-v10.md), [data dummy](docs/data-dummy-v10.md) |
+| v8 — beranda dan akses terpisah | [Rilis](docs/rilis-v8.md) |
+| v7 — etalase dan akun pelanggan | [Rilis](docs/rilis-v7.md), [rencana/cakupan](docs/plan-customer-marketplace-v7.md), [pengujian](docs/testing-customer-v7.md) |
+| v6 — alur staf dan divisi | [Baseline regresi](docs/rilis-v6.md) |
 
-Data orang, foto ilustrasi, produk, transaksi, pembayaran, dan jurnal bersifat simulasi. Aplikasi tidak melakukan transfer bank atau integrasi operasional resmi BNI. Rilis v7 memiliki 11 akun untuk 10 peran, termasuk pelanggan demo khusus dengan email `customer@unit-toko.demo`. Hak akses dan kepemilikan transaksi diperiksa di server. Password dibuat dari seed privat; tidak disertakan dalam repositori.
-
-Arsip studi kasus, kredensial, database, unggahan privat, dan log tidak disertakan dalam repositori ini.
+[README frontend](frontend/README.md) dan [panduan publikasi lama](docs/publikasi-github.md) juga menyimpan konteks transisi; untuk menjalankan atau menerbitkan kandidat saat ini, gunakan panduan pilot/deployment di atas. Data demo, transaksi dan pembayaran sintetis bukan operasi resmi BNI. Arsip studi kasus, kredensial, database, unggahan privat dan log tidak disertakan dalam repositori.

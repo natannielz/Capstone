@@ -1,7 +1,7 @@
-import { StorefrontCart } from "@/components/shop/shopping-pages";
-import { storefrontPageActor } from "@/lib/server/page-session";
+import { redirect } from "next/navigation";
+import { isPilotRelease } from "@/lib/release-scope";
+
 export const metadata = { title: "Keranjang | Unit Toko" };
-export default async function CartPage() {
-  await storefrontPageActor();
-  return <StorefrontCart />;
+export default function CartPage() {
+  redirect(isPilotRelease ? "/ordering/requests" : "/ordering/drafts");
 }

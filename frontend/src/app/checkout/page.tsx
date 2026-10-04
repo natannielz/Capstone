@@ -1,7 +1,7 @@
-import { StorefrontCheckout } from "@/components/shop/checkout-page";
-import { storefrontPageActor } from "@/lib/server/page-session";
+import { redirect } from "next/navigation";
+import { isPilotRelease } from "@/lib/release-scope";
+
 export const metadata = { title: "Checkout | Unit Toko" };
-export default async function CheckoutPage() {
-  await storefrontPageActor();
-  return <StorefrontCheckout />;
+export default function CheckoutPage() {
+  redirect(isPilotRelease ? "/ordering/requests" : "/ordering/checkout");
 }
