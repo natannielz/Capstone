@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "purpose": "Reproducible bounded PDF raster candidate; not integrated product admission or production acceptance",
+  "platform": "Windows x64, existing isolated CPython 3.12 and pinned Pillow runtime",
+  "parser": {
+    "name": "pypdfium2",
+    "version": "5.13.0",
+    "filename": "pypdfium2-5.13.0-py3-none-win_amd64.whl",
+    "url": "https://files.pythonhosted.org/packages/5d/99/a37b6b902457569468ed5908c94e56cb6c4032541f02cf89f723d42a9148/pypdfium2-5.13.0-py3-none-win_amd64.whl",
+    "sha256": "47dcca2a8d507b5fd24f94c3c9d48fb379430f097bc20f01beff6c963ffbcedb",
+    "metadataUrl": "https://pypi.org/pypi/pypdfium2/5.13.0/json",
+    "releaseUrl": "https://pypi.org/project/pypdfium2/5.13.0/",
+    "sourceRevision": "9094de358328ae44236c5cb401a8155311e450a0",
+    "sourceUrl": "https://github.com/pypdfium2-team/pypdfium2/tree/9094de358328ae44236c5cb401a8155311e450a0",
+    "digestSource": "Official PyPI release metadata; inspected 2026-10-04, no package downloaded by this change",
+    "licenses": "pypdfium2: Apache-2.0 OR BSD-3-Clause; PDFium: BSD-style and bundled third-party notices",
+    "licenseUrl": "https://github.com/pypdfium2-team/pypdfium2/tree/9094de358328ae44236c5cb401a8155311e450a0/LICENSES",
+    "nativeLicenseUrl": "https://pdfium.googlesource.com/pdfium/+/refs/heads/main/LICENSE",
+    "licenseRequirement": "Preserve and inventory exact wheel PDFium/third-party license notices with the native runtime; wrapper license does not replace them",
+    "features": "Use this binary wheel only; reject nonempty PDFIUM_INFO.flags, no V8/XFA build or source-build fallback"
+  },
+  "pipeline": "pdfium-static-gray-25over9-bounded-pages-v1",
+  "ocrUnchanged": "tesseract-5.5.3/tesserocr-2.11.0 ind+eng; local_ocr.py is unchanged and has no PDF caller yet",
+  "ceilings": {
+    "sourceBytes": 10485760,
+    "pages": 10,
+    "renderedPageEdge": 4096,
+    "renderedPagePixels": 4000000,
+    "totalRenderedPixels": 25000000,
+    "outputBytesIncludingFrames": 33554432,
+    "capturedRemainingMilliseconds": 60000,
+    "childProcesses": 1
+  },
+  "remainingIntegration": [
+    "Provision this exact free parser wheel without dependencies/source fallback or generated pyc files; verify installed files and preserve license inventory",
+    "Run genuine native multi-page, encrypted, malformed, geometry, output/deadline and raster provenance fixtures",
+    "Connect PDF-aware private admission/security validation, immutable original ownership and per-page derivative provenance",
+    "Start suspended and confine the .NET-owned child in the existing finite Windows Job before input, with immutable runtime pins, denied egress and bounded private pipes",
+    "Require terminal completed frame, exact sequence/source/page hashes, EOF, exit zero and still-current captured read/claim/policy deadlines before any derivative writes",
+    "Pass each verified PNG page to the unchanged pinned OCR engine under the same original deadline; persist page-aware unknown fields for independent human review",
+    "Verify caller/migration/UI, actual host policy and representative business-document acceptance before enabling product PDF support"
+  ]
+}
