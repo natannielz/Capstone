@@ -102,6 +102,7 @@ public sealed class AccountContactMigrationTests(MongoFixture fixture)
     // Test-only empty suffix rehearsal. Existing data and applied predecessor migrations are never removed.
     internal static async Task RestoreV81Async(IMongoDatabase db)
     {
+        await UnitToko.Tests.Documents.PdfEvidenceValidationMigrationTests.RestoreV82Async(db);
         var history = await db.GetCollection<BsonDocument>("schemaMigrations").Find(new BsonDocument()).Sort(new BsonDocument("_id", 1)).ToListAsync();
         if (history.Count <= 81) return;
         Assert.Equal(82, history.Count); Assert.All(history, row => Assert.Equal("applied", row["state"]));

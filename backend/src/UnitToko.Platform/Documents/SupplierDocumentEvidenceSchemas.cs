@@ -33,6 +33,7 @@ internal static partial class SupplierDocumentEvidenceSchemas
         var result = Replace(current); return found ? result : throw Bad(name);
     }
     internal static bool Supports(string name, BsonDocument current, BsonDocument required) =>
+        name == "outboxEvents" && UnitToko.Platform.Mongo.Migrations.PdfEvidenceValidationSchemas.SupportsOutbox(current, required) ||
         ProcurementInspectionEvidenceSchemas.Supports(name, current, required) ||
         name == CatalogEvidenceReadSchemas.Leases && CatalogEvidenceReadSchemas.SupportsFinancial(current, required) ||
         Collections.Contains(name) && (CatalogSchemas.SemanticEquals(required, PreviousValidator(name)) ||
