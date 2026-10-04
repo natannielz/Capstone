@@ -15,7 +15,7 @@ internal sealed record LocalOcrMeasurement(TimeSpan Elapsed, long? PeakJobMemory
 internal sealed record LocalOcrPreprocessing(int OrientationDegrees, decimal DeskewDegrees, bool ContrastApplied,
     int WorkingWidth, int WorkingHeight, decimal OrientationScore, decimal OrientationMargin, IReadOnlyList<string> ReviewReasons);
 
-/// <summary>Offline Tesseract candidate. Not production selected: benchmark and host/egress acceptance are separate release gates.</summary>
+/// <summary>Selected pinned offline Tesseract engine. Host/egress approval and representative-document acceptance remain separate release gates.</summary>
 [SupportedOSPlatform("windows")]
 internal sealed class WindowsLocalOcrEngine : ILocalOcrEngine
 {
