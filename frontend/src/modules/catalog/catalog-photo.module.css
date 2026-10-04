@@ -1,0 +1,21 @@
+.panel {composes: palette from '../workspace-palette.module.css'; color:var(--workspace-ink); background:var(--workspace-surface); border:1px solid var(--workspace-border); border-top:4px solid var(--workspace-accent); border-radius:18px; padding:clamp(18px,3vw,32px); min-width:0; overflow-wrap:anywhere;}
+.heading {display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap;}
+.heading h3 {margin:0; font-size:clamp(24px,3vw,32px); line-height:1.15;}
+.eyebrow {margin:0 0 8px; font-size:12px; font-weight:750; text-transform:uppercase; letter-spacing:.06em; color:var(--workspace-accent);}
+.package {font-weight:700; margin:18px 0 8px;}
+.help {font-size:14px; line-height:1.6; color:var(--workspace-text-muted);}
+.current,.status,.recovery {margin:22px 0; padding:20px; border:1px solid var(--workspace-border); border-radius:12px; background:var(--workspace-surface-selected);}
+.current h4,.status h4,.recovery h4,.preview h4 {margin:0 0 12px; font-size:18px;}
+.current button,.recovery button {margin:8px 10px 0 0;}
+.fields {display:grid; gap:18px; margin:24px 0 18px;}
+.fields input[type='file'] {width:100%; min-width:0; padding:12px;}
+.fields textarea {width:100%; min-height:100px; resize:vertical;}
+.actions {display:flex; flex-wrap:wrap; gap:10px;}
+.preview {margin-top:24px; padding-top:24px; border-top:1px solid var(--workspace-border);}
+.preview img {display:block; width:100%; height:auto; max-height:560px; object-fit:contain; margin:16px 0; border-radius:10px; background:var(--workspace-surface-review); border:1px solid var(--workspace-border);}
+.preview h4:focus-visible {outline:3px solid var(--workspace-accent); outline-offset:6px;}
+.review {margin-top:20px; background:var(--workspace-surface-review); border-left:4px solid var(--workspace-accent); padding:18px; line-height:1.6;}
+.consent {display:flex; align-items:flex-start; gap:12px; margin:18px 0; cursor:pointer;}
+.consent input {flex:0 0 20px; width:20px; height:20px; margin-top:3px; accent-color:var(--workspace-ink);}
+.warning {padding:16px; background:var(--workspace-caution-surface); color:var(--workspace-caution-text); border:1px solid var(--workspace-caution-border); border-radius:10px;}
+@media(max-width:600px) {.panel {border-radius:12px;}.heading>button,.actions>button,.current>button,.recovery>button {width:100%; margin-right:0;}.current,.status,.recovery,.review {padding:16px;}.preview img {max-height:440px;}}

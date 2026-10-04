@@ -96,7 +96,7 @@ public sealed class ProcurementQualityAcceptanceMigrationTests(MongoFixture fixt
     internal static async Task RestoreV76Async(IMongoDatabase db) {
         var history = await HistoryAsync(db);
         if (history.Count <= 76) { Assert.All(history, row => Assert.Equal("applied", row["state"])); return; }
-        Assert.InRange(history.Count, 77, 79); Assert.All(history, row => Assert.Equal("applied", row["state"]));
+        Assert.InRange(history.Count, 77, 80); Assert.All(history, row => Assert.Equal("applied", row["state"]));
         foreach (var table in ProcurementQualityAcceptanceSchemas.Collections) {
             Assert.False(await db.GetCollection<BsonDocument>(table).Find(new BsonDocument()).AnyAsync());
             Assert.False(await db.GetCollection<BsonDocument>("idCounters").Find(new BsonDocument("_id", table)).AnyAsync());
@@ -105,6 +105,7 @@ public sealed class ProcurementQualityAcceptanceMigrationTests(MongoFixture fixt
             ("outboxEvents", "sourceKey"), ("idempotencyRecords", "operation"), ("authorizationHistory", "operation"),
             ("movements", "source.namespace"), ("journalEntries", "source.namespace"), ("journalEntries", "sourceEvent") })
             Assert.False(await db.GetCollection<BsonDocument>(table).Find(new BsonDocument(field, new BsonRegularExpression(@"^procurement\.qualityacceptance(?:[.:]|$)"))).AnyAsync());
+        await UnitToko.Tests.Catalog.CatalogPhotoMigrationTests.RestoreV79Async(db);
         // Prove the M77 suffix is empty before removing a later schema extension.
         await RestoreV77Async(db); history = await HistoryAsync(db);
         var before = await SnapshotAsync(db);

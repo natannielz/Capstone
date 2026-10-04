@@ -26,7 +26,7 @@ Do not place evidence under web/static assets, source control, shared/synchroniz
 
 ## Caller lifecycle and remaining responsibilities
 
-The internal CatalogImage admission service now implements items 1–4; combined integration verification is recorded in the [admission acceptance](../quality/private-evidence-admission-acceptance-2026-09-28.md). It is not registered as a production endpoint. Items 5–6 remain unimplemented. See the [admission operations guide](private-evidence-admission.md) for interrupted outcomes.
+The CatalogImage admission service implements items 1–4; the original adapter/admission verification is recorded in the [admission acceptance](../quality/private-evidence-admission-acceptance-2026-09-28.md). The validation worker implements the scan/decode owner in item 5. The `full` profile connects the [catalog-photo workflow](catalog-photos.md) to authenticated API routes and authorized private reads; current local and production acceptance remain separately recorded in the [ledger](../quality/production-progress.md). The association/read portion of item 6 has its own bounded leases and immutable provenance. Cleanup/deletion is not provided by this adapter. See the [admission operations guide](private-evidence-admission.md) for interrupted outcomes.
 
 1. Commit the authorized reservation, independent lineage/version-row/attempt IDs, uploader binding and capacity before any external I/O. Account for part, ready and original copies, including every failed or unresolved attempt.
 2. Require a known successful commit of the complete-EOF expected tuple before publication. A lost staging result cannot be reconstructed as successful input EOF from a partial file.

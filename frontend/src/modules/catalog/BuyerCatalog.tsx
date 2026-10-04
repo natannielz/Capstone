@@ -11,6 +11,7 @@ import { createIdentityGateway } from '../identity/identity-client';
 import { IdentityFailure, sessionTiming, type IdentitySession } from '../identity/identity-workflow';
 import { CatalogReadGate } from './catalog-editor-state';
 import { createBuyerCatalogGateway, type BuyerVariant } from './catalog-buyer-client';
+import { CatalogBuyerPhoto } from './CatalogBuyerPhoto';
 import shared from '../administration/access.module.css';
 import styles from './buyer-catalog.module.css';
 import { OrderQuotePanel } from '../ordering/OrderQuotePanel';
@@ -32,7 +33,7 @@ function message(error: unknown) {
 type Account = { actorId: string; name: string; actions: readonly string[]; session: IdentitySession; observedAt: number };
 function PackageReview({ item, account, isCurrent, requestOnly }: { item: BuyerVariant; account: Account; isCurrent: () => boolean; requestOnly: boolean }) {
   return <div className={styles.packageLayout}><div className={styles.packageFacts}>
-    {requestOnly && <div className={styles.photoPlaceholder}><PackageOpen size={42} strokeWidth={1} aria-hidden="true" /><p>Foto belum tersedia</p></div>}
+    {requestOnly ? <div className={styles.photoPlaceholder}><PackageOpen size={42} strokeWidth={1} aria-hidden="true" /><p>Foto belum tersedia</p></div> : <CatalogBuyerPhoto actorId={account.actorId} item={item} isCurrent={isCurrent}/>}
     <span className={styles.category}>{item.categoryCode}</span><h2 id="buyer-package-title" className={styles.packageTitle}>{item.familyName} — {item.definition.packageLabel}</h2>
     <p className={styles.code}>{item.code}</p>{item.description && <p className={styles.description}>{item.description}</p>}
     <p className={styles.contents}>{item.definition.baseUnitsPerPackage.toLocaleString('id-ID')} <span>{item.definition.baseUnitCode} per kemasan</span></p>
@@ -122,7 +123,7 @@ export function BuyerCatalog({ publicId, returnPath = '/catalog/browse', request
       : <section aria-busy={busy} aria-label="Kemasan yang tersedia">{busy ? <div className={styles.loading}><p role="status">Memuat katalog untuk akun Anda…</p><div className={styles.skeletonGrid} aria-hidden="true"><span /><span /><span /></div></div> : account && !expired && <>
       <p className={shared.help}>{account.name} · {BigInt(total).toLocaleString('id-ID')} kemasan dalam katalog</p>
       {items.length === 0 ? <div className={styles.empty}><PackageOpen size={36} strokeWidth={1.25} aria-hidden="true" /><h3>Belum ada kemasan yang sesuai.</h3><p>Ubah pencarian atau periksa kembali nanti.</p></div> : <ul className={styles.grid}>{items.map(item => <li className={styles.card} key={item.skuId}>
-        {requestOnly && <div className={styles.photoPlaceholder}><PackageOpen size={48} strokeWidth={1} aria-hidden="true" /><p>Foto belum tersedia</p></div>}
+        {requestOnly ? <div className={styles.photoPlaceholder}><PackageOpen size={48} strokeWidth={1} aria-hidden="true" /><p>Foto belum tersedia</p></div> : <CatalogBuyerPhoto actorId={account.actorId} item={item} isCurrent={current}/>}
         <span className={styles.category}>{item.categoryCode}</span><h2>{item.familyName}</h2><p className={styles.code}>{item.code}</p><h3>{item.definition.packageLabel}</h3>
         <p className={styles.contents}>{item.definition.baseUnitsPerPackage.toLocaleString('id-ID')} <span>{item.definition.baseUnitCode} per kemasan</span></p>
         {!requestOnly && <p className={styles.price}>{price(item.currentPrice)}<span> per {item.definition.packageLabel}</span></p>}

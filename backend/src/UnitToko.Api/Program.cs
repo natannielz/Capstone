@@ -58,6 +58,17 @@ builder.Services.AddSingleton<CatalogVisibilityStore>();
 builder.Services.AddSingleton<CatalogAuthoringService>();
 builder.Services.AddSingleton<CatalogPriceService>();
 builder.Services.AddSingleton<CatalogDefinitionQueryService>();
+builder.Services.AddSingleton(sp => {
+    var options = sp.GetRequiredService<IConfiguration>().GetSection("Evidence:PrivateWindows");
+    var root = options["Root"]; var storeId = options["StoreId"]; var operators = options.GetSection("TrustedOperatorSids").Get<string[]>() ?? [];
+    CatalogPhotoStorageOptions? storage = null;
+    if (root is not null || storeId is not null || operators.Length > 0) {
+        if (string.IsNullOrWhiteSpace(root) || string.IsNullOrWhiteSpace(storeId)) throw new InvalidOperationException("Complete private evidence storage settings are required");
+        storage = new(root, storeId, operators);
+    }
+    return new CatalogPhotoWorkflow(sp.GetRequiredService<IMongoDatabase>(), sp.GetRequiredService<MongoUnitOfWork>(), sp.GetRequiredService<IdAllocator>(),
+        sp.GetRequiredService<IClock>(), sp.GetRequiredService<CatalogAuthoringService>(), storage);
+});
 builder.Services.AddSingleton<OrderQuoteService>();
 builder.Services.AddSingleton<OrderDraftService>();
 builder.Services.AddSingleton<BranchOrderRequestService>();
@@ -290,7 +301,8 @@ app.Use(async (context, next) =>
     context.Response.Headers["X-Correlation-Id"] = correlation;
     try
     {
-        var evidenceStream = context.GetEndpoint()?.Metadata.GetMetadata<PaymentEvidenceBodyStream.UploadMetadata>() is not null;
+        var evidenceStream = context.GetEndpoint()?.Metadata.GetMetadata<PaymentEvidenceBodyStream.UploadMetadata>() is not null ||
+            context.GetEndpoint()?.Metadata.GetMetadata<CatalogPhotoBodyStream.UploadMetadata>() is not null;
         var videoStream = context.GetEndpoint()?.Metadata.GetMetadata<ProcurementInspectionEvidenceBodyStream.UploadMetadata>() is not null;
         // The video endpoint obtains its authorized finite policy and sets its request/source
         // bound before reading bytes. Image and JSON ceilings stay unchanged here.
@@ -414,6 +426,7 @@ app.MapBranchOrderRequestEndpoints();
 if (!pilotRelease)
 {
 app.MapCatalogPriceEndpoints();
+app.MapCatalogPhotoEndpoints();
 app.MapOrderQuoteEndpoints();
 app.MapOrderSpendingPolicyEndpoints();
 app.MapAccountingBookSetupEndpoints();

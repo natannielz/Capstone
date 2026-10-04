@@ -76,7 +76,10 @@ internal static class RefundPayoutEvidenceSchemas
             catch (InvalidOperationException) { throw new UnitToko.Platform.Mongo.PersistenceConflictException("evidence_storage_unavailable", "Evidence storage is not ready"); }
         }
         foreach (var name in EvidenceAccessSchemas.Collections)
-            await InventoryRepository.RequireStorageAsync(database, name, name == "evidenceReadLeases" ? Validator(name) : EvidenceAccessSchemas.Validator(name), EvidenceAccessSchemas.Key(name), ct);
+            if (name == "evidenceReadLeases")
+                await SupplierDocumentEvidenceSchemas.RequireCompatibleStorageAsync(database, name, Validator(name), EvidenceAccessSchemas.Key(name), ct);
+            else
+                await InventoryRepository.RequireStorageAsync(database, name, EvidenceAccessSchemas.Validator(name), EvidenceAccessSchemas.Key(name), ct);
         foreach (var name in new[] { "evidencePins", "evidencePinAudits" })
             await InventoryRepository.RequireStorageAsync(database, name, name == "evidencePins" ? Validator(name) : PaymentSubmissionSchemas.Validator(name), PaymentSubmissionSchemas.Key(name), ct);
     }

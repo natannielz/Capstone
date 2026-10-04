@@ -28,6 +28,15 @@
 .detailHeading > p:last-child { color: #526c70; }
 .photoPlaceholder { width: 100%; min-height: 200px; display: grid; justify-items: center; align-content: center; gap: 13px; text-align: center; background: #f1f4ef; color: #63776b; margin-bottom: 22px; }
 .photoPlaceholder p { font-size: 12px; margin: 0; }
+.buyerPhoto { width: 100%; min-width: 0; margin-bottom: 22px; }
+.buyerPhotoFrame { height: clamp(200px, 22vw, 280px); display: grid; place-items: center; overflow: hidden; border: 1px solid var(--workspace-border, #d5e3e1); background: #fff; }
+.buyerPhotoFrame img { display: block; width: 100%; height: 100%; min-height: 0; object-fit: contain; padding: 16px; }
+.buyerPhotoState { display: grid; justify-items: center; gap: 12px; padding: 20px; color: var(--workspace-ink, #073b45); text-align: center; }
+.buyerPhotoState svg { color: var(--workspace-accent, #c25426); }
+.buyerPhotoState p { margin: 0; font-size: 12px; line-height: 1.6; max-width: 34ch; }
+.buyerPhotoRefresh { display: inline-flex; width: auto; min-height: 36px; align-items: center; justify-content: center; gap: 8px; padding: 6px 4px; color: var(--workspace-ink, #073b45); background: transparent; border: 0; font-size: 12px; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.buyerPhotoRefresh:disabled { opacity: .55; cursor: wait; }
+.buyerPhotoRefresh:focus-visible { outline: 2px solid var(--workspace-ink, #073b45); outline-offset: 3px; }
 .card:nth-child(3n + 2) .photoPlaceholder { background: #f5f0e9; color: #8a715b; }
 .card:nth-child(3n) .photoPlaceholder { background: #edf2f4; color: #65767c; }
 .toolbar, .search, .pagination, .dialogHeader, .detailToolbar { display: flex; gap: 16px; align-items: end; flex-wrap: wrap; }

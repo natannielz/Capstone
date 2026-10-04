@@ -101,6 +101,26 @@ public sealed class CatalogDefinitionQueryService(IMongoDatabase database, Autho
             return rows.Count == 0 ? null : await JoinAsync(tx, rows[0], ct);
         }, cancellationToken);
     }
+    // A buyer photo selector joins the same current publication graph as the named catalogue.
+    // The callback stays inside CatalogVisibilityStore's scoped transaction and final fences.
+    internal Task<T?> ReadPhotoWithinAsync<T>(ActorContext actor, string publicId,
+        Func<IClientSessionHandle, BsonDocument, BsonDocument, CancellationToken, Task<T?>> read,
+        CancellationToken ct) where T : class
+    {
+        if (publicId is null || !Regex.IsMatch(publicId, "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\\z", RegexOptions.CultureInvariant))
+            throw new DomainValidationException("invalid_public_id", "A canonical UUID version 4 is required");
+        return visibility.ReadCurrentAsync<T?>(actor, F.Eq("publicId", publicId) & F.Eq("active", true), async (tx, filter, token) => {
+            var rows = await repository.Rows("skus").Find(tx, filter).Limit(2).ToListAsync(token);
+            if (rows.Count > 1) throw CatalogRepository.Invalid("ambiguous_catalog_identifier");
+            if (rows.Count == 0) return null;
+            if (await JoinAsync(tx, rows[0], token) is null) return null;
+            var definition = await repository.GetAsync(tx, "variantDefinitions", rows[0]["currentDefinitionId"].AsInt64, token);
+            // JoinAsync fences the SKU by incrementing its coordination fence. Pass its
+            // exact post-fence row to the association owner in this same transaction.
+            var currentSku = await repository.GetAsync(tx, "skus", rows[0]["_id"].AsInt64, token);
+            return await read(tx, currentSku, definition, token);
+        }, ct);
+    }
     private async Task<CatalogPublishedVariant?> JoinAsync(IClientSessionHandle tx, BsonDocument row, CancellationToken ct)
     {
         CatalogRepository.Require("skus", row);

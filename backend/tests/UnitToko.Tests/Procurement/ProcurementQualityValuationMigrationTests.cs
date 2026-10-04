@@ -5,6 +5,7 @@ using UnitToko.Platform;
 using UnitToko.Platform.Inventory;
 using UnitToko.Platform.Mongo;
 using UnitToko.Platform.Mongo.Migrations;
+using UnitToko.Platform.Documents;
 using UnitToko.Platform.Procurement;
 using UnitToko.Tests.Authorization;
 using UnitToko.Tests.Documents;
@@ -89,6 +90,10 @@ public sealed class ProcurementQualityValuationMigrationTests(MongoFixture fixtu
         var match = await data.Rows(D.Matches).Find(new BsonDocument("_id", data.MatchId)).SingleAsync();
         var quality = match["links"][0]["quality"].AsBsonDocument;
         var submission = await data.Rows(D.Submissions).Find(new BsonDocument("_id", data.Documents.DocumentId)).SingleAsync();
+        // A direct M79 interrupted-install rehearsal must first remove the
+        // genuinely empty M80 suffix and restore its exact predecessor lease
+        // validator. The populated M79 owner refusal above ran before this.
+        await UnitToko.Tests.Catalog.CatalogPhotoMigrationTests.RestoreV79Async(data.Database);
         Assert.Equal(1L, (await data.Rows("schemaMigrations").DeleteOneAsync(new BsonDocument { { "_id", 79 }, { "state", "applied" } })).DeletedCount);
         foreach (var (table, id) in new[] {
             (ProcurementQualityAcceptanceBson.Allocations, quality["allocationId"]),
@@ -136,7 +141,7 @@ public sealed class ProcurementQualityValuationMigrationTests(MongoFixture fixtu
     internal static async Task RestoreV78Async(IMongoDatabase db) {
         var history = await HistoryAsync(db);
         if (history.Count <= 78) { Assert.All(history, row => Assert.Equal("applied", row["state"])); return; }
-        Assert.Equal(79, history.Count); Assert.All(history, row => Assert.Equal("applied", row["state"]));
+        Assert.InRange(history.Count, 79, 80); Assert.All(history, row => Assert.Equal("applied", row["state"]));
         foreach (var table in ProcurementQualityValuationSchemas.Collections) {
             Assert.False(await db.GetCollection<BsonDocument>(table).Find(new BsonDocument("$nor", new BsonArray { Legacy(table) })).AnyAsync());
             foreach (var field in new[] { "quality", "qualityCapacity", "input.lines.qualityAllocationId", "lines.quality", "links.quality" })
@@ -149,6 +154,9 @@ public sealed class ProcurementQualityValuationMigrationTests(MongoFixture fixtu
                     var id = effect[payload][resultId]; Assert.True(id.IsInt64 && id.AsInt64 > 0);
                     Assert.True(await db.GetCollection<BsonDocument>(table).Find(new BsonDocument { { "_id", id }, { "$and", new BsonArray { Legacy(table) } } }).AnyAsync());
                 }
+        await UnitToko.Tests.Catalog.CatalogPhotoMigrationTests.RestoreV79Async(db);
+        history = await HistoryAsync(db);
+        Assert.Equal(79, history.Count);
         var before = await SnapshotAsync(db);
         foreach (var table in ProcurementQualityValuationSchemas.Collections) {
             var current = before[table]["definition"]["options"]["validator"].AsBsonDocument;
@@ -163,7 +171,7 @@ public sealed class ProcurementQualityValuationMigrationTests(MongoFixture fixtu
         Assert.Equal(new BsonArray(history.Take(78)), await HistoryAsync(db));
         var after = await SnapshotAsync(db);
         // Reversing only the schema/index extension must reproduce the exact pre-isolation snapshot.
-        AssertUpgradePreserves(after, before);
+        AssertUpgradePreserves(after, before, photoUpgrade: false);
     }
 
     internal static async Task VerifyPublishedRequestUpgradeAsync(IMongoDatabase db, IClock clock) {
@@ -185,8 +193,15 @@ public sealed class ProcurementQualityValuationMigrationTests(MongoFixture fixtu
     }
     private static BsonDocument Legacy(string table) => table == D.Matches ? SupplierDocumentSchemas.Validator(table) : ProcurementStockValuationSchemas.Validator(table);
     private static BsonDocument Current(string table) => table == D.Matches ? ProcurementQualityValuationSchemas.CurrentDocumentValidator(table) : ProcurementQualityValuationSchemas.CurrentValuationValidator(table);
-    private static void AssertUpgradePreserves(BsonDocument before, BsonDocument after) {
+    private static void AssertUpgradePreserves(BsonDocument before, BsonDocument after, bool photoUpgrade = true) {
         var expected = before.DeepClone().AsBsonDocument;
+        if (photoUpgrade)
+            expected[CatalogEvidenceReadSchemas.Leases]["definition"]["options"]["validator"] =
+                PaymentManualReviewMigration.ExtendValidator(
+                    expected[CatalogEvidenceReadSchemas.Leases]["definition"]["options"]["validator"].AsBsonDocument,
+                    CatalogEvidenceReadSchemas.PreviousValidator(CatalogEvidenceReadSchemas.Leases),
+                    CatalogEvidenceReadSchemas.Validator(CatalogEvidenceReadSchemas.Leases),
+                    CatalogEvidenceReadSchemas.Leases);
         foreach (var table in ProcurementQualityValuationSchemas.Collections)
             expected[table]["definition"]["options"]["validator"] = PaymentManualReviewMigration.ExtendValidator(
                 expected[table]["definition"]["options"]["validator"].AsBsonDocument, Legacy(table), Current(table), table);

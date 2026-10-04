@@ -34,6 +34,7 @@ internal static partial class SupplierDocumentEvidenceSchemas
     }
     internal static bool Supports(string name, BsonDocument current, BsonDocument required) =>
         ProcurementInspectionEvidenceSchemas.Supports(name, current, required) ||
+        name == CatalogEvidenceReadSchemas.Leases && CatalogEvidenceReadSchemas.SupportsFinancial(current, required) ||
         Collections.Contains(name) && (CatalogSchemas.SemanticEquals(required, PreviousValidator(name)) ||
             ProcurementInspectionEvidenceSchemas.Supports(name, PreviousValidator(name), required)) && InventorySchemas.Contains(current, Validator(name));
     internal static async Task RequireCompatibleStorageAsync(IMongoDatabase database, string name, BsonDocument required, BsonDocument key, CancellationToken ct) {
