@@ -27,6 +27,20 @@ const proposed = { proposalId, decisionId: null, allocationId: null, journalId: 
 const proposeOp = 'procurement.stockvaluation.propose', decideOp = 'procurement.stockvaluation.decide', proposeKey = `sv.propose.${receiptId}.aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa`, approveKey = `sv.approve.${proposalId}.bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb`;
 const command = () => prepareStockValuation(actor, target, { receipt, receiptCapacity }, match, policy, input, preview), decisionCommand = () => prepareStockValuationDecision(checker, original, decisionPreview, 'Pemeriksaan independen dan pembukuan penilaian');
 
+test('mixed partial valuation retains its exact selected quality allocation and pinned receipt acceptance state', () => {
+  const quality = { allocationId: '9007199254741110', proposalId: '9007199254741111', decisionId: '9007199254741112', receiptId, receiptReference: receipt.input.receiptReference, acceptedPackages: '2', lotReference: receipt.input.lotReference, expiresOn: receipt.input.expiresOn, acceptedCondition: 'sealed_undamaged' as const, putawayReference: 'CHECKED-PUTAWAY', segregationReference: 'CHECKED-SUBSET', recordedAt: '2026-10-03T01:00:01.000Z' };
+  const qualityCapacity = { version: '1', acceptedPackages: '2', remainingPackages: '1', lastAllocationId: quality.allocationId, lastHash: 'e'.repeat(64) }, linked = { ...match, quality }, shown = { ...preview, match: linked, qualityCapacity };
+  assert.equal(prepareStockValuation(actor, target, { receipt, receiptCapacity }, linked, policy, input, shown).body.input.packages, 1);
+  const owned = { ...original, proposal: { ...proposal, match: linked, qualityCapacity } }, decision = { ...decisionPreview, proposal: owned.proposal, qualityCapacity };
+  assert.equal(parseStockValuationRead(owned).proposal.match.quality?.allocationId, quality.allocationId);
+  assert.equal(prepareStockValuationDecision(checker, owned, decision, 'Exact independent review').body.decision, 'approve');
+  for (const changed of [{ qualityCapacity: undefined }, { qualityCapacity: { ...qualityCapacity, acceptedPackages: '1', remainingPackages: '2' } }, { qualityCapacity: { ...qualityCapacity, remainingPackages: '2' } }, { qualityCapacity: { ...qualityCapacity, acceptedPackages: 2 } }]) assert.throws(() => parseStockValuationRead({ ...owned, proposal: { ...owned.proposal, ...changed } }));
+  for (const changed of [{ receiptId: '999' }, { receiptReference: 'OTHER-RECEIPT' }, { acceptedCondition: 'intact_as_defined' }, { lotReference: 'OTHER' }, { expiresOn: '2026-10-04' }, { acceptedPackages: '1' }, { acceptedPackages: 2 }, { matchedPackages: '0' }]) assert.throws(() => parseStockValuationRead({ ...owned, proposal: { ...owned.proposal, match: { ...linked, quality: { ...quality, ...changed } } } }));
+  assert.throws(() => prepareStockValuationDecision(checker, owned, { ...decision, qualityCapacity: { ...qualityCapacity, version: '2', acceptedPackages: '3', remainingPackages: '0', lastAllocationId: '999' } }, 'Changed quality state'));
+  assert.throws(() => prepareStockValuation(actor, target, { receipt, receiptCapacity }, match, policy, input, { ...preview, qualityCapacity }));
+  assert.deepEqual(command().body.input, input); assert.equal(Object.hasOwn(parseStockValuationRead(original).proposal, 'qualityCapacity'), false);
+});
+
 test('valuation requires explicit exact quantities and component money; capitalized amount is their bounded sum', () => {
   assert.deepEqual(stockValuationInput(input), input); assert.equal(stockValuationTotal('10000.00', '1000.00', '250.00'), '11250.00');
   for (const values of [['', '0.00', '0.00'], ['1,00', '0.00', '0.00'], ['1.0', '0.00', '0.00'], ['999999999999999.99', '0.01', '0.00']]) assert.equal(stockValuationTotal(...values as [string, string, string]), null);

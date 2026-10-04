@@ -23,7 +23,7 @@ namespace UnitToko.Tests.Procurement;
 // Real receipt, private video inspection, image publication, local decoder and pinned source.
 // Loopback scanner signatures and operational approvals are synthetic test inputs only.
 [SupportedOSPlatform("windows")]
-internal sealed class SupplierDocumentTestData(ProcurementInspectionTestData inspection) : IAsyncDisposable
+internal sealed class SupplierDocumentTestData(ProcurementInspectionTestData inspection, bool ownsInspection = true) : IAsyncDisposable
 {
     internal const string DraftOperation = "procurement.supplierdocument.draft", SubmitOperation = "procurement.supplierdocument.submit", MatchOperation = "procurement.supplierdocument.match";
     internal const string Consumer = "synthetic-supplier-document-image-worker";
@@ -57,12 +57,23 @@ internal sealed class SupplierDocumentTestData(ProcurementInspectionTestData ins
     internal SupplierDocumentMatchInput MatchInput(int packages = 2, Money? tax = null, Money? charge = null, SupplierDocumentInput? reviewed = null) => new(DocumentId, 1, reviewed ?? Input(), null,
         [new(1, packages, InspectionId, 1, null, null, new Money(10000 * packages), tax ?? new Money(2000), charge ?? new Money(500), null, null)]);
     internal static async Task<SupplierDocumentTestData> CreateAsync(MongoFixture fixture, ProcurementRoute route = ProcurementRoute.Ddo, bool createDraft = true, decimal requiredAdvance = 0) {
-        var inspection = await ProcurementInspectionTestData.CreateAsync(fixture, route, createDraft: false, requiredAdvance: requiredAdvance); var data = new SupplierDocumentTestData(inspection);
+        var inspection = await ProcurementInspectionTestData.CreateAsync(fixture, route, createDraft: false, requiredAdvance: requiredAdvance);
+        return await CreateFromInspectionAsync(inspection, createDraft, ownsInspection: true);
+    }
+    internal static async Task<SupplierDocumentTestData> CreateFromInspectionAsync(ProcurementInspectionTestData inspection,
+        bool createDraft = true, bool ownsInspection = false) {
+        var data = new SupplierDocumentTestData(inspection, ownsInspection);
         try {
-            var observed = inspection.Input(); observed = observed with { Discrepancy = null, Lines = [observed.Lines[0] with {
-                DamagedPackages = 0, ExpiredPackages = 0, OpenedPackages = 0, ExpiryDate = AccountingCalendar.BusinessDate(data.Clock.UtcNow).AddYears(1), Discrepancy = null }] };
-            inspection.Draft = await inspection.DraftAsync("supplier-document-inspection-draft", observed);
-            await inspection.UploadAsync(); await inspection.ValidateAsync(); data.InspectionResult = await inspection.SubmitAsync(await inspection.PreviewSubmitAsync());
+            if (inspection.Draft is null) {
+                var observed = inspection.Input(); observed = observed with { Discrepancy = null, Lines = [observed.Lines[0] with {
+                    DamagedPackages = 0, ExpiredPackages = 0, OpenedPackages = 0, ExpiryDate = AccountingCalendar.BusinessDate(data.Clock.UtcNow).AddYears(1), Discrepancy = null }] };
+                inspection.Draft = await inspection.DraftAsync("supplier-document-inspection-draft", observed);
+                await inspection.UploadAsync(); await inspection.ValidateAsync(); data.InspectionResult = await inspection.SubmitAsync(await inspection.PreviewSubmitAsync());
+            } else {
+                var submission = await data.Rows("procurementInspectionSubmissions")
+                    .Find(new BsonDocument("draftId", inspection.DraftId)).SingleAsync();
+                data.InspectionResult = ProcurementInspectionBson.Result(submission);
+            }
             var scope = ProcurementRequestTestData.Scope;
             data.Actor = await data.Base.AddActorAsync(700, scope, Permissions.ProcurementRead, Permissions.ProcurementSupplierDocumentRecord, Permissions.ProcurementSupplierDocumentEvidenceRead, Permissions.ProcurementSupplierDocumentMatch);
             data.Reader = await data.Base.AddActorAsync(701, scope, Permissions.ProcurementRead);
@@ -116,5 +127,5 @@ internal sealed class SupplierDocumentTestData(ProcurementInspectionTestData ins
             state[table] = new BsonArray(await Rows(table).Find(new BsonDocument(field, new BsonDocument("$in", new BsonArray { DraftOperation, SubmitOperation, MatchOperation }))).Sort(new BsonDocument("_id", 1)).ToListAsync());
         state["pins"] = new BsonArray(await Rows("evidencePins").Find(new BsonDocument("associationKind", "SupplierDocument")).Sort(new BsonDocument("_id", 1)).ToListAsync()); return state;
     }
-    public async ValueTask DisposeAsync() { try { if (Scanner is not null) await Scanner.DisposeAsync(); } finally { await Inspection.DisposeAsync(); } }
+    public async ValueTask DisposeAsync() { try { if (Scanner is not null) await Scanner.DisposeAsync(); } finally { if (ownsInspection) await Inspection.DisposeAsync(); } }
 }

@@ -83,6 +83,10 @@ public sealed class BranchOrderRequestServiceTests(MongoFixture fixture) {
         var rejected = await service.DecideAsync(staff, secondId, 1, BranchOrderRequestDecision.Reject, reject["binding"].AsString, Meta("request-reject"));
         Assert.Equal("rejected", rejected["state"].AsString);
         Assert.Equal("Synthetic branch request review", (await service.ReadAsync(catalog.Buyer, secondId))["decision"]["reason"].AsString);
+        // Costing must upgrade past published migration78 without replaying or changing requests.
+        await Procurement.ProcurementQualityValuationMigrationTests.VerifyPublishedRequestUpgradeAsync(source.Database, source.Clock);
+        Assert.Equal("accepted", (await service.ReadAsync(catalog.Buyer, id))["state"].AsString);
+        Assert.Equal("rejected", (await service.ReadAsync(catalog.Buyer, secondId))["state"].AsString);
         var thirdPreview = await service.PreviewAsync(catalog.Buyer, input);
         var third = await service.SubmitAsync(catalog.Buyer, input, thirdPreview["binding"].AsString, Meta("request-race"));
         var thirdId = third["requestId"].AsInt64;

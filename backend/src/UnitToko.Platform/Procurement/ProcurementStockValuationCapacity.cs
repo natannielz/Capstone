@@ -5,6 +5,7 @@ using UnitToko.Platform.Mongo;
 using UnitToko.Platform.Accounting;
 using UnitToko.Modules.Procurement;
 using UnitToko.Platform.Authorization;
+using UnitToko.Platform.Catalog;
 using UnitToko.Platform.Mongo.Migrations;
 using B = UnitToko.Platform.Procurement.ProcurementStockValuationBson;
 
@@ -15,12 +16,50 @@ internal sealed record ProcurementStockValuationCapacity(BsonDocument Receipt, B
 internal sealed record ProcurementStockValuationReceiptCapacity(BsonDocument State, BsonDocument? Head,
     IReadOnlyList<BsonDocument> Allocations);
 
-internal sealed class ProcurementStockValuationCapacityReader(IMongoDatabase database)
+internal sealed class ProcurementStockValuationCapacityReader(IMongoDatabase database, MongoUnitOfWork unit, IClock clock,
+    CatalogAuthoringService catalog, PurchaseOrderService orders)
 {
     private IMongoCollection<BsonDocument> Rows(string name) => database.GetCollection<BsonDocument>(name);
+    private IClientSessionHandle? sourceTransaction;
+    private long sourceTransactionNumber;
+    private readonly Dictionary<long, SupplierDocumentHistory> provenInvoiceHistories = [];
+    internal async Task<SupplierDocumentHistory> InvoiceHistoryAsync(IClientSessionHandle tx, BsonDocument invoice, CancellationToken ct) {
+        if (!tx.IsInTransaction || !ReferenceEquals(tx.Client, database.Client)) throw B.Broken();
+        var transactionNumber = tx.WrappedCoreSession.CurrentTransaction.TransactionNumber;
+        if (!ReferenceEquals(sourceTransaction, tx) || sourceTransactionNumber != transactionNumber) {
+            sourceTransaction = tx; sourceTransactionNumber = transactionNumber; provenInvoiceHistories.Clear();
+        }
+        var invoiceId = invoice["_id"].AsInt64;
+        if (!provenInvoiceHistories.TryGetValue(invoiceId, out var history)) {
+            // A prior allocation consumes capacity only while its full private invoice,
+            // match, quality and claim source lineage remains authenticated.
+            history = await new SupplierDocumentRecords(database, unit, clock, catalog, orders).HistoryAsync(tx, invoice["draftId"].AsInt64, ct);
+            provenInvoiceHistories.Add(invoiceId, history);
+        }
+        if (history.Document is null || history.Document != invoice || history.Identity["draftCount"].AsInt64 != 1)
+            throw B.Broken();
+        return history;
+    }
+    internal SupplierDocumentHistory VerifiedProposalHistory(IClientSessionHandle tx, ProcurementStockValuationProposalProof proof,
+        ProcurementStockValuationInput input, BsonDocument? retainedProposal, BsonDocument invoice) {
+        proof.Require(tx, input, retainedProposal);
+        if (!tx.IsInTransaction || !ReferenceEquals(tx.Client, database.Client) || proof.Source.Invoice != invoice ||
+            proof.Source.InvoiceHistory.Document is null || proof.Source.InvoiceHistory.Document != invoice ||
+            proof.Source.InvoiceHistory.Identity["draftCount"].AsInt64 != 1) throw B.Broken();
+        var transactionNumber = tx.WrappedCoreSession.CurrentTransaction.TransactionNumber;
+        if (!ReferenceEquals(sourceTransaction, tx) || sourceTransactionNumber != transactionNumber) {
+            sourceTransaction = tx; sourceTransactionNumber = transactionNumber; provenInvoiceHistories.Clear();
+        }
+        var history = proof.Source.InvoiceHistory;
+        if (provenInvoiceHistories.TryGetValue(invoice["_id"].AsInt64, out var existing) && existing != history) throw B.Broken();
+        provenInvoiceHistories[invoice["_id"].AsInt64] = history;
+        return history;
+    }
     private async Task OwnerAsync(IClientSessionHandle tx, BsonDocument allocation, CancellationToken ct) {
-        var proposal = await Rows(B.Proposals).Find(tx, new BsonDocument("_id", allocation["proposalId"])).SingleOrDefaultAsync(ct) ?? throw B.Broken();
-        var decision = await Rows(B.Decisions).Find(tx, new BsonDocument("_id", allocation["decisionId"])).SingleOrDefaultAsync(ct) ?? throw B.Broken();
+        var proposal = await Rows(B.Proposals).Find(tx, new BsonDocument { { "_id", allocation["proposalId"] },
+            { "$and", new BsonArray { ProcurementQualityValuationSchemas.CurrentValuationValidator(B.Proposals) } } }).SingleOrDefaultAsync(ct) ?? throw B.Broken();
+        var decision = await Rows(B.Decisions).Find(tx, new BsonDocument { { "_id", allocation["decisionId"] },
+            { "$and", new BsonArray { ProcurementQualityValuationSchemas.CurrentValuationValidator(B.Decisions) } } }).SingleOrDefaultAsync(ct) ?? throw B.Broken();
         if (proposal["snapshotHash"] != B.Hash(proposal) || decision["snapshotHash"] != B.Hash(decision) ||
             proposal["snapshotHash"] != allocation["proposalHash"] || decision["proposalId"] != proposal["_id"] ||
             decision["proposalHash"] != proposal["snapshotHash"] || decision["decision"] != "approve" ||
@@ -28,6 +67,10 @@ internal sealed class ProcurementStockValuationCapacityReader(IMongoDatabase dat
             decision["journalId"] != allocation["journalId"] || decision["input"] != proposal["input"] ||
             decision["receiptBefore"] != allocation["receiptBefore"] || decision["receiptAfter"] != allocation["receiptAfter"] ||
             decision["matchBefore"] != allocation["matchBefore"] || decision["matchAfter"] != allocation["matchAfter"]) throw B.Broken();
+        if (proposal.Contains("quality") != decision.Contains("quality") || proposal.Contains("qualityCapacity") != decision.Contains("qualityCapacity")) throw B.Broken();
+        if (proposal.Contains("quality") && (proposal["quality"] != decision["quality"] || proposal["qualityCapacity"] != decision["qualityCapacity"] ||
+            proposal["quality"]["receiptId"] != allocation["receiptId"] || proposal["quality"]["receiptHash"] != allocation["receiptHash"] ||
+            proposal["qualityCapacity"]["acceptedPackages"].AsInt64 < allocation["receiptAfter"]["allocatedPackages"].AsInt64)) throw B.Broken();
         var input = B.Input(proposal["input"]);
         if (allocation["receiptId"] != input.ReceiptId || allocation["invoiceDocumentId"] != input.InvoiceDocumentId ||
             allocation["invoiceMatchId"] != input.InvoiceMatchId || allocation["matchLineNumber"] != input.MatchLineNumber ||
@@ -42,7 +85,9 @@ internal sealed class ProcurementStockValuationCapacityReader(IMongoDatabase dat
         var invoice = await Rows(SupplierDocumentBson.Submissions).Find(tx, new BsonDocument { { "_id", input.InvoiceDocumentId },
             { "$and", new BsonArray { SupplierDocumentSchemas.Validator(SupplierDocumentBson.Submissions) } } }).SingleOrDefaultAsync(ct) ?? throw B.Broken();
         var match = await Rows(SupplierDocumentBson.Matches).Find(tx, new BsonDocument { { "_id", input.InvoiceMatchId },
-            { "$and", new BsonArray { SupplierDocumentSchemas.Validator(SupplierDocumentBson.Matches) } } }).SingleOrDefaultAsync(ct) ?? throw B.Broken();
+            { "$and", new BsonArray { ProcurementQualityValuationSchemas.CurrentDocumentValidator(SupplierDocumentBson.Matches) } } }).SingleOrDefaultAsync(ct) ?? throw B.Broken();
+        var invoiceHistory = await InvoiceHistoryAsync(tx, invoice, ct);
+        if (!invoiceHistory.Matches.Any(row => row["_id"] == match["_id"] && row == match)) throw B.Broken();
         if (input.MatchLineNumber <= 0 || input.MatchLineNumber > match["lines"].AsBsonArray.Count ||
             input.MatchLineNumber > match["links"].AsBsonArray.Count || match["links"][input.MatchLineNumber - 1].IsBsonNull) throw B.Broken();
         if (receipt["snapshotHash"] != ProcurementStockReceiptBson.Hash(receipt) ||
@@ -56,6 +101,10 @@ internal sealed class ProcurementStockValuationCapacityReader(IMongoDatabase dat
             match["links"][input.MatchLineNumber - 1]["hash"] != receipt["inspection"]["snapshotHash"] ||
             match["links"][input.MatchLineNumber - 1]["orderId"] != receipt["orderId"] ||
             match["lines"][input.MatchLineNumber - 1] != proposal["matchLine"]) throw B.Broken();
+        var matchedLine = match["lines"][input.MatchLineNumber - 1];
+        if (proposal.Contains("quality") != matchedLine.AsBsonDocument.Contains("quality") ||
+            proposal.Contains("quality") && (proposal["quality"] != matchedLine["quality"] ||
+                match["links"][input.MatchLineNumber - 1]["quality"] != proposal["quality"])) throw B.Broken();
         foreach (var row in new[] { proposal, decision }) {
             var auditRow = await Rows("auditEvents").Find(tx, new BsonDocument("_id", row["auditId"])).SingleOrDefaultAsync(ct) ?? throw B.Broken();
             if (auditRow != B.Audit(row)) throw B.Broken();

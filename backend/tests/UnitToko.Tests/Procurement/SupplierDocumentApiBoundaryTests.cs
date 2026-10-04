@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using UnitToko.Api.Procurement;
+using UnitToko.Modules.Contracts;
 
 namespace UnitToko.Tests.Procurement;
 
@@ -38,6 +39,18 @@ public sealed class SupplierDocumentApiBoundaryTests
             """;
         var checkedLine = JsonSerializer.Deserialize<SupplierDocumentMatchLineInputDto>(source, Json)!;
         Assert.Equal(9007199254740993, checkedLine.InspectionId!.Value.Value);
+        Assert.Null(checkedLine.QualityAllocationId);
+        Assert.True(JsonNode.DeepEquals(JsonNode.Parse(source), JsonSerializer.SerializeToNode(checkedLine, Json)));
+        var quality = JsonNode.Parse(source)!.AsObject(); quality["qualityAllocationId"] = "9007199254740993";
+        var qualityLine = JsonSerializer.Deserialize<SupplierDocumentMatchLineInputDto>(quality.ToJsonString(), Json)!;
+        Assert.Equal(9007199254740993, qualityLine.QualityAllocationId!.Value.Value);
+        Assert.Equal(9007199254740993, qualityLine.Domain().QualityAllocationId);
+        quality["qualityAllocationId"] = 9007199254740993L;
+        Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<SupplierDocumentMatchLineInputDto>(quality.ToJsonString(), Json));
+        foreach (var invalid in new[] { "0", "-1", "1.0" }) {
+            quality["qualityAllocationId"] = invalid;
+            Assert.Throws<DomainValidationException>(() => JsonSerializer.Deserialize<SupplierDocumentMatchLineInputDto>(quality.ToJsonString(), Json));
+        }
         foreach (var name in new[] { "documentLineNumber", "packages", "inspectionLineNumber" }) {
             var row = JsonNode.Parse(source)!.AsObject(); row[name] = "1";
             Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<SupplierDocumentMatchLineInputDto>(row.ToJsonString(), Json));

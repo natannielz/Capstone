@@ -1,0 +1,150 @@
+using MongoDB.Bson;
+using MongoDB.Driver;
+using UnitToko.Modules.Identity;
+using UnitToko.Modules.Procurement;
+using UnitToko.Platform.Authorization;
+using UnitToko.Platform.Catalog;
+using UnitToko.Platform.Inventory;
+using UnitToko.Platform.Mongo;
+using UnitToko.Platform.Mongo.Migrations;
+using Q = UnitToko.Platform.Procurement.ProcurementQualityAcceptanceBson;
+using R = UnitToko.Platform.Procurement.ProcurementRequestBson;
+
+namespace UnitToko.Platform.Procurement;
+
+internal sealed record ProcurementApprovedQualitySource(BsonDocument Receipt, BsonDocument Proposal, BsonDocument Decision,
+    BsonDocument Allocation, ProcurementQualityAcceptanceCapacity Capacity, BsonDocument Snapshot);
+
+// A proof cycle can occur when a genuine supplier claim names an invoice match whose
+// quality allocation is being authenticated. Only that exact immutable allocation edge
+// may be revisited while the outer, full physical/claim/document proof is completing.
+internal sealed class ProcurementQualityProofGraph(IClientSessionHandle tx)
+{
+    private readonly long transaction = tx.WrappedCoreSession.CurrentTransaction.TransactionNumber;
+    private readonly Dictionary<long, ProcurementApprovedQualitySource> active = [];
+    internal void Require(IClientSessionHandle current) {
+        if (!ReferenceEquals(tx, current) || !current.IsInTransaction ||
+            current.WrappedCoreSession.CurrentTransaction.TransactionNumber != transaction) throw ProcurementQualityAcceptanceBson.Broken();
+    }
+    internal bool TryActive(IClientSessionHandle current, BsonDocument allocation, out ProcurementApprovedQualitySource source) {
+        Require(current);
+        if (active.TryGetValue(allocation["_id"].AsInt64, out source!)) {
+            if (source.Allocation != allocation || source.Allocation["snapshotHash"] != allocation["snapshotHash"])
+                throw ProcurementQualityAcceptanceBson.Broken();
+            return true;
+        }
+        source = null!; return false;
+    }
+    internal void Enter(IClientSessionHandle current, ProcurementApprovedQualitySource source) {
+        Require(current); if (!active.TryAdd(source.Allocation["_id"].AsInt64, source)) throw ProcurementQualityAcceptanceBson.Broken();
+    }
+    internal void Leave(IClientSessionHandle current, long id) { Require(current); active.Remove(id); }
+}
+
+/// <summary>Authenticates quality and the full physical-disposition graph within one transaction.</summary>
+internal sealed class ProcurementQualityAcceptanceSourceReader(IMongoDatabase database, MongoUnitOfWork unit, IClock clock,
+    CatalogAuthoringService catalog, PurchaseOrderService orders, StockSourceSetupService sources, ProcurementQualityProofGraph? graph = null)
+{
+    private IMongoCollection<BsonDocument> Rows(string name) => database.GetCollection<BsonDocument>(name);
+
+    internal async Task<ProcurementApprovedQualitySource> ReadAsync(IClientSessionHandle tx, long allocationId, CancellationToken ct) {
+        if (allocationId <= 0 || !tx.IsInTransaction || !ReferenceEquals(tx.Client, database.Client)) throw Q.Broken();
+        var allocation = await Rows(Q.Allocations).Find(tx, new BsonDocument { { "_id", allocationId },
+            { "$and", new BsonArray { ProcurementQualityAcceptanceSchemas.Validator(Q.Allocations) } } }).SingleOrDefaultAsync(ct) ?? throw Q.Broken();
+        if (allocation["snapshotHash"] != Q.Hash(allocation)) throw Q.Broken();
+        var proof = graph ?? new ProcurementQualityProofGraph(tx);
+        if (proof.TryActive(tx, allocation, out var active)) return active;
+        var receipt = await new ProcurementStockReceiptRecords(database, unit, clock, catalog, orders, sources)
+            .ReadAsync(tx, allocation["receiptId"].AsInt64, ct);
+        var capacity = await new ProcurementQualityAcceptanceCapacityReader(database, sources).ReadAsync(tx, receipt, ct);
+        if (capacity.Head is null || !capacity.Allocations.Any(row => row["_id"] == allocation["_id"])) throw Q.Broken();
+        var proposal = await Rows(Q.Proposals).Find(tx, new BsonDocument { { "_id", allocation["proposalId"] },
+            { "$and", new BsonArray { ProcurementQualityAcceptanceSchemas.Validator(Q.Proposals) } } }).SingleOrDefaultAsync(ct) ?? throw Q.Broken();
+        var decision = await Rows(Q.Decisions).Find(tx, new BsonDocument { { "_id", allocation["decisionId"] },
+            { "$and", new BsonArray { ProcurementQualityAcceptanceSchemas.Validator(Q.Decisions) } } }).SingleOrDefaultAsync(ct) ?? throw Q.Broken();
+        var input = Q.Input(proposal["input"]);
+        if (proposal["snapshotHash"] != Q.Hash(proposal) || decision["snapshotHash"] != Q.Hash(decision) ||
+            proposal["receiptHash"] != receipt["snapshotHash"] || proposal["input"] != Q.Input(input) ||
+            proposal["location"] != receipt["location"] || input.ReceiptId != receipt["_id"].AsInt64 ||
+            proposal["lotId"] != receipt["lotId"] || proposal["balanceId"] != receipt["balanceId"] ||
+            proposal["poolId"] != receipt["poolId"] || proposal["inspectionHash"] != receipt["inspection"]["snapshotHash"] ||
+            decision["decision"] != "approve" || decision["proposalId"] != proposal["_id"] ||
+            decision["proposalHash"] != proposal["snapshotHash"] || decision["allocationId"] != allocation["_id"] ||
+            decision["input"] != proposal["input"] || allocation["proposalHash"] != proposal["snapshotHash"] ||
+            allocation["receiptHash"] != receipt["snapshotHash"] || allocation["packages"] != input.AcceptedPackages)
+            throw Q.Broken();
+        var proposalAt = new DateTimeOffset(proposal["recordedAt"].ToUniversalTime());
+        var decisionAt = new DateTimeOffset(decision["recordedAt"].ToUniversalTime());
+        if (proposalAt > clock.UtcNow || decisionAt > clock.UtcNow || decisionAt < proposalAt ||
+            proposal["policy"]["approvedAt"].ToUniversalTime() > proposalAt.UtcDateTime ||
+            proposal["policy"]["expiresAt"].ToUniversalTime() <= decisionAt.UtcDateTime) throw Q.Broken();
+        var policy = await new ProcurementQualityAcceptanceRecords(database, unit, clock, catalog, orders, sources)
+            .PolicyAsync(tx, input, proposalAt, false, ct);
+        if (proposal["policy"] != Q.PolicySnapshot(policy)) throw Q.Broken();
+        var balance = await Rows("stockBalances").Find(tx, new BsonDocument("_id", receipt["balanceId"]))
+            .SingleOrDefaultAsync(ct) ?? throw Q.Broken();
+        if (balance != InventoryBson.Balance(InventoryHeldReceiptWriter.After(receipt)) || proposal["heldBalance"] != balance)
+            throw Q.Broken();
+        var pool = await Rows("inventoryPools").Find(tx, new BsonDocument("_id", receipt["poolId"]))
+            .SingleOrDefaultAsync(ct) ?? throw Q.Broken();
+        InventoryGraph.RequirePool(pool);
+        if (proposal["pool"]["_id"] != pool["_id"] || proposal["pool"]["location"] != pool["location"] ||
+            pool["location"] != receipt["poolSource"]["configuration"]["source"]["input"]["location"] ||
+            proposal["sourceConfigurationHash"] != Q.SourceConfigurationHash(proposal["poolSource"].AsBsonDocument))
+            throw Q.Broken();
+        await sources.RequireHeldReceiptHistoryAsync(tx, proposal["poolSource"].AsBsonDocument, proposalAt, ct);
+        ProcurementQualityAcceptanceRecords.LotFacts(input, receipt, proposalAt);
+        ProcurementQualityAcceptanceRecords.LotFacts(input, receipt, decisionAt);
+        ProcurementQualityAcceptanceRecords.ObservationTime(input.ObservedAt, receipt, proposal["policy"].AsBsonDocument,
+            proposalAt);
+        ProcurementQualityAcceptanceRecords.ObservationTime(input.ObservedAt, receipt, proposal["policy"].AsBsonDocument, decisionAt);
+        var maker = R.Person(proposal["people"][0]);
+        var participants = decision["people"].AsBsonArray.Select(R.Person).ToArray();
+        if (maker.UserId != proposal["actorId"].AsInt64 || maker.Verification != PersonVerification.Verified ||
+            participants.Length != 2 || participants.Select(person => person.UserId).ToHashSet().Count != 2 ||
+            !participants.Any(person => person.UserId == maker.UserId && person.PersonId == maker.PersonId) ||
+            !participants.Any(person => person.UserId == decision["actorId"].AsInt64) ||
+            !PersonIndependencePolicy.AreIndependent(participants.Single(person => person.UserId == maker.UserId),
+                participants.Single(person => person.UserId == decision["actorId"].AsInt64))) throw Q.Broken();
+        if (proposal["binding"] != Q.Binding(proposal["actorId"].AsInt64, proposal["actorGrantVersion"].AsInt64,
+                input, receipt, proposal["pool"].AsBsonDocument, proposal["sourceConfigurationHash"].AsString,
+                proposal["policy"].AsBsonDocument, proposal["capacity"].AsBsonDocument) ||
+            proposal["bodyHash"] != AuthorizationStore.CommandHash(Q.ProposeBody(input, proposal["binding"].AsString), proposal["reason"].AsString)) throw Q.Broken();
+        var observation = Q.Observation(decision["observation"]);
+        ProcurementQualityAcceptanceRecords.ObservationTime(observation.ObservedAt, receipt, proposal["policy"].AsBsonDocument, decisionAt);
+        if (observation.AcceptedPackages != input.AcceptedPackages || observation.PutawayReference != input.PutawayReference ||
+            observation.SegregationReference != input.SegregationReference || observation.AcceptedCondition != input.AcceptedCondition ||
+            observation.LotReference != input.LotReference || observation.ExpiresOn != input.ExpiresOn ||
+            observation.NonExpiringReason != input.NonExpiringReason ||
+            decision["binding"] != Q.DecisionBinding(decision["actorId"].AsInt64, decision["actorGrantVersion"].AsInt64,
+                proposal, ProcurementQualityAcceptanceDecision.Approve, observation, proposal["pool"].AsBsonDocument,
+                proposal["sourceConfigurationHash"].AsString, proposal["policy"].AsBsonDocument,
+                decision["capacityBefore"].AsBsonDocument) ||
+            decision["bodyHash"] != AuthorizationStore.CommandHash(Q.DecideBody(proposal["_id"].AsInt64, 1,
+                ProcurementQualityAcceptanceDecision.Approve, observation, decision["binding"].AsString), decision["reason"].AsString)) throw Q.Broken();
+        await ProcurementQualityAcceptanceRecords.RequireEffectsAsync(database, tx, proposal, ct);
+        await ProcurementQualityAcceptanceRecords.RequireEffectsAsync(database, tx, decision, ct, proposal);
+        var snapshot = new BsonDocument { { "allocationId", allocation["_id"] }, { "allocationHash", allocation["snapshotHash"] },
+            { "proposalId", proposal["_id"] }, { "proposalHash", proposal["snapshotHash"] },
+            { "decisionId", decision["_id"] }, { "decisionHash", decision["snapshotHash"] },
+            { "receiptId", receipt["_id"] }, { "receiptHash", receipt["snapshotHash"] },
+            { "receiptReference", receipt["input"]["receiptReference"] }, { "acceptedPackages", allocation["packages"] },
+            { "lotReference", receipt["input"]["lotReference"] }, { "expiresOn", receipt["input"]["expiresOn"] },
+            { "acceptedCondition", input.AcceptedCondition }, { "putawayReference", input.PutawayReference },
+            { "segregationReference", input.SegregationReference }, { "recordedAt", decision["recordedAt"] } };
+        var result = new ProcurementApprovedQualitySource(receipt, proposal, decision, allocation, capacity, snapshot);
+        proof.Enter(tx, result);
+        try {
+            var inspected = receipt["inspection"]["input"]["lines"][receipt["inspectionLineNumber"].AsInt32 - 1];
+            var claims = new SupplierClaimRecords(database, unit, clock, catalog, orders, proof);
+            var disposition = await new ProcurementQuarantineDisposition(database, claims).ReadAsync(tx,
+                SupplierClaimBasis.PhysicalReceived, receipt["inspectionId"].AsInt64, receipt["inspectionLineNumber"].AsInt32,
+                receipt["inspection"]["snapshotHash"].AsString, inspected["receivedPackages"].AsInt32,
+                receipt["location"].AsBsonDocument, receipt["orderId"].AsInt64, receipt["supplierId"].AsInt64, ct);
+            if (disposition.Head is null || !disposition.IssuePackages.All(issue => issue.Value >= 0)) throw Q.Broken();
+            return result;
+        } finally { proof.Leave(tx, allocationId); }
+    }
+
+
+}

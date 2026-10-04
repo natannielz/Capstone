@@ -79,7 +79,8 @@ public sealed partial class SupplierClaimService
         foreach (var name in names) {
             if (name == Q.PhysicalAllocations) await ProcurementStockReceiptSchemas.RequireDispositionStorageAsync(database, ct);
             else {
-                await InventoryRepository.RequireStorageAsync(database, name, validator(name), keys(name), ct);
+                if (SupplierDocumentSchemas.Collections.Contains(name)) await SupplierDocumentService.RequirePredecessorDocumentStorageAsync(database, name, ct);
+                else await InventoryRepository.RequireStorageAsync(database, name, validator(name), keys(name), ct);
                 if ((await (await Rows(name).Indexes.ListAsync(ct)).ToListAsync(ct)).Any(index => InvoiceStorage.Unsafe(index) || index.Contains("partialFilterExpression"))) throw B.Broken();
             }
         }

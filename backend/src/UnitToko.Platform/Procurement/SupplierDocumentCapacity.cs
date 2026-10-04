@@ -8,11 +8,13 @@ using R = UnitToko.Platform.Procurement.ProcurementRequestBson;
 namespace UnitToko.Platform.Procurement;
 
 internal sealed record SupplierDocumentSourceCapacity(string Kind, long SourceId, long? SkuId, string SourceHash,
-    BsonDocument Location, BsonDocument? Head, BsonDocument Capacity, BsonDocument Maximum);
+    BsonDocument Location, BsonDocument? Head, BsonDocument Capacity, BsonDocument Maximum,
+    IReadOnlyDictionary<long, long> QualityMatched);
 
 internal sealed partial class SupplierDocumentRecords
 {
-    internal async Task<SupplierDocumentSourceCapacity> SourceCapacityAsync(IClientSessionHandle tx, ProcurementLocation location, string kind, long sourceId, long? skuId, string hash, BsonDocument maximum, CancellationToken ct) {
+    internal async Task<SupplierDocumentSourceCapacity> SourceCapacityAsync(IClientSessionHandle tx, ProcurementLocation location, string kind, long sourceId, long? skuId, string hash, BsonDocument maximum, CancellationToken ct,
+        Dictionary<long, BsonDocument>? verifiedMatches = null) {
         var table = kind == "inspection" ? B.InspectionHeads : B.OrderHeads;
         var filter = kind == "inspection" ? new BsonDocument("_id", sourceId) : new BsonDocument { { "orderId", sourceId }, { "requestSkuId", skuId!.Value } };
         var raw = await Rows(table).Find(tx, filter).SingleOrDefaultAsync(ct); var head = raw is null ? null : await RowAsync(tx, table, raw["_id"].AsInt64, ct);
@@ -22,12 +24,23 @@ internal sealed partial class SupplierDocumentRecords
         var claimed = await Rows(B.Matches).Find(tx, new BsonDocument("$or", new BsonArray {
             new BsonDocument("links", new BsonDocument("$elemMatch", linkFilter)),
             new BsonDocument("claims", new BsonDocument("$elemMatch", new BsonDocument { { "kind", kind }, { "sourceId", sourceId }, { "skuId", skuId is { } sku ? sku : BsonNull.Value } })) })).ToListAsync(ct);
-        foreach (var candidate in claimed) _ = await MatchAsync(tx, candidate["_id"].AsInt64, ct);
-        var ordered = claimed.Select(row => (Row: row, Claim: row["claims"].AsBsonArray.Single(value => value["kind"] == kind && value["sourceId"] == sourceId && value["skuId"] == (skuId is { } s ? (BsonValue)s : BsonNull.Value)).AsBsonDocument))
+        verifiedMatches ??= [];
+        foreach (var candidate in claimed) {
+            var id = candidate["_id"].AsInt64;
+            if (!verifiedMatches.TryGetValue(id, out var verified)) {
+                verified = await MatchAsync(tx, id, ct);
+                verifiedMatches.Add(id, verified);
+            }
+            Equal(candidate, verified);
+        }
+        var ordered = claimed.Select(raw => {
+            var row = verifiedMatches[raw["_id"].AsInt64];
+            return (Row: row, Claim: row["claims"].AsBsonArray.Single(value => value["kind"] == kind && value["sourceId"] == sourceId && value["skuId"] == (skuId is { } s ? (BsonValue)s : BsonNull.Value)).AsBsonDocument);
+        })
             .OrderBy(pair => pair.Claim["after"]["version"].AsInt64).ToArray();
         var capacity = maximum.DeepClone().AsBsonDocument; capacity.Remove("maximumAmounts"); BsonValue last = BsonNull.Value, lastHash = BsonNull.Value, firstAt = BsonNull.Value, at = BsonNull.Value;
         foreach (var pair in ordered) {
-            var row = await MatchAsync(tx, pair.Row["_id"].AsInt64, ct); var claim = pair.Claim;
+            var row = pair.Row; var claim = pair.Claim;
             SupplierDocumentRecords.Equal(row["location"], ProcurementRequestBson.Location(location)); SupplierDocumentRecords.Equal(claim["sourceHash"], hash);
             SupplierDocumentRecords.Equal(claim["before"], capacity); SupplierDocumentRecords.Equal(claim["previousMatchId"], last); SupplierDocumentRecords.Equal(claim["previousHash"], lastHash);
             capacity = SupplierDocumentService.SourceAfter(capacity, kind, sourceId, skuId, row["input"]["lines"].AsBsonArray, row["links"].AsBsonArray, maximum);
@@ -35,19 +48,36 @@ internal sealed partial class SupplierDocumentRecords
             if (firstAt.IsBsonNull) firstAt = row["recordedAt"]; if (!at.IsBsonNull && row["recordedAt"].CompareTo(at) < 0) throw B.Broken();
             at = row["recordedAt"]; last = row["_id"]; lastHash = row["snapshotHash"];
         }
+        var qualityMatched = new Dictionary<long, long>();
+        if (kind == "inspection") foreach (var candidate in claimed.Select(row => verifiedMatches[row["_id"].AsInt64])) {
+            for (var index = 0; index < candidate["links"].AsBsonArray.Count; index++) {
+                var link = candidate["links"][index];
+                if (link.IsBsonNull || link["kind"] != "inspection" || link["id"] != sourceId ||
+                    !link.AsBsonDocument.TryGetValue("quality", out var quality)) continue;
+                var id = quality["allocationId"].AsInt64;
+                var line = candidate["input"]["lines"][index];
+                if (line["qualityAllocationId"] != id || candidate["lines"][index]["quality"] != quality) throw B.Broken();
+                qualityMatched[id] = checked(qualityMatched.GetValueOrDefault(id) + line["packages"].AsInt32);
+                if (qualityMatched[id] > quality["acceptedPackages"].AsInt32) throw B.Changed("supplier_document_quality_capacity_exceeded");
+            }
+        }
         if (head is null && ordered.Length != 0 || head is not null && ordered.Length == 0) throw B.Broken();
         if (head is not null) {
             SupplierDocumentRecords.Equal(head["sourceHash"], hash); SupplierDocumentRecords.Equal(head["location"], ProcurementRequestBson.Location(location));
             SupplierDocumentRecords.Equal(head["version"], capacity["version"]); SupplierDocumentRecords.Equal(head["lines"], capacity["lines"]);
             SupplierDocumentRecords.Equal(head["lastMatchId"], last); SupplierDocumentRecords.Equal(head["lastHash"], lastHash); SupplierDocumentRecords.Equal(head["createdAt"], firstAt); SupplierDocumentRecords.Equal(head["updatedAt"], at);
         }
-        return new(kind, sourceId, skuId, hash, ProcurementRequestBson.Location(location), head, capacity, maximum);
+        return new(kind, sourceId, skuId, hash, ProcurementRequestBson.Location(location), head, capacity, maximum, qualityMatched);
     }
     internal async Task<List<SupplierDocumentSourceCapacity>> SourceCapacitiesAsync(IClientSessionHandle tx, ProcurementLocation location,
-        Dictionary<long, ProcurementInspectionHistory> inspections, BsonArray links, List<(string Table, BsonDocument Row)> fences, CancellationToken ct) {
+        Dictionary<long, ProcurementInspectionHistory> inspections, BsonArray links, List<(string Table, BsonDocument Row)> fences, CancellationToken ct,
+        BsonArray? pendingLines = null, Dictionary<long, BsonDocument>? verifiedMatches = null) {
+        // Both inspection and order capacities traverse the same immutable matches.
+        // Keep one proof map for this invocation and transaction only.
+        verifiedMatches ??= [];
         var result = new List<SupplierDocumentSourceCapacity>(); var ordersSeen = new HashSet<(long Order, long Sku)>();
         async Task AddAsync(string kind, long sourceId, long? skuId, string hash, BsonDocument maximum) {
-            var source = await SourceCapacityAsync(tx, location, kind, sourceId, skuId, hash, maximum, ct); result.Add(source);
+            var source = await SourceCapacityAsync(tx, location, kind, sourceId, skuId, hash, maximum, ct, verifiedMatches); result.Add(source);
             if (source.Head is not { } head) return;
             var table = kind == "inspection" ? B.InspectionHeads : B.OrderHeads;
             fences.RemoveAll(pair => pair.Table == table && pair.Row["_id"] == head["_id"]); fences.Add((table, head));
@@ -69,6 +99,19 @@ internal sealed partial class SupplierDocumentRecords
                 await AddAsync("order", key.Item1, key.Item2, link["orderHash"].AsString, maximum);
             }
         }
+        if (pendingLines is not null) {
+            var added = new Dictionary<long, long>();
+            for (var index = 0; index < links.Count; index++) {
+                var link = links[index]; if (link.IsBsonNull || link["kind"] != "inspection" ||
+                    !link.AsBsonDocument.TryGetValue("quality", out var quality)) continue;
+                var id = quality["allocationId"].AsInt64;
+                if (pendingLines[index]["qualityAllocationId"] != id) throw B.Broken();
+                added[id] = checked(added.GetValueOrDefault(id) + pendingLines[index]["packages"].AsInt32);
+                var source = result.Single(value => value.Kind == "inspection" && value.SourceId == link["id"].AsInt64);
+                if (source.QualityMatched.GetValueOrDefault(id) + added[id] > quality["acceptedPackages"].AsInt32)
+                    throw B.Changed("supplier_document_quality_capacity_exceeded");
+            }
+        }
         return result;
     }
     // Reuses the live owner's exact source-chain proof during successor migrations and linked claims.
@@ -76,23 +119,43 @@ internal sealed partial class SupplierDocumentRecords
     internal async Task<IReadOnlyList<(string Table, BsonDocument Row)>> RequireSourceCapacitiesAsync(IClientSessionHandle tx, SupplierDocumentHistory history, CancellationToken ct) {
         var inspections = new Dictionary<long, ProcurementInspectionHistory>(); var links = new BsonArray();
         var fences = new List<(string Table, BsonDocument Row)>();
+        var verifiedMatches = new Dictionary<long, BsonDocument>();
+        async Task IncludeInspectionAsync(BsonValue link) {
+            var inspectionId = link["id"].AsInt64;
+            if (!inspections.TryGetValue(inspectionId, out var inspection)) {
+                inspection = await InspectionAsync(tx, inspectionId, ct);
+                inspections.Add(inspectionId, inspection);
+            }
+            var row = inspection.Submissions.SingleOrDefault(value => value["_id"] == inspectionId) ?? throw B.Broken();
+            Equal(row["snapshotHash"], link["hash"]);
+        }
+        void IncludeMatch(BsonDocument match) {
+            var id = match["_id"].AsInt64;
+            if (verifiedMatches.TryGetValue(id, out var previous)) Equal(previous, match);
+            else verifiedMatches.Add(id, match);
+        }
         foreach (var match in history.Matches) {
-            var resolved = await ResolveAsync(tx, history.Document!, B.MatchInput(match["input"]), ct);
-            foreach (var pair in resolved.Inspections) inspections[pair.Key] = pair.Value;
-            foreach (var link in resolved.Links.Where(link => !link.IsBsonNull)) {
+            IncludeMatch(match);
+            foreach (var link in match["links"].AsBsonArray.Where(link => !link.IsBsonNull)) {
                 links.Add(link); if (link["kind"] != "invoice_match") continue;
                 var invoice = await SubmissionAsync(tx, link["documentId"].AsInt64, ct);
                 var invoiceHistory = await HistoryAsync(tx, invoice["draftId"].AsInt64, ct);
+                if (invoiceHistory.Document != invoice || !invoiceHistory.Matches.Any(row =>
+                    row["_id"] == link["id"] && row["snapshotHash"] == link["hash"])) throw B.Broken();
                 foreach (var invoiceMatch in invoiceHistory.Matches) {
-                    var original = await ResolveAsync(tx, invoice, B.MatchInput(invoiceMatch["input"]), ct);
-                    foreach (var pair in original.Inspections) inspections[pair.Key] = pair.Value;
-                    foreach (var originalLink in original.Links.Where(value => !value.IsBsonNull)) links.Add(originalLink);
+                    IncludeMatch(invoiceMatch);
+                    foreach (var originalLink in invoiceMatch["links"].AsBsonArray.Where(value => !value.IsBsonNull)) {
+                        if (originalLink["kind"] != "inspection") throw B.Broken();
+                        links.Add(originalLink);
+                    }
                 }
                 foreach (var pair in new[] { (B.Heads, invoiceHistory.Head), (B.Identities, invoiceHistory.Identity), (B.Drafts, invoiceHistory.Draft) })
                     if (!fences.Any(value => value.Table == pair.Item1 && value.Row["_id"] == pair.Item2["_id"])) fences.Add(pair);
             }
         }
-        _ = await SourceCapacitiesAsync(tx, R.Location(history.Draft["location"]), inspections, links, fences, ct);
+        foreach (var link in links.Where(value => value["kind"] == "inspection")) await IncludeInspectionAsync(link);
+        _ = await SourceCapacitiesAsync(tx, R.Location(history.Draft["location"]), inspections, links, fences, ct,
+            verifiedMatches: verifiedMatches);
         return fences;
     }
 }

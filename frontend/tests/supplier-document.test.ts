@@ -8,6 +8,7 @@ import { identityDestinations, identityReturnPath, parseIdentitySession, stepUpF
 import { createSupplierDocumentGateway, supplierDocumentInput, supplierDocumentMatchInput, parseSupplierDocumentRead, parseSupplierDocumentOcr, parseSupplierDocumentEvidence, prepareSupplierDocument, prepareSupplierDocumentSubmission, prepareSupplierDocumentMatch, parseSupplierDocumentResult, supplierDocumentSuggestions, supplierDocumentFileAllowed, supplierDocumentEvidenceReady } from '../src/modules/procurement/supplier-document-client';
 import { SourceMemoryStorage, sourceSession } from './stock-source-fixtures';
 import { actor, draftId, location, target, order, notice, intake, inspectionInput } from './supplier-document-fixtures';
+import { parseSupplierDocumentQualityChoices } from '../src/modules/procurement/supplier-document-client';
 
 const line = { sourceLineReference: '001', description: 'Kertas pada invoice', sourceSystem: 'supplier', sourceAccount: '0007', sourceCode: '00Ab-01', packages: 2, netPricePerPackage: '12.34', taxAmount: '1.23', chargeAmount: '0.04', relatedInvoiceReference: null, statementAmount: null };
 const input = { location, anchorOrderId: order.id, anchorOrderVersion: '1' as const, anchorOrderApprovalId: order.approvalId, kind: 'invoice' as const, documentReference: '000INV-a', documentDate: '2026-10-03', currency: 'IDR' as const, documentTotal: '25.95', lines: [line], discrepancy: null };
@@ -31,6 +32,36 @@ const matchResult = { ...submitResult, operation: 'procurement.supplierdocument.
 const draftCommand = () => prepareSupplierDocument(actor, target, order, input, preview, draft.reason);
 const submitCommand = () => prepareSupplierDocumentSubmission(actor, read, { draft, binding: 'f'.repeat(64), observedAt: document.recordedAt }, image, document.reason);
 const matchCommand = () => prepareSupplierDocumentMatch(actor, submitted, reviewed, matchedPreview, null, 'Partial allocation explicitly reviewed');
+
+const qualitySource = { allocationId: '9007199254741110', proposalId: '9007199254741111', decisionId: '9007199254741112', receiptId: '9007199254741113', receiptReference: 'HELD-MIXED-001', acceptedPackages: '2', lotReference: inspectionInput.lines[0].lotCode, expiresOn: inspectionInput.lines[0].expiryDate, acceptedCondition: 'sealed_undamaged' as const, putawayReference: 'ACCEPTED-POSITION', segregationReference: 'SEPARATED-SUBSET', recordedAt: '2026-10-03T02:02:01.000Z' };
+test('quality-linked invoice allocation is explicit and legacy null keeps the original clean wire shape', () => {
+  assert.deepEqual(supplierDocumentMatchInput({ ...reviewed, lines: [{ ...allocate, qualityAllocationId: null }] }), supplierDocumentMatchInput(reviewed));
+  const linked = supplierDocumentMatchInput({ ...reviewed, lines: [{ ...allocate, qualityAllocationId: qualitySource.allocationId }] });
+  const shown = { ...matchedPreview, input: linked, lines: [{ ...resolved, qualityAllocationId: qualitySource.allocationId, quality: qualitySource }] };
+  const saved = prepareSupplierDocumentMatch(actor, submitted, linked, shown, null, 'Independent accepted subset');
+  assert.equal(saved.body.input.lines[0].qualityAllocationId, qualitySource.allocationId); assert.ok(Object.isFrozen(saved.body.input.lines));
+  for (const changed of [{ quality: undefined }, { quality: { ...qualitySource, allocationId: '999' } }, { quality: { ...qualitySource, acceptedPackages: '0' } }, { quality: { ...qualitySource, lotReference: 'OTHER' } }, { quality: { ...qualitySource, expiresOn: '2026-10-05' } }, { quality: { ...qualitySource, matchedPackages: '0' } }, { quality: { ...qualitySource, acceptedCondition: 'intact_as_defined' as const } }]) assert.throws(() => prepareSupplierDocumentMatch(actor, submitted, linked, { ...shown, lines: [{ ...shown.lines[0], ...changed }] }, null, 'Denied'));
+  assert.throws(() => prepareSupplierDocumentMatch(actor, submitted, reviewed, { ...matchedPreview, lines: [{ ...resolved, quality: qualitySource }] }, null, 'Unselected quality'));
+  assert.throws(() => supplierDocumentMatchInput({ ...reviewed, lines: [{ ...allocate, qualityAllocationId: Number(qualitySource.allocationId) }] }));
+  assert.throws(() => supplierDocumentMatchInput({ ...reviewed, lines: [{ ...allocate, qualityAllocationId: qualitySource.allocationId, discrepancy: 'Unresolved', inspectionId: null, inspectionLineNumber: null }] }));
+  const ordered = supplierDocumentMatchInput({ ...reviewed, lines: [{ ...allocate, qualityAllocationId: '9007199254741114' }, { ...allocate, qualityAllocationId: qualitySource.allocationId }] });
+  assert.deepEqual(ordered.lines.map(item => item.qualityAllocationId), [qualitySource.allocationId, '9007199254741114']);
+});
+
+test('quality picker binds document and inspection, authentic exact counters and scanned pagination', async () => {
+  const item = { ...qualitySource, matchedPackages: '1', remainingPackages: '1' }, page = { documentId: document.id, inspectionId: allocate.inspectionId, inspectionLineNumber: 1, items: [item], nextAllocationId: null };
+  assert.equal(parseSupplierDocumentQualityChoices(page).items[0].remainingPackages, '1');
+  for (const changed of [{ acceptedPackages: 2 }, { remainingPackages: '2' }, { matchedPackages: '-1' }, { policyPeople: [] }]) assert.throws(() => parseSupplierDocumentQualityChoices({ ...page, items: [{ ...item, ...changed }] }));
+  const sent: Request[] = []; let response: unknown = page;
+  const client = createUnitTokoClient({ baseUrl: 'https://unit.test', fetch: async value => { const request = new Request(value); if (new URL(request.url).pathname.endsWith('/csrf')) return Response.json({ requestToken: 'csrf' }); sent.push(request); return Response.json(response); } });
+  const gateway = createSupplierDocumentGateway(client);
+  const result = await gateway.qualityAllocations(actor, document.id, allocate.inspectionId, 1); assert.equal(result.items[0].allocationId, qualitySource.allocationId);
+  assert.equal(sent[0].headers.get('X-Expected-Actor-Id'), actor); assert.equal(sent[0].headers.get('X-CSRF-Token'), 'csrf'); assert.equal(sent[0].cache, 'no-store');
+  assert.deepEqual(await sent[0].json(), { purpose: 'supplier-document-review', inspectionId: allocate.inspectionId, inspectionLineNumber: 1, beforeAllocationId: null });
+  for (const changed of [{ documentId: '999' }, { inspectionId: '999' }, { inspectionLineNumber: 2 }]) { response = { ...page, ...changed }; await assert.rejects(() => gateway.qualityAllocations(actor, document.id, allocate.inspectionId, 1), AccessFailure); }
+  response = { ...page, items: [], nextAllocationId: '9007199254741109' }; assert.equal((await gateway.qualityAllocations(actor, document.id, allocate.inspectionId, 1, qualitySource.allocationId)).nextAllocationId, '9007199254741109');
+  response = { ...page, items: [], nextAllocationId: qualitySource.allocationId }; await assert.rejects(() => gateway.qualityAllocations(actor, document.id, allocate.inspectionId, 1, qualitySource.allocationId), AccessFailure);
+});
 
 test('unknown invoice facts stay null with explicit discrepancy while SPH amounts never invent packages', () => {
   assert.deepEqual(supplierDocumentInput(input), input); assert.equal(draftCommand().body.input.lines[0].sourceAccount, '0007'); assert.ok(Object.isFrozen(draftCommand().body.input.lines));

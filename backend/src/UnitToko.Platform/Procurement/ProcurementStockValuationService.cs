@@ -60,11 +60,17 @@ public sealed partial class ProcurementStockValuationService
         if (context.SessionExpiry is { } expiry && clock.UtcNow >= expiry) throw new AuthorizationDeniedException("stale_or_inactive_session");
     }
     private async Task StorageAsync(CancellationToken ct) {
+        await new SupplierDocumentService(database, unit, ids, clock, catalog, orders, receiving).StorageAsync(ct);
         await AccountingMigration.RequireInstalledStorageAsync(database, ct);
         foreach (var name in ProcurementStockValuationSchemas.Collections)
-            await InventoryRepository.RequireStorageAsync(database, name, ProcurementStockValuationSchemas.Validator(name), ProcurementStockValuationSchemas.Keys(name), ct);
+            await InventoryRepository.RequireStorageAsync(database, name, ProcurementQualityValuationSchemas.CurrentValuationValidator(name), ProcurementStockValuationSchemas.Keys(name), ct);
         foreach (var name in ProcurementStockValuationSchemas.Collections)
             if ((await (await Rows(name).Indexes.ListAsync(ct)).ToListAsync(ct)).Any(index => InvoiceStorage.Unsafe(index) || index.Contains("partialFilterExpression"))) throw B.Broken();
+        foreach (var (table, name, key) in ProcurementQualityValuationSchemas.LookupIndexes.Where(index => index.Table == B.Proposals)) {
+            var installed = await (await Rows(table).Indexes.ListAsync(ct)).ToListAsync(ct);
+            if (!installed.Any(index => index["name"] == name && index["key"] == key && !index.GetValue("unique", false).AsBoolean &&
+                !InvoiceStorage.Unsafe(index) && !index.Contains("partialFilterExpression"))) throw B.Broken();
+        }
     }
     private static void AddFence(Context context, string table, BsonDocument row) {
         var prior = context.Fences.SingleOrDefault(value => value.Table == table && value.Row["_id"] == row["_id"]);
@@ -119,15 +125,16 @@ public sealed partial class ProcurementStockValuationService
     }
     private async Task<Context> PrepareAsync(ActorContext actor, AuthorizationSnapshot authority, IClientSessionHandle tx,
         ProcurementStockValuationInput input, string permission, CancellationToken ct, BsonDocument? retainedProposal = null,
-        bool posting = false) {
+        bool posting = false, ProcurementStockValuationProposalProof? verifiedProposal = null) {
         var context = new Context(actor, authority, tx, input.Location, permission); _ = Require(context, posting);
-        context.Source = await records.SourcesAsync(tx, input, ct, retainedProposal);
+        context.Source = await records.SourcesAsync(tx, input, ct, retainedProposal, verifiedProposal);
         if (retainedProposal is null) context.PolicyExpiry = new DateTimeOffset(context.Source.Policy["expiresAt"].ToUniversalTime());
         if (retainedProposal is null) AddFence(context, B.Policies, context.Source.Policy);
         AddFence(context, SupplierDocumentBson.Heads, context.Source.InvoiceHistory.Head);
         AddFence(context, SupplierDocumentBson.Identities, context.Source.InvoiceHistory.Identity);
         if (context.Source.Capacity.ReceiptHead is { } receiptHead) AddFence(context, B.ReceiptHeads, receiptHead);
         if (context.Source.Capacity.MatchHead is { } matchHead) AddFence(context, B.MatchHeads, matchHead);
+        if (context.Source.QualityHead is { } qualityHead) AddFence(context, ProcurementQualityAcceptanceBson.ReceiptHeads, qualityHead);
         await PeopleAsync(context, null, context.Source.Match["actorId"].AsInt64, ct);
         Current(context, posting); return context;
     }

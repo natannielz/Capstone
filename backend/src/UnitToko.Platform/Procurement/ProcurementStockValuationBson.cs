@@ -35,14 +35,24 @@ internal static class ProcurementStockValuationBson
         proposalId, version, decision = Decision(decision), binding };
     internal static string Decision(ProcurementStockValuationDecision value) => value == ProcurementStockValuationDecision.Approve ? "approve" : "reject";
     internal static string Binding(long actor, long grant, ProcurementStockValuationInput input, BsonDocument receipt, BsonDocument invoice,
-        BsonDocument match, BsonDocument policy, BsonDocument accounting, BsonDocument receiptCapacity, BsonDocument matchCapacity) => Hash(new() {
+        BsonDocument match, BsonDocument policy, BsonDocument accounting, BsonDocument receiptCapacity, BsonDocument matchCapacity,
+        BsonDocument? quality = null, BsonDocument? qualityCapacity = null) {
+        var facts = new BsonDocument {
             { "actorId", actor }, { "actorGrantVersion", grant }, { "input", Input(input) }, { "receiptHash", receipt["snapshotHash"] },
             { "invoiceHash", invoice["snapshotHash"] }, { "matchHash", match["snapshotHash"] }, { "policy", PolicySnapshot(policy) },
-            { "accounting", accounting }, { "receiptCapacity", receiptCapacity }, { "matchCapacity", matchCapacity } });
+            { "accounting", accounting }, { "receiptCapacity", receiptCapacity }, { "matchCapacity", matchCapacity } };
+        if (quality is not null && qualityCapacity is not null) { facts.Add("quality", quality); facts.Add("qualityCapacity", qualityCapacity); }
+        return Hash(facts);
+    }
     internal static string DecisionBinding(long actor, long grant, BsonDocument proposal, ProcurementStockValuationDecision decision,
-        BsonDocument receiptCapacity, BsonDocument matchCapacity, BsonDocument policy, BsonDocument accounting) => Hash(new() {
+        BsonDocument receiptCapacity, BsonDocument matchCapacity, BsonDocument policy, BsonDocument accounting,
+        BsonDocument? qualityCapacity = null) {
+        var facts = new BsonDocument {
             { "actorId", actor }, { "actorGrantVersion", grant }, { "proposalHash", proposal["snapshotHash"] }, { "decision", Decision(decision) },
-            { "receiptCapacity", receiptCapacity }, { "matchCapacity", matchCapacity }, { "policy", PolicySnapshot(policy) }, { "accounting", accounting } });
+            { "receiptCapacity", receiptCapacity }, { "matchCapacity", matchCapacity }, { "policy", PolicySnapshot(policy) }, { "accounting", accounting } };
+        if (proposal.Contains("quality") && qualityCapacity is not null) { facts.Add("quality", proposal["quality"]); facts.Add("qualityCapacity", qualityCapacity); }
+        return Hash(facts);
+    }
     internal static BsonDocument PolicySnapshot(BsonDocument policy) { var copy = policy.DeepClone().AsBsonDocument; copy.Remove("fence"); return copy; }
     internal static void Metadata(BsonDocument row, string operation, long auditId, UnitToko.Modules.Identity.Contracts.ActorContext actor,
         AuthorizationCommandMetadata metadata, object body, DateTimeOffset now) => R.Metadata(row, operation, auditId, actor, metadata, body, now);

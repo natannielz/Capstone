@@ -21,6 +21,8 @@ namespace UnitToko.Platform.Procurement;
 public sealed partial class SupplierDocumentService
 {
     private readonly IMongoDatabase database;
+    private readonly MongoUnitOfWork unit;
+    private readonly CatalogAuthoringService catalog;
     private readonly IdAllocator ids;
     private readonly IClock clock;
     private readonly AuthorizationStore authorization;
@@ -29,7 +31,7 @@ public sealed partial class SupplierDocumentService
     private readonly PurchaseOrderService orders;
     public SupplierDocumentService(IMongoDatabase database, MongoUnitOfWork unit, IdAllocator ids, IClock clock,
         CatalogAuthoringService catalog, PurchaseOrderService orders, ProcurementReceivingService receiving) {
-        this.database = database; this.ids = ids; this.clock = clock; this.receiving = receiving; this.orders = orders;
+        this.database = database; this.unit = unit; this.catalog = catalog; this.ids = ids; this.clock = clock; this.receiving = receiving; this.orders = orders;
         authorization = new(database, unit, clock); records = new(database, unit, clock, catalog, orders);
     }
     private IMongoCollection<BsonDocument> Rows(string name) => database.GetCollection<BsonDocument>(name);
@@ -69,15 +71,42 @@ public sealed partial class SupplierDocumentService
             context.Source is { } source && context.SourceHash != B.Hash(source)) throw B.Broken();
         if (context.SessionExpiry is { } expiry && clock.UtcNow >= expiry) throw new AuthorizationDeniedException("stale_or_inactive_session");
     }
+    // Predecessor owners must read both genuine M70 storage and the additive M78
+    // match union. The M70 writer itself requires the current union in StorageAsync.
+    internal static async Task RequirePredecessorDocumentStorageAsync(IMongoDatabase database, string name, CancellationToken ct) {
+        var legacy = SupplierDocumentSchemas.Validator(name);
+        if (name != B.Matches) {
+            await InventoryRepository.RequireStorageAsync(database, name, legacy, SupplierDocumentSchemas.Keys(name), ct);
+            return;
+        }
+        var definition = await (await database.ListCollectionsAsync(
+            new ListCollectionsOptions { Filter = new BsonDocument("name", name) }, ct)).SingleOrDefaultAsync(ct);
+        var installed = definition?.GetValue("options", new BsonDocument()).AsBsonDocument.GetValue("validator", BsonNull.Value);
+        var current = ProcurementQualityValuationSchemas.CurrentDocumentValidator(name);
+        var required = installed is BsonDocument validator && InventorySchemas.Contains(validator, current) ? current : legacy;
+        await InventoryRepository.RequireStorageAsync(database, name, required, SupplierDocumentSchemas.Keys(name), ct);
+    }
     internal async Task StorageAsync(CancellationToken ct) {
         await orders.RequireReceivingStorageAsync(ct);
         foreach (var (names, validator, keys) in new[] {
             (ProcurementReceivingSchemas.Collections, (Func<string, BsonDocument>)ProcurementReceivingSchemas.Validator, (Func<string, BsonDocument[]>)ProcurementReceivingSchemas.Keys),
             (ProcurementInspectionSchemas.Collections, (Func<string, BsonDocument>)ProcurementInspectionSchemas.Validator, (Func<string, BsonDocument[]>)ProcurementInspectionSchemas.Keys),
-            (SupplierDocumentSchemas.Collections, (Func<string, BsonDocument>)SupplierDocumentSchemas.Validator, (Func<string, BsonDocument[]>)SupplierDocumentSchemas.Keys) })
+            (SupplierDocumentSchemas.Collections, (Func<string, BsonDocument>)ProcurementQualityValuationSchemas.CurrentDocumentValidator, (Func<string, BsonDocument[]>)SupplierDocumentSchemas.Keys) })
         foreach (var name in names) {
             await InventoryRepository.RequireStorageAsync(database, name, validator(name), keys(name), ct);
             if ((await (await Rows(name).Indexes.ListAsync(ct)).ToListAsync(ct)).Any(index => InvoiceStorage.Unsafe(index) || index.Contains("partialFilterExpression"))) throw B.Broken();
+        }
+        foreach (var (table, name, key) in ProcurementQualityValuationSchemas.LookupIndexes.Where(index => index.Table == B.Matches)) {
+            var installed = await (await Rows(table).Indexes.ListAsync(ct)).ToListAsync(ct);
+            if (!installed.Any(index => index["name"] == name && index["key"] == key && !index.GetValue("unique", false).AsBoolean &&
+                    !InvoiceStorage.Unsafe(index) && !index.Contains("partialFilterExpression"))) throw B.Broken();
+        }
+        foreach (var name in ProcurementQualityAcceptanceSchemas.Collections) {
+            await InventoryRepository.RequireStorageAsync(database, name, ProcurementQualityAcceptanceSchemas.Validator(name), ProcurementQualityAcceptanceSchemas.Keys(name), ct);
+            var installed = await (await Rows(name).Indexes.ListAsync(ct)).ToListAsync(ct);
+            foreach (var key in ProcurementQualityAcceptanceSchemas.SupportKeys(name))
+                if (!installed.Any(index => index["key"] == key && !index.GetValue("unique", false).AsBoolean && !InvoiceStorage.Unsafe(index) &&
+                    !index.Contains("partialFilterExpression"))) throw B.Broken();
         }
     }
     private async Task PeopleAsync(Context context, BsonDocument? original, CancellationToken ct) {

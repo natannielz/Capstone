@@ -43,8 +43,9 @@ public sealed record SupplierDocumentMatchLineInputDto([property: JsonRequired, 
     [property: JsonRequired, JsonNumberHandling(JsonNumberHandling.Strict)] int? Packages, [property: JsonRequired] LongId? InspectionId,
     [property: JsonRequired, JsonNumberHandling(JsonNumberHandling.Strict)] int? InspectionLineNumber, [property: JsonRequired] LongId? InvoiceMatchId,
     [property: JsonRequired, JsonNumberHandling(JsonNumberHandling.Strict)] int? InvoiceMatchLineNumber, [property: JsonRequired] Money? NetAmount,
-    [property: JsonRequired] Money? TaxAmount, [property: JsonRequired] Money? ChargeAmount, [property: JsonRequired] Money? StatementAmount, [property: JsonRequired] string? Discrepancy) {
-    internal SupplierDocumentMatchLineInput Domain() => new(DocumentLineNumber, Packages, InspectionId?.Value, InspectionLineNumber, InvoiceMatchId?.Value, InvoiceMatchLineNumber, NetAmount, TaxAmount, ChargeAmount, StatementAmount, Discrepancy);
+    [property: JsonRequired] Money? TaxAmount, [property: JsonRequired] Money? ChargeAmount, [property: JsonRequired] Money? StatementAmount, [property: JsonRequired] string? Discrepancy,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] LongId? QualityAllocationId = null) {
+    internal SupplierDocumentMatchLineInput Domain() => new(DocumentLineNumber, Packages, InspectionId?.Value, InspectionLineNumber, InvoiceMatchId?.Value, InvoiceMatchLineNumber, NetAmount, TaxAmount, ChargeAmount, StatementAmount, Discrepancy, QualityAllocationId?.Value);
 }
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record SupplierDocumentMatchInputDto([property: JsonRequired] LongId DocumentId, [property: JsonRequired] string DocumentRevision,
@@ -58,6 +59,9 @@ public sealed record SupplierDocumentMatchInputDto([property: JsonRequired] Long
 public sealed record SupplierDocumentQueryDto([property: JsonRequired] string Purpose);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record SupplierDocumentListInputDto([property: JsonRequired] string Purpose, [property: JsonRequired] ProcurementLocationDto Location, LongId? BeforeId = null);
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record SupplierDocumentQualityQueryDto([property: JsonRequired] string Purpose, [property: JsonRequired] LongId InspectionId,
+    [property: JsonRequired, JsonNumberHandling(JsonNumberHandling.Strict)] int InspectionLineNumber, LongId? BeforeAllocationId = null);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record SupplierDocumentPreviewInputDto([property: JsonRequired] string Purpose, [property: JsonRequired] SupplierDocumentInputDto Input);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
@@ -81,7 +85,12 @@ public sealed record SupplierDocumentSubmissionDto(LongId Id, LongId DraftId, st
     LongId? ReservationId, PaymentEvidenceReferenceDto? Evidence);
 public sealed record SupplierDocumentResolvedLineDto(int DocumentLineNumber, int? Packages, LongId? InspectionId, int? InspectionLineNumber,
     LongId? InvoiceMatchId, int? InvoiceMatchLineNumber, Money? NetAmount, Money? TaxAmount, Money? ChargeAmount, Money? StatementAmount, string State, string? Discrepancy,
-    ProcurementFundingOrderDto? Order, ProcurementInspectionLineInputDto? InspectionLine, string? InvoiceDocumentReference);
+    ProcurementFundingOrderDto? Order, ProcurementInspectionLineInputDto? InspectionLine, string? InvoiceDocumentReference,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] SupplierDocumentQualityDto? Quality = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] LongId? QualityAllocationId = null);
+public sealed record SupplierDocumentQualityDto(LongId AllocationId, LongId ProposalId, LongId DecisionId, LongId ReceiptId,
+    string ReceiptReference, string AcceptedPackages, string LotReference, string? ExpiresOn, string AcceptedCondition,
+    string PutawayReference, string SegregationReference, DateTimeOffset RecordedAt);
 public sealed record SupplierDocumentMatchDto(LongId Id, LongId DraftId, LongId DocumentId, string Version, SupplierDocumentMatchInputDto Input,
     SupplierDocumentCapacityDto Before, SupplierDocumentCapacityDto After, SupplierDocumentResolvedLineDto[] Lines, string State, DateTimeOffset RecordedAt, string Reason);
 public sealed record SupplierDocumentReadDto(SupplierDocumentDraftDto Draft, SupplierDocumentSubmissionDto? Document, SupplierDocumentCapacityDto Capacity,
@@ -95,6 +104,11 @@ public sealed record SupplierDocumentMatchPreviewDto(SupplierDocumentMatchInputD
 public sealed record SupplierDocumentInspectionChoiceDto(LongId InspectionId, ProcurementArrivalNoticeDto Notice, ProcurementContainerReceiptDto Intake,
     ProcurementInspectionInputDto Input, ProcurementFundingOrderDto Order, SupplierDocumentCapacityDto Capacity);
 public sealed record SupplierDocumentInspectionChoicesDto(LongId DocumentId, SupplierDocumentInspectionChoiceDto[] Items, LongId? NextInspectionId);
+public sealed record SupplierDocumentQualityChoiceDto(LongId AllocationId, LongId ProposalId, LongId DecisionId, LongId ReceiptId,
+    string ReceiptReference, string AcceptedPackages, string MatchedPackages, string RemainingPackages, string LotReference,
+    string? ExpiresOn, string AcceptedCondition, string PutawayReference, string SegregationReference, DateTimeOffset RecordedAt);
+public sealed record SupplierDocumentQualityChoicesDto(LongId DocumentId, LongId InspectionId, int InspectionLineNumber,
+    SupplierDocumentQualityChoiceDto[] Items, LongId? NextAllocationId);
 public sealed record SupplierDocumentInvoiceChoiceDto(SupplierDocumentDraftDto Document, SupplierDocumentMatchDto Match);
 public sealed record SupplierDocumentInvoiceChoicesDto(LongId DocumentId, SupplierDocumentInvoiceChoiceDto[] Items, LongId? NextMatchId);
 public sealed record SupplierDocumentMatchesDto(LongId DocumentId, SupplierDocumentMatchDto[] Items, LongId? NextMatchId);
@@ -154,6 +168,14 @@ public static class SupplierDocumentEndpoints
             return TypedResults.Ok(new SupplierDocumentInspectionChoicesDto(new(row["documentId"].AsInt64), [.. row["items"].AsBsonArray.Select(item => new SupplierDocumentInspectionChoiceDto(
                 new(item["inspectionId"].AsInt64), I.Notice(item["notice"]), I.Intake(item["intake"]), I.Input(item["input"]), ProcurementFundingEndpoints.Order(item["order"]), Capacity(item["capacity"])))], Id(row["nextInspectionId"])));
         }).WithName("SupplierDocumentInspectionChoices");
+        documents.MapPost("/quality-allocations/query", async (string id, SupplierDocumentQualityQueryDto request, HttpContext http,
+            [FromServices] SupplierDocumentService service, CancellationToken ct) => {
+            if (request is null) throw SupplierDocumentRules.Invalid(); Purpose(request.Purpose);
+            var row = await service.QualityAllocationsAsync(Actor(http), LongId.Parse(id).Value, request.InspectionId.Value,
+                request.InspectionLineNumber, request.BeforeAllocationId?.Value, ct);
+            return TypedResults.Ok(new SupplierDocumentQualityChoicesDto(new(row["documentId"].AsInt64), new(row["inspectionId"].AsInt64),
+                row["inspectionLineNumber"].AsInt32, [.. row["items"].AsBsonArray.Select(QualityChoice)], Id(row["nextAllocationId"])));
+        }).WithName("SupplierDocumentQualityChoices");
         documents.MapPost("/invoice-matches/query", async (string id, InvoiceQueryDto request, HttpContext http, [FromServices] SupplierDocumentService service, CancellationToken ct) => {
             Purpose(request.Purpose); var row = await service.InvoiceMatchesAsync(Actor(http), LongId.Parse(id).Value, request.BeforeId?.Value, ct);
             return TypedResults.Ok(new SupplierDocumentInvoiceChoicesDto(new(row["documentId"].AsInt64), [.. row["items"].AsBsonArray.Select(item => new SupplierDocumentInvoiceChoiceDto(Draft(item["document"]), Match(item["match"])))], Id(row["nextMatchId"])));
@@ -201,9 +223,18 @@ public static class SupplierDocumentEndpoints
         row["kind"].AsString, row["documentReference"].AsString, Text(row["documentDate"]), row["currency"].AsString, OptionalAmount(row["documentTotal"]), [.. row["lines"].AsBsonArray.Select(line => new SupplierDocumentLineInputDto(
             line["sourceLineReference"].AsString, line["description"].AsString, Text(line["sourceSystem"]), Text(line["sourceAccount"]), Text(line["sourceCode"]), Count(line["packages"]),
             OptionalAmount(line["netPricePerPackage"]), OptionalAmount(line["taxAmount"]), OptionalAmount(line["chargeAmount"]), Text(line["relatedInvoiceReference"]), OptionalAmount(line["statementAmount"]))) ], Text(row["discrepancy"]));
-    private static SupplierDocumentMatchInputDto MatchInput(BsonValue row) => new(new(row["documentId"].AsInt64), Number(row["documentRevision"]), Input(row["reviewedInput"]), Id(row["ocrResultId"]), [.. row["lines"].AsBsonArray.Select(line => new SupplierDocumentMatchLineInputDto(
+    internal static SupplierDocumentMatchInputDto MatchInput(BsonValue row) => new(new(row["documentId"].AsInt64), Number(row["documentRevision"]), Input(row["reviewedInput"]), Id(row["ocrResultId"]), [.. row["lines"].AsBsonArray.Select(line => new SupplierDocumentMatchLineInputDto(
         line["documentLineNumber"].AsInt32, Count(line["packages"]), Id(line["inspectionId"]), Count(line["inspectionLineNumber"]), Id(line["invoiceMatchId"]), Count(line["invoiceMatchLineNumber"]),
-        OptionalAmount(line["netAmount"]), OptionalAmount(line["taxAmount"]), OptionalAmount(line["chargeAmount"]), OptionalAmount(line["statementAmount"]), Text(line["discrepancy"]))) ]);
+        OptionalAmount(line["netAmount"]), OptionalAmount(line["taxAmount"]), OptionalAmount(line["chargeAmount"]), OptionalAmount(line["statementAmount"]), Text(line["discrepancy"]),
+        Id(line.AsBsonDocument.GetValue("qualityAllocationId", BsonNull.Value)))) ]);
+    private static SupplierDocumentQualityChoiceDto QualityChoice(BsonValue row) => new(new(row["allocationId"].AsInt64), new(row["proposalId"].AsInt64),
+        new(row["decisionId"].AsInt64), new(row["receiptId"].AsInt64), row["receiptReference"].AsString, row["acceptedPackages"].ToInt64().ToString(CultureInfo.InvariantCulture),
+        Number(row["matchedPackages"]), Number(row["remainingPackages"]), row["lotReference"].AsString, Text(row["expiresOn"]),
+        row["acceptedCondition"].AsString, row["putawayReference"].AsString, row["segregationReference"].AsString, Date(row["recordedAt"]));
+    internal static SupplierDocumentQualityDto? Quality(BsonValue row) => row.IsBsonNull ? null : new(new(row["allocationId"].AsInt64),
+        new(row["proposalId"].AsInt64), new(row["decisionId"].AsInt64), new(row["receiptId"].AsInt64), row["receiptReference"].AsString,
+        row["acceptedPackages"].ToInt64().ToString(CultureInfo.InvariantCulture), row["lotReference"].AsString, Text(row["expiresOn"]), row["acceptedCondition"].AsString,
+        row["putawayReference"].AsString, row["segregationReference"].AsString, Date(row["recordedAt"]));
     private static SupplierDocumentCapacityDto Capacity(BsonValue row) => new(Number(row["version"]), [.. row["lines"].AsBsonArray.Select(line => new SupplierDocumentCapacityLineDto(line["lineNumber"].AsInt32, Count(line["packages"]), Number(line["matchedPackages"]), line["remainingPackages"].IsBsonNull ? null : Number(line["remainingPackages"]),
         Amount(line["matchedNetAmount"]), Amount(line["matchedTaxAmount"]), Amount(line["matchedChargeAmount"]), Amount(line["matchedStatementAmount"]))) ]);
     private static SupplierDocumentDraftDto Draft(BsonValue row) => new(new(row["id"].AsInt64), Number(row["version"]), Input(row["input"]), new(row["supplierId"].AsInt64), ProcurementFundingEndpoints.Order(row["order"]), Date(row["recordedAt"]), row["reason"].AsString, row["state"].AsString);
@@ -212,7 +243,8 @@ public static class SupplierDocumentEndpoints
         line["receivedPackages"].AsInt32, line["damagedPackages"].AsInt32, line["expiredPackages"].AsInt32, line["openedPackages"].AsInt32, Text(line["lotCode"]), Text(line["expiryDate"]), Text(line["putawayReference"]), Text(line["discrepancy"]));
     private static SupplierDocumentResolvedLineDto Resolved(BsonValue row) => new(row["documentLineNumber"].AsInt32, Count(row["packages"]), Id(row["inspectionId"]), Count(row["inspectionLineNumber"]), Id(row["invoiceMatchId"]), Count(row["invoiceMatchLineNumber"]),
         OptionalAmount(row["netAmount"]), OptionalAmount(row["taxAmount"]), OptionalAmount(row["chargeAmount"]), OptionalAmount(row["statementAmount"]), row["state"].AsString, Text(row["discrepancy"]), row["order"].IsBsonNull ? null : ProcurementFundingEndpoints.Order(row["order"]),
-        row["inspectionLine"].IsBsonNull ? null : InspectionLine(row["inspectionLine"]), Text(row["invoiceDocumentReference"]));
+        row["inspectionLine"].IsBsonNull ? null : InspectionLine(row["inspectionLine"]), Text(row["invoiceDocumentReference"]),
+        Quality(row.AsBsonDocument.GetValue("quality", BsonNull.Value)), Id(row.AsBsonDocument.GetValue("qualityAllocationId", BsonNull.Value)));
     private static SupplierDocumentMatchDto Match(BsonValue row) => new(new(row["id"].AsInt64), new(row["draftId"].AsInt64), new(row["documentId"].AsInt64), Number(row["version"]), MatchInput(row["input"]), Capacity(row["before"]), Capacity(row["after"]),
         [.. row["lines"].AsBsonArray.Select(Resolved)], row["state"].AsString, Date(row["recordedAt"]), row["reason"].AsString);
     private static SupplierDocumentReadDto Read(BsonValue row) => new(Draft(row["draft"]), row["document"].IsBsonNull ? null : Submission(row["document"]), Capacity(row["capacity"]), row["reviewedInput"].IsBsonNull ? null : Input(row["reviewedInput"]), row["possibleDuplicate"].AsBoolean, [.. row["matches"].AsBsonArray.Select(Match)], Id(row["nextMatchId"]));

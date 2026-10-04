@@ -86,7 +86,7 @@ public sealed partial class ProcurementQualityAcceptanceService
         foreach (var name in ProcurementReceivingSchemas.Collections)
             await InventoryRepository.RequireStorageAsync(database, name, ProcurementReceivingSchemas.Validator(name), ProcurementReceivingSchemas.Keys(name), ct);
         foreach (var name in SupplierDocumentSchemas.Collections)
-            await InventoryRepository.RequireStorageAsync(database, name, SupplierDocumentSchemas.Validator(name), SupplierDocumentSchemas.Keys(name), ct);
+            await SupplierDocumentService.RequirePredecessorDocumentStorageAsync(database, name, ct);
         foreach (var name in ProcurementQualityAcceptanceSchemas.Collections)
             await InventoryRepository.RequireStorageAsync(database, name, ProcurementQualityAcceptanceSchemas.Validator(name),
                 ProcurementQualityAcceptanceSchemas.Keys(name), ct);

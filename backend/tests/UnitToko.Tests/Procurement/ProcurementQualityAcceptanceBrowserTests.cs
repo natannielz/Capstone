@@ -166,7 +166,7 @@ public sealed class ProcurementQualityAcceptanceBrowserTests(MongoFixture fixtur
                 Assert.Equal(1L, await data.Rows(table).CountDocumentsAsync(new BsonDocument(field, operation)));
     }
 
-    private sealed class ObserveProviderChallenge(ProviderHandlerTests.FakeProvider provider, string issuer) : IStartupFilter
+    internal sealed class ObserveProviderChallenge(ProviderHandlerTests.FakeProvider provider, string issuer) : IStartupFilter
     {
         public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> next) => app => {
             app.Use((context, nextRequest) => {

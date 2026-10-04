@@ -224,6 +224,115 @@ public sealed class ProcurementStockValuationTests(MongoFixture fixture)
     }
 
     [WindowsStorageFact]
+    public async Task Verified_proposal_source_proof_cannot_cross_a_transaction_retry()
+    {
+        await using var data = await D.CreateAsync(fixture);
+        var proposal = await data.ProposeAsync("valuation-transaction-proof");
+        var input = data.Input();
+        var records = new ProcurementStockValuationRecords(data.Database, data.Unit, data.Clock,
+            data.Inspection.Receiving.Procurement.Catalog, data.Inspection.Receiving.Orders.Service, data.Sources);
+        using var tx = await data.Database.Client.StartSessionAsync();
+        tx.StartTransaction();
+        var proof = await records.VerifiedProposalAsync(tx, proposal["proposalId"].AsInt64, CancellationToken.None);
+        proof.Require(tx, input, null);
+        await tx.AbortTransactionAsync();
+        tx.StartTransaction();
+        try {
+            Assert.Equal("procurement_stock_valuation_integrity_unavailable",
+                Assert.Throws<AuthorizationDeniedException>(() => proof.Require(tx, input, null)).Code);
+        } finally { await tx.AbortTransactionAsync(); }
+        await NoAllocationAsync(data);
+    }
+
+    [WindowsStorageFact]
+    public async Task Cached_invoice_history_requires_exact_bytes_and_cannot_cross_a_new_transaction_on_the_same_handle()
+    {
+        await using var data = await D.CreateAsync(fixture);
+        var invoice = await data.Rows(SupplierDocumentBson.Submissions)
+            .Find(new BsonDocument("_id", data.Documents.DocumentId)).SingleAsync();
+        var reader = new ProcurementStockValuationCapacityReader(data.Database, data.Unit, data.Clock,
+            data.Inspection.Receiving.Procurement.Catalog, data.Inspection.Receiving.Orders.Service);
+        using var tx = await data.Database.Client.StartSessionAsync();
+        tx.StartTransaction();
+        try {
+            Assert.Equal(invoice, (await reader.InvoiceHistoryAsync(tx, invoice, CancellationToken.None)).Document);
+            var changed = invoice.DeepClone().AsBsonDocument;
+            changed["reason"] = "Synthetic changed source after an authenticated history read";
+            changed["snapshotHash"] = SupplierDocumentBson.Hash(changed);
+            Assert.Equal(1L, (await data.Rows(SupplierDocumentBson.Submissions).ReplaceOneAsync(tx,
+                new BsonDocument("_id", invoice["_id"]), changed)).ModifiedCount);
+            Assert.Equal("procurement_stock_valuation_integrity_unavailable",
+                (await Assert.ThrowsAsync<AuthorizationDeniedException>(() => reader.InvoiceHistoryAsync(tx, changed, CancellationToken.None))).Code);
+        } finally { await tx.AbortTransactionAsync(); }
+
+        var pinFilter = new BsonDocument("_id", invoice["pinId"]);
+        var pin = await data.Rows("evidencePins").Find(pinFilter).SingleAsync();
+        Assert.Equal(1L, (await data.Rows("evidencePins").DeleteOneAsync(pinFilter)).DeletedCount);
+        try {
+            tx.StartTransaction();
+            try {
+                var current = await data.Rows(SupplierDocumentBson.Submissions).Find(tx,
+                    new BsonDocument("_id", invoice["_id"])).SingleAsync();
+                Assert.Equal(invoice, current);
+                Assert.Equal("evidence_validation_integrity", (await Assert.ThrowsAsync<PersistenceConflictException>(() =>
+                    reader.InvoiceHistoryAsync(tx, current, CancellationToken.None))).Code);
+            } finally { await tx.AbortTransactionAsync(); }
+        } finally { await data.Rows("evidencePins").InsertOneAsync(pin); }
+        await NoAllocationAsync(data);
+    }
+
+    [WindowsStorageFact]
+    public async Task Invoice_head_and_identity_changes_after_proposal_proof_fail_final_decision_preview_fences()
+    {
+        await using var data = await D.CreateAsync(fixture);
+        var proposal = await data.ProposeAsync("valuation-invoice-fence-proof");
+        var proposalId = proposal["proposalId"].AsInt64;
+        var submitted = await data.Rows("supplierDocumentSubmissions").Find(new BsonDocument("_id", data.Documents.DocumentId)).SingleAsync();
+        foreach (var (table, filter, field, replacement) in new[] {
+            ("supplierDocumentHeads", new BsonDocument("_id", submitted["draftId"]), "draftHash", (BsonValue)new string('0', 64)),
+            ("supplierDocumentIdentities", new BsonDocument("_id", submitted["identityId"]), "firstDraftId", (BsonValue)(long.MaxValue - 100)) }) {
+            var original = await data.Rows(table).Find(filter).SingleAsync();
+            var before = await data.StateAsync();
+            using var release = new ManualResetEventSlim();
+            var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var paused = 0;
+            var settings = MongoClientSettings.FromConnectionString(Environment.GetEnvironmentVariable("UNITTOKO_TEST_MONGO_URI") ?? "mongodb://127.0.0.1:27028/?replicaSet=rs0");
+            settings.ClusterConfigurator = cluster => cluster.Subscribe<CommandStartedEvent>(value => {
+                if (value.DatabaseNamespace.DatabaseName == data.Database.DatabaseNamespace.DatabaseName &&
+                    value.Command.GetValue("update", BsonNull.Value) == table &&
+                    value.Command.TryGetValue("updates", out var updates) && updates.IsBsonArray && updates.AsBsonArray.Count == 1 &&
+                    updates.AsBsonArray[0].IsBsonDocument && updates.AsBsonArray[0].AsBsonDocument.TryGetValue("q", out var query) &&
+                    query.IsBsonDocument && query.AsBsonDocument.GetValue("_id", BsonNull.Value) == filter["_id"] &&
+                    Interlocked.CompareExchange(ref paused, 1, 0) == 0) {
+                    entered.TrySetResult();
+                    if (!release.Wait(TimeSpan.FromSeconds(30))) throw new TimeoutException("Invoice source fence did not resume");
+                }
+            });
+            var client = new MongoClient(settings); var db = client.GetDatabase(data.Database.DatabaseNamespace.DatabaseName); var unit = new MongoUnitOfWork(client);
+            var catalog = new CatalogAuthoringService(db, unit, new(db), data.Clock); var requests = new ProcurementRequestService(db, unit, new(db), data.Clock, catalog);
+            var orders = new PurchaseOrderService(db, unit, new(db), data.Clock, catalog, requests, new(db, unit, new(db), data.Clock, catalog));
+            var service = new ProcurementStockValuationService(db, unit, new(db), data.Clock, catalog, orders,
+                new(db, unit, new(db), data.Clock, catalog, orders, requests), new(db, unit, new(db), data.Clock));
+            var pending = Task.Run(() => service.PreviewDecisionAsync(data.Checker, proposalId, ProcurementStockValuationDecision.Approve));
+            try {
+                try {
+                    await entered.Task.WaitAsync(TimeSpan.FromSeconds(60));
+                    Assert.Equal(1L, (await data.Rows(table).UpdateOneAsync(filter, new BsonDocument("$set", new BsonDocument(field, replacement)))).ModifiedCount);
+                } finally { release.Set(); }
+                var failure = await Record.ExceptionAsync(async () => await pending.WaitAsync(TimeSpan.FromSeconds(90)));
+                Assert.True(failure is AuthorizationDeniedException { Code: "procurement_stock_valuation_integrity_unavailable" or "supplier_document_integrity_unavailable" } or
+                    PersistenceConflictException { Code: "version_conflict" or "procurement_stock_valuation_changed" }, failure?.ToString() ?? "Unexpected success");
+                Assert.Equal(1, paused);
+            } finally {
+                release.Set();
+                await data.Rows(table).ReplaceOneAsync(filter, original);
+            }
+            Assert.Equal(before, await data.StateAsync());
+            await NoAllocationAsync(data);
+        }
+    }
+
+    [WindowsStorageFact]
     public async Task Missing_allocation_heads_owner_or_posted_journal_never_becomes_unconsumed_value_or_replays_another_posting()
     {
         await using var data = await D.CreateAsync(fixture, receiptPackages: 2);
@@ -332,6 +441,55 @@ public sealed class ProcurementStockValuationTests(MongoFixture fixture)
         Assert.Equal(secondCost, await data.Service.CostAsync(data.Reader, secondReceiptId));
         Assert.Equal(secondBalance, await data.Rows("stockBalances").Find(secondBalanceFilter).SingleAsync());
         Assert.Equal(preserved, await data.PreservedAsync()); await data.NoPaymentOrReleaseAsync();
+    }
+
+    [WindowsStorageFact]
+    public async Task Another_invoice_cannot_use_receipt_capacity_when_a_prior_invoice_loses_its_private_original_proof()
+    {
+        await using var data = await D.CreateAsync(fixture);
+        var first = await data.ProposeAsync("valuation-prior-invoice-proof");
+        var firstApproval = await data.DecideAsync(first["proposalId"].AsInt64, "valuation-prior-invoice-proof-approved");
+        await JournalAsync(data, firstApproval["journalId"].AsInt64, 11250m);
+
+        // A distinct private original, draft, submission and human match consume the
+        // remaining inspection capacity. The selected invoice's own proof stays valid.
+        var secondOriginal = data.Documents.Input("SYNTHETIC-INVOICE-PRIOR-PROOF-0002");
+        var secondDraft = await data.Documents.DraftAsync("valuation-second-invoice-draft", secondOriginal);
+        var secondDraftId = secondDraft["draftId"].AsInt64;
+        var (reservation, reference) = await data.Documents.UploadForAsync(secondDraftId, "valuation-second-invoice-image");
+        Assert.Equal("completed", await data.Documents.Runtime.RunOnceAsync());
+        var submitPreview = await data.Documents.Service.PreviewSubmitAsync(data.Documents.Actor, secondDraftId, 1,
+            reservation.ReservationId, reference);
+        var secondSubmission = await data.Documents.Evidence.SubmitAsync(data.Documents.Actor, secondDraftId, 1,
+            reservation.ReservationId, reference, submitPreview["binding"].AsString,
+            SupplierDocumentTestData.Meta("valuation-second-invoice-submit"));
+        var secondDocumentId = secondSubmission["documentId"].AsInt64;
+        // The first reviewed match used 2,000 tax and 500 charge; the approved
+        // PO leaves exactly 1,300 tax and 200 charge for its final package.
+        var secondMatchInput = data.Documents.MatchInput(1, new Money(1300), new Money(200)) with {
+            DocumentId = secondDocumentId, ReviewedInput = secondOriginal, OcrResultId = null
+        };
+        var secondMatch = await data.Documents.MatchAsync("valuation-second-invoice-human-match", secondMatchInput);
+        var secondInput = data.Input() with { InvoiceDocumentId = secondDocumentId, InvoiceMatchId = secondMatch["matchId"].AsInt64,
+            TaxAmount = new Money(1300), ChargeAmount = new Money(200), CapitalizedAmount = new Money(11500) };
+        _ = await data.Service.PreviewAsync(data.Maker, secondInput);
+
+        var firstSubmission = await data.Rows("supplierDocumentSubmissions")
+            .Find(new BsonDocument("_id", data.Documents.DocumentId)).SingleAsync();
+        var firstPinFilter = new BsonDocument("_id", firstSubmission["pinId"]);
+        var firstPin = await data.Rows("evidencePins").Find(firstPinFilter).SingleAsync();
+        Assert.Equal(1L, (await data.Rows("evidencePins").DeleteOneAsync(firstPinFilter)).DeletedCount);
+        try {
+            var before = await data.StateAsync();
+            await DeniedAsync(() => data.Service.PreviewAsync(data.Maker, secondInput));
+            Assert.Equal(before, await data.StateAsync());
+        } finally { await data.Rows("evidencePins").InsertOneAsync(firstPin); }
+
+        var secondProposal = await data.ProposeAsync("valuation-second-invoice-proof-restored", secondInput);
+        var secondApproval = await data.DecideAsync(secondProposal["proposalId"].AsInt64, "valuation-second-invoice-proof-approved");
+        await JournalAsync(data, secondApproval["journalId"].AsInt64, 11500m);
+        Assert.Equal(2L, await data.Rows(D.Allocations).CountDocumentsAsync(new BsonDocument()));
+        await data.NoPaymentOrReleaseAsync();
     }
 
     private static async Task<BsonDocument> CostAsync(D data, string state, long valued, string net, string tax, string charge, string capitalized)

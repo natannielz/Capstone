@@ -32,15 +32,17 @@ public sealed partial class ProcurementStockValuationService
         { "capitalizeTax", row["capitalizeTax"] }, { "capitalizeCharge", row["capitalizeCharge"] },
         { "operatingOwnerReference", row["operatingOwnerReference"] }, { "approvalReference", row["approvalReference"] } };
     private static BsonDocument MatchView(ProcurementStockValuationSources source, ProcurementStockValuationInput input, BsonValue? capacity = null) {
-        var line = source.MatchLine; return new() { { "invoiceDocumentId", source.Invoice["_id"] }, { "invoiceDocumentRevision", 1L },
+        var line = source.MatchLine; var result = new BsonDocument { { "invoiceDocumentId", source.Invoice["_id"] }, { "invoiceDocumentRevision", 1L },
             { "invoiceMatchId", source.Match["_id"] }, { "matchLineNumber", input.MatchLineNumber },
             { "documentReference", source.Invoice["input"]["documentReference"] },
             { "line", new BsonDocument { { "documentLineNumber", line["documentLineNumber"] }, { "packages", line["packages"] },
                 { "netAmount", line["netAmount"] }, { "taxAmount", line["taxAmount"] }, { "chargeAmount", line["chargeAmount"] },
                 { "inspectionId", line["inspectionId"] }, { "inspectionLineNumber", line["inspectionLineNumber"] }, { "state", line["state"] } } },
             { "matchCapacity", capacity ?? source.Capacity.Match } };
+        if (source.Quality is not null) result.Add("quality", SupplierDocumentBson.PublicQuality(source.Quality));
+        return result;
     }
-    private static BsonDocument ProposalView(BsonDocument row, BsonDocument? decision, ProcurementStockValuationSources source) => new() { { "id", row["_id"] }, { "version", 1L },
+    private static BsonDocument ProposalView(BsonDocument row, BsonDocument? decision, ProcurementStockValuationSources source) { var result = new BsonDocument { { "id", row["_id"] }, { "version", 1L },
         { "input", row["input"] }, { "receiptHash", row["receiptHash"] }, { "invoiceHash", row["invoiceHash"] }, { "matchHash", row["matchHash"] },
         { "receipt", ProcurementStockReceiptBson.View(source.Receipt) },
         { "match", MatchView(source, B.Input(row["input"]), row["matchCapacity"]) },
@@ -49,6 +51,9 @@ public sealed partial class ProcurementStockValuationService
         { "recordedAt", row["recordedAt"] }, { "reason", row["reason"] },
         { "decisionReason", decision is null ? BsonNull.Value : decision["reason"] },
         { "decision", decision is null ? BsonNull.Value : B.Result(decision) } };
+        if (row.TryGetValue("qualityCapacity", out var qualityCapacity)) result.Add("qualityCapacity", qualityCapacity);
+        return result;
+    }
     public async Task<BsonDocument> PreviewAsync(ActorContext actor, ProcurementStockValuationInput input, CancellationToken ct = default) {
         input = ProcurementStockValuationRules.Copy(input); await StorageAsync(ct);
         return await authorization.ReadAsync(actor, async (authority, tx, token) => {
@@ -57,7 +62,8 @@ public sealed partial class ProcurementStockValuationService
                 { "match", MatchView(source, input) }, { "policy", PolicyView(source.Policy) }, { "accounting", source.Accounting },
                 { "receiptCapacity", source.Capacity.Receipt }, { "matchCapacity", source.Capacity.Match },
                 { "binding", B.Binding(actor.UserId, actor.GrantVersion, input, source.Receipt, source.Invoice, source.Match, source.Policy,
-                    source.Accounting, source.Capacity.Receipt, source.Capacity.Match) }, { "observedAt", Now.UtcDateTime } };
+                    source.Accounting, source.Capacity.Receipt, source.Capacity.Match, source.Quality, source.QualityCapacity) }, { "observedAt", Now.UtcDateTime } };
+            if (source.QualityCapacity is not null) result.Add("qualityCapacity", source.QualityCapacity);
             await FenceAsync(context, token); return result;
         }, ct);
     }
@@ -72,17 +78,19 @@ public sealed partial class ProcurementStockValuationService
                 throw B.Changed("procurement_stock_valuation_lookup_required");
             context = await PrepareAsync(actor, authority, tx, input, Permissions.ProcurementStockValuationPropose, token);
             var source = context.Source!; ProcurementStockValuationRecords.Equal(binding, B.Binding(actor.UserId, actor.GrantVersion, input,
-                source.Receipt, source.Invoice, source.Match, source.Policy, source.Accounting, source.Capacity.Receipt, source.Capacity.Match));
+                source.Receipt, source.Invoice, source.Match, source.Policy, source.Accounting, source.Capacity.Receipt, source.Capacity.Match,
+                source.Quality, source.QualityCapacity));
             return Command(context);
         }, async (tx, token) => {
             var active = context ?? throw B.Broken(); Current(active); await FenceAsync(active, token); var source = active.Source!;
-            var row = new BsonDocument { { "_id", id }, { "schemaVersion", 1 }, { "proposalId", id }, { "version", 1L },
+            var row = new BsonDocument { { "_id", id }, { "schemaVersion", source.Quality is null ? 1 : 2 }, { "proposalId", id }, { "version", 1L },
                 { "location", R.Location(input.Location) }, { "input", B.Input(input) }, { "receiptHash", source.Receipt["snapshotHash"] },
                 { "invoiceHash", source.Invoice["snapshotHash"] }, { "matchHash", source.Match["snapshotHash"] },
                 { "matchActorId", source.Match["actorId"] }, { "matchLine", source.MatchLine.DeepClone() },
                 { "policy", B.PolicySnapshot(source.Policy) }, { "accounting", source.Accounting.DeepClone() },
                 { "receiptCapacity", source.Capacity.Receipt.DeepClone() }, { "matchCapacity", source.Capacity.Match.DeepClone() }, { "binding", binding },
                 { "people", new BsonArray(active.People!.Evidence.OrderBy(person => person.UserId).Select(R.Person)) } };
+            if (source.Quality is not null) { row.Add("quality", source.Quality.DeepClone()); row.Add("qualityCapacity", source.QualityCapacity!.DeepClone()); }
             B.Metadata(row, B.ProposeOperation, auditId, actor, metadata, body, Now);
             await Rows(B.Proposals).InsertOneAsync(tx, row, cancellationToken: token); await EffectsAsync(tx, row, token);
             active.Proposal = row; return B.Result(row);
@@ -95,18 +103,22 @@ public sealed partial class ProcurementStockValuationService
         CancellationToken ct = default) {
         if (proposalId <= 0 || !Enum.IsDefined(decision)) throw ProcurementStockValuationRules.Invalid(); await StorageAsync(ct);
         return await authorization.ReadAsync(actor, async (authority, tx, token) => {
-            var proposal = await records.ProposalAsync(tx, proposalId, token); var input = B.Input(proposal["input"]);
+            var verified = await records.VerifiedProposalAsync(tx, proposalId, token);
+            var proposal = verified.Proposal; var input = B.Input(proposal["input"]);
             if (await records.DecisionAsync(tx, proposal, token) is not null) throw B.Changed("procurement_stock_valuation_already_decided");
             var posting = decision == ProcurementStockValuationDecision.Approve;
             var context = await PrepareAsync(actor, authority, tx, input, Permissions.ProcurementStockValuationDecide, token,
-                posting ? null : proposal, posting); context.Proposal = proposal;
+                posting ? null : proposal, posting, verified); context.Proposal = proposal;
             await PeopleAsync(context, proposal["actorId"].AsInt64, proposal["matchActorId"].AsInt64, token);
             ReviewDecision(context, proposal, posting);
             var source = context.Source!; var result = new BsonDocument { { "proposal", ProposalView(proposal, null, source) }, { "decision", B.Decision(decision) },
                 { "receiptCapacity", source.Capacity.Receipt }, { "matchCapacity", source.Capacity.Match },
                 { "policy", PolicyView(source.Policy) }, { "accounting", source.Accounting },
                 { "binding", B.DecisionBinding(actor.UserId, actor.GrantVersion, proposal, decision, source.Capacity.Receipt,
-                    source.Capacity.Match, source.Policy, source.Accounting) }, { "observedAt", Now.UtcDateTime } };
+                    source.Capacity.Match, source.Policy, source.Accounting,
+                    posting ? source.QualityCapacity : proposal.TryGetValue("qualityCapacity", out var retainedQuality) ? retainedQuality.AsBsonDocument : null) },
+                { "observedAt", Now.UtcDateTime } };
+            if (proposal.TryGetValue("qualityCapacity", out var qualityBefore)) result.Add("qualityCapacity", qualityBefore);
             await FenceAsync(context, token, posting); return result;
         }, ct);
     }
@@ -118,6 +130,11 @@ public sealed partial class ProcurementStockValuationService
         if (posting) {
             ProcurementStockValuationRecords.Equal(proposal["policy"], B.PolicySnapshot(source.Policy));
             ProcurementStockValuationRecords.Equal(proposal["accounting"], source.Accounting);
+            if (proposal.Contains("quality") != (source.Quality is not null)) throw B.Broken();
+            if (source.Quality is not null) {
+                ProcurementStockValuationRecords.Equal(proposal["quality"], source.Quality);
+                ProcurementStockValuationRecords.Equal(proposal["qualityCapacity"], source.QualityCapacity!);
+            }
         }
     }
     public async Task<BsonDocument> DecideAsync(ActorContext actor, long proposalId, long expectedVersion, ProcurementStockValuationDecision decision,
@@ -129,15 +146,17 @@ public sealed partial class ProcurementStockValuationService
         return await authorization.ExecuteCommandAsync(actor, B.DecideOperation, metadata, body, async (authority, tx, token) => {
             if (await records.ForKeyAsync(tx, actor.UserId, B.DecideOperation, metadata.IdempotencyKey, token) is not null)
                 throw B.Changed("procurement_stock_valuation_lookup_required");
-            var proposal = await records.ProposalAsync(tx, proposalId, token);
+            var verified = await records.VerifiedProposalAsync(tx, proposalId, token);
+            var proposal = verified.Proposal;
             if (await records.DecisionAsync(tx, proposal, token) is not null) throw B.Changed("procurement_stock_valuation_already_decided");
             var input = B.Input(proposal["input"]);
             context = await PrepareAsync(actor, authority, tx, input, Permissions.ProcurementStockValuationDecide, token,
-                posting ? null : proposal, posting); context.Proposal = proposal;
+                posting ? null : proposal, posting, verified); context.Proposal = proposal;
             await PeopleAsync(context, proposal["actorId"].AsInt64, proposal["matchActorId"].AsInt64, token);
             ReviewDecision(context, proposal, posting); var source = context.Source!;
             ProcurementStockValuationRecords.Equal(binding, B.DecisionBinding(actor.UserId, actor.GrantVersion, proposal, decision,
-                source.Capacity.Receipt, source.Capacity.Match, source.Policy, source.Accounting));
+                source.Capacity.Receipt, source.Capacity.Match, source.Policy, source.Accounting,
+                posting ? source.QualityCapacity : proposal.TryGetValue("qualityCapacity", out var retainedQuality) ? retainedQuality.AsBsonDocument : null));
             return Command(context, proposal, posting);
         }, async (tx, token) => {
             var active = context ?? throw B.Broken(); var proposal = active.Proposal ?? throw B.Broken(); var source = active.Source ?? throw B.Broken();
@@ -152,13 +171,14 @@ public sealed partial class ProcurementStockValuationService
                 matchAfter = ProcurementStockValuationCapacityReader.AfterMatch(source.Capacity.Match, input.Packages, input.NetAmount,
                     input.TaxAmount, input.ChargeAmount, allocationId.AsInt64, proposal["snapshotHash"].AsString);
             }
-            var row = new BsonDocument { { "_id", id }, { "schemaVersion", 1 }, { "proposalId", proposalId }, { "version", 1L },
+            var row = new BsonDocument { { "_id", id }, { "schemaVersion", proposal.Contains("quality") ? 2 : 1 }, { "proposalId", proposalId }, { "version", 1L },
                 { "location", proposal["location"] }, { "input", proposal["input"] }, { "proposalHash", proposal["snapshotHash"] }, { "decision", B.Decision(decision) },
                 { "receiptHash", proposal["receiptHash"] }, { "invoiceHash", proposal["invoiceHash"] }, { "matchHash", proposal["matchHash"] },
                 { "policy", proposal["policy"] }, { "accounting", proposal["accounting"] }, { "receiptBefore", source.Capacity.Receipt.DeepClone() },
                 { "receiptAfter", receiptAfter }, { "matchBefore", source.Capacity.Match.DeepClone() }, { "matchAfter", matchAfter },
                 { "allocationId", allocationId }, { "journalId", BsonNull.Value }, { "journalFingerprint", BsonNull.Value }, { "postingFence", 0L },
                 { "binding", binding }, { "people", new BsonArray(active.People!.Evidence.OrderBy(person => person.UserId).Select(R.Person)) } };
+            if (proposal.Contains("quality")) { row.Add("quality", proposal["quality"].DeepClone()); row.Add("qualityCapacity", proposal["qualityCapacity"].DeepClone()); }
             B.Metadata(row, B.DecideOperation, auditId, actor, metadata, body, at);
             await Rows(B.Decisions).InsertOneAsync(tx, row, cancellationToken: token);
             if (posting) {

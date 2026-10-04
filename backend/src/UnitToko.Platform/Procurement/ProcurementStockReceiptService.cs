@@ -74,7 +74,7 @@ public sealed partial class ProcurementStockReceiptService
         foreach (var name in ProcurementInspectionSchemas.Collections) await InventoryRepository.RequireStorageAsync(database, name, ProcurementInspectionSchemas.Validator(name), ProcurementInspectionSchemas.Keys(name), ct);
         foreach (var name in SupplierClaimSchemas.Collections.Where(name => name != Q.PhysicalAllocations)) await InventoryRepository.RequireStorageAsync(database, name, SupplierClaimSchemas.Validator(name), SupplierClaimSchemas.Keys(name), ct);
         foreach (var name in ProcurementReceivingSchemas.Collections) await InventoryRepository.RequireStorageAsync(database, name, ProcurementReceivingSchemas.Validator(name), ProcurementReceivingSchemas.Keys(name), ct);
-        foreach (var name in SupplierDocumentSchemas.Collections) await InventoryRepository.RequireStorageAsync(database, name, SupplierDocumentSchemas.Validator(name), SupplierDocumentSchemas.Keys(name), ct);
+        foreach (var name in SupplierDocumentSchemas.Collections) await SupplierDocumentService.RequirePredecessorDocumentStorageAsync(database, name, ct);
         foreach (var name in ProcurementStockReceiptSchemas.Collections.Concat(ProcurementInspectionSchemas.Collections).Concat(ProcurementReceivingSchemas.Collections).Concat(SupplierDocumentSchemas.Collections)
             .Concat(SupplierClaimSchemas.Collections.Where(name => name != Q.PhysicalAllocations)).Concat(["lots", "stockBalances", "movements"]).Distinct())
             if ((await (await Rows(name).Indexes.ListAsync(ct)).ToListAsync(ct)).Any(index => InvoiceStorage.Unsafe(index) || index.Contains("partialFilterExpression"))) throw B.Broken();

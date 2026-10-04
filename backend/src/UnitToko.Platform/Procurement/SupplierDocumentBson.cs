@@ -33,16 +33,27 @@ internal static class SupplierDocumentBson
             line["packages"].IsBsonNull ? null : line["packages"].AsInt32, Amount(line["netPricePerPackage"]), Amount(line["taxAmount"]), Amount(line["chargeAmount"]), C.Text(line["relatedInvoiceReference"]), Amount(line["statementAmount"]))).ToImmutableArray(), C.Text(row["discrepancy"])));
     internal static BsonValue Amount(Money? value) => value is { } money ? money.ToString() : BsonNull.Value;
     internal static Money? Amount(BsonValue value) => value.IsBsonNull ? null : Money.Parse(value.AsString);
-    internal static BsonDocument MatchLine(SupplierDocumentMatchLineInput line) => new() { { "documentLineNumber", line.DocumentLineNumber }, { "packages", line.Packages is { } packages ? packages : BsonNull.Value },
+    internal static BsonDocument MatchLine(SupplierDocumentMatchLineInput line) { var row = new BsonDocument { { "documentLineNumber", line.DocumentLineNumber }, { "packages", line.Packages is { } packages ? packages : BsonNull.Value },
         { "inspectionId", line.InspectionId is { } inspection ? inspection : BsonNull.Value }, { "inspectionLineNumber", line.InspectionLineNumber is { } number ? number : BsonNull.Value },
         { "invoiceMatchId", line.InvoiceMatchId is { } invoice ? invoice : BsonNull.Value }, { "invoiceMatchLineNumber", line.InvoiceMatchLineNumber is { } index ? index : BsonNull.Value },
         { "netAmount", Amount(line.NetAmount) }, { "taxAmount", Amount(line.TaxAmount) }, { "chargeAmount", Amount(line.ChargeAmount) }, { "statementAmount", Amount(line.StatementAmount) }, { "discrepancy", C.Optional(line.Discrepancy) } };
+        if (line.QualityAllocationId is { } quality) row.Add("qualityAllocationId", quality);
+        return row;
+    }
+    internal static BsonDocument PublicQuality(BsonDocument quality) => new() {
+        { "allocationId", quality["allocationId"] }, { "proposalId", quality["proposalId"] }, { "decisionId", quality["decisionId"] },
+        { "receiptId", quality["receiptId"] }, { "receiptReference", quality["receiptReference"] },
+        { "acceptedPackages", (long)quality["acceptedPackages"].AsInt32 }, { "lotReference", quality["lotReference"] },
+        { "expiresOn", quality["expiresOn"] }, { "acceptedCondition", quality["acceptedCondition"] },
+        { "putawayReference", quality["putawayReference"] }, { "segregationReference", quality["segregationReference"] },
+        { "recordedAt", quality["recordedAt"] } };
     internal static BsonDocument Input(SupplierDocumentMatchInput input) { input = SupplierDocumentRules.Copy(input); return new() { { "documentId", input.DocumentId }, { "documentRevision", input.DocumentRevision }, { "reviewedInput", Input(input.ReviewedInput) }, { "ocrResultId", input.OcrResultId is { } ocr ? ocr : BsonNull.Value }, { "lines", new BsonArray(input.Lines.Select(MatchLine)) } }; }
     internal static SupplierDocumentMatchInput MatchInput(BsonValue row) => SupplierDocumentRules.Copy(new SupplierDocumentMatchInput(row["documentId"].AsInt64, row["documentRevision"].AsInt64, Input(row["reviewedInput"]), row["ocrResultId"].IsBsonNull ? null : row["ocrResultId"].AsInt64,
         row["lines"].AsBsonArray.Select(line => new SupplierDocumentMatchLineInput(line["documentLineNumber"].AsInt32, line["packages"].IsBsonNull ? null : line["packages"].AsInt32,
             line["inspectionId"].IsBsonNull ? null : line["inspectionId"].AsInt64, line["inspectionLineNumber"].IsBsonNull ? null : line["inspectionLineNumber"].AsInt32,
             line["invoiceMatchId"].IsBsonNull ? null : line["invoiceMatchId"].AsInt64, line["invoiceMatchLineNumber"].IsBsonNull ? null : line["invoiceMatchLineNumber"].AsInt32,
-            Amount(line["netAmount"]), Amount(line["taxAmount"]), Amount(line["chargeAmount"]), Amount(line["statementAmount"]), C.Text(line["discrepancy"]))).ToImmutableArray()));
+            Amount(line["netAmount"]), Amount(line["taxAmount"]), Amount(line["chargeAmount"]), Amount(line["statementAmount"]), C.Text(line["discrepancy"]),
+            line.AsBsonDocument.TryGetValue("qualityAllocationId", out var quality) ? quality.AsInt64 : null)).ToImmutableArray()));
     internal static string IdentityKey(SupplierDocumentInput input, long supplier) => Hash(new() { { "organizationId", input.Location.OrganizationId }, { "shopId", input.Location.ShopId },
         { "channelId", input.Location.ChannelId }, { "supplierId", supplier }, { "kind", Kind(input.Kind) }, { "reference", input.DocumentReference } });
     internal static BsonDocument Capacity(BsonArray lines, long version = 0, IReadOnlyList<long>? matched = null) => new() { { "version", version },

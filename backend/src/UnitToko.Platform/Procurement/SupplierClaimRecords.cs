@@ -17,7 +17,8 @@ namespace UnitToko.Platform.Procurement;
 
 internal sealed record SupplierClaimSources(BsonArray Lines, IReadOnlyDictionary<long, ProcurementInspectionHistory> Inspections,
     IReadOnlyDictionary<long, SupplierDocumentHistory> Documents, IReadOnlyList<(string Table, BsonDocument Row)> Fences);
-internal sealed class SupplierClaimRecords(IMongoDatabase database, MongoUnitOfWork unit, IClock clock, CatalogAuthoringService catalog, PurchaseOrderService orders)
+internal sealed class SupplierClaimRecords(IMongoDatabase database, MongoUnitOfWork unit, IClock clock, CatalogAuthoringService catalog, PurchaseOrderService orders,
+    ProcurementQualityProofGraph? qualityGraph = null)
 {
     private IMongoCollection<BsonDocument> Rows(string name) => database.GetCollection<BsonDocument>(name);
     internal static void Equal(BsonValue actual, BsonValue expected) { if (!actual.Equals(expected)) throw B.Broken(); }
@@ -28,9 +29,9 @@ internal sealed class SupplierClaimRecords(IMongoDatabase database, MongoUnitOfW
         await new SupplierDocumentRecords(database, unit, clock, catalog, orders).InspectionAsync(tx, id, ct);
     internal async Task<SupplierDocumentHistory> DocumentAsync(IClientSessionHandle tx, long id, CancellationToken ct, List<(string Table, BsonDocument Row)>? fences = null) {
         var route = await Rows(D.Submissions).Find(tx, new BsonDocument("_id", id)).Project(new BsonDocument("draftId", 1)).SingleOrDefaultAsync(ct) ?? throw B.Broken();
-        var history = await new SupplierDocumentRecords(database, unit, clock, catalog, orders).HistoryAsync(tx, route["draftId"].AsInt64, ct);
+        var history = await new SupplierDocumentRecords(database, unit, clock, catalog, orders, qualityGraph).HistoryAsync(tx, route["draftId"].AsInt64, ct);
         if (history.Document is null || history.Document["_id"] != id || history.Document["input"]["kind"] != "invoice") throw B.Broken();
-        var sourceFences = await new SupplierDocumentRecords(database, unit, clock, catalog, orders).RequireSourceCapacitiesAsync(tx, history, ct);
+        var sourceFences = await new SupplierDocumentRecords(database, unit, clock, catalog, orders, qualityGraph).RequireSourceCapacitiesAsync(tx, history, ct);
         fences?.AddRange(sourceFences); return history;
     }
     internal async Task<SupplierClaimSources> ResolveAsync(IClientSessionHandle tx, SupplierClaimInput input, BsonDocument source, CancellationToken ct) {
@@ -114,7 +115,15 @@ internal sealed class SupplierClaimRecords(IMongoDatabase database, MongoUnitOfW
             var allocation = await Rows(Q.Allocations(B.Basis(cap["basis"]))).Find(tx, new BsonDocument { { "headId", cap["headId"] }, { "sequence", cap["version"] } }).SingleOrDefaultAsync(ct) ?? throw B.Broken();
             if (allocation["recordedAt"].CompareTo(row["recordedAt"]) > 0) throw B.Broken();
             if (allocation["schemaVersion"] == 1 && allocation["kind"] == "supplier_claim") {
-                var claim = await RequestAsync(tx, allocation["claimId"].AsInt64, ct); var claimIndex = allocation["claimLineNumber"].AsInt32 - 1;
+                BsonDocument claim;
+                if (allocation["claimId"] == request["_id"]) {
+                    // The caller supplied this fully authenticated request in the same
+                    // transaction. Check its current immutable bytes before reusing it;
+                    // a different claim still takes the full retained-owner path.
+                    var current = await Rows(B.Requests).Find(tx, new BsonDocument("_id", request["_id"])).SingleOrDefaultAsync(ct) ?? throw B.Broken();
+                    Equal(current, request); claim = request;
+                } else claim = await RequestAsync(tx, allocation["claimId"].AsInt64, ct);
+                var claimIndex = allocation["claimLineNumber"].AsInt32 - 1;
                 if (claimIndex < 0 || claimIndex >= claim["allocations"].AsBsonArray.Count) throw B.Broken(); Equal(allocation, Q.Allocation(claim, claimIndex));
             } else if (B.Basis(cap["basis"]) == SupplierClaimBasis.PhysicalReceived && allocation["schemaVersion"] == 2 && allocation["kind"] == "held_receipt")
                 Equal(allocation, ProcurementStockReceiptBson.Allocation(await HeldReceipts.ReadAsync(tx, allocation["receiptId"].AsInt64, ct)));

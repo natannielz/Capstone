@@ -24,7 +24,7 @@ public sealed class ProcurementQualityAcceptanceMigrationTests(MongoFixture fixt
         await data.Database.RunCommandAsync<BsonDocument>(new BsonDocument { { "collMod", B.Proposals },
             { "validator", new BsonDocument("$and", new BsonArray { definition["options"]["validator"], guard }) } });
         await data.Database.DropCollectionAsync(B.Allocations);
-        await new CollectionMigrations(data.Database, data.Clock).ApplyAsync();
+        await ApplyV77Async(data.Database, data.Clock);
         Assert.True(InventorySchemas.Contains((await DefinitionAsync(data.Database, B.Proposals))["options"]["validator"].AsBsonDocument, guard));
         foreach (var table in ProcurementQualityAcceptanceSchemas.Collections) {
             Assert.False(await data.Database.GetCollection<BsonDocument>(table).Find(new BsonDocument()).AnyAsync());
@@ -32,7 +32,7 @@ public sealed class ProcurementQualityAcceptanceMigrationTests(MongoFixture fixt
         }
         foreach (var table in new[] { "lots", "stockBalances", "movements", "journalEntries" })
             Assert.False(await data.Database.GetCollection<BsonDocument>(table).Find(new BsonDocument()).AnyAsync());
-        var installed = await SnapshotAsync(data.Database); await new CollectionMigrations(data.Database, data.Clock).ApplyAsync();
+        var installed = await SnapshotAsync(data.Database); await ApplyV77Async(data.Database, data.Clock);
         Assert.Equal(installed, await SnapshotAsync(data.Database));
     }
 
@@ -50,7 +50,7 @@ public sealed class ProcurementQualityAcceptanceMigrationTests(MongoFixture fixt
             try { await RefusesAsync(data.Database, data.Clock); }
             finally { await data.Rows(table).InsertOneAsync(row); }
         }
-        await new CollectionMigrations(data.Database, data.Clock).ApplyAsync();
+        await ApplyV77Async(data.Database, data.Clock);
         AssertSnapshotEqual(WithRetainedSupplierPolicyFloor(before), await SnapshotAsync(data.Database));
         Assert.Equal(receipt, await data.Rows(ProcurementStockReceiptBson.Receipts).Find(new BsonDocument("_id", data.ReceiptId)).SingleAsync());
         Assert.Equal("3", (await data.Stock.Service.ReadAsync(data.Stock.Reader, data.ReceiptId))["held"].ToString());
@@ -62,6 +62,7 @@ public sealed class ProcurementQualityAcceptanceMigrationTests(MongoFixture fixt
     {
         await using var data = await ProcurementQualityAcceptanceTestData.CreateAsync(fixture);
         var result = await data.DecideAsync((await data.ProposeAsync("quality-migration"))["proposalId"].AsInt64, "quality-migration-approved");
+        await RestoreV77Async(data.Database);
         var unchanged = await SnapshotAsync(data.Database);
         Assert.NotNull(await Record.ExceptionAsync(() => RestoreV76Async(data.Database))); AssertSnapshotEqual(unchanged, await SnapshotAsync(data.Database));
         // Simulate a retained owner in a resumable candidate; the production step must prove it before any DDL.
@@ -71,7 +72,7 @@ public sealed class ProcurementQualityAcceptanceMigrationTests(MongoFixture fixt
             try { await RefusesAsync(data.Database, data.Clock); }
             finally { await data.Rows(table).InsertOneAsync(row); }
         }
-        await new CollectionMigrations(data.Database, data.Clock).ApplyAsync(); AssertSnapshotEqual(WithRetainedSupplierPolicyFloor(unchanged), await SnapshotAsync(data.Database));
+        await ApplyV77Async(data.Database, data.Clock); AssertSnapshotEqual(WithRetainedSupplierPolicyFloor(unchanged), await SnapshotAsync(data.Database));
         Assert.Equal(result, (await data.Service.LookupAsync(data.Checker, B.DecideOperation, "quality-migration-approved"))["result"]);
     }
 
@@ -95,7 +96,7 @@ public sealed class ProcurementQualityAcceptanceMigrationTests(MongoFixture fixt
     internal static async Task RestoreV76Async(IMongoDatabase db) {
         var history = await HistoryAsync(db);
         if (history.Count <= 76) { Assert.All(history, row => Assert.Equal("applied", row["state"])); return; }
-        Assert.Equal(77, history.Count); Assert.All(history, row => Assert.Equal("applied", row["state"]));
+        Assert.InRange(history.Count, 77, 79); Assert.All(history, row => Assert.Equal("applied", row["state"]));
         foreach (var table in ProcurementQualityAcceptanceSchemas.Collections) {
             Assert.False(await db.GetCollection<BsonDocument>(table).Find(new BsonDocument()).AnyAsync());
             Assert.False(await db.GetCollection<BsonDocument>("idCounters").Find(new BsonDocument("_id", table)).AnyAsync());
@@ -104,15 +105,41 @@ public sealed class ProcurementQualityAcceptanceMigrationTests(MongoFixture fixt
             ("outboxEvents", "sourceKey"), ("idempotencyRecords", "operation"), ("authorizationHistory", "operation"),
             ("movements", "source.namespace"), ("journalEntries", "source.namespace"), ("journalEntries", "sourceEvent") })
             Assert.False(await db.GetCollection<BsonDocument>(table).Find(new BsonDocument(field, new BsonRegularExpression(@"^procurement\.qualityacceptance(?:[.:]|$)"))).AnyAsync());
+        // Prove the M77 suffix is empty before removing a later schema extension.
+        await RestoreV77Async(db); history = await HistoryAsync(db);
         var before = await SnapshotAsync(db);
         Assert.Equal(1L, (await db.GetCollection<BsonDocument>("schemaMigrations").DeleteOneAsync(new BsonDocument { { "_id", 77 }, { "state", "applied" } })).DeletedCount);
         Assert.Equal(new BsonArray(history.Take(76)), await HistoryAsync(db)); Assert.Equal(before, await SnapshotAsync(db));
     }
+    // Only empty synthetic request storage can be isolated for a predecessor test.
+    // Production migration78 and every real request/decision remain immutable.
+    internal static async Task RestoreV77Async(IMongoDatabase db) {
+        foreach (var table in BranchOrderRequestSchemas.Collections) {
+            Assert.False(await db.GetCollection<BsonDocument>(table).Find(new BsonDocument()).AnyAsync());
+            Assert.False(await db.GetCollection<BsonDocument>("idCounters").Find(new BsonDocument("_id", table)).AnyAsync());
+        }
+        foreach (var (table, field) in new[] { ("auditEvents", "kind"), ("outboxEvents", "kind"), ("idempotencyRecords", "operation") })
+            Assert.False(await db.GetCollection<BsonDocument>(table).Find(new BsonDocument(field,
+                new BsonRegularExpression(@"^ordering\.branchrequest(?:[.:]|$)"))).AnyAsync());
+        await ProcurementQualityValuationMigrationTests.RestoreV78Async(db);
+        var history = await HistoryAsync(db);
+        if (history.Count <= 77) return;
+        Assert.Equal(78, history.Count);
+        var before = await SnapshotAsync(db);
+        Assert.Equal(1L, (await db.GetCollection<BsonDocument>("schemaMigrations").DeleteOneAsync(new BsonDocument { { "_id", 78 }, { "state", "applied" } })).DeletedCount);
+        Assert.Equal(new BsonArray(history.Take(77)), await HistoryAsync(db)); AssertSnapshotEqual(before, await SnapshotAsync(db));
+    }
     private static async Task RefusesAsync(IMongoDatabase db, IClock clock) {
         var before = await SnapshotAsync(db);
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => new CollectionMigrations(db, clock).ApplyAsync());
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => ApplyV77Async(db, clock));
         Assert.Equal("Procurement quality acceptance migration preflight failed", error.Message); Assert.Equal(before, await SnapshotAsync(db));
         Assert.False(await db.GetCollection<BsonDocument>("schemaMigrations").Find(new BsonDocument { { "_id", 77 }, { "state", "applied" } }).AnyAsync());
+    }
+    private static async Task ApplyV77Async(IMongoDatabase db, IClock clock) {
+        var lease = await new MigrationGate(db, clock, 77).AcquireAsync(77, default);
+        if (lease is null) return;
+        try { await new ProcurementQualityAcceptanceMigration(db, clock).ApplyAsync(lease, default); await lease.CompleteAsync(default); }
+        catch { await lease.ReleaseAsync(); throw; }
     }
     private static BsonDocument WithRetainedSupplierPolicyFloor(BsonDocument before) {
         // SupplierTestData inserts its explicit synthetic policy ID without allocating it.

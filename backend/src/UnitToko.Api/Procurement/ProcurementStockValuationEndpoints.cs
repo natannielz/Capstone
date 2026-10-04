@@ -59,7 +59,8 @@ public sealed record ProcurementStockValuationReceiptsDto(ProcurementLocationDto
 public sealed record ProcurementStockValuationMatchLineDto(int DocumentLineNumber, int Packages, Money NetAmount, Money TaxAmount,
     Money ChargeAmount, LongId InspectionId, int InspectionLineNumber, string State);
 public sealed record ProcurementStockValuationMatchChoiceDto(LongId InvoiceDocumentId, string InvoiceDocumentRevision, LongId InvoiceMatchId,
-    int MatchLineNumber, string DocumentReference, ProcurementStockValuationMatchLineDto Line, ProcurementStockValuationMatchCapacityDto MatchCapacity);
+    int MatchLineNumber, string DocumentReference, ProcurementStockValuationMatchLineDto Line, ProcurementStockValuationMatchCapacityDto MatchCapacity,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] SupplierDocumentQualityDto? Quality = null);
 public sealed record ProcurementStockValuationMatchesDto(LongId ReceiptId, ProcurementStockValuationMatchChoiceDto[] Items, LongId? NextMatchId);
 public sealed record ProcurementStockValuationAccountDto(string MappingKey, LongId AccountId, string AccountCode);
 public sealed record ProcurementStockValuationPolicyDto(LongId Id, string Revision, bool Active, ProcurementLocationDto Location, string Currency,
@@ -71,17 +72,20 @@ public sealed record ProcurementStockValuationAccountingDto(LongId BookId, LongI
     ProcurementStockValuationAccountDto Inventory, ProcurementStockValuationAccountDto ReceiptAccrual);
 public sealed record ProcurementStockValuationPreviewDto(ProcurementStockValuationInputDto Input, ProcurementStockReceiptDto Receipt,
     ProcurementStockValuationMatchChoiceDto Match, ProcurementStockValuationPolicyDto Policy, ProcurementStockValuationAccountingDto Accounting,
-    ProcurementStockValuationCapacityDto ReceiptCapacity, ProcurementStockValuationMatchCapacityDto MatchCapacity, string Binding, DateTimeOffset ObservedAt);
+    ProcurementStockValuationCapacityDto ReceiptCapacity, ProcurementStockValuationMatchCapacityDto MatchCapacity, string Binding, DateTimeOffset ObservedAt,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ProcurementQualityAcceptanceCapacityDto? QualityCapacity = null);
 public sealed record ProcurementStockValuationResultDto(LongId ProposalId, LongId? DecisionId, string Version, string Status,
     LongId? AllocationId, LongId? JournalId, DateTimeOffset RecordedAt);
 public sealed record ProcurementStockValuationProposalDto(LongId Id, string Version, ProcurementStockValuationInputDto Input,
     ProcurementStockReceiptDto Receipt, ProcurementStockValuationMatchChoiceDto Match, ProcurementStockValuationPolicyDto Policy,
-    ProcurementStockValuationAccountingDto Accounting, DateTimeOffset RecordedAt, string Reason);
+    ProcurementStockValuationAccountingDto Accounting, DateTimeOffset RecordedAt, string Reason,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ProcurementQualityAcceptanceCapacityDto? QualityCapacity = null);
 public sealed record ProcurementStockValuationReadDto(ProcurementStockValuationProposalDto Proposal,
     ProcurementStockValuationResultDto? Decision, string? DecisionReason);
 public sealed record ProcurementStockValuationDecisionReviewDto(ProcurementStockValuationProposalDto Proposal, string Decision,
     ProcurementStockValuationCapacityDto ReceiptCapacity, ProcurementStockValuationMatchCapacityDto MatchCapacity,
-    ProcurementStockValuationPolicyDto Policy, ProcurementStockValuationAccountingDto Accounting, string Binding, DateTimeOffset ObservedAt);
+    ProcurementStockValuationPolicyDto Policy, ProcurementStockValuationAccountingDto Accounting, string Binding, DateTimeOffset ObservedAt,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ProcurementQualityAcceptanceCapacityDto? QualityCapacity = null);
 public sealed record ProcurementStockValuationHistoryDto(ProcurementLocationDto Location, ProcurementStockValuationReadDto[] Items, LongId? NextProposalId);
 public sealed record ProcurementStockValuationRecoveryDto(string Status, ProcurementStockValuationResultDto? Result);
 public sealed record ProcurementStockValuationCostAllocationDto(LongId Id, LongId ProposalId, LongId DecisionId,
@@ -128,7 +132,7 @@ public static class ProcurementStockValuationEndpoints
             Purpose(request.Purpose); var row = await service.PreviewAsync(Actor(http), request.Input.Domain(), ct);
             return TypedResults.Ok(new ProcurementStockValuationPreviewDto(Input(row["input"]), Receipt(row["receipt"]), Match(row["match"]),
                 Policy(row["policy"]), Accounting(row["accounting"]), ReceiptCapacity(row["receiptCapacity"]), MatchCapacity(row["matchCapacity"]),
-                row["binding"].AsString, Date(row["observedAt"])));
+                row["binding"].AsString, Date(row["observedAt"]), QualityCapacity(row)));
         }).WithName("PreviewProcurementStockValuation");
         group.MapPost("/proposals", async (ProcurementStockValuationProposeDto request, HttpContext http, [FromServices] ProcurementStockValuationService service,
             [FromHeader(Name = "Idempotency-Key")] string key, CancellationToken ct) => {
@@ -145,7 +149,7 @@ public static class ProcurementStockValuationEndpoints
             var row = await service.PreviewDecisionAsync(Actor(http), LongId.Parse(id).Value, Decision(request.Decision), ct);
             return TypedResults.Ok(new ProcurementStockValuationDecisionReviewDto(Proposal(row["proposal"]), row["decision"].AsString,
                 ReceiptCapacity(row["receiptCapacity"]), MatchCapacity(row["matchCapacity"]), Policy(row["policy"]), Accounting(row["accounting"]),
-                row["binding"].AsString, Date(row["observedAt"])));
+                row["binding"].AsString, Date(row["observedAt"]), QualityCapacity(row)));
         }).WithName("PreviewProcurementStockValuationDecision");
         group.MapPost("/proposals/{id}/decisions", async (string id, ProcurementStockValuationDecideDto request, HttpContext http,
             [FromServices] ProcurementStockValuationService service, [FromHeader(Name = "Idempotency-Key")] string key, CancellationToken ct) => {
@@ -187,7 +191,10 @@ public static class ProcurementStockValuationEndpoints
         new(row["line"]["documentLineNumber"].AsInt32, row["line"]["packages"].AsInt32, Money.Parse(row["line"]["netAmount"].AsString),
             Money.Parse(row["line"]["taxAmount"].AsString), Money.Parse(row["line"]["chargeAmount"].AsString),
             new(row["line"]["inspectionId"].AsInt64), row["line"]["inspectionLineNumber"].AsInt32, row["line"]["state"].AsString),
-        MatchCapacity(row["matchCapacity"]));
+        MatchCapacity(row["matchCapacity"]), SupplierDocumentEndpoints.Quality(row.AsBsonDocument.GetValue("quality", BsonNull.Value)));
+    private static ProcurementQualityAcceptanceCapacityDto? QualityCapacity(BsonValue row) =>
+        row.AsBsonDocument.TryGetValue("qualityCapacity", out var capacity) && !capacity.IsBsonNull
+            ? ProcurementQualityAcceptanceDtos.Capacity(capacity) : null;
     private static ProcurementStockValuationAccountDto Account(BsonValue row) => new(row["mappingKey"].AsString,
         new(row["accountId"].AsInt64), row["accountCode"].AsString);
     private static ProcurementStockValuationPolicyDto Policy(BsonValue row) => new(new(row["id"].AsInt64), Number(row["revision"]),
@@ -209,7 +216,7 @@ public static class ProcurementStockValuationEndpoints
         row["postingDate"].AsString, Date(row["recordedAt"]));
     private static ProcurementStockValuationProposalDto Proposal(BsonValue row) => new(new(row["id"].AsInt64), Number(row["version"]), Input(row["input"]),
         Receipt(row["receipt"]), Match(row["match"]), Policy(row["policy"]), Accounting(row["accounting"]),
-        Date(row["recordedAt"]), row["reason"].AsString);
+        Date(row["recordedAt"]), row["reason"].AsString, QualityCapacity(row));
     private static ProcurementStockValuationReadDto Read(BsonValue row) {
         return new(Proposal(row["proposal"]), row["decision"].IsBsonNull ? null : Result(row["decision"]),
             row["decisionReason"].IsBsonNull ? null : row["decisionReason"].AsString);

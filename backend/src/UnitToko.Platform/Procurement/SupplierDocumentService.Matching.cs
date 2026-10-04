@@ -13,8 +13,9 @@ namespace UnitToko.Platform.Procurement;
 
 public sealed partial class SupplierDocumentService
 {
-    private Task<List<SupplierDocumentSourceCapacity>> SourceCapacitiesAsync(Context context, Dictionary<long, ProcurementInspectionHistory> inspections, BsonArray links, CancellationToken ct) =>
-        records.SourceCapacitiesAsync(context.Tx, context.Location, inspections, links, context.ExtraFences, ct);
+    private Task<List<SupplierDocumentSourceCapacity>> SourceCapacitiesAsync(Context context, Dictionary<long, ProcurementInspectionHistory> inspections, BsonArray links,
+        SupplierDocumentMatchInput input, CancellationToken ct) =>
+        records.SourceCapacitiesAsync(context.Tx, context.Location, inspections, links, context.ExtraFences, ct, B.Input(input)["lines"].AsBsonArray);
     private async Task<IReadOnlyList<SupplierDocumentSourceCapacity>> PrepareMatchAsync(Context context, SupplierDocumentMatchInput input, CancellationToken ct) {
         var history = context.History ?? throw B.Broken(); var document = context.Submission ?? throw B.Broken();
         await VerifySourcesAsync(context, ct);
@@ -32,8 +33,18 @@ public sealed partial class SupplierDocumentService
             _ = await new SupplierDocumentExtractionRecords(database).RequireResultAsync(context.Tx, job, proof, resultId, ct);
         }
         var resolved = await records.ResolveAsync(context.Tx, document, input, ct); context.Resolved = resolved.Lines; context.Links = resolved.Links;
+        foreach (var receiptId in resolved.Links.Where(link => !link.IsBsonNull && link.AsBsonDocument.Contains("quality"))
+            .Select(link => link["quality"]["receiptId"].AsInt64).Distinct()) {
+            var receipt = await new ProcurementStockReceiptRecords(database, unit, clock, catalog, orders,
+                new UnitToko.Platform.Inventory.StockSourceSetupService(database, unit, ids, clock)).ReadAsync(context.Tx, receiptId, ct);
+            var quality = await new ProcurementQualityAcceptanceCapacityReader(database,
+                new UnitToko.Platform.Inventory.StockSourceSetupService(database, unit, ids, clock)).ReadAsync(context.Tx, receipt, ct);
+            if (quality.Head is null) throw B.Broken();
+            if (!context.ExtraFences.Any(pair => pair.Table == ProcurementQualityAcceptanceBson.ReceiptHeads && pair.Row["_id"] == quality.Head["_id"]))
+                context.ExtraFences.Add((ProcurementQualityAcceptanceBson.ReceiptHeads, quality.Head));
+        }
         _ = B.After(history.Capacity, input);
-        var sources = await SourceCapacitiesAsync(context, resolved.Inspections, resolved.Links, ct);
+        var sources = await SourceCapacitiesAsync(context, resolved.Inspections, resolved.Links, input, ct);
         foreach (var source in sources) _ = SourceAfter(source.Capacity, source.Kind, source.SourceId, source.SkuId, B.Input(input)["lines"].AsBsonArray, resolved.Links, source.Maximum);
         RequireStatementCapacity(history.Matches, input, resolved.Lines);
         context.Review = new() { { "capacity", history.Capacity }, { "identityVersion", history.Identity["version"] },
@@ -73,7 +84,9 @@ public sealed partial class SupplierDocumentService
             return Command(context);
         }, async (tx, token) => {
             var active = context ?? throw B.Broken(); Current(active); var document = active.Submission!; var history = active.History!; var head = history.Head; var at = Now;
-            var after = B.After(history.Capacity, input); var row = new BsonDocument { { "_id", id }, { "schemaVersion", 1 }, { "draftId", document["draftId"] }, { "documentId", document["_id"] }, { "version", 1L },
+            var after = B.After(history.Capacity, input); var row = new BsonDocument { { "_id", id },
+                { "schemaVersion", input.Lines.Any(line => line.QualityAllocationId is not null) ? 2 : 1 },
+                { "draftId", document["draftId"] }, { "documentId", document["_id"] }, { "version", 1L },
                 { "supplierId", document["supplierId"] }, { "identityId", document["identityId"] }, { "documentHash", document["snapshotHash"] }, { "location", document["location"] },
                 { "input", B.Input(input) }, { "before", history.Capacity }, { "after", after }, { "lines", active.Resolved }, { "links", active.Links }, { "review", active.Review }, { "binding", binding },
                 { "sequence", after["version"] }, { "previousMatchId", head["lastMatchId"] }, { "previousHash", head["lastHash"] }, { "people", new BsonArray(active.People!.Evidence.Select(R.Person)) } };
@@ -89,5 +102,8 @@ public sealed partial class SupplierDocumentService
             await VerifySourcesAsync(active, token); await records.OrphansAsync(tx, token); await FenceAsync(active, token);
         }, validateCurrent: () => Current(context ?? throw B.Broken()));
     }
-    internal static BsonArray PublicLines(BsonArray rows) => new(rows.Select(value => { var row = value.DeepClone().AsBsonDocument; row.Remove("invoiceMatchedAmount"); return row; }));
+    internal static BsonArray PublicLines(BsonArray rows) => new(rows.Select(value => { var row = value.DeepClone().AsBsonDocument;
+        row.Remove("invoiceMatchedAmount");
+        if (row.TryGetValue("quality", out var quality)) row["quality"] = B.PublicQuality(quality.AsBsonDocument);
+        return row; }));
 }

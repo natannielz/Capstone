@@ -47,14 +47,14 @@ internal sealed class ProcurementQualityAcceptanceTestData(ProcurementStockRecei
             input.LotReference, input.ExpiresOn, input.NonExpiringReason);
     }
     internal static async Task<ProcurementQualityAcceptanceTestData> CreateAsync(MongoFixture fixture, bool nonExpiring = false,
-        int expiryDays = 30, bool createPolicy = true, bool allowNonExpiring = true)
+        int expiryDays = 30, bool createPolicy = true, bool allowNonExpiring = true, int receiptPackages = 3)
     {
         var stock = await ProcurementStockReceiptTestData.CreateAsync(fixture, inspectionInput: input => input with {
             Lines = [input.Lines[0] with { ExpiredPackages = 0, ExpiryDate = nonExpiring ? null : input.InspectionDate.AddDays(expiryDays),
                 Discrepancy = "Synthetic mixed damaged/opened observations overlap; no healthy quantity is inferred" }] });
         var data = new ProcurementQualityAcceptanceTestData(stock);
         try {
-            data.Receipt = await stock.RecordAsync("quality-held-receipt", stock.Input(packages: 3));
+            data.Receipt = await stock.RecordAsync("quality-held-receipt", stock.Input(packages: receiptPackages));
             var source = await data.Rows(ProcurementStockReceiptBson.Receipts).Find(new BsonDocument("_id", data.ReceiptId)).SingleAsync();
             var package = PurchaseOrderService.FundingOrderView(source["source"].AsBsonDocument)["lines"].AsBsonArray.Single(row => row["skuId"] == stock.InspectionLine.RequestSkuId);
             data.AcceptedCondition = package["packageKind"] == "sealed" ? "sealed_undamaged" : "intact_as_defined";

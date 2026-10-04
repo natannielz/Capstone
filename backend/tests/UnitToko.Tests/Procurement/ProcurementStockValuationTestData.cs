@@ -30,6 +30,9 @@ internal sealed class ProcurementStockValuationTestData(SupplierDocumentTestData
         ReceiptHeads = "procurementStockValuationReceiptHeads", MatchHeads = "procurementStockValuationMatchHeads", Allocations = "procurementStockValuationAllocations";
     internal const string Reason = "Synthetic independent valuation of received held goods; no stock release or supplier payment";
     internal SupplierDocumentTestData Documents { get; } = documents;
+    internal ProcurementQualityAcceptanceTestData? MixedQuality { get; private set; }
+    internal BsonDocument? Quality { get; private set; }
+    internal SupplierDocumentMatchInput? MixedMatchInput { get; private set; }
     internal ProcurementInspectionTestData Inspection => Documents.Inspection;
     internal StoreTestData Base => Documents.Base;
     internal IMongoDatabase Database => Documents.Database;
@@ -49,28 +52,46 @@ internal sealed class ProcurementStockValuationTestData(SupplierDocumentTestData
         Inspection.Receiving.Orders.Service, Inspection.Receiving.Service, Sources);
     internal IMongoCollection<BsonDocument> Rows(string name) => Database.GetCollection<BsonDocument>(name);
     internal static AuthorizationCommandMetadata Meta(string key, string reason = Reason) => new(key, reason, "synthetic-stock-valuation-test");
-    internal ProcurementStockValuationInput Input(int packages = 1) => new(ProcurementRequestTestData.Location, ReceiptId, 1, Documents.DocumentId, 1, MatchId, 1,
+    internal ProcurementStockValuationInput Input(int packages = 1, long? invoiceMatchId = null) => new(ProcurementRequestTestData.Location, ReceiptId, 1, Documents.DocumentId, 1, invoiceMatchId ?? MatchId, 1,
         packages, new Money(10000 * packages), new Money(1000 * packages), new Money(250 * packages), new Money(11250 * packages), PolicyId, 1,
         AccountingCalendar.BusinessDate(Clock.UtcNow), Reason);
 
     internal static async Task<ProcurementStockValuationTestData> CreateAsync(MongoFixture fixture, bool createValuationPolicy = true, int receiptPackages = 3,
-        decimal requiredAdvance = 0, bool includePayableMappings = false, bool includeCustomerMappings = false)
+        decimal requiredAdvance = 0, bool includePayableMappings = false, bool includeCustomerMappings = false,
+        bool mixedQuality = false, bool matchInvoice = true)
     {
         Assert.InRange(receiptPackages, 1, 3);
-        var documents = await SupplierDocumentTestData.CreateAsync(fixture, requiredAdvance: requiredAdvance);
-        var data = new ProcurementStockValuationTestData(documents) { ReceiptPackages = receiptPackages };
+        if (mixedQuality && requiredAdvance != 0) throw new ArgumentException("Mixed fixture uses its genuine M77 order terms", nameof(requiredAdvance));
+        ProcurementQualityAcceptanceTestData? quality = mixedQuality ? await ProcurementQualityAcceptanceTestData.CreateAsync(fixture, receiptPackages: receiptPackages) : null;
+        SupplierDocumentTestData documents;
+        try { documents = quality is null ? await SupplierDocumentTestData.CreateAsync(fixture, requiredAdvance: requiredAdvance)
+                : await SupplierDocumentTestData.CreateFromInspectionAsync(quality.Inspection); }
+        catch { if (quality is not null) await quality.DisposeAsync(); throw; }
+        var data = new ProcurementStockValuationTestData(documents) { ReceiptPackages = receiptPackages, MixedQuality = quality };
         try
         {
             // The shared synthetic OCR installer uses policy ID 1; reserve its real allocator ID before installation.
             var ocrPolicyId = (await new IdAllocator(data.Database).NextAsync("supplierDocumentProcessingPolicies")).Value;
             var ocr = await SupplierDocumentOcrTestData.PrepareNativeAsync(documents);
             Assert.Equal(ocrPolicyId, (await data.Rows("supplierDocumentProcessingPolicies").Find(new BsonDocument()).SingleAsync())["_id"].AsInt64);
-            await documents.SubmitOriginalAsync(); Assert.Equal("completed", await ocr.RunOnceAsync());
+            await documents.SubmitOriginalAsync();
+            var ocrOutcome = await ocr.RunOnceAsync();
+            var failureCodes = await data.Rows("supplierDocumentProcessingFailures").Find(new BsonDocument())
+                .Project(new BsonDocument { { "_id", 0 }, { "safeFailure", 1 } }).ToListAsync();
+            Assert.True(ocrOutcome == "completed", $"Native supplier OCR outcome: {ocrOutcome}; safe failures: {string.Join(", ", failureCodes.Select(row => row["safeFailure"].AsString))}");
             var extraction = await documents.Evidence.ReadExtractionAsync(documents.EvidenceReader, documents.DraftId, 1, documents.Reference,
                 new("supplier-document-ocr-view", "synthetic-valuation-human-invoice-review"));
             Assert.Equal("succeeded", extraction.State); Assert.NotNull(extraction.ResultId);
             Assert.Equal("34000.00", Assert.Single(extraction.Fields, field => field.Field == "total_amount").Value);
-            data.Match = await documents.MatchAsync("valuation-human-invoice-match", documents.MatchInput() with { OcrResultId = extraction.ResultId });
+            if (quality is null) data.Match = await documents.MatchAsync("valuation-human-invoice-match", documents.MatchInput() with { OcrResultId = extraction.ResultId });
+            else {
+                var accepted = quality.Input(packages: 2);
+                var proposed = await quality.ProposeAsync("mixed-quality-valuation-propose", accepted);
+                data.Quality = await quality.DecideAsync(proposed["proposalId"].AsInt64, "mixed-quality-valuation-approve", accepted);
+                var matchInput = documents.MatchInput(packages: 2) with { OcrResultId = extraction.ResultId };
+                data.MixedMatchInput = matchInput with { Lines = [matchInput.Lines[0] with { QualityAllocationId = data.Quality["allocationId"].AsInt64 }] };
+                if (matchInvoice) data.Match = await documents.MatchAsync("valuation-human-mixed-invoice-match", data.MixedMatchInput);
+            }
             var scope = ProcurementRequestTestData.Scope;
             data.Maker = await data.Base.AddActorAsync(730, scope, Permissions.ProcurementRead, Permissions.StockRead, Permissions.StockReceive,
                 Permissions.ProcurementStockValuationRead, Permissions.ProcurementStockValuationPropose);
@@ -86,7 +107,9 @@ internal sealed class ProcurementStockValuationTestData(SupplierDocumentTestData
             data.BookChecker = await data.Base.AddActorAsync(737, AccountingBookSetupTestData.Scope, Permissions.AccountingBookRead, Permissions.AccountingBookApprove);
             await PersonTestData.SeedDistinctPeopleAsync(data.Database, data.Clock, data.Maker.UserId, data.Checker.UserId, data.Reader.UserId, data.Outsider.UserId,
                 data.SourceMaker.UserId, data.SourceChecker.UserId, data.BookMaker.UserId, data.BookChecker.UserId);
-            await data.CreateHeldReceiptAsync(); await data.CreateBookAndPolicyAsync(createValuationPolicy, includePayableMappings, includeCustomerMappings);
+            if (quality is null) await data.CreateHeldReceiptAsync();
+            else { data.Receipt = quality.Receipt; data.PoolId = quality.Stock.PoolId; }
+            await data.CreateBookAndPolicyAsync(createValuationPolicy, includePayableMappings, includeCustomerMappings);
             Assert.False(await data.Rows("journalEntries").Find(new BsonDocument()).AnyAsync());
             return data;
         }
@@ -188,5 +211,5 @@ internal sealed class ProcurementStockValuationTestData(SupplierDocumentTestData
         var balance = await Rows("stockBalances").Find(new BsonDocument("_id", Receipt["balanceId"])).SingleAsync();
         Assert.Equal((long)ReceiptPackages, balance["onHand"].AsInt64); Assert.Equal((long)ReceiptPackages, balance["held"].AsInt64); Assert.Equal(0L, balance["reserved"].AsInt64);
     }
-    public ValueTask DisposeAsync() => Documents.DisposeAsync();
+    public async ValueTask DisposeAsync() { await Documents.DisposeAsync(); if (MixedQuality is not null) await MixedQuality.DisposeAsync(); }
 }

@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Text.Json.Serialization;
 using UnitToko.Modules.Accounting;
 using UnitToko.Modules.Contracts;
 
@@ -12,7 +13,8 @@ public sealed record SupplierDocumentInput(ProcurementLocation Location, long An
     SupplierDocumentKind Kind, string DocumentReference, DateOnly? DocumentDate, string Currency, Money? DocumentTotal,
     ImmutableArray<SupplierDocumentLineInput> Lines, string? Discrepancy);
 public sealed record SupplierDocumentMatchLineInput(int DocumentLineNumber, int? Packages, long? InspectionId, int? InspectionLineNumber,
-    long? InvoiceMatchId, int? InvoiceMatchLineNumber, Money? NetAmount, Money? TaxAmount, Money? ChargeAmount, Money? StatementAmount, string? Discrepancy);
+    long? InvoiceMatchId, int? InvoiceMatchLineNumber, Money? NetAmount, Money? TaxAmount, Money? ChargeAmount, Money? StatementAmount, string? Discrepancy,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] long? QualityAllocationId = null);
 public sealed record SupplierDocumentMatchInput(long DocumentId, long DocumentRevision, SupplierDocumentInput ReviewedInput, long? OcrResultId, ImmutableArray<SupplierDocumentMatchLineInput> Lines);
 
 public static class SupplierDocumentRules
@@ -58,17 +60,20 @@ public static class SupplierDocumentRules
         var reviewed = Copy(input.ReviewedInput);
         var lines = input.Lines.Select(line => {
             if (line is null || line.DocumentLineNumber < 1 || line.DocumentLineNumber > reviewed.Lines.Length || line.Packages is < 1 or > DomainValues.MaximumLineQuantity ||
-                line.InspectionId is <= 0 || line.InvoiceMatchId is <= 0 || line.InspectionLineNumber is < 1 or > 100 || line.InvoiceMatchLineNumber is < 1 or > 100) throw Invalid();
+                line.InspectionId is <= 0 || line.InvoiceMatchId is <= 0 || line.QualityAllocationId is <= 0 ||
+                line.InspectionLineNumber is < 1 or > 100 || line.InvoiceMatchLineNumber is < 1 or > 100) throw Invalid();
             Text(line.Discrepancy, 1000, true); Amount(line.NetAmount); Amount(line.TaxAmount); Amount(line.ChargeAmount); Amount(line.StatementAmount);
             var invoice = reviewed.Kind == SupplierDocumentKind.Invoice && line.Packages is not null && line.InspectionId is not null && line.InspectionLineNumber is not null && line.InvoiceMatchId is null && line.InvoiceMatchLineNumber is null &&
                 line.NetAmount is not null && line.TaxAmount is not null && line.ChargeAmount is not null && line.StatementAmount is null;
             var statement = reviewed.Kind == SupplierDocumentKind.Sph && line.Packages is null && line.InspectionId is null && line.InspectionLineNumber is null && line.InvoiceMatchId is not null && line.InvoiceMatchLineNumber is not null &&
                 line.NetAmount is null && line.TaxAmount is null && line.ChargeAmount is null && line.StatementAmount is { Value: > 0 };
             var unresolved = line.Discrepancy is not null && line.InspectionId is null && line.InspectionLineNumber is null && line.InvoiceMatchId is null && line.InvoiceMatchLineNumber is null;
-            if (!(unresolved || line.Discrepancy is null && (invoice || statement))) throw Invalid();
+            if (!(unresolved || line.Discrepancy is null && (invoice || statement)) ||
+                line.QualityAllocationId is not null && (!invoice || line.Discrepancy is not null)) throw Invalid();
             return line with { };
-        }).OrderBy(line => line.DocumentLineNumber).ThenBy(line => line.InspectionId).ThenBy(line => line.InspectionLineNumber).ThenBy(line => line.InvoiceMatchId).ThenBy(line => line.InvoiceMatchLineNumber).ToImmutableArray();
-        if (lines.GroupBy(line => (line.DocumentLineNumber, line.InspectionId, line.InspectionLineNumber, line.InvoiceMatchId, line.InvoiceMatchLineNumber)).Any(group => group.Count() != 1)) throw Invalid();
+        }).OrderBy(line => line.DocumentLineNumber).ThenBy(line => line.InspectionId).ThenBy(line => line.InspectionLineNumber).ThenBy(line => line.InvoiceMatchId).ThenBy(line => line.InvoiceMatchLineNumber).ThenBy(line => line.QualityAllocationId).ToImmutableArray();
+        if (lines.GroupBy(line => (line.DocumentLineNumber, line.InspectionId, line.InspectionLineNumber, line.InvoiceMatchId,
+                line.InvoiceMatchLineNumber, line.QualityAllocationId)).Any(group => group.Count() != 1)) throw Invalid();
         return input with { ReviewedInput = reviewed, Lines = lines };
     }
     public static void SameIdentity(SupplierDocumentInput original, SupplierDocumentInput reviewed) {

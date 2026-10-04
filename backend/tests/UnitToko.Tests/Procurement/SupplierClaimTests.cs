@@ -38,6 +38,31 @@ public sealed class SupplierClaimTests(MongoFixture fixture)
     }
 
     [WindowsStorageFact]
+    public async Task Decision_cannot_reuse_a_verified_request_after_its_stored_bytes_change_in_the_same_transaction() {
+        await using var data = await D.CreateAsync(fixture);
+        var requested = await data.RequestAsync("claim-decision-source-byte-proof");
+        var claimId = requested["claimId"].AsInt64;
+        await data.DecideAsync(claimId, "claim-decision-source-byte-proof-approved");
+        var original = await data.Rows("supplierClaimRequests").Find(new BsonDocument("_id", claimId)).SingleAsync();
+        var before = await data.StateAsync();
+        var failure = await Assert.ThrowsAsync<PersistenceConflictException>(() => data.Unit.ExecuteAsync(async (tx, ct) => {
+            var records = new SupplierClaimRecords(data.Database, data.Unit, data.Clock,
+                data.Inspection.Receiving.Procurement.Catalog, data.Inspection.Receiving.Orders.Service);
+            var verified = await records.RequestAsync(tx, claimId, ct);
+            var changed = verified.DeepClone().AsBsonDocument;
+            changed["reason"] = "Synthetic changed request after verification";
+            changed["input"]["reason"] = changed["reason"];
+            Assert.Equal(1L, (await data.Rows("supplierClaimRequests").ReplaceOneAsync(tx,
+                new BsonDocument("_id", claimId), changed, cancellationToken: ct)).ModifiedCount);
+            _ = await records.DecisionAsync(tx, verified, ct);
+            return true;
+        }));
+        Assert.Equal("supplier_claim_integrity_unavailable", failure.Code);
+        Assert.Equal(original, await data.Rows("supplierClaimRequests").Find(new BsonDocument("_id", claimId)).SingleAsync());
+        Assert.Equal(before, await data.StateAsync());
+    }
+
+    [WindowsStorageFact]
     public async Task Shortage_is_observed_missing_quantity_and_rejection_never_reopens_physical_disposition() {
         await using var data = await D.CreateAsync(fixture, shortage: true);
         var shortage = data.Input("SHORTAGE-001", 2, SupplierClaimBasis.ShortageObserved); var missing = await data.RequestAsync("missing-observed", shortage);

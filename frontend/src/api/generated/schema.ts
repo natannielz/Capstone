@@ -7747,6 +7747,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/procurement/supplier-documents/documents/{id}/quality-allocations/query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SupplierDocumentQualityChoices"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/procurement/supplier-documents/drafts": {
         parameters: {
             query?: never;
@@ -13432,6 +13448,7 @@ export interface components {
             observedAt: string;
             policy: components["schemas"]["ProcurementStockValuationPolicyDto"];
             proposal: components["schemas"]["ProcurementStockValuationProposalDto"];
+            qualityCapacity?: null | components["schemas"]["ProcurementQualityAcceptanceCapacityDto"];
             receiptCapacity: components["schemas"]["ProcurementStockValuationCapacityDto"];
         };
         ProcurementStockValuationHistoryDto: {
@@ -13489,6 +13506,7 @@ export interface components {
             matchCapacity: components["schemas"]["ProcurementStockValuationMatchCapacityDto"];
             /** Format: int32 */
             matchLineNumber: number | string;
+            quality?: null | components["schemas"]["SupplierDocumentQualityDto"];
         };
         ProcurementStockValuationMatchesDto: {
             items: components["schemas"]["ProcurementStockValuationMatchChoiceDto"][];
@@ -13548,6 +13566,7 @@ export interface components {
             /** Format: date-time */
             observedAt: string;
             policy: components["schemas"]["ProcurementStockValuationPolicyDto"];
+            qualityCapacity?: null | components["schemas"]["ProcurementQualityAcceptanceCapacityDto"];
             receipt: components["schemas"]["ProcurementStockReceiptDto"];
             receiptCapacity: components["schemas"]["ProcurementStockValuationCapacityDto"];
         };
@@ -13561,6 +13580,7 @@ export interface components {
             input: components["schemas"]["ProcurementStockValuationInputDto"];
             match: components["schemas"]["ProcurementStockValuationMatchChoiceDto"];
             policy: components["schemas"]["ProcurementStockValuationPolicyDto"];
+            qualityCapacity?: null | components["schemas"]["ProcurementQualityAcceptanceCapacityDto"];
             reason: string;
             receipt: components["schemas"]["ProcurementStockReceiptDto"];
             /** Format: date-time */
@@ -16696,6 +16716,8 @@ export interface components {
             netAmount: null | components["schemas"]["Money"];
             /** Format: int32 */
             packages: null | number | string;
+            /** @description Positive decimal Int64 string, from 1 through 9223372036854775807. JSON numbers are invalid. */
+            qualityAllocationId?: null | string;
             statementAmount: null | components["schemas"]["Money"];
             taxAmount: null | components["schemas"]["Money"];
         };
@@ -16757,6 +16779,54 @@ export interface components {
             input: components["schemas"]["SupplierDocumentInputDto"];
             purpose: string;
         };
+        SupplierDocumentQualityChoiceDto: {
+            acceptedCondition: string;
+            acceptedPackages: string;
+            allocationId: components["schemas"]["LongId"];
+            decisionId: components["schemas"]["LongId"];
+            expiresOn: null | string;
+            lotReference: string;
+            matchedPackages: string;
+            proposalId: components["schemas"]["LongId"];
+            putawayReference: string;
+            receiptId: components["schemas"]["LongId"];
+            receiptReference: string;
+            /** Format: date-time */
+            recordedAt: string;
+            remainingPackages: string;
+            segregationReference: string;
+        };
+        SupplierDocumentQualityChoicesDto: {
+            documentId: components["schemas"]["LongId"];
+            inspectionId: components["schemas"]["LongId"];
+            /** Format: int32 */
+            inspectionLineNumber: number | string;
+            items: components["schemas"]["SupplierDocumentQualityChoiceDto"][];
+            nextAllocationId: null | components["schemas"]["LongId"];
+        };
+        SupplierDocumentQualityDto: {
+            acceptedCondition: string;
+            acceptedPackages: string;
+            allocationId: components["schemas"]["LongId"];
+            decisionId: components["schemas"]["LongId"];
+            expiresOn: null | string;
+            lotReference: string;
+            proposalId: components["schemas"]["LongId"];
+            putawayReference: string;
+            receiptId: components["schemas"]["LongId"];
+            receiptReference: string;
+            /** Format: date-time */
+            recordedAt: string;
+            segregationReference: string;
+        };
+        SupplierDocumentQualityQueryDto: {
+            /** @description Positive decimal Int64 string, from 1 through 9223372036854775807. JSON numbers are invalid. */
+            beforeAllocationId?: null | string;
+            inspectionId: components["schemas"]["LongId"];
+            /** Format: int32 */
+            inspectionLineNumber: number;
+            purpose: string;
+        };
         SupplierDocumentQueryDto: {
             purpose: string;
         };
@@ -16795,6 +16865,9 @@ export interface components {
             order: null | components["schemas"]["ProcurementFundingOrderDto"];
             /** Format: int32 */
             packages: null | number | string;
+            quality?: null | components["schemas"]["SupplierDocumentQualityDto"];
+            /** @description Positive decimal Int64 string, from 1 through 9223372036854775807. JSON numbers are invalid. */
+            qualityAllocationId?: null | string;
             state: string;
             statementAmount: null | components["schemas"]["Money"];
             taxAmount: null | components["schemas"]["Money"];
@@ -57066,6 +57139,100 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SupplierDocumentMatchesDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Payload Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    SupplierDocumentQualityChoices: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
+                /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
+                "X-Expected-Actor-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SupplierDocumentQualityQueryDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierDocumentQualityChoicesDto"];
                 };
             };
             /** @description Bad Request */

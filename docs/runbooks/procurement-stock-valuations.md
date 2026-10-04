@@ -1,6 +1,6 @@
 # Held procurement stock valuation
 
-Status: connected and functionally verified locally. Real accounting policy, performance and provider acceptance remain open; see the production progress ledger.
+Status: the original clean-receipt path and mixed-quality extension are connected and functionally verified locally through browser, .NET and MongoDB; consult the [current progress ledger](../quality/production-progress.md#mixed-quality-costing-validation--4-october-2026). Real accounting policy, performance and provider acceptance remain open.
 
 The `/procurement/stock-valuations` workspace connects an inspected held receipt to a human-reviewed supplier invoice match. A proposal reserves neither packages nor money. An independent checker approves or rejects it. Approval consumes receipt and invoice-match capacity and posts inventory debit / receipt-accrual credit through the existing accounting owner in the same Mongo transaction. Goods remain held; the source pool stays inactive. Rejection posts no journal and consumes no capacity.
 
@@ -18,6 +18,8 @@ Select the location and held receipt, inspect its matched invoice line and choos
 
 If a response is lost, recover using the original actor's operation key. Do not submit a second command to discover whether the first one committed. Changed or incomplete historical evidence causes refusal rather than a success inferred from a journal alone.
 
+For mixed-quality receipts, first select and match an actual independently approved quantity through [supplier documents](supplier-documents.md). Valuation selects that exact match and consumes only the remaining approved receipt and invoice-match quantities. Enter each net, tax and charge amount explicitly; the service does not invent a proportional price or permit capacity to be spent twice. Approved value does not change physical hold status, activate the source, pay the supplier or clear an advance. The preview, saved proposal, independent decision and current cost view retain the same quality and invoice provenance.
+
 ## Current lot cost
 
 The original receipt records the stock state at receipt time, before valuation. The current cost view separately reconstructs approved valuation allocations for that receipt and lot. It shows how many packages have an approved value, how many remain unvalued, and the exact net, tax, charge and capitalized totals. Unvalued packages have unknown cost; a zero approved total does not mean that the goods are free. No rounded per-package cost is inferred.
@@ -29,6 +31,8 @@ This view uses existing valuation records, without another cost ledger or migrat
 ## Storage and release acceptance
 
 Migration 73 preflights retained receipt/source ownership, accounting records, valuation effects and capacities before installing its strict validators and unique indexes. It preserves stronger validators, source records, collection identities and monotonic counters. Use the normal single-writer migration and restore process; this document does not authorize a production migration or cutover.
+
+Additive migration 79 extends document and valuation records for mixed-quality allocations while retaining byte-exact clean v1 history. It preflights retained mixed records and their quality/private-source owners and refuses missing ownership rather than inventing it. Interrupted installation is resumable. This published source has complete local acceptance; the installed migration 78 pilot remains preserved. Normal one-writer, backup/restore and actual operator approval still apply before activation.
 
 The runtime conditionally deletes and reinserts the exact immutable accounting chart in its Mongo transaction to obtain an actual write conflict with concurrent removal/replacement. Provider acceptance must verify the narrowly required find/insert/remove access on `accountingChartVersions` and the effect on configured change-stream consumers. The chart's committed contents remain identical. The existing held-receipt source-policy fences have their own equivalent privilege requirements.
 

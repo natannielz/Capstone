@@ -5,6 +5,7 @@ using UnitToko.Modules.Identity;
 using UnitToko.Modules.Identity.Contracts;
 using UnitToko.Modules.Procurement;
 using UnitToko.Platform.Authorization;
+using UnitToko.Platform.Mongo.Migrations;
 using B = UnitToko.Platform.Procurement.ProcurementStockValuationBson;
 using R = UnitToko.Platform.Procurement.ProcurementRequestBson;
 
@@ -46,13 +47,16 @@ public sealed partial class ProcurementStockValuationService
             var receipt = await ReceiptAsync(tx, receiptId, null, token);
             var context = new Context(actor, authority, tx, R.Location(receipt["location"]), Permissions.ProcurementStockValuationRead);
             _ = Require(context);
-            var capacityReader = new ProcurementStockValuationCapacityReader(database);
+            var capacityReader = new ProcurementStockValuationCapacityReader(database, unit, clock, catalog, orders);
             var coverage = await capacityReader.ReceiptAsync(tx, receipt, token);
-            var documents = new SupplierDocumentRecords(database, unit, clock, catalog, orders);
             var verifiedMatches = new Dictionary<long, BsonDocument>();
             foreach (var group in coverage.Allocations.GroupBy(row => row["invoiceDocumentId"].AsInt64)) {
-                var invoice = await documents.SubmissionAsync(tx, group.Key, token);
-                var history = await documents.HistoryAsync(tx, invoice["draftId"].AsInt64, token);
+                var invoice = await Rows(SupplierDocumentBson.Submissions).Find(tx, new BsonDocument { { "_id", group.Key },
+                    { "$and", new BsonArray { ProcurementQualityValuationSchemas.CurrentDocumentValidator(SupplierDocumentBson.Submissions) } } }).SingleOrDefaultAsync(token)
+                    ?? throw B.Broken();
+                // ReceiptAsync has authenticated every allocation owner, including this exact
+                // invoice's full private history. Recheck the raw bytes in this snapshot.
+                var history = await capacityReader.InvoiceHistoryAsync(tx, invoice, token);
                 if (history.Identity["draftCount"].AsInt64 != 1 || history.Document is null ||
                     history.Document["_id"] != invoice["_id"] || invoice["input"]["kind"] != "invoice" ||
                     invoice["location"] != receipt["location"] || invoice["supplierId"] != receipt["supplierId"]) throw B.Broken();
@@ -110,7 +114,7 @@ public sealed partial class ProcurementStockValuationService
             var rows = await Rows(ProcurementStockReceiptBson.Receipts).Find(tx, filter).Sort(new BsonDocument("_id", -1)).Limit(26).ToListAsync(token);
             var items = new BsonArray(); foreach (var raw in rows.Take(25)) {
                 var receipt = await ReceiptAsync(tx, raw["_id"].AsInt64, location, token);
-                var capacity = await new ProcurementStockValuationCapacityReader(database).ReceiptAsync(tx, receipt, token);
+                var capacity = await new ProcurementStockValuationCapacityReader(database, unit, clock, catalog, orders).ReceiptAsync(tx, receipt, token);
                 items.Add(new BsonDocument { { "receipt", ProcurementStockReceiptBson.View(receipt) }, { "receiptCapacity", capacity.State } });
             }
             await FenceAsync(context, token); return new() { { "location", R.Location(location) }, { "items", items },
@@ -136,13 +140,15 @@ public sealed partial class ProcurementStockValuationService
                         link["id"] != receipt["inspectionId"] || link["lineNumber"] != receipt["inspectionLineNumber"] ||
                         link["hash"] != receipt["inspection"]["snapshotHash"] || link["orderId"] != receipt["orderId"] ||
                         link["orderHash"] != receipt["source"]["approval"]["snapshotHash"]) continue;
-                    var capacity = await new ProcurementStockValuationCapacityReader(database).ReadAsync(tx, receipt, match, i + 1, token);
-                    items.Add(new BsonDocument { { "invoiceDocumentId", invoice["_id"] }, { "invoiceDocumentRevision", 1L },
+                    var capacity = await new ProcurementStockValuationCapacityReader(database, unit, clock, catalog, orders).ReadAsync(tx, receipt, match, i + 1, token);
+                    var choice = new BsonDocument { { "invoiceDocumentId", invoice["_id"] }, { "invoiceDocumentRevision", 1L },
                         { "invoiceMatchId", match["_id"] }, { "matchLineNumber", i + 1 }, { "documentReference", invoice["input"]["documentReference"] },
                         { "line", new BsonDocument { { "documentLineNumber", line["documentLineNumber"] }, { "packages", line["packages"] },
                             { "netAmount", line["netAmount"] }, { "taxAmount", line["taxAmount"] }, { "chargeAmount", line["chargeAmount"] },
                             { "inspectionId", line["inspectionId"] }, { "inspectionLineNumber", line["inspectionLineNumber"] }, { "state", line["state"] } } },
-                        { "matchCapacity", capacity.Match } });
+                        { "matchCapacity", capacity.Match } };
+                    if (line.AsBsonDocument.TryGetValue("quality", out var quality)) choice.Add("quality", SupplierDocumentBson.PublicQuality(quality.AsBsonDocument));
+                    items.Add(choice);
                 }
             }
             await FenceAsync(context, token); return new() { { "receiptId", receiptId }, { "items", items },

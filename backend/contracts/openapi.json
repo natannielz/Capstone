@@ -31668,6 +31668,142 @@
         ]
       }
     },
+    "/api/v1/procurement/supplier-documents/documents/{id}/quality-allocations/query": {
+      "post": {
+        "tags": [
+          "UnitToko.Api"
+        ],
+        "operationId": "SupplierDocumentQualityChoices",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "required": true,
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SupplierDocumentQualityQueryDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload Too Large",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SupplierDocumentQualityChoicesDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
     "/api/v1/procurement/supplier-documents/documents/{id}/invoice-matches/query": {
       "post": {
         "tags": [
@@ -89393,6 +89529,16 @@
           "observedAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "qualityCapacity": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ProcurementQualityAcceptanceCapacityDto"
+              }
+            ]
           }
         },
         "additionalProperties": false
@@ -89635,6 +89781,16 @@
           },
           "matchCapacity": {
             "$ref": "#/components/schemas/ProcurementStockValuationMatchCapacityDto"
+          },
+          "quality": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SupplierDocumentQualityDto"
+              }
+            ]
           }
         },
         "additionalProperties": false
@@ -89894,6 +90050,16 @@
           "observedAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "qualityCapacity": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ProcurementQualityAcceptanceCapacityDto"
+              }
+            ]
           }
         },
         "additionalProperties": false
@@ -89955,6 +90121,16 @@
           },
           "reason": {
             "type": "string"
+          },
+          "qualityCapacity": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ProcurementQualityAcceptanceCapacityDto"
+              }
+            ]
           }
         },
         "additionalProperties": false
@@ -103538,6 +103714,15 @@
               "null",
               "string"
             ]
+          },
+          "qualityAllocationId": {
+            "maxLength": 19,
+            "pattern": "^(?:[1-9][0-9]{0,17}|[1-8][0-9]{18}|9[0-1][0-9]{17}|92[0-1][0-9]{16}|922[0-2][0-9]{15}|9223[0-2][0-9]{14}|92233[0-6][0-9]{13}|922337[0-1][0-9]{12}|92233720[0-2][0-9]{10}|922337203[0-5][0-9]{9}|9223372036[0-7][0-9]{8}|92233720368[0-4][0-9]{7}|922337203685[0-3][0-9]{6}|9223372036854[0-6][0-9]{5}|92233720368547[0-6][0-9]{4}|922337203685477[0-4][0-9]{3}|9223372036854775[0-7][0-9]{2}|922337203685477580[0-6]|9223372036854775807)$(?![\\s\\S])",
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Positive decimal Int64 string, from 1 through 9223372036854775807. JSON numbers are invalid."
           }
         },
         "additionalProperties": false
@@ -103825,6 +104010,207 @@
         },
         "additionalProperties": false
       },
+      "SupplierDocumentQualityChoiceDto": {
+        "required": [
+          "allocationId",
+          "proposalId",
+          "decisionId",
+          "receiptId",
+          "receiptReference",
+          "acceptedPackages",
+          "matchedPackages",
+          "remainingPackages",
+          "lotReference",
+          "expiresOn",
+          "acceptedCondition",
+          "putawayReference",
+          "segregationReference",
+          "recordedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "allocationId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "proposalId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "decisionId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "receiptId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "receiptReference": {
+            "type": "string"
+          },
+          "acceptedPackages": {
+            "type": "string"
+          },
+          "matchedPackages": {
+            "type": "string"
+          },
+          "remainingPackages": {
+            "type": "string"
+          },
+          "lotReference": {
+            "type": "string"
+          },
+          "expiresOn": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "acceptedCondition": {
+            "type": "string"
+          },
+          "putawayReference": {
+            "type": "string"
+          },
+          "segregationReference": {
+            "type": "string"
+          },
+          "recordedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false
+      },
+      "SupplierDocumentQualityChoicesDto": {
+        "required": [
+          "documentId",
+          "inspectionId",
+          "inspectionLineNumber",
+          "items",
+          "nextAllocationId"
+        ],
+        "type": "object",
+        "properties": {
+          "documentId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "inspectionId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "inspectionLineNumber": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SupplierDocumentQualityChoiceDto"
+            }
+          },
+          "nextAllocationId": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LongId"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "SupplierDocumentQualityDto": {
+        "required": [
+          "allocationId",
+          "proposalId",
+          "decisionId",
+          "receiptId",
+          "receiptReference",
+          "acceptedPackages",
+          "lotReference",
+          "expiresOn",
+          "acceptedCondition",
+          "putawayReference",
+          "segregationReference",
+          "recordedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "allocationId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "proposalId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "decisionId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "receiptId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "receiptReference": {
+            "type": "string"
+          },
+          "acceptedPackages": {
+            "type": "string"
+          },
+          "lotReference": {
+            "type": "string"
+          },
+          "expiresOn": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "acceptedCondition": {
+            "type": "string"
+          },
+          "putawayReference": {
+            "type": "string"
+          },
+          "segregationReference": {
+            "type": "string"
+          },
+          "recordedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false
+      },
+      "SupplierDocumentQualityQueryDto": {
+        "required": [
+          "purpose",
+          "inspectionId",
+          "inspectionLineNumber"
+        ],
+        "type": "object",
+        "properties": {
+          "purpose": {
+            "type": "string"
+          },
+          "inspectionId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "inspectionLineNumber": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "beforeAllocationId": {
+            "maxLength": 19,
+            "pattern": "^(?:[1-9][0-9]{0,17}|[1-8][0-9]{18}|9[0-1][0-9]{17}|92[0-1][0-9]{16}|922[0-2][0-9]{15}|9223[0-2][0-9]{14}|92233[0-6][0-9]{13}|922337[0-1][0-9]{12}|92233720[0-2][0-9]{10}|922337203[0-5][0-9]{9}|9223372036[0-7][0-9]{8}|92233720368[0-4][0-9]{7}|922337203685[0-3][0-9]{6}|9223372036854[0-6][0-9]{5}|92233720368547[0-6][0-9]{4}|922337203685477[0-4][0-9]{3}|9223372036854775[0-7][0-9]{2}|922337203685477580[0-6]|9223372036854775807)$(?![\\s\\S])",
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Positive decimal Int64 string, from 1 through 9223372036854775807. JSON numbers are invalid."
+          }
+        },
+        "additionalProperties": false
+      },
       "SupplierDocumentQueryDto": {
         "required": [
           "purpose"
@@ -104089,6 +104475,25 @@
               "null",
               "string"
             ]
+          },
+          "quality": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SupplierDocumentQualityDto"
+              }
+            ]
+          },
+          "qualityAllocationId": {
+            "maxLength": 19,
+            "pattern": "^(?:[1-9][0-9]{0,17}|[1-8][0-9]{18}|9[0-1][0-9]{17}|92[0-1][0-9]{16}|922[0-2][0-9]{15}|9223[0-2][0-9]{14}|92233[0-6][0-9]{13}|922337[0-1][0-9]{12}|92233720[0-2][0-9]{10}|922337203[0-5][0-9]{9}|9223372036[0-7][0-9]{8}|92233720368[0-4][0-9]{7}|922337203685[0-3][0-9]{6}|9223372036854[0-6][0-9]{5}|92233720368547[0-6][0-9]{4}|922337203685477[0-4][0-9]{3}|9223372036854775[0-7][0-9]{2}|922337203685477580[0-6]|9223372036854775807)$(?![\\s\\S])",
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Positive decimal Int64 string, from 1 through 9223372036854775807. JSON numbers are invalid."
           }
         },
         "additionalProperties": false

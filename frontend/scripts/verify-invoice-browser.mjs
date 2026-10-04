@@ -24,6 +24,7 @@ import { verifySupplierDocumentBrowser } from './verify-supplier-document-browse
 import { verifySupplierClaimBrowser } from './verify-supplier-claim-browser.mjs';
 import { verifyProcurementStockReceiptBrowser } from './verify-procurement-stock-receipt-browser.mjs';
 import { verifyProcurementStockValuationBrowser } from './verify-procurement-stock-valuation-browser.mjs';
+import { verifyQualityBackedInvoiceBrowser } from './verify-quality-backed-invoice-browser.mjs';
 import { verifyProcurementSupplierPayableBrowser } from './verify-procurement-supplier-payable-browser.mjs';
 import { verifyProcurementAdvanceReturnBrowser } from './verify-procurement-advance-return-browser.mjs';
 import { verifyProcurementQualityAcceptanceBrowser } from './verify-procurement-quality-acceptance-browser.mjs';
@@ -34,7 +35,7 @@ import { verifyProcurementSettlementBrowser } from './verify-procurement-settlem
 const chunks = []; for await (const chunk of process.stdin) chunks.push(chunk);
 const config = JSON.parse(Buffer.concat(chunks).toString('utf8')), api = new URL(config.apiAddress), origin = new URL(config.origin);
 assert.equal(process.versions.node.split('.')[0], '24'); assert.equal(api.protocol, 'http:'); assert.equal(api.hostname, '127.0.0.1'); assert.ok(Number(api.port) > 0); assert.equal(origin.href, 'https://portal.unit-toko.co.id/');
-const providerIssuer = config.procurementSupplierPayable || config.procurementAdvanceReturn || config.procurementQualityAcceptance ? new URL(config.providerIssuer) : null;
+const providerIssuer = config.procurementSupplierPayable || config.procurementAdvanceReturn || config.procurementQualityAcceptance || config.mixedQuality ? new URL(config.providerIssuer) : null;
 if (providerIssuer) assert.equal(providerIssuer.href, 'https://login.unit-toko.co.id/');
 const load = createRequire(config.playwrightPackage), metadata = load(config.playwrightPackage); assert.equal(metadata.name, 'playwright'); assert.equal(metadata.version, '1.62.1');
 const { chromium } = load('playwright'), channel = process.env.UNITTOKO_BROWSER_CHANNEL ?? 'chromium'; assert.ok(['chromium', 'msedge'].includes(channel));
@@ -55,7 +56,7 @@ const disbursementWrites = [], disbursementRecoveries = [], disbursementUploads 
 const procurementSettlementWrites = [], procurementSettlementRecoveries = [], procurementSettlementOriginals = [], procurementSettlementTracePath = config.procurementSettlement ? resolve(directory, 'procurement-settlement-flow-' + Date.now() + '.jsonl') : null;
 const receivingWrites = [], receivingRecoveries = [], receivingTracePath = config.procurementReceiving ? resolve(directory, 'procurement-receiving-flow-' + Date.now() + '.jsonl') : null;
 const procurementInspectionWrites = [], procurementInspectionRecoveries = [], procurementInspectionUploads = [], procurementInspectionTracePath = config.procurementInspection ? resolve(directory, 'procurement-inspection-flow-' + Date.now() + '.jsonl') : null;
-const documentWrites = [], documentRecoveries = [], documentUploads = [], documentTracePath = config.supplierDocument ? resolve(directory, 'supplier-document-flow-' + Date.now() + '.jsonl') : null;
+const documentWrites = [], documentRecoveries = [], documentUploads = [], documentTracePath = config.supplierDocument || config.mixedQuality ? resolve(directory, 'supplier-document-flow-' + Date.now() + '.jsonl') : null;
 const claimWrites = [], claimRecoveries = [], claimTracePath = config.supplierClaim ? resolve(directory, 'supplier-claim-flow-' + Date.now() + '.jsonl') : null;
 const stockReceiptWrites = [], stockReceiptRecoveries = [], stockReceiptTracePath = config.procurementStockReceipt ? resolve(directory, 'procurement-stock-receipt-flow-' + Date.now() + '.jsonl') : null;
 const valuationWrites = [], valuationRecoveries = [], valuationTracePath = config.procurementStockValuation ? resolve(directory, 'procurement-stock-valuation-flow-' + Date.now() + '.jsonl') : null;
@@ -119,7 +120,7 @@ function forward(req, res, port, isApi) {
   const receivingPath = config.procurementReceiving && req.url.startsWith('/api/v1/procurement/receiving/');
   const documentWrite = req.method === 'POST' && /^\/api\/v1\/procurement\/supplier-documents\/(?:drafts|drafts\/[1-9][0-9]*\/(?:submissions|evidence)|documents\/[1-9][0-9]*\/matches)$/.test(req.url);
   const documentRecovery = req.method === 'POST' && /^\/api\/v1\/procurement\/supplier-documents\/(?:operations\/query|drafts\/[1-9][0-9]*\/evidence\/operations\/query)$/.test(req.url);
-  const documentPath = config.supplierDocument && req.url.startsWith('/api/v1/procurement/supplier-documents/');
+  const documentPath = (config.supplierDocument || config.mixedQuality) && req.url.startsWith('/api/v1/procurement/supplier-documents/');
   const claimWrite = req.method === 'POST' && /^\/api\/v1\/procurement\/supplier-claims\/(?:requests|requests\/[1-9][0-9]*\/decision)$/.test(req.url);
   const claimRecovery = req.method === 'POST' && req.url === '/api/v1/procurement/supplier-claims/operations/query';
   const claimPath = config.supplierClaim && req.url.startsWith('/api/v1/procurement/supplier-claims/');
@@ -251,9 +252,15 @@ try {
     assert.deepEqual(errors, []);
   } else if (config.procurementStockValuation) {
     assert.equal(config.financeToken, config.makerToken);
+    if (config.mixedQuality) {
+      const actualMatch = await verifyQualityBackedInvoiceBrowser({ config, user, origin, documentWrites, documentRecoveries, dropNext: () => { dropNext = true; }, dropped: () => dropped });
+      config.valuationInput = { ...config.valuationInput, ...actualMatch };
+    }
+    const precedingDropped = dropped;
     await verifyProcurementStockValuationBrowser({ config, maker: finance, user, origin, directory, valuationWrites, valuationRecoveries,
-      dropNext: () => { dropNext = true; }, dropped: () => dropped });
-    assert.equal(writes.length + caseWrites.length + decisionWrites.length + returnWrites.length + inspectionWrites.length + resolutionWrites.length + entitlementWrites.length + financialWrites.length + payoutWrites.length + draftWrites.length + settlementWrites.length + addressWrites.length + spendingWrites.length + bookWrites.length + procurementWrites.length + supplierWrites.length + purchaseOrderWrites.length + fundingWrites.length + supplierBankWrites.length + disbursementWrites.length + procurementSettlementWrites.length + receivingWrites.length + procurementInspectionWrites.length + documentWrites.length + claimWrites.length + stockReceiptWrites.length, 0);
+      dropNext: () => { dropNext = true; }, dropped: () => dropped - precedingDropped });
+    assert.equal(documentWrites.length, config.mixedQuality ? 1 : 0); assert.equal(documentRecoveries.length, config.mixedQuality ? 1 : 0);
+    assert.equal(writes.length + caseWrites.length + decisionWrites.length + returnWrites.length + inspectionWrites.length + resolutionWrites.length + entitlementWrites.length + financialWrites.length + payoutWrites.length + draftWrites.length + settlementWrites.length + addressWrites.length + spendingWrites.length + bookWrites.length + procurementWrites.length + supplierWrites.length + purchaseOrderWrites.length + fundingWrites.length + supplierBankWrites.length + disbursementWrites.length + procurementSettlementWrites.length + receivingWrites.length + procurementInspectionWrites.length + claimWrites.length + stockReceiptWrites.length, 0);
     assert.deepEqual(errors, []);
   } else if (config.procurementStockReceipt) {
     assert.equal(config.financeToken, config.makerToken);
@@ -621,7 +628,7 @@ try {
     recoveries: financialRecoveries.map(({ path, key, actor, status, elapsedMs }) => ({ path, key, actor, status, elapsedMs })), dropped }));
   if (config.procurementStockReceipt) console.log('FIXTURE PROCUREMENT STOCK RECEIPT FLOW ' + JSON.stringify({ writes: stockReceiptWrites.map(({ path, key, actor, status, elapsedMs }) => ({ path, key, actor, status, elapsedMs })), recoveries: stockReceiptRecoveries.map(({ path, actor, status, elapsedMs }) => ({ path, actor, status, elapsedMs })), dropped, tracePath: stockReceiptTracePath }));
   if (config.supplierClaim) console.log('FIXTURE SUPPLIER CLAIM FLOW ' + JSON.stringify({ writes: claimWrites.map(({ path, key, actor, status, elapsedMs }) => ({ path, key, actor, status, elapsedMs })), recoveries: claimRecoveries.map(({ path, actor, status, elapsedMs }) => ({ path, actor, status, elapsedMs })), dropped, tracePath: claimTracePath }));
-  if (config.supplierDocument) console.log('FIXTURE SUPPLIER DOCUMENT FLOW ' + JSON.stringify({ writes: documentWrites.map(({ path, key, actor, status, elapsedMs }) => ({ path, key, actor, status, elapsedMs })), recoveries: documentRecoveries.map(({ path, actor, status, elapsedMs }) => ({ path, actor, status, elapsedMs })), uploads: documentUploads, dropped, tracePath: documentTracePath }));
+  if (config.supplierDocument || config.mixedQuality) console.log('FIXTURE SUPPLIER DOCUMENT FLOW ' + JSON.stringify({ writes: documentWrites.map(({ path, key, actor, status, elapsedMs }) => ({ path, key, actor, status, elapsedMs })), recoveries: documentRecoveries.map(({ path, actor, status, elapsedMs }) => ({ path, actor, status, elapsedMs })), uploads: documentUploads, dropped, tracePath: documentTracePath }));
   if (config.procurementInspection) console.log('FIXTURE PROCUREMENT INSPECTION FLOW ' + JSON.stringify({ writes: procurementInspectionWrites.map(({ path, key, actor, status, elapsedMs }) => ({ path, key, actor, status, elapsedMs })), recoveries: procurementInspectionRecoveries.map(({ path, actor, status, elapsedMs }) => ({ path, actor, status, elapsedMs })), uploads: procurementInspectionUploads, dropped, tracePath: procurementInspectionTracePath }));
   if (config.procurementSupplierPayable) console.log('FIXTURE PROCUREMENT SUPPLIER PAYABLE FLOW ' + JSON.stringify({ writes: payableWrites.map(({ path, key, actor, status, elapsedMs }) => ({ path, key, actor, status, elapsedMs })), recoveries: payableRecoveries.map(({ path, actor, status, elapsedMs }) => ({ path, actor, status, elapsedMs })), dropped, tracePath: payableTracePath }));
   if (config.procurementStockValuation) console.log('FIXTURE PROCUREMENT STOCK VALUATION FLOW ' + JSON.stringify({ writes: valuationWrites.map(({ path, key, actor, status, elapsedMs }) => ({ path, key, actor, status, elapsedMs })), recoveries: valuationRecoveries.map(({ path, actor, status, elapsedMs }) => ({ path, actor, status, elapsedMs })), dropped, tracePath: valuationTracePath }));
