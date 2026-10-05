@@ -201,6 +201,13 @@ function Assert-DeploymentBundle([string] $Directory) {
             if (-not $seen.ContainsKey("$component/$name$extension")) { Stop-Deployment 'incomplete_publish_output' }
         }
     }
+    # The private decoder pins and loads this exact relative native-library path.
+    # A RID publish's flattened DLL alone cannot satisfy the actual consumer.
+    foreach ($decoderFile in @('Magick.NET-Q8-AnyCPU.dll','Magick.NET.Core.dll','policy.xml',
+        'runtimes/win-x64/native/Magick.Native-Q8-x64.dll',
+        'third-party/Magick.NET-Notice.txt','third-party/Magick.NET-Core-Copyright.txt')) {
+        if (-not $seen.ContainsKey("image-decoder/$decoderFile")) { Stop-Deployment 'incomplete_decoder_runtime_output' }
+    }
     # Additional named Kestrel endpoints would override the required loopback URL.
     foreach ($settingsFile in Get-ChildItem -LiteralPath (Join-Path $root 'api') -Filter 'appsettings*.json' -File) {
         $settings = Read-DeploymentJson $settingsFile.FullName
