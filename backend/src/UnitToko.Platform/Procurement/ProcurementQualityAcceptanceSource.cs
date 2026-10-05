@@ -87,9 +87,10 @@ internal sealed class ProcurementQualityAcceptanceSourceReader(IMongoDatabase da
             policy = await new ProcurementQualityAcceptanceRecords(database, unit, clock, catalog, orders, sources)
                 .PolicyAsync(tx, input, proposalAt, false, ct);
         if (proposal["policy"] != Q.PolicySnapshot(policy)) throw Q.Broken();
-        var balance = await Rows("stockBalances").Find(tx, new BsonDocument("_id", receipt["balanceId"]))
-            .SingleOrDefaultAsync(ct) ?? throw Q.Broken();
-        if (balance != InventoryBson.Balance(InventoryHeldReceiptWriter.After(receipt)) || proposal["heldBalance"] != balance)
+        // The receipt owner has freshly authenticated current movement provenance. This
+        // independent approval binds the original held capture, not a current balance.
+        var original = InventoryBson.Balance(InventoryHeldReceiptWriter.After(receipt));
+        if (proposal["heldBalance"] != original)
             throw Q.Broken();
         var pool = await Rows("inventoryPools").Find(tx, new BsonDocument("_id", receipt["poolId"]))
             .SingleOrDefaultAsync(ct) ?? throw Q.Broken();

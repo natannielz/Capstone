@@ -112,7 +112,7 @@ internal sealed partial class ProcurementQualityProofGraph
             Equal(receipt, completed.Receipt);
             var inspection = await InspectionAsync(database, unit, clock, catalog, orders, current, receipt["inspectionId"].AsInt64, ct);
             Equal(inspection.Submissions.SingleOrDefault(row => row["_id"] == receipt["inspectionId"]) ?? throw Q.Broken(), receipt["inspection"]);
-            await RequireHeldOwnersAsync(database, current, receipt, completed.Pool, ct);
+            await RequireHeldOwnersAsync(database, unit, clock, current, receipt, completed.Pool, ct);
             RequireDatabase(database, current, receiptId);
             return Clone(receipt);
         }
@@ -122,21 +122,22 @@ internal sealed partial class ProcurementQualityProofGraph
         var pool = await database.GetCollection<BsonDocument>("inventoryPools").Find(current, new BsonDocument("_id", receipt["poolId"]))
             .SingleOrDefaultAsync(ct) ?? throw Q.Broken();
         InventoryGraph.RequirePool(pool);
-        await RequireHeldOwnersAsync(database, current, receipt, pool, ct);
+        await RequireHeldOwnersAsync(database, unit, clock, current, receipt, pool, ct);
         RequireDatabase(database, current, receiptId);
         completedReceipts.Add(receiptId, (Clone(verified), Clone(pool), clock.UtcNow));
         return Clone(verified);
     }
-    private static async Task RequireHeldOwnersAsync(IMongoDatabase database, IClientSessionHandle current,
+    private static async Task RequireHeldOwnersAsync(IMongoDatabase database, MongoUnitOfWork unit, IClock clock, IClientSessionHandle current,
         BsonDocument receipt, BsonDocument expectedPool, CancellationToken ct) {
         var pool = await database.GetCollection<BsonDocument>("inventoryPools").Find(current, new BsonDocument("_id", receipt["poolId"]))
             .SingleOrDefaultAsync(ct) ?? throw Q.Broken();
         InventoryGraph.RequirePool(pool); Equal(pool, expectedPool);
-        var balance = await database.GetCollection<BsonDocument>("stockBalances").Find(current, new BsonDocument("_id", receipt["balanceId"]))
-            .SingleOrDefaultAsync(ct) ?? throw Q.Broken();
-        Equal(balance, InventoryBson.Balance(InventoryHeldReceiptWriter.After(receipt)));
-        // The existing physical owner still requires the exact held lot,
-        // balance and receive-held movement. It cannot hide an early release.
-        await InventoryHeldReceiptWriter.RequireHistoryAsync(database, current, receipt, ct);
+        // Completed semantic ancestors do not cache current stock or grant release authority.
+        // Reconstruct all actual movement owners on every transaction-local reuse.
+        try {
+            _ = await ProcurementStockReceiptRecords.RequireMovementsAsync(database, unit, clock, current, receipt, ct);
+        } catch (PersistenceConflictException error) when (error.Code == "procurement_stock_receipt_integrity_unavailable") {
+            throw Q.Broken();
+        }
     }
 }

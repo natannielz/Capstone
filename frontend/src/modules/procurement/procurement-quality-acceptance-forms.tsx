@@ -8,6 +8,7 @@ export const emptyQualityObservation = (): QualityObservationFields => ({ accept
 export const qualityAcceptanceStates = { proposed: 'Menunggu pemeriksaan independen', approved_held: 'Mutu disetujui · barang tetap ditahan', rejected: 'Penerimaan mutu ditolak' };
 export const qualityAcceptanceConsent = 'Saya telah memeriksa jumlah, kondisi, lot, kedaluwarsa, pemisahan barang dan lokasi penyimpanan. Barang tetap ditahan setelah keputusan ini.';
 export const qualityAcceptanceNotice = 'Jumlah rusak, terbuka dan kedaluwarsa dapat mencakup kemasan yang sama. Tentukan bagian yang diterima melalui pemeriksaan langsung; jangan mengurangi atau menjumlahkan temuan untuk menebak jumlah barang baik.';
+export const qualityAcceptanceBoundary = 'Persetujuan mutu mencatat hasil pemeriksaan fisik. Barang tetap ditahan pada tahap ini. Keputusan ini tidak mengizinkan pelepasan stok, pembayaran, atau penerbitan invoice; masing-masing memerlukan proses dan persetujuan tersendiri.';
 export const qualityWhen = (value: string) => new Intl.DateTimeFormat('id-ID', { timeZone: 'Asia/Jakarta', dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) + ' WIB';
 export const qualityDay = (value: string) => new Intl.DateTimeFormat('id-ID', { timeZone: 'Asia/Jakarta', dateStyle: 'long' }).format(new Date(value + 'T00:00:00+07:00'));
 export const qualityCount = (value: number | string) => new Intl.NumberFormat('id-ID').format(typeof value === 'number' ? value : BigInt(value));
@@ -18,9 +19,9 @@ export function QualityReceiptFacts({ value, historical = false }: { value: Qual
   return <section aria-label="Penerimaan fisik yang diperiksa"><h3>{sku.familyName} · {sku.packageLabel}</h3><dl className={styles.facts}>
     <div><dt>Referensi penerimaan</dt><dd>{receipt.input.receiptReference}</dd></div><div><dt>Pemasok</dt><dd>{receipt.source.order.supplier.displayName}</dd></div><div><dt>Pesanan pembelian</dt><dd>{receipt.source.order.commercialReference.reference}</dd></div>
     <div><dt>Kemasan dan isi</dt><dd>{sku.packageLabel} · {qualityCount(sku.baseUnitsPerPackage)} {sku.baseUnitCode} per kemasan</dd></div><div><dt>Lot penerimaan</dt><dd>{receipt.input.lotReference}</dd></div><div><dt>Kedaluwarsa asli</dt><dd>{receipt.input.expiresOn === null ? 'Tidak tercatat pada lot asli' : qualityDay(receipt.input.expiresOn)}</dd></div>
-    <div><dt>Jumlah pada penerimaan ini</dt><dd>{qualityCount(receipt.input.packages)} kemasan</dd></div><div><dt>Saldo fisik ditahan</dt><dd>{qualityCount(heldBalance.held)} kemasan</dd></div><div><dt>Sudah diterima mutunya</dt><dd>{qualityCount(capacity.acceptedPackages)} kemasan</dd></div><div><dt>Sisa yang dapat diajukan</dt><dd>{qualityCount(capacity.remainingPackages)} kemasan</dd></div>
+    <div><dt>Jumlah pada penerimaan ini</dt><dd>{qualityCount(receipt.input.packages)} kemasan</dd></div><div><dt>{historical ? 'Saldo ditahan saat pengajuan' : 'Saldo fisik ditahan'}</dt><dd>{qualityCount(heldBalance.held)} kemasan</dd></div><div><dt>{historical ? 'Mutu diterima sebelum pengajuan ini' : 'Sudah diterima mutunya'}</dt><dd>{qualityCount(capacity.acceptedPackages)} kemasan</dd></div><div><dt>{historical ? 'Sisa saat pengajuan' : 'Sisa yang dapat diajukan'}</dt><dd>{qualityCount(capacity.remainingPackages)} kemasan</dd></div>
     <div><dt>Temuan kemasan rusak</dt><dd>{qualityCount(line.damagedPackages)} kemasan</dd></div><div><dt>Temuan kemasan terbuka</dt><dd>{qualityCount(line.openedPackages)} kemasan</dd></div><div><dt>Temuan kedaluwarsa</dt><dd>{qualityCount(line.expiredPackages)} kemasan</dd></div>
-  </dl><p>{qualityAcceptanceNotice}</p><p>{historical ? 'Saldo dan sisa ini dicatat saat pengajuan. Bukan pembacaan saldo terkini.' : 'Saldo dan sisa berasal dari pembacaan terakhir dan akan diperiksa ulang saat penyimpanan.'}</p></section>;
+  </dl><p>{qualityAcceptanceNotice}</p><p>{historical ? 'Saldo dan sisa ini dicatat saat pengajuan. Keduanya bukan saldo stok terkini; riwayat ini tidak memastikan barang masih ditahan saat ini.' : 'Saldo dan sisa berasal dari pembacaan terakhir dan akan diperiksa ulang saat penyimpanan.'}</p></section>;
 }
 
 export function QualityPolicyFacts({ value }: { value: QualityAcceptancePolicy }) {
@@ -32,7 +33,7 @@ export function QualityObservationFacts({ value, checker = false }: { value: Qua
 }
 
 export function QualityAcceptanceFacts({ value, historical = false }: { value: Pick<QualityAcceptancePreview, 'input' | 'receipt' | 'heldBalance' | 'capacity' | 'policy'>; historical?: boolean }) {
-  return <div aria-label="Fakta penerimaan mutu yang ditinjau"><QualityReceiptFacts value={value} historical={historical} /><QualityObservationFacts value={value.input} /><p><strong>Alasan pengajuan:</strong> {value.input.reason}</p><p>Persetujuan mutu tidak melepas stok. Seluruh barang tetap ditahan dan belum tersedia untuk pemesanan.</p><details><summary>Kebijakan pemeriksaan mutu</summary><QualityPolicyFacts value={value.policy} /></details></div>;
+  return <div aria-label="Fakta penerimaan mutu yang ditinjau"><QualityReceiptFacts value={value} historical={historical} /><QualityObservationFacts value={value.input} /><p><strong>Alasan pengajuan:</strong> {value.input.reason}</p><p>{qualityAcceptanceBoundary}</p><details><summary>Kebijakan pemeriksaan mutu</summary><QualityPolicyFacts value={value.policy} /></details></div>;
 }
 
 export function qualityObservationValues(value: QualityObservationFields) {

@@ -1,5 +1,6 @@
 using MongoDB.Bson;
 using MongoDB.Driver;
+using UnitToko.Modules.Contracts;
 using UnitToko.Modules.Identity;
 using UnitToko.Modules.Procurement;
 using UnitToko.Platform.Authorization;
@@ -18,6 +19,16 @@ internal sealed class ProcurementStockReceiptRecords(IMongoDatabase database, Mo
 {
     private IMongoCollection<BsonDocument> Rows(string table) => database.GetCollection<BsonDocument>(table);
     internal static void Equal(BsonValue actual, BsonValue expected) { if (!actual.Equals(expected)) throw B.Broken(); }
+    internal static async Task<HeldReceiptMovementState> RequireMovementsAsync(IMongoDatabase database,
+        MongoUnitOfWork unit, IClock clock, IClientSessionHandle tx, BsonDocument receipt, CancellationToken ct) {
+        try {
+            return await new HeldReceiptMovementHistory(database, unit, clock).RequireAsync(tx, receipt, ct);
+        } catch (Exception error) when (error is DomainValidationException or PersistenceConflictException or AuthorizationDeniedException) {
+            // The receipt owner keeps its established public integrity contract. This helper
+            // reconstructs stock provenance only; it does not evaluate a new actor/policy grant.
+            throw B.Broken();
+        }
+    }
     internal async Task<ProcurementInspectionHistory> InspectionAsync(IClientSessionHandle tx, long inspectionId, CancellationToken ct) =>
         proofGraph is null ? await new SupplierDocumentRecords(database, unit, clock, catalog, orders).InspectionAsync(tx, inspectionId, ct)
             : await proofGraph.InspectionAsync(database, unit, clock, catalog, orders, tx, inspectionId, ct);
@@ -67,7 +78,7 @@ internal sealed class ProcurementStockReceiptRecords(IMongoDatabase database, Mo
         Equal(row["binding"], B.Binding(row["actorId"].AsInt64, row["actorGrantVersion"].AsInt64, input, source, inspection, row["poolSource"].AsBsonDocument, before));
         if (row["people"].AsBsonArray.Count != 1 || R.Person(row["people"][0]) is not { Verification: PersonVerification.Verified, PersonId: > 0, Version: > 0 } person || person.UserId != row["actorId"].AsInt64) throw B.Broken();
         using (SupplierDocumentMatchDiagnostics.Begin("receipt.stock-effects")) {
-            await InventoryHeldReceiptWriter.RequireHistoryAsync(database, tx, row, ct); await EffectsAsync(tx, row, ct);
+            _ = await RequireMovementsAsync(database, unit, clock, tx, row, ct); await EffectsAsync(tx, row, ct);
         }
         return row;
     }

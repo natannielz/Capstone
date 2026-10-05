@@ -97,8 +97,15 @@ internal sealed class ProcurementQualityAcceptanceRecords(IMongoDatabase databas
         LotFacts(input, receipt, now);
         var policy = await PolicyAsync(tx, input, now, current, ct);
         ObservationTime(input.ObservedAt, receipt, policy, now);
-        var balance = await Rows("stockBalances").Find(tx, new BsonDocument("_id", receipt["balanceId"])).SingleOrDefaultAsync(ct) ?? throw B.Broken();
-        var original = InventoryBson.Balance(InventoryHeldReceiptWriter.After(receipt)); Equal(balance, original);
+        // ReadAsync above authenticated the complete current movement chain. Historical
+        // quality proposals retain the original fully-held capture, never today's stock.
+        var original = InventoryBson.Balance(InventoryHeldReceiptWriter.After(receipt));
+        var balance = original;
+        if (current) {
+            balance = await Rows("stockBalances").Find(tx, new BsonDocument("_id", receipt["balanceId"])).SingleOrDefaultAsync(ct) ?? throw B.Broken();
+            // A fresh quality review remains stricter than a historical ancestry read.
+            Equal(balance, original);
+        }
         var pool = await Rows("inventoryPools").Find(tx, new BsonDocument("_id", receipt["poolId"])).SingleOrDefaultAsync(ct) ?? throw B.Broken();
         InventoryGraph.RequirePool(pool);
         Equal(pool["location"], receipt["poolSource"]["configuration"]["source"]["input"]["location"]);
