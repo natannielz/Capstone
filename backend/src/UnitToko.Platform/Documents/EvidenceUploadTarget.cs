@@ -8,7 +8,9 @@ internal sealed record EvidenceUploadTarget(EvidenceTargetRef Target, GrantScope
     long? PayoutReservationId = null, long? PayoutId = null, long? PayoutUploaderId = null,
     long? DisbursementReservationId = null, long? DisbursementId = null, long? DisbursementUploaderId = null,
     long? InspectionReservationId = null, long? InspectionId = null, long? InspectionUploaderId = null,
-    long? SupplierDocumentReservationId = null, long? SupplierDocumentId = null, long? SupplierDocumentUploaderId = null);
+    long? SupplierDocumentReservationId = null, long? SupplierDocumentId = null, long? SupplierDocumentUploaderId = null,
+    long? SupplementReservationId = null, long? SupplementId = null, long? SupplementUploaderId = null,
+    DateTimeOffset? OwnerApprovalUntil = null);
 internal interface IPaymentEvidenceUploadTarget
 {
     IMongoDatabase Database { get; }
@@ -78,7 +80,9 @@ internal sealed partial class EvidenceService
                         ? procurementInspectionTargets.WithReadTargetAsync(tx, actor, target, expectedRevision, reference, action, ct)
                         : target.Kind == EvidenceTargetKind.SupplierDocument && supplierDocumentTargets is not null
                             ? supplierDocumentTargets.WithReadTargetAsync(tx, actor, target, expectedRevision, reference, action, ct)
-                            : WithTargetAsync(tx, actor, target, expectedRevision, action, ct);
+                            : target.Kind == EvidenceTargetKind.PaymentSupplement && paymentSupplementTargets is not null
+                                ? paymentSupplementTargets.WithReadTargetAsync(tx, actor, target, expectedRevision, reference, action, ct)
+                                : WithTargetAsync(tx, actor, target, expectedRevision, action, ct);
     private Task<T> WithTargetAsync<T>(IClientSessionHandle tx, ActorContext actor, EvidenceTargetRef target, long? expectedRevision,
         Func<EvidenceUploadTarget, CancellationToken, Task<T>> action, CancellationToken ct) {
         if (target.Kind is EvidenceTargetKind.CatalogFamily or EvidenceTargetKind.CatalogSku)
@@ -94,6 +98,8 @@ internal sealed partial class EvidenceService
             return procurementInspectionTargets.WithTargetAsync(tx, actor, target, expectedRevision, action, ct);
         if (target.Kind == EvidenceTargetKind.SupplierDocument && supplierDocumentTargets is not null)
             return supplierDocumentTargets.WithTargetAsync(tx, actor, target, expectedRevision, action, ct);
+        if (target.Kind == EvidenceTargetKind.PaymentSupplement && paymentSupplementTargets is not null)
+            return paymentSupplementTargets.WithTargetAsync(tx, actor, target, expectedRevision, action, ct);
         throw Invalid("evidence_target_unsupported");
     }
     private static EvidencePurpose Purpose(EvidenceTargetRef target) => target.Kind switch {
@@ -102,7 +108,8 @@ internal sealed partial class EvidenceService
         EvidenceTargetKind.RefundPayout => EvidencePurpose.RefundPayoutImage,
         EvidenceTargetKind.ProcurementDisbursement => EvidencePurpose.ProcurementDisbursementImage,
         EvidenceTargetKind.ProcurementInspection => EvidencePurpose.ProcurementUnboxingVideo,
-        EvidenceTargetKind.SupplierDocument => EvidencePurpose.SupplierDocumentImage, _ => throw Invalid("evidence_target_unsupported") };
+        EvidenceTargetKind.SupplierDocument => EvidencePurpose.SupplierDocumentImage,
+        EvidenceTargetKind.PaymentSupplement => EvidencePurpose.PaymentSupplementPdf, _ => throw Invalid("evidence_target_unsupported") };
     private static string StorePolicyCollection(EvidencePurpose purpose) => purpose == EvidencePurpose.ProcurementUnboxingVideo
         ? "evidenceVideoStorePolicies" : "evidenceStorePolicies";
     private static string ReserveOperation(EvidencePurpose purpose) => purpose switch {
@@ -111,6 +118,7 @@ internal sealed partial class EvidenceService
         EvidencePurpose.ProcurementDisbursementImage => "evidence.procurement-disbursement-image.reserve",
         EvidencePurpose.ProcurementUnboxingVideo => "evidence.procurement-unboxing-video.reserve",
         EvidencePurpose.SupplierDocumentImage => "evidence.supplier-document-image.reserve",
+        EvidencePurpose.PaymentSupplementPdf => "evidence.payment-supplement-pdf.reserve",
         EvidencePurpose.PaymentPdf => "evidence.payment-pdf.reserve", EvidencePurpose.SupplierDocumentPdf => "evidence.supplier-document-pdf.reserve", _ => throw Invalid() };
     private static EvidencePurpose PersistedPurpose(MongoDB.Bson.BsonDocument reservation) {
         if (!reservation.TryGetValue("purpose", out var value) || !value.IsString ||
@@ -127,9 +135,10 @@ internal sealed partial class EvidenceService
         EvidencePurpose.ProcurementDisbursementImage => "evidence.procurement-disbursement-image.complete",
         EvidencePurpose.ProcurementUnboxingVideo => "evidence.procurement-unboxing-video.complete",
         EvidencePurpose.SupplierDocumentImage => "evidence.supplier-document-image.complete",
+        EvidencePurpose.PaymentSupplementPdf => "evidence.payment-supplement-pdf.complete",
         EvidencePurpose.PaymentPdf => "evidence.payment-pdf.complete", EvidencePurpose.SupplierDocumentPdf => "evidence.supplier-document-pdf.complete",
         EvidencePurpose.CatalogImage => "evidence.catalog-image.complete", _ => throw Invalid() };
     private static bool IsVideo(Bundle bundle) => PersistedPurpose(bundle.Reservation) == EvidencePurpose.ProcurementUnboxingVideo;
-    private static bool IsPdf(Bundle bundle) => PersistedPurpose(bundle.Reservation) is EvidencePurpose.PaymentPdf or EvidencePurpose.SupplierDocumentPdf;
+    private static bool IsPdf(Bundle bundle) => PersistedPurpose(bundle.Reservation) is EvidencePurpose.PaymentPdf or EvidencePurpose.SupplierDocumentPdf or EvidencePurpose.PaymentSupplementPdf;
     private static string ValidationKind(Bundle bundle) => IsPdf(bundle) ? PdfEvidenceValidationRecords.Kind : IsVideo(bundle) ? "evidence.video-validation.requested" : "evidence.validation.requested";
 }

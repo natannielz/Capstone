@@ -37,7 +37,7 @@ internal sealed partial class EvidenceService
         VerifiedOriginalHandle handle, long verificationStarted, PinAssociation association, CancellationToken ct) {
         await RequireBindingAsync(tx, actor, claim.Target, claim.ReservationId, ct);
         var bundle = await LoadAsync(tx, claim.ReservationId, ct);
-        if (IsPdf(bundle) && association.Fields["associationKind"] != "SupplierDocument")
+        if (IsPdf(bundle) && association.Fields["associationKind"] != "SupplierDocument" && association.Fields["associationKind"] != "PaymentSupplement")
             throw Conflict("evidence_format_changed");
         RequireAuthority(bundle, new(claim.Target, association.Owner, association.TargetRevision, null, null), actor, true);
         var lease = await LoadReadLeaseAsync(tx, claim, ct);

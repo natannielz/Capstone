@@ -20,12 +20,14 @@ internal sealed partial class EvidenceService
                 (EvidenceTargetKind.PaymentDeclaration, "PaymentImage") => false,
                 (EvidenceTargetKind.SupplierDocument, "SupplierDocumentImage") => false,
                 (EvidenceTargetKind.SupplierDocument, "SupplierDocumentPdf") => true,
+                (EvidenceTargetKind.PaymentSupplement, "PaymentSupplementPdf") => true,
                 _ => throw EvidenceValidationRecords.Broken()
             };
             if (ReadTarget(bundle.Reservation) != target || Reference(bundle) != reference ||
                 bundle.Reservation["uploader"]["userId"] != uploaderId ||
                 bundle.Reservation["admittedTargetRevision"].AsInt64 > targetRevision ||
-                target.Kind == EvidenceTargetKind.SupplierDocument && bundle.Reservation["admittedTargetRevision"] != targetRevision)
+                target.Kind == EvidenceTargetKind.SupplierDocument && bundle.Reservation["admittedTargetRevision"] != targetRevision ||
+                target.Kind == EvidenceTargetKind.PaymentSupplement && (targetRevision != 1 || bundle.Reservation["admittedTargetRevision"] != 1L))
                 throw EvidenceValidationRecords.Broken();
             var validation = await HistoricalValidationAsync(tx, bundle, ct) ?? throw EvidenceValidationRecords.Broken();
             var lifecycle = await RequireHistoricalLifecycleAsync(tx, bundle, validation, ct) ?? throw EvidenceValidationRecords.Broken();

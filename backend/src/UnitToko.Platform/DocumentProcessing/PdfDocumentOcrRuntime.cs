@@ -26,6 +26,8 @@ public sealed class PdfDocumentOcrRuntime
         throw new NotSupportedException("Payment PDF processing requires a separate supplementary evidence owner; primary payment evidence must remain an eligible image");
     public static PdfDocumentOcrRuntime CreateSupplierInvoice(IMongoDatabase database, MongoUnitOfWork unit, IdAllocator ids, IClock clock, PdfDocumentOcrRuntimeOptions options) =>
         Create(database, unit, ids, clock, options, "SupplierInvoice");
+    public static PdfDocumentOcrRuntime CreatePaymentSupplement(IMongoDatabase database, MongoUnitOfWork unit, IdAllocator ids, IClock clock, PdfDocumentOcrRuntimeOptions options) =>
+        Create(database, unit, ids, clock, options, Billing.PaymentSupplementBson.SourceKind);
     private static PdfDocumentOcrRuntime Create(IMongoDatabase database, MongoUnitOfWork unit, IdAllocator ids, IClock clock, PdfDocumentOcrRuntimeOptions options, string sourceKind) {
         ArgumentNullException.ThrowIfNull(options);
         if (!OperatingSystem.IsWindows() || options.Raster is null || options.Engine is null || options.TrustedOperatorSids is null ||

@@ -28,11 +28,14 @@ internal sealed partial class PdfDocumentExtractionRecords(IMongoDatabase databa
         { "version", "pdf-document-ocr-pipeline-v1" }, { "sourceKind", sourceKind }, { "inputMime", PdfDocumentExtractionContract.InputMime },
         { "rasterProvenance", RasterProvenance(raster) }, { "ocrProvenance", OcrProvenance(ocr) } });
     internal static string Kind(string sourceKind) => sourceKind switch { "Payment" => PdfDocumentExtractionContract.PaymentJobKind,
-        "SupplierInvoice" => PdfDocumentExtractionContract.SupplierJobKind, _ => throw Broken() };
-    internal static string SourceKey(string sourceKind, long submissionId) => Kind(sourceKind) + ":" + submissionId.ToString(CultureInfo.InvariantCulture);
+        "SupplierInvoice" => PdfDocumentExtractionContract.SupplierJobKind,
+        PaymentSupplementBson.SourceKind => PaymentSupplementBson.JobKind, _ => throw Broken() };
+    internal static string SourceKey(string sourceKind, long submissionId) => sourceKind == PaymentSupplementBson.SourceKind
+        ? PaymentSupplementBson.JobKey(submissionId) : Kind(sourceKind) + ":" + submissionId.ToString(CultureInfo.InvariantCulture);
     internal static BsonDocument Payload(string sourceKind, BsonDocument binding, ExpectedPublication original) => Payload(sourceKind, binding, Original(original));
     private static BsonDocument Payload(string sourceKind, BsonDocument binding, BsonDocument original)
     {
+        if (sourceKind == PaymentSupplementBson.SourceKind) return SupplementPayload(binding, original);
         var payload = new BsonDocument { { "sourceKind", sourceKind }, { "submissionId", binding["submissionId"] }, { "evidence", binding["reference"] },
             { "pinId", binding["pinId"] }, { "submissionHash", binding["submissionHash"] }, { "uploaderId", binding["uploaderId"] },
             { "reservationId", binding["reservationId"] }, { "original", original } };
@@ -106,8 +109,7 @@ internal sealed partial class PdfDocumentExtractionRecords(IMongoDatabase databa
     {
         Transaction(tx);
         if (actorId <= 0 || actorGrantVersion <= 0 || actorId == long.MaxValue || actorGrantVersion == long.MaxValue) throw Broken();
-        if (sourceKind == "Payment" ? purpose is not ("payment-pdf-ocr-view" or "payment-review-pdf-ocr-view") :
-            sourceKind != "SupplierInvoice" || purpose != "supplier-document-pdf-ocr-view") throw Broken();
+        if (!AllowsReadPurpose(sourceKind, purpose)) throw Broken();
         Text(correlationId, 128);
         if (job.GetValue("kind", "") != Kind(sourceKind) || job.GetValue("sourceKey", "") != SourceKey(sourceKind, currentBinding["submissionId"].AsInt64) ||
             !job.GetValue("payload", BsonNull.Value).Equals(Payload(sourceKind, currentBinding, original))) throw Broken();
@@ -122,8 +124,7 @@ internal sealed partial class PdfDocumentExtractionRecords(IMongoDatabase databa
                 SameOriginalBinding(historical.Failure, currentBinding, original); failure = historical.Failure["safeFailure"].AsString;
             }
         }
-        var sourceId = currentBinding[sourceKind == "Payment" ? "declarationId" : "draftId"].AsInt64;
-        var sourceRevision = currentBinding[sourceKind == "Payment" ? "declarationRevision" : "draftRevision"].AsInt64;
+        var (sourceId, sourceRevision) = ReadSourceIdentity(sourceKind, currentBinding);
         var reference = Reference(currentBinding["reference"].AsBsonDocument);
         var audit = new BsonDocument { { "_id", (await ids.NextAsync(Reads, ct)).Value }, { "schemaVersion", 1 }, { "actorId", actorId }, { "actorGrantVersion", actorGrantVersion },
             { "outboxId", job["_id"] }, { "sourceKind", sourceKind }, { "sourceId", sourceId }, { "sourceRevision", sourceRevision }, { "submissionId", currentBinding["submissionId"] },
@@ -159,7 +160,7 @@ internal sealed partial class PdfDocumentExtractionRecords(IMongoDatabase databa
         if (raster["pipeline"] != PdfRasterProtocol.Pipeline || raster["wrapper"] != PdfRasterProtocol.Wrapper || raster["pdfium"] != PdfRasterProtocol.Pdfium ||
             raster["wheelSha256"] != PdfRasterProtocol.WheelSha256 || !PdfRasterProtocol.Hash(raster["runtimeSha256"].AsString)) throw Broken();
         var ocr = ExtractionRecords.Provenance(row["ocrProvenance"].AsBsonDocument);
-        if (ocr.EngineVersion != LocalOcrProtocol.Engine || ocr.PreprocessingVersion != (row["sourceKind"] == "Payment" ? LocalOcrProtocol.PaymentPreprocessing :
+        if (ocr.EngineVersion != LocalOcrProtocol.Engine || ocr.PreprocessingVersion != (PurposeForSource(row["sourceKind"].AsString) == ExtractionPurpose.Payment ? LocalOcrProtocol.PaymentPreprocessing :
             LocalOcrProtocol.ImagePreprocessing + "/" + SupplierDocumentFieldExtractor.Version)) throw Broken();
         if (row["pipelineId"] != PipelineId(row["sourceKind"].AsString,
             new(raster["pipeline"].AsString, raster["wrapper"].AsString, raster["pdfium"].AsString, raster["wheelSha256"].AsString, raster["pillow"].AsString, raster["runtimeSha256"].AsString), ocr)) throw Broken();
@@ -177,6 +178,11 @@ internal sealed partial class PdfDocumentExtractionRecords(IMongoDatabase databa
             foreach (var name in new[] { "declarationId", "declarationVersionId", "declarationRevision", "reviewRevision" }) if (pin[name] != binding[name]) throw Broken();
         } else if (sourceKind == "SupplierInvoice") {
             if (pin["associationKind"] != "SupplierDocument" || pin["supplierDocumentDraftId"] != binding["draftId"] || pin["supplierDocumentDraftRevision"] != binding["draftRevision"]) throw Broken();
+        } else if (sourceKind == PaymentSupplementBson.SourceKind) {
+            if (pin["associationKind"] != "PaymentSupplement" || pin["supplementId"] != binding["supplementId"] ||
+                pin["supplementRevision"] != 2L || binding["supplementRevision"] != 2L ||
+                !pin["primary"].Equals(binding["primary"]) || pin["primarySubmissionHash"] != binding["primarySubmissionHash"] ||
+                binding["submissionId"] != binding["supplementId"] || binding["reference"].Equals(binding["primary"]["primaryEvidence"])) throw Broken();
         } else throw Broken();
         var reservation = await Rows("evidenceUploadReservations").Find(tx, new BsonDocument("_id", binding["reservationId"])).SingleOrDefaultAsync(ct) ?? throw Broken();
         var version = await Rows("documentVersions").Find(tx, new BsonDocument("_id", binding["versionRowId"])).SingleOrDefaultAsync(ct) ?? throw Broken();
@@ -184,7 +190,7 @@ internal sealed partial class PdfDocumentExtractionRecords(IMongoDatabase databa
         var expected = new ExpectedPublication(new(attempt["storeId"].AsString, reservation["_id"].AsInt64, attempt["_id"].AsInt64,
             attempt["ticketRevision"].AsInt64, attempt["stageToken"].AsString, attempt["generation"].AsString), attempt["contentRevision"].AsInt64,
             new(attempt["length"].AsInt64, attempt["sha256"].AsString));
-        if (!row["original"].Equals(Original(expected)) || reservation["purpose"] != (sourceKind == "Payment" ? "PaymentPdf" : "SupplierDocumentPdf") ||
+        if (!row["original"].Equals(Original(expected)) || reservation["purpose"] != OriginalPurpose(sourceKind) ||
             reservation["uploader"]["userId"] != binding["uploaderId"] || reservation["versionRowId"] != version["_id"] ||
             version["lineageId"] != binding["reference"]["id"] || version["contentVersion"] != binding["reference"]["version"] || version["sha256"] != binding["reference"]["sha256"] ||
             version["storeId"] != binding["storeId"] || version["generation"] != binding["generation"] || version["length"] != binding["length"]) throw Broken();
@@ -195,26 +201,30 @@ internal sealed partial class PdfDocumentExtractionRecords(IMongoDatabase databa
     }
     private async Task CurrentJobAsync(IClientSessionHandle tx, BsonDocument job, CancellationToken ct) {
         Transaction(tx);
-        if (job.GetValue("kind", "") != PdfDocumentExtractionContract.PaymentJobKind && job.GetValue("kind", "") != PdfDocumentExtractionContract.SupplierJobKind) throw Broken();
+        if (job.GetValue("kind", "") != PdfDocumentExtractionContract.PaymentJobKind && job.GetValue("kind", "") != PdfDocumentExtractionContract.SupplierJobKind &&
+            job.GetValue("kind", "") != PaymentSupplementBson.JobKind) throw Broken();
         var current = await Rows("outboxEvents").Find(tx, new BsonDocument("_id", job["_id"])).SingleOrDefaultAsync(ct) ?? throw Broken();
         if (!current.Equals(job)) throw Broken();
     }
     private void Transaction(IClientSessionHandle tx) { if (!tx.IsInTransaction || !ReferenceEquals(tx.Client, database.Client)) throw Broken(); }
     private IMongoCollection<BsonDocument> Rows(string name) => database.GetCollection<BsonDocument>(name);
-    internal static BsonDocument Shape(string name, BsonDocument identity) => new("$and", new BsonArray { identity, PdfDocumentExtractionSchemas.Validator(name) });
+    internal static BsonDocument Shape(string name, BsonDocument identity) => new("$and", new BsonArray { identity, PaymentSupplementSchemas.DocumentOwnerValidator(name) });
     internal static PersistenceConflictException Broken() => new("pdf_document_processing_history_invalid", "Riwayat pemrosesan seluruh PDF perlu diperiksa petugas; dokumen asli tetap dipertahankan.");
 
     internal static async Task RequireStorageAsync(IMongoDatabase database, CancellationToken ct)
     {
         foreach (var name in PdfDocumentExtractionSchemas.Collections) {
             var definition = await AccountContactStorage.DefinitionAsync(database, name, ct) ?? throw Broken();
-            if (!AccountContactStorage.SafeDefinition(definition, PdfDocumentExtractionSchemas.Validator(name))) throw Broken();
+            if (!AccountContactStorage.SafeDefinition(definition, PdfDocumentExtractionSchemas.Validator(name)) &&
+                !AccountContactStorage.SafeDefinition(definition, PaymentSupplementSchemas.DocumentOwnerValidator(name))) throw Broken();
             var indexes = await (await database.GetCollection<BsonDocument>(name).Indexes.ListAsync(ct)).ToListAsync(ct);
             var keys = PdfDocumentExtractionSchemas.Keys(name);
             if (!SafeIndexes(indexes, keys) || keys.Any(key => !indexes.Any(row => AccountContactStorage.Matches(row, key)))) throw Broken();
         }
         var outbox = await AccountContactStorage.DefinitionAsync(database, "outboxEvents", ct) ?? throw Broken();
-        if (!PdfEvidenceAdmissionSchemas.SafeDefinition(outbox) || !PdfDocumentExtractionSchemas.SupportsOutbox(outbox["options"]["validator"].AsBsonDocument, PdfDocumentExtractionSchemas.ExtendedOutboxValidator())) throw Broken();
+        if (!PdfEvidenceAdmissionSchemas.SafeDefinition(outbox) ||
+            !(PdfDocumentExtractionSchemas.SupportsOutbox(outbox["options"]["validator"].AsBsonDocument, PdfDocumentExtractionSchemas.ExtendedOutboxValidator()) ||
+              PaymentSupplementSchemas.SupportsOutbox(outbox["options"]["validator"].AsBsonDocument, PdfDocumentExtractionSchemas.ExtendedOutboxValidator()))) throw Broken();
         PaymentEvidenceMigration.RequireIndexes("outboxEvents", await (await database.GetCollection<BsonDocument>("outboxEvents").Indexes.ListAsync(ct)).ToListAsync(ct));
     }
     internal static bool SafeIndexes(IReadOnlyList<BsonDocument> rows, (string Name, BsonDocument Key, bool Unique)[] keys) =>

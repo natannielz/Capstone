@@ -34,12 +34,15 @@ internal sealed partial class EvidenceService
     private readonly IProcurementDisbursementEvidenceUploadTarget? procurementDisbursementTargets;
     private readonly IProcurementInspectionEvidenceUploadTarget? procurementInspectionTargets;
     private readonly ISupplierDocumentEvidenceUploadTarget? supplierDocumentTargets;
+    private readonly IPaymentSupplementEvidenceUploadTarget? paymentSupplementTargets;
+    internal IMongoDatabase PaymentSupplementHistoryDatabase => database;
     internal EvidenceService(IMongoDatabase database, MongoUnitOfWork unit, IdAllocator ids, IClock clock,
         EvidenceStoreRegistration? registration = null, IPaymentEvidenceUploadTarget? paymentTargets = null,
         IRefundPayoutEvidenceUploadTarget? refundPayoutTargets = null,
         IProcurementDisbursementEvidenceUploadTarget? procurementDisbursementTargets = null,
         IProcurementInspectionEvidenceUploadTarget? procurementInspectionTargets = null,
-        ISupplierDocumentEvidenceUploadTarget? supplierDocumentTargets = null)
+        ISupplierDocumentEvidenceUploadTarget? supplierDocumentTargets = null,
+        IPaymentSupplementEvidenceUploadTarget? paymentSupplementTargets = null)
     {
         this.database = database; this.unit = unit; this.ids = ids; this.clock = clock;
         this.registration = registration ?? EvidenceStoreRegistration.Unavailable();
@@ -58,6 +61,9 @@ internal sealed partial class EvidenceService
         if (supplierDocumentTargets is not null && (!ReferenceEquals(supplierDocumentTargets.Database.Client, database.Client) || !supplierDocumentTargets.Database.DatabaseNamespace.Equals(database.DatabaseNamespace)))
             throw new ArgumentException("Evidence targets must join the same owning transaction");
         this.supplierDocumentTargets = supplierDocumentTargets;
+        if (paymentSupplementTargets is not null && (!ReferenceEquals(paymentSupplementTargets.Database.Client, database.Client) || !paymentSupplementTargets.Database.DatabaseNamespace.Equals(database.DatabaseNamespace)))
+            throw new ArgumentException("Evidence targets must join the same owning transaction");
+        this.paymentSupplementTargets = paymentSupplementTargets;
         catalog = new(database, unit, ids, clock);
     }
 
@@ -81,7 +87,8 @@ internal sealed partial class EvidenceService
 
     internal Task<ReservationResult> ReservePdfAsync(IClientSessionHandle tx, ActorContext actor, ReserveEvidencePdf request,
         AuthorizationCommandMetadata metadata, CancellationToken ct = default) => GuardAsync(tx, async () => {
-            ArgumentNullException.ThrowIfNull(request); await PdfEvidenceAdmissionSchemas.RequireAsync(database, ct);
+            ArgumentNullException.ThrowIfNull(request); if (request.Purpose == EvidencePurpose.PaymentSupplementPdf) await PaymentSupplementEvidenceSchemas.RequireAsync(database, ct);
+            else await PdfEvidenceAdmissionSchemas.RequireAsync(database, ct);
             return await ReserveMediaAsync(tx, actor, (request.Target, request.Purpose, request.ExpectedTargetRevision), metadata, ct);
         });
 
@@ -112,7 +119,7 @@ internal sealed partial class EvidenceService
             var policyCollection = StorePolicyCollection(request.Purpose);
             var policy = await Rows(policyCollection).Find(tx, F.Eq("storeId", registration.StoreId)).SingleOrDefaultAsync(token);
             RequirePolicy(policy);
-            if (request.Purpose is EvidencePurpose.PaymentPdf or EvidencePurpose.SupplierDocumentPdf &&
+            if (request.Purpose is EvidencePurpose.PaymentPdf or EvidencePurpose.SupplierDocumentPdf or EvidencePurpose.PaymentSupplementPdf &&
                 policy!["maximumContentBytes"].AsInt64 > PdfEvidenceValidationContract.MaximumOriginalBytes)
                 throw Conflict("evidence_pdf_policy_unavailable");
             var charge = checked(3 * policy!["maximumContentBytes"].AsInt64);

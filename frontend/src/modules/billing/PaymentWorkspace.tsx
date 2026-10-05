@@ -17,6 +17,10 @@ import common from '../administration/access.module.css';
 import styles from './invoice.module.css';
 import { PaymentOcrPanel } from './PaymentOcrPanel';
 import type { PaymentOcrView, PaymentFollowUp } from './payment-client';
+import { PaymentSupplementRequesterPanel } from './PaymentSupplementPanels';
+import { createPaymentSupplementGateway, paymentSupplementOwner } from './payment-pdf-supplement-client';
+import { SupplementJournal, supplementKeyBinding, isSupplementOperation } from './payment-pdf-supplement-recovery';
+import { paymentSupplementReloadRecoveryAdapter } from './payment-pdf-supplement-recovery-adapter';
 
 type Account = { actorId: string; actions: readonly string[]; session: IdentitySession; observedAt: number };
 const rupiah = (value: string) => orderAmount('IDR', value);
@@ -57,11 +61,15 @@ export function PaymentWorkspace() {
     {error !== null && <p role="alert" className={common.alert}>{message(error)}</p>}
     {loading ? <p role="status">Memeriksa akun…</p> : !account || sessionTiming(account.session, elapsed).expired ? <section className={common.state}><h2>Periksa sesi dan akses</h2>
       <Link href="/identity/login?returnPath=%2Fbilling%2Fpayments">Masuk kembali</Link><button className={common.secondary} onClick={() => setRefresh(value => value + 1)}>Perbarui sesi dan akses</button></section>
-      : <PaymentDesk key={account.actorId + ':' + account.observedAt} account={account} now={Date.parse(account.session.serverTime) + elapsed} onDenied={denied} />}
+      : <PaymentDesk key={account.actorId + ':' + account.observedAt} account={account} now={Date.parse(account.session.serverTime) + elapsed} fresh={sessionTiming(account.session, elapsed).fresh} onDenied={denied} />}
   </main>;
 }
-function PaymentDesk({ account, now, onDenied }: { account: Account; now: number; onDenied: (failure: unknown) => void }) {
+function PaymentDesk({ account, now, fresh, onDenied }: { account: Account; now: number; fresh: boolean; onDenied: (failure: unknown) => void }) {
   const [gateway] = useState(createPaymentGateway), [invoices] = useState(createInvoiceGateway), [ledger] = useState(() => new MutationLedger()), recovery = useOperationRecovery(account.actorId);
+  const [supplements] = useState(createPaymentSupplementGateway), [supplementJournal] = useState(() => new SupplementJournal(() => window.localStorage, undefined, recovery.journal));
+  const [supplementBusy, setSupplementBusy] = useState(false);
+  const refreshRecovery = recovery.refresh;
+  const supplementBusyChanged = useCallback((value: boolean) => {setSupplementBusy(value); if (!value) refreshRecovery();}, [refreshRecovery]);
   const [page, setPage] = useState<{ items: PaymentDraft[]; hasMore: boolean }>({ items: [], hasMore: false }), [invoicePage, setInvoicePage] = useState<{ items: Invoice[]; hasMore: boolean }>({ items: [], hasMore: false });
   const [selected, setSelected] = useState<PaymentDraft | null>(null), [input, setInput] = useState<PaymentInput>(() => empty(now)), [reason, setReason] = useState('');
   const [ocr, setOcr] = useState<PaymentOcrView | null>(null);
@@ -98,7 +106,7 @@ function PaymentDesk({ account, now, onDenied }: { account: Account; now: number
   useEffect(() => () => { previewEpoch.current++; if (previewUrl.current) URL.revokeObjectURL(previewUrl.current); previewUrl.current = null; }, []);
   useEffect(() => { if (preview) previewHeading.current?.focus(); }, [preview]);
   const current = useCallback(() => alive.current && !sessionTiming(account.session, performance.now() - account.observedAt).expired, [account]);
-  const locked = busy || recovering || offline || recovery.locked;
+  const locked = busy || supplementBusy || recovering || offline || recovery.locked;
   useEffect(() => { alive.current = true; const connection = () => setOffline(!navigator.onLine); connection(); window.addEventListener('online', connection); window.addEventListener('offline', connection);
     return () => { alive.current = false; window.removeEventListener('online', connection); window.removeEventListener('offline', connection); }; }, []);
   useEffect(() => { let active = true; const controller = new AbortController(); void Promise.resolve().then(async () => {
@@ -109,7 +117,7 @@ function PaymentDesk({ account, now, onDenied }: { account: Account; now: number
     } catch (failure) { if (active && current()) { setError(failure); onDenied(failure); } } finally { if (active) setBusy(false); }
   }); return () => { active = false; controller.abort(); }; }, [gateway, invoices, account.actorId, before, invoiceBefore, refresh, current, onDenied]);
   async function perform(work: () => Promise<void>) {
-    if (!current() || busy || recovering || offline || pending.current) return; pending.current = true; setBusy(true); setError(null); setNotice('');
+    if (!current() || busy || supplementBusy || recovering || offline || pending.current) return; pending.current = true; setBusy(true); setError(null); setNotice('');
     try { await work(); } catch (failure) { if (current()) { setError(failure); onDenied(failure); } }
     finally { pending.current = false; if (alive.current) { setBusy(false); recovery.refresh(); } }
   }
@@ -196,8 +204,17 @@ function PaymentDesk({ account, now, onDenied }: { account: Account; now: number
   const hasPending = evidence.some(item => ['fresh', 'writing', 'publish_pending'].includes(item.state) && Date.parse(item.expiresAt) > now);
   const unsaved = selected !== null && JSON.stringify(input) !== JSON.stringify(selected.input);
   const submitted = selected?.state === 'submitted';
-  return <><AdministrationNavigation current="payments" actions={account.actions} locked={busy || recovering} />
-    <OperationRecovery entries={recovery.entries} journal={recovery.journal} disabled={busy || offline} onBusyChange={setRecovering} recoveryAdapters={{
+  return <><AdministrationNavigation current="payments" actions={account.actions} locked={busy || supplementBusy || recovering} />
+    <OperationRecovery entries={recovery.entries} journal={recovery.journal} disabled={busy || supplementBusy || offline} onBusyChange={setRecovering} recoveryAdapters={{
+      'billing.payment.supplement': {lookup: async entry => {
+        const adapter = paymentSupplementReloadRecoveryAdapter(supplements, account.actorId, async id => {
+          const draft = await gateway.read(account.actorId, id); if (!current()) throw new AccessFailure(409, 'recovery_request_stale');
+          return paymentSupplementOwner(account.actorId, draft);
+        }, current);
+        const receipt = await adapter.lookup(entry); if (!current()) throw new AccessFailure(409, 'recovery_request_stale');
+        recoveredId.current = receipt !== null && isSupplementOperation(entry.operation) ? supplementKeyBinding(entry.operation, entry.key, account.actorId).declarationId : null;
+        return receipt;
+      }},
       'billing.payment.replacement.create': { lookup: async entry => { const receipt = await gateway.recoverReplacement(entry.actorId, entry.key); if (!current()) throw new AccessFailure(409, 'recovery_request_stale'); recoveredId.current = receipt?.result.declarationId ?? null; return receipt; } },
       'billing.payment.submit': { lookup: async entry => { const receipt = await gateway.recoverSubmission(entry.actorId, entry.key); if (!current()) throw new AccessFailure(409, 'recovery_request_stale'); recoveredId.current = receipt?.result.declarationId ?? null; return receipt; } },
       'billing.payment': { lookup: async entry => { const receipt = await gateway.recover(entry.actorId, entry.key); if (!current()) throw new AccessFailure(409, 'recovery_request_stale'); recoveredId.current = receipt?.result.declarationId ?? null; return receipt; } },
@@ -247,6 +264,9 @@ function PaymentDesk({ account, now, onDenied }: { account: Account; now: number
         <p>Tindak lanjut bukti tidak menetapkan penerimaan dana atau saldo invoice.</p></>}
     </section>}
     {submitted && selected && <PaymentOcrPanel view={ocr} locked={locked} onRefresh={() => void perform(async () => { setOcr(null); const result = await gateway.ocr(account.actorId, selected); if (current()) setOcr(result); })} />}
+    {submitted && selected?.submission && <PaymentSupplementRequesterPanel key={'supplements:' + selected.id + ':' + selected.revision + ':' + selected.submission.id}
+      owner={paymentSupplementOwner(account.actorId, selected)} fresh={fresh} now={now}
+      locked={busy || recovering || offline} current={current} journal={supplementJournal} onDenied={onDenied} onBusyChange={supplementBusyChanged}/>}
     {selected && <section className={common.accountSection} aria-label="Bukti asli pembayaran"><h2>Bukti asli pembayaran</h2><p>{submitted ? 'Bukti berikut terikat pada pengajuan ini. Pemeriksaan keamanan gambar tidak membuktikan dana diterima.' : 'Pilih foto atau hasil pindai JPG/PNG, maksimal 10 MB. Berkas asli disimpan untuk pemeriksaan. Hasil pemeriksaan keamanan tidak memverifikasi pembayaran; draf tetap belum diajukan.'}</p>
       {!submitted && <><label>Pilih bukti pembayaran<input ref={fileInput} type="file" accept="image/jpeg,image/png" disabled={locked || confirmation !== null} onChange={event => setFile(event.target.files?.[0] ?? null)} /></label>
       <label>Ambil foto bukti pembayaran<input ref={cameraInput} type="file" accept="image/jpeg,image/png" capture="environment" disabled={locked || confirmation !== null} onChange={event => setFile(event.target.files?.[0] ?? null)} /></label>

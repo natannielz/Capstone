@@ -1,4 +1,6 @@
 export function recoveryPage(operation: string) {
+  if (['billing.payment.supplement.create', 'evidence.payment-supplement-pdf.reserve', 'billing.payment.supplement.attach'].includes(operation))
+    return {href: '/billing/payments', label: 'halaman lampiran PDF tambahan'};
   if (operation === 'evidence.payment-pdf.reserve') return {href: '/billing/payments', label: 'halaman bukti PDF pembayaran'};
   if (operation === 'evidence.supplier-document-pdf.reserve') return {href: '/procurement/supplier-documents', label: 'halaman bukti PDF dokumen pemasok'};
   if (operation === 'account.contact.update') return {href: '/identity/account#account-contact', label: 'halaman kontak pribadi'};
@@ -68,6 +70,9 @@ export function recoveryPage(operation: string) {
     : { href: "/administration/person-reviews", label: "halaman peninjauan orang" };
 }
 export function operationLabel(operation: string) {
+  if (operation === 'billing.payment.supplement.create') return 'Pembuatan lampiran PDF tambahan';
+  if (operation === 'evidence.payment-supplement-pdf.reserve') return 'Reservasi PDF tambahan';
+  if (operation === 'billing.payment.supplement.attach') return 'Penautan lampiran PDF tambahan';
   if (operation === 'evidence.payment-pdf.reserve') return 'Unggah PDF pembayaran';
   if (operation === 'evidence.supplier-document-pdf.reserve') return 'Unggah PDF dokumen pemasok';
   if (operation === 'account.contact.update') return 'Perubahan kontak pribadi';

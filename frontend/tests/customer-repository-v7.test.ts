@@ -5,9 +5,8 @@ import { createClient, type Client, type InValue } from "@libsql/client";
 import { migrateDatabase, setTestDatabase, type Database, type Statement } from "../../backend/legacy/server/database";
 import { TABLES, ensureSeed, execute, loadState, provisionCustomerDemo } from "../../backend/legacy/server/repository";
 import { demoPassword } from "../../backend/legacy/server/demo-credentials";
-import { digest, hashPassword } from "../../backend/legacy/server/security";
+import { hashPassword } from "../../backend/legacy/server/security";
 import { seedState } from "../../backend/legacy/domain/seed";
-import { PATCH as profilePATCH } from "../src/app/api/profile/route";
 
 // Every client in this file is an isolated in-memory database. No environment URL,
 // live credentials, local demo database or external storage is read by these tests.
@@ -141,7 +140,7 @@ test("customer provisioning stops on email and identity conflicts without changi
   }
 });
 
-test("fresh repository keeps customer buyer keys consistent and preserves scoped profile edits", async () => {
+test("fresh repository keeps customer buyer keys consistent", async () => {
   const oldSeed=process.env.DEMO_PASSWORD_SEED;
   process.env.DEMO_PASSWORD_SEED="isolated-v7-test-password-seed-not-a-live-secret";
   const client=createClient({url:":memory:"});
@@ -152,16 +151,6 @@ test("fresh repository keeps customer buyer keys consistent and preserves scoped
     const state=await loadState();
     const customer=state.users.find(user=>user.id==="customer-demo")!;
     assert.equal(customer.email,"customer@unit-toko.demo");
-    // This retained profile route uses an isolated legacy session; maintained
-    // sign-in/session issuance is covered by the .NET identity lifecycle tests.
-    const token="v7-customer-profile-session";
-    await client.execute({sql:"INSERT INTO sessions(id,user_id,expires_at) VALUES(?,?,?)",args:[await digest(token),customer.id,Date.now()+60_000]});
-    const cookie=`toko_session=${token}`;
-    const profile=await profilePATCH(new Request("http://localhost/api/profile",{method:"PATCH",headers:{cookie,"Content-Type":"application/json"},body:JSON.stringify({name:customer.name,phone:customer.phone||"",position:customer.position||"",address:"  Alamat pelanggan baru  "})}));
-    assert.equal(profile.status,200);
-    assert.equal((await loadState()).users.find(user=>user.id===customer.id)?.address,"Alamat pelanggan baru");
-    const tooLong=await profilePATCH(new Request("http://localhost/api/profile",{method:"PATCH",headers:{cookie,"Content-Type":"application/json"},body:JSON.stringify({address:"x".repeat(501)})}));
-    assert.equal(tooLong.status,400);
     const result=await execute(customer,{id:crypto.randomUUID(),type:"order.create",data:{recipientName:"Penerima",recipientPhone:"081234567890",address:"Alamat penerima",lines:[{productId:"air",qty:1,unitPrice:state.products.find(product=>product.id==="air")!.price}]}});
     const stored=(await client.execute({sql:"SELECT payload,division_id,customer_id FROM orders WHERE id=?",args:[result.id]})).rows[0];
     assert.equal(stored.division_id,null);

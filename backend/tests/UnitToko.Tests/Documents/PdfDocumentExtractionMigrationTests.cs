@@ -4,11 +4,14 @@ using MongoDB.Driver;
 using UnitToko.Modules.Documents;
 using UnitToko.Platform;
 using UnitToko.Platform.Billing;
+using UnitToko.Platform.Catalog;
 using UnitToko.Platform.DocumentProcessing;
 using UnitToko.Platform.Documents;
+using UnitToko.Platform.Inventory;
 using UnitToko.Platform.Mongo;
 using UnitToko.Platform.Mongo.Migrations;
 using UnitToko.Tests.Authorization;
+using UnitToko.Tests.Billing;
 using UnitToko.Tests.Ordering;
 
 namespace UnitToko.Tests.Documents;
@@ -174,9 +177,12 @@ public sealed class PdfDocumentExtractionMigrationTests(MongoFixture fixture)
         catch { await lease.ReleaseAsync(); throw; }
     }
 
-    // Empty test-only suffix rehearsal: exactly one applied marker is removed. No collection, DDL, data or allocator is dropped or rewritten.
+    // Empty test-only suffix rehearsal. Later empty owners are proven before their
+    // markers are removed; only exact reviewed successor validator templates are
+    // restored for this predecessor rehearsal, with operator conjuncts retained.
     internal static async Task RestoreV85Async(IMongoDatabase db)
     {
+        await PaymentSupplementMigrationTests.RestoreV86Async(db);
         var history = await HistoryAsync(db); if (history.Count <= 85) return;
         Assert.Equal(86, history.Count); Assert.True(MigrationHistory.IsValid(history.Select(row => row.AsBsonDocument).ToArray(), 86));
         Assert.All(history, row => Assert.Equal("applied", row["state"]));
@@ -189,7 +195,51 @@ public sealed class PdfDocumentExtractionMigrationTests(MongoFixture fixture)
         Assert.False(await db.GetCollection<BsonDocument>("outboxEvents").Find(new BsonDocument("$or", new BsonArray {
             new BsonDocument("kind", new BsonDocument("$in", new BsonArray { "payment.document-ocr.requested", "supplierdocument.document-ocr.requested" })),
             new BsonDocument("processingReceipt.pdfDocumentExtraction", new BsonDocument("$exists", true)) })).AnyAsync());
+        await RestoreReviewedM86ValidatorsAsync(db);
         Assert.Equal(1L, (await db.GetCollection<BsonDocument>("schemaMigrations").DeleteOneAsync(new BsonDocument { { "_id", 86 }, { "state", "applied" } })).DeletedCount);
+    }
+
+    private static async Task RestoreReviewedM86ValidatorsAsync(IMongoDatabase db)
+    {
+        await PaymentSupplementMigrationTests.RequireEmptySupplementAsync(db);
+        var templates = Owners.Select(name => (Name: name, Successor: PaymentSupplementSchemas.DocumentOwnerValidator(name),
+                Predecessor: PdfDocumentExtractionSchemas.Validator(name)))
+            .Concat(PaymentSupplementEvidenceSchemas.Collections.Select(name => (Name: name,
+                Successor: PaymentSupplementEvidenceSchemas.Validator(name), Predecessor: PaymentSupplementEvidenceSchemas.PreviousValidator(name))))
+            .Append((Name: "outboxEvents", Successor: PaymentSupplementSchemas.ExtendedOutboxValidator(),
+                Predecessor: PdfDocumentExtractionSchemas.ExtendedOutboxValidator()));
+        var changes = new List<(string Name, BsonDocument Before, BsonDocument After, BsonValue Uuid)>();
+        foreach (var template in templates) {
+            var definition = await DefinitionAsync(db, template.Name);
+            Assert.True(PdfEvidenceAdmissionSchemas.SafeDefinition(definition));
+            var before = definition["options"]["validator"].AsBsonDocument;
+            var recognized = false;
+            BsonDocument Replace(BsonDocument value) {
+                if (CatalogSchemas.SemanticEquals(value, template.Successor)) {
+                    recognized = true; return template.Predecessor.DeepClone().AsBsonDocument;
+                }
+                if (CatalogSchemas.SemanticEquals(value, template.Predecessor)) {
+                    recognized = true; return value.DeepClone().AsBsonDocument;
+                }
+                var copy = value.DeepClone().AsBsonDocument;
+                // An unrecognized disjunction is never inferred to be safe.
+                if (copy.TryGetValue("$and", out var terms) && terms.IsBsonArray)
+                    copy["$and"] = new BsonArray(terms.AsBsonArray.Select(term => term.IsBsonDocument ? Replace(term.AsBsonDocument) : term.DeepClone()));
+                return copy;
+            }
+            var after = Replace(before);
+            Assert.True(recognized && InventorySchemas.Contains(after, template.Predecessor));
+            Assert.False(await db.GetCollection<BsonDocument>(template.Name).Find(new BsonDocument("$nor", new BsonArray { after })).AnyAsync());
+            changes.Add((template.Name, before.DeepClone().AsBsonDocument, after, definition["info"]["uuid"].DeepClone()));
+        }
+        // Every definition and retained row was checked before any test-only DDL.
+        foreach (var change in changes) {
+            var current = await DefinitionAsync(db, change.Name);
+            Assert.Equal(change.Uuid, current["info"]["uuid"]); Assert.Equal(change.Before, current["options"]["validator"]);
+            if (!change.Before.Equals(change.After)) await ChangeAsync(db, change.Name, change.After);
+            var installed = await DefinitionAsync(db, change.Name);
+            Assert.Equal(change.Uuid, installed["info"]["uuid"]); Assert.Equal(change.After, installed["options"]["validator"]);
+        }
     }
 
     private static async Task EnsureOwnersAsync(IMongoDatabase db)

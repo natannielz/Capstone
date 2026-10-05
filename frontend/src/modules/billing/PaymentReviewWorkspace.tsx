@@ -24,6 +24,8 @@ import { createPaymentAllocationCorrectionGateway } from './payment-allocation-c
 import { createPaymentVerificationGateway } from './payment-verification-client';
 import { PaymentOcrPanel } from './PaymentOcrPanel';
 import type { PaymentDraft, PaymentOcrView } from './payment-client';
+import { PaymentSupplementReviewerPanel } from './PaymentSupplementPanels';
+import { paymentSupplementOwner } from './payment-pdf-supplement-client';
 import common from '../administration/access.module.css';
 import styles from './invoice.module.css';
 
@@ -150,6 +152,8 @@ function ReviewDesk({ account, fresh, onDenied }: { account: Account; fresh: boo
       <PaymentDuplicatePanel key={'duplicates:' + selected.id + ':' + selected.revision} actorId={account.actorId} owner={selected}
         locked={locked} current={current} onOpen={id => void perform(() => open(id))} onDenied={onDenied} onBusyChange={setEditingBusy} />
       <PaymentOcrPanel view={ocr} locked={locked} onRefresh={() => void perform(async () => { const value = await gateway.ocr(account.actorId, selected); if (current()) setOcr(value); })} />
+      {selected.state === 'submitted' && selected.submission && <PaymentSupplementReviewerPanel key={'supplements:' + selected.id + ':' + selected.revision + ':' + selected.submission.id}
+        owner={paymentSupplementOwner(account.actorId, selected)} locked={locked} current={current} onDenied={onDenied}/>}
       <PaymentCorrectionPanel key={selected.id + ':' + selected.revision + ':' + (ocr?.result?.id ?? 'pending')} actorId={account.actorId} owner={selected} ocr={ocr}
         allowed={account.actions.includes('payment.review.correct')} fresh={fresh}
         locked={locked || recovery.locked} current={current} journal={recovery.journal} onSettled={recovery.refresh} onDenied={onDenied} onBusyChange={setEditingBusy} />

@@ -39,6 +39,20 @@ public sealed class PdfDocumentOcrWorkerConfigurationTests
     }
 
     [Fact]
+    public void Supplement_configuration_is_explicit_and_cannot_activate_primary_payment_or_adopt_supplier_configuration() {
+        var empty = new ConfigurationBuilder().Build(); Assert.Null(Read(empty, "ReadPaymentSupplement"));
+        var fields = Fields("Evidence:PaymentSupplementPdfOcr");
+        fields["Evidence:PaymentSupplementPdfOcr:ConsumerId"] = "synthetic-payment-supplement-pdf";
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(fields).Build();
+        var actual = Assert.IsType<PdfDocumentOcrRuntimeOptions>(Read(configuration, "ReadPaymentSupplement"));
+        Assert.Equal("synthetic-payment-supplement-pdf", actual.ConsumerId);
+        Assert.Null(Read(configuration, "ReadSupplierInvoice")); Assert.Null(Read(configuration, "RejectUnsupportedPayment"));
+        fields["Evidence:PaymentSupplementPdfOcr:SourceKind"] = "Payment";
+        AssertInvalid(new ConfigurationBuilder().AddInMemoryCollection(fields).Build(), "ReadPaymentSupplement");
+        Assert.Throws<NotSupportedException>(() => PdfDocumentOcrRuntime.CreatePayment(null!, null!, null!, null!, null!));
+    }
+
+    [Fact]
     public void Nested_missing_approval_limits_unknown_engine_and_noncontiguous_pin_lists_fail_closed() {
         foreach (var (remove, add) in new[] {
             ("Evidence:SupplierDocumentPdfOcr:ModelSelectionReference", (string?)null),

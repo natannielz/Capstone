@@ -56,7 +56,8 @@ internal static class PdfEvidenceAdmissionSchemas
             var definition = await (await database.ListCollectionsAsync(new ListCollectionsOptions { Filter = new BsonDocument("name", name) }, ct)).SingleOrDefaultAsync(ct);
             var options = definition?.GetValue("options", new BsonDocument()).AsBsonDocument;
             if (definition is null || options is null || !SafeDefinition(definition) ||
-                !InventorySchemas.Contains(options.GetValue("validator", new BsonDocument()).AsBsonDocument, Validator(name)))
+                !(InventorySchemas.Contains(options.GetValue("validator", new BsonDocument()).AsBsonDocument, Validator(name)) ||
+                    PaymentSupplementEvidenceSchemas.Supports(name, options.GetValue("validator", new BsonDocument()).AsBsonDocument, Validator(name))))
                 throw new PersistenceConflictException("evidence_pdf_admission_unavailable", "Explicit PDF evidence admission is not installed");
             PaymentEvidenceMigration.RequireIndexes(name, await (await database.GetCollection<BsonDocument>(name).Indexes.ListAsync(ct)).ToListAsync(ct));
         }

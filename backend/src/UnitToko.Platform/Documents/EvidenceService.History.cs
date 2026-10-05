@@ -48,7 +48,7 @@ internal sealed partial class EvidenceService
     });
     internal Task ValidateHistoricalPinAsync(IClientSessionHandle tx, BsonDocument pin, CancellationToken ct) => GuardAsync(tx, async () => {
         var bundle = await LoadAsync(tx, pin["reservationId"].AsInt64, ct);
-        if (IsPdf(bundle) && pin["associationKind"] != "SupplierDocument") throw EvidenceValidationRecords.Broken();
+        if (IsPdf(bundle) && pin["associationKind"] != "SupplierDocument" && pin["associationKind"] != "PaymentSupplement") throw EvidenceValidationRecords.Broken();
         var reference = Reference(bundle) ?? throw EvidenceValidationRecords.Broken();
         var validation = await HistoricalValidationAsync(tx, bundle, ct) ?? throw EvidenceValidationRecords.Broken();
         var lifecycle = await RequireHistoricalLifecycleAsync(tx, bundle, validation, ct) ?? throw EvidenceValidationRecords.Broken();
@@ -59,6 +59,9 @@ internal sealed partial class EvidenceService
             "ProcurementDisbursement" => target.Kind == EvidenceTargetKind.ProcurementDisbursement && target.Id == pin["procurementDisbursementDraftId"].AsInt64,
             "ProcurementInspection" => target.Kind == EvidenceTargetKind.ProcurementInspection && target.Id == pin["procurementInspectionDraftId"].AsInt64,
             "SupplierDocument" => target.Kind == EvidenceTargetKind.SupplierDocument && target.Id == pin["supplierDocumentDraftId"].AsInt64,
+            "PaymentSupplement" => target.Kind == EvidenceTargetKind.PaymentSupplement && target.Id == pin["supplementId"].AsInt64 &&
+                pin["associationId"] == target.Id && pin["supplementRevision"] == 2L && bundle.Reservation["purpose"] == "PaymentSupplementPdf" &&
+                bundle.Reservation["admittedTargetRevision"] == 1L,
             _ => false };
         if (!bound || !pin["reference"].Equals(ReadReference(reference)) || pin["actorId"] != bundle.Reservation["uploader"]["userId"] ||
             pin["versionRowId"] != bundle.Version["_id"] || pin["storeId"] != bundle.Version["storeId"] || pin["generation"] != bundle.Version["generation"] ||

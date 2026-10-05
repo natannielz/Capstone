@@ -77,8 +77,8 @@ internal sealed partial class PdfDocumentExtractionRecords
     {
         try {
             RequireOriginal(row); RequireProvenance(row);
-            var purpose = row["sourceKind"].AsString switch { "Payment" => ExtractionPurpose.Payment, "SupplierInvoice" => ExtractionPurpose.SupplierInvoice, _ => throw Broken() };
-            if (row["purpose"].AsString != row["sourceKind"].AsString || row["inputMime"] != PdfDocumentExtractionContract.InputMime || row["requiresHumanReview"] != true) throw Broken();
+            var purpose = PurposeForSource(row["sourceKind"].AsString);
+            if (row["purpose"].AsString != purpose.ToString() || row["inputMime"] != PdfDocumentExtractionContract.InputMime || row["requiresHumanReview"] != true) throw Broken();
             var raster = row["rasterProvenance"].AsBsonDocument;
             var pages = row["output"]["pages"].AsBsonArray.Select(value => Page(value.AsBsonDocument)).ToArray();
             var result = new PdfDocumentExtraction(Reference(row["binding"]["reference"].AsBsonDocument), purpose,

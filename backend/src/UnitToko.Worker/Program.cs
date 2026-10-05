@@ -30,6 +30,7 @@ var ocrOptions = migrate ? null : builder.Configuration.GetSection("Evidence:Pay
 var supplierOcrOptions = migrate ? null : builder.Configuration.GetSection("Evidence:SupplierDocumentOcr").Get<SupplierDocumentOcrRuntimeOptions>();
 if (!migrate) PdfDocumentOcrWorkerConfiguration.RejectUnsupportedPayment(builder.Configuration);
 var supplierPdfOcrOptions = migrate ? null : PdfDocumentOcrWorkerConfiguration.ReadSupplierInvoice(builder.Configuration);
+var paymentSupplementPdfOcrOptions = migrate ? null : PdfDocumentOcrWorkerConfiguration.ReadPaymentSupplement(builder.Configuration);
 var paymentNotices = !migrate && builder.Configuration.GetValue<bool>("Notifications:PaymentReviewInApp:Enabled");
 if (evidenceOptions is not null) {
     builder.Services.AddSingleton(sp => EvidenceValidationRuntime.Create(sp.GetRequiredService<IMongoDatabase>(), sp.GetRequiredService<MongoUnitOfWork>(),
@@ -65,7 +66,9 @@ if (supplierOcrOptions is not null) {
 }
 if (supplierPdfOcrOptions is not null) builder.Services.AddSingleton(sp => PdfDocumentOcrRuntime.CreateSupplierInvoice(sp.GetRequiredService<IMongoDatabase>(),
     sp.GetRequiredService<MongoUnitOfWork>(), sp.GetRequiredService<IdAllocator>(), sp.GetRequiredService<IClock>(), supplierPdfOcrOptions));
-if (supplierPdfOcrOptions is not null) builder.Services.AddHostedService<PdfDocumentOcrWorker>();
+if (paymentSupplementPdfOcrOptions is not null) builder.Services.AddSingleton(sp => PdfDocumentOcrRuntime.CreatePaymentSupplement(sp.GetRequiredService<IMongoDatabase>(),
+    sp.GetRequiredService<MongoUnitOfWork>(), sp.GetRequiredService<IdAllocator>(), sp.GetRequiredService<IClock>(), paymentSupplementPdfOcrOptions));
+if (supplierPdfOcrOptions is not null || paymentSupplementPdfOcrOptions is not null) builder.Services.AddHostedService<PdfDocumentOcrWorker>();
 if (paymentNotices) {
     builder.Services.AddSingleton<PaymentReviewNotifications>();
     builder.Services.AddHostedService<PaymentReviewNotificationWorker>();

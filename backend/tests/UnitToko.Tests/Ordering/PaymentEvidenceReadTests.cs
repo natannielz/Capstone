@@ -211,11 +211,13 @@ public sealed class PaymentEvidenceReadTests(MongoFixture fixture)
         internal static AuthorizationReadMetadata Metadata => new("payment-evidence-view", "synthetic-private-read");
         internal IMongoCollection<BsonDocument> Rows(string name) => Database.GetCollection<BsonDocument>(name);
         internal Task<ProtectedEvidenceRead> OpenAsync(ActorContext? actor = null) => Service.OpenReadAsync(actor ?? Actor, DeclarationId, Reservation.ReservationId, 1, Reference, Metadata);
-        internal static async Task<ReadData> CreateAsync(MongoFixture fixture, PaymentDraftData? attachedPayment = null) {
+        internal static async Task<ReadData> CreateAsync(MongoFixture fixture, PaymentDraftData? attachedPayment = null,
+            long maximumContentBytes = 1024) {
             var data = new ReadData();
             try {
                 data.Files = await EvidenceAdmissionTestData.CreateAsync(fixture); data.Payment = attachedPayment ?? await PaymentDraftData.CreateAsync(fixture);
-                var storage = EvidenceAdmissionSchemaTests.Policy(); storage["_id"] = (await new IdAllocator(data.Database).NextAsync("evidenceStorePolicies")).Value;
+                var storage = EvidenceAdmissionSchemaTests.Policy(maximum: maximumContentBytes, bytes: checked(30 * maximumContentBytes));
+                storage["_id"] = (await new IdAllocator(data.Database).NextAsync("evidenceStorePolicies")).Value;
                 await data.Rows("evidenceStorePolicies").InsertOneAsync(storage);
                 await PolicyAsync(data.Database, data.Files.StoreId, data.Catalog.Clock.UtcNow);
                 data.Service = new(data.Database, new(data.Catalog.Client), new(data.Database), data.Catalog.Clock, data.Payment.Service, data.Files.Registration);

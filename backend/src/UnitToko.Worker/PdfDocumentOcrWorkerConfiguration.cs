@@ -9,6 +9,7 @@ internal static class PdfDocumentOcrWorkerConfiguration
             throw new InvalidOperationException("Payment PDF processing requires a separate supplementary evidence owner; primary payment evidence must remain an eligible image");
     }
     internal static PdfDocumentOcrRuntimeOptions? ReadSupplierInvoice(IConfiguration configuration) => Read(configuration, "Evidence:SupplierDocumentPdfOcr");
+    internal static PdfDocumentOcrRuntimeOptions? ReadPaymentSupplement(IConfiguration configuration) => Read(configuration, "Evidence:PaymentSupplementPdfOcr");
     private static PdfDocumentOcrRuntimeOptions? Read(IConfiguration configuration, string path) {
         var section = configuration.GetSection(path); if (!section.Exists()) return null;
         Exact(section, ["Root", "StoreId", "TrustedOperatorSids", "ConsumerId", "HostAcceptanceReference", "ModelSelectionReference", "RasterAcceptanceReference", "Raster", "Engine"]);

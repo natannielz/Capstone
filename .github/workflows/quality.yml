@@ -40,7 +40,9 @@ jobs:
               comparison = [base, "HEAD"] if "pull_request" not in event else [base + "...HEAD"]
               files = subprocess.check_output(["git", "diff", "--name-only", "-z", *comparison]).decode().split("\0")
           infrastructure = any(p.startswith(".github/") for p in files)
-          backend = infrastructure or any(p.startswith("backend/") for p in files)
+          # Generated API types must also recheck their server contract; a frontend-only
+          # pass does not prove the generated file matches the published OpenAPI.
+          backend = infrastructure or any(p.startswith(("backend/", "frontend/src/api/generated/")) for p in files)
           frontend = infrastructure or any(p.startswith(("frontend/", "backend/legacy/", "backend/contracts/")) for p in files)
           security = infrastructure or any(p.startswith((
               "backend/src/UnitToko.Platform/Authorization/", "backend/src/UnitToko.Platform/Identity/",

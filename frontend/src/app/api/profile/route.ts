@@ -1,14 +1,7 @@
 import { body,currentActor,errorResponse,json,sessionCookie } from "@legacy/server/http";
-import { database,execute } from "@legacy/server/repository";
+import { database } from "@legacy/server/repository";
 import { DomainError } from "@legacy/domain/model";
 import { hashPassword,timingEqual } from "@legacy/server/security";
-export async function PATCH(request:Request){try{
- const actor=await currentActor(request),input=await body(request);
- if(!input||typeof input!=="object"||Array.isArray(input))throw new DomainError("Format profil tidak valid.");
- if(Object.keys(input).some(k=>!["name","phone","position","address"].includes(k)))throw new DomainError("Hanya nama, nomor kontak, jabatan, dan alamat yang dapat diubah.",403);
- if(input.address!==undefined){if(typeof input.address!=="string"||input.address.trim().length>500)throw new DomainError("Alamat maksimal 500 karakter.");input.address=input.address.trim();}
- return json(await execute(actor,{id:crypto.randomUUID(),type:"profile.update",data:input}));
- }catch(err){return errorResponse(err);}}
 export async function POST(request:Request){try{
  const actor=await currentActor(request),input=await body(request);
  if(typeof input.currentPassword!=="string"||typeof input.newPassword!=="string"||input.newPassword.length<12||input.newPassword.length>128)throw new DomainError("Gunakan kata sandi baru 12–128 karakter.");

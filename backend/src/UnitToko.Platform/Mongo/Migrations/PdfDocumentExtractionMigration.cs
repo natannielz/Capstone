@@ -12,7 +12,7 @@ using UnitToko.Platform.Reporting;
 namespace UnitToko.Platform.Mongo.Migrations;
 
 /// <summary>Prospective PDF OCR owner. Retained image results and approved original PDF proofs are never relabelled.</summary>
-internal sealed class PdfDocumentExtractionMigration(IMongoDatabase database) : IMigrationStep
+internal sealed partial class PdfDocumentExtractionMigration(IMongoDatabase database) : IMigrationStep
 {
     public int Version => 86;
     private static readonly string[] Owners = [PdfDocumentExtractionRecords.Policies, PdfDocumentExtractionRecords.ProcessingReads,

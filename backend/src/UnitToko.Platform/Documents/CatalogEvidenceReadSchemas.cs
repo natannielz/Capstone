@@ -57,7 +57,14 @@ internal static class CatalogEvidenceReadSchemas
 
     internal static async Task RequireStorageAsync(IMongoDatabase database, CancellationToken ct)
     {
-        foreach (var name in new[] { Leases, Audits })
-            await InventoryRepository.RequireStorageAsync(database, name, Validator(name), EvidenceAccessSchemas.Key(name), ct);
+        foreach (var name in new[] { Leases, Audits }) {
+            if (name == Leases)
+                // M87 preserves this entire reviewed union as its exact predecessor.
+                // The compatibility helper recognizes only that named successor;
+                // it never searches arbitrary $or alternatives for a usable branch.
+                await SupplierDocumentEvidenceSchemas.RequireCompatibleStorageAsync(database, name,
+                    Validator(name), EvidenceAccessSchemas.Key(name), ct);
+            else await InventoryRepository.RequireStorageAsync(database, name, Validator(name), EvidenceAccessSchemas.Key(name), ct);
+        }
     }
 }

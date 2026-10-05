@@ -83,6 +83,7 @@ internal sealed partial class EvidenceService
             // and commit all consume its lifetime from this point, including with a frozen UTC clock.
             var leaseStarted = Stopwatch.GetTimestamp();
             var now = clock.UtcNow; deadline = now.AddMilliseconds(eligible.Policy["requestDurationMs"].AsInt64);
+            if (authority.OwnerApprovalUntil is { } approvalUntil && approvalUntil < deadline.Value) deadline = approvalUntil;
             var until = ReadUntil(eligible, deadline.Value);
             var row = new BsonDocument {
                 { "_id", (await ids.NextAsync("evidenceReadLeases", token)).Value }, { "schemaVersion", 1 }, { "versionRowId", bundle.Version["_id"] },
@@ -97,8 +98,9 @@ internal sealed partial class EvidenceService
             await Rows("evidenceReadAudits").InsertOneAsync(tx, ReadAudit(row, "acquired"), cancellationToken: token);
             deadline = until;
             return new EvidenceReadClaim(row["_id"].AsInt64, row["token"].AsString, target, authority.Revision, reservationId, reference, Publication(bundle),
-                new(eligible.Policy["maximumBytes"].AsInt64, TimeSpan.FromMilliseconds(eligible.Policy["verificationDurationMs"].AsInt64), (int)bundle.Reservation["admittedLimits"]["bufferBytes"].AsInt64),
-                Date(row["deadline"]), TimeSpan.FromMilliseconds(eligible.Policy["requestDurationMs"].AsInt64), eligible.Validation["mime"].AsString, until - now, leaseStarted);
+                new(eligible.Policy["maximumBytes"].AsInt64, authority.OwnerApprovalUntil is null ? TimeSpan.FromMilliseconds(eligible.Policy["verificationDurationMs"].AsInt64) :
+                    Shorter(TimeSpan.FromMilliseconds(eligible.Policy["verificationDurationMs"].AsInt64), Date(row["deadline"]) - now), (int)bundle.Reservation["admittedLimits"]["bufferBytes"].AsInt64),
+                Date(row["deadline"]), authority.OwnerApprovalUntil is null ? TimeSpan.FromMilliseconds(eligible.Policy["requestDurationMs"].AsInt64) : Date(row["deadline"]) - now, eligible.Validation["mime"].AsString, until - now, leaseStarted);
         }, ct);
         FinalCheck(deadline, ct); return result;
     });
@@ -132,9 +134,11 @@ internal sealed partial class EvidenceService
                 row["validationHash"] != eligible.Validation["resultHash"] || row["lifecycleRevision"] != eligible.Lifecycle["revision"] ||
                 row["versionRowId"] != bundle.Version["_id"] || row["storeId"] != bundle.Version["storeId"] || row["generation"] != bundle.Version["generation"]) throw Conflict("evidence_read_reference_changed");
             var next = Clone(row); next["state"] = "active"; next["until"] = ReadUntil(eligible, Date(row["deadline"])).UtcDateTime;
+            if (authority.OwnerApprovalUntil is { } approvalUntil && approvalUntil < Date(next["until"])) next["until"] = approvalUntil.UtcDateTime;
             await SaveReadLeaseAsync(tx, row, next, renew ? "renewed" : "activated", token);
             finalDeadline = Date(next["until"]);
-            return new EvidenceReadWindow(finalDeadline.Value, Date(next["deadline"]), TimeSpan.FromMilliseconds(eligible.Policy["leaseDurationMs"].AsInt64));
+            return new EvidenceReadWindow(finalDeadline.Value, Date(next["deadline"]), authority.OwnerApprovalUntil is null ? TimeSpan.FromMilliseconds(eligible.Policy["leaseDurationMs"].AsInt64) :
+                Shorter(TimeSpan.FromMilliseconds(eligible.Policy["leaseDurationMs"].AsInt64), finalDeadline.Value - clock.UtcNow));
         }, ct);
         FinalCheck(finalDeadline, ct); return result;
     });
@@ -145,16 +149,18 @@ internal sealed partial class EvidenceService
     });
     // Only the corresponding owner's immutable association may bind a different original uploader.
     // Upload/admission paths continue to require the exact current actor's provider identity.
+    private static TimeSpan Shorter(TimeSpan first, TimeSpan second) => first <= second ? first : second;
     private static void RequireReadAuthority(Bundle bundle, EvidenceUploadTarget target, ActorContext actor) {
         var payment = target.ReviewUploaderId is not null || target.SubmittedReservationId is not null || target.SubmittedSubmissionId is not null;
         var payout = target.PayoutUploaderId is not null || target.PayoutReservationId is not null || target.PayoutId is not null;
         var disbursement = target.DisbursementUploaderId is not null || target.DisbursementReservationId is not null || target.DisbursementId is not null;
         var inspection = target.InspectionUploaderId is not null || target.InspectionReservationId is not null || target.InspectionId is not null;
         var supplierDocument = target.SupplierDocumentUploaderId is not null || target.SupplierDocumentReservationId is not null || target.SupplierDocumentId is not null;
-        if ((payment ? 1 : 0) + (payout ? 1 : 0) + (disbursement ? 1 : 0) + (inspection ? 1 : 0) + (supplierDocument ? 1 : 0) > 1) throw Invalid("evidence_actor_or_owner_denied");
+        var supplement = target.SupplementUploaderId is not null || target.SupplementReservationId is not null || target.SupplementId is not null;
+        if ((payment ? 1 : 0) + (payout ? 1 : 0) + (disbursement ? 1 : 0) + (inspection ? 1 : 0) + (supplierDocument ? 1 : 0) + (supplement ? 1 : 0) > 1) throw Invalid("evidence_actor_or_owner_denied");
         // A submitted payment also carries its immutable association for the original
         // uploader. Only a separately authorized reader supplies an uploader override.
-        RequireAuthority(bundle, target, actor, target.ReviewUploaderId is null && target.PayoutUploaderId is null && target.DisbursementUploaderId is null && target.InspectionUploaderId is null && target.SupplierDocumentUploaderId is null);
+        RequireAuthority(bundle, target, actor, target.ReviewUploaderId is null && target.PayoutUploaderId is null && target.DisbursementUploaderId is null && target.InspectionUploaderId is null && target.SupplierDocumentUploaderId is null && target.SupplementUploaderId is null);
         if (payment && (target.Target.Kind != EvidenceTargetKind.PaymentDeclaration ||
             target.SubmittedSubmissionId is not > 0 || target.SubmittedReservationId != bundle.Reservation["_id"].AsInt64 ||
             target.ReviewUploaderId is { } uploader && (uploader <= 0 || bundle.Reservation["uploader"]["userId"] != uploader)))
@@ -171,12 +177,18 @@ internal sealed partial class EvidenceService
         if (supplierDocument && (target.SupplierDocumentUploaderId is not > 0 || target.Target.Kind != EvidenceTargetKind.SupplierDocument ||
             target.SupplierDocumentId is not > 0 || target.SupplierDocumentReservationId != bundle.Reservation["_id"].AsInt64 || bundle.Reservation["uploader"]["userId"] != target.SupplierDocumentUploaderId.Value))
             throw Invalid("evidence_actor_or_owner_denied");
+        if (supplement && (target.Target.Kind != EvidenceTargetKind.PaymentSupplement || target.Revision != 2 ||
+            target.SupplementId != target.Target.Id || target.SupplementUploaderId is not > 0 ||
+            target.SupplementReservationId != bundle.Reservation["_id"].AsInt64 ||
+            bundle.Reservation["uploader"]["userId"] != target.SupplementUploaderId.Value ||
+            bundle.Reservation["purpose"] != "PaymentSupplementPdf" || bundle.Reservation["admittedTargetRevision"] != 1L))
+            throw Invalid("evidence_actor_or_owner_denied");
     }
     private Task<BsonDocument> LoadReadLeaseAsync(IClientSessionHandle tx, EvidenceReadClaim claim, CancellationToken ct) =>
         LoadReadLeaseAsync(tx, claim.Id, claim.Token, claim.ReservationId, ct);
     private async Task<BsonDocument> LoadReadLeaseAsync(IClientSessionHandle tx, long id, string token, long reservationId, CancellationToken ct) {
         var row = await Rows("evidenceReadLeases").Find(tx, new BsonDocument("$and", new BsonArray {
-            new BsonDocument { { "_id", id }, { "token", token }, { "reservationId", reservationId } }, SupplierDocumentEvidenceSchemas.Validator("evidenceReadLeases") })).SingleOrDefaultAsync(ct)
+            new BsonDocument { { "_id", id }, { "token", token }, { "reservationId", reservationId } }, PaymentSupplementEvidenceSchemas.Validator("evidenceReadLeases") })).SingleOrDefaultAsync(ct)
             ?? throw Conflict("evidence_read_lease_expired");
         var audit = await Rows("evidenceReadAudits").Find(tx, F.Eq("_id", row["lastAuditId"])).SingleOrDefaultAsync(ct);
         var kind = row["state"] == "provisional" ? "acquired" : row["state"] == "released" ? "released" : row["revision"] == 2L ? "activated" : "renewed";

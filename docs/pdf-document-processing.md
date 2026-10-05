@@ -2,7 +2,7 @@
 
 Dokumen pemasok mempertahankan format yang disimpan saat unggahan. Dokumen pemasok PDF menggunakan jalur unggahan PDF, validasi PDF tersendiri, dan pekerjaan OCR tersendiri. Unggahan gambar, hasil OCR gambar, dan izin keuangan tetap memakai pemilik yang sudah ada.
 
-Bukti pembayaran utama tetap wajib berupa gambar yang memenuhi syarat (P01). PDF tidak dapat menggantikan gambar tersebut. Pemrosesan PDF pembayaran tidak diaktifkan; PDF tambahan memerlukan asosiasi pengajuan tersendiri dan persetujuan bisnis sebelum dihubungkan pada rilis berikutnya.
+Bukti pembayaran utama tetap wajib berupa gambar yang memenuhi syarat (P01). PDF tidak dapat menggantikan gambar tersebut. Integrasi lampiran PDF pembayaran sedang menjalani validasi lokal; jangan mengaktifkannya pada lingkungan nyata sebelum penerimaan selesai. Lampiran menggunakan identitas, riwayat, reservasi, pin, dan pekerjaan tersendiri yang terikat pada pengajuan gambar utama yang tepat.
 
 Worker membaca dokumen asli yang tepat melalui pegangan berkas privat yang telah diverifikasi. PDF dirender dengan runtime PDFium yang dipin; setiap halaman diproses dengan runtime Tesseract yang sama dengan OCR gambar. Pin kedua runtime ditahan selama seluruh komputasi. Hasil menyimpan metadata halaman, teks, koordinat halaman asli termasuk rotasi, prapemrosesan, kandidat bidang per halaman, dan alasan peninjauan. Gambar halaman tidak dipublikasikan sebagai bukti baru.
 
@@ -10,7 +10,7 @@ Tidak ada nilai pemenang otomatis antar halaman. Nilai bertentangan atau tidak d
 
 ## Konfigurasi worker
 
-Bagian opsional `Evidence:SupplierDocumentPdfOcr` mengaktifkan runtime khusus dokumen pemasok. Konfigurasi tidak menebak format atau sumber dari MIME, nama berkas, atau pekerjaan gambar. Bagian yang tidak diisi tidak mengklaim pekerjaan PDF pemasok. Konfigurasi `Evidence:PaymentPdfOcr` ditolak saat startup worker karena belum ada pemilik bukti tambahan pembayaran. Menjalankan migrasi tidak mengaktifkan worker.
+Bagian opsional `Evidence:SupplierDocumentPdfOcr` mengaktifkan runtime khusus dokumen pemasok. Konfigurasi tidak menebak format atau sumber dari MIME, nama berkas, atau pekerjaan gambar. Bagian yang tidak diisi tidak mengklaim pekerjaan PDF pemasok. Lampiran pembayaran memiliki bagian terpisah `Evidence:PaymentSupplementPdfOcr` dengan kunci dan pin runtime yang sama di bawah ini; hanya pekerjaan `payment.supplement-document-ocr.requested` dapat memakai jalur tersebut. Konfigurasi lama `Evidence:PaymentPdfOcr` tetap ditolak saat startup worker. Menjalankan migrasi tidak mengaktifkan worker.
 
 Bagian pemasok memerlukan persis:
 
@@ -22,6 +22,8 @@ Bagian pemasok memerlukan persis:
 `Files` berupa daftar berurutan dengan `Path` dan `Sha256`. `Engine:Limits` memerlukan `MaximumBytes`, `MaximumWidth`, `MaximumHeight`, `MaximumPixels`. Nilai atau kunci tambahan dan daftar pin berlubang ditolak. Jalur privat dan hash runtime harus berasal dari inventaris runtime yang telah diterima operator; dokumen ini tidak memberikan inventaris atau persetujuan produksi.
 
 Konfigurasi worker saja belum memberikan izin pemrosesan. Pemilik `pdfDocumentProcessingPolicies` harus berisi persetujuan terpisah yang masih aktif untuk konsumen, sumber, store, pipeline, dan provenance raster/OCR yang tepat, beserta ketiga referensi persetujuan. Persetujuan terbatas waktunya dan tidak dibuat otomatis oleh migrasi atau worker. Persetujuan penyimpanan, scanner dan validasi PDF, serta kebijakan baca asli juga tetap diperlukan.
+
+Untuk lampiran pembayaran, kebijakan D06 pada `paymentSupplementPolicies` juga wajib disetujui secara eksplisit oleh Operations, Finance, dan pemilik data untuk unit organisasi/toko/channel yang tepat. Masa persetujuan paling lama 90 hari dan batas lampiran harus 1–64 sesuai keputusan operator. Tidak ada persetujuan bawaan. Pengunggah, penerima reservasi, worker, dan pemeriksa tidak dapat mengubah pengajuan gambar utama atau memakai ulang buktinya sebagai PDF. Pemeriksa tetap memerlukan izin pada lingkup saat ini dan orang yang independen; OCR lampiran tidak mengisi koreksi keuangan secara otomatis. Berakhirnya D06 menutup kemampuan baca asli/OCR saat ini, tetapi pemulihan metadata operasi tetap tersedia untuk pemilik yang masih berwenang.
 
 ## Batas integritas
 

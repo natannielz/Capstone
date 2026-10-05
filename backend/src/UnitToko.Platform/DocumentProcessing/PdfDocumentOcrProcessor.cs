@@ -28,6 +28,7 @@ internal sealed class PdfDocumentOcrProcessor
     private readonly OutboxStore queue;
     private readonly PdfDocumentExtractionRecords records;
     private readonly ISupplierDocumentOcrSource? supplier;
+    private readonly Billing.IPaymentSupplementOcrSource? paymentSupplement;
     internal string SourceKind { get; }
     internal string PipelineId { get; }
     internal PdfRasterProvenance RasterProvenance { get; }
@@ -42,6 +43,7 @@ internal sealed class PdfDocumentOcrProcessor
         if (!Reference(consumer, 128) || !Reference(hostReference, 256) || !Reference(modelReference, 256) || !Reference(rasterReference, 256))
             throw new ArgumentException("Explicit whole-PDF processor approvals are required");
         var purpose = sourceKind switch { "SupplierInvoice" => ExtractionPurpose.SupplierInvoice,
+            Billing.PaymentSupplementBson.SourceKind => ExtractionPurpose.Payment,
             "Payment" => throw new NotSupportedException("Payment PDF processing requires a separate supplementary evidence owner; primary payment evidence must remain an eligible image"),
             _ => throw new ArgumentException("Unsupported PDF source namespace", nameof(sourceKind)) };
         this.database = database; this.unit = unit; this.ids = ids; this.clock = clock; this.registration = registration;
@@ -50,6 +52,8 @@ internal sealed class PdfDocumentOcrProcessor
         PipelineId = PdfDocumentExtractionRecords.PipelineId(sourceKind, RasterProvenance, engine.OcrProvenance);
         ClaimPolicy = new([PdfDocumentExtractionRecords.Kind(sourceKind)], 5, TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(1));
         evidence = new(database, unit, ids, clock, registration); queue = new(database, clock); records = new(database);
+        if (sourceKind == Billing.PaymentSupplementBson.SourceKind)
+            paymentSupplement = new Billing.PaymentSupplementOcrSource(database, new Billing.PaymentSupplementEvidenceHistory(database, evidence));
         {
             var catalog = new Catalog.CatalogAuthoringService(database, unit, ids, clock);
             var suppliers = new Procurement.SupplierService(database, unit, ids, clock, catalog);
@@ -200,10 +204,16 @@ internal sealed class PdfDocumentOcrProcessor
         }
     }
 
-    private ExtractionPurpose Purpose => ExtractionPurpose.SupplierInvoice;
+    private ExtractionPurpose Purpose => PdfDocumentExtractionRecords.PurposeForSource(SourceKind);
     private async Task<Original> OriginalAsync(IClientSessionHandle tx, BsonDocument live, DateTimeOffset until, CancellationToken ct) {
-        var value = await evidence.SupplierPdfDocumentProcessingOriginalAsync(tx, supplier!, live, until, ct);
-        var original = new Original(value.Source.Evidence, value.Publication, value.Budget, value.Binding, value.Until);
+        Original original;
+        if (SourceKind == Billing.PaymentSupplementBson.SourceKind) {
+            var value = await evidence.PaymentSupplementPdfDocumentProcessingOriginalAsync(tx, paymentSupplement!, live, until, ct);
+            original = new(value.Source.PdfEvidence, value.Publication, value.Budget, value.Binding, value.Until);
+        } else {
+            var value = await evidence.SupplierPdfDocumentProcessingOriginalAsync(tx, supplier!, live, until, ct);
+            original = new(value.Source.Evidence, value.Publication, value.Budget, value.Binding, value.Until);
+        }
         if (original.Publication.Content.Length is < 1 or > PdfDocumentExtractionContract.MaximumOriginalBytes ||
             !live["payload"].Equals(PdfDocumentExtractionRecords.Payload(SourceKind, original.Binding, original.Publication)) ||
             live["sourceKey"] != PdfDocumentExtractionRecords.SourceKey(SourceKind, original.Binding["submissionId"].AsInt64))
@@ -217,7 +227,7 @@ internal sealed class PdfDocumentOcrProcessor
         RequireExisting(read, policy, original);
     }
     private void RequireExisting(BsonDocument row, BsonDocument policy, Original original) {
-        if (row["sourceKind"] != SourceKind || row["purpose"] != SourceKind || row["inputMime"] != PdfDocumentExtractionContract.InputMime ||
+        if (row["sourceKind"] != SourceKind || row["purpose"] != Purpose.ToString() || row["inputMime"] != PdfDocumentExtractionContract.InputMime ||
             row["consumerId"] != consumer || row["pipelineId"] != PipelineId || row["policyId"] != policy["_id"] || row["policyRevision"] != policy["revision"] ||
             !row["binding"].Equals(original.Binding) || !row["original"].Equals(PdfDocumentExtractionRecords.Original(original.Publication)) ||
             !row["rasterProvenance"].Equals(PdfDocumentExtractionRecords.RasterProvenance(RasterProvenance)) ||
@@ -227,12 +237,12 @@ internal sealed class PdfDocumentOcrProcessor
         var now = clock.UtcNow; if (now >= until || until - now > TimeSpan.FromMinutes(1)) throw new ProcessingUnavailable("pdf_document_deadline");
         return new() { { "_id", id }, { "schemaVersion", 1 }, { "outboxId", live["_id"] }, { "consumerId", consumer }, { "pipelineId", PipelineId },
             { "policyId", policy["_id"] }, { "policyRevision", policy["revision"] }, { "claimToken", live["leaseToken"] }, { "claimAttempt", live["attempts"] },
-            { "createdAt", now.UtcDateTime }, { "until", until.UtcDateTime }, { "sourceKind", SourceKind }, { "purpose", SourceKind },
+            { "createdAt", now.UtcDateTime }, { "until", until.UtcDateTime }, { "sourceKind", SourceKind }, { "purpose", Purpose.ToString() },
             { "inputMime", PdfDocumentExtractionContract.InputMime }, { "binding", original.Binding }, { "original", PdfDocumentExtractionRecords.Original(original.Publication) },
             { "rasterProvenance", PdfDocumentExtractionRecords.RasterProvenance(RasterProvenance) }, { "ocrProvenance", PdfDocumentExtractionRecords.OcrProvenance(OcrProvenance) } };
     }
     private BsonDocument PolicyFilter() => PdfDocumentExtractionRecords.Shape(PdfDocumentExtractionRecords.Policies, new() {
-        { "consumerId", consumer }, { "storeId", registration.StoreId }, { "pipelineId", PipelineId }, { "sourceKind", SourceKind }, { "purpose", SourceKind },
+        { "consumerId", consumer }, { "storeId", registration.StoreId }, { "pipelineId", PipelineId }, { "sourceKind", SourceKind }, { "purpose", Purpose.ToString() },
         { "inputMime", PdfDocumentExtractionContract.InputMime }, { "rasterProvenance", PdfDocumentExtractionRecords.RasterProvenance(RasterProvenance) },
         { "ocrProvenance", PdfDocumentExtractionRecords.OcrProvenance(OcrProvenance) }, { "active", true },
         { "approvedAt", new BsonDocument("$lte", clock.UtcNow.UtcDateTime) }, { "expiresAt", new BsonDocument("$gt", clock.UtcNow.UtcDateTime) },

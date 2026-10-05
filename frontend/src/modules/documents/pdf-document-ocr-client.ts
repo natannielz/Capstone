@@ -22,7 +22,7 @@ const box = z.tuple([fraction, fraction, fraction, fraction]).refine(value => sc
   scaled(value[0]) + scaled(value[2]) <= unit && scaled(value[1]) + scaled(value[3]) <= unit);
 const evidence = z.object({ id: integer, version: integer, sha256: hash }).strict();
 const source = z.object({ actorId: integer, sourceId: integer, sourceRevision: integer, submissionId: integer,
-  sourceKind: z.enum(['Payment', 'SupplierInvoice']), evidence }).strict();
+  sourceKind: z.enum(['Payment', 'PaymentSupplement', 'SupplierInvoice']), evidence }).strict();
 const provenance = z.object({ engineVersion: text(128), modelVersion: text(128), modelSha256: hash, runtimeSha256: hash, preprocessingVersion: text(128) }).strict();
 const rasterProvenance = z.object({ pipeline: text(128), wrapper: text(128), pdfium: text(128), wheelSha256: hash, pillow: text(32), runtimeSha256: hash }).strict();
 const near = (first: number, second: number) => Math.abs(first - second) <= .001;
@@ -70,7 +70,7 @@ const safeFailures = ['ocr_unavailable', 'ocr_timeout', 'ocr_invalid_output', 'o
   'pdf_raster_source_mismatch', 'pdf_raster_source_limit', 'pdf_raster_malformed_pdf', 'pdf_raster_encrypted_pdf', 'pdf_raster_unsupported_forms', 'pdf_raster_unsupported_attachments',
   'pdf_raster_unsupported_javascript', 'pdf_raster_page_limit', 'pdf_raster_geometry_limit', 'pdf_raster_total_pixel_limit', 'pdf_raster_output_limit', 'pdf_raster_deadline',
   'pdf_raster_render_failed', 'pdf_raster_unavailable', 'pdf_raster_configuration', 'pdf_raster_runtime_pin', 'pdf_raster_process_failed', 'pdf_raster_invalid_output'] as const;
-const viewSchema = z.object({ sourceId: integer, sourceRevision: integer, submissionId: integer, sourceKind: z.enum(['Payment', 'SupplierInvoice']), evidence,
+const viewSchema = z.object({ sourceId: integer, sourceRevision: integer, submissionId: integer, sourceKind: z.enum(['Payment', 'PaymentSupplement', 'SupplierInvoice']), evidence,
   state: z.enum(['queued', 'running', 'retry', 'dead', 'succeeded']), result: result.nullable(), failureCode: z.enum(safeFailures).nullable() }).strict()
   .refine(value => (value.state === 'succeeded') === (value.result !== null) && (['retry', 'dead'].includes(value.state) || value.failureCode === null));
 
@@ -102,8 +102,8 @@ export function parsePdfDocumentOcr(value: unknown, ownerInput: PdfDocumentOcrOw
   if (view.sourceId !== owner.sourceId || view.sourceRevision !== owner.sourceRevision || view.submissionId !== owner.submissionId ||
     view.sourceKind !== owner.sourceKind || !equal(view.evidence, owner.evidence)) return invalid();
   if (!view.result) return view;
-  const extraction = view.result, names = owner.sourceKind === 'Payment' ? paymentPdfFields : supplierPdfFields;
-  if (extraction.purpose !== owner.sourceKind || extraction.pages.reduce((sum, item) => sum + item.raster.width * item.raster.height, 0) > 25_000_000 ||
+  const extraction = view.result, names = owner.sourceKind === 'SupplierInvoice' ? supplierPdfFields : paymentPdfFields;
+  if (extraction.purpose !== (owner.sourceKind === 'PaymentSupplement' ? 'Payment' : owner.sourceKind) || extraction.pages.reduce((sum, item) => sum + item.raster.width * item.raster.height, 0) > 25_000_000 ||
     extraction.pages.reduce((sum, item) => sum + item.raster.length, 0) > 12 * 1024 * 1024 ||
     extraction.pages.reduce((sum, item) => sum + item.lines.reduce((count, item) => count + item.text.length, 0), 0) > 65536) return invalid();
   for (const [index, item] of extraction.pages.entries()) {

@@ -2,7 +2,7 @@
 
 import { useId, useState, type ReactNode } from 'react';
 import common from '@/modules/administration/access.module.css';
-import styles from './pdf-document-ocr.module.css';
+import styles from '@/modules/documents/pdf-document-ocr.module.css';
 import { parsePdfDocumentOcr, pdfDocumentOcrOwnerKey, selectPdfDocumentObservation,
   type PdfDocumentOcrCandidate, type PdfDocumentOcrOwner, type PdfDocumentOcrPage,
   type PdfDocumentOcrView, type PdfDocumentObservationSelection } from './pdf-document-ocr-client';

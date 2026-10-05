@@ -1,4 +1,6 @@
 import { pdfReservationKeyOwner } from '../documents/pdf-evidence-client';
+import { isSupplementOperation, supplementKeyBinding } from '../billing/payment-pdf-supplement-recovery';
+import { parseSupplementRecoveryResult, type PaymentSupplement, type PaymentSupplementReservation } from '../billing/payment-pdf-supplement-client';
 import { parseSupplierPayableResult, type SupplierPayableResult } from '../procurement/procurement-supplier-payable-client';
 import { requestResult, type BranchRequestResult } from '../ordering/branch-request-state';
 import { parseSourceReconciliationResult, type SourceReconciliationResult } from '../inventory/stock-source-reconciliation-client';
@@ -63,10 +65,11 @@ const prefix = "unit-toko:pending:v1:";
 const keyPattern = /^[A-Za-z0-9._:-]{1,128}$/;
 const operationPattern = /^(?:procurement\.qualityacceptance\.(?:propose|decide)|procurement\.advancereturn\.(?:propose|decide)|procurement\.payable\.(?:propose|decide)|stock\.source\.reconciliation\.(?:propose|decide)|procurement\.stockvaluation\.(?:propose|decide)|procurement\.stockreceipt\.receive|procurement\.supplierclaim\.(?:request|approve|reject)|procurement\.supplierdocument\.(?:draft|submit|match)|evidence\.supplier-document-image\.reserve|procurement\.inspection\.(?:draft|submit)|evidence\.procurement-unboxing-video\.reserve|procurement\.receiving\.(?:notice|intake)|procurement\.settlement\.verify|procurement\.disbursement\.(?:draft|record)|evidence\.procurement-disbursement-image\.reserve|procurement\.supplierbank\.(?:propose|observe|approve|reject)|procurement\.funding\.(?:request|approve|reject)|procurement\.purchase\.order\.(?:propose|approve|reject)|procurement\.supplier\.(?:propose|observe|approve|reject)|procurement\.request\.(?:submit|approve|reject)|accounting\.book\.(?:propose|approve|reject)|billing\.refund\.payout\.(?:draft|record|verify)|evidence\.refund-payout-image\.reserve|billing\.return\.financial\.approve|billing\.return\.entitlement\.request|billing\.bank-receipt\.confirm|billing\.bank-statement\.stage|billing\.receiving-account\.(?:propose|observe|approve|reject|withdraw)|billing\.payment\.(?:draft\.save|replacement\.create|submit|verify|allocate|allocation\.correct|review\.(?:correct|manual|manage))|evidence\.payment-image\.reserve|billing\.invoice\.issue|(access|organization)\.[a-z.]{1,100}|identity\.(?:invitation\.(?:propose|approve|rejected|withdrawn|revoked)|recovery\.request)|person\.review\.(?:propose|approve|reject|withdraw)|fulfillment\.(?:case\.(?:request|decide|return_receive|return_inspect|resolution_request)|preparation\.save|shipment\.dispatch|surat-jalan\.issue|delivery-attempt\.record|receipt-proof\.issue|receipt\.(?:challenge\.issue|confirm))|ordering\.(?:spending\.policy\.(?:propose|approve|reject)|draft\.save|order\.(?:submit|cancel|spending\.(?:approve|reject)|store\.(?:accept|reject)))|catalog\.(?:price\.(?:propose|approve|reject|withdraw)|category\.save|family\.(?:create|edit)|sku\.(?:create|revise|replace|retire|publish))|inventory\.stock-count\.record|stock\.source\.(?:suspend|(?:(?:revision|alias|policy)\.)?(?:propose|approve|reject|withdraw)))$(?![\s\S])/;
 const storageKey = (entry: OperationReference) => `${prefix}${entry.actorId}:${entry.operation}:${entry.key}`;
-const recognizedOperation = (operation: string) => ['evidence.payment-pdf.reserve', 'evidence.supplier-document-pdf.reserve'].includes(operation) || operationPattern.test(operation) || /^ordering\.branchrequest\.(?:submit|decide)$(?![\s\S])/u.test(operation) ||
+const recognizedOperation = (operation: string) => isSupplementOperation(operation) || ['evidence.payment-pdf.reserve', 'evidence.supplier-document-pdf.reserve'].includes(operation) || operationPattern.test(operation) || /^ordering\.branchrequest\.(?:submit|decide)$(?![\s\S])/u.test(operation) ||
   operation === catalogPhotoOperation || operation === catalogPhotoReserveOperation || operation === catalogPhotoRevalidationOperation || operation === accountContactOperation;
 function validPhotoKey(operation: string, key: string, actorId: string): boolean {
   try {
+    if (isSupplementOperation(operation)) supplementKeyBinding(operation, key, actorId);
     if (operation === 'evidence.payment-pdf.reserve' || operation === 'evidence.supplier-document-pdf.reserve') pdfReservationKeyOwner(key, actorId, operation === 'evidence.payment-pdf.reserve' ? 'Payment' : 'SupplierInvoice');
     if (operation === catalogPhotoOperation) catalogPhotoKeySku(key);
     else if (operation === catalogPhotoReserveOperation) catalogPhotoReservationOwner(key);
@@ -185,6 +188,7 @@ export type LegacyRecoveryAdapter = Readonly<{
 
 /** Supply this only from the owning client screen. A missing receipt is never a failed or closed request. */
 export type OperationRecoveryAdapters = Readonly<{
+  'billing.payment.supplement'?: Readonly<{lookup: (entry: OperationReference) => Promise<Readonly<{state: 'committed'; result: PaymentSupplement | PaymentSupplementReservation}> | null>}>;
   'evidence.payment-pdf'?: Readonly<{lookup: (entry: OperationReference) => Promise<Readonly<{state: 'committed'; result: PaymentReservation}> | null>}>;
   'evidence.supplier-document-pdf'?: Readonly<{lookup: (entry: OperationReference) => Promise<Readonly<{state: 'committed'; result: PaymentReservation}> | null>}>;
   "account.contact"?: Readonly<{ lookup: (entry: OperationReference) => Promise<Readonly<{ state: "committed"; result: AccountContactResult }> | null> }>;
@@ -333,6 +337,8 @@ function recoveryNamespace(operation: string): "catalog.photo" | "evidence.catal
 
 export function operationRecoveryCapabilities(operation: string, adapters: OperationRecoveryAdapters = {}):
   Readonly<{ canCheck: boolean; canClose: boolean; unavailable: "adapter" | "operation" | null }> {
+  if (isSupplementOperation(operation)) return typeof adapters['billing.payment.supplement']?.lookup === 'function'
+    ? {canCheck: true, canClose: false, unavailable: null} : {canCheck: false, canClose: false, unavailable: 'adapter'};
   if (operation === 'evidence.payment-pdf.reserve' || operation === 'evidence.supplier-document-pdf.reserve') {
     const adapter = adapters[operation === 'evidence.payment-pdf.reserve' ? 'evidence.payment-pdf' : 'evidence.supplier-document-pdf'];
     return typeof adapter?.lookup === 'function' ? {canCheck: true, canClose: false, unavailable: null} : {canCheck: false, canClose: false, unavailable: 'adapter'};
@@ -356,6 +362,19 @@ export function operationRecoveryCapabilities(operation: string, adapters: Opera
 /** Reconcile one immutable reference; never rebuild or retry its original command from persisted metadata. */
 export async function reconcileOperationRecovery(entry: OperationReference, journal: OperationJournal,
   legacy: LegacyRecoveryAdapter, adapters: OperationRecoveryAdapters = {}, closeReason?: string, isCurrent: () => boolean = () => true): Promise<RecoveryOutcome> {
+  if (isSupplementOperation(entry.operation)) {
+    if (!validEntry(entry)) throw new AccessFailure(400, 'recovery_reference_invalid');
+    if (closeReason !== undefined) throw new AccessFailure(400, 'recovery_close_unsupported');
+    const requireCurrent = () => {if (!isCurrent()) throw new AccessFailure(409, 'recovery_request_stale');}; requireCurrent();
+    const operation = entry.operation, reference = Object.freeze({...entry}); supplementKeyBinding(operation, reference.key, reference.actorId);
+    const adapter = adapters['billing.payment.supplement'];
+    if (typeof adapter?.lookup !== 'function') throw new AccessFailure(503, 'recovery_adapter_unavailable');
+    const recovered = await adapter.lookup(reference); requireCurrent(); if (recovered === null) return {state: 'unconfirmed'};
+    if (!recovered || recovered.state !== 'committed' || Object.keys(recovered).sort().join(',') !== 'result,state') throw new AccessFailure(502, 'recovery_receipt_invalid');
+    const result = parseSupplementRecoveryResult(recovered.result, operation, reference.key, reference.actorId); requireCurrent();
+    try {journal.confirmed(reference);} catch {throw new AccessFailure(400, 'recovery_cleanup_failed');}
+    return {state: 'committed', result};
+  }
   if (entry.operation === 'evidence.payment-pdf.reserve' || entry.operation === 'evidence.supplier-document-pdf.reserve') {
     if (!validEntry(entry)) throw new AccessFailure(400, 'recovery_reference_invalid');
     if (closeReason !== undefined) throw new AccessFailure(400, 'recovery_close_unsupported');
