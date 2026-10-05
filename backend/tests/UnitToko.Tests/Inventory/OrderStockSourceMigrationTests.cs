@@ -24,17 +24,19 @@ public sealed class OrderStockSourceMigrationTests(MongoFixture fixture)
         Assert.Equal(0L, await data.Rows("inventoryPools").CountDocumentsAsync(new BsonDocument()));
         var migrations = new CollectionMigrations(data.Data.Database, data.Data.Clock);
         Assert.False(await migrations.IsCurrentAsync()); await migrations.ApplyAsync(); Assert.True(await migrations.IsCurrentAsync());
-        var applied = await HistoryAsync(data); Assert.Equal(90, applied.Count);
+        var applied = await HistoryAsync(data); Assert.Equal(91, applied.Count);
         Assert.Equal(predecessor, new BsonArray(applied.Take(89))); Assert.Equal("applied", applied[89]["state"].AsString);
+        Assert.Equal(91L, applied[90]["_id"].ToInt64()); Assert.Equal("applied", applied[90]["state"].AsString);
         var after = await SnapshotAsync(data);
-        Assert.Equal(before.ElementCount + 2, after.ElementCount);
+        Assert.Equal(before.ElementCount + OrderStockSourceSchemas.Collections.Length + ReconciliationStockSourceSchemas.Collections.Length, after.ElementCount);
         foreach (var name in before.Names) Assert.Equal(before[name], after[name]);
-        foreach (var name in OrderStockSourceSchemas.Collections)
+        foreach (var name in OrderStockSourceSchemas.Collections.Concat(ReconciliationStockSourceSchemas.Collections))
         {
             Assert.Equal(0L, await data.Rows(name).CountDocumentsAsync(new BsonDocument()));
             Assert.False(await data.Rows("idCounters").Find(new BsonDocument("_id", name)).AnyAsync());
         }
         await OrderStockSourceStorage.RequireAsync(data.Data.Database, default);
+        await UnitToko.Platform.Inventory.ReconciliationStockSourceStorage.RequireAsync(data.Data.Database, default);
         await migrations.ApplyAsync();
         Assert.Equal(applied, await HistoryAsync(data)); Assert.Equal(after, await SnapshotAsync(data));
         // A compatible actual proposal is preserved; absence is never turned into an approved pool or producer revision.
@@ -109,6 +111,26 @@ public sealed class OrderStockSourceMigrationTests(MongoFixture fixture)
         // Destructive rehearsal is confined to this fixture's freshly created random database.
         Assert.Matches(@"\Aunittoko_test_[0-9a-f]{32}_[0-9a-f]{8}\z", data.Data.Database.DatabaseNamespace.DatabaseName);
         var history = await HistoryAsync(data);
+        Assert.True(MigrationHistory.IsValid(history.Select(value => value.AsBsonDocument).ToArray(), 91));
+        Assert.Equal(91, history.Count); Assert.All(history, row => Assert.Equal("applied", row["state"].AsString));
+        // The later producer suffix can be removed only while its genuine owners and allocators
+        // are exactly empty. Never erase a setup-created head or immutable transition to rehearse90.
+        foreach (var name in ReconciliationStockSourceSchemas.Collections)
+        {
+            var definition = await AccountContactStorage.DefinitionAsync(data.Data.Database, name, default); Assert.NotNull(definition);
+            Assert.Equal(ReconciliationStockSourceSchemas.Validator(name), definition["options"]["validator"].AsBsonDocument);
+            Assert.Equal("strict", definition["options"]["validationLevel"].AsString);
+            Assert.Equal("error", definition["options"]["validationAction"].AsString);
+            Assert.Equal(0L, await data.Rows(name).CountDocumentsAsync(new BsonDocument()));
+            Assert.False(await data.Rows("idCounters").Find(new BsonDocument("_id", name)).AnyAsync());
+            var indexes = await (await data.Rows(name).Indexes.ListAsync()).ToListAsync();
+            Assert.True(OrderStockSourceStorage.SafeIndexes(indexes, ReconciliationStockSourceSchemas.Keys(name)));
+            Assert.Equal(1 + ReconciliationStockSourceSchemas.Keys(name).Length, indexes.Count);
+        }
+        Assert.Equal(1L, (await data.Rows("schemaMigrations").DeleteOneAsync(history[90].AsBsonDocument)).DeletedCount);
+        foreach (var name in ReconciliationStockSourceSchemas.Collections) await data.Data.Database.DropCollectionAsync(name);
+        Assert.Equal(new BsonArray(history.Take(90)), await HistoryAsync(data));
+        history = await HistoryAsync(data);
         Assert.True(MigrationHistory.IsValid(history.Select(value => value.AsBsonDocument).ToArray(), 90));
         Assert.Equal(90, history.Count); Assert.All(history, row => Assert.Equal("applied", row["state"].AsString));
         foreach (var name in OrderStockSourceSchemas.Collections)
@@ -141,7 +163,7 @@ public sealed class OrderStockSourceMigrationTests(MongoFixture fixture)
             var name = definition["name"].AsString;
             var indexes = (await (await data.Rows(name).Indexes.ListAsync()).ToListAsync()).OrderBy(row => row["name"].AsString, StringComparer.Ordinal);
             var state = new BsonDocument { { "definition", definition.DeepClone() }, { "indexes", new BsonArray(indexes) } };
-            // Only actual deployment history is asserted separately (89 exact predecessors + genuine applying/applied90).
+            // Actual deployment history is asserted separately: exact89 predecessors and real90/91 markers.
             if (name != "schemaMigrations") state.Add("rows", new BsonArray(await data.Rows(name).Find(new BsonDocument()).Sort(new BsonDocument("_id", 1)).ToListAsync()));
             result.Add(name, state);
         }

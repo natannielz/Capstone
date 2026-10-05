@@ -64,10 +64,11 @@ public sealed partial class StockSourceSetupService
                     { "correlationId", metadata.CorrelationId }, { "requestKey", metadata.IdempotencyKey },
                     { "bodyHash", AuthorizationStore.CommandHash(new { input, binding }, metadata.Reason) } };
                 row.Add("snapshotHash", B.Hash(row));
-                await FenceRevisionPoolAsync(tx, context.Source.Pool, false, token);
+                var poolWrite = await ReconciliationStockSourcePoolWrite.FenceAsync(database, tx, context.Source.Pool, token);
                 await Rows(B.Proposals).InsertOneAsync(tx, row, cancellationToken: token);
                 await Rows("auditEvents").InsertOneAsync(tx, B.Audit(row, B.ProposeOperation), cancellationToken: token);
                 await Rows("outboxEvents").InsertOneAsync(tx, B.Outbox(row, B.ProposeOperation), cancellationToken: token);
+                await new ReconciliationStockSourceProducer(database, ids, clock).RecordAsync(tx, "proposal", id, poolWrite, token);
                 wrote = true;
                 return B.Result(row);
             }, ct, recoveryOnly, () => { if (wrote) RequireObservationTime(input.Observation, timingBaseline ?? throw B.Unavailable(), Now()); });
@@ -223,10 +224,11 @@ public sealed partial class StockSourceSetupService
                 row.Add("snapshotHash", B.Hash(row));
                 // Both fresh decisions close an outstanding obligation. Fence the current canonical
                 // pool even when rejecting an old observation, without changing quantities or authority.
-                await FenceRevisionPoolAsync(tx, context.Source.Pool, false, token);
+                var poolWrite = await ReconciliationStockSourcePoolWrite.FenceAsync(database, tx, context.Source.Pool, token);
                 await Rows(B.Decisions).InsertOneAsync(tx, row, cancellationToken: token);
                 await Rows("auditEvents").InsertOneAsync(tx, B.Audit(row, B.DecideOperation), cancellationToken: token);
                 await Rows("outboxEvents").InsertOneAsync(tx, B.Outbox(row, B.DecideOperation), cancellationToken: token);
+                await new ReconciliationStockSourceProducer(database, ids, clock).RecordAsync(tx, "decision", id, poolWrite, token);
                 wrote = true;
                 return B.Result(row);
             }, ct, recoveryOnly, () => {

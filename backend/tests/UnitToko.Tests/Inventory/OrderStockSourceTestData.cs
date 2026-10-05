@@ -39,7 +39,7 @@ internal sealed class OrderStockSourceTestData(StoreTestData data, MongoFixture 
         var data = await StoreTestData.CreateAsync(fixture);
         var value = new OrderStockSourceTestData(data, fixture);
         try {
-            Assert.Equal(90, CollectionMigrations.CurrentVersion);
+            Assert.Equal(91, CollectionMigrations.CurrentVersion);
             Assert.True(await new CollectionMigrations(data.Database, data.Clock).IsCurrentAsync());
             value.Maker = await data.AddActorAsync(1000, Location.ToScope(), Permissions.StockSourcePropose, Permissions.StockSourceRead);
             value.Reviewer = await data.AddActorAsync(2000, Location.ToScope(), Permissions.StockSourceApprove, Permissions.StockSourceRead);
