@@ -138,6 +138,7 @@ public sealed partial class OrderSubmissionService
             await Rows("outboxEvents").InsertOneAsync(tx, new BsonDocument { { "_id", ObjectId.GenerateNewId() }, { "schemaVersion", 1 },
                 { "sourceKey", "ordering.order.submitted:" + id }, { "kind", "ordering.order.submitted" }, { "payload", B.Result(row) },
                 { "createdAt", now.UtcDateTime }, { "dueAt", now.UtcDateTime }, { "status", "pending" }, { "attempts", 0 } }, cancellationToken: token);
+            await RecordStockSourceTransitionAsync(tx, "submission", id, token);
             return B.Result(row);
         }, ct, async (snapshot, tx, token) => {
             var receipt = await ReceiptAsync(actor, metadata.IdempotencyKey, tx, token) ?? throw Invalid();
@@ -196,9 +197,9 @@ public sealed partial class OrderSubmissionService
     }
     private Task<BsonDocument?> ReceiptAsync(ActorContext actor, string key, IClientSessionHandle tx, CancellationToken ct) =>
         Rows("idempotencyRecords").Find(tx, F.Eq("actorId", actor.UserId) & F.Eq("operation", B.Operation) & F.Eq("key", key)).SingleOrDefaultAsync(ct)!;
-    private async Task<BsonDocument> GraphAsync(IClientSessionHandle tx, ActorContext actor, long id, CancellationToken ct, bool requireOwner = true) {
+    private async Task<BsonDocument> GraphAsync(IClientSessionHandle tx, ActorContext? actor, long id, CancellationToken ct, bool requireOwner = true) {
         var filter = F.Eq("_id", id) & OrderSubmissionSchemas.Validator(B.Orders);
-        if (requireOwner) filter &= F.Eq("createdBy", actor.UserId);
+        if (requireOwner) filter &= F.Eq("createdBy", (actor ?? throw Invalid()).UserId);
         var row = await Rows(B.Orders).Find(tx, filter).SingleOrDefaultAsync(ct) ?? throw Invalid();
         var input = OrderDraftBson.Input(row["input"].AsBsonDocument); var quote = B.Quote(row["quote"].AsBsonDocument);
         _ = OrderFulfillmentPolicy.Split(quote);

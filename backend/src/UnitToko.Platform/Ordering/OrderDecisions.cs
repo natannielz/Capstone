@@ -230,6 +230,7 @@ public sealed partial class OrderSubmissionService
             await Rows("outboxEvents").InsertOneAsync(tx, new BsonDocument { { "_id", ObjectId.GenerateNewId() }, { "schemaVersion", 1 },
                 { "sourceKey", "ordering.order.decision:" + id }, { "kind", "ordering.order.decided" }, { "payload", DecisionResult(row) },
                 { "createdAt", now.UtcDateTime }, { "dueAt", now.UtcDateTime }, { "status", "pending" }, { "attempts", 0 } }, cancellationToken: token);
+            await RecordStockSourceTransitionAsync(tx, "decision", id, token);
             return DecisionResult(row);
         }, ct, async (snapshot, tx, token) => {
             var current = await ReviewContextAsync(actor, snapshot, tx, orderId, suborderId, stage, token);

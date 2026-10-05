@@ -221,8 +221,9 @@ public sealed partial class StockSourceSetupService
                     { "correlationId", metadata.CorrelationId }, { "requestKey", metadata.IdempotencyKey },
                     { "bodyHash", AuthorizationStore.CommandHash(new { proposalId, expectedRevision, decision, observation, binding }, metadata.Reason) } };
                 row.Add("snapshotHash", B.Hash(row));
-                // Confirm advances the shared pool fence. A rejection has no quantity/authority effect.
-                if (decision == StockSourceReconciliationDecision.Confirm) await FenceRevisionPoolAsync(tx, context.Source.Pool, false, token);
+                // Both fresh decisions close an outstanding obligation. Fence the current canonical
+                // pool even when rejecting an old observation, without changing quantities or authority.
+                await FenceRevisionPoolAsync(tx, context.Source.Pool, false, token);
                 await Rows(B.Decisions).InsertOneAsync(tx, row, cancellationToken: token);
                 await Rows("auditEvents").InsertOneAsync(tx, B.Audit(row, B.DecideOperation), cancellationToken: token);
                 await Rows("outboxEvents").InsertOneAsync(tx, B.Outbox(row, B.DecideOperation), cancellationToken: token);

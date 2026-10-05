@@ -157,6 +157,7 @@ public sealed class ShipmentDispatchService
             await Rows("outboxEvents").InsertOneAsync(tx, new BsonDocument { { "_id", ObjectId.GenerateNewId() }, { "schemaVersion", 1 },
                 { "kind", "fulfillment.shipment.dispatched" }, { "sourceKey", "fulfillment.shipment.dispatched:" + id }, { "payload", B.Result(row) },
                 { "createdAt", now.UtcDateTime }, { "dueAt", now.UtcDateTime }, { "status", "pending" }, { "attempts", 0 } }, cancellationToken: token);
+            await orders.RecordStockSourceTransitionAsync(tx, "shipment", id, token);
             return B.Result(row);
         }, ct, async (snapshot, tx, token) => {
             var receipt = await ReceiptAsync(actor, metadata.IdempotencyKey, tx, token) ?? throw ShipmentDispatchRecords.Invalid();

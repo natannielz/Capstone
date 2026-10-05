@@ -108,6 +108,8 @@ public sealed partial class StockSourceSetupService(IMongoDatabase database, Mon
                 }
                 await Rows("stockSourceDecisions").InsertOneAsync(tx, row, cancellationToken: token);
                 await Rows("auditEvents").InsertOneAsync(tx, StockSourceSetupBson.Audit(row, actor, "stock.source." + name, now), cancellationToken: token);
+                if (poolId.HasValue)
+                    await new UnitToko.Platform.Ordering.OrderStockSourceProducer(database, ids, clock).InitializeAsync(tx, decisionId, token);
                 return new BsonDocument { { "proposalId", proposalId }, { "decisionId", decisionId },
                     { "poolId", poolId.HasValue ? new BsonInt64(poolId.Value) : BsonNull.Value }, { "status", name } };
             }, ct, recoveryOnly);

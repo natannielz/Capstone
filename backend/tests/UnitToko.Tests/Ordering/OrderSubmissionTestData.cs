@@ -6,10 +6,12 @@ using UnitToko.Modules.Catalog;
 using UnitToko.Modules.Contracts;
 using UnitToko.Modules.Identity;
 using UnitToko.Modules.Identity.Contracts;
+using UnitToko.Modules.Inventory;
 using UnitToko.Modules.Ordering;
 using UnitToko.Modules.Organizations;
 using UnitToko.Platform.Catalog;
 using UnitToko.Platform.Inventory;
+using UnitToko.Platform.Mongo;
 using UnitToko.Platform.Mongo.Migrations;
 using UnitToko.Platform.Ordering;
 using UnitToko.Tests.Catalog;
@@ -20,6 +22,7 @@ namespace UnitToko.Tests.Ordering;
 /// <summary>Isolated local fixture, NOT an approved production policy/source adapter.</summary>
 internal sealed class OrderSubmissionTestData(CatalogPriceTestData prices) : IAsyncDisposable
 {
+    private int fixturePoolSequence;
     internal CatalogPriceTestData Prices { get; } = prices;
     internal OrderDraftInput Input { get; private set; } = null!;
     internal FixtureAdmission Admission { get; private set; } = null!;
@@ -47,10 +50,11 @@ internal sealed class OrderSubmissionTestData(CatalogPriceTestData prices) : IAs
             }
             await InventoryGraphTests.InstallBalances(catalog.Base);
             await InventoryRepository.RequireStorageAsync(data.Database, "movements", InventoryMovementSchemas.Validator(), InventoryMovementSchemas.Key(), default);
-            await data.Rows("inventoryPools").InsertOneAsync(InventoryGraphTests.Pool());
+            var poolId = await data.ConfigureIsolatedOperationalPoolAsync(InventoryGraphTests.Balance().Balance.Key.Location);
             await data.Rows("lots").InsertOneAsync(InventoryGraphTests.Lot(202, item.Sku.Id.Value, item.Definition.Id.Value));
             var balance = InventoryGraphTests.Balance();
-            balance = balance with { Balance = balance.Balance with { Key = balance.Balance.Key with { SkuId = item.Sku.Id, DefinitionId = item.Definition.Id }, OnHand = stock } };
+            balance = balance with { PhysicalPoolId = poolId,
+                Balance = balance.Balance with { Key = balance.Balance.Key with { SkuId = item.Sku.Id, DefinitionId = item.Definition.Id }, OnHand = stock } };
             await data.Rows("stockBalances").InsertOneAsync(InventoryBson.Balance(balance));
             await data.Rows("fixtureOrderApprovals").InsertOneAsync(new BsonDocument { { "_id", 800L }, { "revision", 1L }, { "fence", 0L },
                 { "approved", true }, { "expiresAt", catalog.Clock.UtcNow.AddHours(1).UtcDateTime }, { "branchId", 11L },
@@ -74,12 +78,49 @@ internal sealed class OrderSubmissionTestData(CatalogPriceTestData prices) : IAs
         await Prices.Service.DecideAsync(Prices.Checker, proposed["proposalId"].AsInt64, 1, CatalogPriceDecision.Approve, "Independent synthetic other source", CatalogPriceTestData.Meta("other-price-approve"));
         var item = (await catalog.BuyerService.QueryAsync(Buyer, 0, 25, null)).Items.Single(value => value.Sku.Id == sku.Id);
         Input = Input with { Selections = Input.Selections.Add(new(item.Sku.Id, item.Definition.Id, item.Definition.Version, item.CurrentPrice!.Id, item.CurrentPrice.Version, 3)) };
-        var location = new UnitToko.Modules.Inventory.StockLocation(new(100), new(201), new(202), new(203));
-        var original = InventoryGraphTests.Balance(); var balance = original with { Id = 1001, PhysicalPoolId = 401,
+        var location = new StockLocation(new(100), new(201), new(202), new(203));
+        var poolId = await ConfigureIsolatedOperationalPoolAsync(location);
+        var original = InventoryGraphTests.Balance(); var balance = original with { Id = 1001, PhysicalPoolId = poolId,
             Balance = original.Balance with { OnHand = stock, Key = new(location, item.Sku.Id, item.Definition.Id, new(203)) } };
-        var pool = InventoryGraphTests.Pool(); pool["_id"] = 401L; pool["location"] = InventoryBson.Balance(balance)["location"];
-        await Rows("inventoryPools").InsertOneAsync(pool); await Rows("lots").InsertOneAsync(InventoryGraphTests.Lot(203, item.Sku.Id.Value, item.Definition.Id.Value));
+        await Rows("lots").InsertOneAsync(InventoryGraphTests.Lot(203, item.Sku.Id.Value, item.Definition.Id.Value));
         await Rows("stockBalances").InsertOneAsync(InventoryBson.Balance(balance));
+    }
+
+    private async Task<long> ConfigureIsolatedOperationalPoolAsync(StockLocation location)
+    {
+        var sequence = ++fixturePoolSequence;
+        var catalog = Prices.Catalog;
+        // These already verified, distinct synthetic people also own the real independent price workflow.
+        // Do not seed a second person proof or manufacture Ordering producer records.
+        Assert.NotEqual(Prices.Maker.UserId, Prices.Checker.UserId);
+        await catalog.Base.AddGrantAsync(Prices.Maker, 6260 + sequence, location.ToScope(), [Permissions.StockSourcePropose, Permissions.StockSourceRead]);
+        await catalog.Base.AddGrantAsync(Prices.Checker, 6270 + sequence, location.ToScope(), [Permissions.StockSourceApprove, Permissions.StockSourceRead]);
+        var sources = new StockSourceSetupService(Database, new(catalog.Client), new(Database), catalog.Clock);
+        var input = new StockSourceSetupInput(location, "isolated-order-pool-" + sequence, "Synthetic isolated order source",
+            StockAuthorityMode.WebLedger, StockPoolControl.SharedWebLedger, 60000, 0, null, null,
+            "isolated-discrepancy-owner", "isolated-reviewed-handoff");
+        var proposed = await sources.ProposeAsync(Prices.Maker, input, CatalogPriceTestData.Meta("order-source-propose-" + sequence));
+        var approved = await sources.DecideAsync(Prices.Checker, proposed["proposalId"].AsInt64, 1,
+            StockSourceSetupDecision.Approve, "Independent synthetic source configuration review", CatalogPriceTestData.Meta("order-source-approve-" + sequence));
+        var poolId = approved["poolId"].AsInt64;
+        var pool = await Rows("inventoryPools").Find(new BsonDocument("_id", poolId)).SingleAsync();
+        Assert.False(pool["active"].AsBoolean); Assert.Equal(1L, pool["revision"].AsInt64); Assert.Equal(0L, pool["fence"].AsInt64);
+        await new MongoUnitOfWork(catalog.Client).ExecuteAsync(async (tx, ct) => {
+            var (head, history, state) = await new OrderStockSourceRecords(Database).HistoryAsync(tx, poolId, ct);
+            var transition = Assert.Single(history); Assert.Empty(state);
+            Assert.Equal(poolId, head["_id"].AsInt64); Assert.Equal(1L, head["revision"].AsInt64);
+            Assert.Equal(approved["decisionId"], head["setupDecisionId"]);
+            Assert.Equal("setup", transition["sourceKind"].AsString); Assert.Equal(approved["decisionId"], transition["sourceId"]);
+            Assert.Equal(transition["_id"], head["lastTransitionId"]); Assert.Equal(transition["transitionHash"], head["lastHash"]);
+            Assert.Equal(OrderStockSourceRecords.Hash(transition), transition["transitionHash"].AsString);
+            return 0;
+        });
+        // UNIT ISOLATION ONLY: preserve the existing synthetic active/on-hand/FixtureAdmission harness.
+        // This exact test-only CAS is not the seven-domain governed activation or commercial acceptance.
+        // The producer head/hash and independent setup receipt remain exclusively real owner output.
+        Assert.Equal(1L, (await Rows("inventoryPools").UpdateOneAsync(pool,
+            Builders<BsonDocument>.Update.Set("active", true))).ModifiedCount);
+        return poolId;
     }
 
     internal sealed class FixtureAdmission(OrderSubmissionTestData data) : IOrderAdmissionReader
