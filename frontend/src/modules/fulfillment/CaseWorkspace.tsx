@@ -15,6 +15,7 @@ import { CaseReturnPanel } from './CaseReturnPanel';
 import { createReturnGateway } from './return-client';
 import { createInspectionGateway } from './inspection-client';
 import { createResolutionGateway } from './resolution-client';
+import { createReturnLotGateway, returnLotOperation } from './return-lot-client';
 import { createReturnEntitlementGateway, returnEntitlementOwner } from './return-entitlement-client';
 import { canApproveReturnFinancial, createReturnFinancialApprovalGateway, returnFinancialApprovalOwner } from './return-financial-approval-client';
 import { ReturnFinancialApprovalPanel } from './ReturnFinancialApprovalPanel';
@@ -61,7 +62,7 @@ export function CaseWorkspace() {
   </main>;
 }
 function CaseDesk({ account, fresh, onDenied }: { account: Account; fresh: boolean; onDenied: (failure: unknown) => void }) {
-  const [gateway] = useState(createCaseGateway), [returns] = useState(createReturnGateway), [inspections] = useState(createInspectionGateway), [resolutions] = useState(createResolutionGateway), [entitlements] = useState(createReturnEntitlementGateway), [financialApprovals] = useState(createReturnFinancialApprovalGateway), recovery = useOperationRecovery(account.actorId);
+  const [gateway] = useState(createCaseGateway), [returns] = useState(createReturnGateway), [inspections] = useState(createInspectionGateway), [resolutions] = useState(createResolutionGateway), [returnLots] = useState(createReturnLotGateway), [entitlements] = useState(createReturnEntitlementGateway), [financialApprovals] = useState(createReturnFinancialApprovalGateway), recovery = useOperationRecovery(account.actorId);
   const [ledgers] = useState(() => new Map<string, MutationLedger>());
   const canRead = account.actions.includes('case.read'), canRequest = account.actions.includes('case.request'), canManage = account.actions.includes('case.manage');
   const canApproveFinancial = canApproveReturnFinancial(account.actions, 'credit') || canApproveReturnFinancial(account.actions, 'refund');
@@ -129,6 +130,7 @@ function CaseDesk({ account, fresh, onDenied }: { account: Account; fresh: boole
         if (!canRead || !canManage || !account.actions.includes('invoice.read') || !account.actions.includes(financial.action + '.request')) throw new AccessFailure(403, 'scope_denied');
         const value = await entitlements.recover(entry.actorId, entry.key); if (!current()) throw new AccessFailure(409, 'recovery_request_stale'); return value;
       } }, 'fulfillment.case': { lookup: async entry => {
+        if (entry.operation === returnLotOperation) { if (entry.actorId !== account.actorId || !canManage || !account.actions.includes('stock.count')) throw new AccessFailure(403, 'scope_denied'); const value = await returnLots.recover(entry.actorId, entry.key, freshCurrent); if (!freshCurrent()) throw new AccessFailure(409, 'recovery_request_stale'); return value; }
         if (entry.operation === 'fulfillment.case.resolution_request') { if (!canManage) throw new AccessFailure(403, 'scope_denied'); const value = await resolutions.recover(entry.actorId, entry.key); if (!current()) throw new AccessFailure(409, 'recovery_request_stale'); return value; }
         if (entry.operation === 'fulfillment.case.return_inspect') { if (!canManage || !account.actions.includes('stock.count')) throw new AccessFailure(403, 'scope_denied'); const value = await inspections.recover(entry.actorId, entry.key); if (!current()) throw new AccessFailure(409, 'recovery_request_stale'); return value; }
         if (entry.operation === 'fulfillment.case.return_receive') { if (!canManage || !account.actions.includes('stock.receive')) throw new AccessFailure(403, 'scope_denied'); const value = await returns.recover(entry.actorId, entry.key); if (!current()) throw new AccessFailure(409, 'recovery_request_stale'); return value; }
@@ -164,7 +166,7 @@ function CaseDesk({ account, fresh, onDenied }: { account: Account; fresh: boole
       {canManage && selected.state === 'requested' && <CaseDecisionPanel key={selected.id + ':' + selected.revision} actorId={account.actorId} owner={selected} fresh={fresh} locked={locked} current={current}
         journal={recovery.journal} onDenied={onDenied} onBusyChange={setEditing} onSettled={recovery.refresh}
         onSaved={async saved => { const value = await gateway.read(account.actorId, saved.caseId, saved.revision); if (current()) { setSelected(value); setBefore(null); setRefresh(count => count + 1); } }} />}
-      {selected.state === 'return_authorized' && <CaseReturnPanel key={'returns:' + selected.id} actorId={account.actorId} owner={selected} canReceive={canManage && account.actions.includes('stock.receive')} canInspect={canManage && account.actions.includes('stock.count')} fresh={fresh} locked={locked} current={current}
+      {selected.state === 'return_authorized' && <CaseReturnPanel key={'returns:' + selected.id} actorId={account.actorId} owner={selected} canReceive={canManage && account.actions.includes('stock.receive')} canInspect={canManage && account.actions.includes('stock.count')} freshCurrent={freshCurrent} fresh={fresh} locked={locked} current={current}
         resolutionOptions={canManage ? ['replacement', ...(account.actions.includes('credit.request') ? ['credit' as const] : []), ...(account.actions.includes('refund.request') ? ['refund' as const] : [])] : []} canReadInvoice={account.actions.includes('invoice.read')}
         journal={recovery.journal} onDenied={onDenied} onBusyChange={setEditing} onSettled={recovery.refresh} />}
       {selected.state === 'return_authorized' && canApproveFinancial && <ReturnFinancialApprovalPanel key={'financial:' + selected.id} actorId={account.actorId} owner={selected} actions={account.actions}

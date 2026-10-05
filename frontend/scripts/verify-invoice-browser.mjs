@@ -7,6 +7,7 @@ import { createRequire } from 'node:module';
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import next from 'next';
+import { verifyReturnLotBrowser } from './verify-return-lot-browser.mjs';
 import { verifyReturnFinancialApprovalBrowser } from './verify-return-financial-approval-browser.mjs';
 import { verifyRefundPayoutBrowser } from './verify-refund-payout-browser.mjs';
 import { verifyRefundSettlementBrowser } from './verify-refund-settlement-browser.mjs';
@@ -66,6 +67,7 @@ const reconciliationWrites = [], reconciliationRecoveries = [], reconciliationTr
 const payableWrites = [], payableRecoveries = [], payableTracePath = config.procurementSupplierPayable || config.procurementAdvanceReturn || config.procurementQualityAcceptance ? resolve(directory, (config.procurementQualityAcceptance ? 'procurement-quality-acceptance-flow-' : config.procurementAdvanceReturn ? 'procurement-advance-return-flow-' : 'procurement-supplier-payable-flow-') + Date.now() + '.jsonl') : null;
 function traceFinancial(type, value) { for (const path of [financialTracePath, payoutTracePath, settlementTracePath, addressTracePath, spendingTracePath, bookTracePath, procurementTracePath, supplierTracePath, purchaseOrderTracePath, fundingTracePath, supplierBankTracePath, disbursementTracePath, procurementSettlementTracePath, receivingTracePath, procurementInspectionTracePath, documentTracePath, claimTracePath, stockReceiptTracePath, valuationTracePath, reconciliationTracePath, payableTracePath]) if (path) appendFileSync(path, JSON.stringify({ at: new Date().toISOString(), type, ...value }) + '\n'); }
 traceFinancial('host-start', {});
+const returnLotWrites = [], returnLotRecoveries = [];
 let browser, frontend, edge, tunnel, dropNext = false, dropped = 0;
 function track(server) { server.on('connection', socket => { sockets.add(socket); socket.on('close', () => sockets.delete(socket)); }); return server; }
 async function listen(server) { await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); }); return server.address().port; }
@@ -157,10 +159,31 @@ function forward(req, res, port, isApi) {
     (payableWrite ? payableWrites : payableRecovery ? payableRecoveries : reconciliationWrite ? reconciliationWrites : reconciliationRecovery ? reconciliationRecoveries : valuationWrite ? valuationWrites : valuationRecovery ? valuationRecoveries : stockReceiptWrite ? stockReceiptWrites : stockReceiptRecovery ? stockReceiptRecoveries : claimWrite ? claimWrites : claimRecovery ? claimRecoveries : documentWrite ? documentWrites : documentRecovery ? documentRecoveries : procurementInspectionWrite ? procurementInspectionWrites : procurementInspectionRecovery ? procurementInspectionRecoveries : receivingWrite ? receivingWrites : receivingRecovery ? receivingRecoveries : procurementSettlementWrite ? procurementSettlementWrites : procurementSettlementRecovery ? procurementSettlementRecoveries : procurementSettlementOriginal ? procurementSettlementOriginals : disbursementWrite ? disbursementWrites : disbursementRecovery ? disbursementRecoveries : supplierBankWrite ? supplierBankWrites : supplierBankRecovery ? supplierBankRecoveries : fundingWrite ? fundingWrites : fundingRecovery ? fundingRecoveries : purchaseOrderWrite ? purchaseOrderWrites : purchaseOrderRecovery ? purchaseOrderRecoveries : supplierWrite ? supplierWrites : supplierRecovery ? supplierRecoveries : procurementWrite ? procurementWrites : procurementRecovery ? procurementRecoveries : bookWrite ? bookWrites : bookRecovery ? bookRecoveries : spendingWrite ? spendingWrites : spendingRecovery ? spendingRecoveries : addressWrite ? addressWrites : addressRecovery ? addressRecoveries : financialWrite ? financialWrites : financialRecovery ? financialRecoveries : draftWrite ? draftWrites : payoutWrite ? payoutWrites : payoutRecovery ? payoutRecoveries : settlementWrite ? settlementWrites : settlementRecovery ? settlementRecoveries : settlementOriginalReads).push(reference);
     req.on('data', chunk => body.push(chunk)); req.on('end', () => { reference.body = JSON.parse(Buffer.concat(body).toString('utf8')); });
   }
-  const drop = (write || caseWrite || decisionWrite || returnWrite || inspectionWrite || resolutionWrite || entitlementWrite || financialWrite || payoutWrite || settlementWrite || addressWrite || spendingWrite || bookWrite || procurementWrite || supplierWrite || purchaseOrderWrite || fundingWrite || supplierBankWrite || disbursementWrite || procurementSettlementWrite || receivingWrite || procurementInspectionWrite || documentWrite || claimWrite || stockReceiptWrite || valuationWrite || reconciliationWrite || payableWrite) && dropNext; if (drop) dropNext = false;
+  const returnLotWrite = config.returnLot && req.method === 'POST' && /^\/api\/v1\/fulfillment\/cases\/[1-9][0-9]*\/returns\/[1-9][0-9]*\/lot-verification$/.test(req.url);
+  const returnLotRecovery = config.returnLot && req.method === 'POST' && /^\/api\/v1\/fulfillment\/cases\/[1-9][0-9]*\/returns\/[1-9][0-9]*\/lot-verification\/operations\/query$/.test(req.url);
+  let returnLotReference;
+  if (returnLotWrite || returnLotRecovery) {
+    returnLotReference = { path: req.url, key: req.headers['idempotency-key'], actor: req.headers['x-expected-actor-id'],
+      ...(returnLotWrite ? { version: req.headers['if-match'] } : {}) };
+    (returnLotWrite ? returnLotWrites : returnLotRecoveries).push(returnLotReference);
+    const body = []; let bytes = 0;
+    req.on('data', chunk => { bytes += chunk.length; if (bytes <= 65536) body.push(chunk); else body.length = 0; });
+    req.on('end', () => { if (bytes > 65536) returnLotReference.bodyError = 'request_too_large';
+      else try { returnLotReference.body = JSON.parse(Buffer.concat(body).toString('utf8')); } catch { returnLotReference.bodyError = 'request_invalid_json'; } });
+  }
+  const drop = (returnLotWrite || write || caseWrite || decisionWrite || returnWrite || inspectionWrite || resolutionWrite || entitlementWrite || financialWrite || payoutWrite || settlementWrite || addressWrite || spendingWrite || bookWrite || procurementWrite || supplierWrite || purchaseOrderWrite || fundingWrite || supplierBankWrite || disbursementWrite || procurementSettlementWrite || receivingWrite || procurementInspectionWrite || documentWrite || claimWrite || stockReceiptWrite || valuationWrite || reconciliationWrite || payableWrite) && dropNext; if (drop) dropNext = false;
   const startedAt = performance.now(); let upstreamCompleted = false;
   const upstream = http.request({ hostname: '127.0.0.1', port, path: req.url, method: req.method, headers }, response => {
     response.once('end', () => { upstreamCompleted = true; });
+    if (returnLotReference) {
+      returnLotReference.status = response.statusCode; const body = []; let bytes = 0;
+      response.on('data', chunk => { bytes += chunk.length; if (bytes <= 65536) body.push(chunk); else body.length = 0; });
+      response.once('end', () => {
+        returnLotReference.completed = true; returnLotReference.elapsedMs = Math.round(performance.now() - startedAt);
+        if (bytes > 65536) returnLotReference.responseError = 'response_too_large';
+        else try { returnLotReference.response = JSON.parse(Buffer.concat(body).toString('utf8')); } catch { returnLotReference.responseError = 'response_invalid_json'; }
+      });
+    }
     if (config.procurementSupplierPayable && (payableWrite || payableRecovery) && response.statusCode === 200) {
       const envelope = []; let bytes = 0;
       response.on('data', chunk => { bytes += chunk.length; if (bytes <= 4096) envelope.push(chunk); else envelope.length = 0; });
@@ -227,7 +250,12 @@ try {
   }); const proxyPort = await listen(tunnel);
   browser = await chromium.launch({ ...(channel === 'msedge' ? { channel: 'msedge' } : {}), headless: true, proxy: { server: 'http://127.0.0.1:' + proxyPort } });
   const finance = await user(config.financeToken), page = finance.page;
-  if (config.procurementQualityAcceptance) {
+  if (config.returnLot) {
+    await verifyReturnLotBrowser({ config, actor: finance, user, origin, directory, returnLotWrites, returnLotRecoveries,
+      dropNext: () => { dropNext = true; }, dropped: () => dropped });
+    assert.equal(writes.length + caseWrites.length + decisionWrites.length + returnWrites.length + inspectionWrites.length + resolutionWrites.length + entitlementWrites.length + financialWrites.length + payoutWrites.length + draftWrites.length + settlementWrites.length + addressWrites.length + spendingWrites.length + bookWrites.length + procurementWrites.length + supplierWrites.length + purchaseOrderWrites.length + fundingWrites.length + supplierBankWrites.length + disbursementWrites.length + procurementSettlementWrites.length + receivingWrites.length + procurementInspectionWrites.length + documentWrites.length + claimWrites.length + stockReceiptWrites.length + valuationWrites.length + reconciliationWrites.length + payableWrites.length, 0);
+    assert.deepEqual(errors, []);
+  } else if (config.procurementQualityAcceptance) {
     assert.equal(config.financeToken, config.makerToken);
     await verifyProcurementQualityAcceptanceBrowser({ config, maker: finance, user, origin, directory, qualityWrites: payableWrites, qualityRecoveries: payableRecoveries,
       dropNext: () => { dropNext = true; }, dropped: () => dropped });
@@ -639,6 +667,9 @@ try {
   if (config.procurementSupplierPayable) console.log('FIXTURE PROCUREMENT SUPPLIER PAYABLE FLOW ' + JSON.stringify({ writes: payableWrites.map(({ path, key, actor, status, elapsedMs }) => ({ path, key, actor, status, elapsedMs })), recoveries: payableRecoveries.map(({ path, actor, status, elapsedMs }) => ({ path, actor, status, elapsedMs })), dropped, tracePath: payableTracePath }));
   if (config.procurementStockValuation) console.log('FIXTURE PROCUREMENT STOCK VALUATION FLOW ' + JSON.stringify({ writes: valuationWrites.map(({ path, key, actor, status, elapsedMs }) => ({ path, key, actor, status, elapsedMs })), recoveries: valuationRecoveries.map(({ path, actor, status, elapsedMs }) => ({ path, actor, status, elapsedMs })), dropped, tracePath: valuationTracePath }));
   if (config.stockSourceReconciliation) console.log('FIXTURE STOCK SOURCE RECONCILIATION FLOW ' + JSON.stringify({ writes: reconciliationWrites.map(({ path, key, actor, status, elapsedMs }) => ({ path, key, actor, status, elapsedMs })), recoveries: reconciliationRecoveries.map(({ path, actor, status, elapsedMs }) => ({ path, actor, status, elapsedMs })), dropped, tracePath: reconciliationTracePath }));
+  if (config.returnLot) console.log('FIXTURE RETURN LOT FLOW ' + JSON.stringify({
+    writes: returnLotWrites.map(({ path, actor, status, completed, elapsedMs }) => ({ path, actor, status, completed, elapsedMs })),
+    recoveries: returnLotRecoveries.map(({ path, actor, status, completed, elapsedMs }) => ({ path, actor, status, completed, elapsedMs })), dropped }));
   traceFinancial('host-finally', { writes: financialWrites.length, recoveries: financialRecoveries.length, dropped });
   let timer;
   try { await Promise.race([(async () => { traceFinancial('cleanup-browser-begin', {}); if (browser) await browser.close(); traceFinancial('cleanup-browser-ended', {}); for (const socket of sockets) socket.destroy();

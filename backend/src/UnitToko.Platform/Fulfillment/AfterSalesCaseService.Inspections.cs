@@ -47,9 +47,9 @@ public sealed partial class AfterSalesCaseService
         input = ReturnedStockInspectionPolicy.Copy(input); AuthorizationStore.ValidateMetadata(metadata);
         if (!ReceivingAccountPolicy.Text(metadata.Reason, 1000) || !ReceivingAccountPolicy.Text(metadata.IdempotencyKey, 128)) throw ReturnedStockInspectionPolicy.Invalid();
         await StorageAsync(ct); var body = I.Body(returnId, revision, binding, input); var hash = AuthorizationStore.CommandHash(body, metadata.Reason); var auditId = (await ids.NextAsync("auditEvents", ct)).Value; var store = new I(database, clock);
-        BsonDocument? root = null, receipt = null; AuthorizationSnapshot? current = null; IClientSessionHandle? session = null; PersonAuthorityProof? proof = null;
+        BsonDocument? root = null, receipt = null, fresh = null; Action? sourceCurrent = null; AuthorizationSnapshot? current = null; IClientSessionHandle? session = null; PersonAuthorityProof? proof = null;
         return await authorization.ExecuteCommandAsync(actor, I.Operation, metadata, body, async (authority, tx, token) => {
-            current = authority; session = tx; proof = null; root = await AuthorizedAsync(actor, authority, tx, caseId, Permissions.CaseManage, token);
+            current = authority; session = tx; proof = null; fresh = null; sourceCurrent = null; root = await AuthorizedAsync(actor, authority, tx, caseId, Permissions.CaseManage, token);
             receipt = await InspectionReceiptAsync(actor, authority, tx, root, returnId, Permissions.CaseManage, token); Q.RequireReceiver(actor, authority, receipt["source"].AsBsonDocument, clock.UtcNow, Permissions.StockCount);
             var resources = PaymentDraftBson.Scopes(root["scopes"].AsBsonArray); var approval = new ApprovalRequest(1, 1, RequestedBy: root["requestedBy"].AsInt64);
             return new(ScopePolicy.Authorize(actor, authority, Permissions.CaseManage, resources[0], clock.UtcNow, approval),
@@ -63,13 +63,15 @@ public sealed partial class AfterSalesCaseService
                 { "state", "inspected_quarantine" }, { "lotIdentity", "unverified" }, { "actorId", actor.UserId }, { "actorGrantVersion", actor.GrantVersion }, { "inspectedAt", at.UtcDateTime },
                 { "people", new BsonArray(proof.Evidence.OrderBy(person => person.UserId).Select(ReceivingAccountBson.Person)) }, { "requestKey", metadata.IdempotencyKey }, { "bodyHash", hash },
                 { "reason", metadata.Reason }, { "correlationId", metadata.CorrelationId }, { "auditId", auditId } }; row.Add("snapshotHash", R.Hash(row));
-            await store.RecordAsync(tx, row, received, token); return I.Result(row);
+            await store.RecordAsync(tx, row, received, token); fresh = row; return I.Result(row);
         }, ct, async (authority, tx, token) => {
             var original = await AuthorizedAsync(actor, authority, tx, caseId, Permissions.CaseManage, token); var received = await InspectionReceiptAsync(actor, authority, tx, original, returnId, Permissions.CaseManage, token);
             var saved = await store.ReadAsync(tx, received, token) ?? throw R.Broken(); if (saved["actorId"] != actor.UserId || saved["requestKey"] != metadata.IdempotencyKey || saved["bodyHash"] != hash) throw R.Broken();
             await Q.FenceReceiverAsync(database, authorization, actor, authority, tx, received["source"].AsBsonDocument, clock.UtcNow, token, Permissions.StockCount);
             await FenceAsync(actor, authority, tx, original, Permissions.CaseManage, token);
-        }, validateCurrent: () => { Require(actor, current ?? throw R.Broken(), root ?? throw R.Broken(), Permissions.CaseManage); Q.RequireReceiver(actor, current!, receipt?["source"].AsBsonDocument ?? throw R.Broken(), clock.UtcNow, Permissions.StockCount); proof?.RequireCurrent(session!, clock.UtcNow); });
+            if (fresh is not null) sourceCurrent = await new AfterSalesStockSourceProducer(database, ids, clock).RecordFreshAsync(tx, actor, authority, authorization, "inspect", fresh,
+                () => { Require(actor, current ?? throw R.Broken(), root ?? throw R.Broken(), Permissions.CaseManage); Q.RequireReceiver(actor, current!, receipt?["source"].AsBsonDocument ?? throw R.Broken(), clock.UtcNow, Permissions.StockCount); proof?.RequireCurrent(session!, clock.UtcNow); }, token);
+        }, validateCurrent: () => { Require(actor, current ?? throw R.Broken(), root ?? throw R.Broken(), Permissions.CaseManage); Q.RequireReceiver(actor, current!, receipt?["source"].AsBsonDocument ?? throw R.Broken(), clock.UtcNow, Permissions.StockCount); proof?.RequireCurrent(session!, clock.UtcNow); sourceCurrent?.Invoke(); });
     }
     public async Task<BsonDocument?> RecoverInspectionAsync(ActorContext actor, long caseId, long returnId, string key, CancellationToken ct = default) {
         if (caseId <= 0 || returnId <= 0) throw ReturnedStockInspectionPolicy.Invalid(); AuthorizationStore.ValidateMetadata(new(key, "Recover original return inspection", "return-inspection-recovery")); await StorageAsync(ct);

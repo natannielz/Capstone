@@ -48,6 +48,7 @@ export function recoveryPage(operation: string) {
   if (operation === 'fulfillment.case.request') return { href: '/fulfillment/cases', label: 'halaman keluhan barang' };
   if (operation === 'fulfillment.case.decide') return { href: '/fulfillment/cases', label: 'halaman pemeriksaan keluhan' };
   if (operation === 'fulfillment.case.return_receive') return { href: '/fulfillment/cases', label: 'halaman penerimaan retur' };
+  if (operation === 'fulfillment.case.return_lot_verify') return { href: '/fulfillment/cases', label: 'halaman pencocokan lot retur' };
   if (operation === 'fulfillment.case.return_inspect') return { href: '/fulfillment/cases', label: 'halaman pemeriksaan barang retur' };
   if (operation === 'fulfillment.case.resolution_request') return { href: '/fulfillment/cases', label: 'halaman pengajuan penyelesaian retur' };
   if (operation === 'fulfillment.delivery-attempt.record') return { href: '/fulfillment/shipments', label: 'halaman upaya pengiriman' };
@@ -144,6 +145,7 @@ export function operationLabel(operation: string) {
   if (operation === 'billing.return.entitlement.request') return 'Pengajuan nilai finansial retur';
   if (operation === "billing.payment.allocation.correct") return "Koreksi alokasi pembayaran";
   if (operation === 'fulfillment.case.resolution_request') return 'Pengajuan penyelesaian retur';
+  if (operation === 'fulfillment.case.return_lot_verify') return 'Pencocokan manual lot retur';
   if (operation === 'fulfillment.case.return_inspect') return 'Pemeriksaan barang retur';
   if (operation === 'fulfillment.case.decide') return 'Keputusan pengembalian barang';
   if (operation === "billing.payment.allocate") return "Alokasi pembayaran";

@@ -33,6 +33,7 @@ public static class AfterSalesCaseEndpoints
 {
     public static void MapAfterSalesCaseEndpoints(this WebApplication app) {
         app.MapAfterSalesReturnEndpoints();
+        app.MapAfterSalesLotVerificationEndpoints();
         var group = app.MapGroup("/api/v1/fulfillment/cases").RequireAuthorization().AddEndpointFilter<ActorRequiredFilter>();
         foreach (var status in new[] { 400, 401, 403, 409, 503 }) group.WithMetadata(new ProducesResponseTypeMetadata(status, typeof(ApiProblem), ["application/problem+json"]));
         group.MapPost("/sales/{invoiceId}/query", async (string invoiceId, OrderReadDto request, HttpContext http, AfterSalesCaseService service,
