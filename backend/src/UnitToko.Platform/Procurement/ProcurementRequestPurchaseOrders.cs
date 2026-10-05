@@ -86,7 +86,7 @@ public sealed partial class ProcurementRequestService
         var head = rawHead is null ? null : await CommitmentRowAsync(tx, S.Commitments, rawHead, ct, sourceCapture);
         var allocations = await Rows(S.Allocations).Find(tx, filter).Sort(new BsonDocument("sequence", 1)).ToListAsync(ct);
         sourceCapture?.Record(S.Allocations, filter, allocations);
-        var owner = new PurchaseOrderRecords(database, catalog, sourceCapture);
+        var owner = new PurchaseOrderRecords(database, catalog, clock, sourceCapture);
         var claims = await owner.RequestClaimsAsync(tx, request["_id"].AsInt64, line.SkuId, ct);
         if (claims.Count != allocations.Count || (head is null) != (allocations.Count == 0)) throw B.Broken();
         BsonDocument? previous = null; long sequence = 0; var sum = 0;
@@ -144,7 +144,7 @@ public sealed partial class ProcurementRequestService
             if (permission != Permissions.ProcurementApprove || selected.Length == 0 || orderId <= 0 || approvalId <= 0 || approvalHash is not { Length: 64 } ||
                 approvalHash.Any(c => !char.IsAsciiHexDigitLower(c)) || recordedAt.Offset != TimeSpan.Zero || recordedAt.Ticks % TimeSpan.TicksPerMillisecond != 0 ||
                 recordedAt < new DateTimeOffset(decision["recordedAt"].ToUniversalTime()) || recordedAt > Now) throw B.Broken();
-            await Fence(token); var rows = new BsonArray(); var proof = new PurchaseOrderRecords(database, catalog);
+            await Fence(token); var rows = new BsonArray(); var proof = new PurchaseOrderRecords(database, catalog, clock);
             foreach (var line in selected) {
                 var state = commitments[line.RequestSkuId]; var next = checked(state.Committed + line.Packages); if (next > state.Input.Packages) throw CapacityUnavailable();
                 var allocationId = (await ids.NextAsync(S.Allocations, token)).Value;

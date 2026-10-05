@@ -126,7 +126,7 @@ public static class ProcurementStockReceiptEndpoints
             inspection["inspectionDate"].AsString, inspection["inspectionReference"].AsString, new(inspection["noticeId"].AsInt64), new(inspection["intakeId"].AsInt64),
             inspection["lineNumber"].AsInt32, SupplierDocumentEndpoints.InspectionLine(inspection["line"])));
     }
-    private static ProcurementStockReceiptPoolDto Pool(BsonValue row) => new(new(row["id"].AsInt64), Number(row["revision"]), row["active"].AsBoolean,
+    internal static ProcurementStockReceiptPoolDto Pool(BsonValue row) => new(new(row["id"].AsInt64), Number(row["revision"]), row["active"].AsBoolean,
         R.Location(row["location"]), R.Location(row["requestedLocation"]), row["physicalKey"].AsString, row["label"].AsString,
         row["mode"].AsString, row["control"].AsString, row["configurationHash"].AsString, new(row["policyId"].AsInt64), Number(row["policyRevision"]),
         row["policyHash"].AsString, row["writer"].AsString, row["reconciliationProcedureReference"].AsString, row["outageProcedureReference"].AsString);

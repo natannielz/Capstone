@@ -26,15 +26,16 @@ public sealed class OrderStockSourceMigrationTests(MongoFixture fixture)
         Assert.Equal(0L, await data.Rows("inventoryPools").CountDocumentsAsync(new BsonDocument()));
         var migrations = new CollectionMigrations(data.Data.Database, data.Data.Clock);
         Assert.False(await migrations.IsCurrentAsync()); await migrations.ApplyAsync(); Assert.True(await migrations.IsCurrentAsync());
-        var applied = await HistoryAsync(data); Assert.Equal(93, applied.Count);
+        var applied = await HistoryAsync(data); Assert.Equal(94, applied.Count);
         Assert.Equal(predecessor, new BsonArray(applied.Take(89))); Assert.Equal("applied", applied[89]["state"].AsString);
         Assert.Equal(91L, applied[90]["_id"].ToInt64()); Assert.Equal("applied", applied[90]["state"].AsString);
         Assert.Equal(92L, applied[91]["_id"].ToInt64()); Assert.Equal("applied", applied[91]["state"].AsString);
         Assert.Equal(93L, applied[92]["_id"].ToInt64()); Assert.Equal("applied", applied[92]["state"].AsString);
+        Assert.Equal(94L, applied[93]["_id"].ToInt64()); Assert.Equal("applied", applied[93]["state"].AsString);
         var after = await SnapshotAsync(data);
-        Assert.Equal(before.ElementCount + OrderStockSourceSchemas.Collections.Length + ReconciliationStockSourceSchemas.Collections.Length + FulfillmentStockSourceSchemas.Collections.Length + ProcurementStockSourceSchemas.Collections.Length, after.ElementCount);
+        Assert.Equal(before.ElementCount + OrderStockSourceSchemas.Collections.Length + ReconciliationStockSourceSchemas.Collections.Length + FulfillmentStockSourceSchemas.Collections.Length + ProcurementStockSourceSchemas.Collections.Length + PurchaseOrderInboundBindingSchemas.Collections.Length, after.ElementCount);
         foreach (var name in before.Names) Assert.Equal(before[name], after[name]);
-        foreach (var name in OrderStockSourceSchemas.Collections.Concat(ReconciliationStockSourceSchemas.Collections).Concat(FulfillmentStockSourceSchemas.Collections).Concat(ProcurementStockSourceSchemas.Collections))
+        foreach (var name in OrderStockSourceSchemas.Collections.Concat(ReconciliationStockSourceSchemas.Collections).Concat(FulfillmentStockSourceSchemas.Collections).Concat(ProcurementStockSourceSchemas.Collections).Concat(PurchaseOrderInboundBindingSchemas.Collections))
         {
             Assert.Equal(0L, await data.Rows(name).CountDocumentsAsync(new BsonDocument()));
             Assert.False(await data.Rows("idCounters").Find(new BsonDocument("_id", name)).AnyAsync());
@@ -43,6 +44,7 @@ public sealed class OrderStockSourceMigrationTests(MongoFixture fixture)
         await UnitToko.Platform.Inventory.ReconciliationStockSourceStorage.RequireAsync(data.Data.Database, default);
         await FulfillmentStockSourceStorage.RequireAsync(data.Data.Database, default);
         await ProcurementStockSourceStorage.RequireAsync(data.Data.Database, default);
+        await PurchaseOrderInboundBindingStorage.RequireAsync(data.Data.Database, default);
         await migrations.ApplyAsync();
         Assert.Equal(applied, await HistoryAsync(data)); Assert.Equal(after, await SnapshotAsync(data));
         // A compatible actual proposal is preserved; absence is never turned into an approved pool or producer revision.
@@ -174,7 +176,7 @@ public sealed class OrderStockSourceMigrationTests(MongoFixture fixture)
             var name = definition["name"].AsString;
             var indexes = (await (await data.Rows(name).Indexes.ListAsync()).ToListAsync()).OrderBy(row => row["name"].AsString, StringComparer.Ordinal);
             var state = new BsonDocument { { "definition", definition.DeepClone() }, { "indexes", new BsonArray(indexes) } };
-            // Actual deployment history is asserted separately: exact89 predecessors and real90/91/92/93 markers.
+            // Actual deployment history is asserted separately: exact89 predecessors and real90/91/92/93/94 markers.
             if (name != "schemaMigrations") state.Add("rows", new BsonArray(await data.Rows(name).Find(new BsonDocument()).Sort(new BsonDocument("_id", 1)).ToListAsync()));
             result.Add(name, state);
         }

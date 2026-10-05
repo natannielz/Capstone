@@ -102689,6 +102689,125 @@
         },
         "additionalProperties": false
       },
+      "PurchaseOrderInboundAllocationDto": {
+        "required": [
+          "requestSkuId",
+          "packages",
+          "poolId",
+          "poolRevision"
+        ],
+        "type": "object",
+        "properties": {
+          "requestSkuId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "packages": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "poolId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "poolRevision": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "PurchaseOrderInboundBindingDto": {
+        "required": [
+          "selectionId",
+          "selectionHash",
+          "allocations",
+          "receivingPools",
+          "decisionId",
+          "state",
+          "unplannedPackagesBound",
+          "stockReserved",
+          "physicalStockReleased"
+        ],
+        "type": "object",
+        "properties": {
+          "selectionId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "selectionHash": {
+            "type": "string"
+          },
+          "allocations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PurchaseOrderInboundAllocationDto"
+            }
+          },
+          "receivingPools": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProcurementStockReceiptPoolDto"
+            }
+          },
+          "decisionId": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LongId"
+              }
+            ]
+          },
+          "state": {
+            "type": "string"
+          },
+          "unplannedPackagesBound": {
+            "type": "boolean"
+          },
+          "stockReserved": {
+            "type": "boolean"
+          },
+          "physicalStockReleased": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "PurchaseOrderInboundPreviewDto": {
+        "required": [
+          "allocations",
+          "receivingPools"
+        ],
+        "type": "object",
+        "properties": {
+          "allocations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PurchaseOrderInboundAllocationDto"
+            }
+          },
+          "receivingPools": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProcurementStockReceiptPoolDto"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "PurchaseOrderInboundSelectionDto": {
+        "required": [
+          "allocations"
+        ],
+        "type": "object",
+        "properties": {
+          "allocations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PurchaseOrderInboundAllocationDto"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
       "PurchaseOrderInputDto": {
         "required": [
           "location",
@@ -103020,6 +103139,16 @@
           "observedAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "inboundPools": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PurchaseOrderInboundPreviewDto"
+              }
+            ]
           }
         },
         "additionalProperties": false
@@ -103036,6 +103165,16 @@
           },
           "input": {
             "$ref": "#/components/schemas/PurchaseOrderInputDto"
+          },
+          "inboundPools": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PurchaseOrderInboundSelectionDto"
+              }
+            ]
           }
         },
         "additionalProperties": false
@@ -103114,6 +103253,16 @@
                 "$ref": "#/components/schemas/PurchaseOrderDecisionDto"
               }
             ]
+          },
+          "inboundPools": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PurchaseOrderInboundBindingDto"
+              }
+            ]
           }
         },
         "additionalProperties": false
@@ -103134,6 +103283,16 @@
           },
           "reason": {
             "type": "string"
+          },
+          "inboundPools": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PurchaseOrderInboundSelectionDto"
+              }
+            ]
           }
         },
         "additionalProperties": false

@@ -43,6 +43,7 @@ public sealed partial class ProcurementReceivingService
         internal PurchaseOrderReceivingCapture? Order;
         internal BsonDocument? Notice;
         internal ProcurementContainerHistory? History;
+        internal IReadOnlyList<HeldReceiptPoolCapture> InboundCaptures = [];
         internal DateTimeOffset? SessionExpiry;
     }
     private AuthorizationQuery Query(ActorContext actor, AuthorizationSnapshot authority, string permission) {
@@ -53,7 +54,7 @@ public sealed partial class ProcurementReceivingService
         if (!ScopePolicy.IsResourceActive(context.Resource, context.Authority.Directory) || !query.Matches(context.Resource)) throw new AuthorizationDeniedException("scope_denied"); return query;
     }).ToArray();
     private void Current(Context context) {
-        _ = Require(context); context.Order?.RequireCurrent();
+        _ = Require(context); context.Order?.RequireCurrent(); PurchaseOrderService.RequireApprovedInboundCurrent(context.InboundCaptures);
         if (!context.Tx.IsInTransaction || !ReferenceEquals(context.Tx.Client, database.Client)) throw B.Broken();
         if (context.SessionExpiry is { } expiry && clock.UtcNow >= expiry) throw new AuthorizationDeniedException("stale_or_inactive_session");
     }
@@ -76,7 +77,10 @@ public sealed partial class ProcurementReceivingService
         ProcurementLocation location, long id, long version, long approval, string permission, CancellationToken ct) {
         ProcurementRequestRules.Location(location); var context = new Context(actor, authority, tx, permission, location); _ = Require(context);
         context.Order = await orders.CaptureReceivingAsync(actor, authority, tx, id, version, approval, permission, ct);
-        context.Order.RequireContext(orders, actor, authority, tx); ProcurementReceivingRecords.Equal(context.Order.Source["order"]["location"], R.Location(location)); return context;
+        context.Order.RequireContext(orders, actor, authority, tx); ProcurementReceivingRecords.Equal(context.Order.Source["order"]["location"], R.Location(location));
+        if (permission is Permissions.ProcurementPrepare or Permissions.ProcurementContainerReceive)
+            context.InboundCaptures = await orders.CaptureApprovedInboundAsync(actor, authority, tx, context.Order.Source, ct);
+        Current(context); return context;
     }
     private async Task<Context> NoticeAsync(ActorContext actor, AuthorizationSnapshot authority, IClientSessionHandle tx, long id, string permission, CancellationToken ct) {
         if (id <= 0) throw ProcurementReceivingRules.Invalid();
@@ -86,7 +90,7 @@ public sealed partial class ProcurementReceivingService
         context.Notice = await records.NoticeAsync(tx, id, ct, context.Order); context.History = await records.HistoryAsync(tx, context.Notice, ct); return context;
     }
     private async Task FenceAsync(Context context, CancellationToken ct) {
-        Current(context); if (context.Order is { } order) await order.FenceAsync(ct);
+        Current(context); if (context.Order is { } order) await order.FenceAsync(ct); await PurchaseOrderService.FenceApprovedInboundAsync(context.InboundCaptures, ct);
         if (context.Notice is { } notice && (await Rows(B.Notices).UpdateOneAsync(context.Tx, notice, Builders<BsonDocument>.Update.Set("version", notice["version"]), cancellationToken: ct)).MatchedCount != 1) throw B.Changed();
         if (context.History is { } history) {
             if (history.Head["fence"].AsInt64 >= long.MaxValue - 1 || (await Rows(B.Heads).UpdateOneAsync(context.Tx, history.Head,

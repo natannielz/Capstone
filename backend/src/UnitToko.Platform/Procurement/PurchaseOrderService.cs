@@ -30,9 +30,10 @@ public sealed partial class PurchaseOrderService
     private readonly PurchaseOrderRecords records;
     private readonly ProcurementRequestService requests;
     private readonly SupplierService suppliers;
+    private readonly StockSourceSetupService inboundSources;
     public PurchaseOrderService(IMongoDatabase database, MongoUnitOfWork unit, IdAllocator ids, IClock clock, CatalogAuthoringService catalog, ProcurementRequestService requests, SupplierService suppliers) {
         this.database = database; this.catalog = catalog; this.requests = requests; this.suppliers = suppliers; this.ids = ids; this.clock = clock; authorization = new(database, unit, clock);
-        organizations = new(database, authorization, ids, clock); records = new(database, catalog);
+        organizations = new(database, authorization, ids, clock); records = new(database, catalog, clock); inboundSources = new(database, unit, ids, clock);
     }
     private IMongoCollection<BsonDocument> Rows(string name) => database.GetCollection<BsonDocument>(name);
     private DateTimeOffset Now => DateTimeOffset.FromUnixTimeMilliseconds(clock.UtcNow.ToUnixTimeMilliseconds());
@@ -52,6 +53,9 @@ public sealed partial class PurchaseOrderService
         internal SupplierPurchaseOrderCapture? Supplier { get; set; }
         internal PurchaseOrderInput? ActiveInput { get; set; }
         internal bool Allocate { get; set; }
+        internal PurchaseOrderInboundPoolSelection? InboundSelection;
+        internal BsonDocument? InboundRecord;
+        internal List<HeldReceiptPoolCapture> InboundCaptures = [];
         internal DateTimeOffset? SessionExpiresAt { get; set; }
     }
     private static ResourceScope ResourceFor(ProcurementLocation key) => new(FulfillmentOrganizationId: key.OrganizationId, ShopId: key.ShopId, WarehouseId: key.WarehouseId, ChannelId: key.ChannelId);
@@ -70,6 +74,11 @@ public sealed partial class PurchaseOrderService
         return query;
     }
     private async Task StorageAsync(CancellationToken ct) {
+        await PurchaseOrderInboundBindingStorage.RequireAsync(database, ct);
+        await InboundSources.RequireHeldReceiptStorageAsync(ct);
+        await RequirePreInboundReceivingStorageAsync(ct);
+    }
+    internal async Task RequirePreInboundReceivingStorageAsync(CancellationToken ct) {
         foreach (var name in PurchaseOrderSchemas.Collections) {
             var keys = PurchaseOrderSchemas.Keys(name);
             await InventoryRepository.RequireStorageAsync(database, name, PurchaseOrderSchemas.Validator(name), keys, ct);
@@ -116,7 +125,7 @@ public sealed partial class PurchaseOrderService
         await new PersonAuthorizationFence(database, clock).TouchAsync(context.Tx, proof, ct); context.People = proof;
     }
     private void Current(Context context) {
-        _ = Require(context); context.People?.RequireCurrent(context.Tx, clock.UtcNow);
+        _ = Require(context); RequireInbound(context); context.People?.RequireCurrent(context.Tx, clock.UtcNow);
         context.Request?.RequireCurrent(); context.Supplier?.Require(database, context.Actor, context.Authority, context.Tx);
         if (context.ActiveInput is { } input && input.CommercialReference.ValidUntil <= Now) throw B.Changed();
         if (!context.Tx.IsInTransaction || !ReferenceEquals(context.Tx.Client, database.Client)) throw B.Broken();
@@ -124,6 +133,7 @@ public sealed partial class PurchaseOrderService
     }
     private async Task FenceAsync(Context context, CancellationToken ct) {
         Current(context);
+        await FenceInboundAsync(context, ct);
         foreach (var name in R.SourceNames) await organizations.FenceAddressProfileAsync(context.Tx, context.Sources[name].AsBsonDocument, true, ct);
         if (context.Request is { } request) await requests.FencePurchaseOrderAsync(database, context.Actor, context.Authority, context.Tx, request, ct);
         if (context.Supplier is { } supplier) await suppliers.FencePurchaseOrderAsync(database, context.Actor, context.Authority, context.Tx, supplier, ct);

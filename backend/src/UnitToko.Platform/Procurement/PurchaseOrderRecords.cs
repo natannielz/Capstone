@@ -10,13 +10,14 @@ using R = UnitToko.Platform.Procurement.ProcurementRequestBson;
 
 namespace UnitToko.Platform.Procurement;
 
-internal sealed class PurchaseOrderRecords(IMongoDatabase database, CatalogAuthoringService catalog, PurchaseOrderSourceReadCapture? sourceCapture = null)
+internal sealed class PurchaseOrderRecords(IMongoDatabase database, CatalogAuthoringService catalog, IClock clock, PurchaseOrderSourceReadCapture? sourceCapture = null)
 {
     private IMongoCollection<BsonDocument> Rows(string name) => database.GetCollection<BsonDocument>(name);
     private async Task<BsonDocument?> OneAsync(IClientSessionHandle tx, string name, BsonDocument filter, CancellationToken ct) =>
         sourceCapture is null ? await Rows(name).Find(tx, filter).SingleOrDefaultAsync(ct) : await sourceCapture.OneAsync(database, tx, name, filter, ct);
     private Task<bool> AnyAsync(IClientSessionHandle tx, string name, BsonDocument filter, CancellationToken ct) =>
         sourceCapture is null ? Rows(name).Find(tx, filter).AnyAsync(ct) : sourceCapture.AnyAsync(database, tx, name, filter, ct);
+    private PurchaseOrderInboundBindingRecords Inbound => new(database, clock, sourceCapture);
     internal static void Equal(BsonValue actual, BsonValue expected) { if (!actual.Equals(expected)) throw B.Broken(); }
     internal async Task<BsonDocument> RowAsync(IClientSessionHandle tx, string name, long id, CancellationToken ct) =>
         await OneAsync(tx, name, new BsonDocument { { "_id", id }, { "$and", new BsonArray { PurchaseOrderSchemas.Validator(name) } } }, ct) ?? throw B.Broken();
@@ -53,9 +54,10 @@ internal sealed class PurchaseOrderRecords(IMongoDatabase database, CatalogAutho
         await new SupplierRecords(database, catalog, sourceCapture).PurchaseOrderSourceAsync(tx, input, row["supplier"].AsBsonDocument, at, ct);
         Capacity(input, row["capacity"].AsBsonArray); People(row, row["actorId"].AsInt64);
         foreach (var capacity in row["capacity"].AsBsonArray) Equal(capacity["requestedPackages"], R.Input(source.Request["input"]).Lines.Single(line => line.SkuId == capacity["requestSkuId"].AsInt64).Packages);
-        Equal(row["binding"], B.Binding(row["actorId"].AsInt64, row["actorGrantVersion"].AsInt64, input, source.Request, source.Decision,
-            row["sources"].AsBsonDocument, row["supplier"].AsBsonDocument, row["capacity"].AsBsonArray));
-        await EffectsAsync(tx, row, B.ProposeBody(input, row["binding"].AsString), null, ct); return row;
+        var inbound = await Inbound.SelectionAsync(tx, row, ct);
+        Equal(row["binding"], PurchaseOrderInboundBindingBson.Binding(row["actorId"].AsInt64, row["actorGrantVersion"].AsInt64, input, source.Request, source.Decision,
+            row["sources"].AsBsonDocument, row["supplier"].AsBsonDocument, row["capacity"].AsBsonArray, inbound is null ? null : PurchaseOrderInboundBindingBson.Selection(input, inbound["allocations"]), inbound is null ? [] : inbound["receivingSources"].AsBsonArray));
+        await EffectsAsync(tx, row, PurchaseOrderInboundBindingBson.Body(input, row["binding"].AsString, inbound is null ? null : PurchaseOrderInboundBindingBson.Selection(input, inbound["allocations"])), null, ct); return row;
     }
     internal async Task<BsonDocument> DecisionAsync(IClientSessionHandle tx, long id, BsonDocument proposal, CancellationToken ct) {
         var row = await RowAsync(tx, B.Decisions, id, ct); Equal(row["snapshotHash"], B.Hash(row)); var input = B.Input(proposal["input"]); var decision = B.Decision(row["decision"]);
@@ -74,13 +76,15 @@ internal sealed class PurchaseOrderRecords(IMongoDatabase database, CatalogAutho
         People(row, row["actorId"].AsInt64, proposal["actorId"].AsInt64);
         var people = row["people"].AsBsonArray.Select(B.Person).ToDictionary(person => person.UserId); var maker = proposal["people"].AsBsonArray.Select(B.Person).Single();
         if (people[maker.UserId].PersonId != maker.PersonId || !PersonIndependencePolicy.AreIndependent(people[row["actorId"].AsInt64], people[maker.UserId], maker)) throw B.Broken();
-        Equal(row["binding"], B.DecisionBinding(row["actorId"].AsInt64, row["actorGrantVersion"].AsInt64, proposal, decision,
-            row["reviewSources"].AsBsonDocument, row["reviewSupplier"].IsBsonNull ? null : row["reviewSupplier"].AsBsonDocument, row["reviewCapacity"].AsBsonArray));
+        var selection = await Inbound.SelectionAsync(tx, proposal, ct); var inboundDecision = await Inbound.DecisionAsync(tx, proposal, row, selection, ct);
+        Equal(row["binding"], PurchaseOrderInboundBindingBson.DecisionBinding(row["actorId"].AsInt64, row["actorGrantVersion"].AsInt64, proposal, decision,
+            row["reviewSources"].AsBsonDocument, row["reviewSupplier"].IsBsonNull ? null : row["reviewSupplier"].AsBsonDocument, row["reviewCapacity"].AsBsonArray, selection, inboundDecision is null ? [] : inboundDecision["receivingSources"].AsBsonArray));
         await EffectsAsync(tx, row, B.DecideBody(proposal["_id"].AsInt64, 1, decision, row["binding"].AsString), proposal, ct); return row;
     }
     internal async Task<BsonDocument?> DecisionForAsync(IClientSessionHandle tx, BsonDocument proposal, CancellationToken ct) {
         var row = await OneAsync(tx, B.Decisions, new BsonDocument("proposalId", proposal["_id"]), ct);
         if (row is null) {
+            if (await AnyAsync(tx, PurchaseOrderInboundBindingBson.Decisions, new BsonDocument("proposalId", proposal["_id"]), ct)) throw B.Broken();
             if (await AnyAsync(tx, B.Orders, new BsonDocument("proposalId", proposal["_id"]), ct)) throw B.Broken();
             foreach (var (table, field, result) in new[] { ("auditEvents", "kind", "result"), ("outboxEvents", "kind", "payload"), ("idempotencyRecords", "operation", "result") })
                 if (await AnyAsync(tx, table, new BsonDocument { { field, new BsonDocument("$in", new BsonArray { B.Prefix + "approve", B.Prefix + "reject" }) }, { result + ".proposalId", proposal["_id"] } }, ct)) throw B.Broken();

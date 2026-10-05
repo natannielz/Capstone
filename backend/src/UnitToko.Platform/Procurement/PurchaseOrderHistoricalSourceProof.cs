@@ -32,6 +32,9 @@ internal sealed class PurchaseOrderHistoricalSourceProof
         IClientSessionHandle current, BsonDocument expectedSource, CancellationToken ct) {
         Require(expectedOwner, expectedDatabase, current, expectedSource);
         await capture.RequireAsync(database, current, ct);
+        // Current ancestor membership is not cached. The genuine receiving-policy
+        // owner authenticates selected historical pool/configuration lineage on every reuse.
+        await owner.RequireInboundHistoryAsync(database, current, source, ct);
         Require(expectedOwner, expectedDatabase, current, expectedSource); ct.ThrowIfCancellationRequested();
     }
     internal bool SameProof(PurchaseOrderHistoricalSourceProof other) => ReferenceEquals(owner, other.owner) &&

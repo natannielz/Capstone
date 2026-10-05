@@ -16,14 +16,14 @@ using B = UnitToko.Platform.Inventory.StockSourceReconciliationBson;
 
 namespace UnitToko.Tests.Inventory;
 
-/// <summary>Real pending setup survives the exact empty91/92/93 suffix upgrade. Genuine current-command
+/// <summary>Real pending setup survives the exact empty91/92/93/94 suffix upgrade. Genuine current-command
 /// reconciliation rows are used only for inconsistent middle-history refusal; this does not claim a positive
 /// old-binary approved-source handoff or retrospective producer reconstruction.</summary>
 [Collection("Mongo")]
 public sealed class ReconciliationStockSourceMigrationTests(MongoFixture fixture)
 {
     [Fact]
-    public async Task Genuine_pending_setup_and_all_retained_bytes_survive90_to93_without_creating_authority_and_original_key_recovers()
+    public async Task Genuine_pending_setup_and_all_retained_bytes_survive90_to94_without_creating_authority_and_original_key_recovers()
     {
         await using var data = await OrderStockSourceTestData.CreateAsync(fixture, approve: false);
         await RestoreEmptyV90Async(data.Data.Database);
@@ -40,18 +40,21 @@ public sealed class ReconciliationStockSourceMigrationTests(MongoFixture fixture
         Assert.False(await migration.IsCurrentAsync());
         await migration.ApplyAsync(); Assert.True(await migration.IsCurrentAsync());
         var applied = await HistoryAsync(data.Data.Database);
-        Assert.Equal(93, applied.Count);
+        Assert.Equal(94, applied.Count);
         Assert.Equal(predecessor, new BsonArray(applied.Take(90)));
         Assert.Equal(91L, applied[90]["_id"].ToInt64()); Assert.Equal("applied", applied[90]["state"].AsString);
         Assert.Equal(92L, applied[91]["_id"].ToInt64()); Assert.Equal("applied", applied[91]["state"].AsString);
         Assert.Equal(93L, applied[92]["_id"].ToInt64()); Assert.Equal("applied", applied[92]["state"].AsString);
+        Assert.Equal(94L, applied[93]["_id"].ToInt64()); Assert.Equal("applied", applied[93]["state"].AsString);
         var after = await SnapshotAsync(data.Data.Database);
-        Assert.Equal(before.ElementCount + ReconciliationStockSourceSchemas.Collections.Length + FulfillmentStockSourceSchemas.Collections.Length + ProcurementStockSourceSchemas.Collections.Length, after.ElementCount);
+        Assert.Equal(before.ElementCount + ReconciliationStockSourceSchemas.Collections.Length + FulfillmentStockSourceSchemas.Collections.Length + ProcurementStockSourceSchemas.Collections.Length + PurchaseOrderInboundBindingSchemas.Collections.Length, after.ElementCount);
         foreach (var name in before.Names) Assert.Equal(before[name], after[name]);
         await ReconciliationStockSourceStorage.RequireAsync(data.Data.Database, default);
         await RequireEmptyOwnersAsync(data.Data.Database);
         await RequireEmptyFulfillmentOwnersAsync(data.Data.Database);
         await RequireEmptyProcurementOwnersAsync(data.Data.Database);
+        await PurchaseOrderInboundBindingStorage.RequireAsync(data.Data.Database, default);
+        foreach (var name in PurchaseOrderInboundBindingSchemas.Collections) Assert.Empty(after[name]["rows"].AsBsonArray);
         await migration.ApplyAsync();
         Assert.Equal(applied, await HistoryAsync(data.Data.Database));
         Assert.Equal(after, await SnapshotAsync(data.Data.Database));
@@ -128,7 +131,7 @@ public sealed class ReconciliationStockSourceMigrationTests(MongoFixture fixture
             ReconciliationStockSourceTestData.Meta("m91-migration-real-rejection"));
         Assert.Equal(proposal, await data.Service.RecoverReconciliationAsync(data.Maker, B.ProposeOperation, "m91-migration-real-proposal"));
         Assert.Equal(decision, await data.Service.RecoverReconciliationAsync(data.Checker, B.DecideOperation, "m91-migration-real-rejection"));
-        var history = await RequireAppliedAsync(data.Database, 93);
+        var history = await RequireAppliedAsync(data.Database, 94);
         Assert.True(await data.Rows(ReconciliationStockSourceRecords.Heads).Find(new BsonDocument()).AnyAsync());
         Assert.Equal(3L, await data.Rows(ReconciliationStockSourceRecords.Transitions).CountDocumentsAsync(new BsonDocument()));
         Assert.True(await data.Rows(FulfillmentStockSourceRecords.Heads).Find(new BsonDocument()).AnyAsync());
@@ -143,7 +146,7 @@ public sealed class ReconciliationStockSourceMigrationTests(MongoFixture fixture
             Assert.Equal(proposal["proposalId"], genuineDecision["proposalId"]);
             Assert.False(await data.Rows(B.Proposals).Find(new BsonDocument("_id", genuineDecision["proposalId"])).AnyAsync());
         }
-        // Explicit negative middle-history corruption. Keep the authentic92/93 markers and EVERY
+        // Explicit negative middle-history corruption. Keep the authentic92/93/94 markers and EVERY
         // produced row/counter. This proves the real history gate, not an isolated91 preflight
         // cause, and does not manufacture a valid90 predecessor from an approved current pool.
         Assert.Equal(1L, (await data.Rows("schemaMigrations").DeleteOneAsync(history[90].AsBsonDocument)).DeletedCount);
@@ -164,6 +167,7 @@ public sealed class ReconciliationStockSourceMigrationTests(MongoFixture fixture
         Assert.Equal(damaged, await HistoryAsync(data.Database));
         Assert.Equal(history[91], await data.Rows("schemaMigrations").Find(new BsonDocument("_id", 92)).SingleAsync());
         Assert.Equal(history[92], await data.Rows("schemaMigrations").Find(new BsonDocument("_id", 93)).SingleAsync());
+        Assert.Equal(history[93], await data.Rows("schemaMigrations").Find(new BsonDocument("_id", 94)).SingleAsync());
         Assert.False(await new CollectionMigrations(data.Database, data.Clock).IsCurrentAsync());
         Assert.False((await data.PoolAsync())["active"].AsBoolean);
         foreach (var rows in (await data.StockAndMoneyAsync()).Values) Assert.Empty(rows.AsBsonArray);
@@ -204,7 +208,7 @@ public sealed class ReconciliationStockSourceMigrationTests(MongoFixture fixture
     private static async Task<BsonArray> RequireAppliedAsync(IMongoDatabase database, int version)
     {
         Assert.Matches(@"\Aunittoko_test_[0-9a-f]{32}_[0-9a-f]{8}\z", database.DatabaseNamespace.DatabaseName);
-        Assert.Equal(93, CollectionMigrations.CurrentVersion);
+        Assert.Equal(94, CollectionMigrations.CurrentVersion);
         var history = await HistoryAsync(database);
         Assert.Equal(version, history.Count);
         Assert.True(MigrationHistory.IsValid(history.Select(row => row.AsBsonDocument).ToArray(), version));

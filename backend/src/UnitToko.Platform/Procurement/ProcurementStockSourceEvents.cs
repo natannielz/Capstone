@@ -49,6 +49,17 @@ internal sealed class ProcurementStockSourceEvents
         // Reuse the exact existing storage admission, including current supplier-document
         // schema unions, private inspection owners and allowed disposition index branches.
         await receiptOwner.RequireStockSourcePredecessorStorageAsync(ct);
+        return await ReadCoreAsync(tx, kind, id, requireSetupReceipt, ct);
+    }
+    internal async Task<ProcurementStockSourceEvent> ReadRetainedForMigrationAsync(IClientSessionHandle tx, string kind, long id,
+        bool requireSetupReceipt, MigrationLease lease, CancellationToken ct)
+    {
+        await RequireRetainedMigrationAsync(lease, ct);
+        return await ReadCoreAsync(tx, kind, id, requireSetupReceipt, ct);
+    }
+    private async Task<ProcurementStockSourceEvent> ReadCoreAsync(IClientSessionHandle tx, string kind, long id,
+        bool requireSetupReceipt, CancellationToken ct)
+    {
         if (kind == "setup") {
             var source = await new OrderStockSourceRecords(database).SetupAsync(tx, id, requireSetupReceipt, ct);
             if (source.PoolIds.Length != 1) throw ProcurementStockSourceRecords.Unavailable();
@@ -90,6 +101,24 @@ internal sealed class ProcurementStockSourceEvents
     internal async Task PreflightAsync(IClientSessionHandle tx, CancellationToken ct)
     {
         await receiptOwner.RequireStockSourcePredecessorStorageAsync(ct);
+        await PreflightCoreAsync(tx, ct);
+    }
+    internal async Task PreflightRetainedForMigrationAsync(IClientSessionHandle tx, MigrationLease lease, CancellationToken ct)
+    {
+        await RequireRetainedMigrationAsync(lease, ct);
+        await PreflightCoreAsync(tx, ct);
+    }
+    private async Task RequireRetainedMigrationAsync(MigrationLease lease, CancellationToken ct)
+    {
+        await lease.RenewAsync(ct);
+        var history = await database.GetCollection<BsonDocument>("schemaMigrations").WithReadConcern(ReadConcern.Majority)
+            .Find(new BsonDocument()).Sort(new BsonDocument("_id", 1)).Limit(94).ToListAsync(ct);
+        if (!MigrationHistory.IsValid(history, 93) || history.Count != 93 || history.Take(92).Any(row => row["state"] != "applied") ||
+            history[^1]["state"] != "applying") throw ProcurementStockSourceRecords.Unavailable();
+        await receiptOwner.RequirePreInboundStockSourceStorageForMigrationAsync(ct);
+    }
+    private async Task PreflightCoreAsync(IClientSessionHandle tx, CancellationToken ct)
+    {
         await receipts.OrphansAsync(tx, ct);
         await dispositions.OrphansAsync(tx, ct);
         await quality.PreflightAsync(tx, ct);

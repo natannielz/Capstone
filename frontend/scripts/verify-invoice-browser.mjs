@@ -16,6 +16,7 @@ import { verifyAccountingBooksBrowser } from './verify-accounting-books-browser.
 import { verifyProcurementRequestsBrowser } from './verify-procurement-requests-browser.mjs';
 import { verifySuppliersBrowser } from './verify-suppliers-browser.mjs';
 import { verifyPurchaseOrdersBrowser } from './verify-purchase-orders-browser.mjs';
+import { verifyPurchaseOrderInboundBrowser } from './verify-purchase-order-inbound-browser.mjs';
 import { verifyProcurementFundingBrowser } from './verify-procurement-funding-browser.mjs';
 import { verifySupplierBankBrowser } from './verify-supplier-bank-browser.mjs';
 import { verifyProcurementDisbursementBrowser } from './verify-procurement-disbursement-browser.mjs';
@@ -330,6 +331,11 @@ try {
     assert.equal(config.financeToken, config.makerToken);
     await verifyProcurementFundingBrowser({ config, maker: finance, user, origin, directory, fundingWrites, fundingRecoveries, dropNext: () => { dropNext = true; }, dropped: () => dropped });
     assert.equal(writes.length + caseWrites.length + decisionWrites.length + returnWrites.length + inspectionWrites.length + resolutionWrites.length + entitlementWrites.length + financialWrites.length + payoutWrites.length + draftWrites.length + settlementWrites.length + addressWrites.length + spendingWrites.length + bookWrites.length + procurementWrites.length + supplierWrites.length + purchaseOrderWrites.length, 0);
+    assert.deepEqual(errors, []);
+  } else if (config.purchaseOrderInbound) {
+    assert.equal(config.purchaseOrders, true); assert.equal(config.financeToken, config.makerToken);
+    await verifyPurchaseOrderInboundBrowser({ config, maker: finance, user, origin, directory, purchaseOrderWrites, purchaseOrderRecoveries, dropNext: () => { dropNext = true; }, dropped: () => dropped });
+    assert.equal(writes.length + caseWrites.length + decisionWrites.length + returnWrites.length + inspectionWrites.length + resolutionWrites.length + entitlementWrites.length + financialWrites.length + payoutWrites.length + draftWrites.length + settlementWrites.length + addressWrites.length + spendingWrites.length + bookWrites.length + procurementWrites.length + supplierWrites.length + fundingWrites.length + supplierBankWrites.length + disbursementWrites.length + procurementSettlementWrites.length + receivingWrites.length + procurementInspectionWrites.length + documentWrites.length + claimWrites.length + stockReceiptWrites.length + valuationWrites.length + reconciliationWrites.length + payableWrites.length, 0);
     assert.deepEqual(errors, []);
   } else if (config.purchaseOrders) {
     assert.equal(config.financeToken, config.makerToken);

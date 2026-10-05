@@ -53,7 +53,9 @@ public sealed partial class PurchaseOrderService
         result.AddRange(new BsonDocument { { "id", proposal["_id"] }, { "version", 1L }, { "reason", proposal["reason"] }, { "proposedAt", proposal["recordedAt"] },
             { "state", decision is null ? "pending" : decision["decision"] == "approve" ? "approved" : "rejected" },
             { "decision", decision is null ? BsonNull.Value : new BsonDocument { { "id", decision["_id"] }, { "decision", decision["decision"] }, { "reason", decision["reason"] },
-                { "decidedAt", decision["recordedAt"] }, { "orderId", decision["orderId"] }, { "orderVersion", decision["orderVersion"] } } } }); return result;
+                { "decidedAt", decision["recordedAt"] }, { "orderId", decision["orderId"] }, { "orderVersion", decision["orderVersion"] } } } }); var selection = await InboundRecords.SelectionAsync(context.Tx, proposal, ct);
+        if (selection is not null) result.Add("inboundPools", PurchaseOrderInboundBindingBson.Public(selection, decision is null ? null : await InboundRecords.DecisionAsync(context.Tx, proposal, decision, selection, ct)));
+        return result;
     }
     public async Task<BsonDocument> ReadAsync(ActorContext actor, long proposalId, CancellationToken ct = default) {
         if (proposalId <= 0) throw PurchaseOrderRules.Invalid(); await StorageAsync(ct);

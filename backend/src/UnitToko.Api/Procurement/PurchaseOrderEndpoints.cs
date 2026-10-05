@@ -7,6 +7,7 @@ using UnitToko.Modules.Accounting;
 using UnitToko.Modules.Contracts;
 using UnitToko.Modules.Identity.Contracts;
 using UnitToko.Modules.Procurement;
+using UnitToko.Platform.Authorization;
 using UnitToko.Platform.Procurement;
 using A = UnitToko.Api.Billing.PaymentAllocationEndpoints;
 using R = UnitToko.Api.Procurement.ProcurementRequestEndpoints;
@@ -53,9 +54,38 @@ public sealed record PurchaseOrderReadDto([property: JsonRequired] string Purpos
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record PurchaseOrderListInputDto([property: JsonRequired] string Purpose, [property: JsonRequired] ProcurementLocationDto Location, LongId? BeforeId = null);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed record PurchaseOrderPreviewInputDto([property: JsonRequired] string Purpose, [property: JsonRequired] PurchaseOrderInputDto Input);
+public sealed record PurchaseOrderPreviewInputDto([property: JsonRequired] string Purpose, [property: JsonRequired] PurchaseOrderInputDto Input) {
+    private PurchaseOrderInboundSelectionDto? inboundPools;
+    [JsonIgnore] internal bool InboundPoolsSupplied { get; private set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public PurchaseOrderInboundSelectionDto? InboundPools { get => inboundPools; init { inboundPools = value; InboundPoolsSupplied = true; } }
+    internal PurchaseOrderInboundPoolSelection? Selection(PurchaseOrderInput input) => !InboundPoolsSupplied ? null :
+        InboundPools is null ? throw PurchaseOrderRules.Invalid() : InboundPools.Domain(input);
+}
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed record PurchaseOrderProposeDto([property: JsonRequired] PurchaseOrderInputDto Input, [property: JsonRequired] string Binding, [property: JsonRequired] string Reason);
+public sealed record PurchaseOrderProposeDto([property: JsonRequired] PurchaseOrderInputDto Input, [property: JsonRequired] string Binding, [property: JsonRequired] string Reason) {
+    private PurchaseOrderInboundSelectionDto? inboundPools;
+    [JsonIgnore] internal bool InboundPoolsSupplied { get; private set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public PurchaseOrderInboundSelectionDto? InboundPools { get => inboundPools; init { inboundPools = value; InboundPoolsSupplied = true; } }
+    internal PurchaseOrderInboundPoolSelection? Selection(PurchaseOrderInput input) => !InboundPoolsSupplied ? null :
+        InboundPools is null ? throw PurchaseOrderRules.Invalid() : InboundPools.Domain(input);
+}
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record PurchaseOrderInboundAllocationDto([property: JsonRequired] LongId RequestSkuId,
+    [property: JsonRequired, JsonNumberHandling(JsonNumberHandling.Strict)] int Packages,
+    [property: JsonRequired] LongId PoolId, [property: JsonRequired] string PoolRevision);
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record PurchaseOrderInboundSelectionDto([property: JsonRequired] PurchaseOrderInboundAllocationDto[] Allocations) {
+    internal PurchaseOrderInboundPoolSelection Domain(PurchaseOrderInput input) {
+        if (Allocations is not { Length: > 0 and <= PurchaseOrderInboundRules.MaximumAllocations } || Allocations.Any(row => row is null)) throw PurchaseOrderRules.Invalid();
+        return PurchaseOrderInboundRules.Copy(input, new([.. Allocations.Select(row => new PurchaseOrderInboundAllocation(
+            row.RequestSkuId.Value, row.Packages, row.PoolId.Value, LongId.Parse(row.PoolRevision).Value))]));
+    }
+}
+public sealed record PurchaseOrderInboundPreviewDto(PurchaseOrderInboundAllocationDto[] Allocations, ProcurementStockReceiptPoolDto[] ReceivingPools);
+public sealed record PurchaseOrderInboundBindingDto(LongId SelectionId, string SelectionHash, PurchaseOrderInboundAllocationDto[] Allocations,
+    ProcurementStockReceiptPoolDto[] ReceivingPools, LongId? DecisionId, string State, bool UnplannedPackagesBound, bool StockReserved, bool PhysicalStockReleased);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record PurchaseOrderDecisionPreviewInputDto([property: JsonRequired] string Purpose, [property: JsonRequired] string Decision);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
@@ -78,11 +108,15 @@ public sealed record PurchaseOrderTotalsDto(Money Net, Money Tax, Money Supplier
 public sealed record PurchaseOrderCapacityDto(LongId RequestSkuId, int RequestedPackages, int CommittedPackages, int AvailablePackages, string Version);
 public sealed record PurchaseOrderPreviewDto(PurchaseOrderInputDto Input, string Route, ProcurementSourceDto Source,
     PurchaseOrderRequestReferenceDto Request, PurchaseOrderSupplierDto Supplier, PurchaseOrderLineDto[] Lines, PurchaseOrderTotalsDto Totals,
-    PurchaseOrderCapacityDto[] Capacity, string Binding, DateTimeOffset ObservedAt);
+    PurchaseOrderCapacityDto[] Capacity, string Binding, DateTimeOffset ObservedAt) {
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public PurchaseOrderInboundPreviewDto? InboundPools { get; init; }
+}
 public sealed record PurchaseOrderDecisionDto(LongId Id, string Decision, string Reason, DateTimeOffset DecidedAt, LongId? OrderId, string? OrderVersion);
 public sealed record PurchaseOrderProposalDto(LongId Id, string Version, PurchaseOrderInputDto Input, string Route, ProcurementSourceDto Source,
     PurchaseOrderRequestReferenceDto Request, PurchaseOrderSupplierDto Supplier, PurchaseOrderLineDto[] Lines, PurchaseOrderTotalsDto Totals,
-    PurchaseOrderCapacityDto[] Capacity, string Reason, DateTimeOffset ProposedAt, string State, PurchaseOrderDecisionDto? Decision);
+    PurchaseOrderCapacityDto[] Capacity, string Reason, DateTimeOffset ProposedAt, string State, PurchaseOrderDecisionDto? Decision) {
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public PurchaseOrderInboundBindingDto? InboundPools { get; init; }
+}
 public sealed record PurchaseOrderHistoryDto(ProcurementLocationDto Location, PurchaseOrderProposalDto[] Items, LongId? NextProposalId);
 public sealed record PurchaseOrderDecisionPreviewDto(PurchaseOrderProposalDto Proposal, string Decision, PurchaseOrderCapacityDto[] Capacity, string Binding, DateTimeOffset ObservedAt);
 public sealed record PurchaseOrderResultDto(LongId ProposalId, string ProposalVersion, LongId? DecisionId, LongId? OrderId, string? OrderVersion, string Status);
@@ -103,13 +137,18 @@ public static class PurchaseOrderEndpoints
         }).WithName("PurchaseOrderRequests");
         group.MapPost("/preview/query", async (PurchaseOrderPreviewInputDto request, HttpContext http, [FromServices] PurchaseOrderService service, CancellationToken ct) => {
             Purpose(request.Purpose); if (request.Input is null) throw PurchaseOrderRules.Invalid();
-            return TypedResults.Ok(Preview(await service.PreviewAsync(Actor(http), request.Input.Domain(), ct)));
+            var input = request.Input.Domain(); var selection = request.Selection(input); var actor = Actor(http);
+            var row = selection is null ? await service.PreviewAsync(actor, input, ct) : await service.PreviewInboundAsync(actor, input, selection, ct);
+            return TypedResults.Ok(Preview(row));
         }).WithName("PurchaseOrderPreview");
         group.MapPost("/proposals", async (PurchaseOrderProposeDto request, HttpContext http, [FromServices] PurchaseOrderService service,
             [FromHeader(Name = "Idempotency-Key")] string idempotencyKey, CancellationToken ct) => {
             if (request.Input is null) throw PurchaseOrderRules.Invalid();
-            return TypedResults.Ok(Result(await service.ProposeAsync(Actor(http), request.Input.Domain(), request.Binding,
-                new(AccessRequestMetadata.IdempotencyKey(http.Request), request.Reason, http.TraceIdentifier), ct)));
+            var input = request.Input.Domain(); var selection = request.Selection(input); var actor = Actor(http);
+            var metadata = new AuthorizationCommandMetadata(AccessRequestMetadata.IdempotencyKey(http.Request), request.Reason, http.TraceIdentifier);
+            var row = selection is null ? await service.ProposeAsync(actor, input, request.Binding, metadata, ct) :
+                await service.ProposeInboundAsync(actor, input, selection, request.Binding, metadata, ct);
+            return TypedResults.Ok(Result(row));
         }).WithName("ProposePurchaseOrder");
         group.MapPost("/proposals/query", async (PurchaseOrderListInputDto request, HttpContext http, [FromServices] PurchaseOrderService service, CancellationToken ct) => {
             Purpose(request.Purpose); var row = await service.ListAsync(Actor(http), Location(request.Location), request.BeforeId?.Value, ct);
@@ -165,10 +204,19 @@ public static class PurchaseOrderEndpoints
     private static PurchaseOrderCapacityDto[] Capacity(BsonValue value) => [.. value.AsBsonArray.Select(row => new PurchaseOrderCapacityDto(new(row["requestSkuId"].AsInt64), row["requestedPackages"].AsInt32,
         row["committedPackages"].AsInt32, row["availablePackages"].AsInt32, Number(row["version"])) )];
     private static PurchaseOrderPreviewDto Preview(BsonValue value) => new(Input(value["input"]), value["route"].AsString, R.Source(value["source"]), RequestReference(value["request"]), Supplier(value["supplier"]),
-        Lines(value["lines"]), Totals(value["totals"]), Capacity(value["capacity"]), value["binding"].AsString, Date(value["observedAt"]));
+        Lines(value["lines"]), Totals(value["totals"]), Capacity(value["capacity"]), value["binding"].AsString, Date(value["observedAt"])) { InboundPools = InboundPreview(value) };
     private static PurchaseOrderDecisionDto DecisionView(BsonValue value) => new(new(value["id"].AsInt64), value["decision"].AsString, value["reason"].AsString, Date(value["decidedAt"]), Id(value["orderId"]), OptionalNumber(value["orderVersion"]));
     private static PurchaseOrderProposalDto Proposal(BsonValue value) => new(new(value["id"].AsInt64), Number(value["version"]), Input(value["input"]), value["route"].AsString, R.Source(value["source"]),
         RequestReference(value["request"]), Supplier(value["supplier"]), Lines(value["lines"]), Totals(value["totals"]), Capacity(value["capacity"]), value["reason"].AsString,
-        Date(value["proposedAt"]), value["state"].AsString, value["decision"].IsBsonNull ? null : DecisionView(value["decision"]));
+        Date(value["proposedAt"]), value["state"].AsString, value["decision"].IsBsonNull ? null : DecisionView(value["decision"])) { InboundPools = InboundBinding(value) };
+    private static PurchaseOrderInboundAllocationDto[] InboundAllocations(BsonValue value) => [.. value.AsBsonArray.Select(row =>
+        new PurchaseOrderInboundAllocationDto(new(row["requestSkuId"].AsInt64), row["packages"].AsInt32, new(row["poolId"].AsInt64), Number(row["poolRevision"])))];
+    private static ProcurementStockReceiptPoolDto[] InboundReceivingPools(BsonValue value) =>
+        [.. value.AsBsonArray.Select(ProcurementStockReceiptEndpoints.Pool)];
+    private static PurchaseOrderInboundPreviewDto? InboundPreview(BsonValue value) => value.AsBsonDocument.TryGetValue("inboundPools", out var row) ?
+        new(InboundAllocations(row["allocations"]), InboundReceivingPools(row["receivingPools"])) : null;
+    private static PurchaseOrderInboundBindingDto? InboundBinding(BsonValue value) => value.AsBsonDocument.TryGetValue("inboundPools", out var row) ?
+        new(new(row["selectionId"].AsInt64), row["selectionHash"].AsString, InboundAllocations(row["allocations"]), InboundReceivingPools(row["receivingPools"]),
+            Id(row["decisionId"]), row["state"].AsString, row["unplannedPackagesBound"].AsBoolean, row["stockReserved"].AsBoolean, row["physicalStockReleased"].AsBoolean) : null;
     private static PurchaseOrderResultDto Result(BsonValue value) => new(new(value["proposalId"].AsInt64), Number(value["proposalVersion"]), Id(value["decisionId"]), Id(value["orderId"]), OptionalNumber(value["orderVersion"]), value["status"].AsString);
 }

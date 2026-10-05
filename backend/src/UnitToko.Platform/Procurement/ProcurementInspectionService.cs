@@ -48,6 +48,7 @@ public sealed partial class ProcurementInspectionService
         internal PersonAuthorityProof? People;
         internal DateTimeOffset? SessionExpiry;
         internal bool IncludeEvidence;
+        internal IReadOnlyList<HeldReceiptPoolCapture> InboundCaptures = [];
     }
     private AuthorizationQuery Query(ActorContext actor, AuthorizationSnapshot authority, string permission) {
         var query = ScopePolicy.Compile(actor, authority, permission, clock.UtcNow); AuthorizationStore.Require(query); return query;
@@ -60,7 +61,7 @@ public sealed partial class ProcurementInspectionService
         ProcurementRequestRules.Location(location); var result = new Context(actor, authority, tx, location, permission); _ = Require(result); return result;
     }
     private void Current(Context context) {
-        _ = Require(context); context.People?.RequireCurrent(context.Tx, clock.UtcNow);
+        _ = Require(context); context.People?.RequireCurrent(context.Tx, clock.UtcNow); PurchaseOrderService.RequireApprovedInboundCurrent(context.InboundCaptures);
         if (!context.Tx.IsInTransaction || !ReferenceEquals(context.Tx.Client, database.Client) || context.Tx.WrappedCoreSession.CurrentTransaction.TransactionNumber != context.Transaction ||
             context.History is { } history && context.SourceHash != B.Hash(history.Source)) throw B.Broken();
         if (context.SessionExpiry is { } expiry && clock.UtcNow >= expiry) throw new AuthorizationDeniedException("stale_or_inactive_session");
@@ -87,6 +88,8 @@ public sealed partial class ProcurementInspectionService
             ?? throw new AuthorizationDeniedException("resource_unavailable");
         var context = ContextFor(actor, authority, tx, R.Location(route["location"]), permission);
         context.History = await records.HistoryAsync(tx, noticeId, intakeId, ct); context.SourceHash = B.Hash(context.History.Source);
+        if (permission == Permissions.ProcurementInspect)
+            context.InboundCaptures = await orders.CaptureApprovedInboundAsync(actor, authority, tx, context.History.Source["notice"]["source"].AsBsonDocument, ct);
         await PeopleAsync(context, null, ct); Current(context); return context;
     }
     private async Task<Context> DraftContextAsync(ActorContext actor, AuthorizationSnapshot authority, IClientSessionHandle tx, long id, string permission, bool requireDraft, CancellationToken ct) {
@@ -105,6 +108,7 @@ public sealed partial class ProcurementInspectionService
     }
     private async Task FenceAsync(Context context, CancellationToken ct) {
         Current(context);
+        await PurchaseOrderService.FenceApprovedInboundAsync(context.InboundCaptures, ct);
         if (context.History is { } history) {
             await TouchAsync(context, C.Heads, history.CustodyHead, ct);
             if (history.Head is { } head) await TouchAsync(context, B.Heads, head, ct);

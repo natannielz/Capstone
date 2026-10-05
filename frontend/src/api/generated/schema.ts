@@ -15413,6 +15413,31 @@ export interface components {
             location: components["schemas"]["ProcurementLocationDto"];
             nextProposalId: null | components["schemas"]["LongId"];
         };
+        PurchaseOrderInboundAllocationDto: {
+            /** Format: int32 */
+            packages: number;
+            poolId: components["schemas"]["LongId"];
+            poolRevision: string;
+            requestSkuId: components["schemas"]["LongId"];
+        };
+        PurchaseOrderInboundBindingDto: {
+            allocations: components["schemas"]["PurchaseOrderInboundAllocationDto"][];
+            decisionId: null | components["schemas"]["LongId"];
+            physicalStockReleased: boolean;
+            receivingPools: components["schemas"]["ProcurementStockReceiptPoolDto"][];
+            selectionHash: string;
+            selectionId: components["schemas"]["LongId"];
+            state: string;
+            stockReserved: boolean;
+            unplannedPackagesBound: boolean;
+        };
+        PurchaseOrderInboundPreviewDto: {
+            allocations: components["schemas"]["PurchaseOrderInboundAllocationDto"][];
+            receivingPools: components["schemas"]["ProcurementStockReceiptPoolDto"][];
+        };
+        PurchaseOrderInboundSelectionDto: {
+            allocations: components["schemas"]["PurchaseOrderInboundAllocationDto"][];
+        };
         PurchaseOrderInputDto: {
             businessDate: string;
             commercialReference: components["schemas"]["PurchaseOrderCommercialReferenceDto"];
@@ -15482,6 +15507,7 @@ export interface components {
         PurchaseOrderPreviewDto: {
             binding: string;
             capacity: components["schemas"]["PurchaseOrderCapacityDto"][];
+            inboundPools?: null | components["schemas"]["PurchaseOrderInboundPreviewDto"];
             input: components["schemas"]["PurchaseOrderInputDto"];
             lines: components["schemas"]["PurchaseOrderLineDto"][];
             /** Format: date-time */
@@ -15493,6 +15519,7 @@ export interface components {
             totals: components["schemas"]["PurchaseOrderTotalsDto"];
         };
         PurchaseOrderPreviewInputDto: {
+            inboundPools?: null | components["schemas"]["PurchaseOrderInboundSelectionDto"];
             input: components["schemas"]["PurchaseOrderInputDto"];
             purpose: string;
         };
@@ -15500,6 +15527,7 @@ export interface components {
             capacity: components["schemas"]["PurchaseOrderCapacityDto"][];
             decision: null | components["schemas"]["PurchaseOrderDecisionDto"];
             id: components["schemas"]["LongId"];
+            inboundPools?: null | components["schemas"]["PurchaseOrderInboundBindingDto"];
             input: components["schemas"]["PurchaseOrderInputDto"];
             lines: components["schemas"]["PurchaseOrderLineDto"][];
             /** Format: date-time */
@@ -15515,6 +15543,7 @@ export interface components {
         };
         PurchaseOrderProposeDto: {
             binding: string;
+            inboundPools?: null | components["schemas"]["PurchaseOrderInboundSelectionDto"];
             input: components["schemas"]["PurchaseOrderInputDto"];
             reason: string;
         };

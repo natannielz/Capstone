@@ -25,7 +25,7 @@ public sealed class ProcurementStockSourceTests(MongoFixture fixture)
     public async Task Actual_completed_held_receipt_advances_genuine_producer_once_and_partial_reader_never_claims_inbound_completeness()
     {
         await using var data = await ProcurementStockReceiptTestData.CreateAsync(fixture);
-        Assert.Equal(93, CollectionMigrations.CurrentVersion);
+        Assert.Equal(94, CollectionMigrations.CurrentVersion);
         var records = new ProcurementStockSourceRecords(data.Database);
         var owner = new ProcurementStockSourceEvents(data.Database, new(data.Database), data.Clock);
         var initial = await data.Unit.ExecuteAsync((tx, ct) => records.HistoryAsync(tx, owner, data.PoolId, ct));

@@ -67,7 +67,7 @@ internal sealed class ProcurementStockReceiptRecords(IMongoDatabase database, Mo
         }
         Equal(row["source"], source); Equal(row["supplierId"], source["proposal"]["input"]["supplierId"]);
         Equal(history.Source["notice"]["source"], source);
-        var inspection = history.Submissions.SingleOrDefault(value => value["_id"] == input.InspectionId) ?? throw B.Broken(); Equal(row["inspection"], inspection); Review(input, source, inspection);
+        var inspection = history.Submissions.SingleOrDefault(value => value["_id"] == input.InspectionId) ?? throw B.Broken(); Equal(row["inspection"], inspection); Review(input, source, inspection); await orders.RequirePlannedReceiptMembershipAsync(tx, source, inspection, input, ct);
         var at = new DateTimeOffset(row["recordedAt"].ToUniversalTime()); if (at > clock.UtcNow || inspection["recordedAt"].CompareTo(row["recordedAt"]) > 0) throw B.Broken();
         using (SupplierDocumentMatchDiagnostics.Begin("receipt.configuration"))
             await sources.RequireHeldReceiptHistoryAsync(tx, row["poolSource"].AsBsonDocument, at, ct);

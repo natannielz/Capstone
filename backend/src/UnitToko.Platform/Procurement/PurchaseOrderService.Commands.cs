@@ -29,8 +29,8 @@ public sealed partial class PurchaseOrderService
         }
         Current(context);
     }
-    private static string Binding(Context context, PurchaseOrderInput input) => B.Binding(context.Actor.UserId, context.Actor.GrantVersion, input,
-        context.Request!.Request, context.Request.Decision, context.Sources, context.Supplier!.Snapshot, Capacity(context));
+    private static string Binding(Context context, PurchaseOrderInput input) => PurchaseOrderInboundBindingBson.Binding(context.Actor.UserId, context.Actor.GrantVersion, input,
+        context.Request!.Request, context.Request.Decision, context.Sources, context.Supplier!.Snapshot, Capacity(context), context.InboundSelection, ReceivingSources(context));
     private async Task EffectsAsync(Context context, BsonDocument row, CancellationToken ct) {
         await Rows("auditEvents").InsertOneAsync(context.Tx, B.Audit(row), cancellationToken: ct);
         await Rows("outboxEvents").InsertOneAsync(context.Tx, new BsonDocument { { "_id", ObjectId.GenerateNewId() }, { "schemaVersion", 1 }, { "sourceKey", B.SourceKey(row) },
@@ -63,20 +63,28 @@ public sealed partial class PurchaseOrderService
             await FenceAsync(context, token);
         }, validateCurrent: () => Current(selected ?? throw B.Broken()));
     }
-    public async Task<BsonDocument> PreviewAsync(ActorContext actor, PurchaseOrderInput input, CancellationToken ct = default) {
+    public Task<BsonDocument> PreviewAsync(ActorContext actor, PurchaseOrderInput input, CancellationToken ct = default) => PreviewInboundCoreAsync(actor, input, null, ct);
+    public Task<BsonDocument> PreviewInboundAsync(ActorContext actor, PurchaseOrderInput input, PurchaseOrderInboundPoolSelection selection, CancellationToken ct = default) =>
+        PreviewInboundCoreAsync(actor, input, PurchaseOrderInboundRules.Copy(input, selection), ct);
+    private async Task<BsonDocument> PreviewInboundCoreAsync(ActorContext actor, PurchaseOrderInput input, PurchaseOrderInboundPoolSelection? selection, CancellationToken ct) {
         input = PurchaseOrderRules.Copy(input); await StorageAsync(ct);
         return await authorization.ReadAsync(actor, async (authority, tx, token) => {
-            var context = await ContextAsync(actor, authority, tx, input.Location, Permissions.ProcurementPrepare, token); await PeopleAsync(context, null, null, token); await CaptureAsync(context, input, token);
+            var context = await ContextAsync(actor, authority, tx, input.Location, Permissions.ProcurementPrepare, token); await PeopleAsync(context, null, null, token); await CaptureAsync(context, input, token); await CaptureInboundAsync(context, input, selection, token);
             var result = BusinessView(input, context.Request!.Request, context.Request.Decision, context.Sources, context.Supplier!.Snapshot, Capacity(context));
+            if (selection is not null) result.Add("inboundPools", new BsonDocument { { "allocations", PurchaseOrderInboundBindingBson.Selection(input, selection) }, { "receivingPools", new BsonArray(ReceivingSources(context).Select(value => UnitToko.Platform.Inventory.StockSourceSetupService.HeldReceiptPoolView(value.AsBsonDocument))) } });
             result.Add("binding", Binding(context, input)); result.Add("observedAt", Now.UtcDateTime); await FenceAsync(context, token); return result;
         }, ct);
     }
-    public async Task<BsonDocument> ProposeAsync(ActorContext actor, PurchaseOrderInput input, string binding, AuthorizationCommandMetadata metadata, CancellationToken ct = default) {
+    public Task<BsonDocument> ProposeAsync(ActorContext actor, PurchaseOrderInput input, string binding, AuthorizationCommandMetadata metadata, CancellationToken ct = default) =>
+        ProposeInboundCoreAsync(actor, input, null, binding, metadata, ct);
+    public Task<BsonDocument> ProposeInboundAsync(ActorContext actor, PurchaseOrderInput input, PurchaseOrderInboundPoolSelection selection, string binding, AuthorizationCommandMetadata metadata, CancellationToken ct = default) =>
+        ProposeInboundCoreAsync(actor, input, PurchaseOrderInboundRules.Copy(input, selection), binding, metadata, ct);
+    private async Task<BsonDocument> ProposeInboundCoreAsync(ActorContext actor, PurchaseOrderInput input, PurchaseOrderInboundPoolSelection? selection, string binding, AuthorizationCommandMetadata metadata, CancellationToken ct) {
         input = PurchaseOrderRules.Copy(input); B.RequireBinding(binding); Metadata(metadata); await StorageAsync(ct);
-        var id = (await ids.NextAsync(B.Proposals, ct)).Value; var auditId = (await ids.NextAsync("auditEvents", ct)).Value; var body = B.ProposeBody(input, binding);
+        var id = (await ids.NextAsync(B.Proposals, ct)).Value; var auditId = (await ids.NextAsync("auditEvents", ct)).Value; var body = PurchaseOrderInboundBindingBson.Body(input, binding, selection);
         return await CommandAsync(actor, B.Prefix + "propose", metadata, body, async (authority, tx, saved, token) => {
             if (saved is not null) { var original = await ProposalContextAsync(actor, authority, tx, saved["proposalId"].AsInt64, Permissions.ProcurementPrepare, token); await PeopleAsync(original, null, null, token); return original; }
-            var context = await ContextAsync(actor, authority, tx, input.Location, Permissions.ProcurementPrepare, token); await PeopleAsync(context, null, null, token); await CaptureAsync(context, input, token);
+            var context = await ContextAsync(actor, authority, tx, input.Location, Permissions.ProcurementPrepare, token); await PeopleAsync(context, null, null, token); await CaptureAsync(context, input, token); await CaptureInboundAsync(context, input, selection, token);
             Equal(binding, Binding(context, input)); return context;
         }, async (context, token) => {
             Current(context); var now = Now; var row = new BsonDocument { { "_id", id }, { "schemaVersion", 1 }, { "proposalId", id }, { "version", 1L }, { "requestId", input.RequestId },
@@ -84,23 +92,24 @@ public sealed partial class PurchaseOrderService
                 { "sources", context.Sources.DeepClone() }, { "supplier", context.Supplier!.Snapshot.DeepClone() }, { "capacity", Capacity(context).DeepClone() }, { "binding", binding },
                 { "people", new BsonArray(context.People!.Evidence.OrderBy(person => person.UserId).Select(B.Person)) } };
             B.Metadata(row, B.Prefix + "propose", auditId, actor, metadata, body, now); await Rows(B.Proposals).InsertOneAsync(context.Tx, row, cancellationToken: token);
-            await EffectsAsync(context, row, token); return B.Result(row);
+            await WriteInboundSelectionAsync(context, row, token); await EffectsAsync(context, row, token); return B.Result(row);
         }, ct);
     }
     private async Task<Context> ProposalContextAsync(ActorContext actor, AuthorizationSnapshot authority, IClientSessionHandle tx, long proposalId, string permission, CancellationToken ct) {
         _ = Query(actor, authority, permission); var route = await Rows(B.Proposals).Find(tx, new BsonDocument("_id", proposalId)).Project(new BsonDocument("location", 1)).SingleOrDefaultAsync(ct) ?? throw new AuthorizationDeniedException("resource_unavailable");
         var context = await ContextAsync(actor, authority, tx, R.Location(route["location"]), permission, ct); context.Proposal = await records.ProposalAsync(tx, proposalId, ct);
-        BindPeople(context, context.Proposal); return context;
+        context.InboundRecord = await InboundRecords.SelectionAsync(tx, context.Proposal, ct); BindPeople(context, context.Proposal); return context;
     }
     private async Task PrepareDecisionAsync(Context context, PurchaseOrderDecision decision, CancellationToken ct) {
         if (await records.DecisionForAsync(context.Tx, context.Proposal!, ct) is not null) throw B.Changed();
         if (decision == PurchaseOrderDecision.Approve) {
-            await CaptureAsync(context, B.Input(context.Proposal!["input"]), ct); Equal(context.Sources, context.Proposal["sources"]); Equal(context.Supplier!.Snapshot, context.Proposal["supplier"]);
+            await CaptureAsync(context, B.Input(context.Proposal!["input"]), ct); await CaptureInboundAsync(context, B.Input(context.Proposal["input"]), context.InboundRecord is null ? null : PurchaseOrderInboundBindingBson.Selection(B.Input(context.Proposal["input"]), context.InboundRecord["allocations"]), ct); Equal(context.Sources, context.Proposal["sources"]); Equal(context.Supplier!.Snapshot, context.Proposal["supplier"]);
+            if (context.InboundRecord is not null) Equal(PurchaseOrderInboundBindingBson.StableSources(ReceivingSources(context)), PurchaseOrderInboundBindingBson.StableSources(context.InboundRecord["receivingSources"].AsBsonArray));
         } else await RequireAllocationsAsync(context, context.Proposal!, ct);
         await PeopleAsync(context, context.Actor.UserId, context.Proposal!["actorId"].AsInt64, ct);
     }
-    private static string DecisionBinding(Context context, PurchaseOrderDecision decision) => B.DecisionBinding(context.Actor.UserId, context.Actor.GrantVersion, context.Proposal!, decision,
-        context.Sources, context.Supplier?.Snapshot, Capacity(context));
+    private static string DecisionBinding(Context context, PurchaseOrderDecision decision) => PurchaseOrderInboundBindingBson.DecisionBinding(context.Actor.UserId, context.Actor.GrantVersion, context.Proposal!, decision,
+        context.Sources, context.Supplier?.Snapshot, Capacity(context), context.InboundRecord, ReceivingSources(context));
     public async Task<BsonDocument> PreviewDecisionAsync(ActorContext actor, long proposalId, PurchaseOrderDecision decision, CancellationToken ct = default) {
         if (proposalId <= 0 || !Enum.IsDefined(decision)) throw PurchaseOrderRules.Invalid(); await StorageAsync(ct);
         return await authorization.ReadAsync(actor, async (authority, tx, token) => {
@@ -132,7 +141,7 @@ public sealed partial class PurchaseOrderService
                     { "requestDecisionId", proposal["input"]["requestDecisionId"] }, { "recordedAt", now.UtcDateTime } }; order.Add("snapshotHash", B.Hash(order));
                 await Rows(B.Orders).InsertOneAsync(context.Tx, order, cancellationToken: token);
             }
-            await Rows(B.Decisions).InsertOneAsync(context.Tx, row, cancellationToken: token); await EffectsAsync(context, row, token); return B.Result(row);
+            await Rows(B.Decisions).InsertOneAsync(context.Tx, row, cancellationToken: token); await WriteInboundDecisionAsync(context, row, token); await EffectsAsync(context, row, token); return B.Result(row);
         }, ct);
     }
 }

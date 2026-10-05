@@ -24,7 +24,7 @@ public sealed class ProcurementStockSourceMigrationTests(MongoFixture fixture)
     private const string ProposalKey = "m93-pending-source-propose";
 
     [Fact]
-    public async Task Genuine_pending_setup_and_all_retained_bytes_survive92_to93_and_original_key_recovers()
+    public async Task Genuine_pending_setup_and_all_retained_bytes_survive92_to94_and_original_key_recovers()
     {
         var pending = await PendingAsync(); await using var data = pending.Data;
         await RestoreEmptyV92Async(data.Database);
@@ -38,14 +38,17 @@ public sealed class ProcurementStockSourceMigrationTests(MongoFixture fixture)
         var migration = new CollectionMigrations(data.Database, data.Clock);
         Assert.False(await migration.IsCurrentAsync());
         await migration.ApplyAsync(); Assert.True(await migration.IsCurrentAsync());
-        var applied = await HistoryAsync(data.Database); Assert.Equal(93, applied.Count);
+        var applied = await HistoryAsync(data.Database); Assert.Equal(94, applied.Count);
         Assert.Equal(predecessor, new BsonArray(applied.Take(92)));
         Assert.Equal(93L, applied[92]["_id"].ToInt64()); Assert.Equal("applied", applied[92]["state"].AsString);
+        Assert.Equal(94L, applied[93]["_id"].ToInt64()); Assert.Equal("applied", applied[93]["state"].AsString);
         var after = await SnapshotAsync(data.Database);
-        Assert.Equal(before.ElementCount + ProcurementStockSourceSchemas.Collections.Length, after.ElementCount);
+        Assert.Equal(before.ElementCount + ProcurementStockSourceSchemas.Collections.Length + PurchaseOrderInboundBindingSchemas.Collections.Length, after.ElementCount);
         foreach (var name in before.Names) Assert.Equal(before[name], after[name]);
         await ProcurementStockSourceStorage.RequireAsync(data.Database, default);
         await RequireEmptyOwnersAsync(data.Database);
+        await PurchaseOrderInboundBindingStorage.RequireAsync(data.Database, default);
+        foreach (var name in PurchaseOrderInboundBindingSchemas.Collections) Assert.Empty(after[name]["rows"].AsBsonArray);
         await migration.ApplyAsync();
         Assert.Equal(applied, await HistoryAsync(data.Database));
         Assert.Equal(after, await SnapshotAsync(data.Database));
@@ -106,7 +109,7 @@ public sealed class ProcurementStockSourceMigrationTests(MongoFixture fixture)
     private async Task<(StoreTestData Data, ActorContext Maker, BsonDocument Proposal)> PendingAsync()
     {
         // No direct migration-step shortcut: the future root registry must actually create M93.
-        Assert.Equal(93, CollectionMigrations.CurrentVersion);
+        Assert.Equal(94, CollectionMigrations.CurrentVersion);
         var data = await StoreTestData.CreateAsync(fixture);
         try {
             Assert.True(await new CollectionMigrations(data.Database, data.Clock).IsCurrentAsync());
@@ -145,7 +148,8 @@ public sealed class ProcurementStockSourceMigrationTests(MongoFixture fixture)
     internal static async Task RestoreEmptyV92Async(IMongoDatabase database)
     {
         Assert.Matches(@"\Aunittoko_test_[0-9a-f]{32}_[0-9a-f]{8}\z", database.DatabaseNamespace.DatabaseName);
-        Assert.Equal(93, CollectionMigrations.CurrentVersion);
+        Assert.Equal(94, CollectionMigrations.CurrentVersion);
+        await PurchaseOrderInboundBindingMigrationTests.RestoreEmptyV93Async(database);
         var history = await HistoryAsync(database); Assert.Equal(93, history.Count);
         Assert.True(MigrationHistory.IsValid(history.Select(row => row.AsBsonDocument).ToArray(), 93));
         Assert.All(history, row => Assert.Equal("applied", row["state"].AsString));

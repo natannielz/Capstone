@@ -77,7 +77,15 @@ public sealed partial class ProcurementStockReceiptService
         await RequireStockSourcePredecessorStorageAsync(ct);
     }
     internal async Task RequireStockSourcePredecessorStorageAsync(CancellationToken ct) {
-        await orders.RequireReceivingStorageAsync(ct); await sources.RequireHeldReceiptStorageAsync(ct); await ProcurementStockReceiptSchemas.RequireDispositionStorageAsync(database, ct);
+        await orders.RequireReceivingStorageAsync(ct);
+        await RequireStockSourcePredecessorCoreAsync(ct);
+    }
+    internal async Task RequirePreInboundStockSourceStorageForMigrationAsync(CancellationToken ct) {
+        await orders.RequirePreInboundReceivingStorageAsync(ct);
+        await RequireStockSourcePredecessorCoreAsync(ct);
+    }
+    private async Task RequireStockSourcePredecessorCoreAsync(CancellationToken ct) {
+        await sources.RequireHeldReceiptStorageAsync(ct); await ProcurementStockReceiptSchemas.RequireDispositionStorageAsync(database, ct);
         foreach (var name in ProcurementStockReceiptSchemas.Collections) await InventoryRepository.RequireStorageAsync(database, name, ProcurementStockReceiptSchemas.Validator(name), ProcurementStockReceiptSchemas.Keys(name), ct);
         await InventoryRepository.RequireStorageAsync(database, "lots", InventoryLotSchemas.Validator(), new BsonDocument("_id", 1), ct);
         await InventoryRepository.RequireStorageAsync(database, "stockBalances", InventorySchemas.BalanceValidator(), InventorySchemas.BalanceKey(), ct);
@@ -116,6 +124,7 @@ public sealed partial class ProcurementStockReceiptService
         await InspectionAsync(context, input.InspectionId, input.InspectionLineNumber, ct); ProcurementStockReceiptRecords.Review(input, context.Order!.Source, context.Inspection!);
         if (context.Capacity!.Capacity["remainingPackages"].AsInt64 < input.Packages) throw B.Changed("procurement_stock_receipt_capacity_exceeded");
         context.Pool = await sources.CaptureHeldReceiptAsync(actor, authority, tx, Location(input.Location), input.PoolId, input.PoolRevision, Permissions.StockReceive, ct);
+        await orders.RequirePlannedReceiptCapacityAsync(tx, context.Order.Source, context.Inspection!, input, ct);
         if (await Rows(B.Receipts).Find(tx, new BsonDocument { { "location", R.Location(input.Location) }, { "supplierId", context.Order.Source["proposal"]["input"]["supplierId"] }, { "orderId", input.OrderId }, { "receiptReference", input.ReceiptReference } }).AnyAsync(ct)) throw B.Changed("procurement_stock_receipt_reference_exists");
         Current(context); return context;
     }

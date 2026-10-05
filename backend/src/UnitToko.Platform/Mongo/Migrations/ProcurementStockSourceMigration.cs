@@ -75,20 +75,20 @@ internal sealed class ProcurementStockSourceMigration(IMongoDatabase database, I
         var owner = new ProcurementStockSourceEvents(database, new(database), clock);
         using (var tx = await client.StartSessionAsync(cancellationToken: ct)) {
             tx.StartTransaction(new TransactionOptions(readConcern: ReadConcern.Snapshot));
-            await owner.PreflightAsync(tx, ct);
+            await owner.PreflightRetainedForMigrationAsync(tx, lease, ct);
             var sources = await Rows(ProcurementStockReceiptBson.Receipts).Find(tx, new BsonDocument())
                 .Sort(new BsonDocument("_id", 1)).Limit(ProcurementStockSourceRecords.MaximumRows + 1).ToListAsync(ct);
             if (sources.Count > ProcurementStockSourceRecords.MaximumRows) throw Invalid();
             foreach (var source in sources) {
                 await lease.RenewAsync(ct);
-                _ = await owner.ReadAsync(tx, "heldReceipt", source["_id"].AsInt64, true, ct);
+                _ = await owner.ReadRetainedForMigrationAsync(tx, "heldReceipt", source["_id"].AsInt64, true, lease, ct);
             }
             await tx.CommitTransactionAsync(ct);
         }
         await EvidenceMigration.EachAsync(Rows("stockSourceDecisions"), new BsonDocument("decision", "approve"), async row => {
             using var tx = await client.StartSessionAsync(cancellationToken: ct);
             tx.StartTransaction(new TransactionOptions(readConcern: ReadConcern.Snapshot));
-            _ = await owner.ReadAsync(tx, "setup", row["_id"].AsInt64, true, ct);
+            _ = await owner.ReadRetainedForMigrationAsync(tx, "setup", row["_id"].AsInt64, true, lease, ct);
             await tx.CommitTransactionAsync(ct);
         }, lease, ct);
         foreach (var candidate in candidates) {
