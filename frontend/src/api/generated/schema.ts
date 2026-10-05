@@ -9884,6 +9884,7 @@ export interface components {
             warehouseId?: null | string;
         };
         AccessSubjectDto: {
+            allowedActions: string[];
             grants: components["schemas"]["AccessGrantDto"][];
             grantVersion: string;
             memberships: components["schemas"]["AccessMembershipDto"][];

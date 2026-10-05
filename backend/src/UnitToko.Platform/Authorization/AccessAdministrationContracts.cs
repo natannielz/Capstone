@@ -21,7 +21,7 @@ public sealed record AccessProposalSummary(long Id, string Kind, long SubjectId,
     ImmutableArray<string> DelegablePermissions, DateTimeOffset EffectiveAt, DateTimeOffset? ExpiresAt, long? MembershipId, int? TemplateVersion);
 public sealed record AccessChangeResult(long Id, long SubjectId, long Version, long GrantVersion, string Status);
 public sealed record AccessSubjectSummary(long UserId, string Status, long GrantVersion,
-    ImmutableArray<MembershipSummary> Memberships, ImmutableArray<GrantSummary> Grants);
+    ImmutableArray<MembershipSummary> Memberships, ImmutableArray<GrantSummary> Grants, ImmutableArray<string> AllowedActions);
 public sealed record MembershipSummary(long Id, GrantScope Scope, string Status, long Version, ImmutableArray<string> AllowedActions,
     DateTimeOffset EffectiveAt, DateTimeOffset? ExpiresAt);
 public sealed record GrantSummary(long Id, long MembershipId, string TemplateId, int TemplateVersion,

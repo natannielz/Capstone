@@ -1,5 +1,6 @@
 using MongoDB.Bson;
 using MongoDB.Driver;
+using UnitToko.Modules.Contracts;
 using UnitToko.Modules.Identity;
 using UnitToko.Modules.Identity.Contracts;
 using UnitToko.Platform.Mongo;
@@ -13,7 +14,13 @@ public sealed partial class AccessAdministrationService
         ValidateVersion(userId, expectedVersion);
         var historyId = (await ids.NextAsync("authorizationHistory", cancellationToken)).Value;
         var result = await store.ExecuteCommandAsync(actor, "access.identity.suspend", metadata, new { userId, expectedVersion },
-            (snapshot, _, _) => Task.FromResult(new CommandAuthorization(DemandAdministrative(actor, snapshot, Permissions.AccessRevoke), [])),
+            (snapshot, _, _) =>
+            {
+                var decision = DemandAdministrative(actor, snapshot, Permissions.AccessRevoke);
+                if (actor.UserId == userId)
+                    throw new DomainValidationException("identity_self_suspension_forbidden", "The account issuing this command cannot suspend itself");
+                return Task.FromResult(new CommandAuthorization(decision, []));
+            },
             async (session, token) =>
             {
                 var before = await FindAsync("identities", userId, session, token);
@@ -24,7 +31,14 @@ public sealed partial class AccessAdministrationService
                 if (update is null) throw new PersistenceConflictException("version_conflict", "Identity changed; refresh and try again");
                 await AuditAsync(historyId, actor, userId, "access.identity.suspended", metadata, SafeIdentity(before), SafeIdentity(update), session, token);
                 return ChangeResult(userId, userId, update["grantVersion"].AsInt64, update["grantVersion"].AsInt64, "suspended");
-            }, cancellationToken);
+            }, cancellationToken, complete: async (snapshot, session, token) =>
+            {
+                // Original commands and recorded-key replays retain current factor,
+                // grant/membership expiry and live actor/session authority through the final write.
+                DemandAdministrative(actor, snapshot, Permissions.AccessRevoke);
+                await store.FenceAsync(actor, [], session, token);
+                DemandAdministrative(actor, snapshot, Permissions.AccessRevoke);
+            });
         return ParseChangeResult(result);
     }
 

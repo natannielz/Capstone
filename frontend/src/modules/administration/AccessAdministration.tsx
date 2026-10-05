@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } fro
 import Link from "next/link";
 import type { components } from "../../api/generated/schema";
 import { describeScope, localDateTime, scopeKindLabels, toIsoDate, validReference, type ScopeKind } from "../organizations/access-scope";
-import { commandOperations, createAccessGateway, type ChangeAction } from "./access-client";
+import { commandOperations, createAccessGateway, identitySuspensionReason, identitySuspensionTarget, type AccessSubject, type ChangeAction } from "./access-client";
 import { AccessFailure, accessMessage, MutationLedger, PreviewSession, stableContent, type GrantRequest, type Scope } from "./workflow";
 import { submitTrackedRequest } from "./operation-journal";
 import { OperationRecovery, useOperationRecovery } from "./OperationRecovery";
@@ -36,7 +36,7 @@ export function AccessAdministration() {
   const [offset, setOffset] = useState(0);
   const [selected, setSelected] = useState<string | null>(null);
   const [subjectReference, setSubjectReference] = useState("");
-  const [subject, setSubject] = useState<Schemas["AccessSubjectDto"] | null>(null);
+  const [subject, setSubject] = useState<AccessSubject | null>(null);
   const [membershipId, setMembershipId] = useState("");
   const [templateId, setTemplateId] = useState("buyer");
   const [packs, setPacks] = useState<string[]>([]);
@@ -63,8 +63,12 @@ export function AccessAdministration() {
   const [retry, setRetry] = useState<Retry | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
   const [decisionReason, setDecisionReason] = useState("");
+  const [suspensionConfirmed, setSuspensionConfirmed] = useState(false);
   const recovery = useOperationRecovery(current?.userId);
   const locked = busy || retry !== null || recovery.locked;
+  const suspensionTarget = current ? identitySuspensionTarget(subject, current.userId) : null;
+  const suspensionPending = pendingAction?.action === "suspendIdentity";
+  const suspensionUncertain = suspensionPending && ledger.isUncertain(`suspendIdentity:${pendingAction.id}`);
 
   const loadPage = useCallback(async () => {
     const actor = await gateway.current();
@@ -73,7 +77,7 @@ export function AccessAdministration() {
   }, [gateway, offset]);
   const clearActorData = useCallback(() => {
     setSubject(null); setSubjectReference(""); setMembershipId(""); setSelected(null); setPendingAction(null);
-    setReason(""); setDecisionReason(""); setPacks([]); setExtras([]); setDelegable([]); setTemplateId("buyer");
+    setReason(""); setDecisionReason(""); setSuspensionConfirmed(false); setPacks([]); setExtras([]); setDelegable([]); setTemplateId("buyer");
     setMembershipScope(emptyScope); setRetry(null); setPreview(null); setPreviewDraft("");
     setMode("grant"); setHistoricalKind("buyingBranch"); setHistoricalBranch(""); setHistoricalDivision("");
     setHistoricalSelectedPermissions([]); setHistoricalDirectory(null); setHistoricalDirectoryError(null); setReviewedHistorical(null);
@@ -206,9 +210,9 @@ export function AccessAdministration() {
 
   async function perform(operation: string, payload: unknown, label: string, send: (key: string) => Promise<unknown>) {
     if (!current) return;
+    const canonical = commandOperations[operation.split(":")[0] as keyof typeof commandOperations];
     setBusy(true); setError(null); setMessage("");
     try {
-      const canonical = commandOperations[operation.split(":")[0] as keyof typeof commandOperations];
       await submitTrackedRequest(ledger, recovery.journal, current.userId, operation, canonical, payload, send);
       setRetry(null); setPendingAction(null); setDecisionReason("");
       previewSession.invalidate(); setPreview(null);
@@ -223,7 +227,9 @@ export function AccessAdministration() {
       if (failure instanceof AccessFailure && failure.code === "actor_changed") {
         await refresh(); setError(failure);
       } else if (ledger.isUncertain(operation)) {
-        setRetry({ label: "Periksa kembali permintaan yang sama", run: () => perform(operation, payload, label, send) });
+        // Suspension recovery only looks up the original receipt; it never retransmits the command.
+        if (canonical === "access.identity.suspend") setRetry(null);
+        else setRetry({ label: "Periksa kembali permintaan yang sama", run: () => perform(operation, payload, label, send) });
       } else if (failure instanceof AccessFailure && failure.status === 409) {
         previewSession.invalidate(); setPreview(null); setPendingAction(null);
         await refresh();
@@ -231,7 +237,11 @@ export function AccessAdministration() {
           try { setSubject(await gateway.subject(subject.userId, current.userId)); } catch { setSubject(null); }
         }
       } else if (failure instanceof AccessFailure && failure.status === 403) {
-        previewSession.invalidate(); setPreview(null); await refresh();
+        previewSession.invalidate(); setPreview(null);
+        if (canonical === "access.identity.suspend") {
+          setSubject(null); setPendingAction(null); setDecisionReason(""); setSuspensionConfirmed(false);
+        }
+        await refresh();
       }
     } finally { setBusy(false); recovery.refresh(); }
   }
@@ -259,10 +269,18 @@ export function AccessAdministration() {
 
   async function confirmAction(event: FormEvent) {
     event.preventDefault();
-    if (!pendingAction || !decisionReason.trim() || !current) return;
+    if (!pendingAction || !decisionReason.trim() || !current || locked) return;
     const action = pendingAction;
-    const payload = { action: action.action, id: action.id, version: action.version, reason: decisionReason.trim() };
-    await perform(`${action.action}:${action.id}`, payload, "Perubahan akses telah disimpan.",
+    let reviewedReason = decisionReason.trim();
+    if (action.action === "suspendIdentity") {
+      if (!suspensionConfirmed) return;
+      if (!suspensionTarget || suspensionTarget.id !== action.id || suspensionTarget.version !== action.version) {
+        setPendingAction(null); setSuspensionConfirmed(false); setError(new AccessFailure(409, "identity_suspension_target_changed")); return;
+      }
+      try { reviewedReason = identitySuspensionReason(decisionReason); } catch (failure) { setError(failure); return; }
+    }
+    const payload = { action: action.action, id: action.id, version: action.version, reason: reviewedReason };
+    await perform(`${action.action}:${action.id}`, payload, action.action === "suspendIdentity" ? "Akun telah dinonaktifkan. Seluruh akses dan proses masuk akun tersebut dihentikan." : "Perubahan akses telah disimpan.",
       key => gateway.change(action.action, action.id, action.version, payload.reason, key, current.userId));
   }
 
@@ -293,12 +311,22 @@ export function AccessAdministration() {
       recovery.refresh();
       if (recovery.journal.list(current.userId).length === 0) {
         ledger.resetAfterReconciliation(); setRetry(null); setError(null); setPendingAction(null);
-        previewSession.invalidate(); setPreview(null); void refresh();
+        previewSession.invalidate(); setPreview(null);
+        const reloadSubject = recovery.entries.some(entry => entry.operation === "access.identity.suspend") ? subject?.userId : null;
+        void refresh().then(async () => {
+          if (!reloadSubject || loadedActor.current !== current.userId) return;
+          try {
+            const latest = await gateway.subject(reloadSubject, current.userId);
+            if (loadedActor.current === current.userId) setSubject(previous => previous?.userId === reloadSubject ? latest : previous);
+          } catch {
+            if (loadedActor.current === current.userId) setSubject(previous => previous?.userId === reloadSubject ? null : previous);
+          }
+        });
       }
     }} />}
 
     {message && <p className={styles.success} role="status">{message}</p>}
-    {error !== null && <div className={styles.alert} role="alert"><p>{accessMessage(retry ? new AccessFailure(503, "commit_outcome_unknown") : error)}</p>
+    {error !== null && <div className={styles.alert} role="alert"><p>{suspensionUncertain ? "Hasil penonaktifan belum dapat dipastikan. Periksa hasil melalui Pemulihan permintaan; jangan kirim ulang keputusan. Referensi permintaan akun semula tetap disimpan." : suspensionMessage(retry ? new AccessFailure(503, "commit_outcome_unknown") : error)}</p>
       {error instanceof AccessFailure && error.code === "step_up_required" && !locked && <Link href="/identity/account?returnPath=%2Fadministration%2Faccess">Verifikasi akun untuk melanjutkan</Link>}
       {retry && <p>Tetap di halaman ini sampai hasil permintaan yang sama terkonfirmasi.</p>}
       {error instanceof AccessFailure && error.traceId && <small>Referensi bantuan: {error.traceId}</small>}
@@ -317,13 +345,17 @@ export function AccessAdministration() {
       <section className={styles.accountSection} aria-labelledby="account-heading">
         <h2 id="account-heading">Akun yang dikelola</h2>
         <form onSubmit={loadSubject} className={styles.lookup}>
-          <label>Referensi akun<input value={subjectReference} onChange={event => { setSubjectReference(event.target.value); setSubject(null); setMembershipId(""); setPacks([]); setExtras([]); setDelegable([]); setHistoricalBranch(""); setHistoricalDivision(""); setHistoricalSelectedPermissions([]); setHistoricalDirectory(null); setReviewedHistorical(null); previewSession.invalidate(); setPreview(null); setPreviewDraft(""); }}
-            inputMode="numeric" autoComplete="off" placeholder="Contoh: 1032" maxLength={19} required disabled={locked} aria-describedby="account-help" /></label>
-          <button className={styles.secondary} disabled={locked || !validReference(subjectReference)}>Tampilkan akun</button>
+          <label>Referensi akun<input value={subjectReference} onChange={event => { setSubjectReference(event.target.value); setSubject(null); setPendingAction(null); setDecisionReason(""); setSuspensionConfirmed(false); setMembershipId(""); setPacks([]); setExtras([]); setDelegable([]); setHistoricalBranch(""); setHistoricalDivision(""); setHistoricalSelectedPermissions([]); setHistoricalDirectory(null); setReviewedHistorical(null); previewSession.invalidate(); setPreview(null); setPreviewDraft(""); }}
+            inputMode="numeric" autoComplete="off" placeholder="Contoh: 1032" maxLength={19} required disabled={locked || suspensionPending} aria-describedby="account-help" /></label>
+          <button className={styles.secondary} disabled={locked || suspensionPending || !validReference(subjectReference)}>Tampilkan akun</button>
         </form>
         <p id="account-help" className={styles.help}>Gunakan referensi akun yang diberikan pengelola.</p>
         {subject && <div className={styles.subjectSummary}>
-          <p><strong>Akun {subject.userId}</strong> <span className={styles.status}>{statusLabel(subject.status)}</span></p>
+          <p><strong>Akun {subject.userId}</strong> <span className={styles.status}>{subject.status === "suspended" ? "Dinonaktifkan" : statusLabel(subject.status)}</span></p>
+          {subject.status === "suspended" && <p className={styles.help}>Akun ini tidak dapat masuk atau menggunakan izin di bawah. Keanggotaan dan izin tetap tercatat untuk peninjauan petugas.</p>}
+          {suspensionTarget && <div className={styles.actions}><button type="button" className={styles.danger} disabled={locked || suspensionPending} onClick={() => {
+            setPendingAction({ ...suspensionTarget, label: `Nonaktifkan akun ${suspensionTarget.id}` }); setSelected(null); setDecisionReason(""); setSuspensionConfirmed(false); setError(null); setMessage("");
+          }}>Nonaktifkan akun</button></div>}
           <div className={styles.accessLists}>
             <section><h3>Keanggotaan</h3>{subject.memberships.length === 0 && <p>Belum ada keanggotaan yang dapat ditampilkan.</p>}
               <ul>{subject.memberships.map(item => <li key={item.id}><div><strong>Keanggotaan {item.id}</strong><p>{describeScope(item.scope)}</p><small>{statusLabel(item.status)}</small><Validity effectiveAt={item.effectiveAt} expiresAt={item.expiresAt} /></div>
@@ -362,11 +394,13 @@ export function AccessAdministration() {
         </aside>
 
         <section className={styles.detail} aria-label="Rincian dan pengajuan akses">
-          {pendingAction ? <form onSubmit={confirmAction} className={styles.form}>
+          {pendingAction ? <form onSubmit={confirmAction} className={styles.form} aria-label={suspensionPending ? "Konfirmasi penonaktifan akun" : undefined}>
             <h2>{pendingAction.label}</h2><p>Perubahan ini dicatat bersama akun pelaksana dan alasan. Server memeriksa kembali izin dan versi terbaru.</p>
+            {suspensionPending && <div className={styles.review} role="note"><h3>Seluruh akses akun dihentikan</h3><p>Akun <strong>{pendingAction.id}</strong> tidak dapat masuk atau menggunakan aksesnya pada semua cabang dan unit. Sesi yang sudah ada tidak dapat melanjutkan tindakan.</p><p>Riwayat tetap tersimpan. Penonaktifan ini tidak mengalihkan tugas, mengubah izin menjadi izin baru, atau mengaktifkan akun kembali secara otomatis.</p></div>}
             {selectedProposal && pendingAction.id === selectedProposal.id && <ProposalReview proposal={selectedProposal} />}
-            <label><span id="access-decision-reason-label">Alasan keputusan</span><textarea aria-labelledby="access-decision-reason-label" ref={decisionInput} required maxLength={1000} value={decisionReason} onChange={event => setDecisionReason(event.target.value)} disabled={locked} rows={4} /></label>
-            <div className={styles.actions}><button className={styles.primary} disabled={locked || !decisionReason.trim()}>Simpan keputusan</button><button type="button" className={styles.secondary} disabled={locked} onClick={() => setPendingAction(null)}>Batal</button></div>
+            <label><span id="access-decision-reason-label">Alasan keputusan</span><textarea aria-labelledby="access-decision-reason-label" ref={decisionInput} required maxLength={1000} value={decisionReason} onChange={event => { setDecisionReason(event.target.value); if (suspensionPending) setSuspensionConfirmed(false); }} disabled={locked} rows={4} /></label>
+            {suspensionPending && <label className={styles.checkbox}><input type="checkbox" required checked={suspensionConfirmed} disabled={locked} onChange={event => setSuspensionConfirmed(event.target.checked)} /><span>Saya memahami bahwa seluruh akses dan proses masuk akun ini akan dihentikan.</span></label>}
+            <div className={styles.actions}><button className={suspensionPending ? styles.danger : styles.primary} disabled={locked || !decisionReason.trim() || suspensionPending && !suspensionConfirmed}>{suspensionPending ? "Pastikan dan nonaktifkan akun" : "Simpan keputusan"}</button><button type="button" className={styles.secondary} disabled={locked} onClick={() => { setPendingAction(null); setSuspensionConfirmed(false); }}>Batal</button></div>
           </form> : selectedProposal ? <ProposalDetails proposal={selectedProposal} catalog={catalog} disabled={locked} onApprove={() => {
             setDecisionReason(""); setPendingAction({ action: selectedProposal.kind === "membership" ? "approveMembership" : "approveGrant", id: selectedProposal.id, version: selectedProposal.version, label: `Setujui pengajuan ${selectedProposal.id}` });
           }} onDecision={action => {
@@ -500,3 +534,13 @@ function ScopeFields({ value, onChange }: { value: Scope; onChange: (scope: Scop
 
 function toggle(value: string, values: string[], update: (values: string[]) => void) { update(values.includes(value) ? values.filter(item => item !== value) : [...values, value]); }
 function statusLabel(value: string) { return ({ active: "Aktif", pending: "Menunggu persetujuan", approved: "Disetujui", suspended: "Ditangguhkan", revoked: "Dicabut", rejected: "Ditolak", withdrawn: "Ditarik pengaju" } as Record<string, string>)[value] ?? value; }
+
+function suspensionMessage(error: unknown): string {
+  if (error instanceof AccessFailure) {
+    if (error.code === "identity_self_suspension_forbidden") return "Akun yang sedang Anda gunakan tidak dapat dinonaktifkan. Gunakan petugas berwenang lain.";
+    if (error.code === "identity_suspension_reason_invalid") return "Isi alasan penonaktifan yang jelas, maksimal 1.000 karakter.";
+    if (error.code === "identity_suspension_target_changed") return "Akun atau versi akses berubah. Tampilkan akun terbaru dan tinjau kembali sebelum menonaktifkannya.";
+    if (error.code === "access_subject_invalid") return "Data akun belum dapat dibaca dengan aman. Muat ulang untuk memeriksa status dan tindakan yang diizinkan; perubahan tetap dinonaktifkan.";
+  }
+  return accessMessage(error);
+}

@@ -1,4 +1,5 @@
 export function recoveryPage(operation: string) {
+  if (operation === 'access.identity.suspend') return {href: '/administration/access', label: 'halaman pengelolaan akses'};
   if (['billing.payment.supplement.create', 'evidence.payment-supplement-pdf.reserve', 'billing.payment.supplement.attach'].includes(operation))
     return {href: '/billing/payments', label: 'halaman lampiran PDF tambahan'};
   if (operation === 'evidence.payment-pdf.reserve') return {href: '/billing/payments', label: 'halaman bukti PDF pembayaran'};
@@ -70,6 +71,7 @@ export function recoveryPage(operation: string) {
     : { href: "/administration/person-reviews", label: "halaman peninjauan orang" };
 }
 export function operationLabel(operation: string) {
+  if (operation === 'access.identity.suspend') return 'Penonaktifan akun';
   if (operation === 'billing.payment.supplement.create') return 'Pembuatan lampiran PDF tambahan';
   if (operation === 'evidence.payment-supplement-pdf.reserve') return 'Reservasi PDF tambahan';
   if (operation === 'billing.payment.supplement.attach') return 'Penautan lampiran PDF tambahan';

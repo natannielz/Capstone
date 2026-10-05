@@ -78751,7 +78751,8 @@
           "status",
           "grantVersion",
           "memberships",
-          "grants"
+          "grants",
+          "allowedActions"
         ],
         "type": "object",
         "properties": {
@@ -78774,6 +78775,12 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/AccessGrantDto"
+            }
+          },
+          "allowedActions": {
+            "type": "array",
+            "items": {
+              "type": "string"
             }
           }
         },

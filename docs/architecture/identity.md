@@ -61,6 +61,14 @@ The callback transaction rereads and consumes OIDC state together with admission
 
 Recovery revokes local sessions and increments the security epoch before recording a blocked provider intention in the same transaction. A blocked intention is not a provider password/factor reset or a completed owner recovery. See [account recovery](../runbooks/account-recovery.md).
 
+## Account suspension in access administration
+
+The full-profile `/administration/access` workspace exposes **Nonaktifkan akun** only when the subject's required server-owned `allowedActions` contains `suspend`. Its authority is the existing current administrative `access.revoke` decision; scoped membership suspension or grant revocation cannot confer account-wide authority. Only another active account is eligible. The server refuses self-suspension after checking genuine administrative authority.
+
+The operator reviews the whole-account consequence, supplies a readable reason and explicitly confirms. The command uses the exact account `grantVersion`, actor, CSRF token and original idempotency key. Suspension increments the identity version/fence and records immutable authorization history in one transaction; memberships and grants are retained. Existing business sessions and new admission are denied by the maintained identity controls. Current MFA, grant/membership expiry and the live actor/session fence are checked again at completion, including same-key replay.
+
+A lost reply retains only actor, operation, key and time in the existing recovery journal. Recovery looks up the original receipt without submitting suspension again; an unconfirmed result remains unconfirmed. This slice does not define reactivation, operator succession, task handover, dormant-account campaigns or periodic attestations. Local and hosted acceptance are recorded separately in the [production ledger](../quality/production-progress.md).
+
 ## Configuration and acceptance
 
 Shared protected key construction requires an existing absolute key directory, a stable application discriminator, a current private RSA certificate and retained prior decryption certificates as needed. The library does not prove actual mount sharing, ACL isolation, secret-manager integration or backup/restore. The API wiring is implemented and tested across separate local host instances. Actual infrastructure controls and restore must still be accepted before deployment.

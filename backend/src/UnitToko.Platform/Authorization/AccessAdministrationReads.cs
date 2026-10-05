@@ -28,7 +28,9 @@ public sealed partial class AccessAdministrationService
                     membership.Status == AuthorizationStatus.Active && Revoke(membership.Scope) ? ["suspend"] : [], membership.EffectiveAt, membership.ExpiresAt)).ToImmutableArray(),
                 grants.Select(grant => new GrantSummary(grant.Id, grant.MembershipId, grant.TemplateId, grant.TemplateVersion, grant.Permissions,
                     grant.Scope, AuthorizationBson.Name(grant.Status), grant.Version, grant.Status != AuthorizationStatus.Revoked && Revoke(grant.Scope) ? ["revoke"] : [],
-                    grant.DelegablePermissions.IsDefault ? [] : grant.DelegablePermissions, grant.EffectiveAt, grant.ExpiresAt)).ToImmutableArray());
+                    grant.DelegablePermissions.IsDefault ? [] : grant.DelegablePermissions, grant.EffectiveAt, grant.ExpiresAt)).ToImmutableArray(),
+                userId != actor.UserId && identity["status"] == "active" &&
+                    ScopePolicy.Authorize(actor, snapshot, Permissions.AccessRevoke, Administrative, clock.UtcNow).Allowed ? ["suspend"] : []);
             return new AuditedValue<AccessSubjectSummary>(result, 1, ReadAuthorityScopes(actor, snapshot));
         }, cancellationToken);
 

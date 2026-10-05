@@ -75,7 +75,7 @@ public sealed record AccessGrantDto(LongId Id, LongId MembershipId, string Templ
     string[] Permissions, AccessScopeDto Scope, string Status, string Version, string[] AllowedActions,
     string[] DelegablePermissions, DateTimeOffset EffectiveAt, DateTimeOffset? ExpiresAt);
 public sealed record AccessSubjectDto(LongId UserId, string Status, string GrantVersion,
-    AccessMembershipDto[] Memberships, AccessGrantDto[] Grants);
+    AccessMembershipDto[] Memberships, AccessGrantDto[] Grants, string[] AllowedActions);
 public sealed record AccessPreviewDto(LongId UserId, LongId MembershipId, string TemplateId, int TemplateVersion,
     string[] Permissions, string[] ExistingPermissions, AccessScopeDto Scope, bool RequiresIndependentApproval,
     string[] DelegablePermissions, DateTimeOffset EffectiveAt, DateTimeOffset? ExpiresAt);
@@ -103,7 +103,7 @@ internal static class AccessResponses
         [.. value.DelegablePermissions], value.EffectiveAt, value.ExpiresAt,
         value.MembershipId.HasValue ? new LongId(value.MembershipId.Value) : null, value.TemplateVersion);
     internal static AccessSubjectDto From(AccessSubjectSummary value) => new(new(value.UserId), value.Status,
-        Version(value.GrantVersion), value.Memberships.Select(From).ToArray(), value.Grants.Select(From).ToArray());
+        Version(value.GrantVersion), value.Memberships.Select(From).ToArray(), value.Grants.Select(From).ToArray(), [.. value.AllowedActions]);
     internal static AccessMembershipDto From(MembershipSummary value) => new(new(value.Id),
         AccessScopeDto.From(value.Scope), value.Status, Version(value.Version), [.. value.AllowedActions], value.EffectiveAt, value.ExpiresAt);
     internal static AccessGrantDto From(GrantSummary value) => new(new(value.Id), new(value.MembershipId),
