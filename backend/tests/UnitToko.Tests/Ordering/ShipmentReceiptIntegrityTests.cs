@@ -66,13 +66,16 @@ public sealed class ShipmentReceiptIntegrityTests(MongoFixture fixture)
         var challenge = await original.IssueChallengeAsync(data.Courier, source.Shipment, source.Document, data.Order.Buyer.UserId, CatalogPriceTestData.Meta("fence-qr"));
         using var release = new ManualResetEventSlim(); var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously); var request = 0; var observed = 0;
         var settings = fixture.Client.Settings.Clone(); settings.ClusterConfigurator = builder => {
-            builder.Subscribe<CommandStartedEvent>(command => { if (request == 0 && command.Command.GetValue("insert", BsonNull.Value) == "shipmentReceipts") request = command.RequestId; });
+            builder.Subscribe<CommandStartedEvent>(command => { if (request == 0 && command.DatabaseNamespace.DatabaseName == data.Order.Database.DatabaseNamespace.DatabaseName &&
+                command.Command.GetValue("update", BsonNull.Value) == FulfillmentStockSourceRecords.Heads) request = command.RequestId; });
             builder.Subscribe<CommandSucceededEvent>(command => { if (command.RequestId == request && Interlocked.CompareExchange(ref observed, 1, 0) == 0) { entered.TrySetResult(); if (!release.Wait(TimeSpan.FromSeconds(20))) throw new TimeoutException("Receipt race did not release"); } });
         };
         using var client = new MongoClient(settings); var db = client.GetDatabase(data.Order.Database.DatabaseNamespace.DatabaseName); var clock = data.Order.Prices.Catalog.Clock;
         var orders = new UnitToko.Platform.Ordering.OrderSubmissionService(db, new(client), new(db), clock);
         var queries = new ShipmentQueryService(db, new(client), clock, orders, new(db, new(client), new(db), clock, orders));
         var service = new ShipmentReceiptService(db, new(client), new(db), clock, queries, new(db, new(client), new(db), clock, queries));
+        var head = await data.Order.Rows(FulfillmentStockSourceRecords.Heads).Find(new BsonDocument()).SingleAsync();
+        var pool = await data.Order.Rows("inventoryPools").Find(new BsonDocument()).SingleAsync();
         var pending = Task.Run(() => service.ConfirmAsync(data.Order.Buyer, challenge.Id.Value, challenge.Token!, DeliveryReceiptPolicy.ConsentVersion, true, Whole(data), CatalogPriceTestData.Meta("fenced-confirm")));
         try { await entered.Task.WaitAsync(TimeSpan.FromSeconds(15));
             if (fault == "membership") await data.Order.Rows("memberships").UpdateManyAsync(new BsonDocument("userId", data.Order.Buyer.UserId), Builders<BsonDocument>.Update.Set("status", "revoked"));
@@ -83,5 +86,7 @@ public sealed class ShipmentReceiptIntegrityTests(MongoFixture fixture)
         Assert.Equal(0, await data.Order.Rows("shipmentReceipts").CountDocumentsAsync(new BsonDocument()));
         Assert.True((await data.Order.Rows("shipmentReceiptChallenges").Find(new BsonDocument("_id", challenge.Id.Value)).SingleAsync())["consumedReceiptId"].IsBsonNull);
         foreach (var collection in new[] { "auditEvents", "idempotencyRecords" }) Assert.Equal(0, await data.Order.Rows(collection).CountDocumentsAsync(new BsonDocument("operation", ShipmentReceiptRecords.Confirm)));
+        Assert.Equal(head, await data.Order.Rows(FulfillmentStockSourceRecords.Heads).Find(new BsonDocument()).SingleAsync());
+        Assert.Equal(pool, await data.Order.Rows("inventoryPools").Find(new BsonDocument()).SingleAsync());
     }
 }

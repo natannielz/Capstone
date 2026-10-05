@@ -4,6 +4,7 @@ using UnitToko.Modules.Contracts;
 using UnitToko.Modules.Ordering;
 using UnitToko.Platform.Authorization;
 using UnitToko.Platform.Fulfillment;
+using UnitToko.Platform.Inventory;
 using UnitToko.Platform.Mongo;
 using UnitToko.Tests.Catalog;
 
@@ -61,6 +62,15 @@ public sealed class ShipmentDispatchTests(MongoFixture fixture)
         var balance = await data.Order.Rows("stockBalances").Find(new BsonDocument()).SingleAsync();
         Assert.Equal(8L, balance["onHand"].AsInt64); Assert.Equal(0L, balance["reserved"].AsInt64);
         Assert.Equal(3, await data.Order.Rows("movements").CountDocumentsAsync(new BsonDocument()));
+        var pool = await data.Order.Rows("inventoryPools").Find(new BsonDocument()).SingleAsync();
+        var location = InventoryGraph.Location(pool["location"].AsBsonDocument);
+        var reader = await data.Order.Prices.Catalog.ActorAsync(920950, location.ToScope(), UnitToko.Modules.Identity.Permissions.StockSourceRead);
+        var expected = new StockSourceObligationExpectation(pool["_id"].AsInt64, location, pool["revision"].AsInt64, pool["fence"].AsInt64);
+        var custody = await new MongoUnitOfWork(data.Order.Prices.Catalog.Client).ExecuteAsync((tx, ct) =>
+            new FulfillmentStockSourceObligationReader(data.Order.Database, new(data.Order.Prices.Catalog.Client),
+                new(data.Order.Database), data.Order.Prices.Catalog.Clock).ReadAndFenceAsync(tx, reader, expected, ct));
+        Assert.True(custody.Complete); Assert.Equal(2L, custody.OpenCount);
+        Assert.Equal(2L, await data.Order.Rows(FulfillmentStockSourceRecords.Transitions).CountDocumentsAsync(new BsonDocument("sourceKind", "dispatch")));
     }
 
     [Fact]

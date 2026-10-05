@@ -90,12 +90,14 @@ public sealed partial class ShipmentReceiptService
                 F.Eq("failedAttempts", challenge["failedAttempts"]) & F.Gt("expiresAt", now.UtcDateTime), Builders<BsonDocument>.Update.Set("consumedReceiptId", id).Set("consumedAt", now.UtcDateTime), cancellationToken: token)).ModifiedCount != 1)
                 throw ShipmentReceiptRecords.Invalid();
             await Rows(ShipmentReceiptRecords.Receipts).InsertOneAsync(tx, row, cancellationToken: token);
-            await records.EffectsAsync(tx, row, ShipmentReceiptRecords.Confirm, token); wrote = true;
+            await records.EffectsAsync(tx, row, ShipmentReceiptRecords.Confirm, token);
+            wrote = true;
             return ShipmentReceiptRecords.Result(row, ShipmentReceiptRecords.Confirm);
         }, ct, async (snapshot, tx, token) => {
             final = await records.FindReceiptAsync(tx, challenge["shipmentId"].AsInt64, token) ?? throw ShipmentReceiptRecords.Invalid();
             lines = await VerifyReceiptAsync(tx, final, source, token);
             if (final["actorId"] != actor.UserId || final["requestKey"] != metadata.IdempotencyKey || final["bodyHash"] != AuthorizationStore.CommandHash(body, metadata.Reason)) throw ShipmentReceiptRecords.Invalid();
+            if (wrote) await new FulfillmentStockSourceProducer(database, ids, clock).RecordAsync(tx, "receipt", id, token);
             await FenceAsync(actor, snapshot, tx, source, Permissions.ReceiptAccept, target, proof, token);
             if (wrote && (clock.UtcNow >= ShipmentReceiptRecords.Time(challenge["expiresAt"]) || clock.UtcNow < ShipmentReceiptRecords.Time(final["recordedAt"]))) throw ShipmentReceiptRecords.Invalid();
         });

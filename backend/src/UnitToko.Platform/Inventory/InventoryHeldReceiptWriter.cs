@@ -45,19 +45,4 @@ internal sealed class InventoryHeldReceiptWriter(IMongoDatabase database)
             await database.GetCollection<BsonDocument>("movements").InsertOneAsync(tx, Movement(row, actor), cancellationToken: ct); proof.Require(actor, tx); ct.ThrowIfCancellationRequested();
         } catch { await InventoryRepository.AbortAsync(tx); throw; }
     }
-    internal static async Task RequireHistoryAsync(IMongoDatabase database, IClientSessionHandle tx, BsonDocument row, CancellationToken ct) {
-        if (!tx.IsInTransaction || !ReferenceEquals(tx.Client, database.Client)) throw B.Broken();
-        var lot = await database.GetCollection<BsonDocument>("lots").Find(tx, new BsonDocument("_id", row["lotId"])).SingleOrDefaultAsync(ct) ?? throw B.Broken(); ProcurementStockReceiptRecords.Equal(lot, Lot(row));
-        // A later valuation/release owner must add genuine movement-chain proof before this initial held balance may change.
-        var balance = await database.GetCollection<BsonDocument>("stockBalances").Find(tx, new BsonDocument("_id", row["balanceId"])).SingleOrDefaultAsync(ct) ?? throw B.Broken(); ProcurementStockReceiptRecords.Equal(balance, InventoryBson.Balance(After(row)));
-        var movement = await database.GetCollection<BsonDocument>("movements").Find(tx, new BsonDocument("_id", row["movementId"])).SingleOrDefaultAsync(ct) ?? throw B.Broken();
-        var source = Source(row["_id"].AsInt64); var before = Before(row);
-        var expected = new BsonDocument { { "_id", row["movementId"] }, { "schemaVersion", 1 }, { "kind", "inventory.movement" }, { "sourceEvent", source.EventKey },
-            { "source", new BsonDocument { { "namespace", source.Namespace }, { "documentId", source.DocumentId }, { "eventKind", source.EventKind }, { "occurrence", source.Occurrence } } },
-            { "sourceRevision", 1L }, { "physicalPoolId", row["poolId"] }, { "poolRevision", row["input"]["poolRevision"] }, { "actorId", row["actorId"] }, { "actorGrantVersion", row["actorGrantVersion"] },
-            { "recordedAt", row["recordedAt"] }, { "reason", row["reason"] }, { "correlationId", row["correlationId"] },
-            { "legs", new BsonArray { new BsonDocument { { "balanceId", before.Id }, { "action", "ReceiveHeld" }, { "packages", row["input"]["packages"].ToInt64() },
-                { "before", InventoryBson.Balance(before) }, { "after", InventoryBson.Balance(After(row)) } } } } };
-        ProcurementStockReceiptRecords.Equal(movement, expected);
-    }
 }

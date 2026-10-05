@@ -113,7 +113,7 @@ public sealed class OrderStockSourceCommandTests(MongoFixture fixture)
         var currentHead = await HeadAsync(order, poolId); var currentPool = await PoolAsync(order, poolId);
         Assert.Equal(head["revision"].AsInt64 + 1, currentHead["revision"].AsInt64);
         Assert.Equal(head["fence"].AsInt64 + 1, currentHead["fence"].AsInt64);
-        Assert.Equal(pool["fence"].AsInt64 + 2, currentPool["fence"].AsInt64); // physical dispatch + producer CAS
+        Assert.Equal(pool["fence"].AsInt64 + 3, currentPool["fence"].AsInt64); // physical dispatch + Ordering CAS + Fulfillment CAS
         var transition = await LatestAsync(order, poolId); Assert.Equal("shipment", transition["sourceKind"].AsString);
         Assert.Equal(sent["shipmentId"], transition["sourceId"]); Assert.Equal(head["lastTransitionId"], transition["previousId"]);
         Assert.Equal(head["lastHash"], transition["previousHash"]);

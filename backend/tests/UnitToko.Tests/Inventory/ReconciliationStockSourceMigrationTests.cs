@@ -3,6 +3,7 @@ using MongoDB.Bson;
 using MongoDB.Driver;
 using MongoDB.Driver.Core.Events;
 using UnitToko.Modules.Inventory;
+using UnitToko.Platform.Fulfillment;
 using UnitToko.Platform.Identity;
 using UnitToko.Platform.Inventory;
 using UnitToko.Platform.Mongo;
@@ -14,7 +15,7 @@ using B = UnitToko.Platform.Inventory.StockSourceReconciliationBson;
 namespace UnitToko.Tests.Inventory;
 
 /// <summary>Real pending setup survives an exact empty91 suffix upgrade. Genuine current-command
-/// reconciliation rows are used only for a populated-owner refusal; this does not claim a positive
+/// reconciliation rows are used only for inconsistent middle-history refusal; this does not claim a positive
 /// old-binary approved-source handoff or retrospective producer reconstruction.</summary>
 [Collection("Mongo")]
 public sealed class ReconciliationStockSourceMigrationTests(MongoFixture fixture)
@@ -37,14 +38,16 @@ public sealed class ReconciliationStockSourceMigrationTests(MongoFixture fixture
         Assert.False(await migration.IsCurrentAsync());
         await migration.ApplyAsync(); Assert.True(await migration.IsCurrentAsync());
         var applied = await HistoryAsync(data.Data.Database);
-        Assert.Equal(91, applied.Count);
+        Assert.Equal(92, applied.Count);
         Assert.Equal(predecessor, new BsonArray(applied.Take(90)));
         Assert.Equal(91L, applied[90]["_id"].ToInt64()); Assert.Equal("applied", applied[90]["state"].AsString);
+        Assert.Equal(92L, applied[91]["_id"].ToInt64()); Assert.Equal("applied", applied[91]["state"].AsString);
         var after = await SnapshotAsync(data.Data.Database);
-        Assert.Equal(before.ElementCount + ReconciliationStockSourceSchemas.Collections.Length, after.ElementCount);
+        Assert.Equal(before.ElementCount + ReconciliationStockSourceSchemas.Collections.Length + FulfillmentStockSourceSchemas.Collections.Length, after.ElementCount);
         foreach (var name in before.Names) Assert.Equal(before[name], after[name]);
         await ReconciliationStockSourceStorage.RequireAsync(data.Data.Database, default);
         await RequireEmptyOwnersAsync(data.Data.Database);
+        await RequireEmptyFulfillmentOwnersAsync(data.Data.Database);
         await migration.ApplyAsync();
         Assert.Equal(applied, await HistoryAsync(data.Data.Database));
         Assert.Equal(after, await SnapshotAsync(data.Data.Database));
@@ -63,6 +66,7 @@ public sealed class ReconciliationStockSourceMigrationTests(MongoFixture fixture
         Assert.Equal(0L, await data.Rows("stockSourceDecisions").CountDocumentsAsync(new BsonDocument()));
         Assert.Equal(0L, await data.Rows("inventoryPools").CountDocumentsAsync(new BsonDocument()));
         await RequireEmptyOwnersAsync(data.Data.Database);
+        await RequireEmptyFulfillmentOwnersAsync(data.Data.Database);
     }
 
     [Theory]
@@ -106,7 +110,7 @@ public sealed class ReconciliationStockSourceMigrationTests(MongoFixture fixture
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task Genuine_current_producer_and_actual_linked_orphan_remain_untouched_when_populated_predecessor_is_refused(bool orphan)
+    public async Task Genuine_current_producers_and_actual_linked_orphan_remain_untouched_when_missing_middle_migration_is_refused(bool orphan)
     {
         await using var data = await ReconciliationStockSourceTestData.CreateAsync(fixture);
         var (input, binding) = await data.InputAsync("M91-GENUINE-RETAINED-OBSERVATION");
@@ -119,9 +123,11 @@ public sealed class ReconciliationStockSourceMigrationTests(MongoFixture fixture
             ReconciliationStockSourceTestData.Meta("m91-migration-real-rejection"));
         Assert.Equal(proposal, await data.Service.RecoverReconciliationAsync(data.Maker, B.ProposeOperation, "m91-migration-real-proposal"));
         Assert.Equal(decision, await data.Service.RecoverReconciliationAsync(data.Checker, B.DecideOperation, "m91-migration-real-rejection"));
-        var history = await RequireApplied91Async(data.Database);
+        var history = await RequireApplied92Async(data.Database);
         Assert.True(await data.Rows(ReconciliationStockSourceRecords.Heads).Find(new BsonDocument()).AnyAsync());
         Assert.Equal(3L, await data.Rows(ReconciliationStockSourceRecords.Transitions).CountDocumentsAsync(new BsonDocument()));
+        Assert.True(await data.Rows(FulfillmentStockSourceRecords.Heads).Find(new BsonDocument()).AnyAsync());
+        Assert.True(await data.Rows(FulfillmentStockSourceRecords.Transitions).Find(new BsonDocument()).AnyAsync());
         if (orphan)
         {
             Assert.Equal(1L, (await data.Rows(B.Proposals).DeleteOneAsync(new BsonDocument("_id", proposal["proposalId"]))).DeletedCount);
@@ -129,12 +135,27 @@ public sealed class ReconciliationStockSourceMigrationTests(MongoFixture fixture
             Assert.Equal(proposal["proposalId"], genuineDecision["proposalId"]);
             Assert.False(await data.Rows(B.Proposals).Find(new BsonDocument("_id", genuineDecision["proposalId"])).AnyAsync());
         }
-        // Deliberately invalid predecessor: keep EVERY authentic new producer row and counter.
-        // A populated prospective owner may fail first; this does not isolate the orphan-graph
-        // check or claim positive legacy reconciliation-history migration acceptance.
+        // Explicit negative middle-history corruption. Keep the authentic92 marker and EVERY
+        // produced row/counter. This proves the real history gate, not an isolated91 preflight
+        // cause, and does not manufacture a valid90 predecessor from an approved current pool.
         Assert.Equal(1L, (await data.Rows("schemaMigrations").DeleteOneAsync(history[90].AsBsonDocument)).DeletedCount);
-        Assert.Equal(new BsonArray(history.Take(90)), await HistoryAsync(data.Database));
-        await RequirePreDdlRefusalAsync(data.Database, data.Clock);
+        var damaged = new BsonArray(history.Where(row => row["_id"].ToInt64() != 91));
+        Assert.Equal(damaged, await HistoryAsync(data.Database));
+        var before = await SnapshotAsync(data.Database);
+        var ddl = new ConcurrentQueue<string>();
+        var settings = fixture.Client.Settings.Clone(); settings.ApplicationName = "ReconciliationMiddleHistory-" + Guid.NewGuid().ToString("N");
+        settings.ClusterConfigurator = builder => builder.Subscribe<CommandStartedEvent>(command => {
+            if (command.CommandName is "create" or "collMod" or "createIndexes" or "dropIndexes" or "drop") ddl.Enqueue(command.CommandName);
+        });
+        using var observer = new MongoClient(settings);
+        var observed = observer.GetDatabase(data.Database.DatabaseNamespace.DatabaseName);
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => new CollectionMigrations(observed, data.Clock).ApplyAsync());
+        Assert.Equal("Database has unknown, newer or inconsistent schema migration history; refusing to alter it", error.Message);
+        Assert.Empty(ddl);
+        Assert.Equal(before, await SnapshotAsync(data.Database));
+        Assert.Equal(damaged, await HistoryAsync(data.Database));
+        Assert.Equal(history[91], await data.Rows("schemaMigrations").Find(new BsonDocument("_id", 92)).SingleAsync());
+        Assert.False(await new CollectionMigrations(data.Database, data.Clock).IsCurrentAsync());
         Assert.False((await data.PoolAsync())["active"].AsBoolean);
         foreach (var rows in (await data.StockAndMoneyAsync()).Values) Assert.Empty(rows.AsBsonArray);
     }
@@ -161,6 +182,7 @@ public sealed class ReconciliationStockSourceMigrationTests(MongoFixture fixture
 
     private static async Task RestoreEmptyV90Async(IMongoDatabase database)
     {
+        await RestoreEmptyV91Async(database);
         var history = await RequireApplied91Async(database);
         await RequireEmptyOwnersAsync(database);
         // The only destructive rehearsal removes an exact EMPTY future-owner suffix in this
@@ -173,12 +195,51 @@ public sealed class ReconciliationStockSourceMigrationTests(MongoFixture fixture
     private static async Task<BsonArray> RequireApplied91Async(IMongoDatabase database)
     {
         Assert.Matches(@"\Aunittoko_test_[0-9a-f]{32}_[0-9a-f]{8}\z", database.DatabaseNamespace.DatabaseName);
-        Assert.Equal(91, CollectionMigrations.CurrentVersion);
+        Assert.Equal(92, CollectionMigrations.CurrentVersion);
         var history = await HistoryAsync(database);
         Assert.Equal(91, history.Count);
         Assert.True(MigrationHistory.IsValid(history.Select(row => row.AsBsonDocument).ToArray(), 91));
         Assert.All(history, row => Assert.Equal("applied", row["state"].AsString));
         return history;
+    }
+
+    internal static async Task RestoreEmptyV91Async(IMongoDatabase database)
+    {
+        var history = await RequireApplied92Async(database);
+        await RequireEmptyFulfillmentOwnersAsync(database);
+        // Only exact EMPTY current-suffix owners in this fixture database can be removed.
+        // Never remove genuine setup-created Fulfillment history to manufacture a predecessor.
+        Assert.Equal(1L, (await database.GetCollection<BsonDocument>("schemaMigrations")
+            .DeleteOneAsync(history[91].AsBsonDocument)).DeletedCount);
+        foreach (var name in FulfillmentStockSourceSchemas.Collections) await database.DropCollectionAsync(name);
+        Assert.Equal(new BsonArray(history.Take(91)), await HistoryAsync(database));
+    }
+
+    private static async Task<BsonArray> RequireApplied92Async(IMongoDatabase database)
+    {
+        Assert.Matches(@"\Aunittoko_test_[0-9a-f]{32}_[0-9a-f]{8}\z", database.DatabaseNamespace.DatabaseName);
+        Assert.Equal(92, CollectionMigrations.CurrentVersion);
+        var history = await HistoryAsync(database);
+        Assert.Equal(92, history.Count);
+        Assert.True(MigrationHistory.IsValid(history.Select(row => row.AsBsonDocument).ToArray(), 92));
+        Assert.All(history, row => Assert.Equal("applied", row["state"].AsString));
+        return history;
+    }
+
+    private static async Task RequireEmptyFulfillmentOwnersAsync(IMongoDatabase database)
+    {
+        foreach (var name in FulfillmentStockSourceSchemas.Collections)
+        {
+            var definition = await AccountContactStorage.DefinitionAsync(database, name, default); Assert.NotNull(definition);
+            Assert.Equal(FulfillmentStockSourceSchemas.Validator(name), definition["options"]["validator"].AsBsonDocument);
+            Assert.Equal("strict", definition["options"]["validationLevel"].AsString);
+            Assert.Equal("error", definition["options"]["validationAction"].AsString);
+            Assert.Equal(0L, await database.GetCollection<BsonDocument>(name).CountDocumentsAsync(new BsonDocument()));
+            Assert.False(await database.GetCollection<BsonDocument>("idCounters").Find(new BsonDocument("_id", name)).AnyAsync());
+            var indexes = await (await database.GetCollection<BsonDocument>(name).Indexes.ListAsync()).ToListAsync();
+            Assert.True(OrderStockSourceStorage.SafeIndexes(indexes, FulfillmentStockSourceSchemas.Keys(name)));
+            Assert.Equal(1 + FulfillmentStockSourceSchemas.Keys(name).Length, indexes.Count);
+        }
     }
 
     private static async Task RequireEmptyOwnersAsync(IMongoDatabase database)

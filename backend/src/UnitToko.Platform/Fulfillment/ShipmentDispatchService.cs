@@ -166,6 +166,9 @@ public sealed class ShipmentDispatchService
                 row["bodyHash"] != AuthorizationStore.CommandHash(body, metadata.Reason)) throw ShipmentDispatchRecords.Invalid();
             var source = await orders.ReadForFulfillmentAsync(actor, snapshot, tx, suborderId, Permissions.ShipmentDispatch, token);
             if (prepared is not null && target is not null && admission is not null) {
+                // The command receipt is complete here, so custody can authenticate the entire
+                // order history, including this dispatch, before the final authority fences.
+                await new FulfillmentStockSourceProducer(database, ids, clock).RecordAsync(tx, "dispatch", id, token);
                 await preparations.FenceDispatchedPreparationAsync(prepared, tx, token);
                 await couriers.FenceAsync(actor, snapshot, tx, source.Resource, target, token);
                 await admissionReader!.CompleteAsync(tx, actor, admission, token);

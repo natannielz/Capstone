@@ -18,6 +18,10 @@ import styles from '../ordering/order-draft.module.css';
 type Account = { actorId: string; session: IdentitySession; observedAt: number; canReceive: boolean };
 type ReceiptLink = ReturnType<typeof parseReceiptLink>;
 function message(failure: unknown) {
+  if (failure instanceof AccessFailure && failure.code === 'fulfillment_source_obligation_unavailable')
+    return 'Riwayat stok untuk kiriman ini belum dapat diverifikasi. Hubungi penanggung jawab toko. Jika konfirmasi penerimaan sudah dikirim, gunakan Periksa hasil sebelum mengirim ulang.';
+  if (failure instanceof AccessFailure && ['stock_source_revision_changed', 'stock_pool_changed'].includes(failure.code))
+    return 'Sumber stok untuk kiriman ini berubah. Muat kembali data penerimaan dan periksa jumlah barang sebelum mengonfirmasi. Jika konfirmasi sudah dikirim, gunakan Periksa hasil terlebih dahulu.';
   if (failure instanceof AccessFailure && ['shipment_receipt_unavailable', 'shipment_recipient_unavailable', 'independent_recipient_required'].includes(failure.code))
     return 'Penerimaan tidak dapat dibuka. Gunakan akun penerima yang dituju dan QR yang masih berlaku. Kurir dan penerima harus orang yang berbeda.';
   if (failure instanceof AccessFailure && failure.code === 'invalid_delivery_receipt') return 'Isi semua jumlah secara tepat, termasuk nol. Total diterima, ditolak, dan belum diterima harus sama dengan kiriman. Jelaskan setiap perbedaan.';

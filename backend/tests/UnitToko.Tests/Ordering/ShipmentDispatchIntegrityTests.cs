@@ -4,6 +4,7 @@ using UnitToko.Modules.Contracts;
 using UnitToko.Modules.Ordering;
 using UnitToko.Platform.Authorization;
 using UnitToko.Platform.Fulfillment;
+using UnitToko.Platform.Inventory;
 using UnitToko.Platform.Mongo;
 using UnitToko.Tests.Catalog;
 
@@ -50,14 +51,18 @@ public sealed class ShipmentDispatchIntegrityTests(MongoFixture fixture)
     }
 
     [Theory] [InlineData("source")] [InlineData("dispatcher")] [InlineData("courier")]
-    public async Task Authority_expiring_after_receipt_write_rolls_back_every_dispatch_effect(string fault) {
+    public async Task Authority_expiring_after_custody_write_rolls_back_every_dispatch_effect(string fault) {
         await using var data = await ShipmentDispatchTestData.CreateAsync(fixture); var order = data.Order; var clock = order.Prices.Catalog.Clock;
         var expires = clock.UtcNow.AddMinutes(1).UtcDateTime;
         if (fault == "source") await order.Rows("fixtureDispatchApprovals").UpdateOneAsync(new BsonDocument("_id", 9400L), Builders<BsonDocument>.Update.Set("expiresAt", expires));
         else await order.Rows("authorizationGrants").UpdateManyAsync(new BsonDocument("userId", fault == "dispatcher" ? data.Dispatcher.UserId : data.Courier.UserId), Builders<BsonDocument>.Update.Set("expiresAt", expires));
         var review = await data.PreviewAsync(); var fired = false;
+        var head = await order.Rows(FulfillmentStockSourceRecords.Heads).Find(new BsonDocument()).SingleAsync();
+        var pool = await order.Rows("inventoryPools").Find(new BsonDocument()).SingleAsync();
         data.Admission.BeforeComplete = async (tx, ct) => {
-            if (!fired && await order.Rows("idempotencyRecords").Find(tx, new BsonDocument("key", "expires-after-receipt")).AnyAsync(ct)) {
+            if (!fired && await order.Rows("idempotencyRecords").Find(tx, new BsonDocument {
+                    { "key", "expires-after-receipt" }, { "result.shipmentId", new BsonDocument("$exists", true) } }).AnyAsync(ct) &&
+                await order.Rows(FulfillmentStockSourceRecords.Transitions).Find(tx, new BsonDocument("sourceKind", "dispatch")).AnyAsync(ct)) {
                 fired = true; clock.UtcNow = clock.UtcNow.AddMinutes(2);
             }
         };
@@ -73,6 +78,8 @@ public sealed class ShipmentDispatchIntegrityTests(MongoFixture fixture)
         Assert.Equal(10L, stock["onHand"].AsInt64); Assert.Equal(2L, stock["reserved"].AsInt64);
         var reservation = await order.Rows("reservations").Find(new BsonDocument()).SingleAsync();
         Assert.Equal(2L, reservation["remaining"].AsInt64); Assert.Equal(0L, reservation["dispatched"].AsInt64);
+        Assert.Equal(head, await order.Rows(FulfillmentStockSourceRecords.Heads).Find(new BsonDocument()).SingleAsync());
+        Assert.Equal(pool, await order.Rows("inventoryPools").Find(new BsonDocument()).SingleAsync());
     }
 
     [Theory] [InlineData("shipment")] [InlineData("receipt")] [InlineData("audit")] [InlineData("movement")]

@@ -16,6 +16,7 @@ import styles from '../ordering/order-draft.module.css';
 type Account = { actorId: string; actions: readonly string[]; session: IdentitySession; observedAt: number };
 function message(error: unknown) {
   if (error instanceof AccessFailure) {
+    if (error.code === 'fulfillment_source_obligation_unavailable') return 'Riwayat stok untuk kiriman ini belum dapat diverifikasi. Hubungi penanggung jawab toko. Jika keberangkatan sudah dikirim, gunakan Periksa hasil sebelum mengirim ulang.';
     if (error.code === 'shipment_dispatch_admission_unavailable') return 'Sumber stok, biaya atau kebijakan pengiriman belum disetujui atau perlu diperbarui. Hubungi penanggung jawab toko.';
     if (error.code === 'shipment_courier_unavailable') return 'Penugasan kurir sudah berubah. Muat kembali daftar kurir yang tersedia.';
     if (error.status === 409) return 'Persiapan, stok atau penugasan berubah. Muat kembali dan tinjau pengiriman sebelum mengonfirmasi.';
