@@ -30,7 +30,7 @@ internal sealed class FulfillmentStockSourceTestData(StoreTestData data, MongoFi
     {
         var data = await StoreTestData.CreateAsync(fixture); var value = new FulfillmentStockSourceTestData(data, fixture);
         try {
-            Assert.Equal(92, CollectionMigrations.CurrentVersion);
+            Assert.Equal(93, CollectionMigrations.CurrentVersion);
             Assert.True(await new CollectionMigrations(data.Database, data.Clock).IsCurrentAsync());
             value.Maker = await data.AddActorAsync(920100, Location.ToScope(), Permissions.StockSourcePropose, Permissions.StockSourceRead);
             value.Checker = await data.AddActorAsync(920200, Location.ToScope(), Permissions.StockSourceApprove, Permissions.StockSourceRead);

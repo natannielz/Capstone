@@ -9,17 +9,19 @@ using UnitToko.Platform.Mongo;
 using UnitToko.Platform.Mongo.Migrations;
 using UnitToko.Platform.Ordering;
 using UnitToko.Platform.Fulfillment;
+using UnitToko.Platform.Procurement;
 using UnitToko.Tests.Authorization;
+using UnitToko.Tests.Procurement;
 
 namespace UnitToko.Tests.Inventory;
 
-/// <summary>Real pending setup survives an exact empty92 suffix upgrade. This does not claim a positive
+/// <summary>Real pending setup survives the exact empty92/93 suffix upgrade. This does not claim a positive
 /// old-binary approved-source handoff or retrospective producer reconstruction.</summary>
 [Collection("Mongo")]
 public sealed class FulfillmentStockSourceMigrationTests(MongoFixture fixture)
 {
     [Fact]
-    public async Task Genuine_pending_setup_and_all_retained_bytes_survive91_to92_without_creating_authority_and_original_key_recovers()
+    public async Task Genuine_pending_setup_and_all_retained_bytes_survive91_to93_without_creating_authority_and_original_key_recovers()
     {
         await using var data = await FulfillmentStockSourceTestData.CreateAsync(fixture, approve: false);
         await RestoreEmptyV91Async(data.Data.Database);
@@ -36,14 +38,16 @@ public sealed class FulfillmentStockSourceMigrationTests(MongoFixture fixture)
         Assert.False(await migration.IsCurrentAsync());
         await migration.ApplyAsync(); Assert.True(await migration.IsCurrentAsync());
         var applied = await HistoryAsync(data.Data.Database);
-        Assert.Equal(92, applied.Count);
+        Assert.Equal(93, applied.Count);
         Assert.Equal(predecessor, new BsonArray(applied.Take(91)));
         Assert.Equal(92L, applied[91]["_id"].ToInt64()); Assert.Equal("applied", applied[91]["state"].AsString);
+        Assert.Equal(93L, applied[92]["_id"].ToInt64()); Assert.Equal("applied", applied[92]["state"].AsString);
         var after = await SnapshotAsync(data.Data.Database);
-        Assert.Equal(before.ElementCount + FulfillmentStockSourceSchemas.Collections.Length, after.ElementCount);
+        Assert.Equal(before.ElementCount + FulfillmentStockSourceSchemas.Collections.Length + ProcurementStockSourceSchemas.Collections.Length, after.ElementCount);
         foreach (var name in before.Names) Assert.Equal(before[name], after[name]);
         await FulfillmentStockSourceStorage.RequireAsync(data.Data.Database, default);
         await RequireEmptyOwnersAsync(data.Data.Database);
+        await RequireEmptyProcurementOwnersAsync(data.Data.Database);
         await migration.ApplyAsync();
         Assert.Equal(applied, await HistoryAsync(data.Data.Database));
         Assert.Equal(after, await SnapshotAsync(data.Data.Database));
@@ -62,6 +66,7 @@ public sealed class FulfillmentStockSourceMigrationTests(MongoFixture fixture)
         Assert.Equal(0L, await data.Rows("stockSourceDecisions").CountDocumentsAsync(new BsonDocument()));
         Assert.Equal(0L, await data.Rows("inventoryPools").CountDocumentsAsync(new BsonDocument()));
         await RequireEmptyOwnersAsync(data.Data.Database);
+        await RequireEmptyProcurementOwnersAsync(data.Data.Database);
     }
 
     [Theory]
@@ -124,8 +129,9 @@ public sealed class FulfillmentStockSourceMigrationTests(MongoFixture fixture)
 
     private static async Task RestoreEmptyV91Async(IMongoDatabase database)
     {
-        var history = await RequireApplied92Async(database);
         await RequireEmptyOwnersAsync(database);
+        await ProcurementStockSourceMigrationTests.RestoreEmptyV92Async(database);
+        var history = await RequireApplied92Async(database);
         // The only destructive rehearsal removes an exact EMPTY future-owner suffix in this
         // fixture's random database. Actual approved producer history is never removed.
         Assert.Equal(1L, (await database.GetCollection<BsonDocument>("schemaMigrations").DeleteOneAsync(history[91].AsBsonDocument)).DeletedCount);
@@ -136,7 +142,7 @@ public sealed class FulfillmentStockSourceMigrationTests(MongoFixture fixture)
     private static async Task<BsonArray> RequireApplied92Async(IMongoDatabase database)
     {
         Assert.Matches(@"\Aunittoko_test_[0-9a-f]{32}_[0-9a-f]{8}\z", database.DatabaseNamespace.DatabaseName);
-        Assert.Equal(92, CollectionMigrations.CurrentVersion);
+        Assert.Equal(93, CollectionMigrations.CurrentVersion);
         var history = await HistoryAsync(database);
         Assert.Equal(92, history.Count);
         Assert.True(MigrationHistory.IsValid(history.Select(row => row.AsBsonDocument).ToArray(), 92));
@@ -150,13 +156,24 @@ public sealed class FulfillmentStockSourceMigrationTests(MongoFixture fixture)
         {
             var definition = await AccountContactStorage.DefinitionAsync(database, name, default); Assert.NotNull(definition);
             Assert.Equal(FulfillmentStockSourceSchemas.Validator(name), definition["options"]["validator"].AsBsonDocument);
+            Assert.True(AccountContactStorage.SafeDefinition(definition, FulfillmentStockSourceSchemas.Validator(name)));
             Assert.Equal("strict", definition["options"]["validationLevel"].AsString);
             Assert.Equal("error", definition["options"]["validationAction"].AsString);
             Assert.Equal(0L, await database.GetCollection<BsonDocument>(name).CountDocumentsAsync(new BsonDocument()));
             Assert.False(await database.GetCollection<BsonDocument>("idCounters").Find(new BsonDocument("_id", name)).AnyAsync());
             var indexes = await (await database.GetCollection<BsonDocument>(name).Indexes.ListAsync()).ToListAsync();
             Assert.True(OrderStockSourceStorage.SafeIndexes(indexes, FulfillmentStockSourceSchemas.Keys(name)));
+            Assert.All(FulfillmentStockSourceSchemas.Keys(name), key => Assert.Contains(indexes, row => AccountContactStorage.Matches(row, key)));
             Assert.Equal(1 + FulfillmentStockSourceSchemas.Keys(name).Length, indexes.Count);
+        }
+    }
+
+    private static async Task RequireEmptyProcurementOwnersAsync(IMongoDatabase database)
+    {
+        await ProcurementStockSourceStorage.RequireAsync(database, default);
+        foreach (var name in ProcurementStockSourceSchemas.Collections) {
+            Assert.Equal(0L, await database.GetCollection<BsonDocument>(name).CountDocumentsAsync(new BsonDocument()));
+            Assert.False(await database.GetCollection<BsonDocument>("idCounters").Find(new BsonDocument("_id", name)).AnyAsync());
         }
     }
 

@@ -37,7 +37,7 @@ internal sealed class InventoryHeldReceiptWriter(IMongoDatabase database)
             await InventoryRepository.RequireStorageAsync(database, "lots", InventoryLotSchemas.Validator(), new BsonDocument("_id", 1), ct);
             await InventoryRepository.RequireStorageAsync(database, "stockBalances", InventorySchemas.BalanceValidator(), InventorySchemas.BalanceKey(), ct);
             await InventoryRepository.RequireStorageAsync(database, "movements", InventoryMovementSchemas.Validator(), InventoryMovementSchemas.Key(), ct);
-            await proof.Pool.FenceAsync(ct); proof.Require(actor, tx);
+            await proof.FenceSourceAsync(database, actor, tx, ct); proof.Require(actor, tx);
             var before = Before(row); var lot = Lot(row); _ = InventoryGraph.ReadLot(lot);
             await database.GetCollection<BsonDocument>("lots").InsertOneAsync(tx, lot, cancellationToken: ct);
             var balances = database.GetCollection<BsonDocument>("stockBalances"); await balances.InsertOneAsync(tx, InventoryBson.Balance(before), cancellationToken: ct);

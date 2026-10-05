@@ -57,6 +57,7 @@ public sealed partial class ProcurementStockReceiptService
             active.Fences.RemoveAll(value => value.Table == Q.PhysicalHeads && value.Row["_id"] == head["_id"]); AddFence(active, Q.PhysicalHeads, head);
             var proof = new ProcurementStockReceiptWriteProof(row, active.Pool, actor, active.Authority, tx, () => Current(active));
             await new InventoryHeldReceiptWriter(database).WriteAsync(tx, actor, proof, token);
+            active.SourceWrite = proof.SourceWrite ?? throw B.Broken();
             await Rows("auditEvents").InsertOneAsync(tx, B.Audit(row), cancellationToken: token);
             await Rows("outboxEvents").InsertOneAsync(tx, new BsonDocument { { "_id", ObjectId.GenerateNewId() }, { "schemaVersion", 1 }, { "kind", B.Operation }, { "sourceKey", B.EffectKey(row) },
                 { "actorId", row["actorId"] }, { "requestKey", row["requestKey"] }, { "location", row["location"] }, { "orderId", row["orderId"] }, { "payload", B.Result(row) },
@@ -65,6 +66,9 @@ public sealed partial class ProcurementStockReceiptService
         }, ct, async (authority, tx, token) => {
             var active = context ?? throw B.Broken(); var actual = await records.ReadAsync(tx, active.Receipt!["_id"].AsInt64, token);
             ProcurementStockReceiptRecords.Equal(actual["bodyHash"], AuthorizationStore.CommandHash(body, metadata.Reason));
+            // AuthorizationStore has persisted the completed original result at this point.
+            // Only this attempt's actual fresh held writer may append; replay merely validates.
+            await CompleteHeldStockSourceAsync(active, actual, token);
             // The generic command receipt is complete here; reconstruct both physical owners before final authority fencing.
             await InspectionAsync(active, input.InspectionId, input.InspectionLineNumber, token); await records.OrphansAsync(tx, token); await FenceAsync(active, token);
         }, validateCurrent: () => Current(context ?? throw B.Broken()));

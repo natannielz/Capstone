@@ -39,7 +39,7 @@ internal sealed class ReconciliationStockSourceTestData(StoreTestData data, Mong
         var data = await StoreTestData.CreateAsync(fixture);
         var value = new ReconciliationStockSourceTestData(data, fixture);
         try {
-            Assert.Equal(92, CollectionMigrations.CurrentVersion);
+            Assert.Equal(93, CollectionMigrations.CurrentVersion);
             Assert.True(await new CollectionMigrations(data.Database, data.Clock).IsCurrentAsync());
             value.Maker = await data.AddActorAsync(910100, Location.ToScope(), Permissions.StockSourceRead,
                 Permissions.StockSourcePropose, Permissions.StockSourcePolicyPropose,

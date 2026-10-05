@@ -27,6 +27,12 @@ internal sealed class ProcurementStockReceiptWriteProof(BsonDocument row, HeldRe
     internal BsonDocument Row { get; } = row;
     internal HeldReceiptPoolCapture Pool { get; } = pool;
     internal AuthorizationSnapshot Authority { get; } = authority;
+    internal ProcurementStockSourcePoolWrite? SourceWrite { get; private set; }
+    internal async Task FenceSourceAsync(IMongoDatabase database, ActorContext actor, IClientSessionHandle tx, CancellationToken ct) {
+        Require(actor, tx); if (SourceWrite is not null) throw B.Broken();
+        SourceWrite = await ProcurementStockSourcePoolWrite.FenceAsync(database, tx, actor, this, ct);
+        Require(actor, tx);
+    }
     internal void Require(ActorContext value, IClientSessionHandle session) {
         if (value != actor || Authority.UserId != actor.UserId || Authority.GrantVersion != actor.GrantVersion || !ReferenceEquals(tx, session) || !tx.IsInTransaction || tx.WrappedCoreSession.CurrentTransaction.TransactionNumber != transaction || B.Hash(Row) != hash) throw B.Broken(); Pool.RequireCurrent(); current();
     }
@@ -51,6 +57,7 @@ public sealed partial class ProcurementStockReceiptService
         internal readonly long Transaction = tx.WrappedCoreSession.CurrentTransaction.TransactionNumber; internal readonly ProcurementLocation Location = location; internal readonly string Permission = permission;
         internal PurchaseOrderReceivingCapture? Order; internal HeldReceiptPoolCapture? Pool; internal ProcurementInspectionHistory? History; internal BsonDocument? Inspection, Receipt;
         internal ProcurementQuarantineCapacity? Capacity; internal PersonAuthorityProof? People; internal DateTimeOffset? SessionExpiry;
+        internal ProcurementStockSourcePoolWrite? SourceWrite;
         internal readonly List<(string Table, BsonDocument Row)> Fences = [];
         internal readonly List<ResourceScope> ExtraResources = [];
     }
@@ -66,6 +73,10 @@ public sealed partial class ProcurementStockReceiptService
         context.People?.RequireCurrent(context.Tx, clock.UtcNow); if (context.SessionExpiry is { } expiry && clock.UtcNow >= expiry) throw new AuthorizationDeniedException("stale_or_inactive_session");
     }
     private async Task StorageAsync(CancellationToken ct) {
+        await ProcurementStockSourceStorage.RequireAsync(database, ct);
+        await RequireStockSourcePredecessorStorageAsync(ct);
+    }
+    internal async Task RequireStockSourcePredecessorStorageAsync(CancellationToken ct) {
         await orders.RequireReceivingStorageAsync(ct); await sources.RequireHeldReceiptStorageAsync(ct); await ProcurementStockReceiptSchemas.RequireDispositionStorageAsync(database, ct);
         foreach (var name in ProcurementStockReceiptSchemas.Collections) await InventoryRepository.RequireStorageAsync(database, name, ProcurementStockReceiptSchemas.Validator(name), ProcurementStockReceiptSchemas.Keys(name), ct);
         await InventoryRepository.RequireStorageAsync(database, "lots", InventoryLotSchemas.Validator(), new BsonDocument("_id", 1), ct);
