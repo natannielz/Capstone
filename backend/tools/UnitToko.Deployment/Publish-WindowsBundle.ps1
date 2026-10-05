@@ -63,7 +63,7 @@ try {
     )
     foreach ($component in $components) {
         $destination = Join-Path $bundle $component.Name
-        $restorePolicy = if ($component.Name -eq 'image-decoder') { @('-p:RestoreLockedMode=true') } else { @() }
+        [string[]] $restorePolicy = if ($component.Name -eq 'image-decoder') { @('-p:RestoreLockedMode=true') } else { @() }
         # Capture and discard build text: no environment/configuration body is logged.
         $null = & dotnet publish $component.Project --configuration Release --runtime win-x64 --self-contained false `
             -p:UseAppHost=true -p:ContinuousIntegrationBuild=true -p:SourceRevisionId=$VerifiedCommit `
