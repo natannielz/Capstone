@@ -18,7 +18,7 @@ internal sealed record ProcurementApprovedQualitySource(BsonDocument Receipt, Bs
 // A proof cycle can occur when a genuine supplier claim names an invoice match whose
 // quality allocation is being authenticated. Only that exact immutable allocation edge
 // may be revisited while the outer, full physical/claim/document proof is completing.
-internal sealed class ProcurementQualityProofGraph(IClientSessionHandle tx)
+internal sealed partial class ProcurementQualityProofGraph(IClientSessionHandle tx)
 {
     private readonly long transaction = tx.WrappedCoreSession.CurrentTransaction.TransactionNumber;
     private readonly Dictionary<long, ProcurementApprovedQualitySource> active = [];
@@ -54,9 +54,13 @@ internal sealed class ProcurementQualityAcceptanceSourceReader(IMongoDatabase da
         if (allocation["snapshotHash"] != Q.Hash(allocation)) throw Q.Broken();
         var proof = graph ?? new ProcurementQualityProofGraph(tx);
         if (proof.TryActive(tx, allocation, out var active)) return active;
-        var receipt = await new ProcurementStockReceiptRecords(database, unit, clock, catalog, orders, sources)
-            .ReadAsync(tx, allocation["receiptId"].AsInt64, ct);
-        var capacity = await new ProcurementQualityAcceptanceCapacityReader(database, sources).ReadAsync(tx, receipt, ct);
+        BsonDocument receipt;
+        using (SupplierDocumentMatchDiagnostics.Begin("quality.receipt"))
+            receipt = await new ProcurementStockReceiptRecords(database, unit, clock, catalog, orders, sources, proof)
+                .ReadAsync(tx, allocation["receiptId"].AsInt64, ct);
+        ProcurementQualityAcceptanceCapacity capacity;
+        using (SupplierDocumentMatchDiagnostics.Begin("quality.capacity"))
+            capacity = await new ProcurementQualityAcceptanceCapacityReader(database, sources).ReadAsync(tx, receipt, ct);
         if (capacity.Head is null || !capacity.Allocations.Any(row => row["_id"] == allocation["_id"])) throw Q.Broken();
         var proposal = await Rows(Q.Proposals).Find(tx, new BsonDocument { { "_id", allocation["proposalId"] },
             { "$and", new BsonArray { ProcurementQualityAcceptanceSchemas.Validator(Q.Proposals) } } }).SingleOrDefaultAsync(ct) ?? throw Q.Broken();
@@ -78,8 +82,10 @@ internal sealed class ProcurementQualityAcceptanceSourceReader(IMongoDatabase da
         if (proposalAt > clock.UtcNow || decisionAt > clock.UtcNow || decisionAt < proposalAt ||
             proposal["policy"]["approvedAt"].ToUniversalTime() > proposalAt.UtcDateTime ||
             proposal["policy"]["expiresAt"].ToUniversalTime() <= decisionAt.UtcDateTime) throw Q.Broken();
-        var policy = await new ProcurementQualityAcceptanceRecords(database, unit, clock, catalog, orders, sources)
-            .PolicyAsync(tx, input, proposalAt, false, ct);
+        BsonDocument policy;
+        using (SupplierDocumentMatchDiagnostics.Begin("quality.policy"))
+            policy = await new ProcurementQualityAcceptanceRecords(database, unit, clock, catalog, orders, sources)
+                .PolicyAsync(tx, input, proposalAt, false, ct);
         if (proposal["policy"] != Q.PolicySnapshot(policy)) throw Q.Broken();
         var balance = await Rows("stockBalances").Find(tx, new BsonDocument("_id", receipt["balanceId"]))
             .SingleOrDefaultAsync(ct) ?? throw Q.Broken();
@@ -92,7 +98,8 @@ internal sealed class ProcurementQualityAcceptanceSourceReader(IMongoDatabase da
             pool["location"] != receipt["poolSource"]["configuration"]["source"]["input"]["location"] ||
             proposal["sourceConfigurationHash"] != Q.SourceConfigurationHash(proposal["poolSource"].AsBsonDocument))
             throw Q.Broken();
-        await sources.RequireHeldReceiptHistoryAsync(tx, proposal["poolSource"].AsBsonDocument, proposalAt, ct);
+        using (SupplierDocumentMatchDiagnostics.Begin("quality.configuration"))
+            await sources.RequireHeldReceiptHistoryAsync(tx, proposal["poolSource"].AsBsonDocument, proposalAt, ct);
         ProcurementQualityAcceptanceRecords.LotFacts(input, receipt, proposalAt);
         ProcurementQualityAcceptanceRecords.LotFacts(input, receipt, decisionAt);
         ProcurementQualityAcceptanceRecords.ObservationTime(input.ObservedAt, receipt, proposal["policy"].AsBsonDocument,
@@ -122,8 +129,10 @@ internal sealed class ProcurementQualityAcceptanceSourceReader(IMongoDatabase da
                 decision["capacityBefore"].AsBsonDocument) ||
             decision["bodyHash"] != AuthorizationStore.CommandHash(Q.DecideBody(proposal["_id"].AsInt64, 1,
                 ProcurementQualityAcceptanceDecision.Approve, observation, decision["binding"].AsString), decision["reason"].AsString)) throw Q.Broken();
-        await ProcurementQualityAcceptanceRecords.RequireEffectsAsync(database, tx, proposal, ct);
-        await ProcurementQualityAcceptanceRecords.RequireEffectsAsync(database, tx, decision, ct, proposal);
+        using (SupplierDocumentMatchDiagnostics.Begin("quality.effects")) {
+            await ProcurementQualityAcceptanceRecords.RequireEffectsAsync(database, tx, proposal, ct);
+            await ProcurementQualityAcceptanceRecords.RequireEffectsAsync(database, tx, decision, ct, proposal);
+        }
         var snapshot = new BsonDocument { { "allocationId", allocation["_id"] }, { "allocationHash", allocation["snapshotHash"] },
             { "proposalId", proposal["_id"] }, { "proposalHash", proposal["snapshotHash"] },
             { "decisionId", decision["_id"] }, { "decisionHash", decision["snapshotHash"] },
@@ -135,6 +144,7 @@ internal sealed class ProcurementQualityAcceptanceSourceReader(IMongoDatabase da
         var result = new ProcurementApprovedQualitySource(receipt, proposal, decision, allocation, capacity, snapshot);
         proof.Enter(tx, result);
         try {
+            using var dispositionStage = SupplierDocumentMatchDiagnostics.Begin("quality.disposition");
             var inspected = receipt["inspection"]["input"]["lines"][receipt["inspectionLineNumber"].AsInt32 - 1];
             var claims = new SupplierClaimRecords(database, unit, clock, catalog, orders, proof);
             var disposition = await new ProcurementQuarantineDisposition(database, claims).ReadAsync(tx,

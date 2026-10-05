@@ -36,13 +36,23 @@ internal sealed class PurchaseOrderFundingCapture(object owner, ActorContext act
 
 public sealed partial class PurchaseOrderService
 {
-    internal async Task<BsonDocument> FundingSourceAsync(IMongoDatabase owner, IClientSessionHandle tx, long orderId, long orderVersion, long approvalId, CancellationToken ct) {
+    internal async Task<BsonDocument> FundingSourceAsync(IMongoDatabase owner, IClientSessionHandle tx, long orderId, long orderVersion, long approvalId,
+        CancellationToken ct, ProcurementQualityProofGraph? qualityGraph = null) {
+        if (qualityGraph is null) return await FundingSourceCoreAsync(owner, tx, orderId, orderVersion, approvalId, ct);
+        var proof = await PurchaseOrderHistoricalSourceProof.ReadAsync(this, owner, tx, orderId, orderVersion, approvalId, ct);
+        qualityGraph.AttachFundingProof(tx, proof);
+        return proof.Source;
+    }
+    internal async Task<BsonDocument> FundingSourceCoreAsync(IMongoDatabase owner, IClientSessionHandle tx, long orderId, long orderVersion, long approvalId,
+        CancellationToken ct, PurchaseOrderSourceReadCapture? sourceCapture = null) {
         if (!ReferenceEquals(owner.Client, database.Client) || owner.DatabaseNamespace != database.DatabaseNamespace || !tx.IsInTransaction || !ReferenceEquals(tx.Client, database.Client)) throw B.Broken();
-        var order = await records.RowAsync(tx, B.Orders, orderId, ct); Equal(order["version"], orderVersion); Equal(order["approvalId"], approvalId);
-        var proposal = await records.ProposalAsync(tx, order["proposalId"].AsInt64, ct); var approval = await records.DecisionAsync(tx, approvalId, proposal, ct); Equal(approval["decision"], "approve"); Equal(approval["orderId"], orderId);
-        var input = B.Input(proposal["input"]); var request = await records.RequestAsync(tx, input, ct);
-        await requests.RequirePurchaseOrderAllocationsAsync(database, tx, request.Request, request.Decision, ct);
+        var actualRecords = sourceCapture is null ? records : new PurchaseOrderRecords(database, catalog, sourceCapture);
+        var order = await actualRecords.RowAsync(tx, B.Orders, orderId, ct); Equal(order["version"], orderVersion); Equal(order["approvalId"], approvalId);
+        var proposal = await actualRecords.ProposalAsync(tx, order["proposalId"].AsInt64, ct); var approval = await actualRecords.DecisionAsync(tx, approvalId, proposal, ct); Equal(approval["decision"], "approve"); Equal(approval["orderId"], orderId);
+        var input = B.Input(proposal["input"]); var request = await actualRecords.RequestAsync(tx, input, ct);
+        await requests.RequirePurchaseOrderAllocationsAsync(database, tx, request.Request, request.Decision, ct, sourceCapture);
         var allocations = await Rows(ProcurementRequestPurchaseOrderSchemas.Allocations).Find(tx, new BsonDocument("orderId", orderId)).Sort(new BsonDocument("skuId", 1)).ToListAsync(ct);
+        sourceCapture?.Record(ProcurementRequestPurchaseOrderSchemas.Allocations, new BsonDocument("orderId", orderId), allocations);
         if (allocations.Count != input.Lines.Length) throw B.Broken();
         return new BsonDocument { { "order", order }, { "proposal", proposal }, { "approval", approval },
             { "request", request.Request }, { "requestDecision", request.Decision }, { "allocations", new BsonArray(allocations.Select(row => new BsonDocument { { "id", row["_id"] }, { "hash", row["snapshotHash"] } })) } };

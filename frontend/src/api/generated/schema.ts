@@ -18069,6 +18069,7 @@ export interface components {
             documentRevision: string;
             lines: components["schemas"]["SupplierDocumentMatchLineInputDto"][];
             ocrResultId: null | components["schemas"]["LongId"];
+            pdfObservations?: components["schemas"]["SupplierDocumentPdfMatchObservationDto"][];
             reviewedInput: components["schemas"]["SupplierDocumentInputDto"];
         };
         SupplierDocumentMatchLineInputDto: {
@@ -18134,6 +18135,19 @@ export interface components {
             items: components["schemas"]["ProcurementFundingOrderDto"][];
             location: components["schemas"]["ProcurementLocationDto"];
             nextOrderId: null | components["schemas"]["LongId"];
+        };
+        SupplierDocumentPdfMatchCandidateDto: {
+            evidence: components["schemas"]["PaymentEvidenceReferenceDto"];
+            field: string;
+            /** Format: int32 */
+            pageIndex: number;
+            resultHash: string;
+            resultId: components["schemas"]["LongId"];
+        };
+        SupplierDocumentPdfMatchObservationDto: {
+            candidate: components["schemas"]["SupplierDocumentPdfMatchCandidateDto"];
+            field: string;
+            originalReviewed: boolean;
         };
         SupplierDocumentPreviewDto: {
             binding: string;

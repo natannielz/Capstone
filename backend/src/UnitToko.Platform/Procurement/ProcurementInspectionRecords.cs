@@ -18,7 +18,7 @@ namespace UnitToko.Platform.Procurement;
 internal sealed record ProcurementInspectionHistory(BsonDocument Source, BsonDocument CustodyHead, BsonDocument? Head,
     BsonDocument Capacity, IReadOnlyList<BsonDocument> Drafts, IReadOnlyList<BsonDocument> Submissions);
 internal sealed class ProcurementInspectionRecords(IMongoDatabase database, MongoUnitOfWork unit, IClock clock,
-    CatalogAuthoringService catalog, PurchaseOrderService orders)
+    CatalogAuthoringService catalog, PurchaseOrderService orders, ProcurementQualityProofGraph? qualityGraph = null)
 {
     private IMongoCollection<BsonDocument> Rows(string name) => database.GetCollection<BsonDocument>(name);
     internal static void Equal(BsonValue actual, BsonValue expected) { if (!actual.Equals(expected)) throw B.Broken(); }
@@ -35,7 +35,7 @@ internal sealed class ProcurementInspectionRecords(IMongoDatabase database, Mong
         }
     }
     internal async Task<ProcurementInspectionHistory> HistoryAsync(IClientSessionHandle tx, long noticeId, long intakeId, CancellationToken ct) {
-        var receiving = new ProcurementReceivingRecords(database, clock, catalog, orders);
+        var receiving = new ProcurementReceivingRecords(database, clock, catalog, orders, qualityGraph);
         var notice = await receiving.NoticeAsync(tx, noticeId, ct); var custody = await receiving.HistoryAsync(tx, notice, ct);
         var intake = custody.Intakes.SingleOrDefault(row => row["_id"] == intakeId) ?? throw B.Broken();
         var source = new BsonDocument { { "notice", notice }, { "intake", intake } };

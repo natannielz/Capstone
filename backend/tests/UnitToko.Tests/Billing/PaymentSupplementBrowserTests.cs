@@ -65,7 +65,11 @@ public sealed class PaymentSupplementBrowserTests(MongoFixture fixture, ITestOut
         await using var scanner = await PdfEvidenceAdmissionTestRuntime.CreateAsync(data.Database, unit, data.Catalog.Clock, data.Files.Root, data.Files.StoreId);
         await PdfDocumentOcrProcessingTestData.ReadPolicyAsync(data.Database, data.Files.StoreId);
         if (correction) {
-            await PaymentSupplementCorrectionTestData.ApplyAsync(data.Database, data.Catalog.Clock);
+            // Ordinary browser setup requires the genuinely current registry,
+            // not the fixed M88 predecessor-rehearsal helper.
+            var migrations = new CollectionMigrations(data.Database, data.Catalog.Clock);
+            await migrations.ApplyAsync();
+            Assert.True(await migrations.IsCurrentAsync(), "Correction browser requires genuine current schema history.");
             var imageWorker = PaymentOcrProcessorTests.Processor(data, new WindowsLocalOcrEngine(LocalOcrTests.Options()));
             await PaymentOcrProcessorTests.Policy(data, imageWorker); Assert.Equal("completed", await imageWorker.RunOnceAsync());
             var extraction = await data.Service.ReadExtractionAsync(data.Actor, data.DeclarationId, 1, data.Reference, new("payment-ocr-view", "native-text-primary-browser"));

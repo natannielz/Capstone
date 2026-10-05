@@ -68,23 +68,30 @@ public sealed partial class ProcurementRequestService
             if ((await (await Rows(name).Indexes.ListAsync(ct)).ToListAsync(ct)).Any(index => InvoiceStorage.Unsafe(index) || index.Contains("partialFilterExpression"))) throw B.Broken();
         }
     }
-    private async Task<BsonDocument> CommitmentRowAsync(IClientSessionHandle tx, string collection, BsonDocument row, CancellationToken ct) =>
-        await Rows(collection).Find(tx, new BsonDocument { { "_id", row["_id"] }, { "$and", new BsonArray { S.Validator(collection) } } }).SingleOrDefaultAsync(ct) ?? throw B.Broken();
+    private async Task<BsonDocument> CommitmentRowAsync(IClientSessionHandle tx, string collection, BsonDocument row, CancellationToken ct,
+        PurchaseOrderSourceReadCapture? sourceCapture = null) {
+        var filter = new BsonDocument { { "_id", row["_id"] }, { "$and", new BsonArray { S.Validator(collection) } } };
+        return (sourceCapture is null ? await Rows(collection).Find(tx, filter).SingleOrDefaultAsync(ct)
+            : await sourceCapture.OneAsync(database, tx, collection, filter, ct)) ?? throw B.Broken();
+    }
     private static void RequireCommitmentLink(BsonDocument row, BsonDocument request, BsonDocument decision, long skuId) {
         if (row["requestId"] != request["_id"] || row["requestHash"] != request["snapshotHash"] || row["requestDecisionId"] != decision["_id"] ||
             row["requestDecisionHash"] != decision["snapshotHash"] || row["skuId"] != skuId) throw B.Broken();
     }
-    private async Task<CommitmentLine> CommitmentAsync(IClientSessionHandle tx, BsonDocument request, BsonDocument decision, ProcurementRequestLineInput line, CancellationToken ct) {
+    private async Task<CommitmentLine> CommitmentAsync(IClientSessionHandle tx, BsonDocument request, BsonDocument decision, ProcurementRequestLineInput line,
+        CancellationToken ct, PurchaseOrderSourceReadCapture? sourceCapture = null) {
         var filter = new BsonDocument { { "requestId", request["_id"] }, { "skuId", line.SkuId } };
         var rawHead = await Rows(S.Commitments).Find(tx, filter).SingleOrDefaultAsync(ct);
-        var head = rawHead is null ? null : await CommitmentRowAsync(tx, S.Commitments, rawHead, ct);
+        sourceCapture?.Record(S.Commitments, filter, rawHead is null ? [] : [rawHead]);
+        var head = rawHead is null ? null : await CommitmentRowAsync(tx, S.Commitments, rawHead, ct, sourceCapture);
         var allocations = await Rows(S.Allocations).Find(tx, filter).Sort(new BsonDocument("sequence", 1)).ToListAsync(ct);
-        var owner = new PurchaseOrderRecords(database, catalog);
+        sourceCapture?.Record(S.Allocations, filter, allocations);
+        var owner = new PurchaseOrderRecords(database, catalog, sourceCapture);
         var claims = await owner.RequestClaimsAsync(tx, request["_id"].AsInt64, line.SkuId, ct);
         if (claims.Count != allocations.Count || (head is null) != (allocations.Count == 0)) throw B.Broken();
         BsonDocument? previous = null; long sequence = 0; var sum = 0;
         foreach (var raw in allocations) {
-            var row = await CommitmentRowAsync(tx, S.Allocations, raw, ct); RequireCommitmentLink(row, request, decision, line.SkuId);
+            var row = await CommitmentRowAsync(tx, S.Allocations, raw, ct, sourceCapture); RequireCommitmentLink(row, request, decision, line.SkuId);
             if (row["snapshotHash"] != B.Hash(row) || row["sequence"] != ++sequence || row["previousAllocationId"] != (previous?["_id"] ?? BsonNull.Value) ||
                 row["previousHash"] != (previous?["snapshotHash"] ?? BsonNull.Value) || row["recordedAt"].ToUniversalTime() < decision["recordedAt"].ToUniversalTime() ||
                 previous is not null && row["recordedAt"].ToUniversalTime() < previous["recordedAt"].ToUniversalTime()) throw B.Broken();
@@ -172,14 +179,20 @@ public sealed partial class ProcurementRequestService
         long orderId, long approvalId, string approvalHash, DateTimeOffset recordedAt, CancellationToken ct) {
         RequirePurchaseOrderTransaction(owner, tx); capture.RequireContext(this, actor, authority, tx); return capture.AllocateAsync(orderId, approvalId, approvalHash, recordedAt, ct);
     }
-    internal async Task RequirePurchaseOrderAllocationsAsync(IMongoDatabase owner, IClientSessionHandle tx, BsonDocument request, BsonDocument decision, CancellationToken ct) {
+    internal async Task RequirePurchaseOrderAllocationsAsync(IMongoDatabase owner, IClientSessionHandle tx, BsonDocument request, BsonDocument decision,
+        CancellationToken ct, PurchaseOrderSourceReadCapture? sourceCapture = null) {
         RequirePurchaseOrderTransaction(owner, tx); await PurchaseOrderStorageAsync(ct);
-        var actual = await records.RequestAsync(tx, request["_id"].AsInt64, ct); var approved = await records.DecisionForAsync(tx, actual, ct);
+        var actualRecords = sourceCapture is null ? records : new ProcurementRequestRecords(database, catalog, sourceCapture);
+        var actual = await actualRecords.RequestAsync(tx, request["_id"].AsInt64, ct); var approved = await actualRecords.DecisionForAsync(tx, actual, ct);
         if (!actual.Equals(request) || approved is null || !approved.Equals(decision) || approved["decision"] != "approve") throw B.Broken();
         var input = B.Input(actual["input"]);
-        foreach (var table in S.Collections) if (await Rows(table).Find(tx, new BsonDocument { { "requestId", actual["_id"] },
-            { "skuId", new BsonDocument("$nin", new BsonArray(input.Lines.Select(line => new BsonInt64(line.SkuId)))) } }).AnyAsync(ct)) throw B.Broken();
-        foreach (var line in input.Lines) _ = await CommitmentAsync(tx, actual, approved, line, ct);
+        foreach (var table in S.Collections) {
+            var filter = new BsonDocument { { "requestId", actual["_id"] },
+                { "skuId", new BsonDocument("$nin", new BsonArray(input.Lines.Select(line => new BsonInt64(line.SkuId)))) } };
+            if (sourceCapture is null ? await Rows(table).Find(tx, filter).AnyAsync(ct)
+                : await sourceCapture.AnyAsync(database, tx, table, filter, ct)) throw B.Broken();
+        }
+        foreach (var line in input.Lines) _ = await CommitmentAsync(tx, actual, approved, line, ct, sourceCapture);
         RequirePurchaseOrderTransaction(owner, tx); ct.ThrowIfCancellationRequested();
     }
     private static PersistenceConflictException CapacityUnavailable() => new("procurement_request_capacity_unavailable", "The approved request no longer has enough uncommitted packages");

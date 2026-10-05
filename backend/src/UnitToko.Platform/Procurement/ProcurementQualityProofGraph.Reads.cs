@@ -1,0 +1,142 @@
+using MongoDB.Bson;
+using MongoDB.Driver;
+using UnitToko.Platform.Catalog;
+using UnitToko.Platform.Inventory;
+using UnitToko.Platform.Mongo;
+using UnitToko.Platform.Mongo.Migrations;
+using I = UnitToko.Platform.Procurement.ProcurementInspectionBson;
+using C = UnitToko.Platform.Procurement.ProcurementReceivingBson;
+using Q = UnitToko.Platform.Procurement.ProcurementQualityAcceptanceBson;
+using R = UnitToko.Platform.Procurement.ProcurementStockReceiptBson;
+
+namespace UnitToko.Platform.Procurement;
+
+// Only successful owning readers can populate these proofs. Their immutable
+// ancestors belong to this database and this transaction attempt, while custody,
+// inspection heads, held stock and private pins are checked again on every reuse.
+// No current policy, actor grant, PDF read window, claim or disposition is cached.
+internal sealed partial class ProcurementQualityProofGraph
+{
+    private string? proofDatabase;
+    private readonly Dictionary<long, (ProcurementInspectionHistory History, DateTimeOffset At)> completedInspections = [];
+    private readonly Dictionary<long, (BsonDocument Receipt, BsonDocument Pool, DateTimeOffset At)> completedReceipts = [];
+    private readonly Dictionary<long, PurchaseOrderHistoricalSourceProof> completedFunding = [];
+
+    internal void AttachFundingProof(IClientSessionHandle current, PurchaseOrderHistoricalSourceProof proof) {
+        Require(current);
+        var id = proof.Source["order"]["_id"].AsInt64;
+        if (!completedFunding.TryAdd(id, proof) && !completedFunding[id].SameProof(proof)) throw Q.Broken();
+    }
+    private async Task RequireFundingAsync(IMongoDatabase database, PurchaseOrderService orders,
+        IClientSessionHandle current, BsonDocument source, CancellationToken ct) {
+        RequireDatabase(database, current, source["order"]["_id"].AsInt64);
+        if (!completedFunding.TryGetValue(source["order"]["_id"].AsInt64, out var proof)) throw Q.Broken();
+        await proof.RequireAsync(orders, database, current, source, ct);
+    }
+
+    private void RequireDatabase(IMongoDatabase database, IClientSessionHandle current, long id) {
+        Require(current);
+        if (id <= 0 || !ReferenceEquals(current.Client, database.Client)) throw Q.Broken();
+        var name = database.DatabaseNamespace.DatabaseName;
+        if (proofDatabase is not null && proofDatabase != name) throw Q.Broken();
+        proofDatabase ??= name;
+    }
+    private static BsonDocument Clone(BsonDocument row) => row.DeepClone().AsBsonDocument;
+    private static ProcurementInspectionHistory Clone(ProcurementInspectionHistory history) => new(
+        Clone(history.Source), Clone(history.CustodyHead), history.Head is null ? null : Clone(history.Head),
+        Clone(history.Capacity), history.Drafts.Select(Clone).ToArray(), history.Submissions.Select(Clone).ToArray());
+    private static void Equal(BsonValue actual, BsonValue expected) { if (!actual.Equals(expected)) throw Q.Broken(); }
+
+    internal async Task<ProcurementInspectionHistory> InspectionAsync(IMongoDatabase database, MongoUnitOfWork unit,
+        IClock clock, CatalogAuthoringService catalog, PurchaseOrderService orders, IClientSessionHandle current,
+        long inspectionId, CancellationToken ct) {
+        RequireDatabase(database, current, inspectionId);
+        var inspection = await database.GetCollection<BsonDocument>(I.Submissions).Find(current, new BsonDocument {
+            { "_id", inspectionId }, { "$and", new BsonArray { ProcurementInspectionSchemas.Validator(I.Submissions) } }
+        }).SingleOrDefaultAsync(ct) ?? throw Q.Broken();
+        if (completedInspections.TryGetValue(inspectionId, out var completed)) {
+            if (clock.UtcNow < completed.At) throw Q.Broken();
+            var history = completed.History;
+            Equal(inspection, history.Submissions.SingleOrDefault(row => row["_id"] == inspectionId) ?? throw Q.Broken());
+            await RequireFundingAsync(database, orders, current, history.Source["notice"]["source"].AsBsonDocument, ct);
+            await RequireInspectionOwnersAsync(database, unit, clock, catalog, orders, current, history, ct);
+            RequireDatabase(database, current, inspectionId);
+            return Clone(history);
+        }
+        var verified = await new SupplierDocumentRecords(database, unit, clock, catalog, orders, this)
+            .InspectionAsync(current, inspectionId, ct);
+        Equal(inspection, verified.Submissions.SingleOrDefault(row => row["_id"] == inspectionId) ?? throw Q.Broken());
+        await RequireFundingAsync(database, orders, current, verified.Source["notice"]["source"].AsBsonDocument, ct);
+        RequireDatabase(database, current, inspectionId);
+        completedInspections.Add(inspectionId, (Clone(verified), clock.UtcNow));
+        return Clone(verified);
+    }
+
+    private static async Task RequireInspectionOwnersAsync(IMongoDatabase database, MongoUnitOfWork unit,
+        IClock clock, CatalogAuthoringService catalog, PurchaseOrderService orders, IClientSessionHandle current,
+        ProcurementInspectionHistory history, CancellationToken ct) {
+        var notice = history.Source["notice"].AsBsonDocument;
+        var intake = history.Source["intake"].AsBsonDocument;
+        foreach (var (collection, expected) in new[] { (C.Notices, notice), (C.Intakes, intake), (C.Heads, history.CustodyHead) })
+            Equal(await database.GetCollection<BsonDocument>(collection).Find(current, new BsonDocument("_id", expected["_id"]))
+                .SingleOrDefaultAsync(ct) ?? throw Q.Broken(), expected);
+        var head = await database.GetCollection<BsonDocument>(I.Heads).Find(current, new BsonDocument("_id", intake["_id"]))
+            .SingleOrDefaultAsync(ct);
+        if ((head is null) != (history.Head is null)) throw Q.Broken();
+        if (head is not null) Equal(head, history.Head!);
+        foreach (var (collection, frozen, sort) in new[] {
+            (I.Drafts, history.Drafts, new BsonDocument("_id", 1)),
+            (I.Submissions, history.Submissions, new BsonDocument("sequence", 1)) }) {
+            var actual = await database.GetCollection<BsonDocument>(collection).Find(current, new BsonDocument("intakeId", intake["_id"]))
+                .Sort(sort).ToListAsync(ct);
+            if (actual.Count != frozen.Count) throw Q.Broken();
+            for (var index = 0; index < actual.Count; index++) Equal(actual[index], frozen[index]);
+        }
+        // Re-authenticate each genuine private inspection pin and its admission,
+        // completion, validation and lifecycle history; a retained proof cannot
+        // launder a deleted pin or changed private owner within the transaction.
+        var records = new ProcurementInspectionRecords(database, unit, clock, catalog, orders);
+        foreach (var row in history.Submissions) await records.RequirePinAsync(current, row, ct);
+    }
+
+    internal async Task<BsonDocument> HeldReceiptAsync(IMongoDatabase database, MongoUnitOfWork unit, IClock clock,
+        CatalogAuthoringService catalog, PurchaseOrderService orders, StockSourceSetupService sources,
+        IClientSessionHandle current, long receiptId, CancellationToken ct) {
+        RequireDatabase(database, current, receiptId);
+        var receipt = await database.GetCollection<BsonDocument>(R.Receipts).Find(current, new BsonDocument {
+            { "_id", receiptId }, { "$and", new BsonArray { ProcurementStockReceiptSchemas.Validator(R.Receipts) } }
+        }).SingleOrDefaultAsync(ct) ?? throw Q.Broken();
+        if (receipt["snapshotHash"] != R.Hash(receipt)) throw Q.Broken();
+        if (completedReceipts.TryGetValue(receiptId, out var completed)) {
+            if (clock.UtcNow < completed.At) throw Q.Broken();
+            Equal(receipt, completed.Receipt);
+            var inspection = await InspectionAsync(database, unit, clock, catalog, orders, current, receipt["inspectionId"].AsInt64, ct);
+            Equal(inspection.Submissions.SingleOrDefault(row => row["_id"] == receipt["inspectionId"]) ?? throw Q.Broken(), receipt["inspection"]);
+            await RequireHeldOwnersAsync(database, current, receipt, completed.Pool, ct);
+            RequireDatabase(database, current, receiptId);
+            return Clone(receipt);
+        }
+        var verified = await new ProcurementStockReceiptRecords(database, unit, clock, catalog, orders, sources, this)
+            .ReadCoreAsync(current, receiptId, ct);
+        Equal(receipt, verified);
+        var pool = await database.GetCollection<BsonDocument>("inventoryPools").Find(current, new BsonDocument("_id", receipt["poolId"]))
+            .SingleOrDefaultAsync(ct) ?? throw Q.Broken();
+        InventoryGraph.RequirePool(pool);
+        await RequireHeldOwnersAsync(database, current, receipt, pool, ct);
+        RequireDatabase(database, current, receiptId);
+        completedReceipts.Add(receiptId, (Clone(verified), Clone(pool), clock.UtcNow));
+        return Clone(verified);
+    }
+    private static async Task RequireHeldOwnersAsync(IMongoDatabase database, IClientSessionHandle current,
+        BsonDocument receipt, BsonDocument expectedPool, CancellationToken ct) {
+        var pool = await database.GetCollection<BsonDocument>("inventoryPools").Find(current, new BsonDocument("_id", receipt["poolId"]))
+            .SingleOrDefaultAsync(ct) ?? throw Q.Broken();
+        InventoryGraph.RequirePool(pool); Equal(pool, expectedPool);
+        var balance = await database.GetCollection<BsonDocument>("stockBalances").Find(current, new BsonDocument("_id", receipt["balanceId"]))
+            .SingleOrDefaultAsync(ct) ?? throw Q.Broken();
+        Equal(balance, InventoryBson.Balance(InventoryHeldReceiptWriter.After(receipt)));
+        // The existing physical owner still requires the exact held lot,
+        // balance and receive-held movement. It cannot hide an early release.
+        await InventoryHeldReceiptWriter.RequireHistoryAsync(database, current, receipt, ct);
+    }
+}

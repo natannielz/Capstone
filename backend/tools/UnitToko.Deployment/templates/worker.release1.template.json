@@ -1,0 +1,5 @@
+{
+  "DOTNET_ENVIRONMENT": "Production",
+  "Mongo": { "Uri": "REQUIRED_MONGODB_URI", "Database": "REQUIRED_DEDICATED_DATABASE" },
+  "Logging": { "LogLevel": { "Default": "None", "Microsoft.Hosting.Lifetime": "None" } }
+}

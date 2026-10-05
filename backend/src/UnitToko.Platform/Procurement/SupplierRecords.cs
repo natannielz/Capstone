@@ -11,12 +11,16 @@ using B = UnitToko.Platform.Procurement.SupplierBson;
 
 namespace UnitToko.Platform.Procurement;
 
-internal sealed partial class SupplierRecords(IMongoDatabase database, CatalogAuthoringService catalog)
+internal sealed partial class SupplierRecords(IMongoDatabase database, CatalogAuthoringService catalog, PurchaseOrderSourceReadCapture? sourceCapture = null)
 {
     private IMongoCollection<BsonDocument> Rows(string name) => database.GetCollection<BsonDocument>(name);
+    private async Task<BsonDocument?> OneAsync(IClientSessionHandle tx, string name, BsonDocument filter, CancellationToken ct) =>
+        sourceCapture is null ? await Rows(name).Find(tx, filter).SingleOrDefaultAsync(ct) : await sourceCapture.OneAsync(database, tx, name, filter, ct);
+    private Task<bool> AnyAsync(IClientSessionHandle tx, string name, BsonDocument filter, CancellationToken ct) =>
+        sourceCapture is null ? Rows(name).Find(tx, filter).AnyAsync(ct) : sourceCapture.AnyAsync(database, tx, name, filter, ct);
     internal static void Equal(BsonValue actual, BsonValue expected) { if (!actual.Equals(expected)) throw B.Broken(); }
     internal async Task<BsonDocument> RowAsync(IClientSessionHandle tx, string name, long id, CancellationToken ct) =>
-        await Rows(name).Find(tx, new BsonDocument { { "_id", id }, { "$and", new BsonArray { SupplierSchemas.Validator(name) } } }).SingleOrDefaultAsync(ct) ?? throw B.Broken();
+        await OneAsync(tx, name, new BsonDocument { { "_id", id }, { "$and", new BsonArray { SupplierSchemas.Validator(name) } } }, ct) ?? throw B.Broken();
     internal static void MatchPolicy(BsonDocument policy, SupplierDetails details) {
         foreach (var field in new[] { "subjectReference", "legalName", "registrationNamespace", "registrationValue" }) Equal(policy[field], B.Details(details)[field]);
     }
@@ -43,7 +47,7 @@ internal sealed partial class SupplierRecords(IMongoDatabase database, CatalogAu
     }
     internal async Task SourcesAsync(IClientSessionHandle tx, SupplierOwner owner, BsonDocument sources, CancellationToken ct) {
         foreach (var (name, kind, id) in new[] { ("organization", ScopeNodeKind.FulfillmentOrganization, owner.OrganizationId), ("shop", ScopeNodeKind.Shop, owner.ShopId), ("channel", ScopeNodeKind.Channel, owner.ChannelId) }) {
-            var source = sources[name].AsBsonDocument; await new OrganizationProfileRecords(database).HistoricalAsync(tx, source, ct);
+            var source = sources[name].AsBsonDocument; await new OrganizationProfileRecords(database, sourceCapture).HistoricalAsync(tx, source, ct);
             Equal(source["target"]["id"], id); Equal(source["target"]["kind"], AuthorizationBson.Name(kind));
             Equal(source["target"]["parentId"], kind == ScopeNodeKind.FulfillmentOrganization ? BsonNull.Value : owner.OrganizationId);
         }
@@ -54,8 +58,8 @@ internal sealed partial class SupplierRecords(IMongoDatabase database, CatalogAu
         if (sources.Count != input.Mappings.Length) throw B.Broken();
         for (var index = 0; index < input.Mappings.Length; index++) {
             var mapping = input.Mappings[index]; var source = sources[index]; Equal(source["location"], ProcurementRequestBson.Location(mapping.Location));
-            await new ProcurementRequestRecords(database, catalog).SourcesAsync(tx, mapping.Location, source["sources"].AsBsonDocument, ct);
-            await catalog.VerifyProcurementSourceAsync(tx, mapping.Location, source["catalog"].AsBsonDocument, ct);
+            await new ProcurementRequestRecords(database, catalog, sourceCapture).SourcesAsync(tx, mapping.Location, source["sources"].AsBsonDocument, ct);
+            await catalog.VerifyProcurementSourceAsync(tx, mapping.Location, source["catalog"].AsBsonDocument, ct, sourceCapture);
             var item = source["catalog"]; Equal(item["sku"]["_id"], mapping.SkuId); Equal(item["sku"]["revision"], mapping.ExpectedSkuRevision);
             Equal(item["definition"]["_id"], mapping.DefinitionId); Equal(item["definition"]["version"], mapping.DefinitionVersion);
             if (item["definition"]["effectiveAt"].ToUniversalTime() > recordedAt.UtcDateTime) throw B.Broken();
@@ -104,18 +108,18 @@ internal sealed partial class SupplierRecords(IMongoDatabase database, CatalogAu
         await EffectsAsync(tx, row, B.DecideBody(proposal["_id"].AsInt64, 1, decision, row["observationId"].IsBsonNull ? null : row["observationId"].AsInt64, row["binding"].AsString), proposal, ct); return row;
     }
     internal async Task<BsonDocument?> ObservationForAsync(IClientSessionHandle tx, BsonDocument proposal, CancellationToken ct) {
-        var row = await Rows(B.Observations).Find(tx, new BsonDocument("proposalId", proposal["_id"])).SingleOrDefaultAsync(ct);
+        var row = await OneAsync(tx, B.Observations, new BsonDocument("proposalId", proposal["_id"]), ct);
         if (row is null) await NoOrphansAsync(tx, proposal["_id"].AsInt64, [B.Prefix + "observe"], ct);
         return row is null ? null : await ObservationAsync(tx, row["_id"].AsInt64, proposal, ct);
     }
     internal async Task<BsonDocument?> DecisionForAsync(IClientSessionHandle tx, BsonDocument proposal, CancellationToken ct) {
-        var row = await Rows(B.Decisions).Find(tx, new BsonDocument("proposalId", proposal["_id"])).SingleOrDefaultAsync(ct);
+        var row = await OneAsync(tx, B.Decisions, new BsonDocument("proposalId", proposal["_id"]), ct);
         if (row is null) await NoOrphansAsync(tx, proposal["_id"].AsInt64, [B.Prefix + "approve", B.Prefix + "reject"], ct);
         return row is null ? null : await DecisionAsync(tx, row["_id"].AsInt64, proposal, ct);
     }
     private async Task NoOrphansAsync(IClientSessionHandle tx, long proposalId, string[] operations, CancellationToken ct) {
         foreach (var (table, field, result) in new[] { ("auditEvents", "kind", "result"), ("outboxEvents", "kind", "payload"), ("idempotencyRecords", "operation", "result") })
-            if (await Rows(table).Find(tx, new BsonDocument { { field, new BsonDocument("$in", new BsonArray(operations)) }, { result + ".proposalId", proposalId } }).AnyAsync(ct)) throw B.Broken();
+            if (await AnyAsync(tx, table, new BsonDocument { { field, new BsonDocument("$in", new BsonArray(operations)) }, { result + ".proposalId", proposalId } }, ct)) throw B.Broken();
     }
     internal async Task<BsonDocument> HeadAsync(IClientSessionHandle tx, long id, CancellationToken ct) {
         var head = await RowAsync(tx, B.Heads, id, ct); var root = await ProposalAsync(tx, head["rootProposalId"].AsInt64, ct);
@@ -143,13 +147,13 @@ internal sealed partial class SupplierRecords(IMongoDatabase database, CatalogAu
     }
     private async Task EffectsAsync(IClientSessionHandle tx, BsonDocument row, object body, BsonDocument? proposal, CancellationToken ct) {
         Equal(row["bodyHash"], AuthorizationStore.CommandHash(body, row["reason"].AsString));
-        Equal(await Rows("auditEvents").Find(tx, new BsonDocument("_id", row["auditId"])).SingleOrDefaultAsync(ct) ?? throw B.Broken(), B.Audit(row));
-        var receipt = await Rows("idempotencyRecords").Find(tx, new BsonDocument { { "actorId", row["actorId"] }, { "operation", row["operation"] }, { "key", row["requestKey"] } }).SingleOrDefaultAsync(ct) ?? throw B.Broken();
+        Equal(await OneAsync(tx, "auditEvents", new BsonDocument("_id", row["auditId"]), ct) ?? throw B.Broken(), B.Audit(row));
+        var receipt = await OneAsync(tx, "idempotencyRecords", new BsonDocument { { "actorId", row["actorId"] }, { "operation", row["operation"] }, { "key", row["requestKey"] } }, ct) ?? throw B.Broken();
         string[] fields = ["_id", "schemaVersion", "actorId", "operation", "key", "bodyHash", "createdAt", "result"];
         if (proposal is not null) { fields = [.. fields, PersonApprovalReceipt.Field]; if (PersonApprovalReceipt.Read(receipt, Permissions.SupplierChangeApprove) != new ApprovalRequest(1, 1, ProposedBy: proposal["actorId"].AsInt64)) throw B.Broken(); }
         if (receipt.ElementCount != fields.Length || fields.Any(field => !receipt.Contains(field)) || !receipt["_id"].IsObjectId || receipt["schemaVersion"] != 1 || receipt["createdAt"].ToUniversalTime() > row["recordedAt"].ToUniversalTime()) throw B.Broken();
         Equal(receipt["bodyHash"], row["bodyHash"]); Equal(receipt["result"], B.Result(row));
-        var effect = await Rows("outboxEvents").Find(tx, new BsonDocument("sourceKey", B.SourceKey(row))).SingleOrDefaultAsync(ct) ?? throw B.Broken();
+        var effect = await OneAsync(tx, "outboxEvents", new BsonDocument("sourceKey", B.SourceKey(row)), ct) ?? throw B.Broken();
         Equal(effect["kind"], row["operation"]); Equal(effect["actorId"], row["actorId"]); Equal(effect["requestKey"], row["requestKey"]); Equal(effect["owner"], row["owner"]);
         Equal(effect["payload"], B.Result(row)); Equal(effect["createdAt"], row["recordedAt"]);
     }

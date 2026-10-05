@@ -2,6 +2,7 @@ using System.Collections.Immutable;
 using System.Text.Json.Serialization;
 using UnitToko.Modules.Accounting;
 using UnitToko.Modules.Contracts;
+using UnitToko.Modules.Documents;
 
 namespace UnitToko.Modules.Procurement;
 
@@ -15,7 +16,9 @@ public sealed record SupplierDocumentInput(ProcurementLocation Location, long An
 public sealed record SupplierDocumentMatchLineInput(int DocumentLineNumber, int? Packages, long? InspectionId, int? InspectionLineNumber,
     long? InvoiceMatchId, int? InvoiceMatchLineNumber, Money? NetAmount, Money? TaxAmount, Money? ChargeAmount, Money? StatementAmount, string? Discrepancy,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] long? QualityAllocationId = null);
-public sealed record SupplierDocumentMatchInput(long DocumentId, long DocumentRevision, SupplierDocumentInput ReviewedInput, long? OcrResultId, ImmutableArray<SupplierDocumentMatchLineInput> Lines);
+public sealed record SupplierDocumentPdfMatchObservation(string Field, PdfDocumentCandidateReference Candidate, bool OriginalReviewed);
+public sealed record SupplierDocumentMatchInput(long DocumentId, long DocumentRevision, SupplierDocumentInput ReviewedInput, long? OcrResultId, ImmutableArray<SupplierDocumentMatchLineInput> Lines,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ImmutableArray<SupplierDocumentPdfMatchObservation>? PdfObservations = null);
 
 public static class SupplierDocumentRules
 {
@@ -55,9 +58,26 @@ public static class SupplierDocumentRules
             return total <= DomainValues.MaximumMoney && total == input.DocumentTotal.Value.Value;
         } catch (OverflowException) { return false; }
     }
+    public static ImmutableArray<SupplierDocumentPdfMatchObservation>? CopyPdfObservations(ImmutableArray<SupplierDocumentPdfMatchObservation>? observations) {
+        if (observations is null) return null;
+        var supplied = observations.Value;
+        if (supplied.IsDefaultOrEmpty || supplied.Length > SupplierDocumentFieldExtractor.Fields.Count ||
+            supplied.Any(value => value is null || !value.OriginalReviewed || value.Candidate is null ||
+                !SupplierDocumentFieldExtractor.Fields.Contains(value.Field, StringComparer.Ordinal) || value.Field != value.Candidate.Field ||
+                value.Candidate.ResultId is <= 0 or >= long.MaxValue - 1 || value.Candidate.Evidence.Id is <= 0 or >= long.MaxValue - 1 ||
+                value.Candidate.Evidence.Version != 1) ||
+            supplied.Select(value => value.Field).Distinct(StringComparer.Ordinal).Count() != supplied.Length) throw Invalid();
+        try { return SupplierDocumentFieldExtractor.Fields.Where(name => supplied.Any(value => value.Field == name)).Select(name => {
+            var value = supplied.Single(value => value.Field == name);
+            var candidate = new PdfDocumentCandidateReference(value.Candidate.ResultId, value.Candidate.ResultHash, value.Candidate.Evidence,
+                value.Candidate.PageIndex, value.Candidate.Field);
+            return new SupplierDocumentPdfMatchObservation(name, candidate, true);
+        }).ToImmutableArray(); } catch (DomainValidationException) { throw Invalid(); }
+    }
     public static SupplierDocumentMatchInput Copy(SupplierDocumentMatchInput input) {
         if (input is null || input.DocumentId <= 0 || input.DocumentRevision != 1 || input.OcrResultId is <= 0 || input.Lines.IsDefaultOrEmpty || input.Lines.Length > 100) throw Invalid();
-        var reviewed = Copy(input.ReviewedInput);
+        var reviewed = Copy(input.ReviewedInput); var observations = CopyPdfObservations(input.PdfObservations);
+        if (observations is not null && input.OcrResultId is not null) throw Invalid();
         var lines = input.Lines.Select(line => {
             if (line is null || line.DocumentLineNumber < 1 || line.DocumentLineNumber > reviewed.Lines.Length || line.Packages is < 1 or > DomainValues.MaximumLineQuantity ||
                 line.InspectionId is <= 0 || line.InvoiceMatchId is <= 0 || line.QualityAllocationId is <= 0 ||
@@ -74,7 +94,7 @@ public static class SupplierDocumentRules
         }).OrderBy(line => line.DocumentLineNumber).ThenBy(line => line.InspectionId).ThenBy(line => line.InspectionLineNumber).ThenBy(line => line.InvoiceMatchId).ThenBy(line => line.InvoiceMatchLineNumber).ThenBy(line => line.QualityAllocationId).ToImmutableArray();
         if (lines.GroupBy(line => (line.DocumentLineNumber, line.InspectionId, line.InspectionLineNumber, line.InvoiceMatchId,
                 line.InvoiceMatchLineNumber, line.QualityAllocationId)).Any(group => group.Count() != 1)) throw Invalid();
-        return input with { ReviewedInput = reviewed, Lines = lines };
+        return input with { ReviewedInput = reviewed, Lines = lines, PdfObservations = observations };
     }
     public static void SameIdentity(SupplierDocumentInput original, SupplierDocumentInput reviewed) {
         if (original.Location != reviewed.Location || original.AnchorOrderId != reviewed.AnchorOrderId || original.AnchorOrderVersion != reviewed.AnchorOrderVersion || original.AnchorOrderApprovalId != reviewed.AnchorOrderApprovalId ||

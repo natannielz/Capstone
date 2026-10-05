@@ -49,13 +49,28 @@ internal static class SupplierDocumentBson
         { "expiresOn", quality["expiresOn"] }, { "acceptedCondition", quality["acceptedCondition"] },
         { "putawayReference", quality["putawayReference"] }, { "segregationReference", quality["segregationReference"] },
         { "recordedAt", quality["recordedAt"] } };
-    internal static BsonDocument Input(SupplierDocumentMatchInput input) { input = SupplierDocumentRules.Copy(input); return new() { { "documentId", input.DocumentId }, { "documentRevision", input.DocumentRevision }, { "reviewedInput", Input(input.ReviewedInput) }, { "ocrResultId", input.OcrResultId is { } ocr ? ocr : BsonNull.Value }, { "lines", new BsonArray(input.Lines.Select(MatchLine)) } }; }
+    internal static BsonArray PdfObservations(ImmutableArray<SupplierDocumentPdfMatchObservation> observations) =>
+        new(SupplierDocumentRules.CopyPdfObservations(observations)!.Value.Select(value => new BsonDocument {
+            { "field", value.Field }, { "candidate", PdfDocumentExtractionRecords.CandidateReference(value.Candidate) }, { "originalReviewed", true } }));
+    internal static ImmutableArray<SupplierDocumentPdfMatchObservation>? PdfObservations(BsonDocument input) =>
+        !input.TryGetValue("pdfObservations", out var values) ? null : SupplierDocumentRules.CopyPdfObservations(
+            values.AsBsonArray.Select(value => new SupplierDocumentPdfMatchObservation(value["field"].AsString,
+                new PdfDocumentCandidateReference(value["candidate"]["resultId"].AsInt64, value["candidate"]["resultHash"].AsString,
+                    PaymentSubmissionBson.Reference(value["candidate"]["evidence"].AsBsonDocument), value["candidate"]["pageIndex"].AsInt32,
+                    value["candidate"]["field"].AsString), value["originalReviewed"].AsBoolean)).ToImmutableArray());
+    internal static BsonDocument Input(SupplierDocumentMatchInput input) {
+        input = SupplierDocumentRules.Copy(input);
+        var row = new BsonDocument { { "documentId", input.DocumentId }, { "documentRevision", input.DocumentRevision }, { "reviewedInput", Input(input.ReviewedInput) },
+            { "ocrResultId", input.OcrResultId is { } ocr ? ocr : BsonNull.Value }, { "lines", new BsonArray(input.Lines.Select(MatchLine)) } };
+        if (input.PdfObservations is not null) row.Add("pdfObservations", PdfObservations(input.PdfObservations.Value));
+        return row;
+    }
     internal static SupplierDocumentMatchInput MatchInput(BsonValue row) => SupplierDocumentRules.Copy(new SupplierDocumentMatchInput(row["documentId"].AsInt64, row["documentRevision"].AsInt64, Input(row["reviewedInput"]), row["ocrResultId"].IsBsonNull ? null : row["ocrResultId"].AsInt64,
         row["lines"].AsBsonArray.Select(line => new SupplierDocumentMatchLineInput(line["documentLineNumber"].AsInt32, line["packages"].IsBsonNull ? null : line["packages"].AsInt32,
             line["inspectionId"].IsBsonNull ? null : line["inspectionId"].AsInt64, line["inspectionLineNumber"].IsBsonNull ? null : line["inspectionLineNumber"].AsInt32,
             line["invoiceMatchId"].IsBsonNull ? null : line["invoiceMatchId"].AsInt64, line["invoiceMatchLineNumber"].IsBsonNull ? null : line["invoiceMatchLineNumber"].AsInt32,
             Amount(line["netAmount"]), Amount(line["taxAmount"]), Amount(line["chargeAmount"]), Amount(line["statementAmount"]), C.Text(line["discrepancy"]),
-            line.AsBsonDocument.TryGetValue("qualityAllocationId", out var quality) ? quality.AsInt64 : null)).ToImmutableArray()));
+            line.AsBsonDocument.TryGetValue("qualityAllocationId", out var quality) ? quality.AsInt64 : null)).ToImmutableArray(), PdfObservations(row.AsBsonDocument)));
     internal static string IdentityKey(SupplierDocumentInput input, long supplier) => Hash(new() { { "organizationId", input.Location.OrganizationId }, { "shopId", input.Location.ShopId },
         { "channelId", input.Location.ChannelId }, { "supplierId", supplier }, { "kind", Kind(input.Kind) }, { "reference", input.DocumentReference } });
     internal static BsonDocument Capacity(BsonArray lines, long version = 0, IReadOnlyList<long>? matched = null) => new() { { "version", version },
@@ -88,9 +103,14 @@ internal static class SupplierDocumentBson
         { "matchId", row["operation"] == MatchOperation ? row["_id"] : BsonNull.Value }, { "version", 1L },
         { "state", row["operation"] == DraftOperation ? "draft" : row["operation"] == SubmitOperation ? "submitted_unmatched" : row["input"]["lines"].AsBsonArray.Any(line => !line["discrepancy"].IsBsonNull) ? "discrepancy_pending" : "match_recorded" }, { "recordedAt", row["recordedAt"] } };
     internal static string EffectKey(BsonDocument row) => row["operation"].AsString + ":" + row["_id"].AsInt64;
-    internal static BsonDocument Audit(BsonDocument row) => new() { { "_id", row["auditId"] }, { "schemaVersion", 1 }, { "kind", row["operation"] }, { "actorId", row["actorId"] },
+    internal static BsonDocument Audit(BsonDocument row) {
+        var audit = new BsonDocument { { "_id", row["auditId"] }, { "schemaVersion", 1 }, { "kind", row["operation"] }, { "actorId", row["actorId"] },
         { "actorGrantVersion", row["actorGrantVersion"] }, { "requestKey", row["requestKey"] }, { "bodyHash", row["bodyHash"] }, { "snapshotHash", row["snapshotHash"] },
         { "location", row["location"] }, { "reason", row["reason"] }, { "correlationId", row["correlationId"] }, { "createdAt", row["recordedAt"] }, { "result", Result(row) } };
+        if (row["operation"] == MatchOperation && row["input"].AsBsonDocument.TryGetValue("pdfObservations", out var observations))
+            audit.Add("pdfObservations", observations.DeepClone());
+        return audit;
+    }
     internal static string OcrKey(BsonDocument row) => "supplierdocument.ocr:" + row["_id"].AsInt64 + ":1";
     internal static BsonDocument OcrPayload(BsonDocument row) => new() { { "submissionId", row["_id"] }, { "draftId", row["draftId"] }, { "draftRevision", 1L }, { "evidence", row["evidence"] },
         { "pinId", row["pinId"] }, { "submissionHash", row["snapshotHash"] }, { "draftHash", row["draftHash"] } };
@@ -102,8 +122,13 @@ internal static class SupplierDocumentBson
         { "order", PurchaseOrderService.FundingOrderView(row["source"].AsBsonDocument) }, { "recordedAt", row["recordedAt"] }, { "reason", row["reason"] }, { "state", row["submittedDocumentId"].IsBsonNull ? "draft" : "submitted_unmatched" } };
     internal static BsonDocument SubmissionView(BsonDocument row, bool evidence) => new() { { "id", row["_id"] }, { "draftId", row["draftId"] }, { "version", 1L }, { "state", "submitted_unmatched" },
         { "recordedAt", row["recordedAt"] }, { "reason", row["reason"] }, { "reservationId", evidence ? row["reservationId"] : BsonNull.Value }, { "evidence", evidence ? row["evidence"] : BsonNull.Value } };
-    internal static BsonDocument MatchView(BsonDocument row) => new() { { "id", row["_id"] }, { "draftId", row["draftId"] }, { "documentId", row["documentId"] }, { "version", 1L },
-        { "input", row["input"] }, { "before", row["before"] }, { "after", row["after"] }, { "lines", SupplierDocumentService.PublicLines(row["lines"].AsBsonArray) }, { "state", Result(row)["state"] }, { "recordedAt", row["recordedAt"] }, { "reason", row["reason"] } };
+    internal static BsonDocument MatchView(BsonDocument row, bool includeEvidence = true) {
+        var input = row["input"].DeepClone().AsBsonDocument;
+        if (!includeEvidence) input.Remove("pdfObservations");
+        return new() { { "id", row["_id"] }, { "draftId", row["draftId"] }, { "documentId", row["documentId"] }, { "version", 1L },
+            { "input", input }, { "before", row["before"] }, { "after", row["after"] }, { "lines", SupplierDocumentService.PublicLines(row["lines"].AsBsonArray) },
+            { "state", Result(row)["state"] }, { "recordedAt", row["recordedAt"] }, { "reason", row["reason"] } };
+    }
     internal static AuthorizationDeniedException Broken() => new("supplier_document_integrity_unavailable");
     internal static PersistenceConflictException Changed(string code = "supplier_document_changed") => new(code, "Reload the original supplier document and remaining inspected package quantities");
 }

@@ -6,6 +6,8 @@ using UnitToko.Modules.Identity.Contracts;
 using UnitToko.Modules.Procurement;
 using UnitToko.Platform.Authorization;
 using UnitToko.Platform.DocumentProcessing;
+using UnitToko.Platform.Documents;
+using UnitToko.Platform.Mongo.Migrations;
 using B = UnitToko.Platform.Procurement.SupplierDocumentBson;
 using R = UnitToko.Platform.Procurement.ProcurementRequestBson;
 
@@ -16,9 +18,11 @@ public sealed partial class SupplierDocumentService
     private Task<List<SupplierDocumentSourceCapacity>> SourceCapacitiesAsync(Context context, Dictionary<long, ProcurementInspectionHistory> inspections, BsonArray links,
         SupplierDocumentMatchInput input, CancellationToken ct) =>
         records.SourceCapacitiesAsync(context.Tx, context.Location, inspections, links, context.ExtraFences, ct, B.Input(input)["lines"].AsBsonArray);
-    private async Task<IReadOnlyList<SupplierDocumentSourceCapacity>> PrepareMatchAsync(Context context, SupplierDocumentMatchInput input, CancellationToken ct) {
+    private async Task<IReadOnlyList<SupplierDocumentSourceCapacity>> PrepareMatchAsync(Context context, SupplierDocumentMatchInput input, CancellationToken ct,
+        DateTimeOffset? pdfDeadline = null, Action<DateTimeOffset>? captureWindow = null, string? correlationId = null,
+        EvidenceStoreRegistration? pdfRegistration = null) {
         var history = context.History ?? throw B.Broken(); var document = context.Submission ?? throw B.Broken();
-        await VerifySourcesAsync(context, ct);
+        using (SupplierDocumentMatchDiagnostics.Begin("matching.verify-sources")) await VerifySourcesAsync(context, ct);
         SupplierDocumentRules.SameIdentity(B.Input(document["input"]), input.ReviewedInput);
         if (input.ReviewedInput.DocumentDate is { } day && day > AccountingCalendar.BusinessDate(Now)) throw B.Changed();
         var claiming = input.Lines.Any(line => line.Discrepancy is null);
@@ -32,8 +36,28 @@ public sealed partial class SupplierDocumentService
             var proof = await RequireOcrSourceAsync(context.Tx, job, ct);
             _ = await new SupplierDocumentExtractionRecords(database).RequireResultAsync(context.Tx, job, proof, resultId, ct);
         }
-        var resolved = await records.ResolveAsync(context.Tx, document, input, ct); context.Resolved = resolved.Lines; context.Links = resolved.Links;
-        foreach (var receiptId in resolved.Links.Where(link => !link.IsBsonNull && link.AsBsonDocument.Contains("quality"))
+        if (input.PdfObservations is not null) {
+            if (pdfDeadline is null || captureWindow is null || correlationId is null) throw B.Broken();
+            using (SupplierDocumentMatchDiagnostics.Begin("matching.pdf-candidates"))
+                await RequirePdfMatchAsync(context, input, pdfDeadline.Value, captureWindow, correlationId, pdfRegistration, ct);
+        }
+        (BsonArray Lines, BsonArray Links, Dictionary<long, ProcurementInspectionHistory> Inspections) resolved;
+        using (SupplierDocumentMatchDiagnostics.Begin("matching.resolve")) {
+            if (input.PdfObservations is not null) {
+                context.PdfMatchProof = await records.ResolveMatchProofAsync(context.Tx, document, input, ct);
+                resolved = context.PdfMatchProof.Require(records, context.Tx, document, input);
+            } else resolved = await records.ResolveAsync(context.Tx, document, input, ct);
+        }
+        context.Resolved = resolved.Lines; context.Links = resolved.Links;
+        if (context.PdfMatchProof is { } pdfProof) {
+            using var qualityHeadsStage = SupplierDocumentMatchDiagnostics.Begin("matching.quality-heads");
+            // ResolveCoreAsync has already authenticated the exact held receipt,
+            // quality allocation, private claims and receipt-local capacity in
+            // this transaction. Reuse that proof only to retain the same head CAS.
+            foreach (var head in pdfProof.RequireQualityHeads(records, context.Tx, document, input))
+                if (!context.ExtraFences.Any(pair => pair.Table == ProcurementQualityAcceptanceBson.ReceiptHeads && pair.Row["_id"] == head["_id"]))
+                    context.ExtraFences.Add((ProcurementQualityAcceptanceBson.ReceiptHeads, head));
+        } else foreach (var receiptId in resolved.Links.Where(link => !link.IsBsonNull && link.AsBsonDocument.Contains("quality"))
             .Select(link => link["quality"]["receiptId"].AsInt64).Distinct()) {
             var receipt = await new ProcurementStockReceiptRecords(database, unit, clock, catalog, orders,
                 new UnitToko.Platform.Inventory.StockSourceSetupService(database, unit, ids, clock)).ReadAsync(context.Tx, receiptId, ct);
@@ -44,7 +68,9 @@ public sealed partial class SupplierDocumentService
                 context.ExtraFences.Add((ProcurementQualityAcceptanceBson.ReceiptHeads, quality.Head));
         }
         _ = B.After(history.Capacity, input);
-        var sources = await SourceCapacitiesAsync(context, resolved.Inspections, resolved.Links, input, ct);
+        IReadOnlyList<SupplierDocumentSourceCapacity> sources;
+        using (SupplierDocumentMatchDiagnostics.Begin("matching.source-capacities"))
+            sources = await SourceCapacitiesAsync(context, resolved.Inspections, resolved.Links, input, ct);
         foreach (var source in sources) _ = SourceAfter(source.Capacity, source.Kind, source.SourceId, source.SkuId, B.Input(input)["lines"].AsBsonArray, resolved.Links, source.Maximum);
         RequireStatementCapacity(history.Matches, input, resolved.Lines);
         context.Review = new() { { "capacity", history.Capacity }, { "identityVersion", history.Identity["version"] },
@@ -64,28 +90,57 @@ public sealed partial class SupplierDocumentService
     }
     private static string MatchBinding(Context context, SupplierDocumentMatchInput input) => B.Binding(context.Actor.UserId, context.Actor.GrantVersion, B.Input(input),
         new() { { "documentHash", context.Submission!["snapshotHash"] }, { "links", context.Links } }, context.Review!);
-    public async Task<BsonDocument> PreviewMatchAsync(ActorContext actor, SupplierDocumentMatchInput input, CancellationToken ct = default) {
-        input = SupplierDocumentRules.Copy(input); await StorageAsync(ct); return await authorization.ReadAsync(actor, async (authority, tx, token) => {
-            var context = await DocumentContextAsync(actor, authority, tx, input.DocumentId, Permissions.ProcurementSupplierDocumentMatch, token); _ = await PrepareMatchAsync(context, input, token);
+    public Task<BsonDocument> PreviewMatchAsync(ActorContext actor, SupplierDocumentMatchInput input, CancellationToken ct = default) =>
+        PreviewMatchCoreAsync(actor, input, null, ct);
+    internal Task<BsonDocument> PreviewMatchWithEvidenceAsync(ActorContext actor, SupplierDocumentMatchInput input,
+        EvidenceStoreRegistration registration, CancellationToken ct) => PreviewMatchCoreAsync(actor, input, registration, ct);
+    private async Task<BsonDocument> PreviewMatchCoreAsync(ActorContext actor, SupplierDocumentMatchInput input,
+        EvidenceStoreRegistration? registration, CancellationToken ct) {
+        input = SupplierDocumentRules.Copy(input);
+        using (SupplierDocumentMatchDiagnostics.Begin("matching.storage")) await StorageAsync(ct);
+        if (input.PdfObservations is not null) await SupplierDocumentPdfMatchStorage.RequireAsync(database, B.Matches, ct, requireAnnotated: true);
+        var pdfDeadline = clock.UtcNow.AddSeconds(5); DateTimeOffset? pdfWindow = null;
+        void Capture(DateTimeOffset until) { if (pdfWindow is null || until < pdfWindow.Value) pdfWindow = until; }
+        return await authorization.ReadAsync(actor, async (authority, tx, token) => {
+            Context context;
+            using (SupplierDocumentMatchDiagnostics.Begin("matching.context"))
+                context = await DocumentContextAsync(actor, authority, tx, input.DocumentId, Permissions.ProcurementSupplierDocumentMatch, token);
+            if (input.PdfObservations is not null) context.PdfEligibility = () => CheckPdfMatchWindow(pdfDeadline, pdfWindow);
+            _ = await PrepareMatchAsync(context, input, token, pdfDeadline, Capture, "supplier-document-pdf-match-preview", registration);
             var result = new BsonDocument { { "input", B.Input(input) }, { "document", B.DraftView(context.Draft!) }, { "capacity", context.History!.Capacity }, { "lines", PublicLines(context.Resolved!) },
                 { "possibleDuplicate", context.History.Identity["draftCount"].AsInt64 > 1 }, { "binding", MatchBinding(context, input) }, { "observedAt", Now.UtcDateTime } };
             await FenceAsync(context, token); return result;
         }, ct);
     }
-    public async Task<BsonDocument> MatchAsync(ActorContext actor, SupplierDocumentMatchInput input, string binding, AuthorizationCommandMetadata metadata, CancellationToken ct = default) {
-        input = SupplierDocumentRules.Copy(input); Binding(binding); Metadata(metadata); await StorageAsync(ct);
+    public Task<BsonDocument> MatchAsync(ActorContext actor, SupplierDocumentMatchInput input, string binding,
+        AuthorizationCommandMetadata metadata, CancellationToken ct = default) => MatchCoreAsync(actor, input, binding, metadata, null, ct);
+    internal Task<BsonDocument> MatchWithEvidenceAsync(ActorContext actor, SupplierDocumentMatchInput input, string binding,
+        AuthorizationCommandMetadata metadata, EvidenceStoreRegistration registration, CancellationToken ct) =>
+        MatchCoreAsync(actor, input, binding, metadata, registration, ct);
+    private async Task<BsonDocument> MatchCoreAsync(ActorContext actor, SupplierDocumentMatchInput input, string binding,
+        AuthorizationCommandMetadata metadata, EvidenceStoreRegistration? registration, CancellationToken ct) {
+        input = SupplierDocumentRules.Copy(input); Binding(binding); Metadata(metadata);
+        using (SupplierDocumentMatchDiagnostics.Begin("matching.storage")) await StorageAsync(ct);
+        if (input.PdfObservations is not null) await SupplierDocumentPdfMatchStorage.RequireAsync(database, B.Matches, ct, requireAnnotated: true);
+        var pdfDeadline = clock.UtcNow.AddSeconds(5); DateTimeOffset? pdfWindow = null;
+        void Capture(DateTimeOffset until) { if (pdfWindow is null || until < pdfWindow.Value) pdfWindow = until; }
         var id = (await ids.NextAsync(B.Matches, ct)).Value; var audit = (await ids.NextAsync("auditEvents", ct)).Value; var body = B.MatchBody(input, binding);
         Context? context = null; IReadOnlyList<SupplierDocumentSourceCapacity> sources = [];
         return await authorization.ExecuteCommandAsync(actor, B.MatchOperation, metadata, body, async (authority, tx, token) => {
             var existing = await ExistingAsync(actor, authority, tx, B.MatchOperation, metadata.IdempotencyKey, token);
-            context = await DocumentContextAsync(actor, authority, tx, input.DocumentId, Permissions.ProcurementSupplierDocumentMatch, token);
-            if (existing is null) { sources = await PrepareMatchAsync(context, input, token); SupplierDocumentRecords.Equal(binding, MatchBinding(context, input)); }
+            using (SupplierDocumentMatchDiagnostics.Begin("matching.context"))
+                context = await DocumentContextAsync(actor, authority, tx, input.DocumentId, Permissions.ProcurementSupplierDocumentMatch, token);
+            if (existing is null) {
+                if (input.PdfObservations is not null) context.PdfEligibility = () => CheckPdfMatchWindow(pdfDeadline, pdfWindow);
+                sources = await PrepareMatchAsync(context, input, token, pdfDeadline, Capture, metadata.CorrelationId, registration);
+                SupplierDocumentRecords.Equal(binding, MatchBinding(context, input));
+            }
             else context.Match = context.History!.Matches.SingleOrDefault(row => row["_id"] == existing["_id"]) ?? throw B.Broken();
             return Command(context);
         }, async (tx, token) => {
             var active = context ?? throw B.Broken(); Current(active); var document = active.Submission!; var history = active.History!; var head = history.Head; var at = Now;
             var after = B.After(history.Capacity, input); var row = new BsonDocument { { "_id", id },
-                { "schemaVersion", input.Lines.Any(line => line.QualityAllocationId is not null) ? 2 : 1 },
+                { "schemaVersion", input.PdfObservations is null ? input.Lines.Any(line => line.QualityAllocationId is not null) ? 2 : 1 : input.Lines.Any(line => line.QualityAllocationId is not null) ? 4 : 3 },
                 { "draftId", document["draftId"] }, { "documentId", document["_id"] }, { "version", 1L },
                 { "supplierId", document["supplierId"] }, { "identityId", document["identityId"] }, { "documentHash", document["snapshotHash"] }, { "location", document["location"] },
                 { "input", B.Input(input) }, { "before", history.Capacity }, { "after", after }, { "lines", active.Resolved }, { "links", active.Links }, { "review", active.Review }, { "binding", binding },
@@ -97,7 +152,8 @@ public sealed partial class SupplierDocumentService
             if ((await Rows(B.Heads).ReplaceOneAsync(tx, head, next, cancellationToken: token)).ModifiedCount != 1) throw B.Changed();
             active.Match = row; active.History = history with { Head = next, Capacity = after, Matches = [.. history.Matches, row] }; return B.Result(row);
         }, ct, async (authority, tx, token) => {
-            var active = context ?? throw B.Broken(); var actual = await records.MatchAsync(tx, active.Match!["_id"].AsInt64, token, active.Submission);
+            var active = context ?? throw B.Broken(); var actual = await records.MatchAsync(tx, active.Match!["_id"].AsInt64, token,
+                active.Submission, active.PdfMatchProof);
             SupplierDocumentRecords.Equal(actual["bodyHash"], AuthorizationStore.CommandHash(body, metadata.Reason));
             await VerifySourcesAsync(active, token); await records.OrphansAsync(tx, token); await FenceAsync(active, token);
         }, validateCurrent: () => Current(context ?? throw B.Broken()));

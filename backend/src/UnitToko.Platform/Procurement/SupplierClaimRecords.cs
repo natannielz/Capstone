@@ -24,7 +24,7 @@ internal sealed class SupplierClaimRecords(IMongoDatabase database, MongoUnitOfW
     internal static void Equal(BsonValue actual, BsonValue expected) { if (!actual.Equals(expected)) throw B.Broken(); }
     internal async Task<BsonDocument> RowAsync(IClientSessionHandle tx, string table, long id, CancellationToken ct) =>
         await Rows(table).Find(tx, new BsonDocument { { "_id", id }, { "$and", new BsonArray { table == Q.PhysicalAllocations ? ProcurementStockReceiptSchemas.DispositionValidator() : SupplierClaimSchemas.Validator(table) } } }).SingleOrDefaultAsync(ct) ?? throw B.Broken();
-    internal ProcurementStockReceiptRecords HeldReceipts => new(database, unit, clock, catalog, orders, new StockSourceSetupService(database, unit, new IdAllocator(database), clock));
+    internal ProcurementStockReceiptRecords HeldReceipts => new(database, unit, clock, catalog, orders, new StockSourceSetupService(database, unit, new IdAllocator(database), clock), qualityGraph);
     internal async Task<ProcurementInspectionHistory> InspectionAsync(IClientSessionHandle tx, long id, CancellationToken ct) =>
         await new SupplierDocumentRecords(database, unit, clock, catalog, orders).InspectionAsync(tx, id, ct);
     internal async Task<SupplierDocumentHistory> DocumentAsync(IClientSessionHandle tx, long id, CancellationToken ct, List<(string Table, BsonDocument Row)>? fences = null) {

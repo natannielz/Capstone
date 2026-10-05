@@ -6,14 +6,17 @@ using UnitToko.Modules.Organizations;
 using UnitToko.Platform.Authorization;
 using UnitToko.Platform.Mongo;
 using UnitToko.Platform.Mongo.Migrations;
+using UnitToko.Platform.Procurement;
 using B = UnitToko.Platform.Organizations.OrganizationAddressBson;
 
 namespace UnitToko.Platform.Organizations;
 
 /// <summary>Actual approved profile provenance. This proves postal source identity, not legal registration or tax identity.</summary>
-internal sealed class OrganizationProfileRecords(IMongoDatabase database)
+internal sealed class OrganizationProfileRecords(IMongoDatabase database, PurchaseOrderSourceReadCapture? sourceCapture = null)
 {
     private IMongoCollection<BsonDocument> Rows(string name) => database.GetCollection<BsonDocument>(name);
+    private async Task<BsonDocument?> OneAsync(IClientSessionHandle tx, string name, BsonDocument filter, CancellationToken ct) =>
+        sourceCapture is null ? await Rows(name).Find(tx, filter).SingleOrDefaultAsync(ct) : await sourceCapture.OneAsync(database, tx, name, filter, ct);
     private static void Equal(BsonValue actual, BsonValue expected) { if (!actual.Equals(expected)) throw B.Broken(); }
     internal static BsonDocument Node(ScopeNode node) => new() { { "id", node.Id }, { "kind", B.Kind(node.Kind) },
         { "parentId", node.ParentId is { } parent ? new BsonInt64(parent) : BsonNull.Value }, { "status", "active" }, { "version", node.Version } };
@@ -22,13 +25,14 @@ internal sealed class OrganizationProfileRecords(IMongoDatabase database)
     internal async Task<BsonDocument> ProfileAsync(IClientSessionHandle tx, long id, CancellationToken ct) =>
         await Rows("organizationProfiles").Find(tx, new BsonDocument { { "_id", id }, { "$and", new BsonArray { LifecycleSchemas.Collections()["organizationProfiles"] } } }).SingleOrDefaultAsync(ct) ?? throw B.Broken();
     internal async Task<(BsonDocument Profile, BsonDocument History)> ApprovedProfileAsync(IClientSessionHandle tx, long id, long version, CancellationToken ct) {
-        var histories = await Rows("authorizationHistory").Find(tx, new BsonDocument {
-            { "operation", "organization.approved" }, { "after.profile._id", id }, { "after.profile.version", version } }).Limit(2).ToListAsync(ct);
+        var historyFilter = new BsonDocument { { "operation", "organization.approved" }, { "after.profile._id", id }, { "after.profile.version", version } };
+        var histories = await Rows("authorizationHistory").Find(tx, historyFilter).Limit(2).ToListAsync(ct);
+        sourceCapture?.Record("authorizationHistory", historyFilter, histories);
         if (histories.Count != 1) throw B.Broken();
         var history = histories[0]; var after = history["after"].AsBsonDocument; var profile = after["profile"].AsBsonDocument;
         var proposal = after["proposal"].AsBsonDocument; var before = history["before"].AsBsonDocument; var pending = before["proposal"].AsBsonDocument;
-        var raw = await Rows("organizationProposals").Find(tx, new BsonDocument { { "_id", proposal["_id"] },
-            { "$and", new BsonArray { LifecycleSchemas.Collections()["organizationProposals"] } } }).SingleOrDefaultAsync(ct) ?? throw B.Broken();
+        var raw = await OneAsync(tx, "organizationProposals", new BsonDocument { { "_id", proposal["_id"] },
+            { "$and", new BsonArray { LifecycleSchemas.Collections()["organizationProposals"] } } }, ct) ?? throw B.Broken();
         Equal(raw, proposal); Equal(proposal["status"], "approved"); Equal(proposal["resultScopeId"], id);
         Equal(proposal["approvedBy"], history["actorId"]); Equal(proposal["approvedAt"], history["createdAt"]);
         Equal(proposal["version"], 2L); Equal(pending["version"], 1L); Equal(pending["status"], "pending");
@@ -54,8 +58,10 @@ internal sealed class OrganizationProfileRecords(IMongoDatabase database)
             proposal["code"].AsString, proposal["name"].AsString, proposal["scopeId"].IsBsonNull ? null : proposal["scopeId"].AsInt64,
             proposal["expectedScopeVersion"].AsInt64, proposal["expectedProfileVersion"].AsInt64));
         if (request.Name != proposal["name"].AsString || request.Code != proposal["code"].AsString || node.Version != request.ExpectedScopeVersion + 1) throw B.Broken();
-        var proposed = await Rows("authorizationHistory").Find(tx, new BsonDocument { { "operation", "organization.proposed" },
-            { "actorId", proposal["requestedBy"] }, { "after._id", proposal["_id"] } }).Limit(2).ToListAsync(ct);
+        var proposedFilter = new BsonDocument { { "operation", "organization.proposed" },
+            { "actorId", proposal["requestedBy"] }, { "after._id", proposal["_id"] } };
+        var proposed = await Rows("authorizationHistory").Find(tx, proposedFilter).Limit(2).ToListAsync(ct);
+        sourceCapture?.Record("authorizationHistory", proposedFilter, proposed);
         if (proposed.Count != 1) throw B.Broken(); Equal(proposed[0]["after"], pending); Equal(proposed[0]["createdAt"], proposal["createdAt"]);
         await ReceiptAsync(tx, proposed[0], proposal["_id"].AsInt64, "organization.propose", request,
             new BsonDocument { { "id", proposal["_id"] }, { "subjectId", proposal["scopeId"].IsBsonNull ? proposal["_id"] : proposal["scopeId"] }, { "kind", "organization" },
@@ -66,7 +72,9 @@ internal sealed class OrganizationProfileRecords(IMongoDatabase database)
         return (profile.DeepClone().AsBsonDocument, history);
     }
     private async Task ReceiptAsync(IClientSessionHandle tx, BsonDocument history, long proposalId, string operation, object body, BsonDocument result, CancellationToken ct) {
-        var rows = await Rows("idempotencyRecords").Find(tx, new BsonDocument { { "actorId", history["actorId"] }, { "operation", operation }, { "result.id", proposalId } }).Limit(2).ToListAsync(ct);
+        var filter = new BsonDocument { { "actorId", history["actorId"] }, { "operation", operation }, { "result.id", proposalId } };
+        var rows = await Rows("idempotencyRecords").Find(tx, filter).Limit(2).ToListAsync(ct);
+        sourceCapture?.Record("idempotencyRecords", filter, rows);
         if (rows.Count != 1) throw B.Broken(); var row = rows[0];
         string[] fields = ["_id", "schemaVersion", "actorId", "operation", "key", "bodyHash", "createdAt", "result"];
         if (row.ElementCount != fields.Length || fields.Any(field => !row.Contains(field)) || !row["_id"].IsObjectId || row["schemaVersion"] != 1 ||
@@ -110,7 +118,7 @@ internal sealed class OrganizationProfileRecords(IMongoDatabase database)
         }
         if (visited.Count != nodes.Length) throw B.Broken();
         foreach (var node in nodes) {
-            var current = await Rows("authorizationScopes").Find(tx, new BsonDocument("_id", node.Id)).SingleOrDefaultAsync(ct) ?? throw B.Broken();
+            var current = await OneAsync(tx, "authorizationScopes", new BsonDocument("_id", node.Id), ct) ?? throw B.Broken();
             var actualNode = AuthorizationBson.Node(current);
             if (actualNode.Kind != node.Kind || actualNode.ParentId != node.ParentId || actualNode.Version < node.Version) throw B.Broken();
         }

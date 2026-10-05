@@ -36,7 +36,7 @@ internal sealed class ProcurementQualityValuationMigration(IMongoDatabase databa
                 options.Contains("encryptedFields") || options.Contains("expireAfterSeconds") || options.GetValue("validationLevel", "strict") != "strict" ||
                 options.GetValue("validationAction", "error") != "error" || options.TryGetValue("collation", out var collation) && !InvoiceStorage.Simple(collation)) throw Bad();
             var legacy = name == D.Matches ? SupplierDocumentSchemas.Validator(name) : ProcurementStockValuationSchemas.Validator(name);
-            var current = name == D.Matches ? ProcurementQualityValuationSchemas.CurrentDocumentValidator(name) : ProcurementQualityValuationSchemas.CurrentValuationValidator(name);
+            var current = name == D.Matches ? ProcurementQualityValuationSchemas.PrePdfDocumentValidator(name) : ProcurementQualityValuationSchemas.CurrentValuationValidator(name);
             var extended = PaymentManualReviewMigration.ExtendValidator(options.GetValue("validator", new BsonDocument()).AsBsonDocument, legacy, current, name);
             if (await Rows(name).Find(new BsonDocument("$nor", new BsonArray { extended })).Limit(1).AnyAsync(ct)) throw Bad();
             var indexes = await (await Rows(name).Indexes.ListAsync(ct)).ToListAsync(ct);

@@ -6,6 +6,7 @@ using UnitToko.Modules.Organizations;
 using UnitToko.Modules.Procurement;
 using UnitToko.Platform.Authorization;
 using UnitToko.Platform.Mongo;
+using UnitToko.Platform.Procurement;
 
 namespace UnitToko.Platform.Catalog;
 
@@ -71,28 +72,36 @@ public sealed partial class CatalogAuthoringService
         return (await CaptureProcurementAsync(owner, actor, authority, tx, location, permission, lines, ct), rows.Count > limit);
     }
     internal static BsonDocument ProcurementMaster(BsonDocument row) { var copy = row.DeepClone().AsBsonDocument; copy["fence"] = 0L; return copy; }
-    private async Task RequireProcurementAuditAsync(IClientSessionHandle tx, BsonDocument audit, string part, BsonDocument row, CancellationToken ct) {
+    private async Task RequireProcurementAuditAsync(IClientSessionHandle tx, BsonDocument audit, string part, BsonDocument row, CancellationToken ct,
+        PurchaseOrderSourceReadCapture? sourceCapture = null) {
         _ = CatalogReceiptRules.RequireAudit(audit);
         if (!ProcurementMaster(audit["after"][part].AsBsonDocument).Equals(ProcurementMaster(row))) throw CatalogRepository.Invalid();
         var receipts = await repository.Rows("idempotencyRecords").Find(tx, new BsonDocument("catalogAuthoring.auditId", audit["_id"])).Limit(2).ToListAsync(ct);
+        sourceCapture?.Record("idempotencyRecords", new BsonDocument("catalogAuthoring.auditId", audit["_id"]), receipts);
         if (receipts.Count != 1) throw CatalogRepository.Invalid(); var receipt = receipts[0];
         CatalogReceiptRules.RequireReceipt(receipt, audit["actorId"].AsInt64, audit["operation"].AsString, receipt["key"].AsString);
         if (receipt["bodyHash"] != audit["bodyHash"] || receipt["result"] != audit["result"] || receipt["createdAt"] != audit["createdAt"]) throw CatalogRepository.Invalid();
-        var effect = await repository.Rows("outboxEvents").Find(tx, new BsonDocument("sourceKey", "catalog.command:" + audit["_id"].AsInt64)).SingleOrDefaultAsync(ct) ?? throw CatalogRepository.Invalid();
+        var effectFilter = new BsonDocument("sourceKey", "catalog.command:" + audit["_id"].AsInt64);
+        var effect = (sourceCapture is null ? await repository.Rows("outboxEvents").Find(tx, effectFilter).SingleOrDefaultAsync(ct)
+            : await sourceCapture.OneAsync(database, tx, "outboxEvents", effectFilter, ct)) ?? throw CatalogRepository.Invalid();
         var expected = new BsonDocument { { "kind", audit["result"]["kind"] }, { "id", audit["result"]["id"] }, { "version", audit["result"]["version"] } };
         if (effect["kind"] != "catalog.changed" || effect["createdAt"] != audit["createdAt"] || effect["payload"] != expected) throw CatalogRepository.Invalid();
     }
-    internal async Task VerifyProcurementSourceAsync(IClientSessionHandle tx, ProcurementLocation location, BsonDocument source, CancellationToken ct) {
+    internal async Task VerifyProcurementSourceAsync(IClientSessionHandle tx, ProcurementLocation location, BsonDocument source, CancellationToken ct,
+        PurchaseOrderSourceReadCapture? sourceCapture = null) {
         var scope = ProcurementRequestRules.Scope(location);
         var sku = CatalogRepository.Require("skus", source["sku"].AsBsonDocument); var family = CatalogRepository.Require("productFamilies", source["family"].AsBsonDocument);
         var category = CatalogRepository.Require("catalogCategories", source["category"].AsBsonDocument); var definition = CatalogRepository.Require("variantDefinitions", source["definition"].AsBsonDocument);
         if (!ScopePolicy.ContainsScope(RowOwner(sku), scope) || RowOwner(family) != RowOwner(sku) || RowOwner(category) != RowOwner(sku) ||
             sku["familyId"] != family["_id"] || family["categoryId"] != category["_id"] || family["categoryCode"] != category["code"]) throw CatalogRepository.Invalid();
         RequirePair(sku, definition); RequireActive(sku); RequireActive(family); RequireActive(category);
-        if (!definition.Equals(await repository.GetAsync(tx, "variantDefinitions", definition["_id"].AsInt64, ct))) throw CatalogRepository.Invalid();
+        var actualDefinition = await repository.GetAsync(tx, "variantDefinitions", definition["_id"].AsInt64, ct);
+        sourceCapture?.Record("variantDefinitions", new BsonDocument("_id", definition["_id"]), [actualDefinition]);
+        if (!definition.Equals(actualDefinition)) throw CatalogRepository.Invalid();
         foreach (var (name, row) in new[] { ("sku", sku), ("family", family), ("category", category) }) {
             var audit = await repository.Rows("auditEvents").Find(tx, new BsonDocument("_id", source["audits"][name])).SingleOrDefaultAsync(ct) ?? throw CatalogRepository.Invalid();
-            await RequireProcurementAuditAsync(tx, audit, name, row, ct);
+            sourceCapture?.Record("auditEvents", new BsonDocument("_id", source["audits"][name]), [audit]);
+            await RequireProcurementAuditAsync(tx, audit, name, row, ct, sourceCapture);
         }
     }
 }

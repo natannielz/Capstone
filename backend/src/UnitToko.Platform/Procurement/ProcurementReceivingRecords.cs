@@ -15,7 +15,8 @@ using R = UnitToko.Platform.Procurement.ProcurementRequestBson;
 namespace UnitToko.Platform.Procurement;
 
 internal sealed record ProcurementContainerHistory(BsonDocument Head, BsonDocument Capacity, IReadOnlyList<BsonDocument> Intakes);
-internal sealed class ProcurementReceivingRecords(IMongoDatabase database, IClock clock, CatalogAuthoringService catalog, PurchaseOrderService orders)
+internal sealed class ProcurementReceivingRecords(IMongoDatabase database, IClock clock, CatalogAuthoringService catalog, PurchaseOrderService orders,
+    ProcurementQualityProofGraph? qualityGraph = null)
 {
     private IMongoCollection<BsonDocument> Rows(string name) => database.GetCollection<BsonDocument>(name);
     internal static void Equal(BsonValue actual, BsonValue expected) { if (!actual.Equals(expected)) throw B.Broken(); }
@@ -41,7 +42,7 @@ internal sealed class ProcurementReceivingRecords(IMongoDatabase database, ICloc
         var row = await RowAsync(tx, B.Notices, id, ct); Equal(row["snapshotHash"], B.Hash(row)); var input = B.NoticeInput(row["input"]); Equal(row["input"], B.Input(input));
         var at = new DateTimeOffset(row["recordedAt"].ToUniversalTime()); if (at > clock.UtcNow) throw B.Broken(); ActorProof(row);
         BsonDocument source;
-        if (captured is null) source = await orders.FundingSourceAsync(database, tx, input.OrderId, input.OrderVersion, input.OrderApprovalId, ct);
+        if (captured is null) source = await orders.FundingSourceAsync(database, tx, input.OrderId, input.OrderVersion, input.OrderApprovalId, ct, qualityGraph);
         else { captured.RequireCurrent(); source = captured.Source; }
         Equal(row["source"], source); NoticeFacts(input, source, at);
         foreach (var field in new[] { "orderId", "orderVersion", "orderApprovalId", "location" }) Equal(row[field], row["input"][field]);

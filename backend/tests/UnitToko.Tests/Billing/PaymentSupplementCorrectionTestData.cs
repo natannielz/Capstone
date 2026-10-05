@@ -41,7 +41,11 @@ internal sealed class PaymentSupplementCorrectionTestData : IAsyncDisposable
             result.Pdf = await PaymentSupplementPdfOcrTestData.CreateAsync(fixture, primaryImageBytes: image, maximumValidationAgeMs: 300000);
             var data = result.Data;
             // Finite upload/decoder/read/proof-age policies were created before admission.
-            await ApplyAsync(data.Database, data.Catalog.Clock);
+            // Ordinary fixture creation requires the actual current registry;
+            // the fixed M88 helper is reserved for explicit predecessor rehearsal.
+            var migrations = new CollectionMigrations(data.Database, data.Catalog.Clock);
+            await migrations.ApplyAsync();
+            Assert.True(await migrations.IsCurrentAsync(), "Correction fixture requires genuine current schema history.");
             var imageWorker = PaymentOcrProcessorTests.Processor(data, new WindowsLocalOcrEngine(LocalOcrTests.Options()));
             await PaymentOcrProcessorTests.Policy(data, imageWorker);
             Assert.Equal("completed", await imageWorker.RunOnceAsync());

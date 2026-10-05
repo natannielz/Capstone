@@ -1,0 +1,74 @@
+# Staging template: single direct-TLS Windows ingress, no CDN or upstream LB.
+# Supply an existing approved certificate. No ACME issuance or admin API.
+# Raw request/access logging is intentionally disabled pending redacted monitoring.
+{
+    admin off
+    persist_config off
+    auto_https off
+    log {
+        output discard
+    }
+    servers {
+        protocols h1 h2
+        strict_sni_host on
+    }
+}
+
+https://@@PUBLIC_HOST@@ {
+    tls "@@TLS_CERTIFICATE@@" "@@TLS_PRIVATE_KEY@@"
+
+    @maintained path /api/v1 /api/v1/* /auth /auth/*
+    handle @maintained {
+        # Kestrel listens ONLY on IPv4 loopback; trust ONLY 127.0.0.1.
+        # Preserve URI, method, body, Origin, CSRF and all Set-Cookie/Location.
+        reverse_proxy http://127.0.0.1:5080 {
+            header_up -Forwarded
+            header_up -X-Forwarded-*
+            header_up -X-Original-*
+            header_up Host @@PUBLIC_HOST@@
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto https
+            header_up X-Forwarded-Host @@PUBLIC_HOST@@
+            lb_retries 0
+            transport http {
+                dial_timeout 5s
+                network_proxy none
+            }
+        }
+    }
+
+    # Operational health probes use the private listener; no public OpenAPI.
+    @internal path /health /health/* /openapi /openapi/*
+    handle @internal {
+        respond 404
+    }
+
+    handle {
+        # The approved deployment hostname is required for Vercel routing/TLS.
+        # No TLS bypass, path stripping, response cache or write retries.
+        reverse_proxy https://@@FRONTEND_HOST@@ {
+            header_up -Forwarded
+            header_up -X-Forwarded-*
+            header_up -X-Original-*
+            header_up Host @@FRONTEND_HOST@@
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto https
+            header_up X-Forwarded-Host @@PUBLIC_HOST@@
+            # Maintained opaque credentials belong only to the .NET branch.
+            header_up -Cookie
+            header_up -Authorization
+            header_up -Proxy-Authorization
+            header_up -X-CSRF-Token
+            header_up -X-Expected-Actor-Id
+            header_up -Idempotency-Key
+            header_up -X-Vercel-Protection-Bypass
+            header_up -X-Vercel-Set-Bypass-Cookie
+            header_down -Set-Cookie
+            lb_retries 0
+            transport http {
+                dial_timeout 5s
+                network_proxy none
+            }
+        }
+    }
+}

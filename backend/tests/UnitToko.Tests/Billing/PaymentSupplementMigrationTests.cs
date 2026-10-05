@@ -140,6 +140,7 @@ public sealed class PaymentSupplementMigrationTests(MongoFixture fixture)
     // proven-empty marker; retain all rows, reviewed successor controls and UUIDs.
     internal static async Task RestoreV87Async(IMongoDatabase db)
     {
+        await UnitToko.Tests.Procurement.SupplierDocumentPdfMatchMigrationRehearsal.RestoreV88Async(db);
         var history = await HistoryAsync(db); if (history.Count <= 87) return;
         Assert.Equal(88, history.Count); Assert.True(MigrationHistory.IsValid(history.Select(row => row.AsBsonDocument).ToArray(), 88));
         Assert.All(history, row => Assert.Equal("applied", row["state"]));

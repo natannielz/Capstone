@@ -116,8 +116,9 @@ internal sealed partial class SupplierDocumentRecords
     }
     // Reuses the live owner's exact source-chain proof during successor migrations and linked claims.
     // The caller supplies genuine HistoryAsync output and fences the returned mutable rows in its transaction.
-    internal async Task<IReadOnlyList<(string Table, BsonDocument Row)>> RequireSourceCapacitiesAsync(IClientSessionHandle tx, SupplierDocumentHistory history, CancellationToken ct) {
-        var inspections = new Dictionary<long, ProcurementInspectionHistory>(); var links = new BsonArray();
+    internal async Task<IReadOnlyList<(string Table, BsonDocument Row)>> RequireSourceCapacitiesAsync(IClientSessionHandle tx, SupplierDocumentHistory history,
+        CancellationToken ct, SupplierDocumentResolvedMatchProof? completedProof = null) {
+        var inspections = completedProof?.RequireCompleted(this, tx, history) ?? new Dictionary<long, ProcurementInspectionHistory>(); var links = new BsonArray();
         var fences = new List<(string Table, BsonDocument Row)>();
         var verifiedMatches = new Dictionary<long, BsonDocument>();
         async Task IncludeInspectionAsync(BsonValue link) {

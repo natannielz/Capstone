@@ -1,0 +1,124 @@
+{
+  "ASPNETCORE_ENVIRONMENT": "Production",
+  "ASPNETCORE_URLS": "http://127.0.0.1:5080",
+  "AllowedHosts": "REQUIRED_CANONICAL_HOSTNAME",
+  "Release": {
+    "Profile": "full"
+  },
+  "Mongo": {
+    "Uri": "REQUIRED_MONGODB_URI",
+    "Database": "REQUIRED_DEDICATED_DATABASE"
+  },
+  "Identity": {
+    "TrustedProxies": [
+      "127.0.0.1"
+    ],
+    "Auth0": {
+      "Enabled": true,
+      "Issuer": "REQUIRED_AUTH0_HTTPS_ISSUER_WITH_TRAILING_SLASH",
+      "PublicOrigin": "REQUIRED_CANONICAL_HTTPS_ORIGIN",
+      "ClientId": "REQUIRED_AUTH0_CONFIDENTIAL_CLIENT_ID",
+      "ClientSecret": "REQUIRED_AUTH0_CONFIDENTIAL_CLIENT_SECRET",
+      "ConnectionId": "REQUIRED_AUTH0_DATABASE_CONNECTION_ID",
+      "ConnectionName": "REQUIRED_AUTH0_DATABASE_CONNECTION_NAME",
+      "ClaimsNamespace": "REQUIRED_CONTROLLED_HTTPS_NAMESPACE_WITH_TRAILING_SLASH",
+      "AssurancePolicyVersion": "REQUIRED_REVIEWED_AUTH0_ACTION_VERSION",
+      "AllowedReturnPaths": [
+        "/",
+        "/ordering/requests",
+        "/ordering/requests/incoming",
+        "/identity/account",
+        "/administration/access",
+        "/administration/organizations",
+        "/administration/organizations/addresses",
+        "/administration/history",
+        "/administration/person-reviews",
+        "/administration/catalog",
+        "/catalog/prices",
+        "/catalog/browse",
+        "/shop",
+        "/ordering/drafts",
+        "/ordering/checkout",
+        "/ordering/reviews",
+        "/ordering/orders",
+        "/ordering/spending-policies",
+        "/accounting/books",
+        "/reporting/accounts",
+        "/procurement/requests",
+        "/procurement/suppliers",
+        "/procurement/purchase-orders",
+        "/procurement/funding",
+        "/procurement/supplier-banks",
+        "/procurement/disbursements",
+        "/procurement/settlements",
+        "/procurement/receiving",
+        "/procurement/inspections",
+        "/procurement/supplier-documents",
+        "/procurement/supplier-claims",
+        "/procurement/stock-receipts",
+        "/procurement/stock-valuations",
+        "/procurement/supplier-payables",
+        "/procurement/advance-returns",
+        "/procurement/quality-acceptances",
+        "/fulfillment/preparations",
+        "/fulfillment/dispatches",
+        "/fulfillment/shipments",
+        "/fulfillment/receive",
+        "/fulfillment/cases",
+        "/billing/invoices",
+        "/billing/payments",
+        "/billing/payment-reviews",
+        "/billing/receiving-accounts",
+        "/billing/bank-statements",
+        "/billing/bank-receipts",
+        "/inventory/counts",
+        "/inventory/sources",
+        "/inventory/sources/revisions",
+        "/inventory/sources/aliases",
+        "/inventory/sources/suspensions",
+        "/inventory/sources/policies",
+        "/inventory/source-reconciliations"
+      ]
+    },
+    "Keys": {
+      "Directory": "REQUIRED_PERSISTENT_PRIVATE_KEY_DIRECTORY",
+      "ApplicationName": "REQUIRED_STABLE_ENVIRONMENT_DISCRIMINATOR",
+      "CertificatePath": "REQUIRED_PRIVATE_PKCS12_ABSOLUTE_PATH",
+      "CertificatePassword": "REQUIRED_CERTIFICATE_PASSWORD"
+    }
+  },
+  "Logging": {
+    "LogLevel": {
+      "Default": "None",
+      "Microsoft.AspNetCore": "None"
+    }
+  },
+  "Evidence": {
+    "PrivateWindows": {
+      "Root": "REQUIRED_PRIVATE_FIXED_NTFS_ROOT",
+      "StoreId": "REQUIRED_APPROVED_STORE_ID",
+      "TrustedOperatorSids": [
+        "REQUIRED_APPROVED_OPERATOR_OR_SERVICE_SID"
+      ]
+    },
+    "PrivateVideoWindows": {
+      "Root": "REQUIRED_PRIVATE_FIXED_NTFS_ROOT",
+      "StoreId": "REQUIRED_APPROVED_STORE_ID",
+      "TrustedOperatorSids": [
+        "REQUIRED_APPROVED_OPERATOR_OR_SERVICE_SID"
+      ]
+    },
+    "ImageRevalidation": {
+      "Root": "REQUIRED_PRIVATE_FIXED_NTFS_ROOT",
+      "StoreId": "REQUIRED_APPROVED_STORE_ID",
+      "TrustedOperatorSids": [
+        "REQUIRED_APPROVED_OPERATOR_OR_SERVICE_SID"
+      ],
+      "ConsumerId": "REQUIRED_DISTINCT_APPROVED_CONSUMER_ID",
+      "HostAcceptanceReference": "REQUIRED_ACTUAL_HOST_ACCEPTANCE_REFERENCE",
+      "Limits": "REQUIRED_COMPLETE_TYPED_LIMITS_OBJECT",
+      "Decoder": "REQUIRED_COMPLETE_TYPED_DECODER_OBJECT",
+      "Scanner": "REQUIRED_COMPLETE_TYPED_SCANNER_OBJECT"
+    }
+  }
+}

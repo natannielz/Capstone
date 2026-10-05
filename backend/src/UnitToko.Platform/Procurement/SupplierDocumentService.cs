@@ -54,6 +54,8 @@ public sealed partial class SupplierDocumentService
         internal PersonAuthorityProof? People;
         internal DateTimeOffset? SessionExpiry;
         internal bool IncludeEvidence;
+        internal Action? PdfEligibility;
+        internal SupplierDocumentResolvedMatchProof? PdfMatchProof;
     }
     private AuthorizationQuery Query(ActorContext actor, AuthorizationSnapshot authority, string permission) {
         var query = ScopePolicy.Compile(actor, authority, permission, clock.UtcNow); AuthorizationStore.Require(query); return query;
@@ -66,7 +68,7 @@ public sealed partial class SupplierDocumentService
         ProcurementRequestRules.Location(location); var result = new Context(actor, authority, tx, location, permission); _ = Require(result); return result;
     }
     private void Current(Context context) {
-        _ = Require(context); context.People?.RequireCurrent(context.Tx, clock.UtcNow); context.Order?.RequireCurrent();
+        _ = Require(context); context.People?.RequireCurrent(context.Tx, clock.UtcNow); context.Order?.RequireCurrent(); context.PdfEligibility?.Invoke();
         if (!context.Tx.IsInTransaction || !ReferenceEquals(context.Tx.Client, database.Client) || context.Tx.WrappedCoreSession.CurrentTransaction.TransactionNumber != context.Transaction ||
             context.Source is { } source && context.SourceHash != B.Hash(source)) throw B.Broken();
         if (context.SessionExpiry is { } expiry && clock.UtcNow >= expiry) throw new AuthorizationDeniedException("stale_or_inactive_session");
@@ -79,12 +81,7 @@ public sealed partial class SupplierDocumentService
             await InventoryRepository.RequireStorageAsync(database, name, legacy, SupplierDocumentSchemas.Keys(name), ct);
             return;
         }
-        var definition = await (await database.ListCollectionsAsync(
-            new ListCollectionsOptions { Filter = new BsonDocument("name", name) }, ct)).SingleOrDefaultAsync(ct);
-        var installed = definition?.GetValue("options", new BsonDocument()).AsBsonDocument.GetValue("validator", BsonNull.Value);
-        var current = ProcurementQualityValuationSchemas.CurrentDocumentValidator(name);
-        var required = installed is BsonDocument validator && InventorySchemas.Contains(validator, current) ? current : legacy;
-        await InventoryRepository.RequireStorageAsync(database, name, required, SupplierDocumentSchemas.Keys(name), ct);
+        await SupplierDocumentPdfMatchStorage.RequireAsync(database, name, ct);
     }
     internal async Task StorageAsync(CancellationToken ct) {
         await orders.RequireReceivingStorageAsync(ct);
@@ -93,7 +90,8 @@ public sealed partial class SupplierDocumentService
             (ProcurementInspectionSchemas.Collections, (Func<string, BsonDocument>)ProcurementInspectionSchemas.Validator, (Func<string, BsonDocument[]>)ProcurementInspectionSchemas.Keys),
             (SupplierDocumentSchemas.Collections, (Func<string, BsonDocument>)ProcurementQualityValuationSchemas.CurrentDocumentValidator, (Func<string, BsonDocument[]>)SupplierDocumentSchemas.Keys) })
         foreach (var name in names) {
-            await InventoryRepository.RequireStorageAsync(database, name, validator(name), keys(name), ct);
+            if (name == B.Matches) await SupplierDocumentPdfMatchStorage.RequireAsync(database, name, ct);
+            else await InventoryRepository.RequireStorageAsync(database, name, validator(name), keys(name), ct);
             if ((await (await Rows(name).Indexes.ListAsync(ct)).ToListAsync(ct)).Any(index => InvoiceStorage.Unsafe(index) || index.Contains("partialFilterExpression"))) throw B.Broken();
         }
         foreach (var (table, name, key) in ProcurementQualityValuationSchemas.LookupIndexes.Where(index => index.Table == B.Matches)) {
@@ -142,6 +140,7 @@ public sealed partial class SupplierDocumentService
         row["fence"] = row["fence"].AsInt64 + 1;
     }
     private async Task FenceAsync(Context context, CancellationToken ct) {
+        using var matchingFenceStage = SupplierDocumentMatchDiagnostics.Begin("matching.fence");
         Current(context);
         if (context.History is { } history) {
             await TouchAsync(context, B.Heads, history.Head, ct);

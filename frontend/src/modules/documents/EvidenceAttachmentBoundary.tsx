@@ -4,7 +4,7 @@ import {useEffect, useRef, useState, type ReactNode} from 'react';
 import {type OperationJournal} from '@/modules/administration/operation-journal';
 import {accessMessage} from '@/modules/administration/workflow';
 import common from '@/modules/administration/access.module.css';
-import {pdfDocumentOcrOwnerKey, type PdfDocumentOcrOwner} from './pdf-document-ocr-client';
+import {pdfDocumentOcrOwnerKey, type PdfDocumentOcrOwner, type PdfDocumentObservationSelection} from './pdf-document-ocr-client';
 import {createPdfEvidenceGateway, type PdfEvidenceTarget, type PdfEvidenceStatus, type PdfReadContext} from './pdf-evidence-client';
 import {EvidenceFormatChoice} from './EvidenceFormatChoice';
 import {PdfEvidenceAdmissionPanel} from './PdfEvidenceAdmissionPanel';
@@ -14,7 +14,7 @@ export type EvidenceAttachmentBoundaryProps = {context: PdfReadContext; target: 
   submitted: {owner: PdfDocumentOcrOwner; reservationId: string} | null; locked: boolean; fresh: boolean; now: number;
   current: () => boolean; journal: OperationJournal; onBusyChange: (busy: boolean) => void; onDenied: (failure: unknown) => void;
   onReviewSubmission?: (selected: {status: PdfEvidenceStatus; reviewedOriginalKey: string}) => void;
-  onKind?: (kind: 'image' | 'pdf' | null) => void; renderImage: () => ReactNode};
+  onKind?: (kind: 'image' | 'pdf' | null) => void; onSelectObservation?: (selection: PdfDocumentObservationSelection) => void; renderImage: () => ReactNode};
 
 /** Existing image UI is supplied unchanged; each admission gets a deliberately chosen format. */
 export function EvidenceAttachmentBoundary(props: EvidenceAttachmentBoundaryProps) {
@@ -42,7 +42,7 @@ export function EvidenceAttachmentBoundary(props: EvidenceAttachmentBoundaryProp
       disabled={props.locked} onClick={() => setRefresh(value => value + 1)}>Muat ulang jenis bukti tersimpan</button></section>;
     if (!resolved || resolved.key !== key) return <p role="status">Memeriksa jenis bukti dari pencatatan server…</p>;
     return resolved.kind === 'image' ? <>{props.renderImage()}</> : <PdfDocumentReviewPanel key={key!} context={props.context} owner={submitted.owner}
-      reservationId={submitted.reservationId} locked={props.locked} current={props.current} onDenied={props.onDenied}/>;
+      reservationId={submitted.reservationId} locked={props.locked} current={props.current} onDenied={props.onDenied} onSelectObservation={props.onSelectObservation}/>;
   }
   return <><EvidenceFormatChoice value={chosen} disabled={props.locked} onChange={value => {setChosen(value); props.onKind?.(value);}}/>
     {chosen === 'image' && props.renderImage()}

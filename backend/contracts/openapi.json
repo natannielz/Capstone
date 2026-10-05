@@ -114082,6 +114082,12 @@
             "items": {
               "$ref": "#/components/schemas/SupplierDocumentMatchLineInputDto"
             }
+          },
+          "pdfObservations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SupplierDocumentPdfMatchObservationDto"
+            }
           }
         },
         "additionalProperties": false
@@ -114441,6 +114447,55 @@
                 "$ref": "#/components/schemas/LongId"
               }
             ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "SupplierDocumentPdfMatchCandidateDto": {
+        "required": [
+          "resultId",
+          "resultHash",
+          "evidence",
+          "pageIndex",
+          "field"
+        ],
+        "type": "object",
+        "properties": {
+          "resultId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "resultHash": {
+            "type": "string"
+          },
+          "evidence": {
+            "$ref": "#/components/schemas/PaymentEvidenceReferenceDto"
+          },
+          "pageIndex": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "field": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "SupplierDocumentPdfMatchObservationDto": {
+        "required": [
+          "field",
+          "candidate",
+          "originalReviewed"
+        ],
+        "type": "object",
+        "properties": {
+          "field": {
+            "type": "string"
+          },
+          "candidate": {
+            "$ref": "#/components/schemas/SupplierDocumentPdfMatchCandidateDto"
+          },
+          "originalReviewed": {
+            "type": "boolean"
           }
         },
         "additionalProperties": false

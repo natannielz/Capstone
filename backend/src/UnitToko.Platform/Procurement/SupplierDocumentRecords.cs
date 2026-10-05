@@ -26,7 +26,7 @@ internal sealed partial class SupplierDocumentRecords(IMongoDatabase database, M
     private IMongoCollection<BsonDocument> Rows(string table) => database.GetCollection<BsonDocument>(table);
     internal async Task<ProcurementInspectionHistory> InspectionAsync(IClientSessionHandle tx, long id, CancellationToken ct) {
         var row = await Rows(ProcurementInspectionBson.Submissions).Find(tx, new BsonDocument("_id", id)).SingleOrDefaultAsync(ct) ?? throw B.Broken();
-        return await new ProcurementInspectionRecords(database, unit, clock, catalog, orders).HistoryAsync(tx, row["noticeId"].AsInt64, row["intakeId"].AsInt64, ct);
+        return await new ProcurementInspectionRecords(database, unit, clock, catalog, orders, qualityGraph).HistoryAsync(tx, row["noticeId"].AsInt64, row["intakeId"].AsInt64, ct);
     }
     internal static void Equal(BsonValue actual, BsonValue expected) { if (!actual.Equals(expected)) throw B.Broken(); }
     internal async Task<BsonDocument> RowAsync(IClientSessionHandle tx, string table, long id, CancellationToken ct) => await Rows(table).Find(tx,
@@ -108,11 +108,16 @@ internal sealed partial class SupplierDocumentRecords(IMongoDatabase database, M
         Equal(head["reviewedInput"], reviewed); Equal(head["createdAt"], draft["recordedAt"]); Equal(head["updatedAt"], at); await OrphansAsync(tx, ct);
         return new(draft, document, head, identity, capacity, matches);
     }
-    internal async Task<BsonDocument> MatchAsync(IClientSessionHandle tx, long id, CancellationToken ct, BsonDocument? document = null) {
+    internal async Task<BsonDocument> MatchAsync(IClientSessionHandle tx, long id, CancellationToken ct, BsonDocument? document = null,
+        SupplierDocumentResolvedMatchProof? resolvedProof = null) {
         var row = await RowAsync(tx, B.Matches, id, ct); Equal(row["snapshotHash"], B.Hash(row)); document ??= await SubmissionAsync(tx, row["documentId"].AsInt64, ct);
         Equal(row["documentId"], document["_id"]); Equal(row["documentHash"], document["snapshotHash"]); foreach (var key in new[] { "draftId", "location", "supplierId", "identityId" }) Equal(row[key], document[key]);
         Person(row); if (row["recordedAt"].CompareTo(document["recordedAt"]) < 0) throw B.Broken(); var input = B.MatchInput(row["input"]); Equal(input.DocumentId, document["_id"]);
-        var resolved = await ResolveAsync(tx, document, input, ct, qualityGraph ?? new ProcurementQualityProofGraph(tx));
+        Equal(row["input"], B.Input(input));
+        var expectedSchema = input.PdfObservations is null ? input.Lines.Any(line => line.QualityAllocationId is not null) ? 2 : 1 : input.Lines.Any(line => line.QualityAllocationId is not null) ? 4 : 3;
+        if (row["schemaVersion"] != expectedSchema) throw B.Broken();
+        var resolved = resolvedProof is null ? await ResolveAsync(tx, document, input, ct, qualityGraph ?? new ProcurementQualityProofGraph(tx))
+            : resolvedProof.Require(this, tx, document, input);
         Equal(row["lines"], resolved.Lines); Equal(row["links"], resolved.Links);
         if (row["lines"].AsBsonArray.Any(line => line.AsBsonDocument.TryGetValue("quality", out var quality) &&
             quality["recordedAt"].CompareTo(row["recordedAt"]) > 0)) throw B.Broken();
@@ -135,14 +140,23 @@ internal sealed partial class SupplierDocumentRecords(IMongoDatabase database, M
                 new(GrantScopeKind.FulfillmentShop, location.OrganizationId, ShopId: location.ShopId, ChannelId: location.ChannelId));
             _ = await new SupplierDocumentExtractionRecords(database).RequireResultAsync(tx, job, source, resultId, ct);
         }
+        if (input.PdfObservations is not null) {
+            var original = await OriginalAsync(tx, document, ct) ?? throw B.Broken();
+            await RequirePinAsync(tx, document, ct);
+            await new SupplierDocumentPdfMatchRecords(database).RequireAsync(tx, row, document, original, ct);
+        }
         if (input.ReviewedInput.DocumentDate is { } day && day > AccountingCalendar.BusinessDate(Time(row["recordedAt"]))) throw B.Broken();
         Equal(row["binding"], B.Binding(row["actorId"].AsInt64, row["actorGrantVersion"].AsInt64, row["input"].AsBsonDocument, new() { { "documentHash", document["snapshotHash"] }, { "links", row["links"] } }, row["review"].AsBsonDocument));
-        Equal(row["review"]["capacity"], row["before"]); Equal(row["after"], B.After(row["before"].AsBsonDocument, input)); await EffectsAsync(tx, row, B.MatchBody(input, row["binding"].AsString), ct); return row;
+        Equal(row["review"]["capacity"], row["before"]); Equal(row["after"], B.After(row["before"].AsBsonDocument, input)); await EffectsAsync(tx, row, B.MatchBody(input, row["binding"].AsString), ct);
+        resolvedProof?.Complete(this, tx, row); return row;
     }
-    internal async Task<(BsonArray Lines, BsonArray Links, Dictionary<long, ProcurementInspectionHistory> Inspections)> ResolveAsync(IClientSessionHandle tx, BsonDocument document, SupplierDocumentMatchInput input, CancellationToken ct,
-        ProcurementQualityProofGraph? proofGraph = null) {
+    internal Task<(BsonArray Lines, BsonArray Links, Dictionary<long, ProcurementInspectionHistory> Inspections)> ResolveAsync(IClientSessionHandle tx, BsonDocument document, SupplierDocumentMatchInput input, CancellationToken ct,
+        ProcurementQualityProofGraph? proofGraph = null) =>
+        ResolveCoreAsync(tx, document, input, ct, proofGraph, new Dictionary<long, ProcurementApprovedQualitySource>());
+    private async Task<(BsonArray Lines, BsonArray Links, Dictionary<long, ProcurementInspectionHistory> Inspections)> ResolveCoreAsync(IClientSessionHandle tx,
+        BsonDocument document, SupplierDocumentMatchInput input, CancellationToken ct, ProcurementQualityProofGraph? proofGraph,
+        Dictionary<long, ProcurementApprovedQualitySource> qualitySources) {
         var result = new BsonArray(); var links = new BsonArray(); var inspections = new Dictionary<long, ProcurementInspectionHistory>(); var value = input.ReviewedInput;
-        var qualitySources = new Dictionary<long, ProcurementApprovedQualitySource>();
         SupplierDocumentRules.SameIdentity(B.Input(document["input"]), value);
         if (input.Lines.Any(line => line.Discrepancy is null) && (!SupplierDocumentRules.ExactTotal(value) || value.Discrepancy is not null)) throw B.Changed("supplier_document_discrepancy_requires_resolution");
         foreach (var requested in input.Lines) {
@@ -154,9 +168,17 @@ internal sealed partial class SupplierDocumentRecords(IMongoDatabase database, M
             if (value.Kind == SupplierDocumentKind.Invoice) {
                 if (requested.InspectionId is not { } inspectionId || requested.InspectionLineNumber is not { } index) throw B.Changed();
                 if (!inspections.TryGetValue(inspectionId, out var history)) {
-                    var route = await Rows(ProcurementInspectionBson.Submissions).Find(tx, new BsonDocument("_id", inspectionId)).SingleOrDefaultAsync(ct) ?? throw B.Broken();
-                    Equal(route["location"], document["location"]);
-                    history = await new ProcurementInspectionRecords(database, unit, clock, catalog, orders).HistoryAsync(tx, route["noticeId"].AsInt64, route["intakeId"].AsInt64, ct); inspections.Add(inspectionId, history);
+                    using var inspectionStage = SupplierDocumentMatchDiagnostics.Begin("source.inspection-history");
+                    var graph = proofGraph ?? qualityGraph;
+                    if (graph is null) {
+                        var route = await Rows(ProcurementInspectionBson.Submissions).Find(tx, new BsonDocument("_id", inspectionId)).SingleOrDefaultAsync(ct) ?? throw B.Broken();
+                        Equal(route["location"], document["location"]);
+                        history = await new ProcurementInspectionRecords(database, unit, clock, catalog, orders).HistoryAsync(tx, route["noticeId"].AsInt64, route["intakeId"].AsInt64, ct);
+                    } else {
+                        history = await graph.InspectionAsync(database, unit, clock, catalog, orders, tx, inspectionId, ct);
+                        Equal(history.Submissions.Single(row => row["_id"] == inspectionId)["location"], document["location"]);
+                    }
+                    inspections.Add(inspectionId, history);
                 }
                 var inspection = history.Submissions.SingleOrDefault(row => row["_id"] == inspectionId) ?? throw B.Broken();
                 if (index > inspection["input"]["lines"].AsBsonArray.Count) throw B.Changed(); var observed = inspection["input"]["lines"][index - 1]; var source = history.Source["notice"]["source"].AsBsonDocument;
@@ -169,6 +191,7 @@ internal sealed partial class SupplierDocumentRecords(IMongoDatabase database, M
                 ProcurementApprovedQualitySource? quality = null;
                 if (requested.QualityAllocationId is { } qualityId) {
                     if (!qualitySources.TryGetValue(qualityId, out quality)) {
+                        using var qualityStage = SupplierDocumentMatchDiagnostics.Begin("source.quality");
                         quality = await new ProcurementQualityAcceptanceSourceReader(database, unit, clock, catalog, orders,
                             new StockSourceSetupService(database, unit, new IdAllocator(database), clock),
                             proofGraph ?? qualityGraph ?? new ProcurementQualityProofGraph(tx)).ReadAsync(tx, qualityId, ct);

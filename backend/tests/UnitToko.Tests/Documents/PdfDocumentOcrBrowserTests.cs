@@ -68,11 +68,67 @@ public sealed class PdfDocumentOcrBrowserTests(MongoFixture fixture, ITestOutput
         Assert.Equal(0, await data.Rows("supplierDocumentMatches").CountDocumentsAsync(new BsonDocument()));
     }
 
+    [WindowsPaymentBrowserFact]
+    public async Task Actual_supplier_browser_manually_matches_with_persisted_native_page_reference_and_recovers_one_commit() {
+        await using var fixtureData = await SupplierDocumentPdfMatchTestData.CreateAsync(fixture, submit: false);
+        var data = fixtureData.Data;
+        var sessions = new MongoIdentitySessionStore(data.Database, data.Unit, data.Clock, new("https://approved.example/", "fixture-connection", "fixture-policy"),
+            SessionPayloadProtector.FromTestProvider(new EphemeralDataProtectionProvider()));
+        var actorToken = await IssueAsync(data.Database, data.Unit, data.Clock, sessions, data.Actor, "Pencatat invoice PDF uji");
+        var reviewerToken = await IssueAsync(data.Database, data.Unit, data.Clock, sessions, data.Matcher, "Petugas pencocokan invoice PDF uji");
+        var outsiderToken = await IssueAsync(data.Database, data.Unit, data.Clock, sessions, data.Outsider, "Lingkup lain uji PDF");
+        using var keys = new IdentityRuntimeTests.RuntimeKeys(); var settings = Settings(data.Database, keys);
+        using var factory = IdentityRuntimeTests.Factory(settings).WithWebHostBuilder(web => web.UseEnvironment("Production").ConfigureTestServices(services => {
+            services.RemoveAll<IClock>(); services.AddSingleton<IClock>(data.Clock); services.RemoveAll<MongoIdentitySessionStore>(); services.AddSingleton(sessions);
+            services.RemoveAll<SupplierDocumentService>(); services.AddSingleton(data.Service); services.RemoveAll<SupplierDocumentEvidenceService>(); services.AddSingleton(data.Evidence);
+        }));
+        var observed = fixtureData.Input;
+        var notice = await data.Inspection.Receiving.Service.ReadAsync(data.Inspection.Receiving.Reader, data.Inspection.NoticeId);
+        var input = new Dictionary<string, object?> { ["mode"] = "supplier", ["sourceId"] = data.DraftId.ToString(), ["sourceRevision"] = "1",
+            ["actorToken"] = actorToken, ["actorId"] = data.Actor.UserId.ToString(), ["reviewerToken"] = reviewerToken, ["reviewerId"] = data.Matcher.UserId.ToString(),
+            ["outsiderToken"] = outsiderToken, ["outsiderId"] = data.Outsider.UserId.ToString(), ["documentReference"] = observed.DocumentReference,
+            ["locationKey"] = $"{observed.Location.OrganizationId}:{observed.Location.ShopId}:{observed.Location.WarehouseId}:{observed.Location.ChannelId}",
+            ["expectedSourceKind"] = "SupplierInvoice", ["expectedAmountField"] = "total_amount", ["inspectionId"] = data.InspectionId.ToString(),
+            ["documentInput"] = UnitToko.Api.Procurement.SupplierDocumentEndpoints.Input(SupplierDocumentBson.Input(observed)),
+            ["packageLabel"] = notice["notice"]["order"]["lines"][0]["packageLabel"].AsString };
+        await ChildAsync(factory, input, fixtureData.Bytes, data.Files.Path, fixtureData.Scanner.Runtime, fixtureData.Runtime,
+            "verify-supplier-pdf-match-browser.mjs", "REAL_SUPPLIER_PDF_MATCH_BROWSER_PASS", ["34000.00", "34000.00"]);
+        await DurableAsync(data.Database, data.Unit, "SupplierInvoice", data.DraftId, data.Actor.UserId, data.Matcher.UserId, PdfRasterProtocol.Digest(fixtureData.Bytes));
+        Assert.Equal(fixtureData.Bytes, fixtureData.Scanner.Scanner.Bytes);
+        var job = await data.Rows("outboxEvents").Find(new BsonDocument("kind", PdfDocumentExtractionContract.SupplierJobKind)).SingleAsync();
+        var result = await data.Unit.ExecuteAsync((tx, ct) => new PdfDocumentExtractionRecords(data.Database).ResultAsync(tx, job, ct)); Assert.NotNull(result);
+        var submission = await data.Rows(SupplierDocumentBson.Submissions).Find(new BsonDocument("_id", result["binding"]["submissionId"])).SingleAsync();
+        var row = await data.Rows(SupplierDocumentBson.Matches).Find(new BsonDocument()).SingleAsync();
+        Assert.Equal(3, row["schemaVersion"]); Assert.Equal(data.Matcher.UserId, row["actorId"]); Assert.True(row["input"]["ocrResultId"].IsBsonNull);
+        var observation = Assert.Single(row["input"]["pdfObservations"].AsBsonArray);
+        Assert.Equal("total_amount", observation["field"]); Assert.True(observation["originalReviewed"].AsBoolean);
+        Assert.Equal(result["_id"], observation["candidate"]["resultId"]); Assert.Equal(result["resultHash"], observation["candidate"]["resultHash"]);
+        Assert.Equal(1, observation["candidate"]["pageIndex"]); Assert.Equal(submission["evidence"], observation["candidate"]["evidence"]);
+        Assert.Equal(submission["_id"], row["documentId"]); Assert.Equal(submission["snapshotHash"], row["documentHash"]);
+        Assert.Equal(SupplierDocumentBson.Input(observed), row["input"]["reviewedInput"]);
+        Assert.Equal(2, row["input"]["lines"][0]["packages"]); Assert.Equal("20000.00", row["input"]["lines"][0]["netAmount"]);
+        Assert.Equal("2000.00", row["input"]["lines"][0]["taxAmount"]); Assert.Equal("500.00", row["input"]["lines"][0]["chargeAmount"]);
+        Assert.Equal(1L, row["after"]["lines"][0]["remainingPackages"]);
+        var audit = await data.Rows("auditEvents").Find(new BsonDocument("_id", row["auditId"])).SingleAsync();
+        Assert.Equal(SupplierDocumentBson.Audit(row), audit);
+        var read = await data.Rows(PdfDocumentExtractionRecords.Reads).Find(new BsonDocument {
+            { "actorId", data.Matcher.UserId }, { "correlationId", row["correlationId"] }, { "resultId", result["_id"] } }).SingleAsync();
+        Assert.Equal("supplier-document-pdf-ocr-view", read["purpose"]); Assert.Equal(result["resultHash"], read["resultHash"]);
+        foreach (var (table, field) in new[] { ("auditEvents", "kind"), ("outboxEvents", "kind"), ("idempotencyRecords", "operation") })
+            Assert.Equal(1L, await data.Rows(table).CountDocumentsAsync(new BsonDocument(field, SupplierDocumentTestData.MatchOperation)));
+        var prior = fixtureData.Baseline.DeepClone().AsBsonDocument; prior.Remove("supplierDocumentSubmissions");
+        var after = await fixtureData.PhysicalAndMoneyAsync(); after.Remove("supplierDocumentSubmissions");
+        Assert.Equal(prior, after); Assert.Equal(0L, await data.Rows("supplierDocumentExtractionResults").CountDocumentsAsync(new BsonDocument()));
+        Assert.Equal(1L, await data.Rows(SupplierDocumentBson.Submissions).CountDocumentsAsync(new BsonDocument()));
+        await data.Inspection.Receiving.Orders.NoFinancialOrReceiptEffectsAsync();
+    }
+
     private async Task ChildAsync(WebApplicationFactory<Program> factory, Dictionary<string, object?> input, byte[] bytes, string privateRoot,
-        PdfEvidenceValidationRuntime security, PdfDocumentOcrRuntime extraction) {
+        PdfEvidenceValidationRuntime security, PdfDocumentOcrRuntime extraction, string script = "verify-pdf-document-ocr-browser.mjs",
+        string successMarker = "REAL_PDF_DOCUMENT_BROWSER_PASS", string[]? expectedAmounts = null) {
         var root = Root(); var node = Environment.GetEnvironmentVariable("UNITTOKO_BROWSER_NODE"); var playwright = Environment.GetEnvironmentVariable("UNITTOKO_BROWSER_PLAYWRIGHT_PACKAGE");
         Assert.True(Path.IsPathFullyQualified(node ?? "") && File.Exists(node)); Assert.True(Path.IsPathFullyQualified(playwright ?? "") && File.Exists(playwright));
-        Assert.True(File.Exists(Path.Combine(root, "frontend", ".next-full", "BUILD_ID"))); Assert.True(File.Exists(Path.Combine(root, "frontend", "scripts", "verify-pdf-document-ocr-browser.mjs")));
+        Assert.True(File.Exists(Path.Combine(root, "frontend", ".next-full", "BUILD_ID"))); Assert.True(File.Exists(Path.Combine(root, "frontend", "scripts", script)));
         factory.UseKestrel(options => options.Listen(IPAddress.Loopback, 0)); factory.StartServer();
         var apiAddress = Assert.Single(factory.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!.Addresses);
         using var rsa = RSA.Create(2048); var certificate = new CertificateRequest("CN=UnitToko private PDF rehearsal", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
@@ -86,13 +142,13 @@ public sealed class PdfDocumentOcrBrowserTests(MongoFixture fixture, ITestOutput
         input["apiAddress"] = apiAddress; input["origin"] = Origin; input["pfx"] = pfx; input["password"] = password;
         input["spki"] = Convert.ToBase64String(SHA256.HashData(tls.PublicKey.ExportSubjectPublicKeyInfo())); input["playwrightPackage"] = playwright;
         input["pdfBase64"] = Convert.ToBase64String(bytes); input["pdfSha256"] = PdfRasterProtocol.Digest(bytes); input["pdfFilename"] = "bukti-uji-dua-halaman.pdf";
-        input["expectedAmounts"] = new[] { "1234567.89", "2345678.90" }; input["runDirectory"] = runDirectory;
+        input["expectedAmounts"] = expectedAmounts ?? ["1234567.89", "2345678.90"]; input["runDirectory"] = runDirectory;
         input["validationReadyPath"] = validationReadyPath; input["extractionReadyPath"] = extractionReadyPath;
         var secrets = input.Where(pair => pair.Key.EndsWith("Token", StringComparison.Ordinal) || pair.Key is "pfx" or "password").Select(pair => pair.Value?.ToString()).OfType<string>().Append(privateRoot).ToArray();
         string Safe(string line) { foreach (var secret in secrets) line = line.Replace(secret, "[private]", StringComparison.Ordinal); return line; }
         var start = new ProcessStartInfo(node!) { WorkingDirectory = Path.Combine(root, "frontend"), UseShellExecute = false, CreateNoWindow = true,
             RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true };
-        start.ArgumentList.Add(Path.Combine(root, "frontend", "scripts", "verify-pdf-document-ocr-browser.mjs"));
+        start.ArgumentList.Add(Path.Combine(root, "frontend", "scripts", script));
         start.Environment["NODE_ENV"] = "production"; start.Environment["NEXT_TELEMETRY_DISABLED"] = "1"; start.Environment["NEXT_PUBLIC_UNIT_TOKO_RELEASE"] = "full";
         using var process = Process.Start(start) ?? throw new InvalidOperationException("PDF browser child did not start");
         var lines = new StringBuilder(); var validated = false; var extracted = false;
@@ -114,7 +170,7 @@ public sealed class PdfDocumentOcrBrowserTests(MongoFixture fixture, ITestOutput
             await process.StandardInput.WriteAsync(JsonSerializer.Serialize(input)); process.StandardInput.Close();
             var exit = process.WaitForExitAsync().WaitAsync(TimeSpan.FromMinutes(6)); var first = await Task.WhenAny(exit, stdout, stderr); if (first.IsFaulted) await first;
             await exit; await Task.WhenAll(stdout, stderr);
-            Assert.True(process.ExitCode == 0, lines.ToString()); Assert.Contains("REAL_PDF_DOCUMENT_BROWSER_PASS", lines.ToString()); Assert.True(validated); Assert.True(extracted);
+            Assert.True(process.ExitCode == 0, lines.ToString()); Assert.Contains(successMarker, lines.ToString()); Assert.True(validated); Assert.True(extracted);
         } finally {
             if (!process.HasExited) { process.Kill(true); await process.WaitForExitAsync(); }
             await Task.WhenAll(stdout, stderr); output.WriteLine(lines.ToString()); output.WriteLine("Actual private PDF browser artifact log: " + logPath);

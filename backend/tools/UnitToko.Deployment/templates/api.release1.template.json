@@ -1,0 +1,29 @@
+{
+  "ASPNETCORE_ENVIRONMENT": "Production",
+  "ASPNETCORE_URLS": "http://127.0.0.1:5080",
+  "AllowedHosts": "REQUIRED_CANONICAL_HOSTNAME",
+  "Release": { "Profile": "release1" },
+  "Mongo": { "Uri": "REQUIRED_MONGODB_URI", "Database": "REQUIRED_DEDICATED_DATABASE" },
+  "Identity": {
+    "TrustedProxies": ["127.0.0.1"],
+    "Auth0": {
+      "Enabled": true,
+      "Issuer": "REQUIRED_AUTH0_HTTPS_ISSUER_WITH_TRAILING_SLASH",
+      "PublicOrigin": "REQUIRED_CANONICAL_HTTPS_ORIGIN",
+      "ClientId": "REQUIRED_AUTH0_CONFIDENTIAL_CLIENT_ID",
+      "ClientSecret": "REQUIRED_AUTH0_CONFIDENTIAL_CLIENT_SECRET",
+      "ConnectionId": "REQUIRED_AUTH0_DATABASE_CONNECTION_ID",
+      "ConnectionName": "REQUIRED_AUTH0_DATABASE_CONNECTION_NAME",
+      "ClaimsNamespace": "REQUIRED_CONTROLLED_HTTPS_NAMESPACE_WITH_TRAILING_SLASH",
+      "AssurancePolicyVersion": "REQUIRED_REVIEWED_AUTH0_ACTION_VERSION",
+      "AllowedReturnPaths": ["/", "/identity/account", "/shop", "/catalog/browse", "/ordering/requests", "/ordering/requests/incoming", "/administration/catalog"]
+    },
+    "Keys": {
+      "Directory": "REQUIRED_PERSISTENT_PRIVATE_KEY_DIRECTORY",
+      "ApplicationName": "REQUIRED_STABLE_ENVIRONMENT_DISCRIMINATOR",
+      "CertificatePath": "REQUIRED_PRIVATE_PKCS12_ABSOLUTE_PATH",
+      "CertificatePassword": "REQUIRED_CERTIFICATE_PASSWORD"
+    }
+  },
+  "Logging": { "LogLevel": { "Default": "None", "Microsoft.AspNetCore": "None" } }
+}

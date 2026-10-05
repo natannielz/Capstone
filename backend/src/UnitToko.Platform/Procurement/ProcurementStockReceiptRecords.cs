@@ -14,12 +14,13 @@ using Q = UnitToko.Platform.Procurement.ProcurementQuarantineDispositionBson;
 namespace UnitToko.Platform.Procurement;
 
 internal sealed class ProcurementStockReceiptRecords(IMongoDatabase database, MongoUnitOfWork unit, IClock clock, CatalogAuthoringService catalog,
-    PurchaseOrderService orders, StockSourceSetupService sources)
+    PurchaseOrderService orders, StockSourceSetupService sources, ProcurementQualityProofGraph? proofGraph = null)
 {
     private IMongoCollection<BsonDocument> Rows(string table) => database.GetCollection<BsonDocument>(table);
     internal static void Equal(BsonValue actual, BsonValue expected) { if (!actual.Equals(expected)) throw B.Broken(); }
     internal async Task<ProcurementInspectionHistory> InspectionAsync(IClientSessionHandle tx, long inspectionId, CancellationToken ct) =>
-        await new SupplierDocumentRecords(database, unit, clock, catalog, orders).InspectionAsync(tx, inspectionId, ct);
+        proofGraph is null ? await new SupplierDocumentRecords(database, unit, clock, catalog, orders).InspectionAsync(tx, inspectionId, ct)
+            : await proofGraph.InspectionAsync(database, unit, clock, catalog, orders, tx, inspectionId, ct);
     internal static void Review(ProcurementStockReceiptInput input, BsonDocument source, BsonDocument inspection) {
         Equal(source["order"]["_id"], input.OrderId); Equal(source["order"]["version"], input.OrderVersion); Equal(source["order"]["approvalId"], input.OrderApprovalId);
         Equal(source["order"]["location"], R.Location(input.Location)); Equal(inspection["_id"], input.InspectionId); Equal(inspection["location"], R.Location(input.Location));
@@ -29,22 +30,46 @@ internal sealed class ProcurementStockReceiptRecords(IMongoDatabase database, Mo
             !line["expiryDate"].IsBsonNull && (input.ExpiresOn is null || line["expiryDate"] != PurchaseOrderBson.Date(input.ExpiresOn.Value))) throw B.Changed();
     }
     // No disposition-head recursion: its owner reconstructs allocations against this complete receipt proof.
-    internal async Task<BsonDocument> ReadAsync(IClientSessionHandle tx, long id, CancellationToken ct) {
+    internal Task<BsonDocument> ReadAsync(IClientSessionHandle tx, long id, CancellationToken ct) =>
+        proofGraph is null ? ReadCoreAsync(tx, id, ct)
+            : proofGraph.HeldReceiptAsync(database, unit, clock, catalog, orders, sources, tx, id, ct);
+    internal async Task<BsonDocument> ReadCoreAsync(IClientSessionHandle tx, long id, CancellationToken ct) {
+        using var receiptStage = SupplierDocumentMatchDiagnostics.Begin("receipt.history");
         var row = await Rows(B.Receipts).Find(tx, new BsonDocument { { "_id", id }, { "$and", new BsonArray { ProcurementStockReceiptSchemas.Validator(B.Receipts) } } }).SingleOrDefaultAsync(ct) ?? throw B.Broken();
         Equal(row["snapshotHash"], B.Hash(row)); var input = B.Input(row["input"]); Equal(row["input"], B.Input(input)); Equal(row["receiptId"], id); Equal(row["revision"], 1L);
         foreach (var field in new[] { "location", "orderId", "inspectionId", "inspectionLineNumber", "poolId", "receiptReference", "reason" }) Equal(row[field], row["input"][field]);
-        var source = await orders.FundingSourceAsync(database, tx, input.OrderId, input.OrderVersion, input.OrderApprovalId, ct); Equal(row["source"], source); Equal(row["supplierId"], source["proposal"]["input"]["supplierId"]);
-        var history = await InspectionAsync(tx, input.InspectionId, ct); Equal(history.Source["notice"]["source"], source);
+        BsonDocument source;
+        ProcurementInspectionHistory history;
+        if (proofGraph is null) {
+            // Preserve the legacy standalone reconstruction exactly.
+            using (SupplierDocumentMatchDiagnostics.Begin("receipt.order"))
+                source = await orders.FundingSourceAsync(database, tx, input.OrderId, input.OrderVersion, input.OrderApprovalId, ct);
+            using (SupplierDocumentMatchDiagnostics.Begin("receipt.inspection"))
+                history = await InspectionAsync(tx, input.InspectionId, ct);
+        } else {
+            using (SupplierDocumentMatchDiagnostics.Begin("receipt.inspection"))
+                history = await InspectionAsync(tx, input.InspectionId, ct);
+            // The complete owning inspection proof authenticated this exact
+            // order/version/approval through the actual arrival notice reader.
+            // Review below still binds every receipt tuple to that proved source.
+            source = history.Source["notice"]["source"].AsBsonDocument.DeepClone().AsBsonDocument;
+        }
+        Equal(row["source"], source); Equal(row["supplierId"], source["proposal"]["input"]["supplierId"]);
+        Equal(history.Source["notice"]["source"], source);
         var inspection = history.Submissions.SingleOrDefault(value => value["_id"] == input.InspectionId) ?? throw B.Broken(); Equal(row["inspection"], inspection); Review(input, source, inspection);
         var at = new DateTimeOffset(row["recordedAt"].ToUniversalTime()); if (at > clock.UtcNow || inspection["recordedAt"].CompareTo(row["recordedAt"]) > 0) throw B.Broken();
-        await sources.RequireHeldReceiptHistoryAsync(tx, row["poolSource"].AsBsonDocument, at, ct);
+        using (SupplierDocumentMatchDiagnostics.Begin("receipt.configuration"))
+            await sources.RequireHeldReceiptHistoryAsync(tx, row["poolSource"].AsBsonDocument, at, ct);
         Equal(row["poolSource"]["poolId"], input.PoolId); Equal(row["poolSource"]["requestedLocation"], row["location"]); Equal(row["poolSource"]["configuration"]["source"]["poolRevision"], input.PoolRevision);
         var before = row["before"].AsBsonDocument; Q.RequireCapacity(before, SupplierClaimBasis.PhysicalReceived, input.InspectionId, input.InspectionLineNumber, inspection["snapshotHash"].AsString, inspection["input"]["lines"][input.InspectionLineNumber - 1]["receivedPackages"].AsInt32);
         Equal(row["after"], Q.After(before, row["disposition"]["headId"].AsInt64, input.Packages));
         if ((before["version"] == 0L) != row["disposition"]["previousAllocationId"].IsBsonNull || row["disposition"]["previousAllocationId"].IsBsonNull != row["disposition"]["previousHash"].IsBsonNull) throw B.Broken();
         Equal(row["binding"], B.Binding(row["actorId"].AsInt64, row["actorGrantVersion"].AsInt64, input, source, inspection, row["poolSource"].AsBsonDocument, before));
         if (row["people"].AsBsonArray.Count != 1 || R.Person(row["people"][0]) is not { Verification: PersonVerification.Verified, PersonId: > 0, Version: > 0 } person || person.UserId != row["actorId"].AsInt64) throw B.Broken();
-        await InventoryHeldReceiptWriter.RequireHistoryAsync(database, tx, row, ct); await EffectsAsync(tx, row, ct); return row;
+        using (SupplierDocumentMatchDiagnostics.Begin("receipt.stock-effects")) {
+            await InventoryHeldReceiptWriter.RequireHistoryAsync(database, tx, row, ct); await EffectsAsync(tx, row, ct);
+        }
+        return row;
     }
     private async Task EffectsAsync(IClientSessionHandle tx, BsonDocument row, CancellationToken ct) {
         Equal(row["bodyHash"], AuthorizationStore.CommandHash(B.Body(B.Input(row["input"]), row["binding"].AsString), row["reason"].AsString));

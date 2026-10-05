@@ -16,6 +16,22 @@ Penyimpanan memeriksa sumber dan asli yang telah divalidasi dan dipin, hasil sel
 
 M88 terhubung dan diverifikasi secara lokal melalui browser, API .NET, MongoDB serta runtime OCR terpin. Riwayat koreksi manual dan referensi halaman bertahan setelah muat ulang; balasan tersimpan yang sengaja diputus dipulihkan tanpa pengiriman ulang. Pengujian izin, masa berlaku, pembatalan audit, format HTTP dan preservasi migrasi terhubung dalam ledger. Data pengujian sintetis serta verifikasi lokal ini belum merupakan penerimaan staging atau produksi.
 
+## Referensi halaman pada pencocokan dokumen pemasok (M89)
+
+Petugas dapat meninjau PDF asli dan memilih kandidat bidang dari halaman tertentu sebagai referensi opsional di samping alokasi pencocokan yang dimasukkan manual. `pdfObservations` menyimpan hasil/hash OCR, referensi/hash bukti, halaman, bidang, dan pernyataan pemeriksaan asli. Nilai PDF tidak mengisi jumlah kemasan, nominal, atau pilihan sumber secara otomatis. Dokumen PDF tetap memakai `ocrResultId` gambar yang kosong; jalur gambar dan pencocokan lama tanpa referensi tetap dipertahankan. Pencocokan ini tidak melepaskan stok yang ditahan, membayar pemasok, atau membuat jurnal.
+
+Pratinjau dan penyimpanan memeriksa lingkup dan izin saat ini, orang yang terverifikasi, asli privat dan pin yang tepat, hasil seluruh halaman serta kandidat yang benar. Audit baca kandidat dan pencocokan disimpan dalam transaksi yang sama; kegagalan audit membatalkan keduanya. Tenggat baca yang ditangkap tetap berlaku hingga pemeriksaan akhir. Penggunaan ulang bukti kualitas hanya berlaku dalam percobaan transaksi yang sama dan tetap memeriksa baris induk PO/permintaan yang autentik, pemilik inspeksi privat, kepala kapasitas dan saldo saat ini.
+
+M89 terhubung dan diverifikasi lokal melalui build produksi Next.js, HTTPS API .NET, MongoDB dan runtime PDF/OCR terpin. Browser membuktikan unggahan dan pemrosesan seluruh halaman, pembacaan asli privat, pemilihan halaman kedua, alokasi manual, pratinjau, penyimpanan, pemulihan satu commit dengan kunci asli setelah balasan diputus, serta riwayat setelah muat ulang pada desktop dan seluler. Pengujian native juga membuktikan pencocokan normal dan kualitas, penolakan sumber/halaman/hash/izin yang salah, masa berlaku, pembatalan audit, dan preservasi migrasi beserta riwayat lama.
+
+Bukti tersimpan di `tmp/production/full-migration-results/`:
+
+- `supplier-document-pdf-matching-integrated-release1.trx`: lima lulus, satu kegagalan awal browser tetap disimpan.
+- `supplier-document-pdf-matching-retained-integrity-native-release1.trx`: lima lulus, satu kegagalan penyiapan pengujian M88 yang masih meminta versi 88 setelah database mencapai 89 tetap disimpan.
+- `supplier-document-pdf-matching-corrected-browsers-and-m88-migration-release3.trx`: ketiga pengujian ulang lulus tanpa dilewati; mencakup migrasi M88, browser koreksi pembayaran M88 dan browser pencocokan pemasok M89. Pengujian ulang tidak mengubah status bukti awal yang gagal.
+
+Seluruh penerimaan di atas memakai akun, persetujuan dan masukan sintetis lokal. Profil Release 1 tetap terbatas pada katalog dan permintaan pesanan cabang. Penerimaan staging/produksi, sambungan Auth0 dan layanan API/MongoDB/penyimpanan privat nyata, serta persetujuan operator dan kebijakan host/scanner/OCR yang berlaku masih harus dibuktikan; hasil lokal bukan izin untuk mengaktifkan layanan atau memigrasikan data nyata.
+
 ## Konfigurasi worker
 
 Bagian opsional `Evidence:SupplierDocumentPdfOcr` mengaktifkan runtime khusus dokumen pemasok. Konfigurasi tidak menebak format atau sumber dari MIME, nama berkas, atau pekerjaan gambar. Bagian yang tidak diisi tidak mengklaim pekerjaan PDF pemasok. Lampiran pembayaran memiliki bagian terpisah `Evidence:PaymentSupplementPdfOcr` dengan kunci dan pin runtime yang sama di bawah ini; hanya pekerjaan `payment.supplement-document-ocr.requested` dapat memakai jalur tersebut. Konfigurasi lama `Evidence:PaymentPdfOcr` tetap ditolak saat startup worker. Menjalankan migrasi tidak mengaktifkan worker.

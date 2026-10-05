@@ -67,20 +67,20 @@ public sealed partial class SupplierDocumentService
     }
     private async Task VerifySourcesAsync(Context context, CancellationToken ct) {
         var history = context.History ?? throw B.Broken();
-        foreach (var pair in await records.RequireSourceCapacitiesAsync(context.Tx, history, ct)) {
+        foreach (var pair in await records.RequireSourceCapacitiesAsync(context.Tx, history, ct, context.PdfMatchProof)) {
             if (pair.Table is B.InspectionHeads or B.OrderHeads) {
                 context.ExtraFences.RemoveAll(value => value.Table == pair.Table && value.Row["_id"] == pair.Row["_id"]);
                 context.ExtraFences.Add(pair);
             } else if (!context.ExtraFences.Any(value => value.Table == pair.Table && value.Row["_id"] == pair.Row["_id"])) context.ExtraFences.Add(pair);
         }
     }
-    private static (BsonArray Items, BsonValue Next) MatchPage(SupplierDocumentHistory history, long? beforeId) {
+    private static (BsonArray Items, BsonValue Next) MatchPage(SupplierDocumentHistory history, long? beforeId, bool includeEvidence) {
         var selected = history.Matches.Where(row => beforeId is null || row["_id"].AsInt64 < beforeId).OrderByDescending(row => row["_id"].AsInt64).Take(26).ToArray();
-        return (new(selected.Take(25).Select(B.MatchView)), selected.Length > 25 ? selected[24]["_id"] : BsonNull.Value);
+        return (new(selected.Take(25).Select(row => B.MatchView(row, includeEvidence))), selected.Length > 25 ? selected[24]["_id"] : BsonNull.Value);
     }
     private BsonDocument ReadView(Context context) {
         context.IncludeEvidence = ScopePolicy.Authorize(context.Actor, context.Authority, Permissions.ProcurementSupplierDocumentEvidenceRead, context.Resource, clock.UtcNow).Allowed;
-        var history = context.History!; var page = MatchPage(history, null);
+        var history = context.History!; var page = MatchPage(history, null, context.IncludeEvidence);
         return new() { { "draft", B.DraftView(history.Draft) }, { "document", history.Document is null ? BsonNull.Value : B.SubmissionView(history.Document, context.IncludeEvidence) },
             { "capacity", history.Capacity }, { "reviewedInput", history.Head["reviewedInput"] }, { "possibleDuplicate", history.Identity["draftCount"].AsInt64 > 1 }, { "matches", page.Items }, { "nextMatchId", page.Next } };
     }
@@ -111,7 +111,8 @@ public sealed partial class SupplierDocumentService
         if (documentId <= 0 || beforeId is <= 0) throw SupplierDocumentRules.Invalid(); await StorageAsync(ct);
         return await authorization.ReadAsync(actor, async (authority, tx, token) => {
             var context = await DocumentContextAsync(actor, authority, tx, documentId, Permissions.ProcurementRead, token); await VerifySourcesAsync(context, token);
-            var page = MatchPage(context.History!, beforeId); await FenceAsync(context, token);
+            context.IncludeEvidence = ScopePolicy.Authorize(actor, authority, Permissions.ProcurementSupplierDocumentEvidenceRead, context.Resource, clock.UtcNow).Allowed;
+            var page = MatchPage(context.History!, beforeId, context.IncludeEvidence); await FenceAsync(context, token);
             return new BsonDocument { { "documentId", documentId }, { "items", page.Items }, { "nextMatchId", page.Next } };
         }, ct);
     }
@@ -146,7 +147,7 @@ public sealed partial class SupplierDocumentService
             var rows = await Rows(B.Matches).Find(tx, filter).Sort(new BsonDocument("_id", -1)).Limit(26).ToListAsync(token); var items = new BsonArray(); var contexts = new List<Context>();
             foreach (var row in rows.Take(25)) {
                 var source = await DocumentContextAsync(actor, authority, tx, row["documentId"].AsInt64, Permissions.ProcurementRead, token); await VerifySourcesAsync(source, token);
-                var match = source.History!.Matches.Single(value => value["_id"] == row["_id"]); items.Add(new BsonDocument { { "document", B.DraftView(source.Draft!) }, { "match", B.MatchView(match) } });
+                var match = source.History!.Matches.Single(value => value["_id"] == row["_id"]); items.Add(new BsonDocument { { "document", B.DraftView(source.Draft!) }, { "match", B.MatchView(match, includeEvidence: false) } });
                 await FenceAsync(source, token); contexts.Add(source);
             }
             await FenceAsync(context, token); foreach (var source in contexts) Current(source); token.ThrowIfCancellationRequested();

@@ -32,7 +32,8 @@ internal static class ProcurementQualityValuationSchemas
         return S.Object(fields);
     }
     internal static BsonDocument CurrentResolvedLine() => new("anyOf", new BsonArray { SupplierDocumentSchemas.ResolvedLine(), QualityResolvedLine() });
-    internal static BsonDocument CurrentDocumentValidator(string name) {
+    internal static BsonDocument CurrentDocumentValidator(string name) => SupplierDocumentPdfMatchSchemas.Validator(name);
+    internal static BsonDocument PrePdfDocumentValidator(string name) {
         var legacy = SupplierDocumentSchemas.Validator(name);
         if (name != D.Matches) return legacy;
         var v2 = legacy.DeepClone().AsBsonDocument;

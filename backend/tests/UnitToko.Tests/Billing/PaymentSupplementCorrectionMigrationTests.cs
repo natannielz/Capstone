@@ -94,6 +94,11 @@ public sealed class PaymentSupplementCorrectionMigrationTests(MongoFixture fixtu
 
         // Normal command replay may fence current heads/allocate unused IDs; the
         // sole migration above already proved every counter and row unchanged.
+        // Complete the genuine current registry before returning to business
+        // replay, after all sole-M88 predecessor/preservation/replay assertions.
+        var migrations = new CollectionMigrations(db, data.Data.Catalog.Clock);
+        await migrations.ApplyAsync();
+        Assert.True(await migrations.IsCurrentAsync(), "Business replay requires genuine current schema history.");
         Assert.Equal(saved, await data.Restart().CorrectReviewAsync(data.Reviewer, data.Data.DeclarationId, 0, data.Review.Binding, data.Fields, command));
         Assert.Equal(oldVersion, await data.Rows(PaymentCorrectionBson.Versions).Find(new BsonDocument()).SingleAsync());
         Assert.Equal(oldAudit, await data.Rows("auditEvents").Find(new BsonDocument("_id", oldAudit["_id"])).SingleAsync());

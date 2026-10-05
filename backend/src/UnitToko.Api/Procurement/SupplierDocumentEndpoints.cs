@@ -48,11 +48,37 @@ public sealed record SupplierDocumentMatchLineInputDto([property: JsonRequired, 
     internal SupplierDocumentMatchLineInput Domain() => new(DocumentLineNumber, Packages, InspectionId?.Value, InspectionLineNumber, InvoiceMatchId?.Value, InvoiceMatchLineNumber, NetAmount, TaxAmount, ChargeAmount, StatementAmount, Discrepancy, QualityAllocationId?.Value);
 }
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record SupplierDocumentPdfMatchCandidateDto([property: JsonRequired] LongId ResultId, [property: JsonRequired] string ResultHash,
+    [property: JsonRequired] PaymentEvidenceReferenceDto Evidence, [property: JsonRequired, JsonNumberHandling(JsonNumberHandling.Strict)] int PageIndex,
+    [property: JsonRequired] string Field) {
+    internal PdfDocumentCandidateReference Domain() => Evidence is null ? throw SupplierDocumentRules.Invalid() :
+        new(ResultId.Value, ResultHash, new(Evidence.Id.Value, LongId.Parse(Evidence.Version).Value, Evidence.Sha256), PageIndex, Field);
+}
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record SupplierDocumentPdfMatchObservationDto([property: JsonRequired] string Field, [property: JsonRequired] SupplierDocumentPdfMatchCandidateDto Candidate,
+    [property: JsonRequired] bool OriginalReviewed) {
+    internal SupplierDocumentPdfMatchObservation Domain() => Candidate is null ? throw SupplierDocumentRules.Invalid() : new(Field, Candidate.Domain(), OriginalReviewed);
+}
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record SupplierDocumentMatchInputDto([property: JsonRequired] LongId DocumentId, [property: JsonRequired] string DocumentRevision,
     [property: JsonRequired] SupplierDocumentInputDto ReviewedInput, [property: JsonRequired] LongId? OcrResultId, [property: JsonRequired] SupplierDocumentMatchLineInputDto[] Lines) {
+    private SupplierDocumentPdfMatchObservationDto[]? pdfObservations;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public SupplierDocumentPdfMatchObservationDto[] PdfObservations {
+        // An omitted optional member remains unset; a supplied array is validated before domain conversion.
+        get => pdfObservations!;
+        init { pdfObservations = value; PdfObservationsPresent = true; }
+    }
+    [JsonIgnore] internal bool PdfObservationsPresent { get; private set; }
     internal SupplierDocumentMatchInput Domain() {
         if (ReviewedInput is null || Lines is null || Lines.Any(line => line is null)) throw SupplierDocumentRules.Invalid();
-        return SupplierDocumentRules.Copy(new SupplierDocumentMatchInput(DocumentId.Value, LongId.Parse(DocumentRevision).Value, ReviewedInput.Domain(), OcrResultId?.Value, Lines.Select(line => line.Domain()).ToImmutableArray()));
+        ImmutableArray<SupplierDocumentPdfMatchObservation>? observations = null;
+        if (PdfObservationsPresent) {
+            if (PdfObservations is null || PdfObservations.Length is < 1 or > 8 || PdfObservations.Any(value => value is null)) throw SupplierDocumentRules.Invalid();
+            observations = [.. PdfObservations.Select(value => value.Domain())];
+        }
+        return SupplierDocumentRules.Copy(new SupplierDocumentMatchInput(DocumentId.Value, LongId.Parse(DocumentRevision).Value, ReviewedInput.Domain(), OcrResultId?.Value,
+            Lines.Select(line => line.Domain()).ToImmutableArray(), observations));
     }
 }
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
@@ -184,13 +210,13 @@ public static class SupplierDocumentEndpoints
             Purpose(request.Purpose); var row = await service.MatchesAsync(Actor(http), LongId.Parse(id).Value, request.BeforeId?.Value, ct);
             return TypedResults.Ok(new SupplierDocumentMatchesDto(new(row["documentId"].AsInt64), [.. row["items"].AsBsonArray.Select(Match)], Id(row["nextMatchId"])));
         }).WithName("SupplierDocumentMatches");
-        documents.MapPost("/match-preview/query", async (string id, SupplierDocumentMatchPreviewInputDto request, HttpContext http, [FromServices] SupplierDocumentService service,
+        documents.MapPost("/match-preview/query", async (string id, SupplierDocumentMatchPreviewInputDto request, HttpContext http, [FromServices] SupplierDocumentEvidenceService service,
             [FromHeader(Name = "If-Match")] string expected, CancellationToken ct) => {
             Purpose(request.Purpose); var input = MatchInput(request.Input, id, http); var row = await service.PreviewMatchAsync(Actor(http), input, ct);
             return TypedResults.Ok(new SupplierDocumentMatchPreviewDto(MatchInput(row["input"]), Draft(row["document"]), Capacity(row["capacity"]), [.. row["lines"].AsBsonArray.Select(Resolved)],
                 row["possibleDuplicate"].AsBoolean, row["binding"].AsString, Date(row["observedAt"])));
         }).WithName("PreviewSupplierDocumentMatch");
-        documents.MapPost("/matches", async (string id, SupplierDocumentMatchCommandDto request, HttpContext http, [FromServices] SupplierDocumentService service,
+        documents.MapPost("/matches", async (string id, SupplierDocumentMatchCommandDto request, HttpContext http, [FromServices] SupplierDocumentEvidenceService service,
             [FromHeader(Name = "If-Match")] string expected, [FromHeader(Name = "Idempotency-Key")] string key, CancellationToken ct) =>
             TypedResults.Ok(Result(await service.MatchAsync(Actor(http), MatchInput(request.Input, id, http), request.Binding, Metadata(http, request.Reason), ct)))).WithName("MatchSupplierDocument");
         MapEvidence(drafts);
@@ -223,10 +249,20 @@ public static class SupplierDocumentEndpoints
         row["kind"].AsString, row["documentReference"].AsString, Text(row["documentDate"]), row["currency"].AsString, OptionalAmount(row["documentTotal"]), [.. row["lines"].AsBsonArray.Select(line => new SupplierDocumentLineInputDto(
             line["sourceLineReference"].AsString, line["description"].AsString, Text(line["sourceSystem"]), Text(line["sourceAccount"]), Text(line["sourceCode"]), Count(line["packages"]),
             OptionalAmount(line["netPricePerPackage"]), OptionalAmount(line["taxAmount"]), OptionalAmount(line["chargeAmount"]), Text(line["relatedInvoiceReference"]), OptionalAmount(line["statementAmount"]))) ], Text(row["discrepancy"]));
-    internal static SupplierDocumentMatchInputDto MatchInput(BsonValue row) => new(new(row["documentId"].AsInt64), Number(row["documentRevision"]), Input(row["reviewedInput"]), Id(row["ocrResultId"]), [.. row["lines"].AsBsonArray.Select(line => new SupplierDocumentMatchLineInputDto(
-        line["documentLineNumber"].AsInt32, Count(line["packages"]), Id(line["inspectionId"]), Count(line["inspectionLineNumber"]), Id(line["invoiceMatchId"]), Count(line["invoiceMatchLineNumber"]),
-        OptionalAmount(line["netAmount"]), OptionalAmount(line["taxAmount"]), OptionalAmount(line["chargeAmount"]), OptionalAmount(line["statementAmount"]), Text(line["discrepancy"]),
-        Id(line.AsBsonDocument.GetValue("qualityAllocationId", BsonNull.Value)))) ]);
+    internal static SupplierDocumentMatchInputDto MatchInput(BsonValue row) {
+        var value = new SupplierDocumentMatchInputDto(new(row["documentId"].AsInt64), Number(row["documentRevision"]), Input(row["reviewedInput"]), Id(row["ocrResultId"]),
+            [.. row["lines"].AsBsonArray.Select(line => new SupplierDocumentMatchLineInputDto(
+                line["documentLineNumber"].AsInt32, Count(line["packages"]), Id(line["inspectionId"]), Count(line["inspectionLineNumber"]), Id(line["invoiceMatchId"]), Count(line["invoiceMatchLineNumber"]),
+                OptionalAmount(line["netAmount"]), OptionalAmount(line["taxAmount"]), OptionalAmount(line["chargeAmount"]), OptionalAmount(line["statementAmount"]), Text(line["discrepancy"]),
+                Id(line.AsBsonDocument.GetValue("qualityAllocationId", BsonNull.Value))))]);
+        if (row.AsBsonDocument.TryGetValue("pdfObservations", out var observations))
+            value = value with { PdfObservations = [.. observations.AsBsonArray.Select(item => {
+                var candidate = item["candidate"];
+                return new SupplierDocumentPdfMatchObservationDto(item["field"].AsString, new(new(candidate["resultId"].AsInt64), candidate["resultHash"].AsString,
+                    Evidence(candidate["evidence"]), candidate["pageIndex"].AsInt32, candidate["field"].AsString), item["originalReviewed"].AsBoolean);
+            })] };
+        return value;
+    }
     private static SupplierDocumentQualityChoiceDto QualityChoice(BsonValue row) => new(new(row["allocationId"].AsInt64), new(row["proposalId"].AsInt64),
         new(row["decisionId"].AsInt64), new(row["receiptId"].AsInt64), row["receiptReference"].AsString, row["acceptedPackages"].ToInt64().ToString(CultureInfo.InvariantCulture),
         Number(row["matchedPackages"]), Number(row["remainingPackages"]), row["lotReference"].AsString, Text(row["expiresOn"]),

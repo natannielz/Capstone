@@ -49,6 +49,7 @@ internal sealed class PaymentSupplementEvidenceTestData : IAsyncDisposable
             }
             await PaymentSupplementMigrationTests.ApplyAsync(result.Data.Database, result.Data.Catalog.Clock);
             await PaymentSupplementCorrectionTestData.ApplyAsync(result.Data.Database, result.Data.Catalog.Clock);
+            await new CollectionMigrations(result.Data.Database, result.Data.Catalog.Clock).ApplyAsync();
             var submission = await result.Data.Rows("paymentSubmissions").Find(new BsonDocument("declarationId", result.Data.DeclarationId)).SingleAsync();
             result.Primary = new(result.Data.DeclarationId, submission["declarationRevision"].AsInt64, submission["_id"].AsInt64, result.Data.Reference);
             result.Facade = result.Restart();

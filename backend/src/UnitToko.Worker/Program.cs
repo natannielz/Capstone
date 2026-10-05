@@ -7,6 +7,10 @@ using UnitToko.Worker;
 
 var migrate = args.Contains("--migrate", StringComparer.Ordinal);
 var builder = Host.CreateApplicationBuilder(args.Where(arg => arg != "--migrate").ToArray());
+// The lifetime is context-aware: console runs and the one-shot migration keep
+// their existing behavior; SCM activates it only on the authorized Windows host.
+if (!migrate && OperatingSystem.IsWindows())
+    builder.Services.AddWindowsService(options => options.ServiceName = "UnitToko.Worker");
 var mongoUri = builder.Configuration["Mongo:Uri"];
 var databaseName = builder.Configuration["Mongo:Database"];
 if (string.IsNullOrWhiteSpace(mongoUri) || string.IsNullOrWhiteSpace(databaseName) ||
