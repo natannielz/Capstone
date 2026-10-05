@@ -89437,6 +89437,12 @@
           },
           "reason": {
             "type": "string"
+          },
+          "supplementaryObservations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PaymentSupplementReviewObservationDto"
+            }
           }
         },
         "additionalProperties": false
@@ -89479,6 +89485,15 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/PaymentReviewField"
+            }
+          },
+          "supplementaryObservations": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/PaymentSupplementReviewObservationDto"
             }
           }
         },
@@ -91071,6 +91086,67 @@
           },
           "result": {
             "$ref": "#/components/schemas/PaymentSupplementViewDto"
+          }
+        },
+        "additionalProperties": false
+      },
+      "PaymentSupplementReviewCandidateDto": {
+        "required": [
+          "resultId",
+          "resultHash",
+          "evidence",
+          "pageIndex",
+          "field"
+        ],
+        "type": "object",
+        "properties": {
+          "resultId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "resultHash": {
+            "type": "string"
+          },
+          "evidence": {
+            "$ref": "#/components/schemas/PaymentEvidenceReferenceDto"
+          },
+          "pageIndex": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "field": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "PaymentSupplementReviewObservationDto": {
+        "required": [
+          "field",
+          "supplementId",
+          "supplementRevision",
+          "candidate",
+          "originalReviewed"
+        ],
+        "type": "object",
+        "properties": {
+          "field": {
+            "type": "string"
+          },
+          "supplementId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "supplementRevision": {
+            "type": "string"
+          },
+          "candidate": {
+            "$ref": "#/components/schemas/PaymentSupplementReviewCandidateDto"
+          },
+          "originalReviewed": {
+            "type": "boolean"
           }
         },
         "additionalProperties": false

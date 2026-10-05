@@ -203,7 +203,8 @@ public sealed class PaymentEvidenceReadTests(MongoFixture fixture)
         internal PaymentEvidenceService Service = null!;
         internal ReservationResult Reservation = null!;
         internal EvidenceRef Reference = null!;
-        internal readonly byte[] Bytes = ImageDecoderTests.Png(13, 7);
+        internal byte[] Bytes { get; private set; } = ImageDecoderTests.Png(13, 7);
+        private EvidenceLimits ImageLimits { get; set; } = new(1024, 100, 100, 10000);
         internal long DeclarationId;
         internal IMongoDatabase Database => Payment.Invoice.Order.Database;
         internal UnitToko.Tests.Catalog.CatalogAuthoringTestData Catalog => Payment.Invoice.Order.Prices.Catalog;
@@ -212,14 +213,19 @@ public sealed class PaymentEvidenceReadTests(MongoFixture fixture)
         internal IMongoCollection<BsonDocument> Rows(string name) => Database.GetCollection<BsonDocument>(name);
         internal Task<ProtectedEvidenceRead> OpenAsync(ActorContext? actor = null) => Service.OpenReadAsync(actor ?? Actor, DeclarationId, Reservation.ReservationId, 1, Reference, Metadata);
         internal static async Task<ReadData> CreateAsync(MongoFixture fixture, PaymentDraftData? attachedPayment = null,
-            long maximumContentBytes = 1024) {
+            long maximumContentBytes = 1024, byte[]? primaryImageBytes = null, EvidenceLimits? primaryImageLimits = null,
+            long maximumReadBytes = 1024, long verificationDurationMs = 10000, long leaseDurationMs = 5000,
+            long maximumValidationAgeMs = 86400000) {
             var data = new ReadData();
             try {
+                if (primaryImageBytes is not null) data.Bytes = primaryImageBytes.ToArray();
+                if (primaryImageLimits is not null) data.ImageLimits = primaryImageLimits;
+                Assert.InRange(data.Bytes.LongLength, 1L, Math.Min(maximumContentBytes, Math.Min(maximumReadBytes, data.ImageLimits.MaximumBytes)));
                 data.Files = await EvidenceAdmissionTestData.CreateAsync(fixture); data.Payment = attachedPayment ?? await PaymentDraftData.CreateAsync(fixture);
                 var storage = EvidenceAdmissionSchemaTests.Policy(maximum: maximumContentBytes, bytes: checked(30 * maximumContentBytes));
                 storage["_id"] = (await new IdAllocator(data.Database).NextAsync("evidenceStorePolicies")).Value;
                 await data.Rows("evidenceStorePolicies").InsertOneAsync(storage);
-                await PolicyAsync(data.Database, data.Files.StoreId, data.Catalog.Clock.UtcNow);
+                await PolicyAsync(data.Database, data.Files.StoreId, data.Catalog.Clock.UtcNow, maximumReadBytes, verificationDurationMs, leaseDurationMs, maximumValidationAgeMs);
                 data.Service = new(data.Database, new(data.Catalog.Client), new(data.Database), data.Catalog.Clock, data.Payment.Service, data.Files.Registration);
                 var saved = await data.Payment.Save(null, 0, data.Payment.Input, "private-read-draft"); data.DeclarationId = saved["declarationId"].AsInt64;
                 data.Reservation = await data.Service.ReserveAsync(data.Actor, data.DeclarationId, 1, EvidenceAdmissionTestData.Meta());
@@ -229,17 +235,19 @@ public sealed class PaymentEvidenceReadTests(MongoFixture fixture)
         }
         internal async Task ValidateAsync(string status = "clean") {
             var processor = new EvidenceValidationProcessor(Database, new(Catalog.Client), new(Database), Catalog.Clock, Files.Registration,
-                EvidenceValidationTests.Consumer, new string('c', 64), EvidenceValidationTests.ClaimPolicy, new(1024, 100, 100, 10000),
+                EvidenceValidationTests.Consumer, new string('c', 64), EvidenceValidationTests.ClaimPolicy, ImageLimits,
                 new EvidenceValidationTests.FixtureScanner(status, signaturesAt: Catalog.Clock.UtcNow.AddHours(-1)), new WindowsImageDecoder(ImageDecoderTests.Options()));
             await EvidenceValidationTests.Policy(Database, Catalog.Clock, Files.StoreId, processor.PipelineId);
             Assert.Equal("completed", await processor.RunOnceAsync());
         }
-        internal static async Task PolicyAsync(IMongoDatabase database, string storeId, DateTimeOffset now) =>
+        internal static async Task PolicyAsync(IMongoDatabase database, string storeId, DateTimeOffset now,
+            long maximumReadBytes = 1024, long verificationDurationMs = 10000, long leaseDurationMs = 5000,
+            long maximumValidationAgeMs = 86400000) =>
             await database.GetCollection<BsonDocument>("evidenceReadPolicies").InsertOneAsync(new BsonDocument {
                 { "_id", (await new IdAllocator(database).NextAsync("evidenceReadPolicies")).Value }, { "schemaVersion", 1 }, { "storeId", storeId },
                 { "active", true }, { "revision", 1L }, { "fence", 0L }, { "createdAt", now.UtcDateTime }, { "updatedAt", now.UtcDateTime },
-                { "maximumBytes", 1024L }, { "verificationDurationMs", 10000L }, { "leaseDurationMs", 5000L }, { "requestDurationMs", 60000L },
-                { "maximumValidationAgeMs", 86400000L }, { "maximumSignatureAgeMs", 604800000L } });
+                { "maximumBytes", maximumReadBytes }, { "verificationDurationMs", verificationDurationMs }, { "leaseDurationMs", leaseDurationMs }, { "requestDurationMs", 60000L },
+                { "maximumValidationAgeMs", maximumValidationAgeMs }, { "maximumSignatureAgeMs", 604800000L } });
         public async ValueTask DisposeAsync() { if (Payment is not null) await Payment.DisposeAsync(); if (Files is not null) await Files.DisposeAsync(); }
     }
 }

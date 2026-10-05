@@ -31,9 +31,9 @@ internal sealed class PaymentSupplementPdfOcrTestData : IAsyncDisposable
     internal IMongoCollection<BsonDocument> Rows(string name) => Data.Rows(name);
 
     internal static async Task<PaymentSupplementPdfOcrTestData> CreateAsync(MongoFixture fixture,
-        LocalOcrOptions? engine = null, bool approve = true)
+        LocalOcrOptions? engine = null, bool approve = true, byte[]? primaryImageBytes = null, long maximumValidationAgeMs = 86400000)
     {
-        var result = await CreateDraftAsync(fixture, engine, approve);
+        var result = await CreateDraftAsync(fixture, engine, approve, primaryImageBytes, maximumValidationAgeMs);
         try {
             var primary = result.Evidence.Primary; var supplement = result.Evidence.Supplement;
             result.Reservation = await result.Evidence.Facade.ReservePdfAsync(result.Data.Actor, primary.DeclarationId,
@@ -71,11 +71,15 @@ internal sealed class PaymentSupplementPdfOcrTestData : IAsyncDisposable
     // Browser acceptance performs reserve/upload/attach through the actual API.
     // This creates only the real IMAGE primary, own1 supplement and explicit test policies.
     internal static async Task<PaymentSupplementPdfOcrTestData> CreateDraftAsync(MongoFixture fixture,
-        LocalOcrOptions? engine = null, bool approve = true)
+        LocalOcrOptions? engine = null, bool approve = true, byte[]? primaryImageBytes = null, long maximumValidationAgeMs = 86400000)
     {
         var result = new PaymentSupplementPdfOcrTestData();
         try {
-            result.Evidence = await PaymentSupplementEvidenceTestData.CreateAsync(fixture, maximumContentBytes: MaximumOriginalBytes);
+            result.Evidence = await PaymentSupplementEvidenceTestData.CreateAsync(fixture, maximumContentBytes: MaximumOriginalBytes,
+                primaryImageBytes: primaryImageBytes, primaryImageLimits: primaryImageBytes is null ? null : new(MaximumOriginalBytes, 1001, 651, 651651),
+                maximumReadBytes: primaryImageBytes is null ? 1024 : MaximumOriginalBytes,
+                verificationDurationMs: primaryImageBytes is null ? 10000 : 60000, leaseDurationMs: primaryImageBytes is null ? 5000 : 10000,
+                maximumValidationAgeMs: maximumValidationAgeMs);
             result.Before = await result.SnapshotAsync();
             result.Scanner = await PdfEvidenceAdmissionTestRuntime.CreateAsync(result.Database, result.Unit, result.Data.Catalog.Clock,
                 result.Data.Files.Root, result.Data.Files.StoreId);

@@ -13,13 +13,18 @@ internal sealed class PaymentCorrectionRecords(IMongoDatabase database)
 {
     private IMongoCollection<BsonDocument> Rows(string name) => database.GetCollection<BsonDocument>(name);
     internal async Task<BsonDocument> VersionAsync(IClientSessionHandle tx, long id, CancellationToken ct) {
-        var row = await Rows(B.Versions).Find(tx, Builders<BsonDocument>.Filter.Eq("_id", id) & PaymentCorrectionSchemas.Validator(B.Versions)).SingleOrDefaultAsync(ct) ?? throw Bad();
+        var row = await Rows(B.Versions).Find(tx, Builders<BsonDocument>.Filter.Eq("_id", id) & PaymentSupplementCorrectionSchemas.Validator(B.Versions)).SingleOrDefaultAsync(ct) ?? throw Bad();
         var fields = PaymentReviewCorrectionPolicy.Copy(B.Fields(row["fields"].AsBsonArray));
         var before = PaymentReviewCorrectionPolicy.Copy(B.Fields(row["beforeFields"].AsBsonArray));
         var binding = B.Binding(row["binding"].AsBsonDocument); PaymentReviewCorrectionPolicy.Validate(binding, row["revision"].AsInt64 - 1);
+        var observations = B.Observations(row);
         if (!InvoiceRecords.Equal(row["fields"], B.Fields(fields)) || !InvoiceRecords.Equal(row["beforeFields"], B.Fields(before)) ||
             InvoiceRecords.Equal(row["fields"], row["beforeFields"]) || row["personAtCorrection"]["userId"] != row["recordedBy"] || row["snapshotHash"] != B.Hash(row) ||
-            row["bodyHash"] != AuthorizationStore.CommandHash(B.Body(row["declarationId"].AsInt64, row["revision"].AsInt64 - 1, binding, fields), row["reason"].AsString)) throw Bad();
+            row["bodyHash"] != AuthorizationStore.CommandHash(B.Body(row["declarationId"].AsInt64, row["revision"].AsInt64 - 1, binding, fields, observations), row["reason"].AsString)) throw Bad();
+        if (observations is not null) {
+            await PaymentSupplementCorrectionStorage.RequireAsync(database, B.Versions, ct, requireAnnotated: true);
+            await new PaymentCorrectionSupplementRecords(database).RequireAsync(tx, row, ct);
+        }
         var audit = await Rows("auditEvents").Find(tx, new BsonDocument("_id", row["auditId"])).SingleOrDefaultAsync(ct);
         var receipt = await Rows("idempotencyRecords").Find(tx, new BsonDocument { { "actorId", row["recordedBy"] }, { "operation", B.Operation }, { "key", row["requestKey"] } }).SingleOrDefaultAsync(ct);
         var events = await Rows("outboxEvents").Find(tx, new BsonDocument("sourceKey", B.SourceKey(row))).Limit(2).ToListAsync(ct);

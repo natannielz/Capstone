@@ -218,7 +218,7 @@ async function inspect(page, review, label) {
   const second = panel.locator('[data-pdf-ocr-page="1"]').locator('article').filter({has: page.getByRole('heading', {name: 'Jumlah transfer', exact: true})});
   await second.getByRole('checkbox').check(); await second.getByRole('button', {name: 'Pilih rujukan halaman 2: Jumlah transfer', exact: true}).click();
   const selection = panel.getByRole('region', {name: 'Rujukan observasi lampiran PDF tambahan', exact: true});
-  await selection.waitFor(); assert.match(await selection.innerText(), /halaman 2 · isian amount/); assert.match(await selection.innerText(), /2345678\.90/);
+  await selection.waitFor(); assert.match(await selection.innerText(), /halaman 2 · Nominal \(IDR\)/); assert.match(await selection.innerText(), /2345678\.90/);
   assert.match(await selection.innerText(), /tidak mengisi koreksi foto/);
   await second.locator('summary').click(); assert.match(await second.innerText(), /Empat sudut pada kanvas PDF/);
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);

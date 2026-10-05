@@ -16,6 +16,7 @@ import {createPaymentSupplementGateway, parsePaymentSupplement, parsePaymentSupp
 import type {PaymentSupplementReviewProps} from '../src/modules/billing/PaymentSupplementReviewPanel';
 import {SupplementJournal, recoverSupplement, sendSupplementOnce, supplementKey, supplementKeyBinding, supplementOperations} from '../src/modules/billing/payment-pdf-supplement-recovery';
 import type {PaymentDraft} from '@/modules/billing/payment-client';
+import {paymentCorrectionLabels, correctionFields} from '../src/modules/billing/payment-correction-client';
 
 const owner: PdfDocumentOcrOwner = {actorId: '9007199254740993', sourceId: '9223372036854775806', sourceRevision: '9007199254740995',
   submissionId: '9007199254740997', sourceKind: 'Payment', evidence: {id: '9007199254740999', version: '1', sha256: 'a'.repeat(64)}};
@@ -267,6 +268,7 @@ test('actual supplementary review component aborts a changed session without ref
     if (name === 'react') return mockReact; if (name === 'react/jsx-runtime') return runtimeRequire(name);
     if (name.endsWith('.module.css')) return {default: new Proxy({}, {get: (_target, key) => String(key)})};
     if (name === '../documents/PdfDocumentOcrPanel') return {PdfDocumentOcrPanel: marker};
+    if (name === './payment-correction-client') return {paymentCorrectionLabels, correctionFields};
     if (name === '../documents/pdf-document-ocr-client') return {pdfDocumentOcrOwnerKey: (item: PdfDocumentOcrOwner) => JSON.stringify(item)};
     if (name === './payment-pdf-supplement-client') return {parsePaymentSupplement, paymentSupplementOwnerKey, paymentSupplementError, supplementPdfOwner,
       createPaymentSupplementGateway: () => ({ocr: (_context: unknown, _owner: unknown, _supplement: unknown, valid: () => boolean, signal: AbortSignal) =>

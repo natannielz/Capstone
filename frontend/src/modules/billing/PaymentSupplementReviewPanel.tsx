@@ -6,6 +6,7 @@ import {PdfDocumentOcrPanel} from '../documents/PdfDocumentOcrPanel';
 import {pdfDocumentOcrOwnerKey, type PdfDocumentObservationSelection, type PdfDocumentOcrView} from '../documents/pdf-document-ocr-client';
 import {createPaymentSupplementGateway, parsePaymentSupplement, paymentSupplementError, paymentSupplementOwnerKey, supplementPdfOwner,
   type PaymentSupplement, type PaymentSupplementOwner, type PaymentSupplementReadContext} from './payment-pdf-supplement-client';
+import {paymentCorrectionLabels, correctionFields} from './payment-correction-client';
 
 export type PaymentSupplementObservation = {primary: PaymentSupplementOwner; supplement: PaymentSupplement; observation: PdfDocumentObservationSelection};
 export type PaymentSupplementReviewProps = {owner: PaymentSupplementOwner; supplement: PaymentSupplement; context: PaymentSupplementReadContext;
@@ -52,11 +53,15 @@ function ReviewDesk(props: PaymentSupplementReviewProps) {
     <PdfDocumentOcrPanel owner={source} currentActorId={props.owner.actorId} view={view} locked={props.locked} loading={busy}
       errorMessage={error === null ? null : paymentSupplementError(error)} isCurrent={current} onRefresh={() => void load()} onOpenOriginal={() => void download()}
       onSelectObservation={downloaded ? observation => {if (!current() || pdfDocumentOcrOwnerKey(observation.source) !== key) return;
-        const chosen = {primary: props.owner, supplement: props.supplement, observation}; setSelection(chosen); latest.current.onSelectObservation?.(chosen);} : undefined}/>
+        const chosen = {primary: props.owner, supplement: props.supplement, observation}; setSelection(chosen);} : undefined}/>
     {!downloaded && <p className={common.help}>Unduh PDF tambahan asli dan baca seluruh halaman sebelum memilih rujukan. OCR hanya membantu pemeriksaan.</p>}
     {selection && <section className={common.preview} aria-label="Rujukan observasi lampiran PDF tambahan"><h4>Rujukan observasi lampiran yang dipilih</h4>
-      <p>Lampiran {selection.supplement.supplementId} · halaman {selection.observation.reference.pageIndex + 1} · isian {selection.observation.reference.field}.</p>
-      <p>Hasil {selection.observation.reference.resultId} · hash {selection.observation.reference.resultHash}.</p>
-      <p>Nilai halaman: {selection.observation.candidate.value ?? 'Belum diketahui'}.</p><p>Pilihan ini tidak mengisi koreksi foto atau menetapkan pembayaran secara otomatis.</p></section>}
+      <p>Lampiran {selection.supplement.supplementId} · halaman {selection.observation.reference.pageIndex + 1} · {paymentCorrectionLabels[selection.observation.reference.field as typeof correctionFields[number]]}.</p>
+      <p>Nilai halaman: {selection.observation.candidate.value ?? 'Belum diketahui'}.</p><p>Pilihan ini tidak mengisi koreksi foto atau menetapkan pembayaran secara otomatis.</p>
+      <details><summary>Rincian rujukan dokumen</summary><p>Hasil {selection.observation.reference.resultId} · hash {selection.observation.reference.resultHash}.</p></details>
+      {props.context === 'reviewer' && props.onSelectObservation && <button type="button" className={common.secondary} disabled={props.locked || busy} onClick={() => {
+        if (current() && !latest.current.locked) latest.current.onSelectObservation?.(selection);
+      }}>Gunakan rujukan untuk koreksi foto</button>}
+    </section>}
   </section>;
 }

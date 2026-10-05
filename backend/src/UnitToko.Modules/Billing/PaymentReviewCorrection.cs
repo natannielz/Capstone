@@ -9,8 +9,30 @@ namespace UnitToko.Modules.Billing;
 // Human observations of the image, kept separately from immutable OCR and buyer declarations.
 public sealed record PaymentReviewField(string Field, string? Value);
 public sealed record PaymentCorrectionBinding(long DeclarationRevision, long SubmissionId, EvidenceRef Evidence, long ExtractionId);
+// Separate provenance for an explicitly human-reviewed supplementary original.
+// It never substitutes the mandatory primary image or its immutable OCR identity.
+public sealed record PaymentSupplementReviewObservation(string Field, long SupplementId, long SupplementRevision,
+    PdfDocumentCandidateReference Candidate, bool OriginalReviewed);
 public static class PaymentReviewCorrectionPolicy
 {
+    public static ImmutableArray<PaymentSupplementReviewObservation>? CopySupplementaryObservations(
+        ImmutableArray<PaymentSupplementReviewObservation>? observations) {
+        if (observations is null) return null;
+        var values = observations.Value;
+        if (values.IsDefaultOrEmpty || values.Length > PaymentFieldExtractor.Fields.Count || values.Any(value => value is null || value.Candidate is null ||
+            !value.OriginalReviewed || value.SupplementRevision != 2 || value.Field != value.Candidate.Field ||
+            !PaymentFieldExtractor.Fields.Contains(value.Field, StringComparer.Ordinal)) ||
+            values.Select(value => value.Field).Distinct(StringComparer.Ordinal).Count() != values.Length) throw Invalid();
+        foreach (var value in values) {
+            PaymentSupplementRules.Id(value.SupplementId); PaymentSupplementRules.Id(value.Candidate.ResultId);
+            PaymentSupplementRules.Reference(value.Candidate.Evidence);
+        }
+        return PaymentFieldExtractor.Fields.Where(name => values.Any(value => value.Field == name)).Select(name => {
+            var value = values.Single(value => value.Field == name);
+            return value with { Candidate = new(value.Candidate.ResultId, value.Candidate.ResultHash, value.Candidate.Evidence,
+                value.Candidate.PageIndex, value.Candidate.Field) };
+        }).ToImmutableArray();
+    }
     public static ImmutableArray<PaymentReviewField> Copy(ImmutableArray<PaymentReviewField> fields) {
         if (fields.IsDefault || fields.Length != PaymentFieldExtractor.Fields.Count || fields.Any(field => field is null) ||
             fields.Select(field => field.Field).Distinct(StringComparer.Ordinal).Count() != fields.Length ||

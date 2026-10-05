@@ -5,6 +5,7 @@ using UnitToko.Modules.Billing;
 using UnitToko.Modules.Documents;
 using UnitToko.Platform.Authorization;
 using UnitToko.Platform.Billing;
+using UnitToko.Platform.DocumentProcessing;
 using UnitToko.Platform.Mongo;
 using UnitToko.Tests.Documents;
 using UnitToko.Tests.Ordering;
@@ -21,13 +22,33 @@ internal sealed class PaymentSupplementEvidenceTestData : IAsyncDisposable
     internal PaymentSupplementPrimary Primary { get; private set; } = null!;
     internal PaymentSupplementView Supplement { get; private set; } = null!;
     internal static async Task<PaymentSupplementEvidenceTestData> CreateAsync(MongoFixture fixture, bool approve = true,
-        long maximumContentBytes = 1024)
+        long maximumContentBytes = 1024, byte[]? primaryImageBytes = null, EvidenceLimits? primaryImageLimits = null,
+        long maximumReadBytes = 1024, long verificationDurationMs = 10000, long leaseDurationMs = 5000,
+        long maximumValidationAgeMs = 86400000)
     {
         var result = new PaymentSupplementEvidenceTestData();
         try {
-            result.Data = await PaymentEvidenceReadTests.ReadData.CreateAsync(fixture, maximumContentBytes: maximumContentBytes);
-            await PaymentOcrProcessorTests.Submit(result.Data);
+            result.Data = await PaymentEvidenceReadTests.ReadData.CreateAsync(fixture, maximumContentBytes: maximumContentBytes,
+                primaryImageBytes: primaryImageBytes, primaryImageLimits: primaryImageLimits, maximumReadBytes: maximumReadBytes,
+                verificationDurationMs: verificationDurationMs, leaseDurationMs: leaseDurationMs, maximumValidationAgeMs: maximumValidationAgeMs);
+            if (primaryImageBytes is null) await PaymentOcrProcessorTests.Submit(result.Data);
+            else {
+                await result.Data.ValidateAsync();
+                var proof = await result.Data.Rows("evidenceValidationResults")
+                    .Find(new BsonDocument("_id", result.Data.Reservation.VersionRowId)).SingleAsync();
+                // Queue completion may also mean a durable rejection. Require the genuine
+                // complete, successful security result before submitting the supplied image.
+                Assert.True(proof["status"] == "passed" && proof["decoderStatus"] == "decoded" && proof["safeFailure"].IsBsonNull,
+                    "Actual primary security result: status=" + proof["status"].AsString + "; decoder=" + proof["decoderStatus"].AsString +
+                    "; failure=" + (proof["safeFailure"].IsBsonNull ? "none" : proof["safeFailure"].AsString));
+                Assert.Equal(primaryImageBytes.LongLength, proof["length"].AsInt64);
+                Assert.Equal(1000, proof["width"].AsInt32); Assert.Equal(650, proof["height"].AsInt32);
+                Assert.Equal(EvidenceValidationRecords.Hash(proof), proof["resultHash"]);
+                await result.Data.Service.SubmitAsync(result.Data.Actor, result.Data.DeclarationId, 1,
+                    result.Data.Reservation.ReservationId, result.Data.Reference, EvidenceAdmissionTestData.Meta("ocr-submission"));
+            }
             await PaymentSupplementMigrationTests.ApplyAsync(result.Data.Database, result.Data.Catalog.Clock);
+            await PaymentSupplementCorrectionTestData.ApplyAsync(result.Data.Database, result.Data.Catalog.Clock);
             var submission = await result.Data.Rows("paymentSubmissions").Find(new BsonDocument("declarationId", result.Data.DeclarationId)).SingleAsync();
             result.Primary = new(result.Data.DeclarationId, submission["declarationRevision"].AsInt64, submission["_id"].AsInt64, result.Data.Reference);
             result.Facade = result.Restart();

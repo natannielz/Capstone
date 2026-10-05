@@ -1,7 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createUnitTokoClient } from '../src/api/client';
-import { correctionFields, correctionBinding, createPaymentCorrectionGateway, parsePaymentCorrection, prepareCorrection, paymentCorrectionOwner } from '../src/modules/billing/payment-correction-client';
+import { correctionFields, correctionBinding, createPaymentCorrectionGateway, parsePaymentCorrection, prepareCorrection, paymentCorrectionOwner,
+  rememberPaymentCorrectionObservation, type PaymentCorrectionSupplementaryObservation } from '../src/modules/billing/payment-correction-client';
+import {paymentSupplementOwner, supplementPdfOwner, type PaymentSupplement} from '../src/modules/billing/payment-pdf-supplement-client';
+import type {PaymentSupplementObservation} from '../src/modules/billing/PaymentSupplementReviewPanel';
 import { parsePaymentDraft, parsePaymentOcr } from '../src/modules/billing/payment-client';
 import { OperationJournal, operationRecoveryCapabilities, reconcileOperationRecovery } from '../src/modules/administration/operation-journal';
 import { recoveryPage } from '../src/modules/administration/operation-recovery-navigation';
@@ -55,4 +58,83 @@ test('correction recovery retains missing and wrong receipts and stores referenc
   assert.equal((await reconcileOperationRecovery(entry, journal, legacy, { 'billing.payment.review.correct': { lookup: async () => null } })).state, 'unconfirmed'); assert.equal(values.size, 1);
   await assert.rejects(() => reconcileOperationRecovery(entry, journal, legacy, { 'billing.payment.review.correct': { lookup: async () => ({ state: 'committed', result: { ...result, declarationId: '52' } }) } })); assert.equal(values.size, 1);
   assert.equal((await reconcileOperationRecovery(entry, journal, legacy, { 'billing.payment.review.correct': { lookup: async () => ({ state: 'committed', result }) } })).state, 'committed'); assert.equal(values.size, 0);
+});
+
+const pdfEvidence = {id: '9007199254740995', version: '1' as const, sha256: 'b'.repeat(64)};
+const observation: PaymentCorrectionSupplementaryObservation = {field: 'amount', supplementId: '9007199254740997', supplementRevision: '2', originalReviewed: true,
+  candidate: {resultId: '9007199254740999', resultHash: 'c'.repeat(64), evidence: pdfEvidence, pageIndex: 1, field: 'amount'}};
+test('optional PDF provenance retains exact Int64 strings and old absent-field history while rejecting stale or ambiguous references', () => {
+  const linked = {...saved, recent: [{...row, supplementaryObservations: [observation]}]};
+  assert.deepEqual(parsePaymentCorrection(linked, owner, ocr).recent[0].supplementaryObservations, [observation]);
+  assert.equal(Object.hasOwn(parsePaymentCorrection(saved, owner, ocr).recent[0], 'supplementaryObservations'), false);
+  for (const refs of [null, [], [observation, observation],
+    [{...observation, originalReviewed: false}], [{...observation, supplementRevision: '1'}], [{...observation, field: 'currency'}],
+    [{...observation, supplementId: Number(observation.supplementId)}], [{...observation, supplementId: '9223372036854775806'}],
+    [{...observation, candidate: {...observation.candidate, evidence}}],
+    [{...observation, candidate: {...observation.candidate, pageIndex: 10}}], [{...observation, candidate: {...observation.candidate, resultHash: 'c'.repeat(64) + '\n'}}],
+    [{...observation, candidate: {...observation.candidate, value: '2345678.90'}}],
+    [{...observation, field: 'currency', candidate: {...observation.candidate, field: 'currency'}}, observation],
+    [observation, {...observation, field: 'currency', candidate: {...observation.candidate, field: 'currency', resultHash: 'd'.repeat(64)}}],
+    [observation, {...observation, supplementId: '109', field: 'currency', candidate: {...observation.candidate, field: 'currency'}}]]) {
+    assert.throws(() => parsePaymentCorrection({...saved, recent: [{...row, supplementaryObservations: refs}]}, owner, ocr));
+  }
+  assert.deepEqual(prepareCorrection(actor, initial, changed, 'Foto telah ditinjau', [observation]).body.supplementaryObservations, [observation]);
+  assert.equal(Object.hasOwn(prepareCorrection(actor, initial, changed, 'Foto telah ditinjau').body, 'supplementaryObservations'), false);
+  assert.throws(() => prepareCorrection(actor, initial, original, 'Rujukan saja', [observation]), {code: 'correction_unchanged'});
+  assert.throws(() => prepareCorrection(actor, initial, changed, 'Foto telah ditinjau', []), {code: 'invalid_payment_correction'});
+});
+test('separate image and PDF result sequences can share a numeric ID while exact evidence bindings remain distinct', () => {
+  const sameResultNumber = {...observation, candidate: {...observation.candidate, resultId: initial.binding.extractionId}};
+  const command = prepareCorrection(actor, initial, changed, 'Foto dan PDF yang berbeda diperiksa', [sameResultNumber]);
+  assert.deepEqual(command.body.binding, initial.binding);
+  assert.deepEqual(command.body.supplementaryObservations, [sameResultNumber]);
+  assert.deepEqual(parsePaymentCorrection({...saved, recent: [{...row, supplementaryObservations: [sameResultNumber]}]}, owner, ocr)
+    .recent[0].supplementaryObservations, [sameResultNumber]);
+  for (const conflictingEvidence of [{...pdfEvidence, id: evidence.id}, {...pdfEvidence, sha256: evidence.sha256}]) {
+    const wrongOriginal = {...sameResultNumber, candidate: {...sameResultNumber.candidate, evidence: conflictingEvidence}};
+    assert.throws(() => prepareCorrection(actor, initial, changed, 'Bukti utama tidak menjadi lampiran', [wrongOriginal]), {code: 'invalid_payment_correction'});
+    assert.throws(() => parsePaymentCorrection({...saved, recent: [{...row, supplementaryObservations: [wrongOriginal]}]}, owner, ocr));
+  }
+});
+test('remembered PDF comparisons are bound to exact actor primary tuple and supplementary source without copying a value', () => {
+  const primary = paymentSupplementOwner(actor, owner);
+  const savedSupplement: PaymentSupplement = {declarationId: primary.declarationId, declarationRevision: primary.declarationRevision, submissionId: primary.submissionId,
+    primaryEvidence: primary.primaryEvidence, supplementId: observation.supplementId, supplementRevision: '2',
+    state: 'attached', reservationId: '101', pdfEvidence, attachedAt: time, reason: 'Dokumen tambahan untuk perbandingan'};
+  const selection: PaymentSupplementObservation = {primary, supplement: savedSupplement,
+    observation: {source: supplementPdfOwner(primary, savedSupplement), reference: observation.candidate,
+      candidate: {field: 'amount', value: '2345678.90', confidence: '0.97', boundingBox: ['0.1', '0.2', '0.3', '0.1'],
+        pdfCanvasCorners: [{x: 1, y: 2}, {x: 4, y: 2}, {x: 4, y: 3}, {x: 1, y: 3}], flags: []}}};
+  const remembered = rememberPaymentCorrectionObservation(actor, owner, selection);
+  assert.deepEqual(remembered.reference, observation); assert.equal(remembered.value, '2345678.90');
+  const command = prepareCorrection(actor, initial, changed, 'Nominal foto diperiksa', [remembered.reference]);
+  assert.equal(command.body.fields[0].value, '100.00'); assert.equal(command.body.binding.extractionId, '81');
+  assert.deepEqual(command.body.binding.evidence, evidence); assert.equal('value' in command.body.supplementaryObservations![0].candidate, false);
+  for (const foreign of [
+    {...selection, primary: {...primary, actorId: '92'}}, {...selection, primary: {...primary, submissionId: '42'}},
+    {...selection, supplement: {...savedSupplement, declarationId: '52'}},
+    {...selection, observation: {...selection.observation, source: {...selection.observation.source, sourceKind: 'Payment' as const}}},
+    {...selection, observation: {...selection.observation, source: {...selection.observation.source, sourceId: '99'}}},
+    {...selection, observation: {...selection.observation, reference: {...observation.candidate, evidence}}}
+  ]) assert.throws(() => rememberPaymentCorrectionObservation(actor, owner, foreign));
+});
+test('lost PDF-linked correction reply uses original actor and key lookup without resubmission or private journal payload', async () => {
+  const storage = new Map<string, string>(), journal = new OperationJournal(() => ({get length() {return storage.size;}, key: index => [...storage.keys()][index] ?? null,
+    getItem: key => storage.get(key) ?? null, setItem: (key, value) => {storage.set(key, value);}, removeItem: key => {storage.delete(key);}}));
+  let writes = 0, queries = 0; const command = prepareCorrection(actor, initial, changed, 'Foto dan lampiran diperiksa', [observation]);
+  const gateway = createPaymentCorrectionGateway(createUnitTokoClient({baseUrl: 'https://unit-toko.test', fetch: async request => {
+    assert.ok(request instanceof Request); const path = new URL(request.url).pathname;
+    if (path === '/api/v1/identity/csrf') return Response.json({requestToken: 'fixture-csrf'});
+    assert.equal(request.headers.get('X-Expected-Actor-Id'), actor); assert.equal(request.headers.get('X-CSRF-Token'), 'fixture-csrf');
+    if (path.endsWith('/operations/query')) {queries++; assert.deepEqual(await request.json(), {purpose: 'operation-recovery', key}); return Response.json({status: 'committed', result});}
+    writes++; assert.equal(request.headers.get('If-Match'), '"0"'); assert.equal(request.headers.get('Idempotency-Key'), key);
+    assert.deepEqual(await request.json(), command.body); throw new TypeError('Fixture lost committed reply');
+  }}));
+  const entry = journal.remember(actor, 'billing.payment.review.correct', key);
+  await assert.rejects(() => gateway.save(command, key, () => true));
+  assert.deepEqual(Object.keys(entry).sort(), ['actorId', 'createdAt', 'key', 'operation']);
+  assert.equal([...storage.values()].some(value => value.includes(pdfEvidence.sha256) || value.includes(command.body.reason)), false);
+  const legacy = {lookup: async () => assert.fail('Legacy lookup forbidden'), close: async () => assert.fail('Close forbidden')};
+  assert.equal((await reconcileOperationRecovery(entry, journal, legacy, {'billing.payment.review.correct': {lookup: entry => gateway.recover(entry.actorId, entry.key)}})).state, 'committed');
+  assert.equal(writes, 1); assert.equal(queries, 1); assert.equal(storage.size, 0);
 });

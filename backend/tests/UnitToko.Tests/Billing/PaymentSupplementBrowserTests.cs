@@ -41,12 +41,21 @@ public sealed class PaymentSupplementBrowserTests(MongoFixture fixture, ITestOut
     private const string Origin = "https://portal.unit-toko.co.id";
 
     [WindowsPaymentBrowserFact]
-    public async Task Actual_browser_recovers_separate_supplement_and_reads_all_native_pages_without_replacing_primary_image_or_money()
+    public Task Actual_browser_recovers_separate_supplement_and_reads_all_native_pages_without_replacing_primary_image_or_money() => RunAsync(false);
+
+    [WindowsPaymentBrowserFact]
+    public Task Actual_browser_manually_corrects_image_with_persisted_supplementary_page_reference_and_recovers_one_commit() => RunAsync(true);
+
+    private async Task RunAsync(bool correction)
     {
+        var primaryImage = correction ? await PaymentSupplementCorrectionTestData.ImageAsync() : null;
         await using var evidence = await PaymentSupplementEvidenceTestData.CreateAsync(fixture, approve: false,
-            maximumContentBytes: PaymentSupplementPdfOcrTestData.MaximumOriginalBytes);
+            maximumContentBytes: PaymentSupplementPdfOcrTestData.MaximumOriginalBytes, primaryImageBytes: primaryImage,
+            primaryImageLimits: correction ? new(PaymentSupplementPdfOcrTestData.MaximumOriginalBytes, 1001, 651, 651651) : null,
+            maximumReadBytes: correction ? PaymentSupplementPdfOcrTestData.MaximumOriginalBytes : 1024,
+            verificationDurationMs: correction ? 60000 : 10000, leaseDurationMs: correction ? 10000 : 5000);
         var data = evidence.Data; await evidence.ApproveAsync();
-        var reviewer = await PaymentReviewTests.Reviewer(data);
+        var reviewer = correction ? await PaymentCorrectionTests.Corrector(data, 9951) : await PaymentReviewTests.Reviewer(data);
         var foreign = await data.Catalog.ActorAsync(95781, new GrantScope(GrantScopeKind.BuyerOwned, 20, 21), Permissions.PaymentEvidence, Permissions.InvoiceRead);
         await PersonTestData.SeedDistinctPeopleAsync(data.Database, data.Catalog.Clock, reviewer.UserId, foreign.UserId);
         await ProfileAsync(data, data.Actor.UserId, "Pemohon cabang uji lokal");
@@ -55,6 +64,13 @@ public sealed class PaymentSupplementBrowserTests(MongoFixture fixture, ITestOut
         var unit = new MongoUnitOfWork(data.Catalog.Client);
         await using var scanner = await PdfEvidenceAdmissionTestRuntime.CreateAsync(data.Database, unit, data.Catalog.Clock, data.Files.Root, data.Files.StoreId);
         await PdfDocumentOcrProcessingTestData.ReadPolicyAsync(data.Database, data.Files.StoreId);
+        if (correction) {
+            await PaymentSupplementCorrectionTestData.ApplyAsync(data.Database, data.Catalog.Clock);
+            var imageWorker = PaymentOcrProcessorTests.Processor(data, new WindowsLocalOcrEngine(LocalOcrTests.Options()));
+            await PaymentOcrProcessorTests.Policy(data, imageWorker); Assert.Equal("completed", await imageWorker.RunOnceAsync());
+            var extraction = await data.Service.ReadExtractionAsync(data.Actor, data.DeclarationId, 1, data.Reference, new("payment-ocr-view", "native-text-primary-browser"));
+            Assert.Equal("succeeded", extraction.State); Assert.Equal("1234567.89", Assert.Single(extraction.Extraction!.Fields, field => field.Field == "amount").Value);
+        }
         var runtime = PdfDocumentOcrRuntime.CreatePaymentSupplement(data.Database, unit, new(data.Database), data.Catalog.Clock,
             PdfDocumentOcrProcessingTestData.Options(data.Files.Root, data.Files.StoreId, PaymentSupplementPdfOcrTestData.Consumer));
         await PaymentSupplementPdfOcrTestData.ApproveProcessingAsync(data.Database, data.Catalog.Clock, data.Files.StoreId, runtime);
@@ -95,13 +111,14 @@ public sealed class PaymentSupplementBrowserTests(MongoFixture fixture, ITestOut
             submissionId = Number(evidence.Primary.SubmissionId), primaryReservationId = Number(data.Reservation.ReservationId),
             primaryEvidence = new { id = Number(data.Reference.Id), version = "1", sha256 = data.Reference.Sha256 },
             imageBase64 = Convert.ToBase64String(data.Bytes), pdfBase64 = Convert.ToBase64String(bytes), pdfSha256 = PdfRasterProtocol.Digest(bytes),
+            imageWidth = correction ? 1000 : 13, imageHeight = correction ? 650 : 7,
             pdfFilename = "lampiran-sintetis-dua-halaman.pdf", runDirectory, validationReadyPath, extractionReadyPath };
         var secrets = new[] { input.actorToken, input.reviewerToken, input.outsiderToken, input.pfx, input.password, data.Files.Root };
         string Safe(string line) { foreach (var secret in secrets) line = line.Replace(secret, "[private]", StringComparison.Ordinal); return line; }
         var logPath = Path.Combine(runDirectory, "native-child.log"); var lines = new StringBuilder(); var validated = false; var extracted = false;
         var start = new ProcessStartInfo(node!) { WorkingDirectory = Path.Combine(root, "frontend"), UseShellExecute = false, CreateNoWindow = true,
             RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true };
-        start.ArgumentList.Add(Path.Combine(root, "frontend", "scripts", "verify-payment-supplement-browser.mjs"));
+        start.ArgumentList.Add(Path.Combine(root, "frontend", "scripts", correction ? "verify-payment-supplement-correction-browser.mjs" : "verify-payment-supplement-browser.mjs"));
         start.Environment["NODE_ENV"] = "production"; start.Environment["NEXT_TELEMETRY_DISABLED"] = "1"; start.Environment["NEXT_PUBLIC_UNIT_TOKO_RELEASE"] = "full";
         using var process = Process.Start(start) ?? throw new InvalidOperationException("Supplement browser child did not start");
         async Task ReadAsync(StreamReader stream, bool events) {
@@ -124,7 +141,7 @@ public sealed class PaymentSupplementBrowserTests(MongoFixture fixture, ITestOut
             await process.StandardInput.WriteAsync(JsonSerializer.Serialize(input)); process.StandardInput.Close();
             var exit = process.WaitForExitAsync().WaitAsync(TimeSpan.FromMinutes(8)); var first = await Task.WhenAny(exit, stdout, stderr); if (first.IsFaulted) await first;
             await exit; await Task.WhenAll(stdout, stderr);
-            Assert.True(process.ExitCode == 0, lines.ToString()); Assert.Contains("REAL_PAYMENT_SUPPLEMENT_BROWSER_PASS", lines.ToString());
+            Assert.True(process.ExitCode == 0, lines.ToString()); Assert.Contains(correction ? "REAL_PAYMENT_SUPPLEMENT_CORRECTION_BROWSER_PASS" : "REAL_PAYMENT_SUPPLEMENT_BROWSER_PASS", lines.ToString());
             Assert.True(validated); Assert.True(extracted);
         } finally {
             if (!process.HasExited) { process.Kill(true); await process.WaitForExitAsync(); }
@@ -159,7 +176,21 @@ public sealed class PaymentSupplementBrowserTests(MongoFixture fixture, ITestOut
         Assert.Equal(bytes, scanner.Scanner.Bytes); Assert.Equal(before, await evidence.FinancialAsync());
         Assert.Equal(primaryPins, new BsonArray(await data.Rows("evidencePins").Find(new BsonDocument("associationKind", "PaymentSubmission")).ToListAsync()));
         Assert.False(await data.Rows("outboxEvents").Find(new BsonDocument("kind", "payment.document-ocr.requested")).AnyAsync());
-        Assert.False(await data.Rows("paymentReviewCorrections").Find(new BsonDocument()).AnyAsync());
+        if (correction) {
+            var version = await data.Rows(PaymentCorrectionBson.Versions).Find(new BsonDocument()).SingleAsync();
+            Assert.Equal(2, version["schemaVersion"].AsInt32); Assert.Equal(reviewer.UserId, version["recordedBy"]);
+            var reference = Assert.Single(PaymentCorrectionBson.Observations(version)!.Value);
+            Assert.Equal(supplementId, reference.SupplementId); Assert.Equal(2, reference.SupplementRevision);
+            Assert.Equal(resultId, reference.Candidate.ResultId); Assert.Equal(result["resultHash"].AsString, reference.Candidate.ResultHash);
+            Assert.Equal(1, reference.Candidate.PageIndex); Assert.Equal("amount", reference.Candidate.Field);
+            Assert.Equal(PdfRasterProtocol.Digest(bytes), reference.Candidate.Evidence.Sha256); Assert.True(reference.OriginalReviewed);
+            Assert.Equal(data.Reference, PaymentCorrectionBson.Binding(version["binding"].AsBsonDocument).Evidence);
+            Assert.Equal("4000.00", Assert.Single(PaymentCorrectionBson.Fields(version["fields"].AsBsonArray), field => field.Field == "amount").Value);
+            Assert.Equal("1234567.89", Assert.Single(PaymentCorrectionBson.Fields(version["beforeFields"].AsBsonArray), field => field.Field == "amount").Value);
+            Assert.Equal(PaymentCorrectionBson.Hash(version), version["snapshotHash"]);
+            Assert.Equal(1L, await data.Rows("idempotencyRecords").CountDocumentsAsync(new BsonDocument("operation", PaymentCorrectionBson.Operation)));
+            Assert.Equal(1L, await data.Rows("outboxEvents").CountDocumentsAsync(new BsonDocument("kind", PaymentCorrectionBson.Operation)));
+        } else Assert.False(await data.Rows(PaymentCorrectionBson.Versions).Find(new BsonDocument()).AnyAsync());
     }
 
     private static string Number(long value) => value.ToString(CultureInfo.InvariantCulture);

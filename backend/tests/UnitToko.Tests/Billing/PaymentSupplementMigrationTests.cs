@@ -119,18 +119,36 @@ public sealed class PaymentSupplementMigrationTests(MongoFixture fixture)
     }
     internal static async Task ApplyAsync(IMongoDatabase db, IClock clock)
     {
+        // Rehearse M87 only after the exact later owner is proven empty. Its
+        // reviewed successor controls and all existing data remain installed.
+        await RestoreV87Async(db);
         var lease = await new MigrationGate(db, clock, 87).AcquireAsync(87, default); if (lease is null) return;
         try { await new PaymentSupplementMigration(db).ApplyAsync(lease, default); await lease.CompleteAsync(default); }
         catch { await lease.ReleaseAsync(); throw; }
     }
     internal static async Task RestoreV86Async(IMongoDatabase db)
     {
+        await RestoreV87Async(db);
         var history = await HistoryAsync(db); if (history.Count <= 86) return;
         Assert.Equal(87, history.Count); Assert.True(MigrationHistory.IsValid(history.Select(row => row.AsBsonDocument).ToArray(), 87));
         Assert.All(history, row => Assert.Equal("applied", row["state"]));
         await PaymentSupplementStorage.RequireAsync(db, default);
         await RequireEmptySupplementAsync(db);
         Assert.Equal(1L, (await db.GetCollection<BsonDocument>("schemaMigrations").DeleteOneAsync(new BsonDocument { { "_id", 87 }, { "state", "applied" } })).DeletedCount);
+    }
+    // The later owner is additive and owns no new allocator. Remove only its
+    // proven-empty marker; retain all rows, reviewed successor controls and UUIDs.
+    internal static async Task RestoreV87Async(IMongoDatabase db)
+    {
+        var history = await HistoryAsync(db); if (history.Count <= 87) return;
+        Assert.Equal(88, history.Count); Assert.True(MigrationHistory.IsValid(history.Select(row => row.AsBsonDocument).ToArray(), 88));
+        Assert.All(history, row => Assert.Equal("applied", row["state"]));
+        await PaymentSupplementCorrectionStorage.RequireAsync(db, PaymentCorrectionBson.Versions, default, requireAnnotated: true);
+        await PaymentSupplementCorrectionStorage.RequireAsync(db, PaymentCorrectionBson.Heads, default);
+        Assert.False(await db.GetCollection<BsonDocument>(PaymentCorrectionBson.Versions).Find(new BsonDocument("$or", new BsonArray {
+            new BsonDocument("schemaVersion", 2), new BsonDocument("supplementaryObservations", new BsonDocument("$exists", true)) })).AnyAsync());
+        Assert.False(await db.GetCollection<BsonDocument>("auditEvents").Find(new BsonDocument("supplementaryObservations", new BsonDocument("$exists", true))).AnyAsync());
+        Assert.Equal(1L, (await db.GetCollection<BsonDocument>("schemaMigrations").DeleteOneAsync(new BsonDocument { { "_id", 88 }, { "state", "applied" } })).DeletedCount);
     }
     internal static async Task RequireEmptySupplementAsync(IMongoDatabase db)
     {

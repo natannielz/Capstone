@@ -6,6 +6,7 @@ using UnitToko.Api.Authorization;
 using UnitToko.Api.Ordering;
 using UnitToko.Modules.Billing;
 using UnitToko.Modules.Contracts;
+using UnitToko.Modules.Documents;
 using UnitToko.Platform.Billing;
 
 namespace UnitToko.Api.Billing;
@@ -23,8 +24,35 @@ public sealed record PaymentCorrectionFieldDto([property: JsonRequired] string F
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record PaymentCorrectionQueryDto([property: JsonRequired] string Purpose, [property: JsonRequired] PaymentCorrectionBindingDto Binding);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed record PaymentCorrectionSaveDto([property: JsonRequired] PaymentCorrectionBindingDto Binding, [property: JsonRequired] PaymentCorrectionFieldDto[] Fields, [property: JsonRequired] string Reason);
-public sealed record PaymentCorrectionVersionDto(LongId Id, string Revision, LongId ActorId, DateTimeOffset RecordedAt, string Reason, ImmutableArray<PaymentReviewField> BeforeFields, ImmutableArray<PaymentReviewField> Fields);
+public sealed record PaymentSupplementReviewCandidateDto([property: JsonRequired] LongId ResultId, [property: JsonRequired] string ResultHash,
+    [property: JsonRequired] PaymentEvidenceReferenceDto Evidence, [property: JsonRequired] int PageIndex, [property: JsonRequired] string Field) {
+    internal PdfDocumentCandidateReference Domain() => Evidence is null ? throw PaymentReviewCorrectionPolicy.Invalid() :
+        new(ResultId.Value, ResultHash, new(Evidence.Id.Value, LongId.Parse(Evidence.Version).Value, Evidence.Sha256), PageIndex, Field);
+    internal static PaymentSupplementReviewCandidateDto From(PdfDocumentCandidateReference value) => new(new(value.ResultId), value.ResultHash,
+        new(new(value.Evidence.Id), OrderDraftInputDto.Number(value.Evidence.Version), value.Evidence.Sha256), value.PageIndex, value.Field);
+}
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record PaymentSupplementReviewObservationDto([property: JsonRequired] string Field, [property: JsonRequired] LongId SupplementId,
+    [property: JsonRequired] string SupplementRevision, [property: JsonRequired] PaymentSupplementReviewCandidateDto Candidate, [property: JsonRequired] bool OriginalReviewed) {
+    internal PaymentSupplementReviewObservation Domain() => Candidate is null ? throw PaymentReviewCorrectionPolicy.Invalid() :
+        new(Field, SupplementId.Value, LongId.Parse(SupplementRevision).Value, Candidate.Domain(), OriginalReviewed);
+    internal static PaymentSupplementReviewObservationDto From(PaymentSupplementReviewObservation value) => new(value.Field, new(value.SupplementId),
+        OrderDraftInputDto.Number(value.SupplementRevision), PaymentSupplementReviewCandidateDto.From(value.Candidate), value.OriginalReviewed);
+}
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record PaymentCorrectionSaveDto([property: JsonRequired] PaymentCorrectionBindingDto Binding, [property: JsonRequired] PaymentCorrectionFieldDto[] Fields, [property: JsonRequired] string Reason) {
+    private PaymentSupplementReviewObservationDto[]? supplementaryObservations;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public PaymentSupplementReviewObservationDto[] SupplementaryObservations {
+        // Unset is omitted on the wire; a supplied value must pass the presence/null/length checks below.
+        get => supplementaryObservations!;
+        init { supplementaryObservations = value; SupplementaryObservationsPresent = true; }
+    }
+    // Only deserialization of the actual optional property sets presence; it is never a client-controlled flag.
+    [JsonIgnore] internal bool SupplementaryObservationsPresent { get; private set; }
+}
+public sealed record PaymentCorrectionVersionDto(LongId Id, string Revision, LongId ActorId, DateTimeOffset RecordedAt, string Reason, ImmutableArray<PaymentReviewField> BeforeFields, ImmutableArray<PaymentReviewField> Fields,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ImmutableArray<PaymentSupplementReviewObservationDto>? SupplementaryObservations = null);
 public sealed record PaymentCorrectionViewDto(LongId DeclarationId, PaymentCorrectionBindingDto Binding, string ReviewRevision,
     ImmutableArray<PaymentReviewField> OriginalFields, ImmutableArray<PaymentReviewField> Fields, ImmutableArray<PaymentCorrectionVersionDto> Recent);
 public sealed record PaymentCorrectionResultDto(LongId DeclarationId, LongId SubmissionId, string ReviewRevision, LongId CorrectionId, DateTimeOffset RecordedAt);
@@ -40,13 +68,20 @@ public static class PaymentCorrectionEndpoints
             var view = await service.ReadCorrectionsAsync(http.Features.Get<ResolvedActor>()!.Actor, LongId.Parse(id).Value, request.Binding.Domain(), new(request.Purpose, http.TraceIdentifier), ct);
             http.Response.Headers.ETag = AccessRequestMetadata.VersionTag(view.ReviewRevision);
             return TypedResults.Ok(new PaymentCorrectionViewDto(new(view.DeclarationId), PaymentCorrectionBindingDto.From(view.Binding), OrderDraftInputDto.Number(view.ReviewRevision), view.OriginalFields, view.Fields,
-                [.. view.Recent.Select(row => new PaymentCorrectionVersionDto(new(row.Id), OrderDraftInputDto.Number(row.Revision), new(row.ActorId), row.RecordedAt, row.Reason, row.BeforeFields, row.Fields))]));
+                [.. view.Recent.Select(row => new PaymentCorrectionVersionDto(new(row.Id), OrderDraftInputDto.Number(row.Revision), new(row.ActorId), row.RecordedAt, row.Reason, row.BeforeFields, row.Fields,
+                    row.SupplementaryObservations is null ? null : [.. row.SupplementaryObservations.Value.Select(PaymentSupplementReviewObservationDto.From)]))]));
         }).WithName("ReadPaymentCorrections");
         group.MapPost("", async (string id, PaymentCorrectionSaveDto request, HttpContext http, PaymentEvidenceService service,
             [FromHeader(Name = "Idempotency-Key")] string key, [FromHeader(Name = "If-Match")] string expected, CancellationToken ct) => {
             if (request.Binding is null || request.Fields is null || request.Fields.Any(field => field is null)) throw PaymentReviewCorrectionPolicy.Invalid(); Private(http);
-            return TypedResults.Ok(Result(await service.CorrectReviewAsync(http.Features.Get<ResolvedActor>()!.Actor, LongId.Parse(id).Value, AccessRequestMetadata.ExpectedVersion(http.Request), request.Binding.Domain(),
-                [.. request.Fields.Select(field => new PaymentReviewField(field.Field, field.Value))], new(AccessRequestMetadata.IdempotencyKey(http.Request), request.Reason, http.TraceIdentifier), ct)));
+            var actor = http.Features.Get<ResolvedActor>()!.Actor; var declarationId = LongId.Parse(id).Value; var revision = AccessRequestMetadata.ExpectedVersion(http.Request);
+            ImmutableArray<PaymentReviewField> fields = [.. request.Fields.Select(field => new PaymentReviewField(field.Field, field.Value))];
+            var metadata = new UnitToko.Platform.Authorization.AuthorizationCommandMetadata(AccessRequestMetadata.IdempotencyKey(http.Request), request.Reason, http.TraceIdentifier);
+            if (!request.SupplementaryObservationsPresent)
+                return TypedResults.Ok(Result(await service.CorrectReviewAsync(actor, declarationId, revision, request.Binding.Domain(), fields, metadata, ct)));
+            if (request.SupplementaryObservations is null || request.SupplementaryObservations.Length is < 1 or > 8 || request.SupplementaryObservations.Any(value => value is null)) throw PaymentReviewCorrectionPolicy.Invalid();
+            ImmutableArray<PaymentSupplementReviewObservation> observations = [.. request.SupplementaryObservations.Select(value => value.Domain())];
+            return TypedResults.Ok(Result(await service.CorrectReviewAsync(actor, declarationId, revision, request.Binding.Domain(), fields, observations, metadata, ct)));
         }).WithName("CorrectPaymentReview");
         group.MapPost("/operations/query", async (string id, OrderDraftRecoveryDto request, HttpContext http, PaymentEvidenceService service, CancellationToken ct) => {
             if (request.Purpose != "operation-recovery") throw PaymentReviewCorrectionPolicy.Invalid(); Private(http);

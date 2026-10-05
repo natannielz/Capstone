@@ -8,6 +8,14 @@ Worker membaca dokumen asli yang tepat melalui pegangan berkas privat yang telah
 
 Tidak ada nilai pemenang otomatis antar halaman. Nilai bertentangan atau tidak diketahui tetap terlihat untuk pemeriksa. Hasil OCR tidak menyetujui pembayaran, penerimaan pemasok, stok, atau pencatatan jurnal.
 
+## Referensi halaman pada koreksi pemeriksa (M88)
+
+Pemeriksa dapat memilih pengamatan dari halaman lampiran PDF, menyatakan bahwa asli telah ditinjau, lalu menyimpan referensinya bersama perubahan bidang yang dimasukkan secara manual. Referensi ini opsional dan menyimpan lampiran, hasil/hash OCR, halaman, serta bidang yang tepat. Referensi saja tidak membuat koreksi; koreksi tetap memerlukan perubahan manual dan pengikatan pada gambar pembayaran utama beserta hasil OCR gambarnya. PDF tidak mengisi nilai secara otomatis, mengganti pin gambar utama, memverifikasi bank, atau mengubah uang maupun stok.
+
+Penyimpanan memeriksa sumber dan asli yang telah divalidasi dan dipin, hasil seluruh halaman, izin pemeriksa saat ini, independensi orang, serta persetujuan D06 yang terpisah. Batas waktu asli dan persetujuan tetap berlaku sampai transaksi selesai dan tidak diperpanjang ketika mencoba ulang. Satu audit baca OCR yang tepat disimpan dalam transaksi yang sama dengan koreksi, riwayat, dan receipt; kegagalan audit membatalkan semuanya. Pemeriksaan kandidat memakai pengikatan asli yang sah tanpa membaca ulang berkas asli saat menyimpan koreksi. Koreksi lama tanpa referensi PDF tetap mempertahankan format dan pengikatan gambar yang sama.
+
+M88 terhubung dan diverifikasi secara lokal melalui browser, API .NET, MongoDB serta runtime OCR terpin. Riwayat koreksi manual dan referensi halaman bertahan setelah muat ulang; balasan tersimpan yang sengaja diputus dipulihkan tanpa pengiriman ulang. Pengujian izin, masa berlaku, pembatalan audit, format HTTP dan preservasi migrasi terhubung dalam ledger. Data pengujian sintetis serta verifikasi lokal ini belum merupakan penerimaan staging atau produksi.
+
 ## Konfigurasi worker
 
 Bagian opsional `Evidence:SupplierDocumentPdfOcr` mengaktifkan runtime khusus dokumen pemasok. Konfigurasi tidak menebak format atau sumber dari MIME, nama berkas, atau pekerjaan gambar. Bagian yang tidak diisi tidak mengklaim pekerjaan PDF pemasok. Lampiran pembayaran memiliki bagian terpisah `Evidence:PaymentSupplementPdfOcr` dengan kunci dan pin runtime yang sama di bawah ini; hanya pekerjaan `payment.supplement-document-ocr.requested` dapat memakai jalur tersebut. Konfigurasi lama `Evidence:PaymentPdfOcr` tetap ditolak saat startup worker. Menjalankan migrasi tidak mengaktifkan worker.

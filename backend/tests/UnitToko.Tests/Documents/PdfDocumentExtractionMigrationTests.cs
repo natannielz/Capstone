@@ -182,6 +182,7 @@ public sealed class PdfDocumentExtractionMigrationTests(MongoFixture fixture)
     // restored for this predecessor rehearsal, with operator conjuncts retained.
     internal static async Task RestoreV85Async(IMongoDatabase db)
     {
+        await PaymentSupplementMigrationTests.RestoreV87Async(db);
         await PaymentSupplementMigrationTests.RestoreV86Async(db);
         var history = await HistoryAsync(db); if (history.Count <= 85) return;
         Assert.Equal(86, history.Count); Assert.True(MigrationHistory.IsValid(history.Select(row => row.AsBsonDocument).ToArray(), 86));

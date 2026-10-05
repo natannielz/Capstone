@@ -12383,6 +12383,7 @@ export interface components {
             binding: components["schemas"]["PaymentCorrectionBindingDto"];
             fields: components["schemas"]["PaymentCorrectionFieldDto"][];
             reason: string;
+            supplementaryObservations?: components["schemas"]["PaymentSupplementReviewObservationDto"][];
         };
         PaymentCorrectionVersionDto: {
             actorId: components["schemas"]["LongId"];
@@ -12393,6 +12394,7 @@ export interface components {
             /** Format: date-time */
             recordedAt: string;
             revision: string;
+            supplementaryObservations?: null | components["schemas"]["PaymentSupplementReviewObservationDto"][];
         };
         PaymentCorrectionViewDto: {
             binding: components["schemas"]["PaymentCorrectionBindingDto"];
@@ -12748,6 +12750,21 @@ export interface components {
         PaymentSupplementResultDto: {
             operation: string;
             result: components["schemas"]["PaymentSupplementViewDto"];
+        };
+        PaymentSupplementReviewCandidateDto: {
+            evidence: components["schemas"]["PaymentEvidenceReferenceDto"];
+            field: string;
+            /** Format: int32 */
+            pageIndex: number | string;
+            resultHash: string;
+            resultId: components["schemas"]["LongId"];
+        };
+        PaymentSupplementReviewObservationDto: {
+            candidate: components["schemas"]["PaymentSupplementReviewCandidateDto"];
+            field: string;
+            originalReviewed: boolean;
+            supplementId: components["schemas"]["LongId"];
+            supplementRevision: string;
         };
         PaymentSupplementViewDto: {
             /** Format: date-time */

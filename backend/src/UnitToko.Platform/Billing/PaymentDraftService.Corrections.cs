@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Text.Json.Serialization;
 using MongoDB.Bson;
 using MongoDB.Driver;
 using UnitToko.Modules.Billing;
@@ -16,7 +17,8 @@ using B = UnitToko.Platform.Billing.PaymentCorrectionBson;
 namespace UnitToko.Platform.Billing;
 
 public sealed record PaymentCorrectionVersion(long Id, long Revision, long ActorId, DateTimeOffset RecordedAt, string Reason,
-    ImmutableArray<PaymentReviewField> BeforeFields, ImmutableArray<PaymentReviewField> Fields);
+    ImmutableArray<PaymentReviewField> BeforeFields, ImmutableArray<PaymentReviewField> Fields,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ImmutableArray<PaymentSupplementReviewObservation>? SupplementaryObservations = null);
 public sealed record PaymentCorrectionView(long DeclarationId, PaymentCorrectionBinding Binding, long ReviewRevision,
     ImmutableArray<PaymentReviewField> OriginalFields, ImmutableArray<PaymentReviewField> Fields, ImmutableArray<PaymentCorrectionVersion> Recent);
 
@@ -25,7 +27,7 @@ public sealed partial class PaymentDraftService
     internal async Task CorrectionStorageAsync(CancellationToken ct) {
         await StorageAsync(ct);
         foreach (var name in PaymentCorrectionSchemas.Collections)
-            await InventoryRepository.RequireStorageAsync(database, name, PaymentCorrectionSchemas.Validator(name), PaymentCorrectionSchemas.Key(name), ct);
+            await PaymentSupplementCorrectionStorage.RequireAsync(database, name, ct);
         await PaymentVerificationStorage.RequireAsync(database, ct);
         await InventoryRepository.RequireStorageAsync(database, PaymentReviewActionRecords.Versions, PaymentReviewExplanationSchemas.Validator(), PaymentReviewActionSchemas.Key(), ct);
     }
@@ -54,7 +56,7 @@ public sealed partial class PaymentDraftService
         return new(extraction.DeclarationId, binding, history.Head?["revision"].AsInt64 ?? 0, original,
             history.Recent.Length == 0 ? original : B.Fields(history.Recent[0]["fields"].AsBsonArray),
             [.. history.Recent.Select(row => new PaymentCorrectionVersion(row["_id"].AsInt64, row["revision"].AsInt64, row["recordedBy"].AsInt64,
-                new(row["recordedAt"].ToUniversalTime()), row["reason"].AsString, B.Fields(row["beforeFields"].AsBsonArray), B.Fields(row["fields"].AsBsonArray)))]);
+                new(row["recordedAt"].ToUniversalTime()), row["reason"].AsString, B.Fields(row["beforeFields"].AsBsonArray), B.Fields(row["fields"].AsBsonArray), B.Observations(row)))]);
     }
     private async Task<BsonDocument> CurrentCorrectionSourceAsync(ActorContext actor, AuthorizationSnapshot authority, IClientSessionHandle tx, long id, PaymentCorrectionBinding binding, CancellationToken ct) {
         var head = await ReviewHeadAsync(actor, authority, tx, id, ct); _ = CorrectionQuery(actor, authority, head);
@@ -64,13 +66,15 @@ public sealed partial class PaymentDraftService
     }
     internal async Task<BsonDocument> CorrectAsync(ActorContext actor, long id, long revision, PaymentCorrectionBinding binding, ImmutableArray<PaymentReviewField> fields,
         AuthorizationCommandMetadata metadata,
-        Func<IClientSessionHandle, Func<PaymentExtractionView, Action, CancellationToken, Task<BsonDocument>>, CancellationToken, Task<BsonDocument>> consume, CancellationToken ct) {
+        Func<IClientSessionHandle, Func<PaymentExtractionView, Action, CancellationToken, Task<BsonDocument>>, CancellationToken, Task<BsonDocument>> consume, CancellationToken ct,
+        ImmutableArray<PaymentSupplementReviewObservation>? supplementaryObservations = null) {
         AuthorizationStore.ValidateMetadata(metadata); PaymentReviewCorrectionPolicy.Validate(binding, revision); fields = PaymentReviewCorrectionPolicy.Copy(fields);
+        supplementaryObservations = PaymentReviewCorrectionPolicy.CopySupplementaryObservations(supplementaryObservations);
         if (id <= 0 || metadata.Reason.Length > 1000 || metadata.Reason != metadata.Reason.Trim() || metadata.Reason.Any(c => char.IsControl(c) || char.GetUnicodeCategory(c) == System.Globalization.UnicodeCategory.Format) ||
             metadata.IdempotencyKey.Length > 128 || metadata.IdempotencyKey.Any(c => !char.IsAsciiLetterOrDigit(c) && c is not ('-' or '_' or '.' or ':'))) throw PaymentReviewCorrectionPolicy.Invalid();
         await CorrectionStorageAsync(ct); var store = new PaymentCorrectionRecords(database);
         var versionId = (await ids.NextAsync(B.Versions, ct)).Value; var auditId = (await ids.NextAsync("auditEvents", ct)).Value;
-        var body = B.Body(id, revision, binding, fields); var bodyHash = AuthorizationStore.CommandHash(body, metadata.Reason);
+        var body = B.Body(id, revision, binding, fields, supplementaryObservations); var bodyHash = AuthorizationStore.CommandHash(body, metadata.Reason);
         Action? finalEligibility = null; PersonAuthorityProof? proof = null;
         return await authorization.ExecuteCommandAsync(actor, B.Operation, metadata, body, async (authority, tx, token) => {
             finalEligibility = null; proof = null;
@@ -91,11 +95,12 @@ public sealed partial class PaymentDraftService
             if (prior is not null && prior["recordedAt"].ToUniversalTime() > now.UtcDateTime || extraction.ExtractedAt > now) throw PaymentCorrectionRecords.Bad();
             proof = await new PersonRegistryService(database, clock).ResolveProofsAsync(tx, [actor.UserId], inner); var person = proof.Evidence.Single();
             if (person.Verification == PersonVerification.Verified) await new PersonAuthorizationFence(database, clock).TouchAsync(tx, proof, inner);
-            var row = new BsonDocument { { "_id", versionId }, { "schemaVersion", 1 }, { "declarationId", id }, { "revision", revision + 1 }, { "binding", B.Binding(binding) },
+            var row = new BsonDocument { { "_id", versionId }, { "schemaVersion", supplementaryObservations is null ? 1 : 2 }, { "declarationId", id }, { "revision", revision + 1 }, { "binding", B.Binding(binding) },
                 { "previousVersionId", prior is null ? BsonNull.Value : prior["_id"] }, { "previousHash", prior is null ? BsonNull.Value : prior["snapshotHash"] },
                 { "recordedBy", actor.UserId }, { "actorGrantVersion", actor.GrantVersion }, { "recordedAt", now.UtcDateTime },
                 { "personAtCorrection", new BsonDocument { { "userId", person.UserId }, { "personId", person.PersonId is { } personId ? new BsonInt64(personId) : BsonNull.Value }, { "verification", person.Verification.ToString() }, { "version", person.Version } } },
                 { "beforeFields", before }, { "fields", B.Fields(fields) }, { "requestKey", metadata.IdempotencyKey }, { "bodyHash", bodyHash }, { "reason", metadata.Reason }, { "correlationId", metadata.CorrelationId }, { "auditId", auditId } };
+            if (supplementaryObservations is not null) row.Add("supplementaryObservations", B.Observations(supplementaryObservations.Value));
             row.Add("snapshotHash", B.Hash(row));
             await records.Rows(B.Versions).InsertOneAsync(tx, row, cancellationToken: inner);
             var head = new BsonDocument { { "_id", id }, { "schemaVersion", 1 }, { "revision", revision + 1 }, { "binding", B.Binding(binding) }, { "state", "submitted" }, { "versionId", versionId },
@@ -114,7 +119,7 @@ public sealed partial class PaymentDraftService
             await records.TouchAsync(tx, head, token); await CorrectionFenceAsync(actor, authority, tx, head, token);
             if (proof?.Evidence.Single().Verification == PersonVerification.Verified) proof.RequireCurrent(tx, clock.UtcNow);
             finalEligibility?.Invoke(); token.ThrowIfCancellationRequested();
-        });
+        }, validateCurrent: () => finalEligibility?.Invoke());
     }
     internal async Task<BsonDocument?> RecoverCorrectionAsync(ActorContext actor, long id, string key, CancellationToken ct) {
         AuthorizationStore.ValidateMetadata(new(key, "Recover payment review correction", "payment-correction-recovery")); await CorrectionStorageAsync(ct);

@@ -11,7 +11,7 @@ import { AdministrationNavigation } from '../administration/AdministrationNaviga
 import { orderAmount } from '../ordering/order-quote-client';
 import { createPaymentReviewGateway, type PaymentReviewQueueEntry } from './payment-review-client';
 import { OperationRecovery, useOperationRecovery } from '../administration/OperationRecovery';
-import { createPaymentCorrectionGateway } from './payment-correction-client';
+import { createPaymentCorrectionGateway, correctionFields, rememberPaymentCorrectionObservation, type RememberedPaymentObservation } from './payment-correction-client';
 import { PaymentCorrectionPanel } from './PaymentCorrectionPanel';
 import { PaymentManualReviewPanel } from './PaymentManualReviewPanel';
 import { createPaymentManualReviewGateway } from './payment-manual-review-client';
@@ -70,11 +70,12 @@ function ReviewDesk({ account, fresh, onDenied }: { account: Account; fresh: boo
   const [page, setPage] = useState<{ items: PaymentReviewQueueEntry[]; hasMore: boolean; observedAt: string | null }>({ items: [], hasMore: false, observedAt: null }), [before, setBefore] = useState<string | null>(null), [refresh, setRefresh] = useState(0);
   const [filter, setFilter] = useState('all');
   const [selected, setSelected] = useState<PaymentDraft | null>(null), [ocr, setOcr] = useState<PaymentOcrView | null>(null), [preview, setPreview] = useState<string | null>(null);
+  const [rememberedObservations, setRememberedObservations] = useState<RememberedPaymentObservation[]>([]);
   const [busy, setBusy] = useState(false), [offline, setOffline] = useState(false), [error, setError] = useState<unknown>(null);
   const alive = useRef(false), pending = useRef(false), previewUrl = useRef<string | null>(null), epoch = useRef(0), heading = useRef<HTMLHeadingElement>(null), previewHeading = useRef<HTMLHeadingElement>(null), previewTrigger = useRef<HTMLButtonElement>(null);
   const clearPreview = useCallback(() => { epoch.current++; if (previewUrl.current) URL.revokeObjectURL(previewUrl.current); previewUrl.current = null; setPreview(null); }, []);
   const current = useCallback(() => alive.current && navigator.onLine && !sessionTiming(account.session, performance.now() - account.observedAt).expired, [account]);
-  useEffect(() => { alive.current = true; const generation = epoch; const connection = () => { setOffline(!navigator.onLine); if (!navigator.onLine) clearPreview(); }; connection();
+  useEffect(() => { alive.current = true; const generation = epoch; const connection = () => { setOffline(!navigator.onLine); if (!navigator.onLine) {clearPreview(); setRememberedObservations([]);} }; connection();
     window.addEventListener('online', connection); window.addEventListener('offline', connection);
     return () => { alive.current = false; generation.current++; if (previewUrl.current) URL.revokeObjectURL(previewUrl.current); window.removeEventListener('online', connection); window.removeEventListener('offline', connection); };
   }, [clearPreview]);
@@ -87,12 +88,12 @@ function ReviewDesk({ account, fresh, onDenied }: { account: Account; fresh: boo
   }); return () => { active = false; controller.abort(); }; }, [gateway, account.actorId, before, refresh, current, onDenied]);
   async function perform(work: () => Promise<void>) {
     if (!current() || busy || editingBusy || recovering || pending.current) return; pending.current = true; setBusy(true); setError(null);
-    try { await work(); } catch (failure) { if (alive.current) { clearPreview(); setOcr(null); setSelected(null); setError(failure); onDenied(failure); } }
+    try { await work(); } catch (failure) { if (alive.current) { clearPreview(); setOcr(null); setSelected(null); setRememberedObservations([]); setError(failure); onDenied(failure); } }
     finally { pending.current = false; if (alive.current) setBusy(false); }
   }
   const locked = busy || offline || recovering || editingBusy;
-  function refreshPage(next: string | null) { clearPreview(); setSelected(null); setOcr(null); setBefore(next); setRefresh(value => value + 1); }
-  async function open(id: string) { clearPreview(); setSelected(null); setOcr(null); const result = await gateway.read(account.actorId, id); if (current()) setSelected(result); }
+  function refreshPage(next: string | null) { clearPreview(); setSelected(null); setOcr(null); setRememberedObservations([]); setBefore(next); setRefresh(value => value + 1); }
+  async function open(id: string) { clearPreview(); setSelected(null); setOcr(null); setRememberedObservations([]); const result = await gateway.read(account.actorId, id); if (current()) setSelected(result); }
   async function showOriginal() {
     if (!selected) return; clearPreview(); const version = epoch.current;
     const blob = await gateway.original(account.actorId, selected, () => current() && epoch.current === version);
@@ -153,10 +154,19 @@ function ReviewDesk({ account, fresh, onDenied }: { account: Account; fresh: boo
         locked={locked} current={current} onOpen={id => void perform(() => open(id))} onDenied={onDenied} onBusyChange={setEditingBusy} />
       <PaymentOcrPanel view={ocr} locked={locked} onRefresh={() => void perform(async () => { const value = await gateway.ocr(account.actorId, selected); if (current()) setOcr(value); })} />
       {selected.state === 'submitted' && selected.submission && <PaymentSupplementReviewerPanel key={'supplements:' + selected.id + ':' + selected.revision + ':' + selected.submission.id}
-        owner={paymentSupplementOwner(account.actorId, selected)} locked={locked} current={current} onDenied={onDenied}/>}
+        owner={paymentSupplementOwner(account.actorId, selected)} locked={locked || recovery.locked} current={current} onDenied={onDenied}
+        onSelectObservation={account.actions.includes('payment.review.correct') && fresh && ocr?.result && !locked && !recovery.locked ? selection => {
+          if (!current() || locked || recovery.locked) return;
+          try {const remembered = rememberPaymentCorrectionObservation(account.actorId, selected, selection);
+            setRememberedObservations(previous => [...previous.filter(item => item.reference.field !== remembered.reference.field), remembered]
+              .sort((first, second) => correctionFields.indexOf(first.reference.field) - correctionFields.indexOf(second.reference.field)));
+          } catch (failure) {setError(failure); onDenied(failure);}
+        } : undefined}/>}
       <PaymentCorrectionPanel key={selected.id + ':' + selected.revision + ':' + (ocr?.result?.id ?? 'pending')} actorId={account.actorId} owner={selected} ocr={ocr}
         allowed={account.actions.includes('payment.review.correct')} fresh={fresh}
-        locked={locked || recovery.locked} current={current} journal={recovery.journal} onSettled={recovery.refresh} onDenied={onDenied} onBusyChange={setEditingBusy} />
+        locked={locked || recovery.locked} current={current} journal={recovery.journal} onSettled={recovery.refresh} onDenied={onDenied} onBusyChange={setEditingBusy}
+        observations={rememberedObservations} onRemoveObservation={field => setRememberedObservations(previous => previous.filter(item => item.reference.field !== field))}
+        onObservationsSaved={() => setRememberedObservations([])} />
       <PaymentVerificationPanel key={'verify:' + selected.id + ':' + selected.revision} actorId={account.actorId} owner={selected}
         manualReview={<PaymentManualReviewPanel actorId={account.actorId} owner={selected} ocr={ocr} allowed={account.actions.includes('payment.review.manual')} fresh={fresh} locked={locked || recovery.locked}
           current={current} journal={recovery.journal} onSettled={recovery.refresh} onDenied={onDenied} onBusyChange={setEditingBusy} />}
