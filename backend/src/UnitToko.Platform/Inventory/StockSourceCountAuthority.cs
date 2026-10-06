@@ -133,7 +133,9 @@ public sealed partial class StockSourceSetupService
         var setup = await new OrderStockSourceRecords(database).SetupAsync(tx, binding.SetupDecisionId, true, ct);
         if (setup.PoolIds.Length != 1 || setup.PoolIds[0] != binding.PoolId || source["creationProposalId"] != setup.Record["proposal"]["_id"])
             throw InventoryCountStockSourceRecords.Unavailable();
-        var current = await CurrentSourceAsync(tx, binding.PoolId, ct);
+        // Historical count associations authenticate configuration, not permission to move stock.
+        // This also lets M101 retain genuine counts before M102 creates the activation owner.
+        var current = await SourceConfigurationAsync(tx, binding.PoolId, ct);
         if (current["pool"]["revision"].AsInt64 < binding.PoolRevision) throw InventoryCountStockSourceRecords.Unavailable();
         BsonDocument original;
         if (binding.PoolRevision == 1) {

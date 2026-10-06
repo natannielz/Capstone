@@ -92,6 +92,8 @@ internal sealed class InventoryLedger
             InventoryGraph.RequirePool(pool);
             if (!pool!["active"].AsBoolean || pool["revision"].AsInt64 != snapshot.Pool.Revision ||
                 InventoryGraph.Location(pool["location"].AsBsonDocument) != snapshot.Pool.Location) throw Invalid("inventory_source_pool_changed");
+            var client = database.Client as MongoClient ?? throw Invalid("inventory_source_unavailable");
+            await new StockSourceSetupService(database, new(client), ids, clock).RequireActivatedPoolAsync(tx, pool, ct);
             var before = ImmutableArray.CreateBuilder<InventoryBalanceDocument>(changes.Length);
             foreach (var change in changes) before.Add(await repository.ReadAsync(tx, change.Id, ct));
             var id = await ids.NextAsync("movements", ct);

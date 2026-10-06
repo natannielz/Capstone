@@ -17,7 +17,7 @@ public sealed class OrderSubmissionServiceTests(MongoFixture fixture)
 {
     [Theory] [InlineData(false)] [InlineData(true)]
     public async Task Source_separated_suborders_and_two_physical_pools_commit_or_roll_back_together(bool secondSourceShort) {
-        await using var data = await OrderSubmissionTestData.CreateAsync(fixture); await data.AddSecondFulfillmentAsync(secondSourceShort ? 2 : 10);
+        await using var data = await OrderSubmissionTestData.CreateAsync(fixture, secondFulfillmentStock: secondSourceShort ? 2 : 10);
         var review = await data.Service.PreviewAsync(data.Buyer, data.Input);
         Assert.Equal("55500.50", review.Total.ToString());
         if (secondSourceShort) {

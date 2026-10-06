@@ -19,6 +19,8 @@ internal sealed class InventoryCountStockSourceProducer(IMongoDatabase database,
         // Only the real fresh setup callback may use its authentic pending approval receipt.
         var source = await records.EventAsync(tx, counts, sources, "setup", setupDecisionId, false, ct);
         var pool = await Rows("inventoryPools").Find(tx, new BsonDocument("_id", source.PoolId)).SingleOrDefaultAsync(ct); InventoryGraph.RequirePool(pool);
+        await new StockSourceTopologyFence(database).FenceAsync(tx, pool!["location"]["organizationId"].AsInt64, ct);
+        await new InventoryCountCoverage(database).InitializeFreshAsync(tx, counts, sources, pool["location"]["organizationId"].AsInt64, ct);
         if (pool!["active"] != false || pool["revision"] != 1L || pool["fence"] != 0L || pool["location"] != source.Record["proposal"]["input"]["location"] ||
             await Rows(InventoryCountStockSourceRecords.Heads).Find(tx, new BsonDocument("_id", source.PoolId)).AnyAsync(ct) ||
             await Rows(InventoryCountStockSourceRecords.Transitions).Find(tx, new BsonDocument("poolId", source.PoolId)).AnyAsync(ct) ||

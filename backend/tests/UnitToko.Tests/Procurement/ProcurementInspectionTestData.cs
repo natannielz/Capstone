@@ -61,8 +61,8 @@ internal sealed class ProcurementInspectionTestData(ProcurementReceivingTestData
             3, 3, 1, 1, 2, "SYNTHETIC-LOT-001", AccountingCalendar.BusinessDate(Clock.UtcNow).AddDays(-1), "SYNTHETIC-QUARANTINE-BAY-A",
             "Observed damaged, expired and opened flags overlap; all packages remain held")], "Two actual containers opened; quantities are physical observations only");
     internal static async Task<ProcurementInspectionTestData> CreateAsync(MongoFixture fixture, ProcurementRoute route = ProcurementRoute.Ddo,
-        bool onReceipt = false, bool createDraft = true, string media = "mp4", bool aboveImageCeiling = false, decimal requiredAdvance = 0) {
-        var receiving = await ProcurementReceivingTestData.CreateAsync(fixture, route, onReceipt, requiredAdvance); var data = new ProcurementInspectionTestData(receiving);
+        bool onReceipt = false, bool createDraft = true, string media = "mp4", bool aboveImageCeiling = false, decimal requiredAdvance = 0, bool boundStock = false) {
+        var receiving = await ProcurementReceivingTestData.CreateAsync(fixture, route, onReceipt, requiredAdvance, boundStock); var data = new ProcurementInspectionTestData(receiving);
         try {
             data.Notice = await receiving.NoticeAsync(); data.Intake = await receiving.IntakeAsync(data.NoticeId);
             var scope = ProcurementRequestTestData.Scope;
@@ -70,6 +70,10 @@ internal sealed class ProcurementInspectionTestData(ProcurementReceivingTestData
             data.Reader = await data.Base.AddActorAsync(691, scope, Permissions.ProcurementRead);
             data.EvidenceReader = await data.Base.AddActorAsync(692, scope, Permissions.ProcurementRead, Permissions.ProcurementInspectionEvidenceRead);
             data.OtherInspector = await data.Base.AddActorAsync(693, scope, Permissions.ProcurementRead, Permissions.ProcurementInspect, Permissions.ProcurementInspectionEvidenceRead);
+            if (boundStock) {
+                await data.Base.AddGrantAsync(data.Actor, 7284, scope, [Permissions.StockRead]);
+                await data.Base.AddGrantAsync(data.OtherInspector, 7285, scope, [Permissions.StockRead]);
+            }
             data.Outsider = await data.Base.AddActorAsync(694, new(GrantScopeKind.FulfillmentWarehouse, 100, ShopId: receiving.Procurement.ForeignShopId,
                 WarehouseId: receiving.Procurement.ForeignWarehouseId, ChannelId: 103), Permissions.ProcurementRead, Permissions.ProcurementInspect, Permissions.ProcurementInspectionEvidenceRead);
             await PersonTestData.SeedDistinctPeopleAsync(data.Database, data.Clock, data.Actor.UserId, data.Reader.UserId, data.EvidenceReader.UserId, data.OtherInspector.UserId, data.Outsider.UserId);

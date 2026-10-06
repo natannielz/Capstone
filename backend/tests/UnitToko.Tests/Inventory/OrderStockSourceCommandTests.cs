@@ -21,8 +21,7 @@ public sealed class OrderStockSourceCommandTests(MongoFixture fixture)
     [Fact]
     public async Task Actual_source_separated_submission_advances_each_genuine_pool_once_and_replay_adds_no_source_effect()
     {
-        await using var data = await OrderSubmissionTestData.CreateAsync(fixture);
-        await data.AddSecondFulfillmentAsync(10);
+        await using var data = await OrderSubmissionTestData.CreateAsync(fixture, secondFulfillmentStock: 10);
         var originalHeads = await RowsAsync(data, OrderStockSourceRecords.Heads);
         var originalPools = await RowsAsync(data, "inventoryPools");
         Assert.Equal(2, originalHeads.Count); Assert.Equal(2, originalPools.Count);

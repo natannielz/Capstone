@@ -136,6 +136,12 @@ public sealed partial class StockSourceSetupService
     }
     private async Task<BsonDocument> CurrentSourceAsync(IClientSessionHandle tx, long poolId, CancellationToken ct)
     {
+        var current = await SourceConfigurationAsync(tx, poolId, ct);
+        await RequireActivationPoolProvenanceAsync(tx, current, ct);
+        return current;
+    }
+    private async Task<BsonDocument> SourceConfigurationAsync(IClientSessionHandle tx, long poolId, CancellationToken ct)
+    {
         try
         {
             var registration = await Rows("inventoryPoolRegistrations").Find(tx, F.Eq("_id", poolId)).SingleOrDefaultAsync(ct);
@@ -181,8 +187,9 @@ public sealed partial class StockSourceSetupService
                 var facts = StockSourceSetupBson.ReadInput(input);
                 if (facts.Location != originalFacts.Location || facts.PhysicalKey != originalFacts.PhysicalKey) throw StockSourceRevisionBson.Invalid();
             }
-            return new() { { "pool", pool.DeepClone() }, { "input", input.DeepClone() },
+            var current = new BsonDocument { { "pool", pool.DeepClone() }, { "input", input.DeepClone() },
                 { "approvedAt", approvedAt }, { "creationProposalId", registration["proposalId"] }, { "revisionProposalId", latest is null ? BsonNull.Value : latest["proposalId"] } };
+            return current;
         }
         catch (Exception ex) when (ex is ArgumentException or InvalidCastException or KeyNotFoundException or FormatException or OverflowException)
         { throw StockSourceRevisionBson.Invalid(); }
@@ -238,6 +245,8 @@ public sealed partial class StockSourceSetupService
     }
     private async Task FenceRevisionPoolAsync(IClientSessionHandle tx, BsonDocument pool, bool advance, CancellationToken ct)
     {
+        await new StockSourceTopologyFence(database).FenceAsync(tx,
+            InventoryGraph.Location(pool["location"].AsBsonDocument).OrganizationId.Value, ct);
         if (pool["fence"].AsInt64 == long.MaxValue || advance && pool["revision"].AsInt64 == long.MaxValue) throw StockSourceRevisionBson.Invalid();
         var update = Builders<BsonDocument>.Update.Inc("fence", 1L);
         if (advance) update = update.Inc("revision", 1L);

@@ -23,6 +23,50 @@ internal sealed class AfterSalesStockSourceEvents(IMongoDatabase database, IdAll
     internal IClock Clock => clock;
     private IMongoCollection<BsonDocument> Rows(string name) => database.GetCollection<BsonDocument>(name);
     private readonly FulfillmentStockSourceEvents fulfillment = new(database, ids, clock);
+    internal async Task FenceTopologyAsync(IClientSessionHandle tx, BsonDocument source, CancellationToken ct)
+    {
+        var organizations = PaymentDraftBson.Scopes(source["scopes"].AsBsonArray)
+            .Select(scope => scope.FulfillmentOrganizationId).Distinct().Order().ToArray();
+        if (organizations.Length == 0 || organizations.Any(id => id is not > 0)) throw AfterSalesStockSourceRecords.Unavailable();
+        foreach (var organization in organizations)
+            await new StockSourceTopologyFence(database).FenceAsync(tx, organization!.Value, ct);
+    }
+    internal async Task<AfterSalesStockSourceEvent> ReadCausalAsync(IClientSessionHandle tx, string kind, long id, CancellationToken ct)
+    {
+        if (kind == "setup") return await ReadAsync(tx, kind, id, true, ct);
+        if (kind is not ("request" or "decision")) throw AfterSalesStockSourceRecords.Unavailable();
+        var root = await new AfterSalesCaseRecords(database).ReadAsync(tx, id, ct);
+        var invoice = await Rows(InvoiceBson.Invoices).Find(tx, new BsonDocument("_id", root["source"]["invoiceId"])).SingleOrDefaultAsync(ct)
+            ?? throw AfterSalesStockSourceRecords.Unavailable();
+        await InvoiceRecords.VerifyPersistedAsync(database, tx, invoice, ct);
+        if (!InvoiceRecords.Equal(InvoiceService.CaseSnapshot(invoice), root["source"])) throw AfterSalesStockSourceRecords.Unavailable();
+        foreach (var line in root["source"]["lines"].AsBsonArray) {
+            var dispatched = await fulfillment.ReadAsync(tx, "dispatch", line["shipmentId"].AsInt64, true, ct);
+            var accepted = await fulfillment.ReadAsync(tx, "receipt", line["receiptId"].AsInt64, true, ct);
+            if (accepted.ShipmentId != line["shipmentId"].AsInt64 || dispatched.Record["orderId"] != line["orderId"])
+                throw AfterSalesStockSourceRecords.Unavailable();
+        }
+        var stock = await InvoiceService.CaseDispatchStockAsync(database, tx, root["source"].AsBsonDocument, ct);
+        var selected = new BsonArray(stock.Where(line => root["input"]["lines"].AsBsonArray.Any(item =>
+            item["receiptId"] == line["receiptId"] && item["skuId"] == line["skuId"])));
+        var pools = CausalPools(selected);
+        // Case read fences are mutable concurrency metadata, never part of this immutable cause.
+        var immutable = root.DeepClone().AsBsonDocument; immutable.Remove("fence");
+        var record = new BsonDocument { { "case", immutable }, { "stock", selected } };
+        if (kind == "request") return new(kind, id, record, pools, AfterSalesCaseRecords.Audit(root), root["requestedAt"], null);
+        var decisions = new AfterSalesDecisionRecords(database);
+        var decision = await decisions.ReadAsync(tx, root, ct) ?? throw AfterSalesStockSourceRecords.Unavailable();
+        await decisions.RequireCapacityAsync(tx, root, [], ct);
+        record.Add("decision", decision);
+        return new(kind, id, record, pools, AfterSalesDecisionRecords.Audit(decision), decision["decidedAt"], null);
+    }
+    internal static long[] CausalPools(BsonArray stock)
+    {
+        var pools = stock.SelectMany(line => line["originalLots"].AsBsonArray).Select(lot => lot["poolId"].AsInt64).Distinct().Order().ToArray();
+        if (stock.Count == 0 || pools.Length is < 1 or > 100 || pools.Any(pool => pool is <= 0 or >= long.MaxValue - 1))
+            throw AfterSalesStockSourceRecords.Unavailable();
+        return pools;
+    }
     internal async Task<AfterSalesStockSourceEvent> ReadAsync(IClientSessionHandle tx, string kind, long id,
         bool requireSetupReceipt, CancellationToken ct)
     {

@@ -8,9 +8,10 @@ using UnitToko.Platform.Mongo.Migrations;
 
 namespace UnitToko.Platform.Fulfillment;
 internal sealed record AfterSalesStockSourceSnapshot(BsonDocument Head, long OpenCount);
-internal sealed class AfterSalesStockSourceRecords(IMongoDatabase database)
+internal sealed partial class AfterSalesStockSourceRecords(IMongoDatabase database)
 {
     internal const string Heads = "afterSalesStockSourceHeads", Transitions = "afterSalesStockSourceTransitions";
+    internal const string CausalHeads = "afterSalesCausalSourceHeads", CausalTransitions = "afterSalesCausalSourceTransitions";
     internal const int MaximumRows = 4096;
     private static readonly FilterDefinitionBuilder<BsonDocument> F = Builders<BsonDocument>.Filter;
     private IMongoCollection<BsonDocument> Rows(string name) => database.GetCollection<BsonDocument>(name);

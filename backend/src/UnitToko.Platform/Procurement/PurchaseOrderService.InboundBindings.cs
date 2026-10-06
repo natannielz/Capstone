@@ -19,6 +19,7 @@ public sealed partial class PurchaseOrderService
         new(new(value.OrganizationId), new(value.ShopId), new(value.WarehouseId), new(value.ChannelId));
     private static BsonArray ReceivingSources(Context context) => new(context.InboundCaptures.Select(capture => capture.Source.DeepClone()));
     private async Task CaptureInboundAsync(Context context, PurchaseOrderInput input, PurchaseOrderInboundPoolSelection? selected, CancellationToken ct) {
+        await new StockSourceTopologyFence(database).FenceAsync(context.Tx, input.Location.OrganizationId, ct);
         context.InboundSelection = selected is null ? null : PurchaseOrderInboundRules.Copy(input, selected);
         context.InboundCaptures.Clear();
         if (context.InboundSelection is null) return;
@@ -60,6 +61,7 @@ public sealed partial class PurchaseOrderService
     // used to authorize a NEW write, never to assign historical membership.
     internal async Task<IReadOnlyList<HeldReceiptPoolCapture>> CaptureApprovedInboundAsync(ActorContext actor, AuthorizationSnapshot authority,
         IClientSessionHandle tx, BsonDocument source, CancellationToken ct) {
+        await new StockSourceTopologyFence(database).FenceAsync(tx, source["order"]["location"]["organizationId"].AsInt64, ct);
         var binding = await InboundRecords.ApprovedAsync(tx, source, ct);
         if (binding is null) return [];
         var result = new List<HeldReceiptPoolCapture>(); var input = B.Input(source["proposal"]["input"]);

@@ -33,6 +33,7 @@ internal sealed class ProcurementStockSourceProducer(IMongoDatabase database, Id
             { "lastTransitionId", transition["_id"] }, { "lastHash", transition["transitionHash"] }, { "updatedAt", source.Time }, { "fence", 0L } };
         await Rows(ProcurementStockSourceRecords.Transitions).InsertOneAsync(tx, transition, cancellationToken: ct);
         await Rows(ProcurementStockSourceRecords.Heads).InsertOneAsync(tx, head, cancellationToken: ct);
+        await new ProcurementStockSourceCoverage(database, ids, clock).InitializeAsync(tx, source, ct);
         repository.RequireSession(tx);
         if (tx.WrappedCoreSession.CurrentTransaction.TransactionNumber != number) throw ProcurementStockSourceRecords.Unavailable();
         ct.ThrowIfCancellationRequested();

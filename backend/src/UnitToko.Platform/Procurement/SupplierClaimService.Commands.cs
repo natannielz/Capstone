@@ -39,8 +39,9 @@ public sealed partial class SupplierClaimService
     }
     public async Task<BsonDocument> RequestAsync(ActorContext actor, SupplierClaimInput input, string binding, AuthorizationCommandMetadata metadata, CancellationToken ct = default) {
         input = SupplierClaimRules.Copy(input); Binding(binding); Metadata(metadata); if (metadata.Reason != input.Reason) throw SupplierClaimRules.Invalid(); await StorageAsync(ct);
-        var id = (await ids.NextAsync(B.Requests, ct)).Value; var audit = (await ids.NextAsync("auditEvents", ct)).Value; var body = B.RequestBody(input, binding); Context? context = null;
+        var id = (await ids.NextAsync(B.Requests, ct)).Value; var audit = (await ids.NextAsync("auditEvents", ct)).Value; var body = B.RequestBody(input, binding); Context? context = null; bool fresh = false;
         return await authorization.ExecuteCommandAsync(actor, B.Prefix + "request", metadata, body, async (authority, tx, token) => {
+            fresh = false;
             _ = Query(actor, authority, Permissions.SupplierClaim); var existing = await records.ForKeyAsync(tx, actor.UserId, B.Prefix + "request", metadata.IdempotencyKey, token);
             if (existing is not null) context = await ClaimContextAsync(actor, authority, tx, existing["_id"].AsInt64, Permissions.SupplierClaim, token);
             else {
@@ -71,11 +72,12 @@ public sealed partial class SupplierClaimService
                 else if ((await Rows(Q.Heads(capture.Basis)).ReplaceOneAsync(tx, capture.Head, head, cancellationToken: token)).ModifiedCount != 1) throw B.Changed();
                 active.Fences.RemoveAll(value => value.Table == Q.Heads(capture.Basis) && value.Row["_id"] == head["_id"]); AddFence(active, Q.Heads(capture.Basis), head);
             }
-            await EffectsAsync(tx, row, token); active.Request = row; return B.Result(row);
+            await EffectsAsync(tx, row, token); active.Request = row; fresh = true; return B.Result(row);
         }, ct, async (authority, tx, token) => {
             var active = context ?? throw B.Broken(); var actual = await records.RequestAsync(tx, active.Request!["_id"].AsInt64, token);
             SupplierClaimRecords.Equal(actual["bodyHash"], AuthorizationStore.CommandHash(body, metadata.Reason));
             await AddSourcesAsync(active, B.Input(actual["input"]), token); await records.OrphansAsync(tx, token); await FenceAsync(active, token);
+            if (fresh) await new ProcurementStockSourceCoverage(database, ids, clock).RecordAsync(tx, "claim", actual, token);
         }, validateCurrent: () => Current(context ?? throw B.Broken()));
     }
     public async Task<BsonDocument> PreviewDecisionAsync(ActorContext actor, long claimId, SupplierClaimDecision decision, CancellationToken ct = default) {
@@ -92,7 +94,9 @@ public sealed partial class SupplierClaimService
         if (claimId <= 0 || expectedVersion != 1) throw SupplierClaimRules.Invalid(); input = SupplierClaimRules.Copy(input); Binding(binding); Metadata(metadata); await StorageAsync(ct);
         var id = (await ids.NextAsync(B.Decisions, ct)).Value; var audit = (await ids.NextAsync("auditEvents", ct)).Value; var operation = B.Prefix + B.Decision(input.Decision);
         var body = B.DecisionBody(claimId, expectedVersion, input, binding); Context? context = null;
+        bool fresh = false;
         return await authorization.ExecuteCommandAsync(actor, operation, metadata, body, async (authority, tx, token) => {
+            fresh = false;
             context = await ClaimContextAsync(actor, authority, tx, claimId, Permissions.SupplierClaimApprove, token); return Command(context);
         }, async (tx, token) => {
             var active = context ?? throw B.Broken(); Current(active); if (active.Decision is not null) throw B.Changed("supplier_claim_already_decided");
@@ -101,11 +105,12 @@ public sealed partial class SupplierClaimService
                 { "orderId", active.Request["orderId"] }, { "supplierId", active.Request["supplierId"] }, { "requestHash", active.Request["snapshotHash"] }, { "decision", B.Decision(input.Decision) },
                 { "input", B.DecisionInput(input) }, { "capacity", active.Capacity }, { "binding", binding }, { "people", new BsonArray(active.People!.Evidence.OrderBy(person => person.UserId).Select(R.Person)) } };
             R.Metadata(row, operation, audit, actor, metadata, body, Now); await Rows(B.Decisions).InsertOneAsync(tx, row, cancellationToken: token); await EffectsAsync(tx, row, token);
-            active.Decision = row; return B.Result(row);
+            active.Decision = row; fresh = true; return B.Result(row);
         }, ct, async (authority, tx, token) => {
             var active = context ?? throw B.Broken(); var decision = await records.DecisionAsync(tx, active.Request!, token) ?? throw B.Broken();
             SupplierClaimRecords.Equal(decision["bodyHash"], AuthorizationStore.CommandHash(body, metadata.Reason)); SupplierClaimRecords.Equal(decision["actorId"], actor.UserId); SupplierClaimRecords.Equal(decision["requestKey"], metadata.IdempotencyKey);
             await records.OrphansAsync(tx, token); await FenceAsync(active, token);
+            if (fresh) await new ProcurementStockSourceCoverage(database, ids, clock).RecordAsync(tx, "claimDecision", decision, token);
         }, validateCurrent: () => Current(context ?? throw B.Broken()));
     }
 }

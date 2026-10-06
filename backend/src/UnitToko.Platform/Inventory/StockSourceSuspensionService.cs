@@ -49,6 +49,8 @@ public sealed partial class StockSourceSetupService
             }, async (tx, token) =>
             {
                 var context = captured ?? throw StockSourceSuspensionBson.Invalid();
+                await new StockSourceTopologyFence(database).FenceAsync(tx,
+                    InventoryGraph.Location(context.Pool["location"].AsBsonDocument).OrganizationId.Value, token);
                 var hash = StockSourceSuspensionBson.Hash(context.Configuration);
                 if (context.Pool["revision"].AsInt64 != expected.PoolRevision ||
                     (context.Latest?["suspensionRevision"].AsInt64 ?? 0) != expected.SuspensionRevision || hash != expected.ConfigurationHash)

@@ -17,7 +17,7 @@ public sealed class OrderDecisionTests(MongoFixture fixture)
 {
     [Fact]
     public async Task Each_store_accepts_only_its_own_packages_and_cannot_read_another_stores_part() {
-        await using var data = await OrderSubmissionTestData.CreateAsync(fixture); var actors = await Actors(data); await data.AddSecondFulfillmentAsync(10);
+        await using var data = await OrderSubmissionTestData.CreateAsync(fixture, secondFulfillmentStock: 10); var actors = await Actors(data);
         var other = await data.Prices.Catalog.ActorAsync(8300, CatalogAuthoringTestData.OtherOwner, Permissions.OrderAccept); var id = await Submit(data);
         var branch = await data.Service.ReviewOrderAsync(actors.Approver, id, null, OrderReviewStage.Spending);
         await data.Service.DecideOrderAsync(actors.Approver, id, null, OrderReviewStage.Spending, branch.Revision, branch.Review, CatalogPriceTestData.Meta("approve-both"));

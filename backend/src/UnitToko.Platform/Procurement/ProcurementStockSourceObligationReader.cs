@@ -6,8 +6,8 @@ using UnitToko.Platform.Mongo;
 
 namespace UnitToko.Platform.Procurement;
 
-/// <summary>Partial custody adapter only. Do not register as complete activation coverage:
-/// upstream inbound source binding and terminal resolution owners are still absent.</summary>
+/// <summary>Authenticated causal membership plus held custody. Missing legacy bindings
+/// refuse admission; pending demand/PO/supplier work remains an open obligation.</summary>
 internal sealed class ProcurementStockSourceObligationReader(IMongoDatabase database, MongoUnitOfWork unit, IdAllocator ids, IClock clock)
     : IStockSourceObligationReader
 {

@@ -123,6 +123,7 @@ public sealed partial class ProcurementStockReceiptService
         var context = await OrderAsync(actor, authority, tx, input.Location, input.OrderId, input.OrderVersion, input.OrderApprovalId, Permissions.StockReceive, ct);
         await InspectionAsync(context, input.InspectionId, input.InspectionLineNumber, ct); ProcurementStockReceiptRecords.Review(input, context.Order!.Source, context.Inspection!);
         if (context.Capacity!.Capacity["remainingPackages"].AsInt64 < input.Packages) throw B.Changed("procurement_stock_receipt_capacity_exceeded");
+        await new StockSourceTopologyFence(database).FenceAsync(tx, input.Location.OrganizationId, ct);
         context.Pool = await sources.CaptureHeldReceiptAsync(actor, authority, tx, Location(input.Location), input.PoolId, input.PoolRevision, Permissions.StockReceive, ct);
         await orders.RequirePlannedReceiptCapacityAsync(tx, context.Order.Source, context.Inspection!, input, ct);
         if (await Rows(B.Receipts).Find(tx, new BsonDocument { { "location", R.Location(input.Location) }, { "supplierId", context.Order.Source["proposal"]["input"]["supplierId"] }, { "orderId", input.OrderId }, { "receiptReference", input.ReceiptReference } }).AnyAsync(ct)) throw B.Changed("procurement_stock_receipt_reference_exists");

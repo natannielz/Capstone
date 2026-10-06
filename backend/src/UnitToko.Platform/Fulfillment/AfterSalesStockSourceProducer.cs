@@ -8,14 +8,14 @@ using UnitToko.Platform.Inventory;
 using UnitToko.Platform.Mongo;
 
 namespace UnitToko.Platform.Fulfillment;
-internal sealed class AfterSalesStockSourceProducer(IMongoDatabase database, IdAllocator ids, IClock clock)
+internal sealed partial class AfterSalesStockSourceProducer(IMongoDatabase database, IdAllocator ids, IClock clock)
 {
     private readonly AfterSalesStockSourceRecords records = new(database);
     private readonly AfterSalesStockSourceEvents owner = new(database, ids, clock);
     private IMongoCollection<BsonDocument> Rows(string name) => database.GetCollection<BsonDocument>(name);
     internal async Task InitializeAsync(IClientSessionHandle tx, long decisionId, CancellationToken ct)
     {
-        await AfterSalesStockSourceStorage.RequireAsync(database, ct);
+        await AfterSalesStockSourceStorage.RequireCoverageAsync(database, ct);
         new InventoryRepository(database).RequireSession(tx);
         var number = tx.WrappedCoreSession.CurrentTransaction.TransactionNumber;
         var capturedAt = clock.UtcNow;
@@ -31,6 +31,7 @@ internal sealed class AfterSalesStockSourceProducer(IMongoDatabase database, IdA
         await Rows(AfterSalesStockSourceRecords.Heads).InsertOneAsync(tx, new BsonDocument { { "_id", poolId }, { "schemaVersion", 1 }, { "kind", "aftersales.stocksource.head" },
             { "location", pool["location"].DeepClone() }, { "setupDecisionId", decisionId }, { "revision", 1L }, { "lastTransitionId", transition["_id"] },
             { "lastHash", transition["transitionHash"] }, { "updatedAt", source.Time }, { "fence", 0L } }, cancellationToken: ct);
+        await InitializeCausalAsync(tx, source, ct);
         new InventoryRepository(database).RequireSession(tx);
         if (tx.WrappedCoreSession.CurrentTransaction.TransactionNumber != number || clock.UtcNow < capturedAt) throw AfterSalesStockSourceRecords.Unavailable();
         Time(source); ct.ThrowIfCancellationRequested();
@@ -38,12 +39,14 @@ internal sealed class AfterSalesStockSourceProducer(IMongoDatabase database, IdA
     internal async Task<Action> RecordFreshAsync(IClientSessionHandle tx, ActorContext actor, AuthorizationSnapshot authority, AuthorizationStore authorization,
         string kind, BsonDocument freshRow, Action current, CancellationToken ct)
     {
-        await AfterSalesStockSourceStorage.RequireAsync(database, ct); new InventoryRepository(database).RequireSession(tx); current();
+        await AfterSalesStockSourceStorage.RequireCoverageAsync(database, ct); new InventoryRepository(database).RequireSession(tx); current();
         var source = await owner.ReadAsync(tx, kind, freshRow["_id"].AsInt64, true, ct);
         var field = kind switch { "receive" => "return", "inspect" => "inspection", "verifyLot" => "verification", _ => throw AfterSalesStockSourceRecords.Unavailable() };
         if (source.Record[field] != freshRow) throw AfterSalesStockSourceRecords.Unavailable(); Time(source);
         var writes = new List<AfterSalesStockSourcePoolWrite>();
         foreach (var poolId in source.PoolIds) {
+            var causal = await records.CausalHistoryAsync(tx, owner, poolId, ct);
+            await records.RequireCausalSourcesAsync(tx, owner, poolId, causal.History, null, ct);
             var (head, history, open) = await records.HistoryAsync(tx, owner, poolId, ct);
             await records.RequireSourcesAsync(tx, owner, poolId, history, source, ct);
             if (head["revision"].AsInt64 >= AfterSalesStockSourceRecords.MaximumRows || head["fence"].AsInt64 >= long.MaxValue - 2 ||

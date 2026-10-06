@@ -28,4 +28,14 @@ internal static class AfterSalesStockSourceStorage
             if (!OrderStockSourceStorage.SafeIndexes(indexes, keys) || keys.Any(key => !indexes.Any(row => AccountContactStorage.Matches(row, key)))) throw AfterSalesStockSourceRecords.Unavailable();
         }
     }
+    internal static async Task RequireCoverageAsync(IMongoDatabase database, CancellationToken ct)
+    {
+        await RequireAsync(database, ct);
+        foreach (var name in AfterSalesCausalCoverageSchemas.Collections) {
+            var definition = await AccountContactStorage.DefinitionAsync(database, name, ct) ?? throw AfterSalesStockSourceRecords.Unavailable();
+            if (!AccountContactStorage.SafeDefinition(definition, AfterSalesCausalCoverageSchemas.Validator(name))) throw AfterSalesStockSourceRecords.Unavailable();
+            var indexes = await (await database.GetCollection<BsonDocument>(name).Indexes.ListAsync(ct)).ToListAsync(ct); var keys = AfterSalesCausalCoverageSchemas.Keys(name);
+            if (!OrderStockSourceStorage.SafeIndexes(indexes, keys) || keys.Any(key => !indexes.Any(row => AccountContactStorage.Matches(row, key)))) throw AfterSalesStockSourceRecords.Unavailable();
+        }
+    }
 }

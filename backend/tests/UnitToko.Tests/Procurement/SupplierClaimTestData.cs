@@ -39,16 +39,16 @@ internal sealed class SupplierClaimTestData : IAsyncDisposable
         [new(basis, InspectionId, 1, packages, basis == SupplierClaimBasis.ShortageObserved ? "shortage" : Documents is null ? "damaged" : "other",
             Documents?.DocumentId, Documents is null ? null : 1, Documents is null ? null : InvoiceMatch["matchId"].AsInt64, Documents is null ? null : 1)]);
     internal static async Task<SupplierClaimTestData> CreateAsync(MongoFixture fixture, ProcurementRoute route = ProcurementRoute.Ddo, bool invoice = false, bool shortage = false,
-        Func<ProcurementInspectionInput, ProcurementInspectionInput>? inspectionInput = null) {
+        Func<ProcurementInspectionInput, ProcurementInspectionInput>? inspectionInput = null, bool boundStock = false) {
         var data = new SupplierClaimTestData();
         try {
             if (invoice) {
                 if (inspectionInput is not null) throw new ArgumentException("Custom physical observations belong to the inspection-only fixture", nameof(inspectionInput));
-                data.Documents = await SupplierDocumentTestData.CreateAsync(fixture, route); data.Inspection = data.Documents.Inspection;
+                data.Documents = await SupplierDocumentTestData.CreateAsync(fixture, route, boundStock: boundStock); data.Inspection = data.Documents.Inspection;
                 data.InspectionResult = data.Documents.InspectionResult; await data.Documents.SubmitOriginalAsync();
                 data.InvoiceMatch = await data.Documents.MatchAsync("supplier-claim-invoice-basis");
             } else {
-                data.Inspection = await ProcurementInspectionTestData.CreateAsync(fixture, route, createDraft: false);
+                data.Inspection = await ProcurementInspectionTestData.CreateAsync(fixture, route, createDraft: false, boundStock: boundStock);
                 var input = data.Inspection.Input();
                 input = input with { Lines = [input.Lines[0] with { DeclaredPackages = 4, DamagedPackages = 2 }] };
                 if (shortage) input = input with { Lines = [input.Lines[0] with { DeclaredPackages = 5 }] };

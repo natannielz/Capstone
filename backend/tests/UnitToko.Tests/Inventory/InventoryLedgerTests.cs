@@ -4,7 +4,9 @@ using MongoDB.Driver;
 using UnitToko.Modules.Contracts;
 using UnitToko.Modules.Accounting;
 using UnitToko.Platform.Accounting;
+using UnitToko.Platform.Authorization;
 using UnitToko.Modules.Identity.Contracts;
+using UnitToko.Modules.Identity;
 using UnitToko.Modules.Inventory;
 using UnitToko.Platform.Inventory;
 using UnitToko.Platform.Mongo;
@@ -20,6 +22,8 @@ public sealed class InventoryLedgerTests(MongoFixture fixture)
         new DateTimeOffset(2026, 9, 28, 0, 0, 0, TimeSpan.Zero), FactorAssurance.MultiFactor);
     private static readonly InventorySource Source = new("test-receipt", 5000, "receive", 1);
     private static readonly InventoryWriteMetadata Metadata = new("Synthetic inspected receipt", "test-ledger");
+    private BsonDocument initialPool = null!;
+    private InventoryBalanceDocument FixtureBalance() => InventoryGraphTests.Balance() with { PhysicalPoolId = initialPool["_id"].AsInt64 };
     private MongoUnitOfWork Unit => new(fixture.Client);
     private async Task<StoreTestData> Data()
     {
@@ -27,30 +31,67 @@ public sealed class InventoryLedgerTests(MongoFixture fixture)
         try
         {
             await InventoryGraphTests.InstallBalances(data);
-            await data.Database.GetCollection<BsonDocument>("inventoryPools").InsertOneAsync(InventoryGraphTests.Pool());
+            initialPool = await ActivateEmptyPoolAsync(data);
             await data.Database.GetCollection<BsonDocument>("lots").InsertOneAsync(InventoryGraphTests.Lot());
-            await data.Database.GetCollection<BsonDocument>("stockBalances").InsertOneAsync(InventoryBson.Balance(InventoryGraphTests.Balance()));
+            await data.Database.GetCollection<BsonDocument>("stockBalances").InsertOneAsync(InventoryBson.Balance(FixtureBalance()));
             await InventoryRepository.RequireStorageAsync(data.Database, "movements", InventoryMovementSchemas.Validator(), InventoryMovementSchemas.Key(), default);
             await data.Database.GetCollection<BsonDocument>("inventoryTestSources").InsertOneAsync(new BsonDocument
             {
                 { "_id", 5000L }, { "namespace", Source.Namespace }, { "eventKind", Source.EventKind }, { "occurrence", 1L },
                 { "revision", 1L }, { "fence", 0L }, { "approved", true }, { "actorId", 42L },
-                { "poolRevision", 1L }, { "packages", 3L }
+                { "poolId", initialPool["_id"] }, { "poolRevision", initialPool["revision"] }, { "packages", 3L }
             });
             return data;
         }
         catch { await data.DisposeAsync(); throw; }
     }
+    private async Task<BsonDocument> ActivateEmptyPoolAsync(StoreTestData data)
+    {
+        // The source adapter and on-hand balance remain explicit unit inputs. The pool's setup,
+        // policy and activation are real owning commands, completed while this pool is empty.
+        var location = InventoryGraphTests.Balance().Balance.Key.Location;
+        var maker = await data.AddActorAsync(104100, location.ToScope(), Permissions.StockSourcePropose, Permissions.StockSourcePolicyPropose, Permissions.StockSourceRead);
+        var checker = await data.AddActorAsync(104200, location.ToScope(), Permissions.StockSourceApprove, Permissions.StockSourcePolicyApprove, Permissions.StockSourceRead);
+        await PersonTestData.SeedDistinctPeopleAsync(data.Database, data.Clock, maker.UserId, checker.UserId);
+        var sources = new StockSourceSetupService(data.Database, Unit, new(data.Database), data.Clock);
+        AuthorizationCommandMetadata Meta(string key) => new(key, "Synthetic independently reviewed empty ledger fixture", "inventory-ledger-fixture");
+        const string handoffReference = "Synthetic empty ledger pool handoff";
+        var setup = await sources.ProposeAsync(maker, new(location, "synthetic-ledger-empty-pool", "Synthetic isolated ledger source", StockAuthorityMode.WebLedger,
+            StockPoolControl.SharedWebLedger, 60000, 0, null, null, "Synthetic ledger owner", handoffReference), Meta("ledger-source"));
+        var approved = await sources.DecideAsync(checker, setup["proposalId"].AsInt64, 1, StockSourceSetupDecision.Approve,
+            "Independent synthetic source review", Meta("ledger-source-approved"));
+        var poolId = approved["poolId"].AsInt64;
+        var policyPreview = await sources.PreviewOperatingPolicyAsync(maker, poolId);
+        var policy = await sources.ProposeOperatingPolicyAsync(maker, poolId, new(policyPreview["poolRevision"].AsInt64, policyPreview["suspensionRevision"].AsInt64,
+            policyPreview["policyRevision"].AsInt64, policyPreview["configurationHash"].AsString),
+            new(StockMovementWriter.UnitToko, null, 0, "Synthetic zero-stock reconciliation", "Synthetic suspend before outage"), Meta("ledger-policy"));
+        await sources.DecideOperatingPolicyAsync(checker, policy["proposalId"].AsInt64, 1, StockSourceSetupDecision.Approve,
+            "Independent synthetic operating policy review", Meta("ledger-policy-approved"));
+        var preview = await sources.PreviewActivationAsync(maker, poolId);
+        Assert.Equal(7, preview["obligations"].AsBsonArray.Count);
+        Assert.All(preview["obligations"].AsBsonArray, obligation => {
+            Assert.True(obligation["complete"].AsBoolean); Assert.Equal(0L, obligation["openCount"].AsInt64);
+        });
+        var handoff = new StockSourceEmptyHandoff(handoffReference, data.Clock.UtcNow, 0, 0, true, true, true);
+        var activation = await sources.ProposeActivationAsync(maker, poolId, StockSourceActivationBson.ReadExpected(preview["expected"].AsBsonDocument), handoff, Meta("ledger-activation"));
+        var review = await sources.PreviewActivationDecisionAsync(checker, activation["proposalId"].AsInt64, StockSourceSetupDecision.Approve, handoff);
+        var committed = await sources.DecideActivationAsync(checker, activation["proposalId"].AsInt64, 1, StockSourceSetupDecision.Approve, handoff,
+            StockSourceActivationBson.ReadExpected(review["expected"].AsBsonDocument), review["binding"].AsString, Meta("ledger-activation-approved"));
+        Assert.Equal("activated", committed["status"]);
+        var pool = await data.Database.GetCollection<BsonDocument>("inventoryPools").Find(new BsonDocument("_id", poolId)).SingleAsync();
+        Assert.True(pool["active"].AsBoolean);
+        return pool;
+    }
     private static FixtureReader Reader(StoreTestData data) => new(data.Database);
     private static InventoryLedger Ledger(StoreTestData data, params IInventorySourceReader[] readers) => new(data.Database, data.Clock, readers);
     private static Task Earlier(StoreTestData data, IClientSessionHandle tx) => data.Database.GetCollection<BsonDocument>("fixtureBusinessRecords").InsertOneAsync(tx,
         new BsonDocument { { "_id", 99000L }, { "schemaVersion", 1 } });
-    private static async Task AssertUnchanged(StoreTestData data)
+    private async Task AssertUnchanged(StoreTestData data)
     {
         Assert.Equal(10, (await data.Database.GetCollection<BsonDocument>("stockBalances").Find(new BsonDocument()).SingleAsync())["onHand"].AsInt64);
         Assert.Equal(0, await data.Database.GetCollection<BsonDocument>("movements").CountDocumentsAsync(new BsonDocument()));
         Assert.Equal(0, await data.Database.GetCollection<BsonDocument>("fixtureBusinessRecords").CountDocumentsAsync(new BsonDocument()));
-        Assert.Equal(0, (await data.Database.GetCollection<BsonDocument>("inventoryPools").Find(new BsonDocument()).SingleAsync())["fence"].AsInt64);
+        Assert.Equal(initialPool, await data.Database.GetCollection<BsonDocument>("inventoryPools").Find(new BsonDocument()).SingleAsync());
         Assert.Equal(0, (await data.Database.GetCollection<BsonDocument>("inventoryTestSources").Find(new BsonDocument()).SingleAsync())["fence"].AsInt64);
     }
     [Fact]
@@ -229,7 +270,7 @@ public sealed class InventoryLedgerTests(MongoFixture fixture)
     public async Task One_source_event_covers_all_stock_legs_or_rolls_back_every_leg(bool staleSecond)
     {
         await using var data = await Data();
-        var first = InventoryGraphTests.Balance();
+        var first = FixtureBalance();
         var second = first with { Id = 1001, Balance = first.Balance with { Key = first.Balance.Key with { SkuId = new(300), DefinitionId = new(301), LotId = new(302) } } };
         await data.Database.GetCollection<BsonDocument>("lots").InsertOneAsync(InventoryGraphTests.Lot(302, 300, 301));
         await data.Database.GetCollection<BsonDocument>("stockBalances").InsertOneAsync(InventoryBson.Balance(second));
@@ -284,7 +325,7 @@ public sealed class InventoryLedgerTests(MongoFixture fixture)
     public async Task Every_supported_transition_has_a_valid_exact_database_movement(string action)
     {
         await using var data = await Data();
-        var original = InventoryGraphTests.Balance();
+        var original = FixtureBalance();
         var before = original with { Balance = original.Balance with { OnHand = 100, Reserved = 20, Held = 20, Expired = 10 } };
         await data.Database.GetCollection<BsonDocument>("stockBalances").ReplaceOneAsync(new BsonDocument("_id", before.Id), InventoryBson.Balance(before));
         await data.Database.GetCollection<BsonDocument>("inventoryTestSources").UpdateOneAsync(new BsonDocument(), new BsonDocument("$set", new BsonDocument("action", action)));
@@ -312,7 +353,7 @@ public sealed class InventoryLedgerTests(MongoFixture fixture)
     public async Task Exact_Int64_boundary_quantities_remain_valid_without_double_rounding(string action)
     {
         await using var data = await Data();
-        var original = InventoryGraphTests.Balance();
+        var original = FixtureBalance();
         var before = original with { Balance = original.Balance with { OnHand = action == "Reserve" ? long.MaxValue : long.MaxValue - 3,
             Reserved = action == "Reserve" ? long.MaxValue - 3 : 0, Held = action == "ReceiveHeld" ? long.MaxValue - 3 : 0 } };
         await data.Database.GetCollection<BsonDocument>("stockBalances").ReplaceOneAsync(new BsonDocument("_id", before.Id), InventoryBson.Balance(before));
@@ -382,13 +423,14 @@ public sealed class InventoryLedgerTests(MongoFixture fixture)
             var written = await rows.UpdateOneAsync(tx, row, Builders<BsonDocument>.Update.Inc("fence", 1L), cancellationToken: ct);
             Assert.Equal(1, written.ModifiedCount);
             var actualSource = new InventorySource(row["namespace"].AsString, row["_id"].AsInt64, row["eventKind"].AsString, row["occurrence"].AsInt64);
-            var balance = InventoryGraphTests.Balance();
+            var balance = InventoryBson.ReadBalance(await database.GetCollection<BsonDocument>("stockBalances").Find(tx, new BsonDocument("_id", 1000L)).SingleAsync(ct));
+            if (balance.PhysicalPoolId != row["poolId"].AsInt64) throw new DomainValidationException("synthetic_source_denied", "Synthetic source does not own the configured pool");
             var changes = ImmutableArray.CreateBuilder<InventoryBalanceChange>();
             changes.Add(new(balance.Id, balance.PhysicalPoolId, balance.Balance.Key, 1, Enum.Parse<InventoryBalanceAction>(row.GetValue("action", "Receive").AsString), row["packages"].AsInt64));
-            if (row.Contains("secondPackages")) changes.Add(new(1001, 400,
+            if (row.Contains("secondPackages")) changes.Add(new(1001, balance.PhysicalPoolId,
                 balance.Balance.Key with { SkuId = new(300), DefinitionId = new(301), LotId = new(302) },
                 row["secondRevision"].AsInt64, InventoryBalanceAction.Receive, row["secondPackages"].AsInt64));
-            return Transform(new(actualSource, row["revision"].AsInt64, new(400, balance.Balance.Key.Location, row["poolRevision"].AsInt64), changes.ToImmutable()));
+            return Transform(new(actualSource, row["revision"].AsInt64, new(balance.PhysicalPoolId, balance.Balance.Key.Location, row["poolRevision"].AsInt64), changes.ToImmutable()));
         }
     }
 }

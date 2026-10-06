@@ -218,6 +218,7 @@ builder.Services.AddOpenApi("v1", options =>
         CatalogOpenApi.Configure(document);
         StockCountOpenApi.Configure(document);
         PackConversionRuleOpenApi.Configure(document);
+        StockSourceActivationOpenApi.Configure(document);
         StockSourceSetupOpenApi.Configure(document);
         StockSourceRevisionOpenApi.Configure(document);
         StockSourceAliasOpenApi.Configure(document);
@@ -510,6 +511,7 @@ app.MapBankStatementEndpoints();
 app.MapBankReceiptEndpoints();
 app.MapStockCountEndpoints();
 app.MapPackConversionRuleEndpoints();
+app.MapStockSourceActivationEndpoints();
 app.MapStockSourceSetupEndpoints();
 app.MapStockSourceRevisionEndpoints();
 app.MapStockSourceAliasEndpoints();

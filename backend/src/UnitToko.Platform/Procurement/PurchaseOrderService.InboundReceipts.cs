@@ -22,7 +22,10 @@ public sealed partial class PurchaseOrderService
     internal async Task RequirePlannedReceiptCapacityAsync(IClientSessionHandle tx, BsonDocument source,
         BsonDocument inspection, ProcurementStockReceiptInput input, CancellationToken ct) {
         await RequirePlannedReceiptMembershipAsync(tx, source, inspection, input, ct);
-        var binding = await InboundRecords.ApprovedAsync(tx, source, ct); if (binding is null) return;
+        var binding = await InboundRecords.ApprovedAsync(tx, source, ct);
+        // This path prepares a NEW stock write. The read-only historical membership
+        // method above preserves old unbound custody; it cannot authorize a new leg.
+        if (binding is null) throw B.Changed("procurement_stock_receipt_inbound_target_required");
         var sku = inspection["input"]["lines"][input.InspectionLineNumber - 1]["requestSkuId"].AsInt64;
         var planned = I.Selection(PurchaseOrderBson.Input(source["proposal"]["input"]), binding.Value.Selection["allocations"])
             .Allocations.Single(row => row.RequestSkuId == sku && row.PoolId == input.PoolId);

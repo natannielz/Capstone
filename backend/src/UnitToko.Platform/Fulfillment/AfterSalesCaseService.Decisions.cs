@@ -10,6 +10,7 @@ using UnitToko.Modules.Organizations;
 using UnitToko.Platform.Authorization;
 using UnitToko.Platform.Billing;
 using UnitToko.Platform.Identity;
+using UnitToko.Platform.Inventory;
 using D = UnitToko.Platform.Fulfillment.AfterSalesDecisionRecords;
 using R = UnitToko.Platform.Fulfillment.AfterSalesCaseRecords;
 
@@ -41,9 +42,12 @@ public sealed partial class AfterSalesCaseService
         input = AfterSalesDecisionPolicy.Copy(input); AuthorizationStore.ValidateMetadata(metadata);
         if (!ReceivingAccountPolicy.Text(metadata.Reason, 1000) || !ReceivingAccountPolicy.Text(metadata.IdempotencyKey, 128)) throw AfterSalesDecisionPolicy.Invalid();
         await StorageAsync(ct); var body = D.Body(id, revision, binding, input); var hash = AuthorizationStore.CommandHash(body, metadata.Reason); var auditId = (await ids.NextAsync("auditEvents", ct)).Value;
-        var store = new D(database); BsonDocument? root = null; AuthorizationSnapshot? current = null; IClientSessionHandle? session = null; PersonAuthorityProof? proof = null;
+        var store = new D(database); BsonDocument? root = null, fresh = null; Action? sourceCurrent = null;
+        AuthorizationSnapshot? current = null; IClientSessionHandle? session = null; PersonAuthorityProof? proof = null;
+        void Current() { Require(actor, current ?? throw R.Broken(), root ?? throw R.Broken(), Permissions.CaseManage); proof?.RequireCurrent(session!, clock.UtcNow); }
         return await authorization.ExecuteCommandAsync(actor, D.Operation, metadata, body, async (authority, tx, token) => {
-            current = authority; session = tx; proof = null; root = await AuthorizedAsync(actor, authority, tx, id, Permissions.CaseManage, token);
+            current = authority; session = tx; proof = null; fresh = null; sourceCurrent = null; root = await AuthorizedAsync(actor, authority, tx, id, Permissions.CaseManage, token);
+            await new AfterSalesStockSourceEvents(database, ids, clock).FenceTopologyAsync(tx, root["source"].AsBsonDocument, token);
             var resources = PaymentDraftBson.Scopes(root["scopes"].AsBsonArray); var approval = new ApprovalRequest(1, 1, RequestedBy: root["requestedBy"].AsInt64);
             return new(ScopePolicy.Authorize(actor, authority, Permissions.CaseManage, resources[0], clock.UtcNow, approval),
                 [.. resources.SelectMany(scope => ScopePolicy.RequiredNodes(scope, authority.Directory)).Distinct()], Permissions.CaseManage, new(resources[0], approval));
@@ -59,13 +63,15 @@ public sealed partial class AfterSalesCaseService
             await store.Rows("auditEvents").InsertOneAsync(tx, D.Audit(row), cancellationToken: token);
             await store.Rows("outboxEvents").InsertOneAsync(tx, new BsonDocument { { "_id", ObjectId.GenerateNewId() }, { "schemaVersion", 1 }, { "kind", D.Operation }, { "sourceKey", D.Operation + ":" + id },
                 { "actorId", actor.UserId }, { "requestKey", metadata.IdempotencyKey }, { "payload", D.Result(row) }, { "createdAt", at.UtcDateTime }, { "dueAt", at.UtcDateTime }, { "status", "pending" }, { "attempts", 0 } }, cancellationToken: token);
-            return D.Result(row);
+            fresh = row; return D.Result(row);
         }, ct, async (authority, tx, token) => {
             var original = await AuthorizedAsync(actor, authority, tx, id, Permissions.CaseManage, token); var saved = await store.ReadAsync(tx, original, token) ?? throw R.Broken();
             if (saved["actorId"] != actor.UserId || saved["requestKey"] != metadata.IdempotencyKey || saved["bodyHash"] != hash) throw R.Broken();
             await store.RequireCapacityAsync(tx, original, [], token);
             await FenceAsync(actor, authority, tx, original, Permissions.CaseManage, token);
-        }, validateCurrent: () => { Require(actor, current ?? throw R.Broken(), root ?? throw R.Broken(), Permissions.CaseManage); proof?.RequireCurrent(session!, clock.UtcNow); });
+            if (fresh is not null) sourceCurrent = await new AfterSalesStockSourceProducer(database, ids, clock)
+                .RecordCausalFreshAsync(tx, actor, authority, authorization, "decision", fresh, Current, token);
+        }, validateCurrent: () => { Current(); sourceCurrent?.Invoke(); });
     }
     public async Task<BsonDocument?> RecoverDecisionAsync(ActorContext actor, long id, string key, CancellationToken ct = default) {
         if (id <= 0) throw AfterSalesDecisionPolicy.Invalid(); AuthorizationStore.ValidateMetadata(new(key, "Recover original case decision", "case-decision-recovery")); await StorageAsync(ct);

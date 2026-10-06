@@ -91,9 +91,17 @@ public sealed partial class AfterSalesCaseService
         input = AfterSalesCasePolicy.Copy(input); AuthorizationStore.ValidateMetadata(metadata);
         if (!ReceivingAccountPolicy.Text(metadata.Reason, 1000) || !ReceivingAccountPolicy.Text(metadata.IdempotencyKey, 128)) throw AfterSalesCasePolicy.Invalid();
         await StorageAsync(ct); var id = (await ids.NextAsync(R.Collection, ct)).Value; var auditId = (await ids.NextAsync("auditEvents", ct)).Value;
-        var bodyHash = AuthorizationStore.CommandHash(input, metadata.Reason); BsonDocument? source = null, existing = null;
+        var bodyHash = AuthorizationStore.CommandHash(input, metadata.Reason); BsonDocument? source = null, existing = null, fresh = null;
+        AuthorizationSnapshot? current = null; Action? sourceCurrent = null;
+        void Current() {
+            var authority = current ?? throw R.Broken(); var query = Query(actor, authority, Permissions.CaseRequest);
+            var resources = PaymentDraftBson.Scopes((source ?? throw R.Broken())["scopes"].AsBsonArray);
+            if (resources.Length == 0 || resources.Any(resource => !query.Matches(resource) || !ScopePolicy.IsResourceActive(resource, authority.Directory))) throw R.Broken();
+        }
         return await authorization.ExecuteCommandAsync(actor, R.Operation, metadata, input, async (authority, tx, token) => {
+            current = authority; fresh = null; sourceCurrent = null;
             source = await invoices.CaseSourceAsync(actor, authority, tx, input.InvoiceId, Permissions.CaseRequest, token); R.RequireSource(input, source); existing = null;
+            await new AfterSalesStockSourceEvents(database, ids, clock).FenceTopologyAsync(tx, source, token);
             var original = await records.Rows(R.Collection).Find(tx, new BsonDocument { { "requestedBy", actor.UserId }, { "requestKey", metadata.IdempotencyKey } }).SingleOrDefaultAsync(token);
             if (original is not null) existing = await AuthorizedAsync(actor, authority, tx, original["_id"].AsInt64, Permissions.CaseRequest, token);
             else foreach (var (table, keyField) in new[] { ("idempotencyRecords", "key"), ("auditEvents", "requestKey"), ("outboxEvents", "requestKey") })
@@ -111,12 +119,14 @@ public sealed partial class AfterSalesCaseService
             await records.Rows(R.Collection).InsertOneAsync(tx, row, cancellationToken: token); await records.Rows("auditEvents").InsertOneAsync(tx, R.Audit(row), cancellationToken: token);
             await records.Rows("outboxEvents").InsertOneAsync(tx, new BsonDocument { { "_id", ObjectId.GenerateNewId() }, { "schemaVersion", 1 }, { "kind", R.Operation }, { "sourceKey", R.Operation + ":" + id },
                 { "actorId", actor.UserId }, { "requestKey", metadata.IdempotencyKey }, { "payload", R.Result(row) }, { "createdAt", now.UtcDateTime }, { "dueAt", now.UtcDateTime }, { "status", "pending" }, { "attempts", 0 } }, cancellationToken: token);
-            return R.Result(row);
+            fresh = row; return R.Result(row);
         }, ct, async (authority, tx, token) => {
             var row = await AuthorizedAsync(actor, authority, tx, existing?["_id"].AsInt64 ?? id, Permissions.CaseRequest, token);
             if (row["requestedBy"] != actor.UserId || row["requestKey"] != metadata.IdempotencyKey || row["bodyHash"] != bodyHash) throw R.Broken();
             await FenceAsync(actor, authority, tx, row, Permissions.CaseRequest, token);
-        });
+            if (fresh is not null) sourceCurrent = await new AfterSalesStockSourceProducer(database, ids, clock)
+                .RecordCausalFreshAsync(tx, actor, authority, authorization, "request", fresh, Current, token);
+        }, validateCurrent: () => { Current(); sourceCurrent?.Invoke(); });
     }
     public async Task<AfterSalesCaseView> ReadAsync(ActorContext actor, long id, CancellationToken ct = default) {
         if (id <= 0) throw AfterSalesCasePolicy.Invalid(); await StorageAsync(ct);

@@ -44,27 +44,17 @@ internal sealed class ProcurementStockReceiptTestData : IAsyncDisposable
                 var observed = inspectionInput is null ? input : inspectionInput(input);
                 data.InspectionLine = observed.Lines[0];
                 return observed;
-            });
+            }, boundStock: true);
             var scope = ProcurementRequestTestData.Scope;
             data.Maker = await data.Base.AddActorAsync(720, scope, Permissions.ProcurementRead, Permissions.StockRead, Permissions.StockReceive);
             data.Reader = await data.Base.AddActorAsync(721, scope, Permissions.ProcurementRead, Permissions.StockRead);
             data.Outsider = await data.Base.AddActorAsync(722, new(GrantScopeKind.FulfillmentWarehouse, 100,
                 ShopId: data.Inspection.Receiving.Procurement.ForeignShopId, WarehouseId: data.Inspection.Receiving.Procurement.ForeignWarehouseId, ChannelId: 103), Permissions.ProcurementRead, Permissions.StockRead, Permissions.StockReceive);
-            data.SourceMaker = await data.Base.AddActorAsync(724, scope, Permissions.StockSourcePropose, Permissions.StockSourceRead, Permissions.StockSourcePolicyPropose, Permissions.StockSourceSuspend);
-            data.SourceChecker = await data.Base.AddActorAsync(725, scope, Permissions.StockSourceApprove, Permissions.StockSourceRead, Permissions.StockSourcePolicyApprove);
-            await PersonTestData.SeedDistinctPeopleAsync(data.Database, data.Clock, data.Maker.UserId, data.Reader.UserId, data.Outsider.UserId, data.SourceMaker.UserId, data.SourceChecker.UserId);
-            var source = new StockSourceSetupInput(new(new(100), new(101), new(102), new(103)), "synthetic-held-receiving", "Synthetic reviewed receiving pool",
-                StockAuthorityMode.WebLedger, StockPoolControl.SharedWebLedger, 60001, 12, null, null, "Synthetic receiving operator", "Synthetic received-unit handoff");
-            var proposal = await data.Sources.ProposeAsync(data.SourceMaker, source, Meta("held-source"));
-            var approved = await data.Sources.DecideAsync(data.SourceChecker, proposal["proposalId"].AsInt64, 1, StockSourceSetupDecision.Approve, "Independent synthetic source approval", Meta("held-source-approved"));
-            data.PoolId = approved["poolId"].AsInt64;
-            var preview = await data.Sources.PreviewOperatingPolicyAsync(data.SourceMaker, data.PoolId);
-            var expected = new StockSourcePolicyExpectation(preview["poolRevision"].AsInt64, preview["suspensionRevision"].AsInt64, preview["policyRevision"].AsInt64, preview["configurationHash"].AsString);
-            var policy = await data.Sources.ProposeOperatingPolicyAsync(data.SourceMaker, data.PoolId, expected,
-                new(StockMovementWriter.UnitToko, null, 0, "Synthetic daily received-unit reconciliation", "Synthetic stop-and-review outage procedure"), Meta("held-policy"));
-            var accepted = await data.Sources.DecideOperatingPolicyAsync(data.SourceChecker, policy["proposalId"].AsInt64, 1, StockSourceSetupDecision.Approve,
-                "Independent synthetic operating-policy review", Meta("held-policy-approved"));
-            data.PolicyId = accepted["policyId"].AsInt64;
+            data.SourceMaker = data.Inspection.Receiving.SourceMaker;
+            data.SourceChecker = data.Inspection.Receiving.SourceChecker;
+            data.PoolId = data.Inspection.Receiving.PoolId;
+            data.PolicyId = data.Inspection.Receiving.PolicyId;
+            await PersonTestData.SeedDistinctPeopleAsync(data.Database, data.Clock, data.Maker.UserId, data.Reader.UserId, data.Outsider.UserId);
             Assert.False((await data.Rows("inventoryPools").Find(new BsonDocument("_id", data.PoolId)).SingleAsync())["active"].AsBoolean);
             return data;
         } catch { await data.DisposeAsync(); throw; }

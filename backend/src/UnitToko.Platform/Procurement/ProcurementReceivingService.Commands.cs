@@ -52,6 +52,7 @@ public sealed partial class ProcurementReceivingService
             var current = context ?? throw B.Broken(); var row = await records.FindKeyAsync(tx, actor.UserId, B.NoticeOperation, metadata.IdempotencyKey, token) ?? throw B.Broken();
             current.Notice = await records.NoticeAsync(tx, row["_id"].AsInt64, token, current.Order); current.History = await records.HistoryAsync(tx, current.Notice, token);
             await FenceAsync(current, token);
+            if (replay is null) await new ProcurementStockSourceCoverage(database, ids, clock).RecordAsync(tx, "notice", row, token);
         }, validateCurrent: () => { if (context is null) throw B.Broken(); Current(context); });
     }
     private static BsonDocument IntakeAfter(Context context, long revision, ProcurementContainerIntakeInput input, DateTimeOffset now) {
@@ -98,6 +99,7 @@ public sealed partial class ProcurementReceivingService
             var current = context ?? throw B.Broken(); var row = await records.FindKeyAsync(tx, actor.UserId, B.IntakeOperation, metadata.IdempotencyKey, token) ?? throw B.Broken();
             current.History = await records.HistoryAsync(tx, current.Notice!, token);
             if (!current.History.Intakes.Any(item => item.Equals(row))) throw B.Broken(); await FenceAsync(current, token);
+            if (replay is null) await new ProcurementStockSourceCoverage(database, ids, clock).RecordAsync(tx, "intake", row, token);
         }, validateCurrent: () => { if (context is null) throw B.Broken(); Current(context); });
     }
     public async Task<BsonDocument?> LookupAsync(ActorContext actor, string operation, string key, CancellationToken ct = default) {

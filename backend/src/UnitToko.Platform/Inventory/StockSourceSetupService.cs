@@ -94,6 +94,7 @@ public sealed partial class StockSourceSetupService(IMongoDatabase database, Mon
                 StockSourceSetupBson.Metadata(row, auditId, metadata);
                 if (poolId.HasValue)
                 {
+                    await new StockSourceTopologyFence(database).FenceAsync(tx, input.Location.OrganizationId.Value, token);
                     var key = F.Eq("organizationId", input.Location.OrganizationId.Value) & F.Eq("physicalKey", input.PhysicalKey);
                     if (await Rows("inventoryPoolRegistrations").Find(tx, key).AnyAsync(token))
                         throw new PersistenceConflictException("stock_pool_key_registered", "This physical stock pool is already registered");

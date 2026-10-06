@@ -59,6 +59,7 @@ public sealed partial class StockSourceSetupService
         StockLocation requested, long poolId, long? expectedRevision, string permission, CancellationToken ct) {
         if (permission is not (Permissions.StockReceive or Permissions.StockRead) || !tx.IsInTransaction || !ReferenceEquals(tx.Client, database.Client)) throw StockSourcePolicyBson.Invalid();
         Require(actor, authority, permission, Resource(requested));
+        await new StockSourceTopologyFence(database).FenceAsync(tx, requested.OrganizationId.Value, ct);
         var scope = await Rows("inventoryPools").Find(tx, F.Eq("_id", poolId)).Project(new BsonDocument("location", 1)).SingleOrDefaultAsync(ct) ?? throw new AuthorizationDeniedException("resource_unavailable");
         var owner = InventoryGraph.Location(scope["location"].AsBsonDocument); Require(actor, authority, permission, Resource(owner));
         var context = await HeldConfigurationAsync(tx, poolId, ct); var history = await OperatingPolicyHistoryAsync(tx, context, ct); var selected = history.Latest ?? throw IneligibleHeldPool();

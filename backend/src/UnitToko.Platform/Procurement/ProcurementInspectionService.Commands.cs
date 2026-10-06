@@ -70,6 +70,7 @@ public sealed partial class ProcurementInspectionService
                 _ = await records.RowAsync(tx, B.Heads, input.IntakeId, token); await records.OrphansAsync(tx, token);
             }
             ProcurementInspectionRecords.Equal(row["bodyHash"], AuthorizationStore.CommandHash(body, metadata.Reason)); await FenceAsync(active, token);
+            if (fresh is not null) await new ProcurementStockSourceCoverage(database, ids, clock).RecordAsync(tx, "inspectionDraft", row, token);
         }, validateCurrent: () => Current(context ?? throw B.Broken()));
     }
     public async Task<BsonDocument> PreviewSubmitAsync(ActorContext actor, long draftId, long expectedRevision, long reservationId, EvidenceRef reference, CancellationToken ct = default) {
@@ -122,6 +123,7 @@ public sealed partial class ProcurementInspectionService
                 await records.RequirePinAsync(tx, row, token);
             }
             await FenceAsync(active, token); finalPin?.Invoke();
+            if (fresh is not null) await new ProcurementStockSourceCoverage(database, ids, clock).RecordAsync(tx, "inspection", row, token);
         }, validateCurrent: () => { Current(context ?? throw B.Broken()); finalPin?.Invoke(); });
     }
     internal async Task<BsonDocument?> RecoverSubmitBodyAsync(ActorContext actor, long draftId, string key, string bodyHash, CancellationToken ct) {

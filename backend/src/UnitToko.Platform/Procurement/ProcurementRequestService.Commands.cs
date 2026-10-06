@@ -33,21 +33,24 @@ public sealed partial class ProcurementRequestService
     private Task<BsonDocument> CommandAsync(ActorContext actor, string operation, AuthorizationCommandMetadata metadata, object body,
         Func<AuthorizationSnapshot, IClientSessionHandle, BsonDocument?, CancellationToken, Task<Context>> capture,
         Func<Context, CancellationToken, Task<BsonDocument>> write, CancellationToken ct) {
-        Context? selected = null;
+        Context? selected = null; bool fresh = false;
         return authorization.ExecuteCommandAsync(actor, operation, metadata, body, async (authority, tx, token) => {
+            fresh = false;
             var permission = B.Permission(operation); _ = Query(actor, authority, permission);
             var saved = await ForKeyAsync(actor, authority, tx, operation, metadata.IdempotencyKey, token);
             selected = await capture(authority, tx, saved, token); var query = Require(selected);
             return new(new(true, "allowed", query.Clauses.Where(clause => clause.Matches(selected.Resource)).Select(clause => clause.GrantId).Distinct().ToImmutableArray()),
                 ScopePolicy.RequiredNodes(selected.Resource, authority.Directory), permission,
                 new(selected.Resource, permission == Permissions.ProcurementApprove ? new ApprovalRequest(1, 1, RequestedBy: selected.Proposal!["actorId"].AsInt64) : null));
-        }, (_, token) => write(selected ?? throw B.Broken(), token), ct, async (_, tx, token) => {
+        }, async (_, token) => { var result = await write(selected ?? throw B.Broken(), token); fresh = true; return result; }, ct, async (_, tx, token) => {
             var context = selected ?? throw B.Broken(); var row = await records.ForKeyAsync(tx, actor.UserId, operation, metadata.IdempotencyKey, token) ?? throw B.Broken();
             Equal(row["bodyHash"], AuthorizationStore.CommandHash(body, metadata.Reason));
             var request = await records.RequestAsync(tx, row["requestId"].AsInt64, token);
             BindPeople(context, request, operation == B.Prefix + "submit" ? null : row);
             await PeopleAsync(context, operation == B.Prefix + "submit" ? null : actor.UserId, operation == B.Prefix + "submit" ? null : request["actorId"].AsInt64, token);
             await FenceAsync(context, token);
+            if (fresh) await new ProcurementStockSourceCoverage(database, ids, clock).RecordAsync(tx,
+                operation == B.Prefix + "submit" ? "request" : "requestDecision", row, token);
         }, validateCurrent: () => Current(selected ?? throw B.Broken()));
     }
     public async Task<BsonDocument> SubmitAsync(ActorContext actor, ProcurementRequestInput input, string binding, AuthorizationCommandMetadata metadata, CancellationToken ct = default) {

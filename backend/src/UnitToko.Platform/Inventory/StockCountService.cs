@@ -54,6 +54,8 @@ public sealed partial class StockCountService(IMongoDatabase database, MongoUnit
                 return existing;
             }
             RequireLocation(context, input.Location);
+            var coverage = new InventoryCountCoverage(database);
+            await coverage.RequireFreshUnboundAsync(tx, this, CountSources, input.Location, token);
             var result = await catalog.WithStockCountDefinitionAsync(database, tx, actor, input.Location,
                 input.SkuId, input.ExpectedSkuRevision, input.ExpectedDefinitionId, async (definition, callbackToken) =>
                 {
@@ -63,6 +65,7 @@ public sealed partial class StockCountService(IMongoDatabase database, MongoUnit
                     await Rows(StockCountBson.Collection).InsertOneAsync(tx, row, cancellationToken: callbackToken);
                     await Rows("auditEvents").InsertOneAsync(tx, StockCountBson.Audit(row), cancellationToken: callbackToken);
                     await Rows("idempotencyRecords").InsertOneAsync(tx, StockCountBson.Receipt(row, receiptId), cancellationToken: callbackToken);
+                    await coverage.AppendFreshAsync(tx, this, CountSources, row, callbackToken);
                     return observation;
                 }, token);
             await CompleteAsync(context, token);

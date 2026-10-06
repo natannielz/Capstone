@@ -28,8 +28,13 @@
   </ItemGroup>
 
   <Target Name="CopyPersistenceProbe" AfterTargets="Build">
+    <MSBuild Projects="$(MSBuildThisFileDirectory)../UnitToko.PersistenceProbe/UnitToko.PersistenceProbe.csproj" Targets="GetTargetPath">
+      <Output TaskParameter="TargetOutputs" ItemName="PersistenceProbeOutput" />
+    </MSBuild>
+    <Error Condition="!Exists('@(PersistenceProbeOutput)')" Text="Build the matching persistence probe before copying test helpers." />
+    <PropertyGroup><PersistenceProbeDirectory>@(PersistenceProbeOutput->'%(RootDir)%(Directory)')</PersistenceProbeDirectory></PropertyGroup>
     <ItemGroup>
-      <PersistenceProbeFiles Include="$(MSBuildThisFileDirectory)../UnitToko.PersistenceProbe/bin/$(Configuration)/net10.0/**/*" />
+      <PersistenceProbeFiles Include="$(PersistenceProbeDirectory)**/*" />
     </ItemGroup>
     <Copy SourceFiles="@(PersistenceProbeFiles)"
           DestinationFiles="@(PersistenceProbeFiles->'$(OutDir)PersistenceProbe/%(RecursiveDir)%(Filename)%(Extension)')"
@@ -37,8 +42,13 @@
   </Target>
 
   <Target Name="CopyMigrationWorker" AfterTargets="Build">
+    <MSBuild Projects="$(MSBuildThisFileDirectory)../../src/UnitToko.Worker/UnitToko.Worker.csproj" Targets="GetTargetPath">
+      <Output TaskParameter="TargetOutputs" ItemName="MigrationWorkerOutput" />
+    </MSBuild>
+    <Error Condition="!Exists('@(MigrationWorkerOutput)')" Text="Build the matching migration worker before copying test helpers." />
+    <PropertyGroup><MigrationWorkerDirectory>@(MigrationWorkerOutput->'%(RootDir)%(Directory)')</MigrationWorkerDirectory></PropertyGroup>
     <ItemGroup>
-      <MigrationWorkerFiles Include="$(MSBuildThisFileDirectory)../../src/UnitToko.Worker/bin/$(Configuration)/net10.0/**/*" />
+      <MigrationWorkerFiles Include="$(MigrationWorkerDirectory)**/*" />
     </ItemGroup>
     <Copy SourceFiles="@(MigrationWorkerFiles)"
           DestinationFiles="@(MigrationWorkerFiles->'$(OutDir)MigrationWorker/%(RecursiveDir)%(Filename)%(Extension)')"
@@ -46,8 +56,13 @@
   </Target>
 
   <Target Name="CopyImageDecoder" AfterTargets="Build">
+    <MSBuild Projects="$(MSBuildThisFileDirectory)../../src/UnitToko.ImageDecoder/UnitToko.ImageDecoder.csproj" Targets="GetTargetPath">
+      <Output TaskParameter="TargetOutputs" ItemName="ImageDecoderOutput" />
+    </MSBuild>
+    <Error Condition="!Exists('@(ImageDecoderOutput)')" Text="Build the matching image decoder before copying test helpers." />
+    <PropertyGroup><ImageDecoderDirectory>@(ImageDecoderOutput->'%(RootDir)%(Directory)')</ImageDecoderDirectory></PropertyGroup>
     <ItemGroup>
-      <ImageDecoderFiles Include="$(MSBuildThisFileDirectory)../../src/UnitToko.ImageDecoder/bin/$(Configuration)/net10.0/**/*" />
+      <ImageDecoderFiles Include="$(ImageDecoderDirectory)**/*" />
     </ItemGroup>
     <Copy SourceFiles="@(ImageDecoderFiles)" DestinationFiles="@(ImageDecoderFiles->'$(OutDir)ImageDecoder/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
   </Target>

@@ -30,7 +30,8 @@ internal sealed class OrderSubmissionTestData(CatalogPriceTestData prices) : IAs
     internal IMongoDatabase Database => Prices.Catalog.Database;
     internal OrderSubmissionService Service => new(Database, new(Prices.Catalog.Client), new(Database), Prices.Catalog.Clock, Admission);
     internal IMongoCollection<BsonDocument> Rows(string name) => Database.GetCollection<BsonDocument>(name);
-    internal static async Task<OrderSubmissionTestData> CreateAsync(MongoFixture fixture, int stock = 10, CatalogPriceTestData? attachedPrices = null)
+    internal static async Task<OrderSubmissionTestData> CreateAsync(MongoFixture fixture, int stock = 10, CatalogPriceTestData? attachedPrices = null,
+        int? secondFulfillmentStock = null)
     {
         var data = new OrderSubmissionTestData(attachedPrices ?? await CatalogPriceTestData.CreateAsync(fixture));
         try {
@@ -51,6 +52,9 @@ internal sealed class OrderSubmissionTestData(CatalogPriceTestData prices) : IAs
             await InventoryGraphTests.InstallBalances(catalog.Base);
             await InventoryRepository.RequireStorageAsync(data.Database, "movements", InventoryMovementSchemas.Validator(), InventoryMovementSchemas.Key(), default);
             var poolId = await data.ConfigureIsolatedOperationalPoolAsync(InventoryGraphTests.Balance().Balance.Key.Location);
+            // Configure every requested source while physical storage is genuinely empty.
+            // The second helper seeds its balance only after both sources have been activated.
+            if (secondFulfillmentStock is { } secondStock) await data.AddSecondFulfillmentAsync(secondStock);
             await data.Rows("lots").InsertOneAsync(InventoryGraphTests.Lot(202, item.Sku.Id.Value, item.Definition.Id.Value));
             var balance = InventoryGraphTests.Balance();
             balance = balance with { PhysicalPoolId = poolId,
@@ -64,7 +68,7 @@ internal sealed class OrderSubmissionTestData(CatalogPriceTestData prices) : IAs
     }
     public ValueTask DisposeAsync() => Prices.DisposeAsync();
 
-    internal async Task AddSecondFulfillmentAsync(int stock) {
+    private async Task AddSecondFulfillmentAsync(int stock) {
         var catalog = Prices.Catalog; var owner = CatalogAuthoringTestData.OtherOwner;
         await catalog.Base.AddGrantAsync(Prices.Maker, 7300, owner, [Permissions.CatalogManage, Permissions.PricingManage]);
         await catalog.Base.AddGrantAsync(Prices.Checker, 7400, owner, [Permissions.PricingApprove]);
@@ -93,8 +97,8 @@ internal sealed class OrderSubmissionTestData(CatalogPriceTestData prices) : IAs
         // These already verified, distinct synthetic people also own the real independent price workflow.
         // Do not seed a second person proof or manufacture Ordering producer records.
         Assert.NotEqual(Prices.Maker.UserId, Prices.Checker.UserId);
-        await catalog.Base.AddGrantAsync(Prices.Maker, 6260 + sequence, location.ToScope(), [Permissions.StockSourcePropose, Permissions.StockSourceRead]);
-        await catalog.Base.AddGrantAsync(Prices.Checker, 6270 + sequence, location.ToScope(), [Permissions.StockSourceApprove, Permissions.StockSourceRead]);
+        await catalog.Base.AddGrantAsync(Prices.Maker, 6260 + sequence, location.ToScope(), [Permissions.StockSourcePropose, Permissions.StockSourcePolicyPropose, Permissions.StockSourceRead]);
+        await catalog.Base.AddGrantAsync(Prices.Checker, 6270 + sequence, location.ToScope(), [Permissions.StockSourceApprove, Permissions.StockSourcePolicyApprove, Permissions.StockSourceRead]);
         var sources = new StockSourceSetupService(Database, new(catalog.Client), new(Database), catalog.Clock);
         var input = new StockSourceSetupInput(location, "isolated-order-pool-" + sequence, "Synthetic isolated order source",
             StockAuthorityMode.WebLedger, StockPoolControl.SharedWebLedger, 60000, 0, null, null,
@@ -115,11 +119,28 @@ internal sealed class OrderSubmissionTestData(CatalogPriceTestData prices) : IAs
             Assert.Equal(OrderStockSourceRecords.Hash(transition), transition["transitionHash"].AsString);
             return 0;
         });
-        // UNIT ISOLATION ONLY: preserve the existing synthetic active/on-hand/FixtureAdmission harness.
-        // This exact test-only CAS is not the seven-domain governed activation or commercial acceptance.
-        // The producer head/hash and independent setup receipt remain exclusively real owner output.
-        Assert.Equal(1L, (await Rows("inventoryPools").UpdateOneAsync(pool,
-            Builders<BsonDocument>.Update.Set("active", true))).ModifiedCount);
+        // Activate the genuinely empty pool through its production owners before seeding this
+        // unit fixture's synthetic on-hand balance. No activation row or source proof is invented.
+        var policyPreview = await sources.PreviewOperatingPolicyAsync(Prices.Maker, poolId);
+        var policyExpected = new StockSourcePolicyExpectation(policyPreview["poolRevision"].AsInt64, policyPreview["suspensionRevision"].AsInt64,
+            policyPreview["policyRevision"].AsInt64, policyPreview["configurationHash"].AsString);
+        var policy = await sources.ProposeOperatingPolicyAsync(Prices.Maker, poolId, policyExpected,
+            new(StockMovementWriter.UnitToko, null, 0, "Synthetic zero-stock reconciliation", "Synthetic suspend before outage"),
+            CatalogPriceTestData.Meta("order-source-policy-" + sequence));
+        await sources.DecideOperatingPolicyAsync(Prices.Checker, policy["proposalId"].AsInt64, 1, StockSourceSetupDecision.Approve,
+            "Independent synthetic operating policy review", CatalogPriceTestData.Meta("order-source-policy-approve-" + sequence));
+        var activationPreview = await sources.PreviewActivationAsync(Prices.Maker, poolId);
+        Assert.All(activationPreview["obligations"].AsBsonArray, obligation => {
+            Assert.True(obligation["complete"].AsBoolean); Assert.Equal(0L, obligation["openCount"].AsInt64);
+        });
+        var handoff = new StockSourceEmptyHandoff(input.HandoffReference, catalog.Clock.UtcNow, 0, 0, true, true, true);
+        var activation = await sources.ProposeActivationAsync(Prices.Maker, poolId,
+            StockSourceActivationBson.ReadExpected(activationPreview["expected"].AsBsonDocument), handoff, CatalogPriceTestData.Meta("order-source-activation-" + sequence));
+        var activationReview = await sources.PreviewActivationDecisionAsync(Prices.Checker, activation["proposalId"].AsInt64, StockSourceSetupDecision.Approve, handoff);
+        var activated = await sources.DecideActivationAsync(Prices.Checker, activation["proposalId"].AsInt64, 1, StockSourceSetupDecision.Approve, handoff,
+            StockSourceActivationBson.ReadExpected(activationReview["expected"].AsBsonDocument), activationReview["binding"].AsString,
+            CatalogPriceTestData.Meta("order-source-activation-approve-" + sequence));
+        Assert.Equal("activated", activated["status"]); Assert.True((await Rows("inventoryPools").Find(new BsonDocument("_id", poolId)).SingleAsync())["active"].AsBoolean);
         return poolId;
     }
 

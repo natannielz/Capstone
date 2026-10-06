@@ -64,7 +64,7 @@ internal sealed class ProcurementStockValuationTestData(SupplierDocumentTestData
         if (mixedQuality && requiredAdvance != 0) throw new ArgumentException("Mixed fixture uses its genuine M77 order terms", nameof(requiredAdvance));
         ProcurementQualityAcceptanceTestData? quality = mixedQuality ? await ProcurementQualityAcceptanceTestData.CreateAsync(fixture, receiptPackages: receiptPackages) : null;
         SupplierDocumentTestData documents;
-        try { documents = quality is null ? await SupplierDocumentTestData.CreateAsync(fixture, requiredAdvance: requiredAdvance)
+        try { documents = quality is null ? await SupplierDocumentTestData.CreateAsync(fixture, requiredAdvance: requiredAdvance, boundStock: true)
                 : await SupplierDocumentTestData.CreateFromInspectionAsync(quality.Inspection); }
         catch { if (quality is not null) await quality.DisposeAsync(); throw; }
         var data = new ProcurementStockValuationTestData(documents) { ReceiptPackages = receiptPackages, MixedQuality = quality };
@@ -118,17 +118,8 @@ internal sealed class ProcurementStockValuationTestData(SupplierDocumentTestData
 
     private async Task CreateHeldReceiptAsync()
     {
-        var source = new StockSourceSetupInput(new(new(100), new(101), new(102), new(103)), "synthetic-valuation-held", "Synthetic reviewed valuation receiving pool",
-            StockAuthorityMode.WebLedger, StockPoolControl.SharedWebLedger, 60001, 12, null, null, "Synthetic receiving operator", "Synthetic received-unit handoff");
-        var proposed = await Sources.ProposeAsync(SourceMaker, source, Meta("valuation-stock-source"));
-        var accepted = await Sources.DecideAsync(SourceChecker, proposed["proposalId"].AsInt64, 1, StockSourceSetupDecision.Approve,
-            "Independent synthetic source review", Meta("valuation-stock-source-approved")); PoolId = accepted["poolId"].AsInt64;
-        var preview = await Sources.PreviewOperatingPolicyAsync(SourceMaker, PoolId);
-        var expected = new StockSourcePolicyExpectation(preview["poolRevision"].AsInt64, preview["suspensionRevision"].AsInt64, preview["policyRevision"].AsInt64, preview["configurationHash"].AsString);
-        proposed = await Sources.ProposeOperatingPolicyAsync(SourceMaker, PoolId, expected,
-            new(StockMovementWriter.UnitToko, null, 0, "Synthetic daily stock reconciliation", "Synthetic stop-and-review outage procedure"), Meta("valuation-stock-policy"));
-        await Sources.DecideOperatingPolicyAsync(SourceChecker, proposed["proposalId"].AsInt64, 1, StockSourceSetupDecision.Approve,
-            "Independent synthetic operating-policy review", Meta("valuation-stock-policy-approved"));
+        PoolId = Inspection.Receiving.PoolId;
+        Assert.True(PoolId > 0);
         var inspection = await Rows("procurementInspectionSubmissions").Find(new BsonDocument("_id", Documents.InspectionId)).SingleAsync();
         var line = inspection["input"]["lines"][0];
         Assert.Equal(0, line["damagedPackages"].AsInt32); Assert.Equal(0, line["expiredPackages"].AsInt32); Assert.Equal(0, line["openedPackages"].AsInt32);

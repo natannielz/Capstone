@@ -14,8 +14,8 @@ internal sealed record InventoryCountStockSourceEvent(string Kind, long Id, long
 }
 internal sealed record InventoryCountStockSourceSnapshot(BsonDocument Head, long OpenCount);
 
-/// <summary>Only explicit count associations have canonical membership. Unbound
-/// counts and unknown future adjustment owners prevent complete InventoryOperations coverage.</summary>
+/// <summary>Original explicit-source count associations and canonical pool history.
+/// InventoryCountCoverage additionally owns exhaustive bound/unbound observation membership.</summary>
 internal sealed class InventoryCountStockSourceRecords(IMongoDatabase database)
 {
     internal const string Heads = "inventoryCountSourceHeads", Transitions = "inventoryCountSourceTransitions", Associations = "inventoryCountSourceAssociations";

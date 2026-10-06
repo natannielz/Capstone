@@ -3,9 +3,11 @@ using MongoDB.Driver;
 using UnitToko.Modules.Accounting;
 using UnitToko.Modules.Identity;
 using UnitToko.Modules.Identity.Contracts;
+using UnitToko.Modules.Inventory;
 using UnitToko.Modules.Organizations;
 using UnitToko.Modules.Procurement;
 using UnitToko.Platform.Authorization;
+using UnitToko.Platform.Inventory;
 using UnitToko.Platform.Mongo;
 using UnitToko.Platform.Procurement;
 using UnitToko.Tests.Authorization;
@@ -26,6 +28,8 @@ internal sealed class ProcurementReceivingTestData(PurchaseOrderTestData orders)
     internal MutableAuthorizationClock Clock => Orders.Clock;
     internal ProcurementRoute Route;
     internal ActorContext Maker = null!, Receiver = null!, Reader = null!, Outsider = null!;
+    internal ActorContext SourceMaker = null!, SourceChecker = null!;
+    internal long PoolId, PolicyId;
     internal BsonDocument Proposal = null!, Order = null!;
     internal long OrderId => Order["orderId"].AsInt64;
     internal long ApprovalId => Order["decisionId"].AsInt64;
@@ -43,7 +47,7 @@ internal sealed class ProcurementReceivingTestData(PurchaseOrderTestData orders)
         "One unannounced excess container held pending separate item inspection");
 
     internal static async Task<ProcurementReceivingTestData> CreateAsync(MongoFixture fixture,
-        ProcurementRoute route = ProcurementRoute.Ddo, bool onReceipt = false, decimal requiredAdvance = 0)
+        ProcurementRoute route = ProcurementRoute.Ddo, bool onReceipt = false, decimal requiredAdvance = 0, bool boundStock = false)
     {
         var orders = await PurchaseOrderTestData.CreateAsync(fixture);
         try {
@@ -58,10 +62,40 @@ internal sealed class ProcurementReceivingTestData(PurchaseOrderTestData orders)
             if (route == ProcurementRoute.OmiRegular) input = input with { ExternalOrderReference = "SYNTHETIC-OMI-ORDER-001" };
             if (onReceipt) input = input with { PaymentTerms = new("on_receipt", "Synthetic approved on-receipt terms", new Money(0), "on_receipt", null) };
             if (requiredAdvance > 0) input = input with { PaymentTerms = new("deposit", "Synthetic independently approved deposit; balance on receipt", new Money(requiredAdvance), "on_receipt", null) };
-            data.Proposal = await orders.ProposeAsync("receiving-fixture-po", input);
+            if (boundStock) {
+                await data.Base.AddGrantAsync(orders.Maker, 7280, ProcurementRequestTestData.Scope, [Permissions.StockRead]);
+                await data.Base.AddGrantAsync(orders.Checker, 7281, ProcurementRequestTestData.Scope, [Permissions.StockRead]);
+                data.SourceMaker = await data.Base.AddActorAsync(724, ProcurementRequestTestData.Scope,
+                    Permissions.StockSourcePropose, Permissions.StockSourceRead, Permissions.StockSourcePolicyPropose, Permissions.StockSourceSuspend);
+                data.SourceChecker = await data.Base.AddActorAsync(725, ProcurementRequestTestData.Scope,
+                    Permissions.StockSourceApprove, Permissions.StockSourceRead, Permissions.StockSourcePolicyApprove);
+                await PersonTestData.SeedDistinctPeopleAsync(data.Database, data.Clock, data.SourceMaker.UserId, data.SourceChecker.UserId);
+                var sources = new StockSourceSetupService(data.Database, data.Unit, new(data.Database), data.Clock);
+                var source = new StockSourceSetupInput(new(new(100), new(101), new(102), new(103)), "synthetic-held-receiving", "Synthetic reviewed receiving pool",
+                    StockAuthorityMode.WebLedger, StockPoolControl.SharedWebLedger, 60001, 12, null, null, "Synthetic receiving operator", "Synthetic received-unit handoff");
+                var proposal = await sources.ProposeAsync(data.SourceMaker, source, Meta("held-source"));
+                var approved = await sources.DecideAsync(data.SourceChecker, proposal["proposalId"].AsInt64, 1, StockSourceSetupDecision.Approve,
+                    "Independent synthetic source approval", Meta("held-source-approved"));
+                data.PoolId = approved["poolId"].AsInt64;
+                var policyPreview = await sources.PreviewOperatingPolicyAsync(data.SourceMaker, data.PoolId);
+                var expected = new StockSourcePolicyExpectation(policyPreview["poolRevision"].AsInt64, policyPreview["suspensionRevision"].AsInt64,
+                    policyPreview["policyRevision"].AsInt64, policyPreview["configurationHash"].AsString);
+                var policy = await sources.ProposeOperatingPolicyAsync(data.SourceMaker, data.PoolId, expected,
+                    new(StockMovementWriter.UnitToko, null, 0, "Synthetic daily received-unit reconciliation", "Synthetic stop-and-review outage procedure"), Meta("held-policy"));
+                var accepted = await sources.DecideOperatingPolicyAsync(data.SourceChecker, policy["proposalId"].AsInt64, 1, StockSourceSetupDecision.Approve,
+                    "Independent synthetic operating-policy review", Meta("held-policy-approved"));
+                data.PolicyId = accepted["policyId"].AsInt64;
+                var selection = new PurchaseOrderInboundPoolSelection([.. input.Lines.Select(line => new PurchaseOrderInboundAllocation(line.RequestSkuId, line.Packages, data.PoolId, 1))]);
+                var inbound = await orders.Service.PreviewInboundAsync(orders.Maker, input, selection);
+                data.Proposal = await orders.Service.ProposeInboundAsync(orders.Maker, input, selection, inbound["binding"].AsString, PurchaseOrderTestData.Meta("receiving-fixture-po"));
+            } else data.Proposal = await orders.ProposeAsync("receiving-fixture-po", input);
             data.Order = await orders.DecideAsync(data.Proposal, "receiving-fixture-po-approved");
             data.Maker = await data.Base.AddActorAsync(680, ProcurementRequestTestData.Scope, Permissions.ProcurementRead, Permissions.ProcurementPrepare);
             data.Receiver = await data.Base.AddActorAsync(681, ProcurementRequestTestData.Scope, Permissions.ProcurementRead, Permissions.ProcurementContainerReceive);
+            if (boundStock) {
+                await data.Base.AddGrantAsync(data.Maker, 7282, ProcurementRequestTestData.Scope, [Permissions.StockRead]);
+                await data.Base.AddGrantAsync(data.Receiver, 7283, ProcurementRequestTestData.Scope, [Permissions.StockRead]);
+            }
             data.Reader = await data.Base.AddActorAsync(682, ProcurementRequestTestData.Scope, Permissions.ProcurementRead);
             data.Outsider = await data.Base.AddActorAsync(683, new(GrantScopeKind.FulfillmentWarehouse, 100,
                 ShopId: data.Procurement.ForeignShopId, WarehouseId: data.Procurement.ForeignWarehouseId, ChannelId: 103),

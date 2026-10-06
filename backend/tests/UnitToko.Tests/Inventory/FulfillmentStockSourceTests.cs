@@ -105,9 +105,7 @@ public sealed class FulfillmentStockSourceTests(MongoFixture fixture)
     [Fact]
     public async Task Dispatch_fences_all_order_pools_but_changes_custody_only_for_its_actual_stock_effect_pool()
     {
-        var order = await OrderSubmissionTestData.CreateAsync(fixture);
-        try { await order.AddSecondFulfillmentAsync(10); }
-        catch { await order.DisposeAsync(); throw; }
+        var order = await OrderSubmissionTestData.CreateAsync(fixture, secondFulfillmentStock: 10);
         await using var data = await ShipmentDispatchTestData.CreateAsync(fixture, attachedOrder: order);
         var poolsBefore = await order.Rows("inventoryPools").Find(new BsonDocument()).Sort(new BsonDocument("_id", 1)).ToListAsync();
         var headsBefore = await order.Rows(FulfillmentStockSourceRecords.Heads).Find(new BsonDocument()).Sort(new BsonDocument("_id", 1)).ToListAsync();

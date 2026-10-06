@@ -8,6 +8,7 @@ using UnitToko.Platform.Authorization;
 using UnitToko.Platform.Catalog;
 using UnitToko.Platform.Inventory;
 using UnitToko.Platform.Mongo.Migrations;
+using UnitToko.Platform.Billing;
 
 namespace UnitToko.Platform.Fulfillment;
 /// <summary>Private-constructor witness for the actual canonical CAS after an authentic fresh
@@ -44,16 +45,22 @@ internal sealed class AfterSalesStockSourcePoolWrite
         var before = actualBefore.DeepClone().AsBsonDocument; InventoryGraph.RequirePool(before);
         if (!source.PoolIds.Contains(before["_id"].AsInt64) || source.Audit["actorId"] != actor.UserId ||
             source.Audit["actorGrantVersion"] != actor.GrantVersion || authority.UserId != actor.UserId || authority.GrantVersion != actor.GrantVersion ||
-            source.Kind is not ("receive" or "inspect" or "verifyLot") || before["fence"].AsInt64 >= long.MaxValue - 2) throw AfterSalesStockSourceRecords.Unavailable();
-        var resource = CatalogRepository.Resource(InventoryGraph.Location(before["location"].AsBsonDocument).ToScope());
+            source.Kind is not ("request" or "decision" or "receive" or "inspect" or "verifyLot") || before["fence"].AsInt64 >= long.MaxValue - 2) throw AfterSalesStockSourceRecords.Unavailable();
+        var causal = source.Kind is "request" or "decision";
+        if (stockPermission != (source.Kind switch { "request" => Permissions.CaseRequest, "decision" => Permissions.CaseManage,
+            "receive" => Permissions.StockReceive, _ => Permissions.StockCount })) throw AfterSalesStockSourceRecords.Unavailable();
+        var resources = causal ? PaymentDraftBson.Scopes(source.Record["case"]["scopes"].AsBsonArray) :
+            [CatalogRepository.Resource(InventoryGraph.Location(before["location"].AsBsonDocument).ToScope())];
+        if (resources.Length == 0 || causal && resources.Any(resource => resource.FulfillmentOrganizationId != before["location"]["organizationId"].AsInt64))
+            throw AfterSalesStockSourceRecords.Unavailable();
         void CanonicalCurrent() {
             current(); var admission = ScopePolicy.Compile(actor, authority, stockPermission, clock.UtcNow); AuthorizationStore.Require(admission);
-            if (!admission.Matches(resource) || !ScopePolicy.IsResourceActive(resource, authority.Directory)) throw AfterSalesStockSourceRecords.Unavailable();
+            if (resources.Any(resource => !admission.Matches(resource) || !ScopePolicy.IsResourceActive(resource, authority.Directory))) throw AfterSalesStockSourceRecords.Unavailable();
         }
         CanonicalCurrent(); var query = ScopePolicy.Compile(actor, authority, stockPermission, clock.UtcNow);
-        var clauses = query.Clauses.Where(clause => clause.Matches(resource)).ToArray();
+        var clauses = query.Clauses.Where(clause => resources.Any(clause.Matches)).ToArray();
         await new HistoricalAuthorizationFence(database, authorization).FenceAsync(actor,
-            clauses.SelectMany(clause => clause.RequiredNodes).Concat(ScopePolicy.RequiredNodes(resource, authority.Directory)).Distinct(), [],
+            clauses.SelectMany(clause => clause.RequiredNodes).Concat(resources.SelectMany(resource => ScopePolicy.RequiredNodes(resource, authority.Directory))).Distinct(), [],
             authority.Grants.Where(grant => clauses.Any(clause => clause.GrantId == grant.Id)), authority.Memberships.Where(member => clauses.Any(clause => clause.MembershipId == member.Id)), tx, ct);
         await InventoryRepository.RequireStorageAsync(database, "inventoryPools", StockSourceSetupSchemas.Validator("inventoryPools"), StockSourceSetupSchemas.Key("inventoryPools"), ct);
         var after = before.DeepClone().AsBsonDocument; after["fence"] = checked(before["fence"].AsInt64 + 1);

@@ -44,7 +44,7 @@ public sealed class OrderResolutionTests(MongoFixture fixture)
     }
     [Fact]
     public async Task Branch_rejection_releases_both_sources_with_original_receipt_and_blocks_store_acceptance() {
-        await using var data = await OrderSubmissionTestData.CreateAsync(fixture); var actors = await OrderDecisionTests.Actors(data); await data.AddSecondFulfillmentAsync(10);
+        await using var data = await OrderSubmissionTestData.CreateAsync(fixture, secondFulfillmentStock: 10); var actors = await OrderDecisionTests.Actors(data);
         var id = await OrderDecisionTests.Submit(data); var review = await data.Service.ReviewOrderAsync(actors.Approver, id, null, OrderReviewStage.Spending);
         var result = await data.Service.DecideOrderAsync(actors.Approver, id, null, OrderReviewStage.Spending, review.Revision, review.Review, CatalogPriceTestData.Meta("reject"), action: OrderReviewAction.Reject);
         Assert.Equal("rejected", result["state"].AsString);
@@ -59,7 +59,7 @@ public sealed class OrderResolutionTests(MongoFixture fixture)
     }
     [Fact]
     public async Task Store_rejects_only_its_part_then_buyer_cancels_the_other_part_without_double_release() {
-        await using var data = await OrderSubmissionTestData.CreateAsync(fixture); var actors = await OrderDecisionTests.Actors(data); await data.AddSecondFulfillmentAsync(10);
+        await using var data = await OrderSubmissionTestData.CreateAsync(fixture, secondFulfillmentStock: 10); var actors = await OrderDecisionTests.Actors(data);
         await data.Prices.Catalog.Base.AddGrantAsync(data.Buyer, 6500, CatalogAuthoringTestData.Audience, [Permissions.OrderCancel]);
         var id = await OrderDecisionTests.Submit(data); var spending = await data.Service.ReviewOrderAsync(actors.Approver, id, null, OrderReviewStage.Spending);
         await data.Service.DecideOrderAsync(actors.Approver, id, null, OrderReviewStage.Spending, spending.Revision, spending.Review, CatalogPriceTestData.Meta("approve"));
@@ -76,7 +76,7 @@ public sealed class OrderResolutionTests(MongoFixture fixture)
     }
     [Fact]
     public async Task Failed_rejection_outbox_rolls_back_all_releases_and_decision() {
-        await using var data = await OrderSubmissionTestData.CreateAsync(fixture); var actors = await OrderDecisionTests.Actors(data); await data.AddSecondFulfillmentAsync(10);
+        await using var data = await OrderSubmissionTestData.CreateAsync(fixture, secondFulfillmentStock: 10); var actors = await OrderDecisionTests.Actors(data);
         var id = await OrderDecisionTests.Submit(data); var review = await data.Service.ReviewOrderAsync(actors.Approver, id, null, OrderReviewStage.Spending);
         await data.Database.RunCommandAsync<BsonDocument>(new BsonDocument { { "collMod", "outboxEvents" }, { "validator", new BsonDocument("kind", new BsonDocument("$ne", "ordering.order.decided")) } });
         Assert.NotNull(await Record.ExceptionAsync(() => data.Service.DecideOrderAsync(actors.Approver, id, null, OrderReviewStage.Spending, review.Revision, review.Review,

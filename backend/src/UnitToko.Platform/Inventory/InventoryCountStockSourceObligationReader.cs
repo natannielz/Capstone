@@ -6,8 +6,8 @@ using UnitToko.Platform.Mongo;
 
 namespace UnitToko.Platform.Inventory;
 
-/// <summary>Authenticated bound count-observation slice only. Unbound counts,
-/// adjustment owners and physical closure are unavailable; coverage is ALWAYS incomplete.</summary>
+/// <summary>Exhaustive authenticated current count membership. Original unbound
+/// work remains unresolved; no observation is interpreted as a physical adjustment.</summary>
 internal sealed class InventoryCountStockSourceObligationReader(IMongoDatabase database, MongoUnitOfWork unit, IdAllocator ids, IClock clock)
     : IStockSourceObligationReader
 {
@@ -26,12 +26,17 @@ public sealed partial class StockSourceSetupService
             if (actor is null || expected is null || expected.PoolId <= 0 || expected.Location is null || expected.PoolRevision <= 0 || expected.PoolFence < 0)
                 throw InventoryCountStockSourceRecords.Unavailable();
             actor.Validate(); expected.Location.Validate(); await InventoryCountStockSourceStorage.RequireAsync(database, ct);
+            await new StockSourceTopologyFence(database).FenceAsync(tx, expected.Location.OrganizationId.Value, ct);
             var authority = await authorization.LoadAsync(actor, tx, ct);
             var facts = await ReadInventoryCountSourceFactsAsync(actor, authority, tx, expected.PoolId, Permissions.StockSourceRead, ct);
             if (facts.Pool["location"] != StockSourceSetupBson.Location(expected.Location) || facts.Pool["revision"] != expected.PoolRevision || facts.Pool["fence"] != expected.PoolFence)
                 throw InventoryCountStockSourceRecords.Changed();
             var counts = new StockCountService(database, unit, ids, clock);
             var snapshot = await new InventoryCountStockSourceRecords(database).ReadAsync(tx, counts, this, expected, ct);
+            var coverageOwner = new InventoryCountCoverage(database);
+            var coverage = await coverageOwner.ReadAsync(tx, counts, this, expected.Location.OrganizationId.Value, ct);
+            var complete = await coverageOwner.ForPoolAsync(tx, coverage, facts, snapshot.OpenCount, ct);
+            await coverageOwner.FenceAsync(tx, coverage, ct);
             if (snapshot.Head["fence"].AsInt64 >= long.MaxValue - 2 || StockSourceSetupBson.Time(snapshot.Head["updatedAt"]) > at) throw InventoryCountStockSourceRecords.Unavailable();
             if ((await Rows(InventoryCountStockSourceRecords.Heads).UpdateOneAsync(tx, snapshot.Head,
                 Builders<BsonDocument>.Update.Inc("fence", 1L), cancellationToken: ct)).ModifiedCount != 1) throw InventoryCountStockSourceRecords.Changed();
@@ -42,7 +47,7 @@ public sealed partial class StockSourceSetupService
             new InventoryRepository(database).RequireSession(tx);
             if (tx.WrappedCoreSession.CurrentTransaction.TransactionNumber != number || Now() < at) throw InventoryCountStockSourceRecords.Unavailable();
             ct.ThrowIfCancellationRequested();
-            return new(StockSourceObligationDomain.InventoryOperations, expected, snapshot.Head["revision"].AsInt64, false, snapshot.OpenCount);
+            return new(StockSourceObligationDomain.InventoryOperations, expected, coverage.Head["revision"].AsInt64, complete.Complete, complete.OpenCount);
         } catch { await InventoryRepository.AbortAsync(tx); throw; }
     }
 }

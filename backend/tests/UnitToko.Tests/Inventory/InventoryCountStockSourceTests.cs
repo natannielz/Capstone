@@ -22,11 +22,11 @@ namespace UnitToko.Tests.Inventory;
 public sealed class InventoryCountStockSourceTests(MongoFixture fixture)
 {
     [Fact]
-    public async Task Genuine_inactive_setup_explicit_counts_and_original_keys_preserve_custom_legacy_protocol_and_never_complete_inventory_coverage() {
-        await using var data = await Data.CreateAsync(fixture); Assert.Equal(97, CollectionMigrations.CurrentVersion);
+    public async Task Genuine_inactive_setup_explicit_counts_and_original_keys_preserve_custom_protocol_and_exhaustive_open_count_coverage() {
+        await using var data = await Data.CreateAsync(fixture); Assert.True(CollectionMigrations.CurrentVersion >= 101);
         var original = await data.PhysicalAsync(); var pool = await data.PoolAsync(); var source = await data.StateAsync();
         Assert.False(pool["active"].AsBoolean); Assert.Equal(1L, (await data.HeadAsync())["revision"].AsInt64);
-        var empty = await data.ReadSourceAsync(); Assert.False(empty.Complete); Assert.Equal(0L, empty.OpenCount); Assert.Equal(1L, empty.ProducerRevision);
+        var empty = await data.ReadSourceAsync(); Assert.True(empty.Complete); Assert.Equal(0L, empty.OpenCount); Assert.Equal(1L, empty.ProducerRevision);
         // The count-only/current-person actor can query genuine choices without
         // receiving stock.source.read or an automatic permission grant.
         var beforePermissions = new BsonArray((await data.Rows("authorizationGrants").Find(new BsonDocument("userId", data.Counter.UserId)).ToListAsync())
@@ -37,15 +37,10 @@ public sealed class InventoryCountStockSourceTests(MongoFixture fixture)
             .Select(row => { row.Remove("fence"); return row; }))); // only the established managed read fence is normalized
         Assert.DoesNotContain(await data.Rows("authorizationGrants").Find(new BsonDocument("userId", data.Counter.UserId)).ToListAsync(),
             row => row["permissions"].AsBsonArray.Contains(Permissions.StockSourceRead));
-        var unbound = data.Input(2); var legacy = await data.Counts.RecordCountAsync(data.Counter, unbound, Data.Meta("count-source-unbound"));
-        var legacyRow = await data.Rows(StockCountBson.Collection).Find(new BsonDocument("_id", legacy.Id)).SingleAsync();
-        Assert.Equal(1, legacyRow["schemaVersion"].AsInt32); Assert.False(legacyRow.Contains("poolBinding")); Assert.False(legacyRow.Contains("poolSourceHash"));
-        var oldBody = new BsonDocument { { "location", StockCountBson.Scope(unbound.Location) }, { "skuId", unbound.SkuId }, { "expectedSkuRevision", unbound.ExpectedSkuRevision },
-            { "expectedDefinitionId", unbound.ExpectedDefinitionId }, { "packages", unbound.Packages }, { "observedLotLabel", unbound.ObservedLotLabel ?? throw new InvalidOperationException("Expected explicit synthetic label") }, { "reason", Data.Meta("count-source-unbound").Reason } };
-        Assert.Equal(StockCountBson.Hash(oldBody), legacyRow["bodyHash"].AsString); Assert.Null(legacy.PoolBinding);
-        Assert.False(await data.Rows(InventoryCountStockSourceRecords.Associations).Find(new BsonDocument("_id", legacy.Id)).AnyAsync());
-        var legacyAudit = await data.Rows("auditEvents").Find(new BsonDocument("_id", legacy.AuditId)).SingleAsync();
-        var legacyReceipt = await data.Rows("idempotencyRecords").Find(new BsonDocument { { "operation", StockCountBson.Operation }, { "key", "count-source-unbound" } }).SingleAsync();
+        var unbound = data.Input(2);
+        Assert.Equal("inventory_count_source_obligation_unavailable", (await Assert.ThrowsAsync<DomainValidationException>(() =>
+            data.Counts.RecordCountAsync(data.Counter, unbound, Data.Meta("count-source-unbound")))).Code);
+        Assert.Equal(0L, await data.Rows(StockCountBson.Collection).CountDocumentsAsync(new BsonDocument()));
         var first = unbound with { PoolSelection = choice.Pool.Selection }; var second = first with { Packages = 0 };
         var firstSaved = await data.Counts.RecordCountAsync(data.Counter, first, Data.Meta("count-source-bound-one"));
         var secondSaved = await data.Counts.RecordCountAsync(data.Counter, second, Data.Meta("count-source-bound-zero"));
@@ -54,17 +49,14 @@ public sealed class InventoryCountStockSourceTests(MongoFixture fixture)
         Assert.Equal(firstSaved, await data.Counts.RecordCountAsync(data.Counter, first, Data.Meta("count-source-bound-one")));
         Assert.Equal(firstSaved, await data.Counts.RecoverAsync(data.Counter, "count-source-bound-one"));
         Assert.Equal(firstSaved, await data.Counts.ReadAsync(data.Counter, firstSaved.Id));
-        Assert.Equal(3, (await data.Counts.ListAsync(data.Counter, Data.Warehouse, 0, 25)).Items.Length);
+        Assert.Equal(2, (await data.Counts.ListAsync(data.Counter, Data.Warehouse, 0, 25)).Items.Length);
         Assert.Equal(stable, await data.StateAsync());
         Assert.Equal("idempotency_key_reused", (await Assert.ThrowsAsync<PersistenceConflictException>(() => data.Counts.RecordCountAsync(data.Counter,
             first with { PoolSelection = null }, Data.Meta("count-source-bound-one")))).Code);
-        Assert.Equal(legacyRow, await data.Rows(StockCountBson.Collection).Find(new BsonDocument("_id", legacy.Id)).SingleAsync());
-        Assert.Equal(legacyAudit, await data.Rows("auditEvents").Find(new BsonDocument("_id", legacy.AuditId)).SingleAsync());
-        Assert.Equal(legacyReceipt, await data.Rows("idempotencyRecords").Find(new BsonDocument("_id", legacyReceipt["_id"])).SingleAsync());
         var after = await data.PoolAsync(); var expected = pool.DeepClone().AsBsonDocument; expected["fence"] = pool["fence"].AsInt64 + 2;
         Assert.Equal(expected, after); Assert.Equal(3L, (await data.HeadAsync())["revision"].AsInt64);
         Assert.Equal(2L, await data.Rows(InventoryCountStockSourceRecords.Associations).CountDocumentsAsync(new BsonDocument()));
-        var partial = await data.ReadSourceAsync(); Assert.False(partial.Complete); Assert.Equal(2L, partial.OpenCount); Assert.Equal(3L, partial.ProducerRevision);
+        var partial = await data.ReadSourceAsync(); Assert.True(partial.Complete); Assert.Equal(2L, partial.OpenCount); Assert.Equal(3L, partial.ProducerRevision);
         Assert.Equal(expected, await data.PoolAsync()); Assert.Equal(original, await data.PhysicalAsync());
         Assert.False(await data.Rows("outboxEvents").Find(new BsonDocument("kind", StockCountBson.Operation)).AnyAsync());
         Assert.NotEqual(source, await data.StateAsync());
@@ -189,7 +181,7 @@ public sealed class InventoryCountStockSourceTests(MongoFixture fixture)
         internal static async Task<Data> CreateAsync(MongoFixture fixture) {
             var catalog = await CatalogAuthoringTestData.CreateAsync(fixture); var data = new Data(catalog);
             try {
-                Assert.Equal(97, CollectionMigrations.CurrentVersion); Assert.True(await new CollectionMigrations(catalog.Database, catalog.Clock).IsCurrentAsync());
+                Assert.True(CollectionMigrations.CurrentVersion >= 101); Assert.True(await new CollectionMigrations(catalog.Database, catalog.Clock).IsCurrentAsync());
                 var sku = await catalog.SkuAsync(12, "COUNT-SOURCE-12", "CNT"); data.SkuId = sku.Id.Value; data.DefinitionId = sku.CurrentDefinitionId!.Value.Value;
                 data.Proposer = await catalog.ActorAsync(966100, Warehouse, Permissions.StockSourcePropose, Permissions.StockSourceRead);
                 data.Reviewer = await catalog.ActorAsync(966200, Warehouse, Permissions.StockSourceApprove, Permissions.StockSourceRead);
@@ -213,7 +205,7 @@ public sealed class InventoryCountStockSourceTests(MongoFixture fixture)
         internal async Task<BsonDocument> StateAsync() {
             var state = new BsonDocument();
             foreach (var name in new[] { "inventoryPools", InventoryCountStockSourceRecords.Heads, InventoryCountStockSourceRecords.Transitions,
-                InventoryCountStockSourceRecords.Associations, StockCountBson.Collection }) state[name] = new BsonArray(await Rows(name).Find(new BsonDocument()).Sort(new BsonDocument("_id", 1)).ToListAsync());
+                InventoryCountStockSourceRecords.Associations, InventoryCountCoverage.Heads, InventoryCountCoverage.Members, StockCountBson.Collection }) state[name] = new BsonArray(await Rows(name).Find(new BsonDocument()).Sort(new BsonDocument("_id", 1)).ToListAsync());
             foreach (var (name, field, operation) in new[] { ("auditEvents", "kind", StockCountBson.AuditKind), ("idempotencyRecords", "operation", StockCountBson.Operation), ("outboxEvents", "kind", StockCountBson.Operation) })
                 state[name] = new BsonArray(await Rows(name).Find(new BsonDocument(field, operation)).Sort(new BsonDocument("_id", 1)).ToListAsync());
             return state;

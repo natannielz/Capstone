@@ -18,6 +18,7 @@ public sealed partial class StockCountService
         await InventoryCountStockSourceStorage.RequireAsync(database, ct);
         return await unit.ExecuteAsync(async (tx, token) => {
             var at = clock.UtcNow; var context = await BeginAsync(actor, Permissions.StockCount, tx, token); RequireLocation(context, location);
+            await new StockSourceTopologyFence(database).FenceAsync(tx, location.OrganizationId ?? throw InventoryCountStockSourceRecords.Unavailable(), token);
             var sources = CountSources; var person = await sources.ReadInventoryCountPersonAsync(tx, actor.UserId, token);
             var candidates = await Rows("inventoryPools").Find(tx, new BsonDocument { { "location.organizationId", location.OrganizationId ?? throw InventoryCountStockSourceRecords.Unavailable() },
                 { "location.shopId", location.ShopId ?? throw InventoryCountStockSourceRecords.Unavailable() }, { "location.warehouseId", location.WarehouseId ?? throw InventoryCountStockSourceRecords.Unavailable() } }).Sort(new BsonDocument("_id", 1))
@@ -62,6 +63,7 @@ public sealed partial class StockCountService
             }
             await RequireMissingBoundKeyAsync(context, metadata.IdempotencyKey, token);
             RequireLocation(context, input.Location); var sources = CountSources;
+            await new StockSourceTopologyFence(database).FenceAsync(tx, input.Location.OrganizationId ?? throw InventoryCountStockSourceRecords.Unavailable(), token);
             var capture = await InventoryCountPoolCapture.ReadAsync(sources, actor, context.Snapshot, tx, input.Location, selected, token);
             var result = await catalog.WithStockCountDefinitionAsync(database, tx, actor, input.Location, input.SkuId,
                 input.ExpectedSkuRevision, input.ExpectedDefinitionId, async (definition, callbackToken) => {
@@ -74,6 +76,7 @@ public sealed partial class StockCountService
                     // with its original marker and no empty generic result/outbox.
                     await Rows("idempotencyRecords").InsertOneAsync(tx, StockCountBson.Receipt(row, receiptId), cancellationToken: callbackToken);
                     var proof = await new InventoryCountStockSourceProducer(database, ids, clock).RecordFreshAsync(tx, this, sources, row, capture, callbackToken);
+                    await new InventoryCountCoverage(database).AppendFreshAsync(tx, this, sources, row, callbackToken);
                     await capture.FenceAsync(database, tx, callbackToken); Current(context);
                     await proof.RequireFinalAsync(database, tx, row, callbackToken);
                     return (Observation: await GraphAsync(tx, row, callbackToken), Row: row, Proof: proof);
