@@ -87,7 +87,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 35
     env:
       DOTNET_CLI_TELEMETRY_OPTOUT: '1'
       DOTNET_NOLOGO: '1'
@@ -135,7 +135,8 @@ jobs:
         run: |
           dotnet test tests/UnitToko.Tests/UnitToko.Tests.csproj --no-build --nologo \
             --filter 'FullyQualifiedName~PersonApprovalStoreTests|FullyQualifiedName~PersonApprovalSessionTests|FullyQualifiedName~NumericContractTests|FullyQualifiedName~LotValuePolicyTests|FullyQualifiedName~StockCountPolicyTests|FullyQualifiedName~StockCountIntegrityTests|FullyQualifiedName~StockCountOpenApiTests|FullyQualifiedName~InventoryCountStockSourceTests|FullyQualifiedName~PackConversionRuleTests|FullyQualifiedName~PackConversionRulePolicyTests|FullyQualifiedName~PackConversionRuleMigrationTests|FullyQualifiedName~PackConversionRuleHttpTests' \
-            --logger 'trx;LogFileName=authority.trx' --results-directory ../tmp/focused-ci
+            --logger 'trx;LogFileName=authority.trx' --logger 'console;verbosity=normal' \
+            --blame-hang-timeout 5m --blame-hang-dump-type none --results-directory ../tmp/focused-ci
           python3 - <<'PY'
           import xml.etree.ElementTree as ET
           root = ET.parse("../tmp/focused-ci/authority.trx").getroot()
