@@ -25,6 +25,7 @@ internal sealed class StoreTestData : IAsyncDisposable
         Administration = new(Database, Store, new(Database), Clock);
     }
     public static Task<StoreTestData> CreateAsync(MongoFixture fixture) => CreateAsync(fixture, false);
+    internal static Task<StoreTestData> CreateWithMigrationTargetAsync(MongoFixture fixture, int target) => CreateAsync(fixture, false, migrationTarget: target);
     internal static Task<StoreTestData> CreateForLegacyCatalogAsync(MongoFixture fixture) => CreateAsync(fixture, true);
     internal static Task<StoreTestData> CreateForStockSourceSetupMigrationAsync(MongoFixture fixture) => CreateAsync(fixture, false, true);
     internal static Task<StoreTestData> CreateForStockSourceRevisionMigrationAsync(MongoFixture fixture) => CreateAsync(fixture, false, false, true);
@@ -33,10 +34,12 @@ internal sealed class StoreTestData : IAsyncDisposable
     internal static Task<StoreTestData> CreateForStockSourcePolicyMigrationAsync(MongoFixture fixture) => CreateAsync(fixture, false, sourcePolicyMigration: true);
     internal static Task<StoreTestData> CreateForCatalogPriceMigrationAsync(MongoFixture fixture) => CreateAsync(fixture, false, catalogPriceMigration: true);
     internal static Task<StoreTestData> CreateForLegacyOrderReadsAsync(MongoFixture fixture) => CreateAsync(fixture, false, legacyOrderReads: true);
-    private static async Task<StoreTestData> CreateAsync(MongoFixture fixture, bool legacyCatalog, bool sourceSetupMigration = false, bool sourceRevisionMigration = false, bool sourceAliasMigration = false, bool sourceSuspensionMigration = false, bool sourcePolicyMigration = false, bool catalogPriceMigration = false, bool legacyOrderReads = false)
+    private static async Task<StoreTestData> CreateAsync(MongoFixture fixture, bool legacyCatalog, bool sourceSetupMigration = false, bool sourceRevisionMigration = false, bool sourceAliasMigration = false, bool sourceSuspensionMigration = false, bool sourcePolicyMigration = false, bool catalogPriceMigration = false, bool legacyOrderReads = false,
+        int? migrationTarget = null)
     {
         var data = new StoreTestData(fixture);
-        if (legacyOrderReads) await LegacyOrderSubmissionTestSchema.ApplyV21Async(data.Database, data.Clock);
+        if (migrationTarget is { } target) await ApplyRegisteredThroughAsync(data.Database, data.Clock, target);
+        else if (legacyOrderReads) await LegacyOrderSubmissionTestSchema.ApplyV21Async(data.Database, data.Clock);
         else if (catalogPriceMigration) await LegacyCatalogPriceTestSchema.ApplyV19Async(data.Database, data.Clock);
         else if (sourcePolicyMigration) await LegacyStockSourcePolicyTestSchema.ApplyV18Async(data.Database, data.Clock);
         else if (sourceSuspensionMigration) await LegacyStockSourceSuspensionTestSchema.ApplyV17Async(data.Database, data.Clock);
@@ -58,6 +61,23 @@ internal sealed class StoreTestData : IAsyncDisposable
             new(103, ScopeNodeKind.Channel, 100, AuthorizationStatus.Active, 1)
         }) await data.Database.GetCollection<BsonDocument>("authorizationScopes").InsertOneAsync(AuthorizationBson.Node(node));
         return data;
+    }
+    // Fresh prefix fixtures execute actual registered migrations and their original deployment
+    // leases. They never delete later history or manufacture a predecessor from a current DB.
+    internal static async Task ApplyRegisteredThroughAsync(IMongoDatabase database, IClock clock, int target, CancellationToken ct = default)
+    {
+        if (target < 1 || target > CollectionMigrations.CurrentVersion) throw new ArgumentOutOfRangeException(nameof(target));
+        var steps = new CollectionMigrations(database, clock).RegisteredSteps(); var gate = new MigrationGate(database, clock, target);
+        foreach (var step in steps.Take(target)) {
+            var lease = await gate.AcquireAsync(step.Version, ct); if (lease is null) continue;
+            try { await step.ApplyAsync(lease, ct); await lease.CompleteAsync(ct); }
+            catch {
+                try { await lease.ReleaseAsync(); }
+                catch (MongoException) { /* Preserve the original migration failure. */ }
+                catch (OperationCanceledException) { /* Preserve bounded cleanup behavior. */ }
+                throw;
+            }
+        }
     }
     public async Task<ActorContext> AddActorAsync(long id, GrantScope scope, params string[] permissions)
     {

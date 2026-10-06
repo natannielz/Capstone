@@ -15,7 +15,7 @@ public sealed class CollectionMigrations(IMongoDatabase database, IClock clock)
     public Task<bool> IsCurrentAsync(CancellationToken cancellationToken = default) =>
         new MigrationGate(database, clock, CurrentVersion).IsCurrentAsync(cancellationToken);
 
-    public async Task ApplyAsync(CancellationToken cancellationToken = default)
+    internal IReadOnlyList<IMigrationStep> RegisteredSteps()
     {
         var durableDatabase = database.WithWriteConcern(WriteConcern.WMajority)
             .WithReadPreference(ReadPreference.Primary);
@@ -126,6 +126,12 @@ public sealed class CollectionMigrations(IMongoDatabase database, IClock clock)
         ];
         if (!steps.Select(step => step.Version).SequenceEqual(Enumerable.Range(1, CurrentVersion)))
             throw new InvalidOperationException("Schema migration registry must contain every version in order");
+        return steps;
+    }
+
+    public async Task ApplyAsync(CancellationToken cancellationToken = default)
+    {
+        var steps = RegisteredSteps();
         var gate = new MigrationGate(database, clock, CurrentVersion);
         foreach (var step in steps)
         {

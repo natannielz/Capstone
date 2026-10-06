@@ -230,7 +230,7 @@ public sealed class PackConversionRuleHttpTests(MongoFixture fixture)
         }
         internal static async Task<HttpData> CreateAsync(MongoFixture fixture)
         {
-            Assert.Equal(97, CollectionMigrations.CurrentVersion);
+            Assert.True(CollectionMigrations.CurrentVersion >= 97);
             var value = new HttpData(await StoreTestData.CreateAsync(fixture), fixture);
             try {
                 value.Base.Clock.UtcNow = DateTimeOffset.FromUnixTimeMilliseconds(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());

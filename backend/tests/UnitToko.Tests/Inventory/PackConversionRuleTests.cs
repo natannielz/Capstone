@@ -149,7 +149,9 @@ public sealed class PackConversionRuleTests(MongoFixture fixture)
         internal static async Task<Data> CreateAsync(MongoFixture fixture) {
             var data = new Data(await CatalogAuthoringTestData.CreateAsync(fixture));
             try {
-                Assert.Equal(97, CollectionMigrations.CurrentVersion); Assert.True(await new CollectionMigrations(data.Catalog.Database, data.Catalog.Clock).IsCurrentAsync());
+                Assert.True(CollectionMigrations.CurrentVersion >= 97);
+                Assert.True(await new CollectionMigrations(data.Catalog.Database, data.Catalog.Clock).IsCurrentAsync());
+                await PackConversionRuleStorage.RequireAsync(data.Catalog.Database, default);
                 var source = await data.Catalog.SkuAsync(12, "RULE-SEALED-12", "RULE");
                 var family = await data.Catalog.RowAsync("productFamilies", source.FamilyId!.Value.Value);
                 var destination = await data.Catalog.Service.CreateSkuAsync(data.Catalog.Maker, new(source.FamilyId.Value, family["revision"].AsInt64,
