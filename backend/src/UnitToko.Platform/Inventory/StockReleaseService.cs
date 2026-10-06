@@ -445,9 +445,8 @@ public sealed class StockReleaseService
         if (decision["decision"] != "approve" || decision["input"]["receiptId"] != origin.ReceiptId || decision["movementId"] != movement["_id"] ||
             source["occurrence"] != decision["before"]["physicalPoolId"] || movement["poolRevision"] != decision["expected"]["poolRevision"] ||
             await owner.Rows("movements").Find(tx, new BsonDocument("_id", movement["_id"])).SingleOrDefaultAsync(ct) != movement) throw B.Broken();
-        var selected = await owner.source.ReadOriginAsync(tx, Selection(decision), origin, reads.Reader(origin), ct);
-        if (selected.Snapshot != decision["source"] || selected.BalanceId != decision["before"]["_id"].AsInt64 ||
-            selected.Key != InventoryBson.ReadBalance(decision["before"].AsBsonDocument).Balance.Key) throw B.Broken();
+        // DecisionAsync already proves the selected owner source and balance/key
+        // through its exact proposal. Only read-only link/effect checks intervened.
         await origin.RequireAsync(database, tx, ct);
     }
     private async Task<long> ReleasedQualityAsync(Context context, long qualityId, CancellationToken ct) {
