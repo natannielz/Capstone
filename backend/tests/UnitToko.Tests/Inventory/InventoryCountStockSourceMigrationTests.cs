@@ -28,8 +28,9 @@ public sealed class InventoryCountStockSourceMigrationTests(MongoFixture fixture
     {
         var database = fixture.Client.GetDatabase(fixture.DatabaseName + "_" + Guid.NewGuid().ToString("N")[..8]);
         try {
-            Assert.Equal(96, CollectionMigrations.CurrentVersion);
-            var migrations = new CollectionMigrations(database, new SystemClock()); await migrations.ApplyAsync(); Assert.True(await migrations.IsCurrentAsync());
+            Assert.Equal(97, CollectionMigrations.CurrentVersion);
+            using var migrations = PreservedMigrationRuntime.Create(database, new SystemClock().UtcNow, 96);
+            await migrations.ApplyAsync(); Assert.True(await migrations.IsCurrentAsync());
             await RequireEmptyNewOwnersAsync(database); await InventoryCountStockSourceMigration.RequireCountStorageAsync(database, default);
             foreach (var name in InventoryCountStockSourceSchemas.Collections) {
                 var definition = await AccountContactStorage.DefinitionAsync(database, name, default); Assert.NotNull(definition);
@@ -59,7 +60,7 @@ public sealed class InventoryCountStockSourceMigrationTests(MongoFixture fixture
             rows.Add(row);
         }
         Assert.Contains(rows, row => row["packages"] == 0); Assert.Contains(rows, row => row["packages"] == 2);
-        var migrations = new CollectionMigrations(database, clock);
+        using var migrations = PreservedMigrationRuntime.Create(database, capsule.Clock, 96);
         Assert.False(await migrations.IsCurrentAsync()); await migrations.ApplyAsync(); Assert.True(await migrations.IsCurrentAsync());
         var applied = await HistoryAsync(database); Assert.Equal(96, applied.Count);
         SameHistory(history, new BsonArray(applied.Take(95)), "genuine95 prefix"); Assert.Equal("applied", applied[95]["state"].AsString);
@@ -72,6 +73,15 @@ public sealed class InventoryCountStockSourceMigrationTests(MongoFixture fixture
         }
         await RequireEmptyNewOwnersAsync(database);
         await migrations.ApplyAsync(); Same(after, await SnapshotAsync(database), "forward migration replay state"); SameHistory(applied, await HistoryAsync(database), "forward migration replay history");
+        migrations.Dispose();
+        var current = new CollectionMigrations(database, clock); Assert.False(await current.IsCurrentAsync());
+        await current.ApplyAsync(); Assert.True(await current.IsCurrentAsync());
+        var applied97 = await HistoryAsync(database); Assert.Equal(97, applied97.Count);
+        SameHistory(applied, new BsonArray(applied97.Take(96)), "genuine96 prefix"); Assert.Equal("applied", applied97[96]["state"].AsString);
+        var after97 = await SnapshotAsync(database); Assert.Equal(after.ElementCount + PackConversionRuleSchemas.Collections.Length, after97.ElementCount);
+        foreach (var name in after.Names) Same(after[name].AsBsonDocument, after97[name].AsBsonDocument, name + " exact retained97 metadata/documents");
+        await RequireEmptyRuleOwnersAsync(database);
+        await current.ApplyAsync(); Same(after97, await SnapshotAsync(database), "97 replay state"); SameHistory(applied97, await HistoryAsync(database), "97 replay history");
         var service = new StockCountService(database, new(fixture.Client), new(database), clock);
         foreach (var row in rows) {
             var saved = StockCountBson.Read(row); var key = row["requestKey"].AsString;
@@ -89,6 +99,7 @@ public sealed class InventoryCountStockSourceMigrationTests(MongoFixture fixture
         foreach (var name in new[] { StockCountBson.Collection, "auditEvents", "idempotencyRecords" })
             Same(new BsonDocument("rows", after[name]["rows"].DeepClone()), new BsonDocument("rows", afterReplay[name]["rows"].DeepClone()), name + " original command history");
         await RequireEmptyNewOwnersAsync(database);
+        await RequireEmptyRuleOwnersAsync(database);
         // Existing ordinary replay can allocate gaps and fence identity. No source association,
         // usable stock, financial effect or external provider acceptance is claimed.
         foreach (var name in new[] { "inventoryPools", "stockBalances", "lots", "movements", "reservations", "journalEntries", "cashMovements" }) {
@@ -141,7 +152,7 @@ public sealed class InventoryCountStockSourceMigrationTests(MongoFixture fixture
     private sealed record Capsule(IMongoDatabase Database, DateTimeOffset Clock, long[] Ids, ActorContext Actor);
     private async Task<Capsule> CapsuleAsync(string variable)
     {
-        Assert.Equal(96, CollectionMigrations.CurrentVersion);
+        Assert.Equal(97, CollectionMigrations.CurrentVersion);
         var path = Environment.GetEnvironmentVariable(variable);
         if (string.IsNullOrEmpty(path)) throw new InvalidOperationException("Verified stopped genuine95 count capsule is required; no capsule acceptance is available");
         var root = FindRoot(); var allowed = Path.GetFullPath(Path.Combine(root, "tmp", "production", "inventory-count-genuine95-predecessor-writer-release1")) + Path.DirectorySeparatorChar;
@@ -234,6 +245,14 @@ public sealed class InventoryCountStockSourceMigrationTests(MongoFixture fixture
     private static async Task RequireEmptyNewOwnersAsync(IMongoDatabase database)
     {
         foreach (var name in InventoryCountStockSourceSchemas.Collections) {
+            Assert.Equal(0L, await Rows(database, name).CountDocumentsAsync(new BsonDocument()));
+            Assert.False(await Rows(database, "idCounters").Find(new BsonDocument("_id", name)).AnyAsync());
+        }
+    }
+    private static async Task RequireEmptyRuleOwnersAsync(IMongoDatabase database)
+    {
+        await PackConversionRuleStorage.RequireAsync(database, default);
+        foreach (var name in PackConversionRuleSchemas.Collections) {
             Assert.Equal(0L, await Rows(database, name).CountDocumentsAsync(new BsonDocument()));
             Assert.False(await Rows(database, "idCounters").Find(new BsonDocument("_id", name)).AnyAsync());
         }

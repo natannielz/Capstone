@@ -23,7 +23,7 @@ public sealed class InventoryCountStockSourceTests(MongoFixture fixture)
 {
     [Fact]
     public async Task Genuine_inactive_setup_explicit_counts_and_original_keys_preserve_custom_legacy_protocol_and_never_complete_inventory_coverage() {
-        await using var data = await Data.CreateAsync(fixture); Assert.Equal(96, CollectionMigrations.CurrentVersion);
+        await using var data = await Data.CreateAsync(fixture); Assert.Equal(97, CollectionMigrations.CurrentVersion);
         var original = await data.PhysicalAsync(); var pool = await data.PoolAsync(); var source = await data.StateAsync();
         Assert.False(pool["active"].AsBoolean); Assert.Equal(1L, (await data.HeadAsync())["revision"].AsInt64);
         var empty = await data.ReadSourceAsync(); Assert.False(empty.Complete); Assert.Equal(0L, empty.OpenCount); Assert.Equal(1L, empty.ProducerRevision);
@@ -189,7 +189,7 @@ public sealed class InventoryCountStockSourceTests(MongoFixture fixture)
         internal static async Task<Data> CreateAsync(MongoFixture fixture) {
             var catalog = await CatalogAuthoringTestData.CreateAsync(fixture); var data = new Data(catalog);
             try {
-                Assert.Equal(96, CollectionMigrations.CurrentVersion); Assert.True(await new CollectionMigrations(catalog.Database, catalog.Clock).IsCurrentAsync());
+                Assert.Equal(97, CollectionMigrations.CurrentVersion); Assert.True(await new CollectionMigrations(catalog.Database, catalog.Clock).IsCurrentAsync());
                 var sku = await catalog.SkuAsync(12, "COUNT-SOURCE-12", "CNT"); data.SkuId = sku.Id.Value; data.DefinitionId = sku.CurrentDefinitionId!.Value.Value;
                 data.Proposer = await catalog.ActorAsync(966100, Warehouse, Permissions.StockSourcePropose, Permissions.StockSourceRead);
                 data.Reviewer = await catalog.ActorAsync(966200, Warehouse, Permissions.StockSourceApprove, Permissions.StockSourceRead);

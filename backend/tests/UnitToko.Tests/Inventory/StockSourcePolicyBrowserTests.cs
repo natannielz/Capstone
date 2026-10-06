@@ -100,7 +100,7 @@ public sealed class StockSourcePolicyBrowserTests(MongoFixture fixture, ITestOut
             services.Configure<OpenIdConnectOptions>(Auth0Options.Scheme, options => options.Backchannel = new HttpClient(provider, disposeHandler: false));
             services.RemoveAll<IClock>(); services.AddSingleton<IClock>(clock);
             services.AddSingleton<IStartupFilter>(new ObserveProviderChallenge(provider, configured.Issuer, selection));
-            services.AddSingleton<IStartupFilter>(new FixtureControl(data, clock, controlKey, service, stopper, poolId, selection));
+            services.AddSingleton<IStartupFilter>(new FixtureControl(data, new(fixture.Client), clock, controlKey, service, stopper, poolId, selection));
         }));
         factory.UseKestrel(options => options.Listen(IPAddress.Loopback, 0)); factory.StartServer();
         Assert.Equal("Production", factory.Services.GetRequiredService<IWebHostEnvironment>().EnvironmentName);
@@ -151,7 +151,7 @@ public sealed class StockSourcePolicyBrowserTests(MongoFixture fixture, ITestOut
         public void ExpireFactor() => Interlocked.Exchange(ref offsetTicks, TimeSpan.FromMinutes(6).Ticks);
     }
     private sealed class ProviderSelection { internal string Account = "maker"; }
-    private sealed class FixtureControl(StoreTestData data, BrowserClock clock, string key, StockSourceSetupService service,
+    private sealed class FixtureControl(StoreTestData data, MongoUnitOfWork unit, BrowserClock clock, string key, StockSourceSetupService service,
         ActorContext stopper, long poolId, ProviderSelection selection) : IStartupFilter
     {
         public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> next) => app =>
@@ -176,12 +176,8 @@ public sealed class StockSourcePolicyBrowserTests(MongoFixture fixture, ITestOut
                         Builders<BsonDocument>.Update.Set("status", "suspended").Inc("grantVersion", 1L));
                 else if (action is "same-person" or "distinct-people")
                 {
-                    var shared = action == "same-person";
-                    await Rows(data, "personRecords").UpdateOneAsync(new BsonDocument("_id", PersonTestData.PersonId(49002)),
-                        Builders<BsonDocument>.Update.Set("currentEquivalenceId", PersonTestData.GroupId(shared ? 49001 : 49002)));
-                    await Rows(data, "personEquivalenceGroups").UpdateOneAsync(new BsonDocument("_id", PersonTestData.GroupId(49001)),
-                        Builders<BsonDocument>.Update.Set("memberPersonIds", new BsonArray(shared ? new[] { PersonTestData.PersonId(49001), PersonTestData.PersonId(49002) } : new[] { PersonTestData.PersonId(49001) }))
-                            .Set("memberUserIds", new BsonArray(shared ? new long[] { 49001, 49002 } : new long[] { 49001 })));
+                    await PersonTestData.SetEquivalenceAsync(unit, data.Database, 49001, 49002,
+                        action == "same-person", context.RequestAborted);
                 }
                 else if (action == "stop")
                 {

@@ -9,34 +9,43 @@ using MongoDB.Driver;
 
 namespace UnitToko.Tests.Inventory;
 
-/// <summary>Test-only exact preserved95 migration registry. It receives the already genuine94
-/// database and captured clock; no fixture creation, producer invocation, policy seeding or repair.</summary>
-internal sealed class Preserved95MigrationRuntime : IDisposable
+/// <summary>Test-only hash-pinned95/96 registries, using the captured predecessor clock.
+/// No fixture creation, producer invocation, policy seeding or repair.</summary>
+internal sealed class PreservedMigrationRuntime : IDisposable
 {
     private readonly PreservedContext context;
     private readonly object registry;
     private readonly MethodInfo apply, current;
     private bool disposed;
-    private Preserved95MigrationRuntime(PreservedContext context, object registry, MethodInfo apply, MethodInfo current)
+    private PreservedMigrationRuntime(PreservedContext context, object registry, MethodInfo apply, MethodInfo current)
     { this.context = context; this.registry = registry; this.apply = apply; this.current = current; }
 
-    internal static Preserved95MigrationRuntime Create(IMongoDatabase database, DateTimeOffset capturedClock)
+    internal static PreservedMigrationRuntime Create(IMongoDatabase database, DateTimeOffset capturedClock, int version = 95)
     {
         if (capturedClock == default || capturedClock.Offset != TimeSpan.Zero) throw Invalid();
-        var root = FindRoot(); var artifacts = Path.GetFullPath(Path.Combine(root, "tmp", "production", "aftersales-stock-source-artifacts-release6"));
+        if (version is not (95 or 96)) throw Invalid();
+        var root = FindRoot(); var artifacts = Path.GetFullPath(Path.Combine(root, "tmp", "production",
+            version == 95 ? "aftersales-stock-source-artifacts-release6" : "inventory-count-source-artifacts-release3"));
         var runtime = Path.Combine(artifacts, "bin", "UnitToko.Tests", "release");
-        var bindingPath = Path.Combine(root, "tmp", "production", "aftersales-stock-source-compiled-binding-release6.json");
-        Assert.Equal("D6083C3B95F54CAFD0759AD8DFBC1982A24A1034F13268DA59F5DAF7EEC83166", Hash(bindingPath));
-        using var binding = JsonDocument.Parse(File.ReadAllText(bindingPath)); Assert.Equal(95, binding.RootElement.GetProperty("schema").GetInt32());
-        var required = new Dictionary<string, string> {
+        var bindingPath = Path.Combine(root, "tmp", "production", version == 95
+            ? "aftersales-stock-source-compiled-binding-release6.json" : "inventory-count-source-compiled-binding-release3.json");
+        Assert.Equal(version == 95 ? "D6083C3B95F54CAFD0759AD8DFBC1982A24A1034F13268DA59F5DAF7EEC83166"
+            : "7C352D64551EF88BA12E536134EE7F2A935B1D02113323B0E41982272C0DA4A2", Hash(bindingPath));
+        using var binding = JsonDocument.Parse(File.ReadAllText(bindingPath)); Assert.Equal(version, binding.RootElement.GetProperty("schema").GetInt32());
+        var required = version == 95 ? new Dictionary<string, string> {
             ["UnitToko.Api"] = "1D918E87B5951A2F8E29E9417B07CFF60EBD5437F22A8B233E0153022014234B",
             ["UnitToko.Platform"] = "A41D82D00FF9109D0A5B5900D9A157D75F3F2CBC6AB331676215E2E3AE1BEE97",
             ["UnitToko.Modules"] = "1BB4C7998E2084533754BC827F92A78B970A08E3250DD357F8223F5679A2ED7D",
-            ["UnitToko.Tests"] = "A2CE16992B7399B64D878205C0129DD0B762CBEDF66F0BAE97876B715EAD3D52" };
+            ["UnitToko.Tests"] = "A2CE16992B7399B64D878205C0129DD0B762CBEDF66F0BAE97876B715EAD3D52" }
+            : new Dictionary<string, string> {
+                ["UnitToko.Api"] = "97298E62FB698526D9188A26BD5A53F1FC07F0D1C5585536C8928CA89C24328C",
+                ["UnitToko.Platform"] = "080C92EDDD9CC3FB7A435254E5C32982C84FBE2E2A6FCC92BA6C340F19E0ACB0",
+                ["UnitToko.Modules"] = "7E024825364FA7A29E2F9BA0A4BF1C9CD74FB90F84538F6A5E000258528F2D4A",
+                ["UnitToko.Tests"] = "0E98D3AC0D0655544ADAC954BF3EA193F0CF2273A93E1EA4AEB3A5DD24F3FB3C" };
         foreach (var (name, digest) in required) {
             var binary = binding.RootElement.GetProperty("binaries").EnumerateArray().Single(row => row.GetProperty("name").GetString() == name);
             var path = Path.GetFullPath(binary.GetProperty("path").GetString()!);
-            Assert.True(path.StartsWith(artifacts + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase), "preserved95 binary must stay within its frozen artifact owner");
+            Assert.True(path.StartsWith(artifacts + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase), "preserved binary must stay within its frozen artifact owner");
             Assert.Equal(digest, binary.GetProperty("sha256").GetString()); Assert.Equal(digest, Hash(path));
             Assert.Equal(digest, Hash(Path.Combine(runtime, name + ".dll")));
         }
@@ -48,7 +57,7 @@ internal sealed class Preserved95MigrationRuntime : IDisposable
             var platform = context.LoadFromAssemblyPath(Path.Combine(runtime, "UnitToko.Platform.dll"));
             var tests = context.LoadFromAssemblyPath(Path.Combine(runtime, "UnitToko.Tests.dll"));
             var type = platform.GetType("UnitToko.Platform.Mongo.CollectionMigrations", throwOnError: true)!;
-            Assert.Equal(95, type.GetField("CurrentVersion")!.GetRawConstantValue());
+            Assert.Equal(version, type.GetField("CurrentVersion")!.GetRawConstantValue());
             var clockType = tests.GetType("UnitToko.Tests.Authorization.MutableAuthorizationClock", throwOnError: true)!;
             var clock = Activator.CreateInstance(clockType, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
                 binder: null, args: [capturedClock], culture: CultureInfo.InvariantCulture) ?? throw Invalid();
@@ -86,8 +95,8 @@ internal sealed class Preserved95MigrationRuntime : IDisposable
             if (File.Exists(Path.Combine(directory.FullName, "backend", "UnitToko.slnx"))) return directory.FullName;
         throw Invalid();
     }
-    private static InvalidOperationException Invalid() => new("Exact preserved95 registry and genuine94 captured clock are required");
-    private sealed class PreservedContext(AssemblyDependencyResolver resolver, string artifacts) : AssemblyLoadContext("Retained94ToExact95Migration", isCollectible: true)
+    private static InvalidOperationException Invalid() => new("Exact preserved95/96 registry and captured predecessor clock are required");
+    private sealed class PreservedContext(AssemblyDependencyResolver resolver, string artifacts) : AssemblyLoadContext("ExactPreservedMigration", isCollectible: true)
     {
         protected override Assembly? Load(AssemblyName name)
         {

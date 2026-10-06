@@ -4,7 +4,7 @@ import { canManageAccounts, canReviewPeople, canUseStockCounts, canUseStockSourc
 import styles from "./access.module.css";
 
 export function AdministrationNavigation({ current, actions, locked = false }: {
-  current: "source-reconciliations" | "organization-addresses" | "cases" | "access" | "organizations" | "history" | "accounts" | "person-reviews" | "catalog" | "prices" | "counts" | "sources" | "source-revisions" | "source-aliases" | "source-suspensions" | "source-policies" | "order-reviews" | "orders" | "preparations" | "dispatches" | "shipments" | "invoices" | "payments" | "payment-reviews" | "receiving-accounts" | "bank-statements" | "bank-receipts"; actions: readonly string[]; locked?: boolean;
+  current: "pack-conversion-rules" | "source-reconciliations" | "organization-addresses" | "cases" | "access" | "organizations" | "history" | "accounts" | "person-reviews" | "catalog" | "prices" | "counts" | "sources" | "source-revisions" | "source-aliases" | "source-suspensions" | "source-policies" | "order-reviews" | "orders" | "preparations" | "dispatches" | "shipments" | "invoices" | "payments" | "payment-reviews" | "receiving-accounts" | "bank-statements" | "bank-receipts"; actions: readonly string[]; locked?: boolean;
 }) {
   const links = [
     { id: "branch-requests", href: "/ordering/requests", label: "Permintaan saya", available: actions.some(action => ["order.request.read", "order.request.submit"].includes(action)) },
@@ -29,6 +29,7 @@ export function AdministrationNavigation({ current, actions, locked = false }: {
     { id: "source-revisions", href: "/inventory/sources/revisions", label: "Perubahan sumber", available: canUseStockSources(actions) },
     { id: "sources", href: "/inventory/sources", label: "Sumber stok", available: canUseStockSources(actions) },
     { id: "counts", href: "/inventory/counts", label: "Hitung barang", available: canUseStockCounts(actions) },
+    { id: "pack-conversion-rules", href: "/inventory/pack-conversions", label: "Aturan buka kemasan", available: actions.includes("stock.convert") },
     { id: "catalog", href: "/administration/catalog", label: "Katalog toko", available: actions.includes("catalog.manage") },
     { id: "account", href: "/identity/account", label: "Akun saya", available: true },
     { id: "accounts", href: "/administration/accounts", label: "Akun dan undangan", available: canManageAccounts(actions) },

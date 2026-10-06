@@ -24,7 +24,7 @@ public sealed class AfterSalesPopulatedPredecessorMigrationTests(MongoFixture fi
     [Fact]
     public async Task Genuine_stopped94_case_intake_inspection_survive95_apply_replay_and_original_inspection_recovery()
     {
-        Assert.Equal(96, CollectionMigrations.CurrentVersion);
+        Assert.Equal(97, CollectionMigrations.CurrentVersion);
         var handoffPath = Environment.GetEnvironmentVariable(HandoffEnvironment);
         if (string.IsNullOrWhiteSpace(handoffPath)) throw new InvalidOperationException("Verified stopped genuine94 predecessor handoff is required; populated94 migration acceptance is unavailable");
         Assert.True(Path.IsPathFullyQualified(handoffPath));
@@ -33,7 +33,7 @@ public sealed class AfterSalesPopulatedPredecessorMigrationTests(MongoFixture fi
         var capsuleName = Path.GetFileName(directory);
         Assert.True(capsuleName == "allocator-safe-bootstrap-release2" || Regex.IsMatch(capsuleName,
             @"\Aallocator-safe-bootstrap-release2-full-[0-9a-f]{16}\z"), "only the exact retained94 bootstrap or a fresh approved run suffix is allowed");
-        var parent = Path.GetFullPath(Path.Combine(Preserved95MigrationRuntime.WorkspaceRoot(), "tmp", "production", "aftersales-genuine94-predecessor-writer-release1"));
+        var parent = Path.GetFullPath(Path.Combine(PreservedMigrationRuntime.WorkspaceRoot(), "tmp", "production", "aftersales-genuine94-predecessor-writer-release1"));
         Assert.True(string.Equals(parent, Path.GetDirectoryName(directory), StringComparison.OrdinalIgnoreCase), "retained94 capsule must stay under its exact owned predecessor parent");
         using var handoff = JsonDocument.Parse(await File.ReadAllTextAsync(handoffPath));
         using var stopped = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(directory, "PRODUCER-STOPPED.json")));
@@ -100,7 +100,7 @@ public sealed class AfterSalesPopulatedPredecessorMigrationTests(MongoFixture fi
         var actor = await OriginalActorAsync(database, inspection, clockValue);
         // The exact preserved95 registry owns ONLY the genuine94 ->95 checkpoint.
         // Never ask current96 to migrate both steps and then relabel its result as95.
-        using var preserved95 = Preserved95MigrationRuntime.Create(database, clockValue);
+        using var preserved95 = PreservedMigrationRuntime.Create(database, clockValue);
         Assert.False(await preserved95.IsCurrentAsync());
         await preserved95.ApplyAsync(); Assert.True(await preserved95.IsCurrentAsync());
         var applied = await SnapshotAsync(database);
@@ -118,12 +118,11 @@ public sealed class AfterSalesPopulatedPredecessorMigrationTests(MongoFixture fi
         var replayed = await SnapshotAsync(database); Assert.Equal(applied.Count, replayed.Count);
         foreach (var (table, expected) in applied) Assert.Equal(expected, replayed[table]);
         preserved95.Dispose();
-        // Original public read/recovery must run against the actual current registry. The
-        // forward96 migration alone may extend the two reviewed count validators and create
-        // empty count-source owners; EVERY retained row/index/UUID is still preserved.
-        var currentMigration = new CollectionMigrations(database, clock); Assert.False(await currentMigration.IsCurrentAsync());
+        // Exact96 may extend only the two count validators and add empty count-source owners.
+        using var preserved96 = PreservedMigrationRuntime.Create(database, clockValue, 96);
+        Assert.False(await preserved96.IsCurrentAsync());
         var definitions95 = await (await database.ListCollectionsAsync()).ToListAsync();
-        await currentMigration.ApplyAsync(); Assert.True(await currentMigration.IsCurrentAsync());
+        await preserved96.ApplyAsync(); Assert.True(await preserved96.IsCurrentAsync());
         var applied96 = await SnapshotAsync(database);
         foreach (var (table, expected) in applied) {
             Assert.True(applied96.TryGetValue(table, out var actual), "Retained collection disappeared after96 " + table);
@@ -139,9 +138,28 @@ public sealed class AfterSalesPopulatedPredecessorMigrationTests(MongoFixture fi
         var history96 = await HistoryAsync(database); Assert.Equal(96, history96.Count);
         Assert.Equal(HistoryHash(history), HistoryHash(history96.Take(95)));
         Assert.True(MigrationHistory.IsValid(history96, 96)); Assert.All(history96, row => Assert.Equal("applied", row["state"].AsString));
-        await currentMigration.ApplyAsync(); Assert.Equal(HistoryHash(history96), HistoryHash(await HistoryAsync(database)));
+        await preserved96.ApplyAsync(); Assert.Equal(HistoryHash(history96), HistoryHash(await HistoryAsync(database)));
         var replayed96 = await SnapshotAsync(database); Assert.Equal(applied96.Count, replayed96.Count);
         foreach (var (table, expected) in applied96) Assert.Equal(expected, replayed96[table]);
+        preserved96.Dispose();
+        // Current97 only adds empty reviewed-rule owners; retained UUIDs, definitions,
+        // indexes and rows remain exact. No ratios, activation or stock/value are inferred.
+        var currentMigration = new CollectionMigrations(database, clock); Assert.False(await currentMigration.IsCurrentAsync());
+        await currentMigration.ApplyAsync(); Assert.True(await currentMigration.IsCurrentAsync());
+        var applied97 = await SnapshotAsync(database);
+        Assert.Equal(applied96.Count + PackConversionRuleSchemas.Collections.Length, applied97.Count);
+        foreach (var (table, expected) in applied96) {
+            Assert.True(applied97.TryGetValue(table, out var actual), "Retained collection disappeared after97 " + table);
+            Assert.Equal(expected.Definition, actual!.Definition); Assert.Equal(expected.Indexes, actual.Indexes);
+            if (table != "schemaMigrations") Assert.Equal(expected.Rows, actual.Rows);
+        }
+        await RequireRuleFutureEmptyAsync(database);
+        var history97 = await HistoryAsync(database); Assert.Equal(97, history97.Count);
+        Assert.Equal(HistoryHash(history96), HistoryHash(history97.Take(96))); Assert.True(MigrationHistory.IsValid(history97, 97));
+        Assert.All(history97, row => Assert.Equal("applied", row["state"].AsString));
+        await currentMigration.ApplyAsync(); Assert.Equal(HistoryHash(history97), HistoryHash(await HistoryAsync(database)));
+        var replayed97 = await SnapshotAsync(database); Assert.Equal(applied97.Count, replayed97.Count);
+        foreach (var (table, expected) in applied97) Assert.Equal(expected, replayed97[table]);
         // Read/recovery legitimately append read audits and authority fences AFTER byte-exact migration/replay checks.
         var protectedTables = new[] { AfterSalesCaseRecords.Collection, AfterSalesDecisionRecords.Collection, ReturnQuarantineLedger.Collection,
             ReturnInspectionRecords.Collection, ReturnResolutionRecords.Collection, "stockBalances", "lots", "movements", "reservations", "journalEntries", InvoiceBson.Invoices, InvoiceBson.Allocations };
@@ -160,9 +178,10 @@ public sealed class AfterSalesPopulatedPredecessorMigrationTests(MongoFixture fi
         Assert.Equal(returnId, view.Receipt.Id.Value); Assert.Equal(1L, view.Revision); Assert.NotNull(view.Inspection);
         Assert.Equal(inspection["input"]["publicNote"].AsString, view.Inspection!.PublicNote);
         foreach (var (table, expected) in immutable) Assert.Equal(expected, await RowsHashAsync(database, table, excludeReadFences: true));
-        Assert.Equal(HistoryHash(history96), HistoryHash(await HistoryAsync(database)));
+        Assert.Equal(HistoryHash(history97), HistoryHash(await HistoryAsync(database)));
         await RequireFutureEmptyAsync(database); // No95 attribution, new finding, lot verification or backfill from replay/read.
         await RequireCountFutureEmptyAsync(database);
+        await RequireRuleFutureEmptyAsync(database);
     }
 
     private static string[] FutureNames => [.. AfterSalesStockSourceSchemas.Collections, ReturnedLotVerificationRecords.Collection];
@@ -190,6 +209,14 @@ public sealed class AfterSalesPopulatedPredecessorMigrationTests(MongoFixture fi
             Assert.Equal(0L, await Rows(database, table).CountDocumentsAsync(new BsonDocument()));
             var counter = await Rows(database, "idCounters").Find(new BsonDocument("_id", table)).SingleOrDefaultAsync();
             if (counter is not null) Assert.True(counter == new BsonDocument { { "_id", table }, { "value", 0L } }, "Prospective96 counter was used");
+        }
+    }
+    private static async Task RequireRuleFutureEmptyAsync(IMongoDatabase database) {
+        await PackConversionRuleStorage.RequireAsync(database, default);
+        foreach (var table in PackConversionRuleSchemas.Collections) {
+            Assert.Equal(0L, await Rows(database, table).CountDocumentsAsync(new BsonDocument()));
+            var counter = await Rows(database, "idCounters").Find(new BsonDocument("_id", table)).SingleOrDefaultAsync();
+            Assert.Null(counter); // Rule preparation has no seeded identities or allocator gaps.
         }
     }
     private static async Task<ActorContext> OriginalActorAsync(IMongoDatabase database, BsonDocument inspection, DateTimeOffset frozenClock) {

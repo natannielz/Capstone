@@ -142,6 +142,12 @@ public sealed class Auth0ClaimsTests
     public void Stock_count_return_path_is_explicitly_allowlisted() =>
         Assert.Equal("/inventory/counts", ReturnPathPolicy.Require("/inventory/counts", Settings()));
     [Fact]
+    public void Pack_conversion_return_path_is_exactly_allowlisted() {
+        Assert.Equal("/inventory/pack-conversions", ReturnPathPolicy.Require("/inventory/pack-conversions", Settings()));
+        foreach (var path in new[] { "/inventory/pack-conversions/", "/inventory/pack-conversions?next=https://outside.co.id", "//inventory/pack-conversions" })
+            Assert.Throws<DomainValidationException>(() => ReturnPathPolicy.Require(path, Settings()));
+    }
+    [Fact]
     public void Stock_alias_return_path_is_explicitly_allowlisted() =>
         Assert.Equal("/inventory/sources/aliases", ReturnPathPolicy.Require("/inventory/sources/aliases", Settings()));
     [Fact]

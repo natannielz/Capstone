@@ -26,6 +26,12 @@ public sealed partial class CatalogAuthoringService
             _ => throw new DomainValidationException("invalid_stock_choice_purpose", "Choose counting or history")
         };
         ValidateStockChoiceRead(audit, purpose);
+        return await StockWarehouseOptionsCoreAsync(actor, permission, audit, "inventory.stock-count.warehouses", cancellationToken);
+    }
+
+    private async Task<ImmutableArray<StockWarehouseOption>> StockWarehouseOptionsCoreAsync(ActorContext actor,
+        string permission, AuthorizationReadMetadata audit, string auditKind, CancellationToken cancellationToken)
+    {
         var auditId = await ids.NextAsync("auditEvents", cancellationToken);
         return await unit.ExecuteAsync(async (tx, ct) =>
         {
@@ -58,7 +64,7 @@ public sealed partial class CatalogAuthoringService
                 Name(location.OrganizationId!.Value, ScopeNodeKind.FulfillmentOrganization),
                 Name(location.ShopId!.Value, ScopeNodeKind.Shop), Name(location.WarehouseId!.Value, ScopeNodeKind.Warehouse),
                 Name(location.ChannelId!.Value, ScopeNodeKind.Channel))).ToImmutableArray();
-            await AuditStockChoiceAsync(context, permission, locations, auditId.Value, "inventory.stock-count.warehouses",
+            await AuditStockChoiceAsync(context, permission, locations, auditId.Value, auditKind,
                 audit, new BsonDocument("purpose", audit.Purpose), result.Length, ct);
             return result;
         }, cancellationToken);
@@ -67,7 +73,16 @@ public sealed partial class CatalogAuthoringService
     public async Task<CatalogPage<StockCountPackageOption>> CountablePackagesAsync(ActorContext actor, GrantScope location,
         int offset, int limit, string? search, AuthorizationReadMetadata audit, CancellationToken cancellationToken = default)
     {
-        ValidateStockChoiceRead(audit, StockCountChoicePurpose.Count); StockChoiceLocation(location);
+        ValidateStockChoiceRead(audit, StockCountChoicePurpose.Count);
+        return await StockPackagesCoreAsync(actor, location, offset, limit, search, audit, Permissions.StockCount,
+            "inventory.stock-count.packages", null, cancellationToken);
+    }
+
+    private async Task<CatalogPage<StockCountPackageOption>> StockPackagesCoreAsync(ActorContext actor, GrantScope location,
+        int offset, int limit, string? search, AuthorizationReadMetadata audit, string permission, string auditKind,
+        string? packageKind, CancellationToken cancellationToken)
+    {
+        StockChoiceLocation(location);
         AuthorizationStore.ValidatePage(offset, limit);
         var searchFilter = SearchFilter("displayName", search);
         var selection = new BsonDocument { { "location", CatalogRepository.Owner(location) },
@@ -75,12 +90,13 @@ public sealed partial class CatalogAuthoringService
         var auditId = await ids.NextAsync("auditEvents", cancellationToken);
         return await unit.ExecuteAsync(async (tx, ct) =>
         {
-            var context = await BeginAsync(actor, tx, ct, Permissions.StockCount);
-            _ = StockChoiceQuery(context, Permissions.StockCount, [location]);
+            var context = await BeginAsync(actor, tx, ct, permission);
+            _ = StockChoiceQuery(context, permission, [location]);
             var shop = location with { Kind = GrantScopeKind.FulfillmentShop, WarehouseId = null };
             var filter = F.Or(CatalogRepository.OwnerFilter("authoringOwner", location),
                 CatalogRepository.OwnerFilter("authoringOwner", shop)) & F.Eq("active", true) & searchFilter;
             var pipeline = StockChoicePipeline(filter);
+            if (packageKind is not null) pipeline.Add(new("$match", new BsonDocument("definition.packageKind", packageKind)));
             pipeline.Add(new("$facet", new BsonDocument
             {
                 { "count", new BsonArray { new BsonDocument("$count", "total") } },
@@ -110,8 +126,8 @@ public sealed partial class CatalogAuthoringService
                     definition["packageLabel"].AsString, definition["packageKind"].AsString,
                     definition["baseUnitCode"].AsString, definition["baseUnitsPerPackage"].AsInt32));
             }
-            await AuditStockChoiceAsync(context, Permissions.StockCount, [location], auditId.Value,
-                "inventory.stock-count.packages", audit, selection, result.Count, ct);
+            await AuditStockChoiceAsync(context, permission, [location], auditId.Value,
+                auditKind, audit, selection, result.Count, ct);
             return new CatalogPage<StockCountPackageOption>(total, result.ToImmutable());
         }, cancellationToken);
     }

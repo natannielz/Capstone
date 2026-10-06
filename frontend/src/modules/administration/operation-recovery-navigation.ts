@@ -1,4 +1,5 @@
 export function recoveryPage(operation: string) {
+  if (operation === 'inventory.pack-conversion.rule.propose' || operation === 'inventory.pack-conversion.rule.decide') return { href: '/inventory/pack-conversions', label: 'halaman aturan konversi kemasan' };
   if (operation === 'access.identity.suspend') return {href: '/administration/access', label: 'halaman pengelolaan akses'};
   if (['billing.payment.supplement.create', 'evidence.payment-supplement-pdf.reserve', 'billing.payment.supplement.attach'].includes(operation))
     return {href: '/billing/payments', label: 'halaman lampiran PDF tambahan'};
@@ -72,6 +73,8 @@ export function recoveryPage(operation: string) {
     : { href: "/administration/person-reviews", label: "halaman peninjauan orang" };
 }
 export function operationLabel(operation: string) {
+  if (operation === 'inventory.pack-conversion.rule.propose') return 'Pengajuan aturan konversi kemasan';
+  if (operation === 'inventory.pack-conversion.rule.decide') return 'Keputusan aturan konversi kemasan';
   if (operation === 'access.identity.suspend') return 'Penonaktifan akun';
   if (operation === 'billing.payment.supplement.create') return 'Pembuatan lampiran PDF tambahan';
   if (operation === 'evidence.payment-supplement-pdf.reserve') return 'Reservasi PDF tambahan';

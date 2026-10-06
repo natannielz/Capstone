@@ -137,6 +137,7 @@ builder.Services.AddSingleton(sp => {
         sp.GetRequiredService<IClock>(), sp.GetRequiredService<PaymentDraftService>(), storage);
 });
 builder.Services.AddSingleton<StockCountService>();
+builder.Services.AddSingleton<PackConversionRuleService>();
 builder.Services.AddSingleton<StockSourceSetupService>();
 builder.Services.AddSingleton<HistoricalReadStore>();
 builder.Services.AddSingleton<AccessAdministrationService>();
@@ -216,6 +217,7 @@ builder.Services.AddOpenApi("v1", options =>
         document.Components ??= new OpenApiComponents();
         CatalogOpenApi.Configure(document);
         StockCountOpenApi.Configure(document);
+        PackConversionRuleOpenApi.Configure(document);
         StockSourceSetupOpenApi.Configure(document);
         StockSourceRevisionOpenApi.Configure(document);
         StockSourceAliasOpenApi.Configure(document);
@@ -507,6 +509,7 @@ app.MapReceivingAccountEndpoints();
 app.MapBankStatementEndpoints();
 app.MapBankReceiptEndpoints();
 app.MapStockCountEndpoints();
+app.MapPackConversionRuleEndpoints();
 app.MapStockSourceSetupEndpoints();
 app.MapStockSourceRevisionEndpoints();
 app.MapStockSourceAliasEndpoints();
