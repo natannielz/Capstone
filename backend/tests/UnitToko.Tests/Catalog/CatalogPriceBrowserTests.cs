@@ -1,11 +1,16 @@
 using System.Diagnostics;
+using System.Collections.Concurrent;
 using System.Net;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text.Json;
+using System.Text.RegularExpressions;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using MongoDB.Bson;
@@ -149,6 +154,17 @@ public sealed class CatalogPriceBrowserTests(MongoFixture fixture, ITestOutputHe
         var sku = await catalog.CreateSkuAsync(author, new(family.Id, family.Version, "PRIMARY-12", "primary-pencil", definition), CatalogPriceTestData.Meta("primary-sku"));
         await data.Database.GetCollection<BsonDocument>("catalogAssortments").InsertOneAsync(CatalogVisibilityBson.Assortment(new CatalogAssortment(501, CatalogAuthoringTestData.Shop, AuthorizationStatus.Active, 1)));
         await catalog.SetPublicationsAsync(author, new(sku.Id, 1, [new(501)], [new(new(501), 1)]), CatalogPriceTestData.Meta("primary-publish"));
+        var navigationSetup = Stopwatch.StartNew();
+        for (var index = 1; index <= 25; index++) {
+            var suffix = index.ToString("D2", System.Globalization.CultureInfo.InvariantCulture);
+            var variant = await catalog.CreateSkuAsync(author, new(family.Id, family.Version, "PRIMARY-NAV-" + suffix, "primary-navigation-" + suffix,
+                definition with { PackageLabel = "Dus navigasi " + suffix, MinimumOrderPackages = 1, OrderIncrementPackages = 1 }),
+                CatalogPriceTestData.Meta("primary-navigation-sku-" + suffix));
+            var assortment = await data.Database.GetCollection<BsonDocument>("catalogAssortments").Find(new BsonDocument("_id", 501L)).SingleAsync();
+            await catalog.SetPublicationsAsync(author, new(variant.Id, 1, [new(501)], [new(new(501), assortment["version"].AsInt64)]),
+                CatalogPriceTestData.Meta("primary-navigation-publish-" + suffix));
+        }
+        output.WriteLine("CATALOG_NAVIGATION_SETUP 26 genuinely authored and published variants " + navigationSetup.Elapsed);
         await data.Database.GetCollection<BsonDocument>("catalogEntitlements").InsertOneAsync(CatalogVisibilityBson.Entitlement(new CatalogEntitlement(
             601, buyer.UserId, buyer.UserId, 501, CatalogAuthoringTestData.Audience, AuthorizationStatus.Active,
             data.Clock.UtcNow, null, null, 1, 998, 999, 100601, 1, data.Clock.UtcNow)));
@@ -161,10 +177,14 @@ public sealed class CatalogPriceBrowserTests(MongoFixture fixture, ITestOutputHe
         var skuRow = await data.Database.GetCollection<BsonDocument>("skus").Find(new BsonDocument("_id", sku.Id.Value)).SingleAsync();
         var originalSku = skuRow.DeepClone().AsBsonDocument; originalSku.Remove("fence");
         var originalPrice = await data.Database.GetCollection<BsonDocument>("priceVersions").Find(new BsonDocument("skuId", sku.Id.Value)).SingleAsync();
+        var originalVariants = await data.Database.GetCollection<BsonDocument>("skus").Find(new BsonDocument()).Sort(new BsonDocument("_id", 1)).ToListAsync();
+        Assert.Equal(26, originalVariants.Count); foreach (var row in originalVariants) row.Remove("fence");
+        var photoProblems = new ConcurrentQueue<string>();
         using var keys = new IdentityRuntimeTests.RuntimeKeys(); var settings = IdentityRuntimeTests.Settings(keys);
         settings["Mongo:Database"] = data.Database.DatabaseNamespace.DatabaseName; settings["Identity:TrustedProxies:0"] = "127.0.0.1"; settings["Logging:LogLevel:Default"] = "Warning";
         var configured = new ConfigurationBuilder().AddInMemoryCollection(settings).Build().GetSection(Auth0Options.SectionName).Get<Auth0Options>()!;
-        using var factory = IdentityRuntimeTests.Factory(settings).WithWebHostBuilder(web => web.UseEnvironment("Production"));
+        using var factory = IdentityRuntimeTests.Factory(settings).WithWebHostBuilder(web => web.UseEnvironment("Production")
+            .ConfigureTestServices(services => services.AddSingleton<IStartupFilter>(new PhotoProblemObserver(photoProblems))));
         factory.UseKestrel(options => options.Listen(IPAddress.Loopback, 0)); factory.StartServer();
         var apiAddress = Assert.Single(factory.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!.Addresses);
         var tokens = new Dictionary<string, string>();
@@ -199,6 +219,7 @@ public sealed class CatalogPriceBrowserTests(MongoFixture fixture, ITestOutputHe
         } finally {
             if (!process.HasExited) { process.Kill(true); await process.WaitForExitAsync(); }
             output.WriteLine(await stdout); output.WriteLine(await stderr);
+            foreach (var problem in photoProblems) output.WriteLine(problem);
         }
         var draft = Assert.Single(await data.Database.GetCollection<BsonDocument>(OrderDraftBson.Heads).Find(new BsonDocument()).ToListAsync());
         Assert.Equal(1L, draft["revision"].AsInt64); Assert.Equal(buyer.UserId, draft["createdBy"].AsInt64);
@@ -213,9 +234,72 @@ public sealed class CatalogPriceBrowserTests(MongoFixture fixture, ITestOutputHe
         Assert.Equal(1, await data.Database.GetCollection<BsonDocument>("idempotencyRecords").CountDocumentsAsync(new BsonDocument("operation", OrderDraftBson.Operation)));
         var afterSku = await data.Database.GetCollection<BsonDocument>("skus").Find(new BsonDocument("_id", sku.Id.Value)).SingleAsync(); afterSku.Remove("fence"); Assert.Equal(originalSku, afterSku);
         Assert.Equal(originalPrice, await data.Database.GetCollection<BsonDocument>("priceVersions").Find(new BsonDocument("_id", originalPrice["_id"])).SingleAsync());
+        var retainedVariants = await data.Database.GetCollection<BsonDocument>("skus").Find(new BsonDocument()).Sort(new BsonDocument("_id", 1)).ToListAsync();
+        foreach (var row in retainedVariants) row.Remove("fence"); Assert.Equal(new BsonArray(originalVariants), new BsonArray(retainedVariants));
         Assert.Equal(originalPostal, await postal.StateAsync());
         foreach (var table in new[] { "orders", "stockBalances", "movements", "reservations", "journalEntries", "media" })
             Assert.False(await data.Database.GetCollection<BsonDocument>(table).Find(new BsonDocument()).AnyAsync());
+    }
+
+    private sealed class PhotoProblemObserver(ConcurrentQueue<string> diagnostics) : IStartupFilter
+    {
+        public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> next) => app => {
+            app.Use(async (context, continuation) => {
+                var path = context.Request.Path.Value ?? "";
+                if (context.Request.Method != "POST" || !Regex.IsMatch(path,
+                    @"\A/api/v1/catalog/variants/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/primary-photo/query\z")) {
+                    await continuation(); return;
+                }
+                var original = context.Response.Body;
+                using var tee = new PhotoProblemTee(original, () => context.Response.StatusCode != 204 &&
+                    context.Response.ContentType?.StartsWith("application/problem+json", StringComparison.OrdinalIgnoreCase) == true);
+                context.Response.Body = tee;
+                try { await continuation(); }
+                finally {
+                    context.Response.Body = original;
+                    if (context.Response.StatusCode != 204)
+                        diagnostics.Enqueue("PHOTO_API_PROBLEM status=" + context.Response.StatusCode + " path=" + path + " code=" + tee.SafeCode());
+                }
+            }); next(app);
+        };
+    }
+    // A fixture-only tee: every byte reaches the original stream unchanged; only
+    // a bounded problem prefix is retained, and only its canonical code is logged.
+    private sealed class PhotoProblemTee(Stream original, Func<bool> capture) : Stream
+    {
+        private readonly MemoryStream prefix = new();
+        private void Observe(ReadOnlySpan<byte> bytes) {
+            if (capture() && prefix.Length < 4096) prefix.Write(bytes[..Math.Min(bytes.Length, 4096 - (int)prefix.Length)]);
+        }
+        internal string SafeCode() {
+            try {
+                var reader = new Utf8JsonReader(prefix.GetBuffer().AsSpan(0, (int)prefix.Length), isFinalBlock: false, state: default);
+                while (reader.Read()) if (reader.TokenType == JsonTokenType.PropertyName && reader.ValueTextEquals("code") &&
+                    reader.Read() && reader.TokenType == JsonTokenType.String) {
+                    var code = reader.GetString();
+                    if (code is not null && Regex.IsMatch(code, @"\A[a-z][a-z0-9_.-]{0,95}\z")) return code;
+                }
+            } catch (JsonException) { }
+            return "problem_code_unavailable";
+        }
+        public override bool CanRead => original.CanRead;
+        public override bool CanSeek => original.CanSeek;
+        public override bool CanWrite => original.CanWrite;
+        public override long Length => original.Length;
+        public override long Position { get => original.Position; set => original.Position = value; }
+        public override void Flush() => original.Flush();
+        public override Task FlushAsync(CancellationToken cancellationToken) => original.FlushAsync(cancellationToken);
+        public override int Read(byte[] buffer, int offset, int count) => original.Read(buffer, offset, count);
+        public override long Seek(long offset, SeekOrigin origin) => original.Seek(offset, origin);
+        public override void SetLength(long value) => original.SetLength(value);
+        public override void Write(byte[] buffer, int offset, int count) { Observe(buffer.AsSpan(offset, count)); original.Write(buffer, offset, count); }
+        public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) {
+            Observe(buffer.AsSpan(offset, count)); return original.WriteAsync(buffer, offset, count, cancellationToken);
+        }
+        public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default) {
+            Observe(buffer.Span); return original.WriteAsync(buffer, cancellationToken);
+        }
+        protected override void Dispose(bool disposing) { if (disposing) prefix.Dispose(); base.Dispose(disposing); }
     }
 
     private static string Root()

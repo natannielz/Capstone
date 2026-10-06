@@ -28,6 +28,7 @@ function track(server) { server.on('connection', socket => { sockets.add(socket)
 async function listen(server) { await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); }); return server.address().port; }
 function forward(req, res, port, isApi) {
   const observed = { path: new URL(req.url, origin).pathname, method: req.method };
+  if (isApi) { observed.apiAt = performance.now(); firstApiAt ??= observed.apiAt; }
   if (config.primaryShop) {
     requests.push(observed);
     if (req.method === 'POST' && /^\/api\/v1\/ordering\/(drafts(?:\/operations\/query)?|quote\/query)$/.test(observed.path)) {
@@ -36,7 +37,6 @@ function forward(req, res, port, isApi) {
       });
     }
   }
-  if (isApi) firstApiAt ??= performance.now();
   const headers = { ...req.headers, host: '127.0.0.1:' + port };
   for (const name of Object.keys(headers)) if (name.startsWith('x-forwarded-') || name.startsWith('x-original-') || ['forwarded', 'connection'].includes(name)) delete headers[name];
   if (isApi) { headers['x-forwarded-for'] = req.socket.remoteAddress; headers['x-forwarded-host'] = origin.host; headers['x-forwarded-proto'] = 'https'; }
@@ -187,7 +187,8 @@ try {
   }); const proxyPort = await listen(tunnel);
   browser = await chromium.launch({ ...(channel === 'msedge' ? { channel: 'msedge' } : {}), headless: true, proxy: { server: 'http://127.0.0.1:' + proxyPort } });
   if (config.primaryShop) {
-    await verifyPrimaryShopBrowser({ config, user, origin, directory, writes, requests, loseNext: () => { dropNext = true; }, dropped: () => dropped });
+    await verifyPrimaryShopBrowser({ config, user, origin, directory, writes, requests, firstApiAt: () => firstApiAt,
+      loseNext: () => { dropNext = true; }, dropped: () => dropped });
     assert.deepEqual(errors, []);
   } else {
   const maker = await user('maker'), checker = await user('checker');
