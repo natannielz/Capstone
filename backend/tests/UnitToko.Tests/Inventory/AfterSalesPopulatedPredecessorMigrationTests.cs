@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using MongoDB.Bson;
 using MongoDB.Driver;
 using UnitToko.Modules.Identity.Contracts;
@@ -14,22 +15,26 @@ using UnitToko.Tests.Authorization;
 
 namespace UnitToko.Tests.Inventory;
 
-/// <summary>Explicit native opt-in. The supplied database was produced by exact preserved94
+/// <summary>Required native predecessor input. The supplied database was produced by exact preserved94
 /// factories and writers. This test never removes a migration suffix, repairs history or drops data.</summary>
 [Collection("Mongo")]
 public sealed class AfterSalesPopulatedPredecessorMigrationTests(MongoFixture fixture)
 {
     internal const string HandoffEnvironment = "UNITTOKO_M95_PREDECESSOR_HANDOFF";
-    [Populated94PredecessorFact]
+    [Fact]
     public async Task Genuine_stopped94_case_intake_inspection_survive95_apply_replay_and_original_inspection_recovery()
     {
-        Assert.Equal(95, CollectionMigrations.CurrentVersion);
-        var handoffPath = Environment.GetEnvironmentVariable(HandoffEnvironment)!;
+        Assert.Equal(96, CollectionMigrations.CurrentVersion);
+        var handoffPath = Environment.GetEnvironmentVariable(HandoffEnvironment);
+        if (string.IsNullOrWhiteSpace(handoffPath)) throw new InvalidOperationException("Verified stopped genuine94 predecessor handoff is required; populated94 migration acceptance is unavailable");
         Assert.True(Path.IsPathFullyQualified(handoffPath));
         Assert.Equal("HANDOFF.json", Path.GetFileName(handoffPath));
         var directory = Path.GetDirectoryName(Path.GetFullPath(handoffPath))!;
-        Assert.Equal("allocator-safe-bootstrap-release2", Path.GetFileName(directory));
-        Assert.Equal("aftersales-genuine94-predecessor-writer-release1", Path.GetFileName(Path.GetDirectoryName(directory)));
+        var capsuleName = Path.GetFileName(directory);
+        Assert.True(capsuleName == "allocator-safe-bootstrap-release2" || Regex.IsMatch(capsuleName,
+            @"\Aallocator-safe-bootstrap-release2-full-[0-9a-f]{16}\z"), "only the exact retained94 bootstrap or a fresh approved run suffix is allowed");
+        var parent = Path.GetFullPath(Path.Combine(Preserved95MigrationRuntime.WorkspaceRoot(), "tmp", "production", "aftersales-genuine94-predecessor-writer-release1"));
+        Assert.True(string.Equals(parent, Path.GetDirectoryName(directory), StringComparison.OrdinalIgnoreCase), "retained94 capsule must stay under its exact owned predecessor parent");
         using var handoff = JsonDocument.Parse(await File.ReadAllTextAsync(handoffPath));
         using var stopped = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(directory, "PRODUCER-STOPPED.json")));
         var ready = handoff.RootElement; var terminal = stopped.RootElement;
@@ -93,8 +98,11 @@ public sealed class AfterSalesPopulatedPredecessorMigrationTests(MongoFixture fi
         Assert.Equal(originalKey, inspection["requestKey"].AsString);
         Assert.Equal("unverified", inspection["lotIdentity"].AsString); Assert.Equal("unverified", receipt["lotIdentity"].AsString);
         var actor = await OriginalActorAsync(database, inspection, clockValue);
-        var migrations = new CollectionMigrations(database, clock); Assert.False(await migrations.IsCurrentAsync());
-        await migrations.ApplyAsync(); Assert.True(await migrations.IsCurrentAsync());
+        // The exact preserved95 registry owns ONLY the genuine94 ->95 checkpoint.
+        // Never ask current96 to migrate both steps and then relabel its result as95.
+        using var preserved95 = Preserved95MigrationRuntime.Create(database, clockValue);
+        Assert.False(await preserved95.IsCurrentAsync());
+        await preserved95.ApplyAsync(); Assert.True(await preserved95.IsCurrentAsync());
         var applied = await SnapshotAsync(database);
         foreach (var (table, expected) in before) {
             Assert.True(applied.TryGetValue(table, out var actual), "Retained collection disappeared " + table);
@@ -106,9 +114,34 @@ public sealed class AfterSalesPopulatedPredecessorMigrationTests(MongoFixture fi
         var history = await HistoryAsync(database); Assert.Equal(95, history.Count);
         Assert.Equal(HistoryHash(predecessor), HistoryHash(history.Take(94)));
         Assert.True(MigrationHistory.IsValid(history, 95)); Assert.All(history, row => Assert.Equal("applied", row["state"].AsString));
-        await migrations.ApplyAsync(); Assert.Equal(HistoryHash(history), HistoryHash(await HistoryAsync(database)));
+        await preserved95.ApplyAsync(); Assert.Equal(HistoryHash(history), HistoryHash(await HistoryAsync(database)));
         var replayed = await SnapshotAsync(database); Assert.Equal(applied.Count, replayed.Count);
         foreach (var (table, expected) in applied) Assert.Equal(expected, replayed[table]);
+        preserved95.Dispose();
+        // Original public read/recovery must run against the actual current registry. The
+        // forward96 migration alone may extend the two reviewed count validators and create
+        // empty count-source owners; EVERY retained row/index/UUID is still preserved.
+        var currentMigration = new CollectionMigrations(database, clock); Assert.False(await currentMigration.IsCurrentAsync());
+        var definitions95 = await (await database.ListCollectionsAsync()).ToListAsync();
+        await currentMigration.ApplyAsync(); Assert.True(await currentMigration.IsCurrentAsync());
+        var applied96 = await SnapshotAsync(database);
+        foreach (var (table, expected) in applied) {
+            Assert.True(applied96.TryGetValue(table, out var actual), "Retained collection disappeared after96 " + table);
+            if (table is "stockCountObservations" or "idempotencyRecords") {
+                var definition = definitions95.Single(row => row.GetValue("name", "") == table).DeepClone().AsBsonDocument;
+                definition["options"]["validator"] = InventoryCountStockSourceSchemas.ExtendCount(table, definition["options"]["validator"].AsBsonDocument);
+                Assert.Equal(Hash(definition.ToBson()), actual!.Definition);
+            } else Assert.Equal(expected.Definition, actual!.Definition);
+            Assert.Equal(expected.Indexes, actual!.Indexes); if (table != "schemaMigrations") Assert.Equal(expected.Rows, actual.Rows);
+        }
+        Assert.Equal(applied.Count + InventoryCountStockSourceSchemas.Collections.Length, applied96.Count);
+        await RequireCountFutureEmptyAsync(database);
+        var history96 = await HistoryAsync(database); Assert.Equal(96, history96.Count);
+        Assert.Equal(HistoryHash(history), HistoryHash(history96.Take(95)));
+        Assert.True(MigrationHistory.IsValid(history96, 96)); Assert.All(history96, row => Assert.Equal("applied", row["state"].AsString));
+        await currentMigration.ApplyAsync(); Assert.Equal(HistoryHash(history96), HistoryHash(await HistoryAsync(database)));
+        var replayed96 = await SnapshotAsync(database); Assert.Equal(applied96.Count, replayed96.Count);
+        foreach (var (table, expected) in applied96) Assert.Equal(expected, replayed96[table]);
         // Read/recovery legitimately append read audits and authority fences AFTER byte-exact migration/replay checks.
         var protectedTables = new[] { AfterSalesCaseRecords.Collection, AfterSalesDecisionRecords.Collection, ReturnQuarantineLedger.Collection,
             ReturnInspectionRecords.Collection, ReturnResolutionRecords.Collection, "stockBalances", "lots", "movements", "reservations", "journalEntries", InvoiceBson.Invoices, InvoiceBson.Allocations };
@@ -127,8 +160,9 @@ public sealed class AfterSalesPopulatedPredecessorMigrationTests(MongoFixture fi
         Assert.Equal(returnId, view.Receipt.Id.Value); Assert.Equal(1L, view.Revision); Assert.NotNull(view.Inspection);
         Assert.Equal(inspection["input"]["publicNote"].AsString, view.Inspection!.PublicNote);
         foreach (var (table, expected) in immutable) Assert.Equal(expected, await RowsHashAsync(database, table, excludeReadFences: true));
-        Assert.Equal(HistoryHash(history), HistoryHash(await HistoryAsync(database)));
+        Assert.Equal(HistoryHash(history96), HistoryHash(await HistoryAsync(database)));
         await RequireFutureEmptyAsync(database); // No95 attribution, new finding, lot verification or backfill from replay/read.
+        await RequireCountFutureEmptyAsync(database);
     }
 
     private static string[] FutureNames => [.. AfterSalesStockSourceSchemas.Collections, ReturnedLotVerificationRecords.Collection];
@@ -143,6 +177,19 @@ public sealed class AfterSalesPopulatedPredecessorMigrationTests(MongoFixture fi
             Assert.Equal(0L, await Rows(database, table).CountDocumentsAsync(new BsonDocument()));
             var counter = await Rows(database, "idCounters").Find(new BsonDocument("_id", table)).SingleOrDefaultAsync();
             if (counter is not null) Assert.True(counter == new BsonDocument { { "_id", table }, { "value", 0L } }, "Prospective95 counter was used");
+        }
+    }
+    private static async Task RequireCountFutureEmptyAsync(IMongoDatabase database) {
+        await InventoryCountStockSourceMigration.RequireCountStorageAsync(database, default);
+        foreach (var table in InventoryCountStockSourceSchemas.Collections) {
+            var definition = await UnitToko.Platform.Identity.AccountContactStorage.DefinitionAsync(database, table, default); Assert.NotNull(definition);
+            Assert.True(UnitToko.Platform.Identity.AccountContactStorage.SafeDefinition(definition, InventoryCountStockSourceSchemas.Validator(table)));
+            var indexes = await (await Rows(database, table).Indexes.ListAsync()).ToListAsync(); var required = InventoryCountStockSourceSchemas.Keys(table);
+            Assert.True(OrderStockSourceStorage.SafeIndexes(indexes, required));
+            Assert.All(required, key => Assert.Contains(indexes, row => UnitToko.Platform.Identity.AccountContactStorage.Matches(row, key)));
+            Assert.Equal(0L, await Rows(database, table).CountDocumentsAsync(new BsonDocument()));
+            var counter = await Rows(database, "idCounters").Find(new BsonDocument("_id", table)).SingleOrDefaultAsync();
+            if (counter is not null) Assert.True(counter == new BsonDocument { { "_id", table }, { "value", 0L } }, "Prospective96 counter was used");
         }
     }
     private static async Task<ActorContext> OriginalActorAsync(IMongoDatabase database, BsonDocument inspection, DateTimeOffset frozenClock) {
@@ -188,12 +235,4 @@ public sealed class AfterSalesPopulatedPredecessorMigrationTests(MongoFixture fi
     private static string HistoryHash(IEnumerable<BsonDocument> rows) => Hash(new BsonDocument("rows", new BsonArray(rows)).ToBson());
     private static string Text(JsonElement value, string name) => value.GetProperty(name).GetString() ?? throw new InvalidOperationException("Missing handoff field");
     private static string Hash(byte[] bytes) => Convert.ToHexString(SHA256.HashData(bytes));
-}
-
-public sealed class Populated94PredecessorFactAttribute : FactAttribute
-{
-    public Populated94PredecessorFactAttribute() {
-        if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(AfterSalesPopulatedPredecessorMigrationTests.HandoffEnvironment)))
-            Skip = "Requires explicit genuine stopped94 predecessor handoff; populated94 migration coverage has not executed.";
-    }
 }
