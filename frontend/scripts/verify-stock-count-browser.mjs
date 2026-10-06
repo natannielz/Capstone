@@ -3,6 +3,9 @@ import assert from "node:assert/strict";
 import http from "node:http";
 import https from "node:https";
 import net from "node:net";
+import { createHash } from "node:crypto";
+import { mkdir, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import { createRequire } from "node:module";
 import next from "next";
 
@@ -13,6 +16,8 @@ assert.equal(process.versions.node.split(".")[0], "24");
 const api = new URL(config.apiAddress), origin = new URL(config.origin), issuer = new URL(config.issuer);
 assert.equal(api.protocol, "http:"); assert.equal(api.hostname, "127.0.0.1"); assert.ok(Number(api.port) > 0);
 assert.equal(origin.href, "https://portal.unit-toko.co.id/"); assert.equal(issuer.href, "https://login.unit-toko.co.id/");
+assert.match(config.poolId, /^[1-9][0-9]{0,18}$/);
+assert.match(config.proofPrefix, /^inventory-count-source-[a-f0-9]{32}$/);
 const loadBrowser = createRequire(config.playwrightPackage);
 const browserPackage = loadBrowser(config.playwrightPackage);
 assert.equal(browserPackage.name, "playwright"); assert.equal(browserPackage.version, "1.62.1");
@@ -23,6 +28,7 @@ const path = "/api/v1/inventory/stock-counts";
 const location = { kind: "fulfillmentWarehouse", organizationId: "100", branchId: null, divisionId: null, shopId: "101", warehouseId: "102", channelId: "103" };
 const writes = [], protectedResponses = [], faults = { dropNextWrite: false, dropped: 0 };
 const connections = new Set(), failures = [], checks = [];
+const captures = [], proofDirectory = join(process.cwd(), "..", "tmp", "production", "inventory-count-browser-results");
 let browser, frontend, edge, tunnel;
 const app = next({ dev: false, dir: process.cwd(), quiet: true });
 function track(server) {
@@ -44,7 +50,11 @@ function forward(req, res, port, isApi) {
     headers["x-forwarded-proto"] = "https";
   }
   const write = isApi && req.method === "POST" && req.url === path;
-  if (write) writes.push({ key: req.headers["idempotency-key"], expectedActor: req.headers["x-expected-actor-id"] });
+  if (write) {
+    const observed = { key: req.headers["idempotency-key"], expectedActor: req.headers["x-expected-actor-id"], bodyHash: null };
+    const hash = createHash("sha256"); writes.push(observed);
+    req.on("data", chunk => hash.update(chunk)); req.on("end", () => { observed.bodyHash = hash.digest("hex"); });
+  }
   const drop = write && faults.dropNextWrite;
   if (drop) faults.dropNextWrite = false;
   const upstream = http.request({ hostname: "127.0.0.1", port, path: req.url, method: req.method, headers }, response => {
@@ -83,14 +93,31 @@ async function pending(page) {
 }
 async function select(page) {
   await page.getByLabel("Gudang dan kanal", { exact: true }).selectOption({ label: "Koperasi uji / Toko Tebet uji / Gudang utama uji / OMI uji" });
+  const source = page.getByLabel("Sumber stok yang diamati", { exact: true });
+  await source.locator('option[value="' + config.poolId + '"]').waitFor({ state: "attached" });
+  assert.equal(await source.inputValue(), "");
+  await source.selectOption(config.poolId);
   await page.getByRole("button", { name: /Pensil browser BROWSER-12/ }).click();
+}
+async function capture(page, state) {
+  await mkdir(proofDirectory, { recursive: true });
+  for (const [name, width, height] of [["desktop", 1280, 960], ["mobile", 390, 844]]) {
+    await page.setViewportSize({ width, height });
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
+    const path = join(proofDirectory, config.proofPrefix + "-" + state + "-" + name + ".png");
+    const pixels = await page.screenshot({ path, fullPage: true });
+    captures.push({ state, device: name, path, sha256: createHash("sha256").update(pixels).digest("hex") });
+  }
+  await page.setViewportSize({ width: 1280, height: 960 });
 }
 async function review(page, quantity, reason) {
   await page.getByLabel("Jumlah kemasan yang ditemukan", { exact: true }).fill(quantity);
   await page.getByLabel("Alasan penghitungan", { exact: true }).fill(reason);
   await page.getByRole("button", { name: "Tinjau hitungan", exact: true }).click();
   await page.getByRole("heading", { name: "Periksa sebelum menyimpan", exact: true }).waitFor();
-  await page.getByRole("checkbox", { name: "Saya sudah memeriksa gudang, kemasan dan jumlah yang ditemukan." }).check();
+  await page.getByText("Sumber dipilih oleh petugas", { exact: true }).waitFor();
+  if (!captures.length) await capture(page, "review");
+  await page.getByRole("checkbox", { name: "Saya sudah memeriksa gudang, pilihan kaitan sumber, kemasan dan jumlah yang ditemukan.", exact: true }).check();
 }
 try {
   await app.prepare();
@@ -195,6 +222,10 @@ try {
     await page.getByRole("heading", { name: "BROWSER-12", exact: true }).waitFor();
     await page.getByText("Alasan: Browser zero observation", { exact: true }).waitFor();
     await page.getByText("0 Dus = 0 piece", { exact: true }).waitFor();
+    const binding = page.getByText(/^Kaitan sumber saat dicatat:/);
+    await binding.waitFor();
+    assert.equal((await binding.innerText()).includes(config.sourceLabel), true);
+    await capture(page, "persisted");
     const body = await page.locator("main").innerText();
     assert.equal(body.includes("private-browser-physical"), false);
   });
@@ -215,6 +246,8 @@ try {
     await page.waitForFunction(() => { const button = Array.from(document.querySelectorAll("button")).find(button => button.textContent === "Periksa hasil"); return button !== undefined && !button.disabled; });
     assert.equal(faults.dropped, 2); assert.equal(writes.length, before + 2);
     assert.equal(writes[before].key, writes[before + 1].key);
+    assert.match(writes[before].bodyHash, /^[a-f0-9]{64}$/);
+    assert.equal(writes[before].bodyHash, writes[before + 1].bodyHash);
     entries = await pending(page); assert.equal(entries.length, 1);
     await page.reload();
     await page.getByRole("button", { name: "Periksa hasil", exact: true }).click();
@@ -233,6 +266,12 @@ try {
   assert.deepEqual(failures, []);
   assert.equal(protectedResponses.filter(response => response.path.startsWith("/api/v1/")).every(response => response.noStore), true);
   assert.equal(checks.length, 7);
+  await writeFile(join(proofDirectory, config.proofPrefix + "-proof.json"), JSON.stringify({
+    recordedUtc: new Date().toISOString(), checks, captures, poolId: config.poolId,
+    originalKeyAndBodyPreserved: true, droppedCommittedResponses: faults.dropped, realApiResponses: protectedResponses.length,
+    browserApiMongoJourney: true, syntheticProviderAndAccounts: true, stockRelease: false,
+    physicalCustodyClosure: false, stagingValidated: false, productionAccepted: false,
+  }, null, 2));
   console.log("REAL_STOCK_BROWSER_PASS " + JSON.stringify({ checks, droppedCommittedResponses: faults.dropped, realApiResponses: protectedResponses.length }));
 } catch (error) {
   console.error(error.stack ?? String(error));

@@ -25,6 +25,9 @@ function message(error: unknown): string {
   if (error instanceof IdentityFailure) return identityMessage(error);
   if (error instanceof AccessFailure) {
     if (error.code === "stock_count_selection_required") return "Pilih gudang dan kemasan dari daftar yang tersedia.";
+    if (error.code === 'stock_count_source_selection_required') return 'Pilih sumber stok yang benar-benar diamati, atau pilih pengamatan tanpa kaitan sumber secara sengaja.';
+    if (error.code === 'stock_count_view_stale') return 'Sesi atau pilihan berubah. Perbarui pilihan sumber dan kemasan sebelum meninjau kembali.';
+    if (['stock_count_source_changed', 'stock_source_revision_changed', 'stock_count_pool_changed'].includes(error.code)) return 'Konfigurasi sumber berubah. Muat ulang pilihan dan cocokkan kembali sumber sebelum mencatat pengamatan.';
     if (error.code === "stock_count_input_invalid") return "Isi jumlah kemasan dengan bilangan bulat 0–1.000.000 dan berikan alasan. Kolom kosong bukan jumlah nol.";
     if (error.code === "stock_count_response_invalid") return "Data yang diterima belum sesuai. Referensi permintaan tetap disimpan. Periksa sesi dan data terbaru sebelum melanjutkan.";
     if (error.code === "version_conflict" || error.code === "catalog_revision_conflict") return "Data berubah sejak dipilih. Muat ulang pilihan kemasan, lalu periksa jumlah dan isinya kembali.";
@@ -147,6 +150,24 @@ function CountDesk({ loaded, onRefresh }: { loaded: Loaded; onRefresh: () => Pro
         <strong>{state.warehouse.warehouseName}</strong> / {state.warehouse.channelName}</p>}
       {!state.loadingWarehouses && state.warehouses.length === 0 && <p className={common.help}>Belum ada gudang aktif untuk tugas ini. Periksa penugasan bersama pengelola.</p>}
       <p className={common.help}>Setiap catatan adalah satu pengamatan fisik. Catatan ini belum menetapkan saldo gudang atau jumlah barang yang tersedia.</p>
+      {state.mode === 'count' && state.warehouse && <section aria-label="Pilihan kaitan sumber" aria-busy={state.loadingSources}>
+        <label><span id="stock-count-source-label">Sumber stok yang diamati</span>
+          <select aria-labelledby="stock-count-source-label" value={state.sourceMode === 'unbound' ? 'unbound' : state.selectedSource?.pool.poolId ?? ''}
+            disabled={locked || state.loadingSources} onChange={event => editor.chooseSource(event.target.value)}>
+            <option value="">{state.loadingSources ? 'Memuat pilihan sumber…' : 'Pilih sumber atau pengamatan tanpa kaitan'}</option>
+            <option value="unbound">Catat pengamatan tanpa kaitan sumber</option>
+            {state.sources.items.map(source => <option key={source.pool.poolId} value={source.pool.poolId}>{source.pool.label} — {source.pool.physicalKey}</option>)}
+          </select>
+        </label>
+        <div className={common.actions}><button type="button" className={common.secondary} disabled={locked || state.loadingSources}
+          onClick={() => void editor.loadSources()}>Muat ulang pilihan sumber</button></div>
+        {state.loadingSources && <p role="status">Memeriksa sumber yang diizinkan pada gudang dan kanal ini…</p>}
+        {!state.loadingSources && state.sources.items.length === 0 && <p className={common.help}>Belum ada sumber yang dapat dipilih pada halaman ini. Periksa penugasan atau konfigurasi bersama pengelola. Pengamatan tanpa kaitan harus dipilih secara sengaja.</p>}
+        {state.selectedSource && <p className={common.scopeSummary}>Sumber dipilih oleh petugas: <strong>{state.selectedSource.pool.label}</strong> — {state.selectedSource.pool.physicalKey}.
+          {' '}Revisi sumber saat ditinjau: {state.selectedSource.pool.poolRevision}. Pilihan mengikuti konfigurasi saat dimuat; penanda aktif bukan bukti ketersediaan atau persetujuan pelepasan stok.</p>}
+        {state.sourceMode === 'unbound' && <p className={common.help}>Tanpa kaitan sumber. Gudang dan label lot tidak akan digunakan untuk menebak pool stok.</p>}
+        <Paging offset={state.sourceOffset} total={state.sources.total} disabled={locked || state.loadingSources} onPage={offset => void editor.loadSources(offset)} />
+      </section>}
     </section>
     {state.sending && <p role="status" className={common.help}>Menyimpan pengamatan… Tunggu hasil sebelum melanjutkan.</p>}
     {state.error !== null && <div role="alert" className={common.alert}><p>{message(state.error)}</p>
@@ -162,6 +183,7 @@ function CountDesk({ loaded, onRefresh }: { loaded: Loaded; onRefresh: () => Pro
     {state.result && <div ref={resultFocus} tabIndex={-1} className={common.success} role="status">
       <h2>Hitungan tersimpan</h2><p>{amount(state.result.packages)} {state.result.packageLabel} = {amount(state.result.baseUnits)} {state.result.baseUnitCode}.</p>
       <p>Referensi pengamatan {state.result.id}. Pilih kemasan kembali untuk membuat pengamatan baru.</p>
+      <CountSourceBinding item={state.result} />
     </div>}
     {!state.warehouse ? <section className={common.state}><h2>Pilih gudang untuk mulai</h2><p>Pilihan mengikuti penugasan akun Anda. Barang akan dimuat setelah gudang dipilih.</p></section> :
       state.mode === "history" ? <section className={common.accountSection} aria-busy={state.loadingHistory}>
@@ -241,6 +263,8 @@ function CountReview({ command, warehouse, busy, onConfirm, onCancel }: {
     <h2>Periksa sebelum menyimpan</h2>
     <dl className={common.facts}>
       <div><dt>Gudang / kanal</dt><dd>{warehouse}</dd></div><div><dt>Barang</dt><dd>{command.choice.familyName} ({command.choice.skuCode})</dd></div>
+      <div><dt>Sumber dipilih oleh petugas</dt><dd>{command.source ? command.source.pool.label + ' — ' + command.source.pool.physicalKey : 'Tanpa kaitan sumber'}</dd></div>
+      {command.source && <div><dt>Revisi sumber saat ditinjau</dt><dd>{command.source.pool.poolRevision}</dd></div>}
       <div><dt>Kemasan</dt><dd>{command.choice.packageLabel}, {amount(command.choice.baseUnitsPerPackage)} {command.choice.baseUnitCode} per kemasan</dd></div>
       <div><dt>Jumlah ditemukan</dt><dd>{amount(command.body.packages)} kemasan = {amount(units)} {command.choice.baseUnitCode}</dd></div>
       <div><dt>Label lot belum diverifikasi</dt><dd>{command.body.observedLotLabel ?? "Tidak dicatat"}</dd></div>
@@ -248,7 +272,7 @@ function CountReview({ command, warehouse, busy, onConfirm, onCancel }: {
     </dl>
     <p className={common.help}>Pengamatan tersimpan tidak dapat diubah. Catatan ini belum menetapkan saldo atau ketersediaan barang.</p>
     <label className={common.checkbox}><input type="checkbox" checked={confirmed} disabled={busy} onChange={event => setConfirmed(event.target.checked)} />
-      Saya sudah memeriksa gudang, kemasan dan jumlah yang ditemukan.</label>
+      Saya sudah memeriksa gudang, pilihan kaitan sumber, kemasan dan jumlah yang ditemukan.</label>
     <div className={common.actions}><button className={common.primary} disabled={busy || !confirmed}>Simpan pengamatan</button>
       <button type="button" className={common.secondary} disabled={busy} onClick={onCancel}>Kembali ke isian</button></div>
   </form>;
@@ -259,8 +283,14 @@ function Observation({ item }: { item: StockObservation }) {
     <p><strong>{amount(item.packages)} {item.packageLabel} = {amount(item.baseUnits)} {item.baseUnitCode}</strong></p>
     <p className={common.help}>{amount(item.baseUnitsPerPackage)} {item.baseUnitCode} per kemasan. {kind[item.packageKind]}.</p>
     <p>Alasan: {item.reason}</p>{item.observedLotLabel && <p>Label lot belum diverifikasi: {item.observedLotLabel}</p>}
+    <CountSourceBinding item={item} />
     <details><summary>Referensi pengamatan</summary><p>{item.id}</p></details>
   </li>;
+}
+function CountSourceBinding({ item }: { item: StockObservation }) {
+  return item.poolBinding ? <p>Kaitan sumber saat dicatat: <strong>{item.poolBinding.label}</strong> — {item.poolBinding.physicalKey}; revisi {item.poolBinding.poolRevision}.
+    {' '}Penanda konfigurasi saat dicatat: {item.poolBinding.active ? 'aktif' : 'tidak aktif'}. Kaitan tersimpan tidak menetapkan saldo, nilai, ketersediaan, pelepasan atau penyelesaian stok.</p>
+    : <p>Pengamatan lama/tanpa kaitan sumber. Lokasi dan label lot belum membuktikan kaitan ke pool atau lot stok.</p>;
 }
 function Paging({ offset, total, disabled, onPage }: { offset: number; total: string; disabled: boolean; onPage: (offset: number) => void }) {
   return <div className={common.pagination}>

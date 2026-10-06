@@ -1,11 +1,13 @@
 using System.Collections.Immutable;
+using System.Text.Json.Serialization;
 using UnitToko.Modules.Contracts;
 using UnitToko.Modules.Organizations;
 
 namespace UnitToko.Modules.Inventory;
 
 public sealed record StockCountInput(GrantScope Location, long SkuId, long ExpectedSkuRevision,
-    long ExpectedDefinitionId, int Packages, string? ObservedLotLabel = null);
+    long ExpectedDefinitionId, int Packages, string? ObservedLotLabel = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] StockCountPoolSelection? PoolSelection = null);
 public sealed record StockCountDefinitionSnapshot(GrantScope Owner, long SkuId, long SkuRevision,
     long FamilyId, long FamilyRevision, long CategoryId, long CategoryRevision,
     long DefinitionId, long DefinitionVersion, string SkuCode, string PhysicalItemKey,
@@ -13,7 +15,8 @@ public sealed record StockCountDefinitionSnapshot(GrantScope Owner, long SkuId, 
 public sealed record StockCountObservation(long Id, GrantScope Location, long CountedBy,
     string Issuer, string Subject, DateTimeOffset RecordedAt, StockCountDefinitionSnapshot Definition,
     int Packages, long BaseUnits, string? ObservedLotLabel, string Baseline, string Coverage,
-    long AuditId, string Reason);
+    long AuditId, string Reason,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] StockCountPoolBinding? PoolBinding = null);
 public sealed record StockCountPage(long Total, ImmutableArray<StockCountObservation> Items);
 
 /// <summary>Physical counting evidence only. A count establishes no balance, eligibility or value.</summary>
@@ -24,6 +27,7 @@ public static class StockCountPolicy
         if (input is null || input.SkuId <= 0 || input.ExpectedSkuRevision <= 0 || input.ExpectedDefinitionId <= 0)
             throw Invalid();
         Location(input.Location);
+        input.PoolSelection?.Validate();
         _ = BaseUnits(input.Packages, 1);
         if (input.ObservedLotLabel is { } label && !CanonicalText(label, 160)) throw Invalid();
     }

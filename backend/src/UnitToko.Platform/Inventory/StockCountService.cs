@@ -16,7 +16,7 @@ namespace UnitToko.Platform.Inventory;
 /// Captures immutable physical-count observations only. No stock writer, valuation or promise is activated.
 /// Results include internal provenance and are not an approved public HTTP projection.
 /// </summary>
-public sealed class StockCountService(IMongoDatabase database, MongoUnitOfWork unit, IdAllocator ids, IClock clock)
+public sealed partial class StockCountService(IMongoDatabase database, MongoUnitOfWork unit, IdAllocator ids, IClock clock)
 {
     private static readonly FilterDefinitionBuilder<BsonDocument> F = Builders<BsonDocument>.Filter;
     private readonly AuthorizationStore authorization = new(database, unit, clock);
@@ -36,6 +36,7 @@ public sealed class StockCountService(IMongoDatabase database, MongoUnitOfWork u
     {
         StockCountPolicy.Validate(input);
         Metadata(metadata);
+        if (input.PoolSelection is not null) return await RecordBoundCountAsync(actor, input, metadata, ct);
         var hash = StockCountBson.BodyHash(input, metadata.Reason);
         // Allocation alone is outside the transaction. Aborts/replays may leave gaps, never reused IDs.
         var id = await ids.NextAsync(StockCountBson.Collection, ct);
@@ -76,6 +77,7 @@ public sealed class StockCountService(IMongoDatabase database, MongoUnitOfWork u
         {
             var context = await BeginAsync(actor, Permissions.StockCount, tx, token);
             var receipt = await Rows("idempotencyRecords").Find(tx, ReceiptFilter(actor.UserId, key)).SingleOrDefaultAsync(token);
+            if (receipt is null) await RequireMissingBoundKeyAsync(context, key, token);
             var result = receipt is null ? null : await ReceiptAsync(context, receipt, token);
             await CompleteAsync(context, token);
             return result;
@@ -98,8 +100,10 @@ public sealed class StockCountService(IMongoDatabase database, MongoUnitOfWork u
                 {
                     RequireLocation(context, location);
                     result = await GraphAsync(tx, row, token);
+                    await FenceBoundContextAsync(context, result, token);
                 }
             }
+            if (row is null) await RequireMissingBoundObservationAsync(context, id, token);
             await CompleteAsync(context, token);
             return result;
         }, ct);
@@ -113,11 +117,12 @@ public sealed class StockCountService(IMongoDatabase database, MongoUnitOfWork u
         {
             var context = await BeginAsync(actor, Permissions.StockRead, tx, token);
             RequireLocation(context, location);
+            await RequireBoundListMembershipAsync(context, location, token);
             var filter = CatalogRepository.OwnerFilter("location", location);
             var total = await Rows(StockCountBson.Collection).CountDocumentsAsync(tx, filter, cancellationToken: token);
             var rows = await Rows(StockCountBson.Collection).Find(tx, filter).Sort(new BsonDocument("_id", 1)).Skip(offset).Limit(limit).ToListAsync(token);
             var items = ImmutableArray.CreateBuilder<StockCountObservation>(rows.Count);
-            foreach (var row in rows) items.Add(await GraphAsync(tx, row, token));
+            foreach (var row in rows) { var observation = await GraphAsync(tx, row, token); await FenceBoundContextAsync(context, observation, token); items.Add(observation); }
             await CompleteAsync(context, token);
             return new StockCountPage(total, items.ToImmutable());
         }, ct);
@@ -133,16 +138,21 @@ public sealed class StockCountService(IMongoDatabase database, MongoUnitOfWork u
         var result = await GraphAsync(context.Tx, row, token, receipt);
         if (result.CountedBy != context.Actor.UserId || result.Issuer != context.Actor.ProviderIssuer || result.Subject != context.Actor.ProviderSubject)
             throw new AuthorizationDeniedException("stock_count_identity_changed");
+        await FenceBoundContextAsync(context, result, token);
         return result;
     }
-    private async Task<StockCountObservation> GraphAsync(IClientSessionHandle tx, BsonDocument row, CancellationToken token, BsonDocument? receipt = null)
+    internal async Task<StockCountObservation> GraphObservationAsync(IClientSessionHandle tx, BsonDocument row, CancellationToken token, BsonDocument? receipt = null)
     {
+        new InventoryRepository(database).RequireSession(tx);
+        var transaction = tx.WrappedCoreSession.CurrentTransaction.TransactionNumber;
         var result = StockCountBson.Read(row);
         var audit = await Rows("auditEvents").Find(tx, F.Eq("_id", result.AuditId)).SingleOrDefaultAsync(token);
         receipt ??= await Rows("idempotencyRecords").Find(tx, ReceiptFilter(result.CountedBy, row["requestKey"].AsString)).SingleOrDefaultAsync(token);
         StockCountBson.Graph(row, audit, receipt);
         await StockCountBson.RequireHistoricalCatalogAsync(result, async (collection, id, ct) =>
             await Rows(collection).Find(tx, F.Eq("_id", id)).SingleOrDefaultAsync(ct), token);
+        new InventoryRepository(database).RequireSession(tx);
+        if (tx.WrappedCoreSession.CurrentTransaction.TransactionNumber != transaction) throw StockCountBson.Invalid();
         return result;
     }
     private async Task<Context> BeginAsync(ActorContext actor, string permission, IClientSessionHandle tx, CancellationToken token)

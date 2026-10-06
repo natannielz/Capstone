@@ -27,12 +27,29 @@ internal static class StockCountBson
         Fields(row, "kind", "organizationId", "shopId", "channelId", "warehouseId");
         return CatalogRepository.Owner(row);
     }
-    internal static string BodyHash(StockCountInput input, string reason) => Hash(new()
-    {
-        { "location", Scope(input.Location) }, { "skuId", input.SkuId }, { "expectedSkuRevision", input.ExpectedSkuRevision },
-        { "expectedDefinitionId", input.ExpectedDefinitionId }, { "packages", input.Packages },
-        { "observedLotLabel", input.ObservedLotLabel is { } label ? label : BsonNull.Value }, { "reason", reason }
-    });
+    internal static string BodyHash(StockCountInput input, string reason) {
+        var body = new BsonDocument {
+            { "location", Scope(input.Location) }, { "skuId", input.SkuId }, { "expectedSkuRevision", input.ExpectedSkuRevision },
+            { "expectedDefinitionId", input.ExpectedDefinitionId }, { "packages", input.Packages },
+            { "observedLotLabel", input.ObservedLotLabel is { } label ? label : BsonNull.Value }, { "reason", reason }
+        };
+        if (input.PoolSelection is { } selected) body.Add("poolSelection", PoolSelection(selected));
+        return Hash(body);
+    }
+    internal static BsonDocument PoolSelection(StockCountPoolSelection value) {
+        value.Validate(); return new() { { "poolId", value.PoolId }, { "expectedPoolRevision", value.ExpectedPoolRevision }, { "configurationHash", value.ConfigurationHash } };
+    }
+    internal static BsonDocument PoolBinding(StockCountPoolBinding value) {
+        value.Validate(); return new() { { "poolId", value.PoolId }, { "poolRevision", value.PoolRevision }, { "setupDecisionId", value.SetupDecisionId },
+            { "configurationHash", value.ConfigurationHash }, { "physicalKey", value.PhysicalKey }, { "label", value.Label }, { "active", value.Active } };
+    }
+    internal static StockCountPoolBinding PoolBinding(BsonDocument value) {
+        Fields(value, "poolId", "poolRevision", "setupDecisionId", "configurationHash", "physicalKey", "label", "active");
+        if (!value["active"].IsBoolean) throw Invalid();
+        var result = new StockCountPoolBinding(Long(value, "poolId"), Long(value, "poolRevision"), Long(value, "setupDecisionId"),
+            Text(value, "configurationHash", 64), Text(value, "physicalKey", 128), Text(value, "label", 160), value["active"].AsBoolean);
+        result.Validate(); return result;
+    }
     internal static StockCountDefinitionSnapshot Definition(StockDefinitionSnapshot value) =>
         new(value.Owner, value.SkuId, value.SkuRevision, value.FamilyId, value.FamilyRevision, value.CategoryId,
             value.CategoryRevision, value.DefinitionId, value.DefinitionVersion, value.SkuCode, value.PhysicalItemKey,
@@ -47,17 +64,19 @@ internal static class StockCountBson
         { "packageKind", value.PackageKind }, { "baseUnitCode", value.BaseUnitCode }, { "baseUnitsPerPackage", value.BaseUnitsPerPackage }
     };
     internal static BsonDocument Create(long id, long auditId, ActorContext actor, StockCountInput input,
-        StockCountDefinitionSnapshot definition, AuthorizationCommandMetadata metadata, DateTimeOffset now) =>
+        StockCountDefinitionSnapshot definition, AuthorizationCommandMetadata metadata, DateTimeOffset now,
+        StockCountPoolBinding? pool = null, string? poolSourceHash = null) =>
         Create(id, auditId, actor.UserId, actor.ProviderIssuer, actor.ProviderSubject, actor.GrantVersion, input,
             definition, metadata.IdempotencyKey, metadata.Reason, metadata.CorrelationId,
-            DateTimeOffset.FromUnixTimeMilliseconds(now.ToUnixTimeMilliseconds()));
+            DateTimeOffset.FromUnixTimeMilliseconds(now.ToUnixTimeMilliseconds()), pool, poolSourceHash);
     private static BsonDocument Create(long id, long auditId, long actorId, string issuer, string subject,
         long grantVersion, StockCountInput input, StockCountDefinitionSnapshot definition, string key,
-        string reason, string correlationId, DateTimeOffset now)
+        string reason, string correlationId, DateTimeOffset now, StockCountPoolBinding? pool = null, string? poolSourceHash = null)
     {
+        if ((input.PoolSelection is null) != (pool is null) || pool is not null && (pool.Selection != input.PoolSelection || poolSourceHash is null || !IsHash(poolSourceHash))) throw Invalid();
         var row = new BsonDocument
         {
-            { "_id", id }, { "schemaVersion", 1 }, { "revision", 1L }, { "location", Scope(input.Location) },
+            { "_id", id }, { "schemaVersion", pool is null ? 1 : 2 }, { "revision", 1L }, { "location", Scope(input.Location) },
             { "actorId", actorId }, { "issuer", issuer }, { "subject", subject }, { "actorGrantVersion", grantVersion },
             { "recordedAt", now.UtcDateTime }, { "requestKey", key }, { "bodyHash", BodyHash(input, reason) },
             { "definition", Definition(definition) }, { "packages", input.Packages },
@@ -66,6 +85,7 @@ internal static class StockCountBson
             { "baseline", "unavailable" }, { "coverage", "single-observation" }, { "auditId", auditId },
             { "reason", reason }, { "correlationId", correlationId }
         };
+        if (pool is not null) { row.Add("poolBinding", PoolBinding(pool)); row.Add("poolSourceHash", poolSourceHash ?? throw Invalid()); }
         row.Add("fingerprint", Hash(row));
         return row;
     }
@@ -77,9 +97,14 @@ internal static class StockCountBson
     }
     private static StockCountObservation ReadCore(BsonDocument row)
     {
-        Fields(row, "_id", "schemaVersion", "revision", "location", "actorId", "issuer", "subject", "actorGrantVersion",
+        string[] fields = ["_id", "schemaVersion", "revision", "location", "actorId", "issuer", "subject", "actorGrantVersion",
             "recordedAt", "requestKey", "bodyHash", "definition", "packages", "baseUnits", "observedLotLabel",
-            "baseline", "coverage", "auditId", "reason", "correlationId", "fingerprint");
+            "baseline", "coverage", "auditId", "reason", "correlationId", "fingerprint"];
+        var bound = row.GetValue("schemaVersion", BsonNull.Value) == 2;
+        Fields(row, bound ? [.. fields, "poolBinding", "poolSourceHash"] : fields);
+        var pool = bound ? PoolBinding(Document(row, "poolBinding")) : null;
+        var poolHash = bound && IsHash(row["poolSourceHash"]) ? row["poolSourceHash"].AsString : null;
+        if (bound && poolHash is null) throw Invalid();
         if (!Schema(row) || Long(row, "revision") != 1 || !CatalogSchemas.ValidDate(row["recordedAt"]) ||
             !IsHash(row["bodyHash"]) || !IsHash(row["fingerprint"]) || !Key(Text(row, "requestKey", 128)) ||
             row["baseline"] != "unavailable" || row["coverage"] != "single-observation") throw Invalid();
@@ -89,7 +114,7 @@ internal static class StockCountBson
         if (!ScopePolicy.ContainsScope(definition.Owner, location)) throw Invalid();
         var packages = Integer(row, "packages");
         var label = row["observedLotLabel"].IsBsonNull ? null : Text(row, "observedLotLabel", 160);
-        var input = new StockCountInput(location, definition.SkuId, definition.SkuRevision, definition.DefinitionId, packages, label);
+        var input = new StockCountInput(location, definition.SkuId, definition.SkuRevision, definition.DefinitionId, packages, label, pool?.Selection);
         StockCountPolicy.Validate(input);
         var id = Long(row, "_id");
         var audit = Long(row, "auditId");
@@ -100,10 +125,10 @@ internal static class StockCountBson
         var reason = Text(row, "reason", 1000);
         var correlation = Text(row, "correlationId", 128);
         var time = DateTimeOffset.FromUnixTimeMilliseconds(row["recordedAt"].AsBsonDateTime.MillisecondsSinceEpoch);
-        var expected = Create(id, audit, actor, issuer, subject, grantVersion, input, definition, row["requestKey"].AsString, reason, correlation, time);
+        var expected = Create(id, audit, actor, issuer, subject, grantVersion, input, definition, row["requestKey"].AsString, reason, correlation, time, pool, poolHash);
         if (!Same(row, expected)) throw Invalid();
         return new(id, location, actor, issuer, subject, time, definition, packages,
-            StockCountPolicy.BaseUnits(packages, definition.BaseUnitsPerPackage), label, "unavailable", "single-observation", audit, reason);
+            StockCountPolicy.BaseUnits(packages, definition.BaseUnitsPerPackage), label, "unavailable", "single-observation", audit, reason, pool);
     }
     private static StockCountDefinitionSnapshot ReadDefinition(BsonDocument row)
     {
@@ -191,7 +216,7 @@ internal static class StockCountBson
         row.TryGetValue(field, out var value) && value.IsInt32 ? value.AsInt32 : throw Invalid();
     private static string Text(BsonDocument row, string field, int maximum) =>
         row.TryGetValue(field, out var value) && value.IsString && StockCountPolicy.CanonicalText(value.AsString, maximum) ? value.AsString : throw Invalid();
-    private static bool Schema(BsonDocument row) => row.TryGetValue("schemaVersion", out var value) && value.IsInt32 && value.AsInt32 == 1;
+    private static bool Schema(BsonDocument row) => row.TryGetValue("schemaVersion", out var value) && value.IsInt32 && value.AsInt32 is 1 or 2;
     private static void Fields(BsonDocument row, params string[] fields)
     {
         if (row.ElementCount != fields.Length || row.Names.Distinct(StringComparer.Ordinal).Count() != row.ElementCount || fields.Any(field => !row.Contains(field))) throw Invalid();

@@ -39,6 +39,13 @@ public static class StockCountEndpoints
                 StockCountInputs.Location(request.Location), request.Offset, request.Limit, request.Search,
                 new(request.Purpose, http.TraceIdentifier), ct)));
         }).WithName("StockCountPackages");
+        group.MapPost("/sources/query", async (StockCountSourceQueryDto request, HttpContext http,
+            [FromServices] StockCountService service, CancellationToken ct) =>
+        {
+            Purpose(request.Purpose, "inventory-stock-count");
+            return TypedResults.Ok(StockCountResponses.Sources(await service.SourcesAsync(Actor(http),
+                StockCountInputs.Location(request.Location), request.Offset, request.Limit, ct)));
+        }).WithName("StockCountSources");
         group.MapPost("", async (StockCountRecordDto request, HttpContext http,
             [FromServices] StockCountService service, [FromHeader(Name = "Idempotency-Key")] string idempotencyKey, CancellationToken ct) =>
         {

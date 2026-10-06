@@ -54,6 +54,37 @@ export function parseStockWarehouses(value: unknown) {
   }), item => stockLocationKey(item.location));
 }
 export type StockWarehouse = ReturnType<typeof parseStockWarehouses>[number];
+export type StockPoolSelection = Readonly<{ poolId: string; expectedPoolRevision: string; configurationHash: string }>;
+export type StockPoolBinding = Readonly<{ poolId: string; poolRevision: string; setupDecisionId: string; configurationHash: string;
+  physicalKey: string; label: string; active: boolean }>;
+export type StockSourceChoice = Readonly<{ pool: StockPoolBinding; requestedLocation: AccessScope }>;
+const exact = (value: Record<string, unknown>, fields: string[]) => Object.keys(value).sort().join(',') === [...fields].sort().join(',');
+const configurationHash = (value: unknown): string => typeof value === 'string' && /^[0-9a-f]{64}$(?![\s\S])/.test(value) ? value : invalid();
+export function parseStockPoolBinding(value: unknown): StockPoolBinding {
+  const v = record(value);
+  if (!exact(v, ['poolId', 'poolRevision', 'setupDecisionId', 'configurationHash', 'physicalKey', 'label', 'active']) || typeof v.active !== 'boolean') return invalid();
+  if (typeof v.physicalKey !== 'string' || !/^[a-z][a-z0-9._-]{0,63}$(?![\s\S])/.test(v.physicalKey)) return invalid();
+  return { poolId: id(v.poolId), poolRevision: id(v.poolRevision), setupDecisionId: id(v.setupDecisionId), configurationHash: configurationHash(v.configurationHash),
+    physicalKey: canonicalText(v.physicalKey, 64), label: canonicalText(v.label, 160), active: v.active };
+}
+export function parseStockSourceChoice(value: unknown, location: AccessScope): StockSourceChoice {
+  const v = record(value); if (!exact(v, ['pool', 'requestedLocation'])) return invalid();
+  if (!exact(record(v.requestedLocation), ['kind', 'organizationId', 'branchId', 'divisionId', 'shopId', 'warehouseId', 'channelId'])) return invalid();
+  const place = parseStockLocation(v.requestedLocation);
+  if (stockLocationKey(place) !== stockLocationKey(location)) return invalid();
+  return { pool: parseStockPoolBinding(v.pool), requestedLocation: place };
+}
+export function parseStockSources(value: unknown, location: AccessScope, offset = 0, limit = 25) {
+  if (!exact(record(value), ['total', 'items'])) return invalid();
+  return page(value, offset, limit, item => parseStockSourceChoice(item, location), item => item.pool.poolId);
+}
+export function parseStockPoolSelection(value: unknown): StockPoolSelection {
+  const v = record(value); if (!exact(v, ['poolId', 'expectedPoolRevision', 'configurationHash'])) return invalid();
+  return { poolId: id(v.poolId), expectedPoolRevision: id(v.expectedPoolRevision), configurationHash: configurationHash(v.configurationHash) };
+}
+const sourceBody = (source: StockSourceChoice): StockPoolSelection => Object.freeze({ poolId: source.pool.poolId,
+  expectedPoolRevision: source.pool.poolRevision, configurationHash: source.pool.configurationHash });
+export const stockSourceKey = (source: StockSourceChoice): string => source.pool.poolId;
 function packageFacts(value: unknown) {
   const v = record(value), kind = v.packageKind, code = canonicalText(v.skuCode, 64);
   if ((kind !== "loose" && kind !== "sealed" && kind !== "other") || !/^[A-Z0-9._-]+$(?![\s\S])/.test(code)) return invalid();
@@ -92,7 +123,8 @@ export function parseStockObservation(value: unknown) {
   if (BigInt(baseUnits) !== BigInt(packages) * BigInt(facts.baseUnitsPerPackage)) return invalid();
   return { id: id(v.id), version: "1" as const, location: parseStockLocation(v.location), recordedAt: time(v.recordedAt),
     ...facts, packages, baseUnits, observedLotLabel: v.observedLotLabel === null ? null : canonicalText(v.observedLotLabel, 160),
-    reason: canonicalText(v.reason, 1000), baseline: "unavailable" as const, coverage: "single-observation" as const };
+    reason: canonicalText(v.reason, 1000), baseline: "unavailable" as const, coverage: "single-observation" as const,
+    ...('poolBinding' in v ? { poolBinding: parseStockPoolBinding(v.poolBinding) } : {}) };
 }
 export type StockObservation = ReturnType<typeof parseStockObservation>;
 export function parseStockHistory(value: unknown, location: AccessScope, offset = 0, limit = 25) {
@@ -115,16 +147,20 @@ export function stockCountReceipt(value: unknown, entry: OperationReference): St
 export type StockCountDraft = { packages: string; reason: string; observedLotLabel: string };
 export type StockCountCommand = Readonly<{
   actorId: string; operation: typeof stockCountOperation;
-  body: components["schemas"]["StockCountRecordDto"]; choice: StockPackageChoice;
+  body: components["schemas"]["StockCountRecordDto"] & Readonly<{ poolSelection?: StockPoolSelection }>; choice: StockPackageChoice;
+  source?: StockSourceChoice;
 }>;
 /** The review owns a detached, recursively frozen snapshot. Only references are persisted for recovery. */
-export function prepareStockCount(actorId: string, location: AccessScope, choice: StockPackageChoice, draft: StockCountDraft): StockCountCommand {
+export function prepareStockCount(actorId: string, location: AccessScope, choice: StockPackageChoice, draft: StockCountDraft, source?: StockSourceChoice): StockCountCommand {
   try {
     const actor = id(actorId), place = parseStockLocation(location), selected = packageChoice(choice);
     const quantity = stockCountQuantity(draft.packages, selected.baseUnitsPerPackage);
-    const command: StockCountCommand = { actorId: actor, operation: stockCountOperation, choice: selected,
+    const reviewedSource = source === undefined ? undefined : parseStockSourceChoice(source, place);
+    if (reviewedSource) { Object.freeze(reviewedSource.pool); Object.freeze(reviewedSource.requestedLocation); Object.freeze(reviewedSource); }
+    const command: StockCountCommand = { actorId: actor, operation: stockCountOperation, choice: selected, ...(reviewedSource ? { source: reviewedSource } : {}),
       body: { location: place, skuId: selected.skuId, expectedSkuRevision: selected.skuRevision, expectedDefinitionId: selected.definitionId,
-        packages: quantity.packages, reason: inputText(draft.reason, 1000)!, observedLotLabel: inputText(draft.observedLotLabel, 160, true) } };
+        packages: quantity.packages, reason: inputText(draft.reason, 1000)!, observedLotLabel: inputText(draft.observedLotLabel, 160, true),
+        ...(reviewedSource ? { poolSelection: sourceBody(reviewedSource) } : {}) } };
     Object.freeze(place); Object.freeze(selected); Object.freeze(command.body);
     return Object.freeze(command);
   } catch { return inputInvalid(); }
@@ -138,7 +174,9 @@ export function stockCountOutcome(value: unknown, command: StockCountCommand): S
     observation.observedLotLabel !== body.observedLotLabel ||
     observation.skuCode !== choice.skuCode || observation.definitionVersion !== choice.definitionVersion ||
     observation.packageLabel !== choice.packageLabel || observation.packageKind !== choice.packageKind ||
-    observation.baseUnitCode !== choice.baseUnitCode || observation.baseUnitsPerPackage !== choice.baseUnitsPerPackage) return invalid();
+    observation.baseUnitCode !== choice.baseUnitCode || observation.baseUnitsPerPackage !== choice.baseUnitsPerPackage ||
+    (command.source === undefined) !== (observation.poolBinding === undefined) || command.source &&
+    stableContent(command.source.pool) !== stableContent(observation.poolBinding)) return invalid();
   return observation;
 }
 export function stockCountSearch(value: string): string { return inputText(value, 128, true) ?? ""; }

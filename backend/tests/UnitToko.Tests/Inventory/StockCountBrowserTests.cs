@@ -17,8 +17,10 @@ using MongoDB.Bson;
 using MongoDB.Driver;
 using UnitToko.Api.Identity;
 using UnitToko.Modules.Identity;
+using UnitToko.Modules.Inventory;
 using UnitToko.Platform;
 using UnitToko.Platform.Catalog;
+using UnitToko.Platform.Inventory;
 using UnitToko.Platform.Mongo;
 using UnitToko.Tests.Authorization;
 using UnitToko.Tests.Catalog;
@@ -56,6 +58,19 @@ public sealed class StockCountBrowserTests(MongoFixture fixture, ITestOutputHelp
         var category = await catalog.SaveCategoryAsync(maker, new(CatalogAuthoringTestData.Shop, null, 0, "BROWSER", "Browser fixtures"), CatalogAuthoringTestData.Metadata("browser-category"));
         var family = await catalog.CreateFamilyAsync(maker, new(CatalogAuthoringTestData.Shop, category.Id, "Pensil browser", "Synthetic integration package", []), CatalogAuthoringTestData.Metadata("browser-family"));
         var sku = await catalog.CreateSkuAsync(maker, new(family.Id, family.Version, "BROWSER-12", "private-browser-physical", CatalogAuthoringTestData.Definition()), CatalogAuthoringTestData.Metadata("browser-sku"));
+        var sourceMaker = await data.AddActorAsync(48002, CatalogAuthoringTestData.Warehouse, Permissions.StockSourcePropose);
+        var sourceReviewer = await data.AddActorAsync(48003, CatalogAuthoringTestData.Warehouse, Permissions.StockSourceApprove);
+        await PersonTestData.SeedDistinctPeopleAsync(data.Database, data.Clock, sourceMaker.UserId, sourceReviewer.UserId, counter.UserId);
+        var sourceService = new StockSourceSetupService(data.Database, new(fixture.Client), new(data.Database), data.Clock);
+        var proposed = await sourceService.ProposeAsync(sourceMaker,
+            new(new(new(100), new(101), new(102), new(103)), "browser-count-reviewed-pool", "Sumber hitungan uji",
+                StockAuthorityMode.WebLedger, StockPoolControl.SharedWebLedger, 60000, 0, null, null,
+                "synthetic-discrepancy-owner", "synthetic-reviewed-handoff"),
+            new("browser-count-source-propose", "Synthetic physical-count source", "stock-count-browser"));
+        var approved = await sourceService.DecideAsync(sourceReviewer, proposed["proposalId"].AsInt64, 1,
+            StockSourceSetupDecision.Approve, "synthetic-independent-review",
+            new("browser-count-source-approve", "Independent synthetic source review", "stock-count-browser"));
+        var poolId = approved["poolId"].AsInt64;
         await data.Database.GetCollection<BsonDocument>("idCounters").UpdateOneAsync(new BsonDocument("_id", "stockCountObservations"),
             Builders<BsonDocument>.Update.Set("value", 9007199254740992L), new UpdateOptions { IsUpsert = true });
         await AddNames(data);
@@ -84,7 +99,9 @@ public sealed class StockCountBrowserTests(MongoFixture fixture, ITestOutputHelp
             apiAddress, origin = configured.PublicOrigin, issuer = configured.Issuer,
             pfx = Convert.ToBase64String(tls.Export(X509ContentType.Pfx, password)), password,
             playwrightPackage = playwright, actorId = counter.UserId.ToString(),
-            skuId = sku.Id.ToString(), definitionId = sku.CurrentDefinitionId!.Value.ToString()
+            skuId = sku.Id.ToString(), definitionId = sku.CurrentDefinitionId!.Value.ToString(),
+            poolId = poolId.ToString(System.Globalization.CultureInfo.InvariantCulture), sourceLabel = "Sumber hitungan uji",
+            proofPrefix = "inventory-count-source-" + Guid.NewGuid().ToString("N")
         };
         var start = new ProcessStartInfo(node!)
         {
@@ -119,6 +136,8 @@ public sealed class StockCountBrowserTests(MongoFixture fixture, ITestOutputHelp
         Assert.Equal(new[] { 0L, 24L }, observations.Select(row => row["baseUnits"].AsInt64));
         Assert.All(observations, row => Assert.True(row["_id"].AsInt64 > 9007199254740992L));
         Assert.All(observations, row => Assert.Equal(counter.UserId, row["actorId"].AsInt64));
+        Assert.All(observations, row => Assert.Equal(poolId, row["poolBinding"]["poolId"].AsInt64));
+        Assert.All(observations, row => Assert.False(row["poolBinding"]["active"].AsBoolean));
         Assert.Equal(2, await data.Database.GetCollection<BsonDocument>("auditEvents").CountDocumentsAsync(new BsonDocument("operation", "inventory.stock-count.record")));
         Assert.Equal(2, await data.Database.GetCollection<BsonDocument>("idempotencyRecords").CountDocumentsAsync(new BsonDocument("operation", "inventory.stock-count.record")));
         Assert.Equal(physical, await Physical(data));

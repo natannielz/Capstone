@@ -33,7 +33,7 @@ public sealed class StockCountOpenApiTests
         }
         var paths = document.RootElement.GetProperty("paths");
         var inventory = paths.EnumerateObject().Where(path => path.Name.StartsWith("/api/v1/inventory/stock-counts", StringComparison.Ordinal)).ToArray();
-        Assert.Equal(6, inventory.Length);
+        Assert.Equal(7, inventory.Length);
         foreach (var path in inventory)
         {
             var operation = path.Value.GetProperty("post");
@@ -46,6 +46,17 @@ public sealed class StockCountOpenApiTests
             .GetProperty("responses").GetProperty("200").GetProperty("content").GetProperty("application/json").GetProperty("schema");
         Assert.Contains(detail.GetProperty("anyOf").EnumerateArray(), item => item.TryGetProperty("type", out var type) && type.GetString() == "null");
         Assert.Equal("object", schemas.GetProperty("StockCountObservationDto").GetProperty("type").GetString());
+        var selection = schemas.GetProperty("StockCountPoolSelectionDto");
+        Assert.Equal(new[] { "configurationHash", "expectedPoolRevision", "poolId" },
+            selection.GetProperty("required").EnumerateArray().Select(value => value.GetString()).Order(StringComparer.Ordinal));
+        foreach (var name in new[] { "poolId", "expectedPoolRevision" })
+        {
+            var property = selection.GetProperty("properties").GetProperty(name);
+            if (property.TryGetProperty("$ref", out _)) property = schemas.GetProperty("LongId");
+            Assert.Equal("string", property.GetProperty("type").GetString());
+            Assert.Matches(property.GetProperty("pattern").GetString()!, "9007199254740993");
+        }
+        Assert.DoesNotContain("poolSelection", request.GetProperty("required").EnumerateArray().Select(value => value.GetString()));
         var observationFields = schemas.GetProperty("StockCountObservationDto").GetProperty("properties");
         foreach (var privateField in new[] { "issuer", "subject", "countedBy", "physicalItemKey", "auditId", "requestKey", "authoringOwner" })
             Assert.False(observationFields.TryGetProperty(privateField, out _));

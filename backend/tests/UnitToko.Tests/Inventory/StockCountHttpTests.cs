@@ -93,7 +93,8 @@ public sealed class StockCountHttpTests(MongoFixture fixture)
     {
         await using var data = await HttpData.CreateAsync(fixture);
         using var browser = await data.OpenAsync(Counter);
-        foreach (var bad in new[] { "missing", "null", "string", "fraction", "negative", "too-large", "numeric-id", "zero-revision", "unknown-field" })
+        foreach (var bad in new[] { "missing", "null", "string", "fraction", "negative", "too-large", "numeric-id", "zero-revision", "unknown-field",
+            "source-numeric-id", "source-zero-revision", "source-missing-hash", "source-unknown-field" })
         {
             var command = JsonSerializer.SerializeToNode(data.Command(0))!.AsObject();
             switch (bad)
@@ -107,6 +108,10 @@ public sealed class StockCountHttpTests(MongoFixture fixture)
                 case "numeric-id": command["skuId"] = data.Sku.Id.Value; break;
                 case "zero-revision": command["expectedSkuRevision"] = "0"; break;
                 case "unknown-field": command["balance"] = 0; break;
+                case "source-numeric-id": command["poolSelection"] = new JsonObject { ["poolId"] = 1, ["expectedPoolRevision"] = "1", ["configurationHash"] = new string('A', 64) }; break;
+                case "source-zero-revision": command["poolSelection"] = new JsonObject { ["poolId"] = "1", ["expectedPoolRevision"] = "0", ["configurationHash"] = new string('A', 64) }; break;
+                case "source-missing-hash": command["poolSelection"] = new JsonObject { ["poolId"] = "1", ["expectedPoolRevision"] = "1" }; break;
+                case "source-unknown-field": command["poolSelection"] = new JsonObject { ["poolId"] = "1", ["expectedPoolRevision"] = "1", ["configurationHash"] = new string('A', 64), ["balance"] = 0 }; break;
             }
             using var response = await browser.Post("", command, "bad-" + bad);
             Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);

@@ -20,6 +20,7 @@ function setup(overrides: Partial<StockCountGateway> = {}, actions = ["stock.cou
   const journal = new OperationJournal(() => storage);
   let now = 0, keys = 0;
   const gateway: StockCountGateway = {
+    sources: async () => ({ total: '0', items: [] }),
     warehouses: async () => [warehouse, second], packages: async () => ({ total: "1", items: [choice] }),
     history: async () => ({ total: "1", items: [observation] }), observation: async () => observation,
     receipt: async () => null, submit: async () => observation, ...overrides,
@@ -29,13 +30,14 @@ function setup(overrides: Partial<StockCountGateway> = {}, actions = ["stock.cou
 }
 async function select(editor: StockCountEditor) {
   await editor.start(); await editor.chooseWarehouse(editor.snapshot().warehouses[0].location);
+  editor.chooseSource('unbound');
   editor.choosePackage(choice.skuId); editor.changeDraft("packages", "0"); editor.changeDraft("reason", "Physical count");
 }
 test("review needs a current selected package and explicit zero; success requires another deliberate review", async () => {
   const sent: unknown[] = [], data = setup({ submit: async (command, key) => { sent.push({ command, key }); return observation; } });
   await data.editor.start(); data.editor.reviewCount();
   assert.equal(data.editor.snapshot().review, null); assert.match(String(data.editor.snapshot().error), /stock_count_selection_required/);
-  await data.editor.chooseWarehouse(location); data.editor.choosePackage(choice.skuId); data.editor.changeDraft("reason", "Physical count");
+  await data.editor.chooseWarehouse(location); data.editor.chooseSource('unbound'); data.editor.choosePackage(choice.skuId); data.editor.changeDraft("reason", "Physical count");
   data.editor.reviewCount(); assert.equal(data.editor.snapshot().review, null);
   data.editor.changeDraft("packages", "0"); data.editor.reviewCount();
   assert.equal(data.editor.snapshot().review?.body.packages, 0);

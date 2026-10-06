@@ -5521,6 +5521,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/inventory/stock-counts/sources/query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["StockCountSources"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/inventory/stock-counts/warehouses/query": {
         parameters: {
             query?: never;
@@ -16704,6 +16720,7 @@ export interface components {
             packageLabel: string;
             /** Format: int32 */
             packages: number | string;
+            poolBinding?: null | components["schemas"]["StockCountPoolBindingDto"];
             reason: string;
             /** Format: date-time */
             recordedAt: string;
@@ -16761,6 +16778,20 @@ export interface components {
             offset: number;
             purpose: string;
         };
+        StockCountPoolBindingDto: {
+            active: boolean;
+            configurationHash: string;
+            label: string;
+            physicalKey: string;
+            poolId: components["schemas"]["LongId"];
+            poolRevision: string;
+            setupDecisionId: components["schemas"]["LongId"];
+        };
+        StockCountPoolSelectionDto: {
+            configurationHash: string;
+            expectedPoolRevision: components["schemas"]["LongId"];
+            poolId: components["schemas"]["LongId"];
+        };
         StockCountReadDto: {
             purpose: string;
         };
@@ -16786,8 +16817,31 @@ export interface components {
             observedLotLabel?: null | string;
             /** Format: int32 */
             packages: number;
+            poolSelection?: null | components["schemas"]["StockCountPoolSelectionDto"];
             reason: string;
             skuId: components["schemas"]["LongId"];
+        };
+        StockCountSourceChoiceDto: {
+            pool: components["schemas"]["StockCountPoolBindingDto"];
+            requestedLocation: components["schemas"]["AccessScopeDto"];
+        };
+        StockCountSourcePageDto: {
+            items: components["schemas"]["StockCountSourceChoiceDto"][];
+            total: string;
+        };
+        StockCountSourceQueryDto: {
+            /**
+             * Format: int32
+             * @default 25
+             */
+            limit: number;
+            location: components["schemas"]["AccessScopeDto"];
+            /**
+             * Format: int32
+             * @default 0
+             */
+            offset: number;
+            purpose: string;
         };
         StockCountWarehouseOptionDto: {
             channelName: string;
@@ -46563,6 +46617,80 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StockCountObservationPageDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    StockCountSources: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
+                /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
+                "X-Expected-Actor-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StockCountSourceQueryDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StockCountSourcePageDto"];
                 };
             };
             /** @description Bad Request */

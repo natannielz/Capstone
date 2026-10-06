@@ -115,6 +115,7 @@ public sealed partial class StockSourceSetupService(IMongoDatabase database, Mon
                     await new UnitToko.Platform.Fulfillment.FulfillmentStockSourceProducer(database, ids, clock).InitializeAsync(tx, decisionId, token);
                     await new UnitToko.Platform.Procurement.ProcurementStockSourceProducer(database, ids, clock).InitializeAsync(tx, decisionId, token);
                     await new UnitToko.Platform.Fulfillment.AfterSalesStockSourceProducer(database, ids, clock).InitializeAsync(tx, decisionId, token);
+                    await new InventoryCountStockSourceProducer(database, ids, clock).InitializeAsync(tx, decisionId, token);
                 }
                 return new BsonDocument { { "proposalId", proposalId }, { "decisionId", decisionId },
                     { "poolId", poolId.HasValue ? new BsonInt64(poolId.Value) : BsonNull.Value }, { "status", name } };

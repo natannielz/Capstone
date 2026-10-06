@@ -48,6 +48,8 @@ jobs:
               "backend/src/UnitToko.Platform/Authorization/", "backend/src/UnitToko.Platform/Identity/",
               "backend/src/UnitToko.Modules/Identity/", "backend/src/UnitToko.Platform/Mongo/",
               "backend/src/UnitToko.Platform/Sessions/", "backend/src/UnitToko.Api/Identity/",
+              "backend/src/UnitToko.Platform/Inventory/", "backend/src/UnitToko.Modules/Inventory/",
+              "backend/src/UnitToko.Api/Inventory/", "backend/tests/UnitToko.Tests/Inventory/",
               "backend/tests/UnitToko.Tests/Authorization/", "backend/tests/UnitToko.Tests/Identity/"
           )) for p in files)
           with open(os.environ["GITHUB_OUTPUT"], "a") as output:
@@ -132,7 +134,7 @@ jobs:
         working-directory: backend
         run: |
           dotnet test tests/UnitToko.Tests/UnitToko.Tests.csproj --no-build --nologo \
-            --filter 'FullyQualifiedName~PersonApprovalStoreTests|FullyQualifiedName~PersonApprovalSessionTests|FullyQualifiedName~NumericContractTests' \
+            --filter 'FullyQualifiedName~PersonApprovalStoreTests|FullyQualifiedName~PersonApprovalSessionTests|FullyQualifiedName~NumericContractTests|FullyQualifiedName~StockCountPolicyTests|FullyQualifiedName~StockCountIntegrityTests|FullyQualifiedName~StockCountOpenApiTests|FullyQualifiedName~InventoryCountStockSourceTests' \
             --logger 'trx;LogFileName=authority.trx' --results-directory ../tmp/focused-ci
           python3 - <<'PY'
           import xml.etree.ElementTree as ET
