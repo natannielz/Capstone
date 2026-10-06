@@ -34,7 +34,10 @@ public sealed partial class StockSourceSetupService
         var locations = new HashSet<StockLocation>();
         foreach (var table in new[] { "stockSourceAliases", "stockSourceAliasDecisions" }) {
             var filter = F.Eq("poolId", poolId); if (table.EndsWith("Decisions", StringComparison.Ordinal)) filter &= F.Eq("decision", "approve");
-            foreach (var row in await Rows(table).Find(tx, filter).Project(new BsonDocument("requestedLocation", 1)).ToListAsync(ct)) locations.Add(InventoryGraph.Location(row["requestedLocation"].AsBsonDocument));
+            var query = Rows(table).Find(tx, filter);
+            var rows = await (historyCapture is null ? query.Project<BsonDocument>(new BsonDocument("requestedLocation", 1)) : query).ToListAsync(ct);
+            HistoryRows(table, filter, rows);
+            foreach (var row in rows) locations.Add(InventoryGraph.Location(row["requestedLocation"].AsBsonDocument));
         }
         var aliases = new List<BsonDocument>(); var approvedAt = StockSourceSetupBson.Time(current["approvedAt"]);
         foreach (var location in locations.OrderBy(value => value.ChannelId.Value)) {

@@ -1,5 +1,7 @@
 using System.Collections.Immutable;
 using MongoDB.Bson;
+using MongoDB.Bson.Serialization;
+using MongoDB.Bson.Serialization.Serializers;
 using MongoDB.Driver;
 using UnitToko.Modules.Contracts;
 using UnitToko.Modules.Inventory;
@@ -19,22 +21,46 @@ internal sealed record HeldReceiptMovementState(InventoryBalanceDocument Origina
 /// The owning caller must still authenticate PO, inspection, private evidence, source configuration,
 /// quality and valuation lineage and all write/disclosure authority. This creates no approval or
 /// reusable write proof and never changes stock. Every call reconstructs within its actual transaction.
-/// ReleaseHold and ExpireHeld remain unsupported until their real owning producer exists.</summary>
+/// ReleaseHold requires its genuine release/value owner; ExpireHeld remains unsupported.</summary>
 internal sealed class HeldReceiptMovementHistory(IMongoDatabase database, MongoUnitOfWork unit, IClock clock)
 {
     internal const int MaximumMovements = 1024;
     private static readonly FilterDefinitionBuilder<BsonDocument> F = Builders<BsonDocument>.Filter;
     private IMongoCollection<BsonDocument> Rows(string name) => database.GetCollection<BsonDocument>(name);
+    private static BsonDocument OriginFilter(FilterDefinition<BsonDocument> filter) =>
+        filter.Render(new(BsonDocumentSerializer.Instance, BsonSerializer.SerializerRegistry));
+    private async Task<BsonDocument?> OriginOneAsync(IClientSessionHandle tx, string name, FilterDefinition<BsonDocument> filter,
+        PurchaseOrderSourceReadCapture? capture, CancellationToken ct) => capture is null
+        ? await Rows(name).Find(tx, filter).SingleOrDefaultAsync(ct) : await capture.OneAsync(database, tx, name, OriginFilter(filter), ct);
+    internal Task RequireOriginStorageAsync(CancellationToken ct) => RequireStorageAsync(ct);
     internal static DomainValidationException Unavailable() => new("held_receipt_movement_history_unavailable",
         "A complete bounded authenticated held-receipt movement history is required");
     internal static DomainValidationException Unsupported() => new("held_receipt_movement_source_unavailable",
         "This held-stock transition has no implemented owning proof and cannot be approved by quantity arithmetic");
 
+    /// <summary>Immutable receipt genesis only. It grants no current quantity, availability or write authority.
+    /// Release-origin authentication uses this edge so its full current movement chain does not recurse.</summary>
+    internal async Task<InventoryBalanceDocument> RequireOriginAsync(IClientSessionHandle tx, BsonDocument ownerReceipt, CancellationToken ct,
+        PurchaseOrderSourceReadCapture? capture = null)
+    {
+        new InventoryRepository(database).RequireSession(tx);
+        await RequireStorageAsync(ct);
+        var actual = await OriginOneAsync(tx, B.Receipts, F.Eq("_id", ownerReceipt["_id"]) & ProcurementStockReceiptSchemas.Validator(B.Receipts), capture, ct) ?? throw Unavailable();
+        Equal(actual, ownerReceipt); Equal(actual["snapshotHash"], B.Hash(actual));
+        if (actual["recordedAt"].ToUniversalTime() > clock.UtcNow.UtcDateTime) throw Unavailable();
+        await RequireReceiptEffectsAsync(tx, actual, ct, capture);
+        Equal(await OriginOneAsync(tx, "lots", F.Eq("_id", actual["lotId"]), capture, ct) ?? throw Unavailable(), InventoryHeldReceiptWriter.Lot(actual));
+        var root = await OriginOneAsync(tx, "movements", F.Eq("_id", actual["movementId"]) & InventoryMovementSchemas.Validator(), capture, ct) ?? throw Unavailable();
+        Equal(root, RootMovement(actual));
+        return InventoryHeldReceiptWriter.After(actual);
+    }
+
     internal async Task<HeldReceiptMovementState> RequireAsync(IClientSessionHandle tx, BsonDocument ownerReceipt,
-        CancellationToken ct = default)
+        CancellationToken ct = default, ProcurementQualityProofGraph? currentGraph = null, HeldReceiptOriginProof? retainedOrigin = null)
     {
         try {
             var repository = new InventoryRepository(database); repository.RequireSession(tx);
+            currentGraph?.Require(tx);
             var transactionNumber = tx.WrappedCoreSession.CurrentTransaction.TransactionNumber;
             var capturedAt = clock.UtcNow;
             if (capturedAt == default || capturedAt.Offset != TimeSpan.Zero || ownerReceipt is null) throw Unavailable();
@@ -83,10 +109,20 @@ internal sealed class HeldReceiptMovementHistory(IMongoDatabase database, MongoU
             minimumPoolFence++;
             var sources = new HashSet<string>(StringComparer.Ordinal) { ordered[0]["sourceEvent"].AsString };
             var supported = ordered.Skip(1).Select(movement => (Movement: movement, Kind: SourceKind(movement))).ToArray();
-            // No source proof re-enters receipt/quality readers: Ordering's graph reconstructs
-            // order/reservation/decision/dispatch receipts, audits and its producer transitions only.
-            // In particular it does not call this helper or invent a current admission adapter.
-            if (supported.Length != 0) {
+            // Release provenance uses immutable receipt genesis, never this current chain.
+            HeldReceiptOriginProof? origin = null;
+            if (supported.Any(item => item.Kind == "stock-release")) {
+                origin = retainedOrigin ?? currentGraph?.CurrentMovementOrigin(database, tx, receipt["_id"].AsInt64);
+                if (origin is null) {
+                    var ids = new IdAllocator(database); var catalog = new UnitToko.Platform.Catalog.CatalogAuthoringService(database, unit, ids, clock);
+                    var requests = new ProcurementRequestService(database, unit, ids, clock, catalog);
+                    var orders = new PurchaseOrderService(database, unit, ids, clock, catalog, requests, new SupplierService(database, unit, ids, clock, catalog));
+                    origin = await HeldReceiptOriginProof.CaptureAsync(database, unit, clock, catalog, orders,
+                        new(database, unit, ids, clock), tx, receipt["_id"].AsInt64, ct);
+                } else await origin.RequireAsync(database, tx, ct);
+                if (origin.Receipt != receipt) throw Unavailable();
+            }
+            if (supported.Any(item => item.Kind != "stock-release")) {
                 await OrderStockSourceStorage.RequireAsync(database, ct);
                 var pool = await Rows("inventoryPools").Find(tx, F.Eq("_id", original.PhysicalPoolId)).SingleOrDefaultAsync(ct) ?? throw Unavailable();
                 var owner = new OrderSubmissionService(database, unit, new(database), clock);
@@ -96,7 +132,7 @@ internal sealed class HeldReceiptMovementHistory(IMongoDatabase database, MongoU
             foreach (var (movement, kind) in supported) {
                 if (!sources.Add(movement["sourceEvent"].AsString) || movement["recordedAt"].CompareTo(time) < 0 ||
                     movement["poolRevision"].AsInt64 < poolRevision) throw Unavailable();
-                await RequireSourceAsync(tx, movement, kind, ct);
+                await RequireSourceAsync(tx, movement, kind, origin, ct);
                 var leg = TargetLeg(movement, state.Id);
                 Equal(leg["before"], InventoryBson.Balance(state));
                 state = Transition(state, leg);
@@ -115,6 +151,7 @@ internal sealed class HeldReceiptMovementHistory(IMongoDatabase database, MongoU
             repository.RequireSession(tx);
             if (tx.WrappedCoreSession.CurrentTransaction.TransactionNumber != transactionNumber || clock.UtcNow < capturedAt) throw Unavailable();
             ct.ThrowIfCancellationRequested();
+            if (origin is not null) currentGraph?.RememberCurrentMovementOrigin(database, tx, receipt, origin);
             return new(original, current, ordered.Select(movement => movement["_id"].AsInt64).ToImmutableArray());
         } catch { await InventoryRepository.AbortAsync(tx); throw; }
     }
@@ -127,21 +164,27 @@ internal sealed class HeldReceiptMovementHistory(IMongoDatabase database, MongoU
         await InventoryRepository.RequireStorageAsync(database, "stockBalances", InventorySchemas.BalanceValidator(), InventorySchemas.BalanceKey(), ct);
         await InventoryRepository.RequireStorageAsync(database, "movements", InventoryMovementSchemas.Validator(), InventoryMovementSchemas.Key(), ct);
     }
-    private async Task RequireReceiptEffectsAsync(IClientSessionHandle tx, BsonDocument receipt, CancellationToken ct)
+    private async Task RequireReceiptEffectsAsync(IClientSessionHandle tx, BsonDocument receipt, CancellationToken ct,
+        PurchaseOrderSourceReadCapture? capture = null)
     {
         Equal(receipt["bodyHash"], AuthorizationStore.CommandHash(B.Body(B.Input(receipt["input"]), receipt["binding"].AsString), receipt["reason"].AsString));
-        Equal(await Rows("auditEvents").Find(tx, F.Eq("_id", receipt["auditId"])).SingleOrDefaultAsync(ct) ?? throw Unavailable(), B.Audit(receipt));
-        var receipts = await Rows("idempotencyRecords").Find(tx, F.Eq("actorId", receipt["actorId"]) & F.Eq("operation", B.Operation) &
-            F.Eq("key", receipt["requestKey"])).Limit(2).ToListAsync(ct);
+        Equal(await OriginOneAsync(tx, "auditEvents", F.Eq("_id", receipt["auditId"]), capture, ct) ?? throw Unavailable(), B.Audit(receipt));
+        var filter = F.Eq("actorId", receipt["actorId"]) & F.Eq("operation", B.Operation) & F.Eq("key", receipt["requestKey"]);
+        var receipts = await Rows("idempotencyRecords").Find(tx, filter).Limit(2).ToListAsync(ct);
+        capture?.Record("idempotencyRecords", OriginFilter(filter), receipts);
         if (receipts.Count != 1 || receipts[0]["createdAt"].CompareTo(receipt["recordedAt"]) > 0 ||
             receipts[0]["bodyHash"] != receipt["bodyHash"] || receipts[0]["result"] != B.Result(receipt)) throw Unavailable();
-        var outbox = await Rows("outboxEvents").Find(tx, F.Eq("sourceKey", B.EffectKey(receipt))).SingleOrDefaultAsync(ct) ?? throw Unavailable();
+        var outbox = await OriginOneAsync(tx, "outboxEvents", F.Eq("sourceKey", B.EffectKey(receipt)), capture, ct) ?? throw Unavailable();
         if (outbox["kind"] != B.Operation || outbox["actorId"] != receipt["actorId"] || outbox["requestKey"] != receipt["requestKey"] ||
             outbox["location"] != receipt["location"] || outbox["orderId"] != receipt["orderId"] || outbox["payload"] != B.Result(receipt) ||
             outbox["createdAt"] != receipt["recordedAt"]) throw Unavailable();
     }
-    private async Task RequireSourceAsync(IClientSessionHandle tx, BsonDocument movement, string kind, CancellationToken ct)
+    private async Task RequireSourceAsync(IClientSessionHandle tx, BsonDocument movement, string kind, HeldReceiptOriginProof? origin, CancellationToken ct)
     {
+        if (kind == "stock-release") {
+            await StockReleaseService.RequireMovementSourceAsync(database, unit, clock, tx, movement, origin ?? throw Unavailable(), ct);
+            return;
+        }
         var source = movement["source"].AsBsonDocument;
         var actual = await OrderSubmissionService.ReadStockSourceEventAsync(database, tx, kind, source["documentId"].AsInt64, true, ct);
         if (movement["actorId"] != actual.Audit["actorId"] || movement["actorGrantVersion"] != actual.Audit["actorGrantVersion"] ||
@@ -168,6 +211,7 @@ internal sealed class HeldReceiptMovementHistory(IMongoDatabase database, MongoU
         ("ordering.order", "reserve") => "submission",
         ("ordering.decision", "release") => "decision",
         ("fulfillment.shipment", "dispatch") => "shipment",
+        ("inventory.stock-release", "releaseHeld") => "stock-release",
         _ => throw Unsupported()
     };
     private static BsonDocument TargetLeg(BsonDocument movement, long balanceId) =>
@@ -177,6 +221,7 @@ internal sealed class HeldReceiptMovementHistory(IMongoDatabase database, MongoU
             "Reserve" => StockBalancePolicy.Reserve(before.Balance, before.Balance.Revision, leg["packages"].AsInt64),
             "Release" => StockBalancePolicy.Release(before.Balance, before.Balance.Revision, leg["packages"].AsInt64),
             "Dispatch" => StockBalancePolicy.Dispatch(before.Balance, before.Balance.Revision, leg["packages"].AsInt64),
+            "ReleaseHold" => StockBalancePolicy.ReleaseHold(before.Balance, before.Balance.Revision, leg["packages"].AsInt64),
             _ => throw Unsupported()
         }
     };

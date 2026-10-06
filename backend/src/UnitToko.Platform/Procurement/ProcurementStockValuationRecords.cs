@@ -44,7 +44,7 @@ internal sealed class ProcurementStockValuationProposalProof(IClientSessionHandl
 }
 
 internal sealed class ProcurementStockValuationRecords(IMongoDatabase database, MongoUnitOfWork unit, IClock clock,
-    CatalogAuthoringService catalog, PurchaseOrderService orders, StockSourceSetupService sources)
+    CatalogAuthoringService catalog, PurchaseOrderService orders, StockSourceSetupService sources, ProcurementQualityProofGraph? proofGraph = null)
 {
     private IMongoCollection<BsonDocument> Rows(string table) => database.GetCollection<BsonDocument>(table);
     internal static void Equal(BsonValue actual, BsonValue expected) { if (!actual.Equals(expected)) throw B.Broken(); }
@@ -101,7 +101,7 @@ internal sealed class ProcurementStockValuationRecords(IMongoDatabase database, 
         BsonDocument? retainedProposal = null, ProcurementStockValuationProposalProof? verifiedProposal = null) {
         verifiedProposal?.Require(tx, input, retainedProposal);
         var receipt = verifiedProposal is null
-            ? await new ProcurementStockReceiptRecords(database, unit, clock, catalog, orders, sources).ReadAsync(tx, input.ReceiptId, ct)
+            ? await new ProcurementStockReceiptRecords(database, unit, clock, catalog, orders, sources, proofGraph).ReadAsync(tx, input.ReceiptId, ct)
             : verifiedProposal.Source.Receipt;
         if (verifiedProposal is not null) {
             var currentReceipt = await Rows(ProcurementStockReceiptBson.Receipts).Find(tx, new BsonDocument("_id", input.ReceiptId)).SingleOrDefaultAsync(ct) ?? throw B.Broken();
@@ -110,7 +110,7 @@ internal sealed class ProcurementStockValuationRecords(IMongoDatabase database, 
         Equal(receipt["location"], R.Location(input.Location)); Equal(receipt["revision"], input.ReceiptRevision);
         if (receipt["valuationState"] != "pending" || !receipt["valuation"].IsBsonNull || receipt["state"] != ProcurementStockReceiptBson.State)
             throw B.Changed("procurement_stock_valuation_receipt_unavailable");
-        var capacityReader = new ProcurementStockValuationCapacityReader(database, unit, clock, catalog, orders);
+        var capacityReader = new ProcurementStockValuationCapacityReader(database, unit, clock, catalog, orders, proofGraph);
         var invoice = verifiedProposal is null
             ? (await Rows(SupplierDocumentBson.Submissions).Find(tx, new BsonDocument { { "_id", input.InvoiceDocumentId },
                 { "$and", new BsonArray { ProcurementQualityValuationSchemas.CurrentDocumentValidator(SupplierDocumentBson.Submissions) } } }).SingleOrDefaultAsync(ct) ?? throw B.Broken())

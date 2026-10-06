@@ -61,8 +61,8 @@ internal sealed class ProcurementInspectionTestData(ProcurementReceivingTestData
             3, 3, 1, 1, 2, "SYNTHETIC-LOT-001", AccountingCalendar.BusinessDate(Clock.UtcNow).AddDays(-1), "SYNTHETIC-QUARANTINE-BAY-A",
             "Observed damaged, expired and opened flags overlap; all packages remain held")], "Two actual containers opened; quantities are physical observations only");
     internal static async Task<ProcurementInspectionTestData> CreateAsync(MongoFixture fixture, ProcurementRoute route = ProcurementRoute.Ddo,
-        bool onReceipt = false, bool createDraft = true, string media = "mp4", bool aboveImageCeiling = false, decimal requiredAdvance = 0, bool boundStock = false) {
-        var receiving = await ProcurementReceivingTestData.CreateAsync(fixture, route, onReceipt, requiredAdvance, boundStock); var data = new ProcurementInspectionTestData(receiving);
+        bool onReceipt = false, bool createDraft = true, string media = "mp4", bool aboveImageCeiling = false, decimal requiredAdvance = 0, bool boundStock = false, bool activateEmptySource = false, bool useSystemClock = false) {
+        var receiving = await ProcurementReceivingTestData.CreateAsync(fixture, route, onReceipt, requiredAdvance, boundStock, activateEmptySource, useSystemClock); var data = new ProcurementInspectionTestData(receiving);
         try {
             data.Notice = await receiving.NoticeAsync(); data.Intake = await receiving.IntakeAsync(data.NoticeId);
             var scope = ProcurementRequestTestData.Scope;

@@ -15,14 +15,18 @@ using Q = UnitToko.Platform.Procurement.ProcurementQuarantineDispositionBson;
 namespace UnitToko.Platform.Procurement;
 
 internal sealed class ProcurementStockReceiptRecords(IMongoDatabase database, MongoUnitOfWork unit, IClock clock, CatalogAuthoringService catalog,
-    PurchaseOrderService orders, StockSourceSetupService sources, ProcurementQualityProofGraph? proofGraph = null)
+    PurchaseOrderService orders, StockSourceSetupService sources, ProcurementQualityProofGraph? proofGraph = null,
+    PurchaseOrderSourceReadCapture? originCapture = null)
 {
     private IMongoCollection<BsonDocument> Rows(string table) => database.GetCollection<BsonDocument>(table);
+    private async Task<BsonDocument?> OriginOneAsync(IClientSessionHandle tx, string table, BsonDocument filter, CancellationToken ct) =>
+        originCapture is null ? await Rows(table).Find(tx, filter).SingleOrDefaultAsync(ct) : await originCapture.OneAsync(database, tx, table, filter, ct);
     internal static void Equal(BsonValue actual, BsonValue expected) { if (!actual.Equals(expected)) throw B.Broken(); }
     internal static async Task<HeldReceiptMovementState> RequireMovementsAsync(IMongoDatabase database,
-        MongoUnitOfWork unit, IClock clock, IClientSessionHandle tx, BsonDocument receipt, CancellationToken ct) {
+        MongoUnitOfWork unit, IClock clock, IClientSessionHandle tx, BsonDocument receipt, CancellationToken ct,
+        ProcurementQualityProofGraph? currentGraph = null) {
         try {
-            return await new HeldReceiptMovementHistory(database, unit, clock).RequireAsync(tx, receipt, ct);
+            return await new HeldReceiptMovementHistory(database, unit, clock).RequireAsync(tx, receipt, ct, currentGraph);
         } catch (Exception error) when (error is DomainValidationException or PersistenceConflictException or AuthorizationDeniedException) {
             // The receipt owner keeps its established public integrity contract. This helper
             // reconstructs stock provenance only; it does not evaluate a new actor/policy grant.
@@ -44,9 +48,12 @@ internal sealed class ProcurementStockReceiptRecords(IMongoDatabase database, Mo
     internal Task<BsonDocument> ReadAsync(IClientSessionHandle tx, long id, CancellationToken ct) =>
         proofGraph is null ? ReadCoreAsync(tx, id, ct)
             : proofGraph.HeldReceiptAsync(database, unit, clock, catalog, orders, sources, tx, id, ct);
-    internal async Task<BsonDocument> ReadCoreAsync(IClientSessionHandle tx, long id, CancellationToken ct) {
+    internal Task<BsonDocument> ReadCoreAsync(IClientSessionHandle tx, long id, CancellationToken ct) => ReadReceiptAsync(tx, id, ReceiptExtent.Current, ct);
+    internal Task<BsonDocument> ReadOriginCoreAsync(IClientSessionHandle tx, long id, CancellationToken ct) => ReadReceiptAsync(tx, id, ReceiptExtent.Origin, ct);
+    private enum ReceiptExtent { Current, Origin }
+    private async Task<BsonDocument> ReadReceiptAsync(IClientSessionHandle tx, long id, ReceiptExtent extent, CancellationToken ct) {
         using var receiptStage = SupplierDocumentMatchDiagnostics.Begin("receipt.history");
-        var row = await Rows(B.Receipts).Find(tx, new BsonDocument { { "_id", id }, { "$and", new BsonArray { ProcurementStockReceiptSchemas.Validator(B.Receipts) } } }).SingleOrDefaultAsync(ct) ?? throw B.Broken();
+        var row = await OriginOneAsync(tx, B.Receipts, new BsonDocument { { "_id", id }, { "$and", new BsonArray { ProcurementStockReceiptSchemas.Validator(B.Receipts) } } }, ct) ?? throw B.Broken();
         Equal(row["snapshotHash"], B.Hash(row)); var input = B.Input(row["input"]); Equal(row["input"], B.Input(input)); Equal(row["receiptId"], id); Equal(row["revision"], 1L);
         foreach (var field in new[] { "location", "orderId", "inspectionId", "inspectionLineNumber", "poolId", "receiptReference", "reason" }) Equal(row[field], row["input"][field]);
         BsonDocument source;
@@ -67,7 +74,7 @@ internal sealed class ProcurementStockReceiptRecords(IMongoDatabase database, Mo
         }
         Equal(row["source"], source); Equal(row["supplierId"], source["proposal"]["input"]["supplierId"]);
         Equal(history.Source["notice"]["source"], source);
-        var inspection = history.Submissions.SingleOrDefault(value => value["_id"] == input.InspectionId) ?? throw B.Broken(); Equal(row["inspection"], inspection); Review(input, source, inspection); await orders.RequirePlannedReceiptMembershipAsync(tx, source, inspection, input, ct);
+        var inspection = history.Submissions.SingleOrDefault(value => value["_id"] == input.InspectionId) ?? throw B.Broken(); Equal(row["inspection"], inspection); Review(input, source, inspection); await orders.RequirePlannedReceiptMembershipAsync(tx, source, inspection, input, ct, originCapture);
         var at = new DateTimeOffset(row["recordedAt"].ToUniversalTime()); if (at > clock.UtcNow || inspection["recordedAt"].CompareTo(row["recordedAt"]) > 0) throw B.Broken();
         using (SupplierDocumentMatchDiagnostics.Begin("receipt.configuration"))
             await sources.RequireHeldReceiptHistoryAsync(tx, row["poolSource"].AsBsonDocument, at, ct);
@@ -78,17 +85,26 @@ internal sealed class ProcurementStockReceiptRecords(IMongoDatabase database, Mo
         Equal(row["binding"], B.Binding(row["actorId"].AsInt64, row["actorGrantVersion"].AsInt64, input, source, inspection, row["poolSource"].AsBsonDocument, before));
         if (row["people"].AsBsonArray.Count != 1 || R.Person(row["people"][0]) is not { Verification: PersonVerification.Verified, PersonId: > 0, Version: > 0 } person || person.UserId != row["actorId"].AsInt64) throw B.Broken();
         using (SupplierDocumentMatchDiagnostics.Begin("receipt.stock-effects")) {
-            _ = await RequireMovementsAsync(database, unit, clock, tx, row, ct); await EffectsAsync(tx, row, ct);
+            if (extent == ReceiptExtent.Current) _ = await RequireMovementsAsync(database, unit, clock, tx, row, ct, proofGraph);
+            else _ = await new HeldReceiptMovementHistory(database, unit, clock).RequireOriginAsync(tx, row, ct, originCapture);
+            await EffectsAsync(tx, row, ct);
         }
         return row;
     }
+    internal async Task RequireOriginInspectionAsync(IClientSessionHandle tx, BsonDocument receipt, CancellationToken ct) {
+        if (originCapture is null || proofGraph is null) throw B.Broken();
+        await new HeldReceiptMovementHistory(database, unit, clock).RequireOriginStorageAsync(ct);
+        var history = await InspectionAsync(tx, receipt["inspectionId"].AsInt64, ct);
+        Equal(history.Source["notice"]["source"], receipt["source"]);
+        Equal(history.Submissions.SingleOrDefault(row => row["_id"] == receipt["inspectionId"]) ?? throw B.Broken(), receipt["inspection"]);
+    }
     private async Task EffectsAsync(IClientSessionHandle tx, BsonDocument row, CancellationToken ct) {
         Equal(row["bodyHash"], AuthorizationStore.CommandHash(B.Body(B.Input(row["input"]), row["binding"].AsString), row["reason"].AsString));
-        Equal(await Rows("auditEvents").Find(tx, new BsonDocument("_id", row["auditId"])).SingleOrDefaultAsync(ct) ?? throw B.Broken(), B.Audit(row));
-        var receipt = await Rows("idempotencyRecords").Find(tx, new BsonDocument { { "actorId", row["actorId"] }, { "operation", B.Operation }, { "key", row["requestKey"] } }).SingleOrDefaultAsync(ct) ?? throw B.Broken();
+        Equal(await OriginOneAsync(tx, "auditEvents", new BsonDocument("_id", row["auditId"]), ct) ?? throw B.Broken(), B.Audit(row));
+        var receipt = await OriginOneAsync(tx, "idempotencyRecords", new BsonDocument { { "actorId", row["actorId"] }, { "operation", B.Operation }, { "key", row["requestKey"] } }, ct) ?? throw B.Broken();
         if (receipt.ElementCount != 8 || !receipt["_id"].IsObjectId || receipt["schemaVersion"] != 1 || receipt["createdAt"].CompareTo(row["recordedAt"]) > 0) throw B.Broken();
         Equal(receipt["bodyHash"], row["bodyHash"]); Equal(receipt["result"], B.Result(row));
-        var effect = await Rows("outboxEvents").Find(tx, new BsonDocument("sourceKey", B.EffectKey(row))).SingleOrDefaultAsync(ct) ?? throw B.Broken();
+        var effect = await OriginOneAsync(tx, "outboxEvents", new BsonDocument("sourceKey", B.EffectKey(row)), ct) ?? throw B.Broken();
         foreach (var field in new[] { "actorId", "requestKey", "location", "orderId" }) Equal(effect[field], row[field]); Equal(effect["kind"], B.Operation); Equal(effect["payload"], B.Result(row)); Equal(effect["createdAt"], row["recordedAt"]);
     }
     internal async Task<BsonDocument?> ForKeyAsync(IClientSessionHandle tx, long actor, string key, CancellationToken ct) {

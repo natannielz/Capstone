@@ -134,7 +134,7 @@ jobs:
         working-directory: backend
         run: |
           dotnet test tests/UnitToko.Tests/UnitToko.Tests.csproj --no-build --nologo \
-            --filter 'FullyQualifiedName~PersonApprovalStoreTests|FullyQualifiedName~PersonApprovalSessionTests|FullyQualifiedName~NumericContractTests|FullyQualifiedName~LotValuePolicyTests|FullyQualifiedName~StockCountPolicyTests|FullyQualifiedName~StockCountIntegrityTests|FullyQualifiedName~StockCountOpenApiTests|FullyQualifiedName~InventoryCountStockSourceTests|FullyQualifiedName~PackConversionRuleTests|FullyQualifiedName~PackConversionRulePolicyTests|FullyQualifiedName~PackConversionRuleMigrationTests|FullyQualifiedName~PackConversionRuleHttpTests' \
+            --filter 'FullyQualifiedName~PersonApprovalStoreTests|FullyQualifiedName~PersonApprovalSessionTests|FullyQualifiedName~NumericContractTests|FullyQualifiedName~LotValuePolicyTests|FullyQualifiedName~StockCountPolicyTests|FullyQualifiedName~StockCountIntegrityTests|FullyQualifiedName~StockCountOpenApiTests|FullyQualifiedName~InventoryCountStockSourceTests|FullyQualifiedName~PackConversionRuleTests|FullyQualifiedName~PackConversionRulePolicyTests|FullyQualifiedName~PackConversionRuleMigrationTests|FullyQualifiedName~PackConversionRuleHttpTests|FullyQualifiedName~StockReleaseApprovalPolicyTests|FullyQualifiedName~StockReleaseMigrationTests' \
             --logger 'trx;LogFileName=authority.trx' --logger 'console;verbosity=normal' \
             --blame-hang-timeout 5m --blame-hang-dump-type none --results-directory ../tmp/focused-ci
           python3 - <<'PY'

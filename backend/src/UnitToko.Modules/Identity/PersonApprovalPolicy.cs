@@ -12,7 +12,7 @@ public static class PersonApprovalPolicy
         Permissions.ProcurementApprove or Permissions.SupplierClaimApprove or Permissions.ProcurementStockValuationDecide or Permissions.ProcurementPayableDecide or Permissions.ProcurementAdvanceReturnDecide or Permissions.OrderSpendApprove or Permissions.OrderSpendingPolicyApprove or Permissions.AccountingBookApprove or Permissions.ReceivingAccountApprove or Permissions.ReceivingAccountVerify or Permissions.PricingApprove or Permissions.SupplierChangeApprove or Permissions.SupplierBankApprove or Permissions.StockSourceApprove or Permissions.StockSourcePolicyApprove or Permissions.StockSourceReconciliationDecide or
         Permissions.BankReceiptConfirm or Permissions.PaymentReviewManual or Permissions.PaymentReviewManage or Permissions.PaymentVerify or Permissions.PaymentAllocate or Permissions.DisbursementVerify or Permissions.ReconciliationVerify or
         Permissions.CaseManage or Permissions.CreditApprove or Permissions.RefundApprove or Permissions.FundingApprove or
-        Permissions.ExpenseApprove or Permissions.StockAdjustApprove or Permissions.DisbursementRecord or
+        Permissions.ExpenseApprove or Permissions.StockAdjustApprove or Permissions.StockReleaseApprove or Permissions.DisbursementRecord or
         Permissions.PeriodApprove or Permissions.PeriodClose or Permissions.PeriodReopenApprove or
         Permissions.AccessApprove or Permissions.MembershipApprove;
 
@@ -33,6 +33,7 @@ public static class PersonApprovalPolicy
             Permissions.BankReceiptConfirm or Permissions.PaymentReviewManual or Permissions.PaymentReviewManage or Permissions.PaymentVerify or Permissions.PaymentAllocate or Permissions.DisbursementVerify or
                 Permissions.ReconciliationVerify => [evidence!.RecordedBy],
             Permissions.StockAdjustApprove => [evidence!.CountedBy, evidence.ProposedBy],
+            Permissions.StockReleaseApprove => [evidence!.ProposedBy],
             Permissions.ProcurementStockValuationDecide => [evidence!.RequestedBy, evidence.RecordedBy],
             Permissions.ProcurementPayableDecide => [evidence!.RequestedBy],
             Permissions.ProcurementAdvanceReturnDecide => [evidence!.RequestedBy],

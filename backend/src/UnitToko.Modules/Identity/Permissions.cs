@@ -16,6 +16,7 @@ public static class Permissions
     public const string SubstitutionPropose = "substitution.propose", SubstitutionAccept = "substitution.accept";
     public const string BranchPic = "branch.pic", OrganizationWide = "organization.wide";
     public const string StockRead = "stock.read", StockReceive = "stock.receive", StockCount = "stock.count", StockAdjustPropose = "stock.adjust.propose", StockAdjustApprove = "stock.adjust.approve";
+    public const string StockReleasePropose = "stock.release.propose", StockReleaseApprove = "stock.release.approve";
     public const string StockSourceRead = "stock.source.read", StockSourcePropose = "stock.source.propose", StockSourceApprove = "stock.source.approve";
     public const string StockSourceSuspend = "stock.source.suspend";
     public const string StockSourcePolicyPropose = "stock.source.policy.propose", StockSourcePolicyApprove = "stock.source.policy.approve";
@@ -89,6 +90,8 @@ public static class Permissions
             InvoiceIssue, PaymentRecord, PaymentAllocate, PaymentVerify, CreditRequest, CreditApprove, RefundRequest, DisbursementRecord,
             DisbursementVerify, FundingRequest, FundingApprove, ExpenseApprove, ReconciliationVerify, JournalPost, JournalReverse }) Add(name, Operations);
         foreach (var name in new[] { OrderAccept, SubstitutionPropose, StockConvert, ReservationRelease }) Add(name, Operations);
+        Add(StockReleasePropose, Operations);
+        Add(StockReleaseApprove, Operations, true);
         Add(PricingApprove, Operations, true);
         Add(ReceivingAccountRead, Operations); Add(ReceivingAccountDetailsRead, Operations); Add(ReceivingAccountPropose, Operations);
         Add(ReceivingAccountVerify, Operations, true); Add(ReceivingAccountApprove, Operations, true);

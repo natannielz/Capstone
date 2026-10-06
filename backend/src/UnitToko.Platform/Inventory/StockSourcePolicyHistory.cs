@@ -12,13 +12,15 @@ public sealed partial class StockSourceSetupService
     {
         var poolId = source.Pool["_id"].AsInt64; var views = new Dictionary<long, BsonDocument>(); var accepted = new SortedDictionary<long, BsonDocument>();
         long decisions = 0;
+        var captured = historyCapture is null ? null : new List<BsonDocument>();
         using var cursor = await Rows(StockSourcePolicyBson.Proposals).Find(tx, F.Eq("poolId", poolId)).Sort(new BsonDocument("_id", 1)).ToCursorAsync(ct);
         while (await cursor.MoveNextAsync(ct)) foreach (var proposal in cursor.Current)
         {
+            captured?.Add(proposal);
             StockSourcePolicyBson.Proposal(proposal);
             await RequireOperatingPolicyBindingAsync(tx, proposal, source, ct);
             await OperatingPolicyProvenanceAsync(tx, proposal, null, ct);
-            var decision = await Rows(StockSourcePolicyBson.Decisions).Find(tx, F.Eq("proposalId", proposal["_id"])).SingleOrDefaultAsync(ct);
+            var decision = await HistoryOneAsync(tx, StockSourcePolicyBson.Decisions, F.Eq("proposalId", proposal["_id"]), ct);
             BsonDocument? policy = null;
             if (decision is not null)
             {
@@ -28,13 +30,14 @@ public sealed partial class StockSourceSetupService
                 if (decision["decision"] == "approve")
                 {
                     await RequireOperatingPolicyBindingAtAsync(tx, proposal, StockSourceSetupBson.Time(decision["decidedAt"]), ct);
-                    policy = await Rows(StockSourcePolicyBson.Policies).Find(tx, F.Eq("_id", decision["policyId"])).SingleOrDefaultAsync(ct) ?? throw StockSourcePolicyBson.Invalid();
+                    policy = await HistoryOneAsync(tx, StockSourcePolicyBson.Policies, F.Eq("_id", decision["policyId"]), ct) ?? throw StockSourcePolicyBson.Invalid();
                     StockSourcePolicyBson.Policy(policy, proposal, decision);
                 }
             }
             var view = new BsonDocument { { "proposal", proposal }, { "decision", (BsonValue?)decision ?? BsonNull.Value }, { "policy", (BsonValue?)policy ?? BsonNull.Value } };
             if (!views.TryAdd(proposal["_id"].AsInt64, view) || policy is not null && !accepted.TryAdd(policy["policyRevision"].AsInt64, view)) throw StockSourcePolicyBson.Invalid();
         }
+        HistoryRows(StockSourcePolicyBson.Proposals, F.Eq("poolId", poolId), captured);
         long revision = 0; BsonDocument? previous = null;
         foreach (var (number, view) in accepted)
         {
@@ -51,24 +54,25 @@ public sealed partial class StockSourceSetupService
             if (accepted.Values.Any(policy => policy["policy"]["policyRevision"].AsInt64 > baseRevision &&
                 StockSourceSetupBson.Time(policy["decision"]["decidedAt"]) < StockSourceSetupBson.Time(proposal["proposedAt"]))) throw StockSourcePolicyBson.Invalid();
         }
-        if (await Rows(StockSourcePolicyBson.Decisions).CountDocumentsAsync(tx, F.Eq("poolId", poolId), cancellationToken: ct) != decisions ||
-            await Rows(StockSourcePolicyBson.Policies).CountDocumentsAsync(tx, F.Eq("poolId", poolId), cancellationToken: ct) != revision) throw StockSourcePolicyBson.Invalid();
+        if (await HistoryCountAsync(tx, StockSourcePolicyBson.Decisions, F.Eq("poolId", poolId), ct) != decisions ||
+            await HistoryCountAsync(tx, StockSourcePolicyBson.Policies, F.Eq("poolId", poolId), ct) != revision) throw StockSourcePolicyBson.Invalid();
         var auditFilter = F.Eq("record.poolId", poolId) & F.Or(F.Eq("kind", "stock.source.policy.audit"),
             F.In("record.kind", new[] { "stock.source.policy.proposal", "stock.source.policy.decision" }));
         var receiptFilter = F.Eq("result.poolId", poolId) & F.Or(F.In("operation", new[] {
             "stock.source.policy.propose", "stock.source.policy.approve", "stock.source.policy.reject", "stock.source.policy.withdraw" }),
             F.Exists("result.basePolicyRevision"), F.Exists("result.policyId"));
-        if (await Rows("auditEvents").CountDocumentsAsync(tx, auditFilter, cancellationToken: ct) != views.Count + decisions ||
-            await Rows("idempotencyRecords").CountDocumentsAsync(tx, receiptFilter, cancellationToken: ct) != views.Count + decisions) throw StockSourcePolicyBson.Invalid();
+        if (await HistoryCountAsync(tx, "auditEvents", auditFilter, ct) != views.Count + decisions ||
+            await HistoryCountAsync(tx, "idempotencyRecords", receiptFilter, ct) != views.Count + decisions) throw StockSourcePolicyBson.Invalid();
         return new(views, previous);
     }
     private async Task OperatingPolicyProvenanceAsync(IClientSessionHandle tx, BsonDocument proposal, BsonDocument? decision, CancellationToken ct)
     {
         var row = decision ?? proposal; var operation = StockSourcePolicyBson.Prefix + (decision?["decision"].AsString ?? "propose");
-        var audit = await Rows("auditEvents").Find(tx, F.Eq("_id", row["auditId"])).SingleOrDefaultAsync(ct);
+        var audit = await HistoryOneAsync(tx, "auditEvents", F.Eq("_id", row["auditId"]), ct);
         StockSourcePolicyBson.RequireAudit(audit, row, operation, row[decision is null ? "proposedBy" : "decidedBy"], row[decision is null ? "proposedAt" : "decidedAt"]);
-        var receipts = await Rows("idempotencyRecords").Find(tx, F.Eq("operation", operation) & F.Eq("result.poolId", proposal["poolId"]) &
-            F.Eq("result.proposalId", proposal["_id"])).Limit(2).ToListAsync(ct);
+        var filter = F.Eq("operation", operation) & F.Eq("result.poolId", proposal["poolId"]) & F.Eq("result.proposalId", proposal["_id"]);
+        var receipts = await Rows("idempotencyRecords").Find(tx, filter).Limit(2).ToListAsync(ct);
+        HistoryRows("idempotencyRecords", filter, receipts);
         if (receipts.Count != 1) throw StockSourcePolicyBson.Invalid();
         StockSourcePolicyBson.Receipt(receipts[0], proposal, decision);
     }
@@ -94,8 +98,8 @@ public sealed partial class StockSourceSetupService
         }
         if (proposal["suspensionRevision"].AsInt64 > 0)
         {
-            var stop = await Rows(StockSourceSuspensionSchemas.Collection).Find(tx, F.Eq("poolId", proposal["poolId"]) &
-                F.Eq("suspensionRevision", proposal["suspensionRevision"])).SingleOrDefaultAsync(ct) ?? throw StockSourcePolicyBson.Invalid();
+            var stop = await HistoryOneAsync(tx, StockSourceSuspensionSchemas.Collection, F.Eq("poolId", proposal["poolId"]) &
+                F.Eq("suspensionRevision", proposal["suspensionRevision"]), ct) ?? throw StockSourcePolicyBson.Invalid();
             if (StockSourceSetupBson.Time(stop["suspendedAt"]) > at) throw StockSourcePolicyBson.Invalid();
         }
 
@@ -114,18 +118,21 @@ public sealed partial class StockSourceSetupService
     }
     private async Task RequireOperatingPolicyBindingAtAsync(IClientSessionHandle tx, BsonDocument proposal, DateTimeOffset at, CancellationToken ct)
     {
-        if (await Rows("stockSourceRevisionDecisions").Find(tx, F.Eq("poolId", proposal["poolId"]) & F.Eq("decision", "approve") &
-            F.Gt("poolRevision", proposal["poolRevision"]) & F.Lt("decidedAt", at.UtcDateTime)).AnyAsync(ct) ||
-            await Rows(StockSourceSuspensionSchemas.Collection).Find(tx, F.Eq("poolId", proposal["poolId"]) &
-                F.Gt("suspensionRevision", proposal["suspensionRevision"]) & F.Lt("suspendedAt", at.UtcDateTime)).AnyAsync(ct)) throw StockSourcePolicyBson.Invalid();
+        if (await HistoryAnyAsync(tx, "stockSourceRevisionDecisions", F.Eq("poolId", proposal["poolId"]) & F.Eq("decision", "approve") &
+            F.Gt("poolRevision", proposal["poolRevision"]) & F.Lt("decidedAt", at.UtcDateTime), ct) ||
+            await HistoryAnyAsync(tx, StockSourceSuspensionSchemas.Collection, F.Eq("poolId", proposal["poolId"]) &
+                F.Gt("suspensionRevision", proposal["suspensionRevision"]) & F.Lt("suspendedAt", at.UtcDateTime), ct)) throw StockSourcePolicyBson.Invalid();
         var mappings = proposal["configuration"]["mappings"].AsBsonArray.Select(value => value.AsBsonDocument).ToArray();
         // Strictly earlier approvals must be represented at proposal AND acceptance. Equal timestamps do not invent a commit order.
-        using var cursor = await Rows("stockSourceAliasDecisions").Find(tx, F.Eq("poolId", proposal["poolId"]) &
-            F.Eq("decision", "approve") & F.Lt("decidedAt", at.UtcDateTime)).ToCursorAsync(ct);
+        var filter = F.Eq("poolId", proposal["poolId"]) & F.Eq("decision", "approve") & F.Lt("decidedAt", at.UtcDateTime);
+        var captured = historyCapture is null ? null : new List<BsonDocument>();
+        using var cursor = await Rows("stockSourceAliasDecisions").Find(tx, filter).ToCursorAsync(ct);
         while (await cursor.MoveNextAsync(ct)) foreach (var row in cursor.Current)
         {
+            captured?.Add(row);
             var mapping = mappings.SingleOrDefault(item => item["requestedLocation"].Equals(row["requestedLocation"]));
             if (mapping is null || mapping["aliasRevision"].AsInt64 < row["aliasRevision"].AsInt64) throw StockSourcePolicyBson.Invalid();
         }
+        HistoryRows("stockSourceAliasDecisions", filter, captured);
     }
 }

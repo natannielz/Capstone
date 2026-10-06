@@ -1,5 +1,7 @@
 using System.Collections.Immutable;
 using MongoDB.Bson;
+using MongoDB.Bson.Serialization;
+using MongoDB.Bson.Serialization.Serializers;
 using MongoDB.Driver;
 using UnitToko.Modules.Contracts;
 using UnitToko.Modules.Identity;
@@ -11,6 +13,7 @@ using UnitToko.Platform.Catalog;
 using UnitToko.Platform.Identity;
 using UnitToko.Platform.Mongo;
 using UnitToko.Platform.Mongo.Migrations;
+using UnitToko.Platform.Procurement;
 
 namespace UnitToko.Platform.Inventory;
 
@@ -19,8 +22,47 @@ namespace UnitToko.Platform.Inventory;
 public sealed partial class StockSourceSetupService(IMongoDatabase database, MongoUnitOfWork unit, IdAllocator ids, IClock clock)
 {
     private readonly AuthorizationStore authorization = new(database, unit, clock);
+    private IMongoDatabase HistoryOwnerDatabase => database;
+    private IClock HistoryOwnerClock => clock;
     private IMongoCollection<BsonDocument> Rows(string name) => database.GetCollection<BsonDocument>(name);
     private static readonly FilterDefinitionBuilder<BsonDocument> F = Builders<BsonDocument>.Filter;
+    private PurchaseOrderSourceReadCapture? historyCapture;
+    private DateTimeOffset? historyCapturedAt;
+    internal StockSourceSetupService CaptureHistory(PurchaseOrderSourceReadCapture capture) {
+        var reader = new StockSourceSetupService(database, unit, ids, clock) { historyCapture = capture, historyCapturedAt = Now() };
+        capture.RecordSourceOwner(reader); return reader;
+    }
+    internal bool SameCapturedHistoryOwner(StockSourceSetupService other) => ReferenceEquals(database.Client, other.HistoryOwnerDatabase.Client) &&
+        database.DatabaseNamespace == other.HistoryOwnerDatabase.DatabaseNamespace && ReferenceEquals(clock, other.HistoryOwnerClock);
+    private static BsonDocument HistoryFilter(FilterDefinition<BsonDocument> filter) =>
+        filter.Render(new(BsonDocumentSerializer.Instance, BsonSerializer.SerializerRegistry));
+    private async Task<BsonDocument?> HistoryOneAsync(IClientSessionHandle tx, string name, FilterDefinition<BsonDocument> filter, CancellationToken ct) =>
+        historyCapture is null ? await Rows(name).Find(tx, filter).SingleOrDefaultAsync(ct) : await historyCapture.OneAsync(database, tx, name, HistoryFilter(filter), ct);
+    private async Task<BsonDocument?> HistoryLatestAsync(IClientSessionHandle tx, string name, FilterDefinition<BsonDocument> filter,
+        SortDefinition<BsonDocument> sort, CancellationToken ct) {
+        if (historyCapture is null) return await Rows(name).Find(tx, filter).Sort(sort).FirstOrDefaultAsync(ct);
+        var actual = await Rows(name).Find(tx, filter).Sort(sort).Limit(4097).ToListAsync(ct);
+        historyCapture.Record(name, HistoryFilter(filter), actual); return actual.FirstOrDefault();
+    }
+    private async Task<long> HistoryCountAsync(IClientSessionHandle tx, string name, FilterDefinition<BsonDocument> filter, CancellationToken ct) {
+        var actual = await Rows(name).CountDocumentsAsync(tx, filter, cancellationToken: ct);
+        historyCapture?.RecordCount(name, HistoryFilter(filter), actual); return actual;
+    }
+    private Task<bool> HistoryAnyAsync(IClientSessionHandle tx, string name, FilterDefinition<BsonDocument> filter, CancellationToken ct) =>
+        historyCapture is null ? Rows(name).Find(tx, filter).AnyAsync(ct) : historyCapture.AnyAsync(database, tx, name, HistoryFilter(filter), ct);
+    private void HistoryRows(string name, FilterDefinition<BsonDocument> filter, IEnumerable<BsonDocument>? actual) {
+        if (historyCapture is not null) historyCapture.Record(name, HistoryFilter(filter), actual ?? throw StockSourceSetupBson.Invalid());
+    }
+    private async Task<BsonDocument?> HistoryPoolAsync(IClientSessionHandle tx, FilterDefinition<BsonDocument> filter, CancellationToken ct) {
+        var pool = await Rows("inventoryPools").Find(tx, filter).SingleOrDefaultAsync(ct);
+        if (pool is not null) historyCapture?.RecordPool(pool); return pool;
+    }
+    internal async Task RequireCapturedHistoryStorageAsync(IMongoDatabase expected, IClientSessionHandle tx, CancellationToken ct) {
+        if (!ReferenceEquals(expected.Client, database.Client) || expected.DatabaseNamespace != database.DatabaseNamespace ||
+            !ReferenceEquals(tx.Client, database.Client) || !tx.IsInTransaction) throw StockSourceSetupBson.Invalid();
+        if (historyCapturedAt is null || Now() < historyCapturedAt.Value) throw StockSourceSetupBson.Invalid();
+        await OperatingPolicyStorageAsync(ct); await ActivationOwnerStorageAsync(ct);
+    }
     public Task<BsonDocument> ProposeAsync(ActorContext actor, StockSourceSetupInput input,
         AuthorizationCommandMetadata metadata, CancellationToken ct = default) => ProposeCoreAsync(actor, input, metadata, false, ct);
     private async Task<BsonDocument> ProposeCoreAsync(ActorContext actor, StockSourceSetupInput input,
@@ -245,7 +287,7 @@ public sealed partial class StockSourceSetupService(IMongoDatabase database, Mon
     }
     private async Task<BsonDocument> ProposalAsync(IClientSessionHandle tx, long id, CancellationToken ct)
     {
-        var row = await Rows("stockSourceProposals").Find(tx, F.Eq("_id", id)).SingleOrDefaultAsync(ct);
+        var row = await HistoryOneAsync(tx, "stockSourceProposals", F.Eq("_id", id), ct);
         if (row is null) throw StockSourceSetupBson.Invalid();
         StockSourceSetupBson.RequireProposal(row);
         await AuditAsync(tx, row, "stock.source.propose", row["proposedBy"].AsInt64, row["proposedAt"], ct);
@@ -253,7 +295,7 @@ public sealed partial class StockSourceSetupService(IMongoDatabase database, Mon
     }
     private async Task AuditAsync(IClientSessionHandle tx, BsonDocument row, string operation, long actor, BsonValue time, CancellationToken ct)
     {
-        var audit = await Rows("auditEvents").Find(tx, F.Eq("_id", row["auditId"].AsInt64)).SingleOrDefaultAsync(ct);
+        var audit = await HistoryOneAsync(tx, "auditEvents", F.Eq("_id", row["auditId"].AsInt64), ct);
         if (audit is null || audit.GetValue("kind", "") != "stock.source.audit" || audit.GetValue("operation", "") != operation ||
             audit.GetValue("actorId", BsonNull.Value) != new BsonInt64(actor) || audit.GetValue("createdAt", BsonNull.Value) != time ||
             !audit.GetValue("record", BsonNull.Value).Equals(row)) throw StockSourceSetupBson.Invalid();
@@ -261,7 +303,7 @@ public sealed partial class StockSourceSetupService(IMongoDatabase database, Mon
     private async Task<BsonDocument> ViewAsync(IClientSessionHandle tx, BsonDocument proposal, CancellationToken ct)
     {
         proposal = await ProposalAsync(tx, proposal["_id"].AsInt64, ct);
-        var decision = await Rows("stockSourceDecisions").Find(tx, F.Eq("proposalId", proposal["_id"])).SingleOrDefaultAsync(ct);
+        var decision = await HistoryOneAsync(tx, "stockSourceDecisions", F.Eq("proposalId", proposal["_id"]), ct);
         BsonDocument? pool = null;
         if (decision is not null)
         {
@@ -271,12 +313,12 @@ public sealed partial class StockSourceSetupService(IMongoDatabase database, Mon
             if (!decision["poolId"].IsBsonNull)
             {
                 var input = StockSourceSetupBson.ReadInput(proposal["input"].AsBsonDocument);
-                var registration = await Rows("inventoryPoolRegistrations").Find(tx, F.Eq("_id", decision["poolId"])).SingleOrDefaultAsync(ct);
+                var registration = await HistoryOneAsync(tx, "inventoryPoolRegistrations", F.Eq("_id", decision["poolId"]), ct);
                 var expected = StockSourceSetupBson.Header("inventoryPoolRegistrations", decision["poolId"].AsInt64);
                 expected.Add("organizationId", input.Location.OrganizationId.Value); expected.Add("physicalKey", input.PhysicalKey);
                 expected.Add("proposalId", proposal["_id"]); expected.Add("decisionId", decision["_id"]);
                 if (!expected.Equals(registration)) throw StockSourceSetupBson.Invalid();
-                pool = await Rows("inventoryPools").Find(tx, F.Eq("_id", decision["poolId"])).SingleOrDefaultAsync(ct);
+                pool = await HistoryPoolAsync(tx, F.Eq("_id", decision["poolId"]), ct);
                 InventoryGraph.RequirePool(pool);
                 if (!pool!["location"].Equals(StockSourceSetupBson.Location(input.Location))) throw StockSourceSetupBson.Invalid();
             }

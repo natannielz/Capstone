@@ -47,8 +47,8 @@ internal sealed class SupplierTestData(ProcurementRequestTestData procurement) :
             { "approvalReference", "synthetic-business-policy-approval" }, { "approvedAt", Clock.UtcNow.AddHours(-1).UtcDateTime },
             { "expiresAt", Clock.UtcNow.AddDays(31).UtcDateTime }, { "maxObservationAgeSeconds", 900L }, { "allowReferenceOnly", true }, { "active", true } };
     }
-    internal static async Task<SupplierTestData> CreateAsync(MongoFixture fixture) {
-        var procurement = await ProcurementRequestTestData.CreateAsync(fixture);
+    internal static async Task<SupplierTestData> CreateAsync(MongoFixture fixture, bool useSystemClock = false) {
+        var procurement = await ProcurementRequestTestData.CreateAsync(fixture, useSystemClock);
         try {
             var data = new SupplierTestData(procurement);
             data.Maker = await data.Base.AddActorAsync(620, Scope, Permissions.SupplierChangePropose);

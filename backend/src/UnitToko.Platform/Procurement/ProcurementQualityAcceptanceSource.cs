@@ -18,10 +18,14 @@ internal sealed record ProcurementApprovedQualitySource(BsonDocument Receipt, Bs
 // A proof cycle can occur when a genuine supplier claim names an invoice match whose
 // quality allocation is being authenticated. Only that exact immutable allocation edge
 // may be revisited while the outer, full physical/claim/document proof is completing.
-internal sealed partial class ProcurementQualityProofGraph(IClientSessionHandle tx)
+internal sealed partial class ProcurementQualityProofGraph(IClientSessionHandle tx, HeldReceiptOriginProof? origin = null)
 {
+    private readonly HeldReceiptOriginProof? originProof = origin;
     private readonly long transaction = tx.WrappedCoreSession.CurrentTransaction.TransactionNumber;
     private readonly Dictionary<long, ProcurementApprovedQualitySource> active = [];
+    // Current-chain readers share only immutable genesis. The historical originProof
+    // shortcut above remains separate; every current movement chain is reconstructed.
+    private readonly Dictionary<long, HeldReceiptOriginProof> currentMovementOrigins = [];
     internal void Require(IClientSessionHandle current) {
         if (!ReferenceEquals(tx, current) || !current.IsInTransaction ||
             current.WrappedCoreSession.CurrentTransaction.TransactionNumber != transaction) throw ProcurementQualityAcceptanceBson.Broken();
@@ -38,7 +42,12 @@ internal sealed partial class ProcurementQualityProofGraph(IClientSessionHandle 
     internal void Enter(IClientSessionHandle current, ProcurementApprovedQualitySource source) {
         Require(current); if (!active.TryAdd(source.Allocation["_id"].AsInt64, source)) throw ProcurementQualityAcceptanceBson.Broken();
     }
-    internal void Leave(IClientSessionHandle current, long id) { Require(current); active.Remove(id); }
+    internal void Leave(IClientSessionHandle current, long id) {
+        // Cleanup also runs after a nested reader aborts. Preserve its original
+        // failure; all proof reads still require an active, exactly bound attempt.
+        if (!ReferenceEquals(tx, current) || current.WrappedCoreSession.CurrentTransaction.TransactionNumber != transaction) throw Q.Broken();
+        active.Remove(id);
+    }
 }
 
 /// <summary>Authenticates quality and the full physical-disposition graph within one transaction.</summary>

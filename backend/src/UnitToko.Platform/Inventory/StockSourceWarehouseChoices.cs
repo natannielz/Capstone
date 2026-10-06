@@ -73,7 +73,7 @@ public sealed partial class StockSourceSetupService
         }, ct);
     }
 
-    private static string ProfileName(BsonDocument row, ScopeNode node)
+    internal static string ProfileName(BsonDocument row, ScopeNode node)
     {
         string[] required = ["_id", "schemaVersion", "kind", "parentId", "code", "normalizedCode", "name", "version",
             "createdBy", "updatedBy", "createdAt", "updatedAt", "approvedProposalId"];

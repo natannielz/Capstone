@@ -25,6 +25,7 @@ internal sealed class PurchaseOrderInboundBindingRecords(IMongoDatabase database
         var expected = selection.Allocations.GroupBy(row => row.PoolId).OrderBy(group => group.Key).ToArray();
         if (sources.Count != expected.Length || at > clock.UtcNow) throw B.Broken();
         var owner = new StockSourceSetupService(database, new((MongoClient)database.Client), new(database), clock);
+        if (capture is not null) owner = owner.CaptureHistory(capture);
         for (var index = 0; index < sources.Count; index++) {
             var source = sources[index].AsBsonDocument; Equal(source["poolId"], expected[index].Key);
             Equal(source["requestedLocation"], ProcurementRequestBson.Location(input.Location));

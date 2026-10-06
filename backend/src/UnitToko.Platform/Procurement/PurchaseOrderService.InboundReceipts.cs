@@ -10,8 +10,8 @@ namespace UnitToko.Platform.Procurement;
 public sealed partial class PurchaseOrderService
 {
     internal async Task RequirePlannedReceiptMembershipAsync(IClientSessionHandle tx, BsonDocument source,
-        BsonDocument inspection, ProcurementStockReceiptInput input, CancellationToken ct) {
-        var binding = await InboundRecords.ApprovedAsync(tx, source, ct);
+        BsonDocument inspection, ProcurementStockReceiptInput input, CancellationToken ct, PurchaseOrderSourceReadCapture? capture = null) {
+        var binding = await (capture is null ? InboundRecords : new PurchaseOrderInboundBindingRecords(database, clock, capture)).ApprovedAsync(tx, source, ct);
         if (binding is null) return; // Retained unbound history remains unbound, never inferred.
         if (input.InspectionLineNumber < 1 || input.InspectionLineNumber > inspection["input"]["lines"].AsBsonArray.Count) throw B.Changed();
         var sku = inspection["input"]["lines"][input.InspectionLineNumber - 1]["requestSkuId"].AsInt64;

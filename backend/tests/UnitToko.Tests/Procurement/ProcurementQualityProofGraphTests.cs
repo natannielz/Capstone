@@ -12,6 +12,26 @@ namespace UnitToko.Tests.Procurement;
 public sealed class ProcurementQualityProofGraphTests(MongoFixture fixture)
 {
     [WindowsStorageFact]
+    public async Task Aborted_graph_cleanup_preserves_original_failure_but_cannot_reuse_or_cross_attempts()
+    {
+        using var tx = await fixture.Client.StartSessionAsync(); tx.StartTransaction();
+        var graph = new ProcurementQualityProofGraph(tx);
+        var original = new InvalidOperationException("Synthetic original reader failure");
+        var caught = await Assert.ThrowsAsync<InvalidOperationException>(async () => {
+            try { await tx.AbortTransactionAsync(); throw original; }
+            finally { graph.Leave(tx, 1); }
+        });
+        Assert.Same(original, caught);
+        Assert.Throws<AuthorizationDeniedException>(() => graph.Require(tx));
+        using var other = await fixture.Client.StartSessionAsync();
+        Assert.Throws<AuthorizationDeniedException>(() => graph.Leave(other, 1));
+        tx.StartTransaction();
+        Assert.Throws<AuthorizationDeniedException>(() => graph.Leave(tx, 1));
+        Assert.Throws<AuthorizationDeniedException>(() => graph.Require(tx));
+        await tx.AbortTransactionAsync();
+    }
+
+    [WindowsStorageFact]
     public async Task Completed_actual_quality_graph_rechecks_changed_sources_and_cannot_cross_transaction_or_missing_private_pin()
     {
         await using var fixtureData = await SupplierDocumentPdfMatchTestData.CreateAsync(fixture, quality: true);

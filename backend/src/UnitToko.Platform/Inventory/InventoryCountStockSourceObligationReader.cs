@@ -35,6 +35,16 @@ public sealed partial class StockSourceSetupService
             var snapshot = await new InventoryCountStockSourceRecords(database).ReadAsync(tx, counts, this, expected, ct);
             var coverageOwner = new InventoryCountCoverage(database);
             var coverage = await coverageOwner.ReadAsync(tx, counts, this, expected.Location.OrganizationId.Value, ct);
+            // The new release owner must prove its complete causal membership before its
+            // movement namespace can be excluded from unresolved inventory operations.
+            var catalog = new UnitToko.Platform.Catalog.CatalogAuthoringService(database, unit, ids, clock);
+            var requests = new UnitToko.Platform.Procurement.ProcurementRequestService(database, unit, ids, clock, catalog);
+            var orders = new UnitToko.Platform.Procurement.PurchaseOrderService(database, unit, ids, clock, catalog, requests,
+                new UnitToko.Platform.Procurement.SupplierService(database, unit, ids, clock, catalog));
+            var receiving = new UnitToko.Platform.Procurement.ProcurementReceivingService(database, unit, ids, clock, catalog, orders, requests);
+            var valuations = new UnitToko.Platform.Procurement.ProcurementStockValuationService(database, unit, ids, clock, catalog, orders, receiving, this);
+            var releases = await new StockReleaseService(database, unit, ids, clock, catalog, orders, this, valuations)
+                .ReadObligationAsync(tx, expected.PoolId, ct);
             var complete = await coverageOwner.ForPoolAsync(tx, coverage, facts, snapshot.OpenCount, ct);
             await coverageOwner.FenceAsync(tx, coverage, ct);
             if (snapshot.Head["fence"].AsInt64 >= long.MaxValue - 2 || StockSourceSetupBson.Time(snapshot.Head["updatedAt"]) > at) throw InventoryCountStockSourceRecords.Unavailable();
@@ -47,7 +57,8 @@ public sealed partial class StockSourceSetupService
             new InventoryRepository(database).RequireSession(tx);
             if (tx.WrappedCoreSession.CurrentTransaction.TransactionNumber != number || Now() < at) throw InventoryCountStockSourceRecords.Unavailable();
             ct.ThrowIfCancellationRequested();
-            return new(StockSourceObligationDomain.InventoryOperations, expected, coverage.Head["revision"].AsInt64, complete.Complete, complete.OpenCount);
+            return new(StockSourceObligationDomain.InventoryOperations, expected,
+                checked(coverage.Head["revision"].AsInt64 + releases.MembershipCount), complete.Complete, checked(complete.OpenCount + releases.OpenCount));
         } catch { await InventoryRepository.AbortAsync(tx); throw; }
     }
 }

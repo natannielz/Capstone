@@ -39,9 +39,7 @@ public sealed partial class PurchaseOrderService
     internal async Task<BsonDocument> FundingSourceAsync(IMongoDatabase owner, IClientSessionHandle tx, long orderId, long orderVersion, long approvalId,
         CancellationToken ct, ProcurementQualityProofGraph? qualityGraph = null) {
         if (qualityGraph is null) return await FundingSourceCoreAsync(owner, tx, orderId, orderVersion, approvalId, ct);
-        var proof = await PurchaseOrderHistoricalSourceProof.ReadAsync(this, owner, tx, orderId, orderVersion, approvalId, ct);
-        qualityGraph.AttachFundingProof(tx, proof);
-        return proof.Source;
+        return await qualityGraph.FundingAsync(owner, this, tx, orderId, orderVersion, approvalId, ct);
     }
     internal async Task<BsonDocument> FundingSourceCoreAsync(IMongoDatabase owner, IClientSessionHandle tx, long orderId, long orderVersion, long approvalId,
         CancellationToken ct, PurchaseOrderSourceReadCapture? sourceCapture = null) {

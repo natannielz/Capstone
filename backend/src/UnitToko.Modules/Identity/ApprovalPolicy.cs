@@ -18,7 +18,7 @@ public static class ApprovalPolicy
         Permissions.ProcurementApprove or Permissions.SupplierClaimApprove or Permissions.ProcurementStockValuationDecide or Permissions.ProcurementPayableDecide or Permissions.ProcurementAdvanceReturnDecide or Permissions.OrderSpendApprove or Permissions.OrderSpendingPolicyApprove or Permissions.AccountingBookApprove or Permissions.OrderAccept or Permissions.SubstitutionAccept or
         Permissions.ReceivingAccountApprove or Permissions.ReceivingAccountVerify or Permissions.PricingApprove or Permissions.SupplierChangeApprove or Permissions.SupplierBankApprove or Permissions.StockSourceApprove or Permissions.StockSourcePolicyApprove or Permissions.StockSourceReconciliationDecide or
         Permissions.CaseManage or Permissions.BankReceiptConfirm or Permissions.PaymentVerify or Permissions.PaymentReviewManual or Permissions.PaymentReviewManage or Permissions.PaymentAllocate or Permissions.CreditApprove or Permissions.RefundApprove or
-        Permissions.FundingApprove or Permissions.ExpenseApprove or Permissions.StockAdjustApprove or
+        Permissions.FundingApprove or Permissions.ExpenseApprove or Permissions.StockAdjustApprove or Permissions.StockReleaseApprove or
         Permissions.DisbursementRecord or Permissions.DisbursementVerify or Permissions.PeriodApprove or
         Permissions.PeriodClose or Permissions.PeriodReopenApprove or Permissions.AccessApprove or
         Permissions.MembershipApprove or Permissions.ReconciliationVerify;
@@ -42,6 +42,7 @@ public static class ApprovalPolicy
             Permissions.BankReceiptConfirm or Permissions.PaymentVerify or Permissions.PaymentReviewManual or Permissions.PaymentReviewManage or Permissions.PaymentAllocate or Permissions.DisbursementVerify or Permissions.ReconciliationVerify => Independent(evidence.RecordedBy),
             Permissions.CaseManage or Permissions.CreditApprove or Permissions.RefundApprove or Permissions.FundingApprove or Permissions.ExpenseApprove => Independent(evidence.RequestedBy),
             Permissions.StockAdjustApprove => Independent(evidence.CountedBy, evidence.ProposedBy),
+            Permissions.StockReleaseApprove => Independent(evidence.ProposedBy),
             Permissions.DisbursementRecord => Independent(evidence.ApprovedBy),
             Permissions.PeriodApprove => Independent(evidence.SubmittedBy),
             Permissions.PeriodClose => Independent(evidence.SubmittedBy, evidence.ApprovedBy) && evidence.SubmittedBy != evidence.ApprovedBy,

@@ -11,17 +11,19 @@ public sealed partial class StockSourceSetupService
     private async Task<BsonDocument?> LatestSuspensionAsync(IClientSessionHandle tx, long poolId, BsonDocument current, CancellationToken ct)
     {
         BsonDocument? previous = null; long revision = 0;
+        var captured = historyCapture is null ? null : new List<BsonDocument>();
         using var cursor = await Rows(StockSourceSuspensionSchemas.Collection).Find(tx, F.Eq("poolId", poolId))
             .Sort(new BsonDocument("suspensionRevision", 1)).ToCursorAsync(ct);
         while (await cursor.MoveNextAsync(ct)) foreach (var row in cursor.Current)
         {
+            captured?.Add(row);
             StockSourceSuspensionBson.Require(row);
             if (row["suspensionRevision"].AsInt64 != checked(++revision) ||
                 previous is not null && (row["poolRevision"].AsInt64 < previous["poolRevision"].AsInt64 ||
                     StockSourceSetupBson.Time(row["suspendedAt"]) < StockSourceSetupBson.Time(previous["suspendedAt"])))
                 throw StockSourceSuspensionBson.Invalid();
             await RequireSuspensionBindingAsync(tx, row, current, ct);
-            var audit = await Rows("auditEvents").Find(tx, F.Eq("_id", row["auditId"])).SingleOrDefaultAsync(ct);
+            var audit = await HistoryOneAsync(tx, "auditEvents", F.Eq("_id", row["auditId"]), ct);
             StockSourceSuspensionBson.Guard(() =>
             {
                 if (audit is null) throw StockSourceSuspensionBson.Invalid();
@@ -31,14 +33,16 @@ public sealed partial class StockSourceSetupService
                     audit["actorId"] != row["suspendedBy"] || !StockSourceSuspensionBson.Positive(audit, "actorGrantVersion") ||
                     audit["createdAt"] != row["suspendedAt"] || !audit["record"].Equals(row)) throw StockSourceSuspensionBson.Invalid();
             });
-            var receipts = await Rows("idempotencyRecords").Find(tx, F.Eq("operation", StockSourceSuspensionBson.Operation) &
-                F.Eq("result.poolId", poolId) & F.Eq("result.suspensionId", row["_id"])).Limit(2).ToListAsync(ct);
+            var receiptFilter = F.Eq("operation", StockSourceSuspensionBson.Operation) & F.Eq("result.poolId", poolId) & F.Eq("result.suspensionId", row["_id"]);
+            var receipts = await Rows("idempotencyRecords").Find(tx, receiptFilter).Limit(2).ToListAsync(ct);
+            HistoryRows("idempotencyRecords", receiptFilter, receipts);
             if (receipts.Count != 1) throw StockSourceSuspensionBson.Invalid();
             RequireSuspensionReceipt(receipts[0], row);
             previous = row;
         }
-        if (await Rows("auditEvents").CountDocumentsAsync(tx, F.Eq("kind", "stock.source.suspension.audit") & F.Eq("record.poolId", poolId), cancellationToken: ct) != revision ||
-            await Rows("idempotencyRecords").CountDocumentsAsync(tx, F.Eq("operation", StockSourceSuspensionBson.Operation) & F.Eq("result.poolId", poolId), cancellationToken: ct) != revision)
+        HistoryRows(StockSourceSuspensionSchemas.Collection, F.Eq("poolId", poolId), captured);
+        if (await HistoryCountAsync(tx, "auditEvents", F.Eq("kind", "stock.source.suspension.audit") & F.Eq("record.poolId", poolId), ct) != revision ||
+            await HistoryCountAsync(tx, "idempotencyRecords", F.Eq("operation", StockSourceSuspensionBson.Operation) & F.Eq("result.poolId", poolId), ct) != revision)
             throw StockSourceSuspensionBson.Invalid();
         return previous;
     }

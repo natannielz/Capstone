@@ -144,14 +144,13 @@ public sealed partial class StockSourceSetupService
     {
         try
         {
-            var registration = await Rows("inventoryPoolRegistrations").Find(tx, F.Eq("_id", poolId)).SingleOrDefaultAsync(ct);
+            var registration = await HistoryOneAsync(tx, "inventoryPoolRegistrations", F.Eq("_id", poolId), ct);
             if (registration is null || !registration["proposalId"].IsInt64) throw StockSourceRevisionBson.Invalid();
             var original = await ViewAsync(tx, await ProposalAsync(tx, registration["proposalId"].AsInt64, ct), ct);
             var pool = original["pool"].AsBsonDocument;
             if (pool["_id"].AsInt64 != poolId) throw StockSourceRevisionBson.Invalid();
             var originalInput = original["proposal"]["input"].AsBsonDocument;
-            var latest = await Rows("stockSourceRevisions").Find(tx, F.Eq("poolId", poolId))
-                .Sort(new BsonDocument("poolRevision", -1)).FirstOrDefaultAsync(ct);
+            var latest = await HistoryLatestAsync(tx, "stockSourceRevisions", F.Eq("poolId", poolId), new BsonDocument("poolRevision", -1), ct);
             var input = originalInput;
             var approvedAt = original["decision"]["decidedAt"];
             if (latest is null)
@@ -164,7 +163,7 @@ public sealed partial class StockSourceSetupService
                     throw StockSourceRevisionBson.Invalid();
                 // Compound uniqueness, the maximum revision and count together detect gaps.
                 // This is configuration history, not the hot stock-availability read path.
-                if (await Rows("stockSourceRevisions").CountDocumentsAsync(tx, F.Eq("poolId", poolId), cancellationToken: ct) != pool["revision"].AsInt64 - 1)
+                if (await HistoryCountAsync(tx, "stockSourceRevisions", F.Eq("poolId", poolId), ct) != pool["revision"].AsInt64 - 1)
                     throw StockSourceRevisionBson.Invalid();
                 var proposal = await RevisionProposalAsync(tx, latest["proposalId"].AsInt64, ct);
                 var decision = await RevisionDecisionAsync(tx, proposal, ct) ?? throw StockSourceRevisionBson.Invalid();
@@ -172,8 +171,8 @@ public sealed partial class StockSourceSetupService
                 var predecessorInput = originalInput; var predecessorApprovedAt = approvedAt;
                 if (pool["revision"].AsInt64 > 2)
                 {
-                    var previous = await Rows("stockSourceRevisions").Find(tx, F.Eq("poolId", poolId) &
-                        F.Eq("poolRevision", pool["revision"].AsInt64 - 1)).SingleOrDefaultAsync(ct) ?? throw StockSourceRevisionBson.Invalid();
+                    var previous = await HistoryOneAsync(tx, "stockSourceRevisions", F.Eq("poolId", poolId) &
+                        F.Eq("poolRevision", pool["revision"].AsInt64 - 1), ct) ?? throw StockSourceRevisionBson.Invalid();
                     var previousProposal = await RevisionProposalAsync(tx, previous["proposalId"].AsInt64, ct);
                     var previousDecision = await RevisionDecisionAsync(tx, previousProposal, ct) ?? throw StockSourceRevisionBson.Invalid();
                     StockSourceRevisionBson.Revision(previous, previousProposal, previousDecision);
@@ -205,14 +204,14 @@ public sealed partial class StockSourceSetupService
     }
     private async Task<BsonDocument> RevisionProposalAsync(IClientSessionHandle tx, long id, CancellationToken ct)
     {
-        var row = await Rows("stockSourceRevisionProposals").Find(tx, F.Eq("_id", id)).SingleOrDefaultAsync(ct) ?? throw StockSourceRevisionBson.Invalid();
+        var row = await HistoryOneAsync(tx, "stockSourceRevisionProposals", F.Eq("_id", id), ct) ?? throw StockSourceRevisionBson.Invalid();
         StockSourceRevisionBson.Proposal(row);
         await RevisionAuditAsync(tx, row, "stock.source.revision.propose", row["proposedBy"].AsInt64, row["proposedAt"], ct);
         return row;
     }
     private async Task<BsonDocument?> RevisionDecisionAsync(IClientSessionHandle tx, BsonDocument proposal, CancellationToken ct)
     {
-        var row = await Rows("stockSourceRevisionDecisions").Find(tx, F.Eq("proposalId", proposal["_id"])).SingleOrDefaultAsync(ct);
+        var row = await HistoryOneAsync(tx, "stockSourceRevisionDecisions", F.Eq("proposalId", proposal["_id"]), ct);
         if (row is not null)
         {
             StockSourceRevisionBson.Decision(row, proposal);
@@ -227,15 +226,15 @@ public sealed partial class StockSourceSetupService
         BsonDocument? revision = null;
         if (decision?["decision"] == "approve")
         {
-            revision = await Rows("stockSourceRevisions").Find(tx, F.Eq("poolId", decision["poolId"]) &
-                F.Eq("poolRevision", decision["poolRevision"])).SingleOrDefaultAsync(ct) ?? throw StockSourceRevisionBson.Invalid();
+            revision = await HistoryOneAsync(tx, "stockSourceRevisions", F.Eq("poolId", decision["poolId"]) &
+                F.Eq("poolRevision", decision["poolRevision"]), ct) ?? throw StockSourceRevisionBson.Invalid();
             StockSourceRevisionBson.Revision(revision, proposal, decision);
         }
         return new() { { "proposal", proposal }, { "decision", (BsonValue?)decision ?? BsonNull.Value }, { "appliedRevision", (BsonValue?)revision ?? BsonNull.Value } };
     }
     private async Task RevisionAuditAsync(IClientSessionHandle tx, BsonDocument row, string operation, long actor, BsonValue time, CancellationToken ct)
     {
-        var audit = await Rows("auditEvents").Find(tx, F.Eq("_id", row["auditId"])).SingleOrDefaultAsync(ct);
+        var audit = await HistoryOneAsync(tx, "auditEvents", F.Eq("_id", row["auditId"]), ct);
         if (audit is null || audit.ElementCount != 8 || audit.GetValue("kind", "") != "stock.source.revision.audit" ||
             !audit["_id"].IsInt64 || !audit["schemaVersion"].IsInt32 || audit["schemaVersion"].AsInt32 != 1 ||
             !audit["actorGrantVersion"].IsInt64 || audit["actorGrantVersion"].AsInt64 <= 0 ||

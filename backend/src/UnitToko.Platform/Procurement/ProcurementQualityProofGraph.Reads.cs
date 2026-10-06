@@ -21,11 +21,37 @@ internal sealed partial class ProcurementQualityProofGraph
     private readonly Dictionary<long, (ProcurementInspectionHistory History, DateTimeOffset At)> completedInspections = [];
     private readonly Dictionary<long, (BsonDocument Receipt, BsonDocument Pool, DateTimeOffset At)> completedReceipts = [];
     private readonly Dictionary<long, PurchaseOrderHistoricalSourceProof> completedFunding = [];
+    internal HeldReceiptOriginProof? CurrentMovementOrigin(IMongoDatabase database, IClientSessionHandle current, long receiptId) {
+        RequireDatabase(database, current, receiptId);
+        if (!currentMovementOrigins.TryGetValue(receiptId, out var origin)) return null;
+        origin.Require(database, current); return origin;
+    }
+    internal void RememberCurrentMovementOrigin(IMongoDatabase database, IClientSessionHandle current, BsonDocument receipt, HeldReceiptOriginProof origin) {
+        RequireDatabase(database, current, receipt["_id"].AsInt64); origin.Require(database, current);
+        if (origin.Receipt != receipt || currentMovementOrigins.TryGetValue(origin.ReceiptId, out var existing) && !ReferenceEquals(existing, origin)) throw Q.Broken();
+        currentMovementOrigins[origin.ReceiptId] = origin;
+    }
 
     internal void AttachFundingProof(IClientSessionHandle current, PurchaseOrderHistoricalSourceProof proof) {
         Require(current);
         var id = proof.Source["order"]["_id"].AsInt64;
         if (!completedFunding.TryAdd(id, proof) && !completedFunding[id].SameProof(proof)) throw Q.Broken();
+    }
+    internal async Task<BsonDocument> FundingAsync(IMongoDatabase database, PurchaseOrderService orders, IClientSessionHandle current,
+        long orderId, long orderVersion, long approvalId, CancellationToken ct) {
+        RequireDatabase(database, current, orderId);
+        if (orderVersion <= 0 || approvalId <= 0) throw Q.Broken();
+        if (!completedFunding.TryGetValue(orderId, out var proof)) {
+            proof = await PurchaseOrderHistoricalSourceProof.ReadAsync(orders, database, current, orderId, orderVersion, approvalId, ct);
+            AttachFundingProof(current, proof);
+        }
+        var source = proof.Source;
+        if (source["order"]["_id"] != orderId || source["order"]["version"] != orderVersion || source["order"]["approvalId"] != approvalId) throw Q.Broken();
+        // Genuine semantic ancestry only: every reuse checks its exact owner,
+        // database/client/transaction, complete captured rows/count predicates and
+        // fresh inbound/latest source membership. It never caches current authority.
+        await proof.RequireAsync(orders, database, current, source, ct);
+        RequireDatabase(database, current, orderId); ct.ThrowIfCancellationRequested(); return source;
     }
     private async Task RequireFundingAsync(IMongoDatabase database, PurchaseOrderService orders,
         IClientSessionHandle current, BsonDocument source, CancellationToken ct) {
@@ -103,6 +129,10 @@ internal sealed partial class ProcurementQualityProofGraph
         CatalogAuthoringService catalog, PurchaseOrderService orders, StockSourceSetupService sources,
         IClientSessionHandle current, long receiptId, CancellationToken ct) {
         RequireDatabase(database, current, receiptId);
+        if (originProof is not null && originProof.ReceiptId == receiptId) {
+            await originProof.RequireAsync(database, current, ct);
+            return originProof.Receipt;
+        }
         var receipt = await database.GetCollection<BsonDocument>(R.Receipts).Find(current, new BsonDocument {
             { "_id", receiptId }, { "$and", new BsonArray { ProcurementStockReceiptSchemas.Validator(R.Receipts) } }
         }).SingleOrDefaultAsync(ct) ?? throw Q.Broken();
@@ -127,7 +157,7 @@ internal sealed partial class ProcurementQualityProofGraph
         completedReceipts.Add(receiptId, (Clone(verified), Clone(pool), clock.UtcNow));
         return Clone(verified);
     }
-    private static async Task RequireHeldOwnersAsync(IMongoDatabase database, MongoUnitOfWork unit, IClock clock, IClientSessionHandle current,
+    private async Task RequireHeldOwnersAsync(IMongoDatabase database, MongoUnitOfWork unit, IClock clock, IClientSessionHandle current,
         BsonDocument receipt, BsonDocument expectedPool, CancellationToken ct) {
         var pool = await database.GetCollection<BsonDocument>("inventoryPools").Find(current, new BsonDocument("_id", receipt["poolId"]))
             .SingleOrDefaultAsync(ct) ?? throw Q.Broken();
@@ -135,7 +165,7 @@ internal sealed partial class ProcurementQualityProofGraph
         // Completed semantic ancestors do not cache current stock or grant release authority.
         // Reconstruct all actual movement owners on every transaction-local reuse.
         try {
-            _ = await ProcurementStockReceiptRecords.RequireMovementsAsync(database, unit, clock, current, receipt, ct);
+            _ = await ProcurementStockReceiptRecords.RequireMovementsAsync(database, unit, clock, current, receipt, ct, this);
         } catch (PersistenceConflictException error) when (error.Code == "procurement_stock_receipt_integrity_unavailable") {
             throw Q.Broken();
         }

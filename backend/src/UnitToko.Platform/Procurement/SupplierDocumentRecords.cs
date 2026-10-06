@@ -34,7 +34,7 @@ internal sealed partial class SupplierDocumentRecords(IMongoDatabase database, M
     internal async Task<BsonDocument> DraftAsync(IClientSessionHandle tx, long id, CancellationToken ct) {
         var row = await RowAsync(tx, B.Drafts, id, ct); var input = B.Input(row["input"]); Equal(row["input"], B.Input(input)); Equal(row["snapshotHash"], B.DraftHash(row));
         Equal(row["draftId"], id); Equal(row["location"], R.Location(input.Location));
-        var source = await orders.FundingSourceAsync(database, tx, input.AnchorOrderId, input.AnchorOrderVersion, input.AnchorOrderApprovalId, ct); Equal(row["source"], source);
+        var source = await orders.FundingSourceAsync(database, tx, input.AnchorOrderId, input.AnchorOrderVersion, input.AnchorOrderApprovalId, ct, qualityGraph); Equal(row["source"], source);
         Equal(row["supplierId"], source["proposal"]["input"]["supplierId"]); Equal(source["order"]["location"], row["location"]);
         if (input.DocumentDate is { } day && day > AccountingCalendar.BusinessDate(Time(row["recordedAt"])) || source["approval"]["recordedAt"].CompareTo(row["recordedAt"]) > 0) throw B.Broken();
         Person(row); Equal(row["binding"], B.Binding(row["actorId"].AsInt64, row["actorGrantVersion"].AsInt64, row["input"].AsBsonDocument, source,

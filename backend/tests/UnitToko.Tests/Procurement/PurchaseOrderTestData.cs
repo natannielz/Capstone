@@ -4,8 +4,10 @@ using UnitToko.Modules.Accounting;
 using UnitToko.Modules.Contracts;
 using UnitToko.Modules.Identity;
 using UnitToko.Modules.Identity.Contracts;
+using UnitToko.Modules.Inventory;
 using UnitToko.Modules.Procurement;
 using UnitToko.Platform.Authorization;
+using UnitToko.Platform.Inventory;
 using UnitToko.Platform.Mongo;
 using UnitToko.Platform.Procurement;
 using UnitToko.Tests.Authorization;
@@ -24,6 +26,8 @@ internal sealed class PurchaseOrderTestData(SupplierTestData suppliers) : IAsync
     internal MutableAuthorizationClock Clock => Base.Clock;
     internal PurchaseOrderService Service => new(Database, Unit, new(Database), Clock, Procurement.Catalog, Procurement.Service, Suppliers.Service);
     internal ActorContext Maker = null!, Checker = null!;
+    internal ActorContext SourceMaker = null!, SourceChecker = null!;
+    internal long PoolId, PolicyId;
     internal ActorContext Reader => Procurement.Reader;
     internal ActorContext Outsider => Procurement.Outsider;
     internal BsonDocument Request = null!, RequestDecision = null!, Supplier = null!;
@@ -38,12 +42,13 @@ internal sealed class PurchaseOrderTestData(SupplierTestData suppliers) : IAsync
             new("quote", "SYNTHETIC-QUOTE-0001", date, Clock.UtcNow.AddDays(1)), null,
             new("credit", "Synthetic approved credit terms, due in thirty days", new Money(0), "due_date", date.AddDays(30)), [Line(packages)]);
     }
-    internal static async Task<PurchaseOrderTestData> CreateAsync(MongoFixture fixture) {
-        var suppliers = await SupplierTestData.CreateAsync(fixture);
+    internal static async Task<PurchaseOrderTestData> CreateAsync(MongoFixture fixture, bool activateEmptySource = false, bool useSystemClock = false) {
+        var suppliers = await SupplierTestData.CreateAsync(fixture, useSystemClock);
         try {
             var data = new PurchaseOrderTestData(suppliers);
             var supplier = await suppliers.ProposeAsync("po-fixture-supplier"); var observation = await suppliers.ObserveAsync(supplier, "po-fixture-supplier-observation");
             data.Supplier = await suppliers.DecideAsync(supplier, "po-fixture-supplier-approved", observation["recordId"].AsInt64);
+            if (activateEmptySource) await data.PrepareBoundSourceAsync(activateEmptySource: true);
             var need = data.Procurement.Input(ProcurementRoute.Ddo, ProcurementRequestKind.PurchaseRequest) with {
                 Lines = [ProcurementRequestTestData.Line(data.Procurement.Sku, 6) with { Specification = "Synthetic approved logo specification" }] };
             data.Request = await data.Procurement.SubmitAsync("po-fixture-request", need);
@@ -52,6 +57,41 @@ internal sealed class PurchaseOrderTestData(SupplierTestData suppliers) : IAsync
             data.Checker = await data.Base.AddActorAsync(631, ProcurementRequestTestData.Scope, Permissions.ProcurementRead, Permissions.ProcurementApprove);
             await PersonTestData.SeedDistinctPeopleAsync(data.Database, data.Clock, data.Maker.UserId, data.Checker.UserId); return data;
         } catch { await suppliers.DisposeAsync(); throw; }
+    }
+    // Optional release-fixture seam: the exact receiving source can be genuinely
+    // activated while empty, before any demand exists. Default callers retain their
+    // original setup timing and never acquire activation authority implicitly.
+    internal async Task PrepareBoundSourceAsync(bool activateEmptySource = false) {
+        if (PoolId != 0) return;
+        SourceMaker = await Base.AddActorAsync(724, ProcurementRequestTestData.Scope,
+            Permissions.StockSourcePropose, Permissions.StockSourceRead, Permissions.StockSourcePolicyPropose, Permissions.StockSourceSuspend);
+        SourceChecker = await Base.AddActorAsync(725, ProcurementRequestTestData.Scope,
+            Permissions.StockSourceApprove, Permissions.StockSourceRead, Permissions.StockSourcePolicyApprove);
+        await PersonTestData.SeedDistinctPeopleAsync(Database, Clock, SourceMaker.UserId, SourceChecker.UserId);
+        var sources = new StockSourceSetupService(Database, Unit, new(Database), Clock);
+        var source = new StockSourceSetupInput(new(new(100), new(101), new(102), new(103)), "synthetic-held-receiving", "Synthetic reviewed receiving pool",
+            StockAuthorityMode.WebLedger, StockPoolControl.SharedWebLedger, 60001, 12, null, null, "Synthetic receiving operator", "Synthetic received-unit handoff");
+        var proposal = await sources.ProposeAsync(SourceMaker, source, ProcurementReceivingTestData.Meta("held-source"));
+        var approved = await sources.DecideAsync(SourceChecker, proposal["proposalId"].AsInt64, 1, StockSourceSetupDecision.Approve,
+            "Independent synthetic source approval", ProcurementReceivingTestData.Meta("held-source-approved"));
+        PoolId = approved["poolId"].AsInt64;
+        var policyPreview = await sources.PreviewOperatingPolicyAsync(SourceMaker, PoolId);
+        var expected = new StockSourcePolicyExpectation(policyPreview["poolRevision"].AsInt64, policyPreview["suspensionRevision"].AsInt64,
+            policyPreview["policyRevision"].AsInt64, policyPreview["configurationHash"].AsString);
+        var policy = await sources.ProposeOperatingPolicyAsync(SourceMaker, PoolId, expected,
+            new(StockMovementWriter.UnitToko, null, 0, "Synthetic daily received-unit reconciliation", "Synthetic stop-and-review outage procedure"), ProcurementReceivingTestData.Meta("held-policy"));
+        var accepted = await sources.DecideOperatingPolicyAsync(SourceChecker, policy["proposalId"].AsInt64, 1, StockSourceSetupDecision.Approve,
+            "Independent synthetic operating-policy review", ProcurementReceivingTestData.Meta("held-policy-approved"));
+        PolicyId = accepted["policyId"].AsInt64;
+        if (!activateEmptySource) return;
+        var empty = await sources.PreviewActivationAsync(SourceMaker, PoolId);
+        var handoff = new StockSourceEmptyHandoff(source.HandoffReference, Clock.UtcNow, 0, 0, true, true, true);
+        var activation = await sources.ProposeActivationAsync(SourceMaker, PoolId,
+            StockSourceActivationBson.ReadExpected(empty["expected"].AsBsonDocument), handoff, ProcurementReceivingTestData.Meta("held-empty-activation"));
+        var review = await sources.PreviewActivationDecisionAsync(SourceChecker, activation["proposalId"].AsInt64, StockSourceSetupDecision.Approve, handoff);
+        var activated = await sources.DecideActivationAsync(SourceChecker, activation["proposalId"].AsInt64, 1, StockSourceSetupDecision.Approve, handoff,
+            StockSourceActivationBson.ReadExpected(review["expected"].AsBsonDocument), review["binding"].AsString, ProcurementReceivingTestData.Meta("held-empty-activation-approved"));
+        Assert.Equal("activated", activated["status"].AsString);
     }
     internal async Task<BsonDocument> ProposeAsync(string key, PurchaseOrderInput? input = null) {
         input ??= Input(); var preview = await Service.PreviewAsync(Maker, input);

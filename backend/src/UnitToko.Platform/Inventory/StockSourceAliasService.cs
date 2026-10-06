@@ -210,7 +210,7 @@ public sealed partial class StockSourceSetupService
     }
     private async Task<BsonDocument> AliasProposalAsync(IClientSessionHandle tx, long id, CancellationToken ct)
     {
-        var row = await Rows("stockSourceAliasProposals").Find(tx, F.Eq("_id", id)).SingleOrDefaultAsync(ct) ?? throw StockSourceAliasBson.Invalid();
+        var row = await HistoryOneAsync(tx, "stockSourceAliasProposals", F.Eq("_id", id), ct) ?? throw StockSourceAliasBson.Invalid();
         StockSourceAliasBson.Proposal(row);
         await AliasAuditAsync(tx, row, "stock.source.alias.propose", row["proposedBy"], row["proposedAt"], ct);
         return row;
@@ -218,7 +218,7 @@ public sealed partial class StockSourceSetupService
     private async Task<BsonDocument> AliasViewAsync(IClientSessionHandle tx, long id, CancellationToken ct)
     {
         var proposal = await AliasProposalAsync(tx, id, ct);
-        var decision = await Rows("stockSourceAliasDecisions").Find(tx, F.Eq("proposalId", id)).SingleOrDefaultAsync(ct);
+        var decision = await HistoryOneAsync(tx, "stockSourceAliasDecisions", F.Eq("proposalId", id), ct);
         BsonDocument? alias = null;
         if (decision is not null)
         {
@@ -226,7 +226,7 @@ public sealed partial class StockSourceSetupService
             await AliasAuditAsync(tx, decision, "stock.source.alias." + decision["decision"].AsString, decision["decidedBy"], decision["decidedAt"], ct);
             if (decision["decision"] == "approve")
             {
-                alias = await Rows("stockSourceAliases").Find(tx, F.Eq("decisionId", decision["_id"])).SingleOrDefaultAsync(ct) ?? throw StockSourceAliasBson.Invalid();
+                alias = await HistoryOneAsync(tx, "stockSourceAliases", F.Eq("decisionId", decision["_id"]), ct) ?? throw StockSourceAliasBson.Invalid();
                 StockSourceAliasBson.Alias(alias, proposal, decision);
             }
         }
@@ -235,8 +235,8 @@ public sealed partial class StockSourceSetupService
     private async Task<BsonDocument?> LatestAliasAsync(IClientSessionHandle tx, long poolId, StockLocation requested, CancellationToken ct)
     {
         var filter = AliasFilter(poolId, requested);
-        var latest = await Rows("stockSourceAliases").Find(tx, filter).Sort(new BsonDocument("aliasRevision", -1)).FirstOrDefaultAsync(ct);
-        var approved = await Rows("stockSourceAliasDecisions").CountDocumentsAsync(tx, filter & F.Eq("decision", "approve"), cancellationToken: ct);
+        var latest = await HistoryLatestAsync(tx, "stockSourceAliases", filter, new BsonDocument("aliasRevision", -1), ct);
+        var approved = await HistoryCountAsync(tx, "stockSourceAliasDecisions", filter & F.Eq("decision", "approve"), ct);
         if (latest is null)
         {
             if (approved != 0) throw StockSourceAliasBson.Invalid();
@@ -244,12 +244,11 @@ public sealed partial class StockSourceSetupService
         }
         if (!latest.GetValue("proposalId", BsonNull.Value).IsInt64 || !latest.GetValue("aliasRevision", BsonNull.Value).IsInt64) throw StockSourceAliasBson.Invalid();
         var view = await AliasViewAsync(tx, latest["proposalId"].AsInt64, ct);
-        if (!view["alias"].Equals(latest) || approved != latest["aliasRevision"].AsInt64 || await Rows("stockSourceAliases").CountDocumentsAsync(tx, filter, cancellationToken: ct) != latest["aliasRevision"].AsInt64)
+        if (!view["alias"].Equals(latest) || approved != latest["aliasRevision"].AsInt64 || await HistoryCountAsync(tx, "stockSourceAliases", filter, ct) != latest["aliasRevision"].AsInt64)
             throw StockSourceAliasBson.Invalid();
         if (latest["aliasRevision"].AsInt64 > 1)
         {
-            var preceding = await Rows("stockSourceAliases").Find(tx, filter & F.Eq("aliasRevision", latest["aliasRevision"].AsInt64 - 1))
-                .SingleOrDefaultAsync(ct) ?? throw StockSourceAliasBson.Invalid();
+            var preceding = await HistoryOneAsync(tx, "stockSourceAliases", filter & F.Eq("aliasRevision", latest["aliasRevision"].AsInt64 - 1), ct) ?? throw StockSourceAliasBson.Invalid();
             var before = await AliasViewAsync(tx, preceding["proposalId"].AsInt64, ct);
             if (!before["alias"].Equals(preceding) || preceding["poolRevision"].AsInt64 > latest["poolRevision"].AsInt64 ||
                 StockSourceSetupBson.Time(before["decision"]["decidedAt"]) > StockSourceSetupBson.Time(view["proposal"]["proposedAt"]) ||
@@ -260,7 +259,7 @@ public sealed partial class StockSourceSetupService
     }
     private async Task AliasAuditAsync(IClientSessionHandle tx, BsonDocument row, string operation, BsonValue actor, BsonValue at, CancellationToken ct)
     {
-        var audit = await Rows("auditEvents").Find(tx, F.Eq("_id", row["auditId"])).SingleOrDefaultAsync(ct);
+        var audit = await HistoryOneAsync(tx, "auditEvents", F.Eq("_id", row["auditId"]), ct);
         if (audit is null || audit.ElementCount != 8 || audit.GetValue("kind", "") != "stock.source.alias.audit" ||
             !audit.GetValue("_id", BsonNull.Value).IsInt64 || !audit.GetValue("schemaVersion", BsonNull.Value).IsInt32 ||
             audit["schemaVersion"].AsInt32 != 1 || !audit.GetValue("actorGrantVersion", BsonNull.Value).IsInt64 ||

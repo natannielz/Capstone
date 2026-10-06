@@ -17,7 +17,7 @@ internal sealed record ProcurementStockValuationReceiptCapacity(BsonDocument Sta
     IReadOnlyList<BsonDocument> Allocations);
 
 internal sealed class ProcurementStockValuationCapacityReader(IMongoDatabase database, MongoUnitOfWork unit, IClock clock,
-    CatalogAuthoringService catalog, PurchaseOrderService orders)
+    CatalogAuthoringService catalog, PurchaseOrderService orders, ProcurementQualityProofGraph? proofGraph = null)
 {
     private IMongoCollection<BsonDocument> Rows(string name) => database.GetCollection<BsonDocument>(name);
     private IClientSessionHandle? sourceTransaction;
@@ -33,7 +33,7 @@ internal sealed class ProcurementStockValuationCapacityReader(IMongoDatabase dat
         if (!provenInvoiceHistories.TryGetValue(invoiceId, out var history)) {
             // A prior allocation consumes capacity only while its full private invoice,
             // match, quality and claim source lineage remains authenticated.
-            history = await new SupplierDocumentRecords(database, unit, clock, catalog, orders).HistoryAsync(tx, invoice["draftId"].AsInt64, ct);
+            history = await new SupplierDocumentRecords(database, unit, clock, catalog, orders, proofGraph).HistoryAsync(tx, invoice["draftId"].AsInt64, ct);
             provenInvoiceHistories.Add(invoiceId, history);
         }
         if (history.Document is null || history.Document != invoice || history.Identity["draftCount"].AsInt64 != 1)

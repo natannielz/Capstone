@@ -96,6 +96,8 @@ internal sealed class InventoryLedger
             await new StockSourceSetupService(database, new(client), ids, clock).RequireActivatedPoolAsync(tx, pool, ct);
             var before = ImmutableArray.CreateBuilder<InventoryBalanceDocument>(changes.Length);
             foreach (var change in changes) before.Add(await repository.ReadAsync(tx, change.Id, ct));
+            foreach (var change in changes)
+                await RequireValueOwnerAsync(tx, reader, change, before.Single(value => value.Id == change.Id), ct);
             var id = await ids.NextAsync("movements", ct);
             var after = await repository.ApplyAsync(tx, changes, ct);
             var now = clock.UtcNow;
@@ -106,6 +108,32 @@ internal sealed class InventoryLedger
             return new(id.Value, source.EventKey, after);
         }
         catch { await InventoryRepository.AbortAsync(tx); throw; }
+    }
+    private async Task RequireValueOwnerAsync(IClientSessionHandle tx, IInventorySourceReader reader,
+        InventoryBalanceChange change, InventoryBalanceDocument before, CancellationToken ct)
+    {
+        // Reservations retain the value of undelivered packages. ReceiveHeld/ExpireHeld move
+        // entirely unavailable quantities and also preserve onHand-held-expired.
+        if (change.Action is InventoryBalanceAction.Reserve or InventoryBalanceAction.Release or
+            InventoryBalanceAction.ReceiveHeld or InventoryBalanceAction.ExpireHeld) return;
+        BsonDocument FullKey(string prefix) => new() {
+            { prefix + ".location.organizationId", before.Balance.Key.Location.OrganizationId.Value },
+            { prefix + ".location.shopId", before.Balance.Key.Location.ShopId.Value },
+            { prefix + ".location.warehouseId", before.Balance.Key.Location.WarehouseId.Value },
+            { prefix + ".location.channelId", before.Balance.Key.Location.ChannelId.Value },
+            { prefix + ".skuId", before.Balance.Key.SkuId.Value }, { prefix + ".definitionId", before.Balance.Key.DefinitionId.Value },
+            { prefix + ".lotId", before.Balance.Key.LotId.Value } };
+        // These are refusal signals, including malformed heads and orphan transitions.
+        // A schema filter here would turn missing/corrupt value ownership into unvalued stock.
+        var heads = new BsonDocument("$or", new BsonArray {
+            new BsonDocument("_id", before.Id), new BsonDocument("balanceId", before.Id), FullKey("key") });
+        var history = new BsonDocument("$or", new BsonArray {
+            new BsonDocument("availableId", before.Id), new BsonDocument("destinationId", before.Id), new BsonDocument("held.balanceId", before.Id),
+            FullKey("key"), FullKey("destinationKey"), FullKey("held.key") });
+        var linked = await database.GetCollection<BsonDocument>(LotValueStore.AvailableHeads).Find(tx, heads).Limit(1).AnyAsync(ct) ||
+            await database.GetCollection<BsonDocument>(LotValueStore.Transitions).Find(tx, history).Limit(1).AnyAsync(ct);
+        if (linked && (change.Action != InventoryBalanceAction.ReleaseHold || !StockReleaseService.IsLedgerReleaseSource(reader)))
+            throw Invalid("inventory_lot_value_owner_required");
     }
     internal static void RequireText(string? value, int limit)
     {

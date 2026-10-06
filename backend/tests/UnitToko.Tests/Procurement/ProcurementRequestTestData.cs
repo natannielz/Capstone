@@ -38,9 +38,10 @@ internal sealed class ProcurementRequestTestData(OrganizationAddressTestData org
             "Synthetic independently reviewed procurement need", [Line(Sku)]);
     internal static AuthorizationCommandMetadata Meta(string key) => new(key, "Synthetic independently reviewed procurement need", "procurement-request-test");
     internal IMongoCollection<BsonDocument> Rows(string table) => Database.GetCollection<BsonDocument>(table);
-    internal static async Task<ProcurementRequestTestData> CreateAsync(MongoFixture fixture)
+    internal static async Task<ProcurementRequestTestData> CreateAsync(MongoFixture fixture, bool useSystemClock = false)
     {
         var source = await StoreTestData.CreateAsync(fixture);
+        source.Clock.UseSystemClock = useSystemClock;
         try {
             source.Clock.UtcNow = DateTimeOffset.FromUnixTimeMilliseconds(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
             var data = new ProcurementRequestTestData(await OrganizationAddressTestData.PrepareAsync(source, fixture.Client));

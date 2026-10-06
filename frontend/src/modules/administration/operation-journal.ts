@@ -61,6 +61,7 @@ import { catalogPhotoRevalidationOperation, catalogPhotoRevalidationKeySku, pars
 import { accountContactOperation, accountContactKeyActor, parseAccountContactResult, type AccountContactResult } from "../identity/account-contact-client";
 import { packProposeOperation, packDecideOperation, packOperation, parsePackResult, type PackResult } from '../inventory/pack-conversion-workflow';
 import { activationOperation, activationReceipt, type ActivationResult } from '../inventory/stock-source-activation-workflow';
+import { releaseProposeOperation, releaseDecideOperation, releaseOperation, parseReleaseResult, type ReleaseResult } from '../inventory/stock-release-workflow';
 
 export type OperationReference = Readonly<{ actorId: string; operation: string; key: string; createdAt: string }>;
 type JournalStorage = Pick<Storage, "length" | "key" | "getItem" | "setItem" | "removeItem">;
@@ -70,7 +71,7 @@ const operationPattern = /^(?:procurement\.qualityacceptance\.(?:propose|decide)
 const storageKey = (entry: OperationReference) => `${prefix}${entry.actorId}:${entry.operation}:${entry.key}`;
 const recognizedOperation = (operation: string) => isSupplementOperation(operation) || ['evidence.payment-pdf.reserve', 'evidence.supplier-document-pdf.reserve'].includes(operation) || operationPattern.test(operation) || /^ordering\.branchrequest\.(?:submit|decide)$(?![\s\S])/u.test(operation) ||
   operation === catalogPhotoOperation || operation === catalogPhotoReserveOperation || operation === catalogPhotoRevalidationOperation || operation === accountContactOperation || operation === returnLotOperation ||
-  operation === packProposeOperation || operation === packDecideOperation ||
+  operation === packProposeOperation || operation === packDecideOperation || operation === releaseProposeOperation || operation === releaseDecideOperation ||
   operation === 'stock.source.activation.propose' || operation === 'stock.source.activation.decide';
 function validPhotoKey(operation: string, key: string, actorId: string): boolean {
   try {
@@ -194,6 +195,7 @@ export type LegacyRecoveryAdapter = Readonly<{
 
 /** Supply this only from the owning client screen. A missing receipt is never a failed or closed request. */
 export type OperationRecoveryAdapters = Readonly<{
+  'inventory.stock-release'?: Readonly<{ lookup: (entry: OperationReference) => Promise<Readonly<{ state: 'committed'; result: ReleaseResult }> | null> }>;
   'stock.source.activation'?: Readonly<{ lookup: (entry: OperationReference) => Promise<Readonly<{ state: 'committed'; result: ActivationResult }> | null> }>;
   'inventory.pack-conversion.rule'?: Readonly<{ lookup: (entry: OperationReference) => Promise<Readonly<{ state: 'committed'; result: PackResult }> | null> }>;
   'billing.payment.supplement'?: Readonly<{lookup: (entry: OperationReference) => Promise<Readonly<{state: 'committed'; result: PaymentSupplement | PaymentSupplementReservation}> | null>}>;
@@ -345,6 +347,8 @@ function recoveryNamespace(operation: string): "catalog.photo" | "evidence.catal
 
 export function operationRecoveryCapabilities(operation: string, adapters: OperationRecoveryAdapters = {}):
   Readonly<{ canCheck: boolean; canClose: boolean; unavailable: "adapter" | "operation" | null }> {
+  if (operation === releaseProposeOperation || operation === releaseDecideOperation) return typeof adapters['inventory.stock-release']?.lookup === 'function'
+    ? { canCheck: true, canClose: false, unavailable: null } : { canCheck: false, canClose: false, unavailable: 'adapter' };
   if (operation === 'stock.source.activation.propose' || operation === 'stock.source.activation.decide') return typeof adapters['stock.source.activation']?.lookup === 'function'
     ? { canCheck: true, canClose: false, unavailable: null } : { canCheck: false, canClose: false, unavailable: 'adapter' };
   if (operation === packProposeOperation || operation === packDecideOperation) return typeof adapters['inventory.pack-conversion.rule']?.lookup === 'function'
@@ -374,6 +378,19 @@ export function operationRecoveryCapabilities(operation: string, adapters: Opera
 /** Reconcile one immutable reference; never rebuild or retry its original command from persisted metadata. */
 export async function reconcileOperationRecovery(entry: OperationReference, journal: OperationJournal,
   legacy: LegacyRecoveryAdapter, adapters: OperationRecoveryAdapters = {}, closeReason?: string, isCurrent: () => boolean = () => true): Promise<RecoveryOutcome> {
+  if (entry.operation === releaseProposeOperation || entry.operation === releaseDecideOperation) {
+    if (!validEntry(entry)) throw new AccessFailure(400, 'recovery_reference_invalid');
+    if (closeReason !== undefined) throw new AccessFailure(400, 'recovery_close_unsupported');
+    const requireCurrent = () => { if (!isCurrent()) throw new AccessFailure(409, 'recovery_request_stale'); }; requireCurrent();
+    const reference = Object.freeze({ ...entry }), adapter = adapters['inventory.stock-release'];
+    if (typeof adapter?.lookup !== 'function') throw new AccessFailure(503, 'recovery_adapter_unavailable');
+    const recovered = await adapter.lookup(reference); requireCurrent();
+    if (recovered === null) return { state: 'unconfirmed' };
+    if (!recovered || recovered.state !== 'committed' || Object.keys(recovered).sort().join(',') !== 'result,state') throw new AccessFailure(502, 'recovery_receipt_invalid');
+    const result = parseReleaseResult(recovered.result, releaseOperation(reference.operation)); requireCurrent();
+    try { journal.confirmed(reference); } catch { throw new AccessFailure(400, 'recovery_cleanup_failed'); }
+    return { state: 'committed', result: { id: result.proposalId, version: result.revision } };
+  }
   if (entry.operation === 'stock.source.activation.propose' || entry.operation === 'stock.source.activation.decide') {
     if (!validEntry(entry)) throw new AccessFailure(400, 'recovery_reference_invalid');
     if (closeReason !== undefined) throw new AccessFailure(400, 'recovery_close_unsupported');

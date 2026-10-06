@@ -407,6 +407,68 @@ public sealed class InventoryLedgerTests(MongoFixture fixture)
         var movement = await data.Database.GetCollection<BsonDocument>("movements").Find(new BsonDocument()).SingleAsync();
         Assert.Equal(long.MaxValue, movement["source"]["documentId"].AsInt64); Assert.Equal(long.MaxValue, movement["source"]["occurrence"].AsInt64);
     }
+    [Theory]
+    [InlineData("Receive", "head-id")]
+    [InlineData("Dispatch", "head-id")]
+    [InlineData("Hold", "head-id")]
+    [InlineData("ReleaseHold", "head-id")]
+    [InlineData("Expire", "head-id")]
+    [InlineData("Receive", "head-key")]
+    [InlineData("Receive", "transition-source")]
+    [InlineData("Receive", "transition-destination")]
+    [InlineData("Receive", "transition-key")]
+    public async Task A_released_quantity_change_cannot_orphan_existing_value_evidence_even_when_the_head_or_reverse_link_is_corrupt(string action, string evidence)
+    {
+        await using var data = await Data(); var physical = FixtureBalance();
+        if (action == "Dispatch") physical = physical with { Balance = physical.Balance with { Reserved = 3 } };
+        if (action == "ReleaseHold") physical = physical with { Balance = physical.Balance with { Held = 3 } };
+        await data.Database.GetCollection<BsonDocument>("stockBalances").ReplaceOneAsync(new BsonDocument("_id", physical.Id), InventoryBson.Balance(physical));
+        await data.Database.GetCollection<BsonDocument>("inventoryTestSources").UpdateOneAsync(new BsonDocument(), new BsonDocument("$set", new BsonDocument("action", action)));
+        await CorruptValueSignalAsync(data, physical, evidence);
+        var stock = await data.Database.GetCollection<BsonDocument>("stockBalances").Find(new BsonDocument()).SingleAsync();
+        using var tx = await fixture.Client.StartSessionAsync(); tx.StartTransaction(); await Earlier(data, tx);
+        Assert.Equal("inventory_lot_value_owner_required", (await Assert.ThrowsAsync<DomainValidationException>(() =>
+            Ledger(data, Reader(data)).ApplyAsync(tx, Actor, Source, 1, Metadata))).Code);
+        Assert.False(tx.IsInTransaction); await AssertUnchanged(data);
+        Assert.Equal(stock, await data.Database.GetCollection<BsonDocument>("stockBalances").Find(new BsonDocument()).SingleAsync());
+        Assert.Equal(1L, await data.Database.GetCollection<BsonDocument>(evidence.StartsWith("head", StringComparison.Ordinal) ?
+            LotValueStore.AvailableHeads : LotValueStore.Transitions).CountDocumentsAsync(new BsonDocument()));
+    }
+    [Fact]
+    public async Task A_spoofed_release_namespace_is_not_the_private_current_release_owner()
+    {
+        await using var data = await Data(); var physical = FixtureBalance() with { Balance = FixtureBalance().Balance with { Held = 3 } };
+        await data.Database.GetCollection<BsonDocument>("stockBalances").ReplaceOneAsync(new BsonDocument("_id", physical.Id), InventoryBson.Balance(physical));
+        await CorruptValueSignalAsync(data, physical, "head-id");
+        var source = StockReleaseBson.Source(Source.DocumentId, physical.PhysicalPoolId);
+        await data.Database.GetCollection<BsonDocument>("inventoryTestSources").UpdateOneAsync(new BsonDocument(), new BsonDocument("$set", new BsonDocument {
+            { "namespace", source.Namespace }, { "eventKind", source.EventKind }, { "occurrence", source.Occurrence }, { "action", "ReleaseHold" } }));
+        var reader = new FixtureReader(data.Database) { Namespace = StockReleaseBson.Namespace };
+        Assert.False(StockReleaseService.IsLedgerReleaseSource(reader));
+        using var tx = await fixture.Client.StartSessionAsync(); tx.StartTransaction(); await Earlier(data, tx);
+        Assert.Equal("inventory_lot_value_owner_required", (await Assert.ThrowsAsync<DomainValidationException>(() =>
+            Ledger(data, reader).ApplyAsync(tx, Actor, source, 1, Metadata))).Code);
+        Assert.False(tx.IsInTransaction); await AssertUnchanged(data);
+        Assert.Equal(InventoryBson.Balance(physical), await data.Database.GetCollection<BsonDocument>("stockBalances").Find(new BsonDocument()).SingleAsync());
+    }
+    private static Task CorruptValueSignalAsync(StoreTestData data, InventoryBalanceDocument physical, string evidence)
+    {
+        // Deliberate negative corruption only. These rows assert no authentic value/approval;
+        // they must still prevent a trusted quantity writer from silently losing value ownership.
+        var row = new BsonDocument("_id", 9999L); var key = LotValueStore.Key(physical.Balance.Key);
+        // BSON document ordering cannot be used to hide a complete stock key.
+        key = new BsonDocument(key.Reverse());
+        switch (evidence) {
+            case "head-id": row["_id"] = physical.Id; break;
+            case "head-key": row.Add("balanceId", 9999L); row.Add("key", key); break;
+            case "transition-source": row.Add("availableId", physical.Id); break;
+            case "transition-destination": row.Add("destinationId", physical.Id); break;
+            case "transition-key": row.Add("availableId", 9999L); row.Add("destinationKey", key); break;
+            default: throw new ArgumentOutOfRangeException(nameof(evidence));
+        }
+        return data.Database.GetCollection<BsonDocument>(evidence.StartsWith("head", StringComparison.Ordinal) ? LotValueStore.AvailableHeads : LotValueStore.Transitions)
+            .InsertOneAsync(row, new InsertOneOptions { BypassDocumentValidation = true });
+    }
     internal sealed class FixtureReader(IMongoDatabase database) : IInventorySourceReader
     {
         public string Namespace { get; init; } = "test-receipt";
