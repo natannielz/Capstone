@@ -42,7 +42,7 @@ type Effect = {dependencies?: readonly unknown[]; cleanup?: () => void};
 type Frame = {component: (props: Record<string, unknown>) => unknown; slots: unknown[]; effects: Map<number, Effect>};
 const changed = (before?: readonly unknown[], next?: readonly unknown[]) => !before || !next || before.length !== next.length || next.some((value, index) => !Object.is(value, before[index]));
 
-function mountPayment() {
+function mountPayment(replies: {save?: () => Response; recoverDraft?: () => Response} = {}) {
   const storage = new MemoryStorage(), writes: Request[] = [], lookups: Request[] = [];
   let recoveryUnauthorized = true;
   const root = '/api/v1/billing/payment-declarations';
@@ -55,8 +55,11 @@ function mountPayment() {
     if (path === `${root}/${declarationId}/evidence/query`) return Response.json({items: [image]});
     if (path === root || path === `${root}/${declarationId}/submit`) {
       writes.push(input.clone()); assert.equal(input.headers.get('If-Match'), '"2"'); assert.ok(input.headers.get('Idempotency-Key'));
-      if (path === root) return Response.json({code: 'unauthenticated'}, {status: 401});
+      if (path === root) return replies.save?.() ?? Response.json({code: 'unauthenticated'}, {status: 401});
       throw new TypeError('Lost submission response');
+    }
+    if (path === `${root}/operations/query` && replies.recoverDraft) {
+      lookups.push(input.clone()); assert.equal(input.headers.get('Idempotency-Key'), null); return replies.recoverDraft();
     }
     if (path === `${root}/${declarationId}/submission/operations/query`) {
       lookups.push(input.clone()); assert.equal(input.headers.get('Idempotency-Key'), null);
@@ -179,4 +182,49 @@ test('mounted maintained payment refuses a draft write before sending when recov
   assert.equal(harness.writes.length, 0); assert.equal(harness.storage.length, 0);
   assert.ok(nodes(harness.tree).some(node => node.props.role === 'alert'));
   assert.ok(nodes(harness.tree).some(node => node.props.value === draft.input.payerName));
+});
+
+test('mounted payment allows correction after a definitive 400 but preserves the uncertain reference through malformed recovery', async t => {
+  let attempts = 0;
+  const harness = mountPayment({save: () => {
+    attempts++; assert.ok(attempts <= 2, 'Uncertainty must prevent another draft send');
+    return attempts === 1 ? Response.json({code: 'invalid_payment'}, {status: 400})
+      : Response.json({code: 'commit_outcome_unknown'}, {status: 503});
+  }, recoverDraft: () => Response.json({status: 'committed', result: {declarationId}})});
+  t.after(() => harness.unmount()); await harness.open(); await harness.save();
+  const journal = new operations.OperationJournal(() => harness.storage);
+  assert.equal(harness.writes.length, 1); assert.deepEqual(journal.list(actor), []);
+  assert.equal(harness.find(node => node.type === 'fieldset').props.disabled, false);
+  assert.ok(nodes(harness.tree).some(node => node.props.value === draft.input.payerName));
+  assert.ok(nodes(harness.tree).some(node => node.props.value === draft.input.bankReference));
+  const amount = harness.find(node => node.type === 'input' && node.props.inputMode === 'decimal');
+  (amount.props.onChange as (event: unknown) => void)({target: {value: '3000.02'}}); await harness.settle();
+  // Keep the real pre-uncertainty handler: its old unlocked closure must still consult the live journal before sending.
+  const staleSubmit = harness.find(node => node.type === 'form').props.onSubmit as (event: unknown) => void;
+  await harness.save();
+  assert.equal(harness.writes.length, 2);
+  assert.notEqual(harness.writes[1].headers.get('Idempotency-Key'), harness.writes[0].headers.get('Idempotency-Key'));
+  const firstBody = await harness.writes[0].json() as {input: payments.PaymentDraft['input']};
+  const correctedBody = await harness.writes[1].json() as {input: payments.PaymentDraft['input']};
+  assert.equal(firstBody.input.declaredAmount, '4000.01');
+  assert.equal(correctedBody.input.declaredAmount, '3000.02');
+  const [original] = journal.list(actor), stored = [...harness.storage.values.entries()];
+  assert.equal(original.operation, 'billing.payment.draft.save'); assert.equal(original.key, harness.writes[1].headers.get('Idempotency-Key'));
+  assert.deepEqual(Object.keys(original).sort(), ['actorId', 'createdAt', 'key', 'operation']);
+  assert.doesNotMatch(stored.map(([, value]) => value).join(''), /Private|3000|4000|BANK-REF/);
+  assert.equal(harness.find(node => node.type === 'fieldset').props.disabled, true);
+  staleSubmit({preventDefault() {}}); await harness.settle();
+  await harness.click('Periksa hasil');
+  assert.equal(harness.lookups.length, 1);
+  assert.deepEqual(await harness.lookups[0].json(), {purpose: 'operation-recovery', key: original.key});
+  assert.equal(harness.writes.length, 2); assert.deepEqual(journal.list(actor), [original]);
+  assert.deepEqual([...harness.storage.values.entries()], stored);
+  assert.equal(harness.find(node => node.type === 'fieldset').props.disabled, true);
+  assert.equal(harness.find(node => node.type === 'button' && text(node.props.children) === 'Simpan draf pembayaran').props.disabled, true);
+  assert.ok(nodes(harness.tree).some(node => node.props.value === '3000.02'));
+  assert.ok(nodes(harness.tree).some(node => node.props.value === draft.input.payerName));
+  assert.ok(nodes(harness.tree).some(node => node.props.value === draft.input.bankReference));
+  assert.ok(nodes(harness.tree).some(node => node.props.role === 'alert'));
+  assert.equal(nodes(harness.tree).some(node => node.type === 'a' && text(node.props.children) === 'Masuk kembali'), false);
+  assert.doesNotMatch(text(harness.tree), /Draf tersimpan\./);
 });

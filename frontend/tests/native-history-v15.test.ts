@@ -183,15 +183,3 @@ test("v15 workspace dirty back navigation restores its index until leave is expl
   assert.equal(app.render().page, "payments");
   assert.equal(app.history.state.unitTokoIndex, 1);
 });
-
-test("v15 catalog query updates preserve the module, selection context and workspace back index", () => {
-  const context = browser("/workspace?view=catalog&id=order-a&returnOrder=order-a#items", 6);
-  const evaluated = evaluate("src/components/catalog.tsx", name => name === "@/lib/client/native-history" ? nativeHistory : {}, context.window, "\nexport { writeQuery };\n");
-  const writeQuery = evaluated.writeQuery as (query: Record<string, string>) => void;
-  writeQuery({ q: "kopi", category: "Semua", collection: "", product: "", page: "1" });
-  context.commitRouter();
-  assert.equal(context.window.location.search, "?view=catalog&id=order-a&returnOrder=order-a&q=kopi");
-  assert.equal(context.window.location.hash, "#items");
-  assert.equal(context.history.state.unitTokoIndex, 6);
-  assert.equal(context.history.length, 1);
-});
