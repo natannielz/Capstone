@@ -59,6 +59,9 @@ public sealed class PackConversionRuleMigrationTests(MongoFixture fixture)
     private async Task<CatalogAuthoringTestData> Fresh96Async()
     {
         var source = await StoreTestData.CreateWithMigrationTargetAsync(fixture, 96);
+        // Native Mongo TTL uses wall time even when the business fixture clock is fixed.
+        // Issue these fresh catalog sessions before capturing retained storage bytes.
+        source.Clock.UtcNow = DateTimeOffset.FromUnixTimeMilliseconds(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
         CatalogAuthoringTestData data;
         try { data = await CatalogAuthoringTestData.AttachAsync(source, fixture.Client); }
         catch { await source.DisposeAsync(); throw; }
