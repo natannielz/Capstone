@@ -8,6 +8,35 @@ namespace UnitToko.Tests.Persistence;
 public sealed class MongoContentionRetryTests(MongoFixture fixture)
 {
     [Fact]
+    public async Task Diagnostic_only_labelled_error_preserves_terminal_cause_after_four_attempts_and_real_rollback()
+    {
+        var name = "ut_retry_cause_" + Guid.NewGuid().ToString("N"); var database = fixture.Client.GetDatabase(name);
+        var fences = database.GetCollection<BsonDocument>("fences"); var effects = database.GetCollection<BsonDocument>("effects");
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        try {
+            await fences.InsertOneAsync(new BsonDocument { { "_id", 1L }, { "fence", 0L } }, cancellationToken: deadline.Token);
+            await effects.InsertOneAsync(new BsonDocument("_id", "setup"), cancellationToken: deadline.Token);
+            var causes = new List<MongoException>(); var attempts = 0;
+            var failure = await Assert.ThrowsAsync<PersistenceConflictException>(() => new MongoUnitOfWork(fixture.Client).ExecuteAsync<int>(async (session, token) => {
+                var attempt = ++attempts;
+                await fences.UpdateOneAsync(session, new BsonDocument("_id", 1L), Builders<BsonDocument>.Update.Inc("fence", 1L), cancellationToken: token);
+                await effects.InsertOneAsync(session, new BsonDocument { { "_id", "partial-" + attempt }, { "attempt", attempt } }, cancellationToken: token);
+                // Diagnostic-only synthetic errors after actual transactional writes.
+                // This does not replace real contention or transaction-lifetime tests.
+                var cause = new MongoException("Synthetic diagnostic cause at attempt " + attempt);
+                cause.AddErrorLabel("TransientTransactionError"); causes.Add(cause); throw cause;
+            }, deadline.Token));
+            Assert.Equal(4, attempts); Assert.Equal(MongoUnitOfWork.MaximumAttempts, causes.Count);
+            Assert.Equal("version_conflict", failure.Code); Assert.Equal("Data changed; refresh and try again", failure.Message);
+            Assert.Same(causes[^1], failure.InnerException);
+            Assert.True(causes[^1].HasErrorLabel("TransientTransactionError"));
+            Assert.Equal(0L, (await fences.Find(new BsonDocument("_id", 1L)).SingleAsync(deadline.Token))["fence"].AsInt64);
+            Assert.Equal(1L, await effects.CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty, cancellationToken: deadline.Token));
+            Assert.Equal("setup", (await effects.Find(FilterDefinition<BsonDocument>.Empty).SingleAsync(deadline.Token))["_id"].AsString);
+        } finally { await fixture.Client.DropDatabaseAsync(name); }
+    }
+
+    [Fact]
     public async Task Competing_source_fence_held_beyond_short_retries_eventually_commits_one_effect()
     {
         var name = "ut_contention_" + Guid.NewGuid().ToString("N"); var database = fixture.Client.GetDatabase(name);

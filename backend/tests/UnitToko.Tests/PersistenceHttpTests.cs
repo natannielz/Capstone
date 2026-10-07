@@ -94,7 +94,7 @@ public sealed class PersistenceHttpTests(MongoFixture mongo)
     public async Task Persistence_conflict_is_stable_redacted_409()
     {
         using var factory = ThrowingFactory(() =>
-            throw new PersistenceConflictException("version_conflict", "private conflict detail"));
+            throw new PersistenceConflictException("version_conflict", "private conflict detail", new MongoException("private inner conflict detail")));
         using var client = factory.CreateClient();
         var response = await client.GetAsync("/api/v1/system/status");
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
@@ -102,7 +102,9 @@ public sealed class PersistenceHttpTests(MongoFixture mongo)
         var text = await response.Content.ReadAsStringAsync();
         using var problem = JsonDocument.Parse(text);
         Assert.Equal("version_conflict", problem.RootElement.GetProperty("code").GetString());
+        Assert.Equal("Persistence conflict", problem.RootElement.GetProperty("title").GetString());
         Assert.DoesNotContain("private conflict detail", text);
+        Assert.DoesNotContain("private inner conflict detail", text);
     }
 
     [Fact]

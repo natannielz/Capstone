@@ -4,7 +4,7 @@ using UnitToko.Modules.Contracts;
 
 namespace UnitToko.Platform.Mongo;
 
-public sealed class PersistenceConflictException(string code, string message) : Exception(message)
+public sealed class PersistenceConflictException(string code, string message, Exception? inner = null) : Exception(message, inner)
 {
     public string Code { get; } = code;
 }
@@ -61,7 +61,7 @@ public sealed class MongoUnitOfWork(MongoClient client)
             {
                 await AbortIfActiveAsync(session);
                 if (attempt == MaximumAttempts)
-                    throw new PersistenceConflictException("version_conflict", "Data changed; refresh and try again");
+                    throw new PersistenceConflictException("version_conflict", "Data changed; refresh and try again", ex);
                 // Fenced reads can hold shared source rows for hundreds of milliseconds. Leave
                 // time for the competing transaction to finish without synchronizing its peers.
                 var minimumDelayMs = 100 << (attempt - 1);
