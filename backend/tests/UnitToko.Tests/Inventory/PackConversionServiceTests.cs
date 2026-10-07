@@ -240,7 +240,7 @@ public sealed class PackConversionServiceTests(MongoFixture fixture, ITestOutput
         Assert.Equal(accounting, await data.Valuation.StateAsync()); Assert.Equal(documents, await data.Valuation.Documents.StateAsync());
     }
 
-    private sealed class PreparedConversion(StockReleaseServiceTests.Data data, ActorContext maker, PackConversionInput input,
+    internal sealed class PreparedConversion(StockReleaseServiceTests.Data data, ActorContext maker, PackConversionInput input,
         BsonDocument preview, AuthorizationCommandMetadata metadata) : IAsyncDisposable {
         internal StockReleaseServiceTests.Data Data => data;
         internal ActorContext Maker { get; } = maker;
