@@ -59,6 +59,19 @@ public sealed class StockReleaseService
             if (origins.TryGetValue(origin.ReceiptId, out var existing) && !ReferenceEquals(existing, origin)) throw B.Broken();
             origins[origin.ReceiptId] = origin;
         }
+        internal void Seed(StockReleaseSourceProof source) {
+            Require(owner, tx);
+            var origin = source.CurrentOrigin(owner.database, tx);
+            if (origin is null) return;
+            if (origins.TryGetValue(origin.ReceiptId, out var existing)) {
+                existing.Require(owner.database, tx);
+                if (existing.Receipt != origin.Receipt) throw B.Broken();
+                // Keep an earlier capture: its full rows and private pins must still
+                // pass the owning reader, even after another genuine current read.
+                return;
+            }
+            Seed(origin);
+        }
         internal async Task<HeldReceiptOriginProof> OriginAsync(long receiptId, CancellationToken ct) {
             Require(owner, tx);
             if (!origins.TryGetValue(receiptId, out var origin)) {
@@ -158,6 +171,7 @@ public sealed class StockReleaseService
         StockReleaseSourceProof facts;
         using (SupplierDocumentMatchDiagnostics.Begin("release.current-source")) facts = await source.ReadCurrentAsync(context.Tx, selected, ct);
         if (!facts.IsCurrent || facts.Key.Location != context.Input.Location) throw B.Broken();
+        Reads(context).Seed(facts);
         using (SupplierDocumentMatchDiagnostics.Begin("release.activation")) await sources.RequireActivatedPoolAsync(context.Tx, facts.Pool, ct);
         var before = InventoryBson.ReadBalance(facts.Balance); LotValueBalance available; LotValueBalance? held;
         using (SupplierDocumentMatchDiagnostics.Begin("release.available-value")) available = await values.ReadForReleaseAsync(context.Tx, facts, Authenticate, ct);

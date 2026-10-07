@@ -49,14 +49,19 @@ internal sealed class StockReleaseSourceProof
     private readonly BsonDocument receipt, lot, qualityProposal, qualityDecision, qualityAllocation,
         qualitySnapshot, qualityPolicy, valuationProposal, valuationDecision, valuationAllocation, invoice, match, snapshot;
     private readonly BsonDocument? pool, balance;
+    private readonly HeldReceiptOriginProof? currentOrigin;
     private readonly string seal;
     private StockReleaseSourceProof(IMongoDatabase database, IClientSessionHandle tx, StockReleaseSelection selected,
         ProcurementApprovedQualitySource quality, ProcurementPayableValuationSource value, BsonDocument lot,
-        BsonDocument? pool, BsonDocument? balance, BsonDocument qualityPolicy, DateTimeOffset observedAt)
+        BsonDocument? pool, BsonDocument? balance, BsonDocument qualityPolicy, DateTimeOffset observedAt,
+        HeldReceiptOriginProof? currentOrigin = null)
     {
         this.database = database; session = tx; transactionNumber = tx.WrappedCoreSession.CurrentTransaction.TransactionNumber;
         Selection = selected with { }; ObservedAt = observedAt;
         receipt = Copy(quality.Receipt); this.lot = Copy(lot); this.pool = pool is null ? null : Copy(pool); this.balance = balance is null ? null : Copy(balance);
+        currentOrigin?.Require(database, tx);
+        if (currentOrigin is not null && (pool is null || balance is null || currentOrigin.Receipt != receipt)) throw Unavailable();
+        this.currentOrigin = currentOrigin;
         qualityProposal = Copy(quality.Proposal); qualityDecision = Copy(quality.Decision); qualityAllocation = Copy(quality.Allocation);
         qualitySnapshot = Copy(quality.Snapshot); this.qualityPolicy = Copy(qualityPolicy);
         valuationProposal = Copy(value.Proposal); valuationDecision = Copy(value.Decision); valuationAllocation = Copy(value.Allocation);
@@ -103,11 +108,15 @@ internal sealed class StockReleaseSourceProof
     internal BsonDocument Invoice => Copy(invoice);
     internal BsonDocument Match => Copy(match);
     internal BsonDocument Snapshot => Copy(snapshot);
+    internal HeldReceiptOriginProof? CurrentOrigin(IMongoDatabase current, IClientSessionHandle tx) {
+        Require(current, tx); return currentOrigin;
+    }
     internal void Require(IMongoDatabase current, IClientSessionHandle tx) {
         new InventoryRepository(current).RequireSession(tx);
         if (!ReferenceEquals(current.Client, database.Client) || current.DatabaseNamespace != database.DatabaseNamespace ||
             !ReferenceEquals(session, tx) || tx.WrappedCoreSession.CurrentTransaction.TransactionNumber != transactionNumber ||
             CatalogRepository.Digest(PrivateFacts()) != seal) throw Unavailable();
+        currentOrigin?.Require(current, tx);
     }
     private BsonDocument PrivateFacts() => new() { { "receipt", receipt }, { "lot", lot }, { "pool", (BsonValue?)pool ?? BsonNull.Value }, { "balance", (BsonValue?)balance ?? BsonNull.Value },
         { "qualityProposal", qualityProposal }, { "qualityDecision", qualityDecision }, { "qualityAllocation", qualityAllocation },
@@ -163,7 +172,7 @@ internal sealed class StockReleaseSourceProof
             if (movement.Current.Id != quality.Receipt["balanceId"].AsInt64 || movement.Current.PhysicalPoolId != quality.Receipt["poolId"].AsInt64 ||
                 movement.Current.Balance.Key != InventoryHeldReceiptWriter.After(quality.Receipt).Balance.Key ||
                 movement.Current.Balance.Held <= 0 || pool["location"] != balance["location"]) throw Unavailable();
-            var proof = new StockReleaseSourceProof(database, tx, selected, quality, value, lot, pool, balance, policy, at);
+            var proof = new StockReleaseSourceProof(database, tx, selected, quality, value, lot, pool, balance, policy, at, pair.Origin);
             proof.Require(database, tx); repository.RequireSession(tx);
             if (tx.WrappedCoreSession.CurrentTransaction.TransactionNumber != number || clock.UtcNow < at) throw Unavailable(); ct.ThrowIfCancellationRequested(); return proof;
         } catch { await InventoryRepository.AbortAsync(tx); throw; }
