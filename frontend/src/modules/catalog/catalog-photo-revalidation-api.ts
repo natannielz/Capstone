@@ -34,7 +34,7 @@ export function parseCatalogPhotoRevalidationCurrent(value: unknown, target: Cat
   const result = parse(currentSchema, value), expected = freezeCatalogPhotoTarget(target);
   return result.skuId === expected.skuId && result.skuRevision === expected.skuRevision ? result : invalid();
 }
-export function catalogPhotoRevalidationKey(skuId: string, uuid = crypto.randomUUID()): string {
+export function catalogPhotoRevalidationKey(skuId: string, uuid: string = crypto.randomUUID()): string {
   const key = `catalog.photo.revalidate.${parse(id, skuId)}.${uuid}`; catalogPhotoRevalidationKeySku(key); return key;
 }
 export function catalogPhotoRevalidationKeySku(key: string): string {

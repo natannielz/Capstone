@@ -53,7 +53,7 @@ export function parseAccountContactHistory(value: unknown, before: string | null
   if (history.nextBeforeHistoryId !== null && (history.items.length !== limit || history.nextBeforeHistoryId !== previousId)) return invalid();
   return history;
 }
-export function accountContactKey(actorId: string, uuid = crypto.randomUUID()): string {
+export function accountContactKey(actorId: string, uuid: string = crypto.randomUUID()): string {
   const key = `account.contact.${parse(id, actorId)}.${uuid}`; accountContactKeyActor(key); return key;
 }
 export function accountContactKeyActor(key: string): string {
