@@ -117,6 +117,9 @@ public sealed class StockReleaseMigrationTests(MongoFixture fixture)
     private async Task<CatalogAuthoringTestData> Fresh102Async(string skuCode)
     {
         var source = await StoreTestData.CreateWithMigrationTargetAsync(fixture, 102); CatalogAuthoringTestData data;
+        // Mongo's real TTL clock must not expire freshly issued synthetic sessions
+        // while the fixture's mutable clock still considers them current.
+        source.Clock.UtcNow = DateTimeOffset.FromUnixTimeMilliseconds(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
         try { data = await CatalogAuthoringTestData.AttachAsync(source, fixture.Client); }
         catch { await source.DisposeAsync(); throw; }
         await data.SkuAsync(12, skuCode, "RELMIG");
