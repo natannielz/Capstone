@@ -56,22 +56,24 @@ internal sealed class SupplierDocumentTestData(ProcurementInspectionTestData ins
         [new("001", "Actual synthetic three sealed pencil packages", "supplier", "000001", "000012", 3, new Money(10000), new Money(3300), new Money(700), null, null)], null);
     internal SupplierDocumentMatchInput MatchInput(int packages = 2, Money? tax = null, Money? charge = null, SupplierDocumentInput? reviewed = null) => new(DocumentId, 1, reviewed ?? Input(), null,
         [new(1, packages, InspectionId, 1, null, null, new Money(10000 * packages), tax ?? new Money(2000), charge ?? new Money(500), null, null)]);
-    internal static async Task<SupplierDocumentTestData> CreateAsync(MongoFixture fixture, ProcurementRoute route = ProcurementRoute.Ddo, bool createDraft = true, decimal requiredAdvance = 0, bool boundStock = false, bool activateEmptySource = false, bool useSystemClock = false) {
+    internal static async Task<SupplierDocumentTestData> CreateAsync(MongoFixture fixture, ProcurementRoute route = ProcurementRoute.Ddo, bool createDraft = true, decimal requiredAdvance = 0, bool boundStock = false, bool activateEmptySource = false, bool useSystemClock = false, DateOnly? inspectedExpiry = null) {
         var inspection = await ProcurementInspectionTestData.CreateAsync(fixture, route, createDraft: false, requiredAdvance: requiredAdvance, boundStock: boundStock, activateEmptySource: activateEmptySource, useSystemClock: useSystemClock);
-        return await CreateFromInspectionAsync(inspection, createDraft, ownsInspection: true);
+        return await CreateFromInspectionAsync(inspection, createDraft, ownsInspection: true, inspectedExpiry: inspectedExpiry);
     }
     internal static async Task<SupplierDocumentTestData> CreateFromInspectionAsync(ProcurementInspectionTestData inspection,
-        bool createDraft = true, bool ownsInspection = false) {
+        bool createDraft = true, bool ownsInspection = false, DateOnly? inspectedExpiry = null) {
         var data = new SupplierDocumentTestData(inspection, ownsInspection);
         try {
             if (inspection.Draft is null) {
                 var observed = inspection.Input(); observed = observed with { Discrepancy = null, Lines = [observed.Lines[0] with {
-                    DamagedPackages = 0, ExpiredPackages = 0, OpenedPackages = 0, ExpiryDate = AccountingCalendar.BusinessDate(data.Clock.UtcNow).AddYears(1), Discrepancy = null }] };
+                    DamagedPackages = 0, ExpiredPackages = 0, OpenedPackages = 0, ExpiryDate = inspectedExpiry ?? AccountingCalendar.BusinessDate(data.Clock.UtcNow).AddYears(1), Discrepancy = null }] };
                 inspection.Draft = await inspection.DraftAsync("supplier-document-inspection-draft", observed);
                 await inspection.UploadAsync(); await inspection.ValidateAsync(); data.InspectionResult = await inspection.SubmitAsync(await inspection.PreviewSubmitAsync());
             } else {
                 var submission = await data.Rows("procurementInspectionSubmissions")
                     .Find(new BsonDocument("draftId", inspection.DraftId)).SingleAsync();
+                if (inspectedExpiry is { } requested && submission["input"]["lines"][0]["expiryDate"] != requested.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture))
+                    throw new ArgumentException("An already submitted inspection cannot be assigned a different expiry", nameof(inspectedExpiry));
                 data.InspectionResult = ProcurementInspectionBson.Result(submission);
             }
             var scope = ProcurementRequestTestData.Scope;

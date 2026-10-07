@@ -109,7 +109,7 @@ function RuleDesk({ loaded, onRefresh }: { loaded: Loaded; onRefresh: () => Prom
       {state.loadingWarehouses ? <p role='status'>Memuat lokasi yang ditugaskan…</p> : !state.warehouses.length && <p className={common.help}>Belum ada gudang untuk izin ini. Periksa penugasan akun Anda.</p>}
       <button type='button' className={common.secondary} disabled={locked || state.loadingWarehouses} onClick={() => void editor.loadWarehouses()}>Muat ulang lokasi</button>
     </section>
-    <aside className={styles.conversion}><strong>Persetujuan aturan tidak memindahkan stok.</strong><p>Pelaksanaan konversi fisik belum tersedia dan masih menunggu kewenangan sumber serta nilai lot. Layar ini tidak mengubah saldo, ketersediaan, reservasi, atau nilai barang.</p></aside>
+    <aside className={styles.conversion}><strong>Persetujuan aturan tidak memindahkan stok.</strong><p>Pelaksanaan tersedia melalui Pelaksanaan buka kemasan setelah memilih lot sumber yang tersedia dan meninjau jumlah serta nilai. Layar aturan ini tidak mengubah saldo, ketersediaan, reservasi, atau nilai barang.</p></aside>
     {state.error !== null && <p role='alert' className={common.alert}>{message(state.error)}</p>}
     {state.recoveryError !== null && <p role='alert' className={common.alert}>{message(state.recoveryError)}</p>}
     {state.sending && <p role='status'>Menyimpan permintaan… Tunggu hasil sebelum melanjutkan.</p>}
@@ -157,7 +157,7 @@ function RuleDesk({ loaded, onRefresh }: { loaded: Loaded; onRefresh: () => Prom
       <button type='button' className={common.secondary} disabled={locked || state.loadingRules} onClick={() => void editor.loadRules()}>Muat ulang aturan</button></div>
       {state.loadingRules ? <p role='status'>Memuat aturan…</p> : <><ul className={styles.history}>{state.rules.items.map(rule => <li key={rule.id}><h3>Aturan {rule.id}, versi {rule.version}</h3>
         <RatioFacts input={rule.input} source={rule.source} destination={rule.destination} /><p>Disetujui <time dateTime={rule.approvedAt}>{new Date(rule.approvedAt).toLocaleString('id-ID')}</time>.</p>
-        <p className={common.help}>Referensi pengajuan {rule.proposalId}; keputusan {rule.decisionId}. Pelaksanaan fisik belum tersedia.</p></li>)}</ul>
+        <p className={common.help}>Referensi pengajuan {rule.proposalId}; keputusan {rule.decisionId}. Pelaksanaan tersedia melalui Pelaksanaan buka kemasan.</p></li>)}</ul>
         {!state.rules.items.length && <p className={common.empty}>Belum ada aturan disetujui pada halaman lokasi ini.</p>}
         <CursorButtons previous={state.ruleCursor} next={state.rules.next} disabled={locked} onPage={id => void editor.loadRules(id)} /></>}
     </section>}

@@ -58,15 +58,16 @@ internal sealed class ProcurementStockValuationTestData(SupplierDocumentTestData
 
     internal static async Task<ProcurementStockValuationTestData> CreateAsync(MongoFixture fixture, bool createValuationPolicy = true, int receiptPackages = 3,
         decimal requiredAdvance = 0, bool includePayableMappings = false, bool includeCustomerMappings = false,
-        bool mixedQuality = false, bool matchInvoice = true, bool activateEmptySource = false, bool useSystemClock = false)
+        bool mixedQuality = false, bool matchInvoice = true, bool activateEmptySource = false, bool useSystemClock = false, DateOnly? inspectedExpiry = null)
     {
         Assert.InRange(receiptPackages, 1, 3);
         if (mixedQuality && activateEmptySource) throw new ArgumentException("This minimal activation seam is for the clean receipt fixture", nameof(activateEmptySource));
         if (mixedQuality && useSystemClock) throw new ArgumentException("The browser live clock seam is for the clean receipt fixture", nameof(useSystemClock));
+        if (mixedQuality && inspectedExpiry is not null) throw new ArgumentException("Explicit inspected expiry is for the clean receipt fixture", nameof(inspectedExpiry));
         if (mixedQuality && requiredAdvance != 0) throw new ArgumentException("Mixed fixture uses its genuine M77 order terms", nameof(requiredAdvance));
         ProcurementQualityAcceptanceTestData? quality = mixedQuality ? await ProcurementQualityAcceptanceTestData.CreateAsync(fixture, receiptPackages: receiptPackages) : null;
         SupplierDocumentTestData documents;
-        try { documents = quality is null ? await SupplierDocumentTestData.CreateAsync(fixture, requiredAdvance: requiredAdvance, boundStock: true, activateEmptySource: activateEmptySource, useSystemClock: useSystemClock)
+        try { documents = quality is null ? await SupplierDocumentTestData.CreateAsync(fixture, requiredAdvance: requiredAdvance, boundStock: true, activateEmptySource: activateEmptySource, useSystemClock: useSystemClock, inspectedExpiry: inspectedExpiry)
                 : await SupplierDocumentTestData.CreateFromInspectionAsync(quality.Inspection); }
         catch { if (quality is not null) await quality.DisposeAsync(); throw; }
         var data = new ProcurementStockValuationTestData(documents) { ReceiptPackages = receiptPackages, MixedQuality = quality };

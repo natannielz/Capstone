@@ -140,6 +140,7 @@ builder.Services.AddSingleton(sp => {
 builder.Services.AddSingleton<StockCountService>();
 builder.Services.AddSingleton<PackConversionRuleService>();
 builder.Services.AddSingleton<StockReleaseService>();
+builder.Services.AddSingleton<PackConversionService>();
 builder.Services.AddSingleton<StockSourceSetupService>();
 builder.Services.AddSingleton<HistoricalReadStore>();
 builder.Services.AddSingleton<AccessAdministrationService>();
@@ -220,6 +221,7 @@ builder.Services.AddOpenApi("v1", options =>
         CatalogOpenApi.Configure(document);
         StockCountOpenApi.Configure(document);
         PackConversionRuleOpenApi.Configure(document);
+        PackConversionExecutionOpenApi.Configure(document);
         StockSourceActivationOpenApi.Configure(document);
         StockSourceSetupOpenApi.Configure(document);
         StockSourceRevisionOpenApi.Configure(document);
@@ -513,6 +515,7 @@ app.MapBankStatementEndpoints();
 app.MapBankReceiptEndpoints();
 app.MapStockCountEndpoints();
 app.MapPackConversionRuleEndpoints();
+app.MapPackConversionExecutionEndpoints();
 app.MapStockSourceActivationEndpoints();
 app.MapStockReleaseEndpoints();
 app.MapStockSourceSetupEndpoints();

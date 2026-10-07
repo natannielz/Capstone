@@ -111,7 +111,7 @@ internal sealed class HeldReceiptMovementHistory(IMongoDatabase database, MongoU
             var supported = ordered.Skip(1).Select(movement => (Movement: movement, Kind: SourceKind(movement))).ToArray();
             // Release provenance uses immutable receipt genesis, never this current chain.
             HeldReceiptOriginProof? origin = null;
-            if (supported.Any(item => item.Kind == "stock-release")) {
+            if (supported.Any(item => item.Kind is "stock-release" or "pack-conversion")) {
                 origin = retainedOrigin ?? currentGraph?.CurrentMovementOrigin(database, tx, receipt["_id"].AsInt64);
                 if (origin is null) {
                     var ids = new IdAllocator(database); var catalog = new UnitToko.Platform.Catalog.CatalogAuthoringService(database, unit, ids, clock);
@@ -122,7 +122,7 @@ internal sealed class HeldReceiptMovementHistory(IMongoDatabase database, MongoU
                 } else await origin.RequireAsync(database, tx, ct);
                 if (origin.Receipt != receipt) throw Unavailable();
             }
-            if (supported.Any(item => item.Kind != "stock-release")) {
+            if (supported.Any(item => item.Kind is "submission" or "decision" or "shipment")) {
                 await OrderStockSourceStorage.RequireAsync(database, ct);
                 var pool = await Rows("inventoryPools").Find(tx, F.Eq("_id", original.PhysicalPoolId)).SingleOrDefaultAsync(ct) ?? throw Unavailable();
                 var owner = new OrderSubmissionService(database, unit, new(database), clock);
@@ -179,8 +179,60 @@ internal sealed class HeldReceiptMovementHistory(IMongoDatabase database, MongoU
             outbox["location"] != receipt["location"] || outbox["orderId"] != receipt["orderId"] || outbox["payload"] != B.Result(receipt) ||
             outbox["createdAt"] != receipt["recordedAt"]) throw Unavailable();
     }
-    private async Task RequireSourceAsync(IClientSessionHandle tx, BsonDocument movement, string kind, HeldReceiptOriginProof? origin, CancellationToken ct)
+    /// <summary>Authenticates the exact historical image selected by a conversion.
+    /// Its strictly earlier movement prefix is read from actual membership, never
+    /// the current stock chain of the command being authenticated.</summary>
+    internal async Task RequireBeforeAsync(IClientSessionHandle tx, HeldReceiptOriginProof origin,
+        InventoryBalanceDocument expected, DateTimeOffset selectedAt, ImmutableHashSet<long> ancestors, CancellationToken ct,
+        Func<BsonDocument, HeldReceiptOriginProof, ImmutableHashSet<long>?, CancellationToken, Task>? conversionOwner = null) {
+        origin.Require(database, tx); await RequireStorageAsync(ct);
+        var original = InventoryHeldReceiptWriter.After(origin.Receipt);
+        if (expected.Id != original.Id || expected.PhysicalPoolId != original.PhysicalPoolId || expected.Balance.Key != original.Balance.Key ||
+            expected.Balance.Revision < original.Balance.Revision) throw Unavailable();
+        var current = InventoryBson.ReadBalance(await Rows("stockBalances").Find(tx, F.Eq("_id", original.Id)).SingleOrDefaultAsync(ct));
+        if (current.Id != original.Id || current.PhysicalPoolId != original.PhysicalPoolId || current.Balance.Key != original.Balance.Key ||
+            current.Balance.Revision < expected.Balance.Revision) throw Unavailable();
+        var key = InventoryBson.Balance(original);
+        var linked = F.Eq("legs.balanceId", original.Id) | F.Eq("legs.before._id", original.Id) | F.Eq("legs.after._id", original.Id) |
+            F.Eq("_id", origin.Receipt["movementId"]) | F.Eq("sourceEvent", InventoryHeldReceiptWriter.Source(origin.ReceiptId).EventKey) |
+            F.ElemMatch("legs", F.Eq("before.physicalPoolId", original.PhysicalPoolId) & F.Eq("before.location", key["location"]) &
+                F.Eq("before.skuId", key["skuId"]) & F.Eq("before.definitionId", key["definitionId"]) & F.Eq("before.lotId", key["lotId"])) |
+            F.ElemMatch("legs", F.Eq("after.physicalPoolId", original.PhysicalPoolId) & F.Eq("after.location", key["location"]) &
+                F.Eq("after.skuId", key["skuId"]) & F.Eq("after.definitionId", key["definitionId"]) & F.Eq("after.lotId", key["lotId"]));
+        var movements = await Rows("movements").Find(tx, linked).Limit(MaximumMovements + 1).ToListAsync(ct);
+        if (movements.Count is < 1 or > MaximumMovements) throw Unavailable();
+        foreach (var movement in movements) {
+            if (!await Rows("movements").Find(tx, F.Eq("_id", movement["_id"]) & InventoryMovementSchemas.Validator()).AnyAsync(ct) ||
+                movement["physicalPoolId"] != original.PhysicalPoolId || movement["recordedAt"].ToUniversalTime() > clock.UtcNow.UtcDateTime ||
+                movement["legs"].AsBsonArray.Count(leg => leg["balanceId"] == original.Id) != 1) throw Unavailable();
+        }
+        var ordered = movements.OrderBy(movement => TargetLeg(movement, original.Id)["before"]["version"].AsInt64).ToArray();
+        Equal(ordered[0], RootMovement(origin.Receipt));
+        var state = original; var time = origin.Receipt["recordedAt"];
+        var events = new HashSet<string>(StringComparer.Ordinal) { ordered[0]["sourceEvent"].AsString };
+        foreach (var movement in ordered.Skip(1)) {
+            var leg = TargetLeg(movement, original.Id);
+            var before = InventoryBson.ReadBalance(leg["before"].AsBsonDocument);
+            if (before.Balance.Revision >= expected.Balance.Revision) continue;
+            if (!events.Add(movement["sourceEvent"].AsString) || before != state || movement["recordedAt"].CompareTo(time) < 0) throw Unavailable();
+            await RequireSourceAsync(tx, movement, SourceKind(movement), origin, ct, ancestors, conversionOwner);
+            state = Transition(state, leg); Equal(leg["after"], InventoryBson.Balance(state)); time = movement["recordedAt"];
+        }
+        if (state != expected || time.ToUniversalTime() > selectedAt.UtcDateTime) throw Unavailable();
+        await origin.RequireAsync(database, tx, ct);
+    }
+    private async Task RequireSourceAsync(IClientSessionHandle tx, BsonDocument movement, string kind, HeldReceiptOriginProof? origin,
+        CancellationToken ct, ImmutableHashSet<long>? ancestors = null,
+        Func<BsonDocument, HeldReceiptOriginProof, ImmutableHashSet<long>?, CancellationToken, Task>? conversionOwner = null)
     {
+        if (kind == "pack-conversion") {
+            if (conversionOwner is null) await PackConversionService.RequireMovementSourceAsync(database, unit, clock, tx, movement, origin ?? throw Unavailable(), ct, ancestors);
+            else {
+                if (conversionOwner.Target is not PackConversionService) throw Unavailable();
+                await conversionOwner(movement, origin ?? throw Unavailable(), ancestors, ct);
+            }
+            return;
+        }
         if (kind == "stock-release") {
             await StockReleaseService.RequireMovementSourceAsync(database, unit, clock, tx, movement, origin ?? throw Unavailable(), ct);
             return;
@@ -212,6 +264,7 @@ internal sealed class HeldReceiptMovementHistory(IMongoDatabase database, MongoU
         ("ordering.decision", "release") => "decision",
         ("fulfillment.shipment", "dispatch") => "shipment",
         ("inventory.stock-release", "releaseHeld") => "stock-release",
+        ("inventory.pack-conversion", "convertPackages") => "pack-conversion",
         _ => throw Unsupported()
     };
     private static BsonDocument TargetLeg(BsonDocument movement, long balanceId) =>
@@ -222,6 +275,8 @@ internal sealed class HeldReceiptMovementHistory(IMongoDatabase database, MongoU
             "Release" => StockBalancePolicy.Release(before.Balance, before.Balance.Revision, leg["packages"].AsInt64),
             "Dispatch" => StockBalancePolicy.Dispatch(before.Balance, before.Balance.Revision, leg["packages"].AsInt64),
             "ReleaseHold" => StockBalancePolicy.ReleaseHold(before.Balance, before.Balance.Revision, leg["packages"].AsInt64),
+            "ConvertOut" => StockBalancePolicy.ConvertOut(before.Balance, before.Balance.Revision, leg["packages"].AsInt64),
+            "ConvertIn" => StockBalancePolicy.ConvertIn(before.Balance, before.Balance.Revision, leg["packages"].AsInt64),
             _ => throw Unsupported()
         }
     };

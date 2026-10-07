@@ -7,7 +7,9 @@ namespace UnitToko.Platform.Mongo.Migrations;
 internal static class InventoryMovementSchemas
 {
     internal static BsonDocument Key() => new("sourceEvent", 1);
-    internal static BsonDocument Validator()
+    internal static BsonDocument Validator() => Validator(includeConversions: true);
+    internal static BsonDocument LegacyValidator() => Validator(includeConversions: false);
+    private static BsonDocument Validator(bool includeConversions)
     {
         BsonDocument Long(long min = 1) => new() { { "bsonType", "long" }, { "minimum", min } };
         BsonDocument Text(int max) => new() { { "bsonType", "string" }, { "minLength", 1 }, { "maxLength", max } };
@@ -27,14 +29,15 @@ internal static class InventoryMovementSchemas
             { "reason", Text(2000) }, { "correlationId", Text(128) },
             { "legs", new BsonDocument { { "bsonType", "array" }, { "minItems", 1 }, { "maxItems", 100 }, { "items", Object(new()
             {
-                { "balanceId", Long() }, { "action", new BsonDocument { { "bsonType", "string" }, { "enum", new BsonArray(Enum.GetNames<InventoryBalanceAction>()) } } },
+                { "balanceId", Long() }, { "action", new BsonDocument { { "bsonType", "string" }, { "enum", new BsonArray(includeConversions
+                    ? Enum.GetNames<InventoryBalanceAction>() : ["Receive", "Reserve", "Release", "Dispatch", "Hold", "ReleaseHold", "Expire", "ExpireHeld", "ReceiveHeld"]) } } },
                 { "packages", Long() }, { "before", balance }, { "after", balance.DeepClone() }
             }) } } }
         });
         return new("$and", new BsonArray
         {
             new BsonDocument("$jsonSchema", shape),
-            new BsonDocument("$expr", Effects()),
+            new BsonDocument("$expr", Effects(includeConversions)),
             new BsonDocument("recordedAt", new BsonDocument
             {
                 { "$gte", new BsonDateTime(DateTime.SpecifyKind(DateTime.MinValue, DateTimeKind.Utc)) },
@@ -46,7 +49,7 @@ internal static class InventoryMovementSchemas
             }) }))
         });
     }
-    private static BsonDocument Effects()
+    private static BsonDocument Effects(bool includeConversions)
     {
         BsonValue Before(string field) => "$$leg.before." + field;
         BsonValue After(string field) => "$$leg.after." + field;
@@ -82,6 +85,10 @@ internal static class InventoryMovementSchemas
             Branch("Expire", Lte(quantity, available), new() { ["expired"] = Add(Before("expired"), quantity) }),
             Branch("ExpireHeld", Lte(quantity, Before("held")), new() { ["held"] = Sub(Before("held"), quantity), ["expired"] = Add(Before("expired"), quantity) })
         };
+        if (includeConversions) {
+            actions.Add(Branch("ConvertOut", Lte(quantity, available), new() { ["onHand"] = Sub(Before("onHand"), quantity) }));
+            actions.Add(Branch("ConvertIn", Lte(quantity, Sub(long.MaxValue, Before("onHand"))), new() { ["onHand"] = Add(Before("onHand"), quantity) }));
+        }
         var fields = new List<BsonValue>
         {
             Eq(Before("_id"), "$$leg.balanceId"), Eq(After("_id"), "$$leg.balanceId"),

@@ -112,6 +112,8 @@ internal sealed class InventoryLedger
     private async Task RequireValueOwnerAsync(IClientSessionHandle tx, IInventorySourceReader reader,
         InventoryBalanceChange change, InventoryBalanceDocument before, CancellationToken ct)
     {
+        var conversion = change.Action is InventoryBalanceAction.ConvertOut or InventoryBalanceAction.ConvertIn;
+        if (conversion && !PackConversionService.IsLedgerConversionSource(reader)) throw Invalid("inventory_lot_value_owner_required");
         // Reservations retain the value of undelivered packages. ReceiveHeld/ExpireHeld move
         // entirely unavailable quantities and also preserve onHand-held-expired.
         if (change.Action is InventoryBalanceAction.Reserve or InventoryBalanceAction.Release or
@@ -132,7 +134,7 @@ internal sealed class InventoryLedger
             FullKey("key"), FullKey("destinationKey"), FullKey("held.key") });
         var linked = await database.GetCollection<BsonDocument>(LotValueStore.AvailableHeads).Find(tx, heads).Limit(1).AnyAsync(ct) ||
             await database.GetCollection<BsonDocument>(LotValueStore.Transitions).Find(tx, history).Limit(1).AnyAsync(ct);
-        if (linked && (change.Action != InventoryBalanceAction.ReleaseHold || !StockReleaseService.IsLedgerReleaseSource(reader)))
+        if (linked && !conversion && (change.Action != InventoryBalanceAction.ReleaseHold || !StockReleaseService.IsLedgerReleaseSource(reader)))
             throw Invalid("inventory_lot_value_owner_required");
     }
     internal static void RequireText(string? value, int limit)

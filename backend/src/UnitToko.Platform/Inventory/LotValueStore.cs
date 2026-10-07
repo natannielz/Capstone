@@ -21,7 +21,7 @@ internal sealed class LotValueStore(IMongoDatabase database, IdAllocator ids, IC
 {
     internal const string HeldHeads = "lotValueHeldHeads", AvailableHeads = "lotValueAvailableHeads", Transitions = "lotValueTransitions";
     internal static readonly string[] Collections = [HeldHeads, AvailableHeads, Transitions];
-    private const int MaximumTransitions = 4096;
+    internal const int MaximumTransitions = 4096;
     private IMongoCollection<BsonDocument> Rows(string name) => database.GetCollection<BsonDocument>(name);
     internal static DomainValidationException Unavailable() => new("lot_value_provenance_unavailable", "Exact selected-lot quantity and authenticated value history are required");
     private static PersistenceConflictException Changed() => new("lot_value_revision_changed", "Selected lot value changed; reload its current revision");

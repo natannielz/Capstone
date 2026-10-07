@@ -51,23 +51,44 @@ internal sealed class HeldStockReleaseValueProof
         owner.AuthenticateSourceAsync(current, tx, source, hash, ct);
 }
 
-/// <summary>No dispatch or conversion value authority exists until the real respective
-/// business producer is implemented. There is deliberately no factory or dummy source.</summary>
+/// <summary>Only the genuine in-flight conversion owner may mint this proof after
+/// both exact physical legs have been written in the same transaction attempt.</summary>
 internal sealed class LotValueConsumptionProof
 {
-    private LotValueConsumptionProof() => throw StockReleaseBson.Broken();
-    internal InventorySource Source => throw StockReleaseBson.Broken();
-    internal string SourceHash => throw StockReleaseBson.Broken();
-    internal InventoryBalanceDocument Before => throw StockReleaseBson.Broken();
-    internal InventoryBalanceDocument After => throw StockReleaseBson.Broken();
-    internal DateTimeOffset At => throw StockReleaseBson.Broken();
-    internal string Policy => throw StockReleaseBson.Broken();
-    internal long ExpectedLotRevision => throw StockReleaseBson.Broken();
-    internal long Packages => throw StockReleaseBson.Broken();
-    internal InventoryBalanceDocument? DestinationBefore => throw StockReleaseBson.Broken();
-    internal InventoryBalanceDocument? DestinationAfter => throw StockReleaseBson.Broken();
-    internal long ExpectedDestinationLotRevision => throw StockReleaseBson.Broken();
-    internal void Require(IMongoDatabase database, IClientSessionHandle tx) => throw StockReleaseBson.Broken();
-    internal Task AuthenticateSourceAsync(IMongoDatabase database, IClientSessionHandle tx, InventorySource source, string hash, CancellationToken ct) =>
-        Task.FromException(StockReleaseBson.Broken());
+    private readonly PackConversionService owner;
+    private readonly IMongoDatabase database;
+    private readonly IClientSessionHandle transaction;
+    private readonly long number, conversionId;
+    private LotValueConsumptionProof(PackConversionService owner, IMongoDatabase database, IClientSessionHandle tx, MongoDB.Bson.BsonDocument row) {
+        this.owner = owner; this.database = database; transaction = tx; number = tx.WrappedCoreSession.CurrentTransaction.TransactionNumber;
+        conversionId = row["_id"].AsInt64; Before = InventoryBson.ReadBalance(row["before"].AsBsonDocument); After = InventoryBson.ReadBalance(row["after"].AsBsonDocument);
+        DestinationBefore = InventoryBson.ReadBalance(row["destinationBefore"].AsBsonDocument); DestinationAfter = InventoryBson.ReadBalance(row["destinationAfter"].AsBsonDocument);
+        Source = PackConversionBson.Source(conversionId, Before.PhysicalPoolId); SourceHash = row["causeHash"].AsString;
+        At = new(row["recordedAt"].ToUniversalTime()); Policy = row["policy"].AsString;
+        ExpectedLotRevision = row["expected"]["lotValueRevision"].AsInt64; Packages = row["quantities"]["sourcePackages"].AsInt64;
+    }
+    internal static async Task<LotValueConsumptionProof> CreateAsync(PackConversionService owner, IMongoDatabase database,
+        IClientSessionHandle tx, long conversionId, CancellationToken ct) {
+        var row = await owner.ValueAuthorityAsync(database, tx, conversionId, ct);
+        var proof = new LotValueConsumptionProof(owner, database, tx, row); proof.Require(database, tx); return proof;
+    }
+    internal InventorySource Source { get; }
+    internal string SourceHash { get; }
+    internal InventoryBalanceDocument Before { get; }
+    internal InventoryBalanceDocument After { get; }
+    internal DateTimeOffset At { get; }
+    internal string Policy { get; }
+    internal long ExpectedLotRevision { get; }
+    internal long Packages { get; }
+    internal InventoryBalanceDocument? DestinationBefore { get; }
+    internal InventoryBalanceDocument? DestinationAfter { get; }
+    internal long ExpectedDestinationLotRevision => 0;
+    internal void Require(IMongoDatabase current, IClientSessionHandle tx) {
+        new InventoryRepository(current).RequireSession(tx);
+        if (!ReferenceEquals(current.Client, database.Client) || current.DatabaseNamespace != database.DatabaseNamespace ||
+            !ReferenceEquals(tx, transaction) || tx.WrappedCoreSession.CurrentTransaction.TransactionNumber != number) throw PackConversionBson.Broken();
+        owner.RequireValueAuthority(current, tx, conversionId, SourceHash);
+    }
+    internal Task AuthenticateSourceAsync(IMongoDatabase current, IClientSessionHandle tx, InventorySource source, string hash, CancellationToken ct) =>
+        owner.AuthenticateSourceAsync(current, tx, source, hash, ct);
 }

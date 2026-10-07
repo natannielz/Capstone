@@ -56,15 +56,17 @@ public static class StockBalancePolicy
     public static StockBalance ReleaseHold(StockBalance value, long revision, long quantity) => Change(value, revision, quantity, ChangeKind.ReleaseHold);
     public static StockBalance Expire(StockBalance value, long revision, long quantity) => Change(value, revision, quantity, ChangeKind.Expire);
     public static StockBalance ExpireHeld(StockBalance value, long revision, long quantity) => Change(value, revision, quantity, ChangeKind.ExpireHeld);
+    public static StockBalance ConvertOut(StockBalance value, long revision, long quantity) => Change(value, revision, quantity, ChangeKind.ConvertOut);
+    public static StockBalance ConvertIn(StockBalance value, long revision, long quantity) => Change(value, revision, quantity, ChangeKind.ConvertIn);
 
-    private enum ChangeKind { Reserve, Release, Dispatch, Receive, ReceiveHeld, Hold, ReleaseHold, Expire, ExpireHeld }
+    private enum ChangeKind { Reserve, Release, Dispatch, Receive, ReceiveHeld, Hold, ReleaseHold, Expire, ExpireHeld, ConvertOut, ConvertIn }
     private static StockBalance Change(StockBalance value, long expectedRevision, long quantity, ChangeKind kind)
     {
         var available = AvailablePackages(value);
         if (quantity <= 0) throw new DomainValidationException("invalid_quantity", "Derived stock quantity must be a positive Int64 count");
         if (expectedRevision <= 0 || expectedRevision != value.Revision) throw Invalid("stock_revision_conflict");
         if (value.Revision == long.MaxValue) throw Invalid("stock_revision_exhausted");
-        if (kind is ChangeKind.Reserve or ChangeKind.Hold or ChangeKind.Expire && quantity > available)
+        if (kind is ChangeKind.Reserve or ChangeKind.Hold or ChangeKind.Expire or ChangeKind.ConvertOut && quantity > available)
             throw Invalid("insufficient_available_stock");
         if (kind is ChangeKind.Release or ChangeKind.Dispatch && quantity > value.Reserved)
             throw Invalid("insufficient_reserved_stock");
@@ -83,6 +85,8 @@ public static class StockBalancePolicy
                 ChangeKind.ReleaseHold => value with { Held = value.Held - quantity },
                 ChangeKind.Expire => value with { Expired = checked(value.Expired + quantity) },
                 ChangeKind.ExpireHeld => value with { Held = value.Held - quantity, Expired = checked(value.Expired + quantity) },
+                ChangeKind.ConvertOut => value with { OnHand = checked(value.OnHand - quantity) },
+                ChangeKind.ConvertIn => value with { OnHand = checked(value.OnHand + quantity) },
                 _ => throw Invalid("invalid_stock_change")
             };
             changed = changed with { Revision = value.Revision + 1 };

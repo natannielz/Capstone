@@ -1,4 +1,5 @@
 export function recoveryPage(operation: string) {
+  if (operation === 'inventory.pack-conversion.execute') return { href: '/inventory/pack-conversion-executions', label: 'halaman pelaksanaan buka kemasan' };
   if (operation === 'inventory.stock-release.propose' || operation === 'inventory.stock-release.decide') return { href: '/inventory/stock-releases', label: 'halaman pelepasan stok ditahan' };
   if (operation === 'stock.source.activation.propose' || operation === 'stock.source.activation.decide') return { href: '/inventory/sources/activations', label: 'halaman aktivasi sumber stok' };
   if (operation === 'inventory.pack-conversion.rule.propose' || operation === 'inventory.pack-conversion.rule.decide') return { href: '/inventory/pack-conversions', label: 'halaman aturan konversi kemasan' };
@@ -75,6 +76,7 @@ export function recoveryPage(operation: string) {
     : { href: "/administration/person-reviews", label: "halaman peninjauan orang" };
 }
 export function operationLabel(operation: string) {
+  if (operation === 'inventory.pack-conversion.execute') return 'Pelaksanaan konversi fisik kemasan';
   if (operation === 'inventory.stock-release.propose') return 'Pengajuan pelepasan stok ditahan';
   if (operation === 'inventory.stock-release.decide') return 'Keputusan pelepasan stok ditahan';
   if (operation === 'stock.source.activation.propose') return 'Pengajuan aktivasi sumber stok';

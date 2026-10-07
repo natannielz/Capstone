@@ -246,8 +246,8 @@ public sealed class StockReleaseServiceTests(MongoFixture fixture, ITestOutputHe
             return await Service.DecideAsync(Checker, id, 1, decision, LotValuePolicy.ProportionalFloorPolicy,
                 B.Expected(preview["expected"]), preview["binding"].AsString, Meta(key));
         }
-        internal static async Task<Data> CreateAsync(MongoFixture fixture, Action<string>? diagnostics = null, bool useSystemClock = false) {
-            var valuation = await ProcurementStockValuationTestData.CreateAsync(fixture, activateEmptySource: true, useSystemClock: useSystemClock);
+        internal static async Task<Data> CreateAsync(MongoFixture fixture, Action<string>? diagnostics = null, bool useSystemClock = false, DateOnly? inspectedExpiry = null) {
+            var valuation = await ProcurementStockValuationTestData.CreateAsync(fixture, activateEmptySource: true, useSystemClock: useSystemClock, inspectedExpiry: inspectedExpiry);
             diagnostics?.Invoke("fixture");
             var data = new Data(valuation);
             try {
