@@ -9,6 +9,7 @@ import { prepareDraftCommand, type DraftCommand, type OrderDraft } from './order
 import { createOrderQuoteGateway, orderAmount, orderContextKey, orderQuantity, type OrderAddresses, type OrderQuote } from './order-quote-client';
 import { draftMessage } from './DraftSave';
 import { reorderDraftReason } from './order-reorder';
+import { OrderBulkEntry } from './OrderBulkEntry';
 import common from '../administration/access.module.css';
 import styles from './order-draft.module.css';
 
@@ -23,13 +24,14 @@ export function OrderDraftEditor({ actorId, draft, initialQuote, initialIssue, l
   const [address, setAddress] = useState(draft.input.delivery ?? { recipientName: '', phone: '', address: '', city: '', postalCode: '', instructions: '' });
   const [busy, setBusy] = useState(false), [error, setError] = useState<unknown>(initialIssue), [search, setSearch] = useState(''), [results, setResults] = useState<BuyerVariant[]>([]);
   const [searchPage, setSearchPage] = useState<{ query: string; offset: number; total: string } | null>(null), [selected, setSelected] = useState<BuyerVariant | null>(null), [packageQuantity, setPackageQuantity] = useState('');
+  const [bulkOpen, setBulkOpen] = useState(false);
   const [review, setReview] = useState<{ command: DraftCommand; quote: OrderQuote } | null>(null);
   const [approvedAddresses, setApprovedAddresses] = useState<{ actorId: string; view: OrderAddresses } | null>(null);
   const contextKey = orderContextKey(draft.input.context);
   const alive = useRef(false), pending = useRef(false), reviewRef = useRef<HTMLDivElement>(null);
   useEffect(() => { alive.current = true; return () => { alive.current = false; gate.cancel(); }; }, [gate, actorId, contextKey]);
   useEffect(() => { if (review) reviewRef.current?.focus(); }, [review]);
-  const disabled = locked || busy || review !== null, current = () => alive.current && isCurrent();
+  const disabled = locked || busy || review !== null || bulkOpen, current = () => alive.current && isCurrent();
   const failed = (failure: unknown) => { setApprovedAddresses(null); setError(failure); if (failure instanceof AccessFailure && ([401, 403].includes(failure.status) || failure.code === 'actor_changed')) onFailure(failure); };
   const shownAddresses = approvedAddresses?.actorId === actorId && orderContextKey(approvedAddresses.view.context) === contextKey && isCurrent() ? approvedAddresses.view : null;
   async function readAddresses() {
@@ -99,6 +101,17 @@ export function OrderDraftEditor({ actorId, draft, initialQuote, initialIssue, l
     {error !== null && <p role="alert" className={common.alert}>{error instanceof AccessFailure && error.code === 'organization_address_changed'
       ? 'Alamat penagihan atau tujuan belum tersedia sebagai alamat yang disetujui. Hubungi pengelola organisasi, lalu periksa kembali.'
       : initialQuote === null && error === initialIssue ? 'Sebagian kemasan atau harga tidak lagi tersedia. Pilih kembali kemasan dari katalog; pilihan lama tidak diganti otomatis.' : draftMessage(error, true)}</p>}
+    {!bulkOpen && <button type="button" className={common.secondary} disabled={disabled} onClick={() => { if (current()) setBulkOpen(true); }}>Masukkan banyak SKU</button>}
+    {bulkOpen && !locked && !busy && review === null && <OrderBulkEntry actorId={actorId} currentSelections={selections} isCurrent={current}
+      onFailure={failed} onCancel={() => setBulkOpen(false)} onApply={(result, variants) => {
+        if (!current()) return;
+        const replacements = new Set(variants.map(item => item.skuId));
+        const entered = new Map(selections.map((item, index) => [item.skuId, quantities[index]]));
+        setSelections(result.selections);
+        setQuantities(result.selections.map(item => replacements.has(item.skuId) ? String(item.packages) : entered.get(item.skuId) ?? String(item.packages)));
+        setLabels(previous => { const next = new Map(previous); for (const item of variants) next.set(item.skuId, { name: item.familyName, code: item.code, definition: item.definition }); return next; });
+        setSelected(null); setResults([]); setSearchPage(null); setSearch(''); setError(null); setBulkOpen(false);
+      }} />}
     <form className={styles.form} onSubmit={event => void prepare(event)}>
       <ul className={styles.lines}>{selections.map((item, index) => {
         const label = labels.get(item.skuId);

@@ -15,7 +15,7 @@ using UnitToko.Platform.Mongo.Migrations;
 namespace UnitToko.Platform.Catalog;
 
 /// <summary>Joins package facts only inside the existing current catalog-entitlement transaction.</summary>
-public sealed class CatalogDefinitionQueryService(IMongoDatabase database, AuthorizationStore authorization, IClock clock)
+public sealed partial class CatalogDefinitionQueryService(IMongoDatabase database, AuthorizationStore authorization, IClock clock)
 {
     private static readonly FilterDefinitionBuilder<BsonDocument> F = Builders<BsonDocument>.Filter;
     private readonly CatalogRepository repository = new(database);

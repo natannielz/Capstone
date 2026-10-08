@@ -12,6 +12,7 @@ public static class CatalogEndpoints
 {
     public static void MapCatalogEndpoints(this WebApplication app)
     {
+        app.MapCatalogBulkEndpoints();
         var group = app.MapGroup("/api/v1/catalog/administration")
             .RequireAuthorization().AddEndpointFilter<ActorRequiredFilter>();
         ProblemsMetadata(group);
