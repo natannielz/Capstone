@@ -1,7 +1,8 @@
-import { body,currentActor,errorResponse,json,sessionCookie } from "@legacy/server/http";
-import { database } from "@legacy/server/repository";
-import { DomainError } from "@legacy/domain/model";
-import { hashPassword,timingEqual } from "@legacy/server/security";
+// Historical handler retained for migration/security regression tests; not a Next.js route.
+import { body,currentActor,errorResponse,json,sessionCookie } from "../../server/http";
+import { database } from "../../server/repository";
+import { DomainError } from "../../domain/model";
+import { hashPassword,timingEqual } from "../../server/security";
 export async function POST(request:Request){try{
  const actor=await currentActor(request),input=await body(request);
  if(typeof input.currentPassword!=="string"||typeof input.newPassword!=="string"||input.newPassword.length<12||input.newPassword.length>128)throw new DomainError("Gunakan kata sandi baru 12–128 karakter.");

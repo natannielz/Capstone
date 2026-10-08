@@ -14,7 +14,7 @@
     "db:generate": "npm --prefix ../backend/legacy run db:generate",
     "typecheck": "tsc --noEmit",
     "test": "node scripts/test-domain.mjs",
-    "test:api": "node scripts/smoke-api.mjs",
+    "test:api:legacy": "node scripts/smoke-api.mjs",
     "db:local": "node --import ./scripts/sites-env.mjs node_modules/wrangler/bin/wrangler.js d1 execute DB --local --config wrangler.local.json --file ../backend/legacy/drizzle/0000_common_wallflower.sql --persist-to .wrangler/state",
     "demo:accounts": "node --env-file=.env.local scripts/demo-accounts.mjs"
   },

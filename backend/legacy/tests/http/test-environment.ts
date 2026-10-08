@@ -1,4 +1,5 @@
-import { isolatedTestEnvironment } from "@legacy/server/test-environment";
+// Historical smoke-server identity retained for isolated legacy regressions only.
+import { isolatedTestEnvironment } from "../../server/test-environment";
 
 export const dynamic = "force-dynamic";
 

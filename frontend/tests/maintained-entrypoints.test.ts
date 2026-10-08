@@ -8,7 +8,8 @@ type Page = (props: {searchParams: Promise<{next?: string | string[]}>; params: 
 type Routes = Record<"login" | "customerLogin" | "staffLogin" | "account" | "orders" | "order" | "cart" | "checkout", Page>;
 
 test("retired business, identity and report endpoints cannot expose a second runtime", () => {
-  for (const route of ["state", "commands", "catalog", "session", "auth/login", "auth/logout", "reports"]) {
+  for (const route of ["state", "commands", "catalog", "session", "auth/login", "auth/logout", "reports",
+    "profile", "profile/avatar", "admin/password-reset", "attachments", "attachments/[id]", "documents/[kind]/[id]", "test-environment"]) {
     for (const extension of ["ts", "tsx", "js", "jsx"]) {
       assert.equal(existsSync(new URL(`../src/app/api/${route}/route.${extension}`, import.meta.url)), false, `/api/${route}`);
     }

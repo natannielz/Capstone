@@ -1,3 +1,4 @@
+// Historical HTTP regression for an isolated legacy server; not verification of the maintained .NET API.
 import {readFileSync} from "node:fs";
 import assert from "node:assert/strict";
 import {assertIsolatedSmokeServer} from "./smoke-environment.mjs";

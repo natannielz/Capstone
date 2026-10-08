@@ -1,7 +1,8 @@
-import { currentActor,errorResponse,json,sameOrigin } from "@legacy/server/http";
-import { execute } from "@legacy/server/repository";
-import { files } from "@legacy/server/files";
-import { DomainError } from "@legacy/domain/model";
+// Historical avatar behavior is preserved for migration; not a Next.js route.
+import { currentActor,errorResponse,json,sameOrigin } from "../../server/http";
+import { execute } from "../../server/repository";
+import { files } from "../../server/files";
+import { DomainError } from "../../domain/model";
 export async function POST(request:Request){let key:string|undefined;try{
  sameOrigin(request);const actor=await currentActor(request),limit=2*1024*1024;
  const reader=request.body?.getReader();if(!reader)throw new DomainError("Pilih foto profil.");

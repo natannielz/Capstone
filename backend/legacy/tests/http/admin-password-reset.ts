@@ -1,8 +1,9 @@
-import {body, currentActor, errorResponse, json} from "@legacy/server/http";
-import {database} from "@legacy/server/repository";
-import {digest, hashPassword, timingEqual} from "@legacy/server/security";
-import {DomainError} from "@legacy/domain/model";
-import {today} from "@/lib/domain/selectors";
+// Historical handler retained for migration/security regression tests; not a Next.js route.
+import {body, currentActor, errorResponse, json} from "../../server/http";
+import {database} from "../../server/repository";
+import {digest, hashPassword, timingEqual} from "../../server/security";
+import {DomainError} from "../../domain/model";
+import {today} from "../../../../frontend/src/lib/domain/selectors";
 
 /** Manual account recovery; never exposes passwords in results, commands, or audits. */
 export async function POST(request: Request) {

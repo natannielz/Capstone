@@ -5,8 +5,8 @@ import {migrateDatabase, setTestDatabase, type Database, type Statement} from ".
 import {ensureSeed} from "../../backend/legacy/server/repository";
 import {demoPassword} from "../../backend/legacy/server/demo-credentials";
 import {digest, hashPassword} from "../../backend/legacy/server/security";
-import {POST as resetPassword} from "../src/app/api/admin/password-reset/route";
-import {POST as changePassword} from "../src/app/api/profile/route";
+import {POST as resetPassword} from "../../backend/legacy/tests/http/admin-password-reset";
+import {POST as changePassword} from "../../backend/legacy/tests/http/profile";
 
 class Query implements Statement {
   constructor(readonly client: Client, readonly sql: string, readonly args: InValue[] = []) {}
