@@ -34,6 +34,23 @@ const command = () => prepareSupplier(actor, selected, policy, [mappingSource], 
 const observationCommand = () => prepareSupplierObservation(actor, proposal, policy, details, observation.sourceReference, observation.reason, true, Date.parse(observation.checkedAt));
 const decisionCommand = () => prepareSupplierDecision(actor, observedProposal, decisionPreview, 'Setujui setelah pemeriksaan independen');
 
+test('supplier picker keeps hints separate from the exact source mapping and rejects mismatched hint identities', async () => {
+  const matching = { ruleVersion: 'catalog-code-name-v1', limited: false, items: [{ skuId: choice.skuId, kind: 'similar_name', field: 'name', editDistance: 1 }] };
+  let response: unknown = { items: [choice], offset: 0, hasMore: false, matching }, calls = 0;
+  const gateway = createSupplierGateway(createUnitTokoClient({ baseUrl: 'https://unit-toko.test', fetch: async request => {
+    assert.ok(request instanceof Request); if (request.url.endsWith('/csrf')) return Response.json({ requestToken: 'csrf' }); calls++;
+    assert.equal(request.url.endsWith('/packages/query'), true); assert.equal(request.headers.get('Idempotency-Key'), null);
+    assert.equal(request.headers.get('X-Expected-Actor-Id'), actor); return Response.json(response);
+  } }));
+  const page = await gateway.packages(actor, 'propose', location, 'Kertaz'); assert.deepEqual(page.items, [choice]);
+  assert.deepEqual(prepareSupplier(actor, selected, policy, [{ ...mappingSource, package: page.items[0] }], input, preview, proposal.reason).body, command().body);
+  for (const bad of [{ ...matching, items: [{ ...matching.items[0], skuId: '999' }] }, { ...matching, items: [{ ...matching.items[0], field: 'sku' }] },
+    { ...matching, items: [{ ...matching.items[0], editDistance: null }] }]) {
+    response = { items: [choice], offset: 0, hasMore: false, matching: bad }; await assert.rejects(gateway.packages(actor, 'propose', location, 'Kertaz'));
+  }
+  assert.equal(calls, 4); assert.equal(input.mappings[0].externalItemCode, '00Ab-01');
+});
+
 test('supplier input preserves exact leading-zero source identity and finite WIB intervals without overlapping aliases', () => {
   assert.deepEqual(supplierInput(input), input); assert.equal(supplierTime('2026-10-03T07:00'), '2026-10-03T00:00:00.000Z');
   const exact = '\uFEFFＲujukan\u200d'; assert.equal(supplierInput({ ...input, details: { ...details, contactValue: exact } }).details.contactValue, exact);

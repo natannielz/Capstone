@@ -3,6 +3,7 @@ import { createUnitTokoClient, RequestNotSentError } from '../../api/client';
 import { AccessFailure } from '../administration/workflow';
 import { paymentAllocationSchemas } from '../billing/payment-allocation-client';
 import { freezeCatalogAttempt } from '../catalog/catalog-editor-state';
+import { packageMatchingSchema, packageMatchesFit } from './package-matching';
 
 const { id, hash } = paymentAllocationSchemas;
 const zeroVersion = z.union([z.literal('0'), id]);
@@ -24,7 +25,7 @@ const warehouse = z.object({ location, ...source.shape, warehouse: label }).stri
 const locations = z.object({ items: z.array(warehouse).max(256) }).strict().refine(value => new Set(value.items.map(item => item.location.warehouseId)).size === value.items.length);
 const packageChoice = z.object({ skuId: id, skuRevision: id, definitionId: id, definitionVersion: id, skuCode: labelText(64), familyName: labelText(160), packageLabel: labelText(160),
   packageKind: z.enum(['loose', 'sealed', 'other']), baseUnitCode: labelText(64), baseUnitsPerPackage: z.number().int().min(1).max(2_147_483_647) }).strict();
-const packagePage = z.object({ items: z.array(packageChoice).max(25), offset: z.number().int().min(0).max(10000), hasMore: z.boolean() }).strict().refine(value => new Set(value.items.map(item => item.skuId)).size === value.items.length && (!value.hasMore || value.items.length > 0));
+const packagePage = z.object({ items: z.array(packageChoice).max(25), offset: z.number().int().min(0).max(10000), hasMore: z.boolean(), matching: packageMatchingSchema }).strict().refine(value => new Set(value.items.map(item => item.skuId)).size === value.items.length && (!value.hasMore || value.items.length > 0) && packageMatchesFit(value.items, value.matching));
 const registration = { registrationNamespace: userText(64).nullable(), registrationValue: userText(128).nullable() };
 const registrationMatches = (value: { registrationNamespace: string | null; registrationValue: string | null }) => (value.registrationNamespace === null) === (value.registrationValue === null);
 const details = z.object({ subjectReference: userText(128), legalName: userText(160), displayName: userText(160), ...registration, address: userText(500), contactName: userText(160), contactMethod: z.enum(['email', 'phone', 'other']), contactValue: userText(256) }).strict().refine(registrationMatches);

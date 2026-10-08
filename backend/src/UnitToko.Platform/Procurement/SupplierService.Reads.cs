@@ -67,7 +67,7 @@ public sealed partial class SupplierService
             await PeopleAsync(context, false, null, token); var warehouse = await SourceAsync(authority, tx, ScopeNodeKind.Warehouse, location.WarehouseId, token);
             if (warehouse["target"]["parentId"] != location.ShopId) throw new AuthorizationDeniedException("scope_denied");
             var page = await catalog.ProcurementPackagesAsync(database, actor, authority, tx, location, offset, limit, search, token, permission); context.Catalog.Add((location, page.Capture));
-            var result = new BsonDocument { { "items", new BsonArray(page.Capture.Sources.Select(ProcurementRequestBson.Package)) }, { "offset", offset }, { "hasMore", page.HasMore } };
+            var result = new BsonDocument { { "items", new BsonArray(page.Capture.Sources.Select(ProcurementRequestBson.Package)) }, { "offset", offset }, { "hasMore", page.HasMore }, { "matching", page.Matching } };
             await organizations.FenceAddressProfileAsync(tx, warehouse, true, token); await FenceAsync(context, token); return result;
         }, ct);
     }

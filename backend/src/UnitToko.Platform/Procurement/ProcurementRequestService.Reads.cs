@@ -49,7 +49,7 @@ public sealed partial class ProcurementRequestService
         return await authorization.ReadAsync(actor, async (authority, tx, token) => {
             var context = await ContextAsync(actor, authority, tx, location, Permissions.ProcurementRead, token); await PeopleAsync(context, null, null, token);
             var page = await catalog.ProcurementPackagesAsync(database, actor, authority, tx, location, offset, limit, search, token); context.Catalog = page.Capture;
-            var result = new BsonDocument { { "items", new BsonArray(page.Capture.Sources.Select(B.Package)) }, { "offset", offset }, { "hasMore", page.HasMore } };
+            var result = new BsonDocument { { "items", new BsonArray(page.Capture.Sources.Select(B.Package)) }, { "offset", offset }, { "hasMore", page.HasMore }, { "matching", page.Matching } };
             await FenceAsync(context, token); return result;
         }, ct);
     }

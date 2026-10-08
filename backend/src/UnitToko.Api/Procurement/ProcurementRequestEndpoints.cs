@@ -66,7 +66,9 @@ public sealed record ProcurementTargetDto(ProcurementLocationDto Location, Procu
 public sealed record ProcurementTargetsDto(ProcurementTargetDto[] Items);
 public sealed record ProcurementPackageDto(LongId SkuId, string SkuRevision, LongId DefinitionId, string DefinitionVersion,
     string SkuCode, string FamilyName, string PackageLabel, string PackageKind, string BaseUnitCode, int BaseUnitsPerPackage);
-public sealed record ProcurementPackagesDto(ProcurementPackageDto[] Items, int Offset, bool HasMore);
+public sealed record ProcurementPackageMatchDto(LongId SkuId, string Kind, string Field, int? EditDistance);
+public sealed record ProcurementPackageMatchingDto(string RuleVersion, bool Limited, ProcurementPackageMatchDto[] Items);
+public sealed record ProcurementPackagesDto(ProcurementPackageDto[] Items, int Offset, bool HasMore, ProcurementPackageMatchingDto Matching);
 public sealed record ProcurementLineDto(LongId SkuId, string SkuRevision, LongId DefinitionId, string DefinitionVersion,
     string SkuCode, string FamilyName, string PackageLabel, string PackageKind, string BaseUnitCode, int BaseUnitsPerPackage, int Packages, string? Specification);
 public sealed record ProcurementPreviewDto(ProcurementRequestInputDto Input, DateTimeOffset ObservedAt, string Binding, ProcurementSourceDto Source, ProcurementLineDto[] Lines);
@@ -90,7 +92,7 @@ public static class ProcurementRequestEndpoints
         }).WithName("ProcurementRequestTargets");
         group.MapPost("/packages/query", async (ProcurementPackageQueryDto request, HttpContext http, [FromServices] ProcurementRequestService service, CancellationToken ct) => {
             Purpose(request.Purpose); var row = await service.PackagesAsync(Actor(http), Location(request.Location), request.Offset, request.Limit, request.Search, ct);
-            return TypedResults.Ok(new ProcurementPackagesDto([.. row["items"].AsBsonArray.Select(Package)], row["offset"].AsInt32, row["hasMore"].AsBoolean));
+            return TypedResults.Ok(Packages(row));
         }).WithName("ProcurementRequestPackages");
         group.MapPost("/preview/query", async (ProcurementRequestPreviewInputDto request, HttpContext http, [FromServices] ProcurementRequestService service, CancellationToken ct) => {
             Purpose(request.Purpose); if (request.Input is null) throw ProcurementRequestRules.Invalid();
@@ -137,6 +139,10 @@ public static class ProcurementRequestEndpoints
     internal static ProcurementLabelDto Label(BsonValue value) => new(new(value["id"].AsInt64), value["code"].AsString, value["name"].AsString, Number(value["scopeVersion"]), Number(value["profileVersion"]));
     internal static ProcurementSourceDto Source(BsonValue value) => new(Label(value["organization"]), Label(value["shop"]), Label(value["warehouse"]), Label(value["channel"]));
     internal static ProcurementTargetDto Target(BsonValue value) => new(Location(value["location"]), Label(value["organization"]), Label(value["shop"]), Label(value["warehouse"]), Label(value["channel"]));
+    internal static ProcurementPackagesDto Packages(BsonDocument row) => new([.. row["items"].AsBsonArray.Select(Package)], row["offset"].AsInt32, row["hasMore"].AsBoolean,
+        new(row["matching"]["ruleVersion"].AsString, row["matching"]["limited"].AsBoolean,
+            [.. row["matching"]["items"].AsBsonArray.Select(value => new ProcurementPackageMatchDto(new(value["skuId"].AsInt64), value["kind"].AsString, value["field"].AsString,
+                value["editDistance"].IsBsonNull ? null : value["editDistance"].AsInt32))]));
     internal static ProcurementPackageDto Package(BsonValue value) => new(new(value["skuId"].AsInt64), Number(value["skuRevision"]), new(value["definitionId"].AsInt64), Number(value["definitionVersion"]),
         value["skuCode"].AsString, value["familyName"].AsString, value["packageLabel"].AsString, value["packageKind"].AsString, value["baseUnitCode"].AsString, value["baseUnitsPerPackage"].AsInt32);
     private static ProcurementLineDto[] Lines(BsonValue value) => [.. value.AsBsonArray.Select(line => new ProcurementLineDto(new(line["skuId"].AsInt64), Number(line["skuRevision"]),

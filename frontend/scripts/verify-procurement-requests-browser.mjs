@@ -47,6 +47,14 @@ export async function verifyProcurementRequestsBrowser({ config, maker, user, or
   for (const label of ['Jalur pengadaan', 'Tanggal kebutuhan', 'Alasan permintaan']) assert.equal(await page.getByLabel(label, { exact: true }).inputValue(), '');
   await page.getByLabel('Jalur pengadaan', { exact: true }).selectOption('ddo'); await page.getByLabel('Tanggal kebutuhan', { exact: true }).fill(config.businessDate);
   await page.getByLabel('Cari barang atau kemasan', { exact: true }).fill(config.skuCode); await page.getByRole('button', { name: 'Cari kemasan', exact: true }).click();
+  await page.getByText('Kode SKU sama persis. Periksa isi kemasan sebelum memilih.', { exact: true }).waitFor();
+  assert.equal(await page.getByRole('region', { name: 'Periksa kemasan pilihan', exact: true }).count(), 0);
+  // Both genuine definitions share the same family: a spelling hint must leave the choice and quantity to the person.
+  await page.getByLabel('Cari barang atau kemasan', { exact: true }).fill('Penzil pengadaan'); await page.getByRole('button', { name: 'Cari kemasan', exact: true }).click();
+  await page.getByText('Saran nama mirip (1 perubahan huruf). Belum menjadi pilihan Anda.', { exact: true }).first().waitFor();
+  assert.equal(await page.getByText('Saran nama mirip (1 perubahan huruf). Belum menjadi pilihan Anda.', { exact: true }).count(), 2);
+  assert.equal(await page.getByRole('region', { name: 'Periksa kemasan pilihan', exact: true }).count(), 0); assert.equal(procurementWrites.length, 0);
+  await page.screenshot({ path: resolve(directory, 'procurement-matching-mobile.png'), fullPage: true });
   await page.getByRole('button', { name: new RegExp(config.skuCode + ' · ' + config.packageLabel) }).click();
   const chosen = page.getByRole('region', { name: 'Periksa kemasan pilihan', exact: true }); await chosen.waitFor();
   assert.equal(await chosen.getByLabel('Jumlah kemasan', { exact: true }).inputValue(), '');
@@ -114,5 +122,5 @@ export async function verifyProcurementRequestsBrowser({ config, maker, user, or
   assert.equal(procurementWrites.length, 3); assert.equal(completed().length, 2); const rejected = procurementWrites.filter(write => write.status !== 200); assert.equal(rejected.length, 1);
   assert.equal(rejected[0].path, decisionPath); assert.equal(rejected[0].key, rejectedKey); assert.equal(rejected[0].status, 400); assert.equal(rejected[0].version, undefined);
   console.log('REAL_PROCUREMENT_REQUEST_BROWSER_PASS ' + JSON.stringify({ writes: completed().length, rejectedCommands: rejected.length, requestGuards: true,
-    originalReplyLosses: dropped(), exactActorRecovery: true, independentApproval: true, realCatalogPackages: true, downstreamUnresolved: true, offlineUnsent: true, mobile: true, desktop: true }));
+    originalReplyLosses: dropped(), exactActorRecovery: true, independentApproval: true, realCatalogPackages: true, explicitAmbiguousMatchChoice: true, downstreamUnresolved: true, offlineUnsent: true, mobile: true, desktop: true }));
 }

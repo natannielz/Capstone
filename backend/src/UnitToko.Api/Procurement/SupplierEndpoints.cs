@@ -138,7 +138,7 @@ public static class SupplierEndpoints
         }).WithName("SupplierVerificationPolicies");
         group.MapPost("/packages/query", async (SupplierPackageQueryDto request, HttpContext http, [FromServices] SupplierService service, CancellationToken ct) => {
             Purpose(request.Purpose); var row = await service.PackagesAsync(Actor(http), Access(request.Access), Location(request.Location), request.Offset, request.Limit, request.Search, ct);
-            return TypedResults.Ok(new ProcurementPackagesDto([.. row["items"].AsBsonArray.Select(R.Package)], row["offset"].AsInt32, row["hasMore"].AsBoolean));
+            return TypedResults.Ok(R.Packages(row));
         }).WithName("SupplierCatalogPackages");
         group.MapPost("/preview/query", async (SupplierPreviewInputDto request, HttpContext http, [FromServices] SupplierService service, CancellationToken ct) => {
             Purpose(request.Purpose); if (request.Input is null) throw SupplierRules.Invalid();

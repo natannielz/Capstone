@@ -14932,6 +14932,18 @@ export interface components {
             skuId: components["schemas"]["LongId"];
             skuRevision: string;
         };
+        ProcurementPackageMatchDto: {
+            /** Format: int32 */
+            editDistance: null | number | string;
+            field: string;
+            kind: string;
+            skuId: components["schemas"]["LongId"];
+        };
+        ProcurementPackageMatchingDto: {
+            items: components["schemas"]["ProcurementPackageMatchDto"][];
+            limited: boolean;
+            ruleVersion: string;
+        };
         ProcurementPackageQueryDto: {
             /** Format: int32 */
             limit: number | string;
@@ -14944,6 +14956,7 @@ export interface components {
         ProcurementPackagesDto: {
             hasMore: boolean;
             items: components["schemas"]["ProcurementPackageDto"][];
+            matching: components["schemas"]["ProcurementPackageMatchingDto"];
             /** Format: int32 */
             offset: number | string;
         };

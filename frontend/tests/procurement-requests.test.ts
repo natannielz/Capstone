@@ -15,6 +15,7 @@ const organization = { id: '100', code: 'TOKO', name: 'Koperasi', scopeVersion: 
 const source = { organization, shop: { ...organization, id: '101', code: 'SHOP', name: 'Toko' }, warehouse: { ...organization, id: '102', code: 'WARE', name: 'Gudang' }, channel: { ...organization, id: '103', code: 'RETAIL', name: 'Ritel' } };
 const selected = { location, ...source };
 const choice = { skuId: '500', skuRevision: '2', definitionId: '501', definitionVersion: '1', skuCode: 'PAPER-BOX', familyName: 'Kertas', packageLabel: 'Karton 12', packageKind: 'sealed' as const, baseUnitCode: 'RIM', baseUnitsPerPackage: 12 };
+const matching = { ruleVersion: 'catalog-code-name-v1', limited: false, items: [{ skuId: choice.skuId, kind: 'exact_name', field: 'name', editDistance: 0 }] };
 const input = { location, route: 'ddo' as const, kind: 'purchase_request' as const, businessDate: '2026-10-03', externalReference: null, reason: 'Kebutuhan toko yang telah diperiksa',
   lines: [{ skuId: choice.skuId, expectedSkuRevision: choice.skuRevision, definitionId: choice.definitionId, definitionVersion: choice.definitionVersion, packages: 30, specification: null }] };
 const lines = [{ ...choice, packages: 30, specification: null }];
@@ -88,16 +89,24 @@ test('procurement transport carries exact actor, CSRF, immutable review and If-M
 });
 
 test('catalog package queries are scoped reads with exact paging and reject unexpected costs or mismatched page responses', async () => {
-  let response: unknown = { items: [choice], offset: 25, hasMore: false }, calls = 0;
+  let response: unknown = { items: [choice], offset: 25, hasMore: false, matching }, calls = 0;
   const gateway = createProcurementGateway(createUnitTokoClient({ baseUrl: 'https://unit-toko.test', fetch: async input => {
     assert.ok(input instanceof Request); if (input.url.endsWith('/csrf')) return Response.json({ requestToken: 'csrf' }); calls++;
     assert.equal(input.url.endsWith('/packages/query'), true); assert.equal(input.headers.get('X-Expected-Actor-Id'), actor); assert.equal(input.headers.get('Idempotency-Key'), null);
     assert.deepEqual(await input.json(), { purpose: 'procurement-request-review', location, search: 'Kertas', offset: 25, limit: 25 }); return Response.json(response);
   } }));
   assert.deepEqual((await gateway.packages(actor, location, 'Kertas', 25)).items, [choice]);
-  response = { items: [choice], offset: 0, hasMore: false }; await assert.rejects(gateway.packages(actor, location, 'Kertas', 25));
-  response = { items: [{ ...choice, supplierPrice: '12000.00' }], offset: 25, hasMore: false }; await assert.rejects(gateway.packages(actor, location, 'Kertas', 25));
-  await assert.rejects(gateway.packages(actor, location, 'Kertas', -1), RequestNotSentError); assert.equal(calls, 3);
+  response = { items: [choice], offset: 0, hasMore: false, matching }; await assert.rejects(gateway.packages(actor, location, 'Kertas', 25));
+  response = { items: [{ ...choice, supplierPrice: '12000.00' }], offset: 25, hasMore: false, matching }; await assert.rejects(gateway.packages(actor, location, 'Kertas', 25));
+  for (const bad of [{ ...matching, ruleVersion: 'unreviewed' }, { ...matching, items: [] },
+    { ...matching, items: [{ ...matching.items[0], skuId: '999' }] }, { ...matching, items: [{ ...matching.items[0], editDistance: 1 }] }]) {
+    response = { items: [choice], offset: 25, hasMore: false, matching: bad }; await assert.rejects(gateway.packages(actor, location, 'Kertas', 25));
+  }
+  response = { items: [choice], offset: 25, hasMore: false, matching: { ...matching, limited: true, items: [{ skuId: choice.skuId, kind: 'similar_name', field: 'name', editDistance: 1 }] } };
+  const suggestions = await gateway.packages(actor, location, 'Kertas', 25);
+  assert.deepEqual(suggestions.items, [choice]); assert.equal(suggestions.matching.limited, true);
+  assert.deepEqual(prepareProcurement(actor, selected, suggestions.items, input, preview).body, command().body);
+  await assert.rejects(gateway.packages(actor, location, 'Kertas', -1), RequestNotSentError); assert.equal(calls, 8);
 });
 
 test('original-actor recovery retains only references, remains lookup-only and cannot clear uncertain or foreign decisions', async () => {

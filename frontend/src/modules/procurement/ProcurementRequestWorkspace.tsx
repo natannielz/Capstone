@@ -13,6 +13,7 @@ import { CatalogReadGate } from '../catalog/catalog-editor-state';
 import { createProcurementGateway, procurementLocationKey, procurementQuantity, procurementInput, prepareProcurement, prepareProcurementDecision,
   type ProcurementTarget, type ProcurementPackage, type ProcurementInput, type ProcurementPreview, type ProcurementRequest, type ProcurementDecision, type ProcurementDecisionPreview } from './procurement-request-client';
 import styles from '../administration/access.module.css';
+import { packageMatchExplanation, type PackageMatching } from './package-matching';
 
 type Account = { actorId: string; actions: readonly string[]; session: IdentitySession; observedAt: number };
 type DraftLine = { choice: ProcurementPackage; quantity: string; specification: string };
@@ -76,7 +77,7 @@ function RequestDesk({ account, fresh, onDenied }: { account: Account; fresh: bo
   const [page, setPage] = useState<{ items: ProcurementRequest[]; nextRequestId: string | null }>({ items: [], nextRequestId: null }), [request, setRequest] = useState<ProcurementRequest | null>(null);
   const [editing, setEditing] = useState(false), [route, setRoute] = useState<ProcurementInput['route'] | ''>(''), [kind, setKind] = useState<ProcurementInput['kind'] | ''>('');
   const [businessDate, setBusinessDate] = useState(''), [externalReference, setExternalReference] = useState(''), [reason, setReason] = useState(''), [draftLines, setDraftLines] = useState<DraftLine[]>([]);
-  const [search, setSearch] = useState(''), [packages, setPackages] = useState<ProcurementPackage[]>([]), [packagePage, setPackagePage] = useState<{ search: string; offset: number; hasMore: boolean } | null>(null);
+  const [search, setSearch] = useState(''), [packages, setPackages] = useState<ProcurementPackage[]>([]), [packagePage, setPackagePage] = useState<{ search: string; offset: number; hasMore: boolean; matching: PackageMatching } | null>(null);
   const [chosen, setChosen] = useState<ProcurementPackage | null>(null), [quantity, setQuantity] = useState(''), [specification, setSpecification] = useState('');
   const [decisionReason, setDecisionReason] = useState(''), [confirmed, setConfirmed] = useState(false);
   const [submissionReview, setSubmissionReview] = useState<{ preview: ProcurementPreview; command: ReturnType<typeof prepareProcurement> } | null>(null);
@@ -112,7 +113,7 @@ function RequestDesk({ account, fresh, onDenied }: { account: Account; fresh: bo
   async function find(query = search.trim(), offset = 0) {
     if (!selected || commandLocked || reviewLocked) return;
     await work(async (valid, signal) => { setChosen(null); setPackages([]); setPackagePage(null); const next = await gateway.packages(account.actorId, selected.location, query, offset, signal);
-      if (valid()) { setPackages(next.items); setPackagePage({ search: query, offset: next.offset, hasMore: next.hasMore }); } });
+      if (valid()) { setPackages(next.items); setPackagePage({ search: query, offset: next.offset, hasMore: next.hasMore, matching: next.matching }); } });
   }
   function includePackage() {
     if (!chosen || commandLocked || reviewLocked || !current()) return;
@@ -196,7 +197,9 @@ function RequestDesk({ account, fresh, onDenied }: { account: Account; fresh: bo
               <label>Spesifikasi barang {index + 1} (opsional)<input maxLength={1000} value={line.specification} onChange={event => setDraftLines(values => values.map((value, position) => position === index ? { ...value, specification: event.target.value } : value))} /></label>
               <button type="button" className={styles.secondary} onClick={() => setDraftLines(values => values.filter((_, position) => position !== index))}>Hapus barang {index + 1}</button></section>)}
             <section className={styles.review} aria-label="Pilih kemasan katalog"><label>Cari barang atau kemasan<input maxLength={128} value={search} onChange={event => setSearch(event.target.value)} /></label><button type="button" className={styles.secondary} onClick={() => void find()}>Cari kemasan</button>
-              <ul className={styles.queueList}>{packages.map(item => <li key={item.skuId}><button type="button" className={chosen?.skuId === item.skuId ? styles.selectedRow : styles.queueRow} onClick={() => { setChosen(item); setQuantity(''); setSpecification(''); }}><strong>{item.familyName}</strong><span>{item.skuCode} · {item.packageLabel} · {item.baseUnitsPerPackage} {item.baseUnitCode}</span></button></li>)}</ul>
+              <p className={styles.help}>Hasil pencarian adalah saran. Pilih barang lalu periksa isi dan jumlah kemasan; tidak ada pilihan otomatis.</p>
+              {packagePage?.matching.limited && <p role="status">Hasil pencarian dibatasi untuk katalog besar. Cari kode SKU tepat atau potongan nama untuk mempersempit hasil.</p>}
+              <ul className={styles.queueList}>{packages.map(item => <li key={item.skuId}><button type="button" aria-pressed={chosen?.skuId === item.skuId} className={chosen?.skuId === item.skuId ? styles.selectedRow : styles.queueRow} onClick={() => { setChosen(item); setQuantity(''); setSpecification(''); }}><strong>{item.familyName}</strong><span>{item.skuCode} · {item.packageLabel} · {item.baseUnitsPerPackage} {item.baseUnitCode}</span><small>{packageMatchExplanation(packagePage?.matching.items.find(value => value.skuId === item.skuId))}</small></button></li>)}</ul>
               {packagePage && packages.length === 0 && <p>Tidak ada kemasan yang cocok dalam lokasi ini.</p>}
               {packagePage && <nav className={styles.pagination} aria-label="Halaman kemasan"><button type="button" className={styles.secondary} disabled={packagePage.offset === 0} onClick={() => void find(packagePage.search, Math.max(0, packagePage.offset - 25))}>Kemasan sebelumnya</button>
                 <button type="button" className={styles.secondary} disabled={!packagePage.hasMore || packagePage.offset >= 10000} onClick={() => void find(packagePage.search, packagePage.offset + 25)}>Kemasan berikutnya</button></nav>}

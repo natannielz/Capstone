@@ -102662,6 +102662,59 @@
         },
         "additionalProperties": false
       },
+      "ProcurementPackageMatchDto": {
+        "required": [
+          "skuId",
+          "kind",
+          "field",
+          "editDistance"
+        ],
+        "type": "object",
+        "properties": {
+          "skuId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "field": {
+            "type": "string"
+          },
+          "editDistance": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProcurementPackageMatchingDto": {
+        "required": [
+          "ruleVersion",
+          "limited",
+          "items"
+        ],
+        "type": "object",
+        "properties": {
+          "ruleVersion": {
+            "type": "string"
+          },
+          "limited": {
+            "type": "boolean"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProcurementPackageMatchDto"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
       "ProcurementPackageQueryDto": {
         "required": [
           "purpose",
@@ -102706,7 +102759,8 @@
         "required": [
           "items",
           "offset",
-          "hasMore"
+          "hasMore",
+          "matching"
         ],
         "type": "object",
         "properties": {
@@ -102726,6 +102780,9 @@
           },
           "hasMore": {
             "type": "boolean"
+          },
+          "matching": {
+            "$ref": "#/components/schemas/ProcurementPackageMatchingDto"
           }
         },
         "additionalProperties": false

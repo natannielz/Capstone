@@ -1,5 +1,7 @@
 using MongoDB.Bson;
 using MongoDB.Driver;
+using System.Text.RegularExpressions;
+using UnitToko.Modules.Catalog;
 using UnitToko.Modules.Identity;
 using UnitToko.Modules.Identity.Contracts;
 using UnitToko.Modules.Organizations;
@@ -58,18 +60,45 @@ public sealed partial class CatalogAuthoringService
             await repository.TouchAsync(tx, head.Collection, head.Row, ct);
         RequireProcurement(owner, actor, authority, tx, location, permission); ct.ThrowIfCancellationRequested();
     }
-    internal async Task<(ProcurementCatalogCapture Capture, bool HasMore)> ProcurementPackagesAsync(IMongoDatabase owner, ActorContext actor, AuthorizationSnapshot authority,
+    internal async Task<(ProcurementCatalogCapture Capture, bool HasMore, BsonDocument Matching)> ProcurementPackagesAsync(IMongoDatabase owner, ActorContext actor, AuthorizationSnapshot authority,
         IClientSessionHandle tx, ProcurementLocation location, int offset, int limit, string? search, CancellationToken ct, string permission = Permissions.ProcurementRead) {
         RequireProcurement(owner, actor, authority, tx, location, permission); AuthorizationStore.ValidatePage(offset, limit);
         var scope = ProcurementRequestRules.Scope(location); var shop = scope with { Kind = GrantScopeKind.FulfillmentShop, WarehouseId = null };
-        var pipeline = StockChoicePipeline(F.Or(CatalogRepository.OwnerFilter("authoringOwner", scope), CatalogRepository.OwnerFilter("authoringOwner", shop)) &
-            F.Eq("active", true) & SearchFilter("displayName", search));
-        pipeline.Add(new("$sort", new BsonDocument("_id", 1))); pipeline.Add(new("$skip", offset)); pipeline.Add(new("$limit", limit + 1));
-        pipeline.Add(new("$project", new BsonDocument { { "_id", 1 }, { "revision", 1 }, { "currentDefinitionId", 1 }, { "definition.version", 1 } }));
-        var rows = await repository.Rows("skus").Aggregate<BsonDocument>(tx, pipeline).ToListAsync(ct);
+        var query = search is null or "" ? "" : ProductMatchRule.Normalize(CatalogAuthoringPolicy.Text(search, 128));
+        if (query.Length > 128) throw CatalogRepository.Invalid();
+        var pipeline = StockChoicePipeline(F.Or(CatalogRepository.OwnerFilter("authoringOwner", scope), CatalogRepository.OwnerFilter("authoringOwner", shop)) & F.Eq("active", true));
+        pipeline.Add(new("$sort", new BsonDocument("_id", 1)));
+        pipeline.Add(new("$project", new BsonDocument { { "_id", 1 }, { "revision", 1 }, { "currentDefinitionId", 1 },
+            { "definition.version", 1 }, { "sku", 1 }, { "family.name", 1 }, { "definition.packageLabel", 1 } }));
+        List<BsonDocument> rows; var limited = false;
+        if (query.Length == 0) {
+            pipeline.Add(new("$skip", offset)); pipeline.Add(new("$limit", limit + 1));
+            rows = await repository.Rows("skus").Aggregate<BsonDocument>(tx, pipeline).ToListAsync(ct);
+        } else {
+            // Exact codes and literal fragments search the complete authorized scope; only typo candidates use the bounded prefix of that scope.
+            BsonDocument Stop() => new("$limit", ProductMatchRule.CandidateLimit + 1);
+            var fragments = new BsonArray(query.Split(' ', StringSplitOptions.RemoveEmptyEntries).Select(token => new BsonDocument("$or", new BsonArray(
+                new[] { "sku", "family.name", "definition.packageLabel" }.Select(field => new BsonDocument(field, new BsonRegularExpression(Regex.Escape(token), "i")))))));
+            pipeline.Add(new("$facet", new BsonDocument {
+                { "exact", new BsonArray { new BsonDocument("$match", new BsonDocument("sku", new BsonRegularExpression("^" + Regex.Escape(query) + "$", "i"))), Stop() } },
+                { "literal", new BsonArray { new BsonDocument("$match", new BsonDocument("$and", fragments)), Stop() } },
+                { "fuzzy", new BsonArray { Stop() } } }));
+            var found = await repository.Rows("skus").Aggregate<BsonDocument>(tx, pipeline).SingleAsync(ct);
+            limited = found.Elements.Any(part => part.Value.AsBsonArray.Count > ProductMatchRule.CandidateLimit);
+            rows = found.Elements.SelectMany(part => part.Value.AsBsonArray.Take(ProductMatchRule.CandidateLimit)).Select(value => value.AsBsonDocument)
+                .DistinctBy(row => row["_id"].AsInt64).Select(row => (Row: row, Match: Match(row))).Where(item => item.Match is not null)
+                .OrderBy(item => item.Match!.Rank).ThenBy(item => item.Match!.EditDistance ?? 0).ThenBy(item => item.Row["sku"].AsString, StringComparer.Ordinal)
+                .ThenBy(item => item.Row["_id"].AsInt64).Skip(offset).Take(limit + 1).Select(item => item.Row).ToList();
+        }
+        ProductMatch? Match(BsonDocument row) => ProductMatchRule.Match(query, row["sku"].AsString, row["family"]["name"].AsString, row["definition"]["packageLabel"].AsString);
         var lines = rows.Take(limit).Select(row => new ProcurementRequestLineInput(row["_id"].AsInt64, row["revision"].AsInt64,
             row["currentDefinitionId"].AsInt64, row["definition"]["version"].AsInt64, 1, null)).ToArray();
-        return (await CaptureProcurementAsync(owner, actor, authority, tx, location, permission, lines, ct), rows.Count > limit);
+        var matching = new BsonDocument { { "ruleVersion", ProductMatchRule.Version }, { "limited", limited }, { "items", new BsonArray(rows.Take(limit).Select(row => {
+            var match = Match(row) ?? throw CatalogRepository.Invalid();
+            return new BsonDocument { { "skuId", row["_id"] }, { "kind", match.Kind }, { "field", match.Field },
+                { "editDistance", match.EditDistance is { } distance ? new BsonInt32(distance) : BsonNull.Value } };
+        })) } };
+        return (await CaptureProcurementAsync(owner, actor, authority, tx, location, permission, lines, ct), rows.Count > limit, matching);
     }
     internal static BsonDocument ProcurementMaster(BsonDocument row) { var copy = row.DeepClone().AsBsonDocument; copy["fence"] = 0L; return copy; }
     private async Task RequireProcurementAuditAsync(IClientSessionHandle tx, BsonDocument audit, string part, BsonDocument row, CancellationToken ct,

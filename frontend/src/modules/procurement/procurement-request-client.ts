@@ -3,6 +3,7 @@ import { createUnitTokoClient, RequestNotSentError } from '../../api/client';
 import { AccessFailure } from '../administration/workflow';
 import { paymentAllocationSchemas } from '../billing/payment-allocation-client';
 import { freezeCatalogAttempt } from '../catalog/catalog-editor-state';
+import { packageMatchingSchema, packageMatchesFit } from './package-matching';
 
 const { id, hash } = paymentAllocationSchemas;
 const version = id;
@@ -29,8 +30,8 @@ const input = z.object({ location, route, kind, businessDate: date, externalRefe
 const packageFields = { skuId: id, skuRevision: version, definitionId: id, definitionVersion: version, skuCode: text(64), familyName: text(160),
   packageLabel: text(160), packageKind: z.enum(['loose', 'sealed', 'other']), baseUnitCode: text(64), baseUnitsPerPackage: z.number().int().min(1).max(2_147_483_647) };
 const packageChoice = z.object(packageFields).strict();
-const packagePage = z.object({ items: z.array(packageChoice).max(25), offset: z.number().int().min(0).max(10000), hasMore: z.boolean() }).strict().refine(value =>
-  new Set(value.items.map(item => item.skuId)).size === value.items.length && (!value.hasMore || value.items.length > 0));
+const packagePage = z.object({ items: z.array(packageChoice).max(25), offset: z.number().int().min(0).max(10000), hasMore: z.boolean(), matching: packageMatchingSchema }).strict().refine(value =>
+  new Set(value.items.map(item => item.skuId)).size === value.items.length && (!value.hasMore || value.items.length > 0) && packageMatchesFit(value.items, value.matching));
 const line = z.object({ ...packageFields, packages, specification: userText(1000).nullable() }).strict();
 const lines = z.array(line).min(1).max(100);
 const facts = { input, source, lines };
