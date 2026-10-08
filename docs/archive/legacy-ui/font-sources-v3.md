@@ -4,8 +4,8 @@ Diunduh pada 17 September 2026 langsung dari repositori resmi [Google Fonts](htt
 
 | Peran | Berkas lokal | Sumber resmi | Lisensi lokal |
 | --- | --- | --- | --- |
-| Display — Archivo Black Regular | [archivo-black.ttf](../website/public/fonts/archivo-black.ttf), 90.988 byte | [ArchivoBlack-Regular.ttf](https://github.com/google/fonts/blob/main/ofl/archivoblack/ArchivoBlack-Regular.ttf) | [OFL-ArchivoBlack.txt](../website/public/fonts/OFL-ArchivoBlack.txt) |
-| Body — DM Sans variable, upright | [dm-sans-variable.ttf](../website/public/fonts/dm-sans-variable.ttf), 240.164 byte | [DMSans\[opsz,wght\].ttf](https://github.com/google/fonts/blob/main/ofl/dmsans/DMSans%5Bopsz%2Cwght%5D.ttf) | [OFL-DMSans.txt](../website/public/fonts/OFL-DMSans.txt) |
+| Display — Archivo Black Regular | [archivo-black.ttf](../../../website/public/fonts/archivo-black.ttf), 90.988 byte | [ArchivoBlack-Regular.ttf](https://github.com/google/fonts/blob/main/ofl/archivoblack/ArchivoBlack-Regular.ttf) | [OFL-ArchivoBlack.txt](../../../website/public/fonts/OFL-ArchivoBlack.txt) |
+| Body — DM Sans variable, upright | [dm-sans-variable.ttf](../../../website/public/fonts/dm-sans-variable.ttf), 240.164 byte | [DMSans\[opsz,wght\].ttf](https://github.com/google/fonts/blob/main/ofl/dmsans/DMSans%5Bopsz%2Cwght%5D.ttf) | [OFL-DMSans.txt](../../../website/public/fonts/OFL-DMSans.txt) |
 
 Kedua font disertai salinan SIL Open Font License dari folder sumber masing-masing: [Archivo Black OFL](https://github.com/google/fonts/blob/main/ofl/archivoblack/OFL.txt) dan [DM Sans OFL](https://github.com/google/fonts/blob/main/ofl/dmsans/OFL.txt).
 

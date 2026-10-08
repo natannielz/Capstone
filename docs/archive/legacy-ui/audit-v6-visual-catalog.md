@@ -10,7 +10,7 @@ Pengelompokan 12 keluarga/36 SKU, input jumlah langsung, subtotal, review pengaj
 
 **Prioritas P1 · Confidence tinggi · Dikonfirmasi browser produksi.**
 
-`chosenProduct()` mengutamakan pilihan kemasan sebelumnya sebelum produk yang cocok dengan pencarian: [catalog.tsx:329](../website/components/catalog.tsx#L329). Mengganti teks pencarian hanya memperbarui query, tanpa menyesuaikan pilihan: [catalog.tsx:404](../website/components/catalog.tsx#L404).
+`chosenProduct()` mengutamakan pilihan kemasan sebelumnya sebelum produk yang cocok dengan pencarian: [catalog.tsx:329](../../../website/components/catalog.tsx#L329). Mengganti teks pencarian hanya memperbarui query, tanpa menyesuaikan pilihan: [catalog.tsx:404](../../../website/components/catalog.tsx#L404).
 
 **Reproduksi:** pilih air Paket 6 dus, lalu cari `OMI-001-P3`. Satu hasil muncul, tetapi masih Paket 6, Rp324.000, 22 paket. URL sudah berisi pencarian P3. Tombol Tambah memakai varian yang masih terpilih, sehingga PIC dapat memasukkan kemasan yang berbeda dari SKU yang dicari.
 
@@ -20,7 +20,7 @@ Pengelompokan 12 keluarga/36 SKU, input jumlah langsung, subtotal, review pengaj
 
 **Prioritas P2 · Confidence tinggi · Dikonfirmasi browser produksi.**
 
-Tombol “Ubah barang di keranjang” memanggil `close`: [catalog.tsx:1123](../website/components/catalog.tsx#L1123). Dialog kemudian dilepas dari tree: [catalog.tsx:773](../website/components/catalog.tsx#L773), sementara divisi/tanggal/alamat/catatan hanya disimpan dalam state dialog: [catalog.tsx:817](../website/components/catalog.tsx#L817).
+Tombol “Ubah barang di keranjang” memanggil `close`: [catalog.tsx:1123](../../../website/components/catalog.tsx#L1123). Dialog kemudian dilepas dari tree: [catalog.tsx:773](../../../website/components/catalog.tsx#L773), sementara divisi/tanggal/alamat/catatan hanya disimpan dalam state dialog: [catalog.tsx:817](../../../website/components/catalog.tsx#L817).
 
 **Reproduksi:** sebagai Kepala Toko, isi divisi, alamat khusus, tanggal, dan catatan → Periksa pesanan → Ubah barang di keranjang → Lanjutkan pesanan. Browser produksi mengonfirmasi divisi kembali ke “Pilih divisi” serta alamat/catatan kosong. Pengguna harus mengulang isian hanya untuk mengoreksi barang.
 
@@ -30,7 +30,7 @@ Tombol “Ubah barang di keranjang” memanggil `close`: [catalog.tsx:1123](../w
 
 **Prioritas P2 · Confidence tinggi dari kode · Belum diuji di browser.**
 
-Keranjang diambil sekali ketika komponen dipasang: [catalog.tsx:254](../website/components/catalog.tsx#L254). Setiap perubahan menulis seluruh snapshot lokal: [catalog.tsx:284](../website/components/catalog.tsx#L284). Tidak ada langganan perubahan `storage` pada kode katalog.
+Keranjang diambil sekali ketika komponen dipasang: [catalog.tsx:254](../../../website/components/catalog.tsx#L254). Setiap perubahan menulis seluruh snapshot lokal: [catalog.tsx:284](../../../website/components/catalog.tsx#L284). Tidak ada langganan perubahan `storage` pada kode katalog.
 
 **Reproduksi terarah:** tab A dan B akun sama sama-sama membuka keranjang berisi air 1. A mengubah air menjadi 5. B menambah teh. B menulis snapshot lama berisi air 1 + teh, sehingga saat A dimuat ulang jumlah air kembali 1. Setelah checkout berhasil di A, tab B juga masih menampilkan keranjang sebelum checkout.
 
@@ -40,7 +40,7 @@ Keranjang diambil sekali ketika komponen dipasang: [catalog.tsx:254](../website/
 
 **Prioritas P2 · Confidence tinggi · Dikonfirmasi browser produksi pada 980×900.**
 
-Keranjang turun ke bawah daftar pada breakpoint 1000px: [catalog-v5.css:524](../website/app/catalog-v5.css#L524). Ringkasan fixed baru ditampilkan pada breakpoint 950px: [polish.css:392](../website/app/polish.css#L392) dan [polish.css:413](../website/app/polish.css#L413); default-nya `display:none`.
+Keranjang turun ke bawah daftar pada breakpoint 1000px: [catalog-v5.css:524](../../../website/app/catalog-v5.css#L524). Ringkasan fixed baru ditampilkan pada breakpoint 950px: [polish.css:392](../../../website/app/polish.css#L392) dan [polish.css:413](../../../website/app/polish.css#L413); default-nya `display:none`.
 
 **Reproduksi:** viewport 980×900, tampilkan seluruh katalog lalu tambah barang. Agen utama mengukur posisi Y keranjang sekitar 4221px dan tombol lanjut sekitar 4624px, sementara “Lihat keranjang” memiliki `display:none` dan rect 0. Pengguna harus melewati seluruh daftar produk untuk melanjutkan.
 
@@ -50,7 +50,7 @@ Keranjang turun ke bawah daftar pada breakpoint 1000px: [catalog-v5.css:524](../
 
 **Prioritas P2 · Confidence tinggi dari kode · Belum diuji khusus di browser.**
 
-Semua pilihan produk/koleksi dibuat sebagai URL login: [catalog.ts:111](../website/lib/domain/catalog.ts#L111). Halaman login langsung merender formulir tanpa pemeriksaan sesi: [app/login/page.tsx:2](../website/app/login/page.tsx#L2). Pengalihan baru terjadi setelah formulir login dikirim: [login.tsx:19](../website/components/login.tsx#L19).
+Semua pilihan produk/koleksi dibuat sebagai URL login: [catalog.ts:111](../../../website/lib/domain/catalog.ts#L111). Halaman login langsung merender formulir tanpa pemeriksaan sesi: [app/login/page.tsx:2](../../../website/app/login/page.tsx#L2). Pengalihan baru terjadi setelah formulir login dikirim: [login.tsx:19](../../../website/components/login.tsx#L19).
 
 **Reproduksi terarah:** masuk sebagai PIC → kembali ke beranda publik tanpa logout → klik produk kopi. Meskipun sesi masih valid, alur mengarah ke formulir email/kata sandi, bukan langsung ke detail kopi. Ini memutus kelanjutan pilihan bagi pengguna yang sudah masuk.
 
@@ -60,7 +60,7 @@ Semua pilihan produk/koleksi dibuat sebagai URL login: [catalog.ts:111](../websi
 
 **Prioritas P3 · Confidence tinggi dari kode · Belum diuji dengan jaringan tertunda.**
 
-`refresh()` tidak mengubah `loading` menjadi true sebelum permintaan; hanya mengubahnya menjadi false pada akhir. Tampilan gagal menampilkan tombol “Coba kembali” tanpa disabled/busy: [workspace.tsx:94](../website/components/workspace.tsx#L94) dan [workspace.tsx:100](../website/components/workspace.tsx#L100).
+`refresh()` tidak mengubah `loading` menjadi true sebelum permintaan; hanya mengubahnya menjadi false pada akhir. Tampilan gagal menampilkan tombol “Coba kembali” tanpa disabled/busy: [workspace.tsx:94](../../../website/components/workspace.tsx#L94) dan [workspace.tsx:100](../../../website/components/workspace.tsx#L100).
 
 **Reproduksi terarah:** gagalkan `/api/state` pada pembukaan awal, pulihkan jaringan tetapi tunda respons, lalu klik Coba kembali. Pesan gagal lama dan tombol aktif tetap terlihat selama permintaan baru berlangsung; klik berulang membuat permintaan tambahan.
 

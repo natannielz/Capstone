@@ -18,7 +18,7 @@ Perbaikan v4 — copy sesuai peran, pemisahan profil readonly, hitungan antrean 
 
 ## 1. Kartu antrean perlu membawa konteks filternya
 
-**Sebelum.** Hitungan v4 sudah membedakan pekerjaan staf, tetapi klik kartu hanya menjalankan `go(q.page)`. Halaman Pesanan kemudian menampilkan semua status dan pencarian teks. Bukti: [dashboard.tsx:15](../website/components/dashboard.tsx#L15), [workspace.tsx:91](../website/components/workspace.tsx#L91), [workspace.tsx:129](../website/components/workspace.tsx#L129). Agen utama mengonfirmasi di browser: akun Kepala Toko menekan **Menunggu tinjauan 2 → Lihat rincian**, tetapi tujuan adalah **Semua pesanan 5**, berisi lima baris lintas status dan hanya kolom pencarian.
+**Sebelum.** Hitungan v4 sudah membedakan pekerjaan staf, tetapi klik kartu hanya menjalankan `go(q.page)`. Halaman Pesanan kemudian menampilkan semua status dan pencarian teks. Bukti: [dashboard.tsx:15](../../../website/components/dashboard.tsx#L15), [workspace.tsx:91](../../../website/components/workspace.tsx#L91), [workspace.tsx:129](../../../website/components/workspace.tsx#L129). Agen utama mengonfirmasi di browser: akun Kepala Toko menekan **Menunggu tinjauan 2 → Lihat rincian**, tetapi tujuan adalah **Semua pesanan 5**, berisi lima baris lintas status dan hanya kolom pencarian.
 
 Pemeriksaan browser lanjutan oleh agen utama: cari `0004` → buka `PO/202609/0004` → pilih “Semua pesanan”; textbox kembali kosong dan seluruh lima baris muncul. Jadi kehilangan konteks pencarian juga terkonfirmasi, bukan hanya disimpulkan dari state komponen.
 
@@ -36,7 +36,7 @@ Pola tugas dengan status dan tautan relevan mendukung arah ini. Panduan GOV.UK j
 
 ## 2. Alokasi pembayaran perlu satu ringkasan lintas invoice
 
-**Sebelum.** Dialog “Alokasikan ke invoice” menyediakan satu pilihan invoice dan satu nominal. Payload UI selalu `lines: [{invoiceId, amount}]`, sehingga satu transfer untuk beberapa invoice memerlukan beberapa dialog. Pengguna tidak melihat rencana pembagian dan seluruh saldo akhirnya sebelum menyimpan. Bukti: [workspace.tsx:148](../website/components/workspace.tsx#L148). Engine sudah menerima array alokasi dan memeriksa divisi, saldo invoice, serta dana tersedia: [engine.ts:113](../website/lib/domain/engine.ts#L113). Alur ini memang diwajibkan dalam rencana penagihan (arsip rencana awal; disimpan lokal).
+**Sebelum.** Dialog “Alokasikan ke invoice” menyediakan satu pilihan invoice dan satu nominal. Payload UI selalu `lines: [{invoiceId, amount}]`, sehingga satu transfer untuk beberapa invoice memerlukan beberapa dialog. Pengguna tidak melihat rencana pembagian dan seluruh saldo akhirnya sebelum menyimpan. Bukti: [workspace.tsx:148](../../../website/components/workspace.tsx#L148). Engine sudah menerima array alokasi dan memeriksa divisi, saldo invoice, serta dana tersedia: [engine.ts:113](../../../website/lib/domain/engine.ts#L113). Alur ini memang diwajibkan dalam rencana penagihan (arsip rencana awal; disimpan lokal).
 
 **Sesudah.** Dari pembayaran terverifikasi, buka formulir alokasi berisi invoice belum lunas milik divisi pembayar. Tampilkan saldo awal, jumlah yang dialokasikan per invoice, saldo akhir, total alokasi, dan dana tersisa. Pengguna memeriksa seluruh pembagian sebelum satu kali menyimpan. Bukti transfer dan dokumen invoice tetap dapat dibuka dari konteks yang sama. Tindakan tetap hanya untuk Penagihan; PIC melihat hasil dan statusnya.
 
@@ -52,7 +52,7 @@ Ringkasan yang dapat diperiksa dan diperbaiki sebelum pengiriman data sejalan de
 
 ## 3. Pemesanan jumlah besar membutuhkan input langsung dan pemeriksaan akhir
 
-**Sebelum.** Jumlah produk ditampilkan sebagai teks di antara tombol −/+, baik di kartu maupun keranjang; tidak ada isian langsung. Mengubah satu SKU dari 1 menjadi 50 berarti 49 kali menambah. Dialog pengajuan menampilkan jumlah jenis barang dan estimasi total, tetapi tidak merangkum baris barang yang akan diajukan. Bukti: [catalog.tsx:16](../website/components/catalog.tsx#L16), [catalog.tsx:17](../website/components/catalog.tsx#L17), [catalog.tsx:18](../website/components/catalog.tsx#L18).
+**Sebelum.** Jumlah produk ditampilkan sebagai teks di antara tombol −/+, baik di kartu maupun keranjang; tidak ada isian langsung. Mengubah satu SKU dari 1 menjadi 50 berarti 49 kali menambah. Dialog pengajuan menampilkan jumlah jenis barang dan estimasi total, tetapi tidak merangkum baris barang yang akan diajukan. Bukti: [catalog.tsx:16](../../../website/components/catalog.tsx#L16), [catalog.tsx:17](../../../website/components/catalog.tsx#L17), [catalog.tsx:18](../../../website/components/catalog.tsx#L18).
 
 **Sesudah.** Pertahankan tombol −/+ dan tambahkan isian jumlah dengan satuan yang jelas di keranjang. Perubahan langsung memperbarui subtotal dan estimasi. Sebelum diajukan, tampilkan ringkasan barang, jumlah/satuan, stok yang belum mencukupi, alamat, tanggal kebutuhan, dan total. Tautan “Ubah” kembali ke bagian terkait dengan isian tetap terisi.
 
@@ -68,7 +68,7 @@ Riset Baymard mendukung kombinasi tombol dan isian, terutama untuk jumlah besar,
 
 ## 4. Detail pesanan PIC perlu menghubungkan tindak lanjut dan dokumen
 
-**Sebelum.** Detail pesanan mempunyai tabel jumlah, usulan substitusi, dan pengiriman terkait. Konfirmasi penerimaan berada di halaman Pengiriman; invoice dan pembayaran berada pada menu lain. Detail pesanan belum menunjukkan invoice yang bersumber dari pengiriman tersebut atau tindakan PIC yang sedang menunggu. Bukti: [workspace.tsx:130](../website/components/workspace.tsx#L130), [workspace.tsx:134](../website/components/workspace.tsx#L134), [workspace.tsx:141](../website/components/workspace.tsx#L141), [workspace.tsx:146](../website/components/workspace.tsx#L146). Dokumen harus saling dapat ditelusuri menurut rencana relasi transaksi (arsip rencana awal; disimpan lokal).
+**Sebelum.** Detail pesanan mempunyai tabel jumlah, usulan substitusi, dan pengiriman terkait. Konfirmasi penerimaan berada di halaman Pengiriman; invoice dan pembayaran berada pada menu lain. Detail pesanan belum menunjukkan invoice yang bersumber dari pengiriman tersebut atau tindakan PIC yang sedang menunggu. Bukti: [workspace.tsx:130](../../../website/components/workspace.tsx#L130), [workspace.tsx:134](../../../website/components/workspace.tsx#L134), [workspace.tsx:141](../../../website/components/workspace.tsx#L141), [workspace.tsx:146](../../../website/components/workspace.tsx#L146). Dokumen harus saling dapat ditelusuri menurut rencana relasi transaksi (arsip rencana awal; disimpan lokal).
 
 Agen utama melihat struktur rincian barang, pengiriman terkait, dan aksi status pada browser akun Kepala Toko, tanpa invoice terkait. Kesimpulan untuk akun PIC pada audit ini tetap berdasarkan kode; belum diklaim sebagai pemeriksaan browser PIC.
 
@@ -86,7 +86,7 @@ Susunan hubungan transaksi ini adalah inferensi dari kebutuhan penelusuran lokal
 
 ## 5. Profil perlu menangani perubahan yang belum disimpan
 
-**Sebelum.** Pemisahan Data pribadi/Detail akun/Kata sandi sudah baik pada v4. Namun nilai pribadi hanya hidup di state komponen, tombol Simpan aktif ketika tidak sibuk, dan navigasi workspace langsung mengganti halaman. Ketika pengguna mengubah kontak lalu pindah menu, komponen dilepas dan isian belum tersimpan hilang. Bukti: [profile.tsx:14](../website/components/profile.tsx#L14), [profile.tsx:49](../website/components/profile.tsx#L49), [workspace.tsx:91](../website/components/workspace.tsx#L91).
+**Sebelum.** Pemisahan Data pribadi/Detail akun/Kata sandi sudah baik pada v4. Namun nilai pribadi hanya hidup di state komponen, tombol Simpan aktif ketika tidak sibuk, dan navigasi workspace langsung mengganti halaman. Ketika pengguna mengubah kontak lalu pindah menu, komponen dilepas dan isian belum tersimpan hilang. Bukti: [profile.tsx:14](../../../website/components/profile.tsx#L14), [profile.tsx:49](../../../website/components/profile.tsx#L49), [workspace.tsx:91](../../../website/components/workspace.tsx#L91).
 
 **Sesudah.** Tampilkan status perubahan pada bagian Data pribadi; sediakan Simpan dan Batalkan perubahan hanya saat relevan. Saat meninggalkan halaman dengan perubahan, berikan pilihan Tetap mengedit atau Buang perubahan. Tindakan unggah foto tetap mandiri. Jangan menyimpan kata sandi pada localStorage atau draft profil.
 

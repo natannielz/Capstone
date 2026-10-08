@@ -2,7 +2,7 @@
 
 Tanggal: 17 September 2026. Ruang lingkup: pesanan, pengiriman, invoice, alokasi pembayaran, validasi domain, dan state navigasi. Audit ini hanya membaca aplikasi dan menjalankan fixture di memori; tidak mengubah implementasi, kredensial, database lokal, atau produksi.
 
-Dasar: [AGENTS.md](../website/AGENTS.md) dan [penerapan UI v5](ui-implementation-v5.md). Empat temuan di bawah **terverifikasi**, bukan dugaan. Tidak ada temuan yang mengulang filter antrean, pencarian hilang ketika kembali dari detail, responsivitas daftar pesanan, atau alokasi satu invoice yang sudah diperbaiki pada v5.
+Dasar: [AGENTS.md](../../../website/AGENTS.md) dan [penerapan UI v5](ui-implementation-v5.md). Empat temuan di bawah **terverifikasi**, bukan dugaan. Tidak ada temuan yang mengulang filter antrean, pencarian hilang ketika kembali dari detail, responsivitas daftar pesanan, atau alokasi satu invoice yang sudah diperbaiki pada v5.
 
 ## Ringkasan prioritas
 
@@ -19,7 +19,7 @@ P1 berarti perlu ditangani sebelum memperluas skenario pencatatan tanggal. P2 be
 
 **Status: bug terverifikasi melalui rangkaian perintah domain.**
 
-Lokasi utama: [engine.ts:39](../website/lib/domain/engine.ts#L39), [engine.ts:48](../website/lib/domain/engine.ts#L48), dan [engine.ts:62](../website/lib/domain/engine.ts#L62). Pesanan menyimpan `createdDate` pada [engine.ts:35](../website/lib/domain/engine.ts#L35), tetapi peninjauan, reservasi, dan pembuatan Surat Jalan tidak membandingkan tanggal tindakan dengan tanggal pesanan. Pemeriksaan pengiriman berikutnya hanya mengikuti tanggal Surat Jalan pada [engine.ts:73](../website/lib/domain/engine.ts#L73). Formulir tindakan membolehkan pengguna mengisi tanggal pencatatan pada [workspace.tsx:138](../website/components/workspace.tsx#L138).
+Lokasi utama: [engine.ts:39](../../../website/lib/domain/engine.ts#L39), [engine.ts:48](../../../website/lib/domain/engine.ts#L48), dan [engine.ts:62](../../../website/lib/domain/engine.ts#L62). Pesanan menyimpan `createdDate` pada [engine.ts:35](../../../website/lib/domain/engine.ts#L35), tetapi peninjauan, reservasi, dan pembuatan Surat Jalan tidak membandingkan tanggal tindakan dengan tanggal pesanan. Pemeriksaan pengiriman berikutnya hanya mengikuti tanggal Surat Jalan pada [engine.ts:73](../../../website/lib/domain/engine.ts#L73). Formulir tindakan membolehkan pengguna mengisi tanggal pencatatan pada [workspace.tsx:138](../../../website/components/workspace.tsx#L138).
 
 Reproduksi di memori:
 
@@ -43,7 +43,7 @@ Acceptance criteria:
 
 **Status: bug terverifikasi melalui perintah domain dan selector yang dipakai daftar/detail.**
 
-Lokasi: [engine.ts:45](../website/lib/domain/engine.ts#L45), [order-views.ts:35](../website/lib/domain/order-views.ts#L35), [order-views.ts:52](../website/lib/domain/order-views.ts#L52), dan [order-views.ts:53](../website/lib/domain/order-views.ts#L53).
+Lokasi: [engine.ts:45](../../../website/lib/domain/engine.ts#L45), [order-views.ts:35](../../../website/lib/domain/order-views.ts#L35), [order-views.ts:52](../../../website/lib/domain/order-views.ts#L52), dan [order-views.ts:53](../../../website/lib/domain/order-views.ts#L53).
 
 `order.cancel` hanya mengganti status pesanan menjadi `cancelled` jika tidak ada objek Surat Jalan sama sekali. Surat Jalan yang sudah berstatus `cancelled` masih memenuhi pemeriksaan keberadaan tersebut. Setelah semua kuantitas pesanan dibatalkan, selector membandingkan `accepted >= desired`; nilai 0 >= 0 dianggap terpenuhi.
 
@@ -67,7 +67,7 @@ Acceptance criteria:
 
 **Status: bug terverifikasi melalui perintah domain, selector, dan kondisi render.**
 
-Lokasi: pembatalan [engine.ts:41](../website/lib/domain/engine.ts#L41), guard keputusan [engine.ts:58](../website/lib/domain/engine.ts#L58), antrean [order-views.ts:49](../website/lib/domain/order-views.ts#L49), daftar tindakan [order-experience.tsx:126](../website/components/order-experience.tsx#L126), serta tombol keputusan [order-experience.tsx:202](../website/components/order-experience.tsx#L202).
+Lokasi: pembatalan [engine.ts:41](../../../website/lib/domain/engine.ts#L41), guard keputusan [engine.ts:58](../../../website/lib/domain/engine.ts#L58), antrean [order-views.ts:49](../../../website/lib/domain/order-views.ts#L49), daftar tindakan [order-experience.tsx:126](../../../website/components/order-experience.tsx#L126), serta tombol keputusan [order-experience.tsx:202](../../../website/components/order-experience.tsx#L202).
 
 Reproduksi:
 
@@ -91,7 +91,7 @@ Acceptance criteria:
 
 **Status: bug terverifikasi melalui fixture sintetis 101 baris final dan payload identik dengan pemetaan UI.**
 
-Lokasi: batas `rows()` pada [engine.ts:7](../website/lib/domain/engine.ts#L7), pemakaian oleh penerbitan invoice pada [engine.ts:102](../website/lib/domain/engine.ts#L102), pengumpulan baris pada [workspace.tsx:154](../website/components/workspace.tsx#L154), dan pemetaan seluruh baris divisi pada [workspace.tsx:155](../website/components/workspace.tsx#L155).
+Lokasi: batas `rows()` pada [engine.ts:7](../../../website/lib/domain/engine.ts#L7), pemakaian oleh penerbitan invoice pada [engine.ts:102](../../../website/lib/domain/engine.ts#L102), pengumpulan baris pada [workspace.tsx:154](../../../website/components/workspace.tsx#L154), dan pemetaan seluruh baris divisi pada [workspace.tsx:155](../../../website/components/workspace.tsx#L155).
 
 Kondisi: satu divisi memiliki 101 atau lebih baris penerimaan final yang belum ditagih. Baris tersebut bisa berasal dari banyak pesanan/pengiriman; batas 100 barang per pesanan tidak mencegah kondisi ini.
 

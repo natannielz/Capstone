@@ -17,9 +17,9 @@ Tanggal: 22 September 2026. Lingkup: demo capstone Unit Toko untuk studi kasus d
 
 Logo digambar khusus untuk Unit Toko. Prinsip kontras, ruang bebas, dan penerapan satu warna merujuk pada [IBM Design Language](https://www.ibm.com/design/language/ibm-logos/8-bar/); bentuk logo IBM tidak disalin. Tipografi DM Sans dan Archivo serta palet yang ada dipertahankan. Foto ilustrasi yang tersedia digunakan kembali.
 
-- [Audit akun dan pelanggan](audit-accounts-v9.md)
-- [Audit operasional](audit-operasional-v9.md)
-- [Audit keuangan](audit-finance-v9.md)
+- [Audit akun dan pelanggan](../../audit-accounts-v9.md)
+- [Audit operasional](../../audit-operasional-v9.md)
+- [Audit keuangan](../../audit-finance-v9.md)
 - [Rancangan gerak halaman](design-motion-v9.md)
 
 ## Validasi dan publikasi

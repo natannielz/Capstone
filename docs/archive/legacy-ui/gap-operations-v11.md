@@ -36,7 +36,7 @@ Header “Pinjaman Produktif” dan nomor bab yang tersisa pada template tidak d
 | Laporan | Jurnal gabungan, register transaksi, laporan keuangan, CSV/PDF, review/return/approve/close dan snapshot | Penggabungan terjadi pada data website; bukan impor/rekonsiliasi file kasir OMI/Smart asli |
 | Wewenang | Staf menerima barang dan membayar OMI/DDO; Kepala memesan/membayar Smart/Pasar Kering; Pimpinan menyetujui; Penagihan mencatat dana; Akuntansi menutup | Penutupan sisa PO oleh Kepala adalah kontrol digital tambahan yang dibatasi pada pengadaan |
 
-Titik kode utama: [engine.ts](../website/lib/domain/engine.ts), [model.ts](../website/lib/domain/model.ts), [selectors.ts](../website/lib/domain/selectors.ts), [operations.tsx](../website/components/operations.tsx), [documents.ts](../website/lib/server/documents.ts). Pemetaan role pembayaran pemasok mengikuti kode aktual, bukan asumsi bahwa seluruh pembayaran pemasok dilakukan Penagihan.
+Titik kode utama: [engine.ts](../../../website/lib/domain/engine.ts), [model.ts](../../../website/lib/domain/model.ts), [selectors.ts](../../../website/lib/domain/selectors.ts), [operations.tsx](../../../website/components/operations.tsx), [documents.ts](../../../website/lib/server/documents.ts). Pemetaan role pembayaran pemasok mengikuti kode aktual, bukan asumsi bahwa seluruh pembayaran pemasok dilakukan Penagihan.
 
 ## Temuan menurut dampak
 
@@ -52,11 +52,11 @@ PO tertutup tidak bisa menerima barang lagi, dikonfirmasi ulang, atau ditutup du
 
 Untuk Pasar Kering, jumlah dan status alokasi internal tetap tersimpan. Alokasi belum dipakai dihitung sebagai **alokasi dikurangi pembayaran pemasok**, terpisah dari **utang atas barang diterima**. Selisih ditampilkan pada halaman dan dokumen cetak untuk rekonsiliasi berikutnya; penutupan tidak otomatis mencatat pelepasan alokasi atau arus kas. Pengajuan yang sudah ditutup tidak dapat dilanjutkan ke persetujuan/pencairan.
 
-Halaman pengadaan menyediakan filter status, kolom dibatalkan, nilai setelah pembatalan, alasan penutupan, dan tindakan pelunasan penerimaan. Dokumen cetak juga menunjukkan status, kuantitas awal/diterima/dibatalkan, nilai tersisa, dan catatan dana. Ringkasan [procurement.ts](../website/lib/domain/procurement.ts) menghitung sisa terbuka sebagai nol untuk PO tertutup; tidak ditemukan rollup lain yang memperlakukan PO tertutup sebagai pasokan mendatang. Kebutuhan pengganti dapat dicatat melalui pengadaan baru dengan tautan pesanan sumber yang sama.
+Halaman pengadaan menyediakan filter status, kolom dibatalkan, nilai setelah pembatalan, alasan penutupan, dan tindakan pelunasan penerimaan. Dokumen cetak juga menunjukkan status, kuantitas awal/diterima/dibatalkan, nilai tersisa, dan catatan dana. Ringkasan [procurement.ts](../../../website/lib/domain/procurement.ts) menghitung sisa terbuka sebagai nol untuk PO tertutup; tidak ditemukan rollup lain yang memperlakukan PO tertutup sebagai pasokan mendatang. Kebutuhan pengganti dapat dicatat melalui pengadaan baru dengan tautan pesanan sumber yang sama.
 
 ## Validasi
 
-- [procurement-remainder-v11.test.ts](../website/tests/procurement-remainder-v11.test.ts): **7/7 lulus**, memakai data memori lokal. Mencakup keempat jalur, penutupan sebagian/draf, pembayaran sesudah tutup, role lain, alasan kosong, duplikasi/line asing, tampilan kedaluwarsa, uang muka, seluruh tahap funding, kompatibilitas data lama, kronologi, snapshot periode, HTML escape, dan invariant kuantitas.
+- [procurement-remainder-v11.test.ts](../../../website/tests/procurement-remainder-v11.test.ts): **7/7 lulus**, memakai data memori lokal. Mencakup keempat jalur, penutupan sebagian/draf, pembayaran sesudah tutup, role lain, alasan kosong, duplikasi/line asing, tampilan kedaluwarsa, uang muka, seluruh tahap funding, kompatibilitas data lama, kronologi, snapshot periode, HTML escape, dan invariant kuantitas.
 - Review independen agent operasional: **48 assertion memori lulus** terhadap engine aktual, tanpa perubahan database atau server.
 - Parent melaporkan regresi gabungan **224 tes lulus**, TypeScript lulus, lint 0 error/9 warning yang sudah ada. Audit ini tidak menjalankan ulang seluruh suite atau mengklaim uji browser produksi sendiri.
 

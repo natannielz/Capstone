@@ -27,6 +27,7 @@ Bukti **terdahulu** di bawah diringkas dari dokumen/log yang dipertahankan; kons
 | --- | --- |
 | Build backend119 | Berhasil menurut hasil eksekusi yang diteruskan oleh executor; build tidak membuktikan normal-DI browser atau performa dispatch. |
 | Normal-DI browser121 (sesi ini) | **Gagal terminal**, 7,4056 menit pada backend119. Tiga tahap pertama lulus; dispatch HTTP200 setelah 35.033 ms melewati deadline 30 detik dan abort terdeteksi. Perbaikan119 belum menyelesaikan latensi. Replay120 sebelumnya gagal pada konfigurasi runner (evidence parent belum diset), bukan regresi produk; log dipertahankan. |
+| Deduplicated activation proof123 / browser124 | Native123 **lulus 2/2**, termasuk penolakan riwayat yang dimanipulasi; guard metadata/index **lulus 1/1**. Browser124 **gagal terminal**, 6,8958 menit: tiga tahap pertama lulus, dispatch HTTP200 34.701 ms tetap melampaui 30 detik. Penghapusan validasi identik mengurangi pembacaan tetapi belum memenuhi acceptance browser. Source tetap belum digabung sebagai workflow selesai. |
 | Native accounting116 | **12/12 lulus**, 6,4723 menit, pada binaries115/test-only116. Guard binding/mapping/chart/book/period/clock/mutation/rollback tercatat. Bukan tes provider. |
 | Normal-DI browser117 | **Gagal**, 7,3377 menit. Pending reference langsung terlihat, tetapi verifier membaca record sebelum commit. Dispatch benar-benar HTTP200 setelah 36.604 ms, melampaui batas 30 detik; tidak diterima. |
 | Verifier118 | Memisahkan pending-visible/disabled dari committed response dan settled recovery dalam deadline 30 detik yang sama. Hasil lulus belum tercatat pada konsolidasi. |
@@ -206,6 +207,7 @@ Frontend tetap Vercel. Pemeriksaan akses sesi ini menemukan Railway personal wor
 - Cleanup executor menghapus **405 berkas hasil build obsolete**, total **166.147.797 bytes**, hanya di `website/.test` dan `website/.next`, setelah hash arsip diverifikasi pada `tmp/cleanup-20261008/retired-generated.zip` beserta manifest. Pilot `.next`, database, keys, `website/.data` dan `website/.env.local` dipertahankan.
 - Edit asli pengguna, pricing, mixed-receipt costing dan pilot schema78 tetap dipertahankan. Legacy yang masih melayani fitur wajib tetap dipertahankan sampai penggantinya lulus.
 - README dan Release1 merujuk ledger ini; status “full work belum dilanjutkan” dan proses117/113/116 “sedang berjalan” tidak lagi dipakai sebagai status aktif.
+- Sebanyak65 dokumen/catatan UI/demo lama dipindahkan ke [arsip legacy](../archive/legacy-ui/README.md) dengan verifikasi hash dan perbaikan tautan. Tujuh HTTP handler legacy menjadi fixture historis; regresi dipertahankan. Kandidat cleanup-only melewati types dan16 checks, build checkout penuh lulus tanpa legacy SQL pada77 runtime trace; seluruh dependency lama belum dilepas.
 - Dokumen spesialis tetap dipakai sebagai kontrak/runbook. Klaim fase lama (misalnya “OCR hanya gambar”, “draft/checkout berikutnya”, old worktree baseline) tidak boleh mengalahkan bukti versi dan status aktif di sini.
 
 <a id="mixed-quality-costing-validation--4-october-2026"></a>

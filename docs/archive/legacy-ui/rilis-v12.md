@@ -8,10 +8,10 @@ Riset dan implementasi dibagi kepada tiga agen: referensi/pola interaksi, carous
 
 - Menghapus titik oranye pada label `UNIT TOKO / ETALASE PELANGGAN`, termasuk elemen HTML dan CSS-nya.
 - Mengganti tiga kartu produk yang bertumpuk dan miring dengan carousel tiga koleksi nyata. Foto dan teks mendapat ruang masing-masing, kontrol tetap berada dalam alur layout.
-- Carousel berganti otomatis setiap enam detik, menyediakan Jeda/Mulai dan panah manual, berhenti ketika pengguna berinteraksi, dan menghormati preferensi kurangi gerakan. Slide tidak aktif tidak menerima fokus. [Catatan implementasi](carousel-v12.md).
+- Carousel berganti otomatis setiap enam detik, menyediakan Jeda/Mulai dan panah manual, berhenti ketika pengguna berinteraksi, dan menghormati preferensi kurangi gerakan. Slide tidak aktif tidak menerima fokus. [Catatan implementasi](../../carousel-v12.md).
 - Memperjelas etalase dengan permukaan putih/perak dan warna petroleum, memperbaiki hierarki judul, filter, kartu, serta respons penambahan keranjang.
 - Detail produk memakai kolom foto dan pembelian yang lebih bersih. Deskripsi didekatkan ke nama, SKU tetap di rincian, stok memakai ikon bermakna, serta kuantitas/subtotal dikelompokkan. Bilah pembelian ponsel tetap terpisah dari navigasi bawah.
-- Beranda menggunakan foto dan tautan koleksi sejajar; halaman masuk memisahkan navigasi, foto, cerita dan formulir. Gerakan menjadi pembukaan visual dan pengungkapan bagian yang singkat, dengan kontrol transaksi tetap di tempatnya. [Catatan beranda/login](public-design-v12.md).
+- Beranda menggunakan foto dan tautan koleksi sejajar; halaman masuk memisahkan navigasi, foto, cerita dan formulir. Gerakan menjadi pembukaan visual dan pengungkapan bagian yang singkat, dengan kontrol transaksi tetap di tempatnya. [Catatan beranda/login](../../public-design-v12.md).
 - Mengurangi skala hover foto dan menghilangkan pergeseran/zoom berulang seluruh foto ketika hasil katalog berubah.
 
 ## Verifikasi yang dilakukan
@@ -36,4 +36,4 @@ Suite domain 224 tes dari v11 tidak dijalankan ulang karena rilis ini tidak meng
 
 ## Publikasi
 
-Deployment `dpl_7WYyrtaECyDC991cS9kB2VRfXfnq` berstatus READY dan dipromosikan ke alamat utama; pemetaan domain diperiksa kembali melalui Vercel. [Laporan akses produksi](vercel-v12-results.json) dan [laporan katalog](public-catalog-v12-results.json) menyimpan hasil terstruktur. Publikasi source memakai ekspor bersih yang mengecualikan riwayat Git lokal lama, database dan rahasia.
+Deployment `dpl_7WYyrtaECyDC991cS9kB2VRfXfnq` berstatus READY dan dipromosikan ke alamat utama; pemetaan domain diperiksa kembali melalui Vercel. [Laporan akses produksi](vercel-v12-results.json) dan [laporan katalog](../../public-catalog-v12-results.json) menyimpan hasil terstruktur. Publikasi source memakai ekspor bersih yang mengecualikan riwayat Git lokal lama, database dan rahasia.

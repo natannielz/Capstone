@@ -32,6 +32,6 @@ Rekonsiliasi SPH pemasok secara rinci, penyelesaian pengembalian uang muka/klaim
 - Perilaku reduced motion dan pembersihan animasi diperiksa pada kode. Preferensi sistem reduced motion tidak diemulasikan pada pemeriksaan browser ini. Siklus context animasi yang ditemukan saat pengujian browser telah diperbaiki sebelum build produksi.
 - Deployment **`dpl_DS8tgEemXo3Qj56sqR6y1aKy5M4s`** berstatus Ready, dipromosikan, dan tujuan domain utama diverifikasi.
 - **25/25** kelompok pemeriksaan halaman/autentikasi produksi lulus untuk 11 akun, termasuk penolakan portal salah dan pencabutan sesi pengujian. [Hasil pemeriksaan](vercel-v11-results.json).
-- Katalog produksi memuat 200 produk tambahan dengan deskripsi dan jalur gambar unik sesuai manifest, tanpa barang QA aktif. Lima sampel gambar berhasil dimuat. [Hasil katalog](public-catalog-v11-results.json).
+- Katalog produksi memuat 200 produk tambahan dengan deskripsi dan jalur gambar unik sesuai manifest, tanpa barang QA aktif. Lima sampel gambar berhasil dimuat. [Hasil katalog](../../public-catalog-v11-results.json).
 
 Pengujian transaksi menggunakan database QA lokal atau state terisolasi. Pemeriksaan produksi memakai halaman, autentikasi, katalog dan aset publik; tidak mengekspor atau membandingkan keseluruhan database.
