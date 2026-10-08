@@ -9,11 +9,11 @@ namespace UnitToko.Platform.Procurement;
 
 internal static class ProcurementStockSourceStorage
 {
-    internal static async Task RequireRetainedAsync(IMongoDatabase database, CancellationToken ct)
+    internal static async Task RequireRetainedAsync(IMongoDatabase database, CancellationToken ct, BsonDocument? requiredShipmentValidator = null)
     {
-        await OrderStockSourceStorage.RequireAsync(database, ct);
+        await OrderStockSourceStorage.RequireAsync(database, ct, requiredShipmentValidator);
         await ReconciliationStockSourceStorage.RequireAsync(database, ct);
-        await UnitToko.Platform.Fulfillment.FulfillmentStockSourceStorage.RequireAsync(database, ct);
+        await UnitToko.Platform.Fulfillment.FulfillmentStockSourceStorage.RequireAsync(database, ct, requiredShipmentValidator);
         foreach (var name in ProcurementStockReceiptSchemas.Collections)
             await InventoryRepository.RequireStorageAsync(database, name, ProcurementStockReceiptSchemas.Validator(name), ProcurementStockReceiptSchemas.Keys(name), ct);
         foreach (var name in ProcurementQualityAcceptanceSchemas.Collections) {
@@ -29,9 +29,9 @@ internal static class ProcurementStockSourceStorage
         await InventoryRepository.RequireStorageAsync(database, "stockBalances", InventorySchemas.BalanceValidator(), InventorySchemas.BalanceKey(), ct);
         await InventoryRepository.RequireStorageAsync(database, "movements", InventoryMovementSchemas.Validator(), InventoryMovementSchemas.Key(), ct);
     }
-    internal static async Task RequireAsync(IMongoDatabase database, CancellationToken ct)
+    internal static async Task RequireAsync(IMongoDatabase database, CancellationToken ct, BsonDocument? requiredShipmentValidator = null)
     {
-        await RequireRetainedAsync(database, ct);
+        await RequireRetainedAsync(database, ct, requiredShipmentValidator);
         foreach (var name in ProcurementStockSourceSchemas.Collections) {
             var definition = await AccountContactStorage.DefinitionAsync(database, name, ct) ?? throw ProcurementStockSourceRecords.Unavailable();
             if (!AccountContactStorage.SafeDefinition(definition, ProcurementStockSourceSchemas.Validator(name))) throw ProcurementStockSourceRecords.Unavailable();

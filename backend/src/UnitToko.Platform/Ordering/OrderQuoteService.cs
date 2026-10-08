@@ -2,6 +2,7 @@ using System.Collections.Immutable;
 using MongoDB.Bson;
 using MongoDB.Driver;
 using UnitToko.Modules.Contracts;
+using UnitToko.Modules.Accounting;
 using UnitToko.Modules.Identity;
 using UnitToko.Modules.Identity.Contracts;
 using UnitToko.Modules.Ordering;
@@ -19,6 +20,10 @@ public sealed record OrderPostalAddress(OrganizationAddressTarget Target, Organi
     string Code, string Name, string SourceHash, string SnapshotHash, DateTimeOffset EffectiveAt, PostalAddress Address);
 public sealed record OrderAddressPreview(OrderBuyingContext Context, DateTimeOffset ObservedAt,
     OrderPostalAddress LegalBilling, OrderPostalAddress Delivery, string Binding);
+public sealed record OrderChannelCheckoutGroup(string GroupKey, OperationalBookKey Seller, string? OrganizationName,
+    string? ShopName, string? ChannelName, OrderDraftInput Input, OrderCatalogQuote Catalog);
+public sealed record OrderChannelCheckoutGroups(OrderBuyingContext Context, DateTimeOffset CalculatedAt,
+    ImmutableArray<OrderChannelCheckoutGroup> Items);
 
 /// <summary>Read-only commercial preview. A submitted order must recompute and persist its accepted snapshot
 /// in the owner transaction; this result grants no stock reservation, credit, tax approval or payable amount.</summary>
@@ -109,15 +114,47 @@ public sealed class OrderQuoteService
         if (selections.IsDefaultOrEmpty || selections.Length > 100 || selections.Any(value => value is null))
             throw new DomainValidationException("invalid_order_quote", "Choose up to 100 distinct packages");
         return authorization.ReadAsync(actor, async (snapshot, tx, token) => {
-            Require(actor, snapshot, context);
-            var facts = await catalog.ReadSelectedAsync(actor, snapshot, tx, context.Scope,
-                selections.Select(value => value.SkuId.Value).ToImmutableArray(),
-                fenceToken => FenceAsync(actor, snapshot, tx, [context], fenceToken), token);
-            var quote = OrderQuotePolicy.Create(selections, facts.Select(value =>
-                new OrderCatalogFact(value.Family, value.Sku, value.Definition, value.CurrentPrice)).ToImmutableArray());
+            var quote = await QuoteWithinAsync(actor, snapshot, tx, context, selections, token);
             Require(actor, snapshot, context); token.ThrowIfCancellationRequested();
             return new OrderQuotePreview(context, DateTimeOffset.FromUnixTimeMilliseconds(clock.UtcNow.ToUnixTimeMilliseconds()), quote);
         }, ct);
+    }
+    /// <summary>Authorized catalog grouping only. Each exact seller group requires
+    /// its own current commercial/stock preview and independent submission receipt.</summary>
+    public Task<OrderChannelCheckoutGroups> CheckoutGroupsAsync(ActorContext actor, OrderDraftInput input, CancellationToken ct = default) {
+        input = OrderDraftPolicy.Copy(input);
+        return authorization.ReadAsync(actor, async (snapshot, tx, token) => {
+            var quote = await QuoteWithinAsync(actor, snapshot, tx, input.Context, input.Selections, token);
+            var groups = OrderFulfillmentPolicy.Split(quote).GroupBy(group => new OperationalBookKey(group.Owner.OrganizationId!.Value,
+                group.Owner.ShopId!.Value, group.Owner.ChannelId!.Value, quote.Currency))
+                .OrderBy(group => group.Key.OrganizationId).ThenBy(group => group.Key.ShopId).ThenBy(group => group.Key.ChannelId).ToArray();
+            var ids = groups.SelectMany(group => new[] { group.Key.OrganizationId, group.Key.ShopId, group.Key.ChannelId }).Distinct();
+            var profiles = await database.GetCollection<BsonDocument>("organizationProfiles").Find(tx, Builders<BsonDocument>.Filter.In("_id", ids)).ToListAsync(token);
+            string? Name(long id) {
+                var profile = profiles.SingleOrDefault(row => row["_id"] == id);
+                return profile?.GetValue("name", BsonNull.Value) is { IsString: true } name ? name.AsString : null;
+            }
+            var items = groups.Select(group => {
+                var lines = group.SelectMany(part => part.Lines).OrderBy(line => line.Definition.SkuId.Value).ToImmutableArray();
+                var selected = lines.Select(line => line.Definition.SkuId).ToHashSet();
+                var groupInput = OrderDraftPolicy.Copy(input with { Selections = [.. input.Selections.Where(line => selected.Contains(line.SkuId)).OrderBy(line => line.SkuId.Value)] });
+                var subtotal = lines.Aggregate(new UnitToko.Modules.Accounting.Money(0m), (sum, line) => UnitToko.Modules.Accounting.Money.Add(sum, line.CatalogSubtotal));
+                var key = string.Create(System.Globalization.CultureInfo.InvariantCulture,
+                    $"{group.Key.OrganizationId}:{group.Key.ShopId}:{group.Key.ChannelId}:{group.Key.Currency}");
+                return new OrderChannelCheckoutGroup(key, group.Key, Name(group.Key.OrganizationId), Name(group.Key.ShopId), Name(group.Key.ChannelId),
+                    groupInput, new(lines, quote.Currency, subtotal));
+            }).ToImmutableArray();
+            await FenceAsync(actor, snapshot, tx, [input.Context], token); Require(actor, snapshot, input.Context);
+            token.ThrowIfCancellationRequested();
+            return new OrderChannelCheckoutGroups(input.Context, DateTimeOffset.FromUnixTimeMilliseconds(clock.UtcNow.ToUnixTimeMilliseconds()), items);
+        }, ct);
+    }
+    private async Task<OrderCatalogQuote> QuoteWithinAsync(ActorContext actor, AuthorizationSnapshot snapshot, IClientSessionHandle tx,
+        OrderBuyingContext context, ImmutableArray<OrderPackageSelection> selections, CancellationToken ct) {
+        Require(actor, snapshot, context);
+        var facts = await catalog.ReadSelectedAsync(actor, snapshot, tx, context.Scope, selections.Select(value => value.SkuId.Value).ToImmutableArray(),
+            token => FenceAsync(actor, snapshot, tx, [context], token), ct);
+        return OrderQuotePolicy.Create(selections, [.. facts.Select(value => new OrderCatalogFact(value.Family, value.Sku, value.Definition, value.CurrentPrice))]);
     }
     private AuthorizationQuery Query(ActorContext actor, AuthorizationSnapshot snapshot, string permission = Permissions.OrderSubmit)
     {

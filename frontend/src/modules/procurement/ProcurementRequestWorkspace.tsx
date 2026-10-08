@@ -14,6 +14,7 @@ import { createProcurementGateway, procurementLocationKey, procurementQuantity, 
   type ProcurementTarget, type ProcurementPackage, type ProcurementInput, type ProcurementPreview, type ProcurementRequest, type ProcurementDecision, type ProcurementDecisionPreview } from './procurement-request-client';
 import styles from '../administration/access.module.css';
 import { packageMatchExplanation, type PackageMatching } from './package-matching';
+import { ReplenishmentSuggestion } from './ReplenishmentSuggestion';
 
 type Account = { actorId: string; actions: readonly string[]; session: IdentitySession; observedAt: number };
 type DraftLine = { choice: ProcurementPackage; quantity: string; specification: string };
@@ -77,6 +78,7 @@ function RequestDesk({ account, fresh, onDenied }: { account: Account; fresh: bo
   const [page, setPage] = useState<{ items: ProcurementRequest[]; nextRequestId: string | null }>({ items: [], nextRequestId: null }), [request, setRequest] = useState<ProcurementRequest | null>(null);
   const [editing, setEditing] = useState(false), [route, setRoute] = useState<ProcurementInput['route'] | ''>(''), [kind, setKind] = useState<ProcurementInput['kind'] | ''>('');
   const [businessDate, setBusinessDate] = useState(''), [externalReference, setExternalReference] = useState(''), [reason, setReason] = useState(''), [draftLines, setDraftLines] = useState<DraftLine[]>([]);
+  const [replenishmentReference, setReplenishmentReference] = useState<string | null>(null);
   const [search, setSearch] = useState(''), [packages, setPackages] = useState<ProcurementPackage[]>([]), [packagePage, setPackagePage] = useState<{ search: string; offset: number; hasMore: boolean; matching: PackageMatching } | null>(null);
   const [chosen, setChosen] = useState<ProcurementPackage | null>(null), [quantity, setQuantity] = useState(''), [specification, setSpecification] = useState('');
   const [decisionReason, setDecisionReason] = useState(''), [confirmed, setConfirmed] = useState(false);
@@ -88,7 +90,7 @@ function RequestDesk({ account, fresh, onDenied }: { account: Account; fresh: bo
   const canRead = account.actions.includes(readPermission), canPrepare = account.actions.includes(preparePermission), canDecide = account.actions.includes(approvePermission);
   const locked = busy || recovering || offline, commandLocked = locked || recovery.locked, reviewLocked = submissionReview !== null || decisionReview !== null;
   const clearReview = useCallback(() => { setRequest(null); setEditing(false); setSubmissionReview(null); setDecisionReview(null); setReason(''); setDecisionReason(''); setConfirmed(false);
-    setRoute(''); setKind(''); setBusinessDate(''); setExternalReference(''); setDraftLines([]); setSearch(''); setPackages([]); setPackagePage(null); setChosen(null); setQuantity(''); setSpecification(''); }, []);
+    setRoute(''); setKind(''); setBusinessDate(''); setExternalReference(''); setReplenishmentReference(null); setDraftLines([]); setSearch(''); setPackages([]); setPackagePage(null); setChosen(null); setQuantity(''); setSpecification(''); }, []);
   const clearSelection = useCallback(() => { clearReview(); setSelected(null); setPage({ items: [], nextRequestId: null }); }, [clearReview]);
   function mutations() { return ledger.current ??= new MutationLedger(() => `${keyPrefix.current}.${crypto.randomUUID()}`); }
   useEffect(() => { alive.current = true; const connection = () => setOffline(!navigator.onLine); connection(); window.addEventListener('online', connection); window.addEventListener('offline', connection);
@@ -158,6 +160,22 @@ function RequestDesk({ account, fresh, onDenied }: { account: Account; fresh: bo
   }
   function reconcile() { ledger.current?.resetAfterReconciliation(); clearSelection(); recovery.refresh(); setRevision(value => value + 1); }
   return <>
+    {canRead && canPrepare && account.actions.includes('stock.read') && <ReplenishmentSuggestion actorId={account.actorId} current={current}
+      disabled={commandLocked || reviewLocked} onUse={async advice => { await work(async (valid, signal) => {
+        const target = targets.find(item => item.location.organizationId === advice.location.organizationId && item.location.shopId === advice.location.shopId &&
+          item.location.warehouseId === advice.location.warehouseId && item.location.channelId === advice.location.channelId);
+        if (!target || advice.suggestedPurchasePackages === null) throw new AccessFailure(409, 'procurement_view_stale');
+        procurementQuantity(advice.suggestedPurchasePackages);
+        const choices = await gateway.packages(account.actorId, target.location, advice.skuCode, 0, signal);
+        const exact = choices.items.find(item => item.skuId === advice.skuId && item.skuRevision === advice.skuRevision && item.definitionId === advice.definitionId &&
+          item.definitionVersion === advice.definitionVersion && item.skuCode === advice.skuCode && item.packageLabel === advice.packageLabel &&
+          item.packageKind === advice.packageKind && item.baseUnitCode === advice.baseUnitCode && item.baseUnitsPerPackage === advice.baseUnitsPerPackage);
+        if (!exact) throw new AccessFailure(409, 'procurement_view_stale');
+        await select(target, valid, signal); if (!valid()) return;
+        setEditing(true); setReplenishmentReference('replenishment:' + advice.id); setExternalReference('replenishment:' + advice.id);
+        setDraftLines([{choice: exact, quantity: advice.suggestedPurchasePackages, specification: 'Kebutuhan dari pemeriksaan ' + advice.id + ', diamati ' + when(advice.observedAt)}]);
+        setNotice('Saran dimasukkan ke formulir. Pilih jalur dan tanggal, isi alasan, lalu periksa kembali jumlah sebelum mengajukan.');
+      }); }} />}
     {(canPrepare || canDecide) && !fresh && <div className={styles.alert}><p>Perbarui verifikasi kedua sebelum mengirim atau memutuskan permintaan.</p>
       {[preparePermission, approvePermission].filter(permission => account.actions.includes(permission) && account.session.stepUpOperations.includes(permission)).map(permission => <p key={permission}><Link href={`/identity/account?operation=${permission}&returnPath=${encodeURIComponent(path)}`}>{permission === preparePermission ? 'Verifikasi untuk mengirim permintaan' : 'Verifikasi untuk memutuskan permintaan'}</Link></p>)}</div>}
     {offline && <p role="status" className={styles.alert}>Koneksi terputus. Pengiriman dan keputusan ditahan sampai koneksi kembali.</p>}
@@ -185,9 +203,9 @@ function RequestDesk({ account, fresh, onDenied }: { account: Account; fresh: bo
       <section className={styles.detail} aria-label="Rincian pengadaan">
         {!editing && !request && <div className={styles.form}><h2>{selected.shop.name} · {selected.warehouse.name}</h2><p>Pilih permintaan untuk membaca rincian dan hasil pemeriksaan.</p></div>}
         {editing && <form className={styles.form} onSubmit={event => void previewSubmission(event)}><h2>Buat permintaan pengadaan</h2>
-          <fieldset className={styles.fields} disabled={commandLocked || submissionReview !== null}><label><span id="procurement-route-label">Jalur pengadaan</span><select aria-labelledby="procurement-route-label" required value={route} onChange={event => { const next = event.target.value as ProcurementInput['route'] | ''; setRoute(next); setKind(next === '' || next === 'omi_regular' ? '' : 'purchase_request'); setExternalReference(''); }}>
+          <fieldset className={styles.fields} disabled={commandLocked || submissionReview !== null}><label><span id="procurement-route-label">Jalur pengadaan</span><select aria-labelledby="procurement-route-label" required value={route} onChange={event => { const next = event.target.value as ProcurementInput['route'] | ''; setRoute(next); setKind(next === '' || next === 'omi_regular' ? '' : 'purchase_request'); setExternalReference(replenishmentReference ?? ''); }}>
             <option value="">Pilih jalur pengadaan</option>{Object.entries(routes).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
-            {route === 'omi_regular' ? <><label><span id="procurement-kind-label">Jenis kebutuhan</span><select aria-labelledby="procurement-kind-label" required value={kind} onChange={event => { setKind(event.target.value as ProcurementInput['kind'] | ''); setExternalReference(''); }}><option value="">Pilih jenis kebutuhan OMI</option><option value="stock_need">Kebutuhan stok</option><option value="incoming_notice">Pemberitahuan barang masuk</option></select></label>
+            {route === 'omi_regular' ? <><label><span id="procurement-kind-label">Jenis kebutuhan</span><select aria-labelledby="procurement-kind-label" required value={kind} onChange={event => { const next = event.target.value as ProcurementInput['kind'] | ''; setKind(next); setExternalReference(next === 'incoming_notice' ? '' : replenishmentReference ?? ''); }}><option value="">Pilih jenis kebutuhan OMI</option><option value="stock_need">Kebutuhan stok</option><option value="incoming_notice">Pemberitahuan barang masuk</option></select></label>
               <p className={styles.help}>Kebutuhan stok mencatat kebutuhan internal. Pemberitahuan barang masuk mencatat referensi pemberitahuan OMI yang telah diterima.</p></> : route !== '' && <p>Jenis kebutuhan: Permintaan pembelian</p>}
             <label>Tanggal kebutuhan<input required type="date" min="0001-01-02" max="9999-12-31" value={businessDate} onChange={event => setBusinessDate(event.target.value)} /></label>
             <label>{kind === 'incoming_notice' ? 'Referensi pemberitahuan OMI' : 'Referensi pendukung (opsional)'}<input required={kind === 'incoming_notice'} maxLength={128} value={externalReference} onChange={event => setExternalReference(event.target.value)} /></label>

@@ -28,7 +28,7 @@ internal sealed class ProcurementStockSourceMigration(IMongoDatabase database, I
             var name = definition["name"].AsString;
             indexes.Add(name, (await (await Rows(name).Indexes.ListAsync(ct)).ToListAsync(ct)).ToArray());
         }
-        await ProcurementStockSourceStorage.RequireRetainedAsync(database, ct);
+        await ProcurementStockSourceStorage.RequireRetainedAsync(database, ct, ShipmentDispatchSchemas.LegacyValidator());
         foreach (var name in StockSourceSetupSchemas.Collections.Concat(ProcurementStockReceiptSchemas.Collections)
             .Concat(ProcurementQualityAcceptanceSchemas.Collections)) {
             await lease.RenewAsync(ct);
@@ -110,6 +110,6 @@ internal sealed class ProcurementStockSourceMigration(IMongoDatabase database, I
         }
         var currentCounters = await Rows("idCounters").Find(new BsonDocument()).Sort(new BsonDocument("_id", 1)).ToListAsync(ct);
         if (counters.Count != currentCounters.Count || counters.Where((row, index) => row != currentCounters[index]).Any()) throw Invalid();
-        await ProcurementStockSourceStorage.RequireAsync(database, ct);
+        await ProcurementStockSourceStorage.RequireAsync(database, ct, ShipmentDispatchSchemas.LegacyValidator());
     }
 }

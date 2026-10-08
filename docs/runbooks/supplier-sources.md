@@ -10,6 +10,8 @@ Enter actual legal and display names, the supplier subject reference, address an
 
 Each mapping chooses a genuine catalog SKU and package version at an explicit warehouse and supplies a finite validity interval. The source namespace is the owner, source system, external account and item code. Overlapping mappings within that namespace are rejected, including mappings to another warehouse or supplier. A later approved supplier version replaces the current choices while preserving previous versions for historical orders. Future mappings become selectable at their own start time; expired mappings are unavailable.
 
+Pada pilihan barang untuk mapping supplier, gunakan **Cari kemasan** dengan kode SKU atau nama. Hasil menyebutkan kecocokan kode, nama atau saran nama mirip; setiap hasil tetap memerlukan pilihan Anda. Periksa kemasan dan isinya sebelum memasukkan kode barang supplier yang sebenarnya. Pencarian tidak mengubah mapping, tidak menebak isi dus, dan tidak menganggap kode supplier sama dengan SKU. Jika hasil dibatasi, gunakan pencarian yang lebih spesifik. Alur pemilihan dan pemulihan dijelaskan pada [panduan permintaan pengadaan](procurement-requests.md#panduan-memilih-barang-dan-kemasan).
+
 Current choices also require the latest version's exact verification policy to remain active, unchanged and unexpired. Withdrawing or changing that policy removes the supplier from current choices without falling back to an older version. Historical details and original operation recovery remain available under current authority. Observation freshness is checked at approval; it is not a recurring timer that silently invalidates an otherwise approved supplier every few minutes.
 
 ## Independent verification

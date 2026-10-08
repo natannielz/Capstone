@@ -72,7 +72,7 @@ public sealed class PackConversionCurrentDestinationTests(MongoFixture fixture)
                 Assert.Equal("held_receipt_movement_history_unavailable", (await Assert.ThrowsAsync<DomainValidationException>(Attempt)).Code);
             else {
                 var error = await Assert.ThrowsAsync<DomainValidationException>(Attempt);
-                Assert.Equal(fault == "unowned-reserve" ? "order_source_obligation_unavailable" : PackConversionService.CurrentDestinationUnavailable().Code, error.Code);
+                Assert.Equal(fault is "unowned-reserve" or "unowned-dispatch" ? "order_source_obligation_unavailable" : PackConversionService.CurrentDestinationUnavailable().Code, error.Code);
             }
             Assert.Equal(1, observed); Assert.Equal(state, await prepared.StateAsync());
         }

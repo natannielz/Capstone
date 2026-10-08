@@ -115,9 +115,9 @@ internal sealed class InventoryRepository(IMongoDatabase database)
 
     private Task RequireStorageAsync(CancellationToken ct) => RequireStorageAsync(database, "stockBalances", InventorySchemas.BalanceValidator(), InventorySchemas.BalanceKey(), ct);
 
-    internal static Task RequireStorageAsync(IMongoDatabase database, string collection, BsonDocument requiredValidator, BsonDocument requiredKey, CancellationToken ct) =>
+    internal static Task<IReadOnlyList<BsonDocument>> RequireStorageAsync(IMongoDatabase database, string collection, BsonDocument requiredValidator, BsonDocument requiredKey, CancellationToken ct) =>
         RequireStorageAsync(database, collection, requiredValidator, [requiredKey], ct);
-    internal static async Task RequireStorageAsync(IMongoDatabase database, string collection, BsonDocument requiredValidator, BsonDocument[] requiredKeys, CancellationToken ct)
+    internal static async Task<IReadOnlyList<BsonDocument>> RequireStorageAsync(IMongoDatabase database, string collection, BsonDocument requiredValidator, BsonDocument[] requiredKeys, CancellationToken ct)
     {
         // Read-only metadata checks. A reviewed deployment migration owns DDL and quiesces writers.
         var definition = await (await database.ListCollectionsAsync(
@@ -138,6 +138,7 @@ internal sealed class InventoryRepository(IMongoDatabase database)
                 index.GetValue("unique", false).AsBoolean && index["name"] != "_id_" && !Required(index)))
             throw Invalid("inventory_storage_unavailable");
         ct.ThrowIfCancellationRequested();
+        return indexes;
     }
     private static bool Simple(BsonValue value) => value.IsBsonDocument && value.AsBsonDocument.ElementCount == 1 && value.AsBsonDocument.GetValue("locale", "") == "simple";
     private static bool Unsafe(BsonDocument index) => index.GetValue("sparse", false).AsBoolean || index.GetValue("hidden", false).AsBoolean ||

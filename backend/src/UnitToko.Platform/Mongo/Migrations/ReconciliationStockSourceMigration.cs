@@ -28,7 +28,7 @@ internal sealed class ReconciliationStockSourceMigration(IMongoDatabase database
             indexes.Add(name, (await (await Rows(name).Indexes.ListAsync(ct)).ToListAsync(ct)).ToArray());
         }
         await ReconciliationStockSourceStorage.RequireRetainedAsync(database, ct);
-        await OrderStockSourceStorage.RequireAsync(database, ct);
+        await OrderStockSourceStorage.RequireAsync(database, ct, ShipmentDispatchSchemas.LegacyValidator());
         foreach (var name in StockSourceSetupSchemas.Collections.Concat(StockSourceReconciliationSchemas.Collections)) {
             await lease.RenewAsync(ct);
             var validator = StockSourceSetupSchemas.Collections.Contains(name) ? StockSourceSetupSchemas.Validator(name) : StockSourceReconciliationSchemas.Validator(name);

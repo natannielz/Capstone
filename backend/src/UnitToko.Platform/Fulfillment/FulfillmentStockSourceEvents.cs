@@ -16,13 +16,16 @@ internal sealed record FulfillmentStockSourceEvent(string Kind, long Id, BsonDoc
 
 /// <summary>Internal owning projections. No fabricated actor or disclosure grant is used.
 /// Pool membership comes only from dispatched stock effects, never the complete order allocation.</summary>
-internal sealed class FulfillmentStockSourceEvents(IMongoDatabase database, IdAllocator ids, IClock clock)
+internal sealed class FulfillmentStockSourceEvents(IMongoDatabase database, IdAllocator ids, IClock clock, ShipmentDispatchService.LiveValueRead? liveRead = null,
+    ShipmentDispatchValueRecords.HistoricalRead? history = null)
 {
-    private ShipmentReceiptService Receipts()
+    private ShipmentReceiptService Receipts(IClientSessionHandle tx, ShipmentDispatchValueRecords.HistoricalRead valueHistory)
     {
+        valueHistory.Require(database, tx);
+        liveRead?.Require(database, clock, tx);
         if (database.Client is not MongoClient client) throw FulfillmentStockSourceRecords.Unavailable();
         var unit = new MongoUnitOfWork(client);
-        var orders = new OrderSubmissionService(database, unit, ids, clock);
+        var orders = new OrderSubmissionService(database, unit, ids, clock, null, valueHistory, liveRead);
         var preparation = new ShipmentPreparationService(database, unit, ids, clock, orders);
         var shipments = new ShipmentQueryService(database, unit, clock, orders, preparation);
         return new(database, unit, ids, clock, shipments, new(database, unit, ids, clock, shipments));
@@ -30,6 +33,9 @@ internal sealed class FulfillmentStockSourceEvents(IMongoDatabase database, IdAl
     internal async Task<FulfillmentStockSourceEvent> ReadAsync(IClientSessionHandle tx, string kind, long id,
         bool requireReceipt, CancellationToken ct)
     {
+        var valueHistory = history ?? new ShipmentDispatchValueRecords.HistoricalRead(database, clock, tx);
+        valueHistory.Require(database, tx);
+        liveRead?.Require(database, clock, tx);
         if (id <= 0) throw FulfillmentStockSourceRecords.Unavailable();
         if (kind == "setup") {
             var setup = await new OrderStockSourceRecords(database).SetupAsync(tx, id, requireReceipt, ct);
@@ -38,17 +44,17 @@ internal sealed class FulfillmentStockSourceEvents(IMongoDatabase database, IdAl
         if (kind == "dispatch") {
             // Fresh custody runs after command-receipt persistence in the same transaction.
             // Ordering still verifies its exact new reservation state before custody is appended.
-            var dispatched = await OrderSubmissionService.ReadStockSourceEventAsync(database, tx, "shipment", id, requireReceipt, ct);
+            var dispatched = await OrderSubmissionService.ReadStockSourceEventAsync(database, tx, "shipment", id, requireReceipt, ct, valueHistory, clock, liveRead);
             if (requireReceipt) {
                 if (database.Client is not MongoClient client) throw FulfillmentStockSourceRecords.Unavailable();
-                var order = await new OrderSubmissionService(database, new(client), ids, clock)
+                var order = await new OrderSubmissionService(database, new(client), ids, clock, null, valueHistory, liveRead)
                     .ReadStockSourceGraphAsync(tx, dispatched.Record["orderId"].AsInt64, ct);
                 if (!order["suborderIds"].AsBsonArray.Contains(dispatched.Record["suborderId"])) throw FulfillmentStockSourceRecords.Unavailable();
             }
             var pools = PoolIds(dispatched.Record);
             return new(kind, id, dispatched.Record, pools, dispatched.Audit, dispatched.Time, id, true);
         }
-        if (kind == "receipt") return await Receipts().ReadFulfillmentStockSourceReceiptAsync(tx, id, ct);
+        if (kind == "receipt") return await Receipts(tx, valueHistory).ReadFulfillmentStockSourceReceiptAsync(tx, id, ct);
         throw FulfillmentStockSourceRecords.Unavailable();
     }
     internal static long[] PoolIds(BsonDocument shipment)

@@ -77,18 +77,21 @@ internal sealed partial class ProcurementQualityProofGraph
         IClock clock, CatalogAuthoringService catalog, PurchaseOrderService orders, IClientSessionHandle current,
         long inspectionId, CancellationToken ct) {
         RequireDatabase(database, current, inspectionId);
-        var inspection = await database.GetCollection<BsonDocument>(I.Submissions).Find(current, new BsonDocument {
-            { "_id", inspectionId }, { "$and", new BsonArray { ProcurementInspectionSchemas.Validator(I.Submissions) } }
-        }).SingleOrDefaultAsync(ct) ?? throw Q.Broken();
         if (completedInspections.TryGetValue(inspectionId, out var completed)) {
             if (clock.UtcNow < completed.At) throw Q.Broken();
             var history = completed.History;
-            Equal(inspection, history.Submissions.SingleOrDefault(row => row["_id"] == inspectionId) ?? throw Q.Broken());
+            if (!history.Submissions.Any(row => row["_id"] == inspectionId)) throw Q.Broken();
             await RequireFundingAsync(database, orders, current, history.Source["notice"]["source"].AsBsonDocument, ct);
+            // This reads the complete actual submission membership and compares
+            // every byte, including this inspection, after funding awaits. The
+            // original schema-valid owner row needs no duplicate ID/schema read.
             await RequireInspectionOwnersAsync(database, unit, clock, catalog, orders, current, history, ct);
             RequireDatabase(database, current, inspectionId);
             return Clone(history);
         }
+        var inspection = await database.GetCollection<BsonDocument>(I.Submissions).Find(current, new BsonDocument {
+            { "_id", inspectionId }, { "$and", new BsonArray { ProcurementInspectionSchemas.Validator(I.Submissions) } }
+        }).SingleOrDefaultAsync(ct) ?? throw Q.Broken();
         var verified = await new SupplierDocumentRecords(database, unit, clock, catalog, orders, this)
             .InspectionAsync(current, inspectionId, ct);
         Equal(inspection, verified.Submissions.SingleOrDefault(row => row["_id"] == inspectionId) ?? throw Q.Broken());
@@ -130,7 +133,8 @@ internal sealed partial class ProcurementQualityProofGraph
         IClientSessionHandle current, long receiptId, CancellationToken ct) {
         RequireDatabase(database, current, receiptId);
         if (originProof is not null && originProof.ReceiptId == receiptId) {
-            await originProof.RequireAsync(database, current, ct);
+            if (originRead is null) await originProof.RequireAsync(database, current, ct);
+            else RequireOriginRead(database, current, originProof);
             return originProof.Receipt;
         }
         var receipt = await database.GetCollection<BsonDocument>(R.Receipts).Find(current, new BsonDocument {

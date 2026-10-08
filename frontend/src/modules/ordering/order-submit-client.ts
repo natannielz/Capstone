@@ -2,7 +2,8 @@ import { createUnitTokoClient, RequestNotSentError } from '../../api/client';
 import { AccessFailure, stableContent } from '../administration/workflow';
 import { priceId } from '../catalog/catalog-price-workflow';
 import { parseDraftInput, type DraftInput } from './order-draft-client';
-import { parseOrderQuote } from './order-quote-client';
+import { parseOrderContext, parseOrderQuote } from './order-quote-client';
+import type { OperationReference } from '../administration/operation-journal';
 
 const invalid = (): never => { throw new AccessFailure(502, 'order_submit_response_invalid'); };
 function record(value: unknown): Record<string, unknown> { return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : invalid(); }
@@ -30,6 +31,52 @@ export function parseCheckoutReview(value: unknown, expected: DraftInput) {
   return { input, review: hash(row.review), spendingState: state(row.spendingState), ...amounts(row, input, row.calculatedAt) };
 }
 export type CheckoutReview = ReturnType<typeof parseCheckoutReview>;
+function groupIdentity(value: unknown) {
+  if (typeof value !== 'string') return invalid();
+  const parts = value.split(':');
+  if (parts.length !== 4 || !/^[A-Z]{3}$(?![\s\S])/.test(parts[3])) return invalid();
+  const organizationId = priceId(parts[0]), shopId = priceId(parts[1]), channelId = priceId(parts[2]);
+  if (value !== `${organizationId}:${shopId}:${channelId}:${parts[3]}`) return invalid();
+  return { groupKey: value, organizationId, shopId, channelId, currency: parts[3] };
+}
+function groupName(value: unknown) {
+  return value === null ? null : typeof value === 'string' && value.length > 0 && value.length <= 200 && value.trim() === value &&
+    !/[\u0000-\u001f\u007f]/.test(value) ? value : invalid();
+}
+export function parseCheckoutGroups(value: unknown, expected: DraftInput) {
+  const source = parseDraftInput(expected), row = record(value), context = parseOrderContext(row.context);
+  if (stableContent(context) !== stableContent(source.context) || !Array.isArray(row.items) || row.items.length < 1 || row.items.length > 100) return invalid();
+  const remaining = new Map(source.selections.map(line => [line.skuId, line]));
+  const items = row.items.map(value => {
+    const item = record(value), identity = groupIdentity(item.groupKey), input = parseDraftInput(item.input);
+    if (item.organizationId !== identity.organizationId || item.shopId !== identity.shopId || item.channelId !== identity.channelId || item.currency !== identity.currency ||
+      stableContent({ ...input, selections: source.selections }) !== stableContent(source)) return invalid();
+    for (const line of input.selections) {
+      if (stableContent(remaining.get(line.skuId)) !== stableContent(line)) return invalid();
+      remaining.delete(line.skuId);
+    }
+    const quote = parseOrderQuote({ ...item, context, calculatedAt: row.calculatedAt }, context, input.selections);
+    return { ...identity, organizationName: groupName(item.organizationName), shopName: groupName(item.shopName), channelName: groupName(item.channelName), input, quote };
+  });
+  if (remaining.size !== 0 || new Set(items.map(item => item.groupKey)).size !== items.length || items.some(item => item.currency !== items[0].currency)) return invalid();
+  return { context, calculatedAt: items[0].quote.calculatedAt, items };
+}
+export type CheckoutGroup = ReturnType<typeof parseCheckoutGroups>['items'][number];
+export const orderSubmitOperation = 'ordering.order.submit';
+/** Stable for a saved draft and authenticated channel; edits require recovery of its original attempt. */
+export async function checkoutGroupRequestKey(actorId: string, draftId: string, groupKey: string) {
+  const actor = priceId(actorId), draft = priceId(draftId), identity = groupIdentity(groupKey);
+  const bytes = new TextEncoder().encode(stableContent({ actorId: actor, draftId: draft, groupKey: identity.groupKey }));
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return `${orderSubmitOperation}:${actor}:${Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('')}`;
+}
+export async function readCheckoutGroupAttempt(actorId: string, draftId: string, groupKey: string,
+  journal: { list: (actorId: string) => OperationReference[] }, lookup: (key: string) => Promise<{ state: 'committed'; result: OrderSubmitResult } | null>) {
+  const requestKey = await checkoutGroupRequestKey(actorId, draftId, groupKey);
+  const pending = journal.list(actorId).some(entry => entry.operation === orderSubmitOperation && entry.key === requestKey);
+  const receipt = await lookup(requestKey);
+  return { requestKey, result: receipt?.result ?? null, uncertain: pending && receipt === null };
+}
 export function parseSubmittedOrder(value: unknown) {
   const row = record(value), submission = parseOrderSubmitResult(row.submission), input = parseDraftInput(row.input);
   if (input.delivery === null || typeof row.buyerName !== 'string' || row.buyerName.trim().length === 0 || row.buyerName.length > 200) return invalid();
@@ -61,6 +108,11 @@ function key(value: string) { if (!/^[A-Za-z0-9_.:-]{1,128}$(?![\s\S])/.test(val
 const headers = (actorId: string) => ({ 'X-Expected-Actor-Id': priceId(actorId) });
 export function createOrderSubmitGateway(client: ReturnType<typeof createUnitTokoClient> = createUnitTokoClient()) {
   return {
+    async groups(actorId: string, input: DraftInput, signal?: AbortSignal) {
+      const frozen = parseDraftInput(input);
+      return parseCheckoutGroups(data(await client.POST('/api/v1/ordering/checkout/groups/query', { body: { purpose: 'order-preparation', input: frozen },
+        params: { header: headers(actorId) }, signal })), frozen);
+    },
     async list(actorId: string, beforeId: string | null = null, signal?: AbortSignal) {
       const cursor = beforeId === null ? null : priceId(beforeId);
       return parseOrderPage(data(await client.POST('/api/v1/ordering/orders/query', { body: { purpose: 'order-preparation', context: null, beforeId: cursor, limit: 25 }, params: { header: headers(actorId) }, signal })), cursor);

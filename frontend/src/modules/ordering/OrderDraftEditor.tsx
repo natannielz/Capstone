@@ -8,11 +8,12 @@ import { CatalogReadGate } from '../catalog/catalog-editor-state';
 import { prepareDraftCommand, type DraftCommand, type OrderDraft } from './order-draft-client';
 import { createOrderQuoteGateway, orderAmount, orderContextKey, orderQuantity, type OrderAddresses, type OrderQuote } from './order-quote-client';
 import { draftMessage } from './DraftSave';
+import { reorderDraftReason } from './order-reorder';
 import common from '../administration/access.module.css';
 import styles from './order-draft.module.css';
 
-export function OrderDraftEditor({ actorId, draft, initialQuote, initialIssue, locked, isCurrent, onSubmit, onFailure }: {
-  actorId: string; draft: OrderDraft; initialQuote: OrderQuote | null; initialIssue: unknown; locked: boolean;
+export function OrderDraftEditor({ actorId, draft, initialQuote, initialIssue, locked, isCurrent, onSubmit, onFailure, reorderSourceId }: {
+  actorId: string; draft: Pick<OrderDraft, 'input' | 'revision'> & { id: string | null }; reorderSourceId?: string; initialQuote: OrderQuote | null; initialIssue: unknown; locked: boolean;
   isCurrent: () => boolean; onSubmit: (command: DraftCommand) => Promise<void>; onFailure: (error: unknown) => void;
 }) {
   const [quotes] = useState(() => createOrderQuoteGateway()), [catalog] = useState(() => createBuyerCatalogGateway()), [gate] = useState(() => new CatalogReadGate());
@@ -86,15 +87,15 @@ export function OrderDraftEditor({ actorId, draft, initialQuote, initialIssue, l
         return { ...item, packages: orderQuantity(quantities[index], definition?.minimumOrderPackages ?? 1, definition?.orderIncrementPackages ?? 1) };
       }), purchaseReference: reference.trim() || null, delivery: delivery ? { recipientName: address.recipientName.trim(), phone: address.phone.trim(),
         address: address.address.trim(), city: address.city.trim(), postalCode: address.postalCode?.trim() || null, instructions: address.instructions?.trim() || null } : null };
-      const command = prepareDraftCommand(actorId, draft.id, draft.revision, input, 'Perbarui kemasan dan rencana pengiriman draf');
+      const command = prepareDraftCommand(actorId, draft.id, draft.revision, input, draft.id === null ? reorderDraftReason(reorderSourceId) : 'Perbarui kemasan dan rencana pengiriman draf');
       const quote = await quotes.preview(actorId, input.context, input.selections, request.signal);
       if (request.current() && current()) setReview({ command, quote });
     } catch (failure) { if (request.current() && current()) failed(failure); }
     finally { pending.current = false; if (request.current()) setBusy(false); }
   }
   return <section className={styles.editor} aria-label="Isi draf" aria-busy={busy || locked}>
-    <h2>Draf {draft.id}</h2><p className={common.help}>Versi {draft.revision}. Perubahan baru tersimpan setelah Anda meninjau dan mengonfirmasi.</p>
-    {!locked && <p><Link href={'/ordering/checkout?draft=' + encodeURIComponent(draft.id)}>Lanjut ke pengajuan draf tersimpan</Link></p>}
+    <h2>{draft.id === null ? 'Draf pemesanan ulang' : 'Draf ' + draft.id}</h2><p className={common.help}>{draft.id === null ? 'Pilihan dari pesanan sebelumnya belum tersimpan sebagai draf baru.' : 'Versi ' + draft.revision + '.'} Perubahan baru tersimpan setelah Anda meninjau dan mengonfirmasi.</p>
+    {draft.id !== null && !locked && <p><Link href={'/ordering/checkout?draft=' + encodeURIComponent(draft.id)}>Lanjut ke pengajuan draf tersimpan</Link></p>}
     {error !== null && <p role="alert" className={common.alert}>{error instanceof AccessFailure && error.code === 'organization_address_changed'
       ? 'Alamat penagihan atau tujuan belum tersedia sebagai alamat yang disetujui. Hubungi pengelola organisasi, lalu periksa kembali.'
       : initialQuote === null && error === initialIssue ? 'Sebagian kemasan atau harga tidak lagi tersedia. Pilih kembali kemasan dari katalog; pilihan lama tidak diganti otomatis.' : draftMessage(error, true)}</p>}
@@ -133,6 +134,7 @@ export function OrderDraftEditor({ actorId, draft, initialQuote, initialIssue, l
       <button className={common.primary} disabled={disabled || selections.length === 0}>{busy ? 'Memeriksa…' : 'Tinjau perubahan draf'}</button>
     </form>
     {review && <div className={styles.review} ref={reviewRef} role="region" aria-label="Konfirmasi draf" tabIndex={-1}><h3>Periksa sebelum menyimpan</h3>
+      {draft.id === null && <p>Draf baru dari pesanan {reorderSourceId}. Kemasan dan harga pada tinjauan ini diperiksa kembali untuk cabang pemesan. Pesanan sebelumnya tetap utuh.</p>}
       <ul>{review.quote.lines.map(line => <li key={line.definition.skuId}>{line.familyName} — {line.packages} {line.definition.packageLabel} · {line.baseUnits} {line.definition.baseUnitCode} · {orderAmount(review.quote.currency, line.catalogSubtotal)}</li>)}</ul>
       <p><strong>Subtotal barang {orderAmount(review.quote.currency, review.quote.catalogSubtotal)}</strong></p><p>Referensi: {review.command.input.purchaseReference ?? 'Belum diisi'}</p>
       {review.command.input.delivery && <p className={styles.address}>{review.command.input.delivery.recipientName} · {review.command.input.delivery.phone}{'\n'}{review.command.input.delivery.address}{'\n'}{review.command.input.delivery.city} {review.command.input.delivery.postalCode}</p>}

@@ -13,6 +13,7 @@ public static class Permissions
     public const string OrderSpendApprove = "order.spend.approve", OrderAccept = "order.accept";
     public const string BranchOrderRequestRead = "order.request.read", BranchOrderRequestSubmit = "order.request.submit", BranchOrderRequestDecide = "order.request.decide";
     public const string OrderSpendingPolicyRead = "order.spending.policy.read", OrderSpendingPolicyPropose = "order.spending.policy.propose", OrderSpendingPolicyApprove = "order.spending.policy.approve";
+    public const string OrderCommercialPolicyRead = "order.commercial.policy.read", OrderCommercialPolicyPropose = "order.commercial.policy.propose", OrderCommercialPolicyApprove = "order.commercial.policy.approve";
     public const string SubstitutionPropose = "substitution.propose", SubstitutionAccept = "substitution.accept";
     public const string BranchPic = "branch.pic", OrganizationWide = "organization.wide";
     public const string StockRead = "stock.read", StockReceive = "stock.receive", StockCount = "stock.count", StockAdjustPropose = "stock.adjust.propose", StockAdjustApprove = "stock.adjust.approve";
@@ -29,6 +30,8 @@ public static class Permissions
     public const string SupplierChangePropose = "supplier.change.propose", SupplierChangeApprove = "supplier.change.approve";
     public const string SupplierBankRead = "supplier.bank.read", SupplierBankDetailsRead = "supplier.bank.details.read", SupplierBankPropose = "supplier.bank.propose", SupplierBankApprove = "supplier.bank.approve";
     public const string HistoryRead = "history.read", ReportRead = "report.read";
+    public const string AnomalyRead = "operations.anomaly.read", AnomalyReview = "operations.anomaly.review";
+    public const string AnomalyPolicyConfigure = "operations.anomaly.policy.configure";
     public const string SourcePrepare = "source.prepare", SourceReconcile = "source.reconcile", ReportPrepare = "report.prepare", PeriodSubmit = "period.submit", PeriodApprove = "period.approve", PeriodClose = "period.close", PeriodReopenRequest = "period.reopen.request", PeriodReopenApprove = "period.reopen.approve";
     public const string InvoiceRead = "invoice.read", InvoiceIssue = "invoice.issue", PaymentEvidence = "payment.evidence", PaymentRecord = "payment.record", PaymentAllocate = "payment.allocate", PaymentVerify = "payment.verify";
     public const string ReceivingAccountRead = "receiving.account.read", ReceivingAccountDetailsRead = "receiving.account.details.read", ReceivingAccountPropose = "receiving.account.propose", ReceivingAccountVerify = "receiving.account.verify", ReceivingAccountApprove = "receiving.account.approve";
@@ -72,12 +75,17 @@ public static class Permissions
         Add(BranchOrderRequestSubmit, Buying);
         Add(BranchOrderRequestDecide, Operations);
         foreach (var name in new[] { HistoryRead, ReportRead }) Add(name, [.. Buying, .. Operations]);
+        Add(AnomalyRead, [GrantScopeKind.FulfillmentShop]);
+        Add(AnomalyReview, [GrantScopeKind.FulfillmentShop], true);
+        Add(AnomalyPolicyConfigure, [GrantScopeKind.FulfillmentShop], true);
         result[ShipmentRead] = result[ShipmentRead] with { AllowedScopes = [.. Buying, .. Operations, .. Courier] };
         foreach (var name in new[] { OrderSubmit, OrderApprove, OrderSubstitute, OrderCancel, ReceiptAccept, CaseRequest, PaymentEvidence }) Add(name, Buying);
         Add(OrderSpendApprove, [GrantScopeKind.BuyingDivision, GrantScopeKind.BuyingBranch, GrantScopeKind.BuyingOrganization], true);
         Add(OrderSpendingPolicyRead, [GrantScopeKind.BuyingDivision, GrantScopeKind.BuyingBranch, GrantScopeKind.BuyingOrganization]);
         foreach (var name in new[] { OrderSpendingPolicyPropose, OrderSpendingPolicyApprove })
             Add(name, [GrantScopeKind.BuyingDivision, GrantScopeKind.BuyingBranch, GrantScopeKind.BuyingOrganization], true);
+        Add(OrderCommercialPolicyRead, [GrantScopeKind.BuyingDivision, GrantScopeKind.BuyingBranch, GrantScopeKind.BuyingOrganization, GrantScopeKind.FulfillmentShop]);
+        foreach (var name in new[] { OrderCommercialPolicyPropose, OrderCommercialPolicyApprove }) Add(name, [GrantScopeKind.FulfillmentShop], true);
         Add(SubstitutionAccept, Buying);
         Add(AccountingBookRead, [GrantScopeKind.FulfillmentShop]);
         Add(AccountingBookPropose, [GrantScopeKind.FulfillmentShop], true);

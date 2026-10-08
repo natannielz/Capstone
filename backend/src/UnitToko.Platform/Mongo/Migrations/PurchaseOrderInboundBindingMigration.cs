@@ -46,7 +46,7 @@ internal sealed class PurchaseOrderInboundBindingMigration(IMongoDatabase databa
             targets.Add((name, definition is not null, definition is null ? required : definition["options"]["validator"].AsBsonDocument,
                 keys.Where(key => !currentIndexes.Any(row => row["key"] == key && row.GetValue("unique", false).AsBoolean)).ToArray()));
         }
-        await ProcurementStockSourceStorage.RequireAsync(database, ct);
+        await ProcurementStockSourceStorage.RequireAsync(database, ct, ShipmentDispatchSchemas.LegacyValidator());
         foreach (var (names, validator, keys) in new[] {
             (PurchaseOrderSchemas.Collections, (Func<string, BsonDocument>)PurchaseOrderSchemas.Validator, (Func<string, BsonDocument[]>)PurchaseOrderSchemas.Keys),
             (ProcurementReceivingSchemas.Collections, (Func<string, BsonDocument>)ProcurementReceivingSchemas.Validator, (Func<string, BsonDocument[]>)ProcurementReceivingSchemas.Keys),

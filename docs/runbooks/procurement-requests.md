@@ -17,6 +17,17 @@ Channel names do not automatically determine the route. Missing supplier and com
 
 ## Review and recovery
 
+### Panduan memilih barang dan kemasan
+
+1. Buka **Permintaan pengadaan**, pilih lokasi yang berwenang, lalu **Buat permintaan**. Isi jalur dan tanggal kebutuhan yang sebenarnya.
+2. Pada **Barang dan kemasan**, ketik kode SKU atau nama barang lalu pilih **Cari kemasan**. Kode SKU yang sama persis didahulukan. Saran nama mirip memperlihatkan alasan dan jumlah perubahan huruf; itu belum menjadi pilihan Anda.
+3. Pilih satu hasil, lalu periksa nama, jenis kemasan dan isinya. Barang satuan dan dus dengan isi berbeda tetap merupakan pilihan terpisah. Sistem tidak menebak jumlah isi dari nama atau hasil pencarian.
+4. Masukkan jumlah paket dan alasan, kemudian **Periksa rincian permintaan**. Periksa lagi snapshot kemasan sebelum mengirim. Perubahan katalog yang membuat snapshot usang memerlukan pemilihan ulang.
+5. Bila hasil pencarian dibatasi, gunakan kode atau nama yang lebih spesifik. Nama yang mirip tidak membuktikan kesamaan barang. Pemilihan tidak membuat mapping supplier otomatis.
+6. Setelah pengiriman, tunggu hasil tersimpan. Bila respons hilang, muat ulang dan pulihkan referensi asli dengan akun yang sama; jangan membuat permintaan baru hanya karena hasil belum diketahui.
+
+Pencarian dan saran tidak mencadangkan stok, mengikat harga atau memesan barang ke supplier. Data lokasi, katalog dan identitas pada pengujian lokal bersifat sintetis. Status serta bukti kandidat ada pada [checklist utama](../quality/production-progress.md), baris M06; cakupan semua namespace kode sumber tetap belum selesai.
+
 `procurement.read`, `procurement.prepare` and `procurement.approve` retain exact fulfillment shop/warehouse scope. Submit and approve/reject require current five-minute MFA. A different verified canonical person must decide the stored requester's request; switching accounts for the same person does not establish independence. Approval rechecks the current catalog/package and approved location source. A stale request may be rejected under current authority, but cannot be approved using stale facts.
 
 Review the frozen location, route, date, explanation, package quantities and contents before submitting. Internal approval means that the need or notice was reviewed; it does not mean that a supplier accepted an order, funds were sent or stock arrived. The immutable request and decision retain their audit and original actor's operation receipt.

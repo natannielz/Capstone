@@ -1,0 +1,11 @@
+.field { display: grid; gap: .4rem; margin-block: .8rem; min-width: 0; }
+.field input, .field select, .field textarea { min-width: 0; max-width: 100%; padding: .75rem; border: 1px solid #c6d7d5; border-radius: .6rem; font: inherit; background: white; color: #163a38; }
+.field textarea { min-height: 6rem; resize: vertical; }
+.fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .25rem 1rem; }
+.search { display: flex; flex-wrap: wrap; align-items: end; gap: .75rem; }
+.search .field { flex: 1 1 15rem; }
+.search button { margin-bottom: .8rem; padding: .75rem 1rem; }
+.options { display: grid; gap: .6rem; margin-block: 1rem; }
+.options button { display: grid; gap: .3rem; text-align: left; white-space: normal; overflow-wrap: anywhere; }
+.options button[aria-pressed="true"] { outline: 3px solid #d88727; outline-offset: 2px; }
+@media (max-width: 640px) { .fields { grid-template-columns: 1fr; } }

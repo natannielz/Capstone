@@ -20,7 +20,7 @@ internal sealed class AfterSalesStockSourceMigration(IMongoDatabase database, IC
         var history = await Rows("schemaMigrations").Find(new BsonDocument()).Sort(new BsonDocument("_id", 1)).Limit(Version + 1).ToListAsync(ct);
         if (!MigrationHistory.IsValid(history, Version) || history.Count != Version || history.Take(Version - 1).Any(row => row["state"] != "applied") ||
             history[^1]["state"] != "applying" || database.Client is not MongoClient client || clock.UtcNow == default || clock.UtcNow.Offset != TimeSpan.Zero) throw Invalid();
-        await AfterSalesStockSourceStorage.RequireRetainedAsync(database, ct);
+        await AfterSalesStockSourceStorage.RequireRetainedAsync(database, ct, ShipmentDispatchSchemas.LegacyValidator());
         var retained = await (await database.ListCollectionsAsync(cancellationToken: ct)).ToListAsync(ct);
         var indexes = new Dictionary<string, BsonDocument[]>();
         foreach (var definition in retained.Where(row => row.GetValue("type", "") == "collection"))
@@ -95,6 +95,6 @@ internal sealed class AfterSalesStockSourceMigration(IMongoDatabase database, IC
         }
         var actualCounters = await Rows("idCounters").Find(new BsonDocument()).Sort(new BsonDocument("_id", 1)).ToListAsync(ct);
         if (!counters.SequenceEqual(actualCounters)) throw Invalid();
-        await AfterSalesStockSourceStorage.RequireAsync(database, ct);
+        await AfterSalesStockSourceStorage.RequireAsync(database, ct, ShipmentDispatchSchemas.LegacyValidator());
     }
 }

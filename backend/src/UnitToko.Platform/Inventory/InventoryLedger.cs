@@ -8,6 +8,7 @@ using UnitToko.Modules.Identity.Contracts;
 using UnitToko.Modules.Inventory;
 using UnitToko.Platform.Mongo;
 using UnitToko.Platform.Mongo.Migrations;
+using UnitToko.Platform.Fulfillment;
 
 namespace UnitToko.Platform.Inventory;
 
@@ -134,7 +135,8 @@ internal sealed class InventoryLedger
             FullKey("key"), FullKey("destinationKey"), FullKey("held.key") });
         var linked = await database.GetCollection<BsonDocument>(LotValueStore.AvailableHeads).Find(tx, heads).Limit(1).AnyAsync(ct) ||
             await database.GetCollection<BsonDocument>(LotValueStore.Transitions).Find(tx, history).Limit(1).AnyAsync(ct);
-        if (linked && !conversion && (change.Action != InventoryBalanceAction.ReleaseHold || !StockReleaseService.IsLedgerReleaseSource(reader)))
+        var dispatch = change.Action == InventoryBalanceAction.Dispatch && ShipmentDispatchService.IsLedgerDispatchSource(reader);
+        if (linked && !conversion && !dispatch && (change.Action != InventoryBalanceAction.ReleaseHold || !StockReleaseService.IsLedgerReleaseSource(reader)))
             throw Invalid("inventory_lot_value_owner_required");
     }
     internal static void RequireText(string? value, int limit)

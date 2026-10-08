@@ -57,15 +57,23 @@ export class MutationLedger {
   private attempts = new Map<string, Attempt>();
   constructor(private readonly newKey: () => string = () => crypto.randomUUID()) {}
 
-  begin(operation: string, payload: unknown): string {
+  begin(operation: string, payload: unknown, originalKey?: string): string {
+    if (originalKey !== undefined && !/^[A-Za-z0-9._:-]{1,128}$(?![\s\S])/.test(originalKey))
+      throw new AccessFailure(400, "invalid_original_request_key");
     const content = stableContent(payload);
     const previous = this.attempts.get(operation);
+    if (originalKey !== undefined && previous && previous.key !== originalKey)
+      throw new AccessFailure(400, "original_request_key_changed");
     if (previous?.state === "pending") throw new AccessFailure(0, "request_in_progress");
+    if (originalKey !== undefined && previous?.state === "complete")
+      throw new AccessFailure(400, "original_request_complete");
+    if (originalKey !== undefined && previous?.state === "uncertain")
+      throw new AccessFailure(0, "resolve_previous_attempt");
     if (previous?.state === "uncertain" && previous.content !== content)
       throw new AccessFailure(0, "resolve_previous_attempt");
     const attempt = previous && previous.state !== "complete" && previous.content === content
       ? { ...previous, state: "pending" as const }
-      : { content, key: this.newKey(), unresolved: false, state: "pending" as const };
+      : { content, key: originalKey ?? this.newKey(), unresolved: false, state: "pending" as const };
     this.attempts.set(operation, attempt);
     return attempt.key;
   }

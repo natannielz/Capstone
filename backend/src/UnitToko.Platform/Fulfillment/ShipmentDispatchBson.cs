@@ -15,17 +15,24 @@ internal static class ShipmentDispatchBson
         new BsonDocument { { "reservationId", line.ReservationId.Value }, { "packages", line.Packages } }));
     internal static ImmutableArray<ShipmentLotSelection> Lots(BsonArray selected) => ShipmentDispatchPolicy.Copy([.. selected.Select(line =>
         new ShipmentLotSelection(new(line["reservationId"].AsInt64), line["packages"].AsInt32))]);
-    internal static BsonDocument Admission(ShipmentDispatchAdmission value) => new() {
+    internal static BsonDocument Admission(ShipmentDispatchAdmission value) {
+        var row = new BsonDocument {
         { "seller", new BsonDocument { { "version", OrderSubmissionBson.Reference(value.Seller.Version) }, { "name", value.Seller.Name }, { "address", value.Seller.Address } } },
         { "operatingPolicy", OrderSubmissionBson.Reference(value.OperatingPolicy) },
         { "validUntil", value.ValidUntil.UtcDateTime },
         { "lots", new BsonArray(value.Lots.Select(lot => new BsonDocument { { "reservationId", lot.ReservationId },
             { "sourceAuthority", OrderSubmissionBson.Reference(lot.SourceAuthority) }, { "costBasis", OrderSubmissionBson.Reference(lot.CostBasis) },
             { "packageCost", new BsonDecimal128(lot.PackageCost.Value) } })) } };
+        if (value.FiniteValue is { } finite) row.Add("finiteValue", finite.DeepClone());
+        return row;
+    }
     internal static ShipmentDispatchAdmission Admission(BsonDocument value) => new(new(OrderSubmissionBson.Reference(value["seller"]["version"]),
         value["seller"]["name"].AsString, value["seller"]["address"].AsString), OrderSubmissionBson.Reference(value["operatingPolicy"]),
         [.. value["lots"].AsBsonArray.Select(lot => new ShipmentLotAuthority(lot["reservationId"].AsInt64, OrderSubmissionBson.Reference(lot["sourceAuthority"]),
-            OrderSubmissionBson.Reference(lot["costBasis"]), new Money(Decimal128.ToDecimal(lot["packageCost"].AsDecimal128))))], OrderDraftBson.Time(value["validUntil"]));
+            OrderSubmissionBson.Reference(lot["costBasis"]), new Money(Decimal128.ToDecimal(lot["packageCost"].AsDecimal128))))], OrderDraftBson.Time(value["validUntil"])) {
+                FiniteValue = value.TryGetValue("finiteValue", out var finite) ? finite.DeepClone().AsBsonDocument : null };
+    internal static string CauseHash(BsonDocument row) => CatalogRepository.Digest(new BsonDocument(row.Where(field =>
+        field.Name is not ("phase" or "postingFence" or "valueEffects" or "journalId" or "journalFingerprint" or "causeHash"))));
     internal static object Body(long preparationId, long preparationRevision, long courierId, string review, ImmutableArray<ShipmentLotSelection> selected) =>
         new { preparationId, preparationRevision, courierId, review, selected };
     internal static string Review(BsonDocument preparation, long courierId, long courierGrantVersion, long courierProfileVersion,

@@ -64,12 +64,16 @@ public sealed partial class ProcurementStockValuationService
             ProcurementStockValuationService expectedOwner, IMongoDatabase database, IClientSessionHandle tx, HeldReceiptOriginProof expectedOrigin,
             long qualityAllocationId, long valuationAllocationId, CancellationToken ct) {
             Require(expectedOwner, database, tx, expectedOrigin); await origin.RequireAsync(database, tx, ct);
-            var quality = await new ProcurementQualityAcceptanceSourceReader(owner.database, owner.unit, owner.clock, owner.catalog, owner.orders, owner.sources, graph)
-                .ReadAsync(tx, qualityAllocationId, ct);
-            var records = new ProcurementStockValuationRecords(owner.database, owner.unit, owner.clock, owner.catalog, owner.orders, owner.sources, graph);
-            var value = await owner.ReadApprovedSourceAsync(database, tx, valuationAllocationId, records, ct);
-            if (quality.Receipt != origin.Receipt || value.Receipt != origin.Receipt) throw B.Broken();
-            Require(expectedOwner, database, tx, expectedOrigin); return (quality, value);
+            var token = graph.BeginOriginRead(this, owner, database, owner.clock, tx, origin);
+            try {
+                var quality = await new ProcurementQualityAcceptanceSourceReader(owner.database, owner.unit, owner.clock, owner.catalog, owner.orders, owner.sources, graph)
+                    .ReadAsync(tx, qualityAllocationId, ct);
+                var records = new ProcurementStockValuationRecords(owner.database, owner.unit, owner.clock, owner.catalog, owner.orders, owner.sources, graph);
+                var value = await owner.ReadApprovedSourceAsync(database, tx, valuationAllocationId, records, ct);
+                if (quality.Receipt != origin.Receipt || value.Receipt != origin.Receipt) throw B.Broken();
+                await origin.RequireAsync(database, tx, ct);
+                Require(expectedOwner, database, tx, expectedOrigin); ct.ThrowIfCancellationRequested(); return (quality, value);
+            } finally { graph.EndOriginRead(token); }
         }
     }
     private async Task<ProcurementPayableValuationSource> ReadApprovedSourceAsync(IMongoDatabase owner,

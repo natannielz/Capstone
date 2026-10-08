@@ -16,7 +16,11 @@ Diperiksa ulang pada **8 Oktober 2026 (WIB)** dalam sesi konsolidasi. Dokumen in
 
 Attachment berada di bawah `C:/Users/User/.codex/attachments/`. Ekstraksi manual/diagram yang dipertahankan berada di `tmp/production-plan-inputs/`, di luar publikasi Git. Ketersediaan file tidak memberi izin menerbitkan manual, data pribadi atau source archive sebagai static assets.
 
-**Batas penting:** DOC asli tidak dirender per halaman. Teks binary dan diagram terpisah telah diperiksa; layout/paginasi serta objek Word nonteks/embedded mungkin belum terlihat. Rujukan manual menggunakan bab/judul bagian, bukan nomor halaman yang belum diverifikasi.
+**Batas penting:** DOC asli belum dirender per halaman; Word/LibreOffice tidak tersedia pada lokasi instalasi umum dan Word tidak terdaftar pada komputer ini. Teks binary, sepuluh diagram terpisah, dan seluruh tujuh gambar unik yang berhasil diekstrak dari stream DOC telah diperiksa. Layout/paginasi serta objek Word di luar gambar raster yang berhasil dikenali belum diverifikasi. Rujukan manual menggunakan bab/judul bagian, bukan nomor halaman yang belum diverifikasi.
+
+Pemeriksaan objek tertanam pada8Oktober menemukan19 kemunculan gambar yang lolos decode/CRC dan identik byte dengan source: lima diagram bisnis, satu logo dan satu tanda kecil yang membentuk tujuh gambar unik. Lima diagram tertanam ditinjau langsung: tiga padaBabII (pasokan OMI, vendor merchandise dan pembelian vendor/pasar), satu padaBabIII (pesanan unit→persiapan→surat jalan→pengiriman→tanda tangan→arsip), dan satu padaBabVI (rekonsiliasi akhir bulan→paraf pimpinan→jurnal/laporan akuntansi serta pengecekan SPH OMI). Jadwal Senin/Kamis dalam diagram OMI merupakan konteks manual, bukan ETA baru yang boleh diisi otomatis. Pemeriksaan jumlah koli tetap berbeda dari penerimaan isi barang.
+
+Manifest privat `tmp/cleanup-20261008/manual-embedded-images/manifest.json` mengikat nama DOC, hash asli, stream/offset, ukuran, hash dan gambar hasil ekstraksi. Parser JPEG mengikuti panjang segment agar thumbnail EXIF tidak memotong gambar utama; seluruh signature gambar tingkat atas yang dikenali berhasil didekode. Thumbnail logo yang ditemukan di dalam EXIF juga telah dilihat dan tidak dihitung sebagai diagram tambahan. Lima diagram raster tidak identik hash dengan PNG padaZIP terpisah, sehingga tidak disimpulkan sebagai duplikat hanya berdasarkan topiknya. Tidak ada manual/gambar privat yang dipindahkan ke static asset publik.
 
 ## Isi sumber yang dipertahankan
 
@@ -58,4 +62,3 @@ Keputusan manusia yang tetap berlaku:
 - Tebet/Pancoran/Cawang pada rapat adalah konteks, bukan persetujuan akun, catalog, inventory atau operator produksi.
 - Header historis “Pinjaman Produktif” adalah residue template; bukan kebutuhan aplikasi.
 - Uraian email/telepon/transfer dalam manual adalah flow bisnis, bukan izin bagi agen menghubungi pihak lain atau memindahkan uang.
-

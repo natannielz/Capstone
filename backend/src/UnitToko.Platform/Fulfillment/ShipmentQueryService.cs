@@ -37,16 +37,22 @@ public sealed partial class ShipmentQueryService
     }
     private IMongoCollection<BsonDocument> Rows(string name) => database.GetCollection<BsonDocument>(name);
     internal IMongoDatabase SourceDatabase => database;
+    internal ShipmentDispatchValueRecords.HistoricalRead? StockSourceHistory => orders.StockSourceHistory;
+    internal ShipmentDispatchService.LiveValueRead? StockSourceLiveRead => orders.StockSourceLiveRead;
+    internal IClock StockSourceClock => clock;
     internal async Task StorageAsync(CancellationToken ct) { await preparations.StorageAsync(ct); await ShipmentDispatchStorage.RequireAsync(database, ct); }
     private AuthorizationQuery Query(ActorContext actor, AuthorizationSnapshot snapshot, string permission = Permissions.ShipmentRead) {
         var query = ScopePolicy.Compile(actor, snapshot, permission, clock.UtcNow); AuthorizationStore.Require(query); return query;
     }
     private static ResourceScope Resource(BsonDocument row) => ShipmentPreparationBson.Scope(row["scope"].AsBsonDocument) with {
         AssignedUserIds = [row["courierId"].AsInt64] };
-    private async Task<ShipmentReadView> VerifiedAsync(ActorContext actor, AuthorizationSnapshot snapshot, IClientSessionHandle tx, long id, CancellationToken ct) {
-        var row = await new ShipmentDispatchRecords(database).ReadAsync(tx, id, ct);
+    private async Task<ShipmentReadView> VerifiedAsync(ActorContext actor, AuthorizationSnapshot snapshot, IClientSessionHandle tx, long id, CancellationToken ct,
+        ShipmentDispatchValueRecords.HistoricalRead? history = null) {
+        history ??= orders.StockSourceHistory ?? new ShipmentDispatchValueRecords.HistoricalRead(database, clock, tx);
+        var sourceOrders = orders.WithDispatchHistory(tx, history);
+        var row = await new ShipmentDispatchRecords(database, clock, history, sourceOrders.StockSourceLiveRead).ReadAsync(tx, id, ct);
         if (!Query(actor, snapshot).Matches(Resource(row))) throw ShipmentDispatchRecords.Invalid();
-        await orders.RequireShipmentHistoryAsync(tx, actor, row, ct);
+        await sourceOrders.RequireShipmentHistoryAsync(tx, actor, row, ct);
         var source = ShipmentPreparationBson.Source(row["source"].AsBsonDocument);
         var lines = ShipmentPreparationBson.Lines(row["lines"].AsBsonArray).Select(selected => {
             var line = source.Lines.Single(line => line.SkuId == selected.SkuId);
@@ -60,19 +66,21 @@ public sealed partial class ShipmentQueryService
     public async Task<ShipmentReadView> ReadAsync(ActorContext actor, long id, CancellationToken ct = default) {
         if (id <= 0) throw ShipmentDispatchRecords.Invalid(); await StorageAsync(ct);
         return await authorization.ReadAsync(actor, async (snapshot, tx, token) => {
+            var history = orders.StockSourceHistory ?? new ShipmentDispatchValueRecords.HistoricalRead(database, clock, tx);
             var row = await Rows("shipments").Find(tx, F.Eq("_id", id) & ScopeQuery.Create(Query(actor, snapshot))).SingleOrDefaultAsync(token) ?? throw ShipmentDispatchRecords.Invalid();
-            var result = await VerifiedAsync(actor, snapshot, tx, id, token);
+            var result = await VerifiedAsync(actor, snapshot, tx, id, token, history);
             await FenceAsync(actor, snapshot, tx, [Resource(row)], token); return result;
         }, ct);
     }
     public async Task<(ImmutableArray<ShipmentReadView> Items, bool HasMore)> ListAsync(ActorContext actor, long? beforeId = null, CancellationToken ct = default) {
         if (beforeId is <= 0) throw ShipmentDispatchRecords.Invalid(); await StorageAsync(ct);
         return await authorization.ReadAsync(actor, async (snapshot, tx, token) => {
+            var history = orders.StockSourceHistory ?? new ShipmentDispatchValueRecords.HistoricalRead(database, clock, tx);
             var filter = ScopeQuery.Create(Query(actor, snapshot)); if (beforeId.HasValue) filter &= F.Lt("_id", beforeId.Value);
             var rows = await Rows("shipments").Find(tx, filter).Sort(new BsonDocument("_id", -1)).Limit(26).ToListAsync(token);
             var items = ImmutableArray.CreateBuilder<ShipmentReadView>();
             // Verify the extra row as well: its existence influences the disclosed paging state.
-            foreach (var row in rows) items.Add(await VerifiedAsync(actor, snapshot, tx, row["_id"].AsInt64, token));
+            foreach (var row in rows) items.Add(await VerifiedAsync(actor, snapshot, tx, row["_id"].AsInt64, token, history));
             await FenceAsync(actor, snapshot, tx, rows.Select(Resource).ToArray(), token);
             return (items.Take(25).ToImmutableArray(), rows.Count > 25);
         }, ct);

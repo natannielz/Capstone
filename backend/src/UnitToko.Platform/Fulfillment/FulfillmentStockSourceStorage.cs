@@ -9,19 +9,19 @@ namespace UnitToko.Platform.Fulfillment;
 
 internal static class FulfillmentStockSourceStorage
 {
-    internal static async Task RequireRetainedAsync(IMongoDatabase database, CancellationToken ct)
+    internal static async Task RequireRetainedAsync(IMongoDatabase database, CancellationToken ct, BsonDocument? requiredShipmentValidator = null)
     {
         foreach (var name in StockSourceSetupSchemas.Collections)
             await InventoryRepository.RequireStorageAsync(database, name, StockSourceSetupSchemas.Validator(name), StockSourceSetupSchemas.Key(name), ct);
-        await ShipmentDispatchStorage.RequireAsync(database, ct);
+        await ShipmentDispatchStorage.RequireAsync(database, ct, requiredShipmentValidator);
         await new ShipmentReceiptRecords(database).StorageAsync(ct);
         await new DeliveryAttemptRecords(database).StorageAsync(ct);
-        await OrderStockSourceStorage.RequireAsync(database, ct);
+        await OrderStockSourceStorage.RequireAsync(database, ct, requiredShipmentValidator);
         await ReconciliationStockSourceStorage.RequireAsync(database, ct);
     }
-    internal static async Task RequireAsync(IMongoDatabase database, CancellationToken ct)
+    internal static async Task RequireAsync(IMongoDatabase database, CancellationToken ct, BsonDocument? requiredShipmentValidator = null)
     {
-        await RequireRetainedAsync(database, ct);
+        await RequireRetainedAsync(database, ct, requiredShipmentValidator);
         foreach (var name in FulfillmentStockSourceSchemas.Collections) {
             var definition = await AccountContactStorage.DefinitionAsync(database, name, ct) ?? throw FulfillmentStockSourceRecords.Unavailable();
             if (!AccountContactStorage.SafeDefinition(definition, FulfillmentStockSourceSchemas.Validator(name))) throw FulfillmentStockSourceRecords.Unavailable();

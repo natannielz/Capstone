@@ -8,7 +8,7 @@ internal static class ShipmentDispatchStorage
 {
     // Multiple independent uniqueness rules protect order history and Surat Jalan numbering.
     // The Inventory single-key guard cannot represent this owner's storage contract.
-    internal static async Task RequireAsync(IMongoDatabase db, CancellationToken ct) {
+    internal static async Task RequireAsync(IMongoDatabase db, CancellationToken ct, BsonDocument? requiredValidator = null) {
         var definition = await (await db.ListCollectionsAsync(new ListCollectionsOptions { Filter = new BsonDocument("name", "shipments") }, ct)).SingleOrDefaultAsync(ct);
         if (definition is null || definition.GetValue("type", "") != "collection") throw ShipmentDispatchRecords.Invalid();
         var options = definition.GetValue("options", new BsonDocument()).AsBsonDocument;
@@ -16,8 +16,9 @@ internal static class ShipmentDispatchStorage
             options.GetValue("validationLevel", "strict") != "strict" || options.GetValue("validationAction", "error") != "error" ||
             options.TryGetValue("collation", out var collation) && !Simple(collation) ||
             !options.TryGetValue("validator", out var validator) || !validator.IsBsonDocument ||
-            !InventorySchemas.Contains(validator.AsBsonDocument, ShipmentDispatchSchemas.Validator())) throw ShipmentDispatchRecords.Invalid();
+            !InventorySchemas.Contains(validator.AsBsonDocument, requiredValidator ?? ShipmentDispatchSchemas.Validator())) throw ShipmentDispatchRecords.Invalid();
         var indexes = await (await db.GetCollection<BsonDocument>("shipments").Indexes.ListAsync(ct)).ToListAsync(ct);
+        if (indexes.Any(index => Unsafe(index) && !ShipmentDispatchMigration.FoundationNumberIndex(index))) throw ShipmentDispatchRecords.Invalid();
         var keys = new[] { ShipmentDispatchSchemas.Key(), ShipmentDispatchSchemas.NumberKey() };
         if (!indexes.Any(index => index["name"] == "_id_" && index["key"].Equals(new BsonDocument("_id", 1)) && !Unsafe(index)) ||
             keys.Any(key => !indexes.Any(index => index["key"].Equals(key) && index.GetValue("unique", false).AsBoolean && !Unsafe(index))) ||

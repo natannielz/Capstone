@@ -9,6 +9,10 @@ import { AccessFailure, accessMessage } from '../administration/workflow';
 import { AdministrationNavigation } from '../administration/AdministrationNavigation';
 import { createOrderSubmitGateway, type SubmittedOrder } from './order-submit-client';
 import { orderAmount } from './order-quote-client';
+import { useDraftSave } from './DraftSave';
+import { OrderDraftEditor } from './OrderDraftEditor';
+import type { DraftResult } from './order-draft-client';
+import { prepareReorderDraft } from './order-reorder';
 import common from '../administration/access.module.css';
 import styles from './order-draft.module.css';
 
@@ -69,7 +73,22 @@ function OrderHistoryDesk({ account, onFailure }: { account: Account; onFailure:
   const [page, setPage] = useState<{ items: SubmittedOrder[]; hasMore: boolean }>({ items: [], hasMore: false });
   const [cursor, setCursor] = useState<string | null>(null), [reload, setReload] = useState(0), [selected, setSelected] = useState<SubmittedOrder | null>(null);
   const [busy, setBusy] = useState(false), [error, setError] = useState<unknown>(null), detail = useRef<HTMLElement>(null), alive = useRef(false), pending = useRef(false);
+  const [repeat, setRepeat] = useState<ReturnType<typeof prepareReorderDraft> | null>(null), [saved, setSaved] = useState<DraftResult | null>(null), [notice, setNotice] = useState('');
+  const repeatRegion = useRef<HTMLDivElement>(null), repeatReadEpoch = useRef(0);
+  const current = () => alive.current && !sessionTiming(account.session, performance.now() - account.observedAt).expired;
+  const save = useDraftSave(account.actorId, current, result => { repeatReadEpoch.current++; setRepeat(null); setSaved(result); setNotice(''); }, onFailure, busy);
+  const locked = busy || save.locked || repeat !== null;
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
+  useEffect(() => { if (repeat) repeatRegion.current?.focus(); }, [repeat]);
+  useEffect(() => {
+    const changed = (event: StorageEvent) => {
+      if (event.key === null || event.key.startsWith('unit-toko:pending:v1:' + account.actorId + ':')) {
+        repeatReadEpoch.current++;
+        setRepeat(null); setSaved(null); setNotice('Ada perubahan referensi di tab lain. Periksa hasil yang belum pasti, lalu muat kembali pesanan sebelum membuat draf baru.');
+      }
+    };
+    window.addEventListener('storage', changed); return () => window.removeEventListener('storage', changed);
+  }, [account.actorId]);
   useEffect(() => {
     let active = true; const controller = new AbortController();
     void Promise.resolve().then(async () => {
@@ -78,26 +97,51 @@ function OrderHistoryDesk({ account, onFailure }: { account: Account; onFailure:
       catch (failure) { if (active) { setError(failure); onFailure(failure); } } finally { if (active) setBusy(false); }
     }); return () => { active = false; controller.abort(); };
   }, [gateway, account.actorId, cursor, reload, onFailure]);
-  useEffect(() => { if (selected) detail.current?.focus(); }, [selected]);
+  useEffect(() => { if (selected && repeat === null) detail.current?.focus(); }, [selected, repeat]);
   async function select(id: string) {
     const current = () => alive.current && !sessionTiming(account.session, performance.now() - account.observedAt).expired;
-    if (!current() || busy || pending.current) return; pending.current = true; setBusy(true); setError(null); setSelected(null);
+    if (!current() || locked || pending.current) return; pending.current = true; setBusy(true); setError(null); setSelected(null);
     try { const result = await gateway.read(account.actorId, id); if (current()) { setSelected(result); setPage(previous => ({ ...previous, items: previous.items.map(order => order.submission.orderId === id ? result : order) })); } }
     catch (failure) { if (current()) { setError(failure); onFailure(failure); } }
     finally { pending.current = false; if (alive.current) setBusy(false); }
   }
+  async function beginRepeat(id: string) {
+    if (!current() || locked || pending.current || !account.actions.includes('order.submit')) return;
+    const epoch = ++repeatReadEpoch.current;
+    pending.current = true; setBusy(true); setError(null); setSaved(null); setNotice('');
+    try {
+      // Reload through the historical owner before using an old snapshot as editable draft input.
+      const original = await gateway.read(account.actorId, id);
+      if (current() && repeatReadEpoch.current === epoch) { setSelected(original); setRepeat(prepareReorderDraft(original)); }
+    } catch (failure) { if (current()) { setError(failure); onFailure(failure); } }
+    finally { pending.current = false; if (alive.current) setBusy(false); }
+  }
   return <>
-    <AdministrationNavigation current="orders" actions={account.actions} locked={busy} />
+    <AdministrationNavigation current="orders" actions={account.actions} locked={locked} />
+    {save.recoveryView}
+    {notice && <p role="status" className={common.help}>{notice}</p>}
+    {saved && <section className={styles.review} aria-label="Draf baru tersimpan"><h2>Draf {saved.draftId} tersimpan</h2>
+      <p role="status">Pesanan baru belum diajukan. Harga, ketersediaan, dan tujuan tetap diperiksa pada pengajuan.</p>
+      <div className={common.actions}><Link className={common.secondary} href={'/ordering/checkout?draft=' + encodeURIComponent(saved.draftId)}>Tinjau pengajuan draf</Link>
+        <Link className={common.secondary} href="/ordering/drafts">Daftar draf saya</Link></div>
+    </section>}
+    {repeat && <div ref={repeatRegion} tabIndex={-1} role="region" aria-label="Pemesanan ulang">
+      <p>Pilihan dari pesanan {repeat.sourceOrderId} menjadi awal draf baru untuk cabang yang sama. Jumlah dan rencana pengiriman masih perlu Anda periksa. Referensi pembelian lama tidak disalin.</p>
+      <p>Kemasan yang sudah berubah, harga yang tidak berlaku, atau akses cabang yang dicabut harus diperiksa kembali; sistem tidak menggantinya otomatis.</p>
+      <OrderDraftEditor key={repeat.sourceOrderId} actorId={account.actorId} draft={repeat.draft} initialQuote={repeat.historicalQuote} initialIssue={null}
+        reorderSourceId={repeat.sourceOrderId} locked={busy || save.locked} isCurrent={current} onSubmit={save.submit} onFailure={onFailure} />
+      <button className={common.secondary} disabled={busy || save.locked} onClick={() => setRepeat(null)}>Batalkan draf pemesanan ulang</button>
+    </div>}
     {error !== null && <p role="alert" className={common.alert}>{message(error)}</p>}
     <section className={common.accountSection} aria-label="Daftar pesanan saya" aria-busy={busy}><h2>Pesanan yang diajukan</h2>
       {busy && <p role="status">Memuat pesanan…</p>}{!busy && page.items.length === 0 && <p>Belum ada pesanan pada halaman ini.</p>}
       <ul className={styles.lines}>{page.items.map(order => <li className={styles.line} key={order.submission.orderId}><strong>{order.buyerName}</strong> · Pesanan {order.submission.orderId}
         <p>{date(order.submission.recordedAt)} · {order.quote.lines.length} jenis kemasan</p><p>{status(order)}</p>
         <p>Total saat pengajuan: <strong>{orderAmount(order.quote.currency, order.total)}</strong></p>
-        <button className={common.secondary} disabled={busy} onClick={() => void select(order.submission.orderId)}>Lihat pesanan {order.submission.orderId}</button></li>)}</ul>
-      <div className={common.actions}><button className={common.secondary} disabled={busy} onClick={() => { setCursor(null); setReload(value => value + 1); }}>Muat pesanan terbaru</button>
-        {page.hasMore && <button className={common.secondary} disabled={busy} onClick={() => setCursor(page.items.at(-1)!.submission.orderId)}>Pesanan lebih lama</button>}
-        {account.actions.includes('order.submit') && <Link href="/ordering/drafts" className={common.secondary}>Draf pesanan</Link>}</div>
+        <button className={common.secondary} disabled={locked} onClick={() => void select(order.submission.orderId)}>Lihat pesanan {order.submission.orderId}</button></li>)}</ul>
+      <div className={common.actions}><button className={common.secondary} disabled={locked} onClick={() => { setCursor(null); setReload(value => value + 1); }}>Muat pesanan terbaru</button>
+        {page.hasMore && <button className={common.secondary} disabled={locked} onClick={() => setCursor(page.items.at(-1)!.submission.orderId)}>Pesanan lebih lama</button>}
+        {account.actions.includes('order.submit') && !locked && <Link href="/ordering/drafts" className={common.secondary}>Draf pesanan</Link>}</div>
     </section>
     {selected && <section ref={detail} tabIndex={-1} className={styles.review} aria-label="Rincian pesanan"><h2>Pesanan {selected.submission.orderId}</h2>
       <p>{selected.buyerName} · {date(selected.submission.recordedAt)}</p><p role="status">{status(selected)}</p>
@@ -111,7 +155,9 @@ function OrderHistoryDesk({ account, onFailure }: { account: Account; onFailure:
       <p>Pajak: {orderAmount(selected.quote.currency, selected.tax)} · Biaya lain: {orderAmount(selected.quote.currency, selected.charges)}</p><p><strong>Total: {orderAmount(selected.quote.currency, selected.total)}</strong></p>
       <p>Bagian toko: {selected.progress.acceptedSuborders.length} diterima, {selected.progress.rejectedSuborders.length} ditolak, dari {selected.submission.suborderIds.length} bagian.</p>
       {(selected.progress.cancelled || selected.progress.spendingState === 'Rejected' || selected.progress.rejectedSuborders.length > 0) && <p>Angka di atas menyimpan biaya pengajuan awal. Penolakan atau pembatalan bukan bukti pembayaran maupun pengembalian dana.</p>}
-      <button className={common.secondary} disabled={busy} onClick={() => void select(selected.submission.orderId)}>Perbarui perkembangan</button>
+      <div className={common.actions}><button className={common.secondary} disabled={locked} onClick={() => void select(selected.submission.orderId)}>Perbarui perkembangan</button>
+        {account.actions.includes('order.submit') && <button className={common.primary} disabled={locked} onClick={() => void beginRepeat(selected.submission.orderId)}>Pesan ulang sebagai draf</button>}
+      </div>
     </section>}
   </>;
 }

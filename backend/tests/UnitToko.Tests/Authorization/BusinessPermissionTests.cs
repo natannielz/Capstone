@@ -63,6 +63,74 @@ public sealed class BusinessPermissionTests
     }
 
     [Fact]
+    public void Commercial_policy_writes_require_explicit_exact_seller_shop_authority_and_fresh_MFA()
+    {
+        var directory = new ScopeDirectory([.. Directory.Nodes,
+            new(22, ScopeNodeKind.Shop, 2, AuthorizationStatus.Active, 1),
+            new(202, ScopeNodeKind.Channel, 2, AuthorizationStatus.Active, 1),
+            new(211, ScopeNodeKind.Warehouse, 21, AuthorizationStatus.Active, 1)]);
+        foreach (var permission in new[] { Permissions.OrderCommercialPolicyPropose, Permissions.OrderCommercialPolicyApprove }) {
+            var definition = Permissions.Find(permission)!;
+            Assert.Equal(new[] { GrantScopeKind.FulfillmentShop }, definition.AllowedScopes.ToArray());
+            Assert.True(definition.Assurance.RequiresMfa);
+            Assert.Equal(TimeSpan.FromMinutes(5), definition.Assurance.MaximumAge);
+            Assert.All(RoleTemplates.Templates.Values, role => Assert.DoesNotContain(permission, role.Permissions));
+            Assert.DoesNotContain(permission, RoleTemplates.Materialize("finance", RoleTemplates.FinancePacks.Keys, []).Permissions);
+            Assert.False(ScopePolicy.Compile(Actor, Snapshot("finance", Shop), permission, Now).IsAllowed);
+            foreach (var buyerAuthority in new[] { Permissions.OrderSpendApprove, Permissions.OrderSpendingPolicyApprove })
+                Assert.False(ScopePolicy.Compile(Actor, Snapshot("buyer", Branch, [Permissions.BranchPic, buyerAuthority]), permission, Now).IsAllowed);
+            Assert.False(ScopePolicy.Compile(Actor, Snapshot("buyer", Branch, [Permissions.BranchPic, permission]), permission, Now).IsAllowed);
+            var warehouse = Snapshot("finance", new(GrantScopeKind.FulfillmentWarehouse, 2, ShopId: 21, WarehouseId: 211, ChannelId: 201), [permission]) with { Directory = directory };
+            Assert.False(ScopePolicy.Compile(Actor, warehouse, permission, Now).IsAllowed);
+
+            var policy = Snapshot("finance", Shop, [permission]) with { Directory = directory };
+            var query = ScopePolicy.Compile(Actor, policy, permission, Now);
+            Assert.True(query.Matches(Order));
+            Assert.False(query.Matches(Order with { ShopId = 22 }));
+            Assert.False(query.Matches(Order with { ChannelId = 202 }));
+            Assert.Equal("step_up_required", ScopePolicy.Compile(Actor with { Assurance = FactorAssurance.SingleFactor }, policy, permission, Now).DenialCode);
+            Assert.True(ScopePolicy.Compile(Actor with { AuthenticatedAt = Now.AddMinutes(-5) }, policy, permission, Now).Matches(Order));
+            Assert.Equal("step_up_required", ScopePolicy.Compile(Actor with { AuthenticatedAt = Now.AddMinutes(-5).AddTicks(-1) }, policy, permission, Now).DenialCode);
+        }
+    }
+
+    [Fact]
+    public void Commercial_policy_reads_allow_explicit_buying_scope_and_seller_shop_without_write_authority()
+    {
+        const string read = Permissions.OrderCommercialPolicyRead;
+        Assert.Equal(new[] { GrantScopeKind.BuyingDivision, GrantScopeKind.BuyingBranch, GrantScopeKind.BuyingOrganization, GrantScopeKind.FulfillmentShop },
+            Permissions.Find(read)!.AllowedScopes.ToArray());
+        Assert.Null(Permissions.Find(read)!.Assurance.MaximumAge);
+        Assert.All(RoleTemplates.Templates.Values, role => Assert.DoesNotContain(read, role.Permissions));
+        foreach (var scope in new[] { new GrantScope(GrantScopeKind.BuyingDivision, 1, 11, 111), Branch,
+            new GrantScope(GrantScopeKind.BuyingOrganization, 1), Shop }) {
+            string[] additions = scope.Kind switch {
+                GrantScopeKind.BuyingOrganization => [read, Permissions.OrganizationWide],
+                GrantScopeKind.FulfillmentShop => [read], _ => [read, Permissions.BranchPic] };
+            var reader = Snapshot(scope == Shop ? "finance" : "buyer", scope, additions);
+            Assert.True(ScopePolicy.Compile(Actor with { AuthenticatedAt = Now.AddMinutes(-6) }, reader, read, Now).Matches(Order));
+            Assert.False(ScopePolicy.Compile(Actor, reader, Permissions.OrderCommercialPolicyPropose, Now).IsAllowed);
+            Assert.False(ScopePolicy.Compile(Actor, reader, Permissions.OrderCommercialPolicyApprove, Now).IsAllowed);
+        }
+        Assert.False(ScopePolicy.Compile(Actor, Snapshot("buyer", Buyer, [read]), read, Now).IsAllowed);
+        Assert.False(ScopePolicy.Compile(Actor, Snapshot("buyer", Branch, [read]), read, Now).IsAllowed);
+    }
+
+    [Fact]
+    public void Commercial_policy_approval_requires_the_stored_independent_proposer_and_exact_revision()
+    {
+        const string approve = Permissions.OrderCommercialPolicyApprove;
+        var checker = Snapshot("finance", Shop, [approve]);
+        Assert.True(ApprovalPolicy.RequiresEvidence(approve));
+        Assert.True(PersonApprovalPolicy.RequiresEvidence(approve));
+        Assert.True(ScopePolicy.Authorize(Actor, checker, approve, Order, Now, new(3, 3, ProposedBy: 102)).Allowed);
+        Assert.Equal("approval_evidence_required", ScopePolicy.Authorize(Actor, checker, approve, Order, Now).Code);
+        Assert.Equal("approval_revision_invalid", ScopePolicy.Authorize(Actor, checker, approve, Order, Now, new(3, 2, ProposedBy: 102)).Code);
+        Assert.Equal("independent_actor_required", ScopePolicy.Authorize(Actor, checker, approve, Order, Now, new(3, 3, ProposedBy: Actor.UserId)).Code);
+        Assert.Equal("independent_actor_required", ScopePolicy.Authorize(Actor, checker, approve, Order, Now, new(3, 3, RequestedBy: 102)).Code);
+    }
+
+    [Fact]
     public void Accounting_book_setup_requires_exact_shop_authority_and_independent_approval_without_posting_authority()
     {
         foreach (var permission in new[] { Permissions.AccountingBookRead, Permissions.AccountingBookPropose, Permissions.AccountingBookApprove }) {

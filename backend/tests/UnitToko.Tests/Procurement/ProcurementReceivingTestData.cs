@@ -47,10 +47,11 @@ internal sealed class ProcurementReceivingTestData(PurchaseOrderTestData orders)
         "One unannounced excess container held pending separate item inspection");
 
     internal static async Task<ProcurementReceivingTestData> CreateAsync(MongoFixture fixture,
-        ProcurementRoute route = ProcurementRoute.Ddo, bool onReceipt = false, decimal requiredAdvance = 0, bool boundStock = false, bool activateEmptySource = false, bool useSystemClock = false)
+        ProcurementRoute route = ProcurementRoute.Ddo, bool onReceipt = false, decimal requiredAdvance = 0, bool boundStock = false, bool activateEmptySource = false, bool useSystemClock = false,
+        long reviewedSafetyBufferBaseUnits = 12)
     {
         if (activateEmptySource && !boundStock) throw new ArgumentException("Empty activation needs the bound stock fixture", nameof(activateEmptySource));
-        var orders = await PurchaseOrderTestData.CreateAsync(fixture, activateEmptySource, useSystemClock);
+        var orders = await PurchaseOrderTestData.CreateAsync(fixture, activateEmptySource, useSystemClock, reviewedSafetyBufferBaseUnits);
         try {
             var data = new ProcurementReceivingTestData(orders) { Route = route };
             if (route != ProcurementRoute.Ddo) {
@@ -66,7 +67,7 @@ internal sealed class ProcurementReceivingTestData(PurchaseOrderTestData orders)
             if (boundStock) {
                 await data.Base.AddGrantAsync(orders.Maker, 7280, ProcurementRequestTestData.Scope, [Permissions.StockRead]);
                 await data.Base.AddGrantAsync(orders.Checker, 7281, ProcurementRequestTestData.Scope, [Permissions.StockRead]);
-                await orders.PrepareBoundSourceAsync();
+                await orders.PrepareBoundSourceAsync(reviewedSafetyBufferBaseUnits: reviewedSafetyBufferBaseUnits);
                 data.SourceMaker = orders.SourceMaker; data.SourceChecker = orders.SourceChecker;
                 data.PoolId = orders.PoolId; data.PolicyId = orders.PolicyId;
                 var selection = new PurchaseOrderInboundPoolSelection([.. input.Lines.Select(line => new PurchaseOrderInboundAllocation(line.RequestSkuId, line.Packages, data.PoolId, 1))]);

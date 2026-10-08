@@ -64,6 +64,8 @@ public sealed partial class OrderSubmissionService
         { "correlationId", row["correlationId"] }, { "createdAt", row["decidedAt"] }, { "result", DecisionResult(row) } };
 
     private async Task<OrderApprovalProgress> DecisionGraphAsync(IClientSessionHandle tx, BsonDocument order, CancellationToken ct) {
+        stockSourceHistory?.Require(database, tx);
+        stockSourceLiveRead?.Require(database, clock, tx);
         if (await Rows(Decisions).Find(tx, F.Eq("orderId", order["_id"]) & new BsonDocument("$nor", new BsonArray { OrderSubmissionSchemas.Validator(Decisions) })).AnyAsync(ct)) throw Invalid();
         var rows = await Rows(Decisions).Find(tx, F.Eq("orderId", order["_id"])).Sort(new BsonDocument("revision", 1)).Limit(103).ToListAsync(ct);
         if (rows.Count > 102) throw Invalid();
@@ -76,7 +78,7 @@ public sealed partial class OrderSubmissionService
         var accepted = ImmutableArray.CreateBuilder<LongId>(); var rejected = ImmutableArray.CreateBuilder<LongId>(); var cancelled = false;
         var lastAt = OrderDraftBson.Time(order["orderedAt"]);
         long dispatchSequence = 0;
-        await using var shipments = new ShipmentDispatchRecords(database).ReadOrderAsync(tx, order["_id"].AsInt64, ct).GetAsyncEnumerator(ct);
+        await using var shipments = new ShipmentDispatchRecords(database, clock, stockSourceHistory, stockSourceLiveRead).ReadOrderAsync(tx, order["_id"].AsInt64, ct).GetAsyncEnumerator(ct);
         var hasShipment = await shipments.MoveNextAsync();
         async Task ApplyDispatches() {
             while (hasShipment && shipments.Current["decisionRevision"] == revision) {
@@ -117,6 +119,7 @@ public sealed partial class OrderSubmissionService
         await ApplyDispatches(); if (hasShipment) throw Invalid();
         foreach (var row in actual) foreach (var field in new[] { "revision", "remaining", "released", "dispatched" })
             if (row[field] != reservations[row["_id"].AsInt64][field]) throw Invalid();
+        stockSourceHistory?.Require(database, tx);
         return new(revision, state, accepted.ToImmutable(), rejected.ToImmutable(), cancelled) {
             DispatchSequence = dispatchSequence, HasRemainingReservation = reservations.Values.Any(row => row["remaining"].AsInt64 > 0) };
     }

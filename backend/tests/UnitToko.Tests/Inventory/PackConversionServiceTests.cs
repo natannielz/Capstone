@@ -270,8 +270,10 @@ public sealed class PackConversionServiceTests(MongoFixture fixture, ITestOutput
                 state["conversion-" + table] = new BsonArray(await data.Rows(table).Find(new BsonDocument(field, B.Operation)).Sort(new BsonDocument("_id", 1)).ToListAsync());
             return state;
         }
-        internal static async Task<PreparedConversion> CreateAsync(MongoFixture fixture, bool execute = true, DateOnly? inspectedExpiry = null) {
-            var data = await StockReleaseServiceTests.Data.CreateAsync(fixture, useSystemClock: true, inspectedExpiry: inspectedExpiry);
+        internal static async Task<PreparedConversion> CreateAsync(MongoFixture fixture, bool execute = true, DateOnly? inspectedExpiry = null,
+            bool includeCogsMapping = false, long reviewedSafetyBufferBaseUnits = 12) {
+            var data = await StockReleaseServiceTests.Data.CreateAsync(fixture, useSystemClock: true, inspectedExpiry: inspectedExpiry,
+                includeCogsMapping: includeCogsMapping, reviewedSafetyBufferBaseUnits: reviewedSafetyBufferBaseUnits);
             try {
                 var now = data.Clock.UtcNow; data.Clock.UseSystemClock = false; data.Clock.UtcNow = now;
                 var release = await data.ProposeAsync("conversion-guard-source-release");

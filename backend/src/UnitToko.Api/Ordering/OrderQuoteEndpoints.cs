@@ -44,6 +44,12 @@ public sealed record OrderQuoteLineDto(LongId FamilyId, string FamilyName, strin
     CatalogDefinitionDto Definition, CatalogPriceDto Price, int Packages, string BaseUnits, Money CatalogSubtotal);
 public sealed record OrderQuoteDto(OrderContextDto Context, DateTimeOffset CalculatedAt, string Currency,
     Money CatalogSubtotal, OrderQuoteLineDto[] Lines);
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record OrderCheckoutGroupsRequestDto([property: JsonRequired] string Purpose, [property: JsonRequired] OrderDraftInputDto Input);
+public sealed record OrderChannelCheckoutGroupDto(string GroupKey, LongId OrganizationId, LongId ShopId, LongId ChannelId,
+    string Currency, string? OrganizationName, string? ShopName, string? ChannelName, OrderDraftInputDto Input,
+    Money CatalogSubtotal, OrderQuoteLineDto[] Lines);
+public sealed record OrderChannelCheckoutGroupsDto(OrderContextDto Context, DateTimeOffset CalculatedAt, OrderChannelCheckoutGroupDto[] Items);
 
 public static class OrderQuoteEndpoints
 {
@@ -80,6 +86,19 @@ public static class OrderQuoteEndpoints
                     line.PublicId.ToString("D"), line.SkuCode, CatalogResponses.From(line.Definition), CatalogPriceResponses.Price(line.Price)!,
                     line.Packages, line.BaseUnits.ToString(CultureInfo.InvariantCulture), line.CatalogSubtotal))]));
         }).WithName("OrderQuotePreview").WithDescription("Current branch-scoped catalog subtotal only. No stock hold, order submission, tax/credit approval or payable commitment. Submission must recalculate in its own transaction.");
+        group.MapPost("/checkout/groups/query", async (OrderCheckoutGroupsRequestDto request, HttpContext http,
+            [FromServices] OrderQuoteService service, CancellationToken ct) => {
+            Purpose(request.Purpose); if (request.Input is null) throw Invalid();
+            OrderChannelCheckoutGroups value;
+            try { value = await service.CheckoutGroupsAsync(http.Features.Get<ResolvedActor>()!.Actor, request.Input.Domain(), ct); }
+            catch (DomainValidationException error) when (error.Code == "order_selection_changed") {
+                throw new PersistenceConflictException(error.Code, "Package or price changed; reload and review the selection");
+            }
+            return TypedResults.Ok(new OrderChannelCheckoutGroupsDto(OrderContextDto.From(value.Context), value.CalculatedAt,
+                [.. value.Items.Select(item => new OrderChannelCheckoutGroupDto(item.GroupKey, new(item.Seller.OrganizationId), new(item.Seller.ShopId),
+                    new(item.Seller.ChannelId), item.Seller.Currency, item.OrganizationName, item.ShopName, item.ChannelName,
+                    OrderDraftInputDto.From(item.Input), item.Catalog.CatalogSubtotal, OrderSubmissionEndpoints.Lines(item.Catalog)))]));
+        }).WithName("OrderChannelCheckoutGroups").WithDescription("Current authorized catalog groups by exact seller organization, shop, channel and currency. Each group requires its own reviewed commercial/stock preview and independent original-key submission; this grouping creates no order or stock effect.");
     }
     private static OrderPostalAddressDto Postal(OrderPostalAddress value) => new(new(value.Target.Kind, new(value.Target.Id)),
         value.Purpose == OrganizationAddressPurpose.LegalBilling ? "legal_billing" : "delivery", value.AddressId, value.VersionId,

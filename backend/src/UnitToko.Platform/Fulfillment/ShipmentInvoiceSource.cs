@@ -19,40 +19,47 @@ public sealed partial class ShipmentQueryService
         await FenceAsync(actor, authority, tx, rows.Select(Resource).ToArray(), ct, Permissions.InvoiceIssue);
         return [.. rows.Select(row => row["_id"].AsInt64)];
     }
-    internal async Task<BsonDocument> InvoiceCommercialAsync(ActorContext actor, IClientSessionHandle tx, long shipmentId, CancellationToken ct) {
-        var shipment = await new ShipmentDispatchRecords(database).ReadAsync(tx, shipmentId, ct);
-        return await orders.InvoiceCommercialAsync(tx, actor, shipment, ct);
+    internal async Task<BsonDocument> InvoiceCommercialAsync(ActorContext actor, IClientSessionHandle tx, long shipmentId, CancellationToken ct,
+        ShipmentDispatchValueRecords.HistoricalRead? history = null) {
+        history ??= orders.StockSourceHistory ?? new ShipmentDispatchValueRecords.HistoricalRead(database, clock, tx);
+        var sourceOrders = orders.WithDispatchHistory(tx, history);
+        var shipment = await new ShipmentDispatchRecords(database, clock, history, sourceOrders.StockSourceLiveRead).ReadAsync(tx, shipmentId, ct);
+        return await sourceOrders.InvoiceCommercialAsync(tx, actor, shipment, ct);
     }
     // Internal financial provenance only: never returned as an API projection. Billing needs
     // prior allocations across the original order to conserve quantities/tax without granting
     // the current issuer visibility of another store's invoices or its operational workspace.
-    internal async Task<ShipmentDocumentSource> InvoiceHistoryAsync(ActorContext actor, IClientSessionHandle tx, long shipmentId, CancellationToken ct) {
-        var row = await new ShipmentDispatchRecords(database).ReadAsync(tx, shipmentId, ct);
-        return new(Resource(row), await DocumentFactsAsync(actor, tx, row, ct));
+    internal async Task<ShipmentDocumentSource> InvoiceHistoryAsync(ActorContext actor, IClientSessionHandle tx, long shipmentId, CancellationToken ct,
+        ShipmentDispatchValueRecords.HistoricalRead? history = null) {
+        history ??= orders.StockSourceHistory ?? new ShipmentDispatchValueRecords.HistoricalRead(database, clock, tx);
+        var row = await new ShipmentDispatchRecords(database, clock, history, orders.StockSourceLiveRead).ReadAsync(tx, shipmentId, ct);
+        return new(Resource(row), await DocumentFactsAsync(actor, tx, row, ct, history));
     }
 }
 public sealed partial class ShipmentReceiptService
 {
     internal async Task RequireInvoiceHistoryAsync(ActorContext actor, IClientSessionHandle tx, InvoiceReceiptSource expected, CancellationToken ct) {
-        var source = await shipments.InvoiceHistoryAsync(actor, tx, expected.Snapshot["shipment"]["shipmentId"].AsInt64, ct);
+        var history = shipments.StockSourceHistory ?? new ShipmentDispatchValueRecords.HistoricalRead(database, shipments.StockSourceClock, tx);
+        var source = await shipments.InvoiceHistoryAsync(actor, tx, expected.Snapshot["shipment"]["shipmentId"].AsInt64, ct, history);
         var receipt = await records.FindReceiptAsync(tx, source.Snapshot["shipmentId"].AsInt64, ct) ?? throw ShipmentReceiptRecords.Invalid();
         await VerifyReceiptAsync(tx, receipt, source, ct);
         if (!Mongo.Migrations.CatalogSchemas.SemanticEquals(InvoiceReceiptSnapshot(receipt), expected.Snapshot["receipt"]) ||
             !Mongo.Migrations.CatalogSchemas.SemanticEquals(source.Snapshot, expected.Snapshot["shipment"]) ||
             !Mongo.Migrations.CatalogSchemas.SemanticEquals(ShipmentPreparationBson.Scope(source.Resource), ShipmentPreparationBson.Scope(expected.Resource)) ||
-            !Mongo.Migrations.CatalogSchemas.SemanticEquals(await shipments.InvoiceCommercialAsync(actor, tx, source.Snapshot["shipmentId"].AsInt64, ct), expected.Snapshot["commercial"])) throw ShipmentReceiptRecords.Invalid();
+            !Mongo.Migrations.CatalogSchemas.SemanticEquals(await shipments.InvoiceCommercialAsync(actor, tx, source.Snapshot["shipmentId"].AsInt64, ct, history), expected.Snapshot["commercial"])) throw ShipmentReceiptRecords.Invalid();
     }
     internal Task InvoiceStorageAsync(CancellationToken ct) => StorageAsync(ct);
     internal Task<ImmutableArray<long>> InvoiceShipmentsAsync(ActorContext actor, AuthorizationSnapshot authority, IClientSessionHandle tx, long? beforeId, CancellationToken ct) =>
         shipments.InvoiceShipmentsAsync(actor, authority, tx, beforeId, ct);
     internal async Task<InvoiceReceiptSource?> InvoiceSourceAsync(ActorContext actor, AuthorizationSnapshot authority, IClientSessionHandle tx, long shipmentId, string permission, CancellationToken ct) {
         if (permission is not (Permissions.InvoiceRead or Permissions.InvoiceIssue or Permissions.CaseRead or Permissions.CaseRequest or Permissions.CaseManage)) throw ShipmentReceiptRecords.Invalid();
-        var shipment = await shipments.DocumentSourceAsync(actor, authority, tx, shipmentId, permission, ct);
+        var history = shipments.StockSourceHistory ?? new ShipmentDispatchValueRecords.HistoricalRead(database, shipments.StockSourceClock, tx);
+        var shipment = await shipments.DocumentSourceAsync(actor, authority, tx, shipmentId, permission, ct, history);
         var receipt = await records.FindReceiptAsync(tx, shipmentId, ct);
         if (receipt is null) { await shipments.FenceAsync(actor, authority, tx, [shipment.Resource], ct, permission); return null; }
         await VerifyReceiptAsync(tx, receipt, shipment, ct);
         var snapshot = new BsonDocument { { "shipment", shipment.Snapshot.DeepClone() }, { "receipt", InvoiceReceiptSnapshot(receipt) },
-            { "commercial", await shipments.InvoiceCommercialAsync(actor, tx, shipmentId, ct) } };
+            { "commercial", await shipments.InvoiceCommercialAsync(actor, tx, shipmentId, ct, history) } };
         return new(shipment.Resource, snapshot);
     }
     private static BsonDocument InvoiceReceiptSnapshot(BsonDocument receipt) => new() {

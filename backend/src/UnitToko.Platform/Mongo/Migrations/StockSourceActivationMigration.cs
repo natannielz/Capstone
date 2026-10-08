@@ -18,7 +18,7 @@ internal sealed class StockSourceActivationMigration(IMongoDatabase database, IC
         var history = await Rows("schemaMigrations").Find(new BsonDocument()).Sort(new BsonDocument("_id", 1)).Limit(103).ToListAsync(ct);
         if (!MigrationHistory.IsValid(history, Version) || history.Count != Version || history.Take(101).Any(row => row["state"] != "applied") ||
             history[^1]["state"] != "applying" || clock.UtcNow == default || clock.UtcNow.Offset != TimeSpan.Zero) throw Invalid();
-        await UnitToko.Platform.Fulfillment.AfterSalesStockSourceStorage.RequireCoverageAsync(database, ct);
+        await UnitToko.Platform.Fulfillment.AfterSalesStockSourceStorage.RequireCoverageAsync(database, ct, ShipmentDispatchSchemas.LegacyValidator());
         await UnitToko.Platform.Procurement.ProcurementStockSourceCoverage.RequireStorageAsync(database, ct);
         await InventoryCountStockSourceStorage.RequireCoverageAsync(database, ct);
         await InventoryRepository.RequireStorageAsync(database, "inventoryPools", StockSourceSetupSchemas.Validator("inventoryPools"), StockSourceSetupSchemas.Key("inventoryPools"), ct);

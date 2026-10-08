@@ -23,7 +23,7 @@ internal sealed class ShipmentDispatchMigration(IMongoDatabase database) : IMigr
         var options = definition?.GetValue("options", new BsonDocument()).AsBsonDocument ?? new();
         if (definition is not null && definition.GetValue("type", "") != "collection" || options.GetValue("capped", false).AsBoolean ||
             options.Contains("timeseries") || options.Contains("expireAfterSeconds") || options.TryGetValue("collation", out var collation) && !Simple(collation)) throw Invalid("collection options");
-        var required = ShipmentDispatchSchemas.Validator(); var previous = options.GetValue("validator", new BsonDocument()).AsBsonDocument;
+        var required = ShipmentDispatchSchemas.LegacyValidator(); var previous = options.GetValue("validator", new BsonDocument()).AsBsonDocument;
         var validator = previous.ElementCount == 0 ? required : InventorySchemas.Contains(previous, required) ? previous : new BsonDocument("$and", new BsonArray { previous, required });
         var indexes = definition is null ? [] : await (await rows.Indexes.ListAsync(ct)).ToListAsync(ct); var expected = Indexes();
         if (indexes.Any(Unsafe) || indexes.Any(index => index["name"] != "_id_" && index.GetValue("unique", false).AsBoolean &&

@@ -40,7 +40,11 @@ public sealed class ShipmentDispatchAccountingTests(MongoFixture fixture)
             var expectedInventory = binding.Snapshot["inventory"].AsBsonDocument;
             var lineageBound = await helper.ReadAndFenceAsync(tx, D.Key, Date(data), expectedInventory, ct);
             expectedInventory["accountId"] = long.MaxValue;
-            await helper.RequireCurrentAsync(tx, binding, ct); await helper.RequireCurrentAsync(tx, lineageBound, ct);
+            var checkedBinding = await helper.RequireCurrentAsync(tx, binding, ct);
+            Assert.NotSame(binding, checkedBinding); Assert.Equal(binding.Snapshot, checkedBinding.Snapshot);
+            var checkedCopy = checkedBinding.Snapshot; checkedCopy["setupDecisionHash"] = "changed-copy";
+            Assert.Equal(binding.Snapshot, checkedBinding.Snapshot);
+            await helper.RequireCurrentAsync(tx, lineageBound, ct);
             return binding.Snapshot;
         });
         Assert.Equal(originalChart, await data.Rows(D.Charts).Find(new BsonDocument()).SingleAsync());

@@ -1,6 +1,8 @@
+using MongoDB.Bson;
 using MongoDB.Driver;
 using UnitToko.Modules.Accounting;
 using UnitToko.Modules.Inventory;
+using UnitToko.Platform.Fulfillment;
 
 namespace UnitToko.Platform.Inventory;
 
@@ -51,26 +53,41 @@ internal sealed class HeldStockReleaseValueProof
         owner.AuthenticateSourceAsync(current, tx, source, hash, ct);
 }
 
-/// <summary>Only the genuine in-flight conversion owner may mint this proof after
-/// both exact physical legs have been written in the same transaction attempt.</summary>
+/// <summary>Only a genuine in-flight conversion or dispatch owner may mint this
+/// proof after its exact physical effects in the same transaction attempt.</summary>
 internal sealed class LotValueConsumptionProof
 {
-    private readonly PackConversionService owner;
+    private readonly PackConversionService? owner;
+    private readonly ShipmentDispatchService? dispatchOwner;
     private readonly IMongoDatabase database;
     private readonly IClientSessionHandle transaction;
-    private readonly long number, conversionId;
+    private readonly long number, documentId, dispatchBalanceId;
     private LotValueConsumptionProof(PackConversionService owner, IMongoDatabase database, IClientSessionHandle tx, MongoDB.Bson.BsonDocument row) {
         this.owner = owner; this.database = database; transaction = tx; number = tx.WrappedCoreSession.CurrentTransaction.TransactionNumber;
-        conversionId = row["_id"].AsInt64; Before = InventoryBson.ReadBalance(row["before"].AsBsonDocument); After = InventoryBson.ReadBalance(row["after"].AsBsonDocument);
+        documentId = row["_id"].AsInt64; Before = InventoryBson.ReadBalance(row["before"].AsBsonDocument); After = InventoryBson.ReadBalance(row["after"].AsBsonDocument);
         DestinationBefore = InventoryBson.ReadBalance(row["destinationBefore"].AsBsonDocument); DestinationAfter = InventoryBson.ReadBalance(row["destinationAfter"].AsBsonDocument);
-        Source = PackConversionBson.Source(conversionId, Before.PhysicalPoolId); SourceHash = row["causeHash"].AsString;
+        Source = PackConversionBson.Source(documentId, Before.PhysicalPoolId); SourceHash = row["causeHash"].AsString;
         At = new(row["recordedAt"].ToUniversalTime()); Policy = row["policy"].AsString;
         ExpectedLotRevision = row["expected"]["lotValueRevision"].AsInt64; Packages = row["quantities"]["sourcePackages"].AsInt64;
+    }
+    private LotValueConsumptionProof(ShipmentDispatchService owner, IMongoDatabase database, IClientSessionHandle tx,
+        long shipmentId, long balanceId, MongoDB.Bson.BsonDocument row) {
+        dispatchOwner = owner; this.database = database; transaction = tx;
+        number = tx.WrappedCoreSession.CurrentTransaction.TransactionNumber; documentId = shipmentId; dispatchBalanceId = balanceId;
+        Before = InventoryBson.ReadBalance(row["before"].AsBsonDocument); After = InventoryBson.ReadBalance(row["after"].AsBsonDocument);
+        Source = ShipmentDispatchService.ValueSource(shipmentId, balanceId); SourceHash = row["sourceHash"].AsString;
+        At = new(row["recordedAt"].ToUniversalTime()); Policy = row["policy"].AsString;
+        ExpectedLotRevision = row["expectedLotRevision"].AsInt64; Packages = row["packages"].AsInt64;
     }
     internal static async Task<LotValueConsumptionProof> CreateAsync(PackConversionService owner, IMongoDatabase database,
         IClientSessionHandle tx, long conversionId, CancellationToken ct) {
         var row = await owner.ValueAuthorityAsync(database, tx, conversionId, ct);
         var proof = new LotValueConsumptionProof(owner, database, tx, row); proof.Require(database, tx); return proof;
+    }
+    internal static async Task<LotValueConsumptionProof> CreateAsync(ShipmentDispatchService owner, IMongoDatabase database,
+        IClientSessionHandle tx, long shipmentId, long balanceId, CancellationToken ct) {
+        var row = await owner.ValueAuthorityAsync(database, tx, shipmentId, balanceId, ct);
+        var proof = new LotValueConsumptionProof(owner, database, tx, shipmentId, balanceId, row); proof.Require(database, tx); return proof;
     }
     internal InventorySource Source { get; }
     internal string SourceHash { get; }
@@ -83,12 +100,24 @@ internal sealed class LotValueConsumptionProof
     internal InventoryBalanceDocument? DestinationBefore { get; }
     internal InventoryBalanceDocument? DestinationAfter { get; }
     internal long ExpectedDestinationLotRevision => 0;
+    internal bool HasDispatchOwner => dispatchOwner is not null;
+    internal async Task AuthenticateHeadAsync(IMongoDatabase current, IClientSessionHandle tx, BsonDocument head,
+        IReadOnlyList<BsonDocument> history, CancellationToken ct) {
+        Require(current, tx);
+        if (dispatchOwner is not { } dispatch || head["_id"] != Before.Id || head["balanceId"] != Before.Id ||
+            head["poolId"] != Before.PhysicalPoolId || head["key"] != LotValueStore.Key(Before.Balance.Key) ||
+            head["revision"] != ExpectedLotRevision) throw PackConversionBson.Broken();
+        await dispatch.AuthenticateValueHeadAsync(current, tx, documentId, dispatchBalanceId, SourceHash, head, history, ct);
+        Require(current, tx); ct.ThrowIfCancellationRequested();
+    }
     internal void Require(IMongoDatabase current, IClientSessionHandle tx) {
         new InventoryRepository(current).RequireSession(tx);
         if (!ReferenceEquals(current.Client, database.Client) || !current.DatabaseNamespace.Equals(database.DatabaseNamespace) ||
             !ReferenceEquals(tx, transaction) || tx.WrappedCoreSession.CurrentTransaction.TransactionNumber != number) throw PackConversionBson.Broken();
-        owner.RequireValueAuthority(current, tx, conversionId, SourceHash);
+        if (dispatchOwner is { } dispatch) dispatch.RequireValueAuthority(current, tx, documentId, dispatchBalanceId, SourceHash);
+        else owner!.RequireValueAuthority(current, tx, documentId, SourceHash);
     }
     internal Task AuthenticateSourceAsync(IMongoDatabase current, IClientSessionHandle tx, InventorySource source, string hash, CancellationToken ct) =>
-        owner.AuthenticateSourceAsync(current, tx, source, hash, ct);
+        dispatchOwner is { } dispatch ? dispatch.AuthenticateValueSourceAsync(current, tx, documentId, dispatchBalanceId, SourceHash, source, hash, ct) :
+        owner!.AuthenticateSourceAsync(current, tx, source, hash, ct);
 }

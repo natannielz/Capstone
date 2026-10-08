@@ -47,7 +47,7 @@ public sealed partial class StockSourceSetupService
         if (!pool["active"].AsBoolean) throw B.Unavailable();
         var current = await CurrentSourceAsync(tx, pool["_id"].AsInt64, ct);
         if (current["pool"] != pool) throw B.Changed();
-        await RequireActivationPoolProvenanceAsync(tx, current, ct);
+        ct.ThrowIfCancellationRequested();
     }
 
     private async Task<BsonDocument?> ActivationHistoryAsync(IClientSessionHandle tx, BsonDocument current, CancellationToken ct) {

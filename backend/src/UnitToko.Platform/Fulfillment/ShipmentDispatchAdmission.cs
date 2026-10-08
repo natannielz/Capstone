@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using MongoDB.Bson;
 using MongoDB.Driver;
 using UnitToko.Modules.Accounting;
 using UnitToko.Modules.Contracts;
@@ -10,7 +11,10 @@ namespace UnitToko.Platform.Fulfillment;
 internal sealed record ShipmentLotAuthority(long ReservationId, OrderPolicyReference SourceAuthority,
     OrderPolicyReference CostBasis, Money PackageCost);
 internal sealed record ShipmentDispatchAdmission(OrderPartySnapshot Seller, OrderPolicyReference OperatingPolicy,
-    ImmutableArray<ShipmentLotAuthority> Lots, DateTimeOffset ValidUntil);
+    ImmutableArray<ShipmentLotAuthority> Lots, DateTimeOffset ValidUntil) {
+    internal BsonDocument? FiniteValue { get; init; }
+    internal ShipmentDispatchService.ValueCapture? CapturedValue { get; init; }
+}
 
 /// <summary>Real stock-source, physical-lot/cost and operating-policy owners must approve and fence
 /// dispatch in the caller's Mongo transaction. Check freshness/control/external holds, approved cost
@@ -41,9 +45,10 @@ internal static class ShipmentDispatchAdmissionPolicy
             var reserved = source.Reservations.SingleOrDefault(row => row.Fact.ReservationId == selectedLot.ReservationId) ?? throw Invalid();
             var authority = admission.Lots.SingleOrDefault(lot => lot.ReservationId == selectedLot.ReservationId.Value) ?? throw Invalid();
             OrderAdmissionPolicy.Reference(authority.SourceAuthority); OrderAdmissionPolicy.Reference(authority.CostBasis);
-            if (authority.SourceAuthority.Id != reserved.Allocation.SourceAuthority.Id) throw Invalid();
-            totalCost = Money.Add(totalCost, Money.Multiply(authority.PackageCost, selectedLot.Packages));
+            if (authority.SourceAuthority != reserved.Allocation.SourceAuthority) throw Invalid();
+            if (admission.FiniteValue is null) totalCost = Money.Add(totalCost, Money.Multiply(authority.PackageCost, selectedLot.Packages));
         }
+        if (admission.FiniteValue is { } finite) ShipmentDispatchValueRecords.RequireReview(finite, selected, source.Reservations);
     }
     internal static DomainValidationException Invalid() => new("shipment_dispatch_admission_unavailable", "Current approved source, lot, cost and dispatch policy are required");
 }

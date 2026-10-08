@@ -9,16 +9,19 @@ namespace UnitToko.Platform.Fulfillment;
 /// <summary>Only fresh setup/dispatch/recipient confirmation owner callbacks append. Existing
 /// original-key replay/recovery does not repair history. Its additional canonical fence changes
 /// neither stock quantity nor pool revision/authority and preserves each command's final guards.</summary>
-internal sealed class FulfillmentStockSourceProducer(IMongoDatabase database, IdAllocator ids, IClock clock)
+internal sealed class FulfillmentStockSourceProducer(IMongoDatabase database, IdAllocator ids, IClock clock, ShipmentDispatchService.LiveValueRead? liveRead = null,
+    ShipmentDispatchValueRecords.HistoricalRead? history = null)
 {
     private readonly FulfillmentStockSourceRecords records = new(database);
-    private readonly FulfillmentStockSourceEvents owner = new(database, ids, clock);
     private IMongoCollection<BsonDocument> Rows(string name) => database.GetCollection<BsonDocument>(name);
     internal async Task InitializeAsync(IClientSessionHandle tx, long setupDecisionId, CancellationToken ct)
     {
         await FulfillmentStockSourceStorage.RequireAsync(database, ct);
         var repository = new InventoryRepository(database); repository.RequireSession(tx);
         var number = tx.WrappedCoreSession.CurrentTransaction.TransactionNumber;
+        var valueHistory = history ?? new ShipmentDispatchValueRecords.HistoricalRead(database, clock, tx);
+        valueHistory.Require(database, tx);
+        var owner = new FulfillmentStockSourceEvents(database, ids, clock, liveRead, valueHistory);
         var source = await owner.ReadAsync(tx, "setup", setupDecisionId, false, ct);
         var poolId = source.PoolIds.Single();
         var pool = await Rows("inventoryPools").Find(tx, new BsonDocument("_id", poolId)).SingleOrDefaultAsync(ct); InventoryGraph.RequirePool(pool);
@@ -38,12 +41,16 @@ internal sealed class FulfillmentStockSourceProducer(IMongoDatabase database, Id
         await Rows(FulfillmentStockSourceRecords.Heads).InsertOneAsync(tx, head, cancellationToken: ct);
         repository.RequireSession(tx);
         if (tx.WrappedCoreSession.CurrentTransaction.TransactionNumber != number) throw FulfillmentStockSourceRecords.Unavailable();
+        valueHistory.Require(database, tx);
         ct.ThrowIfCancellationRequested();
     }
     internal async Task RecordAsync(IClientSessionHandle tx, string kind, long sourceId, CancellationToken ct)
     {
         if (kind is not ("dispatch" or "receipt")) throw FulfillmentStockSourceRecords.Unavailable();
         await FulfillmentStockSourceStorage.RequireAsync(database, ct);
+        var valueHistory = history ?? new ShipmentDispatchValueRecords.HistoricalRead(database, clock, tx);
+        valueHistory.Require(database, tx);
+        var owner = new FulfillmentStockSourceEvents(database, ids, clock, liveRead, valueHistory);
         var source = await owner.ReadAsync(tx, kind, sourceId, false, ct);
         RequireTime(source);
         foreach (var poolId in source.PoolIds.Order()) {
@@ -52,10 +59,11 @@ internal sealed class FulfillmentStockSourceProducer(IMongoDatabase database, Id
             // A real factory performs this exact CAS; no handle is invented for an earlier
             // Inventory/Ordering numeric fence. This is an additional documented owning fence.
             var proof = await FulfillmentStockSourcePoolWrite.FenceAsync(database, tx, beforePool!, ct);
-            await AppendAsync(tx, source, proof, ct);
+            await AppendAsync(tx, owner, source, proof, ct);
         }
+        valueHistory.Require(database, tx);
     }
-    private async Task AppendAsync(IClientSessionHandle tx, FulfillmentStockSourceEvent source,
+    private async Task AppendAsync(IClientSessionHandle tx, FulfillmentStockSourceEvents owner, FulfillmentStockSourceEvent source,
         FulfillmentStockSourcePoolWrite proof, CancellationToken ct)
     {
         await proof.RequireAsync(database, tx, ct);

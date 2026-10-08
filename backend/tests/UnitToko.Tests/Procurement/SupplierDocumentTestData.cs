@@ -56,8 +56,10 @@ internal sealed class SupplierDocumentTestData(ProcurementInspectionTestData ins
         [new("001", "Actual synthetic three sealed pencil packages", "supplier", "000001", "000012", 3, new Money(10000), new Money(3300), new Money(700), null, null)], null);
     internal SupplierDocumentMatchInput MatchInput(int packages = 2, Money? tax = null, Money? charge = null, SupplierDocumentInput? reviewed = null) => new(DocumentId, 1, reviewed ?? Input(), null,
         [new(1, packages, InspectionId, 1, null, null, new Money(10000 * packages), tax ?? new Money(2000), charge ?? new Money(500), null, null)]);
-    internal static async Task<SupplierDocumentTestData> CreateAsync(MongoFixture fixture, ProcurementRoute route = ProcurementRoute.Ddo, bool createDraft = true, decimal requiredAdvance = 0, bool boundStock = false, bool activateEmptySource = false, bool useSystemClock = false, DateOnly? inspectedExpiry = null) {
-        var inspection = await ProcurementInspectionTestData.CreateAsync(fixture, route, createDraft: false, requiredAdvance: requiredAdvance, boundStock: boundStock, activateEmptySource: activateEmptySource, useSystemClock: useSystemClock);
+    internal static async Task<SupplierDocumentTestData> CreateAsync(MongoFixture fixture, ProcurementRoute route = ProcurementRoute.Ddo, bool createDraft = true, decimal requiredAdvance = 0, bool boundStock = false, bool activateEmptySource = false, bool useSystemClock = false, DateOnly? inspectedExpiry = null,
+        long reviewedSafetyBufferBaseUnits = 12) {
+        var inspection = await ProcurementInspectionTestData.CreateAsync(fixture, route, createDraft: false, requiredAdvance: requiredAdvance, boundStock: boundStock, activateEmptySource: activateEmptySource, useSystemClock: useSystemClock,
+            reviewedSafetyBufferBaseUnits: reviewedSafetyBufferBaseUnits);
         return await CreateFromInspectionAsync(inspection, createDraft, ownsInspection: true, inspectedExpiry: inspectedExpiry);
     }
     internal static async Task<SupplierDocumentTestData> CreateFromInspectionAsync(ProcurementInspectionTestData inspection,

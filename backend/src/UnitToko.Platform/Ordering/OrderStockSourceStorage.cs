@@ -10,7 +10,7 @@ namespace UnitToko.Platform.Ordering;
 
 internal static class OrderStockSourceStorage
 {
-    internal static async Task RequireAsync(IMongoDatabase database, CancellationToken ct)
+    internal static async Task RequireAsync(IMongoDatabase database, CancellationToken ct, BsonDocument? requiredShipmentValidator = null)
     {
         foreach (var name in OrderStockSourceSchemas.Collections) {
             var definition = await AccountContactStorage.DefinitionAsync(database, name, ct) ?? throw OrderStockSourceRecords.Unavailable();
@@ -24,7 +24,7 @@ internal static class OrderStockSourceStorage
             await InventoryRepository.RequireStorageAsync(database, name, OrderSubmissionSchemas.Validator(name), OrderSubmissionSchemas.Key(name), ct);
         foreach (var name in StockSourceSetupSchemas.Collections)
             await InventoryRepository.RequireStorageAsync(database, name, StockSourceSetupSchemas.Validator(name), StockSourceSetupSchemas.Key(name), ct);
-        await ShipmentDispatchStorage.RequireAsync(database, ct);
+        await ShipmentDispatchStorage.RequireAsync(database, ct, requiredShipmentValidator);
     }
     internal static bool SafeIndexes(IReadOnlyList<BsonDocument> rows, (string Name, BsonDocument Key, bool Unique)[] required) =>
         rows.Any(row => row.GetValue("name", "") == "_id_" && row.GetValue("key", BsonNull.Value) == new BsonDocument("_id", 1)) &&

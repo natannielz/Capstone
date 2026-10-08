@@ -34,6 +34,8 @@ using UnitToko.Api.Accounting;
 using UnitToko.Platform.Accounting;
 using UnitToko.Api.Reporting;
 using UnitToko.Platform.Reporting;
+using UnitToko.Api.Operations;
+using UnitToko.Platform.Operations;
 using UnitToko.Api.Procurement;
 using UnitToko.Platform.Procurement;
 using UnitToko.Api;
@@ -86,9 +88,16 @@ if (builder.Configuration.GetSection("Evidence:ImageRevalidation").Exists())
 builder.Services.AddSingleton<OrderQuoteService>();
 builder.Services.AddSingleton<OrderDraftService>();
 builder.Services.AddSingleton<BranchOrderRequestService>();
-builder.Services.AddSingleton<OrderSubmissionService>();
+builder.Services.AddSingleton(sp => OrderSubmissionService.CreateWithApprovedAdmission(
+    sp.GetRequiredService<IMongoDatabase>(), sp.GetRequiredService<MongoUnitOfWork>(),
+    sp.GetRequiredService<IdAllocator>(), sp.GetRequiredService<IClock>(),
+    sp.GetRequiredService<OrganizationMasterDataService>()));
 builder.Services.AddSingleton<ShipmentPreparationService>();
-builder.Services.AddSingleton<ShipmentDispatchService>();
+builder.Services.AddSingleton(sp => ShipmentDispatchService.CreateWithApprovedAdmission(
+    sp.GetRequiredService<IMongoDatabase>(), sp.GetRequiredService<MongoUnitOfWork>(),
+    sp.GetRequiredService<IdAllocator>(), sp.GetRequiredService<IClock>(),
+    sp.GetRequiredService<OrderSubmissionService>(), sp.GetRequiredService<ShipmentPreparationService>(),
+    sp.GetRequiredService<OrganizationMasterDataService>()));
 builder.Services.AddSingleton<ShipmentQueryService>();
 builder.Services.AddSingleton<ShipmentDocumentService>();
 builder.Services.AddSingleton<ShipmentReceiptService>();
@@ -138,6 +147,7 @@ builder.Services.AddSingleton(sp => {
         sp.GetRequiredService<IClock>(), sp.GetRequiredService<PaymentDraftService>(), storage);
 });
 builder.Services.AddSingleton<StockCountService>();
+builder.Services.AddSingleton<ReplenishmentService>();
 builder.Services.AddSingleton<PackConversionRuleService>();
 builder.Services.AddSingleton<StockReleaseService>();
 builder.Services.AddSingleton<PackConversionService>();
@@ -147,8 +157,10 @@ builder.Services.AddSingleton<AccessAdministrationService>();
 builder.Services.AddSingleton<OrganizationMasterDataService>();
 builder.Services.AddSingleton<OrganizationAddressService>();
 builder.Services.AddSingleton<OrderSpendingPolicyService>();
+builder.Services.AddSingleton<OrderCommercialPolicyService>();
 builder.Services.AddSingleton<AccountingBookSetupService>();
 builder.Services.AddSingleton<AccountingReportService>();
+builder.Services.AddSingleton<OperationalAnomalyService>();
 builder.Services.AddSingleton<ProcurementRequestService>();
 builder.Services.AddSingleton<SupplierService>();
 builder.Services.AddSingleton<PurchaseOrderService>();
@@ -219,6 +231,7 @@ builder.Services.AddOpenApi("v1", options =>
     {
         document.Components ??= new OpenApiComponents();
         CatalogOpenApi.Configure(document);
+        OrderCommercialPolicyEndpoints.ConfigureOpenApi(document);
         StockCountOpenApi.Configure(document);
         PackConversionRuleOpenApi.Configure(document);
         PackConversionExecutionOpenApi.Configure(document);
@@ -464,11 +477,14 @@ app.MapCatalogPhotoEndpoints();
 app.MapCatalogPhotoRevalidationEndpoints();
 app.MapOrderQuoteEndpoints();
 app.MapOrderSpendingPolicyEndpoints();
+app.MapOrderCommercialPolicyEndpoints();
 app.MapAccountingBookSetupEndpoints();
 app.MapAccountingReportEndpoints();
+app.MapOperationalAnomalyEndpoints();
 app.MapProcurementRequestEndpoints();
 app.MapSupplierEndpoints();
 app.MapPurchaseOrderEndpoints();
+app.MapPurchaseArrivalEndpoints();
 app.MapProcurementFundingEndpoints();
 app.MapSupplierBankEndpoints();
 app.MapProcurementDisbursementEndpoints();
@@ -514,6 +530,7 @@ app.MapReceivingAccountEndpoints();
 app.MapBankStatementEndpoints();
 app.MapBankReceiptEndpoints();
 app.MapStockCountEndpoints();
+app.MapReplenishmentEndpoints();
 app.MapPackConversionRuleEndpoints();
 app.MapPackConversionExecutionEndpoints();
 app.MapStockSourceActivationEndpoints();

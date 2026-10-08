@@ -7,12 +7,12 @@ import { Brand } from '../../components/brand';
 import { createIdentityGateway } from '../identity/identity-client';
 import { IdentityFailure, sessionTiming, type IdentitySession } from '../identity/identity-workflow';
 import { createAccessGateway } from '../administration/access-client';
-import { AccessFailure, MutationLedger, accessMessage } from '../administration/workflow';
+import { AccessFailure, MutationLedger, accessMessage, stableContent } from '../administration/workflow';
 import { OperationRecovery, useOperationRecovery } from '../administration/OperationRecovery';
 import { submitTrackedRequest } from '../administration/operation-journal';
 import { priceId } from '../catalog/catalog-price-workflow';
 import { createOrderDraftGateway, type OrderDraft } from './order-draft-client';
-import { createOrderSubmitGateway, type CheckoutReview, type OrderSubmitResult, type SubmittedOrder } from './order-submit-client';
+import { createOrderSubmitGateway, orderSubmitOperation, readCheckoutGroupAttempt, type CheckoutGroup, type CheckoutReview, type OrderSubmitResult, type SubmittedOrder } from './order-submit-client';
 import { OrderCheckoutDetails } from './order-checkout-details';
 import common from '../administration/access.module.css';
 import styles from './order-checkout.module.css';
@@ -70,86 +70,160 @@ export function OrderCheckoutWorkspace() {
   </main><footer className={styles.footer}>Unit Toko · Kebutuhan cabang dan organisasi</footer></div>;
 }
 
+type DeskGroup = { group: CheckoutGroup; requestKey: string; review: CheckoutReview | null; result: OrderSubmitResult | null;
+  order: SubmittedOrder | null; uncertain: boolean; error: { value: unknown; reading: boolean } | null };
+
 function CheckoutDesk({ account, onFailure }: { account: Account; onFailure: (error: unknown) => void }) {
   const { actorId } = account, [drafts] = useState(() => createOrderDraftGateway()), [gateway] = useState(() => createOrderSubmitGateway()), [ledger] = useState(() => new MutationLedger());
-  const recovery = useOperationRecovery(actorId), [draft, setDraft] = useState<OrderDraft | null>(null), [review, setReview] = useState<CheckoutReview | null>(null);
-  const [confirmed, setConfirmed] = useState<OrderSubmitResult | null>(null), [order, setOrder] = useState<SubmittedOrder | null>(null);
-  const [busy, setBusy] = useState(false), [recovering, setRecovering] = useState(false), [error, setError] = useState<{ value: unknown; reading: boolean } | null>(null);
-  const alive = useRef(false), pending = useRef(false), recovered = useRef<OrderSubmitResult | null>(null), reviewPanel = useRef<HTMLDivElement>(null);
+  const recovery = useOperationRecovery(actorId), [draft, setDraft] = useState<OrderDraft | null>(null), [groups, setGroups] = useState<DeskGroup[]>([]);
+  const [otherReceipt, setOtherReceipt] = useState<OrderSubmitResult | null>(null), [busy, setBusy] = useState(false), [recovering, setRecovering] = useState(false);
+  const [error, setError] = useState<{ value: unknown; reading: boolean } | null>(null), [focused, setFocused] = useState(0);
+  const alive = useRef(false), pending = useRef(false), controller = useRef<AbortController | null>(null), reviewPanel = useRef<HTMLDivElement>(null);
+  const recovered = useRef<{ key: string; result: OrderSubmitResult } | null>(null);
   const current = () => alive.current && !sessionTiming(account.session, performance.now() - account.observedAt).expired;
-  useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
+  useEffect(() => { alive.current = true; controller.current = new AbortController(); return () => { alive.current = false; controller.current?.abort(); }; }, []);
   useEffect(() => {
-    let active = true; const controller = new AbortController();
+    let active = true; const initial = new AbortController();
+    const accepted = () => active && alive.current && !sessionTiming(account.session, performance.now() - account.observedAt).expired;
     void Promise.resolve().then(async () => {
       if (!active || !account.draftId) return; setBusy(true); pending.current = true;
-      try { const value = await drafts.read(actorId, account.draftId, controller.signal); if (active) setDraft(value); }
-      catch (failure) { if (active) { setError({ value: failure, reading: true }); onFailure(failure); } }
+      try { const value = await drafts.read(actorId, account.draftId, initial.signal); if (accepted()) setDraft(value); }
+      catch (failure) { if (accepted()) { setError({ value: failure, reading: true }); onFailure(failure); } }
       finally { pending.current = false; if (active) setBusy(false); }
     });
-    return () => { active = false; controller.abort(); };
-  }, [drafts, actorId, account.draftId, onFailure]);
-  useEffect(() => { if (review || confirmed) reviewPanel.current?.focus(); }, [review, confirmed]);
+    return () => { active = false; initial.abort(); };
+  }, [drafts, actorId, account.draftId, onFailure, account.session, account.observedAt]);
+  useEffect(() => { if (focused > 0) reviewPanel.current?.focus(); }, [focused]);
   const locked = busy || recovering || recovery.locked;
-  async function prepare() {
-    if (!current() || locked || pending.current || !draft || confirmed) return;
-    pending.current = true; setBusy(true); setError(null); setReview(null);
+  const signal = () => controller.current?.signal;
+  const update = (groupKey: string, changes: Partial<DeskGroup>) => setGroups(items => items.map(item => item.group.groupKey === groupKey ? { ...item, ...changes } : item));
+  async function attempt(saved: OrderDraft, group: CheckoutGroup) {
+    const checked = await readCheckoutGroupAttempt(actorId, saved.id, group.groupKey, recovery.journal, key => gateway.recover(actorId, key, signal()));
+    if (!current()) throw new AccessFailure(409, 'order_view_stale');
+    if (checked.result) {
+      const entry = recovery.journal.list(actorId).find(entry => entry.operation === orderSubmitOperation && entry.key === checked.requestKey);
+      if (entry) { try { recovery.journal.confirmed(entry); } catch { /* A committed group stays closed even if metadata cleanup fails. */ } }
+      recovery.refresh();
+    }
+    return checked;
+  }
+  async function readConfirmed(groupKey: string, result: OrderSubmitResult) {
+    if (!current()) return; update(groupKey, { result, review: null, uncertain: false, order: null, error: null }); setFocused(value => value + 1);
+    try { const value = await gateway.read(actorId, result.orderId, signal()); if (current()) update(groupKey, { order: value }); }
+    catch (failure) { if (current()) { update(groupKey, { error: { value: failure, reading: true } }); onFailure(failure); } }
+  }
+  async function freshGroup(saved: OrderDraft, item: DeskGroup) {
+    const discovery = await gateway.groups(actorId, saved.input, signal());
+    const actual = discovery.items.find(group => group.groupKey === item.group.groupKey);
+    if (!actual || stableContent(actual.input) !== stableContent(item.group.input)) throw new AccessFailure(409, 'order_selection_changed');
+    return actual;
+  }
+  async function prepare(item?: DeskGroup) {
+    if (!current() || locked || pending.current || !draft || item?.result || item?.uncertain) return;
+    pending.current = true; setBusy(true); setError(null);
+    if (item) update(item.group.groupKey, { review: null, error: null });
     try {
-      const saved = await drafts.read(actorId, draft.id); if (!current()) return; setDraft(saved);
-      const checked = await gateway.preview(actorId, saved.input); if (current()) setReview(checked);
-    } catch (failure) { if (current()) { setError({ value: failure, reading: true }); onFailure(failure); } }
+      const saved = await drafts.read(actorId, draft.id, signal()); if (!current()) return; setDraft(saved);
+      if (item) {
+        const actual = await freshGroup(saved, item), checked = await attempt(saved, actual);
+        if (checked.result) await readConfirmed(actual.groupKey, checked.result);
+        else if (checked.uncertain) update(actual.groupKey, { uncertain: true });
+        else { const review = await gateway.preview(actorId, actual.input, signal()); if (current()) { update(actual.groupKey, { group: actual, review }); setFocused(value => value + 1); } }
+      } else {
+        const discovery = await gateway.groups(actorId, saved.input, signal()), rows: DeskGroup[] = [];
+        for (const group of discovery.items) {
+          const checked = await attempt(saved, group);
+          rows.push({ group, ...checked, review: null, order: null, error: null });
+        }
+        if (!current()) return; setGroups(rows); setFocused(value => value + 1);
+        for (const row of rows) {
+          if (!current()) return;
+          if (row.result) await readConfirmed(row.group.groupKey, row.result);
+          else if (!row.uncertain) {
+            try { const review = await gateway.preview(actorId, row.group.input, signal()); if (current()) update(row.group.groupKey, { review }); }
+            catch (failure) { if (current()) { update(row.group.groupKey, { error: { value: failure, reading: true } }); onFailure(failure); } }
+          }
+        }
+      }
+    } catch (failure) { if (current()) { if (item) update(item.group.groupKey, { error: { value: failure, reading: true } }); else setError({ value: failure, reading: true }); onFailure(failure); } }
     finally { pending.current = false; if (alive.current) setBusy(false); }
   }
-  async function readConfirmed(result: OrderSubmitResult) {
-    if (!current()) return; setConfirmed(result); setReview(null); setDraft(null); setOrder(null);
-    try { const value = await gateway.read(actorId, result.orderId); if (current()) setOrder(value); }
-    catch (failure) { if (current()) { setError({ value: failure, reading: true }); onFailure(failure); } }
-  }
-  async function submit() {
-    if (!current() || locked || pending.current || !review || confirmed) return;
-    pending.current = true; setBusy(true); setError(null);
+  async function submit(item: DeskGroup) {
+    if (!current() || locked || pending.current || !draft || !item.review || item.result || item.uncertain) return;
+    const review = item.review, logical = `${orderSubmitOperation}:${item.group.groupKey}`;
+    pending.current = true; setBusy(true); setError(null); update(item.group.groupKey, { error: null });
     try {
       if (recovery.journal.list(actorId).length > 0) throw new AccessFailure(400, 'resolve_previous_attempt');
-      const result = await submitTrackedRequest(ledger, recovery.journal, actorId, 'ordering.order.submit', 'ordering.order.submit', { actorId, input: review.input, review: review.review },
-        key => gateway.submit(actorId, review, key, current));
-      await readConfirmed(result);
-    } catch (failure) { if (current()) { setReview(null); setError({ value: failure, reading: false }); onFailure(failure); } }
+      const saved = await drafts.read(actorId, draft.id, signal()); if (!current()) return;
+      const actual = await freshGroup(saved, item), checked = await attempt(saved, actual);
+      if (checked.requestKey !== item.requestKey) throw new AccessFailure(400, 'invalid_original_request_key');
+      if (checked.result) { await readConfirmed(actual.groupKey, checked.result); return; }
+      if (checked.uncertain || recovery.journal.list(actorId).length > 0) throw new AccessFailure(400, 'resolve_previous_attempt');
+      if (!current()) return;
+      const result = await submitTrackedRequest(ledger, recovery.journal, actorId, logical, orderSubmitOperation, { actorId, input: review.input, review: review.review },
+        key => gateway.submit(actorId, review, key, current), item.requestKey);
+      await readConfirmed(item.group.groupKey, result);
+    } catch (failure) { if (current()) { update(item.group.groupKey, { review: null, uncertain: ledger.isUncertain(logical), error: { value: failure, reading: false } }); onFailure(failure); } }
     finally { pending.current = false; if (alive.current) { setBusy(false); recovery.refresh(); } }
   }
-  const shown = order ?? review;
+  const completed = groups.filter(item => item.result !== null).length, uncertain = groups.filter(item => item.uncertain).length;
+  const allComplete = groups.length > 0 && completed === groups.length;
   return <>
     <nav className={styles.progress} aria-label="Tahapan pengajuan pesanan"><ol>
       <li><Link href="/ordering/drafts"><ShoppingBag size={18} aria-hidden="true" /><span>Draf pesanan</span></Link></li>
       <li aria-hidden="true" className={styles.progressArrow}><ArrowRight size={16} /></li>
-      <li aria-current={!confirmed ? 'step' : undefined}><span><ClipboardList size={18} aria-hidden="true" />Periksa pesanan</span></li>
+      <li aria-current={!allComplete ? 'step' : undefined}><span><ClipboardList size={18} aria-hidden="true" />Periksa pesanan</span></li>
       <li aria-hidden="true" className={styles.progressArrow}><ArrowRight size={16} /></li>
-      <li aria-current={confirmed ? 'step' : undefined}><span>{confirmed ? <Check size={18} aria-hidden="true" /> : <FileText size={18} aria-hidden="true" />}Tercatat</span></li>
+      <li aria-current={allComplete ? 'step' : undefined}><span>{allComplete ? <Check size={18} aria-hidden="true" /> : <FileText size={18} aria-hidden="true" />}Tercatat</span></li>
     </ol><Link className={styles.historyLink} href="/ordering/orders">Pesanan saya<ArrowRight size={16} aria-hidden="true" /></Link></nav>
     <OperationRecovery entries={recovery.entries} journal={recovery.journal} disabled={busy} onBusyChange={setRecovering}
-      recoveryAdapters={{ 'ordering.order': { lookup: async entry => { const result = await gateway.recover(entry.actorId, entry.key); recovered.current = result?.result ?? null; return result; } } }}
-      onFailure={failure => { setError({ value: failure, reading: true }); onFailure(failure); }} onResolved={() => {
+      recoveryAdapters={{ 'ordering.order': { lookup: async entry => {
+        if (!current() || entry.actorId !== actorId) throw new AccessFailure(409, 'actor_changed');
+        const result = await gateway.recover(entry.actorId, entry.key, signal());
+        if (!current()) throw new AccessFailure(409, 'order_view_stale');
+        recovered.current = result ? { key: entry.key, result: result.result } : null; return result;
+      } } }} onFailure={failure => { setError({ value: failure, reading: true }); onFailure(failure); }} onResolved={() => {
         recovery.refresh(); ledger.resetAfterReconciliation(); setError(null);
-        const result = recovered.current; recovered.current = null;
-        if (result && current()) { setBusy(true); void readConfirmed(result).finally(() => { if (alive.current) setBusy(false); }); }
+        const receipt = recovered.current; recovered.current = null;
+        if (receipt && current()) {
+          const item = groups.find(item => item.requestKey === receipt.key);
+          if (item) { setBusy(true); void readConfirmed(item.group.groupKey, receipt.result).finally(() => { if (alive.current) setBusy(false); }); }
+          else setOtherReceipt(receipt.result);
+        }
       }} />
     {recovery.error !== null && <p role="alert" className={common.alert}>{accessMessage(recovery.error)}</p>}
     {error && <p role="alert" className={common.alert}>{message(error.value, error.reading)}</p>}
-    {confirmed && <section className={styles.confirmed} ref={reviewPanel} tabIndex={-1} aria-label="Pesanan tercatat"><div className={styles.confirmedHeading}><PackageCheck size={28} strokeWidth={1.5} aria-hidden="true" /><h2>Pesanan {confirmed.orderId} tercatat</h2></div>
-      <p>{order?.progress.cancelled ? 'Sisa pesanan dibatalkan. Cadangan barang yang belum dikirim telah dilepas.' : order?.progress.spendingState === 'Rejected' ? 'Belanja cabang ditolak. Cadangan pesanan telah dilepas.' : (order?.progress.spendingState ?? confirmed.spendingState) === 'Pending' ? 'Menunggu persetujuan belanja cabang. Penerimaan oleh toko merupakan langkah terpisah.' : 'Belanja telah disetujui atau tidak memerlukan persetujuan tambahan sesuai aturan pembelian.'}</p>
-      {order && <p>{order.progress.acceptedSuborders.length} dari {confirmed.suborderIds.length} kelompok pemenuhan telah diterima toko.</p>}
-      {order && order.progress.rejectedSuborders.length > 0 && <p>{order.progress.rejectedSuborders.length} kelompok ditolak toko; cadangan bagian tersebut telah dilepas.</p>}
-      <p>{confirmed.suborderIds.length} kelompok pemenuhan tersimpan.{!order?.progress.cancelled && order?.progress.spendingState !== 'Rejected' && order?.progress.rejectedSuborders.length === 0 ? ' Stok pesanan telah dicadangkan.' : ''}</p>
-      <button className={common.secondary} disabled={busy || recovering} onClick={() => { setBusy(true); void readConfirmed(confirmed).finally(() => { if (alive.current) setBusy(false); }); }}>Muat kembali pesanan</button></section>}
-    {!confirmed && draft && <section className={styles.draft}><div><h2>Draf tersimpan yang akan diajukan</h2><p className={styles.draftReference}>{draft.input.purchaseReference ?? 'Kebutuhan cabang'} · {draft.input.selections.length} jenis kemasan · versi {draft.revision}</p>
+    {otherReceipt && <section className={styles.confirmed}><h2>Pesanan {otherReceipt.orderId} tercatat</h2><p>Hasil permintaan semula telah terkonfirmasi. Buka riwayat untuk melihat isinya.</p><Link href="/ordering/orders">Buka pesanan saya</Link></section>}
+    {draft && <section className={styles.draft}><div><h2>Draf tersimpan yang akan diajukan</h2><p className={styles.draftReference}>{draft.input.purchaseReference ?? 'Kebutuhan cabang'} · {draft.input.selections.length} jenis kemasan · versi {draft.revision}</p>
       <p className={common.help}>Pengajuan menggunakan isi draf yang telah tersimpan. Pastikan perubahan di halaman draf sudah disimpan.</p>
       {!draft.input.delivery && <p className={styles.missingDelivery}>Lengkapi rencana pengiriman pada draf terlebih dahulu.</p>}</div>
-      <div className={styles.draftAction}><button className={common.primary} disabled={locked || !draft.input.delivery || review !== null} onClick={() => void prepare()}>{busy ? 'Memeriksa…' : 'Tinjau pesanan dan biaya'}</button>{!review && <p>Rincian harga dan biaya ditampilkan setelah pemeriksaan.</p>}</div></section>}
-    {!confirmed && !draft && !busy && !recovery.locked && <section className={common.state}><h2>Pilih draf untuk melanjutkan</h2><Link href="/ordering/drafts">Buka draf pesanan</Link></section>}
-    {shown && <section className={styles.review} ref={review ? reviewPanel : undefined} tabIndex={-1} aria-label="Rincian pesanan"><OrderCheckoutDetails value={shown} reviewing={review !== null}>
-      {review && <><p>{review.spendingState === 'Pending' ? 'Pesanan memerlukan persetujuan belanja cabang sebelum diterima toko.' : 'Aturan pembelian yang berlaku tidak memerlukan persetujuan belanja tambahan.'}</p>
-        <p className={common.help}>Stok diperiksa dan dicadangkan saat pengajuan berhasil. Pengajuan belum berarti barang diterima toko atau dikirim.</p>
-        <div className={styles.submitActions}><button className={common.primary} disabled={locked} onClick={() => void submit()}>Konfirmasi ajukan pesanan</button>
-          <button className={common.secondary} disabled={locked} onClick={() => setReview(null)}>Batal pengajuan</button></div></>}
-      </OrderCheckoutDetails>
-    </section>}
+      {groups.length === 0 && <div className={styles.draftAction}><button className={common.primary} disabled={locked || !draft.input.delivery} onClick={() => void prepare()}>{busy ? 'Memeriksa…' : 'Tinjau pesanan dan biaya'}</button><p>Setiap kanal toko diperiksa dan diajukan secara terpisah.</p></div>}</section>}
+    {!draft && !busy && !recovery.locked && <section className={common.state}><h2>Pilih draf untuk melanjutkan</h2><Link href="/ordering/drafts">Buka draf pesanan</Link></section>}
+    {groups.length > 0 && <div ref={reviewPanel} tabIndex={-1} aria-label="Kelompok pesanan">
+      <h2>Pesanan menurut kanal toko</h2><p role="status">{completed} dari {groups.length} kelompok tercatat; {groups.length - completed - uncertain} belum diajukan; {uncertain} belum terkonfirmasi.</p>
+      <p className={common.help}>Kelompok yang sudah tercatat tetap tersimpan jika kelompok lain belum berhasil. Untuk mengganti pesanan yang sudah tercatat, buat draf baru.</p>
+      {groups.map(item => {
+        const shown = item.order ?? item.review;
+        return <section key={item.group.groupKey} className={styles.review} aria-label={`Kelompok ${item.group.channelName ?? item.group.channelId}`}>
+          <h3>{item.group.shopName ?? `Toko ${item.group.shopId}`} · {item.group.channelName ?? `Kanal ${item.group.channelId}`}</h3>
+          <p>{item.group.organizationName ?? `Organisasi ${item.group.organizationId}`} · {item.group.input.selections.length} jenis kemasan</p>
+          {item.error && <p role="alert" className={common.alert}>{message(item.error.value, item.error.reading)}</p>}
+          {item.uncertain && <p role="status">Hasil kelompok ini belum terkonfirmasi. Gunakan Periksa hasil untuk permintaan semula; pengajuan ulang ditahan.</p>}
+          {item.result && <div className={styles.confirmed}><div className={styles.confirmedHeading}><PackageCheck size={28} strokeWidth={1.5} aria-hidden="true" /><h2>Pesanan {item.result.orderId} tercatat</h2></div>
+            <p>{item.order?.progress.cancelled ? 'Sisa pesanan dibatalkan. Cadangan barang yang belum dikirim telah dilepas.' : item.order?.progress.spendingState === 'Rejected' ? 'Belanja cabang ditolak. Cadangan pesanan telah dilepas.' : (item.order?.progress.spendingState ?? item.result.spendingState) === 'Pending' ? 'Menunggu persetujuan belanja cabang. Penerimaan oleh toko merupakan langkah terpisah.' : 'Belanja telah disetujui atau tidak memerlukan persetujuan tambahan sesuai aturan pembelian.'}</p>
+            {item.order && <p>{item.order.progress.acceptedSuborders.length} dari {item.result.suborderIds.length} kelompok pemenuhan telah diterima toko.</p>}
+            {item.order && item.order.progress.rejectedSuborders.length > 0 && <p>{item.order.progress.rejectedSuborders.length} kelompok ditolak toko; cadangan bagian tersebut telah dilepas.</p>}
+            <p>{item.result.suborderIds.length} kelompok pemenuhan tersimpan.{item.order && !item.order.progress.cancelled && item.order.progress.spendingState !== 'Rejected' && item.order.progress.rejectedSuborders.length === 0 ? ' Stok pesanan telah dicadangkan.' : ''}</p>
+            <button className={common.secondary} disabled={busy || recovering} onClick={() => { setBusy(true); void readConfirmed(item.group.groupKey, item.result!).finally(() => { if (alive.current) setBusy(false); }); }}>Muat kembali pesanan</button></div>}
+          {!item.result && !item.review && !item.uncertain && <button className={common.primary} disabled={locked} onClick={() => void prepare(item)}>Tinjau pesanan dan biaya</button>}
+          {shown && <OrderCheckoutDetails value={shown} reviewing={item.review !== null}>
+            {item.review && <><p>{item.review.spendingState === 'Pending' ? 'Pesanan memerlukan persetujuan belanja cabang sebelum diterima toko.' : 'Aturan pembelian yang berlaku tidak memerlukan persetujuan belanja tambahan.'}</p>
+              <p className={common.help}>Stok kelompok ini diperiksa dan dicadangkan saat pengajuannya berhasil. Kelompok lain memerlukan konfirmasi terpisah.</p>
+              <div className={styles.submitActions}><button className={common.primary} disabled={locked} onClick={() => void submit(item)}>Konfirmasi ajukan pesanan</button>
+                <button className={common.secondary} disabled={locked} onClick={() => update(item.group.groupKey, { review: null })}>Batal pengajuan</button></div></>}
+          </OrderCheckoutDetails>}
+        </section>;
+      })}
+    </div>}
   </>;
 }

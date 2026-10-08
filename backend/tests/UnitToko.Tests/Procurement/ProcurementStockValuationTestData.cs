@@ -58,16 +58,19 @@ internal sealed class ProcurementStockValuationTestData(SupplierDocumentTestData
 
     internal static async Task<ProcurementStockValuationTestData> CreateAsync(MongoFixture fixture, bool createValuationPolicy = true, int receiptPackages = 3,
         decimal requiredAdvance = 0, bool includePayableMappings = false, bool includeCustomerMappings = false,
-        bool mixedQuality = false, bool matchInvoice = true, bool activateEmptySource = false, bool useSystemClock = false, DateOnly? inspectedExpiry = null)
+        bool mixedQuality = false, bool matchInvoice = true, bool activateEmptySource = false, bool useSystemClock = false, DateOnly? inspectedExpiry = null,
+        bool includeCogsMapping = false, long reviewedSafetyBufferBaseUnits = 12)
     {
         Assert.InRange(receiptPackages, 1, 3);
         if (mixedQuality && activateEmptySource) throw new ArgumentException("This minimal activation seam is for the clean receipt fixture", nameof(activateEmptySource));
         if (mixedQuality && useSystemClock) throw new ArgumentException("The browser live clock seam is for the clean receipt fixture", nameof(useSystemClock));
         if (mixedQuality && inspectedExpiry is not null) throw new ArgumentException("Explicit inspected expiry is for the clean receipt fixture", nameof(inspectedExpiry));
         if (mixedQuality && requiredAdvance != 0) throw new ArgumentException("Mixed fixture uses its genuine M77 order terms", nameof(requiredAdvance));
+        if (mixedQuality && reviewedSafetyBufferBaseUnits != 12) throw new ArgumentException("The reviewed source buffer seam is for the clean receipt fixture", nameof(reviewedSafetyBufferBaseUnits));
         ProcurementQualityAcceptanceTestData? quality = mixedQuality ? await ProcurementQualityAcceptanceTestData.CreateAsync(fixture, receiptPackages: receiptPackages) : null;
         SupplierDocumentTestData documents;
-        try { documents = quality is null ? await SupplierDocumentTestData.CreateAsync(fixture, requiredAdvance: requiredAdvance, boundStock: true, activateEmptySource: activateEmptySource, useSystemClock: useSystemClock, inspectedExpiry: inspectedExpiry)
+        try { documents = quality is null ? await SupplierDocumentTestData.CreateAsync(fixture, requiredAdvance: requiredAdvance, boundStock: true, activateEmptySource: activateEmptySource, useSystemClock: useSystemClock, inspectedExpiry: inspectedExpiry,
+                reviewedSafetyBufferBaseUnits: reviewedSafetyBufferBaseUnits)
                 : await SupplierDocumentTestData.CreateFromInspectionAsync(quality.Inspection); }
         catch { if (quality is not null) await quality.DisposeAsync(); throw; }
         var data = new ProcurementStockValuationTestData(documents) { ReceiptPackages = receiptPackages, MixedQuality = quality };
@@ -112,7 +115,7 @@ internal sealed class ProcurementStockValuationTestData(SupplierDocumentTestData
                 data.SourceMaker.UserId, data.SourceChecker.UserId, data.BookMaker.UserId, data.BookChecker.UserId);
             if (quality is null) await data.CreateHeldReceiptAsync();
             else { data.Receipt = quality.Receipt; data.PoolId = quality.Stock.PoolId; }
-            await data.CreateBookAndPolicyAsync(createValuationPolicy, includePayableMappings, includeCustomerMappings);
+            await data.CreateBookAndPolicyAsync(createValuationPolicy, includePayableMappings, includeCustomerMappings, includeCogsMapping);
             Assert.False(await data.Rows("journalEntries").Find(new BsonDocument()).AnyAsync());
             return data;
         }
@@ -133,7 +136,7 @@ internal sealed class ProcurementStockValuationTestData(SupplierDocumentTestData
         Receipt = await Receipts.ReceiveAsync(Maker, input, receiptPreview["binding"].AsString, Meta("valuation-held-receipt"));
     }
 
-    private async Task CreateBookAndPolicyAsync(bool createPolicy, bool includePayableMappings, bool includeCustomerMappings)
+    private async Task CreateBookAndPolicyAsync(bool createPolicy, bool includePayableMappings, bool includeCustomerMappings, bool includeCogsMapping)
     {
         var setup = new AccountingBookSetupService(Database, Unit, new(Database), Clock);
         var input = new AccountingBookSetupInput(AccountingBookSetupTestData.Key, AccountingCalendar.BusinessDate(Clock.UtcNow).ToString("yyyy-MM", CultureInfo.InvariantCulture),
@@ -144,6 +147,7 @@ internal sealed class ProcurementStockValuationTestData(SupplierDocumentTestData
         if (includeCustomerMappings)
             input = input with { Mappings = [.. input.Mappings, new("invoice_ar", "A1102"), new("invoice_revenue", "R4101"),
                 new("invoice_tax", "L2101"), new("invoice_charges", "R4102")] };
+        if (includeCogsMapping) input = input with { Mappings = [.. input.Mappings, new("cogs", "E5100")] };
         var preview = await setup.PreviewAsync(BookMaker, input);
         var proposal = await setup.ProposeAsync(BookMaker, input, preview["binding"].AsString, Meta("valuation-book"));
         var review = await setup.PreviewDecisionAsync(BookChecker, proposal["proposalId"].AsInt64, AccountingBookSetupDecision.Approve);

@@ -47,7 +47,13 @@ public sealed class StockSourceActivationTests(MongoFixture fixture)
         Assert.Equal(1L, await data.CountAsync(B.Proposals)); Assert.Equal(1L, await data.CountAsync(B.Decisions)); Assert.Equal(1L, await data.CountAsync(B.Activations));
         Assert.Equal(physical, await data.PhysicalAsync());
         using var tx = await fixture.Client.StartSessionAsync(); tx.StartTransaction();
-        await restarted.RequireActivatedPoolAsync(tx, await data.PoolAsync(), default); await tx.AbortTransactionAsync();
+        var activationStorageChecks = 0;
+        fixture.CommandCompleted = (command, _) => {
+            if (command == "listIndexes/stockSourceActivations") Interlocked.Increment(ref activationStorageChecks);
+        };
+        try { await restarted.RequireActivatedPoolAsync(tx, await data.PoolAsync(), default); }
+        finally { fixture.CommandCompleted = null; await tx.AbortTransactionAsync(); }
+        Assert.Equal(1, activationStorageChecks);
     }
 
     [Theory]
@@ -150,6 +156,12 @@ public sealed class StockSourceActivationTests(MongoFixture fixture)
         var before = await data.PhysicalAsync();
         await data.Rows(B.Activations).UpdateOneAsync(new BsonDocument("_id", id), Builders<BsonDocument>.Update.Set("decisionHash", new string('a', 64)));
         await Assert.ThrowsAsync<PersistenceConflictException>(() => data.Sources.ReadActivationAsync(data.Checker, data.PoolId, id));
+        using (var tx = await fixture.Client.StartSessionAsync()) {
+            tx.StartTransaction();
+            await Assert.ThrowsAsync<PersistenceConflictException>(() => data.Sources.RequireActivatedPoolAsync(tx, data.Rows("inventoryPools")
+                .Find(new BsonDocument("_id", data.PoolId)).Single(), default));
+            await tx.AbortTransactionAsync();
+        }
         Assert.Equal(before, await data.PhysicalAsync());
     }
 

@@ -6,6 +6,7 @@ using UnitToko.Modules.Identity.Contracts;
 using UnitToko.Modules.Inventory;
 using UnitToko.Platform.Authorization;
 using UnitToko.Platform.Catalog;
+using UnitToko.Platform.Fulfillment;
 using UnitToko.Platform.Inventory;
 using UnitToko.Platform.Mongo.Migrations;
 using B = UnitToko.Platform.Ordering.OrderSubmissionBson;
@@ -75,8 +76,11 @@ internal sealed class OrderStockSourceRecords(IMongoDatabase database)
             [decision["poolId"].AsInt64], audit, decision["decidedAt"], []);
     }
     internal async Task<(BsonDocument Head, BsonDocument[] History, Dictionary<long, BsonDocument> State)> HistoryAsync(
-        IClientSessionHandle tx, long poolId, CancellationToken ct)
+        IClientSessionHandle tx, long poolId, CancellationToken ct,
+        ShipmentDispatchValueRecords.HistoricalRead? valueHistory = null, IClock? clock = null, ShipmentDispatchService.LiveValueRead? liveRead = null)
     {
+        valueHistory?.Require(database, tx);
+        liveRead?.Require(database, clock ?? throw Unavailable(), tx);
         new InventoryRepository(database).RequireSession(tx);
         var transactionNumber = tx.WrappedCoreSession.CurrentTransaction.TransactionNumber;
         var head = await Rows(Heads).Find(tx, F.Eq("_id", poolId)).SingleOrDefaultAsync(ct) ?? throw Unavailable();
@@ -93,7 +97,7 @@ internal sealed class OrderStockSourceRecords(IMongoDatabase database)
                 previous is not null && StockSourceSetupBson.Time(row["recordedAt"]) < StockSourceSetupBson.Time(previous["recordedAt"])) throw Unavailable();
             var kind = row["sourceKind"].AsString; var id = row["sourceId"].AsInt64;
             if (!events.Add(kind + ":" + id) || (previous is null) != (kind == "setup") || kind == "setup" && id != head["setupDecisionId"].AsInt64) throw Unavailable();
-            var source = kind == "setup" ? await SetupAsync(tx, id, true, ct) : await OrderSubmissionService.ReadStockSourceEventAsync(database, tx, kind, id, true, ct);
+            var source = kind == "setup" ? await SetupAsync(tx, id, true, ct) : await OrderSubmissionService.ReadStockSourceEventAsync(database, tx, kind, id, true, ct, valueHistory, clock, liveRead);
             if (kind == "setup") setupLocation = source.Record["proposal"]["input"]["location"];
             var effects = Effects(source, poolId);
             if (!source.PoolIds.Contains(poolId) || row["sourceHash"] != source.Hash || row["sourceAuditId"] != source.Audit["_id"] ||
@@ -117,6 +121,8 @@ internal sealed class OrderStockSourceRecords(IMongoDatabase database)
             head["lastHash"] != previous["transitionHash"] || head["updatedAt"] != previous["recordedAt"] || head["location"] != setupLocation) throw Unavailable();
         new InventoryRepository(database).RequireSession(tx);
         if (tx.WrappedCoreSession.CurrentTransaction.TransactionNumber != transactionNumber) throw Unavailable();
+        valueHistory?.Require(database, tx);
+        liveRead?.Require(database, clock ?? throw Unavailable(), tx);
         return (head, history.ToArray(), state);
     }
     internal static BsonArray Effects(OrderStockSourceEvent source, long poolId) => new(source.Effects
@@ -124,7 +130,8 @@ internal sealed class OrderStockSourceRecords(IMongoDatabase database)
     internal async Task<OrderStockSourceSnapshot> ReadAsync(IClientSessionHandle tx, OrderSubmissionService owner,
         StockSourceObligationExpectation expected, CancellationToken ct)
     {
-        var (head, history, state) = await HistoryAsync(tx, expected.PoolId, ct);
+        var valueHistory = owner.StockSourceHistory; valueHistory?.Require(database, tx);
+        var (head, history, state) = await HistoryAsync(tx, expected.PoolId, ct, valueHistory, owner.StockSourceClock, owner.StockSourceLiveRead);
         if (head["location"] != StockSourceSetupBson.Location(expected.Location)) throw Unavailable();
         var pool = await Rows("inventoryPools").Find(tx, F.Eq("_id", expected.PoolId)).SingleOrDefaultAsync(ct); InventoryGraph.RequirePool(pool);
         if (pool!["location"] != head["location"] || pool["revision"] != expected.PoolRevision || pool["fence"] != expected.PoolFence) throw Unavailable();
@@ -155,6 +162,7 @@ internal sealed class OrderStockSourceRecords(IMongoDatabase database)
                 !CatalogSchemas.SemanticEquals(recorded["after"], State(reservation))) throw Unavailable();
         }
         var open = reservations.Where(row => row["remaining"].AsInt64 > 0).ToArray();
+        valueHistory?.Require(database, tx);
         return new(head, orders, reservations, open.Select(row => row["orderId"].AsInt64).Distinct().LongCount(), open.LongLength);
     }
 }

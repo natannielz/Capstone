@@ -28,7 +28,7 @@ internal sealed class FulfillmentStockSourceMigration(IMongoDatabase database, I
             var name = definition["name"].AsString;
             indexes.Add(name, (await (await Rows(name).Indexes.ListAsync(ct)).ToListAsync(ct)).ToArray());
         }
-        await FulfillmentStockSourceStorage.RequireRetainedAsync(database, ct);
+        await FulfillmentStockSourceStorage.RequireRetainedAsync(database, ct, ShipmentDispatchSchemas.LegacyValidator());
         foreach (var name in StockSourceSetupSchemas.Collections) {
             await lease.RenewAsync(ct);
             if (await Rows(name).Find(new BsonDocument("$nor", new BsonArray { StockSourceSetupSchemas.Validator(name) })).Limit(1).AnyAsync(ct)) throw Invalid();
@@ -98,6 +98,6 @@ internal sealed class FulfillmentStockSourceMigration(IMongoDatabase database, I
         }
         var currentCounters = await Rows("idCounters").Find(new BsonDocument()).Sort(new BsonDocument("_id", 1)).ToListAsync(ct);
         if (counters.Count != currentCounters.Count || counters.Where((row, index) => row != currentCounters[index]).Any()) throw Invalid();
-        await FulfillmentStockSourceStorage.RequireAsync(database, ct);
+        await FulfillmentStockSourceStorage.RequireAsync(database, ct, ShipmentDispatchSchemas.LegacyValidator());
     }
 }

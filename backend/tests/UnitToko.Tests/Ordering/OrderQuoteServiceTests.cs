@@ -3,10 +3,12 @@ using MongoDB.Bson;
 using MongoDB.Driver;
 using MongoDB.Driver.Core.Events;
 using UnitToko.Modules.Contracts;
+using UnitToko.Modules.Catalog;
 using UnitToko.Modules.Identity;
 using UnitToko.Modules.Ordering;
 using UnitToko.Modules.Organizations;
 using UnitToko.Platform.Authorization;
+using UnitToko.Platform.Catalog;
 using UnitToko.Platform.Ordering;
 using UnitToko.Tests.Catalog;
 
@@ -39,6 +41,51 @@ public sealed class OrderQuoteServiceTests(MongoFixture fixture)
         Assert.Equal(selected[0].DefinitionId, line.Definition.Id); Assert.Equal(selected[0].PriceId, line.Price.Id);
         foreach (var collection in new[] { "orders", "inventoryMovements", "journalEntries" }) Assert.Equal(0, await data.Catalog.CountAsync(collection));
         Assert.Equal(0, await data.Rows("idempotencyRecords").CountDocumentsAsync(new BsonDocument("operation", new BsonDocument("$regex", "^order"))));
+    }
+    [Fact]
+    public async Task Reviewed_channel_groups_conserve_genuine_catalog_selections_and_refuse_foreign_buyer_scope_without_order_effects() {
+        await using var data = await CatalogPriceTestData.CreateAsync(fixture); var selected = await Prepare(data);
+        var catalog = data.Catalog; var owner = CatalogAuthoringTestData.OtherOwner;
+        await catalog.Base.AddGrantAsync(data.Maker, 7300, owner, [Permissions.CatalogManage, Permissions.PricingManage]);
+        await catalog.Base.AddGrantAsync(data.Checker, 7400, owner, [Permissions.PricingApprove]);
+        var family = await catalog.FamilyAsync(data.Maker, owner, "GROUP-OTHER");
+        var sku = await catalog.Service.CreateSkuAsync(data.Maker, new(family.Id, family.Version, "GROUP-OTHER-10", "group-other-base",
+            CatalogAuthoringTestData.Definition(10)), CatalogPriceTestData.Meta("group-other-sku"));
+        await catalog.Service.SetPublicationsAsync(data.Maker, new(sku.Id, 1, [new(503)], [new(new(503), 1)]), CatalogPriceTestData.Meta("group-other-publish"));
+        // Existing fixture entitlement metadata scopes the synthetic buyer. Catalog and price
+        // business rows above/below are produced by their real independent commands.
+        await data.Rows("catalogEntitlements").InsertOneAsync(CatalogVisibilityBson.Entitlement(new CatalogEntitlement(10003,
+            catalog.Buyer.UserId, catalog.Buyer.UserId, 503, CatalogAuthoringTestData.Audience, AuthorizationStatus.Active,
+            catalog.Clock.UtcNow, null, null, 1, 998, 999, 100603, 1, catalog.Clock.UtcNow)));
+        var pricePreview = await data.Service.PreviewAsync(data.Maker, sku.Id.Value, CatalogPriceAccess.Prepare);
+        var price = await data.Service.ProposeAsync(data.Maker, sku.Id.Value, pricePreview.Expected, new("IDR", new(10000m)), CatalogPriceTestData.Meta("group-other-price"));
+        await data.Service.DecideAsync(data.Checker, price["proposalId"].AsInt64, 1, CatalogPriceDecision.Approve,
+            "Independent synthetic group price review", CatalogPriceTestData.Meta("group-other-price-approve"));
+        var other = (await catalog.BuyerService.QueryAsync(catalog.Buyer, 0, 25, null)).Items.Single(item => item.Sku.Id == sku.Id);
+        var input = new OrderDraftInput(Branch, [new(other.Sku.Id, other.Definition.Id, other.Definition.Version,
+            other.CurrentPrice!.Id, other.CurrentPrice.Version, 3), selected[0]],
+            new("Penerima fixture", "081234567890", "Alamat cabang fixture", "Jakarta", "12810", null), "Separate channel fixture");
+        var service = Service(data); var groups = await service.CheckoutGroupsAsync(catalog.Buyer, input);
+        Assert.Equal(2, groups.Items.Length); Assert.Equal(Branch, groups.Context);
+        Assert.Equal(new[] { "100:101:103:IDR", "100:201:203:IDR" }, groups.Items.Select(group => group.GroupKey));
+        Assert.Equal(input.Selections.OrderBy(line => line.SkuId.Value), groups.Items.SelectMany(group => group.Input.Selections).OrderBy(line => line.SkuId.Value));
+        Assert.Equal(54L, groups.Items.SelectMany(group => group.Catalog.Lines).Sum(line => line.BaseUnits));
+        Assert.Equal(54000.50m, groups.Items.Sum(group => group.Catalog.CatalogSubtotal.Value));
+        Assert.All(groups.Items, group => {
+            Assert.Equal(input.Context, group.Input.Context); Assert.Equal(input.Delivery, group.Input.Delivery);
+            Assert.Equal(input.PurchaseReference, group.Input.PurchaseReference);
+            Assert.Equal(group.Input.Selections.Select(line => line.SkuId), group.Catalog.Lines.Select(line => line.Definition.SkuId));
+            Assert.All(group.Catalog.Lines, line => {
+                Assert.Equal(group.Seller.OrganizationId, line.FulfillmentOwner.OrganizationId);
+                Assert.Equal(group.Seller.ShopId, line.FulfillmentOwner.ShopId); Assert.Equal(group.Seller.ChannelId, line.FulfillmentOwner.ChannelId);
+            });
+        });
+        await catalog.Base.AddGrantAsync(catalog.Buyer, 6201, new(GrantScopeKind.BuyerOwned, 10, 12), [Permissions.OrderSubmit, Permissions.CatalogRead]);
+        await Assert.ThrowsAsync<AuthorizationDeniedException>(() => service.CheckoutGroupsAsync(catalog.Buyer, input with { Context = new(new(10), new(12)) }));
+        await data.Rows("catalogEntitlements").UpdateOneAsync(new BsonDocument("_id", 10003L), Builders<BsonDocument>.Update.Set("status", "revoked"));
+        await Assert.ThrowsAsync<AuthorizationDeniedException>(() => service.CheckoutGroupsAsync(catalog.Buyer, input));
+        foreach (var collection in new[] { "orders", "movements", "stockBalances", "journalEntries" }) Assert.Equal(0, await catalog.CountAsync(collection));
+        Assert.Equal(0, await data.Rows("idempotencyRecords").CountDocumentsAsync(new BsonDocument("operation", new BsonDocument("$regex", "^ordering\\.order\\."))));
     }
     [Fact]
     public async Task Catalogue_membership_is_not_order_permission() {

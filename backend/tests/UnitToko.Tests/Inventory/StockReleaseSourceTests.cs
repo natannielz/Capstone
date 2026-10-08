@@ -61,11 +61,20 @@ public sealed class StockReleaseSourceTests(MongoFixture fixture, ITestOutputHel
         await paired.ReadAsync(valueOwner, data.Database, originTx, origin, selected.QualityAllocationId, selected.ValuationAllocationId, default);
         Assert.Equal("procurement_stock_valuation_integrity_unavailable", Assert.Throws<AuthorizationDeniedException>(() => paired.Require(data.Service, data.Database, originTx, origin)).Code);
         await origin.RequireAsync(data.Database, originTx, default); await origin.RequireAsync(data.Database, originTx, default);
+        var scopedGraph = new ProcurementQualityProofGraph(originTx, origin);
+        var scope = scopedGraph.BeginOriginRead(paired, valueOwner, data.Database, data.Clock, originTx, origin);
+        Assert.Throws<AuthorizationDeniedException>(() => scopedGraph.BeginOriginRead(paired, valueOwner, data.Database, data.Clock, originTx, origin));
+        Assert.Equal(origin.Receipt, await scopedGraph.HeldReceiptAsync(data.Database, data.Unit, data.Clock,
+            data.Inspection.Receiving.Procurement.Catalog, data.Inspection.Receiving.Orders.Service, data.Sources, originTx, origin.ReceiptId, default));
         var custody = data.Rows(ProcurementReceivingBson.Heads);
         var head = await custody.Find(originTx, new BsonDocument("noticeId", data.Inspection.NoticeId)).SingleAsync();
         Assert.Equal(1L, (await custody.UpdateOneAsync(originTx, head, Builders<BsonDocument>.Update.Inc("version", 1L))).ModifiedCount);
-        Assert.Equal("procurement_quality_acceptance_integrity_unavailable", (await Assert.ThrowsAsync<AuthorizationDeniedException>(() =>
-            origin.RequireAsync(data.Database, originTx, default))).Code);
+        try {
+            Assert.Equal("procurement_quality_acceptance_integrity_unavailable", (await Assert.ThrowsAsync<AuthorizationDeniedException>(() =>
+                origin.RequireAsync(data.Database, originTx, default))).Code);
+        } finally { scopedGraph.EndOriginRead(scope); }
+        await Assert.ThrowsAsync<AuthorizationDeniedException>(() => scopedGraph.HeldReceiptAsync(data.Database, data.Unit, data.Clock,
+            data.Inspection.Receiving.Procurement.Catalog, data.Inspection.Receiving.Orders.Service, data.Sources, originTx, origin.ReceiptId, default));
         await originTx.AbortTransactionAsync();
         Assert.Throws<DomainValidationException>(() => origin.Require(data.Database, originTx));
         Assert.Equal("procurement_stock_valuation_integrity_unavailable", Assert.Throws<AuthorizationDeniedException>(() => paired.Require(valueOwner, data.Database, originTx, origin)).Code);

@@ -59,6 +59,7 @@ public sealed class ProcurementQualityProofGraphTests(MongoFixture fixture)
         Task<BsonDocument> ReceiptAsync(ProcurementQualityProofGraph selected) =>
             selected.HeldReceiptAsync(data.Database, data.Unit, data.Clock, catalog, orders, sources, tx, quality.ReceiptId, CancellationToken.None);
         try {
+            var inspectionCaptureStartedAt = data.Clock.UtcNow;
             var firstInspection = await InspectionAsync(graph);
             var firstReceipt = await ReceiptAsync(graph);
             Assert.True(firstInspection.Submissions.Single(row => row["_id"] == inspectionId).Equals(inspection),
@@ -69,8 +70,27 @@ public sealed class ProcurementQualityProofGraphTests(MongoFixture fixture)
             firstReceipt["reason"] = "Synthetic caller-only projection mutation";
             firstInspection.Submissions.Single(row => row["_id"] == inspectionId)["reason"] = "Synthetic caller-only projection mutation";
             Assert.True((await ReceiptAsync(graph)).Equals(receipt), "A mutated receipt projection must not poison completed proof.");
-            Assert.True((await InspectionAsync(graph)).Submissions.Single(row => row["_id"] == inspectionId).Equals(inspection),
-                "A mutated inspection projection must not poison completed proof.");
+            var inspectionReads = 0; var previousObserver = fixture.CommandCompleted;
+            fixture.CommandCompleted = (name, milliseconds) => {
+                if (name == "find/" + ProcurementInspectionTestData.Submissions) Interlocked.Increment(ref inspectionReads);
+                previousObserver?.Invoke(name, milliseconds);
+            };
+            try {
+                Assert.True((await InspectionAsync(graph)).Submissions.Single(row => row["_id"] == inspectionId).Equals(inspection),
+                    "A mutated inspection projection must not poison completed proof.");
+            } finally { fixture.CommandCompleted = previousObserver; }
+            Assert.Equal(1, inspectionReads); // The complete fresh membership read already proves this exact owner row.
+            var capturedClock = data.Clock.UtcNow;
+            var usedSystemClock = data.Clock.UseSystemClock;
+            try {
+                // PDF admission enables system time; change the actual observed
+                // clock to before capture, not merely its ignored stored value.
+                data.Clock.UseSystemClock = false;
+                data.Clock.UtcNow = inspectionCaptureStartedAt.AddMilliseconds(-1);
+                Assert.True(data.Clock.UtcNow < inspectionCaptureStartedAt);
+                Assert.Equal("procurement_quality_acceptance_integrity_unavailable",
+                    (await Assert.ThrowsAsync<AuthorizationDeniedException>(() => InspectionAsync(graph))).Code);
+            } finally { data.Clock.UtcNow = capturedClock; data.Clock.UseSystemClock = usedSystemClock; }
 
             // Derive parent identities only from the genuinely authenticated approved-PO source.
             var approvedSource = firstInspection.Source["notice"]["source"].AsBsonDocument;
@@ -126,6 +146,16 @@ public sealed class ProcurementQualityProofGraphTests(MongoFixture fixture)
             Assert.Equal("procurement_quality_acceptance_integrity_unavailable",
                 (await Assert.ThrowsAsync<AuthorizationDeniedException>(() => InspectionAsync(graph))).Code);
             Assert.Equal(1L, (await data.Rows(ProcurementInspectionTestData.Submissions).ReplaceOneAsync(tx, inspectionFilter, inspection)).ModifiedCount);
+            Assert.Equal(1L, (await data.Rows(ProcurementInspectionTestData.Submissions).DeleteOneAsync(tx, inspectionFilter)).DeletedCount);
+            try {
+                Assert.Equal("procurement_quality_acceptance_integrity_unavailable",
+                    (await Assert.ThrowsAsync<AuthorizationDeniedException>(() => InspectionAsync(graph))).Code);
+            } finally { await data.Rows(ProcurementInspectionTestData.Submissions).InsertOneAsync(tx, inspection); }
+            Assert.Equal(1L, (await data.Rows("evidencePins").DeleteOneAsync(tx, pinFilter)).DeletedCount);
+            try {
+                Assert.Equal("evidence_validation_integrity",
+                    (await Assert.ThrowsAsync<UnitToko.Platform.Mongo.PersistenceConflictException>(() => InspectionAsync(graph))).Code);
+            } finally { await data.Rows("evidencePins").InsertOneAsync(tx, pin); }
 
             var balanceFilter = new BsonDocument("_id", receipt["balanceId"]);
             Assert.Equal(1L, (await data.Rows("stockBalances").UpdateOneAsync(tx, balanceFilter,

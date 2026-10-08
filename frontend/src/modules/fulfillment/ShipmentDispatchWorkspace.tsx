@@ -63,7 +63,7 @@ function DispatchDesk({ account, onFailure }: { account: Account; onFailure: (er
   const [page, setPage] = useState<{ items: DispatchQueueItem[]; hasMore: boolean }>({ items: [], hasMore: false }), [before, setBefore] = useState<string | null>(null), [reload, setReload] = useState(0);
   const [prepared, setPrepared] = useState<DispatchPreparation | null>(null), [couriers, setCouriers] = useState<CourierChoice[]>([]), [moreCouriers, setMoreCouriers] = useState(false), [courierId, setCourierId] = useState('');
   const [values, setValues] = useState<Record<string, string>>({}), [reason, setReason] = useState(''), [review, setReview] = useState<DispatchReview | null>(null), [command, setCommand] = useState<DispatchCommand | null>(null);
-  const [busy, setBusy] = useState(false), [recovering, setRecovering] = useState(false), [error, setError] = useState<unknown>(null), [result, setResult] = useState<DispatchResult | null>(null);
+  const [busy, setBusy] = useState(false), [dispatchPending, setDispatchPending] = useState(false), [recovering, setRecovering] = useState(false), [error, setError] = useState<unknown>(null), [result, setResult] = useState<DispatchResult | null>(null);
   const recovery = useOperationRecovery(actorId), alive = useRef(false), pending = useRef(false), panel = useRef<HTMLElement>(null), recovered = useRef<DispatchResult | null>(null);
   const current = useCallback(() => alive.current && !sessionTiming(account.session, performance.now() - account.observedAt).expired, [account]);
   const locked = busy || recovering || recovery.locked;
@@ -105,10 +105,10 @@ function DispatchDesk({ account, onFailure }: { account: Account; onFailure: (er
     try {
       if (recovery.journal.list(actorId).length > 0) throw new AccessFailure(400, 'resolve_previous_attempt');
       const accepted = await submitTrackedRequest(ledger, recovery.journal, actorId, 'fulfillment.shipment.dispatch', 'fulfillment.shipment.dispatch', command,
-        key => gateway.dispatch(command, key, current));
+        key => { setDispatchPending(true); recovery.refresh(); return gateway.dispatch(command, key, current); });
       if (current()) { setResult(accepted); setPrepared(null); setCommand(null); setReview(null); setReload(value => value + 1); }
     } catch (failure) { if (current()) { setCommand(null); setReview(null); setError(failure); onFailure(failure); } }
-    finally { pending.current = false; if (alive.current) { setBusy(false); recovery.refresh(); } }
+    finally { pending.current = false; if (alive.current) { setBusy(false); setDispatchPending(false); recovery.refresh(); } }
   }
   return <>
     <AdministrationNavigation current="dispatches" actions={account.actions} locked={locked} />
@@ -117,11 +117,12 @@ function DispatchDesk({ account, onFailure }: { account: Account; onFailure: (er
       onFailure={failure => { setError(failure); onFailure(failure); }} onResolved={() => {
         recovery.refresh(); ledger.resetAfterReconciliation(); if (current() && recovered.current) { setResult(recovered.current); recovered.current = null; setReload(value => value + 1); }
       }} />
+    {dispatchPending && <p role="status">Permintaan keberangkatan sedang diproses. Referensi bantuan telah disimpan. Tunggu hasil sebelum memeriksa atau mengirim permintaan lain.</p>}
     {error !== null && <p role="alert" className={common.alert}>{message(error)}</p>}{recovery.error !== null && <p role="alert" className={common.alert}>{accessMessage(recovery.error)}</p>}
     {result && <section className={common.success} role="status"><h2>Keberangkatan tercatat</h2><p>Kiriman {result.shipmentId} · nomor {result.numberEntity}/{result.numberChannel}/{result.numberYear}/{result.number}</p>
       <p>Stok dan sisa pesanan sudah diperbarui. Penerimaan barang oleh cabang belum dicatat.</p></section>}
     <section className={common.accountSection} aria-label="Persiapan untuk diberangkatkan" aria-busy={busy}><h2>Persiapan tersimpan</h2>
-      {busy && <p role="status">Memuat pengiriman…</p>}{!busy && page.items.length === 0 && <p>Belum ada persiapan dalam penugasan ini.</p>}
+      {busy && !dispatchPending && <p role="status">Memuat pengiriman…</p>}{!busy && page.items.length === 0 && <p>Belum ada persiapan dalam penugasan ini.</p>}
       <ul className={styles.lines}>{page.items.map(item => <li className={styles.line} key={item.preparationId}><strong>{item.source.buyerName}</strong> · Pesanan {item.source.orderId}
         <p>{item.lines.map(line => { const product = item.source.lines.find(product => product.skuId === line.skuId)!; return `${product.productName} — ${line.packages} ${product.definition.packageLabel}`; }).join(', ')}</p>
         {item.canDispatch ? <button className={common.secondary} disabled={locked} onClick={() => void select(item.source.suborderId)}>Periksa keberangkatan pesanan {item.source.orderId}</button>

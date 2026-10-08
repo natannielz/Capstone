@@ -33,10 +33,9 @@ public sealed partial class OrderSubmissionService
         IClientSessionHandle tx, long suborderId, string permission, CancellationToken ct) {
         var query = FulfillmentQuery(actor, snapshot, permission);
         var sub = await Rows(B.Suborders).Find(tx, ScopeQuery.Create(query) & F.Eq("_id", suborderId)).SingleOrDefaultAsync(ct) ?? throw Invalid();
-        var order = await GraphAsync(tx, actor, sub["orderId"].AsInt64, ct, requireOwner: false);
+        var (order, progress) = await GraphWithProgressAsync(tx, actor, sub["orderId"].AsInt64, ct, requireOwner: false);
         var resource = ReviewResource(order, sub);
         if (!query.Matches(resource) || !ScopePolicy.IsResourceActive(resource, snapshot.Directory)) throw Invalid();
-        var progress = await DecisionGraphAsync(tx, order, ct);
         var reservations = await Rows(B.Reservations).Find(tx, F.Eq("orderId", order["_id"]) & F.Eq("suborderId", suborderId))
             .Sort(new BsonDocument("_id", 1)).Limit(101).ToListAsync(ct);
         var quote = B.Quote(order["quote"].AsBsonDocument);

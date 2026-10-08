@@ -21,6 +21,8 @@ internal sealed record ProcurementApprovedQualitySource(BsonDocument Receipt, Bs
 internal sealed partial class ProcurementQualityProofGraph(IClientSessionHandle tx, HeldReceiptOriginProof? origin = null)
 {
     private readonly HeldReceiptOriginProof? originProof = origin;
+    private (ProcurementStockValuationService.ReleaseOriginReader Reader, ProcurementStockValuationService Owner,
+        IMongoDatabase Database, IClock Clock, DateTimeOffset At, object Token)? originRead;
     private readonly long transaction = tx.WrappedCoreSession.CurrentTransaction.TransactionNumber;
     private readonly Dictionary<long, ProcurementApprovedQualitySource> active = [];
     // Current-chain readers share only immutable genesis. The historical originProof
@@ -29,6 +31,26 @@ internal sealed partial class ProcurementQualityProofGraph(IClientSessionHandle 
     internal void Require(IClientSessionHandle current) {
         if (!ReferenceEquals(tx, current) || !current.IsInTransaction ||
             current.WrappedCoreSession.CurrentTransaction.TransactionNumber != transaction) throw ProcurementQualityAcceptanceBson.Broken();
+    }
+    internal object BeginOriginRead(ProcurementStockValuationService.ReleaseOriginReader reader, ProcurementStockValuationService owner,
+        IMongoDatabase database, IClock clock, IClientSessionHandle current, HeldReceiptOriginProof expected) {
+        RequireDatabase(database, current, expected.ReceiptId);
+        if (originRead is not null || !ReferenceEquals(originProof, expected) || clock.UtcNow == default || clock.UtcNow.Offset != TimeSpan.Zero)
+            throw ProcurementQualityAcceptanceBson.Broken();
+        reader.Require(owner, database, current, expected);
+        var token = new object(); originRead = (reader, owner, database, clock, clock.UtcNow, token); return token;
+    }
+    private void RequireOriginRead(IMongoDatabase database, IClientSessionHandle current, HeldReceiptOriginProof expected) {
+        var scope = originRead ?? throw ProcurementQualityAcceptanceBson.Broken();
+        RequireDatabase(database, current, expected.ReceiptId);
+        if (!ReferenceEquals(expected, originProof) || !ReferenceEquals(database.Client, scope.Database.Client) ||
+            !database.DatabaseNamespace.Equals(scope.Database.DatabaseNamespace) || scope.Clock.UtcNow < scope.At || scope.Clock.UtcNow.Offset != TimeSpan.Zero)
+            throw ProcurementQualityAcceptanceBson.Broken();
+        scope.Reader.Require(scope.Owner, database, current, expected);
+    }
+    internal void EndOriginRead(object token) {
+        if (originRead is not { } scope || !ReferenceEquals(scope.Token, token)) throw ProcurementQualityAcceptanceBson.Broken();
+        originRead = null;
     }
     internal bool TryActive(IClientSessionHandle current, BsonDocument allocation, out ProcurementApprovedQualitySource source) {
         Require(current);

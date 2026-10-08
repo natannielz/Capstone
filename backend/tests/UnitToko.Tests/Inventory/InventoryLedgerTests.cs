@@ -9,6 +9,7 @@ using UnitToko.Modules.Identity.Contracts;
 using UnitToko.Modules.Identity;
 using UnitToko.Modules.Inventory;
 using UnitToko.Platform.Inventory;
+using UnitToko.Platform.Fulfillment;
 using UnitToko.Platform.Mongo;
 using UnitToko.Platform.Mongo.Migrations;
 using UnitToko.Tests.Authorization;
@@ -434,22 +435,30 @@ public sealed class InventoryLedgerTests(MongoFixture fixture)
         Assert.Equal(1L, await data.Database.GetCollection<BsonDocument>(evidence.StartsWith("head", StringComparison.Ordinal) ?
             LotValueStore.AvailableHeads : LotValueStore.Transitions).CountDocumentsAsync(new BsonDocument()));
     }
-    [Fact]
-    public async Task A_spoofed_release_namespace_is_not_the_private_current_release_owner()
+    [Theory]
+    [InlineData("ReleaseHold", "head-id")]
+    [InlineData("Dispatch", "head-id")]
+    [InlineData("Dispatch", "head-key")]
+    public async Task A_spoofed_release_or_dispatch_namespace_is_not_the_private_current_value_owner(string action, string evidence)
     {
-        await using var data = await Data(); var physical = FixtureBalance() with { Balance = FixtureBalance().Balance with { Held = 3 } };
+        await using var data = await Data(); var physical = FixtureBalance();
+        physical = physical with { Balance = action == "Dispatch" ? physical.Balance with { Reserved = 3 } : physical.Balance with { Held = 3 } };
         await data.Database.GetCollection<BsonDocument>("stockBalances").ReplaceOneAsync(new BsonDocument("_id", physical.Id), InventoryBson.Balance(physical));
-        await CorruptValueSignalAsync(data, physical, "head-id");
-        var source = StockReleaseBson.Source(Source.DocumentId, physical.PhysicalPoolId);
+        await CorruptValueSignalAsync(data, physical, evidence);
+        var corruptHead = await data.Database.GetCollection<BsonDocument>(LotValueStore.AvailableHeads).Find(new BsonDocument()).SingleAsync();
+        var source = action == "Dispatch" ? new InventorySource("fulfillment.shipment", Source.DocumentId, "dispatch", physical.PhysicalPoolId) :
+            StockReleaseBson.Source(Source.DocumentId, physical.PhysicalPoolId);
         await data.Database.GetCollection<BsonDocument>("inventoryTestSources").UpdateOneAsync(new BsonDocument(), new BsonDocument("$set", new BsonDocument {
-            { "namespace", source.Namespace }, { "eventKind", source.EventKind }, { "occurrence", source.Occurrence }, { "action", "ReleaseHold" } }));
-        var reader = new FixtureReader(data.Database) { Namespace = StockReleaseBson.Namespace };
+            { "namespace", source.Namespace }, { "eventKind", source.EventKind }, { "occurrence", source.Occurrence }, { "action", action } }));
+        var reader = new FixtureReader(data.Database) { Namespace = source.Namespace };
         Assert.False(StockReleaseService.IsLedgerReleaseSource(reader));
+        Assert.False(ShipmentDispatchService.IsLedgerDispatchSource(reader));
         using var tx = await fixture.Client.StartSessionAsync(); tx.StartTransaction(); await Earlier(data, tx);
         Assert.Equal("inventory_lot_value_owner_required", (await Assert.ThrowsAsync<DomainValidationException>(() =>
             Ledger(data, reader).ApplyAsync(tx, Actor, source, 1, Metadata))).Code);
         Assert.False(tx.IsInTransaction); await AssertUnchanged(data);
         Assert.Equal(InventoryBson.Balance(physical), await data.Database.GetCollection<BsonDocument>("stockBalances").Find(new BsonDocument()).SingleAsync());
+        Assert.Equal(corruptHead, await data.Database.GetCollection<BsonDocument>(LotValueStore.AvailableHeads).Find(new BsonDocument()).SingleAsync());
     }
     private static Task CorruptValueSignalAsync(StoreTestData data, InventoryBalanceDocument physical, string evidence)
     {

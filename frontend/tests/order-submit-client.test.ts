@@ -1,8 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createUnitTokoClient } from '../src/api/client';
-import { createOrderSubmitGateway, parseCheckoutReview, parseSubmittedOrder, parseOrderPage } from '../src/modules/ordering/order-submit-client';
-import { OperationJournal, operationRecoveryCapabilities, reconcileOperationRecovery } from '../src/modules/administration/operation-journal';
+import { checkoutGroupRequestKey, createOrderSubmitGateway, orderSubmitOperation, parseCheckoutGroups, parseCheckoutReview, parseSubmittedOrder, parseOrderPage, readCheckoutGroupAttempt } from '../src/modules/ordering/order-submit-client';
+import { OperationJournal, operationRecoveryCapabilities, reconcileOperationRecovery, submitTrackedRequest } from '../src/modules/administration/operation-journal';
+import { AccessFailure, MutationLedger } from '../src/modules/administration/workflow';
 import { recoveryPage } from '../src/modules/administration/operation-recovery-navigation';
 import { identityReturnPath } from '../src/modules/identity/identity-workflow';
 import { actorId, family, sku, definition } from './catalog-fixtures';
@@ -64,4 +65,60 @@ test('order recovery is lookup-only, preserves unknown outcomes and rejects an i
   const receipt = await gateway(async request => { assert.ok(request.url.endsWith('/operations/query')); assert.deepEqual(await request.json(), { purpose: 'operation-recovery', key: 'original' }); return Response.json({ status: 'committed', result }); }).recover(actorId, 'original');
   assert.deepEqual(await reconcileOperationRecovery(entry, journal, legacy, { 'ordering.order': { lookup: async () => receipt } }), { state: 'committed', result: { id: result.orderId, version: '1' } });
   assert.equal(journal.list(actorId).length, 0);
+});
+
+function groupedFixture() {
+  const secondSelection = { ...input.selections[0], skuId: '9007199254740998', definitionId: '52', priceId: '9007199254741000', packages: 3 };
+  const secondLine = { ...review.lines[0], skuCode: 'PENA-LEPAS', definition: { ...definition, id: '52', skuId: secondSelection.skuId },
+    price: { ...review.lines[0].price, id: secondSelection.priceId, skuId: secondSelection.skuId }, packages: 3, baseUnits: '36', catalogSubtotal: '36000.75' };
+  const selected = { ...input, selections: [...input.selections, secondSelection] };
+  const item = { groupKey: '100:101:103:IDR', organizationId: '100', shopId: '101', channelId: '103', currency: 'IDR',
+    organizationName: 'Penjual fixture', shopName: 'Omi fixture', channelName: 'Omi', input, catalogSubtotal: review.catalogSubtotal, lines: review.lines };
+  const other = { ...item, groupKey: '100:201:203:IDR', shopId: '201', channelId: '203', shopName: 'S-Mart fixture', channelName: 'S-Mart',
+    input: { ...input, selections: [secondSelection] }, catalogSubtotal: secondLine.catalogSubtotal, lines: [secondLine] };
+  return { selected, value: { context: input.context, calculatedAt: review.calculatedAt, items: [item, other] } };
+}
+test('reviewed channel discovery preserves exact package subsets, buyer and delivery without aggregate commercial authority', async () => {
+  const { selected, value } = groupedFixture(), parsed = parseCheckoutGroups(value, selected);
+  assert.deepEqual(parsed.items.map(item => item.input.selections.map(line => line.skuId)), [[sku.id], ['9007199254740998']]);
+  assert.deepEqual(parsed.items.map(item => item.quote.catalogSubtotal), ['24000.50', '36000.75']);
+  const item = value.items[0], other = value.items[1];
+  for (const malformed of [
+    { ...value, items: [item] }, { ...value, items: [item, item] },
+    { ...value, items: [{ ...item, groupKey: '100:101:999:IDR' }, other] },
+    { ...value, items: [{ ...item, input: { ...item.input, delivery: { ...input.delivery, address: 'Changed' } } }, other] },
+    { ...value, items: [{ ...item, input: { ...item.input, selections: [{ ...item.input.selections[0], packages: 1 }] } }, other] },
+    { ...value, items: [{ ...item, lines: [{ ...item.lines[0], catalogSubtotal: '1.00' }] }, other] },
+    { ...value, items: [{ ...item, shopName: 'Bad\nname' }, other] },
+  ]) assert.throws(() => parseCheckoutGroups(malformed, selected));
+  const loaded = await gateway(async request => {
+    assert.ok(request.url.endsWith('/checkout/groups/query')); assert.deepEqual(await request.json(), { purpose: 'order-preparation', input: selected });
+    return Response.json(value);
+  }).groups(actorId, selected);
+  assert.equal(loaded.items.length, 2); assert.equal('policy' in loaded.items[0], false);
+});
+test('saved draft channel keys separate actors and groups; partial commit and lost reply are recovered without resubmission', async () => {
+  const { value } = groupedFixture(), a = value.items[0].groupKey, b = value.items[1].groupKey;
+  const firstKey = await checkoutGroupRequestKey(actorId, '7', a), secondKey = await checkoutGroupRequestKey(actorId, '7', b);
+  assert.equal(firstKey, await checkoutGroupRequestKey(actorId, '7', a)); assert.notEqual(firstKey, secondKey);
+  assert.notEqual(firstKey, await checkoutGroupRequestKey('17', '7', a)); assert.notEqual(firstKey, await checkoutGroupRequestKey(actorId, '8', a));
+  assert.match(firstKey, new RegExp(`^ordering\\.order\\.submit:${actorId}:[a-f0-9]{64}$`));
+  const storage = new Map<string, string>(), journal = new OperationJournal(() => ({ get length() { return storage.size; }, key: index => [...storage.keys()][index] ?? null,
+    getItem: key => storage.get(key) ?? null, setItem: (key, value) => { storage.set(key, value); }, removeItem: key => { storage.delete(key); } }));
+  const ledger = new MutationLedger(() => { throw new Error('A group must retain its original key'); }), receipts = new Map<string, typeof result>(); let writes = 0;
+  assert.equal((await readCheckoutGroupAttempt(actorId, '7', a, journal, async key => receipts.has(key) ? { state: 'committed', result: receipts.get(key)! } : null)).result, null);
+  await submitTrackedRequest(ledger, journal, actorId, a, orderSubmitOperation, input, async key => { writes++; receipts.set(key, result); return result; }, firstKey);
+  await assert.rejects(() => submitTrackedRequest(ledger, journal, actorId, b, orderSubmitOperation, input, async key => {
+    writes++; receipts.set(key, { ...result, orderId: '9007199254741011' }); throw new AccessFailure(503, 'commit_outcome_unknown');
+  }, secondKey));
+  const lookup = async (key: string) => receipts.has(key) ? { state: 'committed' as const, result: receipts.get(key)! } : null;
+  const committedA = await readCheckoutGroupAttempt(actorId, '7', a, new OperationJournal(() => ({ get length() { return storage.size; }, key: index => [...storage.keys()][index] ?? null,
+    getItem: key => storage.get(key) ?? null, setItem: (key, value) => { storage.set(key, value); }, removeItem: key => { storage.delete(key); } })), lookup);
+  const committedB = await readCheckoutGroupAttempt(actorId, '7', b, journal, lookup);
+  assert.equal(committedA.result?.orderId, result.orderId); assert.equal(committedB.result?.orderId, '9007199254741011'); assert.equal(writes, 2);
+  await assert.rejects(() => submitTrackedRequest(ledger, journal, actorId, a, orderSubmitOperation, input, async () => { writes++; return result; }, firstKey), { code: 'original_request_complete' });
+  await assert.rejects(() => submitTrackedRequest(ledger, journal, actorId, b, orderSubmitOperation, input, async () => { writes++; return result; }, secondKey), { code: 'resolve_previous_attempt' });
+  const unknown = await readCheckoutGroupAttempt(actorId, '7', b, journal, async () => null);
+  assert.equal(unknown.uncertain, true); assert.equal(unknown.result, null); assert.equal(journal.list(actorId)[0].key, secondKey); assert.equal(writes, 2);
+  await assert.rejects(() => readCheckoutGroupAttempt(actorId, '7', b, journal, async () => { throw new Error('Lookup failed'); })); assert.equal(writes, 2);
 });

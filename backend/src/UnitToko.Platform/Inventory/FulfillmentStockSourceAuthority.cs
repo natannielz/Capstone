@@ -30,7 +30,9 @@ public sealed partial class StockSourceSetupService
             if (context.Pool["location"] != StockSourceSetupBson.Location(expected.Location) ||
                 context.Pool["revision"] != expected.PoolRevision || context.Pool["fence"] != expected.PoolFence)
                 throw FulfillmentStockSourceRecords.Changed();
-            var facts = await new FulfillmentStockSourceRecords(database).ReadAsync(tx, new FulfillmentStockSourceEvents(database, ids, clock), expected, ct);
+            var history = new ShipmentDispatchValueRecords.HistoricalRead(database, clock, tx);
+            var facts = await new FulfillmentStockSourceRecords(database).ReadAsync(tx,
+                new FulfillmentStockSourceEvents(database, ids, clock, history: history), expected, ct);
             if (StockSourceSetupBson.Time(facts.Head["updatedAt"]) > capturedAt || facts.Head["fence"].AsInt64 >= long.MaxValue - 2)
                 throw FulfillmentStockSourceRecords.Unavailable();
             if ((await Rows(FulfillmentStockSourceRecords.Heads).UpdateOneAsync(tx, facts.Head,
@@ -40,6 +42,7 @@ public sealed partial class StockSourceSetupService
             var currentPool = await Rows("inventoryPools").Find(tx, F.Eq("_id", expected.PoolId)).SingleOrDefaultAsync(ct);
             if (currentPool is null || !currentPool.Equals(context.Pool)) throw FulfillmentStockSourceRecords.Changed();
             await CompleteAuthorityAsync(actor, snapshot, Permissions.StockSourceRead, context.Resources, tx, ct);
+            history.Require(database, tx);
             repository.RequireSession(tx);
             if (tx.WrappedCoreSession.CurrentTransaction.TransactionNumber != number || clock.UtcNow < capturedAt)
                 throw FulfillmentStockSourceRecords.Unavailable();

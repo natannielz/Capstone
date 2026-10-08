@@ -72,3 +72,15 @@ test("separate tabs cannot overwrite unrelated operation references or leak anot
   storage.values.set("unit-toko:pending:v1:1:access.grant.propose:bad", JSON.stringify({ actorId: "2", operation: "access.grant.propose", key: "bad", createdAt: new Date().toISOString() }));
   assert.throws(() => first.list("1"), /recovery_storage_unavailable/);
 });
+
+test("an explicit original key is grammar checked and bound to its actor and operation before sending", async () => {
+  const storage = new MemoryStorage(), journal = new OperationJournal(() => storage); let sends = 0;
+  for (const original of ['ordering.order.submit:2:original', 'ordering.draft.save:1:original', 'ordering.order.submit:1:', 'ordering.order.submit:1:bad\n', 'ordering.order.submit:1:' + 'a'.repeat(128)]) {
+    await assert.rejects(() => submitTrackedRequest(new MutationLedger(), journal, '1', 'group', 'ordering.order.submit', {}, async () => { sends++; }, original), { code: 'invalid_original_request_key' });
+  }
+  assert.equal(sends, 0); assert.equal(storage.length, 0);
+  const original = 'ordering.order.submit:1:original', ledger = new MutationLedger();
+  await submitTrackedRequest(ledger, journal, '1', 'group', 'ordering.order.submit', {}, async key => { sends++; assert.equal(key, original); return 'confirmed'; }, original);
+  await assert.rejects(() => submitTrackedRequest(ledger, journal, '1', 'group', 'ordering.order.submit', {}, async () => { sends++; }, original), { code: 'original_request_complete' });
+  assert.equal(sends, 1);
+});

@@ -157,6 +157,9 @@ public sealed class InventoryRepositoryTests(MongoFixture fixture)
     {
         await using var data = await Data();
         var indexes = await (await data.Database.GetCollection<BsonDocument>("stockBalances").Indexes.ListAsync()).ToListAsync();
+        var verifiedIndexes = await InventoryRepository.RequireStorageAsync(data.Database, "stockBalances",
+            InventorySchemas.BalanceValidator(), InventorySchemas.BalanceKey(), default);
+        Assert.Equal(new BsonArray(indexes.OrderBy(row => row["name"])), new BsonArray(verifiedIndexes.OrderBy(row => row["name"])));
         var index = Assert.Single(indexes, value => value["key"] == InventorySchemas.BalanceKey() && value.GetValue("unique", false).AsBoolean);
         await data.Database.GetCollection<BsonDocument>("stockBalances").Indexes.DropOneAsync(index["name"].AsString);
         var repository = new InventoryRepository(data.Database);

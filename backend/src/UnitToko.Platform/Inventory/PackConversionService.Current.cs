@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using MongoDB.Bson;
 using MongoDB.Driver;
 using UnitToko.Modules.Contracts;
@@ -5,6 +6,7 @@ using UnitToko.Modules.Inventory;
 using UnitToko.Platform.Mongo.Migrations;
 using UnitToko.Platform.Ordering;
 using UnitToko.Platform.Procurement;
+using UnitToko.Platform.Fulfillment;
 using B = UnitToko.Platform.Inventory.PackConversionBson;
 
 namespace UnitToko.Platform.Inventory;
@@ -12,10 +14,19 @@ namespace UnitToko.Platform.Inventory;
 public sealed partial class PackConversionService
 {
     /// <summary>Current physical ownership only. The caller must separately prove
-    /// actor, commercial, expiry and source authority. Dispatch has no value owner
-    /// yet and cannot be admitted by this read or by a structurally valid lot.</summary>
-    internal async Task<InventoryBalanceDocument> ReadCurrentDestinationAsync(IClientSessionHandle tx, long balanceId, CancellationToken ct) {
+    /// actor, commercial, expiry and source authority. Historical dispatch requires
+    /// its genuine finite-value owner; structural validity supplies no admission.</summary>
+    internal Task<InventoryBalanceDocument> ReadCurrentDestinationAsync(IClientSessionHandle tx, long balanceId, CancellationToken ct,
+        ShipmentDispatchValueRecords.HistoricalRead? valueHistory = null, FiniteHistoryRead? retained = null) => retained is null
+            ? ReadCurrentDestinationCoreAsync(tx, balanceId, ct, valueHistory)
+            : retained.ReadCurrentDestinationAsync(this, tx, balanceId, ct, valueHistory);
+    private async Task<InventoryBalanceDocument> ReadCurrentDestinationCoreAsync(IClientSessionHandle tx, long balanceId, CancellationToken ct,
+        ShipmentDispatchValueRecords.HistoricalRead? valueHistory = null, ConversionHistoryRead? retained = null) =>
+        (await ReadCurrentDestinationValueCoreAsync(tx, balanceId, ct, valueHistory, retained)).Physical;
+    private async Task<(InventoryBalanceDocument Physical, LotValueBalance Value)> ReadCurrentDestinationValueCoreAsync(IClientSessionHandle tx,
+        long balanceId, CancellationToken ct, ShipmentDispatchValueRecords.HistoricalRead? valueHistory = null, ConversionHistoryRead? retained = null) {
         new InventoryRepository(database).RequireSession(tx);
+        valueHistory ??= new(database, clock, tx); valueHistory.Require(database, tx);
         if (balanceId <= 0) throw CurrentDestinationUnavailable();
         var number = tx.WrappedCoreSession.CurrentTransaction.TransactionNumber; var capturedAt = Now;
         await StorageAsync(ct);
@@ -26,7 +37,7 @@ public sealed partial class PackConversionService
         var facts = InventoryGraph.ReadLot(lot);
         if (lot["origin"] != "packageConversion" || facts.ParentId is null || facts.OrganizationId != current.Balance.Key.Location.OrganizationId.Value ||
             facts.SkuId != current.Balance.Key.SkuId.Value || facts.DefinitionId != current.Balance.Key.DefinitionId.Value) throw CurrentDestinationUnavailable();
-        var reads = new ConversionHistoryRead(this, tx, capturedAt);
+        var reads = retained ?? new ConversionHistoryRead(this, tx, capturedAt, valueHistory); reads.Require(this, tx);
         try {
             var birth = await ConversionAsync(tx, lot["sourceId"].AsInt64, ct, read: reads);
             if (birth["destinationLot"] != lot) throw CurrentDestinationUnavailable();
@@ -58,7 +69,7 @@ public sealed partial class PackConversionService
             foreach (var movement in ordered.Skip(1)) {
                 if (!events.Add(movement["sourceEvent"].AsString) || movement["recordedAt"].CompareTo(time) < 0 || movement["poolRevision"].AsInt64 < poolRevision)
                     throw CurrentDestinationUnavailable();
-                await RequireDestinationOrderMovementAsync(tx, movement, ct);
+                await RequireDestinationOrderMovementAsync(tx, movement, ct, valueHistory);
                 var leg = DestinationLeg(movement, original.Id);
                 if (leg["before"] != InventoryBson.Balance(state)) throw CurrentDestinationUnavailable();
                 state = DestinationTransition(state, leg);
@@ -83,17 +94,19 @@ public sealed partial class PackConversionService
                 if (linkedRows.Count > OrderStockSourceRecords.MaximumRows) throw CurrentDestinationUnavailable();
                 orderLinked |= linkedRows.Count > 0;
             }
-            if (orderLinked) await RequireDestinationOrderMembershipAsync(tx, pool, ct);
+            if (orderLinked) await RequireDestinationOrderMembershipAsync(tx, pool, ct, valueHistory);
             // Reservations and releases retain the available lot's capitalized
             // packages/value. Only actual release/conversion owners authenticate
-            // this bounded head; dispatch still has no accepted consumption proof.
+            // this bounded head; dispatch requires its exact accepted owner effect.
             await CaptureDestinationValueAsync(tx, current, capture, ct);
-            _ = await values.ReadAvailableAsync(tx, current, AuthenticateSourceAsync, ct);
+            var value = await values.ReadAvailableAsync(tx, current,
+                (owner, session, source, hash, token) => retained is null ? AuthenticateSourceAsync(owner, session, source, hash, token, valueHistory)
+                    : AuthenticateSourceAsync(owner, session, source, hash, ImmutableHashSet<long>.Empty, token, reads), ct);
             capture.Seal(); await capture.RequireAsync(database, tx, ct);
-            if (orderLinked) await RequireDestinationOrderMembershipAsync(tx, await PoolAsync(tx, current.PhysicalPoolId, ct), ct);
+            if (orderLinked) await RequireDestinationOrderMembershipAsync(tx, await PoolAsync(tx, current.PhysicalPoolId, ct), ct, valueHistory);
             var freshBirth = await ConversionAsync(tx, birth["_id"].AsInt64, ct, read: reads);
             if (freshBirth != birth || Now < capturedAt || tx.WrappedCoreSession.CurrentTransaction.TransactionNumber != number) throw CurrentDestinationUnavailable();
-            ct.ThrowIfCancellationRequested(); return current;
+            ct.ThrowIfCancellationRequested(); return (current, value);
         } finally { reads.End(this); }
     }
     private async Task CaptureDestinationValueAsync(IClientSessionHandle tx, InventoryBalanceDocument current, PurchaseOrderSourceReadCapture capture, CancellationToken ct) {
@@ -106,29 +119,33 @@ public sealed partial class PackConversionService
         var history = await CapturedManyAsync(tx, LotValueStore.Transitions, linked, LotValueStore.MaximumTransitions + 1, capture, ct);
         if (history.Count is < 1 or > LotValueStore.MaximumTransitions) throw CurrentDestinationUnavailable();
     }
-    private async Task RequireDestinationOrderMembershipAsync(IClientSessionHandle tx, BsonDocument pool, CancellationToken ct) {
+    private async Task RequireDestinationOrderMembershipAsync(IClientSessionHandle tx, BsonDocument pool, CancellationToken ct,
+        ShipmentDispatchValueRecords.HistoricalRead valueHistory) {
         await OrderStockSourceStorage.RequireAsync(database, ct);
-        var owner = new OrderSubmissionService(database, unit, ids, clock);
+        var owner = new OrderSubmissionService(database, unit, ids, clock, null, valueHistory);
         _ = await new OrderStockSourceRecords(database).ReadAsync(tx, owner,
             new(pool["_id"].AsInt64, InventoryGraph.Location(pool["location"].AsBsonDocument), pool["revision"].AsInt64, pool["fence"].AsInt64), ct);
     }
-    private async Task RequireDestinationOrderMovementAsync(IClientSessionHandle tx, BsonDocument movement, CancellationToken ct) {
+    private async Task RequireDestinationOrderMovementAsync(IClientSessionHandle tx, BsonDocument movement, CancellationToken ct,
+        ShipmentDispatchValueRecords.HistoricalRead valueHistory) {
         var source = movement["source"];
         var kind = (source["namespace"].AsString, source["eventKind"].AsString) switch {
-            ("ordering.order", "reserve") => "submission", ("ordering.decision", "release") => "decision", _ => throw CurrentDestinationUnavailable() };
-        var actual = await OrderSubmissionService.ReadStockSourceEventAsync(database, tx, kind, source["documentId"].AsInt64, true, ct);
+            ("ordering.order", "reserve") => "submission", ("ordering.decision", "release") => "decision",
+            ("fulfillment.shipment", "dispatch") => "shipment", _ => throw CurrentDestinationUnavailable() };
+        var actual = await OrderSubmissionService.ReadStockSourceEventAsync(database, tx, kind, source["documentId"].AsInt64, true, ct, valueHistory, clock);
         if (movement["actorId"] != actual.Audit["actorId"] || movement["actorGrantVersion"] != actual.Audit["actorGrantVersion"] ||
             movement["recordedAt"].CompareTo(actual.Time) < 0 || movement["reason"] != actual.Record["reason"] || movement["correlationId"] != actual.Record["correlationId"] ||
             movement["sourceRevision"] != 1L || source["occurrence"] != movement["physicalPoolId"]) throw CurrentDestinationUnavailable();
         var allocations = kind == "submission" ? actual.Record["allocations"].AsBsonArray.Select(value => value.AsBsonDocument) :
-            actual.Record["releases"].AsBsonArray.Select(value => value["allocation"].AsBsonDocument);
+            actual.Record[kind == "decision" ? "releases" : "stockEffects"].AsBsonArray.Select(value => value["allocation"].AsBsonDocument);
         var facts = allocations.Where(value => value["poolId"] == movement["physicalPoolId"]).Select(OrderSubmissionBson.Allocation).ToArray();
         if (facts.Length is < 1 or > 100 || facts.Length != movement["legs"].AsBsonArray.Count || facts.Select(fact => fact.Change.Id).Distinct().Count() != facts.Length)
             throw CurrentDestinationUnavailable();
         foreach (var fact in facts) {
             var leg = DestinationLeg(movement, fact.Change.Id); var before = InventoryBson.ReadBalance(leg["before"].AsBsonDocument);
             if (movement["poolRevision"] != fact.Pool.Revision || before.Id != fact.Change.Id || before.PhysicalPoolId != fact.Pool.Id || before.Balance.Key != fact.Change.Key ||
-                before.Balance.Revision != fact.Change.ExpectedRevision || leg["packages"] != fact.Change.Packages || leg["action"] != (kind == "submission" ? "Reserve" : "Release") ||
+                before.Balance.Revision != fact.Change.ExpectedRevision || leg["packages"] != fact.Change.Packages ||
+                leg["action"] != (kind == "submission" ? "Reserve" : kind == "decision" ? "Release" : "Dispatch") ||
                 leg["after"] != InventoryBson.Balance(DestinationTransition(before, leg))) throw CurrentDestinationUnavailable();
         }
     }
@@ -138,6 +155,7 @@ public sealed partial class PackConversionService
         Balance = leg["action"].AsString switch {
             "Reserve" => StockBalancePolicy.Reserve(before.Balance, before.Balance.Revision, leg["packages"].AsInt64),
             "Release" => StockBalancePolicy.Release(before.Balance, before.Balance.Revision, leg["packages"].AsInt64),
+            "Dispatch" => StockBalancePolicy.Dispatch(before.Balance, before.Balance.Revision, leg["packages"].AsInt64),
             _ => throw CurrentDestinationUnavailable() } };
     internal static DomainValidationException CurrentDestinationUnavailable() => new("pack_conversion_current_destination_unavailable",
         "The exact converted lot, complete current physical history and conserved value require genuine owning records");

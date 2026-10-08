@@ -1,5 +1,6 @@
 using MongoDB.Bson;
 using MongoDB.Driver;
+using UnitToko.Modules.Contracts;
 using UnitToko.Modules.Ordering;
 using UnitToko.Platform.Authorization;
 using UnitToko.Platform.Catalog;
@@ -19,15 +20,34 @@ internal sealed record OrderStockSourceEvent(string Kind, long Id, BsonDocument 
 
 public sealed partial class OrderSubmissionService
 {
+    internal OrderSubmissionService WithDispatchHistory(IClientSessionHandle tx, ShipmentDispatchValueRecords.HistoricalRead history) {
+        history.Require(database, tx);
+        stockSourceLiveRead?.Require(database, clock, tx);
+        if (stockSourceHistory is not null && !ReferenceEquals(stockSourceHistory, history)) throw OrderStockSourceRecords.Unavailable();
+        return new(database, unit, ids, clock, admissionReader, history, stockSourceLiveRead);
+    }
+    internal OrderSubmissionService WithLiveDispatch(IClientSessionHandle tx, ShipmentDispatchService.LiveValueRead liveRead) {
+        liveRead.Require(database, clock, tx);
+        return new(database, unit, ids, clock, admissionReader, stockSourceHistory, liveRead);
+    }
     // Same owning graph; no fabricated requester. The caller separately owns disclosure authority.
-    internal Task<BsonDocument> ReadStockSourceGraphAsync(IClientSessionHandle tx, long orderId, CancellationToken ct) =>
-        GraphAsync(tx, null, orderId, ct, requireOwner: false);
+    internal async Task<BsonDocument> ReadStockSourceGraphAsync(IClientSessionHandle tx, long orderId, CancellationToken ct) {
+        stockSourceHistory?.Require(database, tx);
+        stockSourceLiveRead?.Require(database, clock, tx);
+        var row = await GraphAsync(tx, null, orderId, ct, requireOwner: false);
+        stockSourceHistory?.Require(database, tx); stockSourceLiveRead?.Require(database, clock, tx); return row;
+    }
     internal Task RecordStockSourceTransitionAsync(IClientSessionHandle tx, string sourceKind, long sourceId, CancellationToken ct) =>
-        new OrderStockSourceProducer(database, ids, clock).RecordAsync(tx, sourceKind, sourceId, ct);
+        new OrderStockSourceProducer(database, ids, clock, stockSourceHistory, stockSourceLiveRead).RecordAsync(tx, sourceKind, sourceId, ct);
 
     internal static async Task<OrderStockSourceEvent> ReadStockSourceEventAsync(IMongoDatabase database, IClientSessionHandle tx,
-        string kind, long sourceId, bool requireReceipt, CancellationToken ct)
+        string kind, long sourceId, bool requireReceipt, CancellationToken ct,
+        ShipmentDispatchValueRecords.HistoricalRead? history = null, IClock? clock = null, ShipmentDispatchService.LiveValueRead? liveRead = null,
+        Action<ShipmentDispatchFiniteSource.AuthenticatedRelease>? releaseAuthenticated = null,
+        PackConversionService.FiniteHistoryRead.HeadRead? headRead = null)
     {
+        history?.Require(database, tx);
+        liveRead?.Require(database, clock ?? throw OrderStockSourceRecords.Unavailable(), tx);
         var rows = database.GetCollection<BsonDocument>(kind switch { "submission" => B.Orders, "decision" => Decisions,
             "shipment" => SB.Collection, _ => throw OrderStockSourceRecords.Unavailable() });
         var source = await rows.Find(tx, new BsonDocument("_id", sourceId)).SingleOrDefaultAsync(ct) ?? throw OrderStockSourceRecords.Unavailable();
@@ -56,7 +76,7 @@ public sealed partial class OrderSubmissionService
             if (source["bodyHash"] != AuthorizationStore.CommandHash(SB.Body(source["preparationId"].AsInt64,
                 source["preparationRevision"].AsInt64, source["courierId"].AsInt64, source["review"].AsString,
                 SB.Lots(source["pickedLots"].AsBsonArray)), source["reason"].AsString)) throw OrderStockSourceRecords.Unavailable();
-            if (requireReceipt) _ = await new ShipmentDispatchRecords(database).ReadAsync(tx, sourceId, ct);
+            if (requireReceipt) _ = await new ShipmentDispatchRecords(database, clock, history, liveRead, releaseAuthenticated, headRead).ReadAsync(tx, sourceId, ct);
         }
         var audit = await database.GetCollection<BsonDocument>("auditEvents").Find(tx, F.Eq("_id", source["auditId"])).SingleOrDefaultAsync(ct);
         if (audit is null || !CatalogSchemas.SemanticEquals(audit, expectedAudit)) throw OrderStockSourceRecords.Unavailable();
@@ -106,6 +126,8 @@ public sealed partial class OrderSubmissionService
                 { "allocation", allocation.DeepClone() }, { "before", (BsonValue?)before ?? BsonNull.Value }, { "after", after } });
         }
         var canonical = source.DeepClone().AsBsonDocument; if (kind == "submission") canonical.Remove("fence");
+        history?.Require(database, tx);
+        liveRead?.Require(database, clock ?? throw OrderStockSourceRecords.Unavailable(), tx);
         return new(kind, sourceId, canonical, pools, expectedAudit, source[timeField], effects);
     }
 }

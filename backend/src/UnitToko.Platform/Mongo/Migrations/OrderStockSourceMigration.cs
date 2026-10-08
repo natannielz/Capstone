@@ -34,8 +34,10 @@ internal sealed class OrderStockSourceMigration(IMongoDatabase database, IClock 
             await InventoryRepository.RequireStorageAsync(database, name, validator, key, ct);
             if (await Rows(name).Find(new BsonDocument("$nor", new BsonArray { validator })).Limit(1).AnyAsync(ct)) throw Invalid();
         }
-        await ShipmentDispatchStorage.RequireAsync(database, ct);
-        if (await Rows("shipments").Find(new BsonDocument("$nor", new BsonArray { ShipmentDispatchSchemas.Validator() })).Limit(1).AnyAsync(ct)) throw Invalid();
+        // Migration90 precedes finite-dispatch105 and must verify the retained
+        // shipment contract installed by24, rather than require a future guard.
+        await ShipmentDispatchStorage.RequireAsync(database, ct, ShipmentDispatchSchemas.LegacyValidator());
+        if (await Rows("shipments").Find(new BsonDocument("$nor", new BsonArray { ShipmentDispatchSchemas.LegacyValidator() })).Limit(1).AnyAsync(ct)) throw Invalid();
         // A missing order cannot disappear from the root traversal and look like no obligation.
         // Reject the orphan before creating either producer collection; do not repair retained data.
         foreach (var name in new[] { "orderSuborders", "reservations", "orderDecisions", "shipments" }) {
@@ -107,6 +109,6 @@ internal sealed class OrderStockSourceMigration(IMongoDatabase database, IClock 
         }
         var currentCounters = await Rows("idCounters").Find(new BsonDocument()).Sort(new BsonDocument("_id", 1)).ToListAsync(ct);
         if (counters.Count != currentCounters.Count || counters.Where((row, index) => row != currentCounters[index]).Any()) throw Invalid();
-        await OrderStockSourceStorage.RequireAsync(database, ct);
+        await OrderStockSourceStorage.RequireAsync(database, ct, ShipmentDispatchSchemas.LegacyValidator());
     }
 }

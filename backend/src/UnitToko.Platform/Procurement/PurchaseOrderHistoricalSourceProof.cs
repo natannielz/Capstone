@@ -1,5 +1,7 @@
 using MongoDB.Bson;
 using MongoDB.Driver;
+using UnitToko.Modules.Organizations;
+using UnitToko.Platform.Authorization;
 using UnitToko.Platform.Inventory;
 using Q = UnitToko.Platform.Procurement.ProcurementQualityAcceptanceBson;
 
@@ -79,6 +81,7 @@ internal sealed class PurchaseOrderSourceReadCapture
         if (!selected.Any(value => value.Equals(filter))) selected.Add(filter.DeepClone().AsBsonDocument);
         if (!rows.TryGetValue(collection, out var frozen)) rows.Add(collection, frozen = []);
         foreach (var row in actual) {
+            if (collection == "authorizationScopes") RequireAuthorizationNode(row);
             var id = row["_id"];
             if (frozen.TryGetValue(id, out var previous)) { if (!previous.Equals(row)) throw Q.Broken(); }
             else frozen.Add(id.DeepClone(), row.DeepClone().AsBsonDocument);
@@ -95,12 +98,39 @@ internal sealed class PurchaseOrderSourceReadCapture
         BsonDocument filter, CancellationToken ct) {
         Context(database, tx);
         var row = await database.GetCollection<BsonDocument>(collection).Find(tx, filter).SingleOrDefaultAsync(ct);
-        // The real read above retains its full schema predicate. On replay an
-        // ID lookup plus byte equality is stricter than filtering a corrupt row
-        // out, and avoids copying the same static schema for every ancestor ID.
-        var replayFilter = filter.ElementCount == 2 && filter.Contains("_id") && filter.Contains("$and")
-            ? new BsonDocument("_id", filter["_id"]) : filter;
+        // The real read above retains its full schema predicate. A successful
+        // exact-ID read can replay the actual row plus byte equality without
+        // replanning its static schema, including conjunctive owner validators.
+        // Expressions, dates, business predicates and negative queries stay intact.
+        var replayFilter = filter;
+        if (row is not null && filter.TryGetValue("_id", out var id) &&
+            !id.IsBsonDocument && !id.IsBsonArray && !id.IsBsonNull && row["_id"] == id) {
+            if (filter.TryGetValue("$jsonSchema", out var schema) && schema.IsBsonDocument) {
+                // The driver flattens composite validators into root fields.
+                // Remove only schema; retain every other predicate byte-for-byte.
+                replayFilter = filter.DeepClone().AsBsonDocument;
+                replayFilter.Remove("$jsonSchema");
+            } else if (filter.ElementCount == 2) {
+                var predicate = new BsonDocument(filter.Elements.Single(element => element.Name != "_id"));
+                var remaining = WithoutValidatedSchema(predicate);
+                replayFilter = new BsonDocument("_id", id);
+                if (remaining is not null) replayFilter.AddRange(remaining);
+            }
+        }
         Record(collection, replayFilter, row is null ? [] : [row]); return row;
+    }
+    private static BsonDocument? WithoutValidatedSchema(BsonDocument predicate) {
+        if (predicate.ElementCount == 1 && predicate.TryGetValue("$jsonSchema", out var schema) && schema.IsBsonDocument) return null;
+        if (predicate.ElementCount != 1 || !predicate.TryGetValue("$and", out var value) || !value.IsBsonArray ||
+            value.AsBsonArray.Count == 0 || value.AsBsonArray.Any(item => !item.IsBsonDocument)) return predicate;
+        var remaining = new BsonArray();
+        foreach (var item in value.AsBsonArray) {
+            var retained = WithoutValidatedSchema(item.AsBsonDocument);
+            if (retained is not null) remaining.Add(retained);
+        }
+        // An all-schema conjunction is already proved by the actual frozen row.
+        // Do not emit an empty $and, or descend into disjunctions/expressions.
+        return remaining.Count == 0 ? null : new BsonDocument("$and", remaining);
     }
     internal async Task<bool> AnyAsync(IMongoDatabase database, IClientSessionHandle tx, string collection,
         BsonDocument filter, CancellationToken ct) {
@@ -126,13 +156,65 @@ internal sealed class PurchaseOrderSourceReadCapture
             pair.Value.Count == 1 ? pair.Value[0].DeepClone().AsBsonDocument : new BsonDocument("$or", new BsonArray(pair.Value.Select(value => value.DeepClone()))),
             new BsonArray(rows[pair.Key].Values.OrderBy(row => row["_id"]).Select(row => row.DeepClone())))).ToArray();
     }
+    private static ScopeNode RequireAuthorizationNode(BsonDocument row) {
+        string[] required = ["_id", "schemaVersion", "kind", "status", "version", "fence"];
+        if (required.Any(name => !row.Contains(name)) || row.Names.Any(name => !required.Contains(name) && name != "parentId") ||
+            !row["schemaVersion"].IsInt32 || row["schemaVersion"].AsInt32 != AuthorizationBson.SchemaVersion ||
+            !row["fence"].IsInt64 || row["fence"].AsInt64 is < 0 or long.MaxValue) throw Q.Broken();
+        ScopeNode node;
+        try { node = AuthorizationBson.Node(row); }
+        catch (AuthorizationDeniedException) { throw Q.Broken(); }
+        if (row["kind"] != AuthorizationBson.Name(node.Kind) || row["status"] != AuthorizationBson.Name(node.Status) ||
+            (OrganizationChangePolicy.ExpectedParent(node.Kind) is null ? node.ParentId is not null : node.ParentId is not > 0)) throw Q.Broken();
+        return node;
+    }
+    private static bool MatchesScope(Scope scope, IReadOnlyList<BsonDocument> actual) {
+        if (scope.Collection != "authorizationScopes") return new BsonArray(actual).Equals(scope.Rows);
+        if (actual.Count != scope.Rows.Count) return false;
+        for (var index = 0; index < actual.Count; index++) {
+            var expected = scope.Rows[index].AsBsonDocument;
+            var current = actual[index];
+            if (RequireAuthorizationNode(current) != RequireAuthorizationNode(expected) || current["fence"].AsInt64 < expected["fence"].AsInt64) return false;
+            // This exact typed node has already been authenticated by the owner.
+            // A later owning fence can advance without changing its identity or
+            // any captured business field, field membership, or query membership.
+            var comparison = current.DeepClone().AsBsonDocument;
+            comparison["fence"] = expected["fence"];
+            if (!comparison.Equals(expected)) return false;
+        }
+        return true;
+    }
     internal async Task RequireAsync(IMongoDatabase database, IClientSessionHandle tx, CancellationToken ct) {
         Context(database, tx);
         if (sealedScopes is null) throw Q.Broken();
         foreach (var scope in sealedScopes) {
             var actual = await database.GetCollection<BsonDocument>(scope.Collection).Find(tx, scope.Filter)
                 .Sort(new BsonDocument("_id", 1)).Limit(MaximumRowsPerScope + 1).ToListAsync(ct);
-            if (!new BsonArray(actual).Equals(scope.Rows)) throw Q.Broken();
+            if (!MatchesScope(scope, actual)) {
+                var failure = Q.Broken();
+                var expected = scope.Rows.Select(value => value.AsBsonDocument).ToArray();
+                var changed = expected.Where(row => !actual.Any(value => value["_id"] == row["_id"] && value == row))
+                    .Concat(actual.Where(row => !expected.Any(value => value["_id"] == row["_id"] && value == row))).ToArray();
+                var fields = changed.SelectMany(row => row.Names).Distinct(StringComparer.Ordinal).Where(name => {
+                    foreach (var row in changed) {
+                        var left = expected.FirstOrDefault(value => value["_id"] == row["_id"]);
+                        var right = actual.FirstOrDefault(value => value["_id"] == row["_id"]);
+                        if (left is null || right is null || left.Contains(name) != right.Contains(name) ||
+                            left.GetValue(name, BsonNull.Value) != right.GetValue(name, BsonNull.Value)) return true;
+                    }
+                    return false;
+                }).Order(StringComparer.Ordinal).Take(32);
+                static string OpaqueId(BsonValue value) => value.BsonType switch {
+                    BsonType.Int32 => value.AsInt32.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    BsonType.Int64 => value.AsInt64.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    BsonType.ObjectId => value.AsObjectId.ToString(), _ => "other" };
+                failure.Data["purchaseOrderCapture.collection"] = scope.Collection;
+                failure.Data["purchaseOrderCapture.expectedCount"] = expected.Length;
+                failure.Data["purchaseOrderCapture.actualCount"] = actual.Count;
+                failure.Data["purchaseOrderCapture.changedIds"] = string.Join(",", changed.Select(row => OpaqueId(row["_id"])).Distinct(StringComparer.Ordinal).Take(8));
+                failure.Data["purchaseOrderCapture.changedFields"] = string.Join(",", fields);
+                throw failure;
+            }
         }
         foreach (var count in counts)
             if (await database.GetCollection<BsonDocument>(count.Collection).CountDocumentsAsync(tx, count.Filter, cancellationToken: ct) != count.Value) throw Q.Broken();

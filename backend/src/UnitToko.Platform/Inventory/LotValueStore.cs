@@ -149,8 +149,13 @@ internal sealed class LotValueStore(IMongoDatabase database, IdAllocator ids, IC
         } catch { await InventoryRepository.AbortAsync(tx); throw; }
     }
     private async Task<BsonDocument?> HeadAsync(IClientSessionHandle tx, string name, long id,
-        Func<IMongoDatabase, IClientSessionHandle, InventorySource, string, CancellationToken, Task> authenticate, CancellationToken ct)
+        Func<IMongoDatabase, IClientSessionHandle, InventorySource, string, CancellationToken, Task> authenticate, CancellationToken ct,
+        LotValueConsumptionProof? dispatchProof = null)
     {
+        if (dispatchProof is not null) {
+            dispatchProof.Require(database, tx);
+            if (name != AvailableHeads || id != dispatchProof.Before.Id || !dispatchProof.HasDispatchOwner) throw Unavailable();
+        }
         var head = await Rows(name).Find(tx, new BsonDocument("_id", id)).SingleOrDefaultAsync(ct);
         var filter = name == HeldHeads ? new BsonDocument("held.allocationId", id) : new BsonDocument("$or", new BsonArray {
             new BsonDocument("availableId", id), new BsonDocument("destinationId", id) });
@@ -176,11 +181,13 @@ internal sealed class LotValueStore(IMongoDatabase database, IdAllocator ids, IC
             if (row["previous" + axis] != previous || Before(row) != state || isHeld && row["held"] != head["held"] ||
                 !isHeld && row[axis == "Available" ? "key" : "destinationKey"] != head["key"]) throw Unavailable();
             var source = ReadSource(row);
-            await authenticate(database, tx, source, row["sourceHash"].AsString, ct);
+            if (dispatchProof is null) await authenticate(database, tx, source, row["sourceHash"].AsString, ct);
             state = After(row); previous = new BsonDocument { { "transitionId", row["_id"] }, { "transitionHash", row["transitionHash"] } }; at = row["recordedAt"];
         }
         if (HeadState(head) != state || Link(head) != previous || head["updatedAt"] != at || head["fence"].AsInt64 < head["revision"].AsInt64) throw Unavailable();
-        _ = ReadState(state, key); return head;
+        _ = ReadState(state, key);
+        if (dispatchProof is not null) await dispatchProof.AuthenticateHeadAsync(database, tx, head, ordered, ct);
+        return head;
     }
     private static InventorySource ReadSource(BsonDocument row)
     {
@@ -317,7 +324,7 @@ internal sealed class LotValueStore(IMongoDatabase database, IdAllocator ids, IC
                 ReleasedPackages(before) - proof.Packages != ReleasedPackages(after)) throw Unavailable();
             await PhysicalAsync(tx, after, ct);
             Func<IMongoDatabase, IClientSessionHandle, InventorySource, string, CancellationToken, Task> authenticate = proof.AuthenticateSourceAsync;
-            var available = await HeadAsync(tx, AvailableHeads, before.Id, authenticate, ct) ?? throw Unavailable();
+            var available = await HeadAsync(tx, AvailableHeads, before.Id, authenticate, ct, proof.HasDispatchOwner ? proof : null) ?? throw Unavailable();
             if (available["revision"] != proof.ExpectedLotRevision) throw Changed(); RequirePhysical(available, before, ReleasedPackages(before));
             var availableBefore = HeadState(available); var availableAfter = Take(availableBefore, before.Balance.Key, proof.Packages, out var moved);
             BsonDocument? destination = null, destinationBefore = null, destinationAfter = null; long? destinationPackages = null;

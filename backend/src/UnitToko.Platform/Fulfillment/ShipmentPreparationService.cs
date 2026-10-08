@@ -47,13 +47,16 @@ public sealed partial class ShipmentPreparationService
         foreach (var name in ShipmentPreparationSchemas.Collections)
             await InventoryRepository.RequireStorageAsync(database, name, ShipmentPreparationSchemas.Validator(name), ShipmentPreparationSchemas.Key(name), ct);
     }
-    internal async Task<PreparedShipment> ReadForDispatchAsync(ActorContext actor, AuthorizationSnapshot snapshot, IClientSessionHandle tx, long suborderId, CancellationToken ct) {
-        var source = await orders.ReadDispatchReservationsAsync(actor, snapshot, tx, suborderId, ct);
+    internal async Task<PreparedShipment> ReadForDispatchAsync(ActorContext actor, AuthorizationSnapshot snapshot, IClientSessionHandle tx, long suborderId, CancellationToken ct,
+        ShipmentDispatchValueRecords.HistoricalRead? history = null) {
+        var sourceOrders = history is null ? orders : orders.WithDispatchHistory(tx, history);
+        var source = await sourceOrders.ReadDispatchReservationsAsync(actor, snapshot, tx, suborderId, ct);
         var head = await HeadAsync(tx, suborderId, ct) ?? throw B.Invalid();
         var version = await VersionAsync(tx, head["versionId"].AsInt64, ct);
         if (!source.Order.View.CanPrepare || source.Order.View.Review != version["source"]["review"].AsString ||
             !CatalogEqual(head["scope"], B.Scope(source.Order.Resource))) throw Changed();
         await TouchAsync(tx, head, ct);
+        history?.Require(database, tx);
         return new(head, version, source);
     }
     internal async Task FenceDispatchedPreparationAsync(PreparedShipment prepared, IClientSessionHandle tx, CancellationToken ct) {

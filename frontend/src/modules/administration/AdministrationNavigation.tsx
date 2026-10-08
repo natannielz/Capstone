@@ -30,6 +30,7 @@ export function AdministrationNavigation({ current, actions, locked = false }: {
     { id: "source-revisions", href: "/inventory/sources/revisions", label: "Perubahan sumber", available: canUseStockSources(actions) },
     { id: "sources", href: "/inventory/sources", label: "Sumber stok", available: canUseStockSources(actions) },
     { id: "counts", href: "/inventory/counts", label: "Hitung barang", available: canUseStockCounts(actions) },
+    { id: "replenishment", href: "/inventory/replenishment", label: "Kebutuhan pembelian", available: actions.includes("stock.read") },
     { id: "stock-releases", href: "/inventory/stock-releases", label: "Pelepasan stok ditahan", available: actions.some(action => ["stock.release.propose", "stock.release.approve"].includes(action)) },
     { id: "pack-conversion-rules", href: "/inventory/pack-conversions", label: "Aturan buka kemasan", available: actions.includes("stock.convert") },
     { id: "pack-conversion-executions", href: "/inventory/pack-conversion-executions", label: "Pelaksanaan buka kemasan", available: actions.includes("stock.convert") },

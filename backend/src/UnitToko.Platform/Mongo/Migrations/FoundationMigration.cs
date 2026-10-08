@@ -110,7 +110,7 @@ internal sealed class FoundationMigration(IMongoDatabase durableDatabase) : IMig
 
     private static BsonDocument JsonSchema(BsonDocument schema) => new("$jsonSchema", schema);
 
-    private static BsonDocument BusinessValidator()
+    internal static BsonDocument BusinessValidator()
     {
         var precisionChecks = new BsonArray();
         foreach (var name in new[] { "unitPrice", "lineTotal", "tax", "documentTotal", "journalAmount", "rate" })

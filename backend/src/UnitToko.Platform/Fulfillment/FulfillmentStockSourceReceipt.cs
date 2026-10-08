@@ -14,7 +14,8 @@ public sealed partial class ShipmentReceiptService
             .SingleOrDefaultAsync(ct) ?? throw FulfillmentStockSourceRecords.Unavailable();
         var source = await shipments.FulfillmentStockSourceDocumentAsync(tx, row["shipmentId"].AsInt64, ct);
         var confirmed = await VerifyReceiptAsync(tx, row, source, ct);
-        var shipment = await new ShipmentDispatchRecords(database).ReadAsync(tx, row["shipmentId"].AsInt64, ct);
+        var shipment = await new ShipmentDispatchRecords(database, shipments.StockSourceClock, shipments.StockSourceHistory, shipments.StockSourceLiveRead)
+            .ReadAsync(tx, row["shipmentId"].AsInt64, ct);
         var result = ShipmentReceiptRecords.Result(row, ShipmentReceiptRecords.Confirm);
         var outbox = await Rows("outboxEvents").Find(tx, F.Eq("sourceKey", ShipmentReceiptRecords.Confirm + ":" + id)).SingleOrDefaultAsync(ct);
         // Receipt owner verifies exact consent, recipient/person independence, challenge/document,

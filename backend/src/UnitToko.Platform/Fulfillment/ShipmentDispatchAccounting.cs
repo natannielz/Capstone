@@ -107,10 +107,11 @@ internal sealed class ShipmentDispatchAccounting(IMongoDatabase database, IClock
 
     /// <summary>The owning shipment command calls this after its awaited work. The
     /// original approval, mapping and period are compared; a changed setup is never rebased.</summary>
-    internal async Task RequireCurrentAsync(IClientSessionHandle tx, Binding binding, CancellationToken ct = default)
+    internal async Task<Binding> RequireCurrentAsync(IClientSessionHandle tx, Binding binding, CancellationToken ct = default)
     {
         AccountingPersistence.RequireSession(database, tx); binding.Require(this, tx, clock.UtcNow);
         var current = await ReadAndFenceAsync(tx, binding.Key, binding.PostingDate, binding.ExpectedInventory, ct);
         binding.Require(this, tx, clock.UtcNow); Equal(current.Snapshot, binding.Snapshot);
+        return current;
     }
 }

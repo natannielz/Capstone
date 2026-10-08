@@ -38,7 +38,7 @@ public sealed partial class OrderSubmissionService
         return facts;
     }
     internal async Task<long> NextShipmentSequenceAsync(IClientSessionHandle tx, ActorContext actor, long orderId, CancellationToken ct) {
-        var order = await GraphAsync(tx, actor, orderId, ct, requireOwner: false);
-        return checked((await DecisionGraphAsync(tx, order, ct)).DispatchSequence + 1);
+        var (_, progress) = await GraphWithProgressAsync(tx, actor, orderId, ct, requireOwner: false);
+        return checked(progress.DispatchSequence + 1);
     }
 }

@@ -17,6 +17,7 @@ import { verifyAccountingBooksBrowser } from './verify-accounting-books-browser.
 import { verifyProcurementRequestsBrowser } from './verify-procurement-requests-browser.mjs';
 import { verifySuppliersBrowser } from './verify-suppliers-browser.mjs';
 import { verifyPurchaseOrdersBrowser } from './verify-purchase-orders-browser.mjs';
+import { verifyPurchaseArrivalsBrowser } from './verify-purchase-arrivals-browser.mjs';
 import { verifyPurchaseOrderInboundBrowser } from './verify-purchase-order-inbound-browser.mjs';
 import { verifyProcurementFundingBrowser } from './verify-procurement-funding-browser.mjs';
 import { verifySupplierBankBrowser } from './verify-supplier-bank-browser.mjs';
@@ -33,6 +34,9 @@ import { verifyProcurementQualityAcceptanceBrowser } from './verify-procurement-
 import { verifyStockSourceReconciliationBrowser } from './verify-stock-source-reconciliation-browser.mjs';
 import { verifyProcurementInspectionBrowser } from './verify-procurement-inspection-browser.mjs';
 import { verifyProcurementSettlementBrowser } from './verify-procurement-settlement-browser.mjs';
+import { verifyOperationalAnomaliesBrowser } from './verify-operational-anomalies-browser.mjs';
+import { verifyReplenishmentBrowser } from './verify-replenishment-browser.mjs';
+import { verifyOrderReorderBrowser } from './verify-order-reorder-browser.mjs';
 
 const chunks = []; for await (const chunk of process.stdin) chunks.push(chunk);
 const config = JSON.parse(Buffer.concat(chunks).toString('utf8')), api = new URL(config.apiAddress), origin = new URL(config.origin);
@@ -220,8 +224,8 @@ function forward(req, res, port, isApi) {
   res.once('close', () => { if (!res.writableEnded && !upstreamCompleted) { if (isApi) traceFinancial('downstream-cancelled', { path: req.url, method: req.method, elapsedMs: Math.round(performance.now() - startedAt) }); upstream.destroy(); } });
   req.on('aborted', () => upstream.destroy()); req.pipe(upstream);
 }
-async function user(token) {
-  const context = await browser.newContext({ ignoreHTTPSErrors: true, viewport: { width: 360, height: 800 }, locale: 'id-ID', timezoneId: 'Asia/Jakarta' });
+async function user(token, storageState) {
+  const context = await browser.newContext({ ignoreHTTPSErrors: true, viewport: { width: 360, height: 800 }, locale: 'id-ID', timezoneId: 'Asia/Jakarta', ...(storageState ? {storageState} : {}) });
   await context.addCookies([{ name: '__Host-ut_session', value: token, domain: origin.hostname, path: '/', secure: true, httpOnly: true, sameSite: 'Lax' }]);
   const page = await context.newPage(); pages.push(page); page.setDefaultTimeout(15000); page.on('pageerror', error => errors.push(error.message));
   page.on('response', async response => { if (response.url().includes('/api/v1/') && response.status() >= 400) { const value = await response.json().catch(() => ({})); console.log('FIXTURE API ' + JSON.stringify({ path: new URL(response.url()).pathname, status: response.status(), code: value?.code })); } }); return { context, page };
@@ -250,7 +254,28 @@ try {
   }); const proxyPort = await listen(tunnel);
   browser = await chromium.launch({ ...(channel === 'msedge' ? { channel: 'msedge' } : {}), headless: true, proxy: { server: 'http://127.0.0.1:' + proxyPort } });
   const finance = await user(config.financeToken), page = finance.page;
-  if (config.returnLot) {
+  if (config.orderReorder) {
+    await verifyOrderReorderBrowser({config, buyer: finance, user, origin, directory, restartUser: async (token, storageState) => {
+      await browser.close();
+      browser = await chromium.launch({ ...(channel === 'msedge' ? { channel: 'msedge' } : {}), headless: true, proxy: { server: 'http://127.0.0.1:' + proxyPort } });
+      return user(token, storageState);
+    }});
+    assert.deepEqual(errors, []);
+  } else if (config.replenishment) {
+    await verifyReplenishmentBrowser({config, maker: finance, user, origin, directory, procurementWrites, restartUser: async (token, storageState) => {
+      await browser.close();
+      browser = await chromium.launch({ ...(channel === 'msedge' ? { channel: 'msedge' } : {}), headless: true, proxy: { server: 'http://127.0.0.1:' + proxyPort } });
+      return user(token, storageState);
+    }});
+    assert.deepEqual(errors, []);
+  } else if (config.operationalAnomalies) {
+    await verifyOperationalAnomaliesBrowser({config, maker: finance, user, origin, directory, restartUser: async (token, storageState) => {
+      await browser.close();
+      browser = await chromium.launch({ ...(channel === 'msedge' ? { channel: 'msedge' } : {}), headless: true, proxy: { server: 'http://127.0.0.1:' + proxyPort } });
+      return user(token, storageState);
+    }});
+    assert.deepEqual(errors, []);
+  } else if (config.returnLot) {
     await verifyReturnLotBrowser({ config, actor: finance, user, origin, directory, returnLotWrites, returnLotRecoveries,
       dropNext: () => { dropNext = true; }, dropped: () => dropped });
     assert.equal(writes.length + caseWrites.length + decisionWrites.length + returnWrites.length + inspectionWrites.length + resolutionWrites.length + entitlementWrites.length + financialWrites.length + payoutWrites.length + draftWrites.length + settlementWrites.length + addressWrites.length + spendingWrites.length + bookWrites.length + procurementWrites.length + supplierWrites.length + purchaseOrderWrites.length + fundingWrites.length + supplierBankWrites.length + disbursementWrites.length + procurementSettlementWrites.length + receivingWrites.length + procurementInspectionWrites.length + documentWrites.length + claimWrites.length + stockReceiptWrites.length + valuationWrites.length + reconciliationWrites.length + payableWrites.length, 0);
@@ -365,6 +390,14 @@ try {
     await verifyPurchaseOrderInboundBrowser({ config, maker: finance, user, origin, directory, purchaseOrderWrites, purchaseOrderRecoveries, dropNext: () => { dropNext = true; }, dropped: () => dropped });
     assert.equal(writes.length + caseWrites.length + decisionWrites.length + returnWrites.length + inspectionWrites.length + resolutionWrites.length + entitlementWrites.length + financialWrites.length + payoutWrites.length + draftWrites.length + settlementWrites.length + addressWrites.length + spendingWrites.length + bookWrites.length + procurementWrites.length + supplierWrites.length + fundingWrites.length + supplierBankWrites.length + disbursementWrites.length + procurementSettlementWrites.length + receivingWrites.length + procurementInspectionWrites.length + documentWrites.length + claimWrites.length + stockReceiptWrites.length + valuationWrites.length + reconciliationWrites.length + payableWrites.length, 0);
     assert.deepEqual(errors, []);
+  } else if (config.purchaseArrivals) {
+    assert.equal(config.purchaseOrders, true); assert.equal(config.financeToken, config.makerToken);
+    await verifyPurchaseArrivalsBrowser({config, maker: finance, user, origin, directory, restartUser: async (token, storageState) => {
+      await browser.close();
+      browser = await chromium.launch({ ...(channel === 'msedge' ? { channel: 'msedge' } : {}), headless: true, proxy: { server: 'http://127.0.0.1:' + proxyPort } });
+      return user(token, storageState);
+    }});
+    assert.equal(purchaseOrderWrites.length, 0); assert.deepEqual(errors, []);
   } else if (config.purchaseOrders) {
     assert.equal(config.financeToken, config.makerToken);
     await verifyPurchaseOrdersBrowser({ config, maker: finance, user, origin, directory, purchaseOrderWrites, purchaseOrderRecoveries, dropNext: () => { dropNext = true; }, dropped: () => dropped });

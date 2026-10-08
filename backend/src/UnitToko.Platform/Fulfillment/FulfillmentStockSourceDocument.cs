@@ -11,7 +11,7 @@ public sealed partial class ShipmentQueryService
     internal async Task<ShipmentDocumentSource> FulfillmentStockSourceDocumentAsync(IClientSessionHandle tx,
         long shipmentId, CancellationToken ct)
     {
-        var row = await new ShipmentDispatchRecords(database).ReadAsync(tx, shipmentId, ct);
+        var row = await new ShipmentDispatchRecords(database, clock, orders.StockSourceHistory, orders.StockSourceLiveRead).ReadAsync(tx, shipmentId, ct);
         var order = await orders.ReadStockSourceGraphAsync(tx, row["orderId"].AsInt64, ct);
         if (!order["suborderIds"].AsBsonArray.Contains(row["suborderId"])) throw ShipmentDispatchRecords.Invalid();
         var source = ShipmentPreparationBson.Source(row["source"].AsBsonDocument);

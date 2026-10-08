@@ -64,8 +64,7 @@ public sealed partial class AccountingBookSetupService
     private async Task StorageAsync(CancellationToken ct) {
         foreach (var name in AccountingBookSetupSchemas.Collections) {
             var keys = AccountingBookSetupSchemas.Keys(name);
-            await InventoryRepository.RequireStorageAsync(database, name, AccountingBookSetupSchemas.Validator(name), keys, ct);
-            var indexes = await (await Rows(name).Indexes.ListAsync(ct)).ToListAsync(ct);
+            var indexes = await InventoryRepository.RequireStorageAsync(database, name, AccountingBookSetupSchemas.Validator(name), keys, ct);
             if (indexes.Any(index => InvoiceStorage.Unsafe(index) || index.Contains("partialFilterExpression"))) throw B.Broken();
         }
         foreach (var (name, key) in new[] { ("accountingBooks", new BsonDocument("canonicalKey", 1)),

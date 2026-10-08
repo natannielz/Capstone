@@ -42,13 +42,14 @@ internal sealed class PurchaseOrderTestData(SupplierTestData suppliers) : IAsync
             new("quote", "SYNTHETIC-QUOTE-0001", date, Clock.UtcNow.AddDays(1)), null,
             new("credit", "Synthetic approved credit terms, due in thirty days", new Money(0), "due_date", date.AddDays(30)), [Line(packages)]);
     }
-    internal static async Task<PurchaseOrderTestData> CreateAsync(MongoFixture fixture, bool activateEmptySource = false, bool useSystemClock = false) {
+    internal static async Task<PurchaseOrderTestData> CreateAsync(MongoFixture fixture, bool activateEmptySource = false, bool useSystemClock = false,
+        long reviewedSafetyBufferBaseUnits = 12) {
         var suppliers = await SupplierTestData.CreateAsync(fixture, useSystemClock);
         try {
             var data = new PurchaseOrderTestData(suppliers);
             var supplier = await suppliers.ProposeAsync("po-fixture-supplier"); var observation = await suppliers.ObserveAsync(supplier, "po-fixture-supplier-observation");
             data.Supplier = await suppliers.DecideAsync(supplier, "po-fixture-supplier-approved", observation["recordId"].AsInt64);
-            if (activateEmptySource) await data.PrepareBoundSourceAsync(activateEmptySource: true);
+            if (activateEmptySource) await data.PrepareBoundSourceAsync(activateEmptySource: true, reviewedSafetyBufferBaseUnits: reviewedSafetyBufferBaseUnits);
             var need = data.Procurement.Input(ProcurementRoute.Ddo, ProcurementRequestKind.PurchaseRequest) with {
                 Lines = [ProcurementRequestTestData.Line(data.Procurement.Sku, 6) with { Specification = "Synthetic approved logo specification" }] };
             data.Request = await data.Procurement.SubmitAsync("po-fixture-request", need);
@@ -61,7 +62,7 @@ internal sealed class PurchaseOrderTestData(SupplierTestData suppliers) : IAsync
     // Optional release-fixture seam: the exact receiving source can be genuinely
     // activated while empty, before any demand exists. Default callers retain their
     // original setup timing and never acquire activation authority implicitly.
-    internal async Task PrepareBoundSourceAsync(bool activateEmptySource = false) {
+    internal async Task PrepareBoundSourceAsync(bool activateEmptySource = false, long reviewedSafetyBufferBaseUnits = 12) {
         if (PoolId != 0) return;
         SourceMaker = await Base.AddActorAsync(724, ProcurementRequestTestData.Scope,
             Permissions.StockSourcePropose, Permissions.StockSourceRead, Permissions.StockSourcePolicyPropose, Permissions.StockSourceSuspend);
@@ -70,7 +71,7 @@ internal sealed class PurchaseOrderTestData(SupplierTestData suppliers) : IAsync
         await PersonTestData.SeedDistinctPeopleAsync(Database, Clock, SourceMaker.UserId, SourceChecker.UserId);
         var sources = new StockSourceSetupService(Database, Unit, new(Database), Clock);
         var source = new StockSourceSetupInput(new(new(100), new(101), new(102), new(103)), "synthetic-held-receiving", "Synthetic reviewed receiving pool",
-            StockAuthorityMode.WebLedger, StockPoolControl.SharedWebLedger, 60001, 12, null, null, "Synthetic receiving operator", "Synthetic received-unit handoff");
+            StockAuthorityMode.WebLedger, StockPoolControl.SharedWebLedger, 60001, reviewedSafetyBufferBaseUnits, null, null, "Synthetic receiving operator", "Synthetic received-unit handoff");
         var proposal = await sources.ProposeAsync(SourceMaker, source, ProcurementReceivingTestData.Meta("held-source"));
         var approved = await sources.DecideAsync(SourceChecker, proposal["proposalId"].AsInt64, 1, StockSourceSetupDecision.Approve,
             "Independent synthetic source approval", ProcurementReceivingTestData.Meta("held-source-approved"));

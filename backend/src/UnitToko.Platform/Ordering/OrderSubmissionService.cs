@@ -9,9 +9,11 @@ using UnitToko.Modules.Ordering;
 using UnitToko.Modules.Organizations;
 using UnitToko.Platform.Authorization;
 using UnitToko.Platform.Catalog;
+using UnitToko.Platform.Fulfillment;
 using UnitToko.Platform.Inventory;
 using UnitToko.Platform.Mongo;
 using UnitToko.Platform.Mongo.Migrations;
+using UnitToko.Platform.Organizations;
 using B = UnitToko.Platform.Ordering.OrderSubmissionBson;
 
 namespace UnitToko.Platform.Ordering;
@@ -26,18 +28,29 @@ public sealed record SubmittedOrderView(LongId Id, long Revision, ImmutableArray
 public sealed partial class OrderSubmissionService
 {
     private readonly IMongoDatabase database;
+    private readonly MongoUnitOfWork unit;
     private readonly IClock clock;
     private readonly IdAllocator ids;
     private readonly AuthorizationStore authorization;
     private readonly OrderQuoteService authority;
     private readonly CatalogDefinitionQueryService catalog;
     private readonly IOrderAdmissionReader? admissionReader;
+    private readonly ShipmentDispatchValueRecords.HistoricalRead? stockSourceHistory;
+    private readonly ShipmentDispatchService.LiveValueRead? stockSourceLiveRead;
+    internal ShipmentDispatchValueRecords.HistoricalRead? StockSourceHistory => stockSourceHistory;
+    internal ShipmentDispatchService.LiveValueRead? StockSourceLiveRead => stockSourceLiveRead;
+    internal IClock StockSourceClock => clock;
     private static readonly FilterDefinitionBuilder<BsonDocument> F = Builders<BsonDocument>.Filter;
     public OrderSubmissionService(IMongoDatabase database, MongoUnitOfWork unit, IdAllocator ids, IClock clock)
         : this(database, unit, ids, clock, null) { }
-    internal OrderSubmissionService(IMongoDatabase database, MongoUnitOfWork unit, IdAllocator ids, IClock clock, IOrderAdmissionReader? reader)
+    /// <summary>Constructs the actual approved buyer, commercial, postal and finite-stock admission owner.</summary>
+    public static OrderSubmissionService CreateWithApprovedAdmission(IMongoDatabase database, MongoUnitOfWork unit,
+        IdAllocator ids, IClock clock, OrganizationMasterDataService organizations) =>
+        new(database, unit, ids, clock, new ApprovedOrderAdmissionReader(database, unit, ids, clock, organizations));
+    internal OrderSubmissionService(IMongoDatabase database, MongoUnitOfWork unit, IdAllocator ids, IClock clock, IOrderAdmissionReader? reader,
+        ShipmentDispatchValueRecords.HistoricalRead? history = null, ShipmentDispatchService.LiveValueRead? liveRead = null)
     {
-        this.database = database; this.clock = clock; this.ids = ids;
+        this.database = database; this.unit = unit; this.clock = clock; this.ids = ids; stockSourceHistory = history; stockSourceLiveRead = liveRead;
         if (reader is not null && (!ReferenceEquals(reader.Database.Client, database.Client) || !reader.Database.DatabaseNamespace.Equals(database.DatabaseNamespace)))
             throw new ArgumentException("Order authority must use the same database and transaction", nameof(reader));
         admissionReader = reader; authorization = new(database, unit, clock); authority = new(database, unit, clock); catalog = new(database, authorization, clock);
@@ -62,16 +75,19 @@ public sealed partial class OrderSubmissionService
             token => authority.FenceAsync(actor, snapshot, tx, [input.Context], token), ct);
         return OrderQuotePolicy.Create(input.Selections, facts.Select(value => new OrderCatalogFact(value.Family, value.Sku, value.Definition, value.CurrentPrice)).ToImmutableArray());
     }
-    private async Task<OrderAdmission> AdmitAsync(ActorContext actor, IClientSessionHandle tx, OrderDraftInput input, OrderCatalogQuote quote, CancellationToken ct) {
+    private async Task<OrderAdmission> AdmitAsync(ActorContext actor, IClientSessionHandle tx, OrderDraftInput input, OrderCatalogQuote quote,
+        CancellationToken ct, bool preview = false) {
         var reader = admissionReader ?? throw OrderAdmissionPolicy.Invalid();
-        var value = await reader.ReadAndFenceAsync(tx, actor, input, quote, ct);
+        var value = preview && reader is ApprovedOrderAdmissionReader approved
+            ? await approved.ReadForPreviewAsync(tx, actor, input, quote, ct)
+            : await reader.ReadAndFenceAsync(tx, actor, input, quote, ct);
         OrderAdmissionPolicy.Validate(input, quote, value);
         return value with { Stock = value.Stock.ToArray().ToImmutableArray() };
     }
     public Task<OrderCheckoutReview> PreviewAsync(ActorContext actor, OrderDraftInput input, CancellationToken ct = default) {
         input = OrderDraftPolicy.Copy(input);
         return authorization.ReadAsync(actor, async (snapshot, tx, token) => {
-            var quote = await QuoteAsync(actor, snapshot, tx, input, token); var admission = await AdmitAsync(actor, tx, input, quote, token);
+            var quote = await QuoteAsync(actor, snapshot, tx, input, token); var admission = await AdmitAsync(actor, tx, input, quote, token, preview: true);
             await admissionReader!.CompleteAsync(tx, actor, admission, token);
             await authority.FenceAsync(actor, snapshot, tx, [input.Context], token);
             return new OrderCheckoutReview(input, quote, B.Review(input, quote, admission.Terms), clock.UtcNow, admission.Terms.Tax, admission.Terms.Charges,
@@ -197,7 +213,10 @@ public sealed partial class OrderSubmissionService
     }
     private Task<BsonDocument?> ReceiptAsync(ActorContext actor, string key, IClientSessionHandle tx, CancellationToken ct) =>
         Rows("idempotencyRecords").Find(tx, F.Eq("actorId", actor.UserId) & F.Eq("operation", B.Operation) & F.Eq("key", key)).SingleOrDefaultAsync(ct)!;
-    private async Task<BsonDocument> GraphAsync(IClientSessionHandle tx, ActorContext? actor, long id, CancellationToken ct, bool requireOwner = true) {
+    private async Task<BsonDocument> GraphAsync(IClientSessionHandle tx, ActorContext? actor, long id, CancellationToken ct, bool requireOwner = true) =>
+        (await GraphWithProgressAsync(tx, actor, id, ct, requireOwner)).Order;
+    private async Task<(BsonDocument Order, OrderApprovalProgress Progress)> GraphWithProgressAsync(IClientSessionHandle tx,
+        ActorContext? actor, long id, CancellationToken ct, bool requireOwner = true) {
         var filter = F.Eq("_id", id) & OrderSubmissionSchemas.Validator(B.Orders);
         if (requireOwner) filter &= F.Eq("createdBy", (actor ?? throw Invalid()).UserId);
         var row = await Rows(B.Orders).Find(tx, filter).SingleOrDefaultAsync(ct) ?? throw Invalid();
@@ -210,8 +229,7 @@ public sealed partial class OrderSubmissionService
         if (audit is null || !CatalogSchemas.SemanticEquals(audit, B.Audit(row)) || receipt is null || receipt.GetValue("bodyHash", BsonNull.Value) != row["bodyHash"] ||
             !receipt.TryGetValue("result", out var result) || !CatalogSchemas.SemanticEquals(result, B.Result(row))) throw Invalid();
         await ChildrenAsync(tx, row, quote, ct);
-        _ = await DecisionGraphAsync(tx, row, ct);
-        return row;
+        return (row, await DecisionGraphAsync(tx, row, ct));
     }
     private async Task ChildrenAsync(IClientSessionHandle tx, BsonDocument order, OrderCatalogQuote quote, CancellationToken ct) {
         var id = order["_id"].AsInt64; var groups = OrderFulfillmentPolicy.Split(quote);

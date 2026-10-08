@@ -20,7 +20,7 @@ internal sealed class AfterSalesCausalCoverageMigration(IMongoDatabase database,
         var history = await Rows("schemaMigrations").Find(new BsonDocument()).Sort(new BsonDocument("_id", 1)).Limit(Version + 1).ToListAsync(ct);
         if (!MigrationHistory.IsValid(history, Version) || history.Count != Version || history.Take(Version - 1).Any(row => row["state"] != "applied") ||
             history[^1]["state"] != "applying" || database.Client is not MongoClient client || clock.UtcNow == default || clock.UtcNow.Offset != TimeSpan.Zero) throw Invalid();
-        await AfterSalesStockSourceStorage.RequireAsync(database, ct);
+        await AfterSalesStockSourceStorage.RequireAsync(database, ct, ShipmentDispatchSchemas.LegacyValidator());
         var retained = (await (await database.ListCollectionsAsync(cancellationToken: ct)).ToListAsync(ct))
             .Where(row => row.GetValue("type", "") == "collection" && !AfterSalesCausalCoverageSchemas.Collections.Contains(row["name"].AsString)).ToArray();
         var indexes = new Dictionary<string, BsonDocument[]>();
@@ -135,7 +135,7 @@ internal sealed class AfterSalesCausalCoverageMigration(IMongoDatabase database,
         var actualCounters = await Rows("idCounters").Find(new BsonDocument()).Sort(new BsonDocument("_id", 1)).ToListAsync(ct);
         if (counters.Where(row => row["_id"] != AfterSalesStockSourceRecords.CausalTransitions).Any(before =>
                 !actualCounters.Any(after => after == before)) || actualCounters.Any(row => row["_id"] != AfterSalesStockSourceRecords.CausalTransitions && !counters.Any(before => before == row))) throw Invalid();
-        await AfterSalesStockSourceStorage.RequireCoverageAsync(database, ct);
+        await AfterSalesStockSourceStorage.RequireCoverageAsync(database, ct, ShipmentDispatchSchemas.LegacyValidator());
     }
     private async Task RequireSeededAsync(MongoClient client, AfterSalesStockSourceEvents owner, AfterSalesStockSourceRecords records,
         HashSet<long> expectedPools, CancellationToken ct)

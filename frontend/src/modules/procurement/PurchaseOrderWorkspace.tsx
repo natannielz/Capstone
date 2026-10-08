@@ -17,6 +17,7 @@ import { createPurchaseOrderGateway, purchaseOrderInput, preparePurchaseOrder, p
 import { purchaseOrderInboundSelection, type PurchaseOrderInboundSelection } from './purchase-order-inbound-client';
 import type { StockReceiptPool } from './procurement-stock-receipt-client';
 import styles from '../administration/access.module.css';
+import { PurchaseArrivalPanel } from './PurchaseArrivalPanel';
 
 type Account = { actorId: string; actions: readonly string[]; session: IdentitySession; observedAt: number };
 type DraftLine = { input: PurchaseOrderInput['lines'][number]; chosen: PurchaseOrderMapping };
@@ -97,7 +98,8 @@ function PurchaseOrderDesk({ account, fresh, onDenied }: { account: Account; fre
   const [termsKind, setTermsKind] = useState<PurchaseOrderInput['paymentTerms']['kind'] | ''>(''), [termsDescription, setTermsDescription] = useState(''), [advance, setAdvance] = useState(''), [balanceTrigger, setBalanceTrigger] = useState<PurchaseOrderInput['paymentTerms']['balanceTrigger'] | ''>(''), [dueDate, setDueDate] = useState('');
   const [reason, setReason] = useState(''), [decisionReason, setDecisionReason] = useState(''), [review, setReview] = useState<Review | null>(null), [confirmed, setConfirmed] = useState(false);
   const [busy, setBusy] = useState(false), [recovering, setRecovering] = useState(false), [offline, setOffline] = useState(false), [error, setError] = useState<unknown>(null), [notice, setNotice] = useState(''), [revision, setRevision] = useState(0);
-  const canRead = account.actions.includes(readPermission), canPrepare = account.actions.includes(preparePermission), canApprove = account.actions.includes(approvePermission), canPlanInbound = canPrepare && account.actions.includes('stock.read'), locked = busy || recovering || offline, commandLocked = locked || recovery.locked;
+  const [arrivalLocked, setArrivalLocked] = useState(false);
+  const canRead = account.actions.includes(readPermission), canPrepare = account.actions.includes(preparePermission), canApprove = account.actions.includes(approvePermission), canPlanInbound = canPrepare && account.actions.includes('stock.read'), locked = busy || recovering || offline || arrivalLocked, commandLocked = locked || recovery.locked;
   const current = useCallback(() => alive.current && navigator.onLine && !sessionTiming(account.session, performance.now() - account.observedAt).expired, [account]);
   const clearLine = useCallback(() => { setSkuId(''); setMappingIndex(''); setQuantity(''); setUnitPrice(''); setTax(''); setCharges(''); }, []);
   const clearInbound = useCallback(() => { setInboundRows([]); setInboundSkuId(''); setInboundPoolId(''); setInboundPackages(''); }, []);
@@ -194,5 +196,8 @@ function PurchaseOrderDesk({ account, fresh, onDenied }: { account: Account; fre
         {review && <section className={styles.review} aria-label={review.kind === 'propose' ? 'Rincian usulan pesanan' : 'Rincian keputusan pesanan'}><h2 tabIndex={-1} ref={heading}>{review.kind === 'propose' ? 'Pastikan usulan pesanan' : 'Pastikan keputusan pesanan'}</h2><Facts value={review.kind === 'propose' ? review.preview : review.preview.proposal} />{review.kind === 'decide' && review.preview.decision === 'approve' && <section aria-label="Kapasitas terkini"><h3>Kapasitas terkini untuk persetujuan</h3><Capacity values={review.preview.capacity} lines={review.preview.proposal.lines} /></section>}
           <p className={styles.preserve}>Alasan: {review.command.body.reason}</p><label className={styles.checkbox}><input type="checkbox" checked={confirmed} disabled={commandLocked || !fresh} onChange={event => setConfirmed(event.target.checked)} />Saya telah memeriksa pemasok, kemasan, jumlah, nilai dan syarat pembayaran.</label><div className={styles.actions}><button className={styles.primary} disabled={commandLocked || !fresh || !confirmed} onClick={() => void save()}>{review.kind === 'propose' ? 'Kirim usulan pesanan' : review.command.decision === 'approve' ? 'Setujui pesanan secara internal' : 'Simpan penolakan pesanan'}</button><button className={styles.secondary} disabled={commandLocked} onClick={() => { setReview(null); setConfirmed(false); }}>Kembali ke rincian</button></div></section>}
       </section></div>}
+    <PurchaseArrivalPanel actorId={account.actorId} order={proposal?.decision?.orderId ? {id: proposal.decision.orderId, lines: proposal.lines} : null}
+      canPrepare={canPrepare} canApprove={canApprove} fresh={fresh} isCurrent={current} disabled={busy || recovering || offline || recovery.locked || !!review}
+      onLocked={setArrivalLocked} onDenied={onDenied} />
   </>;
 }
