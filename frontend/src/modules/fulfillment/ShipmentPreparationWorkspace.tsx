@@ -1,6 +1,8 @@
 'use client';
 
 import Link from 'next/link';
+import {ScanInput} from '../inventory/ScanInput';
+import {sameScanPackage} from '../inventory/scan-client';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createIdentityGateway } from '../identity/identity-client';
 import { IdentityFailure, sessionTiming, type IdentitySession } from '../identity/identity-workflow';
@@ -77,7 +79,7 @@ function PreparationDesk({ account, onFailure }: { account: Account; onFailure: 
   async function load(suborderId: string) {
     const source = await gateway.source(actorId, suborderId); if (!current()) return;
     const preparation = await gateway.read(actorId, suborderId); if (!current()) return;
-    setSelected(source); setSaved(preparation); setStaged(null); setReason('');
+    setSelected(source); setSaved(preparation); setStaged(null); setReason(''); setScanSelection(null); setScanBlocked(false);
     setValues(Object.fromEntries(source.lines.map(line => { const prior = preparation?.lines.find(item => item.skuId === line.skuId);
       return [line.skuId, { selected: prior !== undefined, packages: String(prior?.packages ?? line.remainingPackages) }]; })));
   }
@@ -86,11 +88,12 @@ function PreparationDesk({ account, onFailure }: { account: Account; onFailure: 
     try { await load(suborderId); } catch (failure) { if (current()) { setError(failure); onFailure(failure); } }
     finally { pending.current = false; if (alive.current) setBusy(false); }
   }
+  const [scanBlocked, setScanBlocked] = useState(false), [scanSelection, setScanSelection] = useState<import('../inventory/scan-client').OperationalScanSelection | null>(null);
   async function review() {
-    if (!selected || !current() || locked || pending.current) return; pending.current = true; setBusy(true); setError(null); setNotice(null);
+    if (!selected || !current() || locked || pending.current || scanBlocked) return; pending.current = true; setBusy(true); setError(null); setNotice(null);
     try {
       const lines = selected.lines.filter(line => values[line.skuId]?.selected).map(line => ({ skuId: line.skuId, packages: /^[1-9][0-9]{0,6}$(?![\s\S])/.test(values[line.skuId].packages) ? Number(values[line.skuId].packages) : NaN }));
-      const command = prepareShipmentCommand(actorId, selected, saved?.revision ?? '0', lines, reason.trim());
+      const command = prepareShipmentCommand(actorId, selected, saved?.revision ?? '0', lines, reason.trim(), scanSelection ? [scanSelection] : undefined);
       const source = await gateway.source(actorId, selected.suborderId); if (!current()) return;
       const preparation = await gateway.read(actorId, selected.suborderId); if (!current()) return;
       if (!source.canPrepare || source.review !== command.review || (preparation?.revision ?? '0') !== command.expectedRevision) throw new AccessFailure(409, 'shipment_order_changed');
@@ -131,6 +134,16 @@ function PreparationDesk({ account, onFailure }: { account: Account; onFailure: 
     {selected && <section ref={panel} tabIndex={-1} className={styles.review} aria-label="Rencana persiapan"><h2>Siapkan pesanan {selected.orderId}</h2>
       <p>{selected.buyerName}</p><p className={styles.address}>{selected.delivery.recipientName} · {selected.delivery.phone}{'\n'}{selected.delivery.address}{'\n'}{selected.delivery.city} {selected.delivery.postalCode}</p>
       {saved && <p role="status">Persiapan versi {saved.revision} tersimpan.{!saved.currentSourceMatches && ' Pesanan sudah berubah; persiapan ini perlu ditinjau ulang sebelum digunakan.'}</p>}
+      {selected.canPrepare && !staged && <ScanInput key={selected.suborderId + ':' + selected.review} actorId={actorId} disabled={locked} current={current}
+        context={{purpose: 'picking', location: null, documentId: selected.suborderId, documentRevision: selected.revision,
+          auxiliaryId: null, auxiliaryRevision: null, sourceReview: selected.review}}
+        onReset={() => {setScanSelection(null); setScanBlocked(true); setValues(Object.fromEntries(selected.lines.map(line => [line.skuId, {selected: false, packages: ''}])));}}
+        onManual={() => {setScanSelection(null); setScanBlocked(false);}} onConfirm={candidate => {
+          const line = selected.lines.find(item => item.skuId === candidate.skuId);
+          if (!current() || !line || candidate.targetReference !== line.skuId || !sameScanPackage(candidate, {...line.definition, skuId: line.skuId, skuCode: line.skuCode,
+            definitionId: line.definition.id, definitionVersion: line.definition.version})) throw new AccessFailure(409, 'operational_scan_context_changed');
+          setValues(previous => ({...previous, [line.skuId]: {selected: true, packages: ''}})); setScanSelection(candidate.selection); setScanBlocked(false);
+        }} />}
       {!selected.canPrepare ? <p role="alert">Sisa pesanan tidak lagi dapat disiapkan. Riwayat persiapan tetap tersimpan.</p> : staged ? <>
         <h3>Periksa kemasan yang dipilih</h3><ul>{staged.lines.map(line => { const item = selected.lines.find(item => item.skuId === line.skuId)!;
           return <li key={line.skuId}>{item.productName} — {line.packages} {item.definition.packageLabel} · total {(BigInt(line.packages) * BigInt(item.definition.baseUnitsPerPackage)).toString()} {item.definition.baseUnitCode}</li>; })}</ul>
@@ -144,7 +157,7 @@ function PreparationDesk({ account, onFailure }: { account: Account; onFailure: 
           <label>Jumlah {line.skuCode}<input inputMode="numeric" value={values[line.skuId]?.packages ?? ''} disabled={!values[line.skuId]?.selected || line.remainingPackages === 0} maxLength={7}
             onChange={event => setValues(previous => ({ ...previous, [line.skuId]: { ...previous[line.skuId], packages: event.target.value } }))} /></label></div>)}
         <label>Catatan persiapan<input required maxLength={1000} value={reason} onChange={event => setReason(event.target.value)} /></label>
-        <button className={common.primary} disabled={locked}>Tinjau persiapan</button></fieldset></form>}
+        <button className={common.primary} disabled={locked || scanBlocked}>Tinjau persiapan</button></fieldset></form>}
       <button className={common.secondary} disabled={locked} onClick={() => void select(selected.suborderId)}>Muat ulang persiapan</button>
     </section>}
   </>;

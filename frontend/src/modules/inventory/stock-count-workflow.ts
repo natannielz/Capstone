@@ -2,6 +2,7 @@ import type { components } from "../../api/generated/schema";
 import type { OperationReference, StockCountRecoveryReceipt } from "../administration/operation-journal";
 import { AccessFailure, stableContent } from "../administration/workflow";
 import { validReference, type AccessScope } from "../organizations/access-scope";
+import {validateScanSelections} from './scan-client';
 
 export const stockCountOperation = "inventory.stock-count.record" as const;
 export type StockCountPurpose = "inventory-stock-count" | "inventory-stock-history";
@@ -147,20 +148,23 @@ export function stockCountReceipt(value: unknown, entry: OperationReference): St
 export type StockCountDraft = { packages: string; reason: string; observedLotLabel: string };
 export type StockCountCommand = Readonly<{
   actorId: string; operation: typeof stockCountOperation;
-  body: components["schemas"]["StockCountRecordDto"] & Readonly<{ poolSelection?: StockPoolSelection }>; choice: StockPackageChoice;
+  body: components["schemas"]["StockCountRecordDto"] & Readonly<{ poolSelection?: StockPoolSelection; scanSelections?: import('./scan-client').OperationalScanSelection[] }>; choice: StockPackageChoice;
   source?: StockSourceChoice;
 }>;
 /** The review owns a detached, recursively frozen snapshot. Only references are persisted for recovery. */
-export function prepareStockCount(actorId: string, location: AccessScope, choice: StockPackageChoice, draft: StockCountDraft, source?: StockSourceChoice): StockCountCommand {
+export function prepareStockCount(actorId: string, location: AccessScope, choice: StockPackageChoice, draft: StockCountDraft, source?: StockSourceChoice,
+  scanSelections?: readonly import('./scan-client').OperationalScanSelection[]): StockCountCommand {
   try {
     const actor = id(actorId), place = parseStockLocation(location), selected = packageChoice(choice);
+    const scans = validateScanSelections(scanSelections, [selected]);
     const quantity = stockCountQuantity(draft.packages, selected.baseUnitsPerPackage);
     const reviewedSource = source === undefined ? undefined : parseStockSourceChoice(source, place);
     if (reviewedSource) { Object.freeze(reviewedSource.pool); Object.freeze(reviewedSource.requestedLocation); Object.freeze(reviewedSource); }
     const command: StockCountCommand = { actorId: actor, operation: stockCountOperation, choice: selected, ...(reviewedSource ? { source: reviewedSource } : {}),
       body: { location: place, skuId: selected.skuId, expectedSkuRevision: selected.skuRevision, expectedDefinitionId: selected.definitionId,
         packages: quantity.packages, reason: inputText(draft.reason, 1000)!, observedLotLabel: inputText(draft.observedLotLabel, 160, true),
-        ...(reviewedSource ? { poolSelection: sourceBody(reviewedSource) } : {}) } };
+        ...(reviewedSource ? { poolSelection: sourceBody(reviewedSource) } : {}), ...(scans ? {scanSelections: [...scans]} : {}) } };
+    if (command.body.scanSelections) Object.freeze(command.body.scanSelections);
     Object.freeze(place); Object.freeze(selected); Object.freeze(command.body);
     return Object.freeze(command);
   } catch { return inputInvalid(); }

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { AccessFailure } from '../administration/workflow';
-import { createBuyerCatalogGateway, type BuyerVariant } from '../catalog/catalog-buyer-client';
+import { buyerCurrentCode, createBuyerCatalogGateway, type BuyerVariant } from '../catalog/catalog-buyer-client';
 import { CatalogReadGate } from '../catalog/catalog-editor-state';
 import { prepareDraftCommand, type DraftCommand, type OrderDraft } from './order-draft-client';
 import { createOrderQuoteGateway, orderAmount, orderContextKey, orderQuantity, type OrderAddresses, type OrderQuote } from './order-quote-client';
@@ -116,7 +116,7 @@ export function OrderDraftEditor({ actorId, draft, initialQuote, initialIssue, l
       <ul className={styles.lines}>{selections.map((item, index) => {
         const label = labels.get(item.skuId);
         return <li className={styles.line} key={item.skuId}><h3>{label ? label.name + ' — ' + label.definition.packageLabel : 'Kemasan yang perlu diperiksa'}</h3>
-          {label ? <p>{label.code} · {label.definition.baseUnitsPerPackage} {label.definition.baseUnitCode} per kemasan</p> : <p className={common.help}>Buka katalog untuk memilih kemasan terbaru, lalu hapus pilihan lama jika sudah diganti.</p>}
+          {label ? <p>Referensi SKU: {label.code} · {label.definition.baseUnitsPerPackage} {label.definition.baseUnitCode} per kemasan</p> : <p className={common.help}>Buka katalog untuk memilih kemasan terbaru, lalu hapus pilihan lama jika sudah diganti.</p>}
           <label>Jumlah kemasan {index + 1}<input required inputMode="numeric" maxLength={7} value={quantities[index]} disabled={disabled} onChange={event => setQuantities(values => values.map((value, position) => position === index ? event.target.value : value))} /></label>
           {label && <p className={common.help}>Minimum {label.definition.minimumOrderPackages}; kelipatan {label.definition.orderIncrementPackages}.</p>}
           <button type="button" className={common.secondary} disabled={disabled} onClick={() => { setSelections(values => values.filter((_, position) => position !== index)); setQuantities(values => values.filter((_, position) => position !== index)); }}>Hapus kemasan {index + 1}</button>
@@ -158,11 +158,12 @@ export function OrderDraftEditor({ actorId, draft, initialQuote, initialIssue, l
       <form className={common.lookup} onSubmit={event => { event.preventDefault(); void find(); }}><label>Cari kemasan untuk draf<input value={search} maxLength={128} disabled={disabled} onChange={event => setSearch(event.target.value)} /></label>
         <button className={common.secondary} disabled={disabled}>Cari kemasan</button></form>
       <ul className={styles.choices}>{results.map(item => <li key={item.skuId}><button className={common.secondary} disabled={disabled} onClick={() => void choose(item)}>
-        <strong>{item.familyName}</strong><span>{item.code} · {item.definition.packageLabel} · {item.definition.baseUnitsPerPackage} {item.definition.baseUnitCode}</span></button></li>)}</ul>
+        <strong>{item.familyName}</strong><span>Kode utama: {buyerCurrentCode(item)} · {item.definition.packageLabel} · {item.definition.baseUnitsPerPackage} {item.definition.baseUnitCode}</span></button></li>)}</ul>
       {searchPage && <div className={common.actions}><button className={common.secondary} disabled={disabled || searchPage.offset === 0} onClick={() => void find(searchPage.query, Math.max(0, searchPage.offset - 25))}>Kemasan sebelumnya</button>
         <button className={common.secondary} disabled={disabled || searchPage.offset >= 10000 || BigInt(searchPage.offset + results.length) >= BigInt(searchPage.total)} onClick={() => void find(searchPage.query, searchPage.offset + 25)}>Kemasan berikutnya</button></div>}
       {searchPage && results.length === 0 && <p>Tidak ada kemasan yang sesuai dengan pencarian ini.</p>}
-      {selected && <div className={styles.selection} role="region" aria-label="Periksa pilihan kemasan"><h3>{selected.familyName} — {selected.definition.packageLabel}</h3><p>{selected.code} · {selected.definition.baseUnitsPerPackage} {selected.definition.baseUnitCode} per kemasan</p>
+      {selected && <div className={styles.selection} role="region" aria-label="Periksa pilihan kemasan"><h3>{selected.familyName} — {selected.definition.packageLabel}</h3><p>Kode utama: {buyerCurrentCode(selected)} · {selected.definition.baseUnitsPerPackage} {selected.definition.baseUnitCode} per kemasan</p>
+        {selected.code !== buyerCurrentCode(selected) && <p>Referensi SKU tetap pada catatan transaksi: {selected.code}.</p>}
         <p>{selected.currentPrice ? orderAmount(selected.currentPrice.currency, selected.currentPrice.unitPrice) + ' per kemasan' : 'Harga belum tersedia'}</p>
         <p>Minimum {selected.definition.minimumOrderPackages}; kelipatan {selected.definition.orderIncrementPackages}.</p>
         <label>Jumlah kemasan pilihan<input inputMode="numeric" value={packageQuantity} maxLength={7} disabled={disabled} onChange={event => setPackageQuantity(event.target.value)} /></label>

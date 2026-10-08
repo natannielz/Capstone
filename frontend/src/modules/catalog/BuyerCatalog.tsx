@@ -10,7 +10,7 @@ import { AccessFailure } from '../administration/workflow';
 import { createIdentityGateway } from '../identity/identity-client';
 import { IdentityFailure, sessionTiming, type IdentitySession } from '../identity/identity-workflow';
 import { CatalogReadGate } from './catalog-editor-state';
-import { createBuyerCatalogGateway, type BuyerVariant } from './catalog-buyer-client';
+import { buyerCurrentCode, createBuyerCatalogGateway, type BuyerVariant } from './catalog-buyer-client';
 import { CatalogBuyerPhoto } from './CatalogBuyerPhoto';
 import { catalogHistoryUrl, normalizeCatalogHistorySearch, readCatalogHistoryQuery, type CatalogHistoryQuery } from './catalog-history';
 import shared from '../administration/access.module.css';
@@ -32,11 +32,15 @@ function message(error: unknown) {
   return 'Katalog belum dapat dimuat. Periksa koneksi, lalu coba lagi.';
 }
 type Account = { actorId: string; name: string; actions: readonly string[]; session: IdentitySession; observedAt: number };
+function BuyerCodeLabel({ item }: { item: BuyerVariant }) {
+  return <><p className={styles.code}>{item.buyerIdentity ? 'Kode utama saat ini: ' : 'Referensi SKU: '}{buyerCurrentCode(item)}</p>
+    {item.buyerIdentity && item.code !== buyerCurrentCode(item) && <p className={shared.help}>Referensi SKU tetap pada catatan transaksi: {item.code}. Kode ini hanya dapat dipakai mencari jika aliasnya masih aktif.</p>}</>;
+}
 function PackageReview({ item, account, isCurrent, requestOnly }: { item: BuyerVariant; account: Account; isCurrent: () => boolean; requestOnly: boolean }) {
   return <div className={styles.packageLayout}><div className={styles.packageFacts}>
     {requestOnly ? <div className={styles.photoPlaceholder}><PackageOpen size={42} strokeWidth={1} aria-hidden="true" /><p>Foto belum tersedia</p></div> : <CatalogBuyerPhoto actorId={account.actorId} item={item} isCurrent={isCurrent}/>}
     <span className={styles.category}>{item.categoryCode}</span><h2 id="buyer-package-title" className={styles.packageTitle}>{item.familyName} — {item.definition.packageLabel}</h2>
-    <p className={styles.code}>{item.code}</p>{item.description && <p className={styles.description}>{item.description}</p>}
+    <BuyerCodeLabel item={item} />{item.description && <p className={styles.description}>{item.description}</p>}
     <p className={styles.contents}>{item.definition.baseUnitsPerPackage.toLocaleString('id-ID')} <span>{item.definition.baseUnitCode} per kemasan</span></p>
     {!requestOnly && <p className={styles.price}>{price(item.currentPrice)}<span> per {item.definition.packageLabel}</span></p>}
     <dl className={shared.facts}><div><dt>Jenis kemasan</dt><dd>{{ sealed: 'Kemasan tersegel', loose: 'Satuan lepas', other: 'Kemasan lain' }[item.definition.packageKind]}</dd></div>
@@ -158,18 +162,18 @@ export function BuyerCatalog({ publicId, returnPath = '/catalog/browse', request
       <p className={shared.help}>{account.name} · {BigInt(total).toLocaleString('id-ID')} kemasan dalam katalog</p>
       {items.length === 0 ? <div className={styles.empty}><PackageOpen size={36} strokeWidth={1.25} aria-hidden="true" /><h3>Belum ada kemasan yang sesuai.</h3><p>Ubah pencarian atau periksa kembali nanti.</p></div> : <ul className={styles.grid}>{items.map(item => <li className={styles.card} key={item.skuId}>
         {requestOnly ? <div className={styles.photoPlaceholder}><PackageOpen size={48} strokeWidth={1} aria-hidden="true" /><p>Foto belum tersedia</p></div> : <CatalogBuyerPhoto actorId={account.actorId} item={item} isCurrent={current}/>}
-        <span className={styles.category}>{item.categoryCode}</span><h2>{item.familyName}</h2><p className={styles.code}>{item.code}</p><h3>{item.definition.packageLabel}</h3>
+        <span className={styles.category}>{item.categoryCode}</span><h2>{item.familyName}</h2><BuyerCodeLabel item={item} /><h3>{item.definition.packageLabel}</h3>
         <p className={styles.contents}>{item.definition.baseUnitsPerPackage.toLocaleString('id-ID')} <span>{item.definition.baseUnitCode} per kemasan</span></p>
         {!requestOnly && <p className={styles.price}>{price(item.currentPrice)}<span> per {item.definition.packageLabel}</span></p>}
         <p className={shared.help}>Minimum {item.definition.minimumOrderPackages}; kelipatan {item.definition.orderIncrementPackages} kemasan</p>
-        <div className={styles.cardActions}><button className={shared.primary} aria-label={'Rincian ' + item.code + ' ' + item.definition.packageLabel} disabled={detailBusy !== null} onClick={event => void details(item, event.currentTarget)}>{detailBusy === item.skuId ? 'Memuat…' : 'Periksa kemasan'}</button>
-          <Link className={styles.packageLink} href={'/shop/' + item.publicId} aria-label={'Halaman ' + item.code + ' ' + item.definition.packageLabel}>Buka halaman kemasan</Link></div>
+        <div className={styles.cardActions}><button className={shared.primary} aria-label={'Rincian ' + buyerCurrentCode(item) + ' ' + item.definition.packageLabel} disabled={detailBusy !== null} onClick={event => void details(item, event.currentTarget)}>{detailBusy === item.skuId ? 'Memuat…' : 'Periksa kemasan'}</button>
+          <Link className={styles.packageLink} href={'/shop/' + item.publicId} aria-label={'Halaman ' + buyerCurrentCode(item) + ' ' + item.definition.packageLabel}>Buka halaman kemasan</Link></div>
       </li>)}</ul>}
       <nav className={styles.pagination} aria-label="Halaman katalog"><button className={shared.secondary} disabled={offset === 0 || detailBusy !== null} onClick={() => navigateCatalog({ search: query, offset: Math.max(0, offset - 25) })}>Sebelumnya</button>
         <span>Halaman {offset / 25 + 1}</span><button className={shared.secondary} disabled={offset >= 10000 || BigInt(offset + items.length) >= BigInt(total) || items.length === 0 || detailBusy !== null} onClick={() => navigateCatalog({ search: query, offset: offset + 25 })}>Berikutnya</button></nav>
     </>}</section>}
     {publicId === undefined && <dialog ref={dialog} className={styles.dialog} aria-labelledby="buyer-package-title" onCancel={event => { event.preventDefault(); close(); }}>
-      {selected && !expired && <><div className={styles.dialogHeader}><p className={styles.code}>{selected.code}</p><button className={shared.secondary} onClick={close}>Tutup rincian</button></div>
+      {selected && !expired && <><div className={styles.dialogHeader}><p className={styles.code}>{buyerCurrentCode(selected)}</p><button className={shared.secondary} onClick={close}>Tutup rincian</button></div>
         {account && <PackageReview item={selected} account={account} isCurrent={current} requestOnly={requestOnly} />}</>}
     </dialog>}
   </main>{requestOnly && <PilotSiteFooter />}</div>;

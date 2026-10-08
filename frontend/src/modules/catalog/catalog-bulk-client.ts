@@ -1,6 +1,6 @@
 import { createUnitTokoClient } from '../../api/client';
 import { AccessFailure } from '../administration/workflow';
-import { parseBuyerVariant } from './catalog-buyer-client';
+import { parseBuyerCodeMatch } from './catalog-buyer-client';
 import { priceId } from './catalog-price-workflow';
 
 export function createBuyerBulkGateway(client: ReturnType<typeof createUnitTokoClient> = createUnitTokoClient()) {
@@ -16,10 +16,11 @@ export function createBuyerBulkGateway(client: ReturnType<typeof createUnitTokoC
         throw new AccessFailure(response.response.status, typeof problem.code === 'string' ? problem.code : 'request_failed');
       }
       if (!Array.isArray(response.data) || response.data.length !== codes.length) throw new AccessFailure(502, 'buyer_catalog_response_invalid');
-      const variants = response.data.map(parseBuyerVariant);
-      if (variants.some((variant, index) => variant.code !== codes[index]) || new Set(variants.map(item => item.skuId)).size !== variants.length)
+      const matches = response.data.map((item, index) => parseBuyerCodeMatch(item, codes[index]));
+      if (new Set(matches.map(item => item.variant.skuId)).size !== matches.length ||
+          new Set(matches.map(item => item.matchedIdentifier.identifierId)).size !== matches.length)
         throw new AccessFailure(502, 'buyer_catalog_response_invalid');
-      return variants;
+      return matches;
     },
   };
 }

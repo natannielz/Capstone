@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import {ScanInput} from './ScanInput';
+import {sameScanPackage} from './scan-client';
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createAccessGateway } from "../administration/access-client";
 import { AdministrationNavigation } from "../administration/AdministrationNavigation";
@@ -93,6 +95,7 @@ export function StockCountWorkspace() {
   </main>;
 }
 function CountDesk({ loaded, onRefresh }: { loaded: Loaded; onRefresh: () => Promise<void> }) {
+  const [scanBlocked, setScanBlocked] = useState(false), [scanSelection, setScanSelection] = useState<import('./scan-client').OperationalScanSelection | null>(null);
   const [editor] = useState(() => new StockCountEditor({ actorId: loaded.actorId, actions: loaded.actions, session: loaded.session,
     observedAt: loaded.observedAt, now: () => performance.now(), gateway: createStockCountGateway(),
     journal: new OperationJournal(() => window.localStorage) }));
@@ -139,7 +142,7 @@ function CountDesk({ loaded, onRefresh }: { loaded: Loaded; onRefresh: () => Pro
       </div>
       <label><span id="stock-warehouse-label">Gudang dan kanal</span>
         <select aria-labelledby="stock-warehouse-label" value={state.warehouse ? stockLocationKey(state.warehouse.location) : ""} disabled={locked || state.loadingWarehouses}
-          onChange={event => void editor.chooseWarehouse(state.warehouses.find(item => stockLocationKey(item.location) === event.target.value)?.location ?? null)}>
+          onChange={event => {setScanSelection(null); setScanBlocked(false); void editor.chooseWarehouse(state.warehouses.find(item => stockLocationKey(item.location) === event.target.value)?.location ?? null);}}>
           <option value="">{state.loadingWarehouses ? "Memuat gudang…" : "Pilih gudang dan kanal"}</option>
           {state.warehouses.map(item => <option key={stockLocationKey(item.location)} value={stockLocationKey(item.location)}>
             {item.organizationName} / {item.shopName} / {item.warehouseName} / {item.channelName}
@@ -153,7 +156,7 @@ function CountDesk({ loaded, onRefresh }: { loaded: Loaded; onRefresh: () => Pro
       {state.mode === 'count' && state.warehouse && <section aria-label="Pilihan kaitan sumber" aria-busy={state.loadingSources}>
         <label><span id="stock-count-source-label">Sumber stok yang diamati</span>
           <select aria-labelledby="stock-count-source-label" value={state.sourceMode === 'unbound' ? 'unbound' : state.selectedSource?.pool.poolId ?? ''}
-            disabled={locked || state.loadingSources} onChange={event => editor.chooseSource(event.target.value)}>
+            disabled={locked || state.loadingSources} onChange={event => {setScanSelection(null); setScanBlocked(false); editor.chooseSource(event.target.value);}}>
             <option value="">{state.loadingSources ? 'Memuat pilihan sumber…' : 'Pilih sumber atau pengamatan tanpa kaitan'}</option>
             <option value="unbound">Catat pengamatan tanpa kaitan sumber</option>
             {state.sources.items.map(source => <option key={source.pool.poolId} value={source.pool.poolId}>{source.pool.label} — {source.pool.physicalKey}</option>)}
@@ -196,6 +199,15 @@ function CountDesk({ loaded, onRefresh }: { loaded: Loaded; onRefresh: () => Pro
       </section> :
       <div className={styles.desk}>
         <section className={common.queue} aria-busy={state.loadingPackages}>
+          {state.warehouse && <ScanInput key={stockLocationKey(state.warehouse.location) + ':' + (state.selectedSource?.pool.poolId ?? state.sourceMode)}
+            actorId={loaded.actorId} disabled={locked || state.loadingPackages} current={() => !editor.snapshot().expired && !editor.snapshot().suspended && !sessionTiming(loaded.session, performance.now() - loaded.observedAt).expired}
+            context={{purpose: 'stocktake', location: state.warehouse.location, documentId: null, documentRevision: null, auxiliaryId: null, auxiliaryRevision: null, sourceReview: null}}
+            onReset={() => {setScanSelection(null); setScanBlocked(true); editor.changeSearch('');}} onManual={() => {setScanSelection(null); setScanBlocked(false); editor.changeSearch(''); void editor.loadPackages();}}
+            onConfirm={async candidate => {editor.changeSearch(candidate.skuCode); await editor.loadPackages();
+              const choice = editor.snapshot().packages.items.find(item => item.skuId === candidate.skuId);
+              if (!choice || candidate.targetReference !== choice.skuId || !sameScanPackage(candidate, choice)) throw new AccessFailure(409, 'operational_scan_context_changed');
+              editor.choosePackage(choice.skuId); setScanSelection(candidate.selection); setScanBlocked(false);
+            }} />}
           <div className={common.queueHeader}><h2>Pilih kemasan barang</h2>
             <form className={common.lookup} onSubmit={event => { event.preventDefault(); void editor.loadPackages(); }}>
               <label>Cari kode atau kemasan<input value={state.search} maxLength={128} disabled={locked}
@@ -207,7 +219,7 @@ function CountDesk({ loaded, onRefresh }: { loaded: Loaded; onRefresh: () => Pro
           {state.loadingPackages ? <p role="status" className={common.empty}>Memuat pilihan kemasan…</p> : <>
             <ul className={common.queueList}>{state.packages.items.map(item => <li key={item.skuId}>
               <button type="button" className={state.selectedPackage?.skuId === item.skuId ? common.selectedRow : common.queueRow}
-                aria-pressed={state.selectedPackage?.skuId === item.skuId} disabled={locked} onClick={() => editor.choosePackage(item.skuId)}>
+                aria-pressed={state.selectedPackage?.skuId === item.skuId} disabled={locked} onClick={() => {setScanSelection(null); editor.choosePackage(item.skuId);}}>
                 <strong>{item.familyName}</strong><span>{item.skuCode}</span>
                 <span>{item.packageLabel}: {amount(item.baseUnitsPerPackage)} {item.baseUnitCode} per kemasan</span>
               </button>
@@ -219,7 +231,7 @@ function CountDesk({ loaded, onRefresh }: { loaded: Loaded; onRefresh: () => Pro
         <section className={common.detail}>
           {state.selectedPackage ? <div className={common.form}>
             <PackageDetails choice={state.selectedPackage} />
-            <form onSubmit={event => { event.preventDefault(); editor.reviewCount(); }}>
+            <form onSubmit={event => { event.preventDefault(); if (!scanBlocked) editor.reviewCount(scanSelection ? [scanSelection] : undefined); }}>
               <fieldset className={common.fields} disabled={locked}>
                 <legend className={styles.formLegend}>Hasil hitungan fisik</legend>
                 <label>Jumlah kemasan yang ditemukan
@@ -235,7 +247,7 @@ function CountDesk({ loaded, onRefresh }: { loaded: Loaded; onRefresh: () => Pro
                 <label>Alasan penghitungan
                   <input required maxLength={1000} value={state.draft.reason} onChange={event => editor.changeDraft("reason", event.target.value)} />
                 </label>
-                <button className={common.primary}>Tinjau hitungan</button>
+                <button className={common.primary} disabled={scanBlocked}>Tinjau hitungan</button>
               </fieldset>
             </form>
           </div> : <div className={common.form}><h2>Pilih kemasan dari daftar</h2><p>Periksa isi setiap kemasan sebelum memasukkan jumlah fisiknya.</p></div>}

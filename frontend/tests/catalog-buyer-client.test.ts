@@ -6,6 +6,8 @@ import { actorId, family, sku, definition } from './catalog-fixtures';
 import { identityDestinations, identityReturnPath, loginFields } from '../src/modules/identity/identity-workflow';
 const item = { familyId: family.id, familyPublicId: family.publicId, familyName: family.name, description: family.description,
   categoryCode: family.categoryCode, skuId: sku.id, publicId: sku.publicId, code: sku.code, definition,
+  buyerIdentity: { skuId: sku.id, skuRevision: '1', definitionId: definition.id, definitionVersion: definition.version,
+    currentPrimary: { identifierId: '80', identifierRevision: '1', code: sku.code } },
   currentPrice: { id: '9007199254740999', skuId: sku.id, version: '2', currency: 'IDR', unitPrice: '0.00', effectiveAt: definition.effectiveAt } };
 function gateway(handler: (request: Request) => Promise<Response>) {
   return createBuyerCatalogGateway(createUnitTokoClient({ baseUrl: 'https://unit-toko.test', fetch: async input => {

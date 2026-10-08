@@ -1,4 +1,4 @@
-import type { BuyerVariant } from '../catalog/catalog-buyer-client';
+import { parseBuyerCodeMatch, type BuyerCodeMatch } from '../catalog/catalog-buyer-client';
 import type { DraftInput } from './order-draft-client';
 import { orderQuantity } from './order-quote-client';
 
@@ -31,14 +31,17 @@ export function parseBulkSkuInput(text: string): readonly BulkSkuRow[] {
   return Object.freeze(rows);
 }
 
-export function prepareBulkSkuSelection(rows: readonly BulkSkuRow[], variants: readonly BuyerVariant[],
+export function prepareBulkSkuSelection(rows: readonly BulkSkuRow[], matches: readonly BuyerCodeMatch[],
   current: DraftInput['selections']) {
-  if (rows.length === 0 || rows.length > 100 || variants.length !== rows.length ||
-      new Set(rows.map(row => row.code)).size !== rows.length || new Set(variants.map(item => item.skuId)).size !== variants.length)
+  if (rows.length === 0 || rows.length > 100 || matches.length !== rows.length ||
+      new Set(rows.map(row => row.code)).size !== rows.length || new Set(matches.map(item => item.variant.skuId)).size !== matches.length ||
+      new Set(matches.map(item => item.matchedIdentifier.identifierId)).size !== matches.length)
     throw new BulkInputError('Hasil pemeriksaan tidak sesuai daftar SKU. Periksa kembali.');
   const choices = rows.map((row, index) => {
-    const variant = variants[index];
-    if (variant.code !== row.code || variant.currentPrice === null) throw new BulkInputError('Kemasan atau harga SKU belum tersedia.', row.line);
+    let variant: BuyerCodeMatch['variant'];
+    try { variant = parseBuyerCodeMatch(matches[index], row.code).variant; }
+    catch { throw new BulkInputError('Kode dan kemasan tidak cocok. Periksa daftar kembali.', row.line); }
+    if (variant.currentPrice === null) throw new BulkInputError('Kemasan atau harga SKU belum tersedia.', row.line);
     let packages: number;
     try { packages = orderQuantity(String(row.packages), variant.definition.minimumOrderPackages, variant.definition.orderIncrementPackages); }
     catch { throw new BulkInputError('Jumlah tidak memenuhi minimum atau kelipatan kemasan ini.', row.line); }

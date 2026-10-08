@@ -18,8 +18,8 @@ public static class CatalogBulkEndpoints
             [FromServices] CatalogDefinitionQueryService service, CancellationToken ct) => {
             if (request.Codes is null || request.Codes.Count is < 1 or > 100)
                 throw new DomainValidationException("invalid_bulk_sku_query", "Choose up to 100 distinct internal SKU codes");
-            var items = await service.ReadExactSkuCodesAsync(http.Features.Get<ResolvedActor>()!.Actor, request.Codes.ToImmutableArray(), ct);
-            return TypedResults.Ok(items.Select(CatalogResponses.From).ToArray());
+            var items = await service.ReadExactBuyerIdentifiersAsync(http.Features.Get<ResolvedActor>()!.Actor, request.Codes.ToImmutableArray(), ct);
+            return TypedResults.Ok(items.Select(CatalogBuyerIdentifierResponses.From).ToArray());
         }).RequireAuthorization().AddEndpointFilter<ActorRequiredFilter>()
             .WithName("CatalogPublishedExactSkuQuery");
         foreach (var status in new[] { 400, 401, 403, 409, 503 })

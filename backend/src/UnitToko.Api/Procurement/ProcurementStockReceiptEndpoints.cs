@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Mvc;
 using MongoDB.Bson;
 using UnitToko.Api.Authorization;
+using UnitToko.Api.Catalog;
 using UnitToko.Modules.Accounting;
 using UnitToko.Modules.Contracts;
 using UnitToko.Modules.Identity.Contracts;
@@ -38,7 +39,8 @@ public sealed record ProcurementStockReceiptSourceQueryDto([property: JsonRequir
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record ProcurementStockReceiptPreviewInputDto([property: JsonRequired] string Purpose, [property: JsonRequired] ProcurementStockReceiptInputDto Input);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed record ProcurementStockReceiptCommandDto([property: JsonRequired] ProcurementStockReceiptInputDto Input, [property: JsonRequired] string Binding);
+public sealed record ProcurementStockReceiptCommandDto([property: JsonRequired] ProcurementStockReceiptInputDto Input, [property: JsonRequired] string Binding,
+    UnitToko.Api.Catalog.OperationalScanSelectionDto[]? ScanSelections = null);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record ProcurementStockReceiptRecoveryInputDto([property: JsonRequired] string Purpose, [property: JsonRequired] string Operation, [property: JsonRequired] string Key);
 
@@ -93,7 +95,8 @@ public static class ProcurementStockReceiptEndpoints
             [FromHeader(Name = "Idempotency-Key")] string key, CancellationToken ct) => {
             if (request.Input is null) throw ProcurementStockReceiptRules.Invalid();
             return TypedResults.Ok(Result(await service.ReceiveAsync(Actor(http), request.Input.Domain(), request.Binding,
-                new AuthorizationCommandMetadata(AccessRequestMetadata.IdempotencyKey(http.Request), request.Input.Reason, http.TraceIdentifier), ct)));
+                new AuthorizationCommandMetadata(AccessRequestMetadata.IdempotencyKey(http.Request), request.Input.Reason, http.TraceIdentifier), ct,
+                OperationalScanSelectionDto.DomainAll(request.ScanSelections))));
         }).WithName("ReceiveProcurementStock");
         group.MapPost("/receipts/query", async (ProcurementStockReceiptListInputDto request, HttpContext http, [FromServices] ProcurementStockReceiptService service, CancellationToken ct) => {
             Purpose(request.Purpose); var row = await service.ListAsync(Actor(http), Location(request.Location), request.BeforeId?.Value, ct);

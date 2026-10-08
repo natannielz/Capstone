@@ -137,13 +137,13 @@ public static class CatalogEndpoints
             [FromServices] CatalogDefinitionQueryService service, CancellationToken ct) =>
         {
             Page(request.Offset, request.Limit); Search(request.Search);
-            return TypedResults.Ok(CatalogResponses.From(await service.QueryAsync(Actor(http), request.Offset, request.Limit, request.Search, ct)));
+            return TypedResults.Ok(CatalogBuyerIdentifierResponses.From(await service.QueryBuyerAsync(Actor(http), request.Offset, request.Limit, request.Search, ct)));
         }).WithName("CatalogPublishedVariantQuery");
-        buyer.MapPost("/{publicId}/query", async Task<CatalogPublishedVariantDto?> (string publicId, CatalogVariantReadDto request, HttpContext http,
+        buyer.MapPost("/{publicId}/query", async Task<CatalogBuyerVariantDto?> (string publicId, CatalogVariantReadDto request, HttpContext http,
             [FromServices] CatalogDefinitionQueryService service, CancellationToken ct) =>
         {
-            var result = await service.ReadPublicAsync(Actor(http), publicId, ct);
-            return result is null ? null : CatalogResponses.From(result);
+            var result = await service.ReadBuyerPublicAsync(Actor(http), publicId, ct);
+            return result is null ? null : CatalogBuyerIdentifierResponses.From(result);
         }).WithName("CatalogPublishedVariantRead");
     }
 

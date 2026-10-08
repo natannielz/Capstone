@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using UnitToko.Api.Authorization;
+using UnitToko.Api.Catalog;
 using UnitToko.Modules.Catalog;
 using UnitToko.Modules.Contracts;
 using UnitToko.Modules.Identity.Contracts;
@@ -53,7 +54,8 @@ public static class StockCountEndpoints
             if (!StockCountPolicy.CanonicalText(reason, 1000))
                 throw new DomainValidationException("invalid_reason", "A bounded count reason is required");
             var result = await service.RecordCountAsync(Actor(http), request.ToDomain(),
-                new(AccessRequestMetadata.IdempotencyKey(http.Request), reason!, http.TraceIdentifier), ct);
+                new(AccessRequestMetadata.IdempotencyKey(http.Request), reason!, http.TraceIdentifier), ct,
+                OperationalScanSelectionDto.DomainAll(request.ScanSelections));
             http.Response.Headers.ETag = AccessRequestMetadata.VersionTag(1);
             return TypedResults.Ok(StockCountResponses.Observation(result));
         }).WithName("RecordStockCount");

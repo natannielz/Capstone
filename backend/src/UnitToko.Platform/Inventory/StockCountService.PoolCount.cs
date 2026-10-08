@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using MongoDB.Bson;
 using MongoDB.Driver;
+using UnitToko.Modules.Catalog;
 using UnitToko.Modules.Identity;
 using UnitToko.Modules.Identity.Contracts;
 using UnitToko.Modules.Inventory;
@@ -46,10 +47,11 @@ public sealed partial class StockCountService
         }, ct);
     }
     private async Task<StockCountObservation> RecordBoundCountAsync(ActorContext actor, StockCountInput input,
-        AuthorizationCommandMetadata metadata, CancellationToken ct) {
+        AuthorizationCommandMetadata metadata, CancellationToken ct, IReadOnlyList<OperationalScanSelection>? scanSelections) {
         var selected = input.PoolSelection ?? throw InventoryCountStockSourceRecords.Unavailable(); selected.Validate();
         await InventoryCountStockSourceStorage.RequireAsync(database, ct);
         var hash = StockCountBson.BodyHash(input, metadata.Reason);
+        var scanBindings = new OperationalScanCommandBindings(database, ids, clock);
         var id = await ids.NextAsync(StockCountBson.Collection, ct); var auditId = await ids.NextAsync("auditEvents", ct); var receiptId = ObjectId.GenerateNewId();
         return await unit.ExecuteAsync(async (tx, token) => {
             // Capture is fresh on every UOW attempt. No source/person/authority
@@ -59,15 +61,19 @@ public sealed partial class StockCountService
             if (receipt is not null) {
                 var original = await ReceiptAsync(context, receipt, token);
                 if (receipt["bodyHash"] != hash) throw new UnitToko.Platform.Mongo.PersistenceConflictException("idempotency_key_reused", "Request key was used with a different count source");
+                var replayScan = await scanBindings.BeginAsync(tx, actor, StockCountBson.Operation, metadata.IdempotencyKey, hash, scanSelections, token);
+                await scanBindings.CompleteAsync(tx, replayScan, receipt, await Rows("auditEvents").Find(tx, F.Eq("_id", original.AuditId)).SingleAsync(token), [], token);
                 await CompleteAsync(context, token); return original;
             }
             await RequireMissingBoundKeyAsync(context, metadata.IdempotencyKey, token);
             RequireLocation(context, input.Location); var sources = CountSources;
+            var scanAttempt = await scanBindings.BeginAsync(tx, actor, StockCountBson.Operation, metadata.IdempotencyKey, hash, scanSelections, token);
             await new StockSourceTopologyFence(database).FenceAsync(tx, input.Location.OrganizationId ?? throw InventoryCountStockSourceRecords.Unavailable(), token);
             var capture = await InventoryCountPoolCapture.ReadAsync(sources, actor, context.Snapshot, tx, input.Location, selected, token);
             var result = await catalog.WithStockCountDefinitionAsync(database, tx, actor, input.Location, input.SkuId,
                 input.ExpectedSkuRevision, input.ExpectedDefinitionId, async (definition, callbackToken) => {
                     capture.Require(database, tx); Current(context);
+                    var scans = await CaptureCountScanAsync(tx, input.Location, definition, scanSelections, callbackToken);
                     var row = StockCountBson.Create(id.Value, auditId.Value, actor, input, StockCountBson.Definition(definition), metadata,
                         clock.UtcNow, capture.Binding, capture.SourceHash);
                     await Rows(StockCountBson.Collection).InsertOneAsync(tx, row, cancellationToken: callbackToken);
@@ -77,6 +83,8 @@ public sealed partial class StockCountService
                     await Rows("idempotencyRecords").InsertOneAsync(tx, StockCountBson.Receipt(row, receiptId), cancellationToken: callbackToken);
                     var proof = await new InventoryCountStockSourceProducer(database, ids, clock).RecordFreshAsync(tx, this, sources, row, capture, callbackToken);
                     await new InventoryCountCoverage(database).AppendFreshAsync(tx, this, sources, row, callbackToken);
+                    await scanBindings.CompleteAsync(tx, scanAttempt, StockCountBson.Receipt(row, receiptId), StockCountBson.Audit(row), scans.Evidence, callbackToken);
+                    await scans.CompleteAsync(tx, callbackToken);
                     await capture.FenceAsync(database, tx, callbackToken); Current(context);
                     await proof.RequireFinalAsync(database, tx, row, callbackToken);
                     return (Observation: await GraphAsync(tx, row, callbackToken), Row: row, Proof: proof);

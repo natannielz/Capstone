@@ -1,6 +1,8 @@
 'use client';
 
 import Link from 'next/link';
+import {ScanInput} from '../inventory/ScanInput';
+import {sameScanPackage} from '../inventory/scan-client';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createIdentityGateway } from '../identity/identity-client';
 import { IdentityFailure, sessionTiming, type IdentitySession } from '../identity/identity-workflow';
@@ -82,7 +84,7 @@ function DispatchDesk({ account, onFailure }: { account: Account; onFailure: (er
     try {
       const source = await gateway.read(actorId, suborderId); if (!current()) return;
       const choices = await gateway.couriers(actorId, suborderId); if (!current()) return;
-      setPrepared(source); setCouriers(choices.items); setMoreCouriers(choices.hasMore); setCourierId(''); setValues({}); setReason('');
+      setPrepared(source); setCouriers(choices.items); setMoreCouriers(choices.hasMore); setCourierId(''); setValues({}); setReason(''); setScanSelection(null); setScanBlocked(false);
     } catch (failure) { if (current()) { setError(failure); onFailure(failure); } }
     finally { pending.current = false; if (alive.current) setBusy(false); }
   }
@@ -91,13 +93,15 @@ function DispatchDesk({ account, onFailure }: { account: Account; onFailure: (er
     try { const next = await gateway.couriers(actorId, prepared.source.suborderId, couriers.at(-1)!.userId); if (current()) { setCouriers(previous => [...previous, ...next.items]); setMoreCouriers(next.hasMore); } }
     catch (failure) { if (current()) { setError(failure); onFailure(failure); } } finally { pending.current = false; if (alive.current) setBusy(false); }
   }
+  const [scanBlocked, setScanBlocked] = useState(false), [scannedSku, setScannedSku] = useState<string | null>(null),
+    [scanSelection, setScanSelection] = useState<import('../inventory/scan-client').OperationalScanSelection | null>(null);
   async function preview() {
-    if (!prepared || !current() || locked || pending.current) return; pending.current = true; setBusy(true); setError(null);
+    if (!prepared || !current() || locked || pending.current || scanBlocked) return; pending.current = true; setBusy(true); setError(null);
     try {
       const lots = prepared.lots.filter(lot => (values[lot.reservationId] ?? '').trim() !== '').map(lot => ({ reservationId: lot.reservationId,
         packages: /^[1-9][0-9]{0,6}$(?![\s\S])/.test(values[lot.reservationId]) ? Number(values[lot.reservationId]) : NaN }));
       const next = await gateway.preview(actorId, prepared, courierId, lots); if (!current()) return;
-      setCommand(prepareDispatchCommand(actorId, next, reason.trim())); setReview(next);
+      setCommand(prepareDispatchCommand(actorId, next, reason.trim(), scanSelection ? [scanSelection] : undefined)); setReview(next);
     } catch (failure) { if (current()) { setError(failure); onFailure(failure); } } finally { pending.current = false; if (alive.current) setBusy(false); }
   }
   async function confirm() {
@@ -134,6 +138,17 @@ function DispatchDesk({ account, onFailure }: { account: Account; onFailure: (er
       <p>{prepared.source.buyerName}</p><p className={styles.address}>{prepared.source.delivery.recipientName} · {prepared.source.delivery.phone}{'\n'}{prepared.source.delivery.address}{'\n'}{prepared.source.delivery.city} {prepared.source.delivery.postalCode}</p>
       <ul>{prepared.lines.map(line => { const item = prepared.source.lines.find(item => item.skuId === line.skuId)!;
         return <li key={line.skuId}>{item.productName} — {line.packages} {item.definition.packageLabel} · total {(BigInt(line.packages) * BigInt(item.definition.baseUnitsPerPackage)).toString()} {item.definition.baseUnitCode}</li>; })}</ul>
+      {!review && <ScanInput key={prepared.preparationId + ':' + prepared.preparationRevision + ':' + prepared.source.review} actorId={actorId} disabled={locked} current={current}
+        context={{purpose: 'dispatch', location: null, documentId: prepared.source.suborderId, documentRevision: prepared.source.revision,
+          auxiliaryId: prepared.preparationId, auxiliaryRevision: prepared.preparationRevision, sourceReview: prepared.source.review}}
+        onReset={() => {setScanSelection(null); setScanBlocked(true); setScannedSku(null); setValues({});}} onManual={() => {setScanSelection(null); setScanBlocked(false); setScannedSku(null);}}
+        onConfirm={candidate => {const line = prepared.source.lines.find(item => item.skuId === candidate.skuId);
+          if (!current() || !line || !prepared.lines.some(item => item.skuId === line.skuId) || candidate.targetReference !== line.skuId ||
+            !sameScanPackage(candidate, {...line.definition, skuId: line.skuId, skuCode: line.skuCode, definitionId: line.definition.id, definitionVersion: line.definition.version}))
+            throw new AccessFailure(409, 'operational_scan_context_changed');
+          setScannedSku(line.skuId); setScanSelection(candidate.selection); setScanBlocked(false);
+        }} />}
+      {scannedSku && !review && <p role="status">Kemasan telah dikonfirmasi dari hasil pindai. Pilih lot yang sesuai dan isi jumlah sebenarnya pada baris {prepared.source.lines.find(item => item.skuId === scannedSku)?.skuCode}.</p>}
       {review && command ? <><h3>Konfirmasi barang dan kurir</h3><p>Kurir: <strong>{review.courierName}</strong></p><ul>{review.selected.map(lot => {
         const reserved = prepared.lots.find(item => item.reservationId === lot.reservationId)!; const product = prepared.source.lines.find(item => item.skuId === reserved.skuId)!;
         return <li key={lot.reservationId}>{product.productName} · Lot {reserved.lotId} · {lot.packages} {product.definition.packageLabel}</li>; })}</ul>
@@ -151,7 +166,7 @@ function DispatchDesk({ account, onFailure }: { account: Account; onFailure: (er
         {couriers.length === 0 && <p>Belum ada kurir dengan penugasan aktif untuk toko dan kanal ini.</p>}
         {moreCouriers && <button type="button" className={common.secondary} onClick={() => void loadCouriers()}>Tampilkan kurir lainnya</button>}
         <label>Catatan keberangkatan<input required maxLength={1000} value={reason} onChange={event => setReason(event.target.value)} /></label>
-        <button className={common.primary} disabled={locked || !courierId}>Tinjau keberangkatan</button></fieldset></form>}
+        <button className={common.primary} disabled={locked || !courierId || scanBlocked}>Tinjau keberangkatan</button></fieldset></form>}
       <button className={common.secondary} disabled={locked} onClick={() => void select(prepared.source.suborderId)}>Muat ulang lot dan kurir</button>
     </section>}
   </>;

@@ -21,11 +21,39 @@ export function parseBuyerVariant(value: unknown) {
   if (definition.skuId !== skuId || currentPrice && currentPrice.skuId !== skuId) return invalid();
   if (typeof row.description !== 'string' || catalogDescription(row.description) !== row.description) return invalid();
   const code = text(row.code, 64); if (!/^[A-Z0-9._-]+$(?![\s\S])/.test(code)) return invalid();
-  // Construct the buyer view explicitly. No staff rationale, source or identity fields are copied.
+  // Owner-facing historical DTOs may omit this projection. Never manufacture a current primary from stable code.
+  const buyerIdentity = row.buyerIdentity == null ? null : parseBuyerIdentity(row.buyerIdentity, skuId, definition.id, definition.version);
+  // Construct the buyer view explicitly. No staff rationale, supplier namespace or provenance is copied.
   return { familyId: priceId(row.familyId), familyPublicId: publicId(row.familyPublicId), familyName: text(row.familyName, 160),
-    description: row.description, categoryCode: text(row.categoryCode, 64), skuId, publicId: publicId(row.publicId), code, definition, currentPrice };
+    description: row.description, categoryCode: text(row.categoryCode, 64), skuId, publicId: publicId(row.publicId), code, definition, currentPrice, buyerIdentity };
+}
+function internalCode(value: unknown) {
+  return typeof value === 'string' && /^[A-Z0-9._-]{1,64}$(?![\s\S])/.test(value) ? value : invalid();
+}
+function parseBuyerIdentity(value: unknown, skuId: string, definitionId: string, definitionVersion: string) {
+  const row = record(value), primary = record(row.currentPrimary);
+  if (priceId(row.skuId) !== skuId || priceId(row.definitionId) !== definitionId || priceId(row.definitionVersion) !== definitionVersion) return invalid();
+  return { skuId, skuRevision: priceId(row.skuRevision), definitionId, definitionVersion,
+    currentPrimary: { identifierId: priceId(primary.identifierId), identifierRevision: priceId(primary.identifierRevision), code: internalCode(primary.code) } };
 }
 export type BuyerVariant = ReturnType<typeof parseBuyerVariant>;
+export function buyerCurrentCode(item: BuyerVariant) { return item.buyerIdentity?.currentPrimary.code ?? item.code; }
+export function parseBuyerCodeMatch(value: unknown, requestedCode: string) {
+  const row = record(value), binding = record(row.matchedIdentifier), variant = parseBuyerVariant(row.variant);
+  const identity = variant.buyerIdentity;
+  if (row.requestedCode !== requestedCode || internalCode(binding.code) !== requestedCode || !identity ||
+      binding.kind !== 'skuCode' || binding.namespace !== 'internal' || priceId(binding.skuId) !== identity.skuId ||
+      priceId(binding.skuRevision) !== identity.skuRevision || priceId(binding.definitionId) !== identity.definitionId ||
+      priceId(binding.definitionVersion) !== identity.definitionVersion) return invalid();
+  const matchedIdentifier = { identifierId: priceId(binding.identifierId), identifierRevision: priceId(binding.identifierRevision),
+    code: requestedCode, skuId: identity.skuId, skuRevision: identity.skuRevision, definitionId: identity.definitionId,
+    definitionVersion: identity.definitionVersion, kind: 'skuCode' as const, namespace: 'internal' as const };
+  if ((matchedIdentifier.identifierId === identity.currentPrimary.identifierId || requestedCode === identity.currentPrimary.code) &&
+      (matchedIdentifier.identifierId !== identity.currentPrimary.identifierId || matchedIdentifier.identifierRevision !== identity.currentPrimary.identifierRevision ||
+       requestedCode !== identity.currentPrimary.code)) return invalid();
+  return { requestedCode, matchedIdentifier, variant };
+}
+export type BuyerCodeMatch = ReturnType<typeof parseBuyerCodeMatch>;
 function data<T>(result: { data?: T; error?: unknown; response: Response }): T {
   if (!result.response.ok || result.data === undefined) {
     const problem = result.error && typeof result.error === 'object' ? result.error as Record<string, unknown> : {};
@@ -43,6 +71,7 @@ export function createBuyerCatalogGateway(client: ReturnType<typeof createUnitTo
       const total = row.total === '0' ? '0' : priceId(row.total);
       if (!Array.isArray(row.items) || row.items.length > 25) return invalid();
       const items = row.items.map(parseBuyerVariant);
+      if (items.some(item => item.buyerIdentity === null)) return invalid();
       if (BigInt(total) < BigInt(items.length) || new Set(items.map(item => item.skuId)).size !== items.length ||
         items.some((item, index) => index > 0 && BigInt(item.skuId) <= BigInt(items[index - 1].skuId))) return invalid();
       return { total, items };
@@ -52,7 +81,7 @@ export function createBuyerCatalogGateway(client: ReturnType<typeof createUnitTo
         body: {}, params: { path: { publicId: publicId(id) }, header: { 'X-Expected-Actor-Id': priceId(actorId) } }, signal,
       }));
       if (row === null) return null;
-      const variant = parseBuyerVariant(row); return variant.publicId === id ? variant : invalid();
+      const variant = parseBuyerVariant(row); return variant.publicId === id && variant.buyerIdentity !== null ? variant : invalid();
     },
   };
 }

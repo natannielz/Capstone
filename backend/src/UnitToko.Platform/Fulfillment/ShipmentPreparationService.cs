@@ -65,26 +65,34 @@ public sealed partial class ShipmentPreparationService
         await TouchAsync(tx, head, ct);
     }
     public async Task<BsonDocument> SaveAsync(ActorContext actor, long suborderId, long expectedRevision, string review,
-        ImmutableArray<ShipmentPackageSelection> lines, AuthorizationCommandMetadata metadata, CancellationToken ct = default) {
+        ImmutableArray<ShipmentPackageSelection> lines, AuthorizationCommandMetadata metadata, CancellationToken ct = default,
+        IReadOnlyList<UnitToko.Modules.Catalog.OperationalScanSelection>? scanSelections = null) {
         Metadata(metadata); lines = ShipmentPreparationPolicy.Copy(lines);
         if (suborderId <= 0 || expectedRevision is < 0 or long.MaxValue || review is null || review.Length != 64 || review.Any(c => !char.IsAsciiHexDigitLower(c)))
             throw new DomainValidationException("invalid_shipment_preparation", "Use the current order and preparation revision");
         await StorageAsync(ct);
         var proposedId = (await ids.NextAsync(B.Heads, ct)).Value; var versionId = (await ids.NextAsync(B.Versions, ct)).Value; var auditId = (await ids.NextAsync("auditEvents", ct)).Value;
         var body = Body(suborderId, expectedRevision, review, lines);
+        var scanBindings = new UnitToko.Platform.Catalog.OperationalScanCommandBindings(database, ids, clock); await scanBindings.RequireStorageAsync(ct);
+        UnitToko.Platform.Catalog.OperationalScanCommandBindings.Attempt scanAttempt = null!;
+        UnitToko.Platform.Catalog.CatalogOperationalScanCapture? scans = null;
         BsonDocument? previous = null; FulfillmentOrderSource source = null!; var wrote = false;
         return await authorization.ExecuteCommandAsync(actor, B.Operation, metadata, body, async (snapshot, tx, token) => {
-            wrote = false;
+            wrote = false; scans = null;
             source = await orders.ReadForShipmentPreparationAsync(actor, snapshot, tx, suborderId, token);
             previous = await HeadAsync(tx, suborderId, token);
             var originals = await Rows(B.Versions).Find(tx, F.Eq("preparedBy", actor.UserId) & F.Eq("requestKey", metadata.IdempotencyKey)).Limit(2).ToListAsync(token);
             if (originals.Count > 1) throw B.Invalid();
             if (originals.Count == 1) _ = await VersionAsync(tx, originals[0]["_id"].AsInt64, token);
+            scanAttempt = await scanBindings.BeginAsync(tx, actor, B.Operation, metadata.IdempotencyKey,
+                AuthorizationStore.CommandHash(body, metadata.Reason), scanSelections, token);
             return new(ScopePolicy.Authorize(actor, snapshot, Permissions.ShipmentPrepare, source.Resource, clock.UtcNow),
                 ScopePolicy.RequiredNodes(source.Resource, snapshot.Directory), Permissions.ShipmentPrepare, new(source.Resource));
         }, async (tx, token) => {
             if ((previous?["revision"].AsInt64 ?? 0) != expectedRevision) throw Changed();
             _ = ShipmentPreparationPolicy.Require(source.View, review, lines);
+            scans = await UnitToko.Platform.Catalog.CatalogOperationalScanCapture.ReadAsync(database, tx, source.Resource,
+                source.View.Lines.Where(line => lines.Any(item => item.SkuId == line.SkuId)).Select(line => UnitToko.Platform.Catalog.ScanResolver.Choice(line).Candidate).ToArray(), scanSelections, token);
             var now = DateTimeOffset.FromUnixTimeMilliseconds(clock.UtcNow.ToUnixTimeMilliseconds());
             if (now < source.View.OrderedAt || previous is not null && now < OrderDraftBson.Time(previous["updatedAt"])) throw B.Invalid();
             var id = previous?["_id"].AsInt64 ?? proposedId;
@@ -108,6 +116,8 @@ public sealed partial class ShipmentPreparationService
             var receipt = await ReceiptAsync(actor, metadata.IdempotencyKey, tx, token) ?? throw B.Invalid();
             var recorded = await ReceiptVersionAsync(actor, receipt, tx, token);
             if (recorded["source"]["suborderId"] != suborderId) throw B.Invalid();
+            await scanBindings.CompleteAsync(tx, scanAttempt, receipt, B.Audit(recorded), scans?.Evidence ?? [], token);
+            if (scans is not null) await scans.CompleteAsync(tx, token);
             var current = await orders.ReadForShipmentPreparationAsync(actor, snapshot, tx, suborderId, token);
             if (wrote) _ = ShipmentPreparationPolicy.Require(current.View, review, lines);
             var head = await HeadAsync(tx, suborderId, token) ?? throw B.Invalid();
@@ -134,11 +144,14 @@ public sealed partial class ShipmentPreparationService
         return await authorization.ReadAsync(actor, async (snapshot, tx, token) => {
             AuthorizationStore.Require(ScopePolicy.Compile(actor, snapshot, Permissions.ShipmentPrepare, clock.UtcNow));
             var receipt = await ReceiptAsync(actor, key, tx, token);
-            if (receipt is null) { await orders.FenceShipmentPreparationAsync(actor, snapshot, tx, [], token); return null; }
+            if (receipt is null) {
+                await new UnitToko.Platform.Catalog.OperationalScanCommandBindings(database, ids, clock).VerifyRecoveryAsync(tx, actor.UserId, B.Operation, key, null, token);
+                await orders.FenceShipmentPreparationAsync(actor, snapshot, tx, [], token); return null; }
             var version = await ReceiptVersionAsync(actor, receipt, tx, token);
             var source = await orders.ReadForShipmentPreparationAsync(actor, snapshot, tx, version["source"]["suborderId"].AsInt64, token);
             var head = await HeadAsync(tx, source.View.SuborderId.Value, token) ?? throw B.Invalid();
             if (!CatalogEqual(head["scope"], B.Scope(source.Resource))) throw B.Invalid();
+            await new UnitToko.Platform.Catalog.OperationalScanCommandBindings(database, ids, clock).VerifyRecoveryAsync(tx, actor.UserId, B.Operation, key, receipt, token);
             await TouchAsync(tx, head, token); await orders.FenceShipmentPreparationAsync(actor, snapshot, tx, [source], token);
             return B.Result(version);
         }, ct);

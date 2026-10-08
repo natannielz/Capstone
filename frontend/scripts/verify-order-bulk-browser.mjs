@@ -71,12 +71,25 @@ export async function verifyOrderBulkBrowser({config, buyer, user, origin, direc
     await page.getByRole('button', {name: 'Masukkan banyak SKU', exact: true}).click();
     const read = await inspectBulk(page, config.skuCode + ';' + config.bulkPackages);
     assert.deepEqual(read.input, {codes: [config.skuCode]}); assert.equal(read.result.length, 1);
-    assert.equal(read.result[0].skuId, expected.selections[0].skuId);
-    assert.equal(read.result[0].code, config.skuCode);
-    assert.equal(read.result[0].definition.id, expected.selections[0].definitionId);
-    assert.equal(read.result[0].definition.version, expected.selections[0].definitionVersion);
-    assert.equal(read.result[0].currentPrice.id, expected.selections[0].priceId);
-    assert.equal(read.result[0].currentPrice.version, expected.selections[0].priceVersion);
+    const match = read.result[0], variant = match.variant, identity = variant.buyerIdentity;
+    assert.equal(match.requestedCode, config.skuCode);
+    assert.equal(variant.skuId, expected.selections[0].skuId);
+    assert.equal(variant.code, config.skuCode);
+    assert.equal(variant.definition.id, expected.selections[0].definitionId);
+    assert.equal(variant.definition.version, expected.selections[0].definitionVersion);
+    assert.equal(variant.currentPrice.id, expected.selections[0].priceId);
+    assert.equal(variant.currentPrice.version, expected.selections[0].priceVersion);
+    assert.match(identity.skuRevision, /^[1-9][0-9]*$/);
+    assert.match(identity.currentPrimary.identifierId, /^[1-9][0-9]*$/);
+    assert.match(identity.currentPrimary.identifierRevision, /^[1-9][0-9]*$/);
+    assert.deepEqual(identity, {skuId: variant.skuId, skuRevision: identity.skuRevision,
+      definitionId: variant.definition.id, definitionVersion: variant.definition.version,
+      currentPrimary: {identifierId: identity.currentPrimary.identifierId,
+        identifierRevision: identity.currentPrimary.identifierRevision, code: config.skuCode}});
+    assert.deepEqual(match.matchedIdentifier, {identifierId: identity.currentPrimary.identifierId,
+      identifierRevision: identity.currentPrimary.identifierRevision, code: config.skuCode,
+      skuId: variant.skuId, skuRevision: identity.skuRevision, definitionId: variant.definition.id,
+      definitionVersion: variant.definition.version, kind: 'skuCode', namespace: 'internal'});
     await page.waitForFunction(() => document.activeElement?.getAttribute('aria-label') === 'Konfirmasi daftar SKU');
     await bulkReview(page).getByText('Jumlah SKU ini dalam draf akan diganti menjadi ' + config.bulkPackages + ' setelah Anda menerapkan daftar.', {exact: true}).waitFor();
     await fields(page, config.originalPackages);

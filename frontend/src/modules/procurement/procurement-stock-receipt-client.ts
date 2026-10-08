@@ -5,6 +5,7 @@ import { paymentAllocationSchemas } from '../billing/payment-allocation-client';
 import { freezeCatalogAttempt } from '../catalog/catalog-editor-state';
 import { parseProcurementTargets, procurementLocationKey, type ProcurementTarget } from './procurement-request-client';
 import { procurementInspectionSourceSchemas } from './procurement-inspection-client';
+import {validateScanSelections} from '../inventory/scan-client';
 
 const { id, hash } = paymentAllocationSchemas, { location, order, inspectionLine } = procurementInspectionSourceSchemas;
 const zero = z.union([z.literal('0'), id]), text = (max: number) => z.string().min(1).max(max).refine(value => !/^\p{Z}|\p{Z}$|\p{Cc}/u.test(value));
@@ -48,10 +49,19 @@ export const parseStockReceipt = (value: unknown) => parse(receipt, value);
 export const parseStockReceiptPools = (value: unknown) => parse(pools, value);
 export function stockReceiptKeyOwner(value: string) { const found = /^sr\.receive\.([1-9][0-9]{0,18})\.([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$(?![\s\S])/.exec(value); return found && found[2] !== '00000000-0000-0000-0000-000000000000' ? parse(id, found[1]) : invalid(); }
 export function parseStockReceiptResult(value: unknown, key: string, operation: string) { stockReceiptKeyOwner(key); if (operation !== stockReceiptOperation) return invalid(); return parse(result, value); }
-export function prepareStockReceipt(actorId: string, target: ProcurementTarget, original: StockReceiptOrder, selected: StockReceiptInspection, lineNumber: number, chosenPool: StockReceiptPool, value: ProcurementStockReceiptInput, shown: StockReceiptPreview) {
+export function prepareStockReceipt(actorId: string, target: ProcurementTarget, original: StockReceiptOrder, selected: StockReceiptInspection, lineNumber: number, chosenPool: StockReceiptPool, value: ProcurementStockReceiptInput, shown: StockReceiptPreview,
+  scanSelections?: readonly import('../inventory/scan-client').OperationalScanSelection[]) {
   const where = parseProcurementTargets({ items: [target] }).items[0], ordered = parse(order, original), inspection = parse(choice, selected), allocated = parse(pool, chosenPool), sent = stockReceiptInput(value), checked = parse(preview, shown), line = inspection.lines.find(item => item.lineNumber === lineNumber);
   if (!line || !sameLocation(where.location, sent.location) || !same(ordered, checked.source.order) || !same(allocated, checked.pool) || inspection.inspectionId !== sent.inspectionId || lineNumber !== sent.inspectionLineNumber || !same(line.input, checked.source.inspection.line) || !same(line.capacity, checked.capacity) || !same(sent, checked.input)) throw new RequestNotSentError(409, 'procurement_stock_receipt_view_stale');
-  return freezeCatalogAttempt({ actorId: parse(id, actorId), inspectionId: sent.inspectionId, body: { input: sent, binding: checked.binding } });
+  const product = ordered.lines.find(item => item.skuId === line.input.requestSkuId);
+  if (!product) throw new RequestNotSentError(409, 'operational_scan_context_changed');
+  const scans = validateScanSelections(scanSelections, [product], true);
+  if (scans && (scans.length !== 1 || scans.some(item => item.source !== null && (item.source.orderId !== sent.orderId ||
+    item.source.orderVersion !== sent.orderVersion || item.source.inspectionId !== sent.inspectionId || item.source.inspectionRevision !== inspection.version ||
+    item.source.inspectionLineNumber !== lineNumber || item.source.sourceSystem !== product.sourceSystem ||
+    item.source.sourceAccount !== product.sourceAccountReference || item.source.sourceCode !== product.externalItemCode))))
+    throw new RequestNotSentError(409, 'operational_scan_context_changed');
+  return freezeCatalogAttempt({ actorId: parse(id, actorId), inspectionId: sent.inspectionId, body: { input: sent, binding: checked.binding, ...(scans ? {scanSelections: [...scans]} : {}) } });
 }
 export function createProcurementStockReceiptGateway(client: ReturnType<typeof createUnitTokoClient> = createUnitTokoClient()) {
   return {

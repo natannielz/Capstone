@@ -2,6 +2,7 @@ import { createUnitTokoClient, RequestNotSentError } from '../../api/client';
 import { AccessFailure } from '../administration/workflow';
 import { priceId } from '../catalog/catalog-price-workflow';
 import { parseFulfillmentOrder, type FulfillmentOrder, type PackageSelection } from './preparation-client';
+import {validateScanSelections} from '../inventory/scan-client';
 
 const invalid = (): never => { throw new AccessFailure(502, 'shipment_dispatch_response_invalid'); };
 function record(value: unknown): Record<string, unknown> { return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : invalid(); }
@@ -58,12 +59,15 @@ export function parseDispatchResult(value: unknown) {
     numberEntity: priceId(row.numberEntity), numberChannel: priceId(row.numberChannel), numberYear, number: priceId(row.number) };
 }
 export type DispatchResult = ReturnType<typeof parseDispatchResult>;
-export function prepareDispatchCommand(actorId: string, review: DispatchReview, reason: string) {
+export function prepareDispatchCommand(actorId: string, review: DispatchReview, reason: string, scanSelections?: readonly import('../inventory/scan-client').OperationalScanSelection[]) {
   try {
     const accepted = parseDispatchReview(review);
+    const scans = validateScanSelections(scanSelections, accepted.preparation.source.lines.filter(line => accepted.selected.some(selected =>
+      accepted.preparation.lots.some(lot => lot.reservationId === selected.reservationId && lot.skuId === line.skuId)))
+      .map(line => ({skuId: line.skuId, definitionId: line.definition.id, definitionVersion: line.definition.version})));
     return Object.freeze({ actorId: priceId(actorId), orderId: accepted.preparation.source.orderId, suborderId: accepted.preparation.source.suborderId,
       selection: Object.freeze({ preparationId: accepted.preparation.preparationId, preparationRevision: accepted.preparation.preparationRevision,
-        courierId: accepted.courierId, lots: Object.freeze(accepted.selected.map(lot => Object.freeze({ ...lot }))) }), review: accepted.review, reason: text(reason, 1000) });
+        courierId: accepted.courierId, lots: Object.freeze(accepted.selected.map(lot => Object.freeze({ ...lot }))) }), review: accepted.review, reason: text(reason, 1000), ...(scans ? {scanSelections: scans} : {}) });
   } catch { throw new AccessFailure(400, 'invalid_shipment_dispatch_request'); }
 }
 export type DispatchCommand = ReturnType<typeof prepareDispatchCommand>;
@@ -103,7 +107,7 @@ export function createDispatchGateway(client: ReturnType<typeof createUnitTokoCl
     },
     async dispatch(command: DispatchCommand, requestKey: string, isCurrent: () => boolean) {
       if (!isCurrent()) throw new RequestNotSentError(409, 'shipment_view_stale');
-      const result = parseDispatchResult(data(await client.POST('/api/v1/fulfillment/dispatches/{suborderId}', { body: { selection: { ...command.selection, lots: command.selection.lots.map(lot => ({ ...lot })) }, review: command.review, reason: command.reason },
+      const result = parseDispatchResult(data(await client.POST('/api/v1/fulfillment/dispatches/{suborderId}', { body: { selection: { ...command.selection, lots: command.selection.lots.map(lot => ({ ...lot })) }, review: command.review, reason: command.reason, ...(command.scanSelections ? {scanSelections: [...command.scanSelections]} : {}) },
         params: { path: { suborderId: command.suborderId }, header: { ...headers(command.actorId), 'Idempotency-Key': key(requestKey), 'If-Match': '"' + command.selection.preparationRevision + '"' } } })));
       if (!isCurrent()) throw new AccessFailure(503, 'commit_outcome_unknown');
       if (result.orderId !== command.orderId || result.suborderId !== command.suborderId) return invalid(); return result;

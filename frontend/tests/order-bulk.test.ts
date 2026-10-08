@@ -3,15 +3,19 @@ import assert from 'node:assert/strict';
 import { createUnitTokoClient } from '../src/api/client';
 import { AccessFailure } from '../src/modules/administration/workflow';
 import { createBuyerBulkGateway } from '../src/modules/catalog/catalog-bulk-client';
-import { parseBuyerVariant } from '../src/modules/catalog/catalog-buyer-client';
+import { parseBuyerCodeMatch } from '../src/modules/catalog/catalog-buyer-client';
 import { BulkInputError, parseBulkSkuInput, prepareBulkSkuSelection } from '../src/modules/ordering/order-bulk';
 import { actorId, family, sku, definition } from './catalog-fixtures';
 
 function variant(code = sku.code, id = sku.id) {
-  return parseBuyerVariant({ familyId: family.id, familyPublicId: family.publicId, familyName: family.name,
+  return parseBuyerCodeMatch({ requestedCode: code, matchedIdentifier: { identifierId: '80', identifierRevision: '1', code,
+    skuId: id, skuRevision: '1', definitionId: definition.id, definitionVersion: definition.version, kind: 'skuCode', namespace: 'internal' },
+    variant: { familyId: family.id, familyPublicId: family.publicId, familyName: family.name,
     description: family.description, categoryCode: family.categoryCode, skuId: id, publicId: sku.publicId, code,
     definition: { ...definition, skuId: id, minimumOrderPackages: 2, orderIncrementPackages: 2 },
-    currentPrice: { id: '9007199254741003', skuId: id, version: '4', currency: 'IDR', unitPrice: '12345.67', effectiveAt: definition.effectiveAt } });
+    buyerIdentity: { skuId: id, skuRevision: '1', definitionId: definition.id, definitionVersion: definition.version,
+      currentPrimary: { identifierId: '80', identifierRevision: '1', code } },
+    currentPrice: { id: '9007199254741003', skuId: id, version: '4', currency: 'IDR', unitPrice: '12345.67', effectiveAt: definition.effectiveAt } } }, code);
 }
 
 test('bulk parses explicit internal SKU and package counts from spreadsheet or semicolon rows', () => {
@@ -41,7 +45,7 @@ test('bulk holds exact current definition and price versions, explicitly replace
 
 test('bulk refuses reordered, partial, duplicate or unavailable catalog results and invalid package multiples', () => {
   const rows = parseBulkSkuInput('PENA-12;4\nPAPER_1;2'), first = variant(), second = variant('PAPER_1', '9007199254741011');
-  for (const items of [[first], [second, first], [first, first], [first, { ...second, currentPrice: null }]])
+  for (const items of [[first], [second, first], [first, first], [first, { ...second, variant: { ...second.variant, currentPrice: null } }]])
     assert.throws(() => prepareBulkSkuSelection(rows, items, []), BulkInputError);
   assert.throws(() => prepareBulkSkuSelection(parseBulkSkuInput('PENA-12;1'), [first], []), BulkInputError);
   assert.throws(() => prepareBulkSkuSelection(parseBulkSkuInput('PENA-12;3'), [first], []), BulkInputError);
@@ -69,7 +73,7 @@ test('bulk gateway binds the exact actor and CSRF token and rejects mismatched s
   } }));
   await assert.rejects(() => gateway.exact(actorId, ['pena-12']), AccessFailure); assert.equal(calls, 0);
   const result = await gateway.exact(actorId, [sku.code]);
-  assert.equal(result[0].skuId, sku.id); assert.equal(result[0].currentPrice!.id, '9007199254741003');
+  assert.equal(result[0].variant.skuId, sku.id); assert.equal(result[0].variant.currentPrice!.id, '9007199254741003');
   reply = []; await assert.rejects(() => gateway.exact(actorId, [sku.code]), AccessFailure);
   reply = [variant('DIFFERENT-CODE')]; await assert.rejects(() => gateway.exact(actorId, [sku.code]), AccessFailure);
 });

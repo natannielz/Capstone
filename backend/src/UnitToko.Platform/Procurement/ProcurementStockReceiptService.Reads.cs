@@ -125,8 +125,13 @@ public sealed partial class ProcurementStockReceiptService
         if (operation != B.Operation) throw ProcurementStockReceiptRules.Invalid(); Key(key); await StorageAsync(ct);
         return await authorization.ReadAsync<BsonDocument?>(actor, async (authority, tx, token) => {
             _ = Query(actor, authority, Permissions.StockReceive); var row = await records.ForKeyAsync(tx, actor.UserId, key, token);
-            if (row is null) { await FenceQueryAsync(actor, authority, tx, Permissions.StockReceive, token); return null; }
-            var context = await ReceiptAsync(actor, authority, tx, row["_id"].AsInt64, Permissions.StockReceive, token); await FenceAsync(context, token); return B.Result(context.Receipt!);
+            var originalReceipt = await Rows("idempotencyRecords").Find(tx, new BsonDocument { { "actorId", actor.UserId }, { "operation", B.Operation }, { "key", key } }).SingleOrDefaultAsync(token);
+            if (row is null) {
+                await new UnitToko.Platform.Catalog.OperationalScanCommandBindings(database, ids, clock).VerifyRecoveryAsync(tx, actor.UserId, B.Operation, key, originalReceipt, token);
+                await FenceQueryAsync(actor, authority, tx, Permissions.StockReceive, token); return null; }
+            var context = await ReceiptAsync(actor, authority, tx, row["_id"].AsInt64, Permissions.StockReceive, token);
+            await new UnitToko.Platform.Catalog.OperationalScanCommandBindings(database, ids, clock).VerifyRecoveryAsync(tx, actor.UserId, B.Operation, key, originalReceipt, token);
+            await FenceAsync(context, token); return B.Result(context.Receipt!);
         }, ct);
     }
 }

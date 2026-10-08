@@ -1,9 +1,11 @@
 using MongoDB.Bson;
 using MongoDB.Driver;
+using UnitToko.Modules.Catalog;
 using UnitToko.Modules.Identity;
 using UnitToko.Modules.Identity.Contracts;
 using UnitToko.Modules.Procurement;
 using UnitToko.Platform.Authorization;
+using UnitToko.Platform.Catalog;
 using UnitToko.Platform.Inventory;
 using B = UnitToko.Platform.Procurement.ProcurementStockReceiptBson;
 using Q = UnitToko.Platform.Procurement.ProcurementQuarantineDispositionBson;
@@ -23,22 +25,30 @@ public sealed partial class ProcurementStockReceiptService
             await FenceAsync(context, token); return result;
         }, ct);
     }
-    public async Task<BsonDocument> ReceiveAsync(ActorContext actor, ProcurementStockReceiptInput input, string binding, AuthorizationCommandMetadata metadata, CancellationToken ct = default) {
+    public async Task<BsonDocument> ReceiveAsync(ActorContext actor, ProcurementStockReceiptInput input, string binding, AuthorizationCommandMetadata metadata, CancellationToken ct = default,
+        IReadOnlyList<OperationalScanSelection>? scanSelections = null) {
         input = ProcurementStockReceiptRules.Copy(input); Binding(binding); AuthorizationStore.ValidateMetadata(metadata); Key(metadata.IdempotencyKey);
         ProcurementStockReceiptRules.Text(metadata.CorrelationId, 128); if (metadata.Reason != input.Reason) throw ProcurementStockReceiptRules.Invalid(); await StorageAsync(ct);
         var id = (await ids.NextAsync(B.Receipts, ct)).Value; var audit = (await ids.NextAsync("auditEvents", ct)).Value;
         var lotId = (await ids.NextAsync("lots", ct)).Value; var balanceId = (await ids.NextAsync("stockBalances", ct)).Value; var movementId = (await ids.NextAsync("movements", ct)).Value;
         var body = B.Body(input, binding); Context? context = null;
+        var scanBindings = new OperationalScanCommandBindings(database, ids, clock); await scanBindings.RequireStorageAsync(ct);
+        OperationalScanCommandBindings.Attempt scanAttempt = null!; CatalogOperationalScanCapture? scans = null;
+        IReadOnlyList<OperationalScanEvidence> scanEvidence = [];
         return await authorization.ExecuteCommandAsync(actor, B.Operation, metadata, body, async (authority, tx, token) => {
+            scans = null; scanEvidence = [];
             _ = Query(actor, authority, Permissions.StockReceive); var existing = await records.ForKeyAsync(tx, actor.UserId, metadata.IdempotencyKey, token);
             if (existing is not null) context = await ReceiptAsync(actor, authority, tx, existing["_id"].AsInt64, Permissions.StockReceive, token);
             else {
                 context = await PrepareAsync(actor, authority, tx, input, token);
                 ProcurementStockReceiptRecords.Equal(binding, B.Binding(actor.UserId, actor.GrantVersion, input, context.Order!.Source, context.Inspection!, context.Pool!.Source, context.Capacity!.Capacity));
             }
+            scanAttempt = await scanBindings.BeginAsync(tx, actor, B.Operation, metadata.IdempotencyKey,
+                AuthorizationStore.CommandHash(body, metadata.Reason), scanSelections, token);
             return Command(context);
         }, async (tx, token) => {
             var active = context ?? throw B.Broken(); Current(active); var capacity = active.Capacity ?? throw B.Broken(); var before = capacity.Capacity;
+            (scans, scanEvidence) = await CaptureReceiptScanAsync(active, input, scanSelections, token);
             var headId = capacity.Head?["_id"].AsInt64 ?? (await ids.NextAsync(Q.PhysicalHeads, token)).Value;
             var allocationId = (await ids.NextAsync(Q.PhysicalAllocations, token)).Value;
             var row = new BsonDocument { { "_id", id }, { "schemaVersion", 1 }, { "receiptId", id }, { "revision", 1L }, { "location", R.Location(input.Location) },
@@ -66,6 +76,9 @@ public sealed partial class ProcurementStockReceiptService
         }, ct, async (authority, tx, token) => {
             var active = context ?? throw B.Broken(); var actual = await records.ReadAsync(tx, active.Receipt!["_id"].AsInt64, token);
             ProcurementStockReceiptRecords.Equal(actual["bodyHash"], AuthorizationStore.CommandHash(body, metadata.Reason));
+            var originalReceipt = await Rows("idempotencyRecords").Find(tx, new BsonDocument { { "actorId", actor.UserId }, { "operation", B.Operation }, { "key", metadata.IdempotencyKey } }).SingleAsync(token);
+            await scanBindings.CompleteAsync(tx, scanAttempt, originalReceipt, B.Audit(actual), scanEvidence, token);
+            if (scans is not null) await scans.CompleteAsync(tx, token);
             // AuthorizationStore has persisted the completed original result at this point.
             // Only this attempt's actual fresh held writer may append; replay merely validates.
             await CompleteHeldStockSourceAsync(active, actual, token);

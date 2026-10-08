@@ -28,7 +28,7 @@ function commandInput(command: StockCountCommand) {
     !Number.isInteger(command.body.packages) || Object.is(command.body.packages, -0)) return invalidInput();
   const snapshot = prepareStockCount(command.actorId, command.body.location, command.choice, {
     packages: String(command.body.packages), reason: command.body.reason, observedLotLabel: command.body.observedLotLabel ?? "",
-  }, command.source);
+  }, command.source, command.body.scanSelections);
   if (stableContent(snapshot.body) !== stableContent(command.body)) return invalidInput();
   if ('poolSelection' in command.body) parseStockPoolSelection(command.body.poolSelection);
   return snapshot;

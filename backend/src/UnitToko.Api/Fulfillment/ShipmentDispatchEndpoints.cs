@@ -4,6 +4,7 @@ using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Mvc;
 using MongoDB.Bson;
 using UnitToko.Api.Authorization;
+using UnitToko.Api.Catalog;
 using UnitToko.Api.Ordering;
 using UnitToko.Modules.Contracts;
 using UnitToko.Modules.Fulfillment;
@@ -20,7 +21,8 @@ public sealed record DispatchSelectionDto([property: JsonRequired] LongId Prepar
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record DispatchPreviewDto([property: JsonRequired] string Purpose, [property: JsonRequired] DispatchSelectionDto Selection);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed record DispatchCommandDto([property: JsonRequired] DispatchSelectionDto Selection, [property: JsonRequired] string Review, [property: JsonRequired] string Reason);
+public sealed record DispatchCommandDto([property: JsonRequired] DispatchSelectionDto Selection, [property: JsonRequired] string Review, [property: JsonRequired] string Reason,
+    OperationalScanSelectionDto[]? ScanSelections = null);
 public sealed record DispatchQueueItemDto(LongId PreparationId, string PreparationRevision, FulfillmentOrderDto Source, ShipmentPackageDto[] Lines, bool CanDispatch);
 public sealed record DispatchQueueDto(DispatchQueueItemDto[] Items, bool HasMore);
 public sealed record DispatchReservedLotDto(LongId ReservationId, LongId SkuId, LongId DefinitionId, LongId LotId, int RemainingPackages, DateOnly? ExpiresOn);
@@ -63,7 +65,8 @@ public static class ShipmentDispatchEndpoints
             [FromHeader(Name = "Idempotency-Key")] string key, [FromHeader(Name = "If-Match")] string expected, CancellationToken ct) => {
             var (selection, lots, revision) = Selection(request.Selection); if (AccessRequestMetadata.ExpectedVersion(http.Request) != revision) throw Invalid();
             var row = await service.DispatchAsync(http.Features.Get<ResolvedActor>()!.Actor, LongId.Parse(suborderId).Value, selection.PreparationId.Value, revision,
-                selection.CourierId.Value, lots, request.Review, new(AccessRequestMetadata.IdempotencyKey(http.Request), request.Reason, http.TraceIdentifier), ct);
+                selection.CourierId.Value, lots, request.Review, new(AccessRequestMetadata.IdempotencyKey(http.Request), request.Reason, http.TraceIdentifier), ct,
+                OperationalScanSelectionDto.DomainAll(request.ScanSelections));
             http.Response.Headers.ETag = AccessRequestMetadata.VersionTag(row["revision"].AsInt64); return TypedResults.Ok(Result(row));
         }).WithName("DispatchShipment");
         group.MapPost("/operations/query", async (OrderDraftRecoveryDto request, HttpContext http, ShipmentDispatchService service, CancellationToken ct) => {

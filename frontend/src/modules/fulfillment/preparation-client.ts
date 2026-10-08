@@ -3,6 +3,7 @@ import { AccessFailure } from '../administration/workflow';
 import { parseCatalogDefinition } from '../catalog/catalog-workflow';
 import { priceId } from '../catalog/catalog-price-workflow';
 import { parseOrderDelivery } from '../ordering/order-draft-client';
+import {validateScanSelections, type OperationalScanSelection} from '../inventory/scan-client';
 
 const invalid = (): never => { throw new AccessFailure(502, 'shipment_preparation_response_invalid'); };
 function record(value: unknown): Record<string, unknown> { return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : invalid(); }
@@ -41,12 +42,15 @@ export type Preparation = NonNullable<ReturnType<typeof parsePreparation>>;
 export function parsePreparationResult(value: unknown) { const row = record(value); return { preparationId: priceId(row.preparationId), versionId: priceId(row.versionId), revision: priceId(row.revision),
   orderId: priceId(row.orderId), suborderId: priceId(row.suborderId), recordedAt: time(row.recordedAt) }; }
 export type PreparationResult = ReturnType<typeof parsePreparationResult>;
-export function prepareShipmentCommand(actorId: string, source: FulfillmentOrder, expectedRevision: string, lines: readonly PackageSelection[], reason: string) {
+export function prepareShipmentCommand(actorId: string, source: FulfillmentOrder, expectedRevision: string, lines: readonly PackageSelection[], reason: string,
+  scanSelections?: readonly OperationalScanSelection[]) {
   try {
     const accepted = parseFulfillmentOrder(source);
+    const scans = validateScanSelections(scanSelections, accepted.lines.filter(line => lines.some(item => item.skuId === line.skuId))
+      .map(line => ({skuId: line.skuId, definitionId: line.definition.id, definitionVersion: line.definition.version})));
     if (!accepted.canPrepare || (expectedRevision !== '0' && priceId(expectedRevision) === '9223372036854775807')) return invalid();
     return Object.freeze({ actorId: priceId(actorId), orderId: accepted.orderId, suborderId: accepted.suborderId, expectedRevision,
-      review: accepted.review, lines: Object.freeze(selections(lines, accepted).map(line => Object.freeze(line))), reason: text(reason, 1000) });
+      review: accepted.review, lines: Object.freeze(selections(lines, accepted).map(line => Object.freeze(line))), reason: text(reason, 1000), ...(scans ? {scanSelections: scans} : {}) });
   } catch { throw new AccessFailure(400, 'invalid_shipment_preparation'); }
 }
 export type PreparationCommand = ReturnType<typeof prepareShipmentCommand>;
@@ -77,7 +81,7 @@ export function createPreparationGateway(client: ReturnType<typeof createUnitTok
     async save(command: PreparationCommand, requestKey: string, isCurrent: () => boolean) {
       if (!isCurrent()) throw new RequestNotSentError(409, 'shipment_view_stale');
       const result = parsePreparationResult(data(await client.POST('/api/v1/fulfillment/preparations/{suborderId}', {
-        body: { review: command.review, lines: command.lines.map(line => ({ ...line })), reason: command.reason },
+        body: { review: command.review, lines: command.lines.map(line => ({ ...line })), reason: command.reason, ...(command.scanSelections ? {scanSelections: [...command.scanSelections]} : {}) },
         params: { path: { suborderId: priceId(command.suborderId) }, header: { ...headers(command.actorId), 'Idempotency-Key': key(requestKey), 'If-Match': '"' + command.expectedRevision + '"' } } })));
       if (!isCurrent()) throw new AccessFailure(503, 'commit_outcome_unknown');
       if (result.orderId !== command.orderId || result.suborderId !== command.suborderId || BigInt(result.revision) !== BigInt(command.expectedRevision) + BigInt(1)) return invalid(); return result;

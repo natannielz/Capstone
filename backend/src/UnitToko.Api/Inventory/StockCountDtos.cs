@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.Json.Serialization;
 using UnitToko.Api.Authorization;
+using UnitToko.Api.Catalog;
 using UnitToko.Modules.Catalog;
 using UnitToko.Modules.Contracts;
 using UnitToko.Modules.Inventory;
@@ -31,7 +32,8 @@ public sealed record StockCountPoolSelectionDto([property: JsonRequired] LongId 
 public sealed record StockCountRecordDto([property: JsonRequired] AccessScopeDto Location,
     [property: JsonRequired] LongId SkuId, [property: JsonRequired] LongId ExpectedSkuRevision,
     [property: JsonRequired] LongId ExpectedDefinitionId, [property: JsonRequired] int Packages,
-    [property: JsonRequired] string Reason, string? ObservedLotLabel = null, StockCountPoolSelectionDto? PoolSelection = null)
+    [property: JsonRequired] string Reason, string? ObservedLotLabel = null, StockCountPoolSelectionDto? PoolSelection = null,
+    OperationalScanSelectionDto[]? ScanSelections = null)
 {
     public StockCountInput ToDomain()
     {

@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using MongoDB.Bson;
 using MongoDB.Driver;
+using UnitToko.Modules.Catalog;
 using UnitToko.Modules.Identity;
 using UnitToko.Modules.Identity.Contracts;
 using UnitToko.Modules.Inventory;
@@ -32,11 +33,12 @@ public sealed partial class StockCountService(IMongoDatabase database, MongoUnit
     }
 
     public async Task<StockCountObservation> RecordCountAsync(ActorContext actor, StockCountInput input,
-        AuthorizationCommandMetadata metadata, CancellationToken ct = default)
+        AuthorizationCommandMetadata metadata, CancellationToken ct = default, IReadOnlyList<OperationalScanSelection>? scanSelections = null)
     {
         StockCountPolicy.Validate(input);
         Metadata(metadata);
-        if (input.PoolSelection is not null) return await RecordBoundCountAsync(actor, input, metadata, ct);
+        var scanBindings = new OperationalScanCommandBindings(database, ids, clock); await scanBindings.RequireStorageAsync(ct);
+        if (input.PoolSelection is not null) return await RecordBoundCountAsync(actor, input, metadata, ct, scanSelections);
         var hash = StockCountBson.BodyHash(input, metadata.Reason);
         // Allocation alone is outside the transaction. Aborts/replays may leave gaps, never reused IDs.
         var id = await ids.NextAsync(StockCountBson.Collection, ct);
@@ -50,15 +52,19 @@ public sealed partial class StockCountService(IMongoDatabase database, MongoUnit
             {
                 var existing = await ReceiptAsync(context, receipt, token);
                 if (receipt["bodyHash"] != hash) throw new PersistenceConflictException("idempotency_key_reused", "Request key was used with a different count");
+                var replayScan = await scanBindings.BeginAsync(tx, actor, StockCountBson.Operation, metadata.IdempotencyKey, hash, scanSelections, token);
+                await scanBindings.CompleteAsync(tx, replayScan, receipt, await Rows("auditEvents").Find(tx, F.Eq("_id", existing.AuditId)).SingleAsync(token), [], token);
                 await CompleteAsync(context, token);
                 return existing;
             }
             RequireLocation(context, input.Location);
+            var scanAttempt = await scanBindings.BeginAsync(tx, actor, StockCountBson.Operation, metadata.IdempotencyKey, hash, scanSelections, token);
             var coverage = new InventoryCountCoverage(database);
             await coverage.RequireFreshUnboundAsync(tx, this, CountSources, input.Location, token);
             var result = await catalog.WithStockCountDefinitionAsync(database, tx, actor, input.Location,
                 input.SkuId, input.ExpectedSkuRevision, input.ExpectedDefinitionId, async (definition, callbackToken) =>
                 {
+                    var scans = await CaptureCountScanAsync(tx, input.Location, definition, scanSelections, callbackToken);
                     var row = StockCountBson.Create(id.Value, auditId.Value, actor, input,
                         StockCountBson.Definition(definition), metadata, clock.UtcNow);
                     var observation = StockCountBson.Read(row);
@@ -66,6 +72,8 @@ public sealed partial class StockCountService(IMongoDatabase database, MongoUnit
                     await Rows("auditEvents").InsertOneAsync(tx, StockCountBson.Audit(row), cancellationToken: callbackToken);
                     await Rows("idempotencyRecords").InsertOneAsync(tx, StockCountBson.Receipt(row, receiptId), cancellationToken: callbackToken);
                     await coverage.AppendFreshAsync(tx, this, CountSources, row, callbackToken);
+                    await scanBindings.CompleteAsync(tx, scanAttempt, StockCountBson.Receipt(row, receiptId), StockCountBson.Audit(row), scans.Evidence, callbackToken);
+                    await scans.CompleteAsync(tx, callbackToken);
                     return observation;
                 }, token);
             await CompleteAsync(context, token);
@@ -82,10 +90,16 @@ public sealed partial class StockCountService(IMongoDatabase database, MongoUnit
             var receipt = await Rows("idempotencyRecords").Find(tx, ReceiptFilter(actor.UserId, key)).SingleOrDefaultAsync(token);
             if (receipt is null) await RequireMissingBoundKeyAsync(context, key, token);
             var result = receipt is null ? null : await ReceiptAsync(context, receipt, token);
+            await new OperationalScanCommandBindings(database, ids, clock).VerifyRecoveryAsync(tx, actor.UserId, StockCountBson.Operation, key, receipt, token);
             await CompleteAsync(context, token);
             return result;
         }, ct);
     }
+    private Task<CatalogOperationalScanCapture> CaptureCountScanAsync(IClientSessionHandle tx, GrantScope location,
+        StockDefinitionSnapshot definition, IReadOnlyList<OperationalScanSelection>? selections, CancellationToken ct) =>
+        CatalogOperationalScanCapture.ReadAsync(database, tx, CatalogRepository.Resource(location),
+            [new(definition.SkuId.ToString(System.Globalization.CultureInfo.InvariantCulture), new(definition.SkuId), new(definition.DefinitionId),
+                definition.DefinitionVersion, definition.SkuCode, definition.PackageLabel, definition.PackageKind, definition.BaseUnitCode, definition.BaseUnitsPerPackage)], selections, ct);
 
     public Task<StockCountObservation?> ReadAsync(ActorContext actor, long id, CancellationToken ct = default)
     {

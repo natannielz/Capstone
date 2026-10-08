@@ -548,7 +548,7 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/CatalogPublishedVariantDto"
+                    "$ref": "#/components/schemas/CatalogBuyerCodeMatchDto"
                   }
                 }
               }
@@ -600,6 +600,64 @@
               "application/problem+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
+    "/api/v1/catalog/scans/query": {
+      "post": {
+        "tags": [
+          "UnitToko.Api"
+        ],
+        "operationId": "ResolveOperationalScan",
+        "parameters": [
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "required": true,
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScanRequestDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScanResolutionDto"
                 }
               }
             }
@@ -10481,7 +10539,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CatalogPublishedVariantPageDto"
+                  "$ref": "#/components/schemas/CatalogBuyerVariantPageDto"
                 }
               }
             }
@@ -10599,12 +10657,411 @@
                 "schema": {
                   "anyOf": [
                     {
-                      "$ref": "#/components/schemas/CatalogPublishedVariantDto"
+                      "$ref": "#/components/schemas/CatalogBuyerVariantDto"
                     },
                     {
                       "type": "null"
                     }
                   ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
+    "/api/v1/catalog/administration/skus/{id}/identifiers/query": {
+      "post": {
+        "tags": [
+          "UnitToko.Api"
+        ],
+        "operationId": "CatalogIdentifierQuery",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "required": true,
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CatalogIdentifierReadDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogIdentifierViewDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
+    "/api/v1/catalog/administration/skus/{id}/identifiers": {
+      "post": {
+        "tags": [
+          "UnitToko.Api"
+        ],
+        "operationId": "CatalogIdentifierAssign",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "Reuse this key only for an unchanged logical command, including after an uncertain response.",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "description": "One quoted nonnegative Int64 resource version from the latest response; never a JavaScript number.",
+            "required": true,
+            "schema": {
+              "maxLength": 21,
+              "minLength": 3,
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "required": true,
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CatalogIdentifierAssignDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogIdentifierResultDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
+    "/api/v1/catalog/administration/skus/{id}/identifiers/{identifierId}/retire": {
+      "post": {
+        "tags": [
+          "UnitToko.Api"
+        ],
+        "operationId": "CatalogIdentifierRetire",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "identifierId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "Reuse this key only for an unchanged logical command, including after an uncertain response.",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "description": "One quoted nonnegative Int64 resource version from the latest response; never a JavaScript number.",
+            "required": true,
+            "schema": {
+              "maxLength": 21,
+              "minLength": 3,
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "required": true,
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CatalogIdentifierRetireDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogIdentifierResultDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
+    "/api/v1/catalog/administration/skus/{id}/code": {
+      "post": {
+        "tags": [
+          "UnitToko.Api"
+        ],
+        "operationId": "CatalogSkuCodeCorrect",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "Reuse this key only for an unchanged logical command, including after an uncertain response.",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "description": "One quoted nonnegative Int64 resource version from the latest response; never a JavaScript number.",
+            "required": true,
+            "schema": {
+              "maxLength": 21,
+              "minLength": 3,
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "required": true,
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CatalogIdentifierCorrectDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogIdentifierResultDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
+    "/api/v1/catalog/administration/identifiers/operations/query": {
+      "post": {
+        "tags": [
+          "UnitToko.Api"
+        ],
+        "operationId": "CatalogIdentifierRecovery",
+        "parameters": [
+          {
+            "name": "X-Expected-Actor-Id",
+            "in": "header",
+            "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
+            "required": true,
+            "schema": {
+              "maxLength": 19,
+              "minLength": 1,
+              "pattern": "^[1-9][0-9]{0,18}$(?![\\s\\S])",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CatalogIdentifierRecoveryDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogIdentifierRecoveryResultDto"
                 }
               }
             }
@@ -89836,6 +90293,63 @@
         },
         "additionalProperties": false
       },
+      "ApprovedSourceScanDto": {
+        "required": [
+          "orderId",
+          "orderVersion",
+          "inspectionId",
+          "inspectionRevision",
+          "inspectionLineNumber",
+          "skuId",
+          "definitionId",
+          "definitionVersion",
+          "sourceSystem",
+          "sourceAccount",
+          "sourceCode"
+        ],
+        "type": "object",
+        "properties": {
+          "orderId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "orderVersion": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "inspectionId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "inspectionRevision": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "inspectionLineNumber": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "skuId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "definitionId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "definitionVersion": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "sourceSystem": {
+            "type": "string"
+          },
+          "sourceAccount": {
+            "type": "string"
+          },
+          "sourceCode": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
       "BankReceiptConfirmDto": {
         "required": [
           "importId",
@@ -90810,6 +91324,196 @@
         },
         "additionalProperties": false
       },
+      "CatalogBuyerCodeDto": {
+        "required": [
+          "identifierId",
+          "identifierRevision",
+          "code"
+        ],
+        "type": "object",
+        "properties": {
+          "identifierId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "identifierRevision": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "CatalogBuyerCodeMatchDto": {
+        "required": [
+          "requestedCode",
+          "matchedIdentifier",
+          "variant"
+        ],
+        "type": "object",
+        "properties": {
+          "requestedCode": {
+            "type": "string"
+          },
+          "matchedIdentifier": {
+            "$ref": "#/components/schemas/CatalogBuyerMatchedIdentifierDto"
+          },
+          "variant": {
+            "$ref": "#/components/schemas/CatalogBuyerVariantDto"
+          }
+        },
+        "additionalProperties": false
+      },
+      "CatalogBuyerIdentityDto": {
+        "required": [
+          "skuId",
+          "skuRevision",
+          "definitionId",
+          "definitionVersion",
+          "currentPrimary"
+        ],
+        "type": "object",
+        "properties": {
+          "skuId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "skuRevision": {
+            "type": "string"
+          },
+          "definitionId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "definitionVersion": {
+            "type": "string"
+          },
+          "currentPrimary": {
+            "$ref": "#/components/schemas/CatalogBuyerCodeDto"
+          }
+        },
+        "additionalProperties": false
+      },
+      "CatalogBuyerMatchedIdentifierDto": {
+        "required": [
+          "identifierId",
+          "identifierRevision",
+          "code",
+          "skuId",
+          "skuRevision",
+          "definitionId",
+          "definitionVersion",
+          "kind",
+          "namespace"
+        ],
+        "type": "object",
+        "properties": {
+          "identifierId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "identifierRevision": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "skuId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "skuRevision": {
+            "type": "string"
+          },
+          "definitionId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "definitionVersion": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "namespace": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "CatalogBuyerVariantDto": {
+        "required": [
+          "familyId",
+          "familyPublicId",
+          "familyName",
+          "description",
+          "categoryCode",
+          "skuId",
+          "publicId",
+          "code",
+          "definition",
+          "currentPrice",
+          "buyerIdentity"
+        ],
+        "type": "object",
+        "properties": {
+          "familyId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "familyPublicId": {
+            "type": "string"
+          },
+          "familyName": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "categoryCode": {
+            "type": "string"
+          },
+          "skuId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "publicId": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "definition": {
+            "$ref": "#/components/schemas/CatalogDefinitionDto"
+          },
+          "currentPrice": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CatalogPriceDto"
+              }
+            ]
+          },
+          "buyerIdentity": {
+            "$ref": "#/components/schemas/CatalogBuyerIdentityDto"
+          }
+        },
+        "additionalProperties": false
+      },
+      "CatalogBuyerVariantPageDto": {
+        "required": [
+          "total",
+          "items"
+        ],
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "string"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CatalogBuyerVariantDto"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
       "CatalogCategoryDto": {
         "required": [
           "id",
@@ -91197,6 +91901,268 @@
             "type": "integer",
             "format": "int32",
             "default": 25
+          }
+        },
+        "additionalProperties": false
+      },
+      "CatalogIdentifierAssignDto": {
+        "required": [
+          "kind",
+          "sourceAccount",
+          "rawValue",
+          "definitionId",
+          "provenanceReference",
+          "reason"
+        ],
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "sourceAccount": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "rawValue": {
+            "type": "string"
+          },
+          "definitionId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "provenanceReference": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "CatalogIdentifierCorrectDto": {
+        "required": [
+          "primaryIdentifierId",
+          "expectedIdentifierRevision",
+          "newCode",
+          "provenanceReference",
+          "reason"
+        ],
+        "type": "object",
+        "properties": {
+          "primaryIdentifierId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "expectedIdentifierRevision": {
+            "type": "string"
+          },
+          "newCode": {
+            "type": "string"
+          },
+          "provenanceReference": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "CatalogIdentifierDto": {
+        "required": [
+          "id",
+          "organizationId",
+          "skuId",
+          "kind",
+          "namespace",
+          "rawValue",
+          "canonicalValue",
+          "isPrimary",
+          "effectiveAt",
+          "retiredAt",
+          "revision",
+          "provenanceReference",
+          "definitionId"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "organizationId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "skuId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "namespace": {
+            "type": "string"
+          },
+          "rawValue": {
+            "type": "string"
+          },
+          "canonicalValue": {
+            "type": "string"
+          },
+          "isPrimary": {
+            "type": "boolean"
+          },
+          "effectiveAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "retiredAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "revision": {
+            "type": "string"
+          },
+          "provenanceReference": {
+            "type": "string"
+          },
+          "definitionId": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LongId"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "CatalogIdentifierReadDto": {
+        "required": [
+          "purpose"
+        ],
+        "type": "object",
+        "properties": {
+          "purpose": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "CatalogIdentifierRecoveryDto": {
+        "required": [
+          "purpose",
+          "operation",
+          "key"
+        ],
+        "type": "object",
+        "properties": {
+          "purpose": {
+            "type": "string"
+          },
+          "operation": {
+            "type": "string"
+          },
+          "key": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "CatalogIdentifierRecoveryResultDto": {
+        "required": [
+          "status",
+          "operation",
+          "result"
+        ],
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string"
+          },
+          "operation": {
+            "type": "string"
+          },
+          "result": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CatalogIdentifierResultDto"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "CatalogIdentifierResultDto": {
+        "required": [
+          "skuId",
+          "skuRevision",
+          "identifierId",
+          "identifierRevision",
+          "recordedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "skuId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "skuRevision": {
+            "type": "string"
+          },
+          "identifierId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "identifierRevision": {
+            "type": "string"
+          },
+          "recordedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false
+      },
+      "CatalogIdentifierRetireDto": {
+        "required": [
+          "expectedIdentifierRevision",
+          "provenanceReference",
+          "reason"
+        ],
+        "type": "object",
+        "properties": {
+          "expectedIdentifierRevision": {
+            "type": "string"
+          },
+          "provenanceReference": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "CatalogIdentifierViewDto": {
+        "required": [
+          "catalog",
+          "identifiers"
+        ],
+        "type": "object",
+        "properties": {
+          "catalog": {
+            "$ref": "#/components/schemas/CatalogSkuDto"
+          },
+          "identifiers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CatalogIdentifierDto"
+            }
           }
         },
         "additionalProperties": false
@@ -92520,6 +93486,46 @@
         },
         "additionalProperties": false
       },
+      "CatalogScanIdentifierDto": {
+        "required": [
+          "identifierId",
+          "identifierRevision",
+          "skuId",
+          "definitionId",
+          "definitionVersion",
+          "kind",
+          "namespace",
+          "canonicalValue"
+        ],
+        "type": "object",
+        "properties": {
+          "identifierId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "identifierRevision": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "skuId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "definitionId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "definitionVersion": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "namespace": {
+            "type": "string"
+          },
+          "canonicalValue": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
       "CatalogSkuCreateDto": {
         "required": [
           "code",
@@ -92936,6 +93942,15 @@
           },
           "reason": {
             "type": "string"
+          },
+          "scanSelections": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/OperationalScanSelectionDto"
+            }
           }
         },
         "additionalProperties": false
@@ -94736,6 +95751,36 @@
         "pattern": "^(?:0|[1-9][0-9]{0,14})(?:\\.[0-9]{1,2})?$(?![\\s\\S])",
         "type": "string",
         "description": "Nonnegative decimal string from 0.00 through 999999999999999.99, with at most two fractional digits; responses use exactly two. JSON numbers are invalid."
+      },
+      "OperationalScanSelectionDto": {
+        "required": [
+          "identifier",
+          "source"
+        ],
+        "type": "object",
+        "properties": {
+          "identifier": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CatalogScanIdentifierDto"
+              }
+            ]
+          },
+          "source": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ApprovedSourceScanDto"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
       },
       "OperationLookupDto": {
         "required": [
@@ -110797,6 +111842,15 @@
           },
           "binding": {
             "type": "string"
+          },
+          "scanSelections": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/OperationalScanSelectionDto"
+            }
           }
         },
         "additionalProperties": false
@@ -119594,6 +120648,241 @@
           },
           "reason": {
             "type": "string"
+          },
+          "scanSelections": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/OperationalScanSelectionDto"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "ScanCandidateDto": {
+        "required": [
+          "targetReference",
+          "skuId",
+          "definitionId",
+          "definitionVersion",
+          "skuCode",
+          "packageLabel",
+          "packageKind",
+          "baseUnitCode",
+          "baseUnitsPerPackage",
+          "selection",
+          "currentPrimaryCode"
+        ],
+        "type": "object",
+        "properties": {
+          "targetReference": {
+            "type": "string"
+          },
+          "skuId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "definitionId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "definitionVersion": {
+            "type": "string"
+          },
+          "skuCode": {
+            "type": "string"
+          },
+          "packageLabel": {
+            "type": "string"
+          },
+          "packageKind": {
+            "type": "string"
+          },
+          "baseUnitCode": {
+            "type": "string"
+          },
+          "baseUnitsPerPackage": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "selection": {
+            "$ref": "#/components/schemas/OperationalScanSelectionDto"
+          },
+          "currentPrimaryCode": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "ScanRequestDto": {
+        "required": [
+          "purpose",
+          "codeKind",
+          "rawCode",
+          "sourceNamespace",
+          "sourceAccount",
+          "location",
+          "documentId",
+          "documentRevision",
+          "auxiliaryId",
+          "auxiliaryRevision",
+          "sourceReview"
+        ],
+        "type": "object",
+        "properties": {
+          "purpose": {
+            "type": "string"
+          },
+          "codeKind": {
+            "type": "string"
+          },
+          "rawCode": {
+            "type": "string"
+          },
+          "sourceNamespace": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "sourceAccount": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "location": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AccessScopeDto"
+              }
+            ]
+          },
+          "documentId": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LongId"
+              }
+            ]
+          },
+          "documentRevision": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LongId"
+              }
+            ]
+          },
+          "auxiliaryId": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LongId"
+              }
+            ]
+          },
+          "auxiliaryRevision": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LongId"
+              }
+            ]
+          },
+          "sourceReview": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "ScanResolutionDto": {
+        "required": [
+          "kind",
+          "reason",
+          "purpose",
+          "documentId",
+          "documentRevision",
+          "auxiliaryId",
+          "auxiliaryRevision",
+          "sourceReview",
+          "candidates"
+        ],
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "purpose": {
+            "type": "string"
+          },
+          "documentId": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LongId"
+              }
+            ]
+          },
+          "documentRevision": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "auxiliaryId": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LongId"
+              }
+            ]
+          },
+          "auxiliaryRevision": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "sourceReview": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "candidates": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ScanCandidateDto"
+            }
           }
         },
         "additionalProperties": false
@@ -121010,6 +122299,15 @@
                 "$ref": "#/components/schemas/StockCountPoolSelectionDto"
               }
             ]
+          },
+          "scanSelections": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/OperationalScanSelectionDto"
+            }
           }
         },
         "additionalProperties": false

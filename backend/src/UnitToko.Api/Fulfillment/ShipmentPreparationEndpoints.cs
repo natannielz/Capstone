@@ -20,7 +20,8 @@ public sealed record PreparationPageRequest([property: JsonRequired] string Purp
 [JsonNumberHandling(JsonNumberHandling.Strict)]
 public sealed record ShipmentPackageDto([property: JsonRequired] LongId SkuId, [property: JsonRequired] int Packages);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed record SavePreparationDto([property: JsonRequired] string Review, [property: JsonRequired] ShipmentPackageDto[] Lines, [property: JsonRequired] string Reason);
+public sealed record SavePreparationDto([property: JsonRequired] string Review, [property: JsonRequired] ShipmentPackageDto[] Lines, [property: JsonRequired] string Reason,
+    OperationalScanSelectionDto[]? ScanSelections = null);
 public sealed record FulfillmentOrderLineDto(LongId SkuId, string PublicId, string SkuCode, string ProductName, CatalogDefinitionDto Definition, int OrderedPackages, int RemainingPackages);
 public sealed record FulfillmentOrderDto(LongId OrderId, LongId SuborderId, string Revision, string Review, string BuyerName,
     OrderDeliveryDto Delivery, FulfillmentOrderLineDto[] Lines, bool CanPrepare, DateTimeOffset OrderedAt);
@@ -53,7 +54,7 @@ public static class ShipmentPreparationEndpoints
             if (request.Lines is null || request.Lines.Length is < 1 or > 100 || request.Lines.Any(line => line is null)) throw Invalid();
             var result = await service.SaveAsync(http.Features.Get<ResolvedActor>()!.Actor, LongId.Parse(suborderId).Value, AccessRequestMetadata.ExpectedVersion(http.Request), request.Review,
                 request.Lines.Select(line => new ShipmentPackageSelection(line.SkuId, line.Packages)).ToImmutableArray(),
-                new(AccessRequestMetadata.IdempotencyKey(http.Request), request.Reason, http.TraceIdentifier), ct);
+                new(AccessRequestMetadata.IdempotencyKey(http.Request), request.Reason, http.TraceIdentifier), ct, OperationalScanSelectionDto.DomainAll(request.ScanSelections));
             http.Response.Headers.ETag = AccessRequestMetadata.VersionTag(result["revision"].AsInt64); return TypedResults.Ok(Result(result));
         }).WithName("SaveShipmentPreparation");
         group.MapPost("/operations/query", async (OrderDraftRecoveryDto request, HttpContext http, ShipmentPreparationService service, CancellationToken ct) => {

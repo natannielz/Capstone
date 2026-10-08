@@ -1,0 +1,138 @@
+using System.Collections.Immutable;
+using System.Text.RegularExpressions;
+using MongoDB.Bson;
+using MongoDB.Driver;
+using UnitToko.Modules.Catalog;
+using UnitToko.Modules.Contracts;
+using UnitToko.Modules.Identity.Contracts;
+using UnitToko.Platform.Authorization;
+using UnitToko.Platform.Mongo.Migrations;
+
+namespace UnitToko.Platform.Catalog;
+
+// Buyer-only projections. The original Sku.Code and all commercial owner snapshots stay unchanged.
+public sealed record CatalogBuyerCode(LongId IdentifierId, long IdentifierRevision, string Code);
+public sealed record CatalogBuyerIdentity(LongId SkuId, long SkuRevision, LongId DefinitionId,
+    long DefinitionVersion, CatalogBuyerCode CurrentPrimary);
+public sealed record CatalogBuyerVariant(CatalogPublishedVariant Variant, CatalogBuyerIdentity BuyerIdentity);
+public sealed record CatalogBuyerMatchedIdentifier(LongId IdentifierId, long IdentifierRevision, string Code,
+    LongId SkuId, long SkuRevision, LongId DefinitionId, long DefinitionVersion);
+public sealed record CatalogBuyerCodeMatch(string RequestedCode, CatalogBuyerMatchedIdentifier MatchedIdentifier,
+    CatalogBuyerVariant Variant);
+
+public sealed partial class CatalogDefinitionQueryService
+{
+    public async Task<CatalogPage<CatalogBuyerVariant>> QueryBuyerAsync(ActorContext actor, int offset, int limit,
+        string? search, CancellationToken cancellationToken = default)
+    {
+        AuthorizationStore.ValidatePage(offset, limit);
+        if (search is not null && search.Length > 128) throw new DomainValidationException("catalog_query_invalid", "Use a bounded catalog search");
+        await CatalogIdentifierRecords.RequireStorageAsync(database, cancellationToken);
+        return await visibility.ReadCurrentAsync(actor, F.Eq("active", true), async (tx, filter, ct) => {
+            var pipeline = VisiblePipeline(filter); AddBuyerIdentifierLookup(pipeline);
+            if (!string.IsNullOrWhiteSpace(search)) {
+                var literal = new BsonRegularExpression(Regex.Escape(search.Trim()), "i");
+                // displayName contains the immutable original SKU. It must not revive a retired alias.
+                pipeline.Add(new("$match", new BsonDocument("$or", new BsonArray {
+                    new BsonDocument("buyerIdentifiers.canonicalValue", literal),
+                    new BsonDocument("family.name", literal), new BsonDocument("definition.packageLabel", literal) })));
+            }
+            pipeline.Add(new("$facet", new BsonDocument {
+                { "count", new BsonArray { new BsonDocument("$count", "total") } },
+                { "page", new BsonArray { new BsonDocument("$sort", new BsonDocument("_id", 1)),
+                    new BsonDocument("$skip", offset), new BsonDocument("$limit", limit), new BsonDocument("$project", new BsonDocument("_id", 1)) } } }));
+            var page = await repository.Rows("skus").Aggregate<BsonDocument>(tx, pipeline).SingleAsync(ct);
+            var total = page["count"].AsBsonArray.Count == 0 ? 0L : page["count"][0]["total"].ToInt64();
+            var ids = page["page"].AsBsonArray.Select(item => item["_id"].AsInt64).ToArray();
+            var rows = await repository.Rows("skus").Find(tx, filter & F.In("_id", ids)).Sort(new BsonDocument("_id", 1)).ToListAsync(ct);
+            if (rows.Count != ids.Length) throw CatalogRepository.Invalid();
+            var result = ImmutableArray.CreateBuilder<CatalogBuyerVariant>();
+            foreach (var row in rows) result.Add((await ReadBuyerProjectionAsync(tx, row, ct)).View);
+            return new CatalogPage<CatalogBuyerVariant>(total, result.ToImmutable());
+        }, cancellationToken);
+    }
+
+    public async Task<CatalogBuyerVariant?> ReadBuyerPublicAsync(ActorContext actor, string publicId,
+        CancellationToken cancellationToken = default)
+    {
+        if (publicId is null || !Regex.IsMatch(publicId, "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\\z", RegexOptions.CultureInvariant))
+            throw new DomainValidationException("invalid_public_id", "A canonical UUID version 4 is required");
+        await CatalogIdentifierRecords.RequireStorageAsync(database, cancellationToken);
+        return await visibility.ReadCurrentAsync<CatalogBuyerVariant?>(actor, F.Eq("publicId", publicId) & F.Eq("active", true), async (tx, filter, ct) => {
+            var pipeline = VisiblePipeline(filter); pipeline.Add(new("$limit", 2));
+            var selected = await repository.Rows("skus").Aggregate<BsonDocument>(tx, pipeline).ToListAsync(ct);
+            if (selected.Count > 1) throw CatalogRepository.Invalid("ambiguous_catalog_identifier");
+            if (selected.Count == 0) return null;
+            var row = await repository.Rows("skus").Find(tx, filter & F.Eq("_id", selected[0]["_id"])).SingleAsync(ct);
+            return (await ReadBuyerProjectionAsync(tx, row, ct)).View;
+        }, cancellationToken);
+    }
+
+    /// <summary>Exact active internal identifiers only. No supplier/GTIN namespace, fuzzy match, partial batch or quantity merge.</summary>
+    public async Task<ImmutableArray<CatalogBuyerCodeMatch>> ReadExactBuyerIdentifiersAsync(ActorContext actor,
+        ImmutableArray<string> codes, CancellationToken cancellationToken = default)
+    {
+        if (codes.IsDefaultOrEmpty || codes.Length > 100)
+            throw new DomainValidationException("invalid_bulk_sku_query", "Choose up to 100 distinct internal SKU codes");
+        var normalized = codes.Select(CatalogPolicy.NormalizeSkuCode).ToImmutableArray();
+        if (normalized.Distinct(StringComparer.Ordinal).Count() != normalized.Length)
+            throw new DomainValidationException("invalid_bulk_sku_query", "Choose each internal SKU only once");
+        await CatalogIdentifierRecords.RequireStorageAsync(database, cancellationToken);
+        return await visibility.ReadCurrentAsync(actor, F.Eq("active", true), async (tx, filter, ct) => {
+            // Publication authority precedes identifier lookup, including counts and the bounded selection.
+            var pipeline = VisiblePipeline(filter); AddBuyerIdentifierLookup(pipeline);
+            pipeline.Add(new("$match", new BsonDocument("buyerIdentifiers.canonicalValue", new BsonDocument("$in", new BsonArray(normalized)))));
+            pipeline.Add(new("$project", new BsonDocument("_id", 1))); pipeline.Add(new("$limit", 101));
+            var selected = await repository.Rows("skus").Aggregate<BsonDocument>(tx, pipeline).ToListAsync(ct);
+            if (selected.Count != normalized.Length) throw new AuthorizationDeniedException("order_package_unavailable");
+            var ids = selected.Select(row => row["_id"].AsInt64).ToArray();
+            var rows = await repository.Rows("skus").Find(tx, filter & F.In("_id", ids)).ToListAsync(ct);
+            if (rows.Count != ids.Length) throw new AuthorizationDeniedException("order_package_unavailable");
+            var matches = new Dictionary<string, CatalogBuyerCodeMatch>(StringComparer.Ordinal);
+            foreach (var row in rows) {
+                var projection = await ReadBuyerProjectionAsync(tx, row, ct);
+                var aliases = projection.Codes.Where(item => normalized.Contains(item.Code, StringComparer.Ordinal)).ToArray();
+                // Two accepted aliases for one physical SKU are never silently added or merged.
+                if (aliases.Length != 1) throw new AuthorizationDeniedException("order_package_unavailable");
+                var alias = aliases[0]; var identity = projection.View.BuyerIdentity;
+                var matched = new CatalogBuyerMatchedIdentifier(alias.IdentifierId, alias.IdentifierRevision, alias.Code,
+                    identity.SkuId, identity.SkuRevision, identity.DefinitionId, identity.DefinitionVersion);
+                if (!matches.TryAdd(alias.Code, new(alias.Code, matched, projection.View)))
+                    throw new AuthorizationDeniedException("order_package_unavailable");
+            }
+            if (matches.Count != normalized.Length || normalized.Any(code => !matches.ContainsKey(code)))
+                throw new AuthorizationDeniedException("order_package_unavailable");
+            return normalized.Select(code => matches[code]).ToImmutableArray();
+        }, cancellationToken);
+    }
+
+    private void AddBuyerIdentifierLookup(List<BsonDocument> pipeline)
+    {
+        pipeline.Add(new("$lookup", new BsonDocument {
+            { "from", CatalogIdentifierRecords.Collection }, { "let", new BsonDocument { { "sku", "$_id" }, { "organization", "$organizationId" } } },
+            { "pipeline", new BsonArray { new BsonDocument("$match", new BsonDocument("$and", new BsonArray {
+                CatalogIdentifierSchemas.Validator(CatalogIdentifierRecords.Collection),
+                new BsonDocument { { "kind", "skuCode" }, { "namespace", "internal" }, { "retiredAt", BsonNull.Value },
+                    { "effectiveAt", new BsonDocument("$lte", clock.UtcNow.UtcDateTime) },
+                    { "$expr", new BsonDocument("$and", new BsonArray {
+                        new BsonDocument("$eq", new BsonArray { "$skuId", "$$sku" }),
+                        new BsonDocument("$eq", new BsonArray { "$organizationId", "$$organization" }) }) } } })) } },
+            { "as", "buyerIdentifiers" } }));
+    }
+
+    private async Task<(CatalogBuyerVariant View, CatalogBuyerCode[] Codes)> ReadBuyerProjectionAsync(
+        IClientSessionHandle tx, BsonDocument row, CancellationToken ct)
+    {
+        var definition = await repository.GetAsync(tx, "variantDefinitions", row["currentDefinitionId"].AsInt64, ct);
+        var proof = await new CatalogIdentifierGraph(database).ReadSkuAsync(tx, row, definition, ct);
+        var identifiers = proof.Identifiers.Select(CatalogIdentifierRecords.Read)
+            .Where(item => item.Kind == "skuCode" && item.Namespace == "internal" && item.RetiredAt is null && item.EffectiveAt <= clock.UtcNow).ToArray();
+        var primary = identifiers.SingleOrDefault(item => item.IsPrimary) ?? throw CatalogIdentifierRecords.Broken();
+        var item = await JoinAsync(tx, row, ct) ?? throw new AuthorizationDeniedException("order_package_unavailable");
+        // Includes the selected mapping, its immutable assignment history/audit/receipt and physical definition.
+        // This runs after the catalog/price awaits; visibility closes current authority/publication afterward.
+        await proof.CompleteAsync(tx, ct);
+        CatalogBuyerCode Code(CatalogIdentifier value) => new(value.Id, value.Revision, value.CanonicalValue);
+        return (new(item, new(item.Sku.Id, item.Sku.Revision, item.Definition.Id, item.Definition.Version, Code(primary))), identifiers.Select(Code).ToArray());
+    }
+}

@@ -2785,6 +2785,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/catalog/administration/identifiers/operations/query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["CatalogIdentifierRecovery"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/catalog/administration/operations/query": {
         parameters: {
             query?: never;
@@ -2817,6 +2833,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/catalog/administration/skus/{id}/code": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["CatalogSkuCodeCorrect"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/catalog/administration/skus/{id}/definition": {
         parameters: {
             query?: never;
@@ -2827,6 +2859,54 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["CatalogDefinitionRevise"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/catalog/administration/skus/{id}/identifiers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["CatalogIdentifierAssign"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/catalog/administration/skus/{id}/identifiers/{identifierId}/retire": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["CatalogIdentifierRetire"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/catalog/administration/skus/{id}/identifiers/query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["CatalogIdentifierQuery"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3099,6 +3179,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["RecoverCatalogPrimaryPhoto"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/catalog/scans/query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ResolveOperationalScan"];
         delete?: never;
         options?: never;
         head?: never;
@@ -11574,6 +11670,20 @@ export interface components {
             payout: null | components["schemas"]["RefundPayoutResultDto"];
             settlement: null | components["schemas"]["RefundSettlementResultDto"];
         };
+        ApprovedSourceScanDto: {
+            definitionId: components["schemas"]["LongId"];
+            definitionVersion: components["schemas"]["LongId"];
+            inspectionId: components["schemas"]["LongId"];
+            /** Format: int32 */
+            inspectionLineNumber: number | string;
+            inspectionRevision: components["schemas"]["LongId"];
+            orderId: components["schemas"]["LongId"];
+            orderVersion: components["schemas"]["LongId"];
+            skuId: components["schemas"]["LongId"];
+            sourceAccount: string;
+            sourceCode: string;
+            sourceSystem: string;
+        };
         BankReceiptConfirmDto: {
             attested: boolean;
             binding: string;
@@ -11812,6 +11922,51 @@ export interface components {
         CatalogBulkSkuQueryDto: {
             codes: null | string[];
         };
+        CatalogBuyerCodeDto: {
+            code: string;
+            identifierId: components["schemas"]["LongId"];
+            identifierRevision: string;
+        };
+        CatalogBuyerCodeMatchDto: {
+            matchedIdentifier: components["schemas"]["CatalogBuyerMatchedIdentifierDto"];
+            requestedCode: string;
+            variant: components["schemas"]["CatalogBuyerVariantDto"];
+        };
+        CatalogBuyerIdentityDto: {
+            currentPrimary: components["schemas"]["CatalogBuyerCodeDto"];
+            definitionId: components["schemas"]["LongId"];
+            definitionVersion: string;
+            skuId: components["schemas"]["LongId"];
+            skuRevision: string;
+        };
+        CatalogBuyerMatchedIdentifierDto: {
+            code: string;
+            definitionId: components["schemas"]["LongId"];
+            definitionVersion: string;
+            identifierId: components["schemas"]["LongId"];
+            identifierRevision: string;
+            kind: string;
+            namespace: string;
+            skuId: components["schemas"]["LongId"];
+            skuRevision: string;
+        };
+        CatalogBuyerVariantDto: {
+            buyerIdentity: components["schemas"]["CatalogBuyerIdentityDto"];
+            categoryCode: string;
+            code: string;
+            currentPrice: null | components["schemas"]["CatalogPriceDto"];
+            definition: components["schemas"]["CatalogDefinitionDto"];
+            description: string;
+            familyId: components["schemas"]["LongId"];
+            familyName: string;
+            familyPublicId: string;
+            publicId: string;
+            skuId: components["schemas"]["LongId"];
+        };
+        CatalogBuyerVariantPageDto: {
+            items: components["schemas"]["CatalogBuyerVariantDto"][];
+            total: string;
+        };
         CatalogCategoryDto: {
             active: boolean;
             code: string;
@@ -11911,6 +12066,68 @@ export interface components {
             owner: components["schemas"]["AccessScopeDto"];
             purpose: string;
             search?: null | string;
+        };
+        CatalogIdentifierAssignDto: {
+            definitionId: components["schemas"]["LongId"];
+            kind: string;
+            provenanceReference: string;
+            rawValue: string;
+            reason: string;
+            sourceAccount: null | string;
+        };
+        CatalogIdentifierCorrectDto: {
+            expectedIdentifierRevision: string;
+            newCode: string;
+            primaryIdentifierId: components["schemas"]["LongId"];
+            provenanceReference: string;
+            reason: string;
+        };
+        CatalogIdentifierDto: {
+            canonicalValue: string;
+            definitionId: null | components["schemas"]["LongId"];
+            /** Format: date-time */
+            effectiveAt: string;
+            id: components["schemas"]["LongId"];
+            isPrimary: boolean;
+            kind: string;
+            namespace: string;
+            organizationId: components["schemas"]["LongId"];
+            provenanceReference: string;
+            rawValue: string;
+            /** Format: date-time */
+            retiredAt: null | string;
+            revision: string;
+            skuId: components["schemas"]["LongId"];
+        };
+        CatalogIdentifierReadDto: {
+            purpose: string;
+        };
+        CatalogIdentifierRecoveryDto: {
+            key: string;
+            operation: string;
+            purpose: string;
+        };
+        CatalogIdentifierRecoveryResultDto: {
+            operation: string;
+            result: null | components["schemas"]["CatalogIdentifierResultDto"];
+            status: string;
+        };
+        CatalogIdentifierResultDto: {
+            identifierId: components["schemas"]["LongId"];
+            identifierRevision: string;
+            /** Format: date-time */
+            recordedAt: string;
+            skuId: components["schemas"]["LongId"];
+            skuRevision: string;
+        };
+        CatalogIdentifierRetireDto: {
+            expectedIdentifierRevision: string;
+            provenanceReference: string;
+            reason: string;
+        };
+        CatalogIdentifierViewDto: {
+            catalog: components["schemas"]["CatalogSkuDto"];
+            identifiers: components["schemas"]["CatalogIdentifierDto"][];
         };
         CatalogMutationResultDto: {
             currentDefinitionId: null | components["schemas"]["LongId"];
@@ -12226,6 +12443,16 @@ export interface components {
             operation: string;
             purpose: string;
         };
+        CatalogScanIdentifierDto: {
+            canonicalValue: string;
+            definitionId: components["schemas"]["LongId"];
+            definitionVersion: components["schemas"]["LongId"];
+            identifierId: components["schemas"]["LongId"];
+            identifierRevision: components["schemas"]["LongId"];
+            kind: string;
+            namespace: string;
+            skuId: components["schemas"]["LongId"];
+        };
         CatalogSkuCreateDto: {
             code: string;
             definition: components["schemas"]["CatalogDefinitionInputDto"];
@@ -12338,6 +12565,7 @@ export interface components {
         DispatchCommandDto: {
             reason: string;
             review: string;
+            scanSelections?: null | components["schemas"]["OperationalScanSelectionDto"][];
             selection: components["schemas"]["DispatchSelectionDto"];
         };
         DispatchCourierDto: {
@@ -12778,6 +13006,10 @@ export interface components {
         };
         /** @description Nonnegative decimal string from 0.00 through 999999999999999.99, with at most two fractional digits; responses use exactly two. JSON numbers are invalid. */
         Money: string;
+        OperationalScanSelectionDto: {
+            identifier: null | components["schemas"]["CatalogScanIdentifierDto"];
+            source: null | components["schemas"]["ApprovedSourceScanDto"];
+        };
         OperationLookupDto: {
             key: string;
             operation: string;
@@ -16437,6 +16669,7 @@ export interface components {
         ProcurementStockReceiptCommandDto: {
             binding: string;
             input: components["schemas"]["ProcurementStockReceiptInputDto"];
+            scanSelections?: null | components["schemas"]["OperationalScanSelectionDto"][];
         };
         ProcurementStockReceiptDto: {
             after: components["schemas"]["SupplierClaimCapacityDto"];
@@ -18430,6 +18663,45 @@ export interface components {
             lines: components["schemas"]["ShipmentPackageDto"][];
             reason: string;
             review: string;
+            scanSelections?: null | components["schemas"]["OperationalScanSelectionDto"][];
+        };
+        ScanCandidateDto: {
+            baseUnitCode: string;
+            /** Format: int32 */
+            baseUnitsPerPackage: number | string;
+            currentPrimaryCode: null | string;
+            definitionId: components["schemas"]["LongId"];
+            definitionVersion: string;
+            packageKind: string;
+            packageLabel: string;
+            selection: components["schemas"]["OperationalScanSelectionDto"];
+            skuCode: string;
+            skuId: components["schemas"]["LongId"];
+            targetReference: string;
+        };
+        ScanRequestDto: {
+            auxiliaryId: null | components["schemas"]["LongId"];
+            auxiliaryRevision: null | components["schemas"]["LongId"];
+            codeKind: string;
+            documentId: null | components["schemas"]["LongId"];
+            documentRevision: null | components["schemas"]["LongId"];
+            location: null | components["schemas"]["AccessScopeDto"];
+            purpose: string;
+            rawCode: string;
+            sourceAccount: null | string;
+            sourceNamespace: null | string;
+            sourceReview: null | string;
+        };
+        ScanResolutionDto: {
+            auxiliaryId: null | components["schemas"]["LongId"];
+            auxiliaryRevision: null | string;
+            candidates: components["schemas"]["ScanCandidateDto"][];
+            documentId: null | components["schemas"]["LongId"];
+            documentRevision: null | string;
+            kind: string;
+            purpose: string;
+            reason: string;
+            sourceReview: null | string;
         };
         /** @enum {unknown} */
         ScopeNodeKind: "buyingOrganization" | "fulfillmentOrganization" | "branch" | "division" | "shop" | "warehouse" | "channel";
@@ -18781,6 +19053,7 @@ export interface components {
             packages: number;
             poolSelection?: null | components["schemas"]["StockCountPoolSelectionDto"];
             reason: string;
+            scanSelections?: null | components["schemas"]["OperationalScanSelectionDto"][];
             skuId: components["schemas"]["LongId"];
         };
         StockCountSourceChoiceDto: {
@@ -35369,6 +35642,35 @@ export interface operations {
             };
         };
     };
+    CatalogIdentifierRecovery: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
+                /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
+                "X-Expected-Actor-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CatalogIdentifierRecoveryDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogIdentifierRecoveryResultDto"];
+                };
+            };
+        };
+    };
     CatalogReceiptQuery: {
         parameters: {
             query?: never;
@@ -35517,6 +35819,41 @@ export interface operations {
             };
         };
     };
+    CatalogSkuCodeCorrect: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Reuse this key only for an unchanged logical command, including after an uncertain response. */
+                "Idempotency-Key": string;
+                /** @description One quoted nonnegative Int64 resource version from the latest response; never a JavaScript number. */
+                "If-Match": string;
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
+                /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
+                "X-Expected-Actor-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CatalogIdentifierCorrectDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogIdentifierResultDto"];
+                };
+            };
+        };
+    };
     CatalogDefinitionRevise: {
         parameters: {
             query?: never;
@@ -35593,6 +35930,108 @@ export interface operations {
                 };
                 content: {
                     "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    CatalogIdentifierAssign: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Reuse this key only for an unchanged logical command, including after an uncertain response. */
+                "Idempotency-Key": string;
+                /** @description One quoted nonnegative Int64 resource version from the latest response; never a JavaScript number. */
+                "If-Match": string;
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
+                /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
+                "X-Expected-Actor-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CatalogIdentifierAssignDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogIdentifierResultDto"];
+                };
+            };
+        };
+    };
+    CatalogIdentifierRetire: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Reuse this key only for an unchanged logical command, including after an uncertain response. */
+                "Idempotency-Key": string;
+                /** @description One quoted nonnegative Int64 resource version from the latest response; never a JavaScript number. */
+                "If-Match": string;
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
+                /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
+                "X-Expected-Actor-Id": string;
+            };
+            path: {
+                id: string;
+                identifierId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CatalogIdentifierRetireDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogIdentifierResultDto"];
+                };
+            };
+        };
+    };
+    CatalogIdentifierQuery: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
+                /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
+                "X-Expected-Actor-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CatalogIdentifierReadDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogIdentifierViewDto"];
                 };
             };
         };
@@ -36921,6 +37360,35 @@ export interface operations {
             };
         };
     };
+    ResolveOperationalScan: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
+                /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
+                "X-Expected-Actor-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScanRequestDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScanResolutionDto"];
+                };
+            };
+        };
+    };
     ReserveCatalogPhotoEvidence: {
         parameters: {
             query?: never;
@@ -38060,7 +38528,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CatalogPublishedVariantDto"] | null;
+                    "application/json": components["schemas"]["CatalogBuyerVariantDto"] | null;
                 };
             };
             /** @description Bad Request */
@@ -38134,7 +38602,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CatalogPublishedVariantDto"][];
+                    "application/json": components["schemas"]["CatalogBuyerCodeMatchDto"][];
                 };
             };
             /** @description Bad Request */
@@ -38208,7 +38676,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CatalogPublishedVariantPageDto"];
+                    "application/json": components["schemas"]["CatalogBuyerVariantPageDto"];
                 };
             };
             /** @description Bad Request */

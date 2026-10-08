@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { AccessFailure } from '../administration/workflow';
 import { createBuyerBulkGateway } from '../catalog/catalog-bulk-client';
-import type { BuyerVariant } from '../catalog/catalog-buyer-client';
+import { buyerCurrentCode, type BuyerVariant } from '../catalog/catalog-buyer-client';
 import type { DraftInput } from './order-draft-client';
 import { orderAmount } from './order-quote-client';
 import { BulkInputError, parseBulkSkuInput, prepareBulkSkuSelection, type BulkSkuRow } from './order-bulk';
@@ -30,9 +30,10 @@ export function OrderBulkEntry({ actorId, currentSelections, isCurrent, onApply,
     catch (failure) { setError(failure instanceof BulkInputError ? failure.message : 'Periksa format daftar SKU.'); return; }
     const controller = new AbortController(); request.current = controller; pending.current = true; setBusy(true);
     try {
-      const variants = await gateway.exact(actorId, rows.map(row => row.code), controller.signal);
+      const matches = await gateway.exact(actorId, rows.map(row => row.code), controller.signal);
       if (!alive.current || controller.signal.aborted || !isCurrent()) return;
-      const prepared = prepareBulkSkuSelection(rows, variants, currentSelections);
+      const prepared = prepareBulkSkuSelection(rows, matches, currentSelections);
+      const variants = matches.map(item => item.variant);
       setReview({ rows, variants, prepared });
     } catch (failure) {
       if (!alive.current || controller.signal.aborted || !isCurrent()) return;
@@ -49,7 +50,7 @@ export function OrderBulkEntry({ actorId, currentSelections, isCurrent, onApply,
   return <section className={styles.review} aria-label="Masukkan banyak SKU" aria-busy={busy}>
     <h3>Masukkan banyak SKU</h3>
     <p className={common.help}>Tempel dua kolom: kode SKU internal dan jumlah kemasan, dipisahkan tab atau titik koma. Maksimum 100 SKU berbeda. Jumlah berarti kemasan SKU tersebut, bukan satuan di dalamnya.</p>
-    <p className={common.help}>Gunakan kode yang ditampilkan pada katalog. Kode supplier dan barcode belum didukung pada isian ini. Harga dan kemasan diperiksa sebelum daftar diterapkan.</p>
+    <p className={common.help}>Gunakan kode utama atau alias internal yang masih aktif. Kode supplier dan barcode tidak diterima pada isian ini. Dua kode untuk barang yang sama harus diringkas menjadi satu baris sebelum diperiksa. Harga dan kemasan diperiksa sebelum daftar diterapkan.</p>
     <label>Daftar SKU dan jumlah kemasan<textarea rows={6} maxLength={16000} value={text} disabled={busy || review !== null}
       onChange={event => { setText(event.target.value); setError(null); }} /></label>
     {error && <p role="alert" className={common.alert}>{error}</p>}
@@ -58,7 +59,9 @@ export function OrderBulkEntry({ actorId, currentSelections, isCurrent, onApply,
       <h4>Periksa kemasan dan jumlah</h4>
       <ul className={styles.lines}>{review.rows.map((row, index) => {
         const item = review.variants[index];
-        return <li className={styles.line} key={item.skuId}><strong>{item.code} · {item.familyName}</strong>
+        return <li className={styles.line} key={item.skuId}><strong>{buyerCurrentCode(item)} · {item.familyName}</strong>
+          <p>Kode yang Anda masukkan: {row.code}. Kode utama saat ini: {buyerCurrentCode(item)}.</p>
+          {item.code !== buyerCurrentCode(item) && <p>Referensi SKU tetap pada catatan transaksi: {item.code}.</p>}
           <p>{row.packages} {item.definition.packageLabel} · {item.definition.baseUnitsPerPackage} {item.definition.baseUnitCode} per kemasan</p>
           <p>Minimum {item.definition.minimumOrderPackages}; kelipatan {item.definition.orderIncrementPackages}. Harga per kemasan: {orderAmount(item.currentPrice!.currency, item.currentPrice!.unitPrice)}.</p>
           {review.prepared.replacements.includes(item.skuId) && <p>Jumlah SKU ini dalam draf akan diganti menjadi {row.packages} setelah Anda menerapkan daftar.</p>}

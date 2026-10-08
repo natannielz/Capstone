@@ -63,6 +63,7 @@ builder.Services.AddSingleton<CollectionMigrations>();
 builder.Services.AddSingleton<AuthorizationStore>();
 builder.Services.AddSingleton<CatalogVisibilityStore>();
 builder.Services.AddSingleton<CatalogAuthoringService>();
+builder.Services.AddSingleton<ScanResolver>();
 builder.Services.AddSingleton<AccountContactService>();
 builder.Services.AddSingleton<CatalogPriceService>();
 builder.Services.AddSingleton<CatalogDefinitionQueryService>();
@@ -468,6 +469,8 @@ app.MapOrganizationEndpoints();
 app.MapOrganizationAddressEndpoints();
 }
 app.MapCatalogEndpoints();
+app.MapCatalogIdentifierEndpoints();
+app.MapScanEndpoints();
 app.MapBranchOrderRequestEndpoints();
 if (!pilotRelease)
 {

@@ -203,7 +203,7 @@ export class StockCountEditor {
   changeDraft(field: keyof StockCountDraft, value: string) {
     if (this.mayEdit()) this.patch({ draft: { ...this.state.draft, [field]: value }, error: null });
   }
-  reviewCount() {
+  reviewCount(scanSelections?: readonly import('./scan-client').OperationalScanSelection[]) {
     this.refreshReferences();
     if (!this.mayEdit() || !this.mayCount()) return;
     try {
@@ -212,7 +212,7 @@ export class StockCountEditor {
         throw new AccessFailure(400, "stock_count_selection_required");
       if (this.state.loadingSources || sourceMode === null || sourceMode === 'bound' && (!selectedSource || !this.state.sources.items.includes(selectedSource)))
         throw new AccessFailure(400, 'stock_count_source_selection_required');
-      const review = prepareStockCount(this.options.actorId, warehouse.location, selectedPackage, draft, selectedSource ?? undefined);
+      const review = prepareStockCount(this.options.actorId, warehouse.location, selectedPackage, draft, selectedSource ?? undefined, scanSelections);
       this.patch({ review, error: null, result: null });
     } catch (error) { this.failed(error); }
   }
