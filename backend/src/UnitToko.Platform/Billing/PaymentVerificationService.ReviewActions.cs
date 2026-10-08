@@ -26,12 +26,18 @@ public sealed partial class PaymentVerificationService
             return new PaymentReviewActionView(context.Source!, W.Binding(context.Source!, revision), revision, latest, decision is not null, new(submission["submittedAt"].ToUniversalTime()), Now);
         }, ct);
     }
-    public async Task<BsonDocument> RecordReviewActionAsync(ActorContext actor, long id, long revision, PaymentReviewActionInput input, AuthorizationCommandMetadata metadata, CancellationToken ct = default) {
+    public async Task<BsonDocument> RecordReviewActionAsync(ActorContext actor, long id, long revision, PaymentReviewActionInput input, AuthorizationCommandMetadata metadata, CancellationToken ct = default, PaymentReviewHandoverInput? handover = null) {
         if (id <= 0 || revision is < 0 or >= long.MaxValue - 1) throw PaymentReviewActionPolicy.Invalid(); input = PaymentReviewActionPolicy.Copy(input); Metadata(metadata); await StorageAsync(ct);
-        var body = W.Body(id, revision, input); var bodyHash = AuthorizationStore.CommandHash(body, metadata.Reason);
+        if (handover is not null) {
+            handover = PaymentReviewHandoverPolicy.Copy(handover);
+            if (input.Action != "claim" || input.PublicExplanation is not null) throw PaymentReviewHandoverPolicy.Invalid();
+            await PaymentReviewHandoverRecords.StorageAsync(database, ct);
+        }
+        var body = PaymentReviewHandoverRecords.Body(id, revision, input, handover); var bodyHash = AuthorizationStore.CommandHash(body, metadata.Reason);
         var recovered = await RecoverReviewActionCoreAsync(actor, id, metadata.IdempotencyKey, bodyHash, ct); if (recovered is not null) return W.Result(recovered);
         var store = new W(database); var versionId = (await ids.NextAsync(W.Versions, ct)).Value; var auditId = (await ids.NextAsync("auditEvents", ct)).Value;
-        Context? context = null; PersonAuthorityProof? proof = null;
+        Context? context = null; PersonAuthorityProof? proof = null; BsonDocument? capturedDelegation = null;
+        var handovers = new PaymentReviewHandoverRecords(database);
         return await authorization.ExecuteCommandAsync(actor, W.Operation, metadata, body, async (authority, tx, token) => {
             context = await SourceAsync(new(actor, authority, tx, true) { WritePermission = Permissions.PaymentReviewManage }, id, token); proof = null;
             var resources = PaymentDraftBson.Scopes(context.Source!["scopes"].AsBsonArray); var sourceRevision = context.Source["revision"].AsInt64;
@@ -42,6 +48,7 @@ public sealed partial class PaymentVerificationService
             var active = context ?? throw B.Broken(); var source = active.Source!; await records.RequireUnverifiedAsync(tx, id, token);
             var previous = await store.LatestAsync(tx, id, source, token);
             if ((previous?["revision"].AsInt64 ?? 0) != revision || input.Binding != W.Binding(source, revision)) throw B.Changed();
+            capturedDelegation = handover is null ? null : await handovers.CaptureAsync(tx, source, previous, handover, actor.UserId, token);
             var change = PaymentReviewActionPolicy.Apply(previous?["state"].AsString ?? "pending", previous is null || previous["assigneeId"].IsBsonNull ? null : previous["assigneeId"].AsInt64, input.Action, actor.UserId);
             proof = await PeopleAsync(active, token); var at = Now;
             if (previous is not null && previous["recordedAt"].ToUniversalTime() > at.UtcDateTime) throw B.Broken();
@@ -56,9 +63,15 @@ public sealed partial class PaymentVerificationService
             await store.Rows(W.Versions).InsertOneAsync(tx, row, cancellationToken: token); await store.Rows("auditEvents").InsertOneAsync(tx, W.Audit(row), cancellationToken: token);
             await store.Rows("outboxEvents").InsertOneAsync(tx, new BsonDocument { { "_id", ObjectId.GenerateNewId() }, { "schemaVersion", 1 }, { "kind", W.Operation }, { "sourceKey", W.Operation + ":" + versionId },
                 { "actorId", actor.UserId }, { "requestKey", metadata.IdempotencyKey }, { "payload", W.Result(row) }, { "createdAt", at.UtcDateTime }, { "dueAt", at.UtcDateTime }, { "status", "pending" }, { "attempts", 0 } }, cancellationToken: token);
+            if (handover is not null) await handovers.RecordAsync(tx, row, previous!, capturedDelegation!, handover, token);
             return W.Result(row);
         }, ct, async (_, tx, token) => {
             var active = context ?? throw B.Broken(); var latest = await store.LatestAsync(tx, id, active.Source, token) ?? throw B.Broken();
+            if (capturedDelegation is not null) {
+                var finalDelegation = await TemporaryDelegationRecords.HeadAsync(database, tx, handover!.DelegationId, token);
+                if (TemporaryDelegationRecords.State(finalDelegation) != TemporaryDelegationRecords.State(capturedDelegation)) throw B.Changed();
+                await TemporaryDelegationRecords.ExactAsync(database, tx, TemporaryDelegationRecords.Heads, finalDelegation, token);
+            }
             if (latest["_id"] != versionId || latest["bodyHash"] != bodyHash) throw B.Broken(); await FenceAsync(active, token);
         }, validateCurrent: () => { _ = Require(context ?? throw B.Broken()); proof?.RequireCurrent(context!.Tx, clock.UtcNow); });
     }
@@ -66,7 +79,7 @@ public sealed partial class PaymentVerificationService
         if (id <= 0) throw PaymentReviewActionPolicy.Invalid(); Metadata(new(key, "Recover payment review action", "payment-review-action-recovery")); await StorageAsync(ct);
         var row = await RecoverReviewActionCoreAsync(actor, id, key, null, ct); return row is null ? null : W.Result(row);
     }
-    private Task<BsonDocument?> RecoverReviewActionCoreAsync(ActorContext actor, long id, string key, string? bodyHash, CancellationToken ct) => authorization.ReadAsync<BsonDocument?>(actor, async (authority, tx, token) => {
+    private Task<BsonDocument?> RecoverReviewActionCoreAsync(ActorContext actor, long id, string key, string? bodyHash, CancellationToken ct, bool includeHandover = false) => authorization.ReadAsync<BsonDocument?>(actor, async (authority, tx, token) => {
         var context = await SourceAsync(new(actor, authority, tx, true) { WritePermission = Permissions.PaymentReviewManage }, id, token); var store = new W(database);
         var latest = await store.LatestAsync(tx, id, context.Source, token); var proof = await PeopleAsync(context, token);
         var raw = await store.Rows(W.Versions).Find(tx, new BsonDocument { { "actorId", actor.UserId }, { "requestKey", key } }).SingleOrDefaultAsync(token);
@@ -75,6 +88,14 @@ public sealed partial class PaymentVerificationService
         } else foreach (var name in new[] { "idempotencyRecords", "auditEvents", "outboxEvents" }) {
             var field = name == "idempotencyRecords" ? "key" : "requestKey";
             if (await store.Rows(name).Find(tx, new BsonDocument { { name == "idempotencyRecords" ? "operation" : "kind", W.Operation }, { "actorId", actor.UserId }, { field, key } }).AnyAsync(token)) throw B.Broken();
+        }
+        if (includeHandover) {
+            if (raw is null) {
+                if (await records.Rows(PaymentReviewHandoverRecords.Collection).Find(tx, new BsonDocument { { "actorId", actor.UserId }, { "requestKey", key } }).AnyAsync(token)) throw B.Broken();
+            } else {
+                var handover = await records.Rows(PaymentReviewHandoverRecords.Collection).Find(tx, new BsonDocument("_id", raw["_id"])).SingleOrDefaultAsync(token) ?? throw B.Broken();
+                raw = raw.DeepClone().AsBsonDocument; raw.Add("handoverProof", handover);
+            }
         }
         await AuditReadAsync(context, "workflow.recover", id, token); await FenceAsync(context, token); proof.RequireCurrent(tx, clock.UtcNow); return raw;
     }, ct);

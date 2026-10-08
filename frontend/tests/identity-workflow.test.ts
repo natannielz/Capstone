@@ -30,8 +30,8 @@ test("step-up binds the displayed actor and only offers actual server-permitted 
   assert.throws(() => stepUpFields(parsed, "payment.verify", "/identity/account"));
   assert.throws(() => stepUpFields({ ...parsed, account: null }, "access.approve", "/identity/account"));
   assert.equal(identityDestinations(["access.approve"]).some(item => item.href === "/administration/access"), true);
-  assert.deepEqual(identityDestinations(["order.submit"]).map(item => item.href), ["/ordering/drafts"]);
-  assert.deepEqual(identityDestinations(["report.read"]).map(item => item.href), ["/reporting/accounts"]);
+  assert.deepEqual(identityDestinations(["order.submit"]).map(item => item.href), ["/administration/delegations", "/ordering/drafts"]);
+  assert.deepEqual(identityDestinations(["report.read"]).map(item => item.href), ["/administration/delegations", "/reporting/accounts"]);
   assert.equal(identityDestinations(["accounting.book.read"]).some(item => item.href === "/reporting/accounts"), false);
   assert.deepEqual(loginFields("/reporting/accounts", "", ""), { returnPath: "/reporting/accounts" });
 });
@@ -57,4 +57,9 @@ test("identity failures distinguish unavailable service from missing approval an
   await assert.rejects(gateway.session(), error => error instanceof IdentityFailure && error.status === 503 && error.traceId === "trace");
   assert.match(identityMessage(new IdentityFailure(503, "identity_unavailable")), /belum tersedia/i);
   assert.match(identityMessage(new IdentityFailure(403, "membership_required")), /disetujui/i);
+});
+
+test("personal delegation discovery does not expose administrative write workflows", () => {
+  assert.deepEqual(identityDestinations([]).map(item => item.href), ["/administration/delegations"]);
+  assert.deepEqual(loginFields("/administration/delegations", "", ""), { returnPath: "/administration/delegations" });
 });

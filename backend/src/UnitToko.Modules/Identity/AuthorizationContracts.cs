@@ -9,7 +9,8 @@ public sealed record PermissionGrant(
     ImmutableArray<string> Permissions, GrantScope Scope, AuthorizationStatus Status,
     long RequestedBy, long ApprovedBy, string Reason, DateTimeOffset EffectiveAt,
     DateTimeOffset? ExpiresAt = null, DateTimeOffset? RevokedAt = null, long Version = 1,
-    ImmutableArray<string> DelegablePermissions = default);
+    ImmutableArray<string> DelegablePermissions = default,
+    [property: System.Text.Json.Serialization.JsonIgnore] TemporaryDelegationAuthority? TemporaryAuthority = null);
 
 public sealed record AuthorizationSnapshot(
     long UserId, long GrantVersion, AuthorizationStatus Status,

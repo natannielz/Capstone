@@ -16,6 +16,7 @@ import { PaymentCorrectionPanel } from './PaymentCorrectionPanel';
 import { PaymentManualReviewPanel } from './PaymentManualReviewPanel';
 import { createPaymentManualReviewGateway } from './payment-manual-review-client';
 import { createPaymentReviewActionGateway } from './payment-review-action-client';
+import { PaymentHandoverPanel } from './PaymentHandoverPanel';
 import { PaymentReviewActionPanel } from './PaymentReviewActionPanel';
 import { PaymentDuplicatePanel } from './PaymentDuplicatePanel';
 import { PaymentVerificationPanel } from './PaymentVerificationPanel';
@@ -66,7 +67,7 @@ export function PaymentReviewWorkspace() {
 }
 function ReviewDesk({ account, fresh, onDenied }: { account: Account; fresh: boolean; onDenied: (failure: unknown) => void }) {
   const [gateway] = useState(createPaymentReviewGateway), [corrections] = useState(createPaymentCorrectionGateway), [manual] = useState(createPaymentManualReviewGateway), [reviewActions] = useState(createPaymentReviewActionGateway), [verification] = useState(createPaymentVerificationGateway), [allocation] = useState(createPaymentAllocationGateway), [allocationCorrections] = useState(createPaymentAllocationCorrectionGateway), recovery = useOperationRecovery(account.actorId);
-  const [recovering, setRecovering] = useState(false), [editingBusy, setEditingBusy] = useState(false);
+  const [handoverLocked, setHandoverLocked] = useState(false), [recovering, setRecovering] = useState(false), [editingBusy, setEditingBusy] = useState(false);
   const [page, setPage] = useState<{ items: PaymentReviewQueueEntry[]; hasMore: boolean; observedAt: string | null }>({ items: [], hasMore: false, observedAt: null }), [before, setBefore] = useState<string | null>(null), [refresh, setRefresh] = useState(0);
   const [filter, setFilter] = useState('all');
   const [selected, setSelected] = useState<PaymentDraft | null>(null), [ocr, setOcr] = useState<PaymentOcrView | null>(null), [preview, setPreview] = useState<string | null>(null);
@@ -87,11 +88,12 @@ function ReviewDesk({ account, fresh, onDenied }: { account: Account; fresh: boo
     catch (failure) { if (active && current()) { setError(failure); onDenied(failure); } } finally { if (active) setBusy(false); }
   }); return () => { active = false; controller.abort(); }; }, [gateway, account.actorId, before, refresh, current, onDenied]);
   async function perform(work: () => Promise<void>) {
-    if (!current() || busy || editingBusy || recovering || pending.current) return; pending.current = true; setBusy(true); setError(null);
+    if (!current() || busy || editingBusy || recovering || handoverLocked || pending.current) return; pending.current = true; setBusy(true); setError(null);
     try { await work(); } catch (failure) { if (alive.current) { clearPreview(); setOcr(null); setSelected(null); setRememberedObservations([]); setError(failure); onDenied(failure); } }
     finally { pending.current = false; if (alive.current) setBusy(false); }
   }
-  const locked = busy || offline || recovering || editingBusy;
+  const locked = busy || offline || recovering || editingBusy || handoverLocked;
+  const handoverSettled = useCallback(() => {clearPreview(); setSelected(null); setOcr(null); setRememberedObservations([]); setRefresh(value => value + 1);}, [clearPreview]);
   function refreshPage(next: string | null) { clearPreview(); setSelected(null); setOcr(null); setRememberedObservations([]); setBefore(next); setRefresh(value => value + 1); }
   async function open(id: string) { clearPreview(); setSelected(null); setOcr(null); setRememberedObservations([]); const result = await gateway.read(account.actorId, id); if (current()) setSelected(result); }
   async function showOriginal() {
@@ -104,8 +106,10 @@ function ReviewDesk({ account, fresh, onDenied }: { account: Account; fresh: boo
     if (filter === 'attention') return row.discrepancies.length > 0 || ['retry', 'dead'].includes(row.ocrState);
     return filter === 'closed' ? ['rejected', 'replacement_requested'].includes(row.state) : row.state === filter;
   });
-  return <><AdministrationNavigation current="payment-reviews" actions={account.actions} locked={busy || editingBusy || recovering} />
-    <OperationRecovery entries={recovery.entries} journal={recovery.journal} disabled={busy || offline || editingBusy} onBusyChange={setRecovering}
+  return <><AdministrationNavigation current="payment-reviews" actions={account.actions} locked={busy || editingBusy || recovering || handoverLocked} />
+    <PaymentHandoverPanel actorId={account.actorId} owner={selected} allowed={account.actions.includes('payment.review.manage')} fresh={fresh}
+      locked={busy || offline || recovering || editingBusy || recovery.locked} current={current} onLock={setHandoverLocked} onSettled={handoverSettled} />
+    <OperationRecovery entries={recovery.entries} journal={recovery.journal} disabled={busy || offline || editingBusy || handoverLocked} onBusyChange={setRecovering}
       recoveryAdapters={{ 'billing.payment.review.correct': { lookup: async entry => { const result = await corrections.recover(entry.actorId, entry.key); if (!current()) throw new AccessFailure(409, 'recovery_request_stale'); return result; } },
         'billing.payment.review.manual': { lookup: async entry => { const result = await manual.recover(entry.actorId, entry.key); if (!current()) throw new AccessFailure(409, 'recovery_request_stale'); return result; } },
         'billing.payment.review.manage': { lookup: async entry => { const result = await reviewActions.recover(entry.actorId, entry.key); if (!current()) throw new AccessFailure(409, 'recovery_request_stale'); return result; } },

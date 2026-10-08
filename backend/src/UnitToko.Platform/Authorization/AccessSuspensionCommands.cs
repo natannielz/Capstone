@@ -29,6 +29,7 @@ public sealed partial class AccessAdministrationService
                     Builders<BsonDocument>.Update.Set("status", "suspended").Inc("grantVersion", 1L).Inc("fence", 1L),
                     new FindOneAndUpdateOptions<BsonDocument> { ReturnDocument = ReturnDocument.After }, token);
                 if (update is null) throw new PersistenceConflictException("version_conflict", "Identity changed; refresh and try again");
+                await TemporaryDelegationAuthorityReader.InvalidateDependentsAsync(database, session, [userId], token);
                 await AuditAsync(historyId, actor, userId, "access.identity.suspended", metadata, SafeIdentity(before), SafeIdentity(update), session, token);
                 return ChangeResult(userId, userId, update["grantVersion"].AsInt64, update["grantVersion"].AsInt64, "suspended");
             }, cancellationToken, complete: async (snapshot, session, token) =>
@@ -54,6 +55,12 @@ public sealed partial class AccessAdministrationService
                 if (before["status"].AsString != "active") throw new PersistenceConflictException("scope_inactive", "Scope is not active");
                 await MongoUnitOfWork.RequireVersionAsync(Collection("authorizationScopes"), session, F.Eq("_id", scopeId), expectedVersion,
                     Builders<BsonDocument>.Update.Set("status", "suspended").Inc("fence", 1L), token);
+                // A scope revision permanently ends dependent temporary authority; it must not
+                // reappear when a unit later resumes. Include both source and recipient membership scopes.
+                var affected = await Collection(TemporaryDelegationRecords.Heads).Find(session,
+                    F.Eq("status", "active") & F.Eq("sourceNodes._id", scopeId)).Project(new BsonDocument("sourceUserId", 1)).ToListAsync(token);
+                var sources = affected.Select(row => row["sourceUserId"].AsInt64).Distinct().ToArray();
+                foreach (var source in sources) await BumpIdentityAsync(source, session, token, requireActive: false);
                 var after = await FindAsync("authorizationScopes", scopeId, session, token);
                 await AuditAsync(historyId, actor, scopeId, "access.scope.suspended", metadata, before, after, session, token);
                 return ChangeResult(scopeId, scopeId, checked(expectedVersion + 1), actor.GrantVersion, "suspended");

@@ -92,6 +92,8 @@ public sealed partial class AccessAdministrationService
             async (snapshot, session, token) =>
             {
                 existing = await FindAsync("authorizationGrants", grantId, session, token); grant = AuthorizationBson.Grant(existing);
+                if (grant.TemplateId == TemporaryDelegationPolicy.TemplateId)
+                    throw new DomainValidationException("delegation_owner_required", "Revoke temporary access through its delegation record");
                 return AuthorizeScope(actor, snapshot, Permissions.AccessRevoke, grant.Scope);
             }, async (session, token) =>
             {

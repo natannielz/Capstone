@@ -73,6 +73,7 @@ public sealed partial class OrganizationMasterDataService
             if (result.ModifiedCount != 1)
                 throw new PersistenceConflictException("organization_impact_changed", "Affected accounts changed; review a fresh proposal");
         }
+        await TemporaryDelegationAuthorityReader.InvalidateDependentsAsync(database, session, impact.Identities.Select(row => row["_id"].AsInt64), token);
     }
     private static BsonDocument ImpactDocument(OrganizationImpact impact) => new()
     {

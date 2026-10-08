@@ -23,6 +23,7 @@ internal sealed class PaymentReviewActionRecords(IMongoDatabase database)
         { "actorId", row["actorId"] }, { "actorGrantVersion", row["actorGrantVersion"] }, { "snapshotHash", row["snapshotHash"] }, { "bodyHash", row["bodyHash"] },
         { "reason", row["reason"] }, { "correlationId", row["correlationId"] }, { "createdAt", row["recordedAt"] }, { "result", Result(row) } };
     internal async Task<BsonDocument?> LatestAsync(IClientSessionHandle tx, long id, BsonDocument? source, CancellationToken ct) {
+        var handovers = new PaymentReviewHandoverRecords(database); var actionIds = new List<long>();
         BsonDocument? previous = null; long revision = 0; string state = "pending"; long? assignee = null;
         // ponytail: validate the full linear history; add verified checkpoints only if measured review volume requires them.
         using var cursor = await Rows(Versions).Find(tx, new BsonDocument("declarationId", id)).Sort(new BsonDocument("revision", 1)).ToCursorAsync(ct);
@@ -35,7 +36,8 @@ internal sealed class PaymentReviewActionRecords(IMongoDatabase database)
             if (row["revision"] != ++revision || row["previousVersionId"] != (previous is null ? BsonNull.Value : previous["_id"]) ||
                 row["previousHash"] != (previous is null ? BsonNull.Value : previous["snapshotHash"]) || previous is not null && row["recordedAt"].CompareTo(previous["recordedAt"]) < 0) throw B.Broken();
             var input = PaymentReviewActionPolicy.Copy(new(row["binding"].AsString, row["action"].AsString, row["schemaVersion"] == 2 ? row["publicExplanation"].AsString : null));
-            if (input.Binding != Binding(row["source"].AsBsonDocument, revision - 1) || row["bodyHash"] != AuthorizationStore.CommandHash(Body(id, revision - 1, input), row["reason"].AsString)) throw B.Broken();
+            var handover = await handovers.ReadAsync(tx, row, previous, ct); actionIds.Add(row["_id"].AsInt64);
+            if (input.Binding != Binding(row["source"].AsBsonDocument, revision - 1) || row["bodyHash"] != AuthorizationStore.CommandHash(PaymentReviewHandoverRecords.Body(id, revision - 1, input, handover), row["reason"].AsString)) throw B.Broken();
             var expected = PaymentReviewActionPolicy.Apply(state, assignee, input.Action, row["actorId"].AsInt64);
             if (row["state"] != expected.State || row["assigneeId"] != (expected.AssigneeId is { } user ? new BsonInt64(user) : BsonNull.Value)) throw B.Broken();
             var people = row["people"].AsBsonArray.Select(ReceivingAccountBson.Person).ToArray();
@@ -55,6 +57,7 @@ internal sealed class PaymentReviewActionRecords(IMongoDatabase database)
         }
         if (previous is null) foreach (var (name, field) in new[] { ("idempotencyRecords", "result.declarationId"), ("auditEvents", "result.declarationId"), ("outboxEvents", "payload.declarationId") })
             if (await Rows(name).Find(tx, new BsonDocument { { name == "idempotencyRecords" ? "operation" : "kind", Operation }, { field, id } }).AnyAsync(ct)) throw B.Broken();
+        await handovers.RequireNoOrphansAsync(tx, id, actionIds, ct);
         return previous;
     }
     internal async Task RequireOpenAsync(IClientSessionHandle tx, long id, BsonDocument? source, CancellationToken ct) {

@@ -61,6 +61,7 @@ public sealed class PersonAccountInvalidation(IMongoDatabase database, MongoIden
             revisions.Add(new(account.UserId, account.GrantVersion, account.GrantVersion + 1,
                 account.SecurityVersion, account.SecurityVersion + 1));
         }
+        await UnitToko.Platform.Authorization.TemporaryDelegationAuthorityReader.InvalidateDependentsAsync(database, tx, affectedUserIds, cancellationToken);
         return revisions.MoveToImmutable();
     }
 

@@ -30,7 +30,11 @@ public sealed class AuthorizationStore(IMongoDatabase database, MongoUnitOfWork 
 
     internal Task<T> ReadAsync<T>(ActorContext actor,
         Func<AuthorizationSnapshot, IClientSessionHandle, CancellationToken, Task<T>> read, CancellationToken cancellationToken) =>
-        unitOfWork.ExecuteAsync(async (session, token) => await read(await LoadAsync(actor, session, token), session, token), cancellationToken);
+        unitOfWork.ExecuteAsync(async (session, token) => {
+            var snapshot = await LoadAsync(actor, session, token);
+            var result = await read(snapshot, session, token);
+            TemporaryDelegationAuthorityReader.RequireDeadlines(snapshot, clock.UtcNow); return result;
+        }, cancellationToken);
 
     internal async Task<AuthorizationSnapshot> LoadAsync(ActorContext actor, IClientSessionHandle session, CancellationToken token)
     {
@@ -44,8 +48,11 @@ public sealed class AuthorizationStore(IMongoDatabase database, MongoUnitOfWork 
         var grants = await database.GetCollection<BsonDocument>("authorizationGrants").Find(session, F.Eq("userId", actor.UserId)).ToListAsync(token);
         var memberships = await database.GetCollection<BsonDocument>("memberships").Find(session, F.Eq("userId", actor.UserId)).ToListAsync(token);
         var nodes = await database.GetCollection<BsonDocument>("authorizationScopes").Find(session, F.Empty).ToListAsync(token);
-        return new(actor.UserId, actor.GrantVersion, AuthorizationStatus.Active, grants.Select(AuthorizationBson.Grant).ToImmutableArray(),
-            memberships.Select(AuthorizationBson.Membership).ToImmutableArray(), new(nodes.Select(AuthorizationBson.Node).ToImmutableArray()));
+        var directory = new ScopeDirectory(nodes.Select(AuthorizationBson.Node).ToImmutableArray());
+        var resolved = await new TemporaryDelegationAuthorityReader(database, clock).ResolveAsync(
+            grants.Select(AuthorizationBson.Grant).ToImmutableArray(), directory, session, token);
+        return new(actor.UserId, actor.GrantVersion, AuthorizationStatus.Active, resolved,
+            memberships.Select(AuthorizationBson.Membership).ToImmutableArray(), directory);
     }
 
     public Task<AuthorizedPage> QueryAsync(ActorContext actor, string permission, IMongoCollection<BsonDocument> collection,
@@ -134,6 +141,7 @@ public sealed class AuthorizationStore(IMongoDatabase database, MongoUnitOfWork 
                 var replayProof = await RequirePersonAuthorityAsync(actor, authorization, existing, session, token);
                 if (complete is not null) await complete(snapshot, session, token);
                 await CompletePersonAuthorizationAsync(actor, snapshot, authorization, replayProof, session, token);
+                TemporaryDelegationAuthorityReader.RequireDeadlines(snapshot, clock.UtcNow, authorization.Decision.GrantIds);
                 validateCurrent?.Invoke();
                 return existing["result"].AsBsonDocument.DeepClone().AsBsonDocument;
             }
@@ -152,6 +160,7 @@ public sealed class AuthorizationStore(IMongoDatabase database, MongoUnitOfWork 
             await records.UpdateOneAsync(session, filter, Builders<BsonDocument>.Update.Set("result", result), cancellationToken: token);
             if (complete is not null) await complete(snapshot, session, token);
             await CompletePersonAuthorizationAsync(actor, snapshot, authorization, personProof, session, token);
+            TemporaryDelegationAuthorityReader.RequireDeadlines(snapshot, clock.UtcNow, authorization.Decision.GrantIds);
             validateCurrent?.Invoke();
             return result.DeepClone().AsBsonDocument;
         }, cancellationToken);

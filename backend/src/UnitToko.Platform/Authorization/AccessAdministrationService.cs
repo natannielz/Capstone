@@ -70,7 +70,9 @@ public sealed partial class AccessAdministrationService(IMongoDatabase database,
         var filter = F.Eq("_id", userId) & (requireActive ? F.Eq("status", "active") : F.Empty);
         var identity = await Collection("identities").FindOneAndUpdateAsync(session, filter,
             Builders<BsonDocument>.Update.Inc("grantVersion", 1L).Inc("fence", 1L), new FindOneAndUpdateOptions<BsonDocument> { ReturnDocument = ReturnDocument.After }, token);
-        return identity is null ? throw new AuthorizationDeniedException("beneficiary_inactive") : identity["grantVersion"].AsInt64;
+        if (identity is null) throw new AuthorizationDeniedException("beneficiary_inactive");
+        await TemporaryDelegationAuthorityReader.InvalidateDependentsAsync(database, session, [userId], token);
+        return identity["grantVersion"].AsInt64;
     }
     private Task AuditAsync(long id, ActorContext actor, long subjectId, string operation, AuthorizationCommandMetadata metadata,
         BsonDocument before, BsonDocument after, IClientSessionHandle session, CancellationToken token) =>

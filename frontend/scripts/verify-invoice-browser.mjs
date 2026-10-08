@@ -36,6 +36,8 @@ import { verifyProcurementInspectionBrowser } from './verify-procurement-inspect
 import { verifyProcurementSettlementBrowser } from './verify-procurement-settlement-browser.mjs';
 import { verifyOperationalAnomaliesBrowser } from './verify-operational-anomalies-browser.mjs';
 import { verifyReplenishmentBrowser } from './verify-replenishment-browser.mjs';
+import { verifyPaymentHandoverBrowser } from './verify-payment-handover-browser.mjs';
+import { verifyTemporaryDelegationBrowser } from './verify-temporary-delegation-browser.mjs';
 import { verifyOrderReorderBrowser } from './verify-order-reorder-browser.mjs';
 import { verifyOrderBulkBrowser } from './verify-order-bulk-browser.mjs';
 import {verifyOrderViewsBrowser} from './verify-order-views-browser.mjs';
@@ -256,7 +258,21 @@ try {
   }); const proxyPort = await listen(tunnel);
   browser = await chromium.launch({ ...(channel === 'msedge' ? { channel: 'msedge' } : {}), headless: true, proxy: { server: 'http://127.0.0.1:' + proxyPort } });
   const finance = await user(config.financeToken), page = finance.page;
-  if (config.orderViews) {
+  if (config.paymentHandover) {
+    await verifyPaymentHandoverBrowser({config, reviewer: finance, user, origin, directory, restartUser: async (token, storageState) => {
+      await browser.close();
+      browser = await chromium.launch({ ...(channel === 'msedge' ? { channel: 'msedge' } : {}), headless: true, proxy: { server: 'http://127.0.0.1:' + proxyPort } });
+      return user(token, storageState);
+    }});
+    assert.deepEqual(errors, []);
+  } else if (config.temporaryDelegation) {
+    await verifyTemporaryDelegationBrowser({config, maker: finance, user, origin, directory, restartUser: async (token, storageState) => {
+      await browser.close();
+      browser = await chromium.launch({ ...(channel === 'msedge' ? { channel: 'msedge' } : {}), headless: true, proxy: { server: 'http://127.0.0.1:' + proxyPort } });
+      return user(token, storageState);
+    }});
+    assert.deepEqual(errors, []);
+  } else if (config.orderViews) {
     await verifyOrderViewsBrowser({config, buyer: finance, user, origin, directory, restartUser: async (token, storageState) => {
       await browser.close();
       browser = await chromium.launch({ ...(channel === 'msedge' ? { channel: 'msedge' } : {}), headless: true, proxy: { server: 'http://127.0.0.1:' + proxyPort } });

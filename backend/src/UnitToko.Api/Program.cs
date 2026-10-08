@@ -156,6 +156,7 @@ builder.Services.AddSingleton<PackConversionService>();
 builder.Services.AddSingleton<StockSourceSetupService>();
 builder.Services.AddSingleton<HistoricalReadStore>();
 builder.Services.AddSingleton<AccessAdministrationService>();
+builder.Services.AddSingleton<TemporaryDelegationService>();
 builder.Services.AddSingleton<OrganizationMasterDataService>();
 builder.Services.AddSingleton<OrganizationAddressService>();
 builder.Services.AddSingleton<OrderSpendingPolicyService>();
@@ -462,6 +463,7 @@ app.MapIdentitySecurityEndpoints();
 app.MapProviderSecurityEventEndpoints();
 app.MapIdentityEndpoints();
 app.MapAccessEndpoints(currentOnly: pilotRelease);
+if (!pilotRelease) app.MapTemporaryDelegationEndpoints();
 if (!pilotRelease)
 {
 app.MapIdentityAdministrationEndpoints();
@@ -525,6 +527,7 @@ app.MapPaymentReviewEndpoints();
 app.MapPaymentCorrectionEndpoints();
 app.MapPaymentManualReviewEndpoints();
 app.MapPaymentReviewActionEndpoints();
+app.MapPaymentReviewHandoverEndpoints();
 app.MapPaymentVerificationEndpoints();
 app.MapPaymentAllocationEndpoints();
 app.MapPaymentAllocationCorrectionEndpoints();

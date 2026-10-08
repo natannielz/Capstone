@@ -76,7 +76,7 @@ public static class ScopePolicy
 
     public static bool IsGrantActive(PermissionGrant grant, long actorId, DateTimeOffset now) =>
         grant.Id > 0 && grant.UserId == actorId && grant.MembershipId > 0 && grant.Version > 0 &&
-        !string.IsNullOrWhiteSpace(grant.TemplateId) && RoleTemplates.Templates.ContainsKey(grant.TemplateId) && grant.TemplateVersion == RoleTemplates.CurrentVersion &&
+        !string.IsNullOrWhiteSpace(grant.TemplateId) && (grant.TemplateId == TemporaryDelegationPolicy.TemplateId ? TemporaryDelegationPolicy.HasCurrentProof(grant, now) : RoleTemplates.Templates.ContainsKey(grant.TemplateId) && grant.TemplateVersion == RoleTemplates.CurrentVersion) &&
         grant.RequestedBy > 0 && grant.ApprovedBy > 0 && grant.RequestedBy != grant.ApprovedBy && grant.ApprovedBy != grant.UserId &&
         !string.IsNullOrWhiteSpace(grant.Reason) && !grant.Permissions.IsDefault &&
         grant.Permissions.All(permission => Permissions.Find(permission) is { } definition && definition.AllowedScopes.Contains(grant.Scope.Kind)) &&
