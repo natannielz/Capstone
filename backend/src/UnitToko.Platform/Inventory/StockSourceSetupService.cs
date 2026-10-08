@@ -33,7 +33,7 @@ public sealed partial class StockSourceSetupService(IMongoDatabase database, Mon
         capture.RecordSourceOwner(reader); return reader;
     }
     internal bool SameCapturedHistoryOwner(StockSourceSetupService other) => ReferenceEquals(database.Client, other.HistoryOwnerDatabase.Client) &&
-        database.DatabaseNamespace == other.HistoryOwnerDatabase.DatabaseNamespace && ReferenceEquals(clock, other.HistoryOwnerClock);
+        database.DatabaseNamespace.Equals(other.HistoryOwnerDatabase.DatabaseNamespace) && ReferenceEquals(clock, other.HistoryOwnerClock);
     private static BsonDocument HistoryFilter(FilterDefinition<BsonDocument> filter) =>
         filter.Render(new(BsonDocumentSerializer.Instance, BsonSerializer.SerializerRegistry));
     private async Task<BsonDocument?> HistoryOneAsync(IClientSessionHandle tx, string name, FilterDefinition<BsonDocument> filter, CancellationToken ct) =>
@@ -58,7 +58,7 @@ public sealed partial class StockSourceSetupService(IMongoDatabase database, Mon
         if (pool is not null) historyCapture?.RecordPool(pool); return pool;
     }
     internal async Task RequireCapturedHistoryStorageAsync(IMongoDatabase expected, IClientSessionHandle tx, CancellationToken ct) {
-        if (!ReferenceEquals(expected.Client, database.Client) || expected.DatabaseNamespace != database.DatabaseNamespace ||
+        if (!ReferenceEquals(expected.Client, database.Client) || !expected.DatabaseNamespace.Equals(database.DatabaseNamespace) ||
             !ReferenceEquals(tx.Client, database.Client) || !tx.IsInTransaction) throw StockSourceSetupBson.Invalid();
         if (historyCapturedAt is null || Now() < historyCapturedAt.Value) throw StockSourceSetupBson.Invalid();
         await OperatingPolicyStorageAsync(ct); await ActivationOwnerStorageAsync(ct);

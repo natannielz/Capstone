@@ -29,7 +29,7 @@ public sealed partial class ProcurementFundingService
     }
     private async Task<(BsonDocument Source, FundingCapacityState Capacity)> DisbursementStateAsync(IMongoDatabase owner, IClientSessionHandle tx,
         long requestId, long decisionId, long authorizationId, CancellationToken ct, PurchaseOrderFundingCapture? orderProof = null) {
-        if (!ReferenceEquals(owner.Client, database.Client) || owner.DatabaseNamespace != database.DatabaseNamespace || !tx.IsInTransaction || !ReferenceEquals(tx.Client, database.Client)) throw B.Broken();
+        if (!ReferenceEquals(owner.Client, database.Client) || !owner.DatabaseNamespace.Equals(database.DatabaseNamespace) || !tx.IsInTransaction || !ReferenceEquals(tx.Client, database.Client)) throw B.Broken();
         var request = await records.RequestAsync(tx, requestId, ct, orderProof); var decision = await records.DecisionAsync(tx, decisionId, request, ct);
         ProcurementFundingRecords.Equal(decision["decision"], "approve"); ProcurementFundingRecords.Equal(decision["authorizationId"], authorizationId);
         var allocation = await records.RowAsync(tx, B.Allocations, authorizationId, ct); ProcurementFundingRecords.RequireAllocation(decision, request, allocation);
@@ -53,7 +53,7 @@ public sealed partial class ProcurementFundingService
         return new(this, actor, authority, tx, source, token => FenceAsync(context, token), () => Current(context));
     }
     internal async Task FenceDisbursementAsync(IMongoDatabase owner, ActorContext actor, AuthorizationSnapshot authority, IClientSessionHandle tx, ProcurementFundingCapture capture, CancellationToken ct) {
-        if (!ReferenceEquals(owner.Client, database.Client) || owner.DatabaseNamespace != database.DatabaseNamespace) throw B.Broken();
+        if (!ReferenceEquals(owner.Client, database.Client) || !owner.DatabaseNamespace.Equals(database.DatabaseNamespace)) throw B.Broken();
         capture.RequireContext(this, actor, authority, tx); await capture.FenceAsync(ct);
     }
 }

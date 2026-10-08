@@ -43,7 +43,7 @@ internal sealed class HeldStockReleaseValueProof
     }
     internal void Require(IMongoDatabase current, IClientSessionHandle tx) {
         new InventoryRepository(current).RequireSession(tx);
-        if (!ReferenceEquals(current.Client, database.Client) || current.DatabaseNamespace != database.DatabaseNamespace ||
+        if (!ReferenceEquals(current.Client, database.Client) || !current.DatabaseNamespace.Equals(database.DatabaseNamespace) ||
             !ReferenceEquals(tx, transaction) || tx.WrappedCoreSession.CurrentTransaction.TransactionNumber != number) throw StockReleaseBson.Broken();
         owner.RequireValueAuthority(current, tx, decisionId, SourceHash);
     }
@@ -85,7 +85,7 @@ internal sealed class LotValueConsumptionProof
     internal long ExpectedDestinationLotRevision => 0;
     internal void Require(IMongoDatabase current, IClientSessionHandle tx) {
         new InventoryRepository(current).RequireSession(tx);
-        if (!ReferenceEquals(current.Client, database.Client) || current.DatabaseNamespace != database.DatabaseNamespace ||
+        if (!ReferenceEquals(current.Client, database.Client) || !current.DatabaseNamespace.Equals(database.DatabaseNamespace) ||
             !ReferenceEquals(tx, transaction) || tx.WrappedCoreSession.CurrentTransaction.TransactionNumber != number) throw PackConversionBson.Broken();
         owner.RequireValueAuthority(current, tx, conversionId, SourceHash);
     }

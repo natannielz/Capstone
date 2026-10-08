@@ -28,7 +28,7 @@ public sealed partial class OrderSpendingPolicyService
     private readonly AuthorizationStore authorization;
     private readonly OrderSpendingPolicyRecords records;
     public OrderSpendingPolicyService(IMongoDatabase database, MongoUnitOfWork unit, IdAllocator ids, IClock clock, OrganizationMasterDataService organizations) {
-        if (!ReferenceEquals(database.Client, organizations.AddressSourceDatabase.Client) || database.DatabaseNamespace != organizations.AddressSourceDatabase.DatabaseNamespace)
+        if (!ReferenceEquals(database.Client, organizations.AddressSourceDatabase.Client) || !database.DatabaseNamespace.Equals(organizations.AddressSourceDatabase.DatabaseNamespace))
             throw new ArgumentException("Policy source owners must use the same database and client", nameof(organizations));
         this.database = database; this.ids = ids; this.clock = clock; this.organizations = organizations;
         authorization = new(database, unit, clock); records = new(database);

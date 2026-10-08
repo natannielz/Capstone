@@ -293,7 +293,7 @@ public sealed partial class PackConversionService
         AuthenticateSourceAsync(owner, tx, source, hash, ImmutableHashSet<long>.Empty, ct);
     private async Task AuthenticateSourceAsync(IMongoDatabase owner, IClientSessionHandle tx, InventorySource source, string hash,
         ImmutableHashSet<long> path, CancellationToken ct, ConversionHistoryRead? read = null) {
-        if (!ReferenceEquals(owner.Client, database.Client) || owner.DatabaseNamespace != database.DatabaseNamespace) throw B.Broken();
+        if (!ReferenceEquals(owner.Client, database.Client) || !owner.DatabaseNamespace.Equals(database.DatabaseNamespace)) throw B.Broken();
         if (source.Namespace == StockReleaseBson.Namespace && source.EventKind == "releaseHeld") {
             await releases.AuthenticateSourceAsync(owner, tx, source, hash, ct); return;
         }

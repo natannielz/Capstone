@@ -26,7 +26,7 @@ internal sealed class PurchaseOrderHistoricalSourceProof
         BsonDocument expectedSource) {
         if (!ReferenceEquals(expectedOwner, owner) || !ReferenceEquals(current, transaction) || !current.IsInTransaction ||
             current.WrappedCoreSession.CurrentTransaction.TransactionNumber != transactionNumber ||
-            !ReferenceEquals(expectedDatabase.Client, database.Client) || expectedDatabase.DatabaseNamespace != database.DatabaseNamespace ||
+            !ReferenceEquals(expectedDatabase.Client, database.Client) || !expectedDatabase.DatabaseNamespace.Equals(database.DatabaseNamespace) ||
             !ReferenceEquals(current.Client, database.Client) || !expectedSource.Equals(source)) throw Q.Broken();
     }
     internal async Task RequireAsync(PurchaseOrderService expectedOwner, IMongoDatabase expectedDatabase,
@@ -39,7 +39,7 @@ internal sealed class PurchaseOrderHistoricalSourceProof
     }
     internal bool SameProof(PurchaseOrderHistoricalSourceProof other) => ReferenceEquals(owner, other.owner) &&
         ReferenceEquals(transaction, other.transaction) && transactionNumber == other.transactionNumber &&
-        ReferenceEquals(database.Client, other.database.Client) && database.DatabaseNamespace == other.database.DatabaseNamespace &&
+        ReferenceEquals(database.Client, other.database.Client) && database.DatabaseNamespace.Equals(other.database.DatabaseNamespace) &&
         source.Equals(other.source) && capture.Same(other.capture);
     internal static async Task<PurchaseOrderHistoricalSourceProof> ReadAsync(PurchaseOrderService owner,
         IMongoDatabase database, IClientSessionHandle tx, long orderId, long orderVersion, long approvalId, CancellationToken ct) {
@@ -70,7 +70,7 @@ internal sealed class PurchaseOrderSourceReadCapture
         new InventoryRepository(database).RequireSession(tx);
         if (boundDatabase is null) {
             boundDatabase = database; boundTransaction = tx; boundNumber = tx.WrappedCoreSession.CurrentTransaction.TransactionNumber;
-        } else if (!ReferenceEquals(boundDatabase.Client, database.Client) || boundDatabase.DatabaseNamespace != database.DatabaseNamespace ||
+        } else if (!ReferenceEquals(boundDatabase.Client, database.Client) || !boundDatabase.DatabaseNamespace.Equals(database.DatabaseNamespace) ||
             !ReferenceEquals(boundTransaction, tx) || tx.WrappedCoreSession.CurrentTransaction.TransactionNumber != boundNumber) throw Q.Broken();
     }
     internal void Record(string collection, BsonDocument filter, IEnumerable<BsonDocument> actual) {

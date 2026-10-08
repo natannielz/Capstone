@@ -56,7 +56,7 @@ internal sealed class StockSourceObligationGate
         foreach (var reader in readers.ToArray())
         {
             if (reader is null || !Enum.IsDefined(reader.Domain) || reader.Database is null ||
-                !ReferenceEquals(reader.Database.Client, database.Client) || reader.Database.DatabaseNamespace != database.DatabaseNamespace ||
+                !ReferenceEquals(reader.Database.Client, database.Client) || !reader.Database.DatabaseNamespace.Equals(database.DatabaseNamespace) ||
                 !registered.TryAdd(reader.Domain, reader))
                 throw new ArgumentException("Obligation readers must uniquely own known domains in the same application database and client", nameof(readers));
         }

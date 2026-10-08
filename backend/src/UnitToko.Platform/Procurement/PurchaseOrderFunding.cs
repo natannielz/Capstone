@@ -43,7 +43,7 @@ public sealed partial class PurchaseOrderService
     }
     internal async Task<BsonDocument> FundingSourceCoreAsync(IMongoDatabase owner, IClientSessionHandle tx, long orderId, long orderVersion, long approvalId,
         CancellationToken ct, PurchaseOrderSourceReadCapture? sourceCapture = null) {
-        if (!ReferenceEquals(owner.Client, database.Client) || owner.DatabaseNamespace != database.DatabaseNamespace || !tx.IsInTransaction || !ReferenceEquals(tx.Client, database.Client)) throw B.Broken();
+        if (!ReferenceEquals(owner.Client, database.Client) || !owner.DatabaseNamespace.Equals(database.DatabaseNamespace) || !tx.IsInTransaction || !ReferenceEquals(tx.Client, database.Client)) throw B.Broken();
         var actualRecords = sourceCapture is null ? records : new PurchaseOrderRecords(database, catalog, clock, sourceCapture);
         var order = await actualRecords.RowAsync(tx, B.Orders, orderId, ct); Equal(order["version"], orderVersion); Equal(order["approvalId"], approvalId);
         var proposal = await actualRecords.ProposalAsync(tx, order["proposalId"].AsInt64, ct); var approval = await actualRecords.DecisionAsync(tx, approvalId, proposal, ct); Equal(approval["decision"], "approve"); Equal(approval["orderId"], orderId);
@@ -89,7 +89,7 @@ public sealed partial class PurchaseOrderService
         CurrentSource(); return new(this, actor, authority, tx, source, Fence, CurrentSource);
     }
     internal async Task FenceFundingAsync(IMongoDatabase owner, ActorContext actor, AuthorizationSnapshot authority, IClientSessionHandle tx, PurchaseOrderFundingCapture capture, CancellationToken ct) {
-        if (!ReferenceEquals(owner.Client, database.Client) || owner.DatabaseNamespace != database.DatabaseNamespace) throw B.Broken();
+        if (!ReferenceEquals(owner.Client, database.Client) || !owner.DatabaseNamespace.Equals(database.DatabaseNamespace)) throw B.Broken();
         capture.RequireContext(this, actor, authority, tx); await capture.FenceAsync(ct);
     }
     internal static BsonDocument FundingOrderView(BsonDocument source) {

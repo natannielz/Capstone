@@ -21,7 +21,7 @@ public sealed partial class ProcurementStockValuationService
     // different equivalent instances for their other dependencies.
     internal async Task<(ProcurementApprovedQualitySource Quality, ProcurementPayableValuationSource Value, HeldReceiptOriginProof? Origin)> ReadCurrentReleaseSourcesAsync(
         IMongoDatabase owner, IClientSessionHandle tx, long qualityAllocationId, long valuationAllocationId, CancellationToken ct) {
-        if (!ReferenceEquals(owner.Client, database.Client) || owner.DatabaseNamespace != database.DatabaseNamespace ||
+        if (!ReferenceEquals(owner.Client, database.Client) || !owner.DatabaseNamespace.Equals(database.DatabaseNamespace) ||
             !ReferenceEquals(tx.Client, database.Client) || !tx.IsInTransaction || qualityAllocationId <= 0 || valuationAllocationId <= 0) throw B.Broken();
         var graph = new ProcurementQualityProofGraph(tx);
         var quality = await new ProcurementQualityAcceptanceSourceReader(database, unit, clock, catalog, orders, sources, graph)
@@ -56,7 +56,7 @@ public sealed partial class ProcurementStockValuationService
         internal static ReleaseOriginReader Create(ProcurementStockValuationService owner, IClientSessionHandle tx, HeldReceiptOriginProof origin) => new(owner, tx, origin);
         internal void Require(ProcurementStockValuationService expectedOwner, IMongoDatabase database, IClientSessionHandle tx, HeldReceiptOriginProof expectedOrigin) {
             if (!ReferenceEquals(owner, expectedOwner) || !ReferenceEquals(tx, transaction) || !ReferenceEquals(origin, expectedOrigin) ||
-                !ReferenceEquals(database.Client, owner.database.Client) || database.DatabaseNamespace != owner.database.DatabaseNamespace ||
+                !ReferenceEquals(database.Client, owner.database.Client) || !database.DatabaseNamespace.Equals(owner.database.DatabaseNamespace) ||
                 !tx.IsInTransaction || tx.WrappedCoreSession.CurrentTransaction.TransactionNumber != number) throw B.Broken();
             origin.Require(database, tx); graph.Require(tx);
         }
@@ -75,7 +75,7 @@ public sealed partial class ProcurementStockValuationService
     private async Task<ProcurementPayableValuationSource> ReadApprovedSourceAsync(IMongoDatabase owner,
         IClientSessionHandle tx, long allocationId, ProcurementStockValuationRecords reader, CancellationToken ct)
     {
-        if (!ReferenceEquals(owner.Client, database.Client) || owner.DatabaseNamespace != database.DatabaseNamespace ||
+        if (!ReferenceEquals(owner.Client, database.Client) || !owner.DatabaseNamespace.Equals(database.DatabaseNamespace) ||
             !tx.IsInTransaction || allocationId <= 0) throw B.Broken();
         var allocation = await Rows(B.Allocations).Find(tx, new BsonDocument("_id", allocationId)).SingleOrDefaultAsync(ct)
             ?? throw B.Broken();

@@ -45,7 +45,7 @@ internal sealed class ReconciliationStockSourcePoolWrite
     {
         new InventoryRepository(current).RequireSession(tx);
         if (consumed || !ReferenceEquals(tx, transaction) || !ReferenceEquals(current.Client, database.Client) ||
-            current.DatabaseNamespace != database.DatabaseNamespace || tx.WrappedCoreSession.CurrentTransaction.TransactionNumber != transactionNumber)
+            !current.DatabaseNamespace.Equals(database.DatabaseNamespace) || tx.WrappedCoreSession.CurrentTransaction.TransactionNumber != transactionNumber)
             throw ReconciliationStockSourceRecords.Unavailable();
         var pool = await current.GetCollection<BsonDocument>("inventoryPools").Find(tx, new BsonDocument("_id", PoolId)).SingleOrDefaultAsync(ct);
         if (pool is null || !pool.Equals(after)) throw ReconciliationStockSourceRecords.Changed();

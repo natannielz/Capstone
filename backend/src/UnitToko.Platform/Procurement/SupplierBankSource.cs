@@ -26,7 +26,7 @@ public sealed partial class SupplierBankService
     // This authorizes private beneficiary disclosure only. A later payment owner must separately prove its money authority.
     internal async Task<SupplierBankCapture> CaptureBeneficiaryAsync(IMongoDatabase owner, ActorContext actor, AuthorizationSnapshot authority, IClientSessionHandle tx,
         long supplierId, long versionId, long version, CancellationToken ct) {
-        if (!ReferenceEquals(owner.Client, database.Client) || owner.DatabaseNamespace != database.DatabaseNamespace || !tx.IsInTransaction || !ReferenceEquals(tx.Client, database.Client) ||
+        if (!ReferenceEquals(owner.Client, database.Client) || !owner.DatabaseNamespace.Equals(database.DatabaseNamespace) || !tx.IsInTransaction || !ReferenceEquals(tx.Client, database.Client) ||
             supplierId <= 0 || versionId <= 0 || version <= 0) throw B.Broken();
         await StorageAsync(ct); var context = await SupplierContextAsync(actor, authority, tx, supplierId, Permissions.SupplierBankDetailsRead, true, ct); await HeadAsync(context, supplierId, ct);
         if (context.Head is not { } head || head["versionId"] != versionId || head["version"] != version) throw B.Changed();
@@ -41,7 +41,7 @@ public sealed partial class SupplierBankService
         Current(context); ct.ThrowIfCancellationRequested(); return new(this, actor, authority, tx, source, token => FenceAsync(context, token), () => Current(context));
     }
     internal async Task FenceBeneficiaryAsync(IMongoDatabase owner, ActorContext actor, AuthorizationSnapshot authority, IClientSessionHandle tx, SupplierBankCapture capture, CancellationToken ct) {
-        if (!ReferenceEquals(owner.Client, database.Client) || owner.DatabaseNamespace != database.DatabaseNamespace) throw B.Broken();
+        if (!ReferenceEquals(owner.Client, database.Client) || !owner.DatabaseNamespace.Equals(database.DatabaseNamespace)) throw B.Broken();
         capture.RequireContext(this, actor, authority, tx); await capture.FenceAsync(ct);
     }
 }

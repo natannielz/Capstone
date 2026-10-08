@@ -54,7 +54,7 @@ public sealed partial class ProcurementRequestService
 {
     private sealed record CommitmentLine(BsonDocument? Head, BsonDocument? Previous, ProcurementRequestLineInput Input, int Committed);
     private void RequirePurchaseOrderTransaction(IMongoDatabase owner, IClientSessionHandle tx) {
-        if (owner is null || !ReferenceEquals(owner.Client, database.Client) || owner.DatabaseNamespace != database.DatabaseNamespace ||
+        if (owner is null || !ReferenceEquals(owner.Client, database.Client) || !owner.DatabaseNamespace.Equals(database.DatabaseNamespace) ||
             !ReferenceEquals(tx.Client, database.Client) || !tx.IsInTransaction) throw B.Broken();
     }
     private async Task PurchaseOrderStorageAsync(CancellationToken ct) {

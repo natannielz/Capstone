@@ -113,7 +113,7 @@ internal sealed class StockReleaseSourceProof
     }
     internal void Require(IMongoDatabase current, IClientSessionHandle tx) {
         new InventoryRepository(current).RequireSession(tx);
-        if (!ReferenceEquals(current.Client, database.Client) || current.DatabaseNamespace != database.DatabaseNamespace ||
+        if (!ReferenceEquals(current.Client, database.Client) || !current.DatabaseNamespace.Equals(database.DatabaseNamespace) ||
             !ReferenceEquals(session, tx) || tx.WrappedCoreSession.CurrentTransaction.TransactionNumber != transactionNumber ||
             CatalogRepository.Digest(PrivateFacts()) != seal) throw Unavailable();
         currentOrigin?.Require(current, tx);

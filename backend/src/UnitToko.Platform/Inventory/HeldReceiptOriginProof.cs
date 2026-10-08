@@ -45,7 +45,7 @@ internal sealed class HeldReceiptOriginProof
     internal void Require(IMongoDatabase owner, IClientSessionHandle tx)
     {
         new InventoryRepository(owner).RequireSession(tx);
-        if (!ReferenceEquals(owner.Client, database.Client) || owner.DatabaseNamespace != database.DatabaseNamespace ||
+        if (!ReferenceEquals(owner.Client, database.Client) || !owner.DatabaseNamespace.Equals(database.DatabaseNamespace) ||
             !ReferenceEquals(tx, transaction) || tx.WrappedCoreSession.CurrentTransaction.TransactionNumber != transactionNumber ||
             clock.UtcNow < capturedAt)
             throw HeldReceiptMovementHistory.Unavailable();

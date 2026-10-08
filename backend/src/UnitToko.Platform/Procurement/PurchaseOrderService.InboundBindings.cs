@@ -53,7 +53,7 @@ public sealed partial class PurchaseOrderService
         row.Add("snapshotHash", B.Hash(row)); await Rows(I.Decisions).InsertOneAsync(context.Tx, row, cancellationToken: ct);
     }
     internal async Task RequireInboundHistoryAsync(IMongoDatabase owner, IClientSessionHandle tx, BsonDocument source, CancellationToken ct) {
-        if (!ReferenceEquals(owner.Client, database.Client) || owner.DatabaseNamespace != database.DatabaseNamespace) throw B.Broken();
+        if (!ReferenceEquals(owner.Client, database.Client) || !owner.DatabaseNamespace.Equals(database.DatabaseNamespace)) throw B.Broken();
         _ = await InboundRecords.ApprovedAsync(tx, source, ct);
     }
     // This uses the already authenticated existing FundingSource tuple. Pool IDs

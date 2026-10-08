@@ -270,6 +270,7 @@ public sealed class AuthorizationStore(IMongoDatabase database, MongoUnitOfWork 
         (actor.Session is { } session ? F.Eq("securityVersion", session.SecurityVersion) : F.Empty);
     private void ValidateCollection(IMongoCollection<BsonDocument> collection)
     {
-        if (collection.Database.DatabaseNamespace != database.DatabaseNamespace) throw new ArgumentException("Resource collection must use the same application database");
+        if (!ReferenceEquals(collection.Database.Client, database.Client) || !collection.Database.DatabaseNamespace.Equals(database.DatabaseNamespace))
+            throw new ArgumentException("Resource collection must use the same application database and client");
     }
 }

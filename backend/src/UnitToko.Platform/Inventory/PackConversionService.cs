@@ -268,7 +268,7 @@ public sealed partial class PackConversionService
         await FenceAsync(context, true, ct); return proofRow;
     }
     internal void RequireValueAuthority(IMongoDatabase owner, IClientSessionHandle tx, long id, string hash) {
-        if (!ReferenceEquals(owner.Client, database.Client) || owner.DatabaseNamespace != database.DatabaseNamespace || !inFlight.TryGetValue(tx, out var context)) throw B.Broken();
+        if (!ReferenceEquals(owner.Client, database.Client) || !owner.DatabaseNamespace.Equals(database.DatabaseNamespace) || !inFlight.TryGetValue(tx, out var context)) throw B.Broken();
         Current(context); var row = context.Row ?? throw B.Broken();
         if (row["_id"] != id || row["phase"] != "preparing" || row["causeHash"] != hash || B.CauseHash(row) != hash ||
             row["actorId"] != context.Actor.UserId || row["actorGrantVersion"] != context.Actor.GrantVersion) throw B.Broken();

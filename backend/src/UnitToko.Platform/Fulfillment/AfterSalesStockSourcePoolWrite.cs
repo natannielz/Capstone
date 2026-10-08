@@ -73,7 +73,7 @@ internal sealed class AfterSalesStockSourcePoolWrite
     internal async Task RequireAsync(IMongoDatabase value, IClientSessionHandle tx, CancellationToken ct)
     {
         new InventoryRepository(value).RequireSession(tx); current();
-        if (consumed || !ReferenceEquals(tx, session) || !ReferenceEquals(value.Client, database.Client) || value.DatabaseNamespace != database.DatabaseNamespace ||
+        if (consumed || !ReferenceEquals(tx, session) || !ReferenceEquals(value.Client, database.Client) || !value.DatabaseNamespace.Equals(database.DatabaseNamespace) ||
             tx.WrappedCoreSession.CurrentTransaction.TransactionNumber != transaction) throw AfterSalesStockSourceRecords.Unavailable();
         var actual = await value.GetCollection<BsonDocument>("inventoryPools").Find(tx, new BsonDocument("_id", PoolId)).SingleOrDefaultAsync(ct);
         if (actual is null || actual != after) throw AfterSalesStockSourceRecords.Changed();

@@ -140,6 +140,36 @@ try {
   assert.equal(await heading.evaluate(element => element === document.activeElement), true);
   assert.equal(await recipient.getByRole('button', { name: 'Konfirmasi penerimaan', exact: true }).isDisabled(), true);
   const check = recipient.getByRole('checkbox'); assert.equal(await check.isChecked(), false); await check.check();
+  await recipient.getByRole('button', { name: 'Kembali ke jumlah', exact: true }).click();
+  const firstQuantity = recipient.getByLabel('Diterima — kemasan utuh', { exact: true }); await firstQuantity.waitFor();
+  assert.equal(await firstQuantity.evaluate(element => element === document.activeElement), true);
+  for (const [label, packages, loose] of [['Diterima', '0', '6'], ['Ditolak', '0', '4'], ['Belum diterima', '0', '2']]) {
+    assert.equal(await recipient.getByLabel(label + ' — kemasan utuh', { exact: true }).inputValue(), packages);
+    assert.equal(await recipient.getByLabel(label + ' — satuan lepas', { exact: true }).inputValue(), loose);
+  }
+  assert.equal(await recipient.getByLabel('Alasan perbedaan', { exact: true }).inputValue(), 'Empat satuan rusak dan dua belum tiba');
+  assert.equal(await recipient.getByLabel('Catatan penerimaan', { exact: true }).inputValue(), 'Hitungan diperiksa bersama kurir'); assert.equal(writes.length, 0);
+  await recipient.getByLabel('Diterima — satuan lepas', { exact: true }).fill('5');
+  await recipient.getByLabel('Belum diterima — satuan lepas', { exact: true }).fill('3');
+  await recipient.getByLabel('Alasan perbedaan', { exact: true }).fill('Empat satuan rusak dan tiga belum tiba');
+  await recipient.getByRole('button', { name: 'Tinjau jumlah', exact: true }).click(); await heading.waitFor();
+  const recipientReview = recipient.getByRole('region', { name: 'Konfirmasi penerimaan', exact: true });
+  const changedSummary = await recipientReview.innerText();
+  assert.match(changedSummary, /^Diterima: 0 [^\n]+ \+ 5 [^\n]+$/m); assert.match(changedSummary, /^Ditolak: 0 [^\n]+ \+ 4 [^\n]+$/m);
+  assert.match(changedSummary, /^Belum diterima: 0 [^\n]+ \+ 3 [^\n]+$/m); assert.match(changedSummary, /Empat satuan rusak dan tiga belum tiba/);
+  assert.equal(await check.isChecked(), false); assert.equal(await recipient.getByRole('button', { name: 'Konfirmasi penerimaan', exact: true }).isDisabled(), true);
+  assert.equal(writes.length, 0);
+  // Restore the original coherent counts so the existing native receipt/proof assertions retain their exact 6/4/2 fixture.
+  await recipient.getByRole('button', { name: 'Kembali ke jumlah', exact: true }).click();
+  await recipient.getByLabel('Diterima — satuan lepas', { exact: true }).fill('6');
+  await recipient.getByLabel('Belum diterima — satuan lepas', { exact: true }).fill('2');
+  await recipient.getByLabel('Alasan perbedaan', { exact: true }).fill('Empat satuan rusak dan dua belum tiba');
+  await recipient.getByRole('button', { name: 'Tinjau jumlah', exact: true }).click(); await heading.waitFor();
+  assert.equal(await heading.evaluate(element => element === document.activeElement), true);
+  const finalSummary = await recipientReview.innerText(); assert.match(finalSummary, /^Diterima: 0 [^\n]+ \+ 6 [^\n]+$/m);
+  assert.match(finalSummary, /^Ditolak: 0 [^\n]+ \+ 4 [^\n]+$/m); assert.match(finalSummary, /^Belum diterima: 0 [^\n]+ \+ 2 [^\n]+$/m);
+  assert.match(finalSummary, /Empat satuan rusak dan dua belum tiba/); assert.equal(await check.isChecked(), false); assert.equal(writes.length, 0);
+  await check.check();
   await buyer.context.setOffline(true); await recipient.getByText(/Koneksi terputus. Isian hanya ada/).waitFor();
   assert.equal(await recipient.getByRole('button', { name: 'Konfirmasi penerimaan', exact: true }).isDisabled(), true); assert.equal(writes.length, 0);
   await buyer.context.setOffline(false); await recipient.getByText(/Koneksi terputus. Isian hanya ada/).waitFor({ state: 'hidden' });
@@ -188,7 +218,7 @@ try {
   await page.getByRole('button', { name: 'Upaya pengiriman', exact: true }).click();
   await visits.getByText('Penerimaan telah dikonfirmasi. Kunjungan baru tidak dapat dicatat untuk kiriman ini.', { exact: true }).waitFor();
   assert.equal(await visits.getByLabel('Hasil kunjungan', { exact: true }).count(), 0);
-  assert.deepEqual(errors, []); console.log('REAL_SHIPMENT_RECEIPT_BROWSER_PASS ' + JSON.stringify({ confirmationAttempts: writes.length, failedVisits: visitWrites.length, oldQrRevoked: true, proofAttempts: proofWrites.length, recovered: dropped, separateRecipient: true, explicitCounts: true, offlineUnsent: true, mobile: true }));
+  assert.deepEqual(errors, []); console.log('REAL_SHIPMENT_RECEIPT_BROWSER_PASS ' + JSON.stringify({ confirmationAttempts: writes.length, failedVisits: visitWrites.length, oldQrRevoked: true, proofAttempts: proofWrites.length, recovered: dropped, separateRecipient: true, explicitCounts: true, recipientReviewBackEditFocus: true, renewedConsent: true, offlineUnsent: true, mobile: true }));
 } catch (error) {
   for (const [index, page] of pages.entries()) if (!page.isClosed()) {
     console.error('FIXTURE PAGE ' + index + ': ' + (await page.locator('main').innerText().catch(() => 'unavailable')).slice(0, 5000));

@@ -12,7 +12,7 @@ public sealed partial class ProcurementSettlementService
     internal async Task<ProcurementPayableAdvanceSource> ReadPayableSourceAsync(IMongoDatabase owner,
         IClientSessionHandle tx, long settlementId, CancellationToken ct)
     {
-        if (!ReferenceEquals(owner.Client, database.Client) || owner.DatabaseNamespace != database.DatabaseNamespace ||
+        if (!ReferenceEquals(owner.Client, database.Client) || !owner.DatabaseNamespace.Equals(database.DatabaseNamespace) ||
             !tx.IsInTransaction || settlementId <= 0) throw B.Broken();
         var verified = await records.ReadWithSourceAsync(tx, settlementId, ct);
         var settlement = verified.Settlement;

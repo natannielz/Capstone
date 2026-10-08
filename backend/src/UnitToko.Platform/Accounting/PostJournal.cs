@@ -28,7 +28,7 @@ public sealed class PostJournal
         foreach (var reader in configured)
         {
             AccountingValidation.Code(reader.Namespace);
-            if (!ReferenceEquals(reader.Database.Client, database.Client) || reader.Database.DatabaseNamespace != database.DatabaseNamespace)
+            if (!ReferenceEquals(reader.Database.Client, database.Client) || !reader.Database.DatabaseNamespace.Equals(database.DatabaseNamespace))
                 throw new ArgumentException("Source adapter must own the same application database and client");
         }
 

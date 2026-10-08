@@ -324,14 +324,14 @@ public sealed class StockReleaseService
     }
     internal async Task<(BsonDocument Row, StockReleaseSourceProof Source, InventoryBalanceDocument Before, InventoryBalanceDocument After, StockReleaseExpectation Expected)> ValueAuthorityAsync(
         IMongoDatabase owner, IClientSessionHandle tx, long decisionId, CancellationToken ct) {
-        if (!ReferenceEquals(owner.Client, database.Client) || owner.DatabaseNamespace != database.DatabaseNamespace || !inFlight.TryGetValue(tx, out var context)) throw B.Broken();
+        if (!ReferenceEquals(owner.Client, database.Client) || !owner.DatabaseNamespace.Equals(database.DatabaseNamespace) || !inFlight.TryGetValue(tx, out var context)) throw B.Broken();
         Current(context); var row = context.Decision ?? throw B.Broken();
         if (row["_id"] != decisionId || row["phase"] != "preparing" || row["decision"] != "approve" || row["causeHash"] != B.CauseHash(row) ||
             await Rows(B.Decisions).Find(tx, row).SingleOrDefaultAsync(ct) is null) throw B.Broken();
         await FenceAsync(context, ct); return (row.DeepClone().AsBsonDocument, context.Source!, context.Before!, context.After!, context.Expected!);
     }
     internal void RequireValueAuthority(IMongoDatabase owner, IClientSessionHandle tx, long decisionId, string hash) {
-        if (!ReferenceEquals(owner.Client, database.Client) || owner.DatabaseNamespace != database.DatabaseNamespace || !inFlight.TryGetValue(tx, out var context)) throw B.Broken();
+        if (!ReferenceEquals(owner.Client, database.Client) || !owner.DatabaseNamespace.Equals(database.DatabaseNamespace) || !inFlight.TryGetValue(tx, out var context)) throw B.Broken();
         Current(context); var row = context.Decision ?? throw B.Broken();
         if (row["_id"] != decisionId || row["phase"] != "preparing" || row["decision"] != "approve" || row["causeHash"] != hash || B.CauseHash(row) != hash) throw B.Broken();
     }
@@ -435,7 +435,7 @@ public sealed class StockReleaseService
         await AuthenticateSourceAsync(owner, tx, selected, hash, reads, ct);
     }
     private async Task AuthenticateSourceAsync(IMongoDatabase owner, IClientSessionHandle tx, InventorySource selected, string hash, HistoryReads reads, CancellationToken ct) {
-        if (!ReferenceEquals(owner.Client, database.Client) || owner.DatabaseNamespace != database.DatabaseNamespace || selected.Namespace != B.Namespace ||
+        if (!ReferenceEquals(owner.Client, database.Client) || !owner.DatabaseNamespace.Equals(database.DatabaseNamespace) || selected.Namespace != B.Namespace ||
             selected.EventKind != "releaseHeld") throw B.Broken();
         reads.Require(this, tx); var row = await DecisionAsync(tx, selected.DocumentId, ct, reads: reads);
         if (row["decision"] != "approve" || row["causeHash"] != hash || selected != B.Source(selected.DocumentId, row["before"]["physicalPoolId"].AsInt64)) throw B.Broken();

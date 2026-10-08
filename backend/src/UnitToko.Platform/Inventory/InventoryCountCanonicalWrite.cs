@@ -39,7 +39,7 @@ internal sealed class InventoryCountCanonicalWrite
     }
     private void Context(IMongoDatabase current, IClientSessionHandle session, BsonDocument observation) {
         capture.Require(current, session);
-        if (!ReferenceEquals(session, tx) || !ReferenceEquals(current.Client, database.Client) || current.DatabaseNamespace != database.DatabaseNamespace ||
+        if (!ReferenceEquals(session, tx) || !ReferenceEquals(current.Client, database.Client) || !current.DatabaseNamespace.Equals(database.DatabaseNamespace) ||
             tx.WrappedCoreSession.CurrentTransaction.TransactionNumber != number || observation["_id"] != observationId || observation["fingerprint"] != observationFingerprint)
             throw InventoryCountStockSourceRecords.Unavailable();
     }

@@ -50,7 +50,7 @@ internal sealed class InventoryCountPoolCapture
     internal void Require(IMongoDatabase database, IClientSessionHandle session) {
         new InventoryRepository(database).RequireSession(session);
         if (!ReferenceEquals(session, tx) || !ReferenceEquals(database.Client, owner.InventoryCountDatabase.Client) ||
-            database.DatabaseNamespace != owner.InventoryCountDatabase.DatabaseNamespace || tx.WrappedCoreSession.CurrentTransaction.TransactionNumber != number ||
+            !database.DatabaseNamespace.Equals(owner.InventoryCountDatabase.DatabaseNamespace) || tx.WrappedCoreSession.CurrentTransaction.TransactionNumber != number ||
             owner.InventoryCountNow < capturedAt) throw InventoryCountStockSourceRecords.Unavailable();
         person.RequireCurrent(tx, owner.InventoryCountNow);
         owner.RequireInventoryCountAuthority(actor, authority, facts.Resources, Permissions.StockCount);

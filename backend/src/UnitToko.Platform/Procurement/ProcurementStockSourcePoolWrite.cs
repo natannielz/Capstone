@@ -68,7 +68,7 @@ internal sealed class ProcurementStockSourcePoolWrite
     {
         new InventoryRepository(current).RequireSession(tx);
         if (consumed || !ReferenceEquals(tx, session) || !ReferenceEquals(current.Client, database.Client) ||
-            current.DatabaseNamespace != database.DatabaseNamespace ||
+            !current.DatabaseNamespace.Equals(database.DatabaseNamespace) ||
             tx.WrappedCoreSession.CurrentTransaction.TransactionNumber != transaction)
             throw ProcurementStockSourceRecords.Unavailable();
         var actual = await current.GetCollection<BsonDocument>("inventoryPools")

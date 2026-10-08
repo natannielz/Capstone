@@ -70,12 +70,22 @@ public sealed class ScopeQueryTests(MongoFixture fixture)
         await data.AddResourceAsync(2, 10, 11, actor.UserId);
         await data.AddResourceAsync(3, 10, 11, 1001, [actor.UserId]);
         await data.AddResourceAsync(4, 10, 12, actor.UserId);
-        var collection = data.Database.GetCollection<BsonDocument>("fixtureBusinessRecords");
+        var sameDatabase = fixture.Client.GetDatabase(data.Database.DatabaseNamespace.DatabaseName);
+        Assert.NotSame(data.Database, sameDatabase);
+        Assert.NotSame(data.Database.DatabaseNamespace, sameDatabase.DatabaseNamespace);
+        var collection = sameDatabase.GetCollection<BsonDocument>("fixtureBusinessRecords");
         var result = await data.Store.QueryAsync(actor, Permissions.OrderRead, collection, 0, 1);
         Assert.Equal(2, result.Total);
         Assert.Equal(2L, Assert.Single(result.Items)["_id"].AsInt64);
         Assert.Null(await data.Store.ReadAsync(actor, Permissions.OrderRead, collection, 4));
         Assert.NotNull(await data.Store.ReadAsync(actor, Permissions.OrderRead, collection, 3));
+        using var otherClient = new MongoClient(fixture.Client.Settings.Clone());
+        var otherClientCollection = otherClient.GetDatabase(data.Database.DatabaseNamespace.DatabaseName).GetCollection<BsonDocument>("fixtureBusinessRecords");
+        var otherDatabaseCollection = fixture.Client.GetDatabase(data.Database.DatabaseNamespace.DatabaseName + "_foreign").GetCollection<BsonDocument>("fixtureBusinessRecords");
+        foreach (var foreign in new[] { otherClientCollection, otherDatabaseCollection }) {
+            await Assert.ThrowsAsync<ArgumentException>(() => data.Store.QueryAsync(actor, Permissions.OrderRead, foreign, 0, 1));
+            await Assert.ThrowsAsync<ArgumentException>(() => data.Store.ReadAsync(actor, Permissions.OrderRead, foreign, 3));
+        }
     }
 
     [Fact]

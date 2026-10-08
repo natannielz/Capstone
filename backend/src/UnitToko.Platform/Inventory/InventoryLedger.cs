@@ -57,7 +57,7 @@ internal sealed class InventoryLedger
         foreach (var reader in configured)
         {
             if (reader is null || reader.Database is null || !ReferenceEquals(reader.Database.Client, database.Client) ||
-                reader.Database.DatabaseNamespace != database.DatabaseNamespace)
+                !reader.Database.DatabaseNamespace.Equals(database.DatabaseNamespace))
                 throw new ArgumentException("Inventory source readers must own the same application database and client", nameof(readers));
             InventorySource.RequireCode(reader.Namespace);
         }

@@ -38,7 +38,7 @@ public sealed partial class OrderSubmissionService
     internal OrderSubmissionService(IMongoDatabase database, MongoUnitOfWork unit, IdAllocator ids, IClock clock, IOrderAdmissionReader? reader)
     {
         this.database = database; this.clock = clock; this.ids = ids;
-        if (reader is not null && (!ReferenceEquals(reader.Database.Client, database.Client) || reader.Database.DatabaseNamespace != database.DatabaseNamespace))
+        if (reader is not null && (!ReferenceEquals(reader.Database.Client, database.Client) || !reader.Database.DatabaseNamespace.Equals(database.DatabaseNamespace)))
             throw new ArgumentException("Order authority must use the same database and transaction", nameof(reader));
         admissionReader = reader; authorization = new(database, unit, clock); authority = new(database, unit, clock); catalog = new(database, authorization, clock);
     }
