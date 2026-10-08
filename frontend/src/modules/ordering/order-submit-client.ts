@@ -91,11 +91,12 @@ export function parseSubmittedOrder(value: unknown) {
   return { input, submission, buyerName: row.buyerName, progress: { revision, spendingState: progress.spendingState as 'Pending' | 'NotRequired' | 'Approved' | 'Rejected', acceptedSuborders, rejectedSuborders, cancelled: progress.cancelled }, ...amounts(row, input, submission.recordedAt) };
 }
 export type SubmittedOrder = ReturnType<typeof parseSubmittedOrder>;
-export function parseOrderPage(value: unknown, beforeId: string | null = null) {
+export function parseOrderPage(value: unknown, beforeId: string | null = null, sort: 'newest' | 'oldest' = 'newest') {
+  if (sort !== 'newest' && sort !== 'oldest') return invalid();
   const row = record(value);
   if (!Array.isArray(row.items) || row.items.length > 25 || typeof row.hasMore !== 'boolean' || row.hasMore && row.items.length !== 25) return invalid();
   const items = row.items.map(parseSubmittedOrder); let cursor = beforeId === null ? null : BigInt(priceId(beforeId));
-  for (const item of items) { const id = BigInt(item.submission.orderId); if (cursor !== null && id >= cursor) return invalid(); cursor = id; }
+  for (const item of items) { const id = BigInt(item.submission.orderId); if (cursor !== null && (sort === 'newest' ? id >= cursor : id <= cursor)) return invalid(); cursor = id; }
   return { items, hasMore: row.hasMore };
 }
 function data<T>(result: { data?: T; error?: unknown; response: Response }): T {

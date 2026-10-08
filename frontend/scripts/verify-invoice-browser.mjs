@@ -38,6 +38,7 @@ import { verifyOperationalAnomaliesBrowser } from './verify-operational-anomalie
 import { verifyReplenishmentBrowser } from './verify-replenishment-browser.mjs';
 import { verifyOrderReorderBrowser } from './verify-order-reorder-browser.mjs';
 import { verifyOrderBulkBrowser } from './verify-order-bulk-browser.mjs';
+import {verifyOrderViewsBrowser} from './verify-order-views-browser.mjs';
 
 const chunks = []; for await (const chunk of process.stdin) chunks.push(chunk);
 const config = JSON.parse(Buffer.concat(chunks).toString('utf8')), api = new URL(config.apiAddress), origin = new URL(config.origin);
@@ -255,7 +256,14 @@ try {
   }); const proxyPort = await listen(tunnel);
   browser = await chromium.launch({ ...(channel === 'msedge' ? { channel: 'msedge' } : {}), headless: true, proxy: { server: 'http://127.0.0.1:' + proxyPort } });
   const finance = await user(config.financeToken), page = finance.page;
-  if (config.orderBulk) {
+  if (config.orderViews) {
+    await verifyOrderViewsBrowser({config, buyer: finance, user, origin, directory, restartUser: async (token, storageState) => {
+      await browser.close();
+      browser = await chromium.launch({ ...(channel === 'msedge' ? { channel: 'msedge' } : {}), headless: true, proxy: { server: 'http://127.0.0.1:' + proxyPort } });
+      return user(token, storageState);
+    }});
+    assert.deepEqual(errors, []);
+  } else if (config.orderBulk) {
     await verifyOrderBulkBrowser({config, buyer: finance, user, origin, directory, restartUser: async (token, storageState) => {
       await browser.close();
       browser = await chromium.launch({ ...(channel === 'msedge' ? { channel: 'msedge' } : {}), headless: true, proxy: { server: 'http://127.0.0.1:' + proxyPort } });

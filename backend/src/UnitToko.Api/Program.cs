@@ -88,6 +88,7 @@ if (builder.Configuration.GetSection("Evidence:ImageRevalidation").Exists())
     });
 builder.Services.AddSingleton<OrderQuoteService>();
 builder.Services.AddSingleton<OrderDraftService>();
+builder.Services.AddSingleton<OrderViewService>();
 builder.Services.AddSingleton<BranchOrderRequestService>();
 builder.Services.AddSingleton(sp => OrderSubmissionService.CreateWithApprovedAdmission(
     sp.GetRequiredService<IMongoDatabase>(), sp.GetRequiredService<MongoUnitOfWork>(),
@@ -502,6 +503,7 @@ app.MapProcurementSupplierPayableEndpoints();
 app.MapProcurementAdvanceReturnEndpoints();
 app.MapProcurementQualityAcceptanceEndpoints();
 app.MapOrderDraftEndpoints();
+app.MapOrderViewEndpoints();
 app.MapOrderSubmissionEndpoints();
 app.MapOrderDecisionEndpoints();
 app.MapShipmentPreparationEndpoints();

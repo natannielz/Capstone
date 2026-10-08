@@ -9,6 +9,8 @@ import { AccessFailure, accessMessage } from '../administration/workflow';
 import { AdministrationNavigation } from '../administration/AdministrationNavigation';
 import { createOrderSubmitGateway, type SubmittedOrder } from './order-submit-client';
 import { orderAmount } from './order-quote-client';
+import { OrderSavedViewPanel } from './OrderSavedViewPanel';
+import { createOrderViewGateway, type OrderHistoryFilter } from './order-view-client';
 import { useDraftSave } from './DraftSave';
 import { OrderDraftEditor } from './OrderDraftEditor';
 import type { DraftResult } from './order-draft-client';
@@ -69,7 +71,9 @@ export function OrderHistoryWorkspace() {
   </main>;
 }
 function OrderHistoryDesk({ account, onFailure }: { account: Account; onFailure: (error: unknown) => void }) {
-  const [gateway] = useState(() => createOrderSubmitGateway());
+  const [gateway] = useState(() => createOrderSubmitGateway()), [views] = useState(() => createOrderViewGateway());
+  const [filter, setFilter] = useState<OrderHistoryFilter | null>(null), [filterLocked, setFilterLocked] = useState(true);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [page, setPage] = useState<{ items: SubmittedOrder[]; hasMore: boolean }>({ items: [], hasMore: false });
   const [cursor, setCursor] = useState<string | null>(null), [reload, setReload] = useState(0), [selected, setSelected] = useState<SubmittedOrder | null>(null);
   const [busy, setBusy] = useState(false), [error, setError] = useState<unknown>(null), detail = useRef<HTMLElement>(null), alive = useRef(false), pending = useRef(false);
@@ -77,7 +81,10 @@ function OrderHistoryDesk({ account, onFailure }: { account: Account; onFailure:
   const repeatRegion = useRef<HTMLDivElement>(null), repeatReadEpoch = useRef(0);
   const current = () => alive.current && !sessionTiming(account.session, performance.now() - account.observedAt).expired;
   const save = useDraftSave(account.actorId, current, result => { repeatReadEpoch.current++; setRepeat(null); setSaved(result); setNotice(''); }, onFailure, busy);
-  const locked = busy || save.locked || repeat !== null;
+  const locked = busy || save.locked || repeat !== null || filterLocked;
+  const applyFilter = useCallback((value: OrderHistoryFilter) => {
+    repeatReadEpoch.current++; setRepeat(null); setSelected(null); setSaved(null); setCursor(null); setFilter(value); setReload(current => current + 1);
+  }, []);
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
   useEffect(() => { if (repeat) repeatRegion.current?.focus(); }, [repeat]);
   useEffect(() => {
@@ -90,13 +97,14 @@ function OrderHistoryDesk({ account, onFailure }: { account: Account; onFailure:
     window.addEventListener('storage', changed); return () => window.removeEventListener('storage', changed);
   }, [account.actorId]);
   useEffect(() => {
+    if (filter === null) return;
     let active = true; const controller = new AbortController();
     void Promise.resolve().then(async () => {
       if (!active) return; setBusy(true); setError(null); setSelected(null); setPage({ items: [], hasMore: false });
-      try { const result = await gateway.list(account.actorId, cursor, controller.signal); if (active) setPage(result); }
+      try { const result = await views.orders(account.actorId, filter, cursor, controller.signal); if (active) {setPage(result); setNextCursor(result.nextCursor);} }
       catch (failure) { if (active) { setError(failure); onFailure(failure); } } finally { if (active) setBusy(false); }
     }); return () => { active = false; controller.abort(); };
-  }, [gateway, account.actorId, cursor, reload, onFailure]);
+  }, [views, account.actorId, filter, cursor, reload, onFailure]);
   useEffect(() => { if (selected && repeat === null) detail.current?.focus(); }, [selected, repeat]);
   async function select(id: string) {
     const current = () => alive.current && !sessionTiming(account.session, performance.now() - account.observedAt).expired;
@@ -119,6 +127,8 @@ function OrderHistoryDesk({ account, onFailure }: { account: Account; onFailure:
   return <>
     <AdministrationNavigation current="orders" actions={account.actions} locked={locked} />
     {save.recoveryView}
+    <OrderSavedViewPanel actorId={account.actorId} active={filter} locked={busy || save.locked || repeat !== null} isCurrent={current}
+      onApply={applyFilter} onLock={setFilterLocked} onFailure={onFailure} />
     {notice && <p role="status" className={common.help}>{notice}</p>}
     {saved && <section className={styles.review} aria-label="Draf baru tersimpan"><h2>Draf {saved.draftId} tersimpan</h2>
       <p role="status">Pesanan baru belum diajukan. Harga, ketersediaan, dan tujuan tetap diperiksa pada pengajuan.</p>
@@ -139,8 +149,8 @@ function OrderHistoryDesk({ account, onFailure }: { account: Account; onFailure:
         <p>{date(order.submission.recordedAt)} · {order.quote.lines.length} jenis kemasan</p><p>{status(order)}</p>
         <p>Total saat pengajuan: <strong>{orderAmount(order.quote.currency, order.total)}</strong></p>
         <button className={common.secondary} disabled={locked} onClick={() => void select(order.submission.orderId)}>Lihat pesanan {order.submission.orderId}</button></li>)}</ul>
-      <div className={common.actions}><button className={common.secondary} disabled={locked} onClick={() => { setCursor(null); setReload(value => value + 1); }}>Muat pesanan terbaru</button>
-        {page.hasMore && <button className={common.secondary} disabled={locked} onClick={() => setCursor(page.items.at(-1)!.submission.orderId)}>Pesanan lebih lama</button>}
+      <div className={common.actions}><button className={common.secondary} disabled={locked} onClick={() => { setCursor(null); setReload(value => value + 1); }}>{filter?.sort === 'oldest' ? 'Muat pesanan pertama' : 'Muat pesanan terbaru'}</button>
+        {page.hasMore && <button className={common.secondary} disabled={locked} onClick={() => setCursor(nextCursor)}>{filter?.sort === 'oldest' ? 'Pesanan lebih baru' : 'Pesanan lebih lama'}</button>}
         {account.actions.includes('order.submit') && !locked && <Link href="/ordering/drafts" className={common.secondary}>Draf pesanan</Link>}</div>
     </section>
     {selected && <section ref={detail} tabIndex={-1} className={styles.review} aria-label="Rincian pesanan"><h2>Pesanan {selected.submission.orderId}</h2>
