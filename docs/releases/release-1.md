@@ -2,20 +2,13 @@
 
 Immediate delivery: approved account → scoped catalog → persistent request → staff accepts/rejects → requester reads status/history. Acceptance means **accepted for processing only**: no stock reservation, binding price, payment, invoice or fulfillment commitment.
 
-Authoritative checkout: `C:/Users/User/Documents/Capstone`, branch `main`. All original requirements and the 97-item register remain the later-release backlog; accounting, refunds, OCR, procurement, valuation and notifications are outside this release.
+Authoritative checkout: `C:/Users/User/Documents/Capstone`, branch `main`. This is the bounded pilot record from 4 October, not the current project scope. Full implementation has resumed under the user's latest request; all original requirements and all 97 report items remain mandatory in the [single progress checklist](../quality/production-progress.md). Accounting, refunds, OCR, procurement, valuation and notifications are outside this preserved pilot only.
 
-## Short release checklist
+## Historical pilot delivery record
 
-- [x] Stop unrelated implementation and preserve unfinished mixed-receipt costing.
-- [x] Preserve tracked/untracked changes in `codex/preserved-mixed-costing-20261004`; byte-exact manifest and verified recovery bundle in `tmp/production/preserved-mixed-costing-20261004`.
-- [x] Implement branch-scoped catalog, packaging and request submission without financial/inventory writes.
-- [x] Implement staff review and persistent requester status/history; reuse catalog maintenance.
-- [x] Restrict pilot pages/navigation/API; remove proven unused duplicates.
-- [x] Verify service permission/isolation, validation, retry/concurrency and Mongo persistence checks.
-- [x] Demonstrate actual browser → .NET → Mongo journey, desktop/mobile and restart persistence.
-- [x] Production frontend build and relevant local checks; inspected GitHub rules permit normal main push.
-- [x] Commit and push coherent release; publish verified frontend and verify deployment status honestly.
-- [x] Provide [local startup and private synthetic access](../runbooks/local-pilot-release1.md) and [exact external deployment prerequisites](../runbooks/release1-deployment.md).
+The pilot delivery preserved unfinished mixed-receipt costing and tracked/untracked changes in `codex/preserved-mixed-costing-20261004`, with its byte-exact manifest and recovery bundle at `tmp/production/preserved-mixed-costing-20261004`. Its temporary pause of unrelated implementation ended when full migration resumed.
+
+Delivered pilot behavior: branch-scoped catalog/packaging/request submission without stock or money writes; staff review; persistent requester history; catalog maintenance; bounded navigation/API; proven unused duplicate removal. Recorded checks cover service permission/isolation, validation, retry/concurrency, real Mongo persistence, desktop/mobile browser → .NET → Mongo and restart persistence. The coherent frontend release was built, pushed and published with the limits below. [Local startup/private synthetic access](../runbooks/local-pilot-release1.md) and [external deployment prerequisites](../runbooks/release1-deployment.md) remain the operating instructions. These are historical results, not tests rerun by documentation consolidation.
 
 ## Evidence and status
 
@@ -36,7 +29,7 @@ Integrated browser evidence, 4 October 2026: `tmp/production/release1-browser-re
 
 Published application checkpoint: [`5127a7da1eeebd71666a01b51d52bbf3a61d6557`](https://github.com/natannielz/Capstone/commit/5127a7da1eeebd71666a01b51d52bbf3a61d6557). Vercel built that exact commit as `dpl_EPvnwVREatVP6HJJckdX9HBN5oHK` and reports Ready. The public [Release 1 frontend](https://unit-toko-bni.vercel.app/) shows the inactive-preview banner. Actual browser sign-in reports the unavailable account service; live probes return no-store 503 for `/api/v1/identity/session` and no-store 404 for legacy `/api/products` and deferred `/billing/invoices`. This is frontend publication, **not hosted journey acceptance**. GitHub's [Focused quality run](https://github.com/natannielz/Capstone/actions/runs/37180570201) completed successfully: frontend types/lint/module boundaries and backend compile/contracts/shared-authority regression passed. Existing non-failing lint warnings remain recorded in that run.
 
-Hosted operation still requires the external inputs listed in the deployment runbook. Private accounts, keys, database files and browser credentials are ignored by Git. The preserved 97-item project and mixed-receipt costing are not complete and have not resumed.
+Hosted operation still requires the external inputs listed in the deployment runbook. Private accounts, keys, database files and browser credentials are ignored by Git. The full 97-item project and mixed-receipt costing are active required work, still incomplete; current implementation and terminal test status live only in the [master ledger](../quality/production-progress.md).
 
 ## Visual restoration — 4 October 2026
 

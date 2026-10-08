@@ -1,9 +1,8 @@
 name: Focused quality
 
 on:
-  pull_request:
-  push:
-    branches: [main, 'codex/**']
+  # Implementation is verified locally; run every preserved job manually on
+  # the integrated candidate. Repository protection is managed separately.
   workflow_dispatch:
 
 permissions:

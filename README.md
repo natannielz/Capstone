@@ -14,7 +14,7 @@ Status dan pekerjaan tersisa dicatat dalam satu [ledger kemajuan, checklist dan 
 
 Release 1 mencakup katalog dan permintaan cabang. **“Diterima untuk diproses” tidak mereservasi stok, menetapkan harga, membuat invoice, menerima pembayaran atau menjanjikan pengiriman.** Foto editorial bukan foto produk katalog yang telah disetujui. Lihat [cakupan dan bukti Release 1](docs/releases/release-1.md).
 
-Pilot yang dipertahankan tetap memakai Release 1 dengan skema migrasi **78**. Pekerjaan migrasi **79** untuk pencocokan invoice pemasok berbasis penerimaan mutu dan penilaian parsial berada dalam validasi terpisah; belum dipasang atau diterima di pilot.
+Pilot yang dipertahankan tetap memakai Release 1 dengan skema migrasi **78**. Pekerjaan sistem penuh, termasuk mixed-receipt costing dan migrasi berikutnya, berjalan pada validasi terisolasi; tidak dipasang ke pilot hanya karena build berhasil. [Ledger utama](docs/quality/production-progress.md) membedakan source kandidat, hasil terminal dan penerimaan per persyaratan.
 
 ## Struktur dan teknologi
 
@@ -24,7 +24,7 @@ Pilot yang dipertahankan tetap memakai Release 1 dengan skema migrasi **78**. Pe
 | [backend/](backend/) | C#/.NET 10 API dan worker, modul bisnis, MongoDB transaksional, migrasi, bukti privat, kontrak API dan alat pilot |
 | [docs/](docs/) | Persyaratan, arsitektur, runbook operator, bukti penerimaan, rencana pelaksanaan dan deployment |
 
-Identitas produksi disiapkan untuk **Auth0**, verifikasi email, MFA, sesi server dan izin sesuai lingkup; penerimaan tenant sebenarnya masih terbuka. Dokumen keuangan memakai penyimpanan privat dengan akses terotorisasi. OCR memakai satu mesin lokal yang dipatok: **Tesseract 5.5.3 / tesserocr 2.11.0**, model `ind+eng`. Saat ini input OCR hanya PNG/JPEG; hasilnya saran untuk pemeriksaan manusia, bukan persetujuan atau bukti uang diterima. PDF dan OCR dokumen pengiriman masih pending.
+Identitas produksi disiapkan untuk **Auth0**, verifikasi email, MFA, sesi server dan izin sesuai lingkup; penerimaan tenant sebenarnya masih terbuka. Dokumen keuangan memakai penyimpanan privat dengan akses terotorisasi. OCR memakai satu mesin lokal yang dipatok: **Tesseract 5.5.3 / tesserocr 2.11.0**, model `ind+eng`. [OCR gambar dan PDF pemasok](docs/pdf-document-ocr.md) memiliki checkpoint lokal; pembayaran tetap memerlukan bukti gambar, dan OCR dokumen pengiriman belum diterima. Hasil OCR adalah saran untuk pemeriksaan manusia, bukan persetujuan atau bukti uang diterima.
 
 **Penghentian runtime dan build legacy belum selesai.** `backend/legacy`, dependensi libSQL/Turso/SQLite, adapter dan pemeriksaan regresinya masih dipertahankan sampai pengganti serta penghapusannya diverifikasi. Legacy bukan penulis data pilot Release 1. [Peta transisi modul](docs/architecture/module-boundaries.md) menyimpan konteks migrasi; status aktual tiap alur mengikuti ledger.
 
@@ -48,6 +48,7 @@ Permintaan dan perubahan katalog tersimpan di MongoDB lokal terpisah. `Ctrl+C` m
 
 | Kebutuhan | Mulai dari sini |
 | --- | --- |
+| Kebutuhan dan sumber asli | [Spesifikasi](docs/requirements/unit-toko-production.md), [manual/diagram/rapat dan riwayat](docs/source-material/README.md), [keputusan bisnis](docs/quality/report-decisions.md) |
 | Setup dan kontrak API | [Pengembangan lokal](docs/runbooks/local-development.md), [skrip frontend](frontend/package.json), [kontrak API](backend/contracts/) |
 | Modul dan alur terpelihara | [Identitas](frontend/src/modules/identity/README.md), [katalog](frontend/src/modules/catalog/README.md), [ordering](frontend/src/modules/ordering/README.md), [fulfillment](frontend/src/modules/fulfillment/README.md), [purchase order](docs/runbooks/purchase-orders.md), [alokasi pembayaran](docs/runbooks/payment-allocation.md) |
 | Keamanan dan bukti privat | [Izin](docs/architecture/permissions.md), [otoritas orang](docs/architecture/person-authority.md), [hosting Auth0/sesi](docs/runbooks/identity-hosting.md), [admission bukti](docs/runbooks/private-evidence-admission.md), [penyimpanan privat](docs/runbooks/private-evidence-storage.md) |
@@ -56,10 +57,10 @@ Permintaan dan perubahan katalog tersimpan di MongoDB lokal terpisah. `Ctrl+C` m
 | Deployment, migrasi dan restore | [Deployment Release 1](docs/runbooks/release1-deployment.md), [penerimaan produksi dan backup/restore](docs/quality/production-acceptance.md), [pemulihan akses](docs/runbooks/account-recovery.md) |
 | Seluruh backlog | [97 persyaratan asli](docs/requirements/unit-toko-report-2026-09-28.md), [traceability dan pekerjaan tersisa](docs/quality/production-progress.md#current-traceability--all-97-report-items) |
 
-Skrip frontend yang tersedia mencakup `typecheck`, `lint`, `test` dan `build`; sebagian regresi masih menguji legacy. Pemeriksaan yang menulis data memakai database terisolasi, bukan database pilot. CI push menjalankan pemeriksaan terfokus; workflow manual **Release validation** menyimpan suite rilis lengkap. Hasil fixture lokal tidak membuktikan penerimaan hosted.
+Skrip frontend yang tersedia mencakup `typecheck`, `lint`, `test` dan `build`; sebagian regresi masih menguji legacy. Pemeriksaan yang menulis data memakai database terisolasi, bukan database pilot. Selama implementasi, **Focused quality** dan **Release validation** dijalankan manual; job dan pemeriksaan sebenarnya tetap dipertahankan. Jalankan CI lengkap setelah integrasi siap dan patuhi required checks sebelum merge. Hasil fixture lokal tidak membuktikan penerimaan hosted.
 
 Vercel memakai root `frontend`, Node.js 24 dan [konfigurasi deployment](frontend/vercel.json) dengan Git otomatis hanya dari `main`. Publikasi frontend tidak menjalankan API/worker .NET. Peluncuran sebenarnya memerlukan ingress HTTPS/API yang disetujui, MongoDB replica set, Auth0, private storage dan operator/kebijakan bisnis, lalu verifikasi browser, izin, persistensi, worker dan restore pada koneksi sebenarnya. Push GitHub atau status Ready Vercel saja belum memenuhi gerbang itu.
 
 ## Arsip yang tetap dipertahankan
 
-[README demo lama](frontend/README.md), [rilis visual v15](docs/rilis-v15.md), [landing editorial v13](docs/rilis-v13.md) dan [panduan publikasi lama](docs/publikasi-github.md) menyimpan konteks desain/regresi. Instruksi akun, database dan deployment historis di dalamnya tidak menggantikan panduan pilot saat ini. Seluruh dokumen dan bukti lama tetap dipertahankan; data sintetis bukan operasi resmi BNI.
+[README demo lama](frontend/README.md), [rilis visual v15](docs/rilis-v15.md), [landing editorial v13](docs/rilis-v13.md), [panduan publikasi lama](docs/publikasi-github.md) dan [kronologi progres](docs/archive/production-progress-before-consolidation-2026-10-08.md) menyimpan konteks desain/regresi. Instruksi akun, database, status proses dan deployment historis tidak menggantikan ledger serta panduan pilot saat ini. Sumber, bukti bisnis, data privat dan pekerjaan belum selesai dipertahankan; hasil build obsolete yang dihapus dicatat beserta backup dalam ledger.
