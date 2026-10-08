@@ -53,6 +53,7 @@ export function ReceiptWorkspace() {
     } catch (failure) { if (active) setError(failure); } finally { if (active) setLoading(false); }
   }); return () => { active = false; controller.abort(); }; }, [identity, access, revision]);
   useEffect(() => { const timer = window.setInterval(() => { if (account) setElapsed(performance.now() - account.observedAt); }, 1000); return () => window.clearInterval(timer); }, [account]);
+  const denied = useCallback((failure: unknown) => { if (failure instanceof AccessFailure && failure.status === 401) { setAccount(null); setLink(null); setError(failure); } }, []);
   const expired = account && sessionTiming(account.session, elapsed).expired;
   return <main className={common.page}><header className={common.header}><div><Link href="/identity/account" className={common.brand}>Unit Toko</Link><h1>Penerimaan kiriman</h1>
     <p>Periksa barang bersama kurir. Konfirmasi hanya dengan akun penerima yang dituju.</p></div><Link href="/identity/account" className={common.secondary}>Akun saya</Link></header>
@@ -60,14 +61,14 @@ export function ReceiptWorkspace() {
     {loading ? <p role="status">Memeriksa akun penerima…</p> : !account || expired ? <section className={common.state}><h2>Masuk sebagai penerima</h2>
       <p>Masuk dengan akun penerima sendiri, lalu pindai kembali QR. Tautan tidak disimpan selama proses masuk.</p><Link href="/identity/login?returnPath=%2Ffulfillment%2Freceive">Masuk sebagai penerima</Link>
       <button className={common.secondary} onClick={() => { setError(null); setRevision(value => value + 1); }}>Perbarui sesi dan akses</button></section>
-      : <ReceiptForm key={account.actorId + ':' + account.observedAt} account={account} link={link} />}
+      : <ReceiptForm key={account.actorId + ':' + account.observedAt} account={account} link={link} onDenied={denied} />}
   </main>;
 }
 type Entry = { accepted: [string, string]; rejected: [string, string]; missing: [string, string]; exceptionReason: string };
 const groups = ['accepted', 'rejected', 'missing'] as const;
 const labels = { accepted: 'Diterima', rejected: 'Ditolak', missing: 'Belum diterima' };
 function integer(value: string) { if (!/^(0|[1-9][0-9]{0,6})$(?![\s\S])/.test(value) || Number(value) > 1000000) throw new AccessFailure(400, 'invalid_delivery_receipt'); return Number(value); }
-function ReceiptForm({ account, link }: { account: Account; link: ReceiptLink | null }) {
+function ReceiptForm({ account, link, onDenied }: { account: Account; link: ReceiptLink | null; onDenied: (failure: unknown) => void }) {
   const [gateway] = useState(() => createReceiptGateway()), [ledger] = useState(() => new MutationLedger()), recovery = useOperationRecovery(account.actorId);
   const [review, setReview] = useState<ReceiptReview | null>(null), [observedAt, setObservedAt] = useState(0), [elapsed, setElapsed] = useState(0);
   const [entries, setEntries] = useState<Record<string, Entry>>({}), [reason, setReason] = useState(''), [consent, setConsent] = useState(false);
@@ -75,18 +76,21 @@ function ReceiptForm({ account, link }: { account: Account; link: ReceiptLink | 
   const [proofs] = useState(createReceiptProofGateway), [recoveredProof, setRecoveredProof] = useState<ReceiptProof | null>(null);
   const [error, setError] = useState<unknown>(null), [busy, setBusy] = useState(false), [recovering, setRecovering] = useState(false), [offline, setOffline] = useState(false);
   const alive = useRef(false), pending = useRef(false), heading = useRef<HTMLHeadingElement>(null);
+  const firstQuantity = useRef<HTMLInputElement>(null), returningToQuantities = useRef(false);
   const current = useCallback(() => alive.current && !sessionTiming(account.session, performance.now() - account.observedAt).expired, [account]);
   const expired = !!review && elapsed >= Math.max(0, Date.parse(review.expiresAt) - Date.parse(review.serverTime));
   const locked = busy || recovering || recovery.locked || offline || expired;
   useEffect(() => { alive.current = true; const connection = () => setOffline(!navigator.onLine); connection(); window.addEventListener('online', connection); window.addEventListener('offline', connection);
     return () => { alive.current = false; window.removeEventListener('online', connection); window.removeEventListener('offline', connection); }; }, []);
   useEffect(() => { const timer = window.setInterval(() => setElapsed(performance.now() - observedAt), 1000); return () => window.clearInterval(timer); }, [observedAt]);
-  useEffect(() => { if (command) heading.current?.focus(); }, [command]);
+  useEffect(() => { if (command) heading.current?.focus();
+    else if (returningToQuantities.current) { returningToQuantities.current = false; firstQuantity.current?.focus(); } }, [command]);
+  function failed(failure: unknown) { setError(failure); onDenied(failure); }
   async function load() {
     if (!account.canReceive || !link || !current() || busy || pending.current || offline || recovery.locked) return; pending.current = true; setBusy(true); setError(null); setCommand(null);
     try { const result = await gateway.review(account.actorId, link.challengeId, link.token); if (!current()) return;
       setReview(result); setObservedAt(performance.now()); setElapsed(0); setEntries(Object.fromEntries(result.lines.map(line => [line.skuId, { accepted: ['', ''], rejected: ['', ''], missing: ['', ''], exceptionReason: '' }]))); setConsent(false);
-    } catch (failure) { if (current()) { setReview(null); setError(failure); } } finally { pending.current = false; if (alive.current) setBusy(false); }
+    } catch (failure) { if (current()) { setReview(null); failed(failure); } } finally { pending.current = false; if (alive.current) setBusy(false); }
   }
   function preview() {
     if (!link || !review || locked || !current()) return;
@@ -100,7 +104,7 @@ function ReceiptForm({ account, link }: { account: Account; link: ReceiptLink | 
     try { if (recovery.journal.list(account.actorId).length) throw new AccessFailure(400, 'resolve_previous_attempt');
       const result = await submitTrackedRequest(ledger, recovery.journal, account.actorId, 'fulfillment.receipt.confirm', 'fulfillment.receipt.confirm', command,
         key => gateway.confirm(command, key, current)); if (current()) { setReceipt(result); setCommand(null); setEntries({}); setReview(null); }
-    } catch (failure) { if (current()) setError(failure); } finally { pending.current = false; if (alive.current) { setBusy(false); recovery.refresh(); } }
+    } catch (failure) { if (current()) failed(failure); } finally { pending.current = false; if (alive.current) { setBusy(false); recovery.refresh(); } }
   }
   function change(sku: string, group: typeof groups[number], position: 0 | 1, value: string) {
     setEntries(previous => { const next: [string, string] = [...previous[sku][group]]; next[position] = value; return { ...previous, [sku]: { ...previous[sku], [group]: next } }; });
@@ -109,22 +113,22 @@ function ReceiptForm({ account, link }: { account: Account; link: ReceiptLink | 
     <OperationRecovery entries={recovery.entries.filter(entry => entry.operation !== 'fulfillment.receipt-proof.issue' || !receipt && !recoveredProof)} journal={recovery.journal} disabled={busy || offline} onBusyChange={setRecovering}
       recoveryAdapters={{ 'fulfillment.receipt-proof': { lookup: async entry => { const result = await proofs.recover(entry.actorId, entry.key); if (current() && result) setRecoveredProof(result.result); return result; } },
         'fulfillment.receipt': { lookup: async entry => { const result = await gateway.recover(entry.actorId, entry.key, entry.operation === 'fulfillment.receipt.challenge.issue'); if (current() && result && 'recordedAt' in result.result) setReceipt(result.result); return result; } } }}
-      onFailure={setError} onResolved={() => { recovery.refresh(); ledger.resetAfterReconciliation(); setCommand(null); setEntries({}); setReview(null); }} />
+      onFailure={failed} onResolved={() => { recovery.refresh(); ledger.resetAfterReconciliation(); setCommand(null); setEntries({}); setReview(null); }} />
     {error !== null && <p role="alert" className={common.alert}>{message(error)}</p>}{recovery.error !== null && <p role="alert">{message(recovery.error)}</p>}
     {offline && <p role="status">Koneksi terputus. Isian hanya ada di halaman ini dan belum dikirim. Jangan tutup halaman sebelum tersambung.</p>}
     {expired && !receipt && <p role="status">QR kedaluwarsa. Pindai QR baru sebelum mengirim penerimaan.</p>}{busy && <p role="status">Memeriksa kiriman…</p>}
     {receipt || recoveredProof ? <>{receipt && <ReceiptSummary receipt={receipt} />}<ReceiptProofPanel actorId={account.actorId} shipmentId={receipt?.shipmentId ?? recoveredProof!.shipmentId} receiptId={receipt?.id ?? recoveredProof!.receiptId}
-      asRecipient={receipt ? true : recoveredProof!.issuedAsRecipient} canIssue={!!receipt} current={current} onDenied={setError} /></> : !review ? <><p>{!account.canReceive ? 'Gunakan Periksa hasil untuk memulihkan bukti penerimaan yang telah Anda terbitkan.' : link ? 'Buka rincian kiriman sebelum menghitung barang.' : 'Pindai QR dari kurir. Jika konfirmasi sebelumnya terputus, gunakan Periksa hasil di atas.'}</p>
+      asRecipient={receipt ? true : recoveredProof!.issuedAsRecipient} canIssue={!!receipt} current={current} onDenied={failed} /></> : !review ? <><p>{!account.canReceive ? 'Gunakan Periksa hasil untuk memulihkan bukti penerimaan yang telah Anda terbitkan.' : link ? 'Buka rincian kiriman sebelum menghitung barang.' : 'Pindai QR dari kurir. Jika konfirmasi sebelumnya terputus, gunakan Periksa hasil di atas.'}</p>
       {link && account.canReceive && <button className={common.primary} disabled={busy || offline || recovery.locked} onClick={() => void load()}>Periksa kiriman</button>}</>
       : command ? <div className={styles.review}><h2 ref={heading} tabIndex={-1}>Tinjau jumlah penerimaan</h2><p>{review.recipientName} · Kiriman {review.shipmentId} · Surat Jalan versi {review.documentVersion}</p>
         <ul>{command.body.lines.map(line => { const source = review.lines.find(item => item.skuId === line.skuId)!; return <li key={line.skuId}><strong>{source.productName}</strong>
           {groups.map(group => <p key={group}>{labels[group]}: {line[group].packages} {source.packageLabel} + {line[group].looseUnits} {source.baseUnitCode}</p>)}{line.exceptionReason && <p>{line.exceptionReason}</p>}</li>; })}</ul>
         <p>Catatan: {command.body.reason}</p><label className={common.checkbox}><input type="checkbox" checked={consent} disabled={locked} onChange={event => setConsent(event.target.checked)} /><span>{review.consentText}</span></label>
         <button className={common.primary} disabled={locked || !consent} onClick={() => void confirm()}>Konfirmasi penerimaan</button>
-        <button className={common.secondary} disabled={locked} onClick={() => { setCommand(null); setConsent(false); }}>Kembali ke jumlah</button></div>
+        <button className={common.secondary} disabled={locked} onClick={() => { returningToQuantities.current = true; setCommand(null); setConsent(false); }}>Kembali ke jumlah</button></div>
       : <form onSubmit={event => { event.preventDefault(); preview(); }}><h2>Hitung barang yang tiba</h2><p>Penerima: {review.recipientName}. Isi jumlah kemasan utuh dan satuan lepas; masukkan nol bila tidak ada.</p>
         {review.lines.map(line => <fieldset key={line.skuId} className={styles.line} disabled={locked}><legend>{line.productName} · {line.skuCode}</legend><p>Dikirim {line.packages} {line.packageLabel}. Isi {line.baseUnitsPerPackage} {line.baseUnitCode} per kemasan.</p>
-          {groups.map(group => <div key={group}><h3>{labels[group]}</h3><label>{labels[group]} — kemasan utuh<input inputMode="numeric" required pattern="[0-9]+" maxLength={7} value={entries[line.skuId][group][0]} onChange={event => change(line.skuId, group, 0, event.target.value)} /></label>
+          {groups.map(group => <div key={group}><h3>{labels[group]}</h3><label>{labels[group]} — kemasan utuh<input ref={group === 'accepted' && line.skuId === review.lines[0].skuId ? firstQuantity : undefined} inputMode="numeric" required pattern="[0-9]+" maxLength={7} value={entries[line.skuId][group][0]} onChange={event => change(line.skuId, group, 0, event.target.value)} /></label>
             <label>{labels[group]} — satuan lepas<input inputMode="numeric" required pattern="[0-9]+" maxLength={7} value={entries[line.skuId][group][1]} onChange={event => change(line.skuId, group, 1, event.target.value)} /></label></div>)}
           <label>Alasan perbedaan<textarea maxLength={1000} value={entries[line.skuId].exceptionReason} onChange={event => setEntries(previous => ({ ...previous, [line.skuId]: { ...previous[line.skuId], exceptionReason: event.target.value } }))} /></label></fieldset>)}
         <label>Catatan penerimaan<input required maxLength={1000} disabled={locked} value={reason} onChange={event => setReason(event.target.value)} /></label>
