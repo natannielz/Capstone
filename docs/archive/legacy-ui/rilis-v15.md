@@ -42,6 +42,6 @@ Temuan reset URL direproduksi saat pengembangan dengan live update; tidak dinyat
 
 - Build produksi Vercel berhasil; 24 halaman statis selesai. Deployment `dpl_4knw2TGb5tZGBaHJvCUQ4rURg46K`, [URL deployment](https://unit-toko-b55ptl5kv-natannielzs-projects.vercel.app).
 - Setelah promosi, inspeksi domain utama mengonfirmasi deployment tersebut berstatus READY.
-- Katalog publik terverifikasi: **200 produk, 200 path gambar unik, 200 deskripsi unik**; lima sampel gambar berhasil dimuat. [Hasil katalog](../../public-catalog-v15-results.json).
+- Katalog publik terverifikasi: **200 produk, 200 path gambar unik, 200 deskripsi unik**; lima sampel gambar berhasil dimuat. [Hasil katalog](public-catalog-v15-results.json).
 - Pemeriksaan akses produksi **25/25 lulus**, termasuk 11 akun, pemisahan portal/peran, dan pencabutan seluruh sesi uji; dicatat pada [hasil smoke](vercel-v15-results.json). Helper hanya memakai halaman dan login/logout; tidak mengambil API bisnis privat atau mengirim perintah bisnis.
 - Export GitHub hanya mencakup kode, aset, dan dokumen yang diizinkan. Kredensial, database, konfigurasi privat, arsip studi kasus, dan riwayat Git lokal lama dikecualikan.

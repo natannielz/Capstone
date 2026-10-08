@@ -10,7 +10,7 @@ Katalog pelanggan dan staf menampilkan 24 keluarga produk per halaman. Pencarian
 
 Penambahan produk, stok awal, dan jurnal persediaan dilakukan atomik satu kali. Produk lama tidak diisi ulang, transaksi dan akun tidak direset. Periode tertutup dilindungi. Rincian mekanisme serta pengujiannya tersedia pada [implementasi katalog](implementation-v10-catalog.md).
 
-Foto dibuat satu per produk menggunakan image generation bawaan. PNG sumber dipertahankan secara lokal; situs memakai WebP 1024 × 1024 agar ringan. Manifest prompt, deskripsi, dan pemetaan file dijelaskan pada [data dummy](../../data-dummy-v10.md).
+Foto dibuat satu per produk menggunakan image generation bawaan. PNG sumber dipertahankan secara lokal; situs memakai WebP 1024 × 1024 agar ringan. Manifest prompt, deskripsi, dan pemetaan file dijelaskan pada [data dummy](data-dummy-v10.md).
 
 ## Perbaikan v9 yang disertakan
 
@@ -31,7 +31,7 @@ Lihat [catatan v9](rilis-v9.md) dan dokumen audit yang ditautkan di dalamnya.
 - Lint: 0 error, 9 peringatan lama.
 - Browser: foto dan deskripsi SKU baru termuat; pencarian kode menemukan produk yang tepat; tampilan rincian pada lebar ponsel tidak meluap horizontal; tombol tambah memasukkan produk ke keranjang.
 
-Seluruh 200 gambar selesai, memiliki hash file yang berbeda, dan berhasil didekode sebagai WebP 1024 × 1024. Total ukuran aset pengiriman adalah 11.395.138 byte (sekitar 11,4 MB). PNG sumber dan metadata asal tersedia secara lokal. Hasil pemeriksaan tersimpan pada [verifikasi gambar](../../data-dummy-v10-results.json).
+Seluruh 200 gambar selesai, memiliki hash file yang berbeda, dan berhasil didekode sebagai WebP 1024 × 1024. Total ukuran aset pengiriman adalah 11.395.138 byte (sekitar 11,4 MB). PNG sumber dan metadata asal tersedia secara lokal. Hasil pemeriksaan tersimpan pada [verifikasi gambar](data-dummy-v10-results.json).
 
 Katalog publik lokal juga lolos pemeriksaan 200 produk, 200 deskripsi berbeda, 200 jalur gambar berbeda, serta lima sampel gambar dari seluruh rentang. Pemeriksaan browser mencakup pencarian 200 produk dalam sembilan halaman, perpindahan halaman, filter kategori yang kembali ke halaman pertama, pengurutan harga, rincian produk, keranjang, dan pengalihan checkout tamu ke login pelanggan.
 
@@ -40,7 +40,7 @@ Katalog publik lokal juga lolos pemeriksaan 200 produk, 200 deskripsi berbeda, 2
 Rilis diterbitkan pada 22 September 2026 di [unit-toko-bni.vercel.app](https://unit-toko-bni.vercel.app). Deployment `dpl_7eGpUNkxhTA339jysMqoFL9PRY9J` berstatus **Ready**, dipromosikan, dan tujuan domain utama diperiksa kembali. Build produksi Vercel lulus.
 
 - **25/25** kelompok pemeriksaan halaman dan autentikasi lulus, mencakup 11 akun, pemisahan portal, penolakan portal yang salah, dan pencabutan sesi pengujian saat logout. Lihat [hasil akses produksi](vercel-v10-results.json).
-- Katalog publik memuat seluruh **200 produk baru**, masing-masing dengan deskripsi dan jalur gambar unik yang cocok dengan manifest. Lima sampel aset dari seluruh rentang berhasil dimuat sebagai WebP. Lihat [hasil katalog produksi](../../public-catalog-v10-results.json).
+- Katalog publik memuat seluruh **200 produk baru**, masing-masing dengan deskripsi dan jalur gambar unik yang cocok dengan manifest. Lima sampel aset dari seluruh rentang berhasil dimuat sebagai WebP. Lihat [hasil katalog produksi](public-catalog-v10-results.json).
 - Browser produksi menampilkan logo baru, beranda, dan etalase dengan foto termuat. Etalase saat pemeriksaan berisi 212 keluarga produk, ditampilkan 24 per halaman dalam sembilan halaman.
 
 ## Batas demo

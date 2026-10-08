@@ -49,4 +49,4 @@ Autoplay berhenti ketika pointer memilih tautan/kontrol; pointer pada ruang foto
 
 ## Publikasi
 
-Hasil pemeriksaan domain dan katalog setelah promosi dicatat di [smoke produksi](vercel-v14-results.json) dan [katalog publik](../../public-catalog-v14-results.json). Export GitHub hanya memuat kode/aset dan dokumen yang diizinkan, dengan pemindaian credential; database, konfigurasi privat, dan riwayat Git lokal lama dikecualikan.
+Hasil pemeriksaan domain dan katalog setelah promosi dicatat di [smoke produksi](vercel-v14-results.json) dan [katalog publik](public-catalog-v14-results.json). Export GitHub hanya memuat kode/aset dan dokumen yang diizinkan, dengan pemindaian credential; database, konfigurasi privat, dan riwayat Git lokal lama dikecualikan.

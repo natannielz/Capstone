@@ -117,4 +117,4 @@ Pola pencarian/filter dan rincian bertahap mengikuti [Carbon Data table](https:/
 
 Ini audit ahli dan pengujian teknis terbatas, bukan studi dengan pengguna, sertifikasi aksesibilitas, atau pengukuran kinerja lapangan. Temuan berbasis kode harus direproduksi sebelum diperlakukan sebagai bug terverifikasi. Implementasi tidak mencakup pembayaran sungguhan, integrasi bank, atau perubahan ruang lingkup demo capstone.
 
-Laporan pendukung: [browser](../../audit-v6-browser.md), [katalog dan visual](audit-v6-visual-catalog.md), [alur transaksi](audit-v6-workflows.md), [kualitas operasional/auth](../../audit-v6-quality.md).
+Laporan pendukung: [browser](audit-v6-browser.md), [katalog dan visual](audit-v6-visual-catalog.md), [alur transaksi](audit-v6-workflows.md), [kualitas operasional/auth](audit-v6-quality.md).

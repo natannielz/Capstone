@@ -40,7 +40,7 @@ Identitas petroleum/oranye, foto yang sudah ada, sembilan peran, aturan divisi, 
 - Build Vercel lulus dan alias utama terpasang. **73 pemeriksaan publik lulus, 0 gagal, 1 dilewati** karena produksi tidak memiliki fixture dokumen pengadaan; hak dokumen pengadaan sudah diuji lokal.
 - Browser produksi: persediaan baru dengan pencarian SKU/kartu ponsel tampil benar; produk dari landing langsung membuka dialog katalog dengan sesi aktif. Tidak ada error console pada pemeriksaan ini.
 
-Bukti: [API lokal](../../qa-v6-auth.md), [browser](../../qa-v6-browser-implementation.md), [invoice 101 baris](../../qa-v6-invoice-ui.json), [keandalan](../../qa-v6-reliability.md), [pemeriksaan publik](vercel-v6-results.json).
+Bukti: [API lokal](qa-v6-auth.md), [browser](qa-v6-browser-implementation.md), [invoice 101 baris](qa-v6-invoice-ui.json), [keandalan](qa-v6-reliability.md), [pemeriksaan publik](vercel-v6-results.json).
 
 ## Ukuran aset dan sampel HTTP
 

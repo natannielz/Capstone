@@ -1,6 +1,6 @@
 # Data produk dummy v10
 
-Manifest [demo-products-v10.json](../website/lib/domain/demo-products-v10.json) berisi tepat 200 produk kurasi dengan ID `demo-001` sampai `demo-200` dan SKU `DEMO-001` sampai `DEMO-200`. Nama, deskripsi dua kalimat, dan prompt gambar berbeda untuk setiap entri. Harga serta spesifikasi merupakan data simulasi capstone, tanpa merek dagang atau logo BNI.
+Manifest [demo-products-v10.json](../../../website/lib/domain/demo-products-v10.json) berisi tepat 200 produk kurasi dengan ID `demo-001` sampai `demo-200` dan SKU `DEMO-001` sampai `DEMO-200`. Nama, deskripsi dua kalimat, dan prompt gambar berbeda untuk setiap entri. Harga serta spesifikasi merupakan data simulasi capstone, tanpa merek dagang atau logo BNI.
 
 | Rentang ID | Kelompok etalase | Jumlah | Koleksi |
 | --- | --- | ---: | --- |
@@ -29,7 +29,7 @@ Companion `website/lib/domain/demo-catalog-public-v10.json` hanya menyimpan `id`
 
 ## Hasil pembuatan gambar
 
-Seluruh 200 gambar telah dibuat melalui 200 panggilan terpisah ke alat pembuatan gambar bawaan, satu hasil untuk setiap produk. Setiap gambar menggunakan subjek dan bahan sesuai produk, dengan komposisi foto studio persegi dan latar netral. Hasil ditinjau secara visual selama pembuatan. Prompt untuk seluruh produk disimpan pada field `imagePrompt` di [manifest lengkap](../website/lib/domain/demo-products-v10.json).
+Seluruh 200 gambar telah dibuat melalui 200 panggilan terpisah ke alat pembuatan gambar bawaan, satu hasil untuk setiap produk. Setiap gambar menggunakan subjek dan bahan sesuai produk, dengan komposisi foto studio persegi dan latar netral. Hasil ditinjau secara visual selama pembuatan. Prompt untuk seluruh produk disimpan pada field `imagePrompt` di [manifest lengkap](../../../website/lib/domain/demo-products-v10.json).
 
 Pemeriksaan akhir mencatat 200 aset WebP berukuran 1024 × 1024 piksel, 200 hash SHA-256 yang berbeda, dan total ukuran pengiriman **11.395.138 byte** (sekitar 11,40 MB). Tidak ada aset yang hilang atau gagal pemeriksaan. Ringkasan yang dapat dibaca mesin tersedia di [data-dummy-v10-results.json](data-dummy-v10-results.json).
 
