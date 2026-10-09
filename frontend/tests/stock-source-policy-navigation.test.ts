@@ -6,7 +6,7 @@ import { sourceSession } from "./stock-source-fixtures";
 const path = "/inventory/sources/policies";
 test("policy task discovery separates maker checker and history from source management", () => {
   for (const action of ["stock.source.policy.propose", "stock.source.policy.approve"]) {
-    assert.deepEqual(identityDestinations([action]).map(item => item.href), [path]);
+    assert.deepEqual(identityDestinations([action]).map(item => item.href), ['/administration/delegations', path]);
     assert.equal(canUseStockSources([action]), false);
   }
   assert.ok(identityDestinations(["stock.source.read"]).some(item => item.href === path));

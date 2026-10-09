@@ -11,6 +11,7 @@ import * as identity from '../src/modules/identity/identity-workflow';
 import * as workflow from '../src/modules/administration/workflow';
 import * as operations from '../src/modules/administration/operation-journal';
 import * as navigation from '../src/modules/administration/operation-recovery-navigation';
+import * as scans from '../src/modules/inventory/scan-client';
 
 const source = {orderId: '9007199254741001', suborderId: '9007199254741002', revision: '3', review: 'a'.repeat(64), buyerName: 'Cabang fixture',
   delivery: {recipientName: 'Penerima fixture', phone: '081234567890', address: 'Alamat fixture', city: 'Jakarta', postalCode: '12810', instructions: null},
@@ -98,6 +99,8 @@ function mountDispatch() {
     if (name === './operation-recovery-navigation') return navigation;
     if (name === '../administration/OperationRecovery') return recovery;
     if (name === '../administration/AdministrationNavigation') return {AdministrationNavigation: marker};
+    if (name === '../inventory/ScanInput') return {ScanInput: marker};
+    if (name === '../inventory/scan-client') return scans;
     if (name === './dispatch-client') return {...dispatch, createDispatchGateway: () => gateway};
     throw new Error('Unexpected mounted dispatch import: ' + name);
   };

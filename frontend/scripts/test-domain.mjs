@@ -6,7 +6,7 @@ mkdirSync(".test",{recursive:true});
 const files=readdirSync("tests").filter(name=>name.endsWith(".test.ts")).sort();
 const outputs=await Promise.all(files.map(async file=>{
  const outfile=`.test/${file.replace(/\.ts$/,".mjs")}`;
- await build({entryPoints:[`tests/${file}`],outfile,bundle:true,platform:"node",format:"esm",target:"node24",packages:"external",logLevel:"warning"});
+ await build({entryPoints:[`tests/${file}`],outfile,bundle:true,platform:"node",format:"esm",target:"node24",packages:"external",alias:{"next/link":"next/link.js"},logLevel:"warning"});
  return outfile;
 }));
 // Retained full-workflow regressions run explicitly in full mode; pilot tests check the pure allowlist.

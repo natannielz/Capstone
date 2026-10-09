@@ -44,7 +44,9 @@ function mountCatalog(context: ReturnType<typeof browser>, returnPath: '/shop' |
   const queries: Query[] = [];
   const reply = (query: Query, label = `${query.search || 'Catalog fixture'} / ${query.offset}`) => Response.json({total: '80', items: [{familyId: family.id,
     familyPublicId: family.publicId, familyName: label, description: family.description, categoryCode: family.categoryCode,
-    skuId: sku.id, publicId: sku.publicId, code: sku.code, definition, currentPrice: null}]});
+    skuId: sku.id, publicId: sku.publicId, code: sku.code, definition, currentPrice: null,
+    buyerIdentity: {skuId: sku.id, skuRevision: sku.version, definitionId: definition.id, definitionVersion: definition.version,
+      currentPrimary: {identifierId: '81', identifierRevision: '1', code: sku.code}}}]});
   const gateway = catalog.createBuyerCatalogGateway(createUnitTokoClient({baseUrl: 'https://unit-toko.test', fetch: async input => {
     assert.ok(input instanceof Request); assert.equal(new URL(input.url).pathname, '/api/v1/catalog/variants/query');
     assert.equal(input.headers.get('X-Expected-Actor-Id'), actorId); assert.equal(input.credentials, 'same-origin');

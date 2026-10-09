@@ -8,7 +8,7 @@
   },
   "framework": "nextjs",
   "buildCommand": "npm run build",
-  "installCommand": "npm ci && npm ci --prefix ../backend/legacy",
+  "installCommand": "npm ci",
   "regions": [
     "sin1"
   ]

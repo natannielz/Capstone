@@ -120,7 +120,8 @@ function find(tree: unknown, predicate: (node: Node) => boolean) {const node = n
 function text(value: unknown): string {if (typeof value === "string" || typeof value === "number") return String(value); if (Array.isArray(value)) return value.map(text).join(""); return value && typeof value === "object" && "props" in value ? text((value as Node).props.children) : "";}
 const runtimeRequire = createRequire(resolve("package.json"));
 
-function editorHarness(refresh: () => Promise<void> = async () => {}) {
+// Preserve the retired editor's draft/race regressions without restoring its obsolete PATCH route.
+function editorHarness(refresh: () => Promise<void> = async () => {}, sourcePath = '../backend/legacy/tests/ui/customer-profile-v15.tsx') {
   const hooks: unknown[] = [];
   const effects = new Map<number, {dependencies?: readonly unknown[]; cleanup?: () => void}>();
   let pendingEffects: {index: number; effect: () => void | (() => void); dependencies?: readonly unknown[]}[] = [];
@@ -133,7 +134,7 @@ function editorHarness(refresh: () => Promise<void> = async () => {}) {
     if (!(index in hooks)) hooks[index] = typeof initial === "function" ? initial() : initial;
     return [hooks[index], (value: unknown) => {const next = typeof value === "function" ? value(hooks[index]) : value; changed ||= !Object.is(next, hooks[index]); hooks[index] = next;}];
   }};
-  const source = readFileSync(resolve("src/components/profile.tsx"), "utf8") + "\nexport {ProfileEditor};\n";
+  const source = readFileSync(resolve(sourcePath), "utf8") + "\nexport {ProfileEditor};\n";
   const code = ts.transpileModule(source, {compilerOptions: {module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true}}).outputText;
   const evaluated: {exports: {ProfileEditor?: (props: unknown) => React.ReactElement}} = {exports: {}};
   const imports = (id: string): unknown => {
@@ -170,7 +171,26 @@ function editorHarness(refresh: () => Promise<void> = async () => {}) {
   return Object.assign(render, {unmount() {for (const effect of effects.values()) effect.cleanup?.(); effects.clear();}});
 }
 
-test("v15 actual Profile edits survive a SPA remount; refresh merges and explicit discard uses latest server values", t => {
+test('current retired contact view preserves old drafts without offering a profile write', t => {
+  const storage = memoryStorage(), descriptor = Object.getOwnPropertyDescriptor(globalThis, 'window'), originalFetch = globalThis.fetch;
+  Object.defineProperty(globalThis, 'window', {configurable: true, value: {sessionStorage: storage}});
+  let requests = 0;
+  globalThis.fetch = async () => {requests++; throw new Error('Read-only contact view must not send a request');};
+  t.after(() => {globalThis.fetch = originalFetch; if (descriptor) Object.defineProperty(globalThis, 'window', descriptor); else Reflect.deleteProperty(globalThis, 'window');});
+  const actor: Actor = {id: 'retired-profile', name: original.name, phone: original.phone, address: original.address, email: 'buyer@example.invalid', role: 'customer', divisionId: null, active: true};
+  drafts.saveCustomerProfileDraft(actor.id, original, {...original, name: 'Draf lama'}, storage);
+  const saved = drafts.captureCustomerProfileDraft(actor.id, storage), render = editorHarness(undefined, 'src/components/profile.tsx');
+  const tree = render(actor);
+  for (const id of ['profile-name', 'profile-phone', 'profile-address']) {
+    const input = find(tree, node => node.props.id === id);
+    assert.equal(input.props.readOnly, true); assert.equal(input.props.onChange, undefined);
+  }
+  assert.equal(find(tree, node => node.props.id === 'profile-name').props.value, 'Draf lama');
+  render({...actor, name: 'Nama server baru'}); render.unmount();
+  assert.equal(drafts.captureCustomerProfileDraft(actor.id, storage), saved); assert.equal(requests, 0);
+});
+
+test("historical v15 Profile edits survive a SPA remount; refresh merges and explicit discard uses latest server values", t => {
   const storage = memoryStorage(), descriptor = Object.getOwnPropertyDescriptor(globalThis, "window");
   Object.defineProperty(globalThis, "window", {configurable: true, value: {sessionStorage: storage}});
   t.after(() => {if (descriptor) Object.defineProperty(globalThis, "window", descriptor); else Reflect.deleteProperty(globalThis, "window");});
@@ -204,7 +224,7 @@ test("v15 actual Profile edits survive a SPA remount; refresh merges and explici
   assert.equal(find(tree, node => node.props.id === "profile-address").props.value, newest.address);
 });
 
-test("v15 a delayed Profile PATCH cannot erase drafts from a newer editor or newer edits in the same editor", async t => {
+test("historical v15 a delayed Profile PATCH cannot erase drafts from a newer editor or newer edits in the same editor", async t => {
   const storage = memoryStorage(), descriptor = Object.getOwnPropertyDescriptor(globalThis, "window"), originalFetch = globalThis.fetch;
   Object.defineProperty(globalThis, "window", {configurable: true, value: {sessionStorage: storage}});
   t.after(() => {globalThis.fetch = originalFetch; if (descriptor) Object.defineProperty(globalThis, "window", descriptor); else Reflect.deleteProperty(globalThis, "window");});

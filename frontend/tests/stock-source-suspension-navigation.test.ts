@@ -9,7 +9,7 @@ test("suspension navigation preserves exact login and MFA return without grantin
   assert.equal(stepUpFields({ ...sourceSession, stepUpOperations: ["stock.source.suspend"] }, "stock.source.suspend", path).returnPath, path);
   for (const permission of ["stock.source.read", "stock.source.suspend"]) assert.ok(identityDestinations([permission]).some(item => item.href === path));
   assert.equal(canUseStockSources(["stock.source.suspend"]), false);
-  assert.deepEqual(identityDestinations(["stock.source.suspend"]).map(item => item.href), [path]);
+  assert.deepEqual(identityDestinations(["stock.source.suspend"]).map(item => item.href), ['/administration/delegations', path]);
   for (const permission of ["stock.count", "stock.source.propose", "stock.source.approve", "technical.configure"]) {
     assert.equal(canUseStockSourceSuspensions([permission]), false);
     assert.equal(identityDestinations([permission]).some(item => item.href === path), false);

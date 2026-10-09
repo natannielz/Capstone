@@ -23,14 +23,15 @@
       }
     ],
     "paths": {
-      "@legacy/*": ["../backend/legacy/*"],
+      "@legacy/*": [
+        "../backend/legacy/*"
+      ],
       "@/*": [
         "./src/*"
       ]
     },
     "types": [
-      "node",
-      "@cloudflare/workers-types"
+      "node"
     ]
   },
   "include": [
@@ -45,7 +46,6 @@
   ],
   "exclude": [
     "node_modules",
-    "examples",
-    "vite.config.ts"
+    "examples"
   ]
 }

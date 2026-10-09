@@ -11,6 +11,7 @@ if (apiOrigin) {
 }
 
 const config: NextConfig = {
+  typescript: {tsconfigPath: "tsconfig.app.json"},
   // Full-workflow rehearsals must not replace the persistent Release 1 pilot build.
   distDir: process.env.NEXT_PUBLIC_UNIT_TOKO_RELEASE === "full" ? ".next-full" : ".next",
   async rewrites() {

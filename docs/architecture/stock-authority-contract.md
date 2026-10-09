@@ -1,6 +1,8 @@
 # Inventory quantities and stock authority contract
 
-Status: locally verified domain rules and private Mongo balance/provenance checks for CAT02. Governed pool/lot/source creation, complete forward migration, transactional movements, valuation, usable ledger screens and independent review remain required. These components are not registered as API routes and do not activate a second stock writer.
+This document preserves the stock-authority contracts and their successive implementation checkpoints. Statements about missing routes, registered migration numbers and remaining work describe the checkpoint where they appear; they are not the current deployment status. Use the [maintained progress and evidence register](../quality/production-progress.md) for current implementation, local verification and production acceptance. Historical test results do not authorize another stock writer or a production cutover.
+
+Initial checkpoint: locally verified domain rules and private Mongo balance/provenance checks for CAT02. At that point, governed pool/lot/source creation, complete forward migration, transactional movements, valuation, usable ledger screens and independent review remained required. Those initial components were not registered as API routes and did not activate a second stock writer.
 
 ## Implemented quantity rules
 
