@@ -8,6 +8,14 @@ namespace UnitToko.Platform.Integrity;
 /// <summary>Keyed seal over an immutable owner record, its proof membership and its dependency seals.</summary>
 public static class ProvenanceSeal
 {
+    /// <summary>Stored seal limits (the owner collection validators enforce the same bounds).</summary>
+    public const int MaximumScopes = 128, MaximumMembers = 1000;
+
+    /// <summary>True when the membership fits the stored seal limits. A proof that does not fit stays on the full proof
+    /// instead of attempting an insert the validator would refuse on every later read.</summary>
+    public static bool Sealable(BsonArray membership) => membership.Count <= MaximumScopes &&
+        membership.All(scope => !scope.AsBsonDocument.Contains("members") || scope["members"].AsBsonArray.Count <= MaximumMembers);
+
     /// <summary>Canonical content hash; the freshness fence carries no business content.</summary>
     public static string RowHash(BsonDocument row)
     {
@@ -19,8 +27,10 @@ public static class ProvenanceSeal
         { "kind", seal["kind"] }, { "ownerId", seal["ownerId"] }, { "recordHash", seal["recordHash"] }, { "membership", seal["membership"] },
         { "dependencies", seal["dependencies"] }, { "keyId", seal["keyId"] }, { "sealedAt", seal["sealedAt"] } };
 
+    // The MAC covers the exact BSON bytes, field order included: MongoDB matches embedded-document filters by
+    // field order, so a field-sorted digest would let a keyless writer reorder a sealed filter undetected.
     private static string Mac(byte[] key, BsonDocument seal) =>
-        Convert.ToHexString(HMACSHA256.HashData(key, Encoding.ASCII.GetBytes(CatalogRepository.Digest(Payload(seal))))).ToLowerInvariant();
+        Convert.ToHexString(HMACSHA256.HashData(key, Payload(seal).ToBson())).ToLowerInvariant();
 
     public static BsonDocument Create(SealKeyRing ring, string kind, long ownerId, string recordHash, BsonArray membership, BsonArray dependencies, DateTimeOffset at)
     {

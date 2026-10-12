@@ -24,6 +24,17 @@ public sealed class SealVerifierTests(MongoFixture fixture)
                 using var tx = await fixture.Client.StartSessionAsync(); tx.StartTransaction();
                 try { return await verifier.VerifyAsync(tx, seal, "test.kind", ownerId, owner, default); } finally { await tx.AbortTransactionAsync(); }
             }
+            var alerts = new System.Collections.Concurrent.ConcurrentQueue<SealIntegrityAlert>();
+            void Observe(SealIntegrityAlert alert) { if (alert.Kind == "test.kind") alerts.Enqueue(alert); }
+            SealIntegrityAlerts.Raised += Observe;
+            try {
+                await Assert.ThrowsAsync<SealUnavailableException>(() => Verify(51));
+                Assert.Equal(new SealIntegrityAlert("test.kind", 51, "seal"), Assert.Single(alerts));
+                await rows.UpdateOneAsync(new BsonDocument("_id", 2L), new BsonDocument("$set", new BsonDocument("v", "tampered")));
+                await Assert.ThrowsAsync<SealUnavailableException>(() => Verify());
+                Assert.Equal(new SealIntegrityAlert("test.kind", 50, "membership:members"), alerts.Last());
+                await rows.UpdateOneAsync(new BsonDocument("_id", 2L), new BsonDocument("$set", new BsonDocument("v", "b")));
+            } finally { SealIntegrityAlerts.Raised -= Observe; }
             var scopes = await Verify();
             Assert.Equal(2, Assert.Single(scopes)["rows"].AsBsonArray.Count);
             await rows.UpdateOneAsync(new BsonDocument("_id", 1L), new BsonDocument("$set", new BsonDocument("fence", 4L)));

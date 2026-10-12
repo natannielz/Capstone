@@ -373,13 +373,15 @@ public sealed class CatalogVisibilityMigrationTests(MongoFixture fixture)
             Assert.DoesNotContain(await Indexes(db, Entitlements), index => index["name"] == EntitlementIndex);
             var ddl = commands.Where(command => command.Contains("create") || command.Contains("collMod") || command.Contains("createIndexes")).ToArray();
             Assert.NotEmpty(ddl);
+            // Every DDL targets a collection a clean full migration also owns (no hand-kept list).
+            var owned = await MigrationOwnedCollections.NamesAsync(fixture.Client);
             // Resuming an interrupted migration applies the registered chain through operating-policy definitions.
             foreach (var collection in new[] { "stockSourceAliasProposals", "stockSourceAliasDecisions", "stockSourceAliases", "stockSourceSuspensions", "stockSourcePolicyProposals", "stockSourcePolicyDecisions", "stockSourcePolicies" })
                 Assert.Contains(ddl, command => command.GetElement(0).Value.AsString == collection);
             Assert.All(ddl, command =>
             {
                 Assert.Equal("majority", command["writeConcern"]["w"].AsString);
-                Assert.Contains(command.GetElement(0).Value.AsString, new[] { Entitlements, Assortments, "businessReadEvents", "personEvidenceSources", "personRecords", "personAccountBindings", "personEquivalenceGroups", "personEvidenceVersions", "personGovernancePolicies", "personReviewProposals", "personReviewHistory", "personReviewPreviews", "catalogCategories", "productFamilies", "skus", "variantDefinitions", "catalogIdentifiers", "catalogIdentifierHistory", "accountingBooks", "accountingChartVersions", "journalEntries", "periods", "accountingPeriodHistory", "accountingAuditEvents", "evidenceStorePolicies", "evidenceLineages", "documentVersions", "evidenceUploadReservations", "evidenceUploadAttempts", "auditEvents", "idempotencyRecords", "outboxEvents", "stockCountObservations", "stockSourceProposals", "stockSourceDecisions", "inventoryPoolRegistrations", "inventoryPools", "stockSourceRevisionProposals", "stockSourceRevisionDecisions", "stockSourceRevisions", "stockSourceAliasProposals", "stockSourceAliasDecisions", "stockSourceAliases", "stockSourceSuspensions", "stockSourcePolicyProposals", "stockSourcePolicyDecisions", "stockSourcePolicies" });
+                Assert.Contains(command.GetElement(0).Value.AsString, owned);
             });
         });
     }
