@@ -18,7 +18,7 @@ internal static class InvoiceStorage
     internal static bool FoundationNumber(BsonDocument index) => index["name"] == "uq_numberEntity_numberChannel_numberYear_number" &&
         index["key"].Equals(InvoiceSchemas.NumberKey()) && index.GetValue("unique", false).AsBoolean && index.TryGetValue("partialFilterExpression", out var partial) &&
         InvoiceRecords.Equal(partial, new BsonDocument("$and", new BsonArray(InvoiceSchemas.NumberKey().Names.Select(name => new BsonDocument(name, new BsonDocument("$exists", true))))));
-    internal static BsonDocument[] RequiredKeys(string name) => name == InvoiceBson.Invoices ? [InvoiceSchemas.NumberKey(), InvoiceSchemas.CommandKey()] : [InvoiceSchemas.AllocationKey()];
+    internal static BsonDocument[] RequiredKeys(string name) => name == InvoiceBson.Invoices ? [InvoiceSchemas.NumberKey(), InvoiceSchemas.CommandKey()] : [OrderLineageSchemas.InvoiceAllocationKey()];
     internal static async Task RequireAsync(IMongoDatabase db, CancellationToken ct) {
         foreach (var name in InvoiceSchemas.Collections) {
             var definition = await (await db.ListCollectionsAsync(new ListCollectionsOptions { Filter = new BsonDocument("name", name) }, ct)).SingleOrDefaultAsync(ct);
@@ -27,7 +27,7 @@ internal static class InvoiceStorage
             if (options.GetValue("capped", false).AsBoolean || options.Contains("timeseries") || options.Contains("expireAfterSeconds") ||
                 options.GetValue("validationLevel", "strict") != "strict" || options.GetValue("validationAction", "error") != "error" ||
                 options.TryGetValue("collation", out var collation) && !Simple(collation) ||
-                !InventorySchemas.Contains(options.GetValue("validator", new BsonDocument()).AsBsonDocument, InvoiceSchemas.Validator(name))) throw InvoiceRecords.Invalid();
+                !InventorySchemas.Contains(options.GetValue("validator", new BsonDocument()).AsBsonDocument, OrderLineageSchemas.InvoiceValidator(name))) throw InvoiceRecords.Invalid();
             var indexes = await (await db.GetCollection<BsonDocument>(name).Indexes.ListAsync(ct)).ToListAsync(ct);
             var keys = RequiredKeys(name);
             bool Matches(BsonDocument index, BsonDocument key) => index["key"].Equals(key) && index.GetValue("unique", false).AsBoolean && !index.Contains("partialFilterExpression") && !Unsafe(index);

@@ -24,7 +24,7 @@ function client(handler: (request: Request) => Promise<Response>) {
 }
 const source = {orderId: '9007199254741001', suborderId: '9007199254741002', revision: '3', review: 'a'.repeat(64), buyerName: 'Cabang fixture',
   delivery: {recipientName: 'Penerima fixture', phone: '081234567890', address: 'Alamat fixture', city: 'Jakarta', postalCode: '12810', instructions: null},
-  lines: [{skuId: sku.id, publicId: sku.publicId, skuCode: sku.code, productName: 'Pena biru', definition, orderedPackages: 2, remainingPackages: 2}],
+  lines: [{skuId: sku.id, lineRevision: '0', publicId: sku.publicId, skuCode: sku.code, productName: 'Pena biru', definition, orderedPackages: 2, remainingPackages: 2}],
   canPrepare: true, orderedAt: definition.effectiveAt};
 const selected = proof(sku.id, definition.id, definition.version);
 
@@ -39,13 +39,15 @@ test('picking sends the reviewed exact mapping with the original command key and
     return Response.json({preparationId: '910', versionId: '911', revision: '1', orderId: source.orderId, suborderId: source.suborderId, recordedAt: definition.effectiveAt});
   }));
   await gateway.save(scanned, 'scan-picking', () => true); await gateway.save(manual, 'scan-picking', () => true);
-  assert.deepEqual(sent, [{review: source.review, lines, reason: 'Review', scanSelections: [selected]}, {review: source.review, lines, reason: 'Review'}]);
+  // R02: each prepared line carries its order-line revision ('0' for the unsubstituted original).
+  const revised = lines.map(line => ({...line, lineRevision: '0'}));
+  assert.deepEqual(sent, [{review: source.review, lines: revised, reason: 'Review', scanSelections: [selected]}, {review: source.review, lines: revised, reason: 'Review'}]);
   assert.throws(() => prepareShipmentCommand(actorId, source, '0', lines, 'Review', [proof(sku.id, '99', definition.version)]));
 });
 
 test('dispatch binds scan evidence to the selected reserved package without changing explicit lot quantities', async () => {
-  const prepared = {preparationId: '910', preparationRevision: '1', source, lines: [{skuId: sku.id, packages: 1}],
-    lots: [{reservationId: '920', skuId: sku.id, definitionId: definition.id, lotId: '202', remainingPackages: 2, expiresOn: null}]};
+  const prepared = {preparationId: '910', preparationRevision: '1', source, lines: [{skuId: sku.id, lineRevision: '0', packages: 1}],
+    lots: [{reservationId: '920', skuId: sku.id, lineRevision: '0', definitionId: definition.id, lotId: '202', remainingPackages: 2, expiresOn: null}]};
   const review = {preparation: prepared, courierId: '930', courierName: 'Kurir fixture', selected: [{reservationId: '920', packages: 1}], review: 'b'.repeat(64)};
   const scanned = prepareDispatchCommand(actorId, review, 'Review', [selected]), manual = prepareDispatchCommand(actorId, review, 'Review');
   assert.equal(Object.hasOwn(manual, 'scanSelections'), false); assert.deepEqual(scanned.selection, manual.selection);

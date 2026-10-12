@@ -19,7 +19,7 @@ namespace UnitToko.Platform.Fulfillment;
 public sealed record ShipmentRecipientView(LongId Id, string Name);
 public sealed record ShipmentRecipientPage(ImmutableArray<ShipmentRecipientView> Items, bool HasMore);
 public sealed record ShipmentReceiptChallengeView(LongId Id, LongId ShipmentId, LongId DocumentId, LongId RecipientId, string RecipientName, DateTimeOffset ExpiresAt, DateTimeOffset ServerTime, string? Token);
-public sealed record ShipmentReceiptReviewLine(LongId SkuId, string SkuCode, string ProductName, LongId DefinitionId, string PackageLabel, string BaseUnitCode, int BaseUnitsPerPackage, int Packages);
+public sealed record ShipmentReceiptReviewLine(LongId SkuId, string SkuCode, string ProductName, LongId DefinitionId, string PackageLabel, string BaseUnitCode, int BaseUnitsPerPackage, int Packages, string LineRevision = "0");
 public sealed record ShipmentReceiptReview(LongId ChallengeId, LongId ShipmentId, LongId DocumentId, long DocumentVersion, string DocumentHash, string RecipientName,
     DateTimeOffset ExpiresAt, DateTimeOffset ServerTime, string ConsentVersion, string ConsentText, ImmutableArray<ShipmentReceiptReviewLine> Lines);
 public sealed record ShipmentReceiptView(LongId Id, LongId ShipmentId, LongId DocumentId, LongId RecipientId, string RecipientName, DateTimeOffset RecordedAt, bool HasException,

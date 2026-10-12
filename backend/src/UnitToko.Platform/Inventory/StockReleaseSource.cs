@@ -50,18 +50,20 @@ internal sealed class StockReleaseSourceProof
         qualitySnapshot, qualityPolicy, valuationProposal, valuationDecision, valuationAllocation, invoice, match, snapshot;
     private readonly BsonDocument? pool, balance;
     private readonly HeldReceiptOriginProof? currentOrigin;
+    private readonly ProcurementStockValuationService.ReleaseOriginReader? currentReader;
     private readonly string seal;
     private StockReleaseSourceProof(IMongoDatabase database, IClientSessionHandle tx, StockReleaseSelection selected,
         ProcurementApprovedQualitySource quality, ProcurementPayableValuationSource value, BsonDocument lot,
         BsonDocument? pool, BsonDocument? balance, BsonDocument qualityPolicy, DateTimeOffset observedAt,
-        HeldReceiptOriginProof? currentOrigin = null)
+        HeldReceiptOriginProof? currentOrigin = null, ProcurementStockValuationService.ReleaseOriginReader? currentReader = null)
     {
         this.database = database; session = tx; transactionNumber = tx.WrappedCoreSession.CurrentTransaction.TransactionNumber;
         Selection = selected with { }; ObservedAt = observedAt;
         receipt = Copy(quality.Receipt); this.lot = Copy(lot); this.pool = pool is null ? null : Copy(pool); this.balance = balance is null ? null : Copy(balance);
         currentOrigin?.Require(database, tx);
         if (currentOrigin is not null && (pool is null || balance is null || currentOrigin.Receipt != receipt)) throw Unavailable();
-        this.currentOrigin = currentOrigin;
+        if (currentReader is not null && currentOrigin is null) throw Unavailable();
+        this.currentOrigin = currentOrigin; this.currentReader = currentReader;
         qualityProposal = Copy(quality.Proposal); qualityDecision = Copy(quality.Decision); qualityAllocation = Copy(quality.Allocation);
         qualitySnapshot = Copy(quality.Snapshot); this.qualityPolicy = Copy(qualityPolicy);
         valuationProposal = Copy(value.Proposal); valuationDecision = Copy(value.Decision); valuationAllocation = Copy(value.Allocation);
@@ -110,6 +112,12 @@ internal sealed class StockReleaseSourceProof
     internal BsonDocument Snapshot => Copy(snapshot);
     internal HeldReceiptOriginProof? CurrentOrigin(IMongoDatabase current, IClientSessionHandle tx) {
         Require(current, tx); return currentOrigin;
+    }
+    internal ProcurementStockValuationService.ReleaseOriginReader? CurrentOriginReader(IMongoDatabase current,
+        IClientSessionHandle tx, HeldReceiptOriginProof first) {
+        Require(current, tx); first.Require(current, tx);
+        if (first.Receipt != receipt) throw Unavailable();
+        return currentReader?.ForOrigin(current, tx, first);
     }
     internal void Require(IMongoDatabase current, IClientSessionHandle tx) {
         new InventoryRepository(current).RequireSession(tx);
@@ -172,7 +180,7 @@ internal sealed class StockReleaseSourceProof
             if (movement.Current.Id != quality.Receipt["balanceId"].AsInt64 || movement.Current.PhysicalPoolId != quality.Receipt["poolId"].AsInt64 ||
                 movement.Current.Balance.Key != InventoryHeldReceiptWriter.After(quality.Receipt).Balance.Key ||
                 movement.Current.Balance.Held <= 0 || pool["location"] != balance["location"]) throw Unavailable();
-            var proof = new StockReleaseSourceProof(database, tx, selected, quality, value, lot, pool, balance, policy, at, pair.Origin);
+            var proof = new StockReleaseSourceProof(database, tx, selected, quality, value, lot, pool, balance, policy, at, pair.Origin, pair.Reader);
             proof.Require(database, tx); repository.RequireSession(tx);
             if (tx.WrappedCoreSession.CurrentTransaction.TransactionNumber != number || clock.UtcNow < at) throw Unavailable(); ct.ThrowIfCancellationRequested(); return proof;
         } catch { await InventoryRepository.AbortAsync(tx); throw; }

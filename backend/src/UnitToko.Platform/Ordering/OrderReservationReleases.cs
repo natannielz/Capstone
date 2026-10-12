@@ -39,7 +39,7 @@ public sealed partial class OrderSubmissionService
         if (releases.Count == 0) return;
         foreach (var value in releases) {
             var release = value.AsBsonDocument; var before = release["before"].AsBsonDocument;
-            var row = await Rows(B.Reservations).Find(tx, F.Eq("_id", release["reservationId"]) & F.Eq("orderId", decision["orderId"]) & OrderSubmissionSchemas.Validator(B.Reservations)).SingleOrDefaultAsync(ct) ?? throw Invalid();
+            var row = await Rows(B.Reservations).Find(tx, F.Eq("_id", release["reservationId"]) & F.Eq("orderId", decision["orderId"]) & OrderLineageSchemas.OrderValidator(B.Reservations)).SingleOrDefaultAsync(ct) ?? throw Invalid();
             OrderReleaseFacts.Require(row, release, false);
             if (row["revision"].AsInt64 == long.MaxValue || row["fence"].AsInt64 >= long.MaxValue - 1) throw Invalid();
             if ((await Rows(B.Reservations).UpdateOneAsync(tx, row, Builders<BsonDocument>.Update.Set("remaining", 0L)
@@ -64,14 +64,14 @@ public sealed partial class OrderSubmissionService
             reservation["remaining"] = 0L; reservation["revision"] = checked(reservation["revision"].AsInt64 + 1);
         }
         foreach (var pool in releases.GroupBy(row => row["allocation"]["poolId"].AsInt64)) {
+            var physical = OrderReleaseFacts.Physical(pool.Select(row => B.Allocation(row["allocation"].AsBsonDocument)));
             var source = new InventorySource("ordering.decision", decision["_id"].AsInt64, "release", pool.Key);
             var movement = await Rows("movements").Find(tx, F.Eq("sourceEvent", source.EventKey) & InventoryMovementSchemas.Validator()).SingleOrDefaultAsync(ct) ?? throw Invalid();
             if (movement["actorId"] != decision["decidedBy"] || movement["actorGrantVersion"] != decision["actorGrantVersion"] ||
                 movement["sourceRevision"] != decision["revision"] || movement["physicalPoolId"] != pool.Key || movement["poolRevision"] != pool.First()["allocation"]["poolRevision"] ||
                 movement["source"]["namespace"] != source.Namespace || movement["source"]["documentId"] != source.DocumentId || movement["source"]["eventKind"] != source.EventKind ||
-                movement["source"]["occurrence"] != source.Occurrence || movement["legs"].AsBsonArray.Count != pool.Count()) throw Invalid();
-            foreach (var release in pool) {
-                var allocation = B.Allocation(release["allocation"].AsBsonDocument);
+                movement["source"]["occurrence"] != source.Occurrence || movement["legs"].AsBsonArray.Count != physical.Length) throw Invalid();
+            foreach (var allocation in physical) {
                 var leg = movement["legs"].AsBsonArray.SingleOrDefault(value => value["balanceId"].AsInt64 == allocation.Change.Id) ?? throw Invalid();
                 var before = InventoryBson.ReadBalance(leg["before"].AsBsonDocument); var after = InventoryBson.ReadBalance(leg["after"].AsBsonDocument);
                 if (leg["action"] != "Release" || leg["packages"].AsInt64 != allocation.Change.Packages || before.Id != allocation.Change.Id ||
@@ -87,7 +87,7 @@ internal static class OrderReleaseFacts
     internal static void Require(BsonDocument reservation, BsonDocument release, bool applied) {
         var original = B.Allocation(reservation["allocation"].AsBsonDocument); var allocation = B.Allocation(release["allocation"].AsBsonDocument); var before = release["before"].AsBsonDocument;
         if (release["reservationId"] != reservation["_id"] || allocation.SourceAuthority != original.SourceAuthority || allocation.Pool.Id != original.Pool.Id ||
-            allocation.Pool.Location != original.Pool.Location || allocation.SkuId != original.SkuId || allocation.Change.Id != original.Change.Id ||
+            allocation.Pool.Location != original.Pool.Location || allocation.SkuId != original.SkuId || allocation.LineRevision != original.LineRevision || allocation.Change.Id != original.Change.Id ||
             allocation.Change.PhysicalPoolId != original.Change.PhysicalPoolId || allocation.Change.Key != original.Change.Key ||
             allocation.Change.Packages != before["remaining"].AsInt64 || before["remaining"].AsInt64 <= 0 ||
             before["remaining"].AsInt64 + before["released"].AsInt64 + before["dispatched"].AsInt64 != original.Change.Packages ||
@@ -96,6 +96,16 @@ internal static class OrderReleaseFacts
             reservation["released"].AsInt64 != before["released"].AsInt64 + (applied ? before["remaining"].AsInt64 : 0))
             throw new AuthorizationDeniedException("order_unavailable");
     }
+    // Different buyer-approved versions may share one physical lot. Each reservation is
+    // authenticated separately above; the ledger changes that physical balance only once.
+    internal static OrderStockAllocation[] Physical(IEnumerable<OrderStockAllocation> allocations) => [.. allocations
+        .GroupBy(value => value.Change.Id).OrderBy(group => group.Key).Select(group => {
+            var first = group.First();
+            if (group.Any(value => value.Pool != first.Pool || value.Change.PhysicalPoolId != first.Change.PhysicalPoolId ||
+                value.Change.Key != first.Change.Key || value.Change.ExpectedRevision != first.Change.ExpectedRevision || value.Change.Packages <= 0))
+                throw new AuthorizationDeniedException("order_unavailable");
+            return first with { Change = first.Change with { Packages = group.Aggregate(0L, (total, value) => checked(total + value.Change.Packages)) } };
+        })];
 }
 
 /// <summary>Trusted decision source reads the immutable release facts and conditionally fences the
@@ -108,14 +118,14 @@ internal sealed class OrderReleaseSourceReader(IMongoDatabase database, Func<Can
         var f = Builders<BsonDocument>.Filter; IMongoCollection<BsonDocument> Rows(string name) => database.GetCollection<BsonDocument>(name);
         if (source.Namespace != Namespace || source.EventKind != "release") throw OrderAdmissionPolicy.Invalid();
         var decision = await Rows("orderDecisions").Find(tx, f.Eq("_id", source.DocumentId) & f.Eq("decidedBy", actor.UserId) &
-            f.Eq("revision", expectedRevision) & OrderSubmissionSchemas.Validator("orderDecisions")).SingleOrDefaultAsync(ct) ?? throw OrderAdmissionPolicy.Invalid();
+            f.Eq("revision", expectedRevision) & OrderLineageSchemas.OrderValidator("orderDecisions")).SingleOrDefaultAsync(ct) ?? throw OrderAdmissionPolicy.Invalid();
         if (decision["action"] != "Reject" && decision["action"] != "CancelRemainder") throw OrderAdmissionPolicy.Invalid();
-        var order = await Rows(B.Orders).Find(tx, f.Eq("_id", decision["orderId"]) & OrderSubmissionSchemas.Validator(B.Orders)).SingleOrDefaultAsync(ct) ?? throw OrderAdmissionPolicy.Invalid();
+        var order = await Rows(B.Orders).Find(tx, f.Eq("_id", decision["orderId"]) & OrderLineageSchemas.OrderValidator(B.Orders)).SingleOrDefaultAsync(ct) ?? throw OrderAdmissionPolicy.Invalid();
         if (order["snapshotHash"] != decision["orderSnapshot"] || B.SnapshotHash(order) != order["snapshotHash"].AsString || order["fence"].AsInt64 >= long.MaxValue - 1) throw OrderAdmissionPolicy.Invalid();
         var releases = decision["releases"].AsBsonArray.Select(value => value.AsBsonDocument).Where(value => value["allocation"]["poolId"].AsInt64 == source.Occurrence).ToArray();
         if (releases.Length == 0) throw OrderAdmissionPolicy.Invalid();
         foreach (var release in releases) {
-            var row = await Rows(B.Reservations).Find(tx, f.Eq("_id", release["reservationId"]) & f.Eq("orderId", order["_id"]) & OrderSubmissionSchemas.Validator(B.Reservations)).SingleOrDefaultAsync(ct) ?? throw OrderAdmissionPolicy.Invalid();
+            var row = await Rows(B.Reservations).Find(tx, f.Eq("_id", release["reservationId"]) & f.Eq("orderId", order["_id"]) & OrderLineageSchemas.OrderValidator(B.Reservations)).SingleOrDefaultAsync(ct) ?? throw OrderAdmissionPolicy.Invalid();
             OrderReleaseFacts.Require(row, release, true);
             if (!decision["suborderId"].IsBsonNull && decision["suborderId"] != row["suborderId"] || row["fence"].AsInt64 >= long.MaxValue - 1 ||
                 (await Rows(B.Reservations).UpdateOneAsync(tx, row, Builders<BsonDocument>.Update.Inc("fence", 1L), cancellationToken: ct)).ModifiedCount != 1) throw OrderAdmissionPolicy.Invalid();
@@ -124,6 +134,6 @@ internal sealed class OrderReleaseSourceReader(IMongoDatabase database, Func<Can
         var facts = releases.Select(value => B.Allocation(value["allocation"].AsBsonDocument)).ToArray();
         if (facts.Select(value => value.Pool).Distinct().Count() != 1) throw OrderAdmissionPolicy.Invalid();
         await finalAuthority(ct);
-        return new(source, expectedRevision, facts[0].Pool, [.. facts.Select(value => value.Change with { Action = InventoryBalanceAction.Release })]);
+        return new(source, expectedRevision, facts[0].Pool, [.. OrderReleaseFacts.Physical(facts).Select(value => value.Change with { Action = InventoryBalanceAction.Release })]);
     }
 }

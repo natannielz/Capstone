@@ -9,9 +9,9 @@ import { actorId, sku, definition } from './catalog-fixtures';
 
 const source = { orderId: '9007199254741001', suborderId: '9007199254741002', revision: '3', review: 'a'.repeat(64), buyerName: 'Cabang fixture',
   delivery: { recipientName: 'Penerima fixture', phone: '081234567890', address: 'Alamat fixture', city: 'Jakarta', postalCode: '12810', instructions: null },
-  lines: [{ skuId: sku.id, publicId: sku.publicId, skuCode: sku.code, productName: 'Pena biru', definition, orderedPackages: 2, remainingPackages: 2 }], canPrepare: true, orderedAt: definition.effectiveAt };
-const prepared = { preparationId: '9007199254741010', preparationRevision: '1', source, lines: [{ skuId: sku.id, packages: 1 }],
-  lots: [{ reservationId: '9007199254741011', skuId: sku.id, definitionId: definition.id, lotId: '202', remainingPackages: 2, expiresOn: null }] };
+  lines: [{ skuId: sku.id, lineRevision: '0', publicId: sku.publicId, skuCode: sku.code, productName: 'Pena biru', definition, orderedPackages: 2, remainingPackages: 2 }], canPrepare: true, orderedAt: definition.effectiveAt };
+const prepared = { preparationId: '9007199254741010', preparationRevision: '1', source, lines: [{ skuId: sku.id, lineRevision: '0', packages: 1 }],
+  lots: [{ reservationId: '9007199254741011', skuId: sku.id, lineRevision: '0', definitionId: definition.id, lotId: '202', remainingPackages: 2, expiresOn: null }] };
 const review = { preparation: prepared, courierId: '9100', courierName: 'Kurir fixture', selected: [{ reservationId: prepared.lots[0].reservationId, packages: 1 }], review: 'b'.repeat(64) };
 const result = { shipmentId: '9007199254741020', revision: '1', orderId: source.orderId, suborderId: source.suborderId, recordedAt: definition.effectiveAt,
   numberEntity: '100', numberChannel: '103', numberYear: '2026', number: '9007199254741021' };

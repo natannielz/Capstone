@@ -120,8 +120,11 @@ public sealed partial class StockSourceSetupService
             token => CompleteAuthorityAsync(actor, authority, Permissions.OrderSubmit, [buyer], tx, token), ct);
         var current = OrderQuotePolicy.Create([new(quoted.Definition.SkuId, quoted.Definition.Id, quoted.Definition.Version,
             quoted.Price.Id, quoted.Price.Version, quoted.Packages)], [.. facts.Select(value => new OrderCatalogFact(value.Family, value.Sku, value.Definition, value.CurrentPrice))]);
-        if (reviewed != OrderSubmissionBson.Quote(current)) throw OrderSourceChanged();
-        var line = current.Lines.Single(); var seller = line.FulfillmentOwner;
+        // Catalog facts do not carry an order decision revision. Retain that exact
+        // caller-bound identity while comparing all freshly read commercial facts.
+        var line = current.Lines.Single() with { LineRevision = quoted.LineRevision };
+        if (reviewed != Quote(line)) throw OrderSourceChanged();
+        var seller = line.FulfillmentOwner;
         if (seller.OrganizationId != requested.OrganizationId.Value || seller.ShopId != requested.ShopId.Value ||
             seller.ChannelId != requested.ChannelId.Value || seller.WarehouseId is { } warehouse && warehouse != requested.WarehouseId.Value)
             throw new AuthorizationDeniedException("scope_denied");

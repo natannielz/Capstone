@@ -19,7 +19,7 @@ public sealed partial class ProcurementStockValuationService
     // Graphs retain exact owning PO proof instances. Both reads must originate
     // under this actual service context, even when caller service factories use
     // different equivalent instances for their other dependencies.
-    internal async Task<(ProcurementApprovedQualitySource Quality, ProcurementPayableValuationSource Value, HeldReceiptOriginProof? Origin)> ReadCurrentReleaseSourcesAsync(
+    internal async Task<(ProcurementApprovedQualitySource Quality, ProcurementPayableValuationSource Value, HeldReceiptOriginProof? Origin, ReleaseOriginReader? Reader)> ReadCurrentReleaseSourcesAsync(
         IMongoDatabase owner, IClientSessionHandle tx, long qualityAllocationId, long valuationAllocationId, CancellationToken ct) {
         if (!ReferenceEquals(owner.Client, database.Client) || !owner.DatabaseNamespace.Equals(database.DatabaseNamespace) ||
             !ReferenceEquals(tx.Client, database.Client) || !tx.IsInTransaction || qualityAllocationId <= 0 || valuationAllocationId <= 0) throw B.Broken();
@@ -28,7 +28,10 @@ public sealed partial class ProcurementStockValuationService
             .ReadAsync(tx, qualityAllocationId, ct);
         var reader = new ProcurementStockValuationRecords(database, unit, clock, catalog, orders, sources, graph);
         var value = await ReadApprovedSourceAsync(owner, tx, valuationAllocationId, reader, ct);
-        graph.Require(tx); return (quality, value, graph.CurrentMovementOrigin(database, tx, quality.Receipt["_id"].AsInt64));
+        graph.Require(tx);
+        var origin = graph.CurrentMovementOrigin(database, tx, quality.Receipt["_id"].AsInt64);
+        var retained = origin is null ? null : ReleaseOriginReader.CreateFromCurrent(this, tx, origin, graph);
+        return (quality, value, origin, retained);
     }
     internal async Task<ProcurementPayableValuationSource> ReadReleaseSourceAsync(IMongoDatabase owner,
         IClientSessionHandle tx, long allocationId, HeldReceiptOriginProof origin, CancellationToken ct)
@@ -49,14 +52,32 @@ public sealed partial class ProcurementStockValuationService
         private readonly long number;
         private readonly HeldReceiptOriginProof origin;
         private readonly ProcurementQualityProofGraph graph;
-        private ReleaseOriginReader(ProcurementStockValuationService owner, IClientSessionHandle tx, HeldReceiptOriginProof origin) {
+        private readonly IClock clock;
+        private readonly DateTimeOffset capturedAt;
+        private ReleaseOriginReader(ProcurementStockValuationService owner, IClientSessionHandle tx, HeldReceiptOriginProof origin,
+            ProcurementQualityProofGraph? ancestors = null) {
             this.owner = owner; transaction = tx; number = tx.WrappedCoreSession.CurrentTransaction.TransactionNumber; this.origin = origin;
-            origin.Require(owner.database, tx); graph = new(tx, origin);
+            clock = owner.clock; capturedAt = clock.UtcNow;
+            if (capturedAt == default || capturedAt.Offset != TimeSpan.Zero) throw B.Broken();
+            origin.Require(owner.database, tx);
+            graph = ancestors is null ? new(tx, origin) : ancestors.CopyOriginAncestors(owner.database, clock, tx, origin);
         }
         internal static ReleaseOriginReader Create(ProcurementStockValuationService owner, IClientSessionHandle tx, HeldReceiptOriginProof origin) => new(owner, tx, origin);
+        internal static ReleaseOriginReader CreateFromCurrent(ProcurementStockValuationService owner, IClientSessionHandle tx,
+            HeldReceiptOriginProof origin, ProcurementQualityProofGraph current) => new(owner, tx, origin, current);
+        internal ReleaseOriginReader ForOrigin(IMongoDatabase database, IClientSessionHandle tx, HeldReceiptOriginProof first) {
+            Require(owner, database, tx, origin); first.Require(database, tx);
+            if (first.Receipt != origin.Receipt) throw B.Broken();
+            // Keep the command's first exact origin. Copy only completed semantic
+            // ancestors; the donor reader and its active/mutable state stay private.
+            var result = new ReleaseOriginReader(owner, tx, first, graph);
+            Require(owner, database, tx, origin); result.Require(owner, database, tx, first);
+            return result;
+        }
         internal void Require(ProcurementStockValuationService expectedOwner, IMongoDatabase database, IClientSessionHandle tx, HeldReceiptOriginProof expectedOrigin) {
             if (!ReferenceEquals(owner, expectedOwner) || !ReferenceEquals(tx, transaction) || !ReferenceEquals(origin, expectedOrigin) ||
                 !ReferenceEquals(database.Client, owner.database.Client) || !database.DatabaseNamespace.Equals(owner.database.DatabaseNamespace) ||
+                !ReferenceEquals(clock, expectedOwner.clock) || clock.UtcNow < capturedAt || clock.UtcNow.Offset != TimeSpan.Zero ||
                 !tx.IsInTransaction || tx.WrappedCoreSession.CurrentTransaction.TransactionNumber != number) throw B.Broken();
             origin.Require(database, tx); graph.Require(tx);
         }
@@ -64,6 +85,14 @@ public sealed partial class ProcurementStockValuationService
             ProcurementStockValuationService expectedOwner, IMongoDatabase database, IClientSessionHandle tx, HeldReceiptOriginProof expectedOrigin,
             long qualityAllocationId, long valuationAllocationId, CancellationToken ct) {
             Require(expectedOwner, database, tx, expectedOrigin); await origin.RequireAsync(database, tx, ct);
+            if (completed.TryGetValue((qualityAllocationId, valuationAllocationId), out var verified)) {
+                // Same reader, origin and transaction attempt: the exact quality and valuation
+                // allocation, proposal, decision and receipt-head rows keep this reader's full
+                // owner proof; its snapshot observes no other writer and no row may differ.
+                if (await SourceRowsAsync(tx, verified.Quality, verified.Value, ct) != verified.Rows) throw B.Broken();
+                await origin.RequireAsync(database, tx, ct);
+                Require(expectedOwner, database, tx, expectedOrigin); ct.ThrowIfCancellationRequested(); return (verified.Quality, verified.Value);
+            }
             var token = graph.BeginOriginRead(this, owner, database, owner.clock, tx, origin);
             try {
                 var quality = await new ProcurementQualityAcceptanceSourceReader(owner.database, owner.unit, owner.clock, owner.catalog, owner.orders, owner.sources, graph)
@@ -72,8 +101,22 @@ public sealed partial class ProcurementStockValuationService
                 var value = await owner.ReadApprovedSourceAsync(database, tx, valuationAllocationId, records, ct);
                 if (quality.Receipt != origin.Receipt || value.Receipt != origin.Receipt) throw B.Broken();
                 await origin.RequireAsync(database, tx, ct);
-                Require(expectedOwner, database, tx, expectedOrigin); ct.ThrowIfCancellationRequested(); return (quality, value);
+                Require(expectedOwner, database, tx, expectedOrigin); ct.ThrowIfCancellationRequested();
+                if (completed.Count < LotValueStore.MaximumTransitions)
+                    completed[(qualityAllocationId, valuationAllocationId)] = (quality, value, await SourceRowsAsync(tx, quality, value, ct));
+                return (quality, value);
             } finally { graph.EndOriginRead(token); }
+        }
+        private readonly Dictionary<(long Quality, long Value), (ProcurementApprovedQualitySource Quality, ProcurementPayableValuationSource Value, BsonArray Rows)> completed = [];
+        private async Task<BsonArray> SourceRowsAsync(IClientSessionHandle tx, ProcurementApprovedQualitySource quality,
+            ProcurementPayableValuationSource value, CancellationToken ct) {
+            var rows = new BsonArray();
+            foreach (var (name, id) in new (string Name, BsonValue Id)[] {
+                (ProcurementQualityAcceptanceBson.Allocations, quality.Allocation["_id"]), (ProcurementQualityAcceptanceBson.Proposals, quality.Proposal["_id"]),
+                (ProcurementQualityAcceptanceBson.Decisions, quality.Decision["_id"]), (ProcurementQualityAcceptanceBson.ReceiptHeads, origin.ReceiptId),
+                (B.Allocations, value.Allocation["_id"]), (B.Proposals, value.Proposal["_id"]), (B.Decisions, value.Decision["_id"]), (B.ReceiptHeads, origin.ReceiptId) })
+                rows.Add((BsonValue?)await owner.Rows(name).Find(tx, new BsonDocument("_id", id)).SingleOrDefaultAsync(ct) ?? BsonNull.Value);
+            return rows;
         }
     }
     private async Task<ProcurementPayableValuationSource> ReadApprovedSourceAsync(IMongoDatabase owner,

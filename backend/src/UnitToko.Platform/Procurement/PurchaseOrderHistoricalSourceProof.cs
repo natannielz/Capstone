@@ -229,6 +229,35 @@ internal sealed class PurchaseOrderSourceReadCapture
             foreach (var field in expected) if (field.Name != "fence" && actual[field.Name] != field.Value) throw Q.Broken();
         }
     }
+    // Provenance seals: export the sealed proof membership as row scopes. Pools travel as one-row scopes
+    // and return to the fence-tolerant pool check when rebuilt. Recorded counts travel through SealedCounts().
+    internal IReadOnlyList<(string Collection, BsonDocument Filter, long Value)> SealedCounts() {
+        if (sealedScopes is null) throw Q.Broken();
+        return [.. counts.Select(count => (count.Collection, count.Filter.DeepClone().AsBsonDocument, count.Value))];
+    }
+    internal IReadOnlyList<(string Collection, BsonDocument Filter, IReadOnlyList<BsonDocument> Rows)>? SealedScopes() {
+        if (sealedScopes is null) throw Q.Broken();
+        return [.. sealedScopes.Select(scope => (scope.Collection, scope.Filter.DeepClone().AsBsonDocument,
+                (IReadOnlyList<BsonDocument>)scope.Rows.Select(row => row.AsBsonDocument.DeepClone().AsBsonDocument).ToList())),
+            .. pools.OrderBy(pair => pair.Key).Select(pair => (PoolCollection, new BsonDocument("_id", pair.Key),
+                (IReadOnlyList<BsonDocument>)new List<BsonDocument> { pair.Value.DeepClone().AsBsonDocument }))];
+    }
+    private const string PoolCollection = "inventoryPools";
+    internal static PurchaseOrderSourceReadCapture FromSealed(IMongoDatabase database, IClientSessionHandle tx, IReadOnlyList<BsonDocument> verifiedScopes,
+        StockSourceSetupService? storageOwner) {
+        var capture = new PurchaseOrderSourceReadCapture(); capture.Context(database, tx);
+        if (storageOwner is not null) capture.sourceOwners.Add(storageOwner);
+        var scopes = new List<Scope>();
+        foreach (var scope in verifiedScopes) {
+            var filter = scope["filter"].AsBsonDocument;
+            if (scope.Contains("count")) { capture.counts.Add(new(scope["collection"].AsString, filter.DeepClone().AsBsonDocument, scope["count"].AsInt64)); continue; }
+            var rows = scope["rows"].AsBsonArray;
+            if (scope["collection"] == PoolCollection && filter.ElementCount == 1 && filter.Contains("_id") && filter["_id"].IsInt64 && rows.Count == 1) {
+                InventoryGraph.RequirePool(rows[0].AsBsonDocument); capture.pools.Add(filter["_id"].AsInt64, rows[0].AsBsonDocument.DeepClone().AsBsonDocument);
+            } else scopes.Add(new(scope["collection"].AsString, filter.DeepClone().AsBsonDocument, new BsonArray(rows.Select(row => row.DeepClone()))));
+        }
+        capture.sealedScopes = scopes; return capture;
+    }
     internal bool Same(PurchaseOrderSourceReadCapture other) => sealedScopes is not null && other.sealedScopes is not null &&
         sealedScopes.Count == other.sealedScopes.Count && sealedScopes.Zip(other.sealedScopes).All(pair =>
             pair.First.Collection == pair.Second.Collection && pair.First.Filter.Equals(pair.Second.Filter) && pair.First.Rows.Equals(pair.Second.Rows)) &&

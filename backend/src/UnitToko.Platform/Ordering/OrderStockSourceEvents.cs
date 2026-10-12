@@ -48,18 +48,26 @@ public sealed partial class OrderSubmissionService
     {
         history?.Require(database, tx);
         liveRead?.Require(database, clock ?? throw OrderStockSourceRecords.Unavailable(), tx);
+        if (kind == "substitution") {
+            var substitutionResult = await ReadSubstitutionStockSourceAsync(database, tx, sourceId, requireReceipt, clock ?? throw OrderStockSourceRecords.Unavailable(), ct);
+            history?.Require(database, tx); liveRead?.Require(database, clock!, tx); return substitutionResult;
+        }
         var rows = database.GetCollection<BsonDocument>(kind switch { "submission" => B.Orders, "decision" => Decisions,
             "shipment" => SB.Collection, _ => throw OrderStockSourceRecords.Unavailable() });
         var source = await rows.Find(tx, new BsonDocument("_id", sourceId)).SingleOrDefaultAsync(ct) ?? throw OrderStockSourceRecords.Unavailable();
-        var validator = kind == "shipment" ? ShipmentDispatchSchemas.Validator() : OrderSubmissionSchemas.Validator(kind == "submission" ? B.Orders : Decisions);
+        var validator = kind == "shipment" ? OrderLineageSchemas.DispatchValidator() : OrderLineageSchemas.OrderValidator(kind == "submission" ? B.Orders : Decisions);
         if (!await rows.Find(tx, F.Eq("_id", sourceId) & validator).AnyAsync(ct)) throw OrderStockSourceRecords.Unavailable();
         var order = kind == "submission" ? source : await database.GetCollection<BsonDocument>(B.Orders)
             .Find(tx, F.Eq("_id", source["orderId"])).SingleOrDefaultAsync(ct) ?? throw OrderStockSourceRecords.Unavailable();
-        if (!await database.GetCollection<BsonDocument>(B.Orders).Find(tx, F.Eq("_id", order["_id"]) & OrderSubmissionSchemas.Validator(B.Orders)).AnyAsync(ct) ||
+        if (!await database.GetCollection<BsonDocument>(B.Orders).Find(tx, F.Eq("_id", order["_id"]) & OrderLineageSchemas.OrderValidator(B.Orders)).AnyAsync(ct) ||
             B.SnapshotHash(order) != order["snapshotHash"].AsString ||
             order["bodyHash"] != AuthorizationStore.CommandHash(Body(OrderDraftBson.Input(order["input"].AsBsonDocument), order["review"].AsString), order["reason"].AsString))
             throw OrderStockSourceRecords.Unavailable();
-        var pools = order["allocations"].AsBsonArray.Select(value => value["poolId"].AsInt64).Distinct().Order().ToArray();
+        var cutoff = kind == "submission" ? 1L : source[kind == "decision" ? "expectedRevision" : "decisionRevision"].AsInt64;
+        var amendments = await SubstitutionOriginsAsync(database, tx, order, clock, ct, cutoff);
+        var sourceAllocations = order["allocations"].AsBsonArray.Concat(amendments.Where(row => row["revision"].AsInt64 <= cutoff).SelectMany(row => row["allocations"].AsBsonArray)).ToArray();
+        var allAllocations = order["allocations"].AsBsonArray.Concat(amendments.SelectMany(row => row["allocations"].AsBsonArray)).ToArray();
+        var pools = sourceAllocations.Select(value => value["poolId"].AsInt64).Distinct().Order().ToArray();
         BsonDocument expectedAudit, result; string operation, actorField, timeField;
         if (kind == "submission") {
             expectedAudit = B.Audit(source); result = B.Result(source); operation = B.Operation; actorField = "createdBy"; timeField = "orderedAt";
@@ -87,7 +95,7 @@ public sealed partial class OrderSubmissionService
                 !CatalogSchemas.SemanticEquals(receipt.GetValue("result", BsonNull.Value), result)) throw OrderStockSourceRecords.Unavailable();
             if (kind == "decision" && source["stage"] == "Spending") {
                 if (PersonApprovalReceipt.Read(receipt, UnitToko.Modules.Identity.Permissions.OrderSpendApprove) !=
-                    new UnitToko.Modules.Identity.ApprovalRequest(1, 1, RequestedBy: order["createdBy"].AsInt64))
+                        new UnitToko.Modules.Identity.ApprovalRequest(1, 1, RequestedBy: amendments.LastOrDefault(row => row["revision"].AsInt64 <= cutoff)?["actorId"].AsInt64 ?? order["createdBy"].AsInt64))
                     throw OrderStockSourceRecords.Unavailable();
             } else if (receipt.Contains(PersonApprovalReceipt.Field)) throw OrderStockSourceRecords.Unavailable();
         }
@@ -97,13 +105,16 @@ public sealed partial class OrderSubmissionService
         if (outbox is null || outbox["kind"] != outboxKind || outbox["createdAt"] != source[timeField] ||
             !CatalogSchemas.SemanticEquals(outbox["payload"], result)) throw OrderStockSourceRecords.Unavailable();
         var reservations = await database.GetCollection<BsonDocument>(B.Reservations).Find(tx, F.Eq("orderId", order["_id"]))
-            .Sort(new BsonDocument("_id", 1)).Limit(101).ToListAsync(ct);
-        if (reservations.Count != order["allocations"].AsBsonArray.Count || reservations.Count is < 1 or > 100 ||
+            .Sort(new BsonDocument("_id", 1)).Limit(OrderReservationHistoryLimits.MaximumRetained + 1).ToListAsync(ct);
+        OrderReservationHistoryLimits.Require(reservations);
+        reservations = reservations.Where(row => allAllocations.Contains(row["allocation"])).ToList();
+        if (reservations.Count != allAllocations.Length || reservations.Count < 1 ||
             reservations.Select(row => row["_id"].AsInt64).Distinct().Count() != reservations.Count) throw OrderStockSourceRecords.Unavailable();
         var effects = new BsonArray();
         foreach (var reservation in reservations) {
             var allocation = reservation["allocation"].AsBsonDocument;
-            if (order["allocations"].AsBsonArray.Count(value => CatalogSchemas.SemanticEquals(value, allocation)) != 1) throw OrderStockSourceRecords.Unavailable();
+            if (allAllocations.Count(value => CatalogSchemas.SemanticEquals(value, allocation)) != 1) throw OrderStockSourceRecords.Unavailable();
+            if (kind == "submission" && !order["allocations"].AsBsonArray.Contains(allocation)) continue;
             BsonDocument? before; BsonDocument after;
             if (kind == "submission") {
                 before = null; after = new() { { "revision", 1L }, { "remaining", allocation["packages"] }, { "released", 0L }, { "dispatched", 0L } };
@@ -115,6 +126,7 @@ public sealed partial class OrderSubmissionService
                 var packages = selected["allocation"]["packages"].AsInt64;
                 var supplied = B.Allocation(selected["allocation"].AsBsonDocument); var original = B.Allocation(allocation);
                 if (supplied.Pool.Id != original.Pool.Id || supplied.Pool.Location != original.Pool.Location || supplied.SourceAuthority != original.SourceAuthority ||
+                    supplied.SkuId != original.SkuId || supplied.LineRevision != original.LineRevision ||
                     supplied.Change.Id != original.Change.Id || supplied.Change.Key != original.Change.Key || packages <= 0 || packages > before["remaining"].AsInt64 ||
                     checked(before["remaining"].AsInt64 + before["released"].AsInt64 + before["dispatched"].AsInt64) != original.Change.Packages)
                     throw OrderStockSourceRecords.Unavailable();

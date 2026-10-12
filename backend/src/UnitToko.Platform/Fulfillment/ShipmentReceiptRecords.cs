@@ -6,6 +6,7 @@ using UnitToko.Platform.Authorization;
 using UnitToko.Platform.Catalog;
 using UnitToko.Platform.Inventory;
 using UnitToko.Platform.Mongo.Migrations;
+using UnitToko.Platform.Ordering;
 
 namespace UnitToko.Platform.Fulfillment;
 
@@ -15,7 +16,7 @@ internal sealed class ShipmentReceiptRecords(IMongoDatabase database)
     internal const string Issue = "fulfillment.receipt.challenge.issue", Confirm = "fulfillment.receipt.confirm";
     internal IMongoCollection<BsonDocument> Rows(string collection) => database.GetCollection<BsonDocument>(collection);
     internal async Task StorageAsync(CancellationToken ct) {
-        foreach (var name in ShipmentReceiptSchemas.Collections) await InventoryRepository.RequireStorageAsync(database, name, ShipmentReceiptSchemas.Validator(name), ShipmentReceiptSchemas.Key(name), ct);
+        foreach (var name in ShipmentReceiptSchemas.Collections) await InventoryRepository.RequireStorageAsync(database, name, OrderLineageSchemas.ReceiptValidator(name), ShipmentReceiptSchemas.Key(name), ct);
     }
     internal static BsonDocument Fixed(BsonDocument row, string op) {
         var result = row.DeepClone().AsBsonDocument;
@@ -50,18 +51,19 @@ internal sealed class ShipmentReceiptRecords(IMongoDatabase database)
     }
     internal static ImmutableArray<ReceiptDispatchedLine> Dispatched(BsonDocument source) => source["lines"].AsBsonArray.Select(value => {
         var row = value.AsBsonDocument; var definition = row["definition"].AsBsonDocument;
-        return new ReceiptDispatchedLine(new(row["skuId"].AsInt64), new(definition["_id"].AsInt64), row["packages"].AsInt32, definition["baseUnitsPerPackage"].AsInt32);
+        return new ReceiptDispatchedLine(new(row["skuId"].AsInt64), new(definition["_id"].AsInt64), row["packages"].AsInt32, definition["baseUnitsPerPackage"].AsInt32, OrderLineBson.Revision(row));
     }).ToImmutableArray();
     internal static BsonDocument Amount(ReceiptPackageAmount amount) => new() { { "packages", amount.Packages }, { "looseUnits", amount.LooseUnits } };
     internal static ReceiptPackageAmount Amount(BsonValue amount) => new(amount["packages"].AsInt32, amount["looseUnits"].AsInt32);
-    internal static BsonArray Lines(ImmutableArray<ReceiptConfirmedLine> lines) => new(lines.Select(line => new BsonDocument {
+    internal static BsonArray Lines(ImmutableArray<ReceiptConfirmedLine> lines) => new(lines.Select(line => OrderLineBson.With(new BsonDocument {
         { "skuId", line.Declaration.SkuId.Value }, { "definitionId", line.DefinitionId.Value }, { "dispatchedBaseUnits", line.DispatchedBaseUnits },
         { "accepted", Amount(line.Declaration.Accepted) }, { "rejected", Amount(line.Declaration.Rejected) }, { "missing", Amount(line.Declaration.Missing) },
         { "acceptedBaseUnits", line.AcceptedBaseUnits }, { "rejectedBaseUnits", line.RejectedBaseUnits }, { "missingBaseUnits", line.MissingBaseUnits },
         { "exceptionReason", (BsonValue?)line.Declaration.ExceptionReason ?? BsonNull.Value }
-    }));
+    }, line.Declaration.LineRevision)));
     internal static ImmutableArray<ReceiptLineDeclaration> Declarations(BsonArray lines) => lines.Select(line => new ReceiptLineDeclaration(new(line["skuId"].AsInt64),
-        Amount(line["accepted"]), Amount(line["rejected"]), Amount(line["missing"]), line["exceptionReason"].IsBsonNull ? null : line["exceptionReason"].AsString)).ToImmutableArray();
+        Amount(line["accepted"]), Amount(line["rejected"]), Amount(line["missing"]), line["exceptionReason"].IsBsonNull ? null : line["exceptionReason"].AsString,
+        OrderLineBson.Revision(line))).ToImmutableArray();
     internal static DateTimeOffset Time(BsonValue value) => DateTimeOffset.FromUnixTimeMilliseconds(value.AsBsonDateTime.MillisecondsSinceEpoch);
     internal static AuthorizationDeniedException Invalid() => new("shipment_receipt_unavailable");
 }

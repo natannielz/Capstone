@@ -21,28 +21,28 @@ internal static class OrderSubmissionBson
         { "charges", new BsonDecimal128(value.Charges.Value) }, { "total", new BsonDecimal128(value.Total.Value) } };
     internal static BsonDocument Quote(OrderCatalogQuote value) => new() {
         { "currency", value.Currency }, { "catalogSubtotal", new BsonDecimal128(value.CatalogSubtotal.Value) },
-        { "lines", new BsonArray(value.Lines.Select(line => new BsonDocument {
+        { "lines", new BsonArray(value.Lines.Select(line => OrderLineBson.With(new BsonDocument {
             { "familyId", line.FamilyId.Value }, { "familyName", line.FamilyName }, { "publicId", line.PublicId.ToString("D") },
             { "skuCode", line.SkuCode }, { "owner", CatalogRepository.Owner(line.FulfillmentOwner) },
             { "definition", CatalogRepository.Definition(line.Definition) }, { "price", CatalogPriceBson.Fact(line.Price) },
-            { "packages", line.Packages }, { "baseUnits", line.BaseUnits }, { "subtotal", new BsonDecimal128(line.CatalogSubtotal.Value) } })) } };
+            { "packages", line.Packages }, { "baseUnits", line.BaseUnits }, { "subtotal", new BsonDecimal128(line.CatalogSubtotal.Value) } }, line.LineRevision))) } };
     internal static OrderCatalogQuote Quote(BsonDocument value) => new(value["lines"].AsBsonArray.Select(line => new OrderQuotedLine(
         new(line["familyId"].AsInt64), line["familyName"].AsString, Guid.Parse(line["publicId"].AsString), line["skuCode"].AsString,
         CatalogRepository.Owner(line["owner"].AsBsonDocument), CatalogRepository.Definition(line["definition"].AsBsonDocument),
         CatalogPriceBson.Price(line["price"].AsBsonDocument, true), line["packages"].AsInt32, line["baseUnits"].AsInt64,
-        new(Decimal128.ToDecimal(line["subtotal"].AsDecimal128)))).ToImmutableArray(), value["currency"].AsString,
+        new(Decimal128.ToDecimal(line["subtotal"].AsDecimal128)), OrderLineBson.Revision(line))).ToImmutableArray(), value["currency"].AsString,
         new(Decimal128.ToDecimal(value["catalogSubtotal"].AsDecimal128)));
-    internal static BsonDocument Allocation(OrderStockAllocation value) => new() {
+    internal static BsonDocument Allocation(OrderStockAllocation value) => OrderLineBson.With(new() {
         { "skuId", value.SkuId }, { "authority", Reference(value.SourceAuthority) }, { "poolId", value.Pool.Id }, { "poolRevision", value.Pool.Revision },
         { "balanceId", value.Change.Id }, { "balanceRevision", value.Change.ExpectedRevision }, { "definitionId", value.Change.Key.DefinitionId.Value },
         { "lotId", value.Change.Key.LotId.Value }, { "packages", value.Change.Packages }, { "location", new BsonDocument {
             { "organizationId", value.Pool.Location.OrganizationId.Value }, { "shopId", value.Pool.Location.ShopId.Value },
-            { "warehouseId", value.Pool.Location.WarehouseId.Value }, { "channelId", value.Pool.Location.ChannelId.Value } } } };
+            { "warehouseId", value.Pool.Location.WarehouseId.Value }, { "channelId", value.Pool.Location.ChannelId.Value } } } }, value.LineRevision);
     internal static OrderStockAllocation Allocation(BsonDocument value) {
         var location = InventoryGraph.Location(value["location"].AsBsonDocument); var poolId = value["poolId"].AsInt64;
         return new(value["skuId"].AsInt64, Reference(value["authority"]), new(poolId, location, value["poolRevision"].AsInt64),
             new(value["balanceId"].AsInt64, poolId, new(location, new(value["skuId"].AsInt64), new(value["definitionId"].AsInt64), new(value["lotId"].AsInt64)),
-                value["balanceRevision"].AsInt64, InventoryBalanceAction.Reserve, value["packages"].AsInt64));
+                value["balanceRevision"].AsInt64, InventoryBalanceAction.Reserve, value["packages"].AsInt64), OrderLineBson.Revision(value));
     }
     // The review binds accepted commercial facts, party/address versions and explicit source owner.
     // Lot balance revisions are server concurrency guards; changing a lot cannot alter a reviewed SKU/owner/price.

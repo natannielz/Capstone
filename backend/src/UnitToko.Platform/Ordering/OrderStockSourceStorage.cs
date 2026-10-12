@@ -14,14 +14,18 @@ internal static class OrderStockSourceStorage
     {
         foreach (var name in OrderStockSourceSchemas.Collections) {
             var definition = await AccountContactStorage.DefinitionAsync(database, name, ct) ?? throw OrderStockSourceRecords.Unavailable();
-            if (!AccountContactStorage.SafeDefinition(definition, OrderStockSourceSchemas.Validator(name))) throw OrderStockSourceRecords.Unavailable();
+            // Historical migration callers explicitly request the original shipment contract.
+            var expectedValidator = requiredShipmentValidator is null ? OrderSubstitutionSchemas.StockSourceValidator(name) : OrderStockSourceSchemas.Validator(name);
+            if (!AccountContactStorage.SafeDefinition(definition, expectedValidator)) throw OrderStockSourceRecords.Unavailable();
             var indexes = await (await database.GetCollection<BsonDocument>(name).Indexes.ListAsync(ct)).ToListAsync(ct);
             var required = OrderStockSourceSchemas.Keys(name);
             if (!SafeIndexes(indexes, required) || required.Any(key => !indexes.Any(row => AccountContactStorage.Matches(row, key))))
                 throw OrderStockSourceRecords.Unavailable();
         }
         foreach (var name in OrderSubmissionSchemas.Collections)
-            await InventoryRepository.RequireStorageAsync(database, name, OrderSubmissionSchemas.Validator(name), OrderSubmissionSchemas.Key(name), ct);
+            await InventoryRepository.RequireStorageAsync(database, name,
+                requiredShipmentValidator is null ? OrderLineageSchemas.OrderValidator(name) : OrderSubmissionSchemas.Validator(name),
+                requiredShipmentValidator is null ? OrderLineageSchemas.OrderKey(name) : OrderSubmissionSchemas.Key(name), ct);
         foreach (var name in StockSourceSetupSchemas.Collections)
             await InventoryRepository.RequireStorageAsync(database, name, StockSourceSetupSchemas.Validator(name), StockSourceSetupSchemas.Key(name), ct);
         await ShipmentDispatchStorage.RequireAsync(database, ct, requiredShipmentValidator);

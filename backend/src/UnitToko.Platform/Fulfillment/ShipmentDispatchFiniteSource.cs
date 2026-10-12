@@ -193,6 +193,7 @@ internal sealed class ShipmentDispatchFiniteSource
         private readonly PurchaseOrderSourceReadCapture membership;
         private readonly BsonArray initialHistory;
         private readonly PackConversionService.FiniteHistoryRead conversionHistory;
+        private bool originProven;
         internal InventoryBalanceDocument Before { get; }
         internal LotValueBalance Value { get; }
         internal BsonDocument InventoryAccount => inventory.DeepClone().AsBsonDocument;
@@ -245,6 +246,9 @@ internal sealed class ShipmentDispatchFiniteSource
         }
         internal Task RequireOriginAsync(IMongoDatabase current, IClientSessionHandle tx, CancellationToken ct) =>
             RequireOriginCoreAsync(current, tx, ct);
+        internal void SealBeforeOwnWrite(IMongoDatabase current, IClientSessionHandle tx) {
+            Require(current, tx); conversionHistory.SealBeforeOwnWrite(owner.conversions, current, tx);
+        }
         private void RequireAuthenticatedRelease(IMongoDatabase current, IClientSessionHandle tx,
             AuthenticatedRelease result, HashSet<string> authenticatedHere) {
             Require(current, tx); result.Require(owner, conversionHistory, current, tx);
@@ -259,6 +263,7 @@ internal sealed class ShipmentDispatchFiniteSource
         private async Task RequireOriginCoreAsync(IMongoDatabase current, IClientSessionHandle tx, CancellationToken ct,
             HashSet<string>? authenticatedHere = null, PackConversionService.FiniteHistoryRead.HeadRead? headRead = null) {
             Require(current, tx);
+            if (originProven && authenticatedHere is null && headRead is null) { await RequireProvenOriginAsync(current, tx, ct); return; }
             using var ownRead = headRead is null ? conversionHistory.BeginHeadRead(owner, current, tx, Before.Id, origins) : null;
             var read = headRead ?? ownRead!;
             read.Require(conversionHistory, current, tx);
@@ -281,7 +286,21 @@ internal sealed class ShipmentDispatchFiniteSource
             var lot = InventoryGraph.ReadLot(await owner.Rows("lots").Find(tx, new BsonDocument("_id", Before.Balance.Key.LotId.Value)).SingleOrDefaultAsync(ct));
             if (lot.ExpiresOn is { } expiry && expiry <= AccountingCalendar.BusinessDate(owner.clock.UtcNow)) throw ShipmentDispatchAdmissionPolicy.Invalid();
             read.Require(conversionHistory, current, tx);
+            Require(current, tx); originProven = true;
+        }
+        // The complete origin proof already ran on this exact capture in this same
+        // transaction attempt, whose snapshot observes no other writer. Later reads in
+        // the attempt differ only by the dispatch command's own movement and value
+        // transition, which its owner authenticates against its own effect; a full
+        // re-proof would see that movement join the source lot's reverse membership.
+        private async Task RequireProvenOriginAsync(IMongoDatabase current, IClientSessionHandle tx, CancellationToken ct) {
             Require(current, tx);
+            foreach (var origin in origins) origin.Require(current, tx);
+            var pool = await owner.Rows("inventoryPools").Find(tx, new BsonDocument("_id", Before.PhysicalPoolId)).SingleOrDefaultAsync(ct) ?? throw ShipmentDispatchRecords.Invalid();
+            await owner.sources.RequireActivatedPoolAsync(tx, pool, ct);
+            var lot = InventoryGraph.ReadLot(await owner.Rows("lots").Find(tx, new BsonDocument("_id", Before.Balance.Key.LotId.Value)).SingleOrDefaultAsync(ct));
+            if (lot.ExpiresOn is { } expiry && expiry <= AccountingCalendar.BusinessDate(owner.clock.UtcNow)) throw ShipmentDispatchAdmissionPolicy.Invalid();
+            Require(current, tx); ct.ThrowIfCancellationRequested();
         }
         internal async Task<(InventoryBalanceDocument Physical, LotValueBalance Value)> ReadCurrentValueWithOriginAsync(IMongoDatabase current,
             IClientSessionHandle tx, CancellationToken ct) {

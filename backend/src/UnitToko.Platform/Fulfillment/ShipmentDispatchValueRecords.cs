@@ -128,6 +128,8 @@ internal static class ShipmentDispatchValueRecords
             DateOnly.ParseExact(accounting["postingDate"].AsString, "yyyy-MM-dd", CultureInfo.InvariantCulture),
             [new(accounting["cogs"]["mappingKey"].AsString, amount, zero), new(accounting["inventory"]["mappingKey"].AsString, zero, amount)]);
     }
+    // Consumed-lot ancestry proofs run (tests assert that a verified shipment seal replaces them).
+    internal static long AncestryProofs;
     internal static Task VerifyAsync(IMongoDatabase database, IClock clock, IClientSessionHandle tx, BsonDocument row, CancellationToken ct, HistoricalRead? history = null,
         Action<ShipmentDispatchFiniteSource.AuthenticatedRelease>? releaseAuthenticated = null,
         PackConversionService.FiniteHistoryRead.HeadRead? headRead = null) =>
@@ -147,6 +149,9 @@ internal static class ShipmentDispatchValueRecords
         try {
         foreach (var context in contexts) { context.Require(database, tx); context.Enter(row["_id"].AsInt64); entered.Add(context); }
         var sources = live is null ? history.Sources(database, clock, tx) : null;
+        // A verified seal stands for the consumed-lot ancestry proven when it was sealed; a present seal that fails refuses.
+        // Callers that observe authenticated releases or share head reads keep the full proof.
+        var sealedHistory = live is null && releaseAuthenticated is null && headRead is null && await ShipmentDispatchSeals.VerifyAsync(database, tx, row, ct);
         var finite = row["admission"]["finiteValue"]; var effects = row["valueEffects"].AsBsonArray;
         if (effects.Count != row["pickedLots"].AsBsonArray.Count || effects.Select(value => value["balanceId"]).Distinct().Count() != effects.Count ||
             effects.Select(value => value["reservationId"]).Distinct().Count() != effects.Count) throw ShipmentDispatchRecords.Invalid();
@@ -190,7 +195,10 @@ internal static class ShipmentDispatchValueRecords
             var selectedSource = new InventorySource(priorSource["namespace"].AsString, priorSource["documentId"].AsInt64,
                 priorSource["eventKind"].AsString, priorSource["occurrence"].AsInt64);
             BsonDocument inventoryAccount;
-            if (live is null) {
+            if (live is null && sealedHistory) {
+                inventoryAccount = finite["accounting"]["inventory"].AsBsonDocument;
+            } else if (live is null) {
+                Interlocked.Increment(ref AncestryProofs);
                 inventoryAccount = await sources!.InventoryAccountForHistoryAsync(tx, before.Id, effect["valueBefore"]["revision"].AsInt64, ct, prior, releaseAuthenticated, headRead);
             } else {
                 var capture = live.Lots.SingleOrDefault(value => value.Before == before && value.Value.Revision == effect["valueBefore"]["revision"].AsInt64)
@@ -231,6 +239,7 @@ internal static class ShipmentDispatchValueRecords
             new BsonDocument("sourceHash", row["causeHash"]) })).Limit(101).ToListAsync(ct);
         if (transitions.Count != effects.Count || transitions.Any(transition => !effects.Any(effect => effect["transitionId"] == transition["_id"]))) throw ShipmentDispatchRecords.Invalid();
         await VerifyJournalAsync(database, tx, row, total, ct);
+        if (live is null && !sealedHistory) await ShipmentDispatchSeals.SealAsync(database, clock, tx, row, ct);
         if (liveOwner is not null && !ReferenceEquals(live, await liveOwner.RequireLiveValueCaptureAsync(database, clock, tx, row, ct))) throw ShipmentDispatchRecords.Invalid();
         } finally { foreach (var context in entered.AsEnumerable().Reverse()) context.Leave(row["_id"].AsInt64); }
     }

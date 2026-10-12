@@ -10,7 +10,7 @@ using UnitToko.Platform.Ordering;
 
 namespace UnitToko.Platform.Billing;
 
-internal sealed record InvoiceApprovedLine(long ReceiptId, long SkuId, Money Tax, Money Charges);
+internal sealed record InvoiceApprovedLine(long ReceiptId, long SkuId, Money Tax, Money Charges, long LineRevision = 0);
 internal sealed record InvoiceTerms(OrderPolicyReference Policy, OrderPolicyReference TaxPolicy, OrderPolicyReference TermsPolicy,
     OrderPolicyReference Calendar, OrderPolicyReference Numbering, OrderPolicyReference Template,
     string Grouping, DateOnly PeriodFrom, DateOnly PeriodTo, string TermOrigin, int TermDays, string DayRule,
@@ -48,9 +48,9 @@ internal static class InvoiceAdmissionPolicy
         Current(value, now);
         var first = sources[0]; var scope = first.Resource;
         if (value.Grouping == "receipt" && sources.Length != 1) throw InvoicePolicy.Invalid("invoice_grouping_changed");
-        var keys = sources.SelectMany(source => source.Snapshot["receipt"]["lines"].AsBsonArray.Select(line => (source.Snapshot["receipt"]["id"].AsInt64, line["skuId"].AsInt64))).ToArray();
-        if (keys.Length != value.Lines.Length || value.Lines.Any(line => line is null) || value.Lines.Select(line => (line.ReceiptId, line.SkuId)).Distinct().Count() != keys.Length ||
-            value.Lines.Any(line => !keys.Contains((line.ReceiptId, line.SkuId)))) throw InvoicePolicy.Invalid();
+        var keys = sources.SelectMany(source => source.Snapshot["receipt"]["lines"].AsBsonArray.Select(line => (source.Snapshot["receipt"]["id"].AsInt64, line["skuId"].AsInt64, OrderLineBson.Revision(line)))).ToArray();
+        if (keys.Length != value.Lines.Length || value.Lines.Any(line => line is null) || value.Lines.Select(line => (line.ReceiptId, line.SkuId, line.LineRevision)).Distinct().Count() != keys.Length ||
+            value.Lines.Any(line => !keys.Contains((line.ReceiptId, line.SkuId, line.LineRevision)))) throw InvoicePolicy.Invalid();
         foreach (var line in value.Lines) { _ = new Money(line.Tax.Value); _ = new Money(line.Charges.Value); }
         foreach (var source in sources) {
             var date = AccountingCalendar.BusinessDate(ShipmentReceiptRecords.Time(source.Snapshot["receipt"]["recordedAt"]));

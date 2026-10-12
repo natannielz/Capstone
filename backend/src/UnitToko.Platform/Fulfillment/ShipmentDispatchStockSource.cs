@@ -16,7 +16,7 @@ internal sealed class ShipmentDispatchStockSource(IMongoDatabase database, Order
         if (source.Namespace != Namespace || source.EventKind != "dispatch" || expectedRevision != 1) throw ShipmentDispatchRecords.Invalid();
         var f = Builders<BsonDocument>.Filter;
         var shipment = await database.GetCollection<BsonDocument>(ShipmentDispatchBson.Collection).Find(tx, f.Eq("_id", source.DocumentId) &
-            f.Eq("dispatchedBy", actor.UserId) & f.Eq("actorGrantVersion", actor.GrantVersion) & f.Eq("revision", 1L) & ShipmentDispatchSchemas.Validator())
+            f.Eq("dispatchedBy", actor.UserId) & f.Eq("actorGrantVersion", actor.GrantVersion) & f.Eq("revision", 1L) & OrderLineageSchemas.DispatchValidator())
             .SingleOrDefaultAsync(ct) ?? throw ShipmentDispatchRecords.Invalid();
         var facts = await orders.FenceShipmentReservationsAsync(tx, shipment, source.Occurrence, ct);
         await finalAuthority(ct);

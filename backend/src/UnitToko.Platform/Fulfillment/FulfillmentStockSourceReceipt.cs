@@ -10,7 +10,7 @@ public sealed partial class ShipmentReceiptService
     internal async Task<FulfillmentStockSourceEvent> ReadFulfillmentStockSourceReceiptAsync(IClientSessionHandle tx,
         long id, CancellationToken ct)
     {
-        var row = await Rows(ShipmentReceiptRecords.Receipts).Find(tx, F.Eq("_id", id) & ShipmentReceiptSchemas.Validator(ShipmentReceiptRecords.Receipts))
+        var row = await Rows(ShipmentReceiptRecords.Receipts).Find(tx, F.Eq("_id", id) & OrderLineageSchemas.ReceiptValidator(ShipmentReceiptRecords.Receipts))
             .SingleOrDefaultAsync(ct) ?? throw FulfillmentStockSourceRecords.Unavailable();
         var source = await shipments.FulfillmentStockSourceDocumentAsync(tx, row["shipmentId"].AsInt64, ct);
         var confirmed = await VerifyReceiptAsync(tx, row, source, ct);

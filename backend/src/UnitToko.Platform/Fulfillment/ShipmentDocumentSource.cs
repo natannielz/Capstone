@@ -5,6 +5,7 @@ using UnitToko.Modules.Identity.Contracts;
 using UnitToko.Modules.Organizations;
 using UnitToko.Platform.Authorization;
 using UnitToko.Platform.Catalog;
+using UnitToko.Platform.Ordering;
 
 namespace UnitToko.Platform.Fulfillment;
 
@@ -37,10 +38,10 @@ public sealed partial class ShipmentQueryService
             { "seller", row["admission"]["seller"].DeepClone() }, { "buyer", buyer }, { "delivery", row["source"]["delivery"].DeepClone() },
             { "courierId", row["courierId"] }, { "courierName", row["courierName"] },
             { "lines", new BsonArray(ShipmentPreparationBson.Lines(row["lines"].AsBsonArray).Select(selected => {
-                var line = source.Lines.Single(line => line.SkuId == selected.SkuId);
-                return new BsonDocument { { "skuId", line.SkuId.Value }, { "skuCode", line.SkuCode }, { "productName", line.ProductName },
+                var line = source.Lines.Single(line => line.SkuId == selected.SkuId && line.LineRevision == selected.LineRevision);
+                return OrderLineBson.With(new BsonDocument { { "skuId", line.SkuId.Value }, { "skuCode", line.SkuCode }, { "productName", line.ProductName },
                     { "definition", CatalogRepository.Definition(line.Package) }, { "packages", selected.Packages },
-                    { "baseUnits", checked((long)selected.Packages * line.Package.BaseUnitsPerPackage) } };
+                    { "baseUnits", checked((long)selected.Packages * line.Package.BaseUnitsPerPackage) } }, line.LineRevision);
             })) } };
         return facts;
     }

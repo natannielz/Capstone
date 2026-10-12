@@ -33,6 +33,22 @@ test('decision transport binds reviewed revision, stage and target and sends no 
   await assert.rejects(() => client.decide(actorId, review, 'Independent review', 'decision-original', () => true)); assert.equal(calls, 1);
   await assert.rejects(() => gateway(async () => Response.json({ ...result, revision: '3' })).decide(actorId, review, 'Independent review', 'key', () => true));
 });
+
+test('renewed review retains distinct accepted versions of one SKU and refuses repeated or future identities', () => {
+  const original = row.lines[0], replacement = { ...original, lineRevision: '4',
+    price: { ...original.price, id: '9007199254741019', version: '3', unitPrice: '13000.25' }, catalogSubtotal: '26000.50' };
+  const amended = { ...row, revision: '4', lines: [original, replacement], catalogSubtotal: '50001.00', total: '51501.00' };
+  const reviewed = parseOrderReview(amended, 'Spending');
+  assert.deepEqual(reviewed.quote.lines.map(line => [line.definition.skuId, line.lineRevision, line.price.unitPrice]),
+    [[sku.id, '0', '12000.25'], [sku.id, '4', '13000.25']]);
+  assert.equal(parseOrderReview({ ...amended, stage: 'Store', suborderId: '7', total: null, tax: null, charges: null,
+    storeState: 'awaitingSpending', canDecide: false }, 'Store').quote.lines.length, 2);
+  for (const invalid of [{ ...replacement, lineRevision: '0' }, { ...replacement, lineRevision: '5' },
+    { ...replacement, lineRevision: '04' }, { ...replacement, lineRevision: '1' }, { ...replacement, lineRevision: 4 },
+    { ...replacement, baseUnits: '25' }, { ...replacement, price: { ...replacement.price, currency: 'USD' } }])
+    assert.throws(() => parseOrderReview({ ...amended, lines: [original, invalid] }, 'Spending'));
+  assert.throws(() => parseOrderReview({ ...amended, catalogSubtotal: '50001.01', total: '51501.01' }, 'Spending'));
+});
 test('dedicated decision recovery remains unknown without receipt, rejects cross-stage results and cannot close or resubmit', async () => {
   const storage = new Map<string, string>(); const journal = new OperationJournal(() => ({ get length() { return storage.size; }, key: index => [...storage.keys()][index] ?? null,
     getItem: key => storage.get(key) ?? null, setItem: (key, value) => { storage.set(key, value); }, removeItem: key => { storage.delete(key); } }));

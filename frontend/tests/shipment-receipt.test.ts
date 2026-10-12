@@ -6,8 +6,8 @@ import { OperationJournal, operationRecoveryCapabilities, reconcileOperationReco
 
 const token = 'a'.repeat(64), actorId = '9007199254741000';
 const review: ReceiptReview = { challengeId: '9007199254741001', shipmentId: '2', documentId: '3', documentVersion: '1', documentHash: 'b'.repeat(64), recipientName: 'Penerima', expiresAt: '2026-09-30T01:15:00Z', serverTime: '2026-09-30T01:00:00Z',
-  consentVersion: 'delivery-receipt-v1', consentText: 'Saya telah memeriksa kiriman.', lines: [{ skuId: '4', skuCode: 'SKU-4', productName: 'ATK', definitionId: '5', packageLabel: 'Dus', baseUnitCode: 'piece', baseUnitsPerPackage: 12, packages: 1 }] };
-const lines = [{ skuId: '4', accepted: { packages: 0, looseUnits: 6 }, rejected: { packages: 0, looseUnits: 4 }, missing: { packages: 0, looseUnits: 2 }, exceptionReason: 'Rusak dan kurang' }];
+  consentVersion: 'delivery-receipt-v1', consentText: 'Saya telah memeriksa kiriman.', lines: [{ skuId: '4', lineRevision: '0', skuCode: 'SKU-4', productName: 'ATK', definitionId: '5', packageLabel: 'Dus', baseUnitCode: 'piece', baseUnitsPerPackage: 12, packages: 1 }] };
+const lines = [{ skuId: '4', lineRevision: '0', accepted: { packages: 0, looseUnits: 6 }, rejected: { packages: 0, looseUnits: 4 }, missing: { packages: 0, looseUnits: 2 }, exceptionReason: 'Rusak dan kurang' }];
 const receipt = { id: '6', shipmentId: '2', documentId: '3', recipientId: actorId, recipientName: 'Penerima', recordedAt: '2026-09-30T01:01:00Z', hasException: true,
   lines: [{ ...lines[0], definitionId: '5', dispatchedBaseUnits: '12', acceptedBaseUnits: '6', rejectedBaseUnits: '4', missingBaseUnits: '2' }] };
 const challenge = { id: review.challengeId, shipmentId: '2', documentId: '3', recipientId: actorId, recipientName: 'Penerima', expiresAt: review.expiresAt, serverTime: review.serverTime, token: null };

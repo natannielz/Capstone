@@ -508,6 +508,7 @@ app.MapOrderDraftEndpoints();
 app.MapOrderViewEndpoints();
 app.MapOrderSubmissionEndpoints();
 app.MapOrderDecisionEndpoints();
+app.MapOrderSubstitutionEndpoints();
 app.MapShipmentPreparationEndpoints();
 app.MapShipmentDispatchEndpoints();
 app.MapShipmentReadEndpoints();

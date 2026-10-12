@@ -8,7 +8,7 @@ public sealed class CollectionMigrations(IMongoDatabase database, IClock clock)
 {
     // Deployment history and document format versions are independent. Adding a migration
     // must not silently make existing collection writers produce a new document format.
-    public const int CurrentVersion = 113;
+    public const int CurrentVersion = 115;
     public const int FoundationDocumentSchemaVersion = 1;
     public const int AuthorizationDocumentSchemaVersion = 1;
 
@@ -133,7 +133,9 @@ public sealed class CollectionMigrations(IMongoDatabase database, IClock clock)
             new CatalogIdentifierMigration(durableDatabase),
             new OperationalScanBindingMigration(durableDatabase),
             new OrderViewMigration(durableDatabase),
-            new TemporaryDelegationMigration(durableDatabase)
+            new TemporaryDelegationMigration(durableDatabase),
+            new OrderSubstitutionMigration(durableDatabase, database.Client as MongoClient ?? throw new InvalidOperationException("Migrations require the actual Mongo client"), clock),
+            new ProvenanceSealMigration(durableDatabase)
         ];
         if (!steps.Select(step => step.Version).SequenceEqual(Enumerable.Range(1, CurrentVersion)))
             throw new InvalidOperationException("Schema migration registry must contain every version in order");

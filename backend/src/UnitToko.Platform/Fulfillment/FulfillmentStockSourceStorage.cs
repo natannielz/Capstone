@@ -14,7 +14,12 @@ internal static class FulfillmentStockSourceStorage
         foreach (var name in StockSourceSetupSchemas.Collections)
             await InventoryRepository.RequireStorageAsync(database, name, StockSourceSetupSchemas.Validator(name), StockSourceSetupSchemas.Key(name), ct);
         await ShipmentDispatchStorage.RequireAsync(database, ct, requiredShipmentValidator);
-        await new ShipmentReceiptRecords(database).StorageAsync(ct);
+        // Historical migration callers explicitly bind the exact legacy dispatch contract.
+        // Keep that historical receipt contract here; the default runtime still requires114.
+        if (requiredShipmentValidator is not null && CatalogSchemas.SemanticEquals(requiredShipmentValidator, ShipmentDispatchSchemas.LegacyValidator())) {
+            foreach (var name in ShipmentReceiptSchemas.Collections)
+                await InventoryRepository.RequireStorageAsync(database, name, ShipmentReceiptSchemas.Validator(name), ShipmentReceiptSchemas.Key(name), ct);
+        } else await new ShipmentReceiptRecords(database).StorageAsync(ct);
         await new DeliveryAttemptRecords(database).StorageAsync(ct);
         await OrderStockSourceStorage.RequireAsync(database, ct, requiredShipmentValidator);
         await ReconciliationStockSourceStorage.RequireAsync(database, ct);

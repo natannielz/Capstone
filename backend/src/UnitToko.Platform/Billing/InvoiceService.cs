@@ -14,11 +14,12 @@ using UnitToko.Platform.Authorization;
 using UnitToko.Platform.Documents;
 using UnitToko.Platform.Fulfillment;
 using UnitToko.Platform.Mongo;
+using UnitToko.Platform.Ordering;
 
 namespace UnitToko.Platform.Billing;
 
 public sealed record InvoiceReadLine(LongId OrderId, LongId ShipmentId, LongId ReceiptId, LongId SkuId, string SkuCode, string ProductName,
-    string PackageLabel, int BaseUnitsPerPackage, string BaseUnitCode, long AcceptedBaseUnits, Money Net, Money Tax, Money Charges);
+    string PackageLabel, int BaseUnitsPerPackage, string BaseUnitCode, long AcceptedBaseUnits, Money Net, Money Tax, Money Charges, long LineRevision = 0);
 public sealed record InvoiceIssuePreview(string Review, string BuyerName, string SellerName, DateOnly IssueDate, DateOnly DueDate,
     string Grouping, DateOnly PeriodFrom, DateOnly PeriodTo, string TermOrigin, int TermDays, string DayRule, string TaxDocumentProcess,
     Money Net, Money Tax, Money Charges, Money Total, ImmutableArray<InvoiceReadLine> Lines);
@@ -50,7 +51,7 @@ public sealed partial class InvoiceService
             InvoiceBson.Money(total["net"]), InvoiceBson.Money(total["tax"]), InvoiceBson.Money(total["charges"]), InvoiceBson.Money(total["total"]),
             [.. lines.Select(line => new InvoiceReadLine(new(line["orderId"].AsInt64), new(line["shipmentId"].AsInt64), new(line["receiptId"].AsInt64), new(line["skuId"].AsInt64),
                 line["skuCode"].AsString, line["productName"].AsString, line["definition"]["packageLabel"].AsString, line["definition"]["baseUnitsPerPackage"].AsInt32,
-                line["definition"]["baseUnitCode"].AsString, line["acceptedBaseUnits"].AsInt64, InvoiceBson.Money(line["net"]), InvoiceBson.Money(line["tax"]), InvoiceBson.Money(line["charges"])))]);
+                line["definition"]["baseUnitCode"].AsString, line["acceptedBaseUnits"].AsInt64, InvoiceBson.Money(line["net"]), InvoiceBson.Money(line["tax"]), InvoiceBson.Money(line["charges"]), OrderLineBson.Revision(line)))]);
     }
     private static InvoiceView View(BsonDocument row) => new(new(row["_id"].AsInt64), new(row["numberEntity"].AsInt64), new(row["numberChannel"].AsInt64), checked((int)row["numberYear"].AsInt64),
         row["number"].AsInt64, ShipmentReceiptRecords.Time(row["issuedAt"]), Preview(row["sources"].AsBsonArray, row["terms"].AsBsonDocument, row["lines"].AsBsonArray,
@@ -76,17 +77,14 @@ public sealed partial class InvoiceService
             foreach (var source in order) foreach (var accepted in source.Snapshot["receipt"]["lines"].AsBsonArray) {
                 if (accumulated.Any(row => row["receiptId"] == source.Snapshot["receipt"]["id"] && row["skuId"] == accepted["skuId"]))
                     throw new PersistenceConflictException("receipt_already_invoiced", "Accepted receipt quantities are already invoiced");
-                var existing = accumulated.Where(row => row["skuId"] == accepted["skuId"]).ToArray();
+                var existing = accumulated.Where(row => OrderLineBson.Same(row, accepted)).ToArray();
                 if (existing.Any(row => row["rounding"] != terms.Rounding)) throw InvoicePolicy.Invalid("invoice_rounding_changed");
                 var units = existing.Aggregate(0L, (total, row) => checked(total + row["acceptedBaseUnits"].AsInt64));
                 var net = existing.Aggregate(new Money(0m), (total, row) => Money.Add(total, InvoiceBson.Money(row["net"])));
                 var line = InvoiceRecords.Line(source, terms, accepted["skuId"].AsInt64, units, net); lines.Add(line);
                 var projection = line.DeepClone().AsBsonDocument; projection.Add("rounding", terms.Rounding); accumulated.Add(projection);
             }
-            foreach (var amount in new[] { "tax", "charges" }) {
-                var allocated = accumulated.Aggregate(new Money(0m), (total, row) => Money.Add(total, InvoiceBson.Money(row[amount])));
-                if (allocated.Value > InvoiceBson.Money(order.First().Snapshot["commercial"]["terms"][amount]).Value) throw InvoicePolicy.Invalid("invoice_commercial_allocation_exceeded");
-            }
+            InvoiceRecords.RequireBudget(accumulated, await receipts.CurrentInvoiceBudgetAsync(actor, tx, order.Key, ct));
         }
         _ = InvoiceBson.Totals(lines); var due = InvoiceAdmissionPolicy.DueDate(sources, terms, date);
         return (terms, lines, date, due, InvoiceBson.Review(InvoiceBson.Sources(sources), InvoiceBson.Terms(terms), lines, date, due));

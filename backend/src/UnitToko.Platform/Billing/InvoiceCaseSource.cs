@@ -65,7 +65,11 @@ public sealed partial class InvoiceService
         var result = new BsonArray();
         foreach (var line in expected["lines"].AsBsonArray) {
             var shipment = await new ShipmentDispatchRecords(database).ReadAsync(tx, line["shipmentId"].AsInt64, ct);
-            var allocations = shipment["stockEffects"].AsBsonArray.Select(effect => OrderSubmissionBson.Allocation(effect["allocation"].AsBsonDocument)).Where(item => item.SkuId == line["skuId"].AsInt64).ToArray();
+            // One SKU per immutable shipment is retained. The receipt/shipment key therefore
+            // resolves its exact accepted line without changing historical case snapshots.
+            var dispatched = shipment["lines"].AsBsonArray.SingleOrDefault(value => value["skuId"] == line["skuId"]) ?? throw InvoiceRecords.Invalid();
+            var allocations = shipment["stockEffects"].AsBsonArray.Select(effect => OrderSubmissionBson.Allocation(effect["allocation"].AsBsonDocument))
+                .Where(item => item.SkuId == line["skuId"].AsInt64 && item.LineRevision == OrderLineBson.Revision(dispatched)).ToArray();
             if (allocations.Length == 0 || allocations.Select(item => item.Change.Key.DefinitionId).Distinct().Count() != 1 || allocations.Select(item => item.Pool.Location).Distinct().Count() != 1) throw InvoiceRecords.Invalid();
             var item = allocations[0];
             result.Add(new BsonDocument { { "receiptId", line["receiptId"] }, { "skuId", line["skuId"] }, { "definitionId", item.Change.Key.DefinitionId.Value },

@@ -87,7 +87,8 @@ export function parseSubmittedOrder(value: unknown) {
   if (new Set(decided).size !== decided.length || decided.some(id => !submission.suborderIds.includes(id)) ||
     progress.spendingState === 'NotRequired' && submission.spendingState !== 'NotRequired' || ['Approved', 'Rejected'].includes(String(progress.spendingState)) && submission.spendingState !== 'Pending' ||
     progress.spendingState === 'Pending' && (decided.length > 0 || submission.spendingState !== 'Pending') || progress.spendingState === 'Rejected' && (decided.length > 0 || progress.cancelled) ||
-    BigInt(revision) !== BigInt(1 + decided.length + (['Approved', 'Rejected'].includes(String(progress.spendingState)) ? 1 : 0) + (progress.cancelled ? 1 : 0))) return invalid();
+    // Substitution decisions and renewed reviews add revisions this list does not enumerate.
+    BigInt(revision) < BigInt(1 + decided.length + (['Approved', 'Rejected'].includes(String(progress.spendingState)) ? 1 : 0) + (progress.cancelled ? 1 : 0))) return invalid();
   return { input, submission, buyerName: row.buyerName, progress: { revision, spendingState: progress.spendingState as 'Pending' | 'NotRequired' | 'Approved' | 'Rejected', acceptedSuborders, rejectedSuborders, cancelled: progress.cancelled }, ...amounts(row, input, submission.recordedAt) };
 }
 export type SubmittedOrder = ReturnType<typeof parseSubmittedOrder>;

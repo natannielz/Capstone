@@ -1,4 +1,5 @@
 'use client';
+import { orderLineKey, sameOrderLine } from '../ordering/order-line-identity';
 
 import Link from 'next/link';
 import {ScanInput} from '../inventory/ScanInput';
@@ -11,7 +12,7 @@ import { AccessFailure, MutationLedger, accessMessage } from '../administration/
 import { AdministrationNavigation } from '../administration/AdministrationNavigation';
 import { OperationRecovery, useOperationRecovery } from '../administration/OperationRecovery';
 import { submitTrackedRequest } from '../administration/operation-journal';
-import { createPreparationGateway, prepareShipmentCommand, type FulfillmentOrder, type Preparation, type PreparationCommand, type PreparationResult } from './preparation-client';
+import { createPreparationGateway, initialPreparationValues, prepareShipmentCommand, type FulfillmentOrder, type Preparation, type PreparationCommand, type PreparationResult } from './preparation-client';
 import common from '../administration/access.module.css';
 import styles from '../ordering/order-draft.module.css';
 
@@ -80,8 +81,7 @@ function PreparationDesk({ account, onFailure }: { account: Account; onFailure: 
     const source = await gateway.source(actorId, suborderId); if (!current()) return;
     const preparation = await gateway.read(actorId, suborderId); if (!current()) return;
     setSelected(source); setSaved(preparation); setStaged(null); setReason(''); setScanSelection(null); setScanBlocked(false);
-    setValues(Object.fromEntries(source.lines.map(line => { const prior = preparation?.lines.find(item => item.skuId === line.skuId);
-      return [line.skuId, { selected: prior !== undefined, packages: String(prior?.packages ?? line.remainingPackages) }]; })));
+    setValues(initialPreparationValues(source, preparation));
   }
   async function select(suborderId: string) {
     if (!current() || locked || pending.current) return; pending.current = true; setBusy(true); setError(null); setNotice(null);
@@ -92,7 +92,7 @@ function PreparationDesk({ account, onFailure }: { account: Account; onFailure: 
   async function review() {
     if (!selected || !current() || locked || pending.current || scanBlocked) return; pending.current = true; setBusy(true); setError(null); setNotice(null);
     try {
-      const lines = selected.lines.filter(line => values[line.skuId]?.selected).map(line => ({ skuId: line.skuId, packages: /^[1-9][0-9]{0,6}$(?![\s\S])/.test(values[line.skuId].packages) ? Number(values[line.skuId].packages) : NaN }));
+      const lines = selected.lines.filter(line => values[orderLineKey(line)]?.selected).map(line => ({ skuId: line.skuId, lineRevision: line.lineRevision, packages: /^[1-9][0-9]{0,6}$(?![\s\S])/.test(values[orderLineKey(line)].packages) ? Number(values[orderLineKey(line)].packages) : NaN }));
       const command = prepareShipmentCommand(actorId, selected, saved?.revision ?? '0', lines, reason.trim(), scanSelection ? [scanSelection] : undefined);
       const source = await gateway.source(actorId, selected.suborderId); if (!current()) return;
       const preparation = await gateway.read(actorId, selected.suborderId); if (!current()) return;
@@ -137,25 +137,27 @@ function PreparationDesk({ account, onFailure }: { account: Account; onFailure: 
       {selected.canPrepare && !staged && <ScanInput key={selected.suborderId + ':' + selected.review} actorId={actorId} disabled={locked} current={current}
         context={{purpose: 'picking', location: null, documentId: selected.suborderId, documentRevision: selected.revision,
           auxiliaryId: null, auxiliaryRevision: null, sourceReview: selected.review}}
-        onReset={() => {setScanSelection(null); setScanBlocked(true); setValues(Object.fromEntries(selected.lines.map(line => [line.skuId, {selected: false, packages: ''}])));}}
+        onReset={() => {setScanSelection(null); setScanBlocked(true); setValues(Object.fromEntries(selected.lines.map(line => [orderLineKey(line), {selected: false, packages: ''}])));}}
         onManual={() => {setScanSelection(null); setScanBlocked(false);}} onConfirm={candidate => {
-          const line = selected.lines.find(item => item.skuId === candidate.skuId);
+          const matches = selected.lines.filter(item => item.skuId === candidate.skuId && item.remainingPackages > 0 && item.definition.id === candidate.definitionId);
+          const line = matches.length === 1 ? matches[0] : matches.find(item => values[orderLineKey(item)]?.selected);
           if (!current() || !line || candidate.targetReference !== line.skuId || !sameScanPackage(candidate, {...line.definition, skuId: line.skuId, skuCode: line.skuCode,
             definitionId: line.definition.id, definitionVersion: line.definition.version})) throw new AccessFailure(409, 'operational_scan_context_changed');
-          setValues(previous => ({...previous, [line.skuId]: {selected: true, packages: ''}})); setScanSelection(candidate.selection); setScanBlocked(false);
+          setValues(previous => ({...previous, [orderLineKey(line)]: {selected: true, packages: ''}})); setScanSelection(candidate.selection); setScanBlocked(false);
         }} />}
       {!selected.canPrepare ? <p role="alert">Sisa pesanan tidak lagi dapat disiapkan. Riwayat persiapan tetap tersimpan.</p> : staged ? <>
-        <h3>Periksa kemasan yang dipilih</h3><ul>{staged.lines.map(line => { const item = selected.lines.find(item => item.skuId === line.skuId)!;
-          return <li key={line.skuId}>{item.productName} — {line.packages} {item.definition.packageLabel} · total {(BigInt(line.packages) * BigInt(item.definition.baseUnitsPerPackage)).toString()} {item.definition.baseUnitCode}</li>; })}</ul>
+        <h3>Periksa kemasan yang dipilih</h3><ul>{staged.lines.map(line => { const item = selected.lines.find(item => sameOrderLine(item, line))!;
+          return <li key={orderLineKey(line)}>{item.productName} — {line.packages} {item.definition.packageLabel} · total {(BigInt(line.packages) * BigInt(item.definition.baseUnitsPerPackage)).toString()} {item.definition.baseUnitCode}</li>; })}</ul>
         <p>Catatan: {staged.reason}</p><p>Menyimpan persiapan belum memberangkatkan barang. Jumlah dan akses akan diperiksa lagi sebelum pengiriman.</p>
         <div className={common.actions}><button className={common.primary} disabled={locked} onClick={() => void confirm()}>Konfirmasi persiapan</button>
           <button className={common.secondary} disabled={locked} onClick={() => setStaged(null)}>Kembali ke jumlah</button></div>
       </> : <form onSubmit={event => { event.preventDefault(); void review(); }}><fieldset disabled={locked}><legend>Pilih kemasan untuk persiapan ini</legend>
-        {selected.lines.map(line => <div key={line.skuId} className={styles.line}><label className={common.checkbox}>
-          <input type="checkbox" checked={values[line.skuId]?.selected ?? false} disabled={line.remainingPackages === 0} onChange={event => setValues(previous => ({ ...previous, [line.skuId]: { ...previous[line.skuId], selected: event.target.checked } }))} />
-          <span>{line.productName} — {line.definition.packageLabel}</span></label><p>{line.definition.baseUnitsPerPackage} {line.definition.baseUnitCode} per kemasan · sisa {line.remainingPackages} kemasan</p>
-          <label>Jumlah {line.skuCode}<input inputMode="numeric" value={values[line.skuId]?.packages ?? ''} disabled={!values[line.skuId]?.selected || line.remainingPackages === 0} maxLength={7}
-            onChange={event => setValues(previous => ({ ...previous, [line.skuId]: { ...previous[line.skuId], packages: event.target.value } }))} /></label></div>)}
+        <p>Pilih satu rincian persetujuan per barang untuk kiriman ini.</p>
+        {selected.lines.map(line => <div key={orderLineKey(line)} className={styles.line}><label className={common.checkbox}>
+          <input type="checkbox" checked={values[orderLineKey(line)]?.selected ?? false} disabled={line.remainingPackages === 0} onChange={event => setValues(previous => Object.fromEntries(selected.lines.map(item => [orderLineKey(item), {...previous[orderLineKey(item)], selected: sameOrderLine(item, line) ? event.target.checked : item.skuId === line.skuId && event.target.checked ? false : previous[orderLineKey(item)]?.selected ?? false}])))} />
+          <span>{line.productName} — {line.definition.packageLabel} · {line.lineRevision === '0' ? 'pesanan awal' : `persetujuan ke-${line.lineRevision}`}</span></label><p>{line.definition.baseUnitsPerPackage} {line.definition.baseUnitCode} per kemasan · sisa {line.remainingPackages} kemasan</p>
+          <label>Jumlah {line.skuCode}<input inputMode="numeric" value={values[orderLineKey(line)]?.packages ?? ''} disabled={!values[orderLineKey(line)]?.selected || line.remainingPackages === 0} maxLength={7}
+            onChange={event => setValues(previous => ({ ...previous, [orderLineKey(line)]: { ...previous[orderLineKey(line)], packages: event.target.value } }))} /></label></div>)}
         <label>Catatan persiapan<input required maxLength={1000} value={reason} onChange={event => setReason(event.target.value)} /></label>
         <button className={common.primary} disabled={locked || scanBlocked}>Tinjau persiapan</button></fieldset></form>}
       <button className={common.secondary} disabled={locked} onClick={() => void select(selected.suborderId)}>Muat ulang persiapan</button>

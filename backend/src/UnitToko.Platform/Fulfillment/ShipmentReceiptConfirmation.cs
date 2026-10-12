@@ -43,7 +43,8 @@ public sealed partial class ShipmentReceiptService
             var result = new ShipmentReceiptReview(new(challengeId), new(challenge["shipmentId"].AsInt64), new(challenge["documentId"].AsInt64), challenge["documentVersion"].AsInt64,
                 challenge["documentHash"].AsString, target.Name, ShipmentReceiptRecords.Time(challenge["expiresAt"]), Now, DeliveryReceiptPolicy.ConsentVersion, DeliveryReceiptPolicy.ConsentText,
                 source.Snapshot["lines"].AsBsonArray.Select(line => new ShipmentReceiptReviewLine(new(line["skuId"].AsInt64), line["skuCode"].AsString, line["productName"].AsString,
-                    new(line["definition"]["_id"].AsInt64), line["definition"]["packageLabel"].AsString, line["definition"]["baseUnitCode"].AsString, line["definition"]["baseUnitsPerPackage"].AsInt32, line["packages"].AsInt32)).ToImmutableArray());
+                    new(line["definition"]["_id"].AsInt64), line["definition"]["packageLabel"].AsString, line["definition"]["baseUnitCode"].AsString, line["definition"]["baseUnitsPerPackage"].AsInt32, line["packages"].AsInt32,
+                    UnitToko.Platform.Ordering.OrderLineBson.Revision(line).ToString(System.Globalization.CultureInfo.InvariantCulture))).ToImmutableArray());
             await FenceAsync(actor, snapshot, tx, source, Permissions.ReceiptAccept, target, proof, token);
             if (receipt is null) RequireOpen(challenge); return result;
         }, ct);

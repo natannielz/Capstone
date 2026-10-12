@@ -18,7 +18,7 @@ internal sealed class OrderReservationSourceReader(IMongoDatabase database, Func
         var f = Builders<BsonDocument>.Filter;
         if (source.Namespace != Namespace || source.EventKind != "reserve" || expectedRevision != 1) throw OrderAdmissionPolicy.Invalid();
         var orders = database.GetCollection<BsonDocument>(B.Orders);
-        var order = await orders.Find(tx, f.Eq("_id", source.DocumentId) & f.Eq("createdBy", actor.UserId) & OrderSubmissionSchemas.Validator(B.Orders)).SingleOrDefaultAsync(ct);
+        var order = await orders.Find(tx, f.Eq("_id", source.DocumentId) & f.Eq("createdBy", actor.UserId) & OrderLineageSchemas.OrderValidator(B.Orders)).SingleOrDefaultAsync(ct);
         if (order is null || order["revision"].AsInt64 != 1 || B.SnapshotHash(order) != order["snapshotHash"].AsString || order["fence"].AsInt64 >= long.MaxValue - 1) throw OrderAdmissionPolicy.Invalid();
         var expected = order["allocations"].AsBsonArray.Select(item => item.AsBsonDocument).Where(item => item["poolId"].AsInt64 == source.Occurrence).ToArray();
         var store = database.GetCollection<BsonDocument>(B.Reservations);
@@ -29,7 +29,7 @@ internal sealed class OrderReservationSourceReader(IMongoDatabase database, Func
             if (row["revision"].AsInt64 != 1 || row["remaining"] != allocation["packages"] || row["dispatched"] != 0L || row["released"] != 0L ||
                 row["fence"].AsInt64 >= long.MaxValue - 1 || !order["suborderIds"].AsBsonArray.Contains(row["suborderId"]) ||
                 expected.Count(value => CatalogSchemas.SemanticEquals(value, allocation)) != 1) throw OrderAdmissionPolicy.Invalid();
-            var match = f.And(row, OrderSubmissionSchemas.Validator(B.Reservations));
+            var match = f.And(row, OrderLineageSchemas.OrderValidator(B.Reservations));
             if ((await store.UpdateOneAsync(tx, match, Builders<BsonDocument>.Update.Inc("fence", 1L), cancellationToken: ct)).ModifiedCount != 1) throw OrderAdmissionPolicy.Invalid();
         }
         if ((await orders.UpdateOneAsync(tx, order, Builders<BsonDocument>.Update.Inc("fence", 1L), cancellationToken: ct)).ModifiedCount != 1) throw OrderAdmissionPolicy.Invalid();

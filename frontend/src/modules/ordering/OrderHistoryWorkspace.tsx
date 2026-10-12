@@ -161,6 +161,7 @@ function OrderHistoryDesk({ account, onFailure }: { account: Account; onFailure:
         <p>{orderAmount(selected.quote.currency, line.price.unitPrice)} per kemasan · subtotal {orderAmount(selected.quote.currency, line.catalogSubtotal)}</p></li>)}</ul>
       <h3>Tujuan pengiriman</h3><p className={styles.address}>{selected.input.delivery!.recipientName} · {selected.input.delivery!.phone}{'\n'}{selected.input.delivery!.address}{'\n'}{selected.input.delivery!.city} {selected.input.delivery!.postalCode}</p>
       {selected.input.delivery!.instructions && <p>{selected.input.delivery!.instructions}</p>}
+      {account.actions.some(action => ['substitution.propose', 'substitution.accept'].includes(action)) && <p><Link href={'/ordering/substitutions?order=' + selected.submission.orderId}>Lihat pengajuan dan keputusan penggantian pesanan ini</Link></p>}
       <h3>Biaya saat pengajuan</h3><p>Subtotal barang: {orderAmount(selected.quote.currency, selected.quote.catalogSubtotal)}</p>
       <p>Pajak: {orderAmount(selected.quote.currency, selected.tax)} · Biaya lain: {orderAmount(selected.quote.currency, selected.charges)}</p><p><strong>Total: {orderAmount(selected.quote.currency, selected.total)}</strong></p>
       <p>Bagian toko: {selected.progress.acceptedSuborders.length} diterima, {selected.progress.rejectedSuborders.length} ditolak, dari {selected.submission.suborderIds.length} bagian.</p>

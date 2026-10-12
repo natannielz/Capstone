@@ -16,7 +16,7 @@ internal static class ShipmentDispatchStorage
             options.GetValue("validationLevel", "strict") != "strict" || options.GetValue("validationAction", "error") != "error" ||
             options.TryGetValue("collation", out var collation) && !Simple(collation) ||
             !options.TryGetValue("validator", out var validator) || !validator.IsBsonDocument ||
-            !InventorySchemas.Contains(validator.AsBsonDocument, requiredValidator ?? ShipmentDispatchSchemas.Validator())) throw ShipmentDispatchRecords.Invalid();
+            !InventorySchemas.Contains(validator.AsBsonDocument, requiredValidator ?? OrderLineageSchemas.DispatchValidator())) throw ShipmentDispatchRecords.Invalid();
         var indexes = await (await db.GetCollection<BsonDocument>("shipments").Indexes.ListAsync(ct)).ToListAsync(ct);
         if (indexes.Any(index => Unsafe(index) && !ShipmentDispatchMigration.FoundationNumberIndex(index))) throw ShipmentDispatchRecords.Invalid();
         var keys = new[] { ShipmentDispatchSchemas.Key(), ShipmentDispatchSchemas.NumberKey() };

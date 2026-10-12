@@ -3,6 +3,7 @@ import { AccessFailure } from '../administration/workflow';
 import { priceId } from '../catalog/catalog-price-workflow';
 import { parseFulfillmentOrder, type FulfillmentOrder, type PackageSelection } from './preparation-client';
 import {validateScanSelections} from '../inventory/scan-client';
+import { orderLineRevision, sameOrderLine } from '../ordering/order-line-identity';
 
 const invalid = (): never => { throw new AccessFailure(502, 'shipment_dispatch_response_invalid'); };
 function record(value: unknown): Record<string, unknown> { return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : invalid(); }
@@ -12,8 +13,8 @@ function hash(value: unknown) { return typeof value === 'string' && /^[a-f0-9]{6
 function time(value: unknown) { const result = text(value, 64); return Number.isFinite(Date.parse(result)) ? result : invalid(); }
 function packages(value: unknown, source: FulfillmentOrder, current: boolean): PackageSelection[] {
   if (!Array.isArray(value) || value.length < 1 || value.length > 100) return invalid();
-  const result = value.map(item => { const row = record(item), skuId = priceId(row.skuId), amount = quantity(row.packages), line = source.lines.find(line => line.skuId === skuId);
-    if (!line || amount > (current ? line.remainingPackages : line.orderedPackages)) return invalid(); return { skuId, packages: amount }; });
+  const result = value.map(item => { const row = record(item), skuId = priceId(row.skuId), lineRevision = orderLineRevision(row.lineRevision), amount = quantity(row.packages), line = source.lines.find(line => sameOrderLine(line, { skuId, lineRevision }));
+    if (!line || amount > (current ? line.remainingPackages : line.orderedPackages)) return invalid(); return { skuId, lineRevision, packages: amount }; });
   if (new Set(result.map(line => line.skuId)).size !== result.length) return invalid(); return result;
 }
 export function parseDispatchQueueItem(value: unknown) {
@@ -27,13 +28,13 @@ export function parseDispatchPreparation(value: unknown) {
   const row = record(value), source = parseFulfillmentOrder(row.source), lines = packages(row.lines, source, true);
   if (!source.canPrepare || !Array.isArray(row.lots) || row.lots.length < 1 || row.lots.length > 100) return invalid();
   const lots = row.lots.map(value => {
-    const item = record(value), skuId = priceId(item.skuId), definitionId = priceId(item.definitionId), line = source.lines.find(line => line.skuId === skuId);
+    const item = record(value), skuId = priceId(item.skuId), lineRevision = orderLineRevision(item.lineRevision), definitionId = priceId(item.definitionId), line = source.lines.find(line => sameOrderLine(line, { skuId, lineRevision }));
     if (!line || line.definition.id !== definitionId) return invalid();
     const expiresOn = item.expiresOn === null ? null : text(item.expiresOn, 10);
     if (expiresOn !== null && (!/^\d{4}-\d{2}-\d{2}$(?![\s\S])/.test(expiresOn) || !Number.isFinite(Date.parse(expiresOn)) || new Date(expiresOn).toISOString().slice(0, 10) !== expiresOn)) return invalid();
-    return { reservationId: priceId(item.reservationId), skuId, definitionId, lotId: priceId(item.lotId), remainingPackages: quantity(item.remainingPackages, 0), expiresOn };
+    return { reservationId: priceId(item.reservationId), skuId, lineRevision, definitionId, lotId: priceId(item.lotId), remainingPackages: quantity(item.remainingPackages, 0), expiresOn };
   });
-  if (new Set(lots.map(lot => lot.reservationId)).size !== lots.length || source.lines.some(line => lots.filter(lot => lot.skuId === line.skuId).reduce((sum, lot) => sum + lot.remainingPackages, 0) !== line.remainingPackages)) return invalid();
+  if (new Set(lots.map(lot => lot.reservationId)).size !== lots.length || source.lines.some(line => lots.filter(lot => sameOrderLine(lot, line)).reduce((sum, lot) => sum + lot.remainingPackages, 0) !== line.remainingPackages)) return invalid();
   return { preparationId: priceId(row.preparationId), preparationRevision: priceId(row.preparationRevision), source, lines, lots };
 }
 export type DispatchPreparation = ReturnType<typeof parseDispatchPreparation>;
@@ -42,9 +43,9 @@ function selectedLots(value: unknown, prepared: DispatchPreparation): LotSelecti
   if (!Array.isArray(value) || value.length < 1 || value.length > 100) return invalid();
   const selected = value.map(value => { const row = record(value), reservationId = priceId(row.reservationId), amount = quantity(row.packages);
     const lot = prepared.lots.find(lot => lot.reservationId === reservationId);
-    if (!lot || amount > lot.remainingPackages || !prepared.lines.some(line => line.skuId === lot.skuId)) return invalid(); return { reservationId, packages: amount }; });
+    if (!lot || amount > lot.remainingPackages || !prepared.lines.some(line => sameOrderLine(line, lot))) return invalid(); return { reservationId, packages: amount }; });
   if (new Set(selected.map(lot => lot.reservationId)).size !== selected.length || prepared.lines.some(line => selected.filter(lot =>
-    prepared.lots.find(item => item.reservationId === lot.reservationId)?.skuId === line.skuId).reduce((sum, lot) => sum + lot.packages, 0) !== line.packages)) return invalid();
+    prepared.lots.some(item => item.reservationId === lot.reservationId && sameOrderLine(item, line))).reduce((sum, lot) => sum + lot.packages, 0) !== line.packages)) return invalid();
   return selected;
 }
 export function parseDispatchReview(value: unknown) {
@@ -63,7 +64,7 @@ export function prepareDispatchCommand(actorId: string, review: DispatchReview, 
   try {
     const accepted = parseDispatchReview(review);
     const scans = validateScanSelections(scanSelections, accepted.preparation.source.lines.filter(line => accepted.selected.some(selected =>
-      accepted.preparation.lots.some(lot => lot.reservationId === selected.reservationId && lot.skuId === line.skuId)))
+      accepted.preparation.lots.some(lot => lot.reservationId === selected.reservationId && sameOrderLine(lot, line))))
       .map(line => ({skuId: line.skuId, definitionId: line.definition.id, definitionVersion: line.definition.version})));
     return Object.freeze({ actorId: priceId(actorId), orderId: accepted.preparation.source.orderId, suborderId: accepted.preparation.source.suborderId,
       selection: Object.freeze({ preparationId: accepted.preparation.preparationId, preparationRevision: accepted.preparation.preparationRevision,

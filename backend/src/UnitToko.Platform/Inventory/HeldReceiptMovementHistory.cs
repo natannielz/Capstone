@@ -127,7 +127,7 @@ internal sealed class HeldReceiptMovementHistory(IMongoDatabase database, MongoU
                 } else await origin.RequireAsync(database, tx, ct);
                 if (origin.Receipt != receipt) throw Unavailable();
             }
-            if (supported.Any(item => item.Kind is "submission" or "decision" or "shipment")) {
+            if (supported.Any(item => item.Kind is "submission" or "decision" or "shipment" or "substitution")) {
                 await OrderStockSourceStorage.RequireAsync(database, ct);
                 var pool = await Rows("inventoryPools").Find(tx, F.Eq("_id", original.PhysicalPoolId)).SingleOrDefaultAsync(ct) ?? throw Unavailable();
                 var owner = new OrderSubmissionService(database, unit, new(database), clock, reader: null, history: dispatchHistory);
@@ -251,13 +251,21 @@ internal sealed class HeldReceiptMovementHistory(IMongoDatabase database, MongoU
         }
         var source = movement["source"].AsBsonDocument;
         var actual = await OrderSubmissionService.ReadStockSourceEventAsync(database, tx, kind, source["documentId"].AsInt64, true, ct, dispatchHistory, clock);
+        if (kind == "substitution") {
+            var eventKind = source["eventKind"].AsString;
+            var values = eventKind == "reserve" ? actual.Record["allocations"].AsBsonArray.Select(value => value.AsBsonDocument) :
+                actual.Record["releases"].AsBsonArray.Select(value => value["allocation"].AsBsonDocument);
+            await OrderSubmissionService.RequireSubstitutionMovementAsync(actual.Record, movement, eventKind,
+                values.Where(value => value["poolId"] == movement["physicalPoolId"]).ToArray(), ct); return;
+        }
         if (movement["actorId"] != actual.Audit["actorId"] || movement["actorGrantVersion"] != actual.Audit["actorGrantVersion"] ||
             movement["recordedAt"].CompareTo(actual.Time) < 0 || movement["reason"] != actual.Record["reason"] ||
-            movement["correlationId"] != actual.Record["correlationId"] || movement["sourceRevision"] != 1L ||
+            movement["correlationId"] != actual.Record["correlationId"] || movement["sourceRevision"] != (kind == "decision" ? actual.Record["revision"] : new BsonInt64(1L)) ||
             source["occurrence"] != movement["physicalPoolId"]) throw Unavailable();
         var allocations = kind == "submission" ? actual.Record["allocations"].AsBsonArray.Select(value => value.AsBsonDocument) :
             actual.Record[kind == "decision" ? "releases" : "stockEffects"].AsBsonArray.Select(value => value["allocation"].AsBsonDocument);
         var facts = allocations.Where(value => value["poolId"] == movement["physicalPoolId"]).Select(OrderSubmissionBson.Allocation).ToArray();
+        if (kind == "decision") facts = OrderReleaseFacts.Physical(facts);
         if (facts.Length is < 1 or > 100 || facts.Length != movement["legs"].AsBsonArray.Count ||
             facts.Select(fact => fact.Change.Id).Distinct().Count() != facts.Length) throw Unavailable();
         foreach (var fact in facts) {
@@ -274,6 +282,7 @@ internal sealed class HeldReceiptMovementHistory(IMongoDatabase database, MongoU
     private static string SourceKind(BsonDocument movement) => (movement["source"]["namespace"].AsString, movement["source"]["eventKind"].AsString) switch {
         ("ordering.order", "reserve") => "submission",
         ("ordering.decision", "release") => "decision",
+        ("ordering.substitution", "reserve" or "release") => "substitution",
         ("fulfillment.shipment", "dispatch") => "shipment",
         ("inventory.stock-release", "releaseHeld") => "stock-release",
         ("inventory.pack-conversion", "convertPackages") => "pack-conversion",

@@ -45,7 +45,7 @@ public sealed partial class ShipmentPreparationService
     internal async Task StorageAsync(CancellationToken ct) {
         await orders.RequireFulfillmentSourceStorageAsync(ct);
         foreach (var name in ShipmentPreparationSchemas.Collections)
-            await InventoryRepository.RequireStorageAsync(database, name, ShipmentPreparationSchemas.Validator(name), ShipmentPreparationSchemas.Key(name), ct);
+            await InventoryRepository.RequireStorageAsync(database, name, OrderLineageSchemas.PreparationValidator(name), ShipmentPreparationSchemas.Key(name), ct);
     }
     internal async Task<PreparedShipment> ReadForDispatchAsync(ActorContext actor, AuthorizationSnapshot snapshot, IClientSessionHandle tx, long suborderId, CancellationToken ct,
         ShipmentDispatchValueRecords.HistoricalRead? history = null) {
@@ -92,7 +92,7 @@ public sealed partial class ShipmentPreparationService
             if ((previous?["revision"].AsInt64 ?? 0) != expectedRevision) throw Changed();
             _ = ShipmentPreparationPolicy.Require(source.View, review, lines);
             scans = await UnitToko.Platform.Catalog.CatalogOperationalScanCapture.ReadAsync(database, tx, source.Resource,
-                source.View.Lines.Where(line => lines.Any(item => item.SkuId == line.SkuId)).Select(line => UnitToko.Platform.Catalog.ScanResolver.Choice(line).Candidate).ToArray(), scanSelections, token);
+                source.View.Lines.Where(line => lines.Any(item => item.SkuId == line.SkuId && item.LineRevision == line.LineRevision)).Select(line => UnitToko.Platform.Catalog.ScanResolver.Choice(line).Candidate).ToArray(), scanSelections, token);
             var now = DateTimeOffset.FromUnixTimeMilliseconds(clock.UtcNow.ToUnixTimeMilliseconds());
             if (now < source.View.OrderedAt || previous is not null && now < OrderDraftBson.Time(previous["updatedAt"])) throw B.Invalid();
             var id = previous?["_id"].AsInt64 ?? proposedId;
@@ -166,7 +166,7 @@ public sealed partial class ShipmentPreparationService
     private Task<BsonDocument> VersionAsync(IClientSessionHandle tx, long id, CancellationToken ct) => ReadVersionAsync(database, tx, id, ct);
     internal static async Task<BsonDocument> ReadVersionAsync(IMongoDatabase database, IClientSessionHandle tx, long id, CancellationToken ct) {
         IMongoCollection<BsonDocument> Rows(string name) => database.GetCollection<BsonDocument>(name);
-        var row = await Rows(B.Versions).Find(tx, F.Eq("_id", id) & ShipmentPreparationSchemas.Validator(B.Versions)).SingleOrDefaultAsync(ct) ?? throw B.Invalid();
+        var row = await Rows(B.Versions).Find(tx, F.Eq("_id", id) & OrderLineageSchemas.PreparationValidator(B.Versions)).SingleOrDefaultAsync(ct) ?? throw B.Invalid();
         var source = B.Source(row["source"].AsBsonDocument); var lines = B.Lines(row["lines"].AsBsonArray);
         _ = ShipmentPreparationPolicy.Require(source, source.Review, lines);
         if (row["bodyHash"] != AuthorizationStore.CommandHash(Body(source.SuborderId.Value, row["revision"].AsInt64 - 1, source.Review, lines), row["reason"].AsString)) throw B.Invalid();
@@ -182,7 +182,7 @@ public sealed partial class ShipmentPreparationService
             return null;
         }
         if (rows.Count != 1) throw B.Invalid(); var head = rows[0];
-        if (!await Rows(B.Heads).Find(tx, F.Eq("_id", head["_id"]) & ShipmentPreparationSchemas.Validator(B.Heads)).AnyAsync(ct)) throw B.Invalid();
+        if (!await Rows(B.Heads).Find(tx, F.Eq("_id", head["_id"]) & OrderLineageSchemas.PreparationValidator(B.Heads)).AnyAsync(ct)) throw B.Invalid();
         var version = await VersionAsync(tx, head["versionId"].AsInt64, ct);
         var latest = await Rows(B.Versions).Find(tx, F.Eq("preparationId", head["_id"])).Sort(new BsonDocument("revision", -1)).FirstOrDefaultAsync(ct);
         if (latest is null || latest["_id"] != version["_id"] || version["preparationId"] != head["_id"] || version["revision"] != head["revision"] ||

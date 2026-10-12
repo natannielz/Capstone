@@ -41,7 +41,7 @@ public sealed record OrderPostalAddressDto(OrganizationAddressTargetDto Target, 
 public sealed record OrderAddressesDto(OrderContextDto Context, DateTimeOffset ObservedAt,
     OrderPostalAddressDto LegalBilling, OrderPostalAddressDto Delivery, string Binding);
 public sealed record OrderQuoteLineDto(LongId FamilyId, string FamilyName, string PublicId, string SkuCode,
-    CatalogDefinitionDto Definition, CatalogPriceDto Price, int Packages, string BaseUnits, Money CatalogSubtotal);
+    CatalogDefinitionDto Definition, CatalogPriceDto Price, int Packages, string BaseUnits, Money CatalogSubtotal, string LineRevision = "0");
 public sealed record OrderQuoteDto(OrderContextDto Context, DateTimeOffset CalculatedAt, string Currency,
     Money CatalogSubtotal, OrderQuoteLineDto[] Lines);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]

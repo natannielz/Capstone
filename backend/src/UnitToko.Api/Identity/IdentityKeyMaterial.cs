@@ -17,6 +17,10 @@ public sealed class IdentityKeyMaterial : IDisposable
             var previous = keys.GetSection("PreviousCertificates").GetChildren().Select(Load).ToArray();
             if (previous.Length > 8) throw new InvalidOperationException("Too many retained identity certificates");
             Protector = SessionPayloadProtector.CreatePersistent(keys["Directory"] ?? "", keys["ApplicationName"] ?? "", current, previous);
+            // Provenance seal keys live encrypted in the same protected directory; operators provision them explicitly.
+            if (File.Exists(Path.Combine(keys["Directory"]!, "seal-current.txt")))
+                UnitToko.Platform.Integrity.ProvenanceSealRing.Configure(UnitToko.Platform.Integrity.SealKeyRing.Load(Protector.Provider, keys["Directory"]!));
+            else if (configuration.GetValue<bool>("Integrity:SealsRequired")) throw new InvalidOperationException("Provenance seal keys are required");
         }
         catch
         {

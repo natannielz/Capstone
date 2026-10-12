@@ -66,7 +66,7 @@ public sealed partial class OrderSubmissionService
         if (!await new CollectionMigrations(database, clock).IsCurrentAsync(ct)) throw OrderAdmissionPolicy.Invalid("order_storage_unavailable");
         try {
             foreach (var name in OrderSubmissionSchemas.Collections)
-                await InventoryRepository.RequireStorageAsync(database, name, OrderSubmissionSchemas.Validator(name), OrderSubmissionSchemas.Key(name), ct);
+                await InventoryRepository.RequireStorageAsync(database, name, OrderLineageSchemas.OrderValidator(name), OrderLineageSchemas.OrderKey(name), ct);
         } catch (DomainValidationException error) when (error.Code == "inventory_storage_unavailable") { throw OrderAdmissionPolicy.Invalid("order_storage_unavailable"); }
     }
     private async Task<OrderCatalogQuote> QuoteAsync(ActorContext actor, AuthorizationSnapshot snapshot, IClientSessionHandle tx, OrderDraftInput input, CancellationToken ct) {
@@ -217,7 +217,7 @@ public sealed partial class OrderSubmissionService
         (await GraphWithProgressAsync(tx, actor, id, ct, requireOwner)).Order;
     private async Task<(BsonDocument Order, OrderApprovalProgress Progress)> GraphWithProgressAsync(IClientSessionHandle tx,
         ActorContext? actor, long id, CancellationToken ct, bool requireOwner = true) {
-        var filter = F.Eq("_id", id) & OrderSubmissionSchemas.Validator(B.Orders);
+        var filter = F.Eq("_id", id) & OrderLineageSchemas.OrderValidator(B.Orders);
         if (requireOwner) filter &= F.Eq("createdBy", (actor ?? throw Invalid()).UserId);
         var row = await Rows(B.Orders).Find(tx, filter).SingleOrDefaultAsync(ct) ?? throw Invalid();
         var input = OrderDraftBson.Input(row["input"].AsBsonDocument); var quote = B.Quote(row["quote"].AsBsonDocument);
@@ -231,11 +231,25 @@ public sealed partial class OrderSubmissionService
         await ChildrenAsync(tx, row, quote, ct);
         return (row, await DecisionGraphAsync(tx, row, ct));
     }
+    // One complete owner replay is reused only inside the MongoUnitOfWork operation that owns
+    // the session, within the same transaction attempt and history readers, and only while the
+    // order row and every top-level order member row (suborders, reservations, decisions,
+    // substitutions, shipments) re-read byte-identical apart from their freshness fence counters. That operation is the attempt's only
+    // writer; any own write to those rows replays. Caller-supplied sessions always replay.
+    private sealed record VerifiedGraph(long Number, ShipmentDispatchValueRecords.HistoricalRead? History,
+        ShipmentDispatchService.LiveValueRead? LiveRead, BsonDocument Order, BsonArray Members, OrderApprovalProgress Progress);
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<IClientSessionHandle, Dictionary<long, VerifiedGraph>> verifiedGraphs = new();
+    private async Task<BsonArray> GraphMembersAsync(IClientSessionHandle tx, long id, CancellationToken ct) {
+        var members = new BsonArray(); var byId = new BsonDocument("_id", 1);
+        foreach (var name in new[] { B.Suborders, B.Reservations, Decisions, OrderSubstitutionBson.Proposals, OrderSubstitutionBson.Decisions, ShipmentDispatchBson.Collection })
+            members.Add(new BsonArray(await Rows(name).Find(tx, F.Eq("orderId", id)).Sort(byId).ToListAsync(ct)));
+        return members;
+    }
     private async Task ChildrenAsync(IClientSessionHandle tx, BsonDocument order, OrderCatalogQuote quote, CancellationToken ct) {
         var id = order["_id"].AsInt64; var groups = OrderFulfillmentPolicy.Split(quote);
         foreach (var name in new[] { B.Suborders, B.Reservations })
-            if (await Rows(name).Find(tx, F.Eq("orderId", id) & new BsonDocument("$nor", new BsonArray { OrderSubmissionSchemas.Validator(name) })).AnyAsync(ct)) throw Invalid();
-        var suborders = await Rows(B.Suborders).Find(tx, F.Eq("orderId", id) & OrderSubmissionSchemas.Validator(B.Suborders)).Limit(101).ToListAsync(ct);
+            if (await Rows(name).Find(tx, F.Eq("orderId", id) & new BsonDocument("$nor", new BsonArray { OrderLineageSchemas.OrderValidator(name) })).AnyAsync(ct)) throw Invalid();
+        var suborders = await Rows(B.Suborders).Find(tx, F.Eq("orderId", id) & OrderLineageSchemas.OrderValidator(B.Suborders)).Limit(101).ToListAsync(ct);
         if (suborders.Count != groups.Length || order["suborderIds"].AsBsonArray.Count != groups.Length ||
             suborders.Any(row => !order["suborderIds"].AsBsonArray.Contains(row["_id"]) || row["revision"] != 1L ||
                 row["status"] != (order["initialSpendingState"] == "Pending" ? "awaitingSpending" : "awaitingAcceptance"))) throw Invalid();
@@ -250,8 +264,11 @@ public sealed partial class OrderSubmissionService
                 !suborder["skuIds"].AsBsonArray.SequenceEqual(group.Lines.Select(line => new BsonInt64(line.Definition.SkuId.Value)))) throw Invalid();
         }
         var allocations = order["allocations"].AsBsonArray.Select(item => item.AsBsonDocument).ToArray();
-        var reservations = await Rows(B.Reservations).Find(tx, F.Eq("orderId", id) & OrderSubmissionSchemas.Validator(B.Reservations)).Limit(101).ToListAsync(ct);
-        if (reservations.Count != allocations.Length) throw Invalid();
+        var reservations = await Rows(B.Reservations).Find(tx, F.Eq("orderId", id) & OrderLineageSchemas.OrderValidator(B.Reservations)).Limit(OrderReservationHistoryLimits.MaximumRetained + 1).ToListAsync(ct);
+        // New reservations are introduced only by authenticated accepted amendments. Their
+        // genesis and exact membership are replayed by DecisionGraphAsync below.
+        OrderReservationHistoryLimits.Require(reservations);
+        if (reservations.Count < allocations.Length) throw Invalid();
         foreach (var allocation in allocations) {
             var reservation = reservations.SingleOrDefault(row => CatalogSchemas.SemanticEquals(row["allocation"], allocation)) ?? throw Invalid();
             var suborder = suborders.Single(row => row["skuIds"].AsBsonArray.Contains(allocation["skuId"]));

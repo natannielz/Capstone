@@ -1,8 +1,9 @@
 import { createUnitTokoClient, RequestNotSentError } from '../../api/client';
 import { AccessFailure } from '../administration/workflow';
 import { priceId } from '../catalog/catalog-price-workflow';
-import { parseDraftInput } from './order-draft-client';
-import { parseOrderQuote } from './order-quote-client';
+import { parseDraftInput, parseOrderDelivery } from './order-draft-client';
+import { parseOrderContext, parseOrderQuote } from './order-quote-client';
+import { orderLineRevision } from './order-line-identity';
 
 export type ReviewStage = 'Spending' | 'Store' | 'Cancellation';
 export type ReviewAction = 'Approve' | 'Reject' | 'CancelRemainder';
@@ -32,12 +33,24 @@ export function parseOrderReview(value: unknown, expectedStage: ReviewStage) {
   if (reviewStage !== expectedStage || (reviewStage !== 'Store') !== (suborderId === null) || BigInt(revision) > BigInt(103) ||
     typeof row.buyerName !== 'string' || row.buyerName.length < 1 || row.buyerName.length > 200 || typeof row.canDecide !== 'boolean' ||
     typeof row.cancelled !== 'boolean' || !['Pending', 'NotRequired', 'Approved', 'Rejected'].includes(String(row.spendingState)) || !Array.isArray(row.lines)) return invalid();
-  const input = parseDraftInput({ context: row.context, delivery: row.delivery, purchaseReference: null, selections: row.lines.map(item => {
+  if (row.lines.length < 1 || row.lines.length > 100) return invalid();
+  const context = parseOrderContext(row.context), delivery = parseOrderDelivery(row.delivery), orderedAt = time(row.orderedAt);
+  if (!delivery) return invalid();
+  // Each accepted line keeps its original package and price. Checkout still admits one line per SKU.
+  const accepted = row.lines.map(item => {
     const line = record(item), definition = record(line.definition), price = record(line.price);
-    return { skuId: definition.skuId, definitionId: definition.id, definitionVersion: definition.version, priceId: price.id, priceVersion: price.version, packages: line.packages };
-  }) });
-  if (!input.delivery) return invalid();
-  const orderedAt = time(row.orderedAt), quote = parseOrderQuote({ ...row, calculatedAt: orderedAt }, input.context, input.selections);
+    const selected = parseDraftInput({ context, delivery, purchaseReference: null, selections: [{ skuId: definition.skuId,
+      definitionId: definition.id, definitionVersion: definition.version, priceId: price.id, priceVersion: price.version, packages: line.packages }] }).selections;
+    const checked = parseOrderQuote({ ...row, lines: [line], catalogSubtotal: line.catalogSubtotal, calculatedAt: orderedAt }, context, selected);
+    const lineRevision = orderLineRevision(line.lineRevision);
+    if (BigInt(lineRevision) > BigInt(revision)) return invalid();
+    return { selected: selected[0], line: { ...checked.lines[0], lineRevision }, currency: checked.currency };
+  });
+  const lines = accepted.map(item => item.line), catalogSubtotal = money(row.catalogSubtotal);
+  if (new Set(lines.map(line => `${line.definition.skuId}:${line.lineRevision}`)).size !== lines.length ||
+    lines.reduce((sum, line) => sum + cents(line.catalogSubtotal), BigInt(0)) !== cents(catalogSubtotal)) return invalid();
+  const input = { context, delivery, purchaseReference: null, selections: accepted.map(item => item.selected) };
+  const quote = { context, calculatedAt: orderedAt, currency: accepted[0].currency, catalogSubtotal, lines };
   const spendingState = row.spendingState as 'Pending' | 'NotRequired' | 'Approved' | 'Rejected';
   const tax = row.tax === null ? null : money(row.tax), charges = row.charges === null ? null : money(row.charges), total = row.total === null ? null : money(row.total);
   if (reviewStage !== 'Store') {

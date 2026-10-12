@@ -151,7 +151,7 @@ internal sealed class InventoryCountCoverage(IMongoDatabase database)
         // All current physical writers belong to their owning business-domain readers. Unknown
         // inventory-operation movement owners are unresolved work, never silently excluded.
         var unknown = await Rows("movements").Find(tx, new BsonDocument { { "physicalPoolId", facts.Binding.PoolId },
-            { "source.namespace", new BsonDocument("$nin", new BsonArray { "ordering.order", "ordering.decision", "fulfillment.shipment", UnitToko.Platform.Procurement.ProcurementStockReceiptBson.Operation, StockReleaseBson.Namespace }) } })
+            { "source.namespace", new BsonDocument("$nin", new BsonArray { "ordering.order", "ordering.decision", "ordering.substitution", "fulfillment.shipment", UnitToko.Platform.Procurement.ProcurementStockReceiptBson.Operation, StockReleaseBson.Namespace }) } })
             .Limit(InventoryCountStockSourceRecords.MaximumRows + 1).ToListAsync(ct);
         if (unknown.Count > InventoryCountStockSourceRecords.MaximumRows) throw InventoryCountStockSourceRecords.Unavailable();
         return (unbound == 0 && unknown.Count == 0, checked(boundOpenCount + unbound + unknown.Count));

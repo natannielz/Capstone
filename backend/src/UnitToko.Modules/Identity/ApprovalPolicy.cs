@@ -38,7 +38,9 @@ public static class ApprovalPolicy
             Permissions.ProcurementQualityAcceptanceDecide => Independent(evidence.RequestedBy),
             Permissions.AccountingBookApprove or Permissions.OrderSpendingPolicyApprove or Permissions.OrderCommercialPolicyApprove or Permissions.ReceivingAccountApprove or Permissions.ReceivingAccountVerify or Permissions.PricingApprove or Permissions.SupplierChangeApprove or Permissions.SupplierBankApprove or Permissions.StockSourceApprove or Permissions.StockSourcePolicyApprove or Permissions.StockSourceReconciliationDecide => Independent(evidence.ProposedBy),
             Permissions.OrderAccept => evidence.RequestedBy is > 0,
-            Permissions.SubstitutionAccept => evidence.RequestedBy is > 0 && evidence.ProposedBy is > 0,
+            // R02 buyer consent is independent of the staff offer. The requester may be
+            // the consenting buyer; only the historical proposer is disqualified.
+            Permissions.SubstitutionAccept => evidence.RequestedBy is > 0 && Independent(evidence.ProposedBy),
             Permissions.BankReceiptConfirm or Permissions.PaymentVerify or Permissions.PaymentReviewManual or Permissions.PaymentReviewManage or Permissions.PaymentAllocate or Permissions.DisbursementVerify or Permissions.ReconciliationVerify => Independent(evidence.RecordedBy),
             Permissions.CaseManage or Permissions.CreditApprove or Permissions.RefundApprove or Permissions.FundingApprove or Permissions.ExpenseApprove => Independent(evidence.RequestedBy),
             Permissions.StockAdjustApprove => Independent(evidence.CountedBy, evidence.ProposedBy),

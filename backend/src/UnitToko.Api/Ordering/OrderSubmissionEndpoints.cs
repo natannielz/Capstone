@@ -68,7 +68,7 @@ public static class OrderSubmissionEndpoints
     }
     internal static OrderQuoteLineDto[] Lines(OrderCatalogQuote quote) => [.. quote.Lines.Select(line => new OrderQuoteLineDto(line.FamilyId, line.FamilyName,
         line.PublicId.ToString("D"), line.SkuCode, CatalogResponses.From(line.Definition), CatalogPriceResponses.Price(line.Price)!, line.Packages,
-        line.BaseUnits.ToString(CultureInfo.InvariantCulture), line.CatalogSubtotal))];
+        line.BaseUnits.ToString(CultureInfo.InvariantCulture), line.CatalogSubtotal, OrderDraftInputDto.Number(line.LineRevision)))];
     internal static SubmittedOrderDto From(SubmittedOrderView row) => new(new(row.Id, OrderDraftInputDto.Number(row.Revision), [.. row.SuborderIds], row.RecordedAt, row.InitialSpendingState),
         OrderDraftInputDto.From(row.Input), row.Catalog.Currency, row.Catalog.CatalogSubtotal, row.Tax, row.Charges, row.Total, Lines(row.Catalog),
         new(OrderDraftInputDto.Number(row.Progress.Revision), row.Progress.SpendingState.ToString(), [.. row.Progress.AcceptedSuborders], [.. row.Progress.RejectedSuborders], row.Progress.Cancelled), row.BuyerName);

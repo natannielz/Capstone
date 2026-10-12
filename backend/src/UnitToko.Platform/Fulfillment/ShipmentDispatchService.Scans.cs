@@ -18,8 +18,8 @@ public sealed partial class ShipmentDispatchService
             Expected(prepared, request.AuxiliaryId!.Value, request.AuxiliaryRevision!.Value); var view = View(prepared);
             if (view.Source.Revision != request.DocumentRevision || view.Source.Review != request.SourceReview)
                 throw CatalogOperationalIdentifierProof.Changed();
-            var expected = view.Source.Lines.Where(line => view.Lines.Any(selected => selected.SkuId == line.SkuId) &&
-                view.Lots.Any(lot => lot.Reservation.SkuId == line.SkuId && lot.Reservation.RemainingPackages > 0)).Select(ScanResolver.Choice).ToArray();
+            var expected = view.Source.Lines.Where(line => view.Lines.Any(selected => selected.SkuId == line.SkuId && selected.LineRevision == line.LineRevision) &&
+                view.Lots.Any(lot => lot.Reservation.SkuId == line.SkuId && lot.Reservation.LineRevision == line.LineRevision && lot.Reservation.RemainingPackages > 0)).Select(ScanResolver.Choice).ToArray();
             var resolved = await new CatalogOperationalIdentifierProof(database).ResolveAsync(tx, prepared.Source.Order.Resource, request, expected, token);
             foreach (var capture in resolved.Captures) await capture.CompleteAsync(tx, token);
             await orders.FenceFulfillmentAsync(actor, snapshot, tx, [prepared.Source.Order], Permissions.ShipmentDispatch, token);

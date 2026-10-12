@@ -20,12 +20,12 @@ public sealed record ReceiptChallengeReviewDto([property: JsonRequired] string T
 public sealed record ReceiptAmountDto([property: JsonRequired] int Packages, [property: JsonRequired] int LooseUnits);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record ReceiptDeclarationDto([property: JsonRequired] LongId SkuId, [property: JsonRequired] ReceiptAmountDto Accepted,
-    [property: JsonRequired] ReceiptAmountDto Rejected, [property: JsonRequired] ReceiptAmountDto Missing, [property: JsonRequired] string? ExceptionReason);
+    [property: JsonRequired] ReceiptAmountDto Rejected, [property: JsonRequired] ReceiptAmountDto Missing, [property: JsonRequired] string? ExceptionReason, string LineRevision = "0");
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record ReceiptConfirmDto([property: JsonRequired] string Token, [property: JsonRequired] string ConsentVersion, [property: JsonRequired] bool Consent,
     [property: JsonRequired] ReceiptDeclarationDto[] Lines, [property: JsonRequired] string Reason);
 public sealed record ReceiptLineDto(LongId SkuId, LongId DefinitionId, ReceiptAmountDto Accepted, ReceiptAmountDto Rejected, ReceiptAmountDto Missing, string? ExceptionReason,
-    string DispatchedBaseUnits, string AcceptedBaseUnits, string RejectedBaseUnits, string MissingBaseUnits);
+    string DispatchedBaseUnits, string AcceptedBaseUnits, string RejectedBaseUnits, string MissingBaseUnits, string LineRevision = "0");
 public sealed record ReceiptDto(LongId Id, LongId ShipmentId, LongId DocumentId, LongId RecipientId, string RecipientName, DateTimeOffset RecordedAt, bool HasException, ImmutableArray<ReceiptLineDto> Lines);
 public sealed record ReceiptStateDto(string Status, ReceiptDto? Receipt);
 public sealed record ReceiptChallengeStateDto(string Status, ShipmentReceiptChallengeView? Challenge);
@@ -52,7 +52,7 @@ public static class ShipmentReceiptEndpoints
             [FromHeader(Name = "Idempotency-Key")] string key, CancellationToken ct) => {
             if (request.Lines is null || request.Lines.Length is < 1 or > 100 || request.Lines.Any(line => line is null || line.Accepted is null || line.Rejected is null || line.Missing is null)) throw Invalid();
             var lines = request.Lines.Select(line => new ReceiptLineDeclaration(line.SkuId, new(line.Accepted.Packages, line.Accepted.LooseUnits), new(line.Rejected.Packages, line.Rejected.LooseUnits),
-                new(line.Missing.Packages, line.Missing.LooseUnits), line.ExceptionReason)).ToImmutableArray();
+                new(line.Missing.Packages, line.Missing.LooseUnits), line.ExceptionReason, OrderLineInputs.Revision(line.LineRevision))).ToImmutableArray();
             return TypedResults.Ok(View(await service.ConfirmAsync(http.Features.Get<ResolvedActor>()!.Actor, LongId.Parse(challengeId).Value, request.Token, request.ConsentVersion, request.Consent, lines,
                 new(AccessRequestMetadata.IdempotencyKey(http.Request), request.Reason, http.TraceIdentifier), ct)));
         }).WithName("ConfirmShipmentReceipt");
@@ -71,7 +71,7 @@ public static class ShipmentReceiptEndpoints
     }
     private static ReceiptDto View(ShipmentReceiptView receipt) => new(receipt.Id, receipt.ShipmentId, receipt.DocumentId, receipt.RecipientId, receipt.RecipientName, receipt.RecordedAt, receipt.HasException,
         receipt.Lines.Select(line => new ReceiptLineDto(line.Declaration.SkuId, line.DefinitionId, Amount(line.Declaration.Accepted), Amount(line.Declaration.Rejected), Amount(line.Declaration.Missing),
-            line.Declaration.ExceptionReason, Number(line.DispatchedBaseUnits), Number(line.AcceptedBaseUnits), Number(line.RejectedBaseUnits), Number(line.MissingBaseUnits))).ToImmutableArray());
+            line.Declaration.ExceptionReason, Number(line.DispatchedBaseUnits), Number(line.AcceptedBaseUnits), Number(line.RejectedBaseUnits), Number(line.MissingBaseUnits), Number(line.Declaration.LineRevision))).ToImmutableArray());
     private static ReceiptAmountDto Amount(ReceiptPackageAmount value) => new(value.Packages, value.LooseUnits);
     private static string Number(long value) => value.ToString(CultureInfo.InvariantCulture);
     private static void Purpose(string value) { if (value != "shipment-receipt") throw Invalid(); }

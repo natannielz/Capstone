@@ -146,7 +146,7 @@ function ReviewDesk({ account, elapsed, onFailure, onRefresh }: { account: Accou
     </section>
     {selected && <section ref={reviewPanel} tabIndex={-1} className={styles.review} aria-label="Tinjauan keputusan"><h2>{selected.stage === 'Spending' ? 'Tinjau belanja cabang' : selected.stage === 'Store' ? 'Tinjau penerimaan toko' : 'Tinjau pembatalan sisa pesanan'}</h2>
       <p>{selected.buyerName} · Pesanan {selected.orderId} · versi keputusan {selected.revision}</p>
-      <ul>{selected.quote.lines.map(line => <li key={line.definition.skuId}>{line.familyName} — {line.packages} {line.definition.packageLabel} · {line.baseUnits} {line.definition.baseUnitCode} · {orderAmount(selected.quote.currency, line.catalogSubtotal)}</li>)}</ul>
+      <ul>{selected.quote.lines.map(line => <li key={`${line.definition.skuId}:${line.lineRevision}`}>{line.familyName} — {line.packages} {line.definition.packageLabel} · {line.baseUnits} {line.definition.baseUnitCode} · {orderAmount(selected.quote.currency, line.catalogSubtotal)} · {line.lineRevision === '0' ? 'rincian awal' : `persetujuan ${line.lineRevision}`}</li>)}</ul>
       <p className={styles.address}>{selected.input.delivery!.recipientName} · {selected.input.delivery!.phone}{'\n'}{selected.input.delivery!.address}{'\n'}{selected.input.delivery!.city} {selected.input.delivery!.postalCode}</p>
       <p>Subtotal barang: {orderAmount(selected.quote.currency, selected.quote.catalogSubtotal)}</p>
       {selected.total !== null && <><p>Pajak: {orderAmount(selected.quote.currency, selected.tax!)} · Biaya lain: {orderAmount(selected.quote.currency, selected.charges!)}</p><p><strong>Total belanja: {orderAmount(selected.quote.currency, selected.total)}</strong></p></>}

@@ -30,7 +30,7 @@ internal sealed class ShipmentDispatchRecords(IMongoDatabase database, IClock? c
     private async Task<BsonDocument> VerifyAsync(IClientSessionHandle tx, BsonDocument row, CancellationToken ct) {
         valueHistory?.Require(database, tx);
         liveRead?.Require(database, clock ?? throw Invalid(), tx);
-        if (!await Rows(B.Collection).Find(tx, F.Eq("_id", row["_id"]) & ShipmentDispatchSchemas.Validator()).AnyAsync(ct)) throw Invalid();
+        if (!await Rows(B.Collection).Find(tx, F.Eq("_id", row["_id"]) & OrderLineageSchemas.DispatchValidator()).AnyAsync(ct)) throw Invalid();
         var preparation = await ShipmentPreparationService.ReadVersionAsync(database, tx, row["preparationVersionId"].AsInt64, ct);
         if (preparation["preparationId"] != row["preparationId"] || preparation["revision"] != row["preparationRevision"] ||
             !Equal(preparation["source"], row["source"]) || !Equal(preparation["scope"], row["scope"]) || !Equal(preparation["lines"], row["lines"]) ||

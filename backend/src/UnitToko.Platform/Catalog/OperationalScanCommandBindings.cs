@@ -11,6 +11,7 @@ using UnitToko.Platform.Inventory;
 using UnitToko.Platform.Mongo;
 using UnitToko.Platform.Mongo.Migrations;
 using UnitToko.Platform.Procurement;
+using UnitToko.Platform.Ordering;
 using C = UnitToko.Platform.Inventory.StockCountBson;
 using P = UnitToko.Platform.Fulfillment.ShipmentPreparationBson;
 using D = UnitToko.Platform.Fulfillment.ShipmentDispatchBson;
@@ -159,14 +160,14 @@ internal sealed class OperationalScanCommandBindings(IMongoDatabase database, Id
                 if (owner["snapshotHash"] != R.Hash(owner) || owner["bodyHash"] != AuthorizationStore.CommandHash(R.Body(input, owner["binding"].AsString), owner["reason"].AsString)) throw Invalid();
                 audit = R.Audit(owner); result = R.Result(owner);
             } else if (operation == P.Operation) {
-                owner = await load(P.Versions, WithSchema(receipt["result"]["versionId"], ShipmentPreparationSchemas.Validator(P.Versions))) ?? throw Invalid();
+                owner = await load(P.Versions, WithSchema(receipt["result"]["versionId"], OrderLineageSchemas.PreparationValidator(P.Versions))) ?? throw Invalid();
                 var source = P.Source(owner["source"].AsBsonDocument); var lines = P.Lines(owner["lines"].AsBsonArray);
                 _ = ShipmentPreparationPolicy.Require(source, source.Review, lines);
                 if (owner["bodyHash"] != AuthorizationStore.CommandHash(new { suborderId = source.SuborderId.Value,
                     expectedRevision = owner["revision"].AsInt64 - 1, review = source.Review, lines }, owner["reason"].AsString)) throw Invalid();
                 audit = P.Audit(owner); result = P.Result(owner);
             } else {
-                owner = await load(D.Collection, WithSchema(receipt["result"]["shipmentId"], ShipmentDispatchSchemas.Validator())) ?? throw Invalid();
+                owner = await load(D.Collection, WithSchema(receipt["result"]["shipmentId"], OrderLineageSchemas.DispatchValidator())) ?? throw Invalid();
                 if (owner["bodyHash"] != AuthorizationStore.CommandHash(D.Body(owner["preparationId"].AsInt64, owner["preparationRevision"].AsInt64,
                     owner["courierId"].AsInt64, owner["review"].AsString, D.Lots(owner["pickedLots"].AsBsonArray)), owner["reason"].AsString)) throw Invalid();
                 audit = D.Audit(owner); result = D.Result(owner);
@@ -309,8 +310,8 @@ internal sealed class OperationalScanCommandBindings(IMongoDatabase database, Id
             var product = ReceiptProduct(owner);
             if (product["skuId"] != sku || product["definitionId"] != definition || product["definitionVersion"] != version) throw Invalid();
         } else {
-            if (!owner["lines"].AsBsonArray.Any(line => line["skuId"] == sku)) throw Invalid();
-            var line = owner["source"]["lines"].AsBsonArray.SingleOrDefault(line => line["skuId"] == sku) ?? throw Invalid();
+            var selected = owner["lines"].AsBsonArray.SingleOrDefault(line => line["skuId"] == sku) ?? throw Invalid();
+            var line = owner["source"]["lines"].AsBsonArray.SingleOrDefault(line => OrderLineBson.Same(line, selected)) ?? throw Invalid();
             if (line["definition"]["_id"] != definition || line["definition"]["version"] != version) throw Invalid();
         }
     }

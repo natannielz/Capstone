@@ -34,13 +34,14 @@ internal static class PersonTestData
         long maker, long reviewer, bool shared, CancellationToken ct = default) => await unit.ExecuteAsync(async (session, token) =>
     {
         // Synthetic shared-head protocol: the replaced singleton must not remain a competing active group.
+        // Stored member arrays are canonical strictly ascending ids, whichever account is the maker.
         await database.GetCollection<BsonDocument>("personRecords").UpdateOneAsync(session,
             new BsonDocument("_id", PersonId(reviewer)), Builders<BsonDocument>.Update
                 .Set("currentEquivalenceId", GroupId(shared ? maker : reviewer)).Inc("version", 1L), cancellationToken: token);
         await database.GetCollection<BsonDocument>("personEquivalenceGroups").UpdateOneAsync(session,
             new BsonDocument("_id", GroupId(maker)), Builders<BsonDocument>.Update
-                .Set("memberPersonIds", new BsonArray(shared ? new[] { PersonId(maker), PersonId(reviewer) } : new[] { PersonId(maker) }))
-                .Set("memberUserIds", new BsonArray(shared ? new[] { maker, reviewer } : new[] { maker })).Inc("version", 1L), cancellationToken: token);
+                .Set("memberPersonIds", new BsonArray(shared ? new[] { PersonId(maker), PersonId(reviewer) }.Order().ToArray() : new[] { PersonId(maker) }))
+                .Set("memberUserIds", new BsonArray(shared ? new[] { maker, reviewer }.Order().ToArray() : new[] { maker })).Inc("version", 1L), cancellationToken: token);
         await database.GetCollection<BsonDocument>("personEquivalenceGroups").UpdateOneAsync(session,
             new BsonDocument("_id", GroupId(reviewer)), Builders<BsonDocument>.Update
                 .Set("status", shared ? "superseded" : "active").Inc("version", 1L), cancellationToken: token);
