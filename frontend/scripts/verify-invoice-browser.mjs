@@ -7,6 +7,7 @@ import { createRequire } from 'node:module';
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import next from 'next';
+import { verifyOrderSubstitutionBrowser } from './verify-order-substitution-browser.mjs';
 import { verifyReturnLotBrowser } from './verify-return-lot-browser.mjs';
 import { verifyReturnFinancialApprovalBrowser } from './verify-return-financial-approval-browser.mjs';
 import { verifyRefundPayoutBrowser } from './verify-refund-payout-browser.mjs';
@@ -274,6 +275,13 @@ try {
     assert.deepEqual(errors, []);
   } else if (config.orderViews) {
     await verifyOrderViewsBrowser({config, buyer: finance, user, origin, directory, restartUser: async (token, storageState) => {
+      await browser.close();
+      browser = await chromium.launch({ ...(channel === 'msedge' ? { channel: 'msedge' } : {}), headless: true, proxy: { server: 'http://127.0.0.1:' + proxyPort } });
+      return user(token, storageState);
+    }});
+    assert.deepEqual(errors, []);
+  } else if (config.orderSubstitution) {
+    await verifyOrderSubstitutionBrowser({config, maker: finance, user, origin, directory, restartUser: async (token, storageState) => {
       await browser.close();
       browser = await chromium.launch({ ...(channel === 'msedge' ? { channel: 'msedge' } : {}), headless: true, proxy: { server: 'http://127.0.0.1:' + proxyPort } });
       return user(token, storageState);

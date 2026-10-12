@@ -13,7 +13,7 @@ public sealed partial class OrderSubmissionService
     internal async Task ApplyShipmentReservationsAsync(IClientSessionHandle tx, BsonDocument shipment, CancellationToken ct) {
         foreach (var effect in shipment["stockEffects"].AsBsonArray.Select(value => value.AsBsonDocument)) {
             var row = await Rows(B.Reservations).Find(tx, F.Eq("_id", effect["reservationId"]) & F.Eq("orderId", shipment["orderId"]) &
-                F.Eq("suborderId", shipment["suborderId"]) & OrderSubmissionSchemas.Validator(B.Reservations)).SingleOrDefaultAsync(ct) ?? throw Invalid();
+                F.Eq("suborderId", shipment["suborderId"]) & OrderLineageSchemas.OrderValidator(B.Reservations)).SingleOrDefaultAsync(ct) ?? throw Invalid();
             OrderDispatchFacts.Require(row, effect, false);
             if (row["revision"].AsInt64 == long.MaxValue || row["fence"].AsInt64 >= long.MaxValue - 1) throw Invalid();
             var packages = effect["allocation"]["packages"].AsInt64;
@@ -26,7 +26,7 @@ public sealed partial class OrderSubmissionService
         if (effects.Length is < 1 or > 100) throw Invalid();
         foreach (var effect in effects) {
             var row = await Rows(B.Reservations).Find(tx, F.Eq("_id", effect["reservationId"]) & F.Eq("orderId", shipment["orderId"]) &
-                F.Eq("suborderId", shipment["suborderId"]) & OrderSubmissionSchemas.Validator(B.Reservations)).SingleOrDefaultAsync(ct) ?? throw Invalid();
+                F.Eq("suborderId", shipment["suborderId"]) & OrderLineageSchemas.OrderValidator(B.Reservations)).SingleOrDefaultAsync(ct) ?? throw Invalid();
             OrderDispatchFacts.Require(row, effect, true);
             if (row["fence"].AsInt64 >= long.MaxValue - 1 || (await Rows(B.Reservations).UpdateOneAsync(tx, row,
                 Builders<BsonDocument>.Update.Inc("fence", 1L), cancellationToken: ct)).ModifiedCount != 1) throw Invalid();

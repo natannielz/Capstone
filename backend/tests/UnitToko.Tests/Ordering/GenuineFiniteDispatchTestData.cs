@@ -88,16 +88,15 @@ internal sealed class GenuineFiniteDispatchTestData(IAsyncDisposable lifetime, S
     }
 
     internal static async Task<GenuineFiniteDispatchTestData> CreateAsync(MongoFixture fixture, bool converted, bool cogs = true, bool createOrder = true,
-        long reviewedSafetyBufferBaseUnits = 12, bool useSystemClock = false) {
-        if (converted && useSystemClock) throw new ArgumentException("The live browser clock seam is for the released-root fixture", nameof(useSystemClock));
+        long reviewedSafetyBufferBaseUnits = 12, bool useSystemClock = false, bool includeCustomerMappings = false) {
         StockReleaseServiceTests.Data stock; IAsyncDisposable lifetime; long balance;
         if (converted) {
             var conversion = await PackConversionServiceTests.PreparedConversion.CreateAsync(fixture, includeCogsMapping: cogs,
-                reviewedSafetyBufferBaseUnits: reviewedSafetyBufferBaseUnits);
+                reviewedSafetyBufferBaseUnits: reviewedSafetyBufferBaseUnits, useSystemClock: useSystemClock, includeCustomerMappings: includeCustomerMappings);
             stock = conversion.Data; lifetime = conversion; balance = conversion.Result!["destinationBalanceId"].AsInt64;
         } else {
             stock = await StockReleaseServiceTests.Data.CreateAsync(fixture, useSystemClock: useSystemClock, includeCogsMapping: cogs,
-                reviewedSafetyBufferBaseUnits: reviewedSafetyBufferBaseUnits); lifetime = stock;
+                reviewedSafetyBufferBaseUnits: reviewedSafetyBufferBaseUnits, includeCustomerMappings: includeCustomerMappings); lifetime = stock;
             var release = await stock.ProposeAsync("dispatch-source-release");
             await stock.DecideAsync(release["proposalId"].AsInt64, "dispatch-source-released");
             balance = stock.Valuation.Receipt["balanceId"].AsInt64;

@@ -41,6 +41,14 @@ test('checkout review binds exact branch, delivery, packaging, approved prices a
   assert.equal(parseSubmittedOrder({ ...review, buyerName: 'Cabang fixture', submission: result, progress: { revision: '2', spendingState: 'Rejected', acceptedSuborders: [], rejectedSuborders: [], cancelled: false } }).progress.spendingState, 'Rejected');
   assert.throws(() => parseSubmittedOrder({ ...review, buyerName: 'Cabang fixture', submission: result, progress: { revision: '3', spendingState: 'Rejected', acceptedSuborders: [], rejectedSuborders: [], cancelled: true } }));
 });
+test('a substituted order keeps parsing after its renewed spending and store reviews raise the decision revision', () => {
+  const accepted = (revision: string) => ({ ...review, buyerName: 'Cabang fixture', submission: result,
+    progress: { revision, spendingState: 'Approved', acceptedSuborders: [result.suborderIds[0]], rejectedSuborders: [], cancelled: false } });
+  assert.equal(parseSubmittedOrder(accepted('3')).progress.revision, '3');
+  // Accepted substitution, renewed spending approval and renewed store acceptance each add a revision.
+  assert.equal(parseSubmittedOrder(accepted('6')).progress.revision, '6');
+  assert.throws(() => parseSubmittedOrder(accepted('2')));
+});
 test('order transport sends only accepted references and never retries a lost submission or sends from a stale view', async () => {
   let calls = 0; const checked = parseCheckoutReview(review, input);
   const client = gateway(async request => { calls++; assert.equal(request.headers.get('Idempotency-Key'), 'original'); assert.equal(request.headers.get('If-Match'), '"0"');

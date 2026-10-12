@@ -95,7 +95,7 @@ function ReceiptForm({ account, link, onDenied }: { account: Account; link: Rece
   function preview() {
     if (!link || !review || locked || !current()) return;
     try { const lines: ReceiptDeclaration[] = review.lines.map(line => { const value = entries[line.skuId]; const amount = (group: typeof groups[number]) => ({ packages: integer(value[group][0]), looseUnits: integer(value[group][1]) });
-      return { skuId: line.skuId, accepted: amount('accepted'), rejected: amount('rejected'), missing: amount('missing'), exceptionReason: value.exceptionReason || null }; });
+      return { skuId: line.skuId, lineRevision: line.lineRevision, accepted: amount('accepted'), rejected: amount('rejected'), missing: amount('missing'), exceptionReason: value.exceptionReason || null }; });
       setCommand(prepareReceipt(account.actorId, review, link.token, lines, true, reason)); setConsent(false); setError(null);
     } catch (failure) { setError(failure); }
   }

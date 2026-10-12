@@ -1,5 +1,6 @@
 import { createUnitTokoClient, RequestNotSentError } from '../../api/client';
 import { AccessFailure } from '../administration/workflow';
+import { orderLineKey, orderLineRevision, sameOrderLine } from '../ordering/order-line-identity';
 import { parseCatalogDefinition } from '../catalog/catalog-workflow';
 import { priceId } from '../catalog/catalog-price-workflow';
 import { parseOrderDelivery } from '../ordering/order-draft-client';
@@ -18,18 +19,18 @@ export function parseFulfillmentOrder(value: unknown) {
     const item = record(value), skuId = priceId(item.skuId), definition = parseCatalogDefinition(item.definition), orderedPackages = quantity(item.orderedPackages), remainingPackages = quantity(item.remainingPackages, 0);
     const publicId = text(item.publicId, 36);
     if (definition.skuId !== skuId || remainingPackages > orderedPackages || !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$(?![\s\S])/.test(publicId)) return invalid();
-    return { skuId, publicId, definition, skuCode: text(item.skuCode, 64), productName: text(item.productName, 160), orderedPackages, remainingPackages };
+    return { skuId, lineRevision: orderLineRevision(item.lineRevision), publicId, definition, skuCode: text(item.skuCode, 64), productName: text(item.productName, 160), orderedPackages, remainingPackages };
   });
-  if (new Set(lines.map(line => line.skuId)).size !== lines.length || row.canPrepare && !lines.some(line => line.remainingPackages > 0)) return invalid();
+  if (new Set(lines.map(orderLineKey)).size !== lines.length || row.canPrepare && !lines.some(line => line.remainingPackages > 0)) return invalid();
   return { orderId: priceId(row.orderId), suborderId: priceId(row.suborderId), revision: priceId(row.revision), review: hash(row.review),
     buyerName: text(row.buyerName, 200), delivery, lines, canPrepare: row.canPrepare, orderedAt: time(row.orderedAt) };
 }
 export type FulfillmentOrder = ReturnType<typeof parseFulfillmentOrder>;
-export type PackageSelection = Readonly<{ skuId: string; packages: number }>;
+export type PackageSelection = Readonly<{ skuId: string; packages: number; lineRevision?: string }>;
 function selections(value: unknown, source: FulfillmentOrder) {
   if (!Array.isArray(value) || value.length < 1 || value.length > 100) return invalid();
-  const lines = value.map(value => { const row = record(value), skuId = priceId(row.skuId), packages = quantity(row.packages), accepted = source.lines.find(line => line.skuId === skuId);
-    if (!accepted || packages > accepted.remainingPackages) return invalid(); return { skuId, packages }; });
+  const lines = value.map(value => { const row = record(value), skuId = priceId(row.skuId), lineRevision = orderLineRevision(row.lineRevision), packages = quantity(row.packages), accepted = source.lines.find(line => sameOrderLine(line, { skuId, lineRevision }));
+    if (!accepted || packages > accepted.remainingPackages) return invalid(); return { skuId, lineRevision, packages }; });
   if (new Set(lines.map(line => line.skuId)).size !== lines.length) return invalid(); return lines;
 }
 export function parsePreparation(value: unknown) {
@@ -39,6 +40,12 @@ export function parsePreparation(value: unknown) {
   return { id: priceId(row.id), revision: priceId(row.revision), recordedAt, acceptedSource: source, lines: selections(row.lines, source), currentSourceMatches: row.currentSourceMatches };
 }
 export type Preparation = NonNullable<ReturnType<typeof parsePreparation>>;
+/** Editable selection seeded from a saved preparation. A line with nothing left to prepare is never preselected:
+ * its checkbox is disabled, and an accepted substitution can leave a saved line exhausted. */
+export function initialPreparationValues(source: FulfillmentOrder, preparation: Preparation | null): Record<string, { selected: boolean; packages: string }> {
+  return Object.fromEntries(source.lines.map(line => { const prior = preparation?.lines.find(item => sameOrderLine(item, line));
+    return [orderLineKey(line), { selected: prior !== undefined && line.remainingPackages > 0, packages: String(prior?.packages ?? line.remainingPackages) }]; }));
+}
 export function parsePreparationResult(value: unknown) { const row = record(value); return { preparationId: priceId(row.preparationId), versionId: priceId(row.versionId), revision: priceId(row.revision),
   orderId: priceId(row.orderId), suborderId: priceId(row.suborderId), recordedAt: time(row.recordedAt) }; }
 export type PreparationResult = ReturnType<typeof parsePreparationResult>;
@@ -46,7 +53,7 @@ export function prepareShipmentCommand(actorId: string, source: FulfillmentOrder
   scanSelections?: readonly OperationalScanSelection[]) {
   try {
     const accepted = parseFulfillmentOrder(source);
-    const scans = validateScanSelections(scanSelections, accepted.lines.filter(line => lines.some(item => item.skuId === line.skuId))
+    const scans = validateScanSelections(scanSelections, accepted.lines.filter(line => lines.some(item => sameOrderLine(item, line)))
       .map(line => ({skuId: line.skuId, definitionId: line.definition.id, definitionVersion: line.definition.version})));
     if (!accepted.canPrepare || (expectedRevision !== '0' && priceId(expectedRevision) === '9223372036854775807')) return invalid();
     return Object.freeze({ actorId: priceId(actorId), orderId: accepted.orderId, suborderId: accepted.suborderId, expectedRevision,

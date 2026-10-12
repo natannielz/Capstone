@@ -66,17 +66,43 @@ public sealed partial class OrderSubmissionService
     private async Task<OrderApprovalProgress> DecisionGraphAsync(IClientSessionHandle tx, BsonDocument order, CancellationToken ct) {
         stockSourceHistory?.Require(database, tx);
         stockSourceLiveRead?.Require(database, clock, tx);
-        if (await Rows(Decisions).Find(tx, F.Eq("orderId", order["_id"]) & new BsonDocument("$nor", new BsonArray { OrderSubmissionSchemas.Validator(Decisions) })).AnyAsync(ct)) throw Invalid();
+        var id = order["_id"].AsInt64;
+        var number = MongoUnitOfWork.OwnsOperation(tx) ? tx.WrappedCoreSession.CurrentTransaction.TransactionNumber : (long?)null;
+        var members = number is null ? null : WithoutFences(await GraphMembersAsync(tx, id, ct));
+        var orderKey = WithoutFence(order);
+        if (number is { } attempt && members is not null && verifiedGraphs.TryGetValue(tx, out var verified)) lock (verified)
+            if (verified.TryGetValue(id, out var hit) && hit.Number == attempt && ReferenceEquals(hit.History, stockSourceHistory) &&
+                ReferenceEquals(hit.LiveRead, stockSourceLiveRead) && hit.Order == orderKey && hit.Members == members) return hit.Progress;
+        var progress = await DecisionGraphCoreAsync(tx, order, ct);
+        if (number is { } completed && members is not null && WithoutFences(await GraphMembersAsync(tx, id, ct)) == members) {
+            var table = verifiedGraphs.GetValue(tx, _ => []);
+            lock (table) table[id] = new(completed, stockSourceHistory, stockSourceLiveRead, orderKey, members, progress);
+        }
+        return progress;
+    }
+    // Freshness fences advance on every fenced read and carry no business content.
+    private static BsonDocument WithoutFence(BsonDocument row) { var copy = row.DeepClone().AsBsonDocument; copy.Remove("fence"); return copy; }
+    private static BsonArray WithoutFences(BsonArray members) =>
+        new(members.Select(group => new BsonArray(group.AsBsonArray.Select(row => (BsonValue)WithoutFence(row.AsBsonDocument)))));
+    private async Task<OrderApprovalProgress> DecisionGraphCoreAsync(IClientSessionHandle tx, BsonDocument order, CancellationToken ct) {
+        stockSourceHistory?.Require(database, tx);
+        stockSourceLiveRead?.Require(database, clock, tx);
+        if (await Rows(Decisions).Find(tx, F.Eq("orderId", order["_id"]) & new BsonDocument("$nor", new BsonArray { OrderLineageSchemas.OrderValidator(Decisions) })).AnyAsync(ct)) throw Invalid();
         var rows = await Rows(Decisions).Find(tx, F.Eq("orderId", order["_id"])).Sort(new BsonDocument("revision", 1)).Limit(103).ToListAsync(ct);
+        var substitutions = await Rows(OrderSubstitutionBson.Decisions).Find(tx, F.Eq("orderId", order["_id"])).Limit(103).ToListAsync(ct);
+        rows.AddRange(substitutions); rows = rows.OrderBy(row => row["revision"].AsInt64).ToList();
         if (rows.Count > 102) throw Invalid();
-        var actual = await Rows(B.Reservations).Find(tx, F.Eq("orderId", order["_id"])).Limit(101).ToListAsync(ct);
-        var reservations = actual.ToDictionary(row => row["_id"].AsInt64, row => {
+        var actual = await Rows(B.Reservations).Find(tx, F.Eq("orderId", order["_id"])).Limit(OrderReservationHistoryLimits.MaximumRetained + 1).ToListAsync(ct);
+        OrderReservationHistoryLimits.Require(actual);
+        var reservations = actual.Where(row => order["allocations"].AsBsonArray.Contains(row["allocation"])).ToDictionary(row => row["_id"].AsInt64, row => {
             var expected = row.DeepClone().AsBsonDocument; expected["revision"] = 1L; expected["remaining"] = row["allocation"]["packages"];
             expected["released"] = 0L; expected["dispatched"] = 0L; return expected;
         });
         var state = Enum.Parse<OrderSpendingState>(order["initialSpendingState"].AsString); long revision = 1;
+        var spendingRequestedBy = order["createdBy"].AsInt64;
         var accepted = ImmutableArray.CreateBuilder<LongId>(); var rejected = ImmutableArray.CreateBuilder<LongId>(); var cancelled = false;
         var lastAt = OrderDraftBson.Time(order["orderedAt"]);
+        var currentCatalog = B.Quote(order["quote"].AsBsonDocument); var currentTerms = order["terms"].DeepClone().AsBsonDocument;
         long dispatchSequence = 0;
         await using var shipments = new ShipmentDispatchRecords(database, clock, stockSourceHistory, stockSourceLiveRead).ReadOrderAsync(tx, order["_id"].AsInt64, ct).GetAsyncEnumerator(ct);
         var hasShipment = await shipments.MoveNextAsync();
@@ -85,19 +111,26 @@ public sealed partial class OrderSubmissionService
                 var shipment = shipments.Current; var subId = shipment["suborderId"].AsInt64;
                 if (cancelled || !OrderSpendingPolicy.CanAcceptAtStore(state) || !accepted.Contains(new(subId)) || rejected.Contains(new(subId)) ||
                     shipment["orderSequence"] != checked(dispatchSequence + 1) || OrderDraftBson.Time(shipment["recordedAt"]) < lastAt) throw Invalid();
-                await VerifyDispatchHistoryAsync(tx, order, shipment, reservations, ct);
+                await VerifyDispatchHistoryAsync(tx, order, shipment, reservations, currentCatalog, ct);
                 dispatchSequence++; lastAt = OrderDraftBson.Time(shipment["recordedAt"]); hasShipment = await shipments.MoveNextAsync();
             }
         }
         foreach (var row in rows) {
             await ApplyDispatches();
+            if (row["kind"] == "ordering.substitution.decision") {
+                var change = await VerifySubstitutionHistoryAsync(tx, order, row, reservations, actual, currentCatalog, currentTerms,
+                    state, cancelled, rejected.ToImmutable(), revision, dispatchSequence, lastAt, ct);
+                currentCatalog = change.Catalog; currentTerms = change.Terms; state = change.Spending;
+                if (row["decision"] == "Accept") { accepted.Clear(); spendingRequestedBy = row["actorId"].AsInt64; }
+                lastAt = OrderDraftBson.Time(row["recordedAt"]); revision++; continue;
+            }
             var stage = Enum.Parse<OrderReviewStage>(row["stage"].AsString); var action = Enum.Parse<OrderReviewAction>(row["action"].AsString);
             var operation = DecisionOperation(stage, action); var subId = row["suborderId"].IsBsonNull ? (long?)null : row["suborderId"].AsInt64;
             if (cancelled || row["expectedRevision"] != revision || row["revision"] != revision + 1 || row["orderSnapshot"] != order["snapshotHash"] ||
                 row["review"] != DecisionReview(order, subId, stage, revision, dispatchSequence) || OrderDraftBson.Time(row["decidedAt"]) < lastAt ||
                 row["bodyHash"] != AuthorizationStore.CommandHash(DecisionBody(order["_id"].AsInt64, subId, stage, revision, row["review"].AsString, action), row["reason"].AsString)) throw Invalid();
             if (stage == OrderReviewStage.Spending) {
-                if (subId.HasValue || state != OrderSpendingState.Pending || row["decidedBy"] == order["createdBy"]) throw Invalid();
+                if (subId.HasValue || state != OrderSpendingState.Pending || row["decidedBy"] == spendingRequestedBy) throw Invalid();
                 state = action == OrderReviewAction.Approve ? OrderSpendingState.Approved : OrderSpendingState.Rejected;
             } else if (stage == OrderReviewStage.Store) {
                 if (!subId.HasValue || !order["suborderIds"].AsBsonArray.Contains(new BsonInt64(subId.Value)) ||
@@ -112,18 +145,20 @@ public sealed partial class OrderSubmissionService
             var receipt = await Rows("idempotencyRecords").Find(tx, F.Eq("actorId", row["decidedBy"]) & F.Eq("operation", operation) & F.Eq("key", row["requestKey"])).SingleOrDefaultAsync(ct);
             if (audit is null || !CatalogSchemas.SemanticEquals(audit, DecisionAudit(row)) || receipt is null || receipt["bodyHash"] != row["bodyHash"] ||
                 !CatalogSchemas.SemanticEquals(receipt["result"], DecisionResult(row))) throw Invalid();
-            if (stage == OrderReviewStage.Spending && PersonApprovalReceipt.Read(receipt, Permissions.OrderSpendApprove) != new ApprovalRequest(1, 1, RequestedBy: order["createdBy"].AsInt64)) throw Invalid();
+            if (stage == OrderReviewStage.Spending && PersonApprovalReceipt.Read(receipt, Permissions.OrderSpendApprove) != new ApprovalRequest(1, 1, RequestedBy: spendingRequestedBy)) throw Invalid();
             if (stage != OrderReviewStage.Spending && receipt.Contains(PersonApprovalReceipt.Field)) throw Invalid();
             lastAt = OrderDraftBson.Time(row["decidedAt"]); revision++;
         }
         await ApplyDispatches(); if (hasShipment) throw Invalid();
+        if (reservations.Count != actual.Count || actual.Any(row => !reservations.ContainsKey(row["_id"].AsInt64))) throw Invalid();
         foreach (var row in actual) foreach (var field in new[] { "revision", "remaining", "released", "dispatched" })
             if (row[field] != reservations[row["_id"].AsInt64][field]) throw Invalid();
         stockSourceHistory?.Require(database, tx);
         return new(revision, state, accepted.ToImmutable(), rejected.ToImmutable(), cancelled) {
             DispatchSequence = dispatchSequence, HasRemainingReservation = reservations.Values.Any(row => row["remaining"].AsInt64 > 0) };
     }
-    private sealed record ReviewContext(BsonDocument Order, BsonDocument? Suborder, ResourceScope Resource, OrderApprovalProgress State);
+    private sealed record ReviewContext(BsonDocument Order, BsonDocument? Suborder, ResourceScope Resource, OrderApprovalProgress State,
+        OrderCatalogQuote Catalog, BsonDocument Terms, long SpendingRequestedBy);
     private AuthorizationQuery ReviewQuery(ActorContext actor, AuthorizationSnapshot snapshot, OrderReviewStage stage) {
         var query = ScopePolicy.Compile(actor, snapshot, ReviewPermission(stage), clock.UtcNow); AuthorizationStore.Require(query); return query;
     }
@@ -137,20 +172,25 @@ public sealed partial class OrderSubmissionService
         var order = await GraphAsync(tx, actor, id, ct, requireOwner: false);
         var resource = ReviewResource(order, sub);
         if (!query.Matches(resource) || !ScopePolicy.IsResourceActive(resource, snapshot.Directory)) throw Invalid();
-        return new(order, sub, resource, await DecisionGraphAsync(tx, order, ct));
+        var state = await DecisionGraphAsync(tx, order, ct);
+        var commercial = await CurrentSubstitutionCommercialAsync(tx, order, state.Revision, ct);
+        return new(order, sub, resource, state, B.Quote(commercial.Catalog), commercial.Terms,
+            commercial.Amendment?["actorId"].AsInt64 ?? order["createdBy"].AsInt64);
     }
     private static OrderReviewView ReviewView(ReviewContext context, OrderReviewStage stage) {
-        var order = context.Order; var subId = context.Suborder?["_id"].AsInt64; var quote = B.Quote(order["quote"].AsBsonDocument);
-        if (context.Suborder is { } sub) quote = new([.. quote.Lines.Where(line => sub["skuIds"].AsBsonArray.Contains(new BsonInt64(line.Definition.SkuId.Value)))],
-            quote.Currency, new(Decimal128.ToDecimal(sub["catalogSubtotal"].AsDecimal128)));
+        var order = context.Order; var subId = context.Suborder?["_id"].AsInt64; var quote = context.Catalog;
+        if (context.Suborder is { } sub) {
+            var lines = quote.Lines.Where(line => line.FulfillmentOwner == CatalogRepository.Owner(sub["owner"].AsBsonDocument)).ToImmutableArray();
+            quote = new(lines, quote.Currency, lines.Aggregate(new Money(0), (total, line) => Money.Add(total, line.CatalogSubtotal)));
+        }
         var storeState = subId.HasValue ? context.State.RejectedSuborders.Contains(new(subId.Value)) ? "rejected" : context.State.Cancelled ? "cancelled" :
             context.State.SpendingState == OrderSpendingState.Rejected ? "spendingRejected" : context.State.AcceptedSuborders.Contains(new(subId.Value)) ? "accepted" :
             OrderSpendingPolicy.CanAcceptAtStore(context.State.SpendingState) ? "awaitingAcceptance" : "awaitingSpending" : null;
         return new(order["_id"].AsInt64, subId, stage, context.State.Revision, DecisionReview(order, subId, stage, context.State.Revision, context.State.DispatchSequence),
             OrderDraftBson.Context(order["input"]["context"].AsBsonDocument), order["terms"]["buyer"]["name"].AsString, OrderDraftBson.Input(order["input"].AsBsonDocument).Delivery!, quote,
-            subId.HasValue ? null : new Money(Decimal128.ToDecimal(order["terms"]["tax"].AsDecimal128)),
-            subId.HasValue ? null : new Money(Decimal128.ToDecimal(order["terms"]["charges"].AsDecimal128)),
-            subId.HasValue ? null : new Money(Decimal128.ToDecimal(order["terms"]["total"].AsDecimal128)), context.State.SpendingState, storeState,
+            subId.HasValue ? null : new Money(Decimal128.ToDecimal(context.Terms["tax"].AsDecimal128)),
+            subId.HasValue ? null : new Money(Decimal128.ToDecimal(context.Terms["charges"].AsDecimal128)),
+            subId.HasValue ? null : new Money(Decimal128.ToDecimal(context.Terms["total"].AsDecimal128)), context.State.SpendingState, storeState,
             !context.State.Cancelled && (stage == OrderReviewStage.Spending ? context.State.SpendingState == OrderSpendingState.Pending :
                 stage == OrderReviewStage.Store ? storeState == "awaitingAcceptance" : context.State.SpendingState != OrderSpendingState.Rejected &&
                 context.State.HasRemainingReservation), context.State.Cancelled, OrderDraftBson.Time(order["orderedAt"]));
@@ -213,7 +253,7 @@ public sealed partial class OrderSubmissionService
             var previous = await Rows(Decisions).Find(tx, F.Eq("decidedBy", actor.UserId) & F.Eq("stage", stage.ToString()) & F.Eq("action", action.ToString()) & F.Eq("requestKey", metadata.IdempotencyKey)).Limit(2).ToListAsync(token);
             if (previous.Count > 1) throw Invalid();
             if (previous.Count == 1) _ = await GraphAsync(tx, actor, previous[0]["orderId"].AsInt64, token, requireOwner: false);
-            var evidence = new ApprovalRequest(1, 1, RequestedBy: context.Order["createdBy"].AsInt64);
+            var evidence = new ApprovalRequest(1, 1, RequestedBy: context.SpendingRequestedBy);
             return new(ScopePolicy.Authorize(actor, snapshot, permission, context.Resource, clock.UtcNow, evidence),
                 ScopePolicy.RequiredNodes(context.Resource, snapshot.Directory), permission, new(context.Resource, evidence));
         }, async (tx, token) => {

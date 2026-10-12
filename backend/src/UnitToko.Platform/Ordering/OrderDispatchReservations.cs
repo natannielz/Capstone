@@ -12,7 +12,7 @@ namespace UnitToko.Platform.Ordering;
 
 internal sealed record OrderDispatchReservation(BsonDocument Reservation, OrderStockAllocation Allocation, DateOnly? ExpiresOn) {
     internal ShipmentReservationFact Fact => new(new(Reservation["_id"].AsInt64), new(Allocation.SkuId), Allocation.Change.Key.DefinitionId,
-        Allocation.Change.Key.LotId, checked((int)Reservation["remaining"].AsInt64));
+        Allocation.Change.Key.LotId, checked((int)Reservation["remaining"].AsInt64), Allocation.LineRevision);
 }
 internal sealed record OrderDispatchSource(FulfillmentOrderSource Order, ImmutableArray<OrderDispatchReservation> Reservations);
 
@@ -23,11 +23,12 @@ public sealed partial class OrderSubmissionService
     internal async Task<OrderDispatchSource> ReadDispatchReservationsAsync(ActorContext actor, AuthorizationSnapshot snapshot,
         IClientSessionHandle tx, long suborderId, CancellationToken ct) {
         var source = await ReadForFulfillmentAsync(actor, snapshot, tx, suborderId, Permissions.ShipmentDispatch, ct);
-        var rows = await Rows(B.Reservations).Find(tx, F.Eq("orderId", source.View.OrderId.Value) & F.Eq("suborderId", suborderId))
+        var rows = await Rows(B.Reservations).Find(tx, F.Eq("orderId", source.View.OrderId.Value) & F.Eq("suborderId", suborderId) & F.Gt("remaining", 0L))
             .Sort(new BsonDocument("_id", 1)).Limit(101).ToListAsync(ct);
         if (rows.Count is < 1 or > 100) throw Invalid();
         var result = ImmutableArray.CreateBuilder<OrderDispatchReservation>();
         foreach (var row in rows) {
+            if (row["remaining"].AsInt64 == 0) continue;
             var original = B.Allocation(row["allocation"].AsBsonDocument);
             var balance = await new InventoryRepository(database).ReadAsync(tx, original.Change.Id, ct);
             var pool = await Rows("inventoryPools").Find(tx, F.Eq("_id", original.Pool.Id)).SingleOrDefaultAsync(ct) ?? throw Invalid();
@@ -60,7 +61,7 @@ internal static class OrderDispatchFacts
         var original = B.Allocation(reservation["allocation"].AsBsonDocument); var allocation = B.Allocation(dispatch["allocation"].AsBsonDocument);
         var before = dispatch["before"].AsBsonDocument; var packages = allocation.Change.Packages;
         if (dispatch["reservationId"] != reservation["_id"] || allocation.SourceAuthority != original.SourceAuthority || allocation.Pool.Id != original.Pool.Id ||
-            allocation.Pool.Location != original.Pool.Location || allocation.SkuId != original.SkuId || allocation.Change.Id != original.Change.Id ||
+            allocation.Pool.Location != original.Pool.Location || allocation.SkuId != original.SkuId || allocation.LineRevision != original.LineRevision || allocation.Change.Id != original.Change.Id ||
             allocation.Change.PhysicalPoolId != original.Change.PhysicalPoolId || allocation.Change.Key != original.Change.Key ||
             packages <= 0 || packages > before["remaining"].AsInt64 || before["remaining"].AsInt64 + before["released"].AsInt64 + before["dispatched"].AsInt64 != original.Change.Packages ||
             reservation["revision"].AsInt64 != before["revision"].AsInt64 + (applied ? 1 : 0) || reservation["released"] != before["released"] ||

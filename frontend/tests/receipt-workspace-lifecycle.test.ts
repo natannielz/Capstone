@@ -15,7 +15,7 @@ const actor = '17', token = 'a'.repeat(64), at = '2026-10-08T02:00:00Z';
 const review: receipts.ReceiptReview = {challengeId: '21', shipmentId: '22', documentId: '23', documentVersion: '1', documentHash: 'b'.repeat(64),
   recipientName: 'Private recipient fixture', serverTime: at, expiresAt: '2026-10-08T02:15:00Z', consentVersion: 'delivery-receipt-v1',
   consentText: 'Saya telah memeriksa kiriman.', lines: [{skuId: '31', skuCode: 'SKU-PRIVATE', productName: 'Private shipped product', definitionId: '32',
-    packageLabel: 'Dus', baseUnitCode: 'piece', baseUnitsPerPackage: 12, packages: 1}]};
+    packageLabel: 'Dus', baseUnitCode: 'piece', baseUnitsPerPackage: 12, packages: 1, lineRevision: '0'}]};
 const difference = 'Private difference fixture', reason = 'Private receipt note';
 const session = identity.parseIdentitySession({authenticated: true, account: {userId: actor, displayName: 'Recipient fixture', verifiedEmail: 'recipient@example.invalid'},
   serverTime: at, factorCompletedAt: at, freshFactorUntil: '2026-10-08T02:05:00Z', idleExpiresAt: '2026-10-08T02:30:00Z',
@@ -178,7 +178,7 @@ test('mounted recipient clears private content on confirmation or recovery 401 a
     const staleConfirm = harness.button('Konfirmasi penerimaan').props.onClick as () => void;
     await harness.click('Konfirmasi penerimaan'); assert.equal(harness.writes.length, 1);
     assert.deepEqual(await harness.writes[0].json(), {token, consent: true, consentVersion: review.consentVersion, reason, lines: [{skuId: '31',
-      accepted: {packages: 0, looseUnits: 6}, rejected: {packages: 0, looseUnits: 4}, missing: {packages: 0, looseUnits: 2}, exceptionReason: difference}]});
+      accepted: {packages: 0, looseUnits: 6}, rejected: {packages: 0, looseUnits: 4}, missing: {packages: 0, looseUnits: 2}, exceptionReason: difference, lineRevision: '0'}]});
     const journal = new operations.OperationJournal(() => harness.storage);
     if (mode === '401') {assertSignedOut(harness); assert.deepEqual(journal.list(actor), []); continue;}
     const [original] = journal.list(actor), stored = [...harness.storage.values.entries()];

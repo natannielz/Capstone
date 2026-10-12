@@ -1,4 +1,5 @@
 'use client';
+import { orderLineKey, sameOrderLine } from '../ordering/order-line-identity';
 
 import Link from 'next/link';
 import {ScanInput} from '../inventory/ScanInput';
@@ -128,7 +129,7 @@ function DispatchDesk({ account, onFailure }: { account: Account; onFailure: (er
     <section className={common.accountSection} aria-label="Persiapan untuk diberangkatkan" aria-busy={busy}><h2>Persiapan tersimpan</h2>
       {busy && !dispatchPending && <p role="status">Memuat pengiriman…</p>}{!busy && page.items.length === 0 && <p>Belum ada persiapan dalam penugasan ini.</p>}
       <ul className={styles.lines}>{page.items.map(item => <li className={styles.line} key={item.preparationId}><strong>{item.source.buyerName}</strong> · Pesanan {item.source.orderId}
-        <p>{item.lines.map(line => { const product = item.source.lines.find(product => product.skuId === line.skuId)!; return `${product.productName} — ${line.packages} ${product.definition.packageLabel}`; }).join(', ')}</p>
+        <p>{item.lines.map(line => { const product = item.source.lines.find(product => sameOrderLine(product, line))!; return `${product.productName} — ${line.packages} ${product.definition.packageLabel}`; }).join(', ')}</p>
         {item.canDispatch ? <button className={common.secondary} disabled={locked} onClick={() => void select(item.source.suborderId)}>Periksa keberangkatan pesanan {item.source.orderId}</button>
           : <p>{item.source.canPrepare ? 'Sisa pesanan berubah. Perbarui persiapan untuk pengiriman berikutnya.' : 'Pesanan ini tidak memiliki sisa yang dapat diberangkatkan.'}</p>}</li>)}</ul>
       <div className={common.actions}><button className={common.secondary} disabled={locked} onClick={() => { setBefore(null); setReload(value => value + 1); }}>Muat persiapan terbaru</button>
@@ -136,29 +137,29 @@ function DispatchDesk({ account, onFailure }: { account: Account; onFailure: (er
     </section>
     {prepared && <section ref={panel} tabIndex={-1} className={styles.review} aria-label="Pemeriksaan keberangkatan"><h2>Keberangkatan pesanan {prepared.source.orderId}</h2>
       <p>{prepared.source.buyerName}</p><p className={styles.address}>{prepared.source.delivery.recipientName} · {prepared.source.delivery.phone}{'\n'}{prepared.source.delivery.address}{'\n'}{prepared.source.delivery.city} {prepared.source.delivery.postalCode}</p>
-      <ul>{prepared.lines.map(line => { const item = prepared.source.lines.find(item => item.skuId === line.skuId)!;
-        return <li key={line.skuId}>{item.productName} — {line.packages} {item.definition.packageLabel} · total {(BigInt(line.packages) * BigInt(item.definition.baseUnitsPerPackage)).toString()} {item.definition.baseUnitCode}</li>; })}</ul>
+      <ul>{prepared.lines.map(line => { const item = prepared.source.lines.find(item => sameOrderLine(item, line))!;
+        return <li key={orderLineKey(line)}>{item.productName} — {line.packages} {item.definition.packageLabel} · total {(BigInt(line.packages) * BigInt(item.definition.baseUnitsPerPackage)).toString()} {item.definition.baseUnitCode}</li>; })}</ul>
       {!review && <ScanInput key={prepared.preparationId + ':' + prepared.preparationRevision + ':' + prepared.source.review} actorId={actorId} disabled={locked} current={current}
         context={{purpose: 'dispatch', location: null, documentId: prepared.source.suborderId, documentRevision: prepared.source.revision,
           auxiliaryId: prepared.preparationId, auxiliaryRevision: prepared.preparationRevision, sourceReview: prepared.source.review}}
         onReset={() => {setScanSelection(null); setScanBlocked(true); setScannedSku(null); setValues({});}} onManual={() => {setScanSelection(null); setScanBlocked(false); setScannedSku(null);}}
-        onConfirm={candidate => {const line = prepared.source.lines.find(item => item.skuId === candidate.skuId);
-          if (!current() || !line || !prepared.lines.some(item => item.skuId === line.skuId) || candidate.targetReference !== line.skuId ||
+        onConfirm={candidate => {const line = prepared.source.lines.find(item => item.skuId === candidate.skuId && prepared.lines.some(selected => sameOrderLine(item, selected)));
+          if (!current() || !line || candidate.targetReference !== line.skuId ||
             !sameScanPackage(candidate, {...line.definition, skuId: line.skuId, skuCode: line.skuCode, definitionId: line.definition.id, definitionVersion: line.definition.version}))
             throw new AccessFailure(409, 'operational_scan_context_changed');
           setScannedSku(line.skuId); setScanSelection(candidate.selection); setScanBlocked(false);
         }} />}
       {scannedSku && !review && <p role="status">Kemasan telah dikonfirmasi dari hasil pindai. Pilih lot yang sesuai dan isi jumlah sebenarnya pada baris {prepared.source.lines.find(item => item.skuId === scannedSku)?.skuCode}.</p>}
       {review && command ? <><h3>Konfirmasi barang dan kurir</h3><p>Kurir: <strong>{review.courierName}</strong></p><ul>{review.selected.map(lot => {
-        const reserved = prepared.lots.find(item => item.reservationId === lot.reservationId)!; const product = prepared.source.lines.find(item => item.skuId === reserved.skuId)!;
+        const reserved = prepared.lots.find(item => item.reservationId === lot.reservationId)!; const product = prepared.source.lines.find(item => sameOrderLine(item, reserved))!;
         return <li key={lot.reservationId}>{product.productName} · Lot {reserved.lotId} · {lot.packages} {product.definition.packageLabel}</li>; })}</ul>
         <p>Catatan: {command.reason}</p><p>Konfirmasi saat barang diserahkan untuk berangkat. Jumlah tersebut akan dikurangi dari stok fisik dan reservasi pesanan.</p>
         <div className={common.actions}><button className={common.primary} disabled={locked} onClick={() => void confirm()}>Konfirmasi keberangkatan</button>
           <button className={common.secondary} disabled={locked} onClick={() => { setReview(null); setCommand(null); }}>Kembali ke lot dan kurir</button></div>
       </> : <form onSubmit={event => { event.preventDefault(); void preview(); }}><fieldset disabled={locked}><legend>Pilih lot fisik dan kurir</legend>
         <p>Isi jumlah pada lot yang benar-benar diambil. Kosongkan lot yang tidak digunakan. Total harus sesuai kemasan yang disiapkan.</p>
-        {prepared.lots.filter(lot => lot.remainingPackages > 0 && prepared.lines.some(line => line.skuId === lot.skuId)).map(lot => {
-          const item = prepared.source.lines.find(item => item.skuId === lot.skuId)!;
+        {prepared.lots.filter(lot => lot.remainingPackages > 0 && prepared.lines.some(line => sameOrderLine(line, lot))).map(lot => {
+          const item = prepared.source.lines.find(item => sameOrderLine(item, lot))!;
           return <div className={styles.line} key={lot.reservationId}><strong>{item.productName} — {item.definition.packageLabel}</strong><p>Lot {lot.lotId} · sisa reservasi {lot.remainingPackages} kemasan{lot.expiresOn ? ` · kedaluwarsa ${lot.expiresOn}` : ''}</p>
             <label>Jumlah lot {lot.lotId}<input inputMode="numeric" maxLength={7} value={values[lot.reservationId] ?? ''} onChange={event => setValues(previous => ({ ...previous, [lot.reservationId]: event.target.value }))} /></label></div>;
         })}

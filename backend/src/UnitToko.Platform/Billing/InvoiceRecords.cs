@@ -10,6 +10,7 @@ using UnitToko.Platform.Catalog;
 using UnitToko.Platform.Fulfillment;
 using UnitToko.Platform.Documents;
 using UnitToko.Platform.Mongo.Migrations;
+using UnitToko.Platform.Ordering;
 
 namespace UnitToko.Platform.Billing;
 
@@ -26,7 +27,7 @@ internal sealed class InvoiceRecords(IMongoDatabase database, ShipmentReceiptSer
     // Runtime reads still validate every receipt/shipment/commercial owner above.
     internal static async Task<BsonDocument> VerifyPersistedAsync(IMongoDatabase database, IClientSessionHandle tx, BsonDocument row, CancellationToken ct) {
         IMongoCollection<BsonDocument> Rows(string name) => database.GetCollection<BsonDocument>(name);
-        if (!await Rows(InvoiceBson.Invoices).Find(tx, Builders<BsonDocument>.Filter.Eq("_id", row["_id"]) & InvoiceSchemas.Validator(InvoiceBson.Invoices)).AnyAsync(ct)) throw Invalid();
+        if (!await Rows(InvoiceBson.Invoices).Find(tx, Builders<BsonDocument>.Filter.Eq("_id", row["_id"]) & OrderLineageSchemas.InvoiceValidator(InvoiceBson.Invoices)).AnyAsync(ct)) throw Invalid();
         var sources = InvoiceBson.Sources(row["sources"].AsBsonArray); var terms = InvoiceBson.Terms(row["terms"].AsBsonDocument);
         var issued = ShipmentReceiptRecords.Time(row["issuedAt"]); var date = AccountingCalendar.BusinessDate(issued);
         InvoiceAdmissionPolicy.Require(sources, terms, issued);
@@ -69,19 +70,19 @@ internal sealed class InvoiceRecords(IMongoDatabase database, ShipmentReceiptSer
     internal static BsonDocument Line(InvoiceReceiptSource source, InvoiceTerms terms, long skuId, long previousBaseUnits, Money previousNet) {
         var snapshot = source.Snapshot; var receipt = snapshot["receipt"]; var commercial = snapshot["commercial"];
         var accepted = receipt["lines"].AsBsonArray.SingleOrDefault(line => line["skuId"] == skuId) ?? throw Invalid();
-        var original = commercial["quote"]["lines"].AsBsonArray.SingleOrDefault(line => line["definition"]["skuId"] == skuId) ?? throw Invalid();
+        var original = commercial["quote"]["lines"].AsBsonArray.SingleOrDefault(line => OrderLineBson.Same(line, accepted)) ?? throw Invalid();
         var dispatch = snapshot["shipment"]["lines"].AsBsonArray.SingleOrDefault(line => line["skuId"] == skuId) ?? throw Invalid();
         var definition = CatalogRepository.Definition(original["definition"].AsBsonDocument);
-        if (!Equal(original["definition"], dispatch["definition"]) || accepted["definitionId"] != definition.Id.Value ||
+        if (!OrderLineBson.Same(dispatch, accepted) || !Equal(original["definition"], dispatch["definition"]) || accepted["definitionId"] != definition.Id.Value ||
             accepted["acceptedBaseUnits"].AsInt64 > dispatch["baseUnits"].AsInt64 || original["owner"]["organizationId"] != source.Resource.FulfillmentOrganizationId ||
             original["owner"]["shopId"] != source.Resource.ShopId || original["owner"]["channelId"] != source.Resource.ChannelId) throw Invalid();
-        var approved = terms.Lines.SingleOrDefault(line => line.ReceiptId == receipt["id"].AsInt64 && line.SkuId == skuId) ?? throw Invalid();
+        var approved = terms.Lines.SingleOrDefault(line => line.ReceiptId == receipt["id"].AsInt64 && line.SkuId == skuId && line.LineRevision == OrderLineBson.Revision(accepted)) ?? throw Invalid();
         var net = InvoicePolicy.AcceptedDelta(InvoiceBson.Money(original["price"]["unitPrice"]), definition.BaseUnitsPerPackage,
             original["baseUnits"].AsInt64, previousBaseUnits, previousNet, accepted["acceptedBaseUnits"].AsInt64, terms.Rounding);
-        return new() { { "orderId", commercial["orderId"] }, { "shipmentId", snapshot["shipment"]["shipmentId"] }, { "receiptId", receipt["id"] }, { "skuId", skuId },
+        return OrderLineBson.With(new() { { "orderId", commercial["orderId"] }, { "shipmentId", snapshot["shipment"]["shipmentId"] }, { "receiptId", receipt["id"] }, { "skuId", skuId },
             { "skuCode", original["skuCode"] }, { "productName", original["familyName"] }, { "definition", original["definition"].DeepClone() }, { "price", original["price"].DeepClone() },
             { "orderedBaseUnits", original["baseUnits"] }, { "acceptedBaseUnits", accepted["acceptedBaseUnits"] }, { "previousBaseUnits", previousBaseUnits }, { "previousNet", InvoiceBson.Money(previousNet) },
-            { "net", InvoiceBson.Money(net) }, { "tax", InvoiceBson.Money(approved.Tax) }, { "charges", InvoiceBson.Money(approved.Charges) } };
+            { "net", InvoiceBson.Money(net) }, { "tax", InvoiceBson.Money(approved.Tax) }, { "charges", InvoiceBson.Money(approved.Charges) } }, OrderLineBson.Revision(accepted));
     }
     internal async Task<IReadOnlyList<BsonDocument>> OrderAllocationsAsync(ActorContext actor, IClientSessionHandle tx, long orderId, CancellationToken ct) {
         var invoices = new Dictionary<long, BsonDocument>();
@@ -98,18 +99,19 @@ internal sealed class InvoiceRecords(IMongoDatabase database, ShipmentReceiptSer
                 if (!invoices.ContainsKey(row[field]["invoiceId"].AsInt64) || !seen.Add(row[field]["invoiceId"].AsInt64)) throw Invalid();
             if (seen.Count != invoices.Count) throw Invalid();
         }
-        foreach (var group in allocations.GroupBy(row => row["skuId"].AsInt64)) {
+        foreach (var group in allocations.GroupBy(OrderLineBson.Identity)) {
             long units = 0; var net = new Money(0m); string? rounding = null;
             foreach (var row in group.OrderBy(row => row["previousBaseUnits"].AsInt64)) {
                 if (row["previousBaseUnits"] != units || InvoiceBson.Money(row["previousNet"]) != net || rounding is not null && rounding != row["rounding"].AsString) throw Invalid();
                 rounding = row["rounding"].AsString; units = checked(units + row["acceptedBaseUnits"].AsInt64); net = Money.Add(net, InvoiceBson.Money(row["net"]));
             }
         }
-        if (invoices.Count > 0) {
-            var original = invoices.Values.First()["sources"].AsBsonArray.First(source => source["snapshot"]["commercial"]["orderId"] == orderId)["snapshot"]["commercial"]["terms"];
-            foreach (var field in new[] { "tax", "charges" })
-                if (allocations.Aggregate(new Money(0m), (total, row) => Money.Add(total, InvoiceBson.Money(row[field]))).Value > InvoiceBson.Money(original[field]).Value) throw Invalid();
-        }
+        if (invoices.Count > 0) RequireBudget(allocations, await receipts.CurrentInvoiceBudgetAsync(actor, tx, orderId, ct));
         return allocations;
+    }
+    internal static void RequireBudget(IEnumerable<BsonDocument> allocations, BsonDocument terms) {
+        foreach (var field in new[] { "tax", "charges" })
+            if (allocations.Aggregate(new Money(0m), (total, row) => Money.Add(total, InvoiceBson.Money(row[field]))).Value > InvoiceBson.Money(terms[field]).Value)
+                throw InvoicePolicy.Invalid("invoice_commercial_allocation_exceeded");
     }
 }

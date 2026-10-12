@@ -151,7 +151,7 @@ public sealed partial class ShipmentDispatchService
             target = await couriers.ReadAsync(actor, current, tx, prepared.Source.Order.Resource, courierId, token);
             var effects = OrderSubmissionService.DispatchAllocationFacts(prepared.Source, ShipmentPreparationBson.Lines(prepared.Version["lines"].AsBsonArray), selected);
             scans = await UnitToko.Platform.Catalog.CatalogOperationalScanCapture.ReadAsync(database, tx, prepared.Source.Order.Resource,
-                prepared.Source.Order.View.Lines.Where(line => prepared.Source.Reservations.Any(reservation => reservation.Fact.SkuId == line.SkuId &&
+                prepared.Source.Order.View.Lines.Where(line => prepared.Source.Reservations.Any(reservation => reservation.Fact.SkuId == line.SkuId && reservation.Fact.LineRevision == line.LineRevision &&
                     selected.Any(item => item.ReservationId == reservation.Fact.ReservationId))).Select(line => UnitToko.Platform.Catalog.ScanResolver.Choice(line).Candidate).ToArray(), scanSelections, token);
             admission = await AdmitAsync(actor, tx, prepared, selected, token);
             if (review != B.Review(prepared.Version, courierId, target.GrantVersion, target.ProfileVersion, target.Name, B.Lots(selected), effects, B.Admission(admission)))
@@ -175,6 +175,7 @@ public sealed partial class ShipmentDispatchService
             row.AddRange(scope);
             if (admission.CapturedValue is { } captured) {
                 await captured.RequireBeforeAsync(database, tx, token);
+                foreach (var lot in captured.Lots) lot.SealBeforeOwnWrite(database, tx);
                 row["schemaVersion"] = 2; row["phase"] = "preparing"; row["postingFence"] = 0L;
                 row["journalId"] = BsonNull.Value; row["journalFingerprint"] = BsonNull.Value;
                 row["valueEffects"] = ShipmentDispatchValueRecords.Effects(effects, admission.FiniteValue!, captured.Lots);

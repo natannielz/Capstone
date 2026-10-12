@@ -12,6 +12,7 @@ import * as workflow from '../src/modules/administration/workflow';
 import * as operations from '../src/modules/administration/operation-journal';
 import * as navigation from '../src/modules/administration/operation-recovery-navigation';
 import * as scans from '../src/modules/inventory/scan-client';
+import * as lineIdentity from '../src/modules/ordering/order-line-identity';
 
 const source = {orderId: '9007199254741001', suborderId: '9007199254741002', revision: '3', review: 'a'.repeat(64), buyerName: 'Cabang fixture',
   delivery: {recipientName: 'Penerima fixture', phone: '081234567890', address: 'Alamat fixture', city: 'Jakarta', postalCode: '12810', instructions: null},
@@ -101,6 +102,7 @@ function mountDispatch() {
     if (name === '../administration/AdministrationNavigation') return {AdministrationNavigation: marker};
     if (name === '../inventory/ScanInput') return {ScanInput: marker};
     if (name === '../inventory/scan-client') return scans;
+    if (name === '../ordering/order-line-identity') return lineIdentity;
     if (name === './dispatch-client') return {...dispatch, createDispatchGateway: () => gateway};
     throw new Error('Unexpected mounted dispatch import: ' + name);
   };

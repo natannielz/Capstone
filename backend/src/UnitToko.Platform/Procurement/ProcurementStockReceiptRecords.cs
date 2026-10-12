@@ -49,7 +49,12 @@ internal sealed class ProcurementStockReceiptRecords(IMongoDatabase database, Mo
         proofGraph is null ? ReadCoreAsync(tx, id, ct)
             : proofGraph.HeldReceiptAsync(database, unit, clock, catalog, orders, sources, tx, id, ct);
     internal Task<BsonDocument> ReadCoreAsync(IClientSessionHandle tx, long id, CancellationToken ct) => ReadReceiptAsync(tx, id, ReceiptExtent.Current, ct);
-    internal Task<BsonDocument> ReadOriginCoreAsync(IClientSessionHandle tx, long id, CancellationToken ct) => ReadReceiptAsync(tx, id, ReceiptExtent.Origin, ct);
+    // Number of full receipt-origin reconstructions; provenance-seal tests assert sealed reads skip them.
+    internal static long OriginReconstructions;
+    internal Task<BsonDocument> ReadOriginCoreAsync(IClientSessionHandle tx, long id, CancellationToken ct) {
+        Interlocked.Increment(ref OriginReconstructions);
+        return ReadReceiptAsync(tx, id, ReceiptExtent.Origin, ct);
+    }
     private enum ReceiptExtent { Current, Origin }
     private async Task<BsonDocument> ReadReceiptAsync(IClientSessionHandle tx, long id, ReceiptExtent extent, CancellationToken ct) {
         using var receiptStage = SupplierDocumentMatchDiagnostics.Begin("receipt.history");

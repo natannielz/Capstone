@@ -121,9 +121,9 @@ internal sealed class FulfillmentStockSourceRecords(IMongoDatabase database)
     }
     internal async Task RequireRetainedRootsAsync(IClientSessionHandle tx, CancellationToken ct)
     {
-        foreach (var (name, validator) in new[] { ("shipments", ShipmentDispatchSchemas.Validator()),
-            (ShipmentReceiptRecords.Receipts, ShipmentReceiptSchemas.Validator(ShipmentReceiptRecords.Receipts)),
-            (ShipmentReceiptRecords.Challenges, ShipmentReceiptSchemas.Validator(ShipmentReceiptRecords.Challenges)),
+        foreach (var (name, validator) in new[] { ("shipments", OrderLineageSchemas.DispatchValidator()),
+            (ShipmentReceiptRecords.Receipts, OrderLineageSchemas.ReceiptValidator(ShipmentReceiptRecords.Receipts)),
+            (ShipmentReceiptRecords.Challenges, OrderLineageSchemas.ReceiptValidator(ShipmentReceiptRecords.Challenges)),
             (DeliveryAttemptRecords.Attempts, DeliveryAttemptSchemas.Validator(DeliveryAttemptRecords.Attempts)),
             (DeliveryAttemptRecords.Revocations, DeliveryAttemptSchemas.Validator(DeliveryAttemptRecords.Revocations)) })
             if (await Rows(name).Find(tx, new BsonDocument("$nor", new BsonArray { validator })).Limit(1).AnyAsync(ct)) throw Unavailable();

@@ -1,4 +1,5 @@
 export function recoveryPage(operation: string) {
+  if (/^ordering\.substitution\.(?:propose|accept|decline)$(?![\s\S])/u.test(operation)) return { href: '/ordering/substitutions', label: 'halaman penggantian barang pesanan' };
   if (operation === 'inventory.pack-conversion.execute') return { href: '/inventory/pack-conversion-executions', label: 'halaman pelaksanaan buka kemasan' };
   if (operation === 'inventory.stock-release.propose' || operation === 'inventory.stock-release.decide') return { href: '/inventory/stock-releases', label: 'halaman pelepasan stok ditahan' };
   if (operation === 'stock.source.activation.propose' || operation === 'stock.source.activation.decide') return { href: '/inventory/sources/activations', label: 'halaman aktivasi sumber stok' };
@@ -77,6 +78,9 @@ export function recoveryPage(operation: string) {
     : { href: "/administration/person-reviews", label: "halaman peninjauan orang" };
 }
 export function operationLabel(operation: string) {
+  if (operation === 'ordering.substitution.propose') return 'Pengajuan penggantian barang';
+  if (operation === 'ordering.substitution.accept') return 'Persetujuan pembeli atas penggantian';
+  if (operation === 'ordering.substitution.decline') return 'Penolakan pembeli atas penggantian';
   if (operation === 'inventory.pack-conversion.execute') return 'Pelaksanaan konversi fisik kemasan';
   if (operation === 'inventory.stock-release.propose') return 'Pengajuan pelepasan stok ditahan';
   if (operation === 'inventory.stock-release.decide') return 'Keputusan pelepasan stok ditahan';

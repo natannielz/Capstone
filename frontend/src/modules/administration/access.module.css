@@ -16,7 +16,7 @@
 .header p { margin-bottom: 0; }
 .brand { display: inline-flex; align-items: center; min-height: 44px; color: var(--workspace-ink); font: 400 23px/1.2 var(--font-display), var(--font-body), sans-serif; letter-spacing: -.035em; text-decoration: none; }
 .brand:hover { color: var(--workspace-accent); }
-.primary, .secondary, .danger { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; max-width: 100%; padding: 10px 17px; border-radius: 4px; border: 1px solid var(--workspace-ink); font-weight: 650; line-height: 1.4; text-align: center; text-decoration: none; overflow-wrap: anywhere; cursor: pointer; }
+.primary, .secondary, .danger { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; max-width: 100%; padding: 10px 17px; border-radius: 4px; border: 1px solid var(--workspace-ink); font-weight: 650; line-height: 1.4; text-align: center; text-decoration: none; overflow-wrap: break-word; cursor: pointer; }
 .primary { color: var(--workspace-surface); background: var(--workspace-ink); }
 .primary:hover:not(:disabled) { background: var(--workspace-ink-hover); border-color: var(--workspace-ink-hover); }
 .secondary { background: var(--workspace-surface); color: var(--workspace-ink); border-color: var(--workspace-border-interactive); }

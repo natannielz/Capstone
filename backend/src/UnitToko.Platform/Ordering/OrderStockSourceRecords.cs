@@ -29,8 +29,9 @@ internal sealed class OrderStockSourceRecords(IMongoDatabase database)
     internal static string Hash(BsonDocument row) => CatalogRepository.Digest(new BsonDocument(row.Where(field => field.Name != "transitionHash")));
     internal async Task<BsonDocument[]> BoundedAsync(string name, FilterDefinition<BsonDocument> filter, IClientSessionHandle tx, CancellationToken ct)
     {
-        var rows = await Rows(name).Find(tx, filter).Sort(new BsonDocument("_id", 1)).Limit(MaximumRows + 1).ToListAsync(ct);
-        if (rows.Count > MaximumRows) throw Unavailable(); return rows.ToArray();
+        var maximum = name == B.Reservations ? Math.Max(MaximumRows, OrderReservationHistoryLimits.MaximumRetained) : MaximumRows;
+        var rows = await Rows(name).Find(tx, filter).Sort(new BsonDocument("_id", 1)).Limit(maximum + 1).ToListAsync(ct);
+        if (rows.Count > maximum) throw Unavailable(); return rows.ToArray();
     }
     internal async Task<OrderStockSourceEvent> SetupAsync(IClientSessionHandle tx, long decisionId, bool requireReceipt, CancellationToken ct)
     {
@@ -84,13 +85,13 @@ internal sealed class OrderStockSourceRecords(IMongoDatabase database)
         new InventoryRepository(database).RequireSession(tx);
         var transactionNumber = tx.WrappedCoreSession.CurrentTransaction.TransactionNumber;
         var head = await Rows(Heads).Find(tx, F.Eq("_id", poolId)).SingleOrDefaultAsync(ct) ?? throw Unavailable();
-        if (!await Rows(Heads).Find(tx, F.Eq("_id", poolId) & OrderStockSourceSchemas.Validator(Heads)).AnyAsync(ct)) throw Unavailable();
+        if (!await Rows(Heads).Find(tx, F.Eq("_id", poolId) & OrderSubstitutionSchemas.StockSourceValidator(Heads)).AnyAsync(ct)) throw Unavailable();
         var history = await Rows(Transitions).Find(tx, F.Eq("poolId", poolId)).Sort(new BsonDocument("revision", 1)).Limit(MaximumRows + 1).ToListAsync(ct);
         if (history.Count is < 1 or > MaximumRows || head["revision"].AsInt64 != history.Count) throw Unavailable();
         var state = new Dictionary<long, BsonDocument>(); BsonDocument? previous = null; BsonValue? setupLocation = null;
         var events = new HashSet<string>();
         foreach (var row in history) {
-            if (!await Rows(Transitions).Find(tx, F.Eq("_id", row["_id"]) & OrderStockSourceSchemas.Validator(Transitions)).AnyAsync(ct) ||
+            if (!await Rows(Transitions).Find(tx, F.Eq("_id", row["_id"]) & OrderSubstitutionSchemas.StockSourceValidator(Transitions)).AnyAsync(ct) ||
                 row["revision"].AsInt64 != (previous is null ? 1L : previous["revision"].AsInt64 + 1) ||
                 row["previousId"] != (previous is null ? BsonNull.Value : previous["_id"]) ||
                 row["previousHash"] != (previous is null ? BsonNull.Value : previous["transitionHash"]) || row["transitionHash"] != Hash(row) ||
@@ -136,24 +137,34 @@ internal sealed class OrderStockSourceRecords(IMongoDatabase database)
         var pool = await Rows("inventoryPools").Find(tx, F.Eq("_id", expected.PoolId)).SingleOrDefaultAsync(ct); InventoryGraph.RequirePool(pool);
         if (pool!["location"] != head["location"] || pool["revision"] != expected.PoolRevision || pool["fence"] != expected.PoolFence) throw Unavailable();
         foreach (var name in OrderSubmissionSchemas.Collections)
-            if (await Rows(name).Find(tx, new BsonDocument("$nor", new BsonArray { OrderSubmissionSchemas.Validator(name) })).Limit(1).AnyAsync(ct)) throw Unavailable();
+            if (await Rows(name).Find(tx, new BsonDocument("$nor", new BsonArray { OrderLineageSchemas.OrderValidator(name) })).Limit(1).AnyAsync(ct)) throw Unavailable();
         // Losing a linkage cannot turn an orphan into an apparently empty pool.
-        foreach (var name in new[] { B.Suborders, B.Reservations, "orderDecisions", "shipments" }) {
+        foreach (var name in new[] { B.Suborders, B.Reservations, "orderDecisions", "shipments", OrderSubstitutionBson.Decisions }) {
             BsonDocument[] pipeline = [new("$lookup", new BsonDocument { { "from", B.Orders }, { "localField", "orderId" }, { "foreignField", "_id" }, { "as", "linkedOrder" } }),
                 new("$match", new BsonDocument("linkedOrder", new BsonDocument("$size", 0))), new("$limit", 1)];
             if (await Rows(name).Aggregate<BsonDocument>(tx, pipeline).AnyAsync(ct)) throw Unavailable();
         }
-        var orders = await BoundedAsync(B.Orders, F.Eq("allocations.poolId", expected.PoolId), tx, ct);
-        var ids = orders.Select(row => row["_id"]).ToArray();
         var reservations = await BoundedAsync(B.Reservations, F.Eq("allocation.poolId", expected.PoolId) |
             F.In("_id", state.Keys.Select(key => new BsonInt64(key))), tx, ct);
+        var linkedIds = reservations.Select(row => row["orderId"]).Concat(state.Values.Select(row => row["orderId"])).Distinct().ToArray();
+        var orders = await BoundedAsync(B.Orders, F.Eq("allocations.poolId", expected.PoolId) | F.In("_id", linkedIds), tx, ct);
+        var ids = orders.Select(row => row["_id"]).ToArray();
         var actualEvents = new HashSet<string> { "setup:" + head["setupDecisionId"].AsInt64 };
+        var introducedAt = new Dictionary<long, long>();
         foreach (var order in orders) {
             _ = await owner.ReadStockSourceGraphAsync(tx, order["_id"].AsInt64, ct);
-            actualEvents.Add("submission:" + order["_id"].AsInt64);
+            if (order["allocations"].AsBsonArray.Any(value => value["poolId"] == expected.PoolId)) {
+                actualEvents.Add("submission:" + order["_id"].AsInt64); introducedAt.Add(order["_id"].AsInt64, 1L);
+            } else {
+                var introductions = await BoundedAsync(OrderSubstitutionBson.Decisions, F.Eq("orderId", order["_id"]) & F.Eq("decision", "Accept") & F.Eq("allocations.poolId", expected.PoolId), tx, ct);
+                if (introductions.Length == 0) throw Unavailable(); introducedAt.Add(order["_id"].AsInt64, introductions.Min(row => row["revision"].AsInt64));
+            }
         }
-        foreach (var (name, kind) in new[] { ("orderDecisions", "decision"), ("shipments", "shipment") })
-            foreach (var row in await BoundedAsync(name, F.In("orderId", ids), tx, ct)) actualEvents.Add(kind + ":" + row["_id"].AsInt64);
+        foreach (var (name, kind) in new[] { ("orderDecisions", "decision"), ("shipments", "shipment"), (OrderSubstitutionBson.Decisions, "substitution") })
+            foreach (var row in await BoundedAsync(name, F.In("orderId", ids), tx, ct)) {
+                var at = row[kind == "decision" ? "expectedRevision" : kind == "shipment" ? "decisionRevision" : "revision"].AsInt64;
+                if (at >= introducedAt[row["orderId"].AsInt64]) actualEvents.Add(kind + ":" + row["_id"].AsInt64);
+            }
         if (!actualEvents.SetEquals(history.Select(row => row["sourceKind"].AsString + ":" + row["sourceId"].AsInt64)) || reservations.Length != state.Count) throw Unavailable();
         foreach (var reservation in reservations) {
             if (!state.TryGetValue(reservation["_id"].AsInt64, out var recorded) || !ids.Contains(reservation["orderId"]) ||

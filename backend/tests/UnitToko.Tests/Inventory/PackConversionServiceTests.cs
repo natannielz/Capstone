@@ -271,11 +271,11 @@ public sealed class PackConversionServiceTests(MongoFixture fixture, ITestOutput
             return state;
         }
         internal static async Task<PreparedConversion> CreateAsync(MongoFixture fixture, bool execute = true, DateOnly? inspectedExpiry = null,
-            bool includeCogsMapping = false, long reviewedSafetyBufferBaseUnits = 12) {
+            bool includeCogsMapping = false, long reviewedSafetyBufferBaseUnits = 12, bool useSystemClock = false, bool includeCustomerMappings = false) {
             var data = await StockReleaseServiceTests.Data.CreateAsync(fixture, useSystemClock: true, inspectedExpiry: inspectedExpiry,
-                includeCogsMapping: includeCogsMapping, reviewedSafetyBufferBaseUnits: reviewedSafetyBufferBaseUnits);
+                includeCogsMapping: includeCogsMapping, reviewedSafetyBufferBaseUnits: reviewedSafetyBufferBaseUnits, includeCustomerMappings: includeCustomerMappings);
             try {
-                var now = data.Clock.UtcNow; data.Clock.UseSystemClock = false; data.Clock.UtcNow = now;
+                if (!useSystemClock) { var now = data.Clock.UtcNow; data.Clock.UseSystemClock = false; data.Clock.UtcNow = now; }
                 var release = await data.ProposeAsync("conversion-guard-source-release");
                 await data.DecideAsync(release["proposalId"].AsInt64, "conversion-guard-source-approved");
                 var procurement = data.Valuation.Inspection.Receiving.Procurement;

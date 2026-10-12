@@ -13,6 +13,12 @@ public sealed class UncertainCommitException(string message, Exception inner) : 
 public sealed class MongoUnitOfWork(MongoClient client)
 {
     public const int MaximumAttempts = 4;
+    private static readonly AsyncLocal<IClientSessionHandle?> operationSession = new();
+
+    // True only inside this unit's own operation delegate for the session it started. A
+    // caller-supplied session may be written by anyone between reads, so it gets no reuse.
+    internal static bool OwnsOperation(IClientSessionHandle session) =>
+        session.IsInTransaction && ReferenceEquals(operationSession.Value, session);
 
     public async Task<T> ExecuteAsync<T>(Func<IClientSessionHandle, CancellationToken, Task<T>> operation,
         CancellationToken cancellationToken = default)
@@ -25,7 +31,11 @@ public sealed class MongoUnitOfWork(MongoClient client)
                 readConcern: ReadConcern.Snapshot, writeConcern: WriteConcern.WMajority));
             try
             {
-                var result = await operation(session, cancellationToken);
+                T result;
+                var outer = operationSession.Value;
+                operationSession.Value = session;
+                try { result = await operation(session, cancellationToken); }
+                finally { operationSession.Value = outer; }
                 Exception? earlierUnknownCommit = null;
                 for (var commitAttempt = 1; commitAttempt <= MaximumAttempts; commitAttempt++)
                 {

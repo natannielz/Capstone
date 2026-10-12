@@ -131,14 +131,23 @@ public sealed partial class PackConversionService
         var source = movement["source"];
         var kind = (source["namespace"].AsString, source["eventKind"].AsString) switch {
             ("ordering.order", "reserve") => "submission", ("ordering.decision", "release") => "decision",
+            ("ordering.substitution", "reserve" or "release") => "substitution",
             ("fulfillment.shipment", "dispatch") => "shipment", _ => throw CurrentDestinationUnavailable() };
         var actual = await OrderSubmissionService.ReadStockSourceEventAsync(database, tx, kind, source["documentId"].AsInt64, true, ct, valueHistory, clock);
+        if (kind == "substitution") {
+            var eventKind = source["eventKind"].AsString;
+            var values = eventKind == "reserve" ? actual.Record["allocations"].AsBsonArray.Select(value => value.AsBsonDocument) :
+                actual.Record["releases"].AsBsonArray.Select(value => value["allocation"].AsBsonDocument);
+            await OrderSubmissionService.RequireSubstitutionMovementAsync(actual.Record, movement, eventKind,
+                values.Where(value => value["poolId"] == movement["physicalPoolId"]).ToArray(), ct); return;
+        }
         if (movement["actorId"] != actual.Audit["actorId"] || movement["actorGrantVersion"] != actual.Audit["actorGrantVersion"] ||
             movement["recordedAt"].CompareTo(actual.Time) < 0 || movement["reason"] != actual.Record["reason"] || movement["correlationId"] != actual.Record["correlationId"] ||
-            movement["sourceRevision"] != 1L || source["occurrence"] != movement["physicalPoolId"]) throw CurrentDestinationUnavailable();
+            movement["sourceRevision"] != (kind == "decision" ? actual.Record["revision"] : new BsonInt64(1L)) || source["occurrence"] != movement["physicalPoolId"]) throw CurrentDestinationUnavailable();
         var allocations = kind == "submission" ? actual.Record["allocations"].AsBsonArray.Select(value => value.AsBsonDocument) :
             actual.Record[kind == "decision" ? "releases" : "stockEffects"].AsBsonArray.Select(value => value["allocation"].AsBsonDocument);
         var facts = allocations.Where(value => value["poolId"] == movement["physicalPoolId"]).Select(OrderSubmissionBson.Allocation).ToArray();
+        if (kind == "decision") facts = OrderReleaseFacts.Physical(facts);
         if (facts.Length is < 1 or > 100 || facts.Length != movement["legs"].AsBsonArray.Count || facts.Select(fact => fact.Change.Id).Distinct().Count() != facts.Length)
             throw CurrentDestinationUnavailable();
         foreach (var fact in facts) {

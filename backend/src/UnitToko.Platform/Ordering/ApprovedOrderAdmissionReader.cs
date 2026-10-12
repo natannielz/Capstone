@@ -23,7 +23,7 @@ namespace UnitToko.Platform.Ordering;
 /// <summary>Actual current buyer/commercial/postal/spending/source/finite-lot
 /// admission. Not registered until its owning workflow has passed integration.
 /// Required capacity obligations have no implemented owner and always refuse.</summary>
-internal sealed class ApprovedOrderAdmissionReader : IOrderAdmissionReader
+internal sealed partial class ApprovedOrderAdmissionReader : IOrderAdmissionReader
 {
     private const int MaximumLots = 100;
     private readonly IMongoDatabase database;
@@ -38,6 +38,11 @@ internal sealed class ApprovedOrderAdmissionReader : IOrderAdmissionReader
     // Native weak lifetime: retained proofs belong only to the caller's live
     // session/transaction attempt. No approval or availability result is cached.
     private readonly ConditionalWeakTable<IClientSessionHandle, Frame> frames = new();
+    // Substitution only: exact value-transition sources the finite capture authenticated before
+    // this transaction wrote; completion re-reads the head chain against exactly these sources.
+    private readonly ConditionalWeakTable<ShipmentDispatchFiniteSource.Capture, AuthenticatedValueSources> substitutionValueSources = new();
+    private sealed record AuthenticatedValueSources(ImmutableArray<(InventorySource Source, string Hash)> Sources);
+    private readonly LotValueStore values;
     private static readonly FilterDefinitionBuilder<BsonDocument> F = Builders<BsonDocument>.Filter;
     public IMongoDatabase Database => database;
     internal ApprovedOrderAdmissionReader(IMongoDatabase database, MongoUnitOfWork unit, IdAllocator ids, IClock clock,
@@ -45,7 +50,7 @@ internal sealed class ApprovedOrderAdmissionReader : IOrderAdmissionReader
         this.database = database; this.clock = clock; authorization = new(database, unit, clock); buyers = new(database, unit, clock);
         addresses = new(database, unit, ids, clock, organizations); spending = new(database, unit, ids, clock, organizations);
         commercial = new(database, unit, ids, clock, organizations); sources = new(database, unit, ids, clock);
-        finite = new(database, unit, ids, clock);
+        finite = new(database, unit, ids, clock); values = new(database, ids, clock);
     }
     private IMongoCollection<BsonDocument> Rows(string name) => database.GetCollection<BsonDocument>(name);
     private sealed record Lot(OrderStockAllocation Allocation, ShipmentDispatchFiniteSource.Capture Physical,
@@ -80,6 +85,9 @@ internal sealed class ApprovedOrderAdmissionReader : IOrderAdmissionReader
         internal ImmutableArray<CandidateSet> Candidates { get; }
         internal BsonDocument Binding { get; }
         internal long? OrderId;
+        internal bool ForSubstitution;
+        internal long? SubstitutionId;
+        internal OrderSubstitutionReleaseCapture? Release;
     }
     private static BsonDocument AdmissionBinding(OrderAdmission value) => new() { { "context", OrderDraftBson.Context(value.Context) },
         { "terms", B.Terms(value.Terms) }, { "allocations", new BsonArray(value.Stock.Select(B.Allocation)) } };
@@ -93,8 +101,10 @@ internal sealed class ApprovedOrderAdmissionReader : IOrderAdmissionReader
     internal Task<OrderAdmission> ReadForPreviewAsync(IClientSessionHandle tx, ActorContext actor, OrderDraftInput input,
         OrderCatalogQuote quote, CancellationToken ct) => ReadCoreAsync(tx, actor, input, quote, ct, complete: false);
     private async Task<OrderAdmission> ReadCoreAsync(IClientSessionHandle tx, ActorContext actor, OrderDraftInput input,
-        OrderCatalogQuote quote, CancellationToken ct, bool complete) {
+        OrderCatalogQuote quote, CancellationToken ct, bool complete, OrderCatalogQuote? replacement = null, OrderSubstitutionReleaseCapture? release = null) {
         new InventoryRepository(database).RequireSession(tx); input = OrderDraftPolicy.Copy(input);
+        if ((replacement is null) != (release is null)) throw Unavailable();
+        release?.Require(database, clock, actor, tx);
         if (actor.Session is null || quote is null || quote.Lines.IsDefaultOrEmpty || quote.Lines.Length > 100 ||
             quote.Lines.Any(line => line is null || line.Definition is null || line.Price is null || line.FulfillmentOwner is null)) throw Unavailable();
         var at = DateTimeOffset.FromUnixTimeMilliseconds(clock.UtcNow.ToUnixTimeMilliseconds());
@@ -124,10 +134,13 @@ internal sealed class ApprovedOrderAdmissionReader : IOrderAdmissionReader
         var terms = new OrderCommercialTerms(policy, policy, capacityDecision.Reference, new(spend.PolicyId, spend.Version), spend.Rule,
             new(new(legal.AddressId, legal.Version), legal.Snapshot["source"]["profile"]["name"].AsString, LegalPostal(legal.Address)),
             new(new(delivery.AddressId, delivery.Version), input.Delivery), totals.Tax, totals.Charges, totals.Total);
-        var selectedLots = await SelectLotsAsync(actor, authority, tx, input, quote, ct); var lots = selectedLots.Lots;
+        var selectedLots = await SelectLotsAsync(actor, authority, tx, input, replacement ?? quote, ct, release); var lots = selectedLots.Lots;
         var admitted = new OrderAdmission(input.Context, terms, [.. lots.Select(lot => lot.Allocation)]);
-        OrderAdmissionPolicy.Validate(input, quote, admitted);
+        if (replacement is null) OrderAdmissionPolicy.Validate(input, quote, admitted);
+        else OrderAdmissionPolicy.ValidateSubstitution(input, quote, replacement, admitted);
         var frame = new Frame(actor, authority, tx, at, input, quote, admitted, legal, delivery, spend, bundle, capacityDecision, lots, selectedLots.Candidates);
+        frame.ForSubstitution = replacement is not null;
+        frame.Release = release;
         frames.Remove(tx); frames.Add(tx, frame);
         if (complete) await CompleteAsync(tx, actor, admitted, ct);
         else Require(frame, actor, tx, admitted);
@@ -147,7 +160,7 @@ internal sealed class ApprovedOrderAdmissionReader : IOrderAdmissionReader
         result.Require(source); return result;
     }
     private async Task<(ImmutableArray<Lot> Lots, ImmutableArray<CandidateSet> Candidates)> SelectLotsAsync(ActorContext actor, AuthorizationSnapshot authority, IClientSessionHandle tx,
-        OrderDraftInput input, OrderCatalogQuote quote, CancellationToken ct) {
+        OrderDraftInput input, OrderCatalogQuote quote, CancellationToken ct, OrderSubstitutionReleaseCapture? release = null) {
         var result = ImmutableArray.CreateBuilder<Lot>(); var membership = ImmutableArray.CreateBuilder<CandidateSet>();
         foreach (var line in quote.Lines.OrderBy(value => value.Definition.SkuId.Value)) {
             var selected = input.Selections.SingleOrDefault(value => value.SkuId == line.Definition.SkuId) ?? throw Unavailable();
@@ -164,7 +177,7 @@ internal sealed class ApprovedOrderAdmissionReader : IOrderAdmissionReader
             var control = new Dictionary<long, StockSourceSetupService.OrderSourceCapture>();
             foreach (var row in rows) {
                 var physical = InventoryBson.ReadBalance(row);
-                if (StockBalancePolicy.AvailablePackages(physical.Balance) <= 0) continue;
+                if (StockBalancePolicy.AvailablePackages((release?.BeforeReserve(physical) ?? physical).Balance) <= 0) continue;
                 if (!control.TryGetValue(physical.PhysicalPoolId, out var source)) {
                     var pool = await Rows("inventoryPools").Find(tx, F.Eq("_id", physical.PhysicalPoolId)).SingleOrDefaultAsync(ct) ?? throw Unavailable();
                     source = await sources.CaptureOrderSubmitSourceAsync(actor, authority, tx, input.Context, line, physical.Balance.Key.Location,
@@ -172,6 +185,14 @@ internal sealed class ApprovedOrderAdmissionReader : IOrderAdmissionReader
                 }
                 var proof = await finite.ReadAsync(tx, physical, ct);
                 if (proof.Value.RemainingPackages != checked(physical.Balance.OnHand - physical.Balance.Held - physical.Balance.Expired)) throw Unavailable();
+                if (release is not null) {
+                    // Same transaction, no write since the full authentication above: record its exact sources.
+                    var authenticated = ImmutableArray.CreateBuilder<(InventorySource Source, string Hash)>();
+                    var recorded = await values.ReadAvailableAsync(tx, physical, (_, _, source, hash, _) => {
+                        authenticated.Add((source, hash)); return Task.CompletedTask; }, ct);
+                    if (recorded != proof.Value || authenticated.Count == 0) throw Unavailable();
+                    substitutionValueSources.AddOrUpdate(proof, new(authenticated.ToImmutable()));
+                }
                 eligible.Add((physical, proof, source));
             }
             var remaining = (long)line.Packages;
@@ -179,15 +200,16 @@ internal sealed class ApprovedOrderAdmissionReader : IOrderAdmissionReader
                 var source = control[pool.Key]; var setup = StockSourceSetupBson.ReadInput(source.Snapshot["configuration"]["source"]["input"].AsBsonDocument);
                 var buffer = checked(setup.SafetyBufferBaseUnits / line.Definition.BaseUnitsPerPackage +
                     (setup.SafetyBufferBaseUnits % line.Definition.BaseUnitsPerPackage == 0 ? 0 : 1));
-                var available = pool.Aggregate(0L, (sum, value) => checked(sum + StockBalancePolicy.AvailablePackages(value.Balance.Balance)));
+                var available = pool.Aggregate(0L, (sum, value) => checked(sum + StockBalancePolicy.AvailablePackages((release?.BeforeReserve(value.Balance) ?? value.Balance).Balance)));
                 var limit = Math.Max(0, checked(available - buffer));
                 foreach (var candidate in pool.OrderBy(value => value.Balance.Balance.Key.LotId.Value).ThenBy(value => value.Balance.Id)) {
-                    var quantity = Math.Min(remaining, Math.Min(limit, StockBalancePolicy.AvailablePackages(candidate.Balance.Balance)));
+                    var reserveBefore = release?.BeforeReserve(candidate.Balance) ?? candidate.Balance;
+                    var quantity = Math.Min(remaining, Math.Min(limit, StockBalancePolicy.AvailablePackages(reserveBefore.Balance)));
                     if (quantity == 0) continue;
                     if (result.Count >= MaximumLots) throw Unavailable("order_stock_selection_limit");
                     var change = new InventoryBalanceChange(candidate.Balance.Id, candidate.Balance.PhysicalPoolId, candidate.Balance.Balance.Key,
-                        candidate.Balance.Balance.Revision, InventoryBalanceAction.Reserve, quantity);
-                    result.Add(new(new(line.Definition.SkuId.Value, source.Authority, source.Pool, change), candidate.Proof, source, line));
+                        reserveBefore.Balance.Revision, InventoryBalanceAction.Reserve, quantity);
+                    result.Add(new(new(line.Definition.SkuId.Value, source.Authority, source.Pool, change, line.LineRevision), candidate.Proof, source, line));
                     remaining -= quantity; limit -= quantity;
                 }
             }
@@ -202,6 +224,10 @@ internal sealed class ApprovedOrderAdmissionReader : IOrderAdmissionReader
         frame.Spending.RequireContext(actor, frame.Authority, tx); await frame.Spending.FenceAsync(ct);
         frame.Commercial.RequireContext(actor, frame.Authority, tx); await frame.Commercial.FenceAsync(ct);
         foreach (var source in frame.Lots.Select(lot => lot.Source).Distinct()) await source.FenceAsync(ct);
+        if (frame.Release is { } release) {
+            await release.FenceAsync(frame.SubstitutionId is not null, ct);
+            if (frame.SubstitutionId is not null) await RequireSubstitutionReleaseAsync(frame, ct);
+        }
         foreach (var candidateSet in frame.Candidates) {
             var current = await Rows("stockBalances").Find(tx, candidateSet.Filter).Sort(new BsonDocument { { "lotId", 1 }, { "_id", 1 } })
                 .Limit(MaximumLots + 1).ToListAsync(ct);
@@ -209,15 +235,33 @@ internal sealed class ApprovedOrderAdmissionReader : IOrderAdmissionReader
             for (var index = 0; index < current.Count; index++) {
                 var actual = InventoryBson.ReadBalance(current[index]); var before = candidateSet.Rows[index];
                 var chosen = frame.Lots.SingleOrDefault(lot => lot.Allocation.Change.Id == before.Id);
-                var after = chosen is null ? before : before with { Balance = StockBalancePolicy.Reserve(before.Balance,
+                var released = frame.Release?.BeforeReserve(before) ?? before;
+                var after = chosen is null ? released : released with { Balance = StockBalancePolicy.Reserve(released.Balance,
                     chosen.Allocation.Change.ExpectedRevision, chosen.Allocation.Change.Packages) };
                 if (actual != before && actual != after) throw Unavailable("order_stock_changed");
             }
         }
         foreach (var lot in frame.Lots) {
-            var checkedValue = await lot.Physical.ReadCurrentValueWithOriginAsync(database, tx, ct); var actual = checkedValue.Physical;
-            var after = lot.Physical.Before with { Balance = StockBalancePolicy.Reserve(lot.Physical.Before.Balance,
+            var reserveBefore = frame.Release?.BeforeReserve(lot.Physical.Before) ?? lot.Physical.Before;
+            var after = reserveBefore with { Balance = StockBalancePolicy.Reserve(reserveBefore.Balance,
                 lot.Allocation.Change.ExpectedRevision, lot.Allocation.Change.Packages) };
+            if (frame.SubstitutionId is not null) {
+                // The substitution's own release/reserve movements may join the source-lot membership pinned before
+                // this write. Its own writes never change lot value: require the exact reserved balance and the same
+                // value head chain, every transition being one already authenticated by this capture before writing.
+                if (!substitutionValueSources.TryGetValue(lot.Physical, out var authenticated)) throw Unavailable();
+                lot.Physical.Require(database, tx);
+                var reservedPhysical = await new InventoryRepository(database).ReadAsync(tx, lot.Physical.Before.Id, ct);
+                if (reservedPhysical != after) throw Unavailable("order_stock_changed");
+                var seen = 0;
+                var reservedValue = await values.ReadAvailableAsync(tx, reservedPhysical, (_, _, source, hash, _) => {
+                    if (seen >= authenticated.Sources.Length || authenticated.Sources[seen] != (source, hash)) throw Unavailable("order_stock_changed");
+                    seen++; return Task.CompletedTask; }, ct);
+                if (seen != authenticated.Sources.Length || reservedValue != lot.Physical.Value) throw Unavailable("order_stock_changed");
+                await RequireOwnReserveAsync(frame, lot, after, ct);
+                continue;
+            }
+            var checkedValue = await lot.Physical.ReadCurrentValueWithOriginAsync(database, tx, ct); var actual = checkedValue.Physical;
             if (actual != lot.Physical.Before && actual != after) throw Unavailable("order_stock_changed");
             if (actual == after) await RequireOwnReserveAsync(frame, lot, after, ct);
         }
@@ -231,12 +275,14 @@ internal sealed class ApprovedOrderAdmissionReader : IOrderAdmissionReader
         buyers.Require(actor, frame.Authority, frame.Input.Context);
         frame.Legal.RequireCurrent(); frame.Delivery.RequireCurrent(); frame.Spending.RequireCurrent(); frame.Commercial.RequireCurrent();
         frame.Capacity.Require(frame.Commercial);
+        frame.Release?.Require(database, clock, actor, tx);
         foreach (var lot in frame.Lots) {
             lot.Source.RequireContext(sources, actor, frame.Authority, tx, frame.Input.Context, lot.Line);
             lot.Physical.Require(database, tx);
         }
     }
     private async Task RequireOwnReserveAsync(Frame frame, Lot lot, InventoryBalanceDocument after, CancellationToken ct) {
+        if (frame.ForSubstitution) { await RequireSubstitutionReserveAsync(frame, lot, after, ct); return; }
         var candidates = await Rows(B.Orders).Find(frame.Tx, F.Eq("createdBy", frame.Actor.UserId) & F.Gte("orderedAt", frame.At.UtcDateTime) &
             F.Eq("allocations.balanceId", lot.Allocation.Change.Id)).Limit(3).ToListAsync(ct);
         var expectedAllocations = new BsonArray(frame.Admission.Stock.Select(B.Allocation));
@@ -244,7 +290,7 @@ internal sealed class ApprovedOrderAdmissionReader : IOrderAdmissionReader
             row["terms"] == B.Terms(frame.Admission.Terms) && row["allocations"] == expectedAllocations).ToArray();
         if (orders.Length != 1) throw Unavailable("order_reservation_owner_unavailable"); var order = orders[0];
         if (frame.OrderId is { } original && original != order["_id"].AsInt64 ||
-            !await Rows(B.Orders).Find(frame.Tx, F.Eq("_id", order["_id"]) & OrderSubmissionSchemas.Validator(B.Orders)).AnyAsync(ct) ||
+            !await Rows(B.Orders).Find(frame.Tx, F.Eq("_id", order["_id"]) & OrderLineageSchemas.OrderValidator(B.Orders)).AnyAsync(ct) ||
             order["snapshotHash"] != B.SnapshotHash(order) || order["actorGrantVersion"] != frame.Actor.GrantVersion ||
             order["review"] != B.Review(frame.Input, frame.Quote, frame.Admission.Terms) ||
             order["bodyHash"] != AuthorizationStore.CommandHash(new { input = frame.Input, review = order["review"].AsString }, order["reason"].AsString))

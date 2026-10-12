@@ -32,6 +32,27 @@ internal sealed partial class ProcurementQualityProofGraph
         currentMovementOrigins[origin.ReceiptId] = origin;
     }
 
+    // A successful current owner may supply only its completed immutable ancestors
+    // to an origin reader. No mutable receipt/pool/current movement or active cycle
+    // state crosses this boundary; existing reuse still refreshes every owner/pin.
+    internal ProcurementQualityProofGraph CopyOriginAncestors(IMongoDatabase database, IClock clock,
+        IClientSessionHandle current, HeldReceiptOriginProof retainedOrigin) {
+        RequireDatabase(database, current, retainedOrigin.ReceiptId); retainedOrigin.Require(database, current);
+        if (active.Count != 0 || originRead is not null || clock.UtcNow == default || clock.UtcNow.Offset != TimeSpan.Zero)
+            throw Q.Broken();
+        var result = new ProcurementQualityProofGraph(current, retainedOrigin);
+        result.RequireDatabase(database, current, retainedOrigin.ReceiptId);
+        foreach (var (id, proof) in completedFunding) {
+            if (proof.Source["order"]["_id"] != id || !result.completedFunding.TryAdd(id, proof)) throw Q.Broken();
+        }
+        foreach (var (id, completed) in completedInspections) {
+            if (clock.UtcNow < completed.At || !completed.History.Submissions.Any(row => row["_id"] == id) ||
+                !result.completedInspections.TryAdd(id, (Clone(completed.History), completed.At))) throw Q.Broken();
+        }
+        RequireDatabase(database, current, retainedOrigin.ReceiptId); retainedOrigin.Require(database, current);
+        return result;
+    }
+
     internal void AttachFundingProof(IClientSessionHandle current, PurchaseOrderHistoricalSourceProof proof) {
         Require(current);
         var id = proof.Source["order"]["_id"].AsInt64;

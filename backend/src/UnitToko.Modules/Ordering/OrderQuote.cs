@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Text.Json.Serialization;
 using UnitToko.Modules.Accounting;
 using UnitToko.Modules.Catalog;
 using UnitToko.Modules.Contracts;
@@ -26,7 +27,8 @@ public sealed record OrderPackageSelection(LongId SkuId, LongId DefinitionId, lo
     LongId PriceId, long PriceVersion, int Packages);
 public sealed record OrderCatalogFact(ProductFamily Family, Sku Sku, VariantDefinitionVersion Definition, PriceVersion? Price);
 public sealed record OrderQuotedLine(LongId FamilyId, string FamilyName, Guid PublicId, string SkuCode,
-    GrantScope FulfillmentOwner, VariantDefinitionVersion Definition, PriceVersion Price, int Packages, long BaseUnits, Money CatalogSubtotal);
+    GrantScope FulfillmentOwner, VariantDefinitionVersion Definition, PriceVersion Price, int Packages, long BaseUnits, Money CatalogSubtotal,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] long LineRevision = 0);
 public sealed record OrderCatalogQuote(ImmutableArray<OrderQuotedLine> Lines, string Currency, Money CatalogSubtotal);
 
 /// <summary>Exact catalog-price arithmetic, not a payable/tax-inclusive total. The owning transaction

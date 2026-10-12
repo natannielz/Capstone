@@ -24,14 +24,14 @@ internal static class InvoiceBson
         { "dayRule", value.DayRule }, { "workingDays", new BsonArray(value.WorkingDays.Select(day => new BsonInt32((int)day))) }, { "holidays", new BsonArray(value.Holidays.Order().Select(day => new BsonString(Date(day)))) },
         { "rounding", value.Rounding }, { "receivableMapping", value.ReceivableMapping }, { "revenueMapping", value.RevenueMapping }, { "taxMapping", value.TaxMapping }, { "chargesMapping", value.ChargesMapping },
         { "taxDocumentProcess", value.TaxDocumentProcess }, { "validUntil", value.ValidUntil.UtcDateTime },
-        { "lines", new BsonArray(value.Lines.OrderBy(line => line.ReceiptId).ThenBy(line => line.SkuId).Select(line => new BsonDocument {
-            { "receiptId", line.ReceiptId }, { "skuId", line.SkuId }, { "tax", Money(line.Tax) }, { "charges", Money(line.Charges) } })) } };
+        { "lines", new BsonArray(value.Lines.OrderBy(line => line.ReceiptId).ThenBy(line => line.SkuId).Select(line => OrderLineBson.With(new BsonDocument {
+            { "receiptId", line.ReceiptId }, { "skuId", line.SkuId }, { "tax", Money(line.Tax) }, { "charges", Money(line.Charges) } }, line.LineRevision))) } };
     internal static InvoiceTerms Terms(BsonDocument value) => new(OrderSubmissionBson.Reference(value["policy"]), OrderSubmissionBson.Reference(value["taxPolicy"]), OrderSubmissionBson.Reference(value["termsPolicy"]),
         OrderSubmissionBson.Reference(value["calendar"]), OrderSubmissionBson.Reference(value["numbering"]), OrderSubmissionBson.Reference(value["template"]),
         value["grouping"].AsString, Date(value["periodFrom"]), Date(value["periodTo"]), value["termOrigin"].AsString, value["termDays"].AsInt32, value["dayRule"].AsString,
         [.. value["workingDays"].AsBsonArray.Select(day => (DayOfWeek)day.AsInt32)], [.. value["holidays"].AsBsonArray.Select(Date)], value["rounding"].AsString,
         value["receivableMapping"].AsString, value["revenueMapping"].AsString, value["taxMapping"].AsString, value["chargesMapping"].AsString, value["taxDocumentProcess"].AsString,
-        ShipmentReceiptRecords.Time(value["validUntil"]), [.. value["lines"].AsBsonArray.Select(line => new InvoiceApprovedLine(line["receiptId"].AsInt64, line["skuId"].AsInt64, Money(line["tax"]), Money(line["charges"])))]);
+        ShipmentReceiptRecords.Time(value["validUntil"]), [.. value["lines"].AsBsonArray.Select(line => new InvoiceApprovedLine(line["receiptId"].AsInt64, line["skuId"].AsInt64, Money(line["tax"]), Money(line["charges"]), OrderLineBson.Revision(line)))]);
     internal static BsonArray Sources(ImmutableArray<InvoiceReceiptSource> sources) => new(sources.Select(source => new BsonDocument {
         { "scope", ShipmentPreparationBson.Scope(source.Resource) }, { "snapshot", source.Snapshot.DeepClone() } }));
     internal static ImmutableArray<InvoiceReceiptSource> Sources(BsonArray values) => [.. values.Select(value => new InvoiceReceiptSource(ShipmentPreparationBson.Scope(value["scope"].AsBsonDocument), value["snapshot"].AsBsonDocument))];
@@ -53,8 +53,8 @@ internal static class InvoiceBson
     internal static BsonDocument Audit(BsonDocument row) => new() { { "_id", row["auditId"] }, { "schemaVersion", 1 }, { "kind", Operation }, { "operation", Operation },
         { "actorId", row["issuedBy"] }, { "actorGrantVersion", row["actorGrantVersion"] }, { "requestKey", row["requestKey"] }, { "bodyHash", row["bodyHash"] },
         { "snapshotHash", row["snapshotHash"] }, { "reason", row["reason"] }, { "correlationId", row["correlationId"] }, { "createdAt", row["issuedAt"] }, { "orderIds", row["orderIds"].DeepClone() }, { "result", Result(row) } };
-    internal static BsonDocument Allocation(BsonDocument invoice, BsonDocument line) => new() { { "_id", line["allocationId"] }, { "schemaVersion", 1 }, { "invoiceId", invoice["_id"] },
+    internal static BsonDocument Allocation(BsonDocument invoice, BsonDocument line) => OrderLineBson.With(new() { { "_id", line["allocationId"] }, { "schemaVersion", 1 }, { "invoiceId", invoice["_id"] },
         { "orderId", line["orderId"] }, { "shipmentId", line["shipmentId"] }, { "receiptId", line["receiptId"] }, { "skuId", line["skuId"] }, { "definitionId", line["definition"]["_id"] },
         { "acceptedBaseUnits", line["acceptedBaseUnits"] }, { "previousBaseUnits", line["previousBaseUnits"] }, { "previousNet", line["previousNet"] },
-        { "net", line["net"] }, { "tax", line["tax"] }, { "charges", line["charges"] }, { "rounding", invoice["terms"]["rounding"] }, { "issuedAt", invoice["issuedAt"] } };
+        { "net", line["net"] }, { "tax", line["tax"] }, { "charges", line["charges"] }, { "rounding", invoice["terms"]["rounding"] }, { "issuedAt", invoice["issuedAt"] } }, OrderLineBson.Revision(line));
 }

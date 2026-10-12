@@ -4,6 +4,7 @@ using MongoDB.Driver;
 using UnitToko.Modules.Contracts;
 using UnitToko.Modules.Fulfillment;
 using UnitToko.Modules.Inventory;
+using UnitToko.Modules.Ordering;
 using UnitToko.Platform.Catalog;
 using UnitToko.Platform.Fulfillment;
 using UnitToko.Platform.Inventory;
@@ -15,14 +16,13 @@ namespace UnitToko.Platform.Ordering;
 public sealed partial class OrderSubmissionService
 {
     private async Task VerifyDispatchHistoryAsync(IClientSessionHandle tx, BsonDocument order, BsonDocument shipment,
-        Dictionary<long, BsonDocument> expected, CancellationToken ct) {
+        Dictionary<long, BsonDocument> expected, OrderCatalogQuote quote, CancellationToken ct) {
         var suborderId = shipment["suborderId"].AsInt64;
         var sub = await Rows(B.Suborders).Find(tx, F.Eq("_id", suborderId) & F.Eq("orderId", order["_id"])).SingleOrDefaultAsync(ct) ?? throw Invalid();
         var reserved = expected.Values.Where(row => row["suborderId"] == suborderId).OrderBy(row => row["_id"].AsInt64).ToArray();
-        var quote = B.Quote(order["quote"].AsBsonDocument);
-        var lines = quote.Lines.Where(line => sub["skuIds"].AsBsonArray.Contains(new BsonInt64(line.Definition.SkuId.Value)))
+        var lines = quote.Lines.Where(line => line.FulfillmentOwner == CatalogRepository.Owner(sub["owner"].AsBsonDocument))
             .Select(line => new FulfillmentOrderLine(line.Definition.SkuId, line.PublicId, line.SkuCode, line.FamilyName, line.Definition, line.Packages,
-                checked((int)reserved.Where(row => row["allocation"]["skuId"] == line.Definition.SkuId.Value).Sum(row => row["remaining"].AsInt64)))).ToImmutableArray();
+                checked((int)reserved.Where(row => OrderLineBson.Identity(row["allocation"]) == OrderLineIdentity.Of(line)).Sum(row => row["remaining"].AsInt64)), line.LineRevision)).ToImmutableArray();
         var before = new FulfillmentOrderView(new(order["_id"].AsInt64), new(suborderId), shipment["decisionRevision"].AsInt64,
             FulfillmentReview(order, suborderId, shipment["decisionRevision"].AsInt64, reserved), order["terms"]["buyer"]["name"].AsString,
             OrderDraftBson.Input(order["input"].AsBsonDocument).Delivery!, lines, true, OrderDraftBson.Time(order["orderedAt"]));
@@ -30,8 +30,8 @@ public sealed partial class OrderSubmissionService
             !CatalogSchemas.SemanticEquals(ShipmentPreparationBson.Scope(ReviewResource(order, sub)), shipment["scope"])) throw Invalid();
         var picked = ShipmentDispatchBson.Lots(shipment["pickedLots"].AsBsonArray);
         _ = ShipmentDispatchPolicy.Require(before, before.Review, ShipmentPreparationBson.Lines(shipment["lines"].AsBsonArray),
-            [.. reserved.Select(row => new ShipmentReservationFact(new(row["_id"].AsInt64), new(row["allocation"]["skuId"].AsInt64),
-                new(row["allocation"]["definitionId"].AsInt64), new(row["allocation"]["lotId"].AsInt64), checked((int)row["remaining"].AsInt64)))], picked);
+            [.. reserved.Where(row => row["remaining"].AsInt64 > 0).Select(row => new ShipmentReservationFact(new(row["_id"].AsInt64), new(row["allocation"]["skuId"].AsInt64),
+                new(row["allocation"]["definitionId"].AsInt64), new(row["allocation"]["lotId"].AsInt64), checked((int)row["remaining"].AsInt64), OrderLineBson.Revision(row["allocation"])))], picked);
         var effects = shipment["stockEffects"].AsBsonArray.Select(value => value.AsBsonDocument).ToArray();
         foreach (var effect in effects) {
             var reservation = reserved.SingleOrDefault(row => row["_id"] == effect["reservationId"]) ?? throw Invalid();

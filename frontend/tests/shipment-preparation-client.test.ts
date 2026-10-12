@@ -9,9 +9,9 @@ import { actorId, sku, definition } from './catalog-fixtures';
 
 const source = { orderId: '9007199254741001', suborderId: '9007199254741002', revision: '3', review: 'a'.repeat(64), buyerName: 'Cabang fixture',
   delivery: { recipientName: 'Penerima fixture', phone: '081234567890', address: 'Alamat fixture', city: 'Jakarta', postalCode: '12810', instructions: null },
-  lines: [{ skuId: sku.id, publicId: sku.publicId, skuCode: sku.code, productName: 'Pena biru', definition: { ...definition, minimumOrderPackages: 2, orderIncrementPackages: 2 }, orderedPackages: 2, remainingPackages: 2 }],
+  lines: [{ skuId: sku.id, lineRevision: '0', publicId: sku.publicId, skuCode: sku.code, productName: 'Pena biru', definition: { ...definition, minimumOrderPackages: 2, orderIncrementPackages: 2 }, orderedPackages: 2, remainingPackages: 2 }],
   canPrepare: true, orderedAt: definition.effectiveAt };
-const lines = [{ skuId: sku.id, packages: 1 }];
+const lines = [{ skuId: sku.id, lineRevision: '0', packages: 1 }];
 const result = { preparationId: '9007199254741010', versionId: '9007199254741011', revision: '1', orderId: source.orderId, suborderId: source.suborderId, recordedAt: definition.effectiveAt };
 const saved = { id: result.preparationId, revision: result.revision, acceptedSource: source, lines, currentSourceMatches: true, recordedAt: result.recordedAt };
 const command = () => prepareShipmentCommand(actorId, parseFulfillmentOrder(source), '0', lines, 'Kemasan diperiksa');

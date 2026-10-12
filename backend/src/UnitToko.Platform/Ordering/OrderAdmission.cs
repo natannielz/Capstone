@@ -15,7 +15,7 @@ internal sealed record OrderCommercialTerms(OrderPolicyReference Policy, OrderPo
     OrderPolicyReference CreditDecision, OrderPolicyReference SpendingPolicy, OrderSpendingRule Spending,
     OrderPartySnapshot Buyer, OrderDeliverySnapshot Delivery, Money Tax, Money Charges, Money Total);
 internal sealed record OrderStockAllocation(long SkuId, OrderPolicyReference SourceAuthority,
-    InventoryPoolExpectation Pool, InventoryBalanceChange Change);
+    InventoryPoolExpectation Pool, InventoryBalanceChange Change, long LineRevision = 0);
 internal sealed record OrderAdmission(OrderBuyingContext Context, OrderCommercialTerms Terms,
     ImmutableArray<OrderStockAllocation> Stock);
 
@@ -37,6 +37,14 @@ internal interface IOrderAdmissionReader
 internal static class OrderAdmissionPolicy
 {
     internal static void Validate(OrderDraftInput input, OrderCatalogQuote quote, OrderAdmission value)
+        => ValidateCore(input, quote, quote, value);
+    internal static void ValidateSubstitution(OrderDraftInput input, OrderCatalogQuote quote, OrderCatalogQuote replacement, OrderAdmission value)
+    {
+        if (replacement is null || replacement.Lines.Length != 1 || replacement.Currency != quote.Currency ||
+            !quote.Lines.Contains(replacement.Lines[0])) throw Invalid();
+        ValidateCore(input, quote, replacement, value);
+    }
+    private static void ValidateCore(OrderDraftInput input, OrderCatalogQuote quote, OrderCatalogQuote reservedQuote, OrderAdmission value)
     {
         if (value is null || value.Context != input.Context || value.Terms is not { } terms ||
             terms.Buyer is null || terms.Delivery is null || terms.Delivery.Address is null ||
@@ -53,7 +61,7 @@ internal static class OrderAdmissionPolicy
         foreach (var allocation in value.Stock) {
             if (allocation is null || allocation.Pool is null || allocation.Change is null) throw Invalid();
             Reference(allocation.SourceAuthority);
-            var line = quote.Lines.SingleOrDefault(item => item.Definition.SkuId.Value == allocation.SkuId) ?? throw Invalid();
+            var line = reservedQuote.Lines.SingleOrDefault(item => item.Definition.SkuId.Value == allocation.SkuId && item.LineRevision == allocation.LineRevision) ?? throw Invalid();
             var pool = allocation.Pool; var change = allocation.Change; var owner = line.FulfillmentOwner;
             if (pool.Id <= 0 || pool.Revision <= 0 || pool.Location is null || change.Id <= 0 || change.ExpectedRevision <= 0 ||
                 change.Key is null || change.PhysicalPoolId != pool.Id || change.Key.Location != pool.Location ||
@@ -64,8 +72,8 @@ internal static class OrderAdmissionPolicy
                 throw Invalid();
             pool.Location.Validate();
         }
-        foreach (var line in quote.Lines)
-            if (value.Stock.Where(item => item.SkuId == line.Definition.SkuId.Value).Sum(item => item.Change.Packages) != line.Packages) throw Invalid();
+        foreach (var line in reservedQuote.Lines)
+            if (value.Stock.Where(item => item.SkuId == line.Definition.SkuId.Value && item.LineRevision == line.LineRevision).Sum(item => item.Change.Packages) != line.Packages) throw Invalid();
         foreach (var group in value.Stock.GroupBy(item => item.Pool.Id))
             if (group.Select(item => item.Pool).Distinct().Count() != 1) throw Invalid();
     }

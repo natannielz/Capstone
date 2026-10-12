@@ -55,7 +55,7 @@ public sealed partial class ShipmentQueryService
         await sourceOrders.RequireShipmentHistoryAsync(tx, actor, row, ct);
         var source = ShipmentPreparationBson.Source(row["source"].AsBsonDocument);
         var lines = ShipmentPreparationBson.Lines(row["lines"].AsBsonArray).Select(selected => {
-            var line = source.Lines.Single(line => line.SkuId == selected.SkuId);
+            var line = source.Lines.Single(line => line.SkuId == selected.SkuId && line.LineRevision == selected.LineRevision);
             return new ShipmentReadLine(line.SkuId, line.SkuCode, line.ProductName, line.Package, selected.Packages,
                 checked((long)selected.Packages * line.Package.BaseUnitsPerPackage));
         }).ToImmutableArray();

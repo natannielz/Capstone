@@ -25,7 +25,7 @@ public sealed record DispatchCommandDto([property: JsonRequired] DispatchSelecti
     OperationalScanSelectionDto[]? ScanSelections = null);
 public sealed record DispatchQueueItemDto(LongId PreparationId, string PreparationRevision, FulfillmentOrderDto Source, ShipmentPackageDto[] Lines, bool CanDispatch);
 public sealed record DispatchQueueDto(DispatchQueueItemDto[] Items, bool HasMore);
-public sealed record DispatchReservedLotDto(LongId ReservationId, LongId SkuId, LongId DefinitionId, LongId LotId, int RemainingPackages, DateOnly? ExpiresOn);
+public sealed record DispatchReservedLotDto(LongId ReservationId, LongId SkuId, LongId DefinitionId, LongId LotId, int RemainingPackages, DateOnly? ExpiresOn, string LineRevision = "0");
 public sealed record DispatchPreparationDto(LongId PreparationId, string PreparationRevision, FulfillmentOrderDto Source, ShipmentPackageDto[] Lines, DispatchReservedLotDto[] Lots);
 public sealed record DispatchCourierDto(LongId UserId, string DisplayName);
 public sealed record DispatchCouriersDto(DispatchCourierDto[] Items, bool HasMore);
@@ -81,8 +81,8 @@ public static class ShipmentDispatchEndpoints
     }
     private static DispatchPreparationDto Preparation(ShipmentDispatchPreparation row) => new(row.PreparationId, Number(row.PreparationRevision),
         ShipmentPreparationEndpoints.Source(row.Source), Packages(row.Lines), [.. row.Lots.Select(lot => new DispatchReservedLotDto(lot.Reservation.ReservationId,
-            lot.Reservation.SkuId, lot.Reservation.DefinitionId, lot.Reservation.LotId, lot.Reservation.RemainingPackages, lot.ExpiresOn))]);
-    private static ShipmentPackageDto[] Packages(ImmutableArray<ShipmentPackageSelection> lines) => [.. lines.Select(line => new ShipmentPackageDto(line.SkuId, line.Packages))];
+            lot.Reservation.SkuId, lot.Reservation.DefinitionId, lot.Reservation.LotId, lot.Reservation.RemainingPackages, lot.ExpiresOn, OrderDraftInputDto.Number(lot.Reservation.LineRevision)))]);
+    private static ShipmentPackageDto[] Packages(ImmutableArray<ShipmentPackageSelection> lines) => [.. lines.Select(line => new ShipmentPackageDto(line.SkuId, line.Packages, OrderDraftInputDto.Number(line.LineRevision)))];
     private static DispatchResultDto Result(BsonDocument row) => new(new(row["shipmentId"].AsInt64), Number(row["revision"].AsInt64), new(row["orderId"].AsInt64),
         new(row["suborderId"].AsInt64), DateTimeOffset.FromUnixTimeMilliseconds(row["recordedAt"].AsBsonDateTime.MillisecondsSinceEpoch),
         new(row["numberEntity"].AsInt64), new(row["numberChannel"].AsInt64), Number(row["numberYear"].AsInt64), Number(row["number"].AsInt64));

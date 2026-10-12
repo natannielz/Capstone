@@ -32,8 +32,8 @@ public sealed class StockReleaseService
     }
     private IMongoCollection<BsonDocument> Rows(string name) => database.GetCollection<BsonDocument>(name);
     private DateTimeOffset Now => DateTimeOffset.FromUnixTimeMilliseconds(clock.UtcNow.ToUnixTimeMilliseconds());
-    internal FiniteSourceHistory RetainFiniteSourceHistory(IClientSessionHandle tx, ShipmentDispatchValueRecords.HistoricalRead valueHistory) =>
-        FiniteSourceHistory.Create(this, tx, valueHistory);
+    internal FiniteSourceHistory RetainFiniteSourceHistory(IClientSessionHandle tx, ShipmentDispatchValueRecords.HistoricalRead valueHistory,
+        ReceiptOriginRead? retainedRead = null) => FiniteSourceHistory.Create(this, tx, valueHistory, retainedRead);
     // Retains only this owner's existing typed ancestry readers in one finite
     // command. Decisions, quantities, effects and valuation results stay fresh.
     internal sealed class FiniteSourceHistory
@@ -43,13 +43,14 @@ public sealed class StockReleaseService
         private readonly long number;
         private readonly DateTimeOffset capturedAt;
         private readonly HistoryReads reads;
-        private FiniteSourceHistory(StockReleaseService owner, IClientSessionHandle tx, ShipmentDispatchValueRecords.HistoricalRead valueHistory) {
+        private FiniteSourceHistory(StockReleaseService owner, IClientSessionHandle tx, ShipmentDispatchValueRecords.HistoricalRead valueHistory, ReceiptOriginRead? retainedRead) {
             this.owner = owner; this.tx = tx; new InventoryRepository(owner.database).RequireSession(tx);
             valueHistory.Require(owner.database, tx); number = tx.WrappedCoreSession.CurrentTransaction.TransactionNumber; capturedAt = owner.clock.UtcNow;
             if (capturedAt == default || capturedAt.Offset != TimeSpan.Zero) throw B.Broken();
-            reads = new(owner, tx, valueHistory, bounded: true);
+            reads = new(owner, tx, valueHistory, bounded: true, retainedRead: retainedRead);
         }
-        internal static FiniteSourceHistory Create(StockReleaseService owner, IClientSessionHandle tx, ShipmentDispatchValueRecords.HistoricalRead valueHistory) => new(owner, tx, valueHistory);
+        internal static FiniteSourceHistory Create(StockReleaseService owner, IClientSessionHandle tx, ShipmentDispatchValueRecords.HistoricalRead valueHistory,
+            ReceiptOriginRead? retainedRead = null) => new(owner, tx, valueHistory, retainedRead);
         internal void Require(StockReleaseService expectedOwner, IMongoDatabase database, IClientSessionHandle current) {
             if (!ReferenceEquals(owner, expectedOwner) || !ReferenceEquals(database.Client, owner.database.Client) || !database.DatabaseNamespace.Equals(owner.database.DatabaseNamespace) ||
                 !ReferenceEquals(tx, current) || !current.IsInTransaction || current.WrappedCoreSession.CurrentTransaction.TransactionNumber != number || owner.clock.UtcNow < capturedAt)
@@ -66,9 +67,13 @@ public sealed class StockReleaseService
             IClientSessionHandle current, StockReleaseSelection selected, CancellationToken ct) {
             Require(owner, database, current); selected.Validate(); await owner.StorageAsync(ct);
             var origin = await reads.OriginAsync(selected.ReceiptId, ct);
-            var proof = await owner.source.ReadOriginAsync(current, selected, origin, reads.Reader(origin), ct);
+            var proof = await reads.ReadOriginAsync(selected, origin, ct);
             proof.Require(database, current); origin.Require(database, current);
             Require(owner, database, current); ct.ThrowIfCancellationRequested(); return (proof, origin);
+        }
+        internal ReceiptOriginRead RetainReceiptOrigins(IMongoDatabase database, IClientSessionHandle current) {
+            Require(owner, database, current);
+            return new ReceiptOriginRead(owner, tx, reads.OriginAsync, reads.ReadOriginAsync);
         }
         internal void SeedOrigin(IMongoDatabase database, IClientSessionHandle current, HeldReceiptOriginProof origin) {
             Require(owner, database, current); origin.Require(database, current);
@@ -98,12 +103,114 @@ public sealed class StockReleaseService
             Require(owner, database, current); ct.ThrowIfCancellationRequested();
         }
     }
+    // Supplies only the first immutable receipt capture retained by the actual
+    // release read. It carries no current balance, availability or grant authority.
+    internal sealed class ReceiptOriginRead
+    {
+        private readonly StockReleaseService owner;
+        private readonly IClientSessionHandle transaction;
+        private readonly long number;
+        private readonly DateTimeOffset capturedAt;
+        private readonly Func<long, CancellationToken, Task<HeldReceiptOriginProof>> read;
+        private readonly Func<StockReleaseSelection, HeldReceiptOriginProof, CancellationToken, Task<StockReleaseSourceProof>>? sourceRead;
+        internal ReceiptOriginRead(StockReleaseService owner, IClientSessionHandle transaction,
+            Func<long, CancellationToken, Task<HeldReceiptOriginProof>> read,
+            Func<StockReleaseSelection, HeldReceiptOriginProof, CancellationToken, Task<StockReleaseSourceProof>>? sourceRead = null) {
+            this.owner = owner; this.transaction = transaction; this.read = read; this.sourceRead = sourceRead;
+            new InventoryRepository(owner.database).RequireSession(transaction);
+            number = transaction.WrappedCoreSession.CurrentTransaction.TransactionNumber; capturedAt = owner.clock.UtcNow;
+            if (capturedAt == default || capturedAt.Offset != TimeSpan.Zero) throw B.Broken();
+        }
+        internal void Require(IMongoDatabase database, IClock clock, IClientSessionHandle current) {
+            if (!ReferenceEquals(owner.database.Client, database.Client) || !owner.database.DatabaseNamespace.Equals(database.DatabaseNamespace) ||
+                !ReferenceEquals(owner.clock, clock) || !ReferenceEquals(transaction, current) || !current.IsInTransaction ||
+                current.WrappedCoreSession.CurrentTransaction.TransactionNumber != number || clock.UtcNow < capturedAt) throw B.Broken();
+            new InventoryRepository(database).RequireSession(current);
+        }
+        internal async Task<HeldReceiptOriginProof> ReadAsync(IMongoDatabase database, IClock clock,
+            IClientSessionHandle current, long receiptId, CancellationToken ct) {
+            Require(database, clock, current); ct.ThrowIfCancellationRequested();
+            if (receiptId <= 0) throw B.Broken();
+            var origin = await read(receiptId, ct);
+            Require(database, clock, current); origin.Require(database, current);
+            if (origin.ReceiptId != receiptId) throw B.Broken();
+            ct.ThrowIfCancellationRequested(); return origin;
+        }
+        internal async Task<StockReleaseSourceProof> ReadSourceAsync(IMongoDatabase database, IClock clock,
+            IClientSessionHandle current, StockReleaseSelection selected, HeldReceiptOriginProof origin, CancellationToken ct) {
+            Require(database, clock, current); selected.Validate(); origin.Require(database, current);
+            var first = await ReadAsync(database, clock, current, selected.ReceiptId, ct);
+            if (!ReferenceEquals(first, origin) || sourceRead is null) throw B.Broken();
+            // Execute the actual original owner's fresh quality/value readers.
+            // Never rebind its PO/valuation proof instances to a synthetic owner.
+            var result = await sourceRead(selected, origin, ct);
+            Require(database, clock, current); origin.Require(database, current); result.Require(database, current);
+            if (result.IsCurrent || result.Selection != selected || result.Receipt != origin.Receipt) throw B.Broken();
+            ct.ThrowIfCancellationRequested(); return result;
+        }
+    }
+    // This set survives only the current command's reader resets. It retains
+    // immutable receipt genesis and forkable completed ancestor proofs, never quality/value decisions, current stock,
+    // conversion balance captures, grants, person proofs or session authority.
+    private sealed class ReceiptOrigins(StockReleaseService owner, IClientSessionHandle tx, bool bounded = false)
+    {
+        private readonly long number = tx.WrappedCoreSession.CurrentTransaction.TransactionNumber;
+        private readonly DateTimeOffset capturedAt = owner.clock.UtcNow;
+        private readonly Dictionary<long, HeldReceiptOriginProof> values = [];
+        private readonly Dictionary<long, ProcurementStockValuationService.ReleaseOriginReader> ancestors = [];
+        internal void Require(StockReleaseService expectedOwner, IClientSessionHandle current) {
+            if (!ReferenceEquals(owner, expectedOwner) || !ReferenceEquals(tx, current) || !current.IsInTransaction ||
+                current.WrappedCoreSession.CurrentTransaction.TransactionNumber != number || capturedAt == default ||
+                capturedAt.Offset != TimeSpan.Zero || owner.clock.UtcNow < capturedAt) throw B.Broken();
+            new InventoryRepository(owner.database).RequireSession(current);
+        }
+        internal void Seed(HeldReceiptOriginProof origin) {
+            Require(owner, tx); origin.Require(owner.database, tx);
+            if (values.TryGetValue(origin.ReceiptId, out var existing) && !ReferenceEquals(existing, origin)) throw B.Broken();
+            if (bounded && !values.ContainsKey(origin.ReceiptId) && values.Count >= LotValueStore.MaximumTransitions) throw B.Broken();
+            values[origin.ReceiptId] = origin;
+        }
+        internal void SeedIfAbsent(HeldReceiptOriginProof origin) {
+            Require(owner, tx); origin.Require(owner.database, tx);
+            if (values.TryGetValue(origin.ReceiptId, out var existing)) {
+                existing.Require(owner.database, tx);
+                if (existing.Receipt != origin.Receipt) throw B.Broken();
+                return; // Keep the first exact capture and all its original rows/private pins.
+            }
+            Seed(origin);
+        }
+        internal HeldReceiptOriginProof First(HeldReceiptOriginProof origin) {
+            SeedIfAbsent(origin);
+            var first = values[origin.ReceiptId]; first.Require(owner.database, tx); return first;
+        }
+        internal void RetainAncestors(HeldReceiptOriginProof origin, ProcurementStockValuationService.ReleaseOriginReader reader) {
+            Require(owner, tx); var first = First(origin);
+            if (!ReferenceEquals(first, origin)) throw B.Broken();
+            var fork = reader.ForOrigin(owner.database, tx, first);
+            // Keep only the first capability. Forking copies completed funding and
+            // inspection proofs, never live receipt/pool/current-value state.
+            ancestors.TryAdd(first.ReceiptId, fork); Require(owner, tx);
+        }
+        internal ProcurementStockValuationService.ReleaseOriginReader? ForkAncestors(HeldReceiptOriginProof origin) {
+            Require(owner, tx); origin.Require(owner.database, tx);
+            if (!values.TryGetValue(origin.ReceiptId, out var first) || !ReferenceEquals(first, origin)) throw B.Broken();
+            return ancestors.TryGetValue(origin.ReceiptId, out var reader) ? reader.ForOrigin(owner.database, tx, origin) : null;
+        }
+        internal async Task<HeldReceiptOriginProof> ReadAsync(long receiptId, CancellationToken ct) {
+            Require(owner, tx);
+            if (!values.TryGetValue(receiptId, out var origin)) {
+                if (bounded && values.Count >= LotValueStore.MaximumTransitions) throw B.Broken();
+                origin = await owner.source.CaptureOriginAsync(tx, receiptId, ct); Seed(origin);
+            }
+            Require(owner, tx); origin.Require(owner.database, tx); return origin;
+        }
+    }
     private sealed class Context(ActorContext actor, AuthorizationSnapshot authority, IClientSessionHandle tx, string permission, StockReleaseInput input) {
         internal ActorContext Actor = actor; internal AuthorizationSnapshot Authority = authority; internal IClientSessionHandle Tx = tx;
         internal long Number = tx.WrappedCoreSession.CurrentTransaction.TransactionNumber; internal string Permission = permission; internal StockReleaseInput Input = input;
         internal StockReleaseSourceProof? Source; internal StockReleaseExpectation? Expected; internal PersonAuthorityProof? People;
         internal string? Operation, Key;
-        internal HistoryReads? History;
+        internal HistoryReads? History; internal ReceiptOrigins? Origins;
         internal long? HeldRemaining, QualityRemaining;
         internal Dictionary<long, BsonDocument>? FencedScopes;
         internal BsonDocument? Proposal, Decision; internal InventoryBalanceDocument? Before, After; internal DateTimeOffset? SessionExpiry;
@@ -113,61 +220,66 @@ public sealed class StockReleaseService
     // Per owning operation/transaction attempt only. It retains typed immutable
     // ancestry readers; never decisions, effects, policy or current availability.
     private sealed class HistoryReads(StockReleaseService owner, IClientSessionHandle tx,
-        ShipmentDispatchValueRecords.HistoricalRead? valueHistory = null, bool bounded = false) {
+        ShipmentDispatchValueRecords.HistoricalRead? valueHistory = null, bool bounded = false, ReceiptOrigins? retainedOrigins = null,
+        ReceiptOriginRead? retainedRead = null) {
         internal ShipmentDispatchValueRecords.HistoricalRead? ValueHistory => valueHistory;
+        private ShipmentDispatchValueRecords.HistoricalRead? conversionValues;
+        private PackConversionService.HistoricalSourceRead? conversions;
+        internal async Task AuthenticateConversionAsync(InventorySource selected, string hash, CancellationToken ct) {
+            Require(owner, tx);
+            var history = valueHistory ?? (conversionValues ??= new(owner.database, owner.clock, tx));
+            conversions ??= PackConversionService.RetainValueSources(owner.database, owner.unit, owner.clock, tx, history,
+                retainedRead ?? new ReceiptOriginRead(owner, tx, OriginAsync, ReadOriginAsync));
+            await conversions.AuthenticateValueSourceAsync(owner.database, tx, selected, hash, ct);
+            Require(owner, tx); ct.ThrowIfCancellationRequested();
+        }
         private readonly long number = tx.WrappedCoreSession.CurrentTransaction.TransactionNumber;
-        private readonly Dictionary<long, HeldReceiptOriginProof> origins = [];
+        private readonly ReceiptOrigins origins = retainedOrigins ?? new(owner, tx, bounded);
         private readonly Dictionary<long, ProcurementStockValuationService.ReleaseOriginReader> readers = [];
         internal void Require(StockReleaseService expectedOwner, IClientSessionHandle current) {
             if (!ReferenceEquals(owner, expectedOwner) || !ReferenceEquals(tx, current) || !current.IsInTransaction ||
                 current.WrappedCoreSession.CurrentTransaction.TransactionNumber != number) throw B.Broken();
             new InventoryRepository(owner.database).RequireSession(current);
-            valueHistory?.Require(owner.database, current);
+            origins.Require(owner, current); valueHistory?.Require(owner.database, current); retainedRead?.Require(owner.database, owner.clock, current);
         }
-        internal void Seed(HeldReceiptOriginProof origin) {
-            Require(owner, tx); origin.Require(owner.database, tx);
-            if (origins.TryGetValue(origin.ReceiptId, out var existing) && !ReferenceEquals(existing, origin)) throw B.Broken();
-            if (bounded && !origins.ContainsKey(origin.ReceiptId) && origins.Count >= LotValueStore.MaximumTransitions) throw B.Broken();
-            origins[origin.ReceiptId] = origin;
-        }
-        internal void SeedIfAbsent(HeldReceiptOriginProof origin) {
-            Require(owner, tx); origin.Require(owner.database, tx);
-            if (origins.TryGetValue(origin.ReceiptId, out var existing)) {
-                existing.Require(owner.database, tx);
-                if (existing.Receipt != origin.Receipt) throw B.Broken();
-                return; // Preserve the earlier exact capture; never rebase its rows or pins.
-            }
-            Seed(origin);
-        }
+        internal void Seed(HeldReceiptOriginProof origin) { Require(owner, tx); origins.Seed(origin); }
+        internal void SeedIfAbsent(HeldReceiptOriginProof origin) { Require(owner, tx); origins.SeedIfAbsent(origin); }
         internal void Seed(StockReleaseSourceProof source) {
             Require(owner, tx);
             var origin = source.CurrentOrigin(owner.database, tx);
-            if (origin is null) return;
-            if (origins.TryGetValue(origin.ReceiptId, out var existing)) {
-                existing.Require(owner.database, tx);
-                if (existing.Receipt != origin.Receipt) throw B.Broken();
-                // Keep an earlier capture: its full rows and private pins must still
-                // pass the owning reader, even after another genuine current read.
-                return;
+            if (origin is not null) {
+                var first = origins.First(origin);
+                if (source.CurrentOriginReader(owner.database, tx, first) is { } reader) {
+                    origins.RetainAncestors(first, reader);
+                    if (!readers.ContainsKey(first.ReceiptId)) readers.Add(first.ReceiptId, origins.ForkAncestors(first) ?? throw B.Broken());
+                }
             }
-            Seed(origin);
         }
         internal async Task<HeldReceiptOriginProof> OriginAsync(long receiptId, CancellationToken ct) {
             Require(owner, tx);
-            if (!origins.TryGetValue(receiptId, out var origin)) {
-                if (bounded && origins.Count >= LotValueStore.MaximumTransitions) throw B.Broken();
-                origin = await owner.source.CaptureOriginAsync(tx, receiptId, ct); Seed(origin);
-            }
-            origin.Require(owner.database, tx); return origin;
+            if (retainedRead is not null) origins.SeedIfAbsent(await retainedRead.ReadAsync(owner.database, owner.clock, tx, receiptId, ct));
+            var result = await origins.ReadAsync(receiptId, ct); Require(owner, tx); return result;
+        }
+        internal async Task<StockReleaseSourceProof> ReadOriginAsync(StockReleaseSelection selected, HeldReceiptOriginProof origin, CancellationToken ct) {
+            Require(owner, tx); selected.Validate(); origin.Require(owner.database, tx);
+            if (origin.ReceiptId != selected.ReceiptId) throw B.Broken();
+            var result = retainedRead is null
+                ? await owner.source.ReadOriginAsync(tx, selected, origin, Reader(origin), ct)
+                : await retainedRead.ReadSourceAsync(owner.database, owner.clock, tx, selected, origin, ct);
+            Require(owner, tx); result.Require(owner.database, tx); ct.ThrowIfCancellationRequested(); return result;
         }
         internal ProcurementStockValuationService.ReleaseOriginReader Reader(HeldReceiptOriginProof origin) {
             Seed(origin);
-            if (!readers.TryGetValue(origin.ReceiptId, out var reader)) readers.Add(origin.ReceiptId, reader = owner.source.CreateOriginReader(tx, origin));
+            if (!readers.TryGetValue(origin.ReceiptId, out var reader)) readers.Add(origin.ReceiptId,
+                reader = origins.ForkAncestors(origin) ?? owner.source.CreateOriginReader(tx, origin));
             return reader;
         }
     }
     private HistoryReads Reads(Context context) {
-        var read = context.History ??= new HistoryReads(this, context.Tx); read.Require(this, context.Tx); return read;
+        var origins = context.Origins ??= new ReceiptOrigins(this, context.Tx);
+        origins.Require(this, context.Tx);
+        var read = context.History ??= new HistoryReads(this, context.Tx, retainedOrigins: origins);
+        read.Require(this, context.Tx); return read;
     }
     private Task AuthenticateHistoryAsync(Context context, IMongoDatabase owner, IClientSessionHandle tx, InventorySource selected, string hash, CancellationToken ct) =>
         AuthenticateSourceAsync(owner, tx, selected, hash, Reads(context), ct);
@@ -315,8 +427,8 @@ public sealed class StockReleaseService
             _ = await ProposalAsync(tx, row["_id"].AsInt64, token, reads: Reads(active)); await FenceAsync(active, token); }, validateCurrent: () => Current(context ?? throw B.Broken()));
     }
     private async Task<Context> ProposalContextAsync(ActorContext actor, AuthorizationSnapshot authority, IClientSessionHandle tx, long id, CancellationToken ct) {
-        var reads = new HistoryReads(this, tx);
-        var proposal = await ProposalAsync(tx, id, ct, reads: reads); var context = new Context(actor, authority, tx, ApprovePermission, B.Input(proposal["input"])) { Proposal = proposal, History = reads };
+        var origins = new ReceiptOrigins(this, tx); var reads = new HistoryReads(this, tx, retainedOrigins: origins);
+        var proposal = await ProposalAsync(tx, id, ct, reads: reads); var context = new Context(actor, authority, tx, ApprovePermission, B.Input(proposal["input"])) { Proposal = proposal, History = reads, Origins = origins };
         Require(context); await RequireMakerAsync(context, ct); await PeopleAsync(context, ct); context.History = null; return context;
     }
     private async Task RequireMakerAsync(Context context, CancellationToken ct) {
@@ -334,7 +446,7 @@ public sealed class StockReleaseService
     private async Task PrepareRejectAsync(Context context, CancellationToken ct) {
         await new StockSourceTopologyFence(database).FenceAsync(context.Tx, context.Input.Location.OrganizationId.Value, ct);
         var proposal = context.Proposal ?? throw B.Broken(); var reads = Reads(context); var origin = await reads.OriginAsync(context.Input.ReceiptId, ct);
-        context.Source = await source.ReadOriginAsync(context.Tx, Selection(proposal), origin, reads.Reader(origin), ct);
+        context.Source = await reads.ReadOriginAsync(Selection(proposal), origin, ct);
         context.Expected = B.Expected(proposal["expected"]); context.Before = InventoryBson.ReadBalance(proposal["before"].AsBsonDocument);
         context.After = context.Before; Current(context);
     }
@@ -373,9 +485,9 @@ public sealed class StockReleaseService
                 if (decision == StockReleaseDecision.Approve) {
                     var reader = new LedgerSource(this, active); var ledger = new InventoryLedger(database, clock, [reader]);
                     var movement = await ledger.ApplyAsync(tx, actor, B.Source(id, active.Source!.PoolId), 1, new(metadata.Reason, metadata.CorrelationId), token);
-                    // Physical ownership changed within this attempt. Start fresh ancestor
-                    // captures for post-write value history, retaining no pre-write view.
-                    active.History = new HistoryReads(this, tx);
+                    // Physical ownership changed. Discard every value/conversion/current
+                    // reader; only immutable receipt/ancestor capabilities survive in this attempt.
+                    active.History = null;
                     var proof = await HeldStockReleaseValueProof.CreateAsync(this, database, tx, id, token); var value = await values.ReleaseAsync(tx, proof, token);
                     row["movementId"] = movement.Id; row["valueTransitionId"] = value.TransitionId; row["valueTransitionHash"] = value.TransitionHash; row["transferredValue"] = value.TransferredValue.ToString();
                 }
@@ -427,7 +539,7 @@ public sealed class StockReleaseService
         reads?.Require(this, tx);
         var origin = retainedOrigin ?? (reads is null ? await source.CaptureOriginAsync(tx, receiptId, ct) : await reads.OriginAsync(receiptId, ct));
         var proof = reads is null ? await source.ReadOriginAsync(tx, Selection(row), origin, ct)
-            : await source.ReadOriginAsync(tx, Selection(row), origin, reads.Reader(origin), ct);
+            : await reads.ReadOriginAsync(Selection(row), origin, ct);
         if (proof.Snapshot != row["source"]) throw B.Broken();
         var input = B.Input(row["input"]); var expected = B.Expected(row["expected"]); var before = InventoryBson.ReadBalance(row["before"].AsBsonDocument);
         var after = InventoryBson.ReadBalance(row["after"].AsBsonDocument); var maker = R.Person(row["people"][0]);
@@ -534,7 +646,7 @@ public sealed class StockReleaseService
             await ShipmentDispatchService.RequireValueSourceAsync(database, unit, clock, tx, selected, hash, ct, reads.ValueHistory); return;
         }
         if (selected.Namespace == PackConversionBson.Namespace && selected.EventKind == "convertPackages") {
-            await PackConversionService.RequireValueSourceAsync(database, unit, clock, tx, selected, hash, ct, reads.ValueHistory); return;
+            await reads.AuthenticateConversionAsync(selected, hash, ct); return;
         }
         if (selected.Namespace != B.Namespace ||
             selected.EventKind != "releaseHeld") throw B.Broken();
@@ -641,8 +753,9 @@ public sealed class StockReleaseService
         await Rows(operation == B.Propose ? B.Proposals : B.Decisions).Find(tx, new BsonDocument { { "actorId", actor }, { "requestKey", key } }).SingleOrDefaultAsync(ct);
     public async Task<BsonDocument?> ReadAsync(ActorContext actor, long proposalId, CancellationToken ct = default) {
         await StorageAsync(ct); return await authorization.ReadAsync<BsonDocument?>(actor, async (authority, tx, token) => {
-            var reads = new HistoryReads(this, tx); var proposal = await ProposalAsync(tx, proposalId, token, reads: reads);
-            var context = new Context(actor, authority, tx, ProposePermission, B.Input(proposal["input"])) { History = reads };
+            var origins = new ReceiptOrigins(this, tx); var reads = new HistoryReads(this, tx, retainedOrigins: origins);
+            var proposal = await ProposalAsync(tx, proposalId, token, reads: reads);
+            var context = new Context(actor, authority, tx, ProposePermission, B.Input(proposal["input"])) { History = reads, Origins = origins };
             if (!ScopePolicy.Compile(actor, authority, ProposePermission, Now).Matches(context.Resource)) context.Permission = ApprovePermission;
             var decision = await Rows(B.Decisions).Find(tx, new BsonDocument("proposalId", proposalId)).SingleOrDefaultAsync(token);
             if (decision is not null) decision = await DecisionAsync(tx, decision["_id"].AsInt64, token, reads: reads); await FenceAsync(context, token);
@@ -661,9 +774,9 @@ public sealed class StockReleaseService
                     authority.Memberships.Where(member => query.Clauses.Any(clause => clause.MembershipId == member.Id)), tx, token);
                 AuthorizationStore.Require(ScopePolicy.Compile(actor, authority, permission, Now)); return null;
             }
-            var reads = new HistoryReads(this, tx);
+            var origins = new ReceiptOrigins(this, tx); var reads = new HistoryReads(this, tx, retainedOrigins: origins);
             var row = operation == B.Propose ? await ProposalAsync(tx, found["_id"].AsInt64, token, reads: reads) : await DecisionAsync(tx, found["_id"].AsInt64, token, reads: reads);
-            var context = new Context(actor, authority, tx, operation == B.Propose ? ProposePermission : ApprovePermission, B.Input(row["input"])) { History = reads };
+            var context = new Context(actor, authority, tx, operation == B.Propose ? ProposePermission : ApprovePermission, B.Input(row["input"])) { History = reads, Origins = origins };
             if (operation == B.Decide) { context.Proposal = await ProposalAsync(tx, row["proposalId"].AsInt64, token, reads: reads); await PeopleAsync(context, token); }
             await FenceAsync(context, token); return B.Result(row);
         }, ct);

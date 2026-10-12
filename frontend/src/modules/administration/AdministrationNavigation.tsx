@@ -4,9 +4,10 @@ import { canManageAccounts, canReviewPeople, canUseStockCounts, canUseStockSourc
 import styles from "./access.module.css";
 
 export function AdministrationNavigation({ current, actions, locked = false }: {
-  current: "delegations" | "pack-conversion-executions" | "stock-releases" | "source-activations" | "pack-conversion-rules" | "source-reconciliations" | "organization-addresses" | "cases" | "access" | "organizations" | "history" | "accounts" | "person-reviews" | "catalog" | "prices" | "counts" | "sources" | "source-revisions" | "source-aliases" | "source-suspensions" | "source-policies" | "order-reviews" | "orders" | "preparations" | "dispatches" | "shipments" | "invoices" | "payments" | "payment-reviews" | "receiving-accounts" | "bank-statements" | "bank-receipts"; actions: readonly string[]; locked?: boolean;
+  current: "substitutions" | "delegations" | "pack-conversion-executions" | "stock-releases" | "source-activations" | "pack-conversion-rules" | "source-reconciliations" | "organization-addresses" | "cases" | "access" | "organizations" | "history" | "accounts" | "person-reviews" | "catalog" | "prices" | "counts" | "sources" | "source-revisions" | "source-aliases" | "source-suspensions" | "source-policies" | "order-reviews" | "orders" | "preparations" | "dispatches" | "shipments" | "invoices" | "payments" | "payment-reviews" | "receiving-accounts" | "bank-statements" | "bank-receipts"; actions: readonly string[]; locked?: boolean;
 }) {
   const links = [
+    { id: 'substitutions', href: '/ordering/substitutions', label: 'Penggantian barang', available: actions.some(action => ['substitution.propose', 'substitution.accept'].includes(action)) },
     {id: "delegations", href: "/administration/delegations", label: "Delegasi sementara", available: true},
     { id: "branch-requests", href: "/ordering/requests", label: "Permintaan saya", available: actions.some(action => ["order.request.read", "order.request.submit"].includes(action)) },
     { id: "branch-requests-incoming", href: "/ordering/requests/incoming", label: "Permintaan masuk", available: actions.includes("order.request.decide") },

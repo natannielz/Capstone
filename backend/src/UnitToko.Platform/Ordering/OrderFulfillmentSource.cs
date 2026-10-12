@@ -37,13 +37,15 @@ public sealed partial class OrderSubmissionService
         var resource = ReviewResource(order, sub);
         if (!query.Matches(resource) || !ScopePolicy.IsResourceActive(resource, snapshot.Directory)) throw Invalid();
         var reservations = await Rows(B.Reservations).Find(tx, F.Eq("orderId", order["_id"]) & F.Eq("suborderId", suborderId))
-            .Sort(new BsonDocument("_id", 1)).Limit(101).ToListAsync(ct);
-        var quote = B.Quote(order["quote"].AsBsonDocument);
-        var lines = quote.Lines.Where(line => sub["skuIds"].AsBsonArray.Contains(new BsonInt64(line.Definition.SkuId.Value)))
+            .Sort(new BsonDocument("_id", 1)).Limit(OrderReservationHistoryLimits.MaximumRetained + 1).ToListAsync(ct);
+        var commercial = await CurrentSubstitutionCommercialAsync(tx, order, progress.Revision, ct);
+        var quote = B.Quote(commercial.Catalog);
+        var lines = quote.Lines.Where(line => line.FulfillmentOwner == CatalogRepository.Owner(sub["owner"].AsBsonDocument))
             .Select(line => new FulfillmentOrderLine(line.Definition.SkuId, line.PublicId, line.SkuCode, line.FamilyName, line.Definition,
-                line.Packages, checked((int)reservations.Where(row => row["allocation"]["skuId"] == line.Definition.SkuId.Value).Sum(row => row["remaining"].AsInt64))))
+                line.Packages, checked((int)reservations.Where(row => OrderLineBson.Identity(row["allocation"]) == OrderLineIdentity.Of(line)).Sum(row => row["remaining"].AsInt64)), line.LineRevision))
             .ToImmutableArray();
-        if (lines.IsDefaultOrEmpty || reservations.Count is 0 or > 100 || lines.Any(line => line.RemainingPackages < 0 || line.RemainingPackages > line.OrderedPackages)) throw Invalid();
+        OrderReservationHistoryLimits.Require(reservations);
+        if (lines.IsDefaultOrEmpty || lines.Any(line => line.RemainingPackages < 0 || line.RemainingPackages > line.OrderedPackages)) throw Invalid();
         var review = FulfillmentReview(order, suborderId, progress.Revision, reservations);
         var canPrepare = !progress.Cancelled && OrderSpendingPolicy.CanAcceptAtStore(progress.SpendingState) &&
             progress.AcceptedSuborders.Contains(new(suborderId)) && !progress.RejectedSuborders.Contains(new(suborderId)) && lines.Any(line => line.RemainingPackages > 0);

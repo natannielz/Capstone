@@ -21,7 +21,19 @@ public sealed partial class OrderSubmissionService
         var order = await GraphAsync(tx, actor, shipment["orderId"].AsInt64, ct, requireOwner: false);
         if (!order["suborderIds"].AsBsonArray.Contains(shipment["suborderId"])) throw Invalid();
         await TouchAsync(tx, order, ct);
+        var commercial = await CurrentSubstitutionCommercialAsync(tx, order, shipment["decisionRevision"].AsInt64, ct);
         return new BsonDocument { { "orderId", order["_id"] }, { "orderHash", order["snapshotHash"] }, { "orderedAt", order["orderedAt"] },
-            { "terms", order["terms"].DeepClone() }, { "quote", order["quote"].DeepClone() } };
+            { "terms", commercial.Terms }, { "quote", commercial.Catalog } };
+    }
+
+    // Separate owner seam keeps existing immutable invoice snapshot bytes unchanged.
+    // A later shipment can use a commercial amendment approved after original ordering.
+    internal async Task<DateTimeOffset> InvoiceCommercialApprovalTimeAsync(IClientSessionHandle tx, ActorContext actor, BsonDocument shipment, CancellationToken ct) {
+        var order = await GraphAsync(tx, actor, shipment["orderId"].AsInt64, ct, requireOwner: false);
+        if (!order["suborderIds"].AsBsonArray.Contains(shipment["suborderId"])) throw Invalid();
+        var commercial = await CurrentSubstitutionCommercialAsync(tx, order, shipment["decisionRevision"].AsInt64, ct);
+        var approvedAt = OrderDraftBson.Time(commercial.Amendment?["recordedAt"] ?? order["orderedAt"]);
+        await TouchAsync(tx, order, ct);
+        return approvedAt;
     }
 }

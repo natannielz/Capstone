@@ -13,25 +13,25 @@ namespace UnitToko.Platform.Fulfillment;
 internal static class ShipmentPreparationBson
 {
     internal const string Heads = "shipmentPreparations", Versions = "shipmentPreparationVersions", Operation = "fulfillment.preparation.save";
-    internal static BsonArray Lines(ImmutableArray<ShipmentPackageSelection> value) => new(value.Select(line => new BsonDocument { { "skuId", line.SkuId.Value }, { "packages", line.Packages } }));
+    internal static BsonArray Lines(ImmutableArray<ShipmentPackageSelection> value) => new(value.Select(line => OrderLineBson.With(new BsonDocument { { "skuId", line.SkuId.Value }, { "packages", line.Packages } }, line.LineRevision)));
     internal static ImmutableArray<ShipmentPackageSelection> Lines(BsonArray value) => ShipmentPreparationPolicy.Copy(value.Select(line =>
-        new ShipmentPackageSelection(new(line["skuId"].AsInt64), line["packages"].AsInt32)).ToImmutableArray());
+        new ShipmentPackageSelection(new(line["skuId"].AsInt64), line["packages"].AsInt32, OrderLineBson.Revision(line))).ToImmutableArray());
     internal static BsonDocument Source(FulfillmentOrderView source) => new() {
         { "orderId", source.OrderId.Value }, { "suborderId", source.SuborderId.Value }, { "revision", source.Revision }, { "review", source.Review },
         { "buyerName", source.BuyerName }, { "delivery", new BsonDocument { { "recipientName", source.Delivery.RecipientName }, { "phone", source.Delivery.Phone },
             { "address", source.Delivery.Address }, { "city", source.Delivery.City }, { "postalCode", Text(source.Delivery.PostalCode) }, { "instructions", Text(source.Delivery.Instructions) } } },
         { "orderedAt", source.OrderedAt.UtcDateTime }, { "canPrepare", source.CanPrepare },
-        { "lines", new BsonArray(source.Lines.Select(line => new BsonDocument { { "skuId", line.SkuId.Value }, { "publicId", line.PublicId.ToString("D") },
+        { "lines", new BsonArray(source.Lines.Select(line => OrderLineBson.With(new BsonDocument { { "skuId", line.SkuId.Value }, { "publicId", line.PublicId.ToString("D") },
             { "skuCode", line.SkuCode }, { "productName", line.ProductName }, { "definition", CatalogRepository.Definition(line.Package) },
-            { "orderedPackages", line.OrderedPackages }, { "remainingPackages", line.RemainingPackages } })) } };
+            { "orderedPackages", line.OrderedPackages }, { "remainingPackages", line.RemainingPackages } }, line.LineRevision))) } };
     internal static FulfillmentOrderView Source(BsonDocument row) {
         var delivery = row["delivery"].AsBsonDocument;
         var value = new FulfillmentOrderView(new(row["orderId"].AsInt64), new(row["suborderId"].AsInt64), row["revision"].AsInt64, row["review"].AsString,
             row["buyerName"].AsString, new(delivery["recipientName"].AsString, delivery["phone"].AsString, delivery["address"].AsString, delivery["city"].AsString,
                 NullText(delivery["postalCode"]), NullText(delivery["instructions"])), row["lines"].AsBsonArray.Select(line => new FulfillmentOrderLine(new(line["skuId"].AsInt64),
                     Guid.ParseExact(line["publicId"].AsString, "D"), line["skuCode"].AsString, line["productName"].AsString, CatalogRepository.Definition(line["definition"].AsBsonDocument),
-                    line["orderedPackages"].AsInt32, line["remainingPackages"].AsInt32)).ToImmutableArray(), row["canPrepare"].AsBoolean, OrderDraftBson.Time(row["orderedAt"]));
-        if (!CatalogSchemas.SemanticEquals(row, Source(value)) || value.Lines.Select(line => line.SkuId).Distinct().Count() != value.Lines.Length ||
+                    line["orderedPackages"].AsInt32, line["remainingPackages"].AsInt32, OrderLineBson.Revision(line))).ToImmutableArray(), row["canPrepare"].AsBoolean, OrderDraftBson.Time(row["orderedAt"]));
+        if (!CatalogSchemas.SemanticEquals(row, Source(value)) || value.Lines.Select(line => (line.SkuId, line.LineRevision)).Distinct().Count() != value.Lines.Length ||
             value.Lines.Any(line => line.Package.SkuId != line.SkuId || line.OrderedPackages is < 1 or > DomainValues.MaximumLineQuantity ||
                 line.RemainingPackages < 0 || line.RemainingPackages > line.OrderedPackages)) throw Invalid();
         return value;
