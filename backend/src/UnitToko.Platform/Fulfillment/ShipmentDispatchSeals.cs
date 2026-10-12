@@ -13,7 +13,7 @@ namespace UnitToko.Platform.Fulfillment;
 internal static class ShipmentDispatchSeals
 {
     private const string Kind = ProvenanceSealSchemas.ShipmentDispatchKind;
-    private const int MaximumMembers = 1000;
+    private const int MaximumMembers = ProvenanceSeal.MaximumMembers;
     private static IMongoCollection<BsonDocument> Seals(IMongoDatabase database) =>
         database.GetCollection<BsonDocument>(ProvenanceSealSchemas.ShipmentDispatchCollection);
     // Transition ids are allocated monotonically and a balance's transitions serialize on its revision.
@@ -52,7 +52,9 @@ internal static class ShipmentDispatchSeals
             if (members.Count > MaximumMembers) return; // Too long to seal: this shipment keeps the full proof.
             scopes.Add((collection, filter, members));
         }
+        var membership = SealVerifier.Membership(scopes);
+        if (!ProvenanceSeal.Sealable(membership)) return; // Beyond the stored seal limits: this shipment keeps the full proof.
         await Seals(database).InsertOneAsync(tx, ProvenanceSeal.Create(ring, Kind, row["_id"].AsInt64, ProvenanceSeal.RowHash(row),
-            SealVerifier.Membership(scopes), [], clock.UtcNow), cancellationToken: ct);
+            membership, [], clock.UtcNow), cancellationToken: ct);
     }
 }

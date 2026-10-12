@@ -93,8 +93,12 @@ public sealed class MigrationLifecycleTests(MongoFixture fixture)
             Assert.False(await migrations.IsCurrentAsync());
             await database.GetCollection<BsonDocument>("organizationProfiles").ReplaceOneAsync(
                 new BsonDocument("_id", 30L), Profile(30L));
-            await migrations.ApplyAsync();
-            Assert.True(await migrations.IsCurrentAsync());
+            // The reconciled v3 step now completes and the chain resumes. It then reaches the independent v58
+            // organization-address gate, which refuses this synthetic profile: it carries no original approval evidence.
+            var later = await Assert.ThrowsAsync<PersistenceConflictException>(() => migrations.ApplyAsync());
+            Assert.Equal("organization_address_integrity_unavailable", later.Code);
+            Assert.True((await History(database)).Count(row => row["state"] == "applied") >= 57);
+            Assert.False(await migrations.IsCurrentAsync());
             Assert.Equal(31L, (await new IdAllocator(database).NextAsync("authorizationScopes")).Value);
         });
     }

@@ -329,6 +329,10 @@ builder.Services.AddOpenApi("v1", options =>
 });
 
 var app = builder.Build();
+// A present provenance seal that fails verification is possible tampering: log it for the integrity responder.
+var integrityLog = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("UnitToko.Integrity");
+UnitToko.Platform.Integrity.SealIntegrityAlerts.Raised += alert =>
+    integrityLog.LogCritical("Provenance seal verification failed: kind {Kind}, owner {OwnerId}, check {Check}", alert.Kind, alert.OwnerId, alert.Check);
 var pilotRelease = ReleaseProfile.IsPilot(app.Configuration);
 if (identityEnabled) _ = app.Services.GetRequiredService<IdentityKeyMaterial>();
 var mongoUri = app.Configuration["Mongo:Uri"];

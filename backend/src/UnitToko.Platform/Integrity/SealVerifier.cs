@@ -9,7 +9,7 @@ namespace UnitToko.Platform.Integrity;
 /// A passing verification is memoized only inside the owning unit-of-work operation's transaction attempt.</summary>
 public sealed class SealVerifier(IMongoDatabase database, SealKeyRing ring)
 {
-    private const int MaximumMembers = 1000;
+    private const int MaximumMembers = ProvenanceSeal.MaximumMembers;
     private static readonly ConditionalWeakTable<IClientSessionHandle, Dictionary<string, IReadOnlyList<BsonDocument>>> verified = new();
 
     public static BsonArray Membership(IEnumerable<(string Collection, BsonDocument Filter, IReadOnlyList<BsonDocument> Rows)> scopes,
@@ -26,16 +26,17 @@ public sealed class SealVerifier(IMongoDatabase database, SealKeyRing ring)
     public async Task<IReadOnlyList<BsonDocument>> VerifyAsync(IClientSessionHandle tx, BsonDocument seal, string kind, long ownerId,
         BsonDocument liveRecord, CancellationToken ct)
     {
-        static SealUnavailableException Mismatch() => new("seal_mismatch");
-        if (!tx.IsInTransaction || !ProvenanceSeal.MacValid(ring, seal) || seal["kind"] != kind || seal["ownerId"] != ownerId ||
-            seal["recordHash"] != ProvenanceSeal.RowHash(liveRecord)) throw Mismatch();
+        // Every refusal of a present seal raises an integrity alert naming the failing check (spec 3.3).
+        SealUnavailableException Mismatch(string check) { SealIntegrityAlerts.Raise(kind, ownerId, check); return new("seal_mismatch"); }
+        if (!tx.IsInTransaction || !ProvenanceSeal.MacValid(ring, seal) || seal["kind"] != kind || seal["ownerId"] != ownerId) throw Mismatch("seal");
+        if (seal["recordHash"] != ProvenanceSeal.RowHash(liveRecord)) throw Mismatch("record");
         var memo = MongoUnitOfWork.OwnsOperation(tx) ? tx.WrappedCoreSession.CurrentTransaction.TransactionNumber + ":" + seal["mac"].AsString : null;
         if (memo is not null && verified.TryGetValue(tx, out var done)) lock (done) if (done.TryGetValue(memo, out var known)) return known;
         var result = new List<BsonDocument>();
         foreach (var scope in seal["membership"].AsBsonArray.Select(value => value.AsBsonDocument)) {
             if (scope.Contains("count")) {
                 if (await database.GetCollection<BsonDocument>(scope["collection"].AsString).CountDocumentsAsync(tx, scope["filter"].AsBsonDocument, cancellationToken: ct) != scope["count"].AsInt64)
-                    throw Mismatch();
+                    throw Mismatch("membership:" + scope["collection"].AsString);
                 result.Add(new BsonDocument { { "collection", scope["collection"] }, { "filter", scope["filter"] }, { "count", scope["count"] } });
                 continue;
             }
@@ -44,7 +45,7 @@ public sealed class SealVerifier(IMongoDatabase database, SealKeyRing ring)
             var expected = scope["members"].AsBsonArray;
             if (actual.Count != expected.Count ||
                 actual.Where((row, index) => row["_id"] != expected[index]["id"] || ProvenanceSeal.RowHash(row) != expected[index]["hash"].AsString).Any())
-                throw Mismatch();
+                throw Mismatch("membership:" + scope["collection"].AsString);
             result.Add(new BsonDocument { { "collection", scope["collection"] }, { "filter", scope["filter"] }, { "rows", new BsonArray(actual) } });
         }
         if (memo is not null) { var table = verified.GetValue(tx, _ => []); lock (table) table[memo] = result; }

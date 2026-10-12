@@ -68,9 +68,12 @@ internal sealed class HeldReceiptOriginProof
         capture.Seal();
         var proof = new HeldReceiptOriginProof(database, tx, records, capture, clock, receipt);
         // Only the owning unit-of-work operation seals; caller-supplied sessions never write seals.
-        if (ring is not null && MongoUnitOfWork.OwnsOperation(tx) && capture.SealedScopes() is { } scopes)
+        // A membership beyond the stored seal limits keeps the full proof rather than failing validation on every read.
+        if (ring is not null && MongoUnitOfWork.OwnsOperation(tx) && capture.SealedScopes() is { } scopes &&
+            UnitToko.Platform.Integrity.SealVerifier.Membership(scopes, capture.SealedCounts()) is var membership &&
+            UnitToko.Platform.Integrity.ProvenanceSeal.Sealable(membership))
             await sealRows.InsertOneAsync(tx, UnitToko.Platform.Integrity.ProvenanceSeal.Create(ring, SealKind, receiptId,
-                UnitToko.Platform.Integrity.ProvenanceSeal.RowHash(receipt), UnitToko.Platform.Integrity.SealVerifier.Membership(scopes, capture.SealedCounts()), [], clock.UtcNow), cancellationToken: ct);
+                UnitToko.Platform.Integrity.ProvenanceSeal.RowHash(receipt), membership, [], clock.UtcNow), cancellationToken: ct);
         return proof;
     }
     internal void Require(IMongoDatabase owner, IClientSessionHandle tx)
