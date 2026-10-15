@@ -267,7 +267,8 @@ public sealed class PersistenceHttpTests(MongoFixture mongo)
         {
             var output = process.StandardOutput.ReadToEndAsync();
             var errors = process.StandardError.ReadToEndAsync();
-            await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(45));
+            // A cold worker process applies the whole registered chain (116 steps); this bounds a hang, not migration speed.
+            await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(120));
             Assert.True(process.ExitCode == 0,
                 $"Migration worker exited {process.ExitCode}: {await output}; {await errors}");
         }

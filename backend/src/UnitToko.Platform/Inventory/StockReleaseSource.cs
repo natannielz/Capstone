@@ -12,6 +12,13 @@ using V = UnitToko.Platform.Procurement.ProcurementStockValuationBson;
 
 namespace UnitToko.Platform.Inventory;
 
+/// <summary>The exact approved-quality rows a release source binds (never current quality capacity).</summary>
+internal sealed record StockReleaseQualityRows(BsonDocument Receipt, BsonDocument Proposal, BsonDocument Decision, BsonDocument Allocation, BsonDocument Snapshot)
+{
+    internal static StockReleaseQualityRows Of(ProcurementApprovedQualitySource source) =>
+        new(source.Receipt, source.Proposal, source.Decision, source.Allocation, source.Snapshot);
+}
+
 internal sealed record StockReleaseSelection(long ReceiptId, long QualityAllocationId, long ValuationAllocationId)
 {
     internal void Validate() {
@@ -53,7 +60,7 @@ internal sealed class StockReleaseSourceProof
     private readonly ProcurementStockValuationService.ReleaseOriginReader? currentReader;
     private readonly string seal;
     private StockReleaseSourceProof(IMongoDatabase database, IClientSessionHandle tx, StockReleaseSelection selected,
-        ProcurementApprovedQualitySource quality, ProcurementPayableValuationSource value, BsonDocument lot,
+        StockReleaseQualityRows quality, ProcurementPayableValuationSource value, BsonDocument lot,
         BsonDocument? pool, BsonDocument? balance, BsonDocument qualityPolicy, DateTimeOffset observedAt,
         HeldReceiptOriginProof? currentOrigin = null, ProcurementStockValuationService.ReleaseOriginReader? currentReader = null)
     {
@@ -141,13 +148,29 @@ internal sealed class StockReleaseSourceProof
         if (origin.ReceiptId != selected.ReceiptId) throw Unavailable();
         var reader = retainedReader ?? valuations.CreateReleaseOriginReader(tx, origin);
         var pair = await reader.ReadAsync(valuations, database, tx, origin, selected.QualityAllocationId, selected.ValuationAllocationId, ct);
-        var quality = pair.Quality; var value = pair.Value; RequireSelected(selected, quality, value);
+        var quality = pair.Quality; var value = pair.Value; RequireSelected(selected, StockReleaseQualityRows.Of(quality), value);
         if (quality.Receipt != origin.Receipt) throw Unavailable();
         var lot = await database.GetCollection<BsonDocument>("lots").Find(tx, new BsonDocument("_id", quality.Receipt["lotId"])).SingleOrDefaultAsync(ct) ?? throw Unavailable();
         if (lot != InventoryHeldReceiptWriter.Lot(quality.Receipt)) throw Unavailable();
         // This proves only immutable acquisition/quality ancestry. It deliberately has
         // no current balance/pool projection and cannot be used as new release authority.
-        var proof = new StockReleaseSourceProof(database, tx, selected, quality, value, lot, null, null, quality.Proposal["policy"].AsBsonDocument, clock.UtcNow);
+        var proof = new StockReleaseSourceProof(database, tx, selected, StockReleaseQualityRows.Of(quality), value, lot, null, null, quality.Proposal["policy"].AsBsonDocument, clock.UtcNow);
+        proof.Require(database, tx); return proof;
+    }
+    /// <summary>Rebuilds the historical source proof from seal-verified rows (StockReleaseSeals): the same selection,
+    /// relationship and lot checks run; only the procurement ancestry replay is replaced by the verified seal.</summary>
+    internal static StockReleaseSourceProof FromSealed(IMongoDatabase database, IClientSessionHandle tx, StockReleaseSelection selected,
+        IReadOnlyDictionary<string, BsonDocument> rows, HeldReceiptOriginProof origin, DateTimeOffset observedAt) {
+        new InventoryRepository(database).RequireSession(tx); selected.Validate(); origin.Require(database, tx);
+        var receipt = rows[ProcurementStockReceiptBson.Receipts];
+        if (origin.ReceiptId != selected.ReceiptId || receipt != origin.Receipt) throw Unavailable();
+        var quality = new StockReleaseQualityRows(receipt, rows[Q.Proposals], rows[Q.Decisions], rows[Q.Allocations],
+            ProcurementQualityAcceptanceSourceReader.Snapshot(rows[Q.Allocations], rows[Q.Proposals], rows[Q.Decisions], receipt));
+        var value = new ProcurementPayableValuationSource(rows[V.Proposals], rows[V.Decisions], rows[V.Allocations], receipt,
+            rows[SupplierDocumentBson.Submissions], rows[SupplierDocumentBson.Matches]);
+        RequireSelected(selected, quality, value);
+        var lot = rows["lots"]; if (lot != InventoryHeldReceiptWriter.Lot(receipt)) throw Unavailable();
+        var proof = new StockReleaseSourceProof(database, tx, selected, quality, value, lot, null, null, quality.Proposal["policy"].AsBsonDocument, observedAt);
         proof.Require(database, tx); return proof;
     }
     internal static async Task<StockReleaseSourceProof> ReadCurrentAsync(IMongoDatabase database, MongoUnitOfWork unit, IClock clock,
@@ -163,7 +186,7 @@ internal sealed class StockReleaseSourceProof
             // exact PO-owner reference binding is preserved across both readers.
             var pair = await valuations.ReadCurrentReleaseSourcesAsync(database, tx, selected.QualityAllocationId, selected.ValuationAllocationId, ct);
             var quality = pair.Quality; var value = pair.Value;
-            RequireSelected(selected, quality, value);
+            RequireSelected(selected, StockReleaseQualityRows.Of(quality), value);
             var input = Q.Input(quality.Proposal["input"]);
             // Historical approval can now have expired; new release preparation applies the
             // current business day and current independently approved quality policy.
@@ -180,12 +203,12 @@ internal sealed class StockReleaseSourceProof
             if (movement.Current.Id != quality.Receipt["balanceId"].AsInt64 || movement.Current.PhysicalPoolId != quality.Receipt["poolId"].AsInt64 ||
                 movement.Current.Balance.Key != InventoryHeldReceiptWriter.After(quality.Receipt).Balance.Key ||
                 movement.Current.Balance.Held <= 0 || pool["location"] != balance["location"]) throw Unavailable();
-            var proof = new StockReleaseSourceProof(database, tx, selected, quality, value, lot, pool, balance, policy, at, pair.Origin, pair.Reader);
+            var proof = new StockReleaseSourceProof(database, tx, selected, StockReleaseQualityRows.Of(quality), value, lot, pool, balance, policy, at, pair.Origin, pair.Reader);
             proof.Require(database, tx); repository.RequireSession(tx);
             if (tx.WrappedCoreSession.CurrentTransaction.TransactionNumber != number || clock.UtcNow < at) throw Unavailable(); ct.ThrowIfCancellationRequested(); return proof;
         } catch { await InventoryRepository.AbortAsync(tx); throw; }
     }
-    private static void RequireSelected(StockReleaseSelection selected, ProcurementApprovedQualitySource quality, ProcurementPayableValuationSource value) {
+    private static void RequireSelected(StockReleaseSelection selected, StockReleaseQualityRows quality, ProcurementPayableValuationSource value) {
         if (quality.Receipt["_id"] != selected.ReceiptId || value.Receipt != quality.Receipt ||
             quality.Allocation["_id"] != selected.QualityAllocationId || value.Allocation["_id"] != selected.ValuationAllocationId ||
             quality.Allocation["receiptId"] != selected.ReceiptId || value.Allocation["receiptId"] != selected.ReceiptId ||
