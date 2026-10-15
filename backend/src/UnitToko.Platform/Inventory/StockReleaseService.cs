@@ -538,8 +538,14 @@ public sealed class StockReleaseService
         if (retainedOrigin is not null && retainedOrigin.ReceiptId != receiptId) throw B.Broken();
         reads?.Require(this, tx);
         var origin = retainedOrigin ?? (reads is null ? await source.CaptureOriginAsync(tx, receiptId, ct) : await reads.OriginAsync(receiptId, ct));
-        var proof = reads is null ? await source.ReadOriginAsync(tx, Selection(row), origin, ct)
-            : await reads.ReadOriginAsync(Selection(row), origin, ct);
+        // A verified seal replaces only the procurement ancestry replay; every relationship and hash check below still runs.
+        var sealedRows = await StockReleaseSeals.VerifyAsync(database, tx, row, ct);
+        StockReleaseSourceProof proof;
+        if (sealedRows is not null) proof = StockReleaseSourceProof.FromSealed(database, tx, Selection(row), sealedRows, origin, clock.UtcNow);
+        else {
+            Interlocked.Increment(ref StockReleaseSeals.FullProofs);
+            proof = reads is null ? await source.ReadOriginAsync(tx, Selection(row), origin, ct) : await reads.ReadOriginAsync(Selection(row), origin, ct);
+        }
         if (proof.Snapshot != row["source"]) throw B.Broken();
         var input = B.Input(row["input"]); var expected = B.Expected(row["expected"]); var before = InventoryBson.ReadBalance(row["before"].AsBsonDocument);
         var after = InventoryBson.ReadBalance(row["after"].AsBsonDocument); var maker = R.Person(row["people"][0]);
@@ -547,7 +553,9 @@ public sealed class StockReleaseService
             before.Id != proof.BalanceId || before.PhysicalPoolId != proof.PoolId || before.Balance.Key != proof.Key || input.Location != proof.Key.Location ||
             expected.BalanceRevision != before.Balance.Revision || after != (before with { Balance = StockBalancePolicy.ReleaseHold(before.Balance, before.Balance.Revision, input.Packages) }) ||
             row["bodyHash"] != AuthorizationStore.CommandHash(new { input, expected, binding = row["binding"].AsString }, row["reason"].AsString)) throw B.Broken();
-        await EffectsProofAsync(tx, row, B.Propose, ct); return (row, proof, origin);
+        await EffectsProofAsync(tx, row, B.Propose, ct);
+        if (sealedRows is null) await StockReleaseSeals.SealAsync(database, clock, tx, row, proof, ct);
+        return (row, proof, origin);
     }
     private static StockReleaseSelection Selection(BsonDocument row) => new(row["input"]["receiptId"].AsInt64, row["input"]["qualityAllocationId"].AsInt64, row["input"]["valuationAllocationId"].AsInt64);
     private async Task<BsonDocument> DecisionAsync(IClientSessionHandle tx, long id, CancellationToken ct, HeldReceiptOriginProof? retainedOrigin = null, HistoryReads? reads = null) =>

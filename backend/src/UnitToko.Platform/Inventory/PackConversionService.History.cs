@@ -466,6 +466,13 @@ public sealed partial class PackConversionService
             capture.Seal(); var proof = new CompletedConversionProof(owner, tx, row, capture, origin, destinationGenesis);
             await proof.RequireAsync(owner, tx, ct); return proof;
         }
+        // A capture rebuilt from a verified seal is already sealed; it is required exactly like a fresh one.
+        internal static async Task<CompletedConversionProof> CreateVerifiedAsync(PackConversionService owner, IClientSessionHandle tx,
+            BsonDocument row, PurchaseOrderSourceReadCapture sealedCapture, HeldReceiptOriginProof origin, CancellationToken ct,
+            InventoryBalanceDocument? destinationGenesis = null) {
+            var proof = new CompletedConversionProof(owner, tx, row, sealedCapture, origin, destinationGenesis);
+            await proof.RequireAsync(owner, tx, ct); return proof;
+        }
     }
     private async Task RequireGenesisDestinationAsync(IClientSessionHandle tx, InventoryBalanceDocument genesis, CancellationToken ct) {
         // Re-read full actual rows and the complete reverse identity membership.
@@ -545,6 +552,21 @@ public sealed partial class PackConversionService
             before.PhysicalPoolId != origin.Receipt["poolId"].AsInt64 || before.Balance.Key != InventoryHeldReceiptWriter.After(origin.Receipt).Balance.Key) throw B.Broken();
         var sourceFacts = InventoryGraph.ReadLot(row["sourceLot"].AsBsonDocument);
         if (sourceFacts.RecordedAt > at.ToUnixTimeMilliseconds() || sourceFacts.ExpiresOn is { } expiry && expiry <= DateOnly.FromDateTime(at.UtcDateTime)) throw B.Broken();
+        if (await PackConversionSeals.VerifyAsync(database, tx, row, ct) is { } verified) {
+            // The verified seal stands for the reconstructed source prefix and immutable evidence. The own movement,
+            // destination lot and balance, rule, pool-source history and receipt origin stay fresh.
+            if (row["destinationLot"] != DestinationLot(id, start.Balance.Key.LotId.Value, ruleInput, row["sourceLot"].AsBsonDocument, at)) throw B.Broken();
+            var destinations = await Rows("stockBalances").Find(tx, new BsonDocument("$or", new BsonArray {
+                new BsonDocument("_id", start.Id), new BsonDocument("lotId", start.Balance.Key.LotId.Value) })).Limit(2).ToListAsync(ct);
+            if (destinations.Count != 1 || InventoryBson.ReadBalance(destinations[0]) is var destination &&
+                (destination.Id != start.Id || destination.PhysicalPoolId != start.PhysicalPoolId || destination.Balance.Key != start.Balance.Key ||
+                 destination.Balance.Revision < end.Balance.Revision)) throw B.Broken();
+            await PhysicalMovementAsync(tx, row, ct);
+            read.Add(this, await CompletedConversionProof.CreateVerifiedAsync(this, tx, row,
+                PurchaseOrderSourceReadCapture.FromSealed(database, tx, verified, null), origin, ct, read.RetainsGenesis ? end : null));
+            return row;
+        }
+        Interlocked.Increment(ref PackConversionSeals.FullProofs);
         // Capture the full reverse membership before the semantic prefix read.
         // Publication below rereads it, so changes during reconstruction refuse.
         await CaptureSourceMembershipAsync(tx, origin, capture, ct);
@@ -563,6 +585,7 @@ public sealed partial class PackConversionService
         await ValueTransitionAsync(tx, row, path, read, capture, ct);
         await EffectsProofAsync(tx, row, ct, capture);
         read.Add(this, await CompletedConversionProof.CreateAsync(this, tx, row, capture, origin, ct, read.RetainsGenesis ? end : null));
+        await PackConversionSeals.SealAsync(database, clock, tx, row, capture, ct);
         return row;
         } finally { if (ownsRead) read.End(this); }
     }

@@ -78,6 +78,18 @@ internal sealed class ProcurementQualityAcceptanceSourceReader(IMongoDatabase da
 {
     private IMongoCollection<BsonDocument> Rows(string name) => database.GetCollection<BsonDocument>(name);
 
+    /// <summary>The approved-quality snapshot is a pure function of the exact allocation, proposal, decision and receipt rows.</summary>
+    internal static BsonDocument Snapshot(BsonDocument allocation, BsonDocument proposal, BsonDocument decision, BsonDocument receipt) {
+        var input = Q.Input(proposal["input"]);
+        return new BsonDocument { { "allocationId", allocation["_id"] }, { "allocationHash", allocation["snapshotHash"] },
+            { "proposalId", proposal["_id"] }, { "proposalHash", proposal["snapshotHash"] },
+            { "decisionId", decision["_id"] }, { "decisionHash", decision["snapshotHash"] },
+            { "receiptId", receipt["_id"] }, { "receiptHash", receipt["snapshotHash"] },
+            { "receiptReference", receipt["input"]["receiptReference"] }, { "acceptedPackages", allocation["packages"] },
+            { "lotReference", receipt["input"]["lotReference"] }, { "expiresOn", receipt["input"]["expiresOn"] },
+            { "acceptedCondition", input.AcceptedCondition }, { "putawayReference", input.PutawayReference },
+            { "segregationReference", input.SegregationReference }, { "recordedAt", decision["recordedAt"] } };
+    }
     internal async Task<ProcurementApprovedQualitySource> ReadAsync(IClientSessionHandle tx, long allocationId, CancellationToken ct) {
         if (allocationId <= 0 || !tx.IsInTransaction || !ReferenceEquals(tx.Client, database.Client)) throw Q.Broken();
         var allocation = await Rows(Q.Allocations).Find(tx, new BsonDocument { { "_id", allocationId },
@@ -165,14 +177,7 @@ internal sealed class ProcurementQualityAcceptanceSourceReader(IMongoDatabase da
             await ProcurementQualityAcceptanceRecords.RequireEffectsAsync(database, tx, proposal, ct);
             await ProcurementQualityAcceptanceRecords.RequireEffectsAsync(database, tx, decision, ct, proposal);
         }
-        var snapshot = new BsonDocument { { "allocationId", allocation["_id"] }, { "allocationHash", allocation["snapshotHash"] },
-            { "proposalId", proposal["_id"] }, { "proposalHash", proposal["snapshotHash"] },
-            { "decisionId", decision["_id"] }, { "decisionHash", decision["snapshotHash"] },
-            { "receiptId", receipt["_id"] }, { "receiptHash", receipt["snapshotHash"] },
-            { "receiptReference", receipt["input"]["receiptReference"] }, { "acceptedPackages", allocation["packages"] },
-            { "lotReference", receipt["input"]["lotReference"] }, { "expiresOn", receipt["input"]["expiresOn"] },
-            { "acceptedCondition", input.AcceptedCondition }, { "putawayReference", input.PutawayReference },
-            { "segregationReference", input.SegregationReference }, { "recordedAt", decision["recordedAt"] } };
+        var snapshot = Snapshot(allocation, proposal, decision, receipt);
         var result = new ProcurementApprovedQualitySource(receipt, proposal, decision, allocation, capacity, snapshot);
         proof.Enter(tx, result);
         try {
