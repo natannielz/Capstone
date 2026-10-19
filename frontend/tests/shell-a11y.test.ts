@@ -45,3 +45,19 @@ test("the mobile menu closes with an Indonesian label", () => {
   assert.doesNotMatch(sheet, />Close</);
   assert.match(sheet, /Tutup/);
 });
+
+// The sidebar and the mobile sheet each render the navigation; with the sheet open both are in the DOM, so heading ids
+// and landmark labels must stay unique, and only real links carry aria-current.
+test("two navigation copies keep unique heading ids and distinct landmark labels", async () => {
+  const { NavigationList } = await import("../src/modules/administration/NavigationList");
+  const groups = [{ id: "home", label: "Beranda", items: [{ href: "/identity/account", label: "Pekerjaan saya", description: "", current: true, available: true }] }];
+  const html = renderToStaticMarkup(createElement("div", null,
+    createElement(NavigationList, { groups, locked: false, label: "Ruang kerja" }),
+    createElement(NavigationList, { groups, locked: false, label: "Menu ruang kerja" })));
+  const ids = [...html.matchAll(/ id="([^"]+)"/g)].map(match => match[1]);
+  assert.equal(new Set(ids).size, ids.length, ids.join(","));
+  assert.match(html, /aria-label="Ruang kerja"/);
+  assert.match(html, /aria-label="Menu ruang kerja"/);
+  const source = readFileSync("src/modules/administration/AdministrationNavigation.tsx", "utf8");
+  assert.doesNotMatch(source, /<span[^>]*aria-current/);
+});
