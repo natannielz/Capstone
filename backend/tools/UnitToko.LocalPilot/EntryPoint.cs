@@ -61,7 +61,7 @@ internal static class EntryPoint
             Console.WriteLine("SYNTHETIC LOCAL PILOT (" + PilotBoundary.Profile + ") — no real identity, MFA, approved catalog, purchases or stock.");
             Console.WriteLine("Private account/password/simulated factor file: " + Path.Combine(directory, "ACCOUNTS-PRIVATE.txt"));
             Console.WriteLine("Open with the isolated browser shortcut below. Ordinary browser profiles cannot resolve these private names.");
-            Console.WriteLine(PilotBoundary.Origin + "/identity/account");
+            Console.WriteLine(PilotBoundary.Origin + "/");
             SaveBrowserLauncher(repository, state);
             Console.WriteLine("Browser launcher: " + Path.Combine(directory, "open-browser.ps1"));
             Console.WriteLine("Ctrl+C stops API and Next. MongoDB remains loopback-only; its data, keys and accounts persist.");
@@ -108,7 +108,7 @@ internal static class EntryPoint
             "if (-not $edgePath) { throw 'Microsoft Edge is required; no browser is downloaded automatically.' }\n" +
             "$pilotArguments = @(" + string.Join(",", new[] { "--user-data-dir=" + Path.Combine(state.Directory, "browser-profile"),
                 "--host-resolver-rules=MAP " + PilotBoundary.PortalHost + " 127.0.0.1, MAP " + PilotBoundary.ProviderHost + " 127.0.0.1",
-                "--ignore-certificate-errors-spki-list=" + state.SpkiPin, "--no-proxy-server", "--no-first-run", "--disable-sync", PilotBoundary.Origin + "/identity/account" }.Select(Quote)) + ")\n" +
+                "--ignore-certificate-errors-spki-list=" + state.SpkiPin, "--no-proxy-server", "--no-first-run", "--disable-sync", PilotBoundary.Origin + "/" }.Select(Quote)) + ")\n" +
             "$start = [System.Diagnostics.ProcessStartInfo]::new($edgePath)\n$start.UseShellExecute = $false\nforeach ($item in $pilotArguments) { $start.ArgumentList.Add($item) }\n[void][System.Diagnostics.Process]::Start($start)\n";
         _ = repository;
         File.WriteAllText(Path.Combine(state.Directory, "open-browser.ps1"), script);
