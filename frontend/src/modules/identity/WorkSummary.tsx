@@ -1,11 +1,10 @@
 'use client';
 
-import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { ListTable } from '@/components/workspace-kit/list-table';
 import { OutcomeState } from '@/components/workspace-kit/outcome-state';
 import { AccessFailure } from '../administration/workflow';
-import { createWorkSummaryGateway, visibleWorkItems, workAgeText, workCountText, type WorkSummary as Summary } from './work-summary-client';
+import { createWorkSummaryGateway, visibleWorkItems, type WorkSummary as Summary } from './work-summary-client';
+import { WorkQueue } from './WorkQueue';
 import styles from './identity.module.css';
 import { EmptyState } from '@/components/workspace-kit/empty-state';
 
@@ -43,11 +42,6 @@ export function WorkSummary({ actorId, actions }: { actorId: string; actions: re
     {state.kind === 'error' && <OutcomeState kind="error" onAction={() => setRefresh(value => value + 1)} />}
     {state.kind === 'ready' && (items.length === 0
       ? <EmptyState kind="done" title="Semua pekerjaan selesai" body="Tidak ada pekerjaan yang menunggu Anda saat ini." />
-      : <ListTable caption="Pekerjaan yang menunggu" rows={items} getKey={item => item.key}
-        columns={[
-          { key: 'work', header: 'Pekerjaan', render: item => <><Link href={item.href}>{item.label}</Link>{item.unavailable && <p className={styles.help}>Belum dapat dimuat. Buka ruang kerjanya untuk memeriksa.</p>}</> },
-          { key: 'count', header: 'Jumlah', align: 'end', render: item => item.unavailable ? '—' : workCountText(item.count, item.hasMore) },
-          { key: 'age', header: 'Menunggu', render: item => workAgeText(item.oldestAt, Date.parse(state.summary.observedAt), item.hasMore) || '—' },
-        ]} />)}
+      : <WorkQueue items={items} observedAt={state.summary.observedAt} />)}
   </section>;
 }
