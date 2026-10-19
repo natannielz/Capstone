@@ -29,4 +29,14 @@ public sealed class ApprovedRuleConformanceTests
         Assert.DoesNotContain(permissions, name => name.EndsWith(".approve", StringComparison.Ordinal) || name.EndsWith(".allocate", StringComparison.Ordinal) ||
             name.EndsWith(".post", StringComparison.Ordinal) || name.StartsWith("order.", StringComparison.Ordinal) || name.StartsWith("payment.", StringComparison.Ordinal));
     }
+
+    // ASVS V6: every permission (so every role, including the Super Admin's administration) requires a multi-factor
+    // session; approvals and money-moving permissions additionally require authentication within 5 minutes.
+    [Fact]
+    public void Every_permission_requires_multi_factor_and_privileged_decisions_require_fresh_authentication() {
+        Assert.All(Permissions.Catalog.Values, definition => Assert.True(definition.Assurance.RequiresMfa, definition.Name));
+        foreach (var name in new[] { Permissions.AccessApprove, Permissions.MembershipApprove, Permissions.RecoveryInitiate, Permissions.PaymentVerify,
+            Permissions.PaymentAllocate, Permissions.FundingApprove, Permissions.CreditApprove, Permissions.DisbursementVerify })
+            Assert.Equal(TimeSpan.FromMinutes(5), Permissions.Find(name)!.Assurance.MaximumAge);
+    }
 }
