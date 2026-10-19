@@ -1,0 +1,156 @@
+/* Landing page. Palette and type: docs/superpowers/plans/2026-10-20-phase-g-legacy-retirement-and-ui-overhaul.md, Task 5. */
+.page {
+  --dock: #0F4C52;
+  --dock-deep: #0B3D42;
+  --dock-text: #B5D0CC;
+  --label: #F1F4EF;
+  --paper: #FFFFFF;
+  --ink: #12343A;
+  --ink-muted: #4A6266;
+  --rule: #C9D3CD;
+  --kraft: #C69A62;
+  --kraft-text: #E0BE8E;
+  --marker: #C2471A;
+  --gutter: clamp(16px, 4vw, 56px);
+  min-height: 100dvh;
+  background: var(--label);
+  color: var(--ink);
+  font: 400 17px/1.6 var(--font-body), system-ui, sans-serif;
+}
+.page :where(h1, h2, h3, p, figure, ol, dl, dd) { margin: 0; }
+.page :where(a, button, input):focus-visible { outline: 3px solid var(--marker); outline-offset: 3px; }
+
+.skip { position: fixed; top: 12px; left: 12px; z-index: 50; padding: 12px 18px; border-radius: 8px; background: var(--paper); color: var(--ink); font-weight: 650; transform: translateY(-200%); }
+.skip:focus { transform: none; }
+
+/* Hero: the dock wall. The copy sits left, the pallet stage right, and the label straddles the edge into the page. */
+.hero {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  min-height: min(880px, 100svh);
+  padding: 0 var(--gutter);
+  background:
+    linear-gradient(to bottom, transparent 62%, rgb(0 0 0 / 0.12)),
+    var(--dock);
+  color: #FFFFFF;
+}
+.hero :where(a, button, input):focus-visible { outline-color: var(--kraft-text); }
+.header { grid-column: 1 / -1; display: flex; align-items: center; gap: 28px; padding: 22px 0; position: relative; z-index: 2; }
+.nav { display: flex; gap: 4px; margin-left: auto; }
+.nav a, .headerSignIn { display: inline-flex; align-items: center; min-height: 44px; padding: 0 14px; border-radius: 8px; color: #FFFFFF; font-size: 15px; font-weight: 550; text-decoration: none; }
+.nav a:hover { background: rgb(255 255 255 / 0.08); }
+.headerSignIn { border: 1.5px solid rgb(255 255 255 / 0.55); padding: 0 18px; }
+.headerSignIn:hover { border-color: #FFFFFF; }
+
+.copy { grid-column: 1; grid-row: 2; align-self: center; position: relative; z-index: 2; padding: 32px 0 168px; outline: none; }
+.copy h1 { max-width: 11ch; font-size: clamp(42px, 5.4vw, 84px); font-weight: 760; line-height: 0.98; letter-spacing: -0.042em; text-wrap: balance; }
+.copy p { max-width: 44ch; margin-top: 26px; color: var(--dock-text); font-size: 18px; line-height: 1.65; }
+.actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 28px; margin-top: 36px; }
+.primary { display: inline-flex; align-items: center; min-height: 52px; padding: 0 26px; border-radius: 10px; background: var(--label); color: var(--dock); font-weight: 700; text-decoration: none; }
+.primary:hover { background: #FFFFFF; }
+.secondary { color: #FFFFFF; font-weight: 600; text-decoration: underline; text-decoration-thickness: 1.5px; text-underline-offset: 7px; min-height: 44px; display: inline-flex; align-items: center; }
+.secondary:hover { text-decoration-color: var(--kraft-text); }
+
+.stage { grid-column: 2; grid-row: 2 / 4; position: relative; min-height: 540px; margin-left: -14%; margin-right: calc(var(--gutter) * -1); }
+.poster, .canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.poster { padding: 8% 6% 16%; transition: opacity 0.45s ease; }
+.canvas { opacity: 0; transition: opacity 0.45s ease; }
+.stage[data-ready] .canvas { opacity: 1; }
+.stage[data-ready] .poster { opacity: 0; }
+
+/* The shipping label: white stock, ink bars, a die-cut corner radius. */
+.label {
+  grid-column: 2; grid-row: 3; justify-self: end; position: relative; z-index: 3;
+  width: min(100%, 452px); margin-bottom: -150px;
+  background: var(--paper); color: var(--ink); border-radius: 6px;
+  box-shadow: 0 1px 0 rgb(18 52 58 / 0.1), 0 22px 44px -22px rgb(4 30 34 / 0.55);
+}
+.labelTitle { padding: 10px 18px; border-radius: 6px 6px 0 0; background: var(--ink); color: #FFFFFF; font-size: 14px; font-weight: 700; letter-spacing: 0.01em; }
+.labelFields { display: grid; grid-template-columns: 1.3fr 1.2fr 0.8fr; border-bottom: 2px solid var(--ink); }
+.labelFields > div { padding: 12px 18px 14px; }
+.labelFields > div + div { border-left: 1.5px solid var(--ink); }
+.labelFields dt { color: var(--ink-muted); font-size: 12px; font-weight: 600; }
+.labelFields dd { margin-top: 3px; font-size: 15px; font-weight: 650; line-height: 1.3; }
+.labelQuantity { display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; padding: 16px 18px 6px; }
+.labelQuantity :global(.quantity-stepper) label { font-size: 13px; font-weight: 650; color: var(--ink); }
+.labelQuantity :global(.quantity-stepper-controls) button { border: 1.5px solid var(--ink); background: var(--paper); color: var(--ink); }
+.labelQuantity :global(.quantity-stepper-controls) button[aria-disabled="true"] { border-color: var(--rule); color: #7D9094; }
+.labelQuantity :global(.quantity-stepper-controls) input { width: 64px; flex: none; border: 1.5px solid var(--ink); border-radius: 8px; background: var(--paper); color: var(--ink); font-size: 20px; font-weight: 700; }
+.total { display: grid; justify-items: end; text-align: right; }
+.totalNumber { color: var(--marker); font-family: var(--font-stencil), var(--font-body), sans-serif; font-size: 68px; line-height: 0.9; letter-spacing: 0.01em; }
+.totalText { margin-top: 4px; color: var(--ink-muted); font-size: 13px; font-weight: 600; }
+.labelNote { padding: 6px 18px 16px; color: var(--ink-muted); font-size: 13px; line-height: 1.5; }
+
+/* Page sections on label paper. */
+.main { display: grid; gap: clamp(72px, 9vw, 128px); max-width: 1240px; margin: 0 auto; padding: 208px var(--gutter) clamp(80px, 10vw, 136px); }
+.intro h2, .access h2 { max-width: 18ch; font-size: clamp(30px, 3.4vw, 46px); font-weight: 740; line-height: 1.05; letter-spacing: -0.032em; text-wrap: balance; }
+.intro p { max-width: 46ch; margin-top: 18px; color: var(--ink-muted); }
+.inlineLink { display: inline-flex; align-items: center; min-height: 44px; margin-top: 14px; color: var(--ink); font-weight: 650; text-decoration: underline; text-decoration-thickness: 1.5px; text-underline-offset: 6px; }
+.inlineLink:hover { color: var(--marker); }
+
+.trail, .catalog { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: clamp(32px, 6vw, 96px); align-items: start; }
+.record { padding: 26px clamp(18px, 3vw, 34px) 10px; border-radius: 6px; background: var(--paper); box-shadow: 0 1px 0 rgb(18 52 58 / 0.08); }
+.record figcaption { padding-bottom: 18px; border-bottom: 2px solid var(--ink); color: var(--ink-muted); font-size: 14px; }
+.record figcaption strong { color: var(--ink); font-weight: 700; }
+.record ol { list-style: none; padding: 8px 0 0; }
+.record li { position: relative; display: grid; grid-template-columns: 112px 1fr; column-gap: 28px; padding: 16px 0 18px; }
+.record li + li { border-top: 1px solid #E2E8E4; }
+.record li::before { content: ""; position: absolute; left: 122px; top: 25px; width: 10px; height: 10px; border-radius: 50%; background: var(--dock); }
+.record li:not(:last-child)::after { content: ""; position: absolute; left: 126px; top: 39px; bottom: -23px; width: 2px; background: #D3DCD7; }
+.record li[data-current]::before { background: var(--paper); box-shadow: inset 0 0 0 2.5px var(--marker); }
+.time { grid-row: 1 / 3; padding-top: 2px; font-variant-numeric: tabular-nums; color: var(--ink-muted); font-size: 14px; font-weight: 600; }
+.status { font-weight: 700; }
+.stepText { margin-top: 2px; color: var(--ink-muted); font-size: 15px; line-height: 1.55; }
+
+.packing { width: 100%; border-collapse: collapse; font-size: 16px; }
+.packing caption { caption-side: bottom; padding-top: 14px; color: var(--ink-muted); font-size: 14px; text-align: left; }
+.packing thead th { padding: 0 16px 12px 0; border-bottom: 2px solid var(--ink); color: var(--ink-muted); font-size: 13px; font-weight: 650; text-align: left; }
+.packing tbody th, .packing td { padding: 18px 16px 18px 0; border-bottom: 1px solid var(--rule); text-align: left; vertical-align: top; line-height: 1.45; }
+.packing tbody th { font-weight: 700; }
+.packing td:last-child { white-space: nowrap; font-weight: 600; }
+
+.access h2 { max-width: none; }
+.doors { display: grid; grid-template-columns: 1fr 1fr; margin-top: 36px; border-top: 2px solid var(--ink); }
+.doors > div { padding: 28px clamp(0px, 3vw, 40px) 8px 0; }
+.doors > div + div { padding-left: clamp(20px, 3vw, 40px); border-left: 1.5px solid var(--rule); }
+.doors h3 { font-size: 22px; font-weight: 720; letter-spacing: -0.015em; }
+.doors p { max-width: 40ch; margin-top: 10px; color: var(--ink-muted); }
+.accessNote { margin-top: 32px; color: var(--ink-muted); font-size: 14px; }
+
+@media (max-width: 1080px) {
+  .nav { display: none; }
+  .headerSignIn { margin-left: auto; }
+}
+
+@media (max-width: 900px) {
+  .hero { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto auto auto; min-height: 0; padding-bottom: 28px; }
+  .copy { grid-row: 2; padding: 20px 0 8px; }
+  .stage { grid-column: 1; grid-row: 3; min-height: 0; height: clamp(280px, 74vw, 520px); margin: 8px calc(var(--gutter) * -1) 0; }
+  .label { grid-column: 1; grid-row: 4; justify-self: stretch; width: auto; margin: -36px 0 0; }
+  .main { padding-top: 72px; }
+  .trail, .catalog { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (max-width: 560px) {
+  .page { font-size: 16px; }
+  .copy p { font-size: 17px; }
+  .labelFields { grid-template-columns: 1fr 1fr; }
+  .labelFields > div:nth-child(3) { grid-column: 1 / -1; border-left: 0; border-top: 1.5px solid var(--ink); }
+  .labelQuantity { flex-wrap: wrap; }
+  .total { width: 100%; justify-items: start; text-align: left; }
+  .totalNumber { font-size: 56px; }
+  .record li { grid-template-columns: 1fr; padding-left: 22px; }
+  .record li::before { left: 0; top: 23px; }
+  .record li:not(:last-child)::after { left: 4px; top: 37px; }
+  .time { grid-row: auto; }
+  .packing { font-size: 15px; }
+  .packing td:last-child { white-space: normal; }
+  .doors { grid-template-columns: minmax(0, 1fr); }
+  .doors > div + div { padding-left: 0; border-left: 0; border-top: 1.5px solid var(--rule); margin-top: 20px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .poster, .canvas { transition: none; }
+}

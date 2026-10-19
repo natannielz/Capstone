@@ -6,6 +6,8 @@ import { SkipLink } from "../components/workspace-kit/shell-links";
 
 const bodyFont = localFont({src:"../../public/fonts/dm-sans-variable.ttf",variable:"--font-body",display:"swap",weight:"100 1000"});
 const displayFont = localFont({src:"../../public/fonts/archivo-black.ttf",variable:"--font-display",display:"swap",weight:"400"});
+// Package numerals and carton print on the landing page only; not preloaded on other pages.
+const stencilFont = localFont({src:"../../public/fonts/saira-stencil-one.woff2",variable:"--font-stencil",display:"swap",weight:"400",preload:false});
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000")),
@@ -24,7 +26,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="id" data-scroll-behavior="smooth" className={`${bodyFont.variable} ${displayFont.variable}`}>
+    <html lang="id" data-scroll-behavior="smooth" className={`${bodyFont.variable} ${displayFont.variable} ${stencilFont.variable}`}>
       <body className="antialiased">
         <SkipLink />
         {isPilotRelease && process.env.VERCEL && !process.env.UNIT_TOKO_API_ORIGIN && (
