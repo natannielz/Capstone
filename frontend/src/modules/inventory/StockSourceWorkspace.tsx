@@ -71,7 +71,7 @@ export function StockSourceWorkspace() {
   return <main className={common.page}>
     <a className={styles.skip} href="#source-workspace">Langsung ke pengaturan sumber</a>
     <header className={common.header}><div><Link className={common.brand} href="/identity/account">Unit Toko</Link>
-      <p className={styles.eyebrow}>PENGELOLAAN PERSEDIAAN</p><h1>Sumber stok</h1>
+      <p className={styles.eyebrow}>Pengelolaan persediaan</p><h1>Sumber stok</h1>
       <p>Tentukan asal pencatatan dan tanggung jawab persediaan untuk setiap gudang dan kanal.</p></div></header>
     <div id="source-workspace">{loaded ? <SourceDesk key={loaded.actorId + ":" + loaded.generation} loaded={loaded} onRefresh={refresh} /> :
       <section className={common.state} aria-busy={loading}><h2>{loading ? "Memeriksa sesi dan akses" : sessionLost(error) ? "Masuk untuk mengelola sumber stok" : "Pengaturan belum tersedia"}</h2>
@@ -149,7 +149,7 @@ function SourceDesk({ loaded, onRefresh }: { loaded: Loaded; onRefresh: () => Pr
     {!state.warehouse ? <section className={common.state}><h2>Pilih gudang untuk mulai</h2><p>Pilihan mengikuti penugasan akun Anda.</p></section> :
       state.mode === "propose" ? <div className={styles.desk}><section className={common.detail}>
         <div className={common.form}><h2>Pengaturan sumber baru</h2><SourceForm draft={state.draft} disabled={locked} onChange={(field, value) => editor.changeDraft(field, value)} onReview={() => editor.reviewProposal()} /></div>
-      </section><aside className={styles.guide}><span className={styles.eyebrow}>SEBELUM MENGAJUKAN</span><h2>Satu alokasi, tanggung jawab yang jelas</h2>
+      </section><aside className={styles.guide}><span className={styles.eyebrow}>Sebelum mengajukan</span><h2>Satu alokasi, tanggung jawab yang jelas</h2>
         <ol><li>Pastikan alokasi fisik yang sama belum diajukan dengan kode lain.</li><li>Gunakan batas usia data dan cadangan yang telah disepakati pengelola.</li>
           <li>Cantumkan penanggung jawab selisih serta acuan serah terima.</li></ol><p>Peninjau yang berbeda akan memeriksa pengajuan sebelum pengaturan disetujui.</p></aside></div> :
       !editor.canRead ? <section className={common.state}><h2>Akses riwayat diperlukan</h2><p>Izin peninjauan tidak otomatis memberi akses membaca pengajuan. Minta penugasan membaca pada gudang yang sesuai.</p></section> :
@@ -220,7 +220,7 @@ function SourceReview({ command, warehouse, busy, onConfirm, onCancel }: { comma
   const [confirmed, setConfirmed] = useState(false);
   const labels = { "stock.source.propose": "Kirim pengajuan", "stock.source.approve": "Setujui pengaturan", "stock.source.reject": "Tolak pengajuan", "stock.source.withdraw": "Tarik pengajuan" };
   return <form onSubmit={event => { event.preventDefault(); if (confirmed) onConfirm(); }}>
-    <span className={styles.eyebrow}>PERIKSA SEBELUM MENYIMPAN</span><h2>{labels[command.operation]}</h2><p className={common.scopeSummary}>{warehouse}</p>
+    <span className={styles.eyebrow}>Periksa sebelum menyimpan</span><h2>{labels[command.operation]}</h2><p className={common.scopeSummary}>{warehouse}</p>
     <SourceFacts value={"proposal" in command ? command.proposal : command.body} />
     {"proposal" in command && <><p>Referensi pengajuan {command.proposalId}, versi {command.expectedVersion}.</p><h3>Acuan peninjauan</h3><p>{command.body.reviewReference}</p><h3>Alasan keputusan</h3><p className={common.preserve}>{command.body.reason}</p></>}
     <label className={common.checkbox}><input type="checkbox" required checked={confirmed} disabled={busy} onChange={event => setConfirmed(event.target.checked)} />

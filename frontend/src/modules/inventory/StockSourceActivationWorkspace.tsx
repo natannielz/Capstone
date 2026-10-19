@@ -77,7 +77,7 @@ export function StockSourceActivationWorkspace() {
   return <main className={common.page}>
     <a className={styles.skip} href="#activation-workspace">Langsung ke aktivasi sumber</a>
     <header className={common.header}><div><Link className={common.brand} href="/identity/account">Unit Toko</Link>
-      <p className={styles.eyebrow}>PENGELOLAAN PERSEDIAAN</p><h1>Aktivasi sumber stok</h1>
+      <p className={styles.eyebrow}>Pengelolaan persediaan</p><h1>Aktivasi sumber stok</h1>
       <p>Periksa serah terima sumber kosong dan ajukan peninjauan oleh petugas yang berbeda.</p></div></header>
     <div id="activation-workspace">{loaded ? <ActivationDesk key={loaded.actorId + ':' + loaded.generation} loaded={loaded} refresh={refresh} /> :
       <section className={common.state} aria-busy={loading}><h2>{loading ? 'Memeriksa sesi dan akses' : lostSession(error) ? 'Masuk untuk memeriksa aktivasi' : 'Aktivasi belum tersedia'}</h2>

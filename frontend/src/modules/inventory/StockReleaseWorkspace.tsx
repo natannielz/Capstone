@@ -73,7 +73,7 @@ export function StockReleaseWorkspace() {
   return <main className={common.page}>
     <a className={styles.skip} href="#release-workspace">Langsung ke pelepasan stok</a>
     <header className={common.header}><div><Link className={common.brand} href="/identity/account">Unit Toko</Link>
-      <p className={styles.eyebrow}>PENGELOLAAN PERSEDIAAN</p><h1>Pelepasan stok ditahan</h1><p>Periksa kemasan, lot dan jumlah barang yang mutu serta nilainya sudah disetujui.</p></div></header>
+      <p className={styles.eyebrow}>Pengelolaan persediaan</p><h1>Pelepasan stok ditahan</h1><p>Periksa kemasan, lot dan jumlah barang yang mutu serta nilainya sudah disetujui.</p></div></header>
     <div id="release-workspace">{loaded ? <ReleaseDesk key={loaded.actorId + ':' + loaded.generation} loaded={loaded} refresh={refresh} /> :
       <section className={common.state} aria-busy={loading}><h2>{loading ? 'Memeriksa sesi dan akses' : lostSession(error) ? 'Masuk untuk memeriksa pelepasan' : 'Pelepasan belum tersedia'}</h2>
         {error !== null && <p role="alert" className={common.alert}>{message(error)}</p>}

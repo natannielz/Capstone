@@ -2,7 +2,7 @@
 .headingRow { display: flex; align-items: start; justify-content: space-between; flex-wrap: wrap; gap: 16px; }
 .headingRow h2 { margin: 0; }
 .modeChoices { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0 24px; }
-.eyebrow { font-size: 12px; letter-spacing: .12em; font-weight: 750; color: #44646d; margin: 16px 0 4px; }
+.eyebrow { font-size: 13px; font-weight: 650; color: #44646d; margin: 16px 0 4px; }
 .notice { border-left: 4px solid #087f8c; background: #eaf4f5; padding: 18px 22px; margin-bottom: 26px; }
 .notice p { margin: 6px 0 0; color: #345963; }
 .guide { padding: 28px; border-top: 3px solid #087f8c; background: #e7f0f1; }

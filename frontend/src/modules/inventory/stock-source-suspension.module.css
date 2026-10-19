@@ -1,4 +1,4 @@
-.eyebrow { margin: 16px 0 4px; font-size: 12px; letter-spacing: .12em; color: #44646d; font-weight: 750; }
+.eyebrow { margin: 16px 0 4px; font-size: 13px; color: #44646d; font-weight: 650; }
 .skip { position: absolute; left: -10000px; top: 10px; padding: 12px; background: white; z-index: 10; }
 .skip:focus { left: 16px; }
 .heading { display: flex; justify-content: space-between; align-items: start; flex-wrap: wrap; gap: 16px; }
