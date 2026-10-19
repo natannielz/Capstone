@@ -12,4 +12,4 @@ Profil `release1` memakai `.next`. Profil `full` memakai `.next-full` dan hanya 
 
 Halaman UI terpelihara menggunakan klien `src/api` dan modul `src/modules`. Tujuh handler HTTP demo lama telah dilepas dari Next dan dipertahankan hanya sebagai fixture regresi. `/api/state` dan `/api/commands` bukan API bisnis yang aktif. Konfigurasi `UNIT_TOKO_API_ORIGIN` harus menunjuk ingress HTTPS yang disetujui; konfigurasi contoh atau frontend READY tidak membuktikan backend hosted bekerja.
 
-[Panduan demo lama](../docs/archive/legacy-ui/frontend-demo-readme.md) menyimpan konteks fitur dan desain historis. Instruksi akun, database Turso dan deployment di dalamnya tidak berlaku untuk setup terpelihara. Branding teal/oranye, DM Sans/Archivo, imagery dan navigasi yang telah dipulihkan tetap menjadi acuan.
+Aplikasi demo lama dan dokumennya telah dihapus pada 20 Oktober 2026; riwayatnya tersedia di Git.

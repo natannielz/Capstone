@@ -6,7 +6,6 @@ import ts from "typescript";
 
 const frontend = fileURLToPath(new URL("../", import.meta.url));
 const source = join(frontend, "src");
-const legacy = resolve(frontend, "../backend/legacy");
 const server = join(source, "lib/server");
 
 function collect(directory, files = new Map()) {
@@ -46,12 +45,11 @@ function within(path, directory) {
 function resolveImport(from, name, files) {
   let base;
   if (name.startsWith("@/")) base = join(source, name.slice(2));
-  else if (name.startsWith("@legacy/")) base = join(legacy, name.slice(8));
   else if (name.startsWith(".")) base = resolve(dirname(from), name);
   else return null;
   for (const candidate of [base, base + ".ts", base + ".tsx", base + ".js", base + ".mjs", base + ".json",
     join(base, "index.ts"), join(base, "index.tsx")]) {
-    if (files.has(candidate) || within(candidate, legacy) || within(candidate, server)) return candidate;
+    if (files.has(candidate) || within(candidate, server)) return candidate;
   }
   return base;
 }
@@ -65,7 +63,7 @@ function findViolations(files) {
   const violations = [];
   const visited = new Set();
   function walk(path, chain) {
-    if (within(path, legacy) || within(path, server)) {
+    if (within(path, server)) {
       violations.push(chain.map(item => relative(frontend, item).replaceAll("\\", "/")).join(" -> "));
       return;
     }
@@ -89,11 +87,11 @@ assert.equal(findViolations(fixture({
 })).length, 1);
 assert.equal(findViolations(fixture({
   "components/client.tsx": '"use client"; import "../shared/helper";',
-  "shared/helper.ts": 'import "@legacy/server/repository";',
+  "shared/helper.ts": 'import "@/lib/server/page-session";',
 })).length, 1);
 assert.equal(findViolations(fixture({
   "modules/orders/view.tsx": '"use client"; import "../../shared/bridge";',
-  "shared/bridge.ts": 'export { loadState } from "@legacy/server/repository";',
+  "shared/bridge.ts": 'export { session } from "@/lib/server/page-session";',
 })).length, 1);
 assert.equal(findViolations(fixture({
   "components/safe.tsx": '"use client"; import "@/lib/utils";',

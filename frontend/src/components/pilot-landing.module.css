@@ -1,3 +1,0 @@
-.main { font-family: var(--font-body), sans-serif; }
-.illustration { position: absolute; right: 12px; bottom: 12px; margin: 0; padding: 6px 10px; border: 1px solid #ffffff59; border-radius: 2px; background: #073b45e8; color: #fff; font-family: var(--font-body), sans-serif; font-size: 11px; line-height: 1.5; letter-spacing: .025em; }
-@media (max-width: 540px) { .illustration { right: 9px; bottom: 9px; font-size: 10px; padding: 5px 8px; } }
