@@ -80,6 +80,40 @@ jobs:
       - run: npm ci --prefix frontend
       - run: npm run typecheck --prefix frontend
       - run: npm run lint --prefix frontend
+      - name: Frontend unit tests
+        run: npm test --prefix frontend
+
+  supply-chain:
+    name: Dependency vulnerabilities and committed secrets
+    needs: changes
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DOTNET_NOLOGO: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: backend/global.json
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+      - name: Committed secret patterns (ASVS V13)
+        run: |
+          if git grep -nIE '(AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY-----|ghp_[A-Za-z0-9]{36}|xox[baprs]-[A-Za-z0-9-]{10,}|sk_live_[A-Za-z0-9]{16,})' -- ':!**/package-lock.json'; then
+            echo "A committed secret pattern was found; remove it and rotate the credential." && exit 1
+          fi
+      - name: Vulnerable NuGet packages, including transitive
+        working-directory: backend
+        run: |
+          dotnet restore UnitToko.slnx --nologo
+          dotnet list UnitToko.slnx package --vulnerable --include-transitive | tee ../nuget-vulnerable.txt
+          if grep -qE '^\s+>\s' ../nuget-vulnerable.txt; then echo "Vulnerable NuGet packages found" && exit 1; fi
+      - name: Vulnerable production npm packages
+        run: npm audit --prefix frontend --omit=dev --audit-level=high
 
   backend:
     name: Backend compile, contracts and affected authority
