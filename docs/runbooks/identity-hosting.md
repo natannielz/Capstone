@@ -56,3 +56,9 @@ The two mapped POST receivers use separate rotating bearer credentials, the same
 Actual Auth0 tier, region, ownership, Action ordering/event semantics, verified email/enrollment/recovery behavior and authenticated deduplicated external security-change coverage are unproven. Invitation and recovery delivery intentions remain blocked. No tenant, email, live account, paid resource or production data is provisioned by these files. Release 1 requires the sign-in, provisioning, session-revocation, catalog and request acceptance checks relevant to its exact scope; the full 97-item backlog is not its prerequisite. A local synthetic provider is a separate test tool and never production Auth0 acceptance.
 
 Implementation references: `backend/src/UnitToko.Api/Identity/IdentityRuntime.cs`, `IdentityBrowserSecurity.cs`, `IdentityKeyMaterial.cs` and `IdentityEndpoints.cs`. Official framework behavior: [anti-forgery](https://learn.microsoft.com/en-us/aspnet/core/security/anti-request-forgery?view=aspnetcore-10.0) and [trusted forwarding](https://learn.microsoft.com/en-us/aspnet/core/host-and-deploy/proxy-load-balancer?view=aspnetcore-10.0).
+
+## Frontend security headers and the identity origin
+
+The frontend sends a Content-Security-Policy on every route (`frontend/src/lib/security-headers.ts`). Sign-in, step-up and sign-out are form posts that the API redirects to the identity provider, and Chrome applies `form-action` to that redirect. Set `UNIT_TOKO_IDENTITY_ORIGIN` to the provider's HTTPS origin (for example `https://<tenant>.<region>.auth0.com`) in the frontend build environment. Until it is set, `form-action` allows `'self' https:`.
+
+Next.js computes `headers()` at **build time**. Changing `UNIT_TOKO_IDENTITY_ORIGIN` therefore needs a new frontend build. An enterprise or social connection that redirects through another origin must be added to this value before it is enabled.

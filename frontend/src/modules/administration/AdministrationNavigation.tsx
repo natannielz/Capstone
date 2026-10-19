@@ -39,5 +39,7 @@ export function AdministrationNavigation({ current, actions, locked = false }: {
       <PaletteButton locked={locked} onOpen={() => setPaletteOpen(true)} />
     </div>
     <CommandPalette groups={groups} locked={locked} open={paletteOpen} onOpenChange={setPaletteOpen} />
+    {/* The skip link lands here: past the header and every navigation link, at the start of the workspace content. */}
+    <span id="konten-utama" tabIndex={-1} className="list-table-sr">Konten utama</span>
   </>;
 }

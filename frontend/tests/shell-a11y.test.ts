@@ -16,9 +16,17 @@ test("skip_link_targets_main_content", () => {
   const attributes = new Map<string, string>(); let focused = false, scrolled = false;
   const main = { hasAttribute: (name: string) => attributes.has(name), setAttribute: (name: string, value: string) => attributes.set(name, value),
     focus: () => { focused = true; }, scrollIntoView: () => { scrolled = true; } };
-  assert.equal(focusMain({ querySelector: () => main } as never), true);
+  assert.equal(focusMain({ getElementById: () => null, querySelector: () => main } as never), true);
   assert.deepEqual([attributes.get("tabindex"), focused, scrolled], ["-1", true, true]);
-  assert.equal(focusMain({ querySelector: () => null } as never), false);
+  assert.equal(focusMain({ getElementById: () => null, querySelector: () => null } as never), false);
+  // In workspaces the navigation sits inside <main>; the skip link must land past it, on the workspace content marker.
+  let markerFocused = false, mainFocused = false;
+  const marker = { hasAttribute: () => true, setAttribute() {}, focus: () => { markerFocused = true; }, scrollIntoView() {} };
+  const workspaceMain = { hasAttribute: () => true, setAttribute() {}, focus: () => { mainFocused = true; }, scrollIntoView() {} };
+  assert.equal(focusMain({ getElementById: (id: string) => id === "konten-utama" ? marker : null, querySelector: () => workspaceMain } as never), true);
+  assert.deepEqual([markerFocused, mainFocused], [true, false]);
+  const navigation = readFileSync("src/modules/administration/AdministrationNavigation.tsx", "utf8");
+  assert.ok(navigation.lastIndexOf('id="konten-utama"') > navigation.lastIndexOf("<NavigationList"), "the content marker follows the navigation");
 });
 
 test("help_link_absent_without_number", () => {

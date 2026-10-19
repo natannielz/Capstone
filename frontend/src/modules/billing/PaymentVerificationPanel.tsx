@@ -47,14 +47,15 @@ export function PaymentVerificationPanel({ actorId, owner, allowed, allocationAl
   useEffect(() => { if (confirm) reviewHeading.current?.focus(); }, [confirm]);
   const active = () => alive.current && current();
   async function work(action: () => Promise<void>, automatic = false) {
-    if (!active() || locked || pending.current) return; pending.current = true; setBusy(true); onBusyChange(true); setError(null);
+    if (!active() || locked || pending.current) return; pending.current = true; setBusy(true); if (!automatic) onBusyChange(true); setError(null);
     try { await action(); } catch (failure) { if (alive.current) { setError(failure); if (!(failure instanceof AccessFailure && failure.code === 'step_up_required') && (!automatic || autoLoadEndsSession(failure))) onDenied(failure); } }
-    finally { pending.current = false; onBusyChange(false); onSettled(); if (alive.current) setBusy(false); }
+    finally { pending.current = false; if (!automatic) onBusyChange(false); onSettled(); if (alive.current) setBusy(false); }
   }
   async function read() { const result = await gateway.read(actorId, owner); if (active()) { setSaved(result); setChecked(true); setShown(null); setConfirm(null); setPage(null); } }
   // Opening a submission reads its verification once; the panel is keyed by submission and revision, so a remount discards late replies.
+  const autoLoaded = useRef(false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { void Promise.resolve().then(() => work(read, true /* automatic */)); }, []);
+  useEffect(() => { if (locked || autoLoaded.current) return; autoLoaded.current = true; void Promise.resolve().then(() => work(read, true /* automatic */)); }, [locked]);
   async function receipts(after: string | null) { setShown(null); setConfirm(null); const result = await gateway.receipts(actorId, owner.id, after); if (active()) setPage(result); }
   async function choose(receiptId: string) {
     setShown(null); setConfirm(null);

@@ -1,7 +1,6 @@
 import * as proofFile from '../src/modules/billing/payment-proof-file';
 import * as displayFormat from '../src/lib/format';
 import * as rupiahInputModule from '../src/lib/rupiah-input';
-import * as rupiahInputKit from '../src/components/workspace-kit/rupiah-input';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import * as React from 'react';
@@ -87,6 +86,7 @@ function mountPayment(replies: {save?: () => Response; recoverDraft?: () => Resp
     useCallback(callback: unknown, dependencies?: readonly unknown[]) {const index = position++, previous = active.slots[index] as {value: unknown; dependencies?: readonly unknown[]} | undefined;
       if (!previous || changed(previous.dependencies, dependencies)) active.slots[index] = {value: callback, dependencies}; return (active.slots[index] as {value: unknown}).value;},
     useEffect(effect: () => void | (() => void), dependencies?: readonly unknown[]) {pending.push({frame: active, index: position++, effect, dependencies});}};
+  let rupiahInputKit: Record<string, unknown> | undefined;
   const runtimeRequire = createRequire(resolve('package.json')), ts = runtimeRequire('typescript') as typeof import('typescript');
   const marker = () => null;
   const imports = (name: string): unknown => {
@@ -113,7 +113,8 @@ function mountPayment(replies: {save?: () => Response; recoverDraft?: () => Resp
     if (name === '@/lib/format') return displayFormat;
     if (name === '@/lib/rupiah-input') return rupiahInputModule;
     if (name === './payment-proof-file') return proofFile;
-    if (name === '@/components/workspace-kit/rupiah-input') return rupiahInputKit;
+    // Loaded through this harness so its useState runs on the mounted hook slots, not React's dispatcher.
+    if (name === '@/components/workspace-kit/rupiah-input') return rupiahInputKit ??= load('src/components/workspace-kit/rupiah-input.tsx');
     throw new Error('Unexpected mounted payment import: ' + name);
   };
   function load(file: string) {

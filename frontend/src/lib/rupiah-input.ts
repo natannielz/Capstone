@@ -16,11 +16,13 @@ const LARGE = "Jumlah terlalu besar.";
 
 function grouped(text: string, separator: string): string | null {
   const groups = text.split(separator);
-  return /^[0-9]{1,3}$/.test(groups[0]) && groups.slice(1).every(group => /^[0-9]{3}$/.test(group)) ? groups.join("") : null;
+  // The first group of a grouped number never starts with zero ("0.500" is not five hundred).
+  return /^[1-9][0-9]{0,2}$/.test(groups[0]) && groups.slice(1).every(group => /^[0-9]{3}$/.test(group)) ? groups.join("") : null;
 }
 
 export function parseRupiahInput(raw: string): RupiahInputResult {
-  const text = raw.trim().replace(/^(rp|idr)\.?/i, "").replace(/\s+/g, "");
+  // "Rp 150.000,-" is the common written price form: the ",-" (or ".-") suffix means no cents.
+  const text = raw.trim().replace(/^(rp|idr)\.?/i, "").replace(/\s+/g, "").replace(/[.,]-$/, "");
   if (!text) return { error: EMPTY };
   if (!/^[0-9][0-9.,]*$/.test(text) || /[.,]$/.test(text)) return { error: JUNK };
   const dots = text.split(".").length - 1, commas = text.split(",").length - 1;

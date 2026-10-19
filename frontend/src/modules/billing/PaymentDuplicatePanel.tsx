@@ -22,14 +22,15 @@ export function PaymentDuplicatePanel({ actorId, owner, locked, current, onOpen,
   useEffect(() => { if (page && requested.current) heading.current?.focus(); }, [page]);
   async function load(before: string | null, automatic = false) {
     if (locked || pending.current || !current()) return;
-    pending.current = true; requested.current = !automatic; setBusy(true); onBusyChange(true); setError(null); setPage(null);
+    pending.current = true; requested.current = !automatic; setBusy(true); if (!automatic) onBusyChange(true); setError(null); setPage(null);
     try { const result = await gateway.duplicates(actorId, owner, before); if (alive.current && current()) setPage(result); }
     catch (failure) { if (alive.current && current()) { setError(failure); if (!automatic || autoLoadEndsSession(failure)) onDenied(failure); } }
-    finally { pending.current = false; if (alive.current) { setBusy(false); onBusyChange(false); } }
+    finally { pending.current = false; if (alive.current) { setBusy(false); if (!automatic) onBusyChange(false); } }
   }
   // Opening a submission compares it once; the panel is keyed by submission and revision, so a remount discards late replies.
+  const autoLoaded = useRef(false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { void Promise.resolve().then(() => load(null, true /* automatic */)); }, []);
+  useEffect(() => { if (locked || autoLoaded.current) return; autoLoaded.current = true; void Promise.resolve().then(() => load(null, true /* automatic */)); }, [locked]);
   return <section className={styles.correctionPanel} aria-label="Indikasi pengajuan berulang"><h3>Indikasi pengajuan berulang</h3>
     <p>Bandingkan gambar asli yang identik dan referensi pembeli yang sama dalam cakupan akses Anda. Hasil ini tidak membuktikan transfer ganda dan tidak mengubah pembayaran.</p>
     <button className={common.secondary} disabled={locked || busy} onClick={() => void load(null)}>Periksa ulang kecocokan pengajuan</button>
