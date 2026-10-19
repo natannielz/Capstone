@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { dateFormatter, dateTimeFormatter, formatDate, formatDateTime, formatMoney, formatMonth, formatNumber, formatPercent, formatRupiah, formatTime, jakartaDateKey, numberFormatter } from "../src/lib/format";
+import { dateFormatter, dateTimeFormatter, formatDate, formatDateTime, formatMoney, formatMoneyText, formatMonth, formatNumber, formatPercent, formatRupiah, formatTime, jakartaDateKey, numberFormatter } from "../src/lib/format";
 
 // EYD V: "Rp1.250.000" (no space after Rp), dot thousands, comma decimals; times "14.30 WIB".
 test("formatRupiah writes EYD V rupiah without a space and with explicit fraction digits", () => {
@@ -53,4 +53,11 @@ test("dates and times render in Asia/Jakarta with WIB", () => {
 test("formatted output never contains no-break spaces that break EYD V or copy/paste", () => {
   for (const value of [formatRupiah(1250000), formatRupiah("1.5", { decimals: 2 }), formatDate(new Date()), formatDateTime(new Date()), formatTime(new Date()), formatPercent(0.5)])
     assert.equal(/[  ]/.test(value), false, JSON.stringify(value));
+});
+
+test("formatMoneyText formats valid amounts and shows text still being typed as entered, never throwing", () => {
+  assert.equal(formatMoneyText("7000.00"), "Rp7.000,00");
+  assert.equal(formatMoneyText("1250000"), "Rp1.250.000,00");
+  assert.equal(formatMoneyText(" 12. "), "Rp12.");
+  assert.equal(formatMoneyText(""), "Rp—");
 });

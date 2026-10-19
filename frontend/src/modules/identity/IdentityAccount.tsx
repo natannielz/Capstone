@@ -97,7 +97,7 @@ export function IdentityAccount() {
         <Link href="/identity/login" className={styles.primary}>Ke halaman masuk</Link>
       </section>}
       {!loading && session?.account && !timing.expired && <>
-        {!isPilotRelease && navigationError === null && <WorkSummary key={session.account.userId} actorId={session.account.userId} />}
+        {!isPilotRelease && navigationError === null && <WorkSummary key={session.account.userId} actorId={session.account.userId} actions={actions} />}
         <WorkspaceDirectory actions={actions} accessState={navigationError} />
         <div className={styles.accountGrid}>
           <section className={styles.card} aria-labelledby="profile-heading"><span className={styles.status}>Akun terverifikasi</span>

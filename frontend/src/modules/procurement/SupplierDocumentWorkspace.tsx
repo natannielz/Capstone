@@ -21,7 +21,7 @@ import { createSupplierDocumentGateway, supplierDocumentInput, supplierDocumentM
   type SupplierDocumentRead, type SupplierDocumentOrders, type SupplierDocumentOrder, type SupplierDocumentPreview, type SupplierDocumentSubmitPreview, type SupplierDocumentMatchPreview, type SupplierDocumentOcr, type SupplierDocumentInspections, type SupplierDocumentInvoices, type SupplierDocumentInput, type SupplierDocumentQualityChoices } from './supplier-document-client';
 import { DocumentFields, DocumentFacts, DocumentCapacity, DocumentOcr, MatchFacts, SupplierQualitySelector, blankDocumentForm, documentFormFrom, type DocumentForm } from './supplier-document-forms';
 import styles from '../administration/access.module.css';
-import { dateTimeFormatter } from '@/lib/format';
+import { dateTimeFormatter, formatMoneyText } from '@/lib/format';
 
 type Account = { actorId: string; actions: readonly string[]; session: IdentitySession; observedAt: number };
 type Review = { kind: 'draft'; preview: SupplierDocumentPreview; command: ReturnType<typeof prepareSupplierDocument> } | { kind: 'submit'; preview: SupplierDocumentSubmitPreview; command: ReturnType<typeof prepareSupplierDocumentSubmission> } | { kind: 'match'; preview: SupplierDocumentMatchPreview; command: ReturnType<typeof prepareSupplierDocumentMatch> };
@@ -48,7 +48,7 @@ function message(error: unknown) {
   }
   return 'Koneksi terputus. Periksa hasil permintaan tersimpan atau status unggahan sebelum melanjutkan.';
 }
-function OrderFacts({ value }: { value: SupplierDocumentOrder }) { return <section aria-label="Pesanan pembelian sumber"><h3>{value.supplier.displayName}</h3><p>{routes[value.route]} · Referensi pesanan: <span className={styles.preserve}>{value.externalOrderReference ?? value.commercialReference.reference}</span></p><p>Tanggal pesanan {value.businessDate} · Nilai pesanan IDR {value.total}</p><ul className={styles.historyList}>{value.lines.map(item => <li key={item.skuId}>{item.familyName} · {item.skuCode} · {item.packageLabel}<p>{item.baseUnitsPerPackage} {item.baseUnitCode} per kemasan · Definisi versi {item.definitionVersion} · Kode sumber <span className={styles.preserve}>{item.sourceAccountReference} / {item.externalItemCode}</span></p></li>)}</ul></section>; }
+function OrderFacts({ value }: { value: SupplierDocumentOrder }) { return <section aria-label="Pesanan pembelian sumber"><h3>{value.supplier.displayName}</h3><p>{routes[value.route]} · Referensi pesanan: <span className={styles.preserve}>{value.externalOrderReference ?? value.commercialReference.reference}</span></p><p>Tanggal pesanan {value.businessDate} · Nilai pesanan {formatMoneyText(value.total)}</p><ul className={styles.historyList}>{value.lines.map(item => <li key={item.skuId}>{item.familyName} · {item.skuCode} · {item.packageLabel}<p>{item.baseUnitsPerPackage} {item.baseUnitCode} per kemasan · Definisi versi {item.definitionVersion} · Kode sumber <span className={styles.preserve}>{item.sourceAccountReference} / {item.externalItemCode}</span></p></li>)}</ul></section>; }
 
 export function SupplierDocumentWorkspace() {
   const [identity] = useState(createIdentityGateway), [access] = useState(createAccessGateway);

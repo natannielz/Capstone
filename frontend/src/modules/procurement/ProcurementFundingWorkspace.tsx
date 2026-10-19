@@ -14,7 +14,7 @@ import { procurementLocationKey, type ProcurementTarget } from './procurement-re
 import { createFundingGateway, fundingInput, fundingPolicyEligible, prepareFunding, prepareFundingDecision, type FundingOrder, type FundingCapacity,
   type FundingPolicy, type FundingChoices, type FundingPreview, type FundingRequest, type FundingDecisionPreview } from './procurement-funding-client';
 import styles from '../administration/access.module.css';
-import { dateTimeFormatter } from '@/lib/format';
+import { dateTimeFormatter, formatMoneyText } from '@/lib/format';
 
 type Account = { actorId: string; actions: readonly string[]; session: IdentitySession; observedAt: number };
 type Review = { kind: 'request'; preview: FundingPreview; command: ReturnType<typeof prepareFunding> } | { kind: 'decide'; preview: FundingDecisionPreview; command: ReturnType<typeof prepareFundingDecision> };
@@ -25,7 +25,7 @@ const termsKinds = { full_before_dispatch: 'Lunas sebelum dikirim', deposit: 'Ua
 const triggers = { before_dispatch: 'Sebelum dikirim', on_receipt: 'Saat diterima', due_date: 'Tanggal jatuh tempo' } as const;
 const states = { requested: 'Menunggu pemeriksaan', approved: 'Diotorisasi secara internal', rejected: 'Ditolak' } as const;
 const when = (value: string) => dateTimeFormatter.format(new Date(value));
-const amount = (value: string) => 'IDR ' + value;
+const amount = (value: string) => formatMoneyText(value);
 function message(error: unknown) {
   if (error instanceof IdentityFailure) return 'Masuk kembali untuk memeriksa otorisasi uang muka.';
   if (error instanceof AccessFailure || error instanceof RequestNotSentError) {

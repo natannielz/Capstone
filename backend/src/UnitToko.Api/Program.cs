@@ -169,6 +169,7 @@ builder.Services.AddSingleton<UnitToko.Platform.Work.IWorkSource, UnitToko.Platf
 builder.Services.AddSingleton<UnitToko.Platform.Work.IWorkSource, UnitToko.Platform.Ordering.OrderReviewWorkSource>();
 builder.Services.AddSingleton<UnitToko.Platform.Work.IWorkSource, UnitToko.Platform.Ordering.IncomingRequestWorkSource>();
 builder.Services.AddSingleton<UnitToko.Platform.Work.IWorkSource, UnitToko.Platform.Fulfillment.DispatchWorkSource>();
+builder.Services.AddSingleton<UnitToko.Platform.Work.IWorkPermissions, UnitToko.Platform.Work.AuthorizedWorkPermissions>();
 builder.Services.AddSingleton<UnitToko.Platform.Work.WorkSummaryService>();
 builder.Services.AddSingleton<ProcurementRequestService>();
 builder.Services.AddSingleton<SupplierService>();

@@ -42,7 +42,7 @@ export async function verifyPurchaseOrdersBrowser({ config, maker, user, origin,
     const text = await region.innerText();
     for (const value of [config.organizationName, config.shopName, config.warehouseName, config.channelName, config.supplierName, config.supplierSubject,
       config.skuCode, config.familyName, config.packageLabel, config.specification, '12 piece per kemasan', '3 kemasan', '36 piece', '000001', '000012', reference,
-      'Rp10000.00', 'Rp30000.00', 'Rp3300.00', 'Rp700.00', 'Rp34000.00', description, config.dueDate]) assert.ok(text.includes(value), value);
+      'Rp10.000,00', 'Rp30.000,00', 'Rp3.300,00', 'Rp700,00', 'Rp34.000,00', description, config.dueDate]) assert.ok(text.includes(value), value);
   }
   async function reviewReady(region, heading, button) {
     await region.waitFor(); assert.equal(await region.getByRole('heading', { name: heading, exact: true }).evaluate(element => element === document.activeElement), true);

@@ -170,7 +170,7 @@ img{max-width:100%}
 .data-table small{font-size:12px;line-height:1.65;color:var(--text-secondary);display:block;margin-top:4px;white-space:normal}
 .data-table td:first-child{min-width:170px}
 .data-table td:has(.row-actions){min-width:170px}
-.data-table td
+.data-table td.numeric{min-width:110px}
 .cell-description{min-width:180px;max-width:340px;white-space:normal;overflow-wrap:anywhere}
 .data-table tr:hover td{background:#fbfcfd}
 
@@ -449,7 +449,7 @@ img{max-width:100%}
   .order-summary{padding:24px 20px;gap:24px;flex-direction:column}.order-summary h2{font-size:22px}.summary-actions{max-width:none;align-items:flex-start;gap:12px}
   .substitution{padding:20px}.delivery-meta{padding:20px;gap:12px}.delivery-actions{padding:20px;gap:12px}.delivery-proof{padding:20px 20px 0}
   .complaint-item{padding:20px;flex-wrap:wrap;gap:12px}.complaint-item>div{min-width:calc(100% - 36px)}.complaint-item>[data-slot=button]{margin-left:30px}
-  .related-list>button{padding:20px;gap:12px}.related-list>button>
+  .related-list>button{padding:20px;gap:12px}.related-list>button>.status-badge{margin-left:32px}
   .ready-billing{padding:20px;align-items:flex-start;gap:20px}
   .module-note{padding:20px;font-size:13px}.detail-totals{padding:20px;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}.detail-totals b{font-size:17px}
   .metric-grid{gap:16px}.metric-card{padding:20px}.metric-card>strong{font-size:23px}.metric-card>div>span{font-size:13px}
