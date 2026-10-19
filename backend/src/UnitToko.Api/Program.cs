@@ -164,6 +164,12 @@ builder.Services.AddSingleton<OrderCommercialPolicyService>();
 builder.Services.AddSingleton<AccountingBookSetupService>();
 builder.Services.AddSingleton<AccountingReportService>();
 builder.Services.AddSingleton<OperationalAnomalyService>();
+// "Pekerjaan saya": one source per owner queue (each reads through its own authorised service).
+builder.Services.AddSingleton<UnitToko.Platform.Work.IWorkSource, UnitToko.Platform.Billing.PaymentReviewWorkSource>();
+builder.Services.AddSingleton<UnitToko.Platform.Work.IWorkSource, UnitToko.Platform.Ordering.OrderReviewWorkSource>();
+builder.Services.AddSingleton<UnitToko.Platform.Work.IWorkSource, UnitToko.Platform.Ordering.IncomingRequestWorkSource>();
+builder.Services.AddSingleton<UnitToko.Platform.Work.IWorkSource, UnitToko.Platform.Fulfillment.DispatchWorkSource>();
+builder.Services.AddSingleton<UnitToko.Platform.Work.WorkSummaryService>();
 builder.Services.AddSingleton<ProcurementRequestService>();
 builder.Services.AddSingleton<SupplierService>();
 builder.Services.AddSingleton<PurchaseOrderService>();
@@ -468,6 +474,7 @@ app.MapProviderSecurityEventEndpoints();
 app.MapIdentityEndpoints();
 app.MapAccessEndpoints(currentOnly: pilotRelease);
 if (!pilotRelease) app.MapTemporaryDelegationEndpoints();
+if (!pilotRelease) UnitToko.Api.Work.WorkEndpoints.MapWorkEndpoints(app);
 if (!pilotRelease)
 {
 app.MapIdentityAdministrationEndpoints();
