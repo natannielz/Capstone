@@ -59,3 +59,24 @@ Actual Auth0 requires the reviewed provider and hosting inputs in `identity-host
 6. As `petugas`, use **Katalog toko** to maintain the pilot's product groups, package definitions and publishing state. Photos remain unavailable until the existing evidence/asset workflow is approved for that use; placeholders state this honestly.
 
 Stop and restart the same launcher to check persistence. Keep `tmp/pilot/release1` intact; deleting it is not part of the launch procedure.
+
+## Full-workspace demo profile
+
+To see every maintained workspace locally (grouped sidebar, Ctrl+K palette, Pekerjaan saya, order drafts with discard and restore, payment forms), build the full frontend once and start the launcher with `-Profile full`:
+
+```powershell
+$env:NEXT_PUBLIC_UNIT_TOKO_RELEASE = 'full'
+npm run build --prefix frontend
+dotnet build backend/tools/UnitToko.LocalPilot/UnitToko.LocalPilot.csproj -c Release
+./backend/tools/UnitToko.LocalPilot/start-local-pilot.ps1 -Profile full `
+  -DotnetPath './.tools/dotnet10/dotnet.exe' `
+  -MongoPath './.tools/mongodb/mongodb-win32-x86_64-windows-8.2.12/bin/mongod.exe' `
+  -NodePath 'C:/Users/User/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node.exe'
+```
+
+The full profile keeps its own state in `tmp/pilot/full`, its own database `unittoko_local_pilot_full` on `127.0.0.1:27030`, and its own browser profile. It never touches the Release 1 pilot. Its synthetic accounts additionally receive the following:
+- **Requesters:** ordering, invoice and payment-evidence rights.
+- **`petugas`:** the operational workspace rights.
+- **`peninjau`:** price approval.
+
+The three sample packages receive prices through the real maker/checker price service, so requesters can prepare drafts. Everything stays SYNTHETIC. Only one profile can run at a time, because both use port 443.
