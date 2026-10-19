@@ -17,7 +17,7 @@ internal static class ShipmentDispatchSeals
     private static IMongoCollection<BsonDocument> Seals(IMongoDatabase database) =>
         database.GetCollection<BsonDocument>(ProvenanceSealSchemas.ShipmentDispatchCollection);
     // Transition ids are allocated monotonically and a balance's transitions serialize on its revision.
-    private static (string Collection, BsonDocument Filter)[] Scopes(BsonDocument row) =>
+    internal static (string Collection, BsonDocument Filter)[] Scopes(BsonDocument row) =>
         [.. row["valueEffects"].AsBsonArray.Select(effect => (LotValueStore.Transitions, new BsonDocument {
             { "$or", new BsonArray { new BsonDocument("availableId", effect["balanceId"]), new BsonDocument("destinationId", effect["balanceId"]) } },
             { "_id", new BsonDocument("$lte", effect["transitionId"]) } }))];

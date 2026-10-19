@@ -19,8 +19,10 @@ internal sealed class ShipmentDispatchRecords(IMongoDatabase database, IClock? c
 {
     private static readonly FilterDefinitionBuilder<BsonDocument> F = Builders<BsonDocument>.Filter;
     private IMongoCollection<BsonDocument> Rows(string name) => database.GetCollection<BsonDocument>(name);
-    internal async IAsyncEnumerable<BsonDocument> ReadOrderAsync(IClientSessionHandle tx, long orderId, [EnumeratorCancellation] CancellationToken ct) {
-        var query = Rows(B.Collection).Find(tx, F.Eq("orderId", orderId)).Sort(new BsonDocument("orderSequence", 1));
+    // afterSequence > 0 reads only shipments after a verified order-progress checkpoint; earlier ones are bound by its seal.
+    internal async IAsyncEnumerable<BsonDocument> ReadOrderAsync(IClientSessionHandle tx, long orderId, [EnumeratorCancellation] CancellationToken ct, long afterSequence = 0) {
+        var filter = afterSequence > 0 ? F.Eq("orderId", orderId) & F.Gt("orderSequence", afterSequence) : F.Eq("orderId", orderId);
+        var query = Rows(B.Collection).Find(tx, filter).Sort(new BsonDocument("orderSequence", 1));
         query.Options.BatchSize = 50;
         using var cursor = await query.ToCursorAsync(ct);
         while (await cursor.MoveNextAsync(ct)) foreach (var row in cursor.Current) yield return await VerifyAsync(tx, row, ct);

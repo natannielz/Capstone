@@ -18,7 +18,7 @@ public sealed class SealVerifier(IMongoDatabase database, SealKeyRing ring)
             .Select(scope => new BsonDocument {
                 { "collection", scope.Collection }, { "filter", scope.Filter.DeepClone() },
                 { "members", new BsonArray(scope.Rows.OrderBy(row => row["_id"]).Select(row => new BsonDocument {
-                    { "id", row["_id"] }, { "hash", ProvenanceSeal.RowHash(row) } })) } })
+                    { "id", row["_id"] }, { "hash", ProvenanceSeal.MemberHash(scope.Collection, row) } })) } })
             .Concat((counts ?? []).OrderBy(count => count.Collection, StringComparer.Ordinal).ThenBy(count => count.Filter.ToJson(), StringComparer.Ordinal)
                 .Select(count => new BsonDocument { { "collection", count.Collection }, { "filter", count.Filter.DeepClone() }, { "count", count.Value } })));
 
@@ -44,7 +44,7 @@ public sealed class SealVerifier(IMongoDatabase database, SealKeyRing ring)
                 .Sort(new BsonDocument("_id", 1)).Limit(MaximumMembers + 1).ToListAsync(ct);
             var expected = scope["members"].AsBsonArray;
             if (actual.Count != expected.Count ||
-                actual.Where((row, index) => row["_id"] != expected[index]["id"] || ProvenanceSeal.RowHash(row) != expected[index]["hash"].AsString).Any())
+                actual.Where((row, index) => row["_id"] != expected[index]["id"] || ProvenanceSeal.MemberHash(scope["collection"].AsString, row) != expected[index]["hash"].AsString).Any())
                 throw Mismatch("membership:" + scope["collection"].AsString);
             result.Add(new BsonDocument { { "collection", scope["collection"] }, { "filter", scope["filter"] }, { "rows", new BsonArray(actual) } });
         }
