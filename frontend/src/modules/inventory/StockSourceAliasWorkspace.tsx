@@ -20,6 +20,7 @@ import { AliasFacts, AliasDraftForm, AliasDecisionForm, AliasReview, aliasStatus
 import type { StockWarehouse } from "./stock-count-workflow";
 import common from "../administration/access.module.css";
 import styles from "./stock-source-alias.module.css";
+import { formatDateTime } from "@/lib/format";
 
 const path = "/inventory/sources/aliases";
 const loginHref = "/identity/login?returnPath=" + encodeURIComponent(path);
@@ -219,7 +220,7 @@ function AliasDesk({ loaded, onRefresh }: { loaded: Loaded; onRefresh: () => Pro
           {state.selected.status === "proposed" && editor.staleBase && <p role="status" className={common.alert}>Dasar pengajuan telah berubah. Pengajuan ini belum dapat disetujui; periksa pemetaan dan pengaturan terbaru.</p>}
           {state.selected.status === "proposed" && state.current.source.poolState === "active" && <p className={common.alert}>Alokasi masih aktif. Pemetaan belum dapat disetujui.</p>}
           {state.selected.decision && <section className={styles.section}><h3>Keputusan tercatat</h3><p>{state.selected.decision.reviewReference}</p>
-            <p className={common.preserve}>{state.selected.decision.reason}</p><p>{new Date(state.selected.decision.decidedAt).toLocaleString("id-ID", { timeZone: "Asia/Jakarta" })} WIB.</p></section>}
+            <p className={common.preserve}>{state.selected.decision.reason}</p><p>{formatDateTime(state.selected.decision.decidedAt)}.</p></section>}
           <section className={styles.section}><AliasDecisionForm key={state.selected.id + ":" + state.current.source.poolVersion + ":" + state.current.mapping?.appliedAliasVersion}
             proposal={state.selected} disabled={locked} fresh={state.fresh} approvable={!editor.staleBase && state.current.source.poolState === "inactive"}
             canPropose={editor.canPropose} canApprove={editor.canApprove} onReview={(action, reference, reason) => editor.reviewDecision(action, reference, reason)} /></section>

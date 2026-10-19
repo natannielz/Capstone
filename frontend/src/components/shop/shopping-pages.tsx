@@ -33,6 +33,7 @@ import {
   useShop,
 } from "./shop-shell";
 import { rupiah, safeShopBack, shopCategory, shopFamilies } from "./shop-data";
+import { formatNumber } from "@/lib/format";
 
 export function ShopQuantity({
   value,
@@ -97,7 +98,7 @@ export function ShopQuantity({
       </div>
       {!valid && (
         <p className="shop-field-error" id={`${id}-error`}>
-          {unavailable ? "Stok kemasan ini habis." : `Isi bilangan bulat 1–${max.toLocaleString("id-ID")}.`}
+          {unavailable ? "Stok kemasan ini habis." : `Isi bilangan bulat 1–${formatNumber(max)}.`}
         </p>
       )}
     </div>

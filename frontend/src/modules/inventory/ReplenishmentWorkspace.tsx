@@ -12,11 +12,12 @@ import {createReplenishmentGateway, isReplenishmentRecoveryKey, parseReplenishme
   type ReplenishmentEvaluation, type ReplenishmentPending, type ReplenishmentSource, type ReplenishmentValues} from './replenishment-client';
 import common from '../administration/access.module.css';
 import styles from './replenishment.module.css';
+import { dateTimeFormatter, numberFormatter } from '@/lib/format';
 
 const path = '/inventory/replenishment';
 type Account = {actorId: string; actions: readonly string[]; session: IdentitySession; observedAt: number};
-const when = (value: string) => new Intl.DateTimeFormat('id-ID', {dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Jakarta'}).format(new Date(value)) + ' WIB';
-const amount = (value: string | null) => value === null ? 'Belum diketahui' : new Intl.NumberFormat('id-ID').format(BigInt(value));
+const when = (value: string) => dateTimeFormatter.format(new Date(value));
+const amount = (value: string | null) => value === null ? 'Belum diketahui' : numberFormatter.format(BigInt(value));
 const warnings: Record<string, string> = {
   daily_demand_missing: 'Pemakaian per hari belum diisi.', lead_time_missing: 'Waktu tunggu belum diisi.', safety_stock_missing: 'Stok pengaman belum diisi.',
   reorder_point_missing: 'Batas peringatan belum diisi.', stock_authority_unavailable: 'Sumber stok belum dapat dipastikan berlaku.',

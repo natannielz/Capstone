@@ -14,6 +14,7 @@ import {permissionLabel} from './permission-labels';
 import {createDelegationGateway, parseDelegationCommand, type DelegationCommand, type DelegationItem, type DelegationSource} from './delegation-client';
 import {DelegationJournal, delegationJournalPrefix, type DelegationAction, type DelegationReference} from './delegation-journal';
 import styles from './access.module.css';
+import { formatDateTime } from '@/lib/format';
 
 const path = '/administration/delegations';
 const names: Record<DelegationAction, string> = {propose: 'Ajukan delegasi', approve: 'Setujui delegasi', revoke: 'Hentikan delegasi', handover: 'Catat serah-terima'};
@@ -178,14 +179,14 @@ function Desk({account, refreshSession}: {account: Account; refreshSession: () =
             <label>Keanggotaan penerima<select value={membershipId} onChange={event => setMembershipId(event.target.value)}><option value="">Pilih keanggotaan aktif</option>{subject?.memberships.filter(row => row.status === 'active').map(row => <option key={row.id} value={row.id}>{row.id} · {describeScope(row.scope)}</option>)}</select></label>
             {source && <fieldset className={styles.choiceGroup}><legend>Izin yang didelegasikan</legend>{source.permissions.map(permission => <label key={permission} className={styles.checkbox}><input type="checkbox" checked={permissions.includes(permission)} onChange={event => setPermissions(rows => event.target.checked ? [...rows, permission] : rows.filter(p => p !== permission))} />{permissionLabel(permission)}</label>)}</fieldset>}
             <div className={styles.twoFields}><label>Mulai berlaku (WIB)<input type="datetime-local" value={effective} onChange={event => setEffective(event.target.value)} /></label><label>Berakhir (WIB)<input type="datetime-local" value={expiry} onChange={event => setExpiry(event.target.value)} /></label></div>
-            {source?.expiresAt && <p className={styles.help}>Izin sumber berakhir {new Date(source.expiresAt).toLocaleString('id-ID', {timeZone: 'Asia/Jakarta'})} WIB.</p>}
+            {source?.expiresAt && <p className={styles.help}>Izin sumber berakhir {formatDateTime(source.expiresAt)}.</p>}
             <label>Alasan delegasi<textarea value={reason} maxLength={1000} onChange={event => setReason(event.target.value)} /></label>
             <button type="button" className={styles.primary} onClick={() => preview('propose')}>Tinjau pengajuan delegasi</button>
           </fieldset>
         </section>}
         {detail && <section className={styles.form} aria-label="Rincian delegasi"><h2>Delegasi {detail.item.id}</h2><p>{states[detail.item.status]} · {detail.item.sourceState === 'current' ? 'Sumber masih berlaku' : 'Sumber tidak tersedia; akses turunan tidak diberikan'}</p>
           <p>{describeScope(detail.item.request.scope)}</p><p>Pemberi {detail.item.sourceUserId} · penerima {detail.item.request.beneficiaryUserId} · penyetuju {detail.item.approvedBy ?? 'belum ada'}</p>
-          <p>{new Date(detail.item.request.effectiveAt).toLocaleString('id-ID', {timeZone: 'Asia/Jakarta'})} sampai {new Date(detail.item.request.expiresAt).toLocaleString('id-ID', {timeZone: 'Asia/Jakarta'})} WIB</p>
+          <p>{formatDateTime(detail.item.request.effectiveAt)} sampai {formatDateTime(detail.item.request.expiresAt)}</p>
           <ul>{detail.item.request.permissions.map(permission => <li key={permission}>{permissionLabel(permission)}</li>)}</ul><p className={styles.preserve}>{detail.item.reason}</p>
           <label>Alasan keputusan atau catatan serah-terima<textarea disabled={locked || review !== null} value={reason} maxLength={1000} onChange={event => setReason(event.target.value)} /></label>
           <div className={styles.actions}>{detail.item.allowedActions.map(action => <button key={action} type="button" className={styles.secondary} disabled={locked || review !== null} onClick={() => preview(action)}>Tinjau: {names[action]}</button>)}</div>
@@ -193,7 +194,7 @@ function Desk({account, refreshSession}: {account: Account; refreshSession: () =
         </section>}
         {review && <section ref={confirmRegion} tabIndex={-1} className={styles.review} aria-label="Konfirmasi delegasi"><h2>{names[review.action]}</h2>
           {review.request ? <><p>Penerima {review.request.beneficiaryUserId} · keanggotaan {review.request.beneficiaryMembershipId}</p><p>{describeScope(review.request.scope)}</p>
-            <p>{new Date(review.request.effectiveAt).toLocaleString('id-ID', {timeZone: 'Asia/Jakarta'})} sampai {new Date(review.request.expiresAt).toLocaleString('id-ID', {timeZone: 'Asia/Jakarta'})} WIB</p>
+            <p>{formatDateTime(review.request.effectiveAt)} sampai {formatDateTime(review.request.expiresAt)}</p>
             <ul>{review.request.permissions.map(permission => <li key={permission}>{permissionLabel(permission)}</li>)}</ul></> : <p>Delegasi {review.id} · revisi {review.revision}</p>}
           <p className={styles.preserve}>{review.reason}</p><p>Catatan ini tidak memindahkan tugas operasional atau menggantikan persetujuan orang yang berbeda.</p>
           <label className={styles.checkbox}><input type="checkbox" checked={accepted} disabled={locked} onChange={event => setAccepted(event.target.checked)} />Saya sudah memeriksa penerima, izin, waktu, dan alasan.</label>

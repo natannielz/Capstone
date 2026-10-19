@@ -16,6 +16,7 @@ import {catalogPhotoRevalidationKeySku, catalogPhotoRevalidationLabel, catalogPh
   type CatalogPhotoRevalidationCurrent, type CatalogPhotoRevalidationGateway, type CatalogPhotoRevalidationResult} from './catalog-photo-revalidation-api';
 import common from '../administration/access.module.css';
 import styles from './catalog-photo.module.css';
+import { formatDateTime, formatNumber } from "@/lib/format";
 
 export type CatalogPhotoPanelProps = {
   actorId: string; sku: CatalogSku; journal: OperationJournal; gateway: CatalogPhotoGateway; evidenceGateway: CatalogPhotoEvidenceGateway;
@@ -267,7 +268,7 @@ function PhotoEditor({actorId, sku, journal, gateway, evidenceGateway, revalidat
     <div className={styles.current}><h4>Foto yang tercatat</h4>
       {!metadata ? <p>{busy ? 'Memuat sumber foto…' : 'Sumber foto belum tersedia.'}</p> : metadata.photo ? <>
         <p>{metadata.photo.matchesCurrentDefinition ? 'Foto utama sudah tercatat untuk kemasan ini.' : 'Foto sebelumnya berasal dari definisi kemasan lain. Tinjau dan tetapkan foto baru untuk kemasan ini.'}</p>
-        <p className={styles.help}>Revisi foto {metadata.photoRevision} · tersimpan {new Date(metadata.photo.recordedAt).toLocaleString('id-ID')}</p>
+        <p className={styles.help}>Revisi foto {metadata.photoRevision} · tersimpan {formatDateTime(metadata.photo.recordedAt)}</p>
         {metadata.photo.matchesCurrentDefinition && <button type="button" className={common.secondary} disabled={disabled || !canOpenCurrent} onClick={() => void run(signal => showOriginal('current', signal))}>Lihat foto yang tercatat</button>}
       </> : <p>Belum ada foto utama. Tidak ada gambar pengganti yang diasumsikan.</p>}
       <button type="button" className={common.secondary} disabled={busy || offline || !sku.active} onClick={() => void run(load)}>Muat ulang sumber foto</button>
@@ -276,7 +277,7 @@ function PhotoEditor({actorId, sku, journal, gateway, evidenceGateway, revalidat
       <h4 id="catalog-photo-revalidation-heading">Pemeriksaan ulang keamanan foto</h4>
       <p className={styles.help}>Periksa kembali file asli yang sama tanpa mengunggah atau menetapkan foto baru. Pemeriksaan yang lulus tetap harus memenuhi kebijakan dan masa berlaku saat foto dibuka.</p>
       {proof ? <><p role="status"><strong>{catalogPhotoRevalidationLabel(proof)}</strong></p>
-        <p className={styles.help}>Revisi pemeriksaan {proof.proofRevision}{proof.checkedAt ? ` · diperiksa ${new Date(proof.checkedAt).toLocaleString('id-ID')}` : ''}</p>
+        <p className={styles.help}>Revisi pemeriksaan {proof.proofRevision}{proof.checkedAt ? ` · diperiksa ${formatDateTime(proof.checkedAt)}` : ''}</p>
         {proof.state === 'pending' && <p>Foto belum dapat ditampilkan selama pemeriksaan terbaru menunggu hasil.</p>}
         {proof.state === 'rejected' && <p>Foto ini ditolak dan tidak dapat ditampilkan. Tinjau penyebab bersama penanggung jawab atau pilih foto pengganti.</p>}
         {proof.proofRevision === '256' && <p>Batas pemeriksaan ulang file ini telah tercapai. Hubungi penanggung jawab atau siapkan foto pengganti.</p>}
@@ -299,7 +300,7 @@ function PhotoEditor({actorId, sku, journal, gateway, evidenceGateway, revalidat
       <label className={common.field}><span>Foto asli PNG atau JPEG</span><input ref={fileInput} type="file" accept="image/png,image/jpeg" disabled={disabled || reservation !== null && status?.state !== 'fresh'} onChange={event => chooseFile(event.target.files?.[0])}/><span className={styles.help}>Satu foto, maksimal 10 MiB. File tetap di perangkat sampai Anda memilih unggah.</span></label>
       <label className={common.field}><span>Alasan penetapan foto utama</span><textarea maxLength={1000} rows={3} value={reason} disabled={disabled} onChange={event => { setReason(event.target.value); setConsent(false); }}/></label>
     </div>
-    {file && <p className={styles.help}>{file.name} · {(file.size / (1024 * 1024)).toLocaleString('id-ID', {maximumFractionDigits: 2})} MiB · belum menjadi foto utama</p>}
+    {file && <p className={styles.help}>{file.name} · {formatNumber((file.size / (1024 * 1024)).toFixed(2), 2)} MiB · belum menjadi foto utama</p>}
     <button type="button" className={common.primary} disabled={disabled || !file || !reason || !reservation && reservePending.length > 0 || reservation !== null && status?.state !== 'fresh'} onClick={() => void run(upload)}>{reservation ? 'Lanjutkan unggah terpilih' : 'Unggah foto asli'}</button>
     {reservation && <section className={styles.status} aria-label="Status pemeriksaan foto"><h4>Status unggah dan pemeriksaan</h4>
       <p role="status">{status ? catalogPhotoEvidenceLabel(status) : 'Hasil unggah belum dapat dipastikan.'}</p>

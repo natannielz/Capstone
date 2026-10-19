@@ -1,8 +1,9 @@
 import type { SourceReconciliationBaseline, SourceReconciliationObservation } from './stock-source-reconciliation-client';
 import styles from '../administration/access.module.css';
+import { formatDateTime, numberFormatter } from "@/lib/format";
 
-export const reconciliationWhen = (value: string) => new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'medium', timeZone: 'Asia/Jakarta' }).format(new Date(value)) + ' WIB';
-const count = (value: string | number) => new Intl.NumberFormat('id-ID').format(BigInt(value));
+export const reconciliationWhen = (value: string) => formatDateTime(value, { seconds: true });
+const count = (value: string | number) => numberFormatter.format(BigInt(value));
 const kinds = { loose: 'Satuan / lepas', sealed: 'Kemasan tertutup', other: 'Kemasan lain' };
 export const reconciliationNotice = 'Rekonsiliasi hanya mencatat perbandingan jumlah fisik. Sumber belum diaktifkan; status tahan, biaya dan ketersediaan barang tidak berubah.';
 

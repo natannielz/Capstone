@@ -10,6 +10,7 @@ import { createReturnGateway, type ReturnView } from './return-client';
 import { canRecordRefundPayout, createRefundPayoutGateway, prepareRefundPayoutDraft, prepareRefundPayoutRecord,
   type ApprovedRefundView, type RefundPayoutPreview, type RefundPayoutView } from './refund-payout-client';
 import styles from '../administration/access.module.css';
+import { formatDateTime } from '@/lib/format';
 
 type Props = { actorId: string; owner: AfterSalesCase; actions: readonly string[]; fresh: boolean; locked: boolean; current: () => boolean; freshCurrent: () => boolean;
   journal: OperationJournal; onSettled: () => void; onDenied: (failure: unknown) => void; onBusyChange: (busy: boolean) => void };
@@ -32,10 +33,10 @@ function imageLabel(item: PaymentEvidenceStatus) {
 }
 function PayoutStatus({ payout, settlement }: { payout: NonNullable<ApprovedRefundView['payout']>; settlement: ApprovedRefundView['settlement'] }) {
   return settlement ? <section aria-label="Hasil verifikasi debit refund"><p role="status">Pembayaran refund {rupiah(settlement.amount)} telah dicocokkan dengan debit bank secara independen.</p>
-    <p>Verifikasi {settlement.settlementId} · {new Date(settlement.recordedAt).toLocaleString('id-ID')}</p>
+    <p>Verifikasi {settlement.settlementId} · {formatDateTime(settlement.recordedAt)}</p>
     <ul>{settlement.receipts.map(row => <li key={row.receiptId}>Penerimaan bank {row.receiptId}: refund dibayar {rupiah(row.paid)}, masih disisihkan {rupiah(row.pending)}, dana tersedia {rupiah(row.available)}.</li>)}</ul>
   </section> : <section aria-label="Refund tercatat belum diverifikasi"><p role="status">Bukti refund {rupiah(payout.amount)} tercatat, menunggu verifikasi bank independen.</p>
-    <p>Pencatatan {payout.payoutId} · {new Date(payout.recordedAt).toLocaleString('id-ID')}</p><p>Catatan ini belum membuktikan uang diterima pelanggan.</p></section>;
+    <p>Pencatatan {payout.payoutId} · {formatDateTime(payout.recordedAt)}</p><p>Catatan ini belum membuktikan uang diterima pelanggan.</p></section>;
 }
 export function RefundPayoutPanel(props: Props) {
   const { actorId, owner, actions, locked, fresh, current, onBusyChange, onDenied, onSettled } = props;
@@ -56,7 +57,7 @@ export function RefundPayoutPanel(props: Props) {
     {error !== null && <p role="alert">{message(error)}</p>}{busy && <p role="status">Memeriksa persetujuan refund…</p>}
     <button className={styles.secondary} disabled={locked || busy || !fresh} onClick={() => void work(async () => { const value = await returns.read(actorId, owner); if (alive.current && current()) { setPhysical(value); setReturnId(value.recent[0]?.id ?? ''); setOlderId(''); setOpened(null); } })}>Muat retur untuk pencatatan refund</button>
     {physical && <form onSubmit={event => { event.preventDefault(); const selected = olderId || returnId; if (selected && fresh) void work(async () => { setOpened(null); const value = await gateway.approved(actorId, owner, selected); if (alive.current && current()) setOpened(value); }); }}>
-      {physical.recent.length ? <label>Penerimaan barang retur untuk refund<select required value={returnId} disabled={locked || busy || !!olderId} onChange={event => { setReturnId(event.target.value); setOpened(null); }}>{physical.recent.map(row => <option key={row.id} value={row.id}>{row.id} · {new Date(row.receivedAt).toLocaleString('id-ID')}</option>)}</select></label> : <p>Belum ada penerimaan retur.</p>}
+      {physical.recent.length ? <label>Penerimaan barang retur untuk refund<select required value={returnId} disabled={locked || busy || !!olderId} onChange={event => { setReturnId(event.target.value); setOpened(null); }}>{physical.recent.map(row => <option key={row.id} value={row.id}>{row.id} · {formatDateTime(row.receivedAt)}</option>)}</select></label> : <p>Belum ada penerimaan retur.</p>}
       {physical.hasEarlier && <label>ID penerimaan retur yang lebih lama untuk refund<input inputMode="numeric" pattern="[1-9][0-9]*" maxLength={19} value={olderId} disabled={locked || busy} onChange={event => { setOlderId(event.target.value); setOpened(null); }} /></label>}
       <button className={styles.secondary} disabled={locked || busy || !fresh || !(olderId || returnId)}>Buka persetujuan refund</button></form>}
     {opened && (opened.approval === null ? <p role="status">Belum ada persetujuan refund untuk penerimaan ini.</p> : opened.payout ? <PayoutStatus payout={opened.payout} settlement={opened.settlement} /> : <PayoutDesk key={opened.approval.financialApprovalId} {...props} approved={opened} />)}

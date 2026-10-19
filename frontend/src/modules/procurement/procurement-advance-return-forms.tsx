@@ -2,9 +2,10 @@
 
 import type { AdvanceReturnPolicy, AdvanceReturnPreview } from './procurement-advance-return-client';
 import styles from '../administration/access.module.css';
+import { dateTimeFormatter } from '@/lib/format';
 
 export const advanceReturnStates = { proposed: 'Menunggu pemeriksaan independen', returned: 'Pengembalian dibukukan', rejected: 'Ditolak tanpa pembukuan' };
-export const advanceReturnWhen = (value: string) => new Intl.DateTimeFormat('id-ID', { timeZone: 'Asia/Jakarta', dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) + ' WIB';
+export const advanceReturnWhen = (value: string) => dateTimeFormatter.format(new Date(value));
 export const advanceReturnConsent = 'Saya telah memeriksa seluruh kredit bank, pemasok, pesanan pembelian, rincian uang muka dan kebijakan pembukuan.';
 export const advanceReturnNotice = 'Satu kredit bank harus seluruhnya untuk satu pemasok dan satu pesanan pembelian. Beberapa uang muka terverifikasi dari pesanan yang sama dapat dipilih. Pengajuan belum mencadangkan nilai; persetujuan mencatat uang yang sudah diterima.';
 export function advanceReturnCents(value: string): bigint | null {

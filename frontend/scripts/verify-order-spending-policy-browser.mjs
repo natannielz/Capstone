@@ -48,7 +48,7 @@ export async function verifyOrderSpendingPolicyBrowser({ config, maker, user, or
   await page.getByRole('button', { name: 'Periksa rincian pengajuan', exact: true }).click();
   const review = page.getByRole('region', { name: 'Rincian pengajuan aturan', exact: true }); await review.waitFor();
   assert.equal(await review.getByRole('heading', { name: 'Rincian yang akan diajukan', exact: true }).evaluate(element => element === document.activeElement), true);
-  assert.match(await review.innerText(), /IDR 500\.000,25/); assert.equal(await review.getByRole('textbox').count(), 0);
+  assert.match(await review.innerText(), /Rp500\.000,25/); assert.equal(await review.getByRole('textbox').count(), 0);
   assert.equal(await review.getByRole('button', { name: 'Kirim pengajuan aturan', exact: true }).isDisabled(), true);
   await review.getByRole('checkbox').check(); await context.setOffline(true); await page.getByText(/Koneksi terputus/).waitFor();
   assert.equal(await review.getByRole('button', { name: 'Kirim pengajuan aturan', exact: true }).isDisabled(), true); assert.equal(spendingWrites.length, 0);
@@ -103,7 +103,7 @@ export async function verifyOrderSpendingPolicyBrowser({ config, maker, user, or
   await checker.page.getByRole('button', { name: 'Periksa hasil', exact: true }).waitFor({ state: 'hidden' });
   assert.equal(completedWrites().length, 2); assert.equal(dropped(), 2); assert.equal((await references(checker.page)).length, 0);
   await choose(checker.page); await checker.page.getByRole('heading', { name: 'Aturan aktif', exact: true }).waitFor();
-  assert.match(await checker.page.getByRole('region', { name: 'Rincian aturan belanja', exact: true }).innerText(), /IDR 500\.000,25/);
+  assert.match(await checker.page.getByRole('region', { name: 'Rincian aturan belanja', exact: true }).innerText(), /Rp500\.000,25/);
   assert.equal(await checker.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
   await checker.page.screenshot({ path: resolve(directory, 'order-spending-policy-approved-mobile.png'), fullPage: true });
   const reader = await user(config.readerToken); await reader.page.goto(origin.origin + path); await choose(reader.page);

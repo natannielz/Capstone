@@ -14,6 +14,7 @@ import { createSupplierBankGateway, supplierBankOwnerKey, supplierBankInput, sup
   type SupplierBankTarget, type SupplierBankDetails, type SupplierBankPolicy, type SupplierBankChoice, type SupplierBankChoices, type SupplierBankPreview, type SupplierBankProposal, type SupplierBankSummary,
   type SupplierBankCurrent, type SupplierBankObservationPreview, type SupplierBankDecisionPreview } from './supplier-bank-client';
 import styles from '../administration/access.module.css';
+import { dateTimeFormatter } from '@/lib/format';
 
 type Account = { actorId: string; actions: readonly string[]; session: IdentitySession; observedAt: number };
 type Review = { kind: 'propose'; preview: SupplierBankPreview; command: ReturnType<typeof prepareSupplierBank> } |
@@ -22,7 +23,7 @@ type Review = { kind: 'propose'; preview: SupplierBankPreview; command: ReturnTy
 const path = '/procurement/supplier-banks', readPermission = 'supplier.bank.read', detailsPermission = 'supplier.bank.details.read', proposePermission = 'supplier.bank.propose', approvePermission = 'supplier.bank.approve';
 const blank = (): SupplierBankDetails => ({ bankCode: '', accountNumber: '', holderName: '', currency: 'IDR' });
 const states = { pending: 'Menunggu pemeriksaan', approved: 'Disetujui', rejected: 'Ditolak' } as const;
-const when = (value: string) => new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Jakarta' }).format(new Date(value)) + ' WIB';
+const when = (value: string) => dateTimeFormatter.format(new Date(value));
 function message(error: unknown) {
   if (error instanceof IdentityFailure) return 'Masuk kembali dengan akun yang memiliki penugasan rekening pemasok.';
   if (error instanceof AccessFailure || error instanceof RequestNotSentError) {

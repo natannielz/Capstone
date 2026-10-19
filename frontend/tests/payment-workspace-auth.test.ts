@@ -1,3 +1,4 @@
+import * as displayFormat from '../src/lib/format';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import * as React from 'react';
@@ -106,6 +107,7 @@ function mountPayment(replies: {save?: () => Response; recoverDraft?: () => Resp
     if (name === './payment-pdf-supplement-client') return {...supplements, createPaymentSupplementGateway: () => ({})};
     if (name === './payment-pdf-supplement-recovery') return supplementRecovery;
     if (name === './payment-pdf-supplement-recovery-adapter') return supplementAdapter;
+    if (name === '@/lib/format') return displayFormat;
     throw new Error('Unexpected mounted payment import: ' + name);
   };
   function load(file: string) {

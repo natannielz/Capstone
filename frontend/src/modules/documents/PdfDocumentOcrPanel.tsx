@@ -6,6 +6,7 @@ import styles from '@/modules/documents/pdf-document-ocr.module.css';
 import { parsePdfDocumentOcr, pdfDocumentOcrOwnerKey, selectPdfDocumentObservation,
   type PdfDocumentOcrCandidate, type PdfDocumentOcrOwner, type PdfDocumentOcrPage,
   type PdfDocumentOcrView, type PdfDocumentObservationSelection } from './pdf-document-ocr-client';
+import { dateTimeFormatter } from '@/lib/format';
 
 const labels: Record<PdfDocumentOcrCandidate['field'], string> = {amount: 'Jumlah transfer', currency: 'Mata uang', transfer_date: 'Tanggal transfer',
   transfer_time: 'Waktu transfer', recipient: 'Penerima', account: 'Rekening tujuan', bank: 'Bank tujuan', reference: 'Referensi bank',
@@ -106,7 +107,7 @@ function CompleteResult({view, props}: {view: PdfDocumentOcrView; props: PdfDocu
     <details className={styles.lines}><summary>Identitas hasil dan pembacaan</summary><dl className={common.facts}>
       <div><dt>Hasil OCR</dt><dd>{result.id}</dd></div><div><dt>Hash hasil</dt><dd>{result.resultHash}</dd></div>
       <div><dt>Bukti asli dan versi</dt><dd>{view.evidence.id} · {view.evidence.version}</dd></div><div><dt>Hash bukti asli</dt><dd>{view.evidence.sha256}</dd></div>
-      <div><dt>Waktu pembacaan (WIB)</dt><dd>{new Intl.DateTimeFormat('id-ID', {timeZone: 'Asia/Jakarta', dateStyle: 'medium', timeStyle: 'short'}).format(new Date(result.extractedAt))}</dd></div>
+      <div><dt>Waktu pembacaan</dt><dd>{dateTimeFormatter.format(new Date(result.extractedAt))}</dd></div>
       <div><dt>Model pembacaan</dt><dd>{result.ocrProvenance.modelVersion}</dd></div><div><dt>Rasterisasi</dt><dd>{result.rasterProvenance.pipeline}</dd></div>
       <div><dt>Versi sumber</dt><dd>{view.sourceRevision}</dd></div></dl></details></>;
 }

@@ -1,11 +1,12 @@
 import type { SupplierClaimCapacity, SupplierClaimPreview, SupplierClaimInspections, SupplierClaimOrder } from './supplier-claim-client';
 import styles from '../administration/access.module.css';
+import { dateTimeFormatter } from '@/lib/format';
 
 export const claimStates = { requested: 'Menunggu keputusan internal', approved_pending_supplier_action: 'Disetujui internal · menunggu tindak lanjut pemasok', rejected_quarantined: 'Ditolak internal · barang tetap ditahan' } as const;
 export const claimIssues = { damaged: 'Rusak', expired: 'Kedaluwarsa', opened: 'Terbuka', wrong_item: 'Barang tidak sesuai', shortage: 'Kekurangan barang', other: 'Masalah lain' } as const;
 export const claimResolutions = { replacement: 'Penggantian barang', credit: 'Kredit pemasok', cash_refund: 'Pengembalian uang', investigation: 'Pemeriksaan lebih lanjut' } as const;
 export const claimBases = { physical_received: 'Barang diterima fisik', shortage_observed: 'Kekurangan teramati' } as const;
-export const claimWhen = (value: string) => new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Jakarta' }).format(new Date(value)) + ' WIB';
+export const claimWhen = (value: string) => dateTimeFormatter.format(new Date(value));
 export type ClaimRow = { key: string; source: string; basis: string; issue: string; packages: string; invoice: string; invoiceMatch: string };
 export const blankClaimRow = (): ClaimRow => ({ key: crypto.randomUUID(), source: '', basis: '', issue: '', packages: '', invoice: '', invoiceMatch: '' });
 const unknown = (value: string | number | null) => value === null ? 'Belum diketahui' : String(value);

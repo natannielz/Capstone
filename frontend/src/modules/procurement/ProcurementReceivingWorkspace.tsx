@@ -15,13 +15,14 @@ import { procurementLocationKey, type ProcurementTarget } from './procurement-re
 import { createProcurementReceivingGateway, receivingBusinessDate, receivingNoticeInput, receivingIntakeInput, prepareReceivingNotice, prepareReceivingIntake,
   type ReceivingOrder, type ReceivingOrders, type ReceivingNotice, type ReceivingNotices, type ReceivingRead, type ReceivingCapacity, type ReceivingReceiptPage, type ReceivingIntakeInput, type ReceivingNoticePreview, type ReceivingIntakePreview } from './procurement-receiving-client';
 import styles from '../administration/access.module.css';
+import { dateTimeFormatter } from '@/lib/format';
 
 type Account = { actorId: string; actions: readonly string[]; session: IdentitySession; observedAt: number };
 type Review = { kind: 'notice'; preview: ReceivingNoticePreview; command: ReturnType<typeof prepareReceivingNotice> } | { kind: 'intake'; preview: ReceivingIntakePreview; command: ReturnType<typeof prepareReceivingIntake> };
 const path = '/procurement/receiving', readPermission = 'procurement.read', noticePermission = 'procurement.prepare', intakePermission = 'procurement.container.receive';
 const routes = { omi_regular: 'OMI reguler', ddo: 'DDO', smart: 'S-Mart', pasar_kering: 'Pasar Kering' } as const;
 const conditions = { intact: 'Utuh', opened: 'Terbuka', damaged: 'Rusak', mixed: 'Kondisi campuran', unverified: 'Belum dapat dipastikan' } as const;
-const when = (value: string) => new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Jakarta' }).format(new Date(value)) + ' WIB';
+const when = (value: string) => dateTimeFormatter.format(new Date(value));
 function message(error: unknown) {
   if (error instanceof IdentityFailure) return 'Masuk kembali dengan akun yang ditugaskan untuk penerimaan pengadaan.';
   if (error instanceof AccessFailure || error instanceof RequestNotSentError) {

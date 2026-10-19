@@ -8,6 +8,7 @@ import type { AfterSalesCase } from './case-client';
 import { canVerifyRefundSettlement, createRefundSettlementGateway, prepareRefundSettlement,
   type RefundSettlementPreview, type RefundSettlementView } from './refund-settlement-client';
 import styles from '../administration/access.module.css';
+import { formatDateTime } from '@/lib/format';
 
 type Props = { actorId: string; owner: AfterSalesCase; actions: readonly string[]; fresh: boolean; locked: boolean; current: () => boolean; freshCurrent: () => boolean;
   journal: OperationJournal; onSettled: () => void; onDenied: (failure: unknown) => void; onBusyChange: (busy: boolean) => void };
@@ -60,7 +61,7 @@ export function RefundSettlementPanel({ actorId, owner, actions, fresh, locked, 
       <p>Tanggal transfer tercatat {view.transferDate} · Referensi {view.transferReference}</p>
       {view.settlement ? <section aria-label="Hasil verifikasi debit refund"><h4 ref={heading} tabIndex={-1}>Debit bank refund terverifikasi</h4>
         <p role="status">Pembayaran refund {rupiah(view.settlement.amount)} telah dicocokkan dengan debit bank secara independen.</p>
-        <p>Verifikasi {view.settlement.settlementId} · {new Date(view.settlement.recordedAt).toLocaleString('id-ID')}</p>
+        <p>Verifikasi {view.settlement.settlementId} · {formatDateTime(view.settlement.recordedAt)}</p>
         <ul>{view.settlement.receipts.map(row => <li key={row.receiptId}>Penerimaan bank {row.receiptId}: refund dibayar {rupiah(row.paid)}, masih disisihkan {rupiah(row.pending)}, dana tersedia {rupiah(row.available)}.</li>)}</ul>
       </section> : <><p role="status">Bukti refund telah dicatat; pembayaran belum diverifikasi.</p><p>{view.candidateInstructions}</p>
         <Link href="/billing/bank-statements">Periksa impor mutasi bank</Link>

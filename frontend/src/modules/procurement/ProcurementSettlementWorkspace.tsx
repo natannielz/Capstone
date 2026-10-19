@@ -16,12 +16,13 @@ import { createProcurementSettlementGateway, prepareProcurementSettlement, procu
   type ProcurementSettlementChoices, type ProcurementSettlementRead, type ProcurementSettlementDisbursement, type ProcurementSettlementOptions,
   type ProcurementSettlementPolicy, type ProcurementSettlementImports, type ProcurementSettlementDebits, type ProcurementSettlementPreview, type ProcurementSettlementHistory } from './procurement-settlement-client';
 import styles from '../administration/access.module.css';
+import { dateTimeFormatter } from '@/lib/format';
 
 type Account = { actorId: string; actions: readonly string[]; session: IdentitySession; observedAt: number };
 type Review = { preview: ProcurementSettlementPreview; command: ReturnType<typeof prepareProcurementSettlement>; importName: string; importProfile: string };
 const path = '/procurement/settlements', readPermission = 'procurement.settlement.read', evidencePermission = 'procurement.disbursement.evidence.read', verifyPermission = 'disbursement.verify';
 const sourcePermissions = ['procurement.disbursement.read', 'supplier.bank.read', 'supplier.bank.details.read', 'bank.receipt.read', 'bank.statement.read', 'receiving.account.read', 'receiving.account.details.read'] as const;
-const when = (value: string) => new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Jakarta' }).format(new Date(value)) + ' WIB';
+const when = (value: string) => dateTimeFormatter.format(new Date(value));
 const amount = (value: string) => orderAmount('IDR', value);
 const routes = { omi_regular: 'OMI reguler', ddo: 'DDO', smart: 'S-Mart', pasar_kering: 'Pasar Kering' } as const;
 const issues = { missing_identity: 'Identitas transaksi belum tersedia', duplicate_identity: 'Identitas transaksi berulang', already_claimed: 'Sudah digunakan untuk pencatatan lain', amount_mismatch: 'Nominal berbeda', date_mismatch: 'Tanggal di luar rentang transfer' } as const;

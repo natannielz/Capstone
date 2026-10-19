@@ -1,3 +1,4 @@
+import * as displayFormat from '../src/lib/format';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import * as React from 'react';
@@ -85,6 +86,7 @@ function mountCatalog(context: ReturnType<typeof browser>, returnPath: '/shop' |
     if (name === './catalog-history') return history;
     if (name === './CatalogBuyerPhoto') return {CatalogBuyerPhoto: marker};
     if (name === '../ordering/OrderQuotePanel') return {OrderQuotePanel: marker};
+    if (name === '@/lib/format') return displayFormat;
     throw new Error('Unexpected mounted catalog import: ' + name);
   };
   const code = ts.transpileModule(readFileSync(resolve('src/modules/catalog/BuyerCatalog.tsx'), 'utf8'), {compilerOptions: {module: ts.ModuleKind.CommonJS,

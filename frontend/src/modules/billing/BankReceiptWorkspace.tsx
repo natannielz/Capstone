@@ -15,10 +15,11 @@ import { createBankReceiptGateway, prepareBankReceipt, type BankReceiptCommand, 
 import common from '../administration/access.module.css';
 import styles from './invoice.module.css';
 import sheet from './bank-statement.module.css';
+import { dateTimeFormatter } from '@/lib/format';
 
 type Account = { actorId: string; actions: readonly string[]; session: IdentitySession; observedAt: number };
 const rupiah = (value: string) => orderAmount('IDR', value);
-const at = (value: string) => new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Jakarta' }).format(new Date(value));
+const at = (value: string) => dateTimeFormatter.format(new Date(value));
 function message(error: unknown) {
   if (error instanceof IdentityFailure) return 'Masuk kembali untuk memeriksa penerimaan bank.';
   if (error instanceof AccessFailure) {

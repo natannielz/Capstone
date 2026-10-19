@@ -12,13 +12,13 @@ import {accountingReportBookKey, createAccountingReportGateway, formatAccounting
   type AccountingReportBook, type AccountingReportSnapshot} from './accounting-report-client';
 import common from '../administration/access.module.css';
 import styles from './reporting.module.css';
+import { dateTimeFormatter, jakartaDateKey } from "@/lib/format";
 
 type Account = {actorId: string; session: IdentitySession; observedAt: number};
 const path = '/reporting/accounts', pageSize = 20;
-const when = (value: string) => new Intl.DateTimeFormat('id-ID', {dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Jakarta'}).format(new Date(value)) + ' WIB';
+const when = (value: string) => dateTimeFormatter.format(new Date(value));
 function todayInJakarta(): string {
-  const values = new Intl.DateTimeFormat('en-CA', {timeZone: 'Asia/Jakarta', year: 'numeric', month: '2-digit', day: '2-digit'}).formatToParts(new Date());
-  return ['year', 'month', 'day'].map(part => values.find(value => value.type === part)!.value).join('-');
+  return jakartaDateKey(new Date());
 }
 function message(error: unknown): string {
   if (error instanceof IdentityFailure) return 'Sesi terverifikasi belum tersedia. Masuk kembali untuk memeriksa laporan dalam cakupan Anda.';

@@ -90,7 +90,7 @@
 .workspace .data-table td small { color: var(--work-muted); font-size: 12px; line-height: 1.65; }
 .workspace .data-table :is(th,td).numeric { text-align: right; font-variant-numeric: tabular-nums; }
 .workspace .data-table tr:hover td { background: #f7faf9; }
-.workspace .status-badge { font-weight: 600 !important; border-radius: 4px !important; }
+
 .workspace :is(.ops-facts dd,.detail-totals b,.metric-card > strong,.invoice-mobile dd,.catalog-card-price,.basket-total strong) { font-variant-numeric: tabular-nums; }
 .workspace :is(.row-actions,.ops-row-actions,.delivery-actions) { gap: 8px; align-items: center; }
 .workspace .row-actions [data-slot=button] { min-height: 40px; white-space: normal; text-align: left; line-height: 1.45; }

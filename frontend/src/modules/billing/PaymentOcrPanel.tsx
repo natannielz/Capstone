@@ -1,6 +1,7 @@
 import type { PaymentOcrView } from './payment-client';
 import common from '../administration/access.module.css';
 import styles from './invoice.module.css';
+import { dateTimeFormatter, formatPercent } from "@/lib/format";
 
 const labels = { amount: 'Jumlah transfer', currency: 'Mata uang', transfer_date: 'Tanggal transfer', transfer_time: 'Waktu transfer', recipient: 'Penerima', account: 'Rekening tujuan', bank: 'Bank tujuan', reference: 'Referensi bank' };
 const flags: Record<string, string> = { unknown: 'Belum terbaca', ambiguous: 'Lebih dari satu kemungkinan', low_confidence: 'Perlu pemeriksaan ulang', unparsed: 'Format belum dikenali', masked: 'Nomor tersamarkan', timezone_unverified: 'Zona waktu belum dipastikan', no_text: 'Tidak ada teks yang terbaca', amount_unknown: 'Jumlah transfer belum diketahui', touches_image_edge: 'Periksa tepi gambar', ambiguous_fields: 'Ada data yang ambigu' };
@@ -13,9 +14,9 @@ export function PaymentOcrPanel({ view, locked, onRefresh }: { view: PaymentOcrV
     <button className={common.secondary} disabled={locked} onClick={onRefresh}>Muat hasil OCR</button>
     {view?.result && <><p>{view.result.qualityFlags.map(flag => flags[flag]).join(' · ') || 'Periksa kembali semua saran terhadap bukti asli.'}</p>
       <dl className={styles.facts}>{view.result.fields.map(field => <div key={field.field}><dt>{labels[field.field]}</dt><dd><span>{field.value ?? 'Belum diketahui'}</span>
-        {field.confidence !== null && <p>Keyakinan pembacaan: {new Intl.NumberFormat('id-ID', { style: 'percent', maximumFractionDigits: 1 }).format(Number(field.confidence))}</p>}
+        {field.confidence !== null && <p>Keyakinan pembacaan: {formatPercent(Number(field.confidence), 1)}</p>}
         {field.flags.length > 0 && <p>{field.flags.map(flag => flags[flag]).join(' · ')}</p>}</dd></div>)}</dl>
-      <details><summary>Riwayat pembacaan</summary><p>Hasil {view.result.id} · {new Intl.DateTimeFormat('id-ID', { timeZone: 'Asia/Jakarta', dateStyle: 'medium', timeStyle: 'short' }).format(new Date(view.result.extractedAt))} WIB</p>
+      <details><summary>Riwayat pembacaan</summary><p>Hasil {view.result.id} · {dateTimeFormatter.format(new Date(view.result.extractedAt))}</p>
         <p>Versi model: {view.result.provenance.modelVersion}</p></details></>}
   </section>;
 }

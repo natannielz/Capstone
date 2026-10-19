@@ -15,10 +15,11 @@ import { createSpendingPolicyGateway, spendingPolicyInput, spendingPolicyThresho
   type SpendingPolicyRule, type SpendingPolicyChoice, type SpendingPolicyCurrent, type SpendingPolicyProposal, type SpendingPolicyPreview,
   type SpendingPolicyDecisionPreview, type SpendingPolicyDecision } from './order-spending-policy-client';
 import styles from '../administration/access.module.css';
+import { dateTimeFormatter } from '@/lib/format';
 
 type Account = { actorId: string; actions: readonly string[]; session: IdentitySession; observedAt: number };
 const path = '/ordering/spending-policies', readPermission = 'order.spending.policy.read', proposePermission = 'order.spending.policy.propose', approvePermission = 'order.spending.policy.approve';
-const when = (value: string) => new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Jakarta' }).format(new Date(value)) + ' WIB';
+const when = (value: string) => dateTimeFormatter.format(new Date(value));
 const status = { pending: 'Menunggu pemeriksaan', approved: 'Disetujui', rejected: 'Ditolak' } as const;
 function message(error: unknown) {
   if (error instanceof IdentityFailure) return 'Sesi belum tersedia. Masuk kembali untuk memeriksa aturan belanja.';

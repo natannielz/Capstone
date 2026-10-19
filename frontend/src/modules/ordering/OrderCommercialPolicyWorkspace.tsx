@@ -16,10 +16,11 @@ import { createCommercialPolicyGateway, commercialPolicyInput, prepareCommercial
   type CommercialPolicyDecisionPreview, type CommercialPolicyDecision, type CommercialPolicySeller as CommercialPolicySellerChoice } from './order-commercial-policy-client';
 import { CommercialPolicyForm, type CommercialPolicyFormValue } from './CommercialPolicyForm';
 import styles from '../administration/access.module.css';
+import { dateTimeFormatter } from '@/lib/format';
 
 type Account = { actorId: string; actions: readonly string[]; session: IdentitySession; observedAt: number };
 const path = '/ordering/commercial-policies', readPermission = 'order.commercial.policy.read', proposePermission = 'order.commercial.policy.propose', approvePermission = 'order.commercial.policy.approve';
-const when = (value: string) => new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Jakarta' }).format(new Date(value)) + ' WIB';
+const when = (value: string) => dateTimeFormatter.format(new Date(value));
 const status = { pending: 'Menunggu pemeriksaan', approved: 'Disetujui', rejected: 'Ditolak' } as const;
 function message(error: unknown) {
   if (error instanceof IdentityFailure) return 'Sesi belum tersedia. Masuk kembali untuk memeriksa aturan komersial.';

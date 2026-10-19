@@ -11,6 +11,7 @@ import { orderAmount } from '../ordering/order-quote-client';
 import type { PaymentDraft } from './payment-client';
 import styles from '../administration/access.module.css';
 import invoice from './invoice.module.css';
+import { dateTimeFormatter } from '@/lib/format';
 
 const labels: Record<string, string> = { amount: 'Nominal', currency: 'Mata uang', transfer_date: 'Tanggal transfer dan pembukuan', transfer_time: 'Waktu dan zona transfer', recipient: 'Nama penerima', account: 'Rekening tujuan', bank: 'Nama atau kode bank', reference: 'Referensi transfer' };
 function message(error: unknown) {
@@ -67,7 +68,7 @@ export function PaymentVerificationPanel({ actorId, owner, allowed, allocationAl
     {saved ? <section className={styles.state} aria-label="Hasil verifikasi pembayaran"><h4>Pembayaran terverifikasi</h4>
       <p>Penerimaan bank {saved.result.receiptId} · Pemeriksaan versi {saved.result.reviewRevision} · Verifikator {saved.verifiedBy}</p>
       <p>Sumber pemeriksaan: {saved.reviewSource === 'manual' ? 'Pengecualian OCR dengan pemeriksaan manual' : 'Hasil OCR dan koreksi petugas'}</p>
-      <p>{new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Jakarta' }).format(new Date(saved.result.recordedAt))}</p>
+      <p>{dateTimeFormatter.format(new Date(saved.result.recordedAt))}</p>
       <p>Referensi pemeriksaan pembayar: {saved.payerVerificationReference}</p><p>Alasan: {saved.reason}</p>
       <ul>{saved.resolutions.map(item => <li key={item.field}>{labels[item.field]}: {item.reason}</li>)}</ul>
       <p>Pengaitan menetapkan pemilik dana. Periksa saldo dan alokasi invoice melalui bagian di bawah ini.</p>

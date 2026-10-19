@@ -7,6 +7,7 @@ import { invitationDates, invitationRole, invitationScopeOptions, invitationScop
 import { permissionLabel } from "../administration/permission-labels";
 import { rolePermissionSuggestions } from "../administration/role-permission-suggestions";
 import styles from "../administration/access.module.css";
+import { dateTimeFormatter } from "@/lib/format";
 
 type Schemas = components["schemas"];
 type Proposal = Schemas["IdentityInvitationProposalDto"];
@@ -48,7 +49,7 @@ export function InvitationProposalForm({current,catalog,locked,onSubmit,labels}:
     setBusy(true);
     try{await onSubmit(candidate);reset();}catch{/* The parent owns request errors and recovery; preserve the reviewed draft. */}finally{setBusy(false);}
   };
-  const dateLabel=(value:string)=>new Intl.DateTimeFormat("id-ID",{dateStyle:"medium",timeStyle:"short",timeZone:"Asia/Jakarta"}).format(new Date(value));
+  const dateLabel=(value:string)=>dateTimeFormatter.format(new Date(value));
 
   return <form className={styles.form} onSubmit={event=>{void submit(event);}} aria-label="Usulkan undangan akun">
     <h2>Usulkan undangan akun</h2>

@@ -8,8 +8,9 @@ import {OperationJournal, type OperationReference} from '../administration/opera
 import {createAccountContactGateway, createAccountContactWorkflow, prepareAccountContact,
   type AccountContactCurrent, type AccountContactGateway, type AccountContactHistory} from './account-contact-client';
 import styles from './identity.module.css';
+import { dateTimeFormatter } from '@/lib/format';
 
-const displayTime = (value: string) => new Intl.DateTimeFormat('id-ID', {dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Jakarta'}).format(new Date(value)) + ' WIB';
+const displayTime = (value: string) => dateTimeFormatter.format(new Date(value));
 const emptyFields = {name: '', phone: '', position: '', address: ''};
 function message(error: unknown): string {
   if (error instanceof AccessFailure || error instanceof RequestNotSentError) {

@@ -17,6 +17,7 @@ import { PolicyConfigurationFacts } from './StockSourcePolicyForms';
 import type { ActivationCommand, ActivationDetail, ActivationHandoff, ActivationPreview } from './stock-source-activation-workflow';
 import common from '../administration/access.module.css';
 import styles from './stock-source-policy.module.css';
+import { formatDateTime } from '@/lib/format';
 
 const path = '/inventory/sources/activations';
 const loginHref = '/identity/login?returnPath=' + encodeURIComponent(path);
@@ -24,7 +25,7 @@ const factorHref = '/identity/account?operation=stock.source.approve&returnPath=
 const status = { proposed: 'Menunggu peninjauan', activated: 'Aktivasi disetujui', rejected: 'Ditolak' };
 const domainNames: Record<string, string> = { Orders: 'Pesanan', Reservations: 'Alokasi pesanan', Fulfillment: 'Pengiriman', Procurement: 'Pengadaan',
   AfterSales: 'Purnajual', SourceReconciliation: 'Rekonsiliasi sumber', InventoryOperations: 'Pemeriksaan persediaan' };
-const time = (value: string) => new Date(value).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' }) + ' WIB';
+const time = (value: string) => formatDateTime(value);
 type Loaded = { actorId: string; actions: string[]; session: IdentitySession; observedAt: number; generation: number };
 const lostSession = (error: unknown) => (error instanceof AccessFailure || error instanceof IdentityFailure) && (error.status === 401 || error.code === 'actor_changed');
 function message(error: unknown) {

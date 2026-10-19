@@ -1,6 +1,7 @@
 import {z} from 'zod';
 import {fetchCsrfToken, RequestNotSentError} from '../../api/client';
 import {AccessFailure} from '../administration/workflow';
+import { formatMoney } from "@/lib/format";
 
 export const accountingReportPurpose = 'accounting-reporting' as const;
 export const accountingReportLimits = Object.freeze({books: 128, journals: 500, lines: 10_000, accounts: 2_000, charts: 64, csvBytes: 8 * 1024 * 1024});
@@ -47,8 +48,7 @@ export function accountingReportDate(value: string): string {
 /** Formatting uses the server amount directly, with no floating-point conversion or calculated report totals. */
 export function formatAccountingReportMoney(value: string, currency: string): string {
   const amount = parse(signedMoney, value), currencyCode = parse(bookKey.shape.currency, currency);
-  const negative = amount.startsWith('-'), [whole, fraction] = (negative ? amount.slice(1) : amount).split('.');
-  return `${currencyCode === 'IDR' ? 'Rp' : currencyCode} ${negative ? '-' : ''}${whole.replace(/\B(?=(\d{3})+(?!\d))/gu, '.')},${fraction}`;
+  return formatMoney(currencyCode, amount);
 }
 export function parseAccountingReportSnapshot(value: unknown, expectedBook: AccountingReportBook, expectedDate: string): AccountingReportSnapshot {
   const result = parse(snapshot, value), owner = parse(book, expectedBook), endDate = accountingReportDate(expectedDate);

@@ -6,12 +6,13 @@ import {AccessFailure} from '../administration/workflow';
 import {arrivalUtc, createPurchaseArrivalGateway, type PurchaseArrivalPending, type PurchaseArrivalPreview, type PurchaseArrivalView} from './purchase-arrival-client';
 import {arrivalJournalPrefix, PurchaseArrivalJournal} from './purchase-arrival-journal';
 import styles from '../administration/access.module.css';
+import { dateTimeFormatter } from '@/lib/format';
 
 type Line = {skuId: string; definitionId: string; skuCode: string; familyName: string; packageLabel: string};
 type Props = {actorId: string; order: {id: string; lines: readonly Line[]} | null; canPrepare: boolean; canApprove: boolean;
   fresh: boolean; isCurrent: () => boolean; disabled: boolean; onLocked: (value: boolean) => void; onDenied: (error: unknown) => void};
 const when = (value: string | null) => value === null ? 'Belum ada waktu kedatangan yang dapat digunakan.'
-  : new Intl.DateTimeFormat('id-ID', {dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Jakarta'}).format(new Date(value)) + ' WIB';
+  : dateTimeFormatter.format(new Date(value));
 const states = {unrecorded: 'Belum dicatat', pending: 'Menunggu pemeriksaan', approved: 'Disetujui', rejected: 'Ditolak'};
 function message(error: unknown) {
   if (error instanceof AccessFailure || error instanceof RequestNotSentError) {

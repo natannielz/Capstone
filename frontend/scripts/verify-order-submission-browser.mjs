@@ -93,7 +93,7 @@ try {
   await page.goto(origin.origin + '/ordering/checkout?draft=' + config.draftId);
   await page.getByRole('button', { name: 'Tinjau pesanan dan biaya', exact: true }).click();
   const review = page.getByRole('region', { name: 'Rincian pesanan', exact: true }); await review.waitFor();
-  assert.match(await review.innerText(), /2 Dus · 24 piece/); assert.match(await review.innerText(), /Total pesanan: IDR 25\.500,50/);
+  assert.match(await review.innerText(), /2 Dus · 24 piece/); assert.match(await review.innerText(), /Total pesanan: Rp25\.500,50/);
   assert.equal(await review.evaluate(element => element === document.activeElement), true);
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
   await captureCheckout(page, 'checkout');
@@ -133,7 +133,7 @@ try {
   const approver = await user(config.approverToken); await approver.page.goto(origin.origin + '/ordering/reviews');
   await approver.page.getByRole('button', { name: 'Tinjau pesanan ' + orderId, exact: true }).click();
   const branchReview = approver.page.getByRole('region', { name: 'Tinjauan keputusan', exact: true }); await branchReview.waitFor();
-  assert.match(await branchReview.innerText(), /Total belanja: IDR 25\.500,50/);
+  assert.match(await branchReview.innerText(), /Total belanja: Rp25\.500,50/);
   assert.equal(await branchReview.evaluate(element => element === document.activeElement), true);
   await branchReview.getByLabel('Catatan peninjauan').fill('Peninjauan kebutuhan dan biaya fixture');
   await branchReview.getByRole('button', { name: 'Setujui belanja', exact: true }).click();

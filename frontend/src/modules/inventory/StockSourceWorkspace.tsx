@@ -14,6 +14,7 @@ import { StockSourceEditor } from "./stock-source-editor-state";
 import { sourceActor, sourceLocationKey, sourceAgeSeconds, type SourceCommand, type SourceDecision, type SourceDetail, type SourceDraft } from "./stock-source-workflow";
 import common from "../administration/access.module.css";
 import styles from "./stock-source.module.css";
+import { formatDateTime, numberFormatter } from "@/lib/format";
 
 const path = "/inventory/sources";
 const loginHref = "/identity/login?returnPath=" + encodeURIComponent(path);
@@ -22,7 +23,7 @@ type Loaded = { actorId: string; actions: string[]; session: IdentitySession; ob
 const statusLabel = { proposed: "Menunggu peninjauan", approved: "Disetujui · belum aktif", rejected: "Ditolak", withdrawn: "Ditarik" };
 const modeLabel: Record<string, string> = { webLedger: "Catatan stok web", externalLedger: "Catatan stok sistem lain" };
 const controlLabel: Record<string, string> = { exclusiveWebAllocation: "Alokasi khusus web", sharedWebLedger: "Catatan bersama pada web", externalHold: "Pemesanan ditahan di sistem lain" };
-const amount = (value: string) => new Intl.NumberFormat("id-ID").format(BigInt(value));
+const amount = (value: string) => numberFormatter.format(BigInt(value));
 function message(error: unknown) {
   if (error instanceof IdentityFailure) return identityMessage(error);
   if (error instanceof AccessFailure) {
@@ -164,7 +165,7 @@ function SourceDesk({ loaded, onRefresh }: { loaded: Loaded; onRefresh: () => Pr
             <span>Halaman {Math.floor(state.historyOffset / 25) + 1}</span><button type="button" className={common.secondary} disabled={editor.selectionLocked || state.historyOffset >= 10000 || BigInt(state.historyOffset + 25) >= BigInt(state.history.total)} onClick={() => void editor.loadHistory(state.historyOffset + 25)}>Berikutnya</button></div></>}
       </section><section className={common.detail} aria-busy={state.loadingDetail}><div className={common.form}>
         {state.loadingDetail ? <p role="status">Memeriksa pengajuan terbaru…</p> : state.selected ? <><h2>{state.selected.label}</h2><p className={styles.badge}>{statusLabel[state.selected.status]}</p>
-          <SourceFacts value={state.selected} /><p className={common.help}>Diajukan {new Date(state.selected.proposedAt).toLocaleString("id-ID", { timeZone: "Asia/Jakarta" })} WIB. Referensi {state.selected.id}.</p>
+          <SourceFacts value={state.selected} /><p className={common.help}>Diajukan {formatDateTime(state.selected.proposedAt)}. Referensi {state.selected.id}.</p>
           {state.selected.decision && <section><h3>Keputusan tercatat</h3><p>{state.selected.decision.reviewReference}</p><p className={common.preserve}>{state.selected.decision.reason}</p></section>}
           {state.selected.status === "proposed" && (editor.canPropose || editor.canApprove) && <DecisionForm key={state.selected.id + ":" + state.mode} disabled={locked} canPropose={editor.canPropose} canApprove={editor.canApprove}
             onReview={(decision, reference, reason) => editor.reviewDecision(decision, reference, reason)} />}</> : <><h2>Pilih pengajuan</h2><p>Pengaturan terbaru akan dimuat sebelum Anda memeriksa atau mengambil keputusan.</p></>}

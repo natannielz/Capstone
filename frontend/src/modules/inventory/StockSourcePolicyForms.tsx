@@ -7,12 +7,13 @@ import { sourceAgeSeconds } from "./stock-source-workflow";
 import { RevisionFacts } from "./StockSourceRevisionForms";
 import common from "../administration/access.module.css";
 import styles from "./stock-source-policy.module.css";
+import { formatDateTime } from "@/lib/format";
 
 type Wire = components["schemas"];
 export const policyStatus = { proposed: "Menunggu peninjauan", approved: "Disetujui", rejected: "Ditolak", withdrawn: "Ditarik" };
 export const policyActionLabel = { "stock.source.policy.propose": "Kirim pengajuan", "stock.source.policy.approve": "Setujui kebijakan",
   "stock.source.policy.reject": "Tolak pengajuan", "stock.source.policy.withdraw": "Tarik pengajuan saya" };
-const time = (value: string) => new Date(value).toLocaleString("id-ID", { timeZone: "Asia/Jakarta" }) + " WIB";
+const time = (value: string) => formatDateTime(value);
 
 export function PolicyConfigurationFacts({ configuration }: { configuration: Wire["StockSourcePolicyConfigurationDto"] }) {
   const owner = configuration.settings.location;

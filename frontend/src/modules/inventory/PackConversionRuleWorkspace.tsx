@@ -16,10 +16,11 @@ import { packActor, type PackCommand, type PackPreview, type PackInput, type Pac
 import { stockLocationKey, type StockPackageChoice } from './stock-count-workflow';
 import common from '../administration/access.module.css';
 import styles from './stock-count.module.css';
+import { formatDateTime, numberFormatter } from '@/lib/format';
 
 const path = '/inventory/pack-conversions', loginHref = '/identity/login?returnPath=' + encodeURIComponent(path);
 type Loaded = { actorId: string; actions: string[]; session: IdentitySession; observedAt: number; generation: number };
-const format = new Intl.NumberFormat('id-ID'), amount = (value: number | string) => format.format(typeof value === 'string' ? BigInt(value) : value);
+const format = numberFormatter, amount = (value: number | string) => format.format(typeof value === 'string' ? BigInt(value) : value);
 const statusLabel = { pending: 'Menunggu peninjauan', approved: 'Disetujui sebagai aturan', rejected: 'Ditolak' };
 function message(error: unknown) {
   if (error instanceof RequestNotSentError) return accessMessage(error);
@@ -156,7 +157,7 @@ function RuleDesk({ loaded, onRefresh }: { loaded: Loaded; onRefresh: () => Prom
     {state.warehouse && state.mode === 'rules' && <section className={common.accountSection} aria-labelledby='pack-rules-heading'><div className={styles.headingRow}><h2 id='pack-rules-heading'>Aturan disetujui</h2>
       <button type='button' className={common.secondary} disabled={locked || state.loadingRules} onClick={() => void editor.loadRules()}>Muat ulang aturan</button></div>
       {state.loadingRules ? <p role='status'>Memuat aturan…</p> : <><ul className={styles.history}>{state.rules.items.map(rule => <li key={rule.id}><h3>Aturan {rule.id}, versi {rule.version}</h3>
-        <RatioFacts input={rule.input} source={rule.source} destination={rule.destination} /><p>Disetujui <time dateTime={rule.approvedAt}>{new Date(rule.approvedAt).toLocaleString('id-ID')}</time>.</p>
+        <RatioFacts input={rule.input} source={rule.source} destination={rule.destination} /><p>Disetujui <time dateTime={rule.approvedAt}>{formatDateTime(rule.approvedAt)}</time>.</p>
         <p className={common.help}>Referensi pengajuan {rule.proposalId}; keputusan {rule.decisionId}. Pelaksanaan tersedia melalui Pelaksanaan buka kemasan.</p></li>)}</ul>
         {!state.rules.items.length && <p className={common.empty}>Belum ada aturan disetujui pada halaman lokasi ini.</p>}
         <CursorButtons previous={state.ruleCursor} next={state.rules.next} disabled={locked} onPage={id => void editor.loadRules(id)} /></>}
@@ -194,10 +195,10 @@ function RatioFacts({ input, source, destination }: { input: PackInput; source: 
       Tujuan: SKU {destination.skuId}, revisi {destination.skuRevision}, definisi {destination.definitionId}, versi {destination.definitionVersion}.</p></details></>;
 }
 function PreviewFacts({ preview }: { preview: PackPreview }) { return <section className={styles.contents}><h3>Pratinjau aturan dari server</h3><RatioFacts {...preview} />
-  <p>Diperiksa <time dateTime={preview.observedAt}>{new Date(preview.observedAt).toLocaleString('id-ID')}</time>. Aturan belum diajukan; barang belum dikonversi.</p></section>; }
+  <p>Diperiksa <time dateTime={preview.observedAt}>{formatDateTime(preview.observedAt)}</time>. Aturan belum diajukan; barang belum dikonversi.</p></section>; }
 function ProposalFacts({ proposal }: { proposal: PackProposal }) { return <><RatioFacts {...proposal} /><p>Alasan pengajuan: {proposal.reason}</p>
-  <p>Diajukan <time dateTime={proposal.proposedAt}>{new Date(proposal.proposedAt).toLocaleString('id-ID')}</time>.</p>
-  {proposal.decision && <p>Keputusan {proposal.decision.id}: {proposal.decision.action === 'approve' ? 'persetujuan aturan' : 'penolakan'}, {new Date(proposal.decision.decidedAt).toLocaleString('id-ID')}.<br />Alasan: {proposal.decision.reason}</p>}</>; }
+  <p>Diajukan <time dateTime={proposal.proposedAt}>{formatDateTime(proposal.proposedAt)}</time>.</p>
+  {proposal.decision && <p>Keputusan {proposal.decision.id}: {proposal.decision.action === 'approve' ? 'persetujuan aturan' : 'penolakan'}, {formatDateTime(proposal.decision.decidedAt)}.<br />Alasan: {proposal.decision.reason}</p>}</>; }
 function CommandReview({ command, busy, onConfirm, onCancel }: { command: PackCommand; busy: boolean; onConfirm: () => void; onCancel: () => void }) {
   const [confirmed, setConfirmed] = useState(false), decision = 'proposalId' in command;
   const title = decision ? command.action === 'approve' ? 'Konfirmasi persetujuan aturan' : 'Konfirmasi penolakan pengajuan' : 'Konfirmasi pengajuan aturan';

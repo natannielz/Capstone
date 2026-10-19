@@ -9,9 +9,10 @@ import { createShipmentDocumentGateway } from './shipment-document-client';
 import { createReceiptGateway, type Receipt, type ReceiptChallenge } from './receipt-client';
 import { ReceiptProofPanel } from './ReceiptProofPanel';
 import common from '../administration/access.module.css';
+import { dateTimeFormatter } from '@/lib/format';
 
 export function ReceiptSummary({ receipt }: { receipt: Receipt }) {
-  return <section aria-label="Hasil penerimaan"><h3>Penerimaan tersimpan</h3><p>Dikonfirmasi oleh {receipt.recipientName} pada {new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Jakarta' }).format(new Date(receipt.recordedAt))} WIB.</p>
+  return <section aria-label="Hasil penerimaan"><h3>Penerimaan tersimpan</h3><p>Dikonfirmasi oleh {receipt.recipientName} pada {dateTimeFormatter.format(new Date(receipt.recordedAt))}.</p>
     <p>{receipt.hasException ? 'Ada barang ditolak atau belum diterima. Perbedaan tercatat untuk tindak lanjut.' : 'Seluruh jumlah kiriman diterima.'}</p>
     <ul>{receipt.lines.map(line => <li key={line.skuId}>SKU {line.skuId}: diterima {line.acceptedBaseUnits}, ditolak {line.rejectedBaseUnits}, belum diterima {line.missingBaseUnits} satuan dasar.{line.exceptionReason && <p>{line.exceptionReason}</p>}</li>)}</ul></section>;
 }

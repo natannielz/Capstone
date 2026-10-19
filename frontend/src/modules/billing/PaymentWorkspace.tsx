@@ -21,11 +21,12 @@ import { PaymentSupplementRequesterPanel } from './PaymentSupplementPanels';
 import { createPaymentSupplementGateway, paymentSupplementOwner } from './payment-pdf-supplement-client';
 import { SupplementJournal, supplementKeyBinding, isSupplementOperation } from './payment-pdf-supplement-recovery';
 import { paymentSupplementReloadRecoveryAdapter } from './payment-pdf-supplement-recovery-adapter';
+import { dateTimeFormatter, jakartaDateKey, longDateFormatter } from "@/lib/format";
 
 type Account = { actorId: string; actions: readonly string[]; session: IdentitySession; observedAt: number };
 const rupiah = (value: string) => orderAmount('IDR', value);
-const transferDay = (value: string) => new Intl.DateTimeFormat('id-ID', { timeZone: 'Asia/Jakarta', day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(value + 'T00:00:00+07:00'));
-const dayAt = (time: number) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta', year: 'numeric', month: '2-digit', day: '2-digit' }).format(time);
+const transferDay = (value: string) => longDateFormatter.format(new Date(value + 'T00:00:00+07:00'));
+const dayAt = (time: number) => jakartaDateKey(time);
 const empty = (time: number): PaymentInput => ({ invoiceIds: [], declaredAmount: '', transferDate: dayAt(time), payerName: '', bankReference: null, note: null });
 function message(error: unknown) {
   if (error instanceof AccessFailure && ['evidence_storage_unavailable', 'evidence_policy_unavailable', 'payment_evidence_storage_unavailable'].includes(error.code)) return 'Penyimpanan bukti belum siap. Draf tetap tersimpan; hubungi penanggung jawab untuk mengaktifkan layanan bukti.';
@@ -252,7 +253,7 @@ function PaymentDesk({ account, now, fresh, onDenied }: { account: Account; now:
     {submitted && selected && <section className={common.accountSection} aria-label="Tindak lanjut pengajuan"><h2>Tindak lanjut pengajuan</h2>
       <button className={common.secondary} disabled={locked} onClick={() => void perform(async () => { setFollowUp(null); setReplacement(null); const result = await gateway.followUp(account.actorId, selected); if (current()) setFollowUp(result); })}>Muat tindak lanjut petugas</button>
       {followUp?.declarationId === selected.id && <><p role="status">{{ pending: 'Belum ada penanggung jawab tindak lanjut', assigned: 'Penanggung jawab tindak lanjut telah ditetapkan', rejected: 'Pengajuan bukti ditolak', replacement_requested: 'Petugas meminta bukti pengganti' }[followUp.state]}</p>
-        {followUp.recordedAt && <p>Diperbarui {new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Jakarta' }).format(new Date(followUp.recordedAt))}.</p>}
+        {followUp.recordedAt && <p>Diperbarui {dateTimeFormatter.format(new Date(followUp.recordedAt))}.</p>}
         {followUp.publicExplanation && <p>Penjelasan petugas: {followUp.publicExplanation}</p>}
         {['rejected', 'replacement_requested'].includes(followUp.state) && <p>Pengajuan ini telah ditutup untuk verifikasi baru. Data dan bukti aslinya tetap tersimpan.</p>}
         {followUp.notification.state !== 'not_applicable' && <p>Notifikasi aplikasi: {{ pending: 'Menunggu layanan', running: 'Sedang diproses', retry: 'Menunggu pengulangan layanan', failed: 'Belum tersedia; hubungi penanggung jawab tindak lanjut', available: 'Pemberitahuan tindak lanjut tersedia pada akun ini' }[followUp.notification.state]}. Status ini tidak menyatakan email terkirim atau dana diterima.</p>}

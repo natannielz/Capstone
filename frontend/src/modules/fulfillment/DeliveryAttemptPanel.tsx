@@ -6,8 +6,9 @@ import { type useOperationRecovery } from '../administration/OperationRecovery';
 import { submitTrackedRequest } from '../administration/operation-journal';
 import { createDeliveryAttemptGateway, deliveryOutcomes, jakartaVisitInput, jakartaVisitTime, prepareDeliveryAttempt, type DeliveryHistory, type DeliveryPreview } from './delivery-attempt-client';
 import common from '../administration/access.module.css';
+import { dateTimeFormatter } from '@/lib/format';
 
-export const visitTime = (value: string) => new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Jakarta' }).format(new Date(value));
+export const visitTime = (value: string) => dateTimeFormatter.format(new Date(value));
 function message(error: unknown) {
   if (error instanceof AccessFailure && ['invalid_delivery_attempt', 'invalid_delivery_attempt_time'].includes(error.code)) return 'Pilih hasil kunjungan, isi waktu sejak keberangkatan dan catatan hingga 1.000 karakter. Waktu tidak boleh melewati waktu saat ini atau mendahului kunjungan terakhir.';
   if (error instanceof AccessFailure && ['delivery_attempt_changed', 'shipment_already_received'].includes(error.code)) return 'Riwayat kiriman berubah. Muat riwayat terbaru sebelum mencatat kunjungan.';

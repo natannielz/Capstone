@@ -10,6 +10,7 @@ import { CaseReturnedLotPanel } from './CaseReturnedLotPanel';
 import type { ResolutionAction } from './resolution-client';
 import { createInspectionGateway, prepareInspection, inspectionIdentities, inspectionConditions, type InspectionLine, type InspectionView } from './inspection-client';
 import styles from '../administration/access.module.css';
+import { formatDateTime } from '@/lib/format';
 
 export function CaseInspectionPanel({ actorId, owner, returnId, canInspect, resolutionOptions, canReadInvoice = false, fresh, locked, current, freshCurrent, journal, onSettled, onDenied, onBusyChange }: {
   actorId: string; owner: AfterSalesCase; returnId: string; canInspect: boolean; resolutionOptions: readonly ResolutionAction[]; canReadInvoice?: boolean; fresh: boolean; locked: boolean; current: () => boolean; freshCurrent: () => boolean; journal: OperationJournal;
@@ -37,7 +38,7 @@ export function CaseInspectionPanel({ actorId, owner, returnId, canInspect, reso
     <button className={styles.secondary} disabled={disabled} onClick={() => void work(async () => { const value = await gateway.read(actorId, owner, returnId); if (active()) { setView(value); setPreview(false); setConfirm(null); } })}>Lihat hasil pemeriksaan {returnId}</button>
     {canInspect && <button className={styles.secondary} disabled={!canAct} onClick={() => void work(async () => { const value = await gateway.read(actorId, owner, returnId, true); if (active()) { setView(value); setPreview(true); setConfirm(null); setConsent(false); } })}>Periksa barang retur {returnId}</button>}
     {view && !view.inspection && <p>Belum ada hasil pemeriksaan barang untuk penerimaan ini.</p>}
-    {view?.inspection && <section aria-label="Hasil pemeriksaan barang"><p>{new Date(view.inspection.inspectedAt).toLocaleString('id-ID')} · Telah diperiksa, tetap karantina</p><p>{view.inspection.publicNote}</p>
+    {view?.inspection && <section aria-label="Hasil pemeriksaan barang"><p>{formatDateTime(view.inspection.inspectedAt)} · Telah diperiksa, tetap karantina</p><p>{view.inspection.publicNote}</p>
       <ul>{view.inspection.lines.map(line => { const item = product(line.receiptId, line.skuId); return <li key={line.receiptId + ':' + line.skuId}>{item.productName}: {line.inspectedBaseUnits} {item.baseUnitCode} · {inspectionIdentities[line.identity]} · {inspectionConditions[line.condition]}</li>; })}</ul></section>}
     {view?.inspection && canInspect && <CaseReturnedLotPanel actorId={actorId} owner={owner} inspection={view} fresh={fresh} locked={disabled} current={current} freshCurrent={freshCurrent} journal={journal} onSettled={onSettled} onDenied={onDenied} onBusyChange={onBusyChange} />}
     {view?.inspection && <CaseResolutionPanel actorId={actorId} owner={owner} inspection={view} allowedActions={resolutionOptions} canReadInvoice={canReadInvoice} fresh={fresh} locked={disabled} current={current} journal={journal} onSettled={onSettled} onDenied={onDenied} onBusyChange={onBusyChange} />}

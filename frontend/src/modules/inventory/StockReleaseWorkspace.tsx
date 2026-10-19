@@ -16,13 +16,14 @@ import { StockReleaseEditor } from './stock-release-editor-state';
 import { releaseChoiceKey, releaseLocationKey, type ReleasePreview, type ReleaseReview, type ReleaseCommand } from './stock-release-workflow';
 import common from '../administration/access.module.css';
 import styles from './stock-source-policy.module.css';
+import { formatDateTime, formatMoney } from "@/lib/format";
 
 const path = '/inventory/stock-releases';
 const login = '/identity/login?returnPath=' + encodeURIComponent(path);
 const factor = '/identity/account?operation=stock.release.approve&returnPath=' + encodeURIComponent(path);
 const status = { proposed: 'Menunggu peninjauan', approved: 'Pelepasan disetujui', rejected: 'Ditolak' };
-const time = (value: string) => new Date(value).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' }) + ' WIB';
-const amount = (value: string) => { const [whole, fraction] = value.split('.'); return 'Rp ' + BigInt(whole).toLocaleString('id-ID') + ',' + fraction; };
+const time = (value: string) => formatDateTime(value);
+const amount = (value: string) => formatMoney('IDR', value);
 type Loaded = { actorId: string; actions: string[]; session: IdentitySession; observedAt: number; generation: number };
 const lostSession = (error: unknown) => (error instanceof AccessFailure || error instanceof IdentityFailure) && (error.status === 401 || error.code === 'actor_changed');
 function message(error: unknown) {

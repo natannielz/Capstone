@@ -15,6 +15,7 @@ import { createSupplierGateway, supplierInput, supplierOwnerKey, supplierTime, s
   type SupplierMappingSource, type SupplierPreview, type SupplierProposal, type SupplierCurrent, type SupplierDecision, type SupplierDecisionPreview } from './supplier-client';
 import styles from '../administration/access.module.css';
 import { packageMatchExplanation, type PackageMatching } from './package-matching';
+import { dateTimeFormatter } from '@/lib/format';
 
 type Account = { actorId: string; actions: readonly string[]; session: IdentitySession; observedAt: number };
 type DetailDraft = Omit<SupplierDetails, 'contactMethod'> & { contactMethod: SupplierDetails['contactMethod'] | '' };
@@ -29,7 +30,7 @@ const sourceNames = { omi: 'OMI', s_mart: 'S-Mart', supplier: 'Pemasok' } as con
 const states = { pending: 'Menunggu pemeriksaan', approved: 'Disetujui', rejected: 'Ditolak' } as const;
 const fields = [ ['subjectReference', 'Referensi identitas pemasok', 128], ['legalName', 'Nama badan usaha', 160], ['displayName', 'Nama tampilan', 160],
   ['registrationNamespace', 'Jenis registrasi (opsional)', 64], ['registrationValue', 'Nomor registrasi (opsional)', 128], ['address', 'Alamat pemasok', 500], ['contactName', 'Nama kontak', 160], ['contactValue', 'Detail kontak', 256] ] as const;
-const when = (value: string) => new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Jakarta' }).format(new Date(value)) + ' WIB';
+const when = (value: string) => dateTimeFormatter.format(new Date(value));
 function message(error: unknown) {
   if (error instanceof IdentityFailure) return 'Masuk kembali dengan akun yang memiliki penugasan pengajuan atau pemeriksaan pemasok.';
   if (error instanceof AccessFailure || error instanceof RequestNotSentError) {

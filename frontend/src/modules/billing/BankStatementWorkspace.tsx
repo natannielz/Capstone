@@ -15,9 +15,10 @@ import { createBankStatementGateway, prepareStatement, statementFile, type State
 import common from '../administration/access.module.css';
 import styles from './invoice.module.css';
 import sheet from './bank-statement.module.css';
+import { dateTimeFormatter } from '@/lib/format';
 
 type Account = { actorId: string; actions: readonly string[]; session: IdentitySession; observedAt: number };
-const at = (value: string) => new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Jakarta' }).format(new Date(value));
+const at = (value: string) => dateTimeFormatter.format(new Date(value));
 const rupiah = (value: string) => orderAmount('IDR', value);
 const issues: Record<string, string> = { identity_missing: 'Identitas transfer belum tersedia; perlu rekonsiliasi manual.', identity_repeated: 'Identitas transfer muncul lebih dari sekali; periksa kemungkinan baris berulang.', reference_repeated: 'Referensi digunakan lagi; periksa setiap transfer secara terpisah.', payer_unknown: 'Pengirim belum diketahui.', column_count: 'Jumlah kolom tidak sesuai format bank.', invalid_text: 'Teks berisi karakter atau spasi yang tidak didukung.', invalid_date: 'Tanggal tidak valid atau berada di masa depan.', invalid_direction: 'Penanda masuk/keluar tidak sesuai format.', invalid_amount: 'Nominal harus positif dengan paling banyak dua angka desimal.', account_mismatch: 'Nomor rekening berbeda dari rekening yang dipilih.', currency_mismatch: 'Mata uang berbeda dari rekening yang dipilih.', total_out_of_range: 'Total melebihi batas nominal yang didukung.' };
 function message(error: unknown) {

@@ -12,6 +12,7 @@ import {AnomalyJournal, anomalyJournalPrefix, parseAnomalyReference, type Anomal
 import common from '../administration/access.module.css';
 import styles from './anomaly.module.css';
 import {AnomalyPolicyPanel} from './AnomalyPolicyPanel';
+import { formatDateTime } from '@/lib/format';
 
 type Account = {actorId: string; session: IdentitySession; observedAt: number; review: boolean; configure: boolean; kinds: AnomalyKind[]};
 const states = {consistent: 'Konsisten', flagged: 'Perlu tinjauan', within_policy: 'Dalam batas tinjauan', policy_needed: 'Kebijakan belum tersedia', unavailable: 'Sumber belum tersedia'};
@@ -172,12 +173,12 @@ function Desk({account, onDenied}: {account: Account; onDenied: () => void}) {
     {items.length === 0 && <p role="status">Belum ada sumber yang dapat ditinjau dalam cakupan dan izin akun ini.</p>}
     <p className={styles.notice}>Penyesuaian stok: sumber dan pembanding yang disetujui belum tersedia. Hasil hitung fisik tidak dianggap sebagai penyesuaian.</p>
     {error !== null && <p className={common.alert} role="alert">{message(error)}</p>}
-    {value && <article><h2>Hasil pemeriksaan #{value.id}</h2><p>Aturan {value.ruleVersion} · Kebijakan {value.policyVersion ?? 'belum tersedia'} · {new Date(value.recordedAt).toLocaleString('id-ID')}</p>
+    {value && <article><h2>Hasil pemeriksaan #{value.id}</h2><p>Aturan {value.ruleVersion} · Kebijakan {value.policyVersion ?? 'belum tersedia'} · {formatDateTime(value.recordedAt)}</p>
       {!value.current && <p role="alert">Sumber atau kebijakan telah berubah. Buat pemeriksaan baru untuk melanjutkan.</p>}
       <ul className={styles.signals}>{value.signals.map((signal, index) => <li key={signal.code + ':' + signal.reference + ':' + index} data-state={signal.state}>
         <strong>{states[signal.state]}</strong><span>{signal.reference}</span><p>{signal.explanation}</p></li>)}</ul>
       {value.disposition && <div className={styles.notice}><h3>{outcomes[value.disposition.outcome]}</h3><p>{value.disposition.reason}</p>
-        <p>Petugas #{value.disposition.reviewerId} · {new Date(value.disposition.recordedAt).toLocaleString('id-ID')}</p></div>}
+        <p>Petugas #{value.disposition.reviewerId} · {formatDateTime(value.disposition.recordedAt)}</p></div>}
     </article>}
     {selected && <div className={styles.controls}><label>Alasan pemeriksaan atau tindak lanjut<textarea value={reason} maxLength={1000} disabled={busy || recoveryLocked} onChange={event => setReason(event.target.value)} /></label>
       <button type="button" disabled={busy || !reason.trim() || recoveryLocked} onClick={() => void send('evaluate')}>Buat pemeriksaan baru</button>

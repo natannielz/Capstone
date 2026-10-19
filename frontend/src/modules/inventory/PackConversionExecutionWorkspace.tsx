@@ -17,10 +17,11 @@ import { PackExecutionEditor } from './pack-conversion-execution-state';
 import { conversionTransferredValue, type ConversionCommand, type ConversionPreview, type ConversionSource, type ConversionDetail } from './pack-conversion-execution-workflow';
 import common from '../administration/access.module.css';
 import styles from './stock-count.module.css';
+import { formatDateTime, numberFormatter } from '@/lib/format';
 
 const path = '/inventory/pack-conversion-executions', loginHref = '/identity/login?returnPath=' + encodeURIComponent(path);
 type Loaded = { actorId: string; actions: string[]; session: IdentitySession; observedAt: number; generation: number };
-const format = new Intl.NumberFormat('id-ID'), amount = (value: string | number) => format.format(typeof value === 'string' ? BigInt(value) : value);
+const format = numberFormatter, amount = (value: string | number) => format.format(typeof value === 'string' ? BigInt(value) : value);
 const valueLabel = (value: string) => amount(value.split('.')[0]) + ',' + value.split('.')[1];
 const lostSession = (error: unknown) => error instanceof IdentityFailure && error.status === 401 || error instanceof AccessFailure && (error.status === 401 || error.code === 'actor_changed');
 function message(error: unknown): string {
@@ -164,13 +165,13 @@ function PreviewFacts({ preview }: { preview: ConversionPreview }) {
   return <section className={styles.contents}><h3>Pratinjau pelaksanaan dari server</h3><p><strong>{amount(preview.sourcePackages)} × {preview.source.packageLabel} ({preview.source.skuCode}) → {amount(preview.destinationPackages)} × {preview.destination.packageLabel} ({preview.destination.skuCode})</strong></p>
     <p>{amount(preview.baseUnits)} {preview.source.baseUnitCode} tetap. Saldo sumber: {amount(preview.stockBefore.onHand)} → {amount(preview.stockAfter.onHand)} kemasan; reservasi {amount(preview.stockBefore.reserved)} tetap.</p>
     <p>Nilai dipindahkan: {valueLabel(conversionTransferredValue(preview))}. Kebijakan: proporsi nilai lot tersisa, dibulatkan ke bawah sampai dua desimal; sisa pembulatan tetap di lot sumber.</p>
-    <p>Diperiksa <time dateTime={preview.observedAt}>{new Date(preview.observedAt).toLocaleString('id-ID')}</time>. Konversi belum dicatat.</p></section>;
+    <p>Diperiksa <time dateTime={preview.observedAt}>{formatDateTime(preview.observedAt)}</time>. Konversi belum dicatat.</p></section>;
 }
 function HistoryFacts({ item }: { item: ConversionDetail }) {
   return <><h3>Konversi {item.id}</h3><p>{item.source.familyName} · {amount(item.sourcePackages)} {item.source.packageLabel} ({item.source.skuCode}) → {amount(item.destinationPackages)} {item.destination.packageLabel} ({item.destination.skuCode})</p>
     <p>Penerimaan {item.receiptReference}; lot sumber {item.sourceLotReference}. Nilai dipindahkan: {valueLabel(item.transferredValue)}.</p>
     <p>{amount(item.baseUnits)} {item.source.baseUnitCode} tetap. Saldo sumber {amount(item.stockBefore.onHand)} → {amount(item.stockAfter.onHand)}; saldo tujuan baru {amount(item.destinationAfter.onHand)} kemasan.</p>
-    <p>Alasan: {item.reason}</p><p>Dicatat <time dateTime={item.recordedAt}>{new Date(item.recordedAt).toLocaleString('id-ID')}</time>.</p>
+    <p>Alasan: {item.reason}</p><p>Dicatat <time dateTime={item.recordedAt}>{formatDateTime(item.recordedAt)}</time>.</p>
     <details><summary>Referensi aturan dan lot</summary><p>Aturan {item.input.ruleId}, versi {item.input.ruleVersion}; lot sumber {item.stockBefore.lotId}; lot tujuan {item.destinationAfter.lotId}. Versi saldo sumber {item.stockBefore.revision} → {item.stockAfter.revision}.</p></details></>;
 }
 function ExecutionReview({ command, busy, onConfirm, onCancel }: { command: ConversionCommand; busy: boolean; onConfirm: () => void; onCancel: () => void }) {
