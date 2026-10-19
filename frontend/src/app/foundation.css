@@ -1,0 +1,11 @@
+/* Owned foundation rules: above legacy, in Tailwind's components/utilities layers (they win by layer order, without importance flags). */
+@layer components{
+.status-badge{font-size:12px;line-height:1.5;font-weight:600;white-space:nowrap;max-width:100%;padding:4px 9px;border-radius:5px}
+.status-badge[data-tone="neutral"]{background:var(--tone-neutral);color:var(--tone-neutral-foreground)}.status-badge[data-tone="info"]{background:var(--tone-info);color:var(--tone-info-foreground)}.status-badge[data-tone="warning"]{background:var(--tone-warning);color:var(--tone-warning-foreground)}.status-badge[data-tone="success"]{background:var(--tone-success);color:var(--tone-success-foreground)}.status-badge[data-tone="danger"]{background:var(--tone-danger);color:var(--tone-danger-foreground)}
+.error-message{background:var(--tone-danger);color:var(--tone-danger-foreground);padding:12px;border-radius:8px;font-size:14px;margin-bottom:12px}
+}
+@layer utilities{
+.numeric{font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap;letter-spacing:0}
+.money{font-variant-numeric:tabular-nums}
+.warning-text{color:var(--tone-warning-foreground)}
+}

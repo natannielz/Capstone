@@ -17,6 +17,7 @@ import { sourceActor, sourceLocationKey, type SourcePurpose } from "./stock-sour
 import { RevisionFacts, RevisionComparison, RevisionDraftForm, RevisionDecisionForm, RevisionReview, revisionStatus, sourceAmount } from "./StockSourceRevisionForms";
 import common from "../administration/access.module.css";
 import styles from "./stock-source-revision.module.css";
+import { formatDateTime } from "@/lib/format";
 
 const path = "/inventory/sources/revisions";
 const loginHref = "/identity/login?returnPath=" + encodeURIComponent(path);
@@ -160,7 +161,7 @@ function RevisionDesk({ loaded, onRefresh }: { loaded: Loaded; onRefresh: () => 
         </section>
         <section className={styles.details} aria-busy={state.loadingCurrent}>{state.loadingCurrent ? <p role="status">Memeriksa pengaturan terbaru…</p> : state.current ? <>
           <h2>{state.current.settings.label}</h2><p>Pengaturan saat ini · versi <strong>{state.current.poolVersion}</strong> · {state.current.poolState === "inactive" ? "Belum aktif" : "Aktif"}</p>
-          <p className={common.help}>Alokasi {state.current.physicalPoolId}. Disetujui {new Date(state.current.approvedAt).toLocaleString("id-ID", { timeZone: "Asia/Jakarta" })} WIB.</p>
+          <p className={common.help}>Alokasi {state.current.physicalPoolId}. Disetujui {formatDateTime(state.current.approvedAt)}.</p>
           <details><summary>Lihat pengaturan saat ini</summary><RevisionFacts settings={state.current.settings} /></details>
           {editor.canPropose && <section className={styles.section}><h3>Ajukan perubahan pengaturan</h3>
             <RevisionDraftForm draft={state.draft} disabled={locked} onChange={(field, value) => editor.changeDraft(field, value)} onReview={() => editor.reviewProposal()} /></section>}
@@ -177,12 +178,12 @@ function RevisionDesk({ loaded, onRefresh }: { loaded: Loaded; onRefresh: () => 
           <Pager name="riwayat" offset={state.historyOffset} total={state.history.total} disabled={locked} onPage={offset => void editor.loadHistory(offset)} /></>}</section>
           <section className={styles.details} aria-busy={state.loadingDetail}>{state.loadingDetail ? <p role="status">Memeriksa pengajuan terbaru…</p> :
             state.selected ? <><h2>Pengajuan #{state.selected.id}</h2><p>{revisionStatus[state.selected.status]}</p>
-              <p>{state.selected.reason}</p><p className={common.help}>Diajukan {new Date(state.selected.proposedAt).toLocaleString("id-ID", { timeZone: "Asia/Jakarta" })} WIB.</p>
+              <p>{state.selected.reason}</p><p className={common.help}>Diajukan {formatDateTime(state.selected.proposedAt)}.</p>
               {state.selected.status === "proposed" && editor.staleBase && <p role="status" className={common.alert}>Dasar pengajuan sudah berbeda dari versi saat ini. Pengajuan ini belum dapat disetujui; periksa versi terbaru sebelum mengajukan pengganti.</p>}
               {state.selected.status === "proposed" && state.current.poolState === "active" && <p className={common.alert}>Alokasi masih aktif. Perubahan belum dapat disetujui.</p>}
               <RevisionComparison base={state.selected.baseSettings} proposed={state.selected.proposedSettings} baseVersion={state.selected.basePoolVersion} current={state.current} />
               {state.selected.decision && <section className={styles.section}><h3>Keputusan tercatat</h3><p>{state.selected.decision.reviewReference}</p><p>{state.selected.decision.reason}</p>
-                <p>{new Date(state.selected.decision.decidedAt).toLocaleString("id-ID", { timeZone: "Asia/Jakarta" })} WIB{state.selected.appliedPoolVersion ? " · diterapkan sebagai versi " + state.selected.appliedPoolVersion : ""}.</p></section>}
+                <p>{formatDateTime(state.selected.decision.decidedAt)}{state.selected.appliedPoolVersion ? " · diterapkan sebagai versi " + state.selected.appliedPoolVersion : ""}.</p></section>}
               <section className={styles.section}><RevisionDecisionForm key={state.selected.id + ":" + state.current.poolVersion} proposal={state.selected}
                 disabled={locked} fresh={state.fresh} approvable={!editor.staleBase && state.current.poolState === "inactive"} canPropose={editor.canPropose} canApprove={editor.canApprove}
                 onReview={(action, reference, reason) => editor.reviewDecision(action, reference, reason)} /></section>

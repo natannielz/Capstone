@@ -4,6 +4,7 @@ import {buyerLabel} from "@/lib/domain/buyers";
 import {ArrowLeft, ArrowRight, Check, FileText, Package, Search, Truck, X} from "lucide-react";
 import {Button} from "@/components/ui/button";
 import {Badge} from "@/components/ui/badge";
+import {statusTone} from "@/lib/status/dictionary";
 import {Field, FieldGroup, FieldLabel} from "@/components/ui/field";
 import {InputGroup, InputGroupAddon, InputGroupInput} from "@/components/ui/input-group";
 import type {Order, OrderLine, Shipment, State} from "@/lib/domain/model";
@@ -11,6 +12,7 @@ import {get, invoiceStatus, lineProgress, money, productAvailable, sum, today} f
 import {matchesOrderQueue, ORDER_QUEUES, orderFulfillmentLabel, orderValue, readOrderQuery, relatedOrderInvoices, substitutionNeedsDecision} from "@/lib/domain/order-views";
 import type {WorkspaceContext} from "./workspace";
 import {Attachments} from "./operations";
+import { formatDate } from "@/lib/format";
 
 type QueryProps = {
   query: URLSearchParams;
@@ -18,12 +20,11 @@ type QueryProps = {
 };
 
 function dateLabel(value: string) {
-  return new Date(value.length === 10 ? `${value}T12:00:00` : value)
-    .toLocaleDateString("id-ID", {day: "numeric", month: "short", year: "numeric"});
+  return formatDate(value.length === 10 ? `${value}T12:00:00+07:00` : value);
 }
 
 function StateBadge({children}: {children: string}) {
-  return <Badge variant="secondary" className="status-badge" data-status={children}>{children}</Badge>;
+  return <Badge variant="secondary" className="status-badge" data-tone={statusTone(String(children))}>{children}</Badge>;
 }
 
 function Document({kind, id, children}: {kind: "shipment" | "invoice"; id: string; children: string}) {

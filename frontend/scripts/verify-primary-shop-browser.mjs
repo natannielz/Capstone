@@ -301,7 +301,7 @@ export async function verifyPrimaryShopBrowser({ config, user, origin, directory
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
   await page.screenshot({ path: resolve(directory, 'primary-shop-mobile.png'), fullPage: true });
   await open.click(); const dialog = page.getByRole('dialog', { name: 'Pensil utama — Dus dua belas', exact: true }); await dialog.waitFor();
-  assert.match(await dialog.innerText(), /12 piece per kemasan/); assert.match(await dialog.innerText(), /IDR 12\.000,25/);
+  assert.match(await dialog.innerText(), /12 piece per kemasan/); assert.match(await dialog.innerText(), /Rp12\.000,25/);
   assert.equal(await dialog.getByLabel('Cabang pemesan', { exact: true }).inputValue(), '');
   assert.equal(await dialog.getByLabel('Jumlah kemasan', { exact: true }).inputValue(), '');
   assert.equal(writes.length, 0); await dialog.getByRole('button', { name: 'Tutup rincian', exact: true }).click();
@@ -313,7 +313,7 @@ export async function verifyPrimaryShopBrowser({ config, user, origin, directory
   const details = page.getByRole('region', { name: 'Rincian kemasan', exact: true }); await details.waitFor();
   await details.getByRole('heading', { name: 'Pensil utama — Dus dua belas', exact: true }).waitFor();
   assert.equal(await page.getByRole('dialog').count(), 0); assert.match(await details.innerText(), /Pensil utama — Dus dua belas/);
-  assert.match(await details.innerText(), /12 piece per kemasan/); assert.match(await details.innerText(), /IDR 12\.000,25/);
+  assert.match(await details.innerText(), /12 piece per kemasan/); assert.match(await details.innerText(), /Rp12\.000,25/);
   assert.equal(await details.getByRole('img').count(), 0, 'There are no invented product images in the empty-media fixture');
   const branch = details.getByLabel('Cabang pemesan', { exact: true }), quantity = details.getByLabel('Jumlah kemasan', { exact: true });
   await branch.waitFor(); assert.equal(await branch.inputValue(), ''); assert.equal(await quantity.inputValue(), '');
@@ -327,7 +327,7 @@ export async function verifyPrimaryShopBrowser({ config, user, origin, directory
   }
   await quantity.fill('6'); await details.getByRole('button', { name: 'Periksa subtotal', exact: true }).click();
   const subtotal = details.getByRole('status').filter({ hasText: 'Subtotal barang' }); await subtotal.waitFor();
-  assert.match(await subtotal.innerText(), /IDR 72\.001,50/); assert.match(await subtotal.innerText(), /6 Dus dua belas · 72 piece/);
+  assert.match(await subtotal.innerText(), /Rp72\.001,50/); assert.match(await subtotal.innerText(), /6 Dus dua belas · 72 piece/);
   assert.match(await subtotal.innerText(), /Pesanan belum dikirim dan stok belum dipesan/);
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
   await page.screenshot({ path: resolve(directory, 'primary-package-subtotal-mobile.png'), fullPage: true });

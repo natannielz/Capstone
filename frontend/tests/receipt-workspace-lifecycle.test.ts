@@ -1,3 +1,4 @@
+import * as displayFormat from '../src/lib/format';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import * as React from 'react';
@@ -95,6 +96,7 @@ function mountReceipt(confirmMode: 'lost' | '401' = 'lost') {
     if (name === './ShipmentReceiptPanel') return {ReceiptSummary: marker};
     if (name === './ReceiptProofPanel') return {ReceiptProofPanel: marker};
     if (name === './receipt-proof-client') return {createReceiptProofGateway: () => ({})};
+    if (name === '@/lib/format') return displayFormat;
     throw new Error('Unexpected mounted receipt import: ' + name);
   };
   function load(file: string) {

@@ -277,7 +277,7 @@
 }
 .shop-routing {
   max-width: 640px;
-  margin: auto !important;
+  margin: auto;
   padding: 48px 24px;
   color: var(--shop-muted);
 }
@@ -548,7 +548,7 @@
   line-height: 1.35;
   letter-spacing: -0.35px;
   font-variant-numeric: tabular-nums;
-  margin-top: 10px !important;
+  margin-top: 10px;
   color: var(--shop-petroleum);
 }
 .shop-product-price > span {
@@ -560,7 +560,7 @@
 }
 .shop-packaging {
   font-size: 12px;
-  margin-top: 5px !important;
+  margin-top: 5px;
   color: var(--shop-muted);
 }
 .shop-packaging > span {
@@ -871,7 +871,7 @@
 }
 .shop-detail-sku {
   font-size: 11px;
-  margin-top: 8px !important;
+  margin-top: 8px;
   color: var(--shop-muted);
 }
 .shop-detail-price {
@@ -1018,7 +1018,7 @@
 .shop-field-error {
   font-size: 12px;
   color: #a33721;
-  margin-top: 7px !important;
+  margin-top: 7px;
   line-height: 1.55;
 }
 .shop-product-actions {
@@ -1206,7 +1206,7 @@
   border: 0;
   background: none;
   color: var(--shop-muted);
-  font-size: 12px !important;
+  font-size: 12px;
 }
 .shop-remove-item:hover {
   color: #a33721;
@@ -1274,9 +1274,9 @@
   align-items: center;
   justify-content: center;
   gap: 6px;
-  font-size: 11px !important;
+  font-size: 11px;
   color: var(--shop-muted);
-  margin-top: 13px !important;
+  margin-top: 13px;
   text-align: center;
 }
 .shop-secure {
@@ -1347,7 +1347,7 @@
 .shop-field-help {
   font-size: 11px;
   color: var(--shop-muted);
-  margin-top: 7px !important;
+  margin-top: 7px;
 }
 .shop-checkout-lines {
   list-style: none;
@@ -1900,7 +1900,7 @@
   .shop-product-price {
     font-size: 17px;
     letter-spacing: -0.5px;
-    margin-top: 9px !important;
+    margin-top: 9px;
   }
   .shop-product-price > span {
     font-size: 10px;
@@ -1908,7 +1908,7 @@
   }
   .shop-packaging {
     font-size: 10px;
-    margin-top: 4px !important;
+    margin-top: 4px;
   }
   .shop-packaging > span {
     display: block;
@@ -2112,7 +2112,7 @@
   }
   .shop-detail-sku {
     font-size: 10px;
-    margin-top: 6px !important;
+    margin-top: 6px;
   }
   .shop-detail-price {
     margin-top: 17px;
@@ -2275,7 +2275,7 @@
     font-size: 10px;
   }
   .shop-remove-item {
-    font-size: 10px !important;
+    font-size: 10px;
     gap: 4px;
     min-height: 40px;
   }
@@ -2352,7 +2352,7 @@
   }
   .shop-summary-note {
     justify-content: center;
-    font-size: 10px !important;
+    font-size: 10px;
   }
   .shop-secure {
     display: none;
@@ -2429,7 +2429,7 @@
     font-size: 11px;
   }
   .shop-checkout-shipping {
-    font-size: 11px !important;
+    font-size: 11px;
   }
 }
 @media (max-width: 370px) {

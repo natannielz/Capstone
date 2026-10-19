@@ -1,8 +1,9 @@
 import { ACCOUNTS, DomainError, type State, type OrderLine, type Invoice, type Batch, type Stocktake } from "./model";
 import { now } from "./clock";
+import { formatRupiah, jakartaDateKey } from "@/lib/format";
 export const sum=(values:number[])=>values.reduce((a,b)=>a+b,0);
-export const today=()=>now().toLocaleDateString("en-CA",{timeZone:"Asia/Jakarta"});
-export const money=(v:number)=>new Intl.NumberFormat("id-ID",{style:"currency",currency:"IDR",maximumFractionDigits:0}).format(v);
+export const today=()=>jakartaDateKey(now());
+export const money=(v:number)=>formatRupiah(v);
 export const get=<T extends {id:string}>(items:T[],id:unknown):T=>{const item=items.find(x=>x.id===id);if(!item)throw new DomainError("Data tidak ditemukan.",404);return item;};
 export function available(state:State,batch:Batch,date=today()){return batch.expiry&&batch.expiry<=date?0:batch.qty-batch.held-sum(state.reservations.filter(r=>r.batchId===batch.id).map(r=>r.qty));}
 export function productAvailable(s:State,id:string,date=today()){return sum(s.batches.filter(b=>b.productId===id).map(b=>available(s,b,date)));}

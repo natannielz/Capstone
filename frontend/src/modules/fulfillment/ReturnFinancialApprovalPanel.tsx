@@ -10,6 +10,7 @@ import { createReturnGateway, type ReturnView } from './return-client';
 import { canApproveReturnFinancial, createReturnFinancialApprovalGateway, prepareReturnFinancialApproval, returnFinancialApprovalInput,
   type ReturnFinancialAction, type ReturnFinancialApprovalView, type ReturnFinancialApprovalPreview } from './return-financial-approval-client';
 import styles from '../administration/access.module.css';
+import { formatDateTime } from '@/lib/format';
 
 const rupiah = (value: string) => orderAmount('IDR', value);
 const money = (value: bigint) => (value / BigInt(100)).toString() + '.' + (value % BigInt(100)).toString().padStart(2, '0');
@@ -47,7 +48,7 @@ export function ReturnFinancialApprovalPanel(props: Props) {
     <button className={styles.secondary} disabled={locked || busy} onClick={() => void load()}>Muat penerimaan retur untuk Finance</button>
     {physical && <form onSubmit={event => { event.preventDefault(); const selected = olderId || returnId; if (!locked && !busy && current() && selected && canApproveReturnFinancial(actions, action)) setOpened({ returnId: selected, action }); }}>
       {physical.recent.length ? <label>Penerimaan barang retur<select required value={returnId} disabled={locked || busy || !!olderId} onChange={event => { setReturnId(event.target.value); setOpened(null); }}>
-        {physical.recent.map(row => <option key={row.id} value={row.id}>{row.id} · {new Date(row.receivedAt).toLocaleString('id-ID')}</option>)}</select></label> : <p>Belum ada barang retur yang diterima untuk keluhan ini.</p>}
+        {physical.recent.map(row => <option key={row.id} value={row.id}>{row.id} · {formatDateTime(row.receivedAt)}</option>)}</select></label> : <p>Belum ada barang retur yang diterima untuk keluhan ini.</p>}
       {physical.hasEarlier && <label>ID penerimaan retur yang lebih lama<input inputMode="numeric" pattern="[1-9][0-9]*" maxLength={19} disabled={locked || busy} value={olderId} onChange={event => { setOlderId(event.target.value); setOpened(null); }} /></label>}
       <label>Penyelesaian yang diajukan<select value={action} disabled={locked || busy} onChange={event => { setAction(event.target.value as ReturnFinancialAction); setOpened(null); }}>{allowed.map(value => <option key={value} value={value}>{value === 'credit' ? 'Nota kredit' : 'Nota kredit dan reservasi refund'}</option>)}</select></label>
       <button className={styles.secondary} disabled={locked || busy || !(olderId || returnId)}>Buka pengajuan finansial</button></form>}
@@ -96,7 +97,7 @@ function FinancialReview({ actorId, owner, returnId, action, fresh, locked, curr
     {view && <><p>Invoice {owner.source.number} · {view.invoice.buyerName} · Total {rupiah(view.invoice.issued)} · Dibayar {rupiah(view.invoice.paid)} · Dikreditkan {rupiah(view.invoice.credited)} · Sisa {rupiah(view.invoice.outstanding)}</p>
       <p>Pengajuan tetap: {rupiah(view.request.credit)} · Nilai barang {rupiah(view.request.net)} · Pajak {rupiah(view.request.tax)} · Biaya {rupiah(view.request.charges)}</p>
       <ul>{view.request.lines.map(line => { const item = owner.source.lines.find(item => item.receiptId === line.receiptId && item.skuId === line.skuId)!; return <li key={line.receiptId + ':' + line.skuId}>{item.productName}: {line.attributedBaseUnits} {item.baseUnitCode} · Nilai {rupiah(line.net)} · Pajak {rupiah(line.tax)} · Biaya {rupiah(line.charges)}</li>; })}</ul>
-      {view.approval ? <section aria-label="Persetujuan finansial tercatat"><p role="status">Nota kredit {rupiah(view.approval.credit)} tercatat. {view.approval.action === 'refund' && <>Dana refund {rupiah(view.approval.reservedRefund)} telah disisihkan; uang belum dikirim.</>}</p><p>{new Date(view.approval.recordedAt).toLocaleString('id-ID')} · Persetujuan {view.approval.financialApprovalId}</p></section>
+      {view.approval ? <section aria-label="Persetujuan finansial tercatat"><p role="status">Nota kredit {rupiah(view.approval.credit)} tercatat. {view.approval.action === 'refund' && <>Dana refund {rupiah(view.approval.reservedRefund)} telah disisihkan; uang belum dikirim.</>}</p><p>{formatDateTime(view.approval.recordedAt)} · Persetujuan {view.approval.financialApprovalId}</p></section>
         : !confirm && <form onSubmit={event => { event.preventDefault(); if (!canAct || !currentApproval()) return; void work(async () => {
           const { source, input } = reviewedSelection(), preview = await gateway.preview(actorId, owner, source, input);
           const command = prepareReturnFinancialApproval(actorId, owner, returnId, action, preview, input, reason.trim()); if (currentApproval()) { setShown(preview); setConfirm(command); setConsent(false); }

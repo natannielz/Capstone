@@ -9,10 +9,11 @@ import { ROLE_LABELS } from "@/lib/domain/accounts";
 import type { WorkspaceContext } from "./workspace";
 import { OrderList } from "./order-experience";
 import { Button } from "@/components/ui/button";
+import { formatDate } from "@/lib/format";
 
 const queueIcons = { users: Users, building: Building2, package: Package, truck: Truck, check: CheckCheck, orders: ClipboardList, wallet: WalletCards, calendar: CalendarCheck, shopping: ShoppingBag };
 const orderQuery = (queue: string | null) => ({ queue, q: null, orderPage: null });
-const dateLabel = (date: string) => new Date(date + "T12:00:00+07:00").toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Jakarta" });
+const dateLabel = (date: string) => formatDate(date + "T12:00:00+07:00");
 
 export function Dashboard(ctx: WorkspaceContext) {
   const { s, actor, go } = ctx;

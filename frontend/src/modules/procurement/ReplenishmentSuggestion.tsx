@@ -4,6 +4,7 @@ import Link from 'next/link';
 import {useEffect, useState} from 'react';
 import {createReplenishmentGateway, type ReplenishmentEvaluation} from '../inventory/replenishment-client';
 import styles from '../administration/access.module.css';
+import { dateTimeFormatter, numberFormatter } from '@/lib/format';
 
 export function ReplenishmentSuggestion({actorId, disabled, current, onUse}: {actorId: string; disabled: boolean; current: () => boolean;
   onUse: (value: ReplenishmentEvaluation) => Promise<void>}) {
@@ -22,8 +23,8 @@ export function ReplenishmentSuggestion({actorId, disabled, current, onUse}: {ac
   const usable = quantity !== null && BigInt(quantity) > BigInt(0) && BigInt(quantity) <= BigInt(1000000);
   return <section className={styles.review}><h2>Saran dari pemeriksaan kebutuhan</h2>
     <p>{value.skuCode} · {value.packageLabel} · {value.baseUnitsPerPackage} {value.baseUnitCode} per kemasan</p>
-    <p>{usable ? `Saran tersimpan: ${new Intl.NumberFormat('id-ID').format(BigInt(quantity!))} kemasan.` : 'Belum ada jumlah yang dapat dimasukkan ke permintaan ini.'}</p>
-    <p>Diamati {new Intl.DateTimeFormat('id-ID', {dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Jakarta'}).format(new Date(value.observedAt))} WIB. Saran ini merupakan catatan pada waktu tersebut. Tinjau perubahan kebutuhan sebelum mengajukan.</p>
+    <p>{usable ? `Saran tersimpan: ${numberFormatter.format(BigInt(quantity!))} kemasan.` : 'Belum ada jumlah yang dapat dimasukkan ke permintaan ini.'}</p>
+    <p>Diamati {dateTimeFormatter.format(new Date(value.observedAt))}. Saran ini merupakan catatan pada waktu tersebut. Tinjau perubahan kebutuhan sebelum mengajukan.</p>
     <p>Lokasi dan kemasan diperiksa kembali sebelum dimasukkan. Anda tetap memilih jalur, tanggal dan alasan, lalu meninjau permintaan.</p>
     <div className={styles.actions}><button type="button" className={styles.primary} disabled={disabled || !usable} onClick={() => void onUse(value)}>Gunakan saran dalam formulir</button>
       <Link href={'/inventory/replenishment?review=' + value.id}>Buka dasar perhitungan</Link></div>

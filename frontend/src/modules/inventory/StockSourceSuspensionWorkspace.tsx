@@ -17,6 +17,7 @@ import { StockSourceSuspensionEditor } from "./stock-source-suspension-editor-st
 import type { SourceSuspensionCommand, SuspensionPreview } from "./stock-source-suspension-workflow";
 import common from "../administration/access.module.css";
 import styles from "./stock-source-suspension.module.css";
+import { formatDateTime, formatNumber } from "@/lib/format";
 
 const path = "/inventory/sources/suspensions";
 const loginHref = "/identity/login?returnPath=" + encodeURIComponent(path);
@@ -155,14 +156,14 @@ function SuspensionDesk({ loaded, onRefresh }: { loaded: Loaded; onRefresh: () =
       </div>}
     </section>
     {editor.canRead && state.poolId && <section className={styles.history} aria-busy={state.loadingHistory}>
-      <header className={styles.heading}><div><h2>Riwayat penghentian</h2><p>{BigInt(state.history.total).toLocaleString("id-ID")} catatan pada alokasi {state.poolId}.</p></div>
+      <header className={styles.heading}><div><h2>Riwayat penghentian</h2><p>{formatNumber(BigInt(state.history.total))} catatan pada alokasi {state.poolId}.</p></div>
         <button type="button" className={common.secondary} disabled={locked || state.loadingPool || state.loadingHistory} onClick={() => void editor.loadHistory()}>Muat ulang riwayat</button></header>
       <div className={styles.historyGrid}><section className={common.queue}>
         {state.loadingHistory ? <p role="status" className={common.empty}>Memuat riwayat…</p> : <>
           <ul className={common.queueList}>{state.history.items.map(item => <li key={item.id}><button type="button" disabled={locked}
             className={state.selected?.id === item.id ? common.selectedRow : common.queueRow} aria-pressed={state.selected?.id === item.id}
             onClick={() => void editor.chooseHistory(item.id)}><strong>{item.reason}</strong><span>Penghentian #{item.id} · versi {item.suspensionVersion}</span>
-            <span>{new Date(item.suspendedAt).toLocaleString("id-ID", { timeZone: "Asia/Jakarta" })} WIB</span></button></li>)}</ul>
+            <span>{formatDateTime(item.suspendedAt)}</span></button></li>)}</ul>
           {!state.history.items.length && <p className={common.empty}>Belum ada catatan pada halaman ini.</p>}
           <div className={common.pagination} aria-label="Halaman riwayat">
             <button type="button" className={common.secondary} aria-label="Halaman riwayat sebelumnya" disabled={locked || state.historyOffset === 0} onClick={() => void editor.loadHistory(state.historyOffset - 25)}>Sebelumnya</button>

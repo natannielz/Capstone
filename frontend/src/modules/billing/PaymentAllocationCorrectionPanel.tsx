@@ -11,6 +11,7 @@ import type { PaymentDraft } from './payment-client';
 import type { PaymentVerificationDetail } from './payment-verification-client';
 import styles from '../administration/access.module.css';
 import invoice from './invoice.module.css';
+import { dateTimeFormatter } from '@/lib/format';
 
 const rupiah = (value: string) => orderAmount('IDR', value);
 function message(error: unknown) {
@@ -58,7 +59,7 @@ export function PaymentAllocationCorrectionPanel({ actorId, owner, verified, all
     {allowed && (!fresh || error instanceof AccessFailure && error.code === 'step_up_required') && <p className={styles.alert}>Verifikasi dua langkah terbaru diperlukan. <Link href="/identity/account?operation=payment.allocate&returnPath=%2Fbilling%2Fpayment-reviews">Verifikasi dua langkah untuk koreksi alokasi</Link></p>}
     {saved && <p role="status">Koreksi {rupiah(saved.amount)} tersimpan. Dana belum dialokasikan saat pencatatan: {rupiah(saved.unapplied)}.</p>}
     {items && <><ul className={invoice.candidates}>{items.map(item => <li key={item.originalAllocationId}><strong>Alokasi {item.originalAllocationId}</strong>
-      <p>Dicatat {new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Jakarta' }).format(new Date(item.originalRecordedAt))}</p>
+      <p>Dicatat {dateTimeFormatter.format(new Date(item.originalRecordedAt))}</p>
       <ul>{item.capacities.map(line => <li key={line.invoiceId}>Invoice {allocationInvoiceNumber(item.view.invoices.find(value => value.invoiceId === line.invoiceId)!)}: alokasi asli {rupiah(line.originallyAllocated)} · Telah dikoreksi {rupiah(line.previouslyReversed)}.</li>)}</ul>
       <button className={styles.secondary} disabled={disabled || !!confirm} onClick={() => void work(() => select(item.originalAllocationId))}>Tinjau alokasi {item.originalAllocationId}</button></li>)}</ul>
       {!items.length && <p>Belum ada alokasi asli untuk pengajuan ini.</p>}

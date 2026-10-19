@@ -16,6 +16,7 @@ import { StockSourcePolicyEditor } from "./stock-source-policy-editor-state";
 import { PolicyConfigurationFacts, PolicyDraftForm, PolicyFinalReview, PolicyInputFacts, PolicyProposalFacts, policyStatus } from "./StockSourcePolicyForms";
 import common from "../administration/access.module.css";
 import styles from "./stock-source-policy.module.css";
+import { formatNumber } from "@/lib/format";
 
 const path = "/inventory/sources/policies";
 const loginHref = "/identity/login?returnPath=" + encodeURIComponent(path);
@@ -176,7 +177,7 @@ function PolicyDesk({ loaded, onRefresh }: { loaded: Loaded; onRefresh: () => Pr
       </form></div>}
     </section>}
     {editor.canRead && state.poolId && <section className={styles.history} aria-busy={state.loadingHistory}>
-      <header className={styles.heading}><div><h2>Riwayat kebijakan</h2><p>{BigInt(state.history.total).toLocaleString("id-ID")} pengajuan pada alokasi {state.poolId}.</p></div>
+      <header className={styles.heading}><div><h2>Riwayat kebijakan</h2><p>{formatNumber(BigInt(state.history.total))} pengajuan pada alokasi {state.poolId}.</p></div>
         <button type="button" className={common.secondary} disabled={locked || state.loadingPool || state.loadingHistory} onClick={() => void editor.loadHistory()}>Muat ulang riwayat</button></header>
       {state.latest && <section className={styles.detail}><h3>Kebijakan terakhir yang disetujui</h3>
         {state.latest.policy ? <><p>Pengajuan #{state.latest.policy.id} · versi {state.latest.policy.policyVersion}</p>

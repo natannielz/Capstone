@@ -3,6 +3,7 @@ import { validReference } from "../organizations/access-scope";
 import { AccessFailure, accessMessage, stableContent } from "../administration/workflow";
 import { IdentityFailure, identityMessage } from "./identity-workflow";
 import type { OperationReference, PersonRecoveryReceipt } from "../administration/operation-journal";
+import { dateTimeFormatter } from "@/lib/format";
 
 type Schemas = components["schemas"];
 export type PersonReviewAccount = Schemas["PersonReviewAccountDto"];
@@ -177,4 +178,4 @@ export function personReviewMessage(error: unknown): string {
   return accessMessage(error);
 }
 export const personReviewStatus = (value: string) => ({ pending: "Menunggu keputusan", approved: "Penangguhan disetujui", rejected: "Ditolak", withdrawn: "Ditarik", active: "Aktif", disputed: "Perlu peninjauan", suspended: "Ditangguhkan", revoked: "Dicabut" } as Record<string, string>)[value] ?? "Status belum dikenal";
-export const personReviewDate = (value: string) => new Intl.DateTimeFormat("id-ID", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Jakarta" }).format(new Date(value)) + " WIB";
+export const personReviewDate = (value: string) => dateTimeFormatter.format(new Date(value));

@@ -14,6 +14,7 @@ import { procurementLocationKey, type ProcurementTarget } from './procurement-re
 import { createProcurementInspectionGateway, inspectionInput, inspectionToday, inspectionEvidenceLabel, inspectionEvidenceReady, inspectionFileAllowed, prepareInspection, prepareInspectionSubmission,
   type InspectionChoice, type InspectionChoices, type InspectionRead, type InspectionPreview, type InspectionSubmitPreview, type InspectionCapacity, type InspectionEvidence, type InspectionUploadLimits } from './procurement-inspection-client';
 import styles from '../administration/access.module.css';
+import { dateTimeFormatter } from '@/lib/format';
 
 type Account = { actorId: string; actions: readonly string[]; session: IdentitySession; observedAt: number };
 type Review = { kind: 'draft'; preview: InspectionPreview; command: ReturnType<typeof prepareInspection> } | { kind: 'submit'; preview: InspectionSubmitPreview; command: ReturnType<typeof prepareInspectionSubmission> };
@@ -21,7 +22,7 @@ type Row = { key: string; skuId: string; declaredPackages: string; receivedPacka
 const blankRow = (): Row => ({ key: crypto.randomUUID(), skuId: '', declaredPackages: '', receivedPackages: '', damagedPackages: '', expiredPackages: '', openedPackages: '', lotCode: '', expiryDate: '', putawayReference: '', discrepancy: '' });
 const path = '/procurement/inspections', readPermission = 'procurement.read', inspectPermission = 'procurement.inspection.record', evidencePermission = 'procurement.inspection.evidence.read';
 const routes = { omi_regular: 'OMI reguler', ddo: 'DDO', smart: 'S-Mart', pasar_kering: 'Pasar Kering' } as const;
-const when = (value: string) => new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Jakarta' }).format(new Date(value)) + ' WIB';
+const when = (value: string) => dateTimeFormatter.format(new Date(value));
 const counts = [['declaredPackages', 'Kemasan menurut dokumen'], ['receivedPackages', 'Kemasan diterima'], ['damagedPackages', 'Kemasan rusak'], ['expiredPackages', 'Kemasan kedaluwarsa'], ['openedPackages', 'Kemasan terbuka']] as const;
 function integer(value: string) { if (!/^(?:0|[1-9][0-9]{0,6})$(?![\s\S])/.test(value) || Number(value) > 1_000_000) throw new RequestNotSentError(400, 'invalid_procurement_inspection'); return Number(value); }
 function message(error: unknown) {

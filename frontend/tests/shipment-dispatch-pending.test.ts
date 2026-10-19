@@ -1,3 +1,4 @@
+import * as displayFormat from '../src/lib/format';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import * as React from 'react';
@@ -104,6 +105,7 @@ function mountDispatch() {
     if (name === '../inventory/scan-client') return scans;
     if (name === '../ordering/order-line-identity') return lineIdentity;
     if (name === './dispatch-client') return {...dispatch, createDispatchGateway: () => gateway};
+    if (name === '@/lib/format') return displayFormat;
     throw new Error('Unexpected mounted dispatch import: ' + name);
   };
   function load(file: string) {

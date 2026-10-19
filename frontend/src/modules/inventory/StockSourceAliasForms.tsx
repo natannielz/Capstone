@@ -4,12 +4,13 @@ import type { SourceDecision } from "./stock-source-workflow";
 import type { CurrentAlias, SourceAlias, SourceAliasCommand } from "./stock-source-alias-workflow";
 import common from "../administration/access.module.css";
 import styles from "./stock-source-alias.module.css";
+import { formatDateTime, numberFormatter } from "@/lib/format";
 
 export const aliasStatus = { proposed: "Menunggu peninjauan", approved: "Disetujui", rejected: "Ditolak", withdrawn: "Ditarik" };
 export const aliasAction = { "stock.source.alias.propose": "Kirim pemetaan", "stock.source.alias.approve": "Setujui pemetaan",
   "stock.source.alias.reject": "Tolak pemetaan", "stock.source.alias.withdraw": "Tarik pemetaan" };
 export const bindingLabel = { absent: "Belum dipetakan", disabled: "Pemetaan dinonaktifkan", stale: "Perlu peninjauan ulang", current: "Sesuai pengaturan saat ini" };
-export const aliasAmount = (value: string) => new Intl.NumberFormat("id-ID").format(BigInt(value));
+export const aliasAmount = (value: string) => numberFormatter.format(BigInt(value));
 const enabledLabel = (value: boolean) => value ? "Izinkan kanal memakai alokasi ini" : "Nonaktifkan pemetaan kanal";
 export function AliasFacts({ proposal }: { proposal: SourceAlias }) {
   return <dl className={styles.facts}>
@@ -19,7 +20,7 @@ export function AliasFacts({ proposal }: { proposal: SourceAlias }) {
     <div><dt>Versi pengaturan sumber yang ditinjau</dt><dd>{proposal.poolVersion}</dd></div>
     <div><dt>Dasar pemetaan</dt><dd>{proposal.baseAliasVersion === "0" ? "Belum ada pemetaan" : "Versi " + proposal.baseAliasVersion}</dd></div>
     {proposal.appliedAliasVersion && <div><dt>Versi pemetaan yang disimpan</dt><dd>{proposal.appliedAliasVersion}</dd></div>}
-    <div><dt>Diajukan</dt><dd>{new Date(proposal.proposedAt).toLocaleString("id-ID", { timeZone: "Asia/Jakarta" })} WIB</dd></div>
+    <div><dt>Diajukan</dt><dd>{formatDateTime(proposal.proposedAt)}</dd></div>
     <div><dt>Alasan pengajuan</dt><dd className={common.preserve}>{proposal.reason}</dd></div>
   </dl>;
 }

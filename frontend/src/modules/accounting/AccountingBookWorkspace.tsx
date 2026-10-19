@@ -14,10 +14,11 @@ import { accountingBookKey, accountingBookInput, createAccountingBookGateway, pr
   type AccountingBookChoice, type AccountingBookInput, type AccountingBookCurrent, type AccountingBookProposal, type AccountingBookPreview,
   type AccountingBookDecision, type AccountingBookDecisionPreview } from './accounting-book-client';
 import styles from '../administration/access.module.css';
+import { dateTimeFormatter } from '@/lib/format';
 
 type Account = { actorId: string; actions: readonly string[]; session: IdentitySession; observedAt: number };
 const path = '/accounting/books', readPermission = 'accounting.book.read', proposePermission = 'accounting.book.propose', approvePermission = 'accounting.book.approve';
-const when = (value: string) => new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Jakarta' }).format(new Date(value)) + ' WIB';
+const when = (value: string) => dateTimeFormatter.format(new Date(value));
 const states = { pending: 'Menunggu pemeriksaan', approved: 'Disetujui', rejected: 'Ditolak' } as const;
 function message(error: unknown) {
   if (error instanceof IdentityFailure) return 'Sesi belum tersedia. Masuk kembali untuk memeriksa buku akuntansi.';

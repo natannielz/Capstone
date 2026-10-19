@@ -90,8 +90,8 @@ test('snapshot rejects duplicate journals, unsupported truncation, changed order
 });
 
 test('money display preserves every minor-unit digit and signed balances without Number conversion', () => {
-  assert.equal(formatAccountingReportMoney('999999999999999.99', 'IDR'), 'Rp 999.999.999.999.999,99');
-  assert.equal(formatAccountingReportMoney('-90071992547409.93', 'IDR'), 'Rp -90.071.992.547.409,93');
+  assert.equal(formatAccountingReportMoney('999999999999999.99', 'IDR'), 'Rp999.999.999.999.999,99');
+  assert.equal(formatAccountingReportMoney('-90071992547409.93', 'IDR'), '-Rp90.071.992.547.409,93');
   assert.equal(formatAccountingReportMoney('0.00', 'USD'), 'USD 0,00');
   for (const value of ['1e3', '1.001', '-0.00', '9999999999999999.99']) assert.throws(() => formatAccountingReportMoney(value, 'IDR'), invalid);
 });

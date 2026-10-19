@@ -6,6 +6,7 @@ import { accessMessage } from "../administration/workflow";
 import { describeScope } from "../organizations/access-scope";
 import type { IdentityAdministrationGateway, InvitationAction } from "./identity-administration-client";
 import styles from "../administration/access.module.css";
+import { dateTimeFormatter } from "@/lib/format";
 
 type Schemas = components["schemas"];
 export type Profile = Schemas["IdentityProfileDto"];
@@ -13,7 +14,7 @@ export type Invitation = Schemas["IdentityInvitationDto"];
 export type IdentityDecision = { kind: "invitation"; value: Invitation; action: InvitationAction } | { kind: "recovery"; value: Profile };
 const actions: Record<InvitationAction, string> = { approve: "Setujui", reject: "Tolak", withdraw: "Tarik pengajuan", revoke: "Cabut undangan" };
 export const invitationStatus = (status: string) => ({ pending: "Menunggu persetujuan", approved: "Disetujui · pengiriman tertahan", rejected: "Ditolak", withdrawn: "Ditarik", revoked: "Dicabut", redeemed: "Telah digunakan", active: "Aktif", suspended: "Ditangguhkan" } as Record<string, string>)[status] ?? status;
-export const jakartaTime = (value: string) => new Intl.DateTimeFormat("id-ID", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Jakarta" }).format(new Date(value)) + " WIB";
+export const jakartaTime = (value: string) => dateTimeFormatter.format(new Date(value));
 
 type Common = { gateway: IdentityAdministrationGateway; actorId: string; revision: number; locked: boolean; onSelect: (decision: IdentityDecision) => void; onFailure: (error: unknown) => void };
 export function AccountDirectory({ gateway, actorId, revision, locked, onSelect, onFailure, canRecover }: Common & { canRecover: boolean }) {

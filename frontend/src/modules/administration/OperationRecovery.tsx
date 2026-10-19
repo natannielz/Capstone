@@ -6,6 +6,7 @@ import { OperationJournal, operationRecoveryCapabilities, reconcileOperationReco
 import { AccessFailure, accessMessage } from "./workflow";
 import styles from "./access.module.css";
 import { recoveryPage, operationLabel } from "./operation-recovery-navigation";
+import { formatDateTime } from "@/lib/format";
 
 export function useOperationRecovery(actorId?: string) {
   const [journal] = useState(() => new OperationJournal(() => window.localStorage));
@@ -76,7 +77,7 @@ export function OperationRecovery({ entries, journal, disabled, onResolved, onFa
       <ul className={styles.recoveryList}>{entries.map(entry => {
         const capabilities = operationRecoveryCapabilities(entry.operation, recoveryAdapters);
         return <li key={`${entry.operation}:${entry.key}`}>
-        <div><strong>{operationLabel(entry.operation)}</strong><p>{new Date(entry.createdAt).toLocaleString("id-ID")}</p>
+        <div><strong>{operationLabel(entry.operation)}</strong><p>{formatDateTime(entry.createdAt)}</p>
           <details><summary>Referensi bantuan</summary><code>{entry.key}</code></details></div>
         <div className={styles.actions}><button className={styles.secondary} disabled={disabled || busy || !capabilities.canCheck} onClick={() => void check(entry)}>Periksa hasil</button>
           {capabilities.canClose && <button className={styles.secondary} disabled={disabled || busy} onClick={() => { setClosing(entry); setReason(""); setConfirmed(false); setError(null); }}>Selesaikan dan tutup</button>}</div>

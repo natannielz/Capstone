@@ -9,6 +9,7 @@ import type { InspectionView } from './inspection-client';
 import { ReturnEntitlementPanel } from './ReturnEntitlementPanel';
 import { createResolutionGateway, prepareResolution, resolutionActions, type ResolutionAction, type ResolutionView } from './resolution-client';
 import styles from '../administration/access.module.css';
+import { formatDateTime } from '@/lib/format';
 
 export function CaseResolutionPanel({ actorId, owner, inspection, allowedActions, canReadInvoice = false, fresh, locked, current, journal, onSettled, onDenied, onBusyChange }: {
   actorId: string; owner: AfterSalesCase; inspection: InspectionView; allowedActions: readonly ResolutionAction[]; canReadInvoice?: boolean; fresh: boolean; locked: boolean; current: () => boolean; journal: OperationJournal;
@@ -32,7 +33,7 @@ export function CaseResolutionPanel({ actorId, owner, inspection, allowedActions
     {error !== null && <p role="alert">{error instanceof AccessFailure && error.code === 'invalid_return_resolution' ? 'Pilih penyelesaian yang tersedia dan isi catatan pengajuan.' : accessMessage(error)}</p>}{busy && <p role="status">Memeriksa pengajuan penyelesaian…</p>}
     <button className={styles.secondary} disabled={disabled} onClick={() => void work(async () => { const value = await gateway.read(actorId, owner, inspection); if (active()) { setView(value); setPreview(false); setConfirm(null); } })}>Lihat pengajuan penyelesaian {inspection.receipt.id}</button>
     {view && !view.request && <p>Belum ada pengajuan penyelesaian untuk penerimaan ini.</p>}
-    {view?.request && <section aria-label="Pengajuan penyelesaian barang"><p>{resolutionActions[view.request.action]} · Menunggu persetujuan penyelesaian</p><p>{new Date(view.request.requestedAt).toLocaleString('id-ID')}</p><p>{view.request.publicNote}</p></section>}
+    {view?.request && <section aria-label="Pengajuan penyelesaian barang"><p>{resolutionActions[view.request.action]} · Menunggu persetujuan penyelesaian</p><p>{formatDateTime(view.request.requestedAt)}</p><p>{view.request.publicNote}</p></section>}
     {view?.request && view.request.action !== 'replacement' && canReadInvoice && allowedActions.includes(view.request.action) &&
       <ReturnEntitlementPanel key={view.returnId + ':' + view.request.action} actorId={actorId} owner={owner} resolution={view} fresh={fresh} locked={disabled} current={current} journal={journal} onSettled={onSettled} onDenied={onDenied} onBusyChange={onBusyChange} />}
     {allowedActions.length > 0 && !view?.request && !confirm && <><label>Pilihan penyelesaian<select disabled={disabled} value={action} onChange={event => { setAction(event.target.value as ResolutionAction); setPreview(false); setConfirm(null); }}>{allowedActions.map(value => <option key={value} value={value}>{resolutionActions[value]}</option>)}</select></label>

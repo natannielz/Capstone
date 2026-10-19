@@ -9,6 +9,7 @@ import { createPaymentCorrectionGateway, prepareCorrection, paymentCorrectionLab
 import type { PaymentDraft, PaymentOcrView } from './payment-client';
 import styles from '../administration/access.module.css';
 import invoice from './invoice.module.css';
+import { dateTimeFormatter } from '@/lib/format';
 
 const labels = paymentCorrectionLabels;
 const formats: Record<string, string> = { amount: 'Contoh: 2000.01', currency: 'IDR atau kosong jika tidak diketahui', transfer_date: 'YYYY-MM-DD', transfer_time: 'HH:mm:ss; zona waktu tetap perlu diperiksa' };
@@ -96,7 +97,7 @@ export function PaymentCorrectionPanel({ actorId, owner, ocr, allowed, fresh, lo
           })}>Simpan koreksi</button><button type="button" className={styles.secondary} disabled={disabled} onClick={() => setConfirm(null)}>Kembali ke isian</button>
         </section>}</>}
       <h4>Riwayat pemeriksaan</h4>{view.recent.length === 0 ? <p>Belum ada koreksi petugas.</p> : <><p>Menampilkan {view.recent.length} versi terbaru; seluruh versi tetap tersimpan.</p><ul>{view.recent.map(row => <li key={row.id}>
-        <strong>Versi {row.revision} · Akun {row.actorId}</strong><p>{new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Jakarta' }).format(new Date(row.recordedAt))} · {row.reason}</p>
+        <strong>Versi {row.revision} · Akun {row.actorId}</strong><p>{dateTimeFormatter.format(new Date(row.recordedAt))} · {row.reason}</p>
         <ul>{row.fields.filter((item, index) => item.value !== row.beforeFields[index].value).map(item => <li key={item.field}>{labels[item.field]}: {row.beforeFields.find(value => value.field === item.field)?.value ?? 'Belum diketahui'} → {item.value ?? 'Belum diketahui'}</li>)}</ul>
         {row.supplementaryObservations && <section aria-label={'Rujukan PDF tersimpan versi ' + row.revision}><p>Rujukan PDF tambahan yang diperiksa pada koreksi ini:</p><ObservationList observations={row.supplementaryObservations}/></section>}
       </li>)}</ul></>}

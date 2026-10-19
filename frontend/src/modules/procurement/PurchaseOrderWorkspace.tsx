@@ -18,6 +18,7 @@ import { purchaseOrderInboundSelection, type PurchaseOrderInboundSelection } fro
 import type { StockReceiptPool } from './procurement-stock-receipt-client';
 import styles from '../administration/access.module.css';
 import { PurchaseArrivalPanel } from './PurchaseArrivalPanel';
+import { dateTimeFormatter } from '@/lib/format';
 
 type Account = { actorId: string; actions: readonly string[]; session: IdentitySession; observedAt: number };
 type DraftLine = { input: PurchaseOrderInput['lines'][number]; chosen: PurchaseOrderMapping };
@@ -29,7 +30,7 @@ const referenceKinds = { quote: 'Penawaran', order: 'Pesanan', invoice: 'Invoice
 const termsKinds = { full_before_dispatch: 'Lunas sebelum dikirim', deposit: 'Uang muka', on_receipt: 'Bayar saat diterima', credit: 'Kredit' } as const;
 const triggers = { before_dispatch: 'Sebelum dikirim', on_receipt: 'Saat diterima', due_date: 'Tanggal jatuh tempo' } as const;
 const states = { pending: 'Menunggu pemeriksaan', approved: 'Disetujui secara internal', rejected: 'Ditolak' } as const;
-const when = (value: string) => new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Jakarta' }).format(new Date(value)) + ' WIB';
+const when = (value: string) => dateTimeFormatter.format(new Date(value));
 const amount = (value: string) => 'IDR ' + value;
 function message(error: unknown) {
   if (error instanceof IdentityFailure) return 'Masuk kembali untuk memeriksa pesanan pembelian.';

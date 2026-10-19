@@ -12,8 +12,9 @@ import { WorkspaceDirectory } from "./WorkspaceDirectory";
 import { AccountContactPanel } from "./AccountContactPanel";
 import styles from "./identity.module.css";
 import { isPilotRelease } from '../../lib/release-scope';
+import { dateTimeFormatter } from "@/lib/format";
 
-const displayTime = (value: string | null) => value ? new Intl.DateTimeFormat("id-ID", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Jakarta" }).format(new Date(value)) + " WIB" : "—";
+const displayTime = (value: string | null) => value ? dateTimeFormatter.format(new Date(value)) : "—";
 const availableStepUp = (session: IdentitySession) => session.stepUpOperations.filter(operation => !isPilotRelease || ['catalog.manage', 'order.request.submit', 'order.request.decide', 'order.request.read'].includes(operation));
 
 export function IdentityAccount() {

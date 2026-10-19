@@ -1,3 +1,4 @@
+import { formatRupiah } from "@/lib/format";
 export type PublicProduct = {
   id: string;
   familyId: string;
@@ -50,11 +51,7 @@ export const SHOP_COLLECTIONS = [
   },
 ];
 export const rupiah = (value: number) =>
-  new Intl.NumberFormat("id-ID", {
-    style: "currency",
-    currency: "IDR",
-    maximumFractionDigits: 0,
-  }).format(value);
+  formatRupiah(value);
 export function shopCategory(product: PublicProduct) {
   if (product.group && SHOP_CATEGORIES.includes(product.group)) return product.group;
   if (["air", "teh", "kopi", "galon"].includes(product.familyId))

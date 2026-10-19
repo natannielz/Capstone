@@ -15,6 +15,7 @@ import { PriceMutationLedger, priceRecoverySku } from './catalog-price-recovery'
 import { pricePath, preparePriceProposal, preparePriceDecision, type PriceAccess, type PriceChoice, type PricePreview,
   type PriceProposal, type PriceCommand, type CatalogPrice } from './catalog-price-workflow';
 import styles from '../administration/access.module.css';
+import { dateTimeFormatter, formatMoney } from "@/lib/format";
 
 const loginHref = '/identity/login?returnPath=' + encodeURIComponent(pricePath);
 const factorHref = '/identity/account?operation=pricing.approve&returnPath=' + encodeURIComponent(pricePath);
@@ -33,10 +34,9 @@ function message(error: unknown): string {
 }
 const amount = (price: { currency: string; unitPrice: string } | null) => {
   if (price === null) return 'Belum ada harga disetujui';
-  const [whole, fraction] = price.unitPrice.split('.');
-  return price.currency + ' ' + BigInt(whole).toLocaleString('id-ID') + ',' + fraction;
+  return formatMoney(price.currency, price.unitPrice);
 };
-const date = (value: string) => new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Jakarta' }).format(new Date(value)) + ' WIB';
+const date = (value: string) => dateTimeFormatter.format(new Date(value));
 const status = (value: PriceProposal['status']) => ({ proposed: 'Menunggu tinjauan', approve: 'Disetujui', reject: 'Ditolak', withdraw: 'Ditarik' })[value];
 
 export function CatalogPriceWorkspace() {

@@ -7,6 +7,7 @@ import {IdentifierJournal, createCatalogIdentifierGateway, identifierCommand, id
   type CatalogIdentifierView, type IdentifierCommand, type IdentifierReference, type IdentifierResult} from './catalog-identifier-client';
 import common from '../administration/access.module.css';
 import styles from './catalog-editor.module.css';
+import { formatDateTime } from '@/lib/format';
 
 export function useCatalogIdentifierRecovery(actorId: string) {
   const [journal] = useState(() => new IdentifierJournal(() => window.localStorage));
@@ -55,7 +56,7 @@ export function CatalogIdentifierRecoveryPanel({actorId, recovery, disabled, isC
       <button type="button" className={common.secondary} disabled={disabled || busy} onClick={recovery.refresh}>Periksa referensi kode</button></div>}
     <ul className={common.recoveryList}>{recovery.entries.map(ref => <li key={ref.operation + ':' + ref.key} data-identifier-recovery-key={ref.key}>
       <div><strong>{ref.operation === 'catalog.identifier.assign' ? 'Pencatatan kode' : ref.operation === 'catalog.identifier.retire' ? 'Penghentian kode' : 'Koreksi kode utama'} · SKU {ref.skuId}</strong>
-        <p>{new Date(ref.createdAt).toLocaleString('id-ID')}</p><details><summary>Referensi bantuan</summary><code>{ref.key}</code></details></div>
+        <p>{formatDateTime(ref.createdAt)}</p><details><summary>Referensi bantuan</summary><code>{ref.key}</code></details></div>
       <button type="button" className={common.secondary} disabled={disabled || busy || recovery.blocked} onClick={() => void recover(ref)}>Periksa hasil kode</button>
     </li>)}</ul>
   </section>;
@@ -126,7 +127,7 @@ export function CatalogIdentifierPanel({actorId, sku, recovery, locked, isCurren
       <ul className={styles.variantList}>{view.identifiers.map(row => <li key={row.id}><div className={styles.sectionHeading}><strong>{row.rawValue}</strong>
       <span>{row.isPrimary ? 'Kode utama' : row.kind === 'gtin' ? 'GTIN' : row.kind === 'skuCode' ? 'Alias SKU' : 'Kode sumber'} · {row.retiredAt ? 'Dihentikan' : 'Aktif'}</span></div>
       <p>Nilai pembanding: {row.canonicalValue}</p><p>Referensi asal: {row.provenanceReference}</p>
-      <p className={common.help}>Dicatat {new Date(row.effectiveAt).toLocaleString('id-ID')}{row.retiredAt ? ' · dihentikan ' + new Date(row.retiredAt).toLocaleString('id-ID') : ''}</p>
+      <p className={common.help}>Dicatat {formatDateTime(row.effectiveAt)}{row.retiredAt ? ' · dihentikan ' + formatDateTime(row.retiredAt) : ''}</p>
       <div className={common.actions}>{row.isPrimary ? <button type="button" className={common.secondary} disabled={disabled || preview !== null} onClick={() => choose('correct', row.id)}>Koreksi kode utama</button> :
         !row.retiredAt && <button type="button" className={common.danger} disabled={disabled || preview !== null} onClick={() => choose('retire', row.id)}>Hentikan kode {row.rawValue}</button>}</div></li>)}</ul>
       {!preview && <form className={common.form} onSubmit={event => {event.preventDefault(); review();}}><h3>{action === 'assign' ? 'Catat kode tambahan' : action === 'retire' ? 'Hentikan kode tambahan' : 'Koreksi kode utama'}</h3>

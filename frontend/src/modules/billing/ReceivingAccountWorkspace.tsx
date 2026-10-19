@@ -13,9 +13,10 @@ import { createReceivingAccountGateway, prepareReceivingProposal, prepareReceivi
   type ReceivingCommand, type ReceivingDetails, type ReceivingPolicy, type ReceivingSummary, type ReceivingView } from './receiving-account-client';
 import common from '../administration/access.module.css';
 import styles from './invoice.module.css';
+import { dateTimeFormatter } from '@/lib/format';
 
 type Account = { actorId: string; actions: readonly string[]; session: IdentitySession; observedAt: number };
-const at = (value: string) => new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Jakarta' }).format(new Date(value));
+const at = (value: string) => dateTimeFormatter.format(new Date(value));
 const blank = (): ReceivingDetails => ({ bankCode: '', accountNumber: '', holderName: '', currency: 'IDR' });
 const stateName: Record<string, string> = { pending: 'Menunggu keputusan', approve: 'Disetujui', reject: 'Ditolak', withdraw: 'Ditarik' };
 const actionName: Record<string, string> = { propose: 'Kirim usulan', observe: 'Simpan hasil pemeriksaan bank', approve: 'Setujui rekening', reject: 'Tolak usulan', withdraw: 'Tarik usulan' };

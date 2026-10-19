@@ -12,6 +12,7 @@ import { reorderDraftReason } from './order-reorder';
 import { OrderBulkEntry } from './OrderBulkEntry';
 import common from '../administration/access.module.css';
 import styles from './order-draft.module.css';
+import { formatDateTime } from '@/lib/format';
 
 export function OrderDraftEditor({ actorId, draft, initialQuote, initialIssue, locked, isCurrent, onSubmit, onFailure, reorderSourceId }: {
   actorId: string; draft: Pick<OrderDraft, 'input' | 'revision'> & { id: string | null }; reorderSourceId?: string; initialQuote: OrderQuote | null; initialIssue: unknown; locked: boolean;
@@ -127,12 +128,12 @@ export function OrderDraftEditor({ actorId, draft, initialQuote, initialIssue, l
       <section aria-label="Alamat yang disetujui"><h3>Alamat organisasi dan tujuan</h3>
         <p className={common.help}>Periksa alamat yang telah disetujui untuk organisasi dan tujuan draf ini. Pemeriksaan ini tidak mengubah isian pengiriman atau memverifikasi penerima.</p>
         <button type="button" className={common.secondary} disabled={disabled} onClick={() => void readAddresses()}>Periksa alamat yang disetujui</button>
-        {shownAddresses && <><p className={common.help}>Diperiksa {new Date(shownAddresses.observedAt).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })} WIB.</p>
+        {shownAddresses && <><p className={common.help}>Diperiksa {formatDateTime(shownAddresses.observedAt)}.</p>
           <div className={common.twoFields}>{[shownAddresses.legalBilling, shownAddresses.delivery].map(item => {
             const label = item.purpose === 'legal_billing' ? 'Alamat penagihan organisasi' : item.target.kind === 'division' ? 'Alamat pengiriman divisi' : 'Alamat pengiriman cabang';
             return <section key={item.purpose} className={styles.line} aria-label={label}><h4>{label}</h4><p><strong>{item.name}</strong><br />{item.code}</p>
               <p className={styles.address}>{[item.address.line1, item.address.line2, item.address.city, item.address.region, item.address.postalCode, item.address.countryCode].filter(value => value !== null).join('\n')}</p>
-              <p className={common.help}>Versi {item.version} · Berlaku {new Date(item.effectiveAt).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })} WIB.</p></section>;
+              <p className={common.help}>Versi {item.version} · Berlaku {formatDateTime(item.effectiveAt)}.</p></section>;
           })}</div></>}
       </section>
       <label className={common.checkbox}><input type="checkbox" checked={delivery} disabled={disabled} onChange={event => setDelivery(event.target.checked)} />Isi rencana pengiriman</label>

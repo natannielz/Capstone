@@ -9,6 +9,7 @@ import shared from '../administration/access.module.css';
 import styles from './order-quote.module.css';
 import { useDraftSave } from './DraftSave';
 import { prepareDraftCommand } from './order-draft-client';
+import { formatNumber } from '@/lib/format';
 
 function message(error: unknown) {
   if (error instanceof AccessFailure) {
@@ -65,7 +66,7 @@ export function OrderQuotePanel({ actorId, item, isCurrent }: { actorId: string;
     {saving.recoveryView}
     {saved && <p role="status" className={shared.success}>Draf tersimpan. <Link href="/ordering/drafts">Buka draf pesanan</Link> untuk melengkapi barang dan pengiriman.</p>}
     {quote && <div className={styles.result} ref={result} tabIndex={-1} role="status"><h4>Subtotal barang</h4><p className={styles.amount}>{orderAmount(quote.currency, quote.catalogSubtotal)}</p>
-      <p>{quote.lines[0].packages} {quote.lines[0].definition.packageLabel} · {BigInt(quote.lines[0].baseUnits).toLocaleString('id-ID')} {quote.lines[0].definition.baseUnitCode}</p>
+      <p>{quote.lines[0].packages} {quote.lines[0].definition.packageLabel} · {formatNumber(BigInt(quote.lines[0].baseUnits))} {quote.lines[0].definition.baseUnitCode}</p>
       <p className={shared.help}>Perhitungan awal. Pesanan belum dikirim dan stok belum dipesan. Pajak, ongkir, dan syarat pembayaran diperiksa sebelum pengajuan.</p>
       <button className={shared.primary} disabled={busy || saving.locked} onClick={() => {
         if (!item.currentPrice) return;

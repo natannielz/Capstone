@@ -14,6 +14,7 @@ import { createOrderSubstitutionGateway, replacementSelection, substitutionOpera
   type SubstitutionDecisionReview, type SubstitutionHistory, type SubstitutionLine, type SubstitutionProposalReview,
   type SubstitutionResult, type SubstitutionTarget } from './order-substitution-client';
 import styles from '../administration/access.module.css';
+import { formatDateTime } from '@/lib/format';
 
 type Account = { actorId: string; actions: readonly string[]; session: IdentitySession; observedAt: number };
 type Page<T> = { items: T[]; hasMore: boolean };
@@ -184,7 +185,7 @@ function SubstitutionDesk({ account, orderId, onFailure }: { account: Account; o
       <ul className={styles.recoveryList}>{history.items.map(value => <li key={value.proposalId}><div><strong>{value.buyerName} · Pesanan {value.orderId}</strong>
         <p>{value.input.originalPackages} × {label(value.original)} → {value.replacement.packages} × {label(value.replacement)}</p>
         <p>Harga pengganti {orderAmount(value.replacement.price.currency, value.replacement.price.unitPrice)} per kemasan · subtotal {orderAmount(value.replacement.price.currency, value.replacement.catalogSubtotal)}</p>
-        <p>{statusLabel[value.status]} · diajukan {new Date(value.proposedAt).toLocaleString('id-ID')}{value.decidedAt ? ` · diputuskan ${new Date(value.decidedAt).toLocaleString('id-ID')}` : ''}</p></div>
+        <p>{statusLabel[value.status]} · diajukan {formatDateTime(value.proposedAt)}{value.decidedAt ? ` · diputuskan ${formatDateTime(value.decidedAt)}` : ''}</p></div>
         {forBuyer && value.status === 'pending' && <div className={styles.actions}><button className={styles.primary} disabled={locked} onClick={() => void reviewDecision(value, 'Accept')}>Tinjau persetujuan</button><button className={styles.secondary} disabled={locked} onClick={() => void reviewDecision(value, 'Decline')}>Tinjau penolakan</button></div>}</li>)}</ul>
       {history.hasMore && <button className={styles.secondary} disabled={locked} onClick={() => { clearReview(); setHistoryBefore(history.items.at(-1)!.proposalId); }}>Pengajuan sebelumnya</button>}
     </section>

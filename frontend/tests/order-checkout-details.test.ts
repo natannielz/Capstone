@@ -17,11 +17,11 @@ const source = { input, review: 'a'.repeat(64), calculatedAt: definition.effecti
 test('checkout displays exact validated package and price facts without a guessed product photograph or shipping charge', () => {
   const value = parseCheckoutReview(source, input);
   const html = renderToStaticMarkup(createElement(OrderCheckoutDetails, { value, reviewing: true }));
-  for (const text of ['Pena biru', 'PENA-12', '2 Dus · 24 PCS', 'Isi per Dus: 12 PCS', 'IDR 12.000,25 / Dus', 'IDR 24.000,50', 'Total pesanan: IDR 25.500,50',
+  for (const text of ['Pena biru', 'PENA-12', '2 Dus · 24 PCS', 'Isi per Dus: 12 PCS', 'Rp12.000,25 / Dus', 'Rp24.000,50', 'Total pesanan: Rp25.500,50',
     'Hubungi penerima sebelum tiba.', 'KEBUTUHAN-001', 'Foto belum tersedia']) assert.ok(html.includes(text), text);
   assert.doesNotMatch(html, /<img|<input|<select|Gratis ongkir|Pembayaran berhasil|>null</);
-  assert.match(html, /<dt>Pajak<\/dt><dd>IDR 0,00<\/dd>/);
-  assert.match(html, /<dt>Biaya lain<\/dt><dd>IDR 1.500,00<\/dd>/);
+  assert.match(html, /<dt>Pajak<\/dt><dd>Rp0,00<\/dd>/);
+  assert.match(html, /<dt>Biaya lain<\/dt><dd>Rp1.500,00<\/dd>/);
 });
 
 test('saved checkout presents the immutable submitted prices without retaining a review action', () => {
@@ -31,6 +31,6 @@ test('saved checkout presents the immutable submitted prices without retaining a
   const html = renderToStaticMarkup(createElement(OrderCheckoutDetails, { value, reviewing: false }, createElement('button', null, 'Konfirmasi ajukan pesanan')));
   assert.match(html, /Rincian pesanan tersimpan/);
   assert.match(html, /Nilai ini mengikuti rincian saat pesanan diajukan/);
-  assert.match(html, /Total pesanan: IDR 25\.500,50/);
+  assert.match(html, /Total pesanan: Rp25\.500,50/);
   assert.doesNotMatch(html, /<button|Periksa sebelum mengajukan/);
 });

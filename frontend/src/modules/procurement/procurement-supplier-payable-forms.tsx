@@ -2,10 +2,11 @@
 
 import type { SupplierPayableCapacity, SupplierPayablePolicy, SupplierPayablePreview } from './procurement-supplier-payable-client';
 import styles from '../administration/access.module.css';
+import { dateTimeFormatter } from '@/lib/format';
 
 export const payableKinds = { recognize: 'Pengakuan utang', apply_advance: 'Penerapan uang muka' };
 export const payableStates = { proposed: 'Menunggu pemeriksaan independen', approved: 'Disetujui dan dibukukan', rejected: 'Ditolak tanpa pembukuan' };
-export const payableWhen = (value: string) => new Intl.DateTimeFormat('id-ID', { timeZone: 'Asia/Jakarta', dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) + ' WIB';
+export const payableWhen = (value: string) => dateTimeFormatter.format(new Date(value));
 export const payableNotice = 'Pengajuan belum mencadangkan nilai. Persetujuan hanya mencatat pembukuan yang ditinjau; tidak mengirim uang atau melepas barang.';
 
 export function PayableCapacityFacts({ value, historical = false }: { value: SupplierPayableCapacity; historical?: boolean }) {

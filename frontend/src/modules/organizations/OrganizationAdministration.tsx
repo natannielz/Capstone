@@ -15,6 +15,7 @@ import { changeLabels, editOrganizationRequest, newOrganizationRequest, organiza
   type OrganizationProposal, type OrganizationRequest } from "./organization-workflow";
 import styles from "../administration/access.module.css";
 import orgStyles from "./organizations.module.css";
+import { formatDateTime } from "@/lib/format";
 
 type Schemas = components["schemas"];
 type Selection = { kind: "unit"; value: Organization } | { kind: "proposal"; value: OrganizationProposal } | null;
@@ -249,7 +250,7 @@ function ProposalDetails({ proposal, compact = false }: { proposal: Organization
       <p className={styles.help}>Angka ini mencakup potensi akses, termasuk izin dengan cakupan lebih luas. Masa berlaku dan verifikasi akun tetap diperiksa. Unit turunan yang ditangguhkan tetap ditangguhkan. Sesi lama akun terkait perlu diperbarui.</p>
       <details><summary>Referensi pemeriksaan dampak</summary><p className={styles.preserve}>{proposal.impact.revision}</p></details></section>}
     <div><h3>Alasan pengajuan</h3><p className={styles.preserve}>{proposal.reason}</p></div>
-    {!compact && <><p className={styles.help}>Diajukan {new Date(proposal.createdAt).toLocaleString("id-ID")}</p>
+    {!compact && <><p className={styles.help}>Diajukan {formatDateTime(proposal.createdAt)}</p>
       {proposal.approvedBy && <p>Disetujui akun {proposal.approvedBy}{proposal.resultScopeId ? `; hasil pada unit ${proposal.resultScopeId}` : ""}.</p>}
       {proposal.decisionBy && <p>Keputusan oleh akun {proposal.decisionBy}: <span className={styles.preserve}>{proposal.decisionReason}</span></p>}</>}
   </>;

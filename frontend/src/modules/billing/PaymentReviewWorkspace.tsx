@@ -29,10 +29,11 @@ import { PaymentSupplementReviewerPanel } from './PaymentSupplementPanels';
 import { paymentSupplementOwner } from './payment-pdf-supplement-client';
 import common from '../administration/access.module.css';
 import styles from './invoice.module.css';
+import { dateFormatter } from '@/lib/format';
 
 type Account = { actorId: string; actions: readonly string[]; session: IdentitySession; observedAt: number };
 const rupiah = (value: string) => orderAmount('IDR', value);
-const date = (value: string) => new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeZone: 'Asia/Jakarta' }).format(new Date(value));
+const date = (value: string) => dateFormatter.format(new Date(value));
 function message(error: unknown) {
   if (error instanceof AccessFailure && (error.code.startsWith('evidence_') || error.code === 'payment_response_invalid')) return 'Bukti tidak dapat dibuka dengan aman. Muat pengajuan terbaru atau hubungi penanggung jawab pemeriksaan bukti.';
   if (error instanceof AccessFailure && error.code === 'payment_draft_changed') return 'Pengajuan berubah. Muat kembali pengajuan sebelum melanjutkan pemeriksaan.';

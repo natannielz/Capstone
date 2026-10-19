@@ -1,6 +1,7 @@
 "use client";
 
 import { Badge } from "@/components/ui/badge";
+import { statusTone } from "@/lib/status/dictionary";
 import type { Actor } from "@/lib/domain/accounts";
 import type { State,Order,CommandResult } from "@/lib/domain/model";
 import { orderFulfillmentLabel } from "@/lib/domain/order-views";
@@ -11,4 +12,4 @@ export type FormField={key:string;label:string;type?:"text"|"number"|"date"|"tex
 export type ActionSpec={title:string;description:string;type:string;fields:FormField[];data?:Record<string,unknown>;map?:(values:Record<string,string>)=>Record<string,unknown>;label?:string;after?:(r:CommandResult)=>void};
 export type WorkspaceContext={refresh:()=>Promise<void>;s:State;actor:Actor;go:(page:Page,id?:string,query?:QueryPatch)=>void;ask:(spec:ActionSpec)=>void};
 export function orderStatus(s:State,o:Order){return orderFulfillmentLabel(s,o);}
-export function Status({text}:{text:string}){return <Badge variant="secondary" data-status={text} className="status-badge">{text}</Badge>;}
+export function Status({text}:{text:string}){return <Badge variant="secondary" data-tone={statusTone(text)} className="status-badge">{text}</Badge>;}

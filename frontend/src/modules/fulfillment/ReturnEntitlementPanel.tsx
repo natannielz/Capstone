@@ -10,6 +10,7 @@ import { inspectionConditions, inspectionIdentities } from './inspection-client'
 import { resolutionActions, type ResolutionView } from './resolution-client';
 import { createReturnEntitlementGateway, prepareReturnEntitlement, returnEntitlementInput, type ReturnEntitlementView, type ReturnEntitlementPreview } from './return-entitlement-client';
 import styles from '../administration/access.module.css';
+import { formatDateTime } from '@/lib/format';
 
 const rupiah = (amount: string) => orderAmount('IDR', amount);
 function message(failure: unknown) {
@@ -49,7 +50,7 @@ export function ReturnEntitlementPanel({ actorId, owner, resolution, fresh, lock
     {error !== null && <p role="alert">{message(error)}</p>}{busy && <p role="status">Memeriksa nilai retur…</p>}
     <button className={styles.secondary} disabled={disabled} onClick={() => void work(async () => { const value = await gateway.read(actorId, owner, resolution); if (active()) { setView(value); setConfirm(null); setShown(null); setConsent(false); setValues({}); } })}>Periksa nilai finansial retur {resolution.returnId}</button>
     {view?.request && <section aria-label="Pengajuan nilai retur tercatat"><p role="status">Nilai retur {rupiah(view.request.credit)} tercatat untuk pemeriksaan Finance independen. Tagihan, saldo pembayaran, dana refund dan stok belum berubah.</p>
-      <p>{new Date(view.request.requestedAt).toLocaleString('id-ID')} · Menunggu pemeriksaan finansial</p><p>Nilai barang {rupiah(view.request.net)} · Pajak {rupiah(view.request.tax)} · Biaya {rupiah(view.request.charges)}</p></section>}
+      <p>{formatDateTime(view.request.requestedAt)} · Menunggu pemeriksaan finansial</p><p>Nilai barang {rupiah(view.request.net)} · Pajak {rupiah(view.request.tax)} · Biaya {rupiah(view.request.charges)}</p></section>}
     {view && !view.request && !confirm && <form onSubmit={event => { event.preventDefault(); if (!canAct) return; void work(async () => {
       const input = returnEntitlementInput(view, { lines: view.lines.map(line => ({ receiptId: line.receiptId, skuId: line.skuId, ...valueFor(line) })) });
       const preview = await gateway.preview(actorId, owner, resolution, view, input);

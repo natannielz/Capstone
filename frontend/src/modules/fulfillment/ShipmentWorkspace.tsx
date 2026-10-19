@@ -15,9 +15,10 @@ import { createDeliveryAttemptGateway, deliveryOutcomes, type DeliveryAttempt } 
 import { OperationRecovery, useOperationRecovery } from '../administration/OperationRecovery';
 import common from '../administration/access.module.css';
 import styles from '../ordering/order-draft.module.css';
+import { dateTimeFormatter } from '@/lib/format';
 
 type Account = { actorId: string; actions: readonly string[]; session: IdentitySession; observedAt: number };
-const time = (value: string) => new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Jakarta' }).format(new Date(value));
+const time = (value: string) => dateTimeFormatter.format(new Date(value));
 const number = (item: Shipment) => `${item.numberEntity}/${item.numberChannel}/${item.numberYear}/${item.number}`;
 function message(error: unknown) {
   if (error instanceof AccessFailure && error.status >= 400 && error.status < 500) return accessMessage(error);

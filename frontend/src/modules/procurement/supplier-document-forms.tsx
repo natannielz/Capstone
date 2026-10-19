@@ -1,11 +1,12 @@
 import type { SupplierDocumentInput, SupplierDocumentLine, SupplierDocumentMatchPreview, SupplierDocumentRead, SupplierDocumentOcr, SupplierDocumentQuality, SupplierDocumentQualityChoices } from './supplier-document-client';
 import styles from '../administration/access.module.css';
 import {SupplierPdfObservationList} from './SupplierPdfMatchObservations';
+import { dateTimeFormatter, longDateFormatter, numberFormatter } from '@/lib/format';
 
 export type DocumentRow = { key: string } & { [K in keyof SupplierDocumentLine]: string };
-const qualityCount = (value: string) => new Intl.NumberFormat('id-ID').format(BigInt(value));
-const qualityWhen = (value: string) => new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Jakarta' }).format(new Date(value)) + ' WIB';
-const qualityDay = (value: string) => new Intl.DateTimeFormat('id-ID', { dateStyle: 'long', timeZone: 'Asia/Jakarta' }).format(new Date(value + 'T00:00:00+07:00'));
+const qualityCount = (value: string) => numberFormatter.format(BigInt(value));
+const qualityWhen = (value: string) => dateTimeFormatter.format(new Date(value));
+const qualityDay = (value: string) => longDateFormatter.format(new Date(value + 'T00:00:00+07:00'));
 export function SupplierQualityFacts({ value }: { value: SupplierDocumentQuality }) {
   return <section aria-label="Penerimaan mutu yang mendasari pencocokan"><h3>Bagian barang yang diterima mutunya</h3><dl className={styles.facts}>
     <div><dt>Referensi penerimaan stok</dt><dd>{value.receiptReference}</dd></div><div><dt>Persetujuan mutu dicatat</dt><dd>{qualityWhen(value.recordedAt)}</dd></div>

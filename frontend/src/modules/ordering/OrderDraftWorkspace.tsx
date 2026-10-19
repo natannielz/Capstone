@@ -13,6 +13,7 @@ import { draftMessage, useDraftSave } from './DraftSave';
 import { OrderDraftEditor } from './OrderDraftEditor';
 import common from '../administration/access.module.css';
 import styles from './order-draft.module.css';
+import { formatDateTime } from '@/lib/format';
 
 type Account = { actorId: string; session: IdentitySession; observedAt: number; options: OrderContextOption[] };
 export const branchLabel = (option: OrderContextOption) => `${option.organizationName ?? 'Organisasi ' + option.context.organizationId} · ${option.branchName ?? 'Cabang ' + option.context.branchId}${option.context.divisionId ? ' · ' + (option.divisionName ?? 'Divisi ' + option.context.divisionId) : ''}`;
@@ -111,7 +112,7 @@ function DraftDesk({ account, onFailure }: { account: Account; onFailure: (error
       {loading ? <p className={styles.empty} role="status">Memuat draf…</p> : rows.length === 0 ? <p className={styles.empty}>Belum ada draf di halaman ini. Pilih kemasan dari katalog untuk memulai.</p> :
         <ul className={common.queueList}>{rows.map(draft => <li key={draft.id}><button className={loaded?.draft.id === draft.id ? common.selectedRow : common.queueRow} disabled={locked}
           onClick={() => { setNotice(''); void reload(after, draft.id); }}><strong>{draft.input.purchaseReference ?? 'Draf ' + draft.id}</strong>
-          <span>{draft.input.selections.length} jenis kemasan · versi {draft.revision}</span><small>{new Date(draft.updatedAt).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })} WIB</small></button></li>)}</ul>}
+          <span>{draft.input.selections.length} jenis kemasan · versi {draft.revision}</span><small>{formatDateTime(draft.updatedAt)}</small></button></li>)}</ul>}
       <div className={common.pagination}><button className={common.secondary} disabled={locked || after === null} onClick={() => void reload()}>Awal daftar</button>
         <button className={common.secondary} disabled={locked || !hasMore} onClick={() => void reload(rows.at(-1)!.id)}>Berikutnya</button></div></section>
       {loaded ? <OrderDraftEditor key={loaded.draft.id + ':' + loaded.draft.revision + ':' + loaded.sequence} actorId={actorId} draft={loaded.draft} initialQuote={loaded.quote} initialIssue={loaded.issue}

@@ -13,6 +13,7 @@ import { grantProfileLabel, historicalGrantLabel, permissionLabel } from "./perm
 import { buildHistoricalGrant, historicalBranches, historicalDivisions, historicalNodeLabel, historicalParentMemberships, historicalPermissions, historicalReviewedBody, historicalScopeLabel, type HistoricalDirectoryNode, type HistoricalGrantProposal } from "./historical-grant";
 import { rolePermissionSuggestions } from "./role-permission-suggestions";
 import styles from "./access.module.css";
+import { formatDateTime } from "@/lib/format";
 
 type Schemas = components["schemas"];
 type Proposal = Schemas["AccessProposalDto"];
@@ -478,7 +479,7 @@ export function AccessAdministration() {
 function ProposalDetails({ proposal, catalog, disabled, onApprove, onDecision }: { proposal: Proposal; catalog: Schemas["AccessCatalogDto"]; disabled: boolean; onApprove: () => void; onDecision: (action: "rejectProposal" | "withdrawProposal") => void }) {
   return <div className={styles.form}><h2>Pengajuan {proposal.id}</h2><dl className={styles.facts}>
     <div><dt>Akun penerima</dt><dd>{proposal.subjectId}</dd></div><div><dt>Diajukan oleh</dt><dd>Akun {proposal.requestedBy}</dd></div>
-    <div><dt>Status</dt><dd>{statusLabel(proposal.status)}</dd></div><div><dt>Diajukan pada</dt><dd>{new Date(proposal.createdAt).toLocaleString("id-ID")}</dd></div>
+    <div><dt>Status</dt><dd>{statusLabel(proposal.status)}</dd></div><div><dt>Diajukan pada</dt><dd>{formatDateTime(proposal.createdAt)}</dd></div>
     {proposal.templateId && <div><dt>{proposal.templateId === "historical-read" ? "Profil izin" : "Peran awal"}</dt><dd>{grantProfileLabel(proposal.templateId, catalog.roles)}</dd></div>}
   </dl><ProposalReview proposal={proposal} />
     {proposal.allowedActions.includes("approve") ? <><p className={styles.help}>Persetujuan hanya berlaku untuk cakupan dan izin pada pengajuan ini. Izin terbaru serta independensi akun diperiksa saat disimpan.</p><button className={styles.primary} disabled={disabled} onClick={onApprove}>Tinjau dan setujui</button></>
@@ -506,7 +507,7 @@ function HistoricalReadNotice({ scope }: { scope: Scope }) {
 }
 
 function Validity({ effectiveAt, expiresAt }: { effectiveAt: string; expiresAt: string | null }) {
-  return <p className={styles.help}>Mulai: {new Date(effectiveAt).toLocaleString("id-ID")}. Berakhir: {expiresAt ? new Date(expiresAt).toLocaleString("id-ID") : "tanpa tanggal akhir"}.</p>;
+  return <p className={styles.help}>Mulai: {formatDateTime(effectiveAt)}. Berakhir: {expiresAt ? formatDateTime(expiresAt) : "tanpa tanggal akhir"}.</p>;
 }
 
 function DelegationList({ permissions }: { permissions: readonly string[] }) {

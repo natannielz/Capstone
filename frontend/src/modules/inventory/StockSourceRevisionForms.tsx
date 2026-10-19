@@ -5,6 +5,7 @@ import type { CurrentSource, SourceRevision, SourceRevisionCommand } from "./sto
 import type { RevisionDraft } from "./stock-source-revision-editor-state";
 import common from "../administration/access.module.css";
 import styles from "./stock-source-revision.module.css";
+import { numberFormatter } from "@/lib/format";
 
 type Settings = CurrentSource["settings"];
 export const revisionStatus = { proposed: "Menunggu peninjauan", approved: "Disetujui · belum aktif", rejected: "Ditolak", withdrawn: "Ditarik" };
@@ -12,7 +13,7 @@ export const revisionAction = { "stock.source.revision.propose": "Kirim perubaha
   "stock.source.revision.reject": "Tolak perubahan", "stock.source.revision.withdraw": "Tarik perubahan" };
 const mode: Record<string, string> = { webLedger: "Catatan stok web", externalLedger: "Catatan stok sistem lain" };
 const control: Record<string, string> = { exclusiveWebAllocation: "Alokasi khusus web", sharedWebLedger: "Catatan bersama pada web", externalHold: "Pemesanan ditahan di sistem lain" };
-export const sourceAmount = (value: string) => new Intl.NumberFormat("id-ID").format(BigInt(value));
+export const sourceAmount = (value: string) => numberFormatter.format(BigInt(value));
 const fields: { key: Exclude<keyof Settings, "location">; label: string; format?: (value: string) => string }[] = [
   { key: "physicalKey", label: "Kode alokasi fisik" }, { key: "label", label: "Nama alokasi" },
   { key: "mode", label: "Cara pencatatan", format: value => mode[value] }, { key: "control", label: "Pengendalian alokasi", format: value => control[value] },

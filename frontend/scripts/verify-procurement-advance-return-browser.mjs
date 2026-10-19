@@ -53,13 +53,13 @@ export async function verifyProcurementAdvanceReturnBrowser({ config, maker, use
   async function facts(current, outer) {
     const region = outer.locator('[aria-label="Fakta pengembalian yang ditinjau"]'), summary = region.getByText('Sumber dan kebijakan pembukuan', { exact: true });
     if (!(await summary.locator('..').evaluate(node => node.open))) await summary.click();
-    await value(region, 'Seluruh kredit bank', 'IDR 7000.00'); await value(region, 'Tanggal pembukuan', input.postingDate); await value(region, 'Alasan pengajuan', input.reason);
+    await value(region, 'Seluruh kredit bank', 'Rp7000.00'); await value(region, 'Tanggal pembukuan', input.postingDate); await value(region, 'Alasan pengajuan', input.reason);
     for (const label of ['Pemasok', 'Referensi pesanan pembelian', 'Referensi bank', 'Persetujuan kebijakan', 'Penanggung jawab', 'Akun penerimaan belum dialokasikan', 'Akun uang muka pemasok']) {
       const term = region.getByText(label, { exact: true }); assert.equal(await term.evaluate(node => node.tagName), 'DT'); assert.ok((await term.locator('..').locator(':scope > dd').innerText()).trim());
     }
     for (const line of input.lines) {
       const row = region.getByRole('heading', { name: 'Uang muka terverifikasi ' + line.settlementId, exact: true }).locator('..');
-      await value(row, 'Nilai pengembalian', 'IDR ' + line.amount); await value(row, 'Sudah diterapkan ke utang', 'IDR 0.00'); await value(row, 'Sudah dikembalikan pemasok', 'IDR 0.00');
+      await value(row, 'Nilai pengembalian', 'IDR ' + line.amount); await value(row, 'Sudah diterapkan ke utang', 'Rp0.00'); await value(row, 'Sudah dikembalikan pemasok', 'Rp0.00');
     }
     assert.equal(await current.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
     assert.equal(await region.evaluate(element => { for (let node = element; node; node = node.parentElement) { const style = getComputedStyle(node); if (['auto', 'scroll', 'hidden'].includes(style.overflowY) && node.scrollHeight > node.clientHeight + 1 && node !== document.documentElement) return false; } return true; }), true);

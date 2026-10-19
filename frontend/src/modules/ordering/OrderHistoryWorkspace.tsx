@@ -17,6 +17,7 @@ import type { DraftResult } from './order-draft-client';
 import { prepareReorderDraft } from './order-reorder';
 import common from '../administration/access.module.css';
 import styles from './order-draft.module.css';
+import { dateTimeFormatter } from '@/lib/format';
 
 type Account = { actorId: string; actions: readonly string[]; session: IdentitySession; observedAt: number };
 function status(order: SubmittedOrder) {
@@ -29,7 +30,7 @@ function status(order: SubmittedOrder) {
   if (progress.acceptedSuborders.length === order.submission.suborderIds.length) return 'Diterima toko — menunggu pemenuhan';
   return 'Menunggu penerimaan toko';
 }
-const date = (value: string) => new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Jakarta' }).format(new Date(value)) + ' WIB';
+const date = (value: string) => dateTimeFormatter.format(new Date(value));
 function message(error: unknown) {
   if (error instanceof AccessFailure && error.status > 0 && error.status < 500) return accessMessage(error);
   return 'Pesanan belum dapat dimuat. Periksa koneksi dan coba kembali.';

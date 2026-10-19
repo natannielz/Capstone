@@ -9,6 +9,7 @@ import { AdministrationNavigation } from "./AdministrationNavigation";
 import { OperationRecovery, useOperationRecovery } from "./OperationRecovery";
 import { AccessFailure, accessMessage } from "./workflow";
 import styles from "./access.module.css";
+import { formatDateTime } from "@/lib/format";
 
 type Schemas = components["schemas"];
 export function AccessHistory() {
@@ -61,7 +62,7 @@ export function AccessHistory() {
       {page && <section className={styles.accountSection} aria-labelledby="history-results-heading">
         <h2 id="history-results-heading">Hasil pemeriksaan</h2><p>{page.total} catatan dalam cakupan dan pilihan ini.</p>
         {page.items.length === 0 ? <p>Tidak ada catatan yang dapat ditampilkan.</p> : <ol className={styles.historyList}>
-          {page.items.map(item => <li key={item.id}><div className={styles.historyHeading}><h3>{historyOperation(item.operation)}</h3><time dateTime={item.createdAt}>{new Date(item.createdAt).toLocaleString("id-ID")}</time></div>
+          {page.items.map(item => <li key={item.id}><div className={styles.historyHeading}><h3>{historyOperation(item.operation)}</h3><time dateTime={item.createdAt}>{formatDateTime(item.createdAt)}</time></div>
             <p>{item.scope ? describeScope(item.scope) : "Cakupan riwayat lama tidak dapat dipastikan"}</p><dl className={styles.facts}>
               <div><dt>Pelaksana</dt><dd>Akun {item.actorId}</dd></div><div><dt>Referensi subjek</dt><dd>{item.subjectId}</dd></div>
               <div><dt>Data terkait</dt><dd>{item.resourceId ?? "—"}</dd></div><div><dt>Perubahan versi</dt><dd>{item.beforeVersion ?? "—"} → {item.afterVersion ?? "—"}</dd></div>

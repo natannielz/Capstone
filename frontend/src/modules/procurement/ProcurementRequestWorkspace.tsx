@@ -15,6 +15,7 @@ import { createProcurementGateway, procurementLocationKey, procurementQuantity, 
 import styles from '../administration/access.module.css';
 import { packageMatchExplanation, type PackageMatching } from './package-matching';
 import { ReplenishmentSuggestion } from './ReplenishmentSuggestion';
+import { dateTimeFormatter } from '@/lib/format';
 
 type Account = { actorId: string; actions: readonly string[]; session: IdentitySession; observedAt: number };
 type DraftLine = { choice: ProcurementPackage; quantity: string; specification: string };
@@ -22,7 +23,7 @@ const path = '/procurement/requests', readPermission = 'procurement.read', prepa
 const routes = { omi_regular: 'OMI reguler', ddo: 'DDO', smart: 'S-Mart', pasar_kering: 'Pasar Kering' } as const;
 const kinds = { stock_need: 'Kebutuhan stok', incoming_notice: 'Pemberitahuan barang masuk', purchase_request: 'Permintaan pembelian' } as const;
 const states = { submitted: 'Menunggu pemeriksaan', approved: 'Disetujui', rejected: 'Ditolak' } as const;
-const when = (value: string) => new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Jakarta' }).format(new Date(value)) + ' WIB';
+const when = (value: string) => dateTimeFormatter.format(new Date(value));
 function message(error: unknown) {
   if (error instanceof IdentityFailure) return 'Sesi belum tersedia. Masuk kembali untuk memeriksa permintaan pengadaan.';
   if (error instanceof AccessFailure || error instanceof RequestNotSentError) {

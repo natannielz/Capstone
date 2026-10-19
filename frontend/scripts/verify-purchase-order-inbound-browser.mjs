@@ -48,7 +48,7 @@ export async function verifyPurchaseOrderInboundBrowser({ config, maker, user, o
     const text = await region.innerText();
     for (const value of [config.organizationName, config.shopName, config.warehouseName, config.channelName, config.supplierName, config.supplierSubject,
       config.skuCode, config.familyName, config.packageLabel, config.specification, '12 piece per kemasan', '2 kemasan', '24 piece', '000001', '000012', reference,
-      'IDR 10000.00', 'IDR 20000.00', 'IDR 3300.00', 'IDR 700.00', 'IDR 24000.00', description, config.dueDate]) assert.ok(text.includes(value), value);
+      'Rp10000.00', 'Rp20000.00', 'Rp3300.00', 'Rp700.00', 'Rp24000.00', description, config.dueDate]) assert.ok(text.includes(value), value);
     const plan = region.getByRole('region', { name: 'Rencana tujuan penerimaan', exact: true });
     const details = await plan.innerText(); for (const value of [config.poolLabel, 'Referensi tujuan ' + config.poolId + ', revisi ' + config.poolRevision, '2 kemasan', disclaimer, 'jumlah berlebih']) assert.ok(details.includes(value), value);
   }

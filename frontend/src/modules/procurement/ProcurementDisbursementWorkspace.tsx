@@ -16,11 +16,12 @@ import { procurementLocationKey, type ProcurementTarget } from './procurement-re
 import { createDisbursementGateway, disbursementInput, disbursementToday, disbursementPolicyCurrent, disbursementEvidenceReady, prepareDisbursement, prepareDisbursementRecord,
   type DisbursementChoice, type DisbursementChoices, type DisbursementOptions, type DisbursementPreview, type DisbursementDraft, type DisbursementRecordPreview, type DisbursementCapacity, type DisbursementPolicy } from './procurement-disbursement-client';
 import styles from '../administration/access.module.css';
+import { dateTimeFormatter } from '@/lib/format';
 
 type Account = { actorId: string; actions: readonly string[]; session: IdentitySession; observedAt: number };
 type Review = { kind: 'draft'; preview: DisbursementPreview; command: ReturnType<typeof prepareDisbursement> } | { kind: 'record'; preview: DisbursementRecordPreview; command: ReturnType<typeof prepareDisbursementRecord> };
 const path = '/procurement/disbursements', readPermission = 'procurement.disbursement.read', evidencePermission = 'procurement.disbursement.evidence.read', recordPermission = 'disbursement.record';
-const when = (value: string) => new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Jakarta' }).format(new Date(value)) + ' WIB';
+const when = (value: string) => dateTimeFormatter.format(new Date(value));
 const amount = (value: string) => orderAmount('IDR', value);
 const states = { draft: 'Draf menunggu bukti', recorded_unverified: 'Tercatat, belum diverifikasi bank' } as const;
 const routes = { omi_regular: 'OMI reguler', ddo: 'DDO', smart: 'S-Mart', pasar_kering: 'Pasar Kering' } as const;

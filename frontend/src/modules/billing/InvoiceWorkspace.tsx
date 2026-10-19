@@ -13,11 +13,12 @@ import { orderAmount } from '../ordering/order-quote-client';
 import { createInvoiceGateway, prepareInvoice, type Invoice, type InvoiceCandidate, type InvoicePreview } from './invoice-client';
 import common from '../administration/access.module.css';
 import styles from './invoice.module.css';
+import { longDateFormatter } from '@/lib/format';
 
 type Account = { actorId: string; actions: readonly string[]; session: IdentitySession; observedAt: number };
 const number = (item: Invoice) => `${item.numberEntity}/${item.numberChannel}/${item.numberYear}/${item.number}`;
 const rupiah = (value: string) => orderAmount('IDR', value);
-const date = (value: string) => new Intl.DateTimeFormat('id-ID', { dateStyle: 'long', timeZone: 'Asia/Jakarta' }).format(new Date(value));
+const date = (value: string) => longDateFormatter.format(new Date(value));
 function message(error: unknown) {
   if (error instanceof AccessFailure && ['invoice_policy_unavailable', 'invoice_policy_expired'].includes(error.code)) return 'Aturan tagihan belum tersedia atau belum disetujui. Penanggung jawab perlu melengkapi aturan pajak, jatuh tempo, pengelompokan, penomoran dan pembukuan.';
   if (error instanceof AccessFailure && ['invoice_review_changed', 'receipt_already_invoiced', 'invoice_grouping_changed', 'invoice_commercial_allocation_exceeded'].includes(error.code)) return 'Sumber atau aturan tagihan berubah. Muat data terbaru, lalu tinjau pilihan penerimaan kembali.';

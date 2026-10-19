@@ -9,6 +9,7 @@ import type { PaymentCorrectionField } from './payment-correction-client';
 import type { PaymentDraft, PaymentOcrView } from './payment-client';
 import styles from '../administration/access.module.css';
 import invoice from './invoice.module.css';
+import { dateTimeFormatter } from '@/lib/format';
 
 const labels: Record<string, string> = { amount: 'Nominal (IDR)', currency: 'Mata uang', transfer_date: 'Tanggal transfer (YYYY-MM-DD)', transfer_time: 'Waktu transfer (HH:mm:ss)', recipient: 'Nama penerima', account: 'Rekening tujuan pada bukti', bank: 'Bank tujuan pada bukti', reference: 'Nomor referensi' };
 function message(error: unknown) {
@@ -46,7 +47,7 @@ export function PaymentManualReviewPanel({ actorId, owner, ocr, allowed, fresh, 
     {error !== null && <p role="alert" className={styles.alert}>{message(error)}</p>}{notice && <p role="status">{notice}</p>}{busy && <p role="status">Memproses pemeriksaan manual…</p>}
     {view && <form onSubmit={event => { event.preventDefault(); if (!canSave) return; try { prepareManualReview(actorId, view, values, imageReviewed, reason.trim()); setConfirm(true); requestAnimationFrame(() => heading.current?.focus()); } catch (failure) { setError(failure); } }}>
       <p>Versi pemeriksaan manual {view.reviewRevision} · Gangguan {view.failureId}: {view.failureCode}</p><p>Prosedur: {view.procedureReference}</p>
-      {view.reviewedBy && <p>Pemeriksa terakhir: akun {view.reviewedBy} · {new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Jakarta' }).format(new Date(view.recordedAt!))}</p>}
+      {view.reviewedBy && <p>Pemeriksa terakhir: akun {view.reviewedBy} · {dateTimeFormatter.format(new Date(view.recordedAt!))}</p>}
       <div className={invoice.correctionFields}>{values.map((field, index) => <div className={invoice.correctionField} key={field.field}>
         <label htmlFor={'manual-' + field.field}>{labels[field.field]}</label><input id={'manual-' + field.field} value={field.value ?? ''} maxLength={256} autoComplete="off" disabled={disabled || confirm || !fresh}
           onChange={event => setValues(rows => rows.map((row, position) => position === index ? { ...row, value: event.target.value || null } : row))} />

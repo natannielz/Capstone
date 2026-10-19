@@ -197,27 +197,27 @@ try {
     await proposal(maker.page, '12000.25'); await submit(maker.page, true);
   });
   await check('independent checker approves through the API and recovers the exact decision after reload', async () => {
-    await choose(checker.page); await decision(checker.page, 'IDR 12.000,25', 'approve'); await submit(checker.page, true);
-    assert.match(await checker.page.locator('main').innerText(), /Harga berlaku per kemasan\nIDR 12.000,25/);
+    await choose(checker.page); await decision(checker.page, 'Rp12.000,25', 'approve'); await submit(checker.page, true);
+    assert.match(await checker.page.locator('main').innerText(), /Harga berlaku per kemasan\nRp12.000,25/);
   });
   await check('explicit zero creates another immutable reviewed version', async () => {
     await maker.page.getByRole('button', { name: 'Muat ulang harga dan riwayat', exact: true }).click();
     await proposal(maker.page, '0.00'); await submit(maker.page);
     await checker.page.getByRole('button', { name: 'Muat ulang harga dan riwayat', exact: true }).click();
-    await decision(checker.page, 'IDR 0,00', 'approve'); await submit(checker.page);
+    await decision(checker.page, 'Rp0,00', 'approve'); await submit(checker.page);
     await checker.page.getByText(/Versi 2 ·/).waitFor(); await checker.page.getByText(/Versi 1 ·/).waitFor();
   });
   await check('withdrawal and rejection recover without creating price versions', async () => {
     await maker.page.getByRole('button', { name: 'Muat ulang harga dan riwayat', exact: true }).click();
-    await proposal(maker.page, '13000.00'); await submit(maker.page); await decision(maker.page, 'IDR 13.000,00', 'withdraw'); await submit(maker.page, true);
+    await proposal(maker.page, '13000.00'); await submit(maker.page); await decision(maker.page, 'Rp13.000,00', 'withdraw'); await submit(maker.page, true);
     await proposal(maker.page, '14000.00'); await submit(maker.page);
     await checker.page.getByRole('button', { name: 'Muat ulang harga dan riwayat', exact: true }).click();
-    await decision(checker.page, 'IDR 14.000,00', 'reject'); await submit(checker.page, true);
+    await decision(checker.page, 'Rp14.000,00', 'reject'); await submit(checker.page, true);
   });
   await check('stale package review conflicts after a real authoring change', async () => {
     await proposal(maker.page, '15000.00'); await submit(maker.page);
     await checker.page.getByRole('button', { name: 'Muat ulang harga dan riwayat', exact: true }).click();
-    await decision(checker.page, 'IDR 15.000,00', 'approve');
+    await decision(checker.page, 'Rp15.000,00', 'approve');
     const author = await user('author');
     const status = await author.page.evaluate(async ({ skuId, authorId }) => {
       const csrf = await (await fetch('/api/v1/identity/csrf')).json();
@@ -246,14 +246,14 @@ try {
     assert.equal(await buyer.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
     await buyer.page.screenshot({ path: resolve(directory, 'buyer-catalog-mobile.png'), fullPage: true });
     await open.click(); const detail = buyer.page.getByRole('dialog'); await detail.waitFor();
-    assert.match(await detail.innerText(), /12 piece per kemasan/); assert.match(await detail.innerText(), /IDR 0,00/);
+    assert.match(await detail.innerText(), /12 piece per kemasan/); assert.match(await detail.innerText(), /Rp0,00/);
     assert.doesNotMatch(await detail.innerText(), /Tinjauan independen fixture|Harga kemasan terisolasi/);
     const branch = detail.getByLabel('Cabang pemesan'); await branch.waitFor();
     assert.equal(await branch.inputValue(), '', 'The buyer must select a branch explicitly');
     await branch.selectOption('10:11:'); await detail.getByLabel('Jumlah kemasan').fill('2');
     await detail.getByRole('button', { name: 'Periksa subtotal', exact: true }).click();
     const subtotal = detail.getByRole('status').filter({ hasText: 'Subtotal barang' }); await subtotal.waitFor();
-    assert.match(await subtotal.innerText(), /IDR 0,00/); assert.match(await subtotal.innerText(), /2 Dus dua belas · 24 piece/);
+    assert.match(await subtotal.innerText(), /Rp0,00/); assert.match(await subtotal.innerText(), /2 Dus dua belas · 24 piece/);
     assert.match(await subtotal.innerText(), /Pesanan belum dikirim/);
     assert.equal(await detail.evaluate(element => element.scrollWidth <= element.clientWidth), true);
     await buyer.page.screenshot({ path: resolve(directory, 'buyer-quote-mobile.png'), fullPage: true });

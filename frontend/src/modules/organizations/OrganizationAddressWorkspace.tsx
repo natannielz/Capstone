@@ -15,11 +15,12 @@ import { addressPurposeLabels, createOrganizationAddressGateway, organizationAdd
   type OrganizationAddressProposal, type OrganizationAddressPreview, type OrganizationAddressDecisionPreview, type OrganizationAddressDecision } from './organization-address-client';
 import styles from '../administration/access.module.css';
 import orgStyles from './organizations.module.css';
+import { dateTimeFormatter } from '@/lib/format';
 
 type Account = { actorId: string; actions: readonly string[]; session: IdentitySession; observedAt: number };
 const path = '/administration/organizations/addresses';
 const blank = (): PostalAddress => ({ line1: '', line2: null, city: '', region: '', postalCode: '', countryCode: '' });
-const when = (value: string) => new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Jakarta' }).format(new Date(value));
+const when = (value: string) => dateTimeFormatter.format(new Date(value));
 const status = { pending: 'Menunggu pemeriksaan', approved: 'Disetujui', rejected: 'Ditolak' } as const;
 function message(error: unknown) {
   if (error instanceof IdentityFailure) return 'Sesi belum tersedia. Masuk kembali untuk memeriksa alamat organisasi.';

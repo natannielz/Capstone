@@ -6,6 +6,7 @@ import type { PaymentDraft } from './payment-client';
 import { createPaymentReviewGateway, type PaymentDuplicatePage } from './payment-review-client';
 import common from '../administration/access.module.css';
 import styles from './invoice.module.css';
+import { dateTimeFormatter } from '@/lib/format';
 
 export function PaymentDuplicatePanel({ actorId, owner, locked, current, onOpen, onDenied, onBusyChange }: {
   actorId: string; owner: PaymentDraft; locked: boolean; current: () => boolean; onOpen: (id: string) => void;
@@ -32,7 +33,7 @@ export function PaymentDuplicatePanel({ actorId, owner, locked, current, onOpen,
       {page.items.length === 0 ? <p>Tidak ada kecocokan persis pada halaman ini dalam cakupan akses Anda. Gambar yang dipotong atau dikompresi ulang belum dibandingkan; tetap periksa bukti bank.</p> :
         <ul className={styles.lines}>{page.items.map(item => <li key={item.declarationId}><strong>Pengajuan {item.declarationId}</strong>
           <p>{item.signals.map(signal => signal === 'same_image' ? 'Berkas gambar asli identik' : 'Referensi yang dinyatakan pembeli sama').join(' · ')}</p>
-          <p>Diajukan {new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Jakarta' }).format(new Date(item.submittedAt))}</p>
+          <p>Diajukan {dateTimeFormatter.format(new Date(item.submittedAt))}</p>
           <button className={common.secondary} disabled={locked || busy} onClick={() => onOpen(item.declarationId)}>Buka pengajuan pembanding {item.declarationId}</button>
         </li>)}</ul>}
       {page.hasMore && <button className={common.secondary} disabled={locked || busy} onClick={() => void load(page.items.at(-1)!.declarationId)}>Kecocokan lebih lama</button>}

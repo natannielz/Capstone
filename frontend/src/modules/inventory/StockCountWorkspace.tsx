@@ -16,11 +16,12 @@ import { StockCountEditor } from "./stock-count-editor-state";
 import { stockCountActor, stockCountQuantity, stockLocationKey, type StockCountCommand, type StockObservation, type StockPackageChoice } from "./stock-count-workflow";
 import common from "../administration/access.module.css";
 import styles from "./stock-count.module.css";
+import { formatDateTime, numberFormatter } from "@/lib/format";
 
 const path = "/inventory/counts";
 const loginHref = "/identity/login?returnPath=" + encodeURIComponent(path);
 type Loaded = { actorId: string; actions: string[]; session: IdentitySession; observedAt: number; generation: number };
-const countFormat = new Intl.NumberFormat("id-ID");
+const countFormat = numberFormatter;
 const amount = (value: string | number) => countFormat.format(typeof value === "string" ? BigInt(value) : value);
 const kind: Readonly<Record<string, string>> = { loose: "Satuan / lepas", sealed: "Kemasan tertutup", other: "Kemasan lain" };
 function message(error: unknown): string {
@@ -291,7 +292,7 @@ function CountReview({ command, warehouse, busy, onConfirm, onCancel }: {
 }
 function Observation({ item }: { item: StockObservation }) {
   return <li><div className={styles.headingRow}><h3>{item.skuCode}</h3>
-    <time dateTime={item.recordedAt}>{new Date(item.recordedAt).toLocaleString("id-ID", { timeZone: "Asia/Jakarta" })} WIB</time></div>
+    <time dateTime={item.recordedAt}>{formatDateTime(item.recordedAt)}</time></div>
     <p><strong>{amount(item.packages)} {item.packageLabel} = {amount(item.baseUnits)} {item.baseUnitCode}</strong></p>
     <p className={common.help}>{amount(item.baseUnitsPerPackage)} {item.baseUnitCode} per kemasan. {kind[item.packageKind]}.</p>
     <p>Alasan: {item.reason}</p>{item.observedLotLabel && <p>Label lot belum diverifikasi: {item.observedLotLabel}</p>}
