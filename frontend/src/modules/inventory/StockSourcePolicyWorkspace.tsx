@@ -71,7 +71,7 @@ export function StockSourcePolicyWorkspace() {
   return <main className={common.page}>
     <a className={styles.skip} href="#policy-workspace">Langsung ke kebijakan operasional</a>
     <header className={common.header}><div><Link className={common.brand} href="/identity/account">Unit Toko</Link>
-      <p className={styles.eyebrow}>PENGELOLAAN PERSEDIAAN</p><h1>Kebijakan operasional stok</h1>
+      <p className={styles.eyebrow}>Pengelolaan persediaan</p><h1>Kebijakan operasional stok</h1>
       <p>Tetapkan pencatat stok utama serta prosedur rekonsiliasi dan penanganan gangguan.</p></div></header>
     <div id="policy-workspace">{loaded ? <PolicyDesk key={loaded.actorId + ":" + loaded.generation} loaded={loaded} onRefresh={refresh} /> :
       <section className={common.state} aria-busy={loading}><h2>{loading ? "Memeriksa sesi dan akses" : lostSession(error) ? "Masuk untuk memeriksa kebijakan" : "Kebijakan belum tersedia"}</h2>

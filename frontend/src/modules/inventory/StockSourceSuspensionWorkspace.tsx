@@ -72,7 +72,7 @@ export function StockSourceSuspensionWorkspace() {
   return <main className={common.page}>
     <a className={styles.skip} href="#suspension-workspace">Langsung ke penghentian sumber</a>
     <header className={common.header}><div><Link className={common.brand} href="/identity/account">Unit Toko</Link>
-      <p className={styles.eyebrow}>PENGELOLAAN PERSEDIAAN</p><h1>Penghentian sumber stok</h1>
+      <p className={styles.eyebrow}>Pengelolaan persediaan</p><h1>Penghentian sumber stok</h1>
       <p>Tinjau alokasi dan seluruh kanal yang terdampak sebelum menghentikan penggunaannya.</p></div></header>
     <div id="suspension-workspace">{loaded ? <SuspensionDesk key={loaded.actorId + ":" + loaded.generation} loaded={loaded} onRefresh={refresh} /> :
       <section className={common.state} aria-busy={loading}><h2>{loading ? "Memeriksa sesi dan akses" : lostSession(error) ? "Masuk untuk memeriksa sumber" : "Penghentian belum tersedia"}</h2>

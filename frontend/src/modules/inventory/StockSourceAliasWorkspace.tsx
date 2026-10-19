@@ -75,7 +75,7 @@ export function StockSourceAliasWorkspace() {
   return <main className={common.page}>
     <a className={styles.skip} href="#alias-workspace">Langsung ke pemetaan kanal</a>
     <header className={common.header}><div><Link className={common.brand} href="/identity/account">Unit Toko</Link>
-      <p className={styles.eyebrow}>PENGELOLAAN PERSEDIAAN</p><h1>Pemetaan kanal</h1>
+      <p className={styles.eyebrow}>Pengelolaan persediaan</p><h1>Pemetaan kanal</h1>
       <p>Kelola penggunaan satu alokasi fisik oleh kanal lain, dengan pengajuan dan peninjauan terpisah.</p></div></header>
     <div id="alias-workspace">{loaded ? <AliasDesk key={loaded.actorId + ":" + loaded.generation} loaded={loaded} onRefresh={refresh} /> :
       <section className={common.state} aria-busy={loading}><h2>{loading ? "Memeriksa sesi dan akses" : lostSession(error) ? "Masuk untuk mengelola pemetaan" : "Pemetaan belum tersedia"}</h2>

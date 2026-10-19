@@ -85,7 +85,7 @@ export function RevisionReview({ command, current, busy, onSubmit, onCancel }: {
   const proposed = "current" in command ? command.body : command.proposal.proposedSettings;
   const version = "current" in command ? command.current.poolVersion : command.proposal.basePoolVersion;
   return <form className={styles.form} onSubmit={event => { event.preventDefault(); onSubmit(confirmed); }}>
-    <p className={styles.eyebrow}>PEMERIKSAAN AKHIR</p><h2>{revisionAction[command.operation]}</h2>
+    <p className={styles.eyebrow}>Pemeriksaan akhir</p><h2>{revisionAction[command.operation]}</h2>
     <p>Alokasi {command.poolId} · dasar versi {version}. Periksa perubahan dan alasan sebelum mengirim.</p>
     <RevisionComparison base={base} proposed={proposed} baseVersion={version} current={current ?? undefined} />
     {"proposalId" in command && <p>Acuan peninjauan: <strong>{command.body.reviewReference}</strong></p>}

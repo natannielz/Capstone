@@ -1,7 +1,7 @@
 .panel {composes: palette from '../workspace-palette.module.css'; color:var(--workspace-ink); background:var(--workspace-surface); border:1px solid var(--workspace-border); border-top:4px solid var(--workspace-accent); border-radius:18px; padding:clamp(18px,3vw,32px); min-width:0; overflow-wrap:anywhere;}
 .heading {display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap;}
 .heading h3 {margin:0; font-size:clamp(24px,3vw,32px); line-height:1.15;}
-.eyebrow {margin:0 0 8px; font-size:12px; font-weight:750; text-transform:uppercase; letter-spacing:.06em; color:var(--workspace-accent);}
+.eyebrow {margin:0 0 8px; font-size:13px; font-weight:650; color:var(--workspace-accent);}
 .package {font-weight:700; margin:18px 0 8px;}
 .help {font-size:14px; line-height:1.6; color:var(--workspace-text-muted);}
 .current,.status,.recovery {margin:22px 0; padding:20px; border:1px solid var(--workspace-border); border-radius:12px; background:var(--workspace-surface-selected);}
