@@ -19,3 +19,13 @@ test("money, number and date formatting goes through src/lib/format.ts", () => {
       .map(({ path, index }) => `${path}:${index + 1}`));
   assert.deepEqual(offenders, []);
 });
+
+// Raw "IDR 7000.00" bypasses rupiah grouping and the comma decimal; amounts render as formatMoney("IDR", value).
+test("no amount is printed with a raw IDR prefix", () => {
+  const offenders = sources("src")
+    .filter(path => path.replaceAll("\\", "/") !== "src/lib/format.ts")
+    .flatMap(path => readFileSync(path, "utf8").split("\n").map((line, index) => ({ path, line, index }))
+      .filter(({ line }) => /IDR \{|IDR \$\{|'IDR ' \+|"IDR " \+/.test(line))
+      .map(({ path, index }) => `${path}:${index + 1}`));
+  assert.deepEqual(offenders, []);
+});

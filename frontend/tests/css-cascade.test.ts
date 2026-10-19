@@ -37,3 +37,14 @@ test("no !important outside prefers-reduced-motion blocks", () => {
   for (const file of [...legacyFiles, "globals.css", "foundation.css"])
     assert.equal(importantOutsideReducedMotion(readFileSync(`${app}/${file}`, "utf8")), 0, file);
 });
+
+// A rule split mid-selector (".a td" newline ".b{...}") silently becomes a descendant selector.
+test("no stylesheet line ends in a dangling selector fragment", () => {
+  for (const file of [...legacyFiles, "globals.css", "foundation.css"]) {
+    readFileSync(`${app}/${file}`, "utf8").split("\n").forEach((raw, index) => {
+      const line = raw.trimEnd(), trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith("/*") || trimmed.startsWith("*") || trimmed.endsWith("*/")) return;
+      assert.match(line, /[{},;:]$/, `${file}:${index + 1} ends mid-selector: ${trimmed.slice(0, 80)}`);
+    });
+  }
+});

@@ -3,8 +3,7 @@ import {buyerLabel} from "@/lib/domain/buyers";
 
 import {ArrowLeft, ArrowRight, Check, FileText, Package, Search, Truck, X} from "lucide-react";
 import {Button} from "@/components/ui/button";
-import {Badge} from "@/components/ui/badge";
-import {statusTone} from "@/lib/status/dictionary";
+import {StatusBadge} from "@/components/workspace-kit/status-badge";
 import {Field, FieldGroup, FieldLabel} from "@/components/ui/field";
 import {InputGroup, InputGroupAddon, InputGroupInput} from "@/components/ui/input-group";
 import type {Order, OrderLine, Shipment, State} from "@/lib/domain/model";
@@ -24,7 +23,7 @@ function dateLabel(value: string) {
 }
 
 function StateBadge({children}: {children: string}) {
-  return <Badge variant="secondary" className="status-badge" data-tone={statusTone(String(children))}>{children}</Badge>;
+  return <StatusBadge text={String(children)} />;
 }
 
 function Document({kind, id, children}: {kind: "shipment" | "invoice"; id: string; children: string}) {

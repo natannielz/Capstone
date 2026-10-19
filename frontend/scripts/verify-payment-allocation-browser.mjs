@@ -112,8 +112,8 @@ try {
   await page.waitForFunction(() => !Object.keys(localStorage).some(key => key.startsWith('unit-toko:pending:v1:')));
   await open(page); await balances(page);
   await panel.getByText(/Dibayar sebagian/).waitFor();
-  assert.match(await panel.locator('dl').innerText(), /Sudah dialokasikan\s+IDR\s*1\.000/);
-  assert.match(await panel.locator('dl').innerText(), /Dana tersedia\s+IDR\s*3\.000/);
+  assert.match(await panel.locator('dl').innerText(), /Sudah dialokasikan\s+Rp1\.000/);
+  assert.match(await panel.locator('dl').innerText(), /Dana tersedia\s+Rp3\.000/);
   await page.setViewportSize({ width: 1440, height: 950 }); await page.screenshot({ path: resolve(directory, 'payment-allocation-desktop.png'), fullPage: true });
   const makerCorrections = page.getByRole('region', { name: 'Koreksi alokasi pembayaran', exact: true });
   assert.equal(await makerCorrections.getByRole('button', { name: 'Periksa koreksi alokasi', exact: true }).count(), 0);
@@ -147,10 +147,10 @@ try {
   await checker.page.reload(); await checker.page.getByRole('button', { name: 'Periksa hasil', exact: true }).click();
   await checker.page.waitForFunction(() => !Object.keys(localStorage).some(key => key.startsWith('unit-toko:pending:v1:')));
   await open(checker.page); const currentPanel = await balances(checker.page);
-  assert.match(await currentPanel.locator('dl').innerText(), /Sudah dialokasikan\s+IDR\s*600/);
-  assert.match(await currentPanel.locator('dl').innerText(), /Dana tersedia\s+IDR\s*3\.400/);
+  assert.match(await currentPanel.locator('dl').innerText(), /Sudah dialokasikan\s+Rp600/);
+  assert.match(await currentPanel.locator('dl').innerText(), /Dana tersedia\s+Rp3\.400/);
   await correctionPanel.getByRole('button', { name: 'Muat alokasi asli', exact: true }).click();
-  await correctionPanel.getByText(/Telah dikoreksi IDR\s*400/).waitFor();
+  await correctionPanel.getByText(/Telah dikoreksi Rp400/).waitFor();
   await checker.page.setViewportSize({ width: 1440, height: 1000 }); await checker.page.screenshot({ path: resolve(directory, 'payment-allocation-correction-desktop.png'), fullPage: true });
   const reader = await desk(config.readerToken); await open(reader.page); const readPanel = await balances(reader.page);
   assert.equal(await readPanel.getByRole('checkbox').count(), 0); assert.equal(await readPanel.getByRole('button', { name: /Periksa alokasi|Simpan alokasi/ }).count(), 0);

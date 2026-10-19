@@ -42,6 +42,13 @@ export function formatMoney(currency: string, value: Decimal, decimals: 0 | 2 = 
   return currency === "IDR" ? formatRupiah(value, { decimals }) : `${currency} ${formatNumber(value, decimals)}`;
 }
 
+/** Rupiah for amounts that may still be typed text (review panels echo form input): valid decimals format, anything else shows as entered. */
+export function formatMoneyText(value: string): string {
+  const text = value.trim();
+  if (!text) return "Rp—";
+  try { return formatRupiah(text, { decimals: 2 }); } catch { return `Rp${text}`; }
+}
+
 /** "1.234.567"; fractionDigits fixes the comma decimals ("2,5"). */
 export function formatNumber(value: Decimal, fractionDigits = 0): string {
   const { negative, whole, fraction } = decimalParts(value, fractionDigits);
