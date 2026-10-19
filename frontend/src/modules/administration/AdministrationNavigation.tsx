@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { Menu } from "lucide-react";
+import { CommandPalette, PaletteButton } from "@/components/workspace-kit/command-palette";
 import { Sheet, SheetContent, SheetDescription, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { NAVIGATION_HREFS, navigationClick, workspaceNavigation, type NavigationGroup, type NavigationId } from "../identity/workspace-navigation";
 
@@ -13,10 +14,12 @@ import { NAVIGATION_HREFS, navigationClick, workspaceNavigation, type Navigation
 export function AdministrationNavigation({ current, actions, locked = false }: { current: NavigationId; actions: readonly string[]; locked?: boolean }) {
   const groups = workspaceNavigation(actions, NAVIGATION_HREFS[current]);
   const [open, setOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
   const currentLabel = groups.flatMap(group => group.items).find(item => item.current)?.label ?? "Ruang kerja";
   return <>
     <aside className="workspace-sidebar" aria-label="Navigasi ruang kerja">
       <Link href="/identity/account" className="workspace-sidebar-brand" aria-disabled={locked} onClick={navigationClick(locked)}>Unit Toko</Link>
+      <PaletteButton locked={locked} onOpen={() => setPaletteOpen(true)} />
       <NavigationList groups={groups} locked={locked} />
     </aside>
     <div className="workspace-topbar">
@@ -29,7 +32,9 @@ export function AdministrationNavigation({ current, actions, locked = false }: {
         </SheetContent>
       </Sheet>
       <span className="workspace-topbar-current" aria-current="page">{currentLabel}</span>
+      <PaletteButton locked={locked} onOpen={() => setPaletteOpen(true)} />
     </div>
+    <CommandPalette groups={groups} locked={locked} open={paletteOpen} onOpenChange={setPaletteOpen} />
   </>;
 }
 
