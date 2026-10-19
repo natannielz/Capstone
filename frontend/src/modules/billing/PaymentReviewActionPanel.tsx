@@ -46,11 +46,15 @@ export function PaymentReviewActionPanel({ actorId, owner, allowed, fresh, locke
     <button className={styles.secondary} disabled={disabled} onClick={() => void work(load)}>Muat ulang status pemeriksaan</button>
     {busy && <p role="status">Memeriksa status…</p>}{error !== null && <p role="alert" className={styles.alert}>{message(error)}</p>}
     {allowed && !fresh && <p className={styles.alert}>Verifikasi dua langkah terbaru diperlukan. <Link href="/identity/account?operation=payment.review.manage&returnPath=%2Fbilling%2Fpayment-reviews">Verifikasi dua langkah untuk tindak lanjut</Link></p>}
-    {view && <><p>Status: {view.verified ? 'Pembayaran sudah terverifikasi' : states[view.state]} · Versi tindak lanjut {view.reviewRevision}</p>
-      <p>Usia pengajuan saat pemeriksaan: {Math.floor((Date.parse(view.observedAt) - Date.parse(view.submittedAt)) / 60000)} menit menurut waktu server.</p>
-      <p>Penanggung jawab: {view.assigneeId ? 'Akun ' + view.assigneeId : 'Belum ditetapkan'}</p>{view.reason && <p>Alasan internal terakhir: {view.reason}</p>}
-      {view.publicExplanation && <p>Penjelasan untuk pelanggan: {view.publicExplanation}</p>}
-      {view.recordedAt && <p>Dicatat akun {view.recordedBy} pada {dateTimeFormatter.format(new Date(view.recordedAt))}.</p>}
+    {view && <><dl className={styles.facts}>
+        <div><dt>Status</dt><dd>{view.verified ? 'Pembayaran sudah terverifikasi' : states[view.state]}</dd></div>
+        <div><dt>Versi tindak lanjut</dt><dd>{view.reviewRevision}</dd></div>
+        <div><dt>Usia saat diperiksa</dt><dd>{Math.floor((Date.parse(view.observedAt) - Date.parse(view.submittedAt)) / 60000)} menit menurut waktu server</dd></div>
+        <div><dt>Penanggung jawab</dt><dd>{view.assigneeId ? 'Akun ' + view.assigneeId : 'Belum ditetapkan'}</dd></div>
+        {view.reason && <div><dt>Alasan internal terakhir</dt><dd>{view.reason}</dd></div>}
+        {view.publicExplanation && <div><dt>Penjelasan untuk pelanggan</dt><dd>{view.publicExplanation}</dd></div>}
+        {view.recordedAt && <div><dt>Dicatat oleh</dt><dd>Akun {view.recordedBy}, {dateTimeFormatter.format(new Date(view.recordedAt))}</dd></div>}
+      </dl>
       {!open && <p>Pengajuan ini tidak menerima tindakan baru. Pemeriksaan terdahulu tetap dapat dibaca. Pengganti dan tindak lanjut penjualan harus ditautkan melalui alur yang sesuai.</p>}
       {open && allowed && <form onSubmit={event => { event.preventDefault(); if (!canAct) return; try { setConfirm(prepareReviewAction(actorId, view, action, reason.trim(), ['reject', 'request_replacement'].includes(action) ? publicExplanation.trim() : null)); } catch (failure) { setError(failure); } }}>
         <h4 ref={formHeading} tabIndex={-1}>Tinjau tindakan pemeriksaan</h4><label htmlFor="review-action">Tindakan</label><select id="review-action" value={action} disabled={disabled || !!confirm} onChange={event => setAction(event.target.value)}>

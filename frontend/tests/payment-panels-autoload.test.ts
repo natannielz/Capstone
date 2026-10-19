@@ -25,3 +25,13 @@ test("each payment review panel loads once when first unlocked, offers a reload,
     assert.match(source, /autoLoadEndsSession\(failure\)/, `${name} guards onDenied for automatic loads`);
   }
 });
+
+// The review status reads as labelled facts, not a run of "Label: value" sentences, so the state, the owner and the
+// last reasons can be scanned. The words the browser proof waits for (state labels) stay in the values.
+test("the review action panel shows its status as a list of labelled facts", () => {
+  const source = readFileSync("src/modules/billing/PaymentReviewActionPanel.tsx", "utf8");
+  assert.match(source, /<dl className=\{styles\.facts\}>/);
+  for (const label of ["Status", "Versi tindak lanjut", "Usia saat diperiksa", "Penanggung jawab", "Alasan internal terakhir", "Penjelasan untuk pelanggan", "Dicatat oleh"])
+    assert.ok(source.includes(`<dt>${label}</dt>`), label);
+  assert.doesNotMatch(source, /<p>Status: /);
+});
