@@ -1,4 +1,46 @@
-/* Owned foundation rules: above legacy, in Tailwind's components/utilities layers (they win by layer order, without importance flags). */
+/* Owned foundation rules: element defaults in Tailwind's base layer, shared components and utilities above it (they win by layer order, without importance flags). */
+/* Element defaults every screen relies on (formerly spread over the legacy layer). Tailwind's preflight, also in
+   @layer base, already resets margins, box sizing and form fonts; these add the app's type and focus rules. */
+@layer base{
+html{scroll-behavior:smooth}
+body{background:var(--background);color:var(--foreground);font-family:var(--font-body),system-ui,sans-serif;font-size:15px;line-height:1.6}
+:where(h1,h2,h3,h4){font-weight:650;letter-spacing:-.02em;line-height:1.3}
+p{line-height:1.65}
+button,a{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+button:not(:disabled){cursor:pointer}
+button:disabled{cursor:not-allowed}
+:where(a,button,input,select,textarea,summary):focus-visible{outline:3px solid var(--ring);outline-offset:3px}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*::before,*::after{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
+}
+
+@layer components{
+/* Brand: a T held inside a U, with the name and an optional context line. */
+.unit-brand{display:inline-flex;align-items:center;gap:12px;color:var(--primary);flex-shrink:0;line-height:1.15;text-decoration:none;white-space:nowrap}
+.unit-brand-mark{display:block;width:44px;height:44px;flex-shrink:0}
+.unit-brand-copy{display:flex;flex-direction:column;gap:5px;min-width:0}
+.unit-brand-name{font-family:var(--font-body),sans-serif;font-size:25px;font-weight:700;letter-spacing:-.8px;line-height:1}
+.unit-brand-context{font-size:11px;line-height:1.35;letter-spacing:.025em;font-weight:500;color:var(--muted-foreground)}
+.unit-brand--inverse{color:#fff}.unit-brand--inverse .unit-brand-context{color:#c8dfe1}
+.unit-brand--compact .unit-brand-mark{width:36px;height:36px}.unit-brand--compact .unit-brand-name{font-size:21px}.unit-brand--compact .unit-brand-context{font-size:10px}
+@media(max-width:520px){.unit-brand{gap:9px}.unit-brand-mark{width:38px;height:38px}.unit-brand-name{font-size:22px}.unit-brand-context{font-size:10px}}
+
+.empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:40px 22px;text-align:center;font-size:14px;color:var(--muted-foreground)}
+.empty-state p{max-width:350px}
+.empty-state small{font-size:13px}
+
+:is(th,td).numeric{text-align:right;font-variant-numeric:tabular-nums}
+
+[data-slot=dialog-content]{background:var(--card);border-color:var(--border);padding:28px;gap:24px;border-radius:10px;max-height:calc(100dvh - 40px)}
+[data-slot=dialog-header]{text-align:left;gap:10px;padding-right:26px}
+[data-slot=dialog-title]{font-size:22px;font-weight:600;line-height:1.35;letter-spacing:-.01em}
+[data-slot=dialog-description]{font-size:14px;line-height:1.7;color:var(--muted-foreground)}
+[data-slot=dialog-close]{min-height:32px;min-width:32px;display:grid;place-items:center;top:18px;right:18px}
+@media(max-width:760px){
+  [data-slot=dialog-content]{padding:24px 20px;max-height:calc(100dvh - 32px);width:calc(100% - 32px)}
+  [data-slot=dialog-title]{font-size:21px}
+  [data-slot=dialog-close]{top:16px;right:12px}
+}
+}
 @layer components{
 .status-badge{font-size:12px;line-height:1.5;font-weight:600;white-space:nowrap;max-width:100%;padding:4px 9px;border-radius:5px}
 .status-badge[data-tone="neutral"]{background:var(--tone-neutral);color:var(--tone-neutral-foreground)}.status-badge[data-tone="info"]{background:var(--tone-info);color:var(--tone-info-foreground)}.status-badge[data-tone="warning"]{background:var(--tone-warning);color:var(--tone-warning-foreground)}.status-badge[data-tone="success"]{background:var(--tone-success);color:var(--tone-success-foreground)}.status-badge[data-tone="danger"]{background:var(--tone-danger);color:var(--tone-danger-foreground)}
