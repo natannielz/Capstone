@@ -21,11 +21,11 @@ internal sealed class PilotApiFactory(string repository, PilotState state, Synth
         builder.ConfigureHostConfiguration(config => config.AddInMemoryCollection(new Dictionary<string, string?>
         {
             ["Mongo:Uri"] = PilotBoundary.MongoUri, ["Mongo:Database"] = PilotBoundary.DatabaseName,
-            ["Release:Profile"] = "release1", ["Identity:Auth0:Enabled"] = "true", ["Identity:Auth0:Issuer"] = PilotBoundary.Issuer,
+            ["Release:Profile"] = PilotBoundary.Profile, ["Identity:Auth0:Enabled"] = "true", ["Identity:Auth0:Issuer"] = PilotBoundary.Issuer,
             ["Identity:Auth0:PublicOrigin"] = PilotBoundary.Origin, ["Identity:Auth0:ClientId"] = SyntheticOidcProvider.ClientId,
             ["Identity:Auth0:ClientSecret"] = state.Secrets.ClientSecret, ["Identity:Auth0:ConnectionId"] = SyntheticOidcProvider.ConnectionId,
             ["Identity:Auth0:ConnectionName"] = SyntheticOidcProvider.ConnectionName, ["Identity:Auth0:ClaimsNamespace"] = SyntheticOidcProvider.ClaimsNamespace,
-            ["Identity:Keys:Directory"] = state.KeyDirectory, ["Identity:Keys:ApplicationName"] = "UnitToko.SYNTHETIC.LocalPilot.Release1",
+            ["Identity:Keys:Directory"] = state.KeyDirectory, ["Identity:Keys:ApplicationName"] = PilotBoundary.Profile == "full" ? "UnitToko.SYNTHETIC.LocalPilot.Full" : "UnitToko.SYNTHETIC.LocalPilot.Release1",
             ["Identity:Keys:CertificatePath"] = state.CertificatePath, ["Identity:Keys:CertificatePassword"] = state.Secrets.CertificatePassword,
             ["Identity:TrustedProxies:0"] = "127.0.0.1", ["Logging:LogLevel:Default"] = "Warning"
         }));
@@ -71,7 +71,7 @@ internal static class PilotRuntime
             parsed.GetValue("replication", new BsonDocument()).AsBsonDocument.GetValue("replSet", "") != PilotBoundary.ReplicaSet ||
             !string.Equals(Path.GetFullPath(parsed["storage"]["dbPath"].AsString), Path.GetFullPath(dataPath), StringComparison.OrdinalIgnoreCase) ||
             parsed.GetValue("setParameter", new BsonDocument()).AsBsonDocument.Contains("enableTestCommands"))
-            throw new InvalidOperationException("Port 27029 is not the isolated pilot Mongo process. No bootstrap was attempted.");
+            throw new InvalidOperationException("Port " + PilotBoundary.MongoPort + " is not the isolated pilot Mongo process. No bootstrap was attempted.");
         try
         {
             await admin.RunCommandAsync<BsonDocument>(new BsonDocument("replSetInitiate", new BsonDocument { { "_id", PilotBoundary.ReplicaSet },
@@ -95,13 +95,13 @@ internal static class PilotRuntime
     public static async Task<(Process Process, string Address)> NextAsync(string repository, string node, string stateDirectory, CancellationToken ct)
     {
         if (!Path.IsPathFullyQualified(node) || !File.Exists(node)) throw new InvalidOperationException("Supply the existing Node executable path.");
-        if (!File.Exists(Path.Combine(repository, "frontend", ".next", "BUILD_ID"))) throw new InvalidOperationException("Build the Release 1 frontend before starting the pilot.");
+        if (!File.Exists(Path.Combine(repository, "frontend", PilotBoundary.NextBuildFolder, "BUILD_ID"))) throw new InvalidOperationException("Build the " + PilotBoundary.Profile + " frontend before starting the pilot.");
         var listener = new TcpListener(IPAddress.Loopback, 0); listener.Start(); var port = ((IPEndPoint)listener.LocalEndpoint).Port; listener.Stop();
         var start = new ProcessStartInfo(node) { WorkingDirectory = Path.Combine(repository, "frontend"), UseShellExecute = false, CreateNoWindow = true,
             RedirectStandardOutput = true, RedirectStandardError = true, WindowStyle = ProcessWindowStyle.Hidden };
         foreach (var arg in new[] { Path.Combine(repository, "frontend", "node_modules", "next", "dist", "bin", "next"), "start", "--hostname", "127.0.0.1", "--port", port.ToString(System.Globalization.CultureInfo.InvariantCulture) }) start.ArgumentList.Add(arg);
         start.Environment["NODE_ENV"] = "production"; start.Environment["NEXT_TELEMETRY_DISABLED"] = "1";
-        start.Environment["NEXT_PUBLIC_UNIT_TOKO_RELEASE"] = "release1";
+        start.Environment["NEXT_PUBLIC_UNIT_TOKO_RELEASE"] = PilotBoundary.Profile;
         var process = Process.Start(start) ?? throw new InvalidOperationException("Could not start Next.js.");
         // Drain bounded process output; authentication request data is never logged by this launcher.
         process.OutputDataReceived += (_, value) => { if (value.Data is { } line) AppendLog(stateDirectory, line); };

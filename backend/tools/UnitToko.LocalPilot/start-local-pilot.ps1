@@ -1,7 +1,9 @@
 param(
     [string]$DotnetPath,
     [string]$MongoPath,
-    [string]$NodePath
+    [string]$NodePath,
+    # release1: the persistent Release 1 pilot. full: a separate demo of every maintained workspace (own database, port and state).
+    [ValidateSet('release1', 'full')][string]$Profile = 'release1'
 )
 $ErrorActionPreference = 'Stop'
 $repository = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../../..'))
@@ -22,6 +24,7 @@ $pilotMongo = Existing-Tool $MongoPath 'mongod' 'mongod.exe'
 $pilotNode = Existing-Tool $NodePath 'node' 'node.exe'
 $assembly = Join-Path $PSScriptRoot 'bin/Release/net10.0/UnitToko.LocalPilot.dll'
 if (-not (Test-Path -LiteralPath $assembly)) { throw 'Build backend/tools/UnitToko.LocalPilot in Release first; this launcher does not build.' }
-if (-not (Test-Path -LiteralPath (Join-Path $repository 'frontend/.next/BUILD_ID'))) { throw 'Build the Release 1 frontend first.' }
-& $pilotDotnet $assembly --synthetic-local-pilot --repository $repository --mongo $pilotMongo --node $pilotNode
+$build = if ($Profile -eq 'full') { 'frontend/.next-full/BUILD_ID' } else { 'frontend/.next/BUILD_ID' }
+if (-not (Test-Path -LiteralPath (Join-Path $repository $build))) { throw "Build the $Profile frontend first (NEXT_PUBLIC_UNIT_TOKO_RELEASE=$Profile)." }
+& $pilotDotnet $assembly --synthetic-local-pilot --repository $repository --mongo $pilotMongo --node $pilotNode --profile $Profile
 exit $LASTEXITCODE

@@ -21,11 +21,11 @@ public static class PilotBootstrap
         var database = client.GetDatabase(PilotBoundary.DatabaseName);
         var names = await (await database.ListCollectionNamesAsync(cancellationToken: ct)).ToListAsync(ct);
         var markers = database.GetCollection<BsonDocument>(Marker);
-        var marker = names.Contains(Marker) ? await markers.Find(new BsonDocument("_id", "release1")).SingleOrDefaultAsync(ct) : null;
+        var marker = names.Contains(Marker) ? await markers.Find(new BsonDocument("_id", PilotBoundary.Profile)).SingleOrDefaultAsync(ct) : null;
         if (marker is null)
         {
             if (names.Count != 0) throw new InvalidOperationException("Refusing to bootstrap an existing unmarked database.");
-            marker = new BsonDocument { { "_id", "release1" }, { "instanceId", secrets.InstanceId }, { "synthetic", true },
+            marker = new BsonDocument { { "_id", PilotBoundary.Profile }, { "instanceId", secrets.InstanceId }, { "synthetic", true },
                 { "createdAt", DateTime.UtcNow }, { "phase", "created" } };
             await markers.InsertOneAsync(marker, cancellationToken: ct);
         }
@@ -92,7 +92,7 @@ public static class PilotBootstrap
                     ("authorizationGrants", 2101L), ("catalogAssortments", 501L), ("catalogEntitlements", 1002L) })
                     await database.GetCollection<BsonDocument>("idCounters").UpdateOneAsync(tx, new BsonDocument("_id", name),
                         Builders<BsonDocument>.Update.Max("value", floor), new UpdateOptions { IsUpsert = true }, token);
-                await markers.UpdateOneAsync(tx, new BsonDocument("_id", "release1"), Builders<BsonDocument>.Update.Set("phase", "identities"), cancellationToken: token);
+                await markers.UpdateOneAsync(tx, new BsonDocument("_id", PilotBoundary.Profile), Builders<BsonDocument>.Update.Set("phase", "identities"), cancellationToken: token);
                 return true;
             }, ct);
         }
@@ -109,13 +109,35 @@ public static class PilotBootstrap
             var sku = await service.CreateSkuAsync(actor, new(family.Id, family.Version, item.Item1, "synthetic-pilot-item-" + index,
                 new DefinitionInput(item.Item3, index == 2 ? "loose" : "sealed", "piece", item.Item4, ImmutableSortedDictionary.Create<string, string>(StringComparer.Ordinal), [], 1, 1)), Metadata("sku-" + index), ct);
             await service.SetPublicationsAsync(actor, new(sku.Id, sku.Version, [new(501)], [new(new(501), index + 1)]), Metadata("publish-" + index), ct);
+            if (PilotBoundary.Profile == "full")
+            {
+                // Synthetic prices through the real maker/checker price service so requesters can prepare order drafts.
+                var prices = new CatalogPriceService(database, unit, new(database), clock);
+                var reviewer = new ActorContext(2002, PilotBoundary.Issuer, secrets.Accounts.Single(x => x.Id == 2002).Subject, 1, clock.UtcNow, FactorAssurance.MultiFactor);
+                var preview = await prices.PreviewAsync(actor, sku.Id.Value, CatalogPriceAccess.Prepare, ct);
+                var proposal = await prices.ProposeAsync(actor, sku.Id.Value, preview.Expected,
+                    new("IDR", UnitToko.Modules.Accounting.Money.Parse(new[] { "18000.00", "27000.00", "3500.00" }[index])), Metadata("price-" + index), ct);
+                await prices.DecideAsync(reviewer, proposal["proposalId"].AsInt64, 1, CatalogPriceDecision.Approve,
+                    "SYNTHETIC independent price review for the local demo", Metadata("price-approve-" + index), ct);
+            }
         }
-        await markers.UpdateOneAsync(new BsonDocument("_id", "release1"), Builders<BsonDocument>.Update.Set("phase", "complete"), cancellationToken: ct);
+        await markers.UpdateOneAsync(new BsonDocument("_id", PilotBoundary.Profile), Builders<BsonDocument>.Update.Set("phase", "complete"), cancellationToken: ct);
     }
 
-    public static string[] PermissionsFor(long accountId) => accountId < 2000
+    public static string[] PermissionsFor(long accountId) => PilotBoundary.Profile == "full" ? FullPermissionsFor(accountId) : accountId < 2000
         ? [Permissions.CatalogRead, "order.request.read", "order.request.submit", Permissions.BranchPic]
         : accountId == 2001 ? [Permissions.CatalogRead, Permissions.CatalogManage] : [Permissions.CatalogRead];
+
+    // Full-workspace demo: requesters can also prepare and follow orders and payments; the staff account sees the
+    // maintained operational workspaces; the second staff identity is the independent price reviewer. SYNTHETIC only.
+    private static string[] FullPermissionsFor(long accountId) => accountId < 2000
+        ? [Permissions.CatalogRead, "order.request.read", "order.request.submit", Permissions.BranchPic, Permissions.OrderSubmit, Permissions.OrderRead,
+            Permissions.InvoiceRead, Permissions.PaymentEvidence, Permissions.ShipmentRead, Permissions.CaseRead, Permissions.CaseRequest]
+        : accountId == 2001
+            ? [Permissions.CatalogRead, Permissions.CatalogManage, Permissions.PricingManage, Permissions.OrderRead, Permissions.OrderAccept,
+                Permissions.InvoiceRead, Permissions.PaymentReviewRead, Permissions.ShipmentRead, Permissions.ShipmentPrepare, Permissions.ShipmentDispatch,
+                Permissions.ShipmentAssign, Permissions.StockRead, Permissions.CaseRead, Permissions.BankReceiptRead]
+            : [Permissions.CatalogRead, Permissions.PricingApprove];
     private static BsonDocument Scope(long accountId) => accountId < 2000
         ? new BsonDocument { { "kind", "buyingBranch" }, { "organizationId", 10L }, { "branchId", accountId == 1001 ? 11L : 12L } }
         : new BsonDocument { { "kind", "fulfillmentShop" }, { "organizationId", 100L }, { "shopId", 101L }, { "channelId", 103L } };

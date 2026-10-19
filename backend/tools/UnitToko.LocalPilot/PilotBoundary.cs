@@ -7,10 +7,19 @@ namespace UnitToko.LocalPilot;
 
 public static class PilotBoundary
 {
-    public const string DatabaseName = "unittoko_local_pilot_release1";
+    /// <summary>"release1" (the persistent pilot) or "full" (a separate demo of every maintained workspace). Set once at startup.</summary>
+    public static string Profile { get; private set; } = "release1";
+    public static void UseProfile(string profile)
+    {
+        if (profile is not ("release1" or "full")) throw new InvalidOperationException("Profile must be release1 or full.");
+        Profile = profile;
+    }
+    public static string DatabaseName => "unittoko_local_pilot_" + Profile;
     public const string ReplicaSet = "unitTokoPilot";
-    public const int MongoPort = 27029;
-    public const string MongoUri = "mongodb://127.0.0.1:27029/?replicaSet=unitTokoPilot";
+    public static int MongoPort => Profile == "full" ? 27030 : 27029;
+    public static string MongoUri => $"mongodb://127.0.0.1:{MongoPort}/?replicaSet={ReplicaSet}";
+    /// <summary>The production frontend build each profile serves (next.config.ts picks .next-full for the full release).</summary>
+    public static string NextBuildFolder => Profile == "full" ? ".next-full" : ".next";
     // Reserved private home.arpa names are resolved only inside the dedicated browser profile.
     public const string PortalHost = "portal.unit-toko-pilot.home.arpa";
     public const string ProviderHost = "login.unit-toko-pilot.home.arpa";
@@ -33,7 +42,7 @@ public static class PilotBoundary
         if (!File.Exists(Path.Combine(root, "backend", "src", "UnitToko.Api", "UnitToko.Api.csproj")) ||
             !File.Exists(Path.Combine(root, "frontend", "package.json")))
             throw new InvalidOperationException("Use the repository root, not an arbitrary data directory.");
-        var path = Path.Combine(root, "tmp", "pilot", "release1");
+        var path = Path.Combine(root, "tmp", "pilot", Profile);
         for (var item = new DirectoryInfo(path); item is not null; item = item.Parent)
             if (item.Exists && (item.Attributes & FileAttributes.ReparsePoint) != 0)
                 throw new InvalidOperationException("Pilot state cannot be stored through a junction or symbolic link.");

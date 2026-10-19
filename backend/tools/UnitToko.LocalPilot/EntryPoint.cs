@@ -10,8 +10,11 @@ internal static class EntryPoint
     public static async Task<int> Main(string[] args)
     {
         if (!OperatingSystem.IsWindows()) { Console.Error.WriteLine("This isolated local pilot launcher supports Windows only."); return 2; }
-        if (args.Length != 7 || args[0] != "--synthetic-local-pilot" || args[1] != "--repository" || args[3] != "--mongo" || args[5] != "--node")
-        { Console.Error.WriteLine("Explicit consent required: --synthetic-local-pilot --repository <root> --mongo <mongod.exe> --node <node.exe>"); return 2; }
+        if (args.Length is not (7 or 9) || args[0] != "--synthetic-local-pilot" || args[1] != "--repository" || args[3] != "--mongo" || args[5] != "--node" ||
+            args.Length == 9 && args[7] != "--profile")
+        { Console.Error.WriteLine("Explicit consent required: --synthetic-local-pilot --repository <root> --mongo <mongod.exe> --node <node.exe> [--profile release1|full]"); return 2; }
+        try { PilotBoundary.UseProfile(args.Length == 9 ? args[8] : "release1"); }
+        catch (InvalidOperationException exception) { Console.Error.WriteLine(exception.Message); return 2; }
         try { return await RunAsync(args[2], args[4], args[6]); }
         catch (Exception exception) { Console.Error.WriteLine("Local pilot stopped: " + exception.Message); return 1; }
     }
@@ -55,7 +58,7 @@ internal static class EntryPoint
                 await ForwardAsync(context, forward, address);
             });
             await edge.StartAsync(stop.Token);
-            Console.WriteLine("SYNTHETIC LOCAL PILOT — no real identity, MFA, approved catalog, purchases or stock.");
+            Console.WriteLine("SYNTHETIC LOCAL PILOT (" + PilotBoundary.Profile + ") — no real identity, MFA, approved catalog, purchases or stock.");
             Console.WriteLine("Private account/password/simulated factor file: " + Path.Combine(directory, "ACCOUNTS-PRIVATE.txt"));
             Console.WriteLine("Open with the isolated browser shortcut below. Ordinary browser profiles cannot resolve these private names.");
             Console.WriteLine(PilotBoundary.Origin + "/identity/account");
@@ -101,7 +104,7 @@ internal static class EntryPoint
     {
         // Generated only in private ignored state. No global hosts entry, certificate store, or default profile is changed.
         static string Quote(string value) => "'" + value.Replace("'", "''", StringComparison.Ordinal) + "'";
-        var script = "$ErrorActionPreference = 'Stop'\n$edgePath = @(${env:ProgramFiles(x86)} + '\\Microsoft\\Edge\\Application\\msedge.exe', ${env:ProgramFiles} + '\\Microsoft\\Edge\\Application\\msedge.exe') | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1\n" +
+        var script = "$ErrorActionPreference = 'Stop'\n$edgePath = @((${env:ProgramFiles(x86)} + '\\Microsoft\\Edge\\Application\\msedge.exe'), (${env:ProgramFiles} + '\\Microsoft\\Edge\\Application\\msedge.exe')) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1\n" +
             "if (-not $edgePath) { throw 'Microsoft Edge is required; no browser is downloaded automatically.' }\n" +
             "$pilotArguments = @(" + string.Join(",", new[] { "--user-data-dir=" + Path.Combine(state.Directory, "browser-profile"),
                 "--host-resolver-rules=MAP " + PilotBoundary.PortalHost + " 127.0.0.1, MAP " + PilotBoundary.ProviderHost + " 127.0.0.1",
