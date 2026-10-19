@@ -31,14 +31,15 @@ export function PaymentReviewActionPanel({ actorId, owner, allowed, fresh, locke
   useEffect(() => { if (confirm) heading.current?.focus(); }, [confirm]);
   const active = () => alive.current && current();
   async function work(task: () => Promise<void>, automatic = false) {
-    if (!active() || locked || pending.current) return; pending.current = true; setBusy(true); onBusyChange(true); setError(null);
+    if (!active() || locked || pending.current) return; pending.current = true; setBusy(true); if (!automatic) onBusyChange(true); setError(null);
     try { await task(); } catch (failure) { if (active()) { setError(failure); if (!(failure instanceof AccessFailure && failure.code === 'step_up_required') && (!automatic || autoLoadEndsSession(failure))) onDenied(failure); } }
-    finally { pending.current = false; onBusyChange(false); onSettled(); if (alive.current) setBusy(false); }
+    finally { pending.current = false; if (!automatic) onBusyChange(false); onSettled(); if (alive.current) setBusy(false); }
   }
   async function load() { const result = await gateway.read(actorId, owner); if (active()) { setView(result); setConfirm(null); setReason(''); setPublicExplanation(''); setAction(result.assigneeId === actorId ? 'release' : 'claim'); } }
   // Opening a submission loads its status once; the panel is keyed by submission and revision, so a remount discards late replies.
+  const autoLoaded = useRef(false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { void Promise.resolve().then(() => work(load, true /* automatic */)); }, []);
+  useEffect(() => { if (locked || autoLoaded.current) return; autoLoaded.current = true; void Promise.resolve().then(() => work(load, true /* automatic */)); }, [locked]);
   const disabled = locked || busy, canAct = allowed && fresh && !disabled, open = view && !view.verified && ['pending', 'assigned'].includes(view.state);
   return <section className={invoice.correctionPanel} aria-label="Penanggung jawab pemeriksaan"><h3>Penanggung jawab dan tindak lanjut</h3>
     <p>Diajukan {dateTimeFormatter.format(new Date(owner.submission!.submittedAt))}. Pengajuan dan bukti asli tetap tersimpan.</p>

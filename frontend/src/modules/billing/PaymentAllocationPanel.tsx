@@ -29,7 +29,7 @@ function message(error: unknown) {
     if (error.code === 'payment_allocation_exceeds_receipt') return 'Jumlah alokasi melebihi dana yang masih tersedia.';
     if (error.code === 'payment_allocation_exceeds_invoice') return 'Jumlah alokasi melebihi sisa tagihan invoice.';
     if (error.code === 'payment_allocation_accounting_mapping_changed') return 'Pemetaan akun pembukuan berbeda dari penerimaan atau invoice asli. Penanggung jawab Finance perlu menyelesaikan pemetaan sebelum alokasi.';
-    if (error.code === 'invalid_payment_allocation') return 'Pilih invoice, isi nominal positif tanpa pemisah ribuan, dan jelaskan alasan alokasi.';
+    if (error.code === 'invalid_payment_allocation') return 'Pilih invoice, isi nominal positif (misalnya 1.250.000 atau 1250000,50), dan jelaskan alasan alokasi.';
     if (error.code === 'payment_allocation_unavailable' || error.code === 'payment_balance_unavailable') return 'Riwayat dana belum dapat dibuktikan utuh. Jangan mengalokasikan ulang; hubungi penanggung jawab rekonsiliasi.';
     if (error.code === 'independent_person_required') return 'Alokasi memerlukan pemeriksa independen dan identitas orang yang masih terverifikasi.';
   }
@@ -106,7 +106,7 @@ export function PaymentAllocationPanel({ actorId, owner, verified, allowed, fres
             setShown(null); setValues(previous => { const next = { ...previous }; if (event.target.checked) next[item.invoiceId] = ''; else delete next[item.invoiceId]; return next; });
           }} /> Pilih invoice {number(item)}</label>
             {Object.hasOwn(values, item.invoiceId) && <div className={invoice.correctionField}><label htmlFor={'allocation-amount-' + item.invoiceId}>Nominal alokasi (IDR)</label>
-              <input id={'allocation-amount-' + item.invoiceId} inputMode="decimal" required maxLength={18} placeholder="Contoh: 1000,00" value={values[item.invoiceId]} disabled={!canAllocate || !!confirm}
+              <input id={'allocation-amount-' + item.invoiceId} inputMode="decimal" required maxLength={32} placeholder="Contoh: 1000,00" value={values[item.invoiceId]} disabled={!canAllocate || !!confirm}
                 onChange={event => { setShown(null); setValues(previous => ({ ...previous, [item.invoiceId]: event.target.value })); }} /></div>}</>}
         </li>)}</ul>
         {allowed && <><label htmlFor="allocation-reason">Alasan alokasi</label><textarea id="allocation-reason" required maxLength={1000} value={reason} disabled={!canAllocate || !!confirm} onChange={event => setReason(event.target.value)} />

@@ -25,7 +25,7 @@ const lost = (error: unknown) => (error instanceof AccessFailure || error instan
 function message(error: unknown): string {
   if (error instanceof IdentityFailure) return identityMessage(error);
   if (error instanceof AccessFailure) {
-    if (error.code === 'catalog_price_input_invalid') return 'Lengkapi mata uang, harga per kemasan dan alasan. Gunakan titik untuk desimal, maksimal dua angka.';
+    if (error.code === 'catalog_price_input_invalid') return 'Lengkapi mata uang, harga per kemasan dan alasan. Tulis harga seperti 12.000 atau 12000,50 (paling banyak dua angka di belakang koma).';
     if (error.code === 'step_up_required') return 'Verifikasi dua langkah terbaru diperlukan untuk meninjau harga dan memeriksa hasil keputusan.';
     if (error.status === 409) return 'Harga atau kemasan telah berubah. Muat ulang dan tinjau kembali sebelum mengirim.';
     if (error.status === 403) return 'Tindakan tidak diizinkan. Pemeriksa harus orang terverifikasi yang berbeda dari pengaju dan memiliki penugasan yang masih berlaku.';

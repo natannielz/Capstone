@@ -36,6 +36,7 @@ export function CameraScanner({ onDetected, onClose }: { onDetected: (raw: strin
         };
         void tick();
       } catch (failure) {
+        stop(); // a failed start (play, detector) must not leave the camera running
         setMessage(failure instanceof DOMException && failure.name === 'NotAllowedError'
           ? 'Izin kamera ditolak. Gunakan pemindai atau ketik kode secara manual.' : 'Kamera belum dapat dibuka. Gunakan pemindai atau ketik kode secara manual.');
       }

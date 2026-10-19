@@ -18,7 +18,8 @@ public interface IWorkSource
     string Area { get; }
     string Label { get; }
     string Href { get; }
-    /// <summary>The same rule that shows this workspace in navigation (identityDestinations); a source the actor cannot see is never read.</summary>
+    /// <summary>When the actor may see this queue (derived from its workspace navigation rule, narrowed to the actions that make work
+    /// wait for this actor); a source the actor cannot see is never read.</summary>
     bool AvailableTo(Func<string, bool> allowed);
     /// <summary>Null when nothing is waiting.</summary>
     Task<WorkCount?> ReadAsync(ActorContext actor, CancellationToken ct);
@@ -35,7 +36,9 @@ public sealed class AuthorizedWorkPermissions(AuthorizationStore authorization, 
     public async Task<Func<string, bool>> ReadAsync(ActorContext actor, CancellationToken ct)
     {
         var snapshot = await authorization.ReadCurrentAsync(actor, ct); var now = clock.UtcNow;
-        return permission => ScopePolicy.Compile(actor, snapshot, permission, now).IsAllowed;
+        // The account's action list (navigation) also offers fresh-authentication permissions the session can step up to;
+        // the queue read itself then answers step_up_required, which the summary shows as unavailable, never as done.
+        return permission => ScopePolicy.Compile(actor, snapshot, permission, now).IsAllowed || ScopePolicy.CanRequestStepUp(actor, snapshot, permission, now);
     }
 }
 

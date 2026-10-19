@@ -2,9 +2,12 @@
 
 import { whatsappLink } from "@/lib/whatsapp";
 
-/** Moves focus to the page's <main> (made focusable without joining the tab order). Works on every workspace page. */
-export function focusMain(root: Pick<Document, "querySelector">): boolean {
-  const main = root.querySelector("main");
+/**
+ * Moves focus past the header and navigation: to the workspace content marker (#konten-utama, rendered after the workspace
+ * navigation), or to the page's <main> where there is no workspace navigation (landing, login). Focusable without joining the tab order.
+ */
+export function focusMain(root: Pick<Document, "querySelector" | "getElementById">): boolean {
+  const main = root.getElementById("konten-utama") ?? root.querySelector("main");
   if (!main) return false;
   if (!main.hasAttribute("tabindex")) main.setAttribute("tabindex", "-1");
   main.focus(); main.scrollIntoView();

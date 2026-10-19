@@ -1,4 +1,5 @@
 using UnitToko.Modules.Identity;
+using UnitToko.Modules.Organizations;
 using UnitToko.Platform.Authorization;
 using UnitToko.Platform.Billing;
 using UnitToko.Platform.Fulfillment;
@@ -24,5 +25,20 @@ public sealed class WorkPermissionsTests(MongoFixture fixture)
         IWorkSource[] sources = [new PaymentReviewWorkSource(null!), new OrderReviewWorkSource(null!), new IncomingRequestWorkSource(null!), new DispatchWorkSource(null!)];
         Assert.DoesNotContain(sources, source => source.AvailableTo(allowed));
         Assert.Empty(await new WorkSummaryService(sources, permissions).ReadAsync(data.Catalog.Buyer, default));
+    }
+
+    // Navigation (the account action list) offers fresh-authentication permissions such as spending approval when the
+    // session can step up (its factor is older than the fresh window). The summary must offer the same
+    // source, so a stale factor shows "unavailable", never "done".
+    [Fact]
+    public async Task Fresh_authentication_permissions_follow_navigation_when_the_session_can_step_up() {
+        await using var data = await CatalogPriceTestData.CreateAsync(fixture);
+        await new CollectionMigrations(data.Catalog.Database, data.Catalog.Clock).ApplyAsync();
+        await data.Catalog.Base.AddGrantAsync(data.Catalog.Buyer, 6201, new(GrantScopeKind.BuyingBranch, 10, 11), [Permissions.OrderSpendApprove, Permissions.BranchPic]);
+        var stale = data.Catalog.Buyer with { AuthenticatedAt = data.Catalog.Clock.UtcNow.AddMinutes(-30) };
+        var permissions = new AuthorizedWorkPermissions(new AuthorizationStore(data.Catalog.Database, new(data.Catalog.Client), data.Catalog.Clock), data.Catalog.Clock);
+        var allowed = await permissions.ReadAsync(stale, default);
+        Assert.True(allowed(Permissions.OrderSpendApprove));
+        Assert.True(new OrderReviewWorkSource(null!).AvailableTo(allowed));
     }
 }
