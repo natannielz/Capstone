@@ -281,3 +281,9 @@ test('missing native locks refuses the photo before any fetch', async () => {
     else Reflect.deleteProperty(globalThis, 'navigator');
   }
 });
+
+// A loaded photo needs no "Muat ulang foto" under it; the action appears only when the photo failed or was hidden.
+test('the photo reload action is offered only after a failure or when the photo was hidden', async () => {
+  const {photoRefreshOffered} = await import('../src/modules/catalog/CatalogBuyerPhoto');
+  assert.deepEqual(['loading', 'none', 'ready', 'error', 'hidden'].map(kind => photoRefreshOffered(kind as never)), [false, false, false, true, true]);
+});

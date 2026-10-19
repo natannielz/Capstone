@@ -34,6 +34,8 @@
 .queueItem:hover .queueLabel { text-decoration-color: currentColor; }
 .queueAge { color: var(--workspace-text-muted); font-size: 14px; }
 .brand { display: inline-flex; align-items: center; min-height: 44px; font: 400 25px/1.2 var(--font-display), var(--font-body), sans-serif; letter-spacing: -.035em; color: var(--workspace-ink); text-decoration: none; }
+/* The brand mark (a T held inside a U, as BrandMark draws it) before every workspace wordmark; a data: mask is allowed by img-src. */
+.brand::before { content: ""; flex-shrink: 0; width: 1.25em; height: 1.25em; margin-right: .42em; background: currentColor; -webkit-mask: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%3E%3Cpath%20d%3D%22M8%208h48v8H36v24h-8V16H8V8Zm0%2018h8v12c0%208%206%2014%2016%2014s16-6%2016-14V26h8v12c0%2013-10%2022-24%2022S8%2051%208%2038V26Z%22%2F%3E%3C%2Fsvg%3E") center / contain no-repeat; mask: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%3E%3Cpath%20d%3D%22M8%208h48v8H36v24h-8V16H8V8Zm0%2018h8v12c0%208%206%2014%2016%2014s16-6%2016-14V26h8v12c0%2013-10%2022-24%2022S8%2051%208%2038V26Z%22%2F%3E%3C%2Fsvg%3E") center / contain no-repeat; }
 .brand:hover { color: var(--workspace-accent); }
 .kicker { color: var(--workspace-text-muted); font-size: 13px; }
 .eyebrow { display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: .08em; color: var(--workspace-text-muted); margin-bottom: 14px; }

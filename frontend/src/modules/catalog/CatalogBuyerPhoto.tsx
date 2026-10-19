@@ -18,6 +18,9 @@ function failureMessage(error: unknown) {
   return 'Foto belum dapat dimuat. Periksa koneksi lalu coba lagi.';
 }
 
+/** Reloading is offered only when there is something to recover from; a loaded or absent photo needs no action. */
+export function photoRefreshOffered(kind: State["kind"]): boolean { return kind === "error" || kind === "hidden"; }
+
 export function CatalogBuyerPhoto(props: Props) {
   return <PrivatePhoto key={buyerPhotoIdentity(props.actorId, buyerPhotoTarget(props.item))} {...props}/>;
 }
@@ -59,6 +62,6 @@ function PrivatePhoto({actorId, item, isCurrent}: Props) {
         : <div className={styles.buyerPhotoState}>{state.kind === 'error' ? <ImageOff size={36} strokeWidth={1.25} aria-hidden="true"/> : <PackageOpen size={40} strokeWidth={1.1} aria-hidden="true"/>}
           <p role="status">{state.kind === 'loading' ? 'Memuat foto…' : state.kind === 'none' ? 'Foto belum tersedia' : state.kind === 'hidden' ? 'Foto disembunyikan. Periksa kembali sesi dan koneksi.' : state.message}</p></div>}
     </div>
-    <button type="button" className={styles.buyerPhotoRefresh} aria-label={`Muat ulang foto ${item.code}`} disabled={state.kind === 'loading'} onClick={refresh}><RefreshCw size={14} aria-hidden="true"/>Muat ulang foto</button>
+    {photoRefreshOffered(state.kind) && <button type="button" className={styles.buyerPhotoRefresh} aria-label={`Muat ulang foto ${item.code}`} onClick={refresh}><RefreshCw size={14} aria-hidden="true"/>Muat ulang foto</button>}
   </section>;
 }
