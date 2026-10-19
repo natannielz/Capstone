@@ -2,7 +2,7 @@
 
 import styles from '../administration/access.module.css';
 import type { QualityAcceptanceChoice, QualityAcceptanceObservation, QualityAcceptancePolicy, QualityAcceptancePreview } from './procurement-quality-acceptance-client';
-import { dateTimeFormatter, longDateFormatter, numberFormatter } from '@/lib/format';
+import { dateTimeFormatter, formatDecimal, longDateFormatter, numberFormatter } from '@/lib/format';
 
 export type QualityObservationFields = { acceptedPackages: string; observedAt: string; qualityReference: string; putawayReference: string; segregationReference: string; acceptedCondition: string; lotReference: string; expiresOn: string; nonExpiringChecked: boolean; nonExpiringReason: string };
 export const emptyQualityObservation = (): QualityObservationFields => ({ acceptedPackages: '', observedAt: '', qualityReference: '', putawayReference: '', segregationReference: '', acceptedCondition: '', lotReference: '', expiresOn: '', nonExpiringChecked: false, nonExpiringReason: '' });
@@ -26,7 +26,7 @@ export function QualityReceiptFacts({ value, historical = false }: { value: Qual
 }
 
 export function QualityPolicyFacts({ value }: { value: QualityAcceptancePolicy }) {
-  return <dl className={styles.facts}><div><dt>Persetujuan kebijakan</dt><dd>{value.approvalReference}</dd></div><div><dt>Prosedur pemeriksaan mutu</dt><dd>{value.qualityProcedureReference}</dd></div><div><dt>Prosedur penempatan barang</dt><dd>{value.putawayProcedureReference}</dd></div><div><dt>Masa berlaku kebijakan</dt><dd>{qualityWhen(value.approvedAt)} – {qualityWhen(value.expiresAt)}</dd></div><div><dt>Batas usia pengamatan</dt><dd>{numberFormatter.format(Number(value.maximumObservationAgeMilliseconds) / 60000)} menit</dd></div><div><dt>Barang tanpa kedaluwarsa</dt><dd>{value.allowNonExpiring ? `Diizinkan melalui ${value.nonExpiringProcedureReference}` : 'Tidak diizinkan'}</dd></div></dl>;
+  return <dl className={styles.facts}><div><dt>Persetujuan kebijakan</dt><dd>{value.approvalReference}</dd></div><div><dt>Prosedur pemeriksaan mutu</dt><dd>{value.qualityProcedureReference}</dd></div><div><dt>Prosedur penempatan barang</dt><dd>{value.putawayProcedureReference}</dd></div><div><dt>Masa berlaku kebijakan</dt><dd>{qualityWhen(value.approvedAt)} – {qualityWhen(value.expiresAt)}</dd></div><div><dt>Batas usia pengamatan</dt><dd>{formatDecimal(Number(value.maximumObservationAgeMilliseconds) / 60000, 3)} menit</dd></div><div><dt>Barang tanpa kedaluwarsa</dt><dd>{value.allowNonExpiring ? `Diizinkan melalui ${value.nonExpiringProcedureReference}` : 'Tidak diizinkan'}</dd></div></dl>;
 }
 
 export function QualityObservationFacts({ value, checker = false }: { value: QualityAcceptanceObservation; checker?: boolean }) {

@@ -62,7 +62,8 @@
 .list-table th[data-align="end"],.list-table td[data-align="end"]{text-align:right}
 .list-table td{padding:12px 14px;border-bottom:1px solid var(--border);vertical-align:middle;color:var(--foreground)}
 .list-table[data-density="compact"] td{padding:6px 14px}
-.list-table tbody tr:hover,.list-table tbody tr[aria-selected="true"]{background:var(--secondary)}
+.list-table tbody tr:hover,.list-table tbody tr[aria-current="true"]{background:var(--secondary)}
+.list-table-open:disabled{color:var(--muted-foreground);cursor:not-allowed}
 .list-table-open{min-height:36px;padding:0 12px;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--primary);font-weight:600;white-space:nowrap}
 .list-table-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 @media (max-width:639px){
@@ -93,4 +94,24 @@
 .numeric{font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap;letter-spacing:0}
 .money{font-variant-numeric:tabular-nums}
 .warning-text{color:var(--tone-warning-foreground)}
+}
+@layer components{
+.rupiah-input{display:grid;gap:6px}
+.rupiah-input-hint{margin:0;font-size:13px;color:var(--muted-foreground)}
+.rupiah-input-error{margin:0;font-size:13px;font-weight:600;color:var(--tone-danger-foreground)}
+}
+/* Shell accessibility: skip link (2.4.1), focus not hidden by the sticky top bar (2.4.11), help in a consistent place (3.2.6). */
+@layer components{
+.skip-link{position:absolute;left:8px;top:-60px;z-index:100;padding:10px 16px;border-radius:8px;background:var(--primary);color:var(--primary-foreground);font-weight:700;text-decoration:none}
+.skip-link:focus{top:8px}
+.workspace-help{display:flex;align-items:center;min-height:44px;margin-top:auto;padding:8px 12px;border:1px solid var(--border);border-radius:8px;color:var(--primary);font-weight:600;text-decoration:none}
+@media (max-width:1023px){html{scroll-padding-top:72px}}
+}
+@layer components{
+.empty-state{display:grid;gap:6px;justify-items:start;padding:20px;border:1px dashed var(--border);border-radius:10px;background:var(--card)}
+.empty-state h3{margin:0;font-size:16px;color:var(--foreground)}
+.empty-state p{margin:0;color:var(--muted-foreground)}
+.empty-state[data-kind="done"]{border-style:solid;background:var(--tone-success)}
+.empty-state[data-kind="done"] p{color:var(--tone-success-foreground)}
+.empty-state-action{margin-top:6px}
 }

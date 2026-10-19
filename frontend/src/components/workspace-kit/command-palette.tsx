@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Search } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import type { NavigationGroup } from "@/modules/identity/workspace-navigation";
-import { isPaletteShortcut, paletteSearch } from "./palette-search";
+import { isPaletteShortcut, paletteComboboxProps, paletteSearch } from "./palette-search";
 
 /** Opens the single page-level palette; place one in the sidebar and one in the narrow-screen top bar. */
 export function PaletteButton({ onOpen, locked }: { onOpen: () => void; locked: boolean }) {
@@ -32,6 +32,8 @@ export function CommandPalette({ groups, locked, open, onOpenChange }: { groups:
     return () => window.removeEventListener("keydown", onKey);
   }, [locked, onOpenChange]);
 
+  // Keep the highlighted result visible while moving with the arrow keys.
+  useEffect(() => { if (open) document.getElementById(`${listId}-${active}`)?.scrollIntoView({ block: "nearest" }); }, [open, active, listId]);
   const close = (next: boolean) => { onOpenChange(next); if (!next) { setQuery(""); setActive(0); } };
   const go = (href: string) => { if (locked) return; close(false); router.push(href); };
   const onInputKey = (event: React.KeyboardEvent<HTMLInputElement>) => {
@@ -44,7 +46,7 @@ export function CommandPalette({ groups, locked, open, onOpenChange }: { groups:
     <DialogContent className="workspace-palette">
       <DialogTitle>Cari ruang kerja</DialogTitle>
       <DialogDescription>Ketik nama tugas, lalu tekan Enter. Hanya ruang kerja yang tersedia untuk akun Anda.</DialogDescription>
-      <input autoFocus type="search" role="combobox" aria-expanded="true" aria-controls={listId} aria-activedescendant={results[active] ? `${listId}-${active}` : undefined}
+      <input autoFocus type="search" {...paletteComboboxProps(listId, results.length, active)}
         aria-label="Cari ruang kerja" placeholder="Misalnya pembayaran, kiriman, pemasok" value={query} maxLength={120}
         onChange={event => { setQuery(event.target.value); setActive(0); }} onKeyDown={onInputKey} />
       {results.length === 0

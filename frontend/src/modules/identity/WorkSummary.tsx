@@ -7,6 +7,7 @@ import { OutcomeState } from '@/components/workspace-kit/outcome-state';
 import { AccessFailure } from '../administration/workflow';
 import { createWorkSummaryGateway, visibleWorkItems, workAgeText, workCountText, type WorkSummary as Summary } from './work-summary-client';
 import styles from './identity.module.css';
+import { EmptyState } from '@/components/workspace-kit/empty-state';
 
 type State = { kind: 'loading' } | { kind: 'ready'; summary: Summary } | { kind: 'offline' } | { kind: 'denied' } | { kind: 'error' };
 
@@ -41,7 +42,7 @@ export function WorkSummary({ actorId, actions }: { actorId: string; actions: re
     {state.kind === 'denied' && <OutcomeState kind="denied" />}
     {state.kind === 'error' && <OutcomeState kind="error" onAction={() => setRefresh(value => value + 1)} />}
     {state.kind === 'ready' && (items.length === 0
-      ? <p role="status" className={styles.help}>Tidak ada pekerjaan yang menunggu.</p>
+      ? <EmptyState kind="done" title="Semua pekerjaan selesai" body="Tidak ada pekerjaan yang menunggu Anda saat ini." />
       : <ListTable caption="Pekerjaan yang menunggu" rows={items} getKey={item => item.key}
         columns={[
           { key: 'work', header: 'Pekerjaan', render: item => <><Link href={item.href}>{item.label}</Link>{item.unavailable && <p className={styles.help}>Belum dapat dimuat. Buka ruang kerjanya untuk memeriksa.</p>}</> },

@@ -80,7 +80,7 @@ export function canUseStockCounts(actions: readonly string[]) { return actions.i
 
 export function canUseStockSourceReconciliations(actions: readonly string[]) { return ["read", "propose", "decide"].some(action => actions.includes("stock.source.reconciliation." + action)); }
 
-export function identityDestinations(actions: readonly string[]) {
+function destinationEntries(actions: readonly string[]) {
   return [
     {href: "/administration/delegations", label: "Delegasi sementara", description: "Ikuti izin sementara dan catatan serah-terima yang melibatkan akun Anda.", visible: true},
     { href: '/ordering/requests', label: 'Permintaan saya', description: 'Susun kebutuhan cabang dan ikuti hasil peninjauan toko.', visible: actions.some(action => ['order.request.read', 'order.request.submit'].includes(action)) },
@@ -142,7 +142,16 @@ export function identityDestinations(actions: readonly string[]) {
     { href: "/administration/organizations/addresses", label: "Alamat organisasi", description: "Ajukan dan periksa alamat penagihan, cabang dan gudang sesuai penugasan.", visible: canUseOrganizationAddresses(actions) },
     { href: "/administration/organizations", label: "Organisasi dan unit", description: "Kelola struktur organisasi melalui persetujuan.", visible: actions.some(action => ["technical.configure", "organization.approve", "access.audit.read"].includes(action)) },
     { href: "/administration/history", label: "Riwayat perubahan", description: "Periksa jejak pengajuan dan keputusan akses.", visible: actions.some(action => ["access.audit.read", "access.approve", "membership.approve", "access.revoke", "technical.configure", "organization.approve"].includes(action)) },
-  ].filter(item => item.visible && (!isPilotRelease || isPilotPathAllowed(item.href)));
+  ];
+}
+
+export function identityDestinations(actions: readonly string[]) {
+  return destinationEntries(actions).filter(item => item.visible && (!isPilotRelease || isPilotPathAllowed(item.href)));
+}
+
+/** A destination's own name regardless of the actor's permissions (e.g. the current page when access is unavailable). */
+export function destinationLabel(href: string): string | undefined {
+  return destinationEntries([]).find(entry => entry.href === href)?.label;
 }
 
 export function identityMessage(error: unknown): string {

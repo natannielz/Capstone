@@ -48,3 +48,14 @@ test("no stylesheet line ends in a dangling selector fragment", () => {
     });
   }
 });
+
+// Removing !important must not let element resets win: ".shop-v7 button{font:inherit}" and ".shop-v7 p{margin:0}"
+// (0,1,1) beat a lone class (0,1,0), so these overrides are scoped under .shop-v7.
+test("storefront overrides outrank the storefront element resets", () => {
+  const css = readFileSync(`${app}/storefront-v7.css`, "utf8");
+  for (const name of ["shop-remove-item", "shop-field-error"]) {
+    const selectors = [...css.matchAll(new RegExp(`([^{}]*)\\.${name}\\s*\\{`, "g"))].map(match => match[1].split(",").at(-1)!.trim());
+    assert.ok(selectors.length > 0, name);
+    for (const selector of selectors) assert.match(selector, /\.shop-v7\s*$/, `${name} rule "${selector}.${name}" is not scoped under .shop-v7`);
+  }
+});

@@ -24,3 +24,10 @@ export function isPaletteShortcut(event: { key: string; ctrlKey: boolean; metaKe
   if (event.key.toLowerCase() !== "k" || !(event.ctrlKey || event.metaKey)) return false;
   return !event.editable && !["INPUT", "TEXTAREA", "SELECT"].includes(event.targetTag);
 }
+
+/** ARIA for the palette's search input: an expanded, controlled listbox only while results exist (WAI-ARIA combobox). */
+export function paletteComboboxProps(listId: string, resultCount: number, active: number) {
+  const open = resultCount > 0;
+  return { role: "combobox" as const, "aria-autocomplete": "list" as const, "aria-expanded": open,
+    "aria-controls": open ? listId : undefined, "aria-activedescendant": open && active < resultCount ? `${listId}-${active}` : undefined };
+}

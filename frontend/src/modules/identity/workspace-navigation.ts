@@ -1,5 +1,5 @@
 import { isPilotPathAllowed, isPilotRelease } from '../../lib/release-scope';
-import { identityDestinations } from './identity-workflow';
+import { destinationLabel } from './identity-workflow';
 import { workspaceDirectory } from './workspace-directory';
 
 /** Former AdministrationNavigation `current` ids → their workspace path (kept so the 33 call sites stay unchanged). */
@@ -65,8 +65,8 @@ export function workspaceNavigation(actions: readonly string[], current: string 
   }
   const listed = new Set(groups.flatMap(group => group.items.map(entry => entry.href)));
   if (current && current !== HOME.href && !listed.has(current) && allowed(current)) {
-    const known = identityDestinations(['*']).find(entry => entry.href === current);
-    groups.push({ id: 'current', label: 'Halaman ini', items: [{ href: current, label: known?.label ?? 'Halaman ini', description: 'Akses ke halaman ini sedang tidak tersedia.', current: true, available: false }] });
+    const known = destinationLabel(current);
+    groups.push({ id: 'current', label: 'Halaman ini', items: [{ href: current, label: known ?? 'Halaman ini', description: 'Akses ke halaman ini sedang tidak tersedia.', current: true, available: false }] });
   }
   groups.push({ id: 'account', label: 'Akun', items: [item(ACCOUNT, true)] });
   return groups;

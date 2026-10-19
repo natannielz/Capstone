@@ -15,7 +15,8 @@ import { PriceMutationLedger, priceRecoverySku } from './catalog-price-recovery'
 import { pricePath, preparePriceProposal, preparePriceDecision, type PriceAccess, type PriceChoice, type PricePreview,
   type PriceProposal, type PriceCommand, type CatalogPrice } from './catalog-price-workflow';
 import styles from '../administration/access.module.css';
-import { dateTimeFormatter, formatMoney } from "@/lib/format";
+import { dateTimeFormatter, formatMoney, formatRupiah } from "@/lib/format";
+import { rupiahAmount } from "@/lib/rupiah-input";
 
 const loginHref = '/identity/login?returnPath=' + encodeURIComponent(pricePath);
 const factorHref = '/identity/account?operation=pricing.approve&returnPath=' + encodeURIComponent(pricePath);
@@ -126,7 +127,7 @@ function PriceDesk({ actorId, actions, session, observedAt, onRefresh, onFailure
   }
   function review(event: FormEvent, action: 'propose' | 'approve' | 'reject' | 'withdraw') {
     event.preventDefault(); if (locked || forbidden || !preview) return;
-    try { setError(null); setNotice(''); setStaged(action === 'propose' ? preparePriceProposal(actorId, preview, currency, price, reason)
+    try { setError(null); setNotice(''); setStaged(action === 'propose' ? preparePriceProposal(actorId, preview, currency, currency === 'IDR' ? rupiahAmount(price) ?? price : price, reason)
       : preparePriceDecision(actorId, selected, action, reference, reason)); } catch (failure) { failed(failure); }
   }
   async function confirm() {
@@ -183,7 +184,7 @@ function PriceDesk({ actorId, actions, session, observedAt, onRefresh, onFailure
           <button className={styles.secondary} disabled={locked || detailLoading} onClick={() => void load(preview.sku.id)}>Muat ulang harga dan riwayat</button>
           {mode === 'prepare' && <form onSubmit={event => review(event, 'propose')}><fieldset className={styles.fields} disabled={locked || detailLoading || !preview.sku.active}>
             <legend><h3>Harga baru per kemasan</h3></legend><div className={styles.twoFields}><label>Mata uang<input value={currency} maxLength={3} onChange={event => setCurrency(event.target.value.toUpperCase())} required /></label>
-              <label>Harga per kemasan<input inputMode="decimal" value={price} onChange={event => setPrice(event.target.value)} placeholder="12000.00" required /></label></div>
+              <label>Harga per kemasan<input inputMode="decimal" value={price} onChange={event => setPrice(event.target.value)} placeholder="Contoh: 12.000" required /></label>{currency === 'IDR' && price.trim() && <small>{rupiahAmount(price) === null ? 'Periksa angka harga, misalnya 12.000 atau 12000,50.' : 'Akan dicatat: ' + formatRupiah(rupiahAmount(price)!, { decimals: 2 })}</small>}</div>
             <label>Alasan pengajuan<textarea value={reason} maxLength={1000} onChange={event => setReason(event.target.value)} required /></label><button className={styles.primary}>Tinjau pengajuan harga</button>
           </fieldset></form>}
           <section><h3>Pengajuan harga</h3>{proposals.length === 0 ? <p>Belum ada pengajuan pada halaman ini.</p> : <ul className={styles.queueList}>{proposals.map(item => <li key={item.proposalId}><button className={selected?.proposalId === item.proposalId ? styles.selectedRow : styles.queueRow} disabled={locked || detailLoading}
