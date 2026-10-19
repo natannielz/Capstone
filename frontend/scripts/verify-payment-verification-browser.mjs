@@ -70,11 +70,11 @@ try {
   await image.getByRole('img').evaluate(element => element.decode()); await image.getByRole('button', { name: 'Tutup bukti', exact: true }).click();
   assert.equal(await review.getByRole('button', { name: 'Lihat bukti asli', exact: true }).evaluate(element => document.activeElement === element), true);
   const panel = review.getByRole('region', { name: 'Verifikasi pembayaran', exact: true });
-  await panel.getByRole('button', { name: 'Muat hasil verifikasi', exact: true }).click();
+  await panel.getByRole('button', { name: 'Muat ulang hasil verifikasi', exact: true }).click();
   await panel.getByText('Belum ada verifikasi pembayaran yang tersimpan.', { exact: true }).waitFor();
   if (config.workflow) {
     const workflow = review.getByRole('region', { name: 'Penanggung jawab pemeriksaan', exact: true });
-    await workflow.getByRole('button', { name: 'Muat status pemeriksaan', exact: true }).click(); await workflow.getByText(/Menunggu penanggung jawab/).waitFor();
+    await workflow.getByText(/Menunggu penanggung jawab/).waitFor();
     assert.equal(await workflow.getByText(/Usia pengajuan.*menurut waktu server/).count(), 1);
     await workflow.getByLabel('Alasan tindak lanjut', { exact: true }).fill('Synthetic independent queue owner');
     await workflow.getByRole('button', { name: 'Periksa tindak lanjut', exact: true }).click();
@@ -87,7 +87,7 @@ try {
     const references = await page.evaluate(() => Object.keys(localStorage).filter(key => key.startsWith('unit-toko:pending:v1:')).map(key => JSON.parse(localStorage[key])));
     assert.equal(references.length, 1); assert.equal(references[0].operation, 'billing.payment.review.manage'); assert.deepEqual(Object.keys(references[0]).sort(), ['actorId', 'createdAt', 'key', 'operation']); assert.doesNotMatch(JSON.stringify(references), /Synthetic|0000123456789|4000/);
     await page.reload(); await page.getByRole('button', { name: 'Periksa hasil', exact: true }).click(); await page.waitForFunction(() => !Object.keys(localStorage).some(key => key.startsWith('unit-toko:pending:v1:')));
-    await open(page); await workflow.getByRole('button', { name: 'Muat status pemeriksaan', exact: true }).click(); await workflow.getByText(/Dalam pemeriksaan/).waitFor();
+    await open(page); await workflow.getByRole('button', { name: 'Muat ulang status pemeriksaan', exact: true }).click(); await workflow.getByText(/Dalam pemeriksaan/).waitFor();
     for (const [choice, reasonText, expected] of [['release', 'Synthetic ownership release', /Menunggu penanggung jawab/], ['request_replacement', 'Synthetic request for legible replacement', /Bukti pengganti diminta/]]) {
       await workflow.getByLabel('Tindakan', { exact: true }).selectOption(choice); await workflow.getByLabel('Alasan tindak lanjut', { exact: true }).fill(reasonText);
       if (choice === 'request_replacement') await workflow.getByLabel('Penjelasan untuk pelanggan', { exact: true }).fill('Unggah foto bukti asli yang terbaca jelas.');
@@ -96,7 +96,7 @@ try {
       await confirmation.getByRole('button', { name: 'Simpan tindak lanjut', exact: true }).click(); await workflow.getByText(expected).waitFor();
     }
     assert.equal(await workflow.getByRole('button', { name: 'Periksa tindak lanjut', exact: true }).count(), 0);
-    await panel.getByRole('button', { name: 'Muat hasil verifikasi', exact: true }).click(); await panel.getByRole('button', { name: 'Pilih penerimaan bank', exact: true }).click();
+    await panel.getByRole('button', { name: 'Muat ulang hasil verifikasi', exact: true }).click(); await panel.getByRole('button', { name: 'Pilih penerimaan bank', exact: true }).click();
     const blocked = page.waitForResponse(response => response.url().endsWith('/verification/preview'));
     await panel.getByRole('button', { name: 'Periksa penerimaan ' + config.receiptId, exact: true }).click(); assert.equal((await blocked).status(), 409);
     await panel.getByRole('alert').getByText(/Pengajuan ini sudah ditutup/).waitFor();
@@ -120,7 +120,7 @@ try {
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true); await queue.screenshot({ path: resolve(directory, 'payment-queue-mobile.png') });
     await queue.getByLabel('Tampilan halaman ini', { exact: true }).selectOption('all');
     const reader = await desk(config.readerToken); await open(reader.page); const readWorkflow = reader.page.getByRole('region', { name: 'Penanggung jawab pemeriksaan', exact: true });
-    await readWorkflow.getByRole('button', { name: 'Muat status pemeriksaan', exact: true }).click(); await readWorkflow.getByText(/Bukti pengganti diminta/).waitFor(); assert.equal(await readWorkflow.getByRole('button', { name: 'Periksa tindak lanjut', exact: true }).count(), 0);
+    await readWorkflow.getByRole('button', { name: 'Muat ulang status pemeriksaan', exact: true }).click(); await readWorkflow.getByText(/Bukti pengganti diminta/).waitFor(); assert.equal(await readWorkflow.getByRole('button', { name: 'Periksa tindak lanjut', exact: true }).count(), 0);
     const buyer = await user(config.buyerToken); await buyer.page.goto(origin.origin + '/billing/payments');
     await buyer.page.getByRole('heading', { name: 'Bukti pembayaran', exact: true }).waitFor();
     await buyer.page.getByRole('button', { name: 'Buka pembayaran ' + config.declarationId, exact: true }).click();
@@ -193,7 +193,7 @@ try {
     assert.doesNotMatch(JSON.stringify(refs), /Synthetic|0000123456789|4000/);
     await page.reload(); await page.getByRole('button', { name: 'Periksa hasil', exact: true }).click();
     await page.waitForFunction(() => !Object.keys(localStorage).some(key => key.startsWith('unit-toko:pending:v1:')));
-    await open(page); await panel.getByRole('button', { name: 'Muat hasil verifikasi', exact: true }).click();
+    await open(page); await panel.getByRole('button', { name: 'Muat ulang hasil verifikasi', exact: true }).click();
     await panel.getByText('Belum ada verifikasi pembayaran yang tersimpan.', { exact: true }).waitFor();
     await review.getByRole('button', { name: 'Muat hasil OCR', exact: true }).click();
     await manual.getByRole('button', { name: 'Muat pengecualian terbaru', exact: true }).click();
@@ -250,13 +250,13 @@ try {
   assert.equal(references[0].operation, 'billing.payment.verify'); assert.doesNotMatch(JSON.stringify(references), /Synthetic|0000123456789|4000/);
   await page.reload(); await page.getByRole('button', { name: 'Periksa hasil', exact: true }).click();
   await page.waitForFunction(() => !Object.keys(localStorage).some(key => key.startsWith('unit-toko:pending:v1:')));
-  await open(page); await panel.getByRole('button', { name: 'Muat hasil verifikasi', exact: true }).click();
+  await open(page); await panel.getByRole('button', { name: 'Muat ulang hasil verifikasi', exact: true }).click();
   await panel.getByRole('heading', { name: 'Pembayaran terverifikasi', exact: true }).waitFor();
   assert.equal(await panel.getByRole('button', { name: 'Pilih penerimaan bank', exact: true }).count(), 0);
   await page.setViewportSize({ width: 1440, height: 950 }); await page.screenshot({ path: resolve(directory, 'payment-verification-desktop.png'), fullPage: true });
   const reader = await desk(config.readerToken); await open(reader.page);
   const readPanel = reader.page.getByRole('region', { name: 'Verifikasi pembayaran', exact: true });
-  await readPanel.getByRole('button', { name: 'Muat hasil verifikasi', exact: true }).click();
+  await readPanel.getByRole('button', { name: 'Muat ulang hasil verifikasi', exact: true }).click();
   await readPanel.getByRole('heading', { name: 'Pembayaran terverifikasi', exact: true }).waitFor();
   assert.equal(await readPanel.getByRole('button', { name: /Pilih penerimaan|Simpan verifikasi/ }).count(), 0);
   const outsider = await desk(config.otherToken); await outsider.page.getByRole('button', { name: 'Muat pengajuan terbaru', exact: true }).waitFor();

@@ -12,6 +12,7 @@ import type { PaymentDraft } from './payment-client';
 import styles from '../administration/access.module.css';
 import invoice from './invoice.module.css';
 import { dateTimeFormatter } from '@/lib/format';
+import { autoLoadEndsSession } from './payment-review-session';
 
 const labels: Record<string, string> = { amount: 'Nominal', currency: 'Mata uang', transfer_date: 'Tanggal transfer dan pembukuan', transfer_time: 'Waktu dan zona transfer', recipient: 'Nama penerima', account: 'Rekening tujuan', bank: 'Nama atau kode bank', reference: 'Referensi transfer' };
 function message(error: unknown) {
@@ -45,12 +46,15 @@ export function PaymentVerificationPanel({ actorId, owner, allowed, allocationAl
   useEffect(() => { if (shown) heading.current?.focus(); }, [shown]);
   useEffect(() => { if (confirm) reviewHeading.current?.focus(); }, [confirm]);
   const active = () => alive.current && current();
-  async function work(action: () => Promise<void>) {
+  async function work(action: () => Promise<void>, automatic = false) {
     if (!active() || locked || pending.current) return; pending.current = true; setBusy(true); onBusyChange(true); setError(null);
-    try { await action(); } catch (failure) { if (alive.current) { setError(failure); if (!(failure instanceof AccessFailure && failure.code === 'step_up_required')) onDenied(failure); } }
+    try { await action(); } catch (failure) { if (alive.current) { setError(failure); if (!(failure instanceof AccessFailure && failure.code === 'step_up_required') && (!automatic || autoLoadEndsSession(failure))) onDenied(failure); } }
     finally { pending.current = false; onBusyChange(false); onSettled(); if (alive.current) setBusy(false); }
   }
   async function read() { const result = await gateway.read(actorId, owner); if (active()) { setSaved(result); setChecked(true); setShown(null); setConfirm(null); setPage(null); } }
+  // Opening a submission reads its verification once; the panel is keyed by submission and revision, so a remount discards late replies.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { void Promise.resolve().then(() => work(read, true /* automatic */)); }, []);
   async function receipts(after: string | null) { setShown(null); setConfirm(null); const result = await gateway.receipts(actorId, owner.id, after); if (active()) setPage(result); }
   async function choose(receiptId: string) {
     setShown(null); setConfirm(null);
@@ -60,7 +64,7 @@ export function PaymentVerificationPanel({ actorId, owner, allowed, allocationAl
   const disabled = locked || busy, canVerify = allowed && fresh && !disabled;
   return <section className={invoice.correctionPanel} aria-label="Verifikasi pembayaran"><h3>Verifikasi pembayaran</h3>
     <p>Hubungkan pengajuan dan bukti asli dengan dana yang telah dikonfirmasi melalui bank. Pembayar harus diverifikasi melalui prosedur Finance yang disetujui.</p>
-    <button className={styles.secondary} disabled={disabled} onClick={() => void work(read)}>Muat hasil verifikasi</button>
+    <button className={styles.secondary} disabled={disabled} onClick={() => void work(read)}>Muat ulang hasil verifikasi</button>
     {busy && <p role="status">Memeriksa verifikasi…</p>}{error !== null && <p role="alert" className={styles.alert}>{message(error)}</p>}
     {allowed && (!fresh || error instanceof AccessFailure && error.code === 'step_up_required') && <p className={styles.alert}>Verifikasi dua langkah terbaru diperlukan. <Link href="/identity/account?operation=payment.verify&returnPath=%2Fbilling%2Fpayment-reviews">Verifikasi dua langkah untuk pembayaran</Link></p>}
     {checked && !saved && <p>Belum ada verifikasi pembayaran yang tersimpan.</p>}
