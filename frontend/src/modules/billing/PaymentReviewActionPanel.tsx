@@ -9,6 +9,7 @@ import type { PaymentDraft } from './payment-client';
 import styles from '../administration/access.module.css';
 import invoice from './invoice.module.css';
 import { dateTimeFormatter } from '@/lib/format';
+import { autoLoadEndsSession } from './payment-review-session';
 
 const states: Record<string, string> = { pending: 'Menunggu penanggung jawab', assigned: 'Dalam pemeriksaan', rejected: 'Pengajuan ditolak', replacement_requested: 'Bukti pengganti diminta' };
 const actions: Record<string, string> = { claim: 'Ambil tanggung jawab pemeriksaan', release: 'Lepaskan tanggung jawab', reject: 'Tolak pengajuan', request_replacement: 'Minta bukti pengganti' };
@@ -29,16 +30,19 @@ export function PaymentReviewActionPanel({ actorId, owner, allowed, fresh, locke
   useEffect(() => { alive.current = true; return () => { alive.current = false; onBusyChange(false); }; }, [onBusyChange]);
   useEffect(() => { if (confirm) heading.current?.focus(); }, [confirm]);
   const active = () => alive.current && current();
-  async function work(task: () => Promise<void>) {
+  async function work(task: () => Promise<void>, automatic = false) {
     if (!active() || locked || pending.current) return; pending.current = true; setBusy(true); onBusyChange(true); setError(null);
-    try { await task(); } catch (failure) { if (active()) { setError(failure); if (!(failure instanceof AccessFailure && failure.code === 'step_up_required')) onDenied(failure); } }
+    try { await task(); } catch (failure) { if (active()) { setError(failure); if (!(failure instanceof AccessFailure && failure.code === 'step_up_required') && (!automatic || autoLoadEndsSession(failure))) onDenied(failure); } }
     finally { pending.current = false; onBusyChange(false); onSettled(); if (alive.current) setBusy(false); }
   }
   async function load() { const result = await gateway.read(actorId, owner); if (active()) { setView(result); setConfirm(null); setReason(''); setPublicExplanation(''); setAction(result.assigneeId === actorId ? 'release' : 'claim'); } }
+  // Opening a submission loads its status once; the panel is keyed by submission and revision, so a remount discards late replies.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { void Promise.resolve().then(() => work(load, true /* automatic */)); }, []);
   const disabled = locked || busy, canAct = allowed && fresh && !disabled, open = view && !view.verified && ['pending', 'assigned'].includes(view.state);
   return <section className={invoice.correctionPanel} aria-label="Penanggung jawab pemeriksaan"><h3>Penanggung jawab dan tindak lanjut</h3>
     <p>Diajukan {dateTimeFormatter.format(new Date(owner.submission!.submittedAt))}. Pengajuan dan bukti asli tetap tersimpan.</p>
-    <button className={styles.secondary} disabled={disabled} onClick={() => void work(load)}>Muat status pemeriksaan</button>
+    <button className={styles.secondary} disabled={disabled} onClick={() => void work(load)}>Muat ulang status pemeriksaan</button>
     {busy && <p role="status">Memeriksa status…</p>}{error !== null && <p role="alert" className={styles.alert}>{message(error)}</p>}
     {allowed && !fresh && <p className={styles.alert}>Verifikasi dua langkah terbaru diperlukan. <Link href="/identity/account?operation=payment.review.manage&returnPath=%2Fbilling%2Fpayment-reviews">Verifikasi dua langkah untuk tindak lanjut</Link></p>}
     {view && <><p>Status: {view.verified ? 'Pembayaran sudah terverifikasi' : states[view.state]} · Versi tindak lanjut {view.reviewRevision}</p>

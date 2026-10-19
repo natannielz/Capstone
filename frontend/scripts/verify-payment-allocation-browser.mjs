@@ -59,7 +59,7 @@ try {
   async function open(page) { await page.getByRole('button', { name: 'Periksa pengajuan ' + config.declarationId, exact: true }).click(); }
   const reviewer = await desk(config.reviewerToken), page = reviewer.page; await open(page);
   const duplicates = page.getByRole('region', { name: 'Indikasi pengajuan berulang', exact: true });
-  await duplicates.getByRole('button', { name: 'Periksa kecocokan pengajuan', exact: true }).click();
+  await duplicates.getByRole('button', { name: 'Periksa ulang kecocokan pengajuan', exact: true }).click();
   await duplicates.getByText('Berkas gambar asli identik · Referensi yang dinyatakan pembeli sama', { exact: true }).waitFor();
   assert.equal(await duplicates.getByRole('heading', { name: 'Hasil perbandingan pengajuan' }).evaluate(element => document.activeElement === element), true);
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
@@ -72,7 +72,7 @@ try {
   await open(page); assert.equal(writes.length, 0);
 
   async function balances(page) {
-    await page.getByRole('button', { name: 'Muat hasil verifikasi', exact: true }).click();
+    await page.getByRole('button', { name: 'Muat ulang hasil verifikasi', exact: true }).click();
     const panel = page.getByRole('region', { name: 'Alokasi pembayaran', exact: true });
     await panel.getByRole('button', { name: 'Muat saldo alokasi', exact: true }).click();
     await panel.getByRole('heading', { name: 'Saldo dana dan tagihan', exact: true }).waitFor();
