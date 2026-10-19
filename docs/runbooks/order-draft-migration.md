@@ -41,3 +41,16 @@ Menerapkan daftar baru mengubah isian di layar. Pilih **Tinjau perubahan draf** 
 Jika hasil penyimpanan belum diketahui, gunakan **Periksa hasil** dengan akun, perangkat dan referensi operasi semula. Jangan membuat draf pengganti. Pemeriksaan dan pemulihan mengikuti panduan draf biasa, termasuk setelah browser dibuka kembali. Referensi pemulihan tidak menyimpan salinan isi daftar atau rincian pengiriman pada penyimpanan browser.
 
 Local bulk acceptance: seven unique native cases have latest passing results, client 6/6 and scoped type/lint passed. Actual main backend5 and fullfrontend6 passed; browser main5-2 passed 1/1 in 6.5310 minutes, including explicit preview/apply, one lost committed response, actual browser restart/original-key recovery, stale-tab locking, refresh, denied actor/branch and unchanged source order/stock/money. Six desktop1440/mobile360 screenshots were inspected. Source, runtime and proof hashes are recorded in `tmp/u07-bulk-candidate/acceptance-main5-2.json`. The original selector failure and its driver-only correction remain recorded; this is local synthetic-identity acceptance, not staging or production acceptance.
+
+## Buang, pulihkan dan retensi 30 hari (migrasi 118)
+
+Aturan D02 yang disetujui pada 16 Oktober 2026 berlaku untuk draf pesanan yang belum diajukan. Pesanan yang sudah diajukan, invoice, pembayaran dan jurnal tidak pernah dihapus.
+
+- **Buang draf.** Pembuat draf memilih **Buang draf**, meninjau tanggal batas pemulihan, lalu mengonfirmasi. Draf hilang dari *Draf saya* dan tampil di *Draf yang dibuang*. Draf yang dibuang tidak dapat disimpan atau dibuka untuk diubah sampai dipulihkan.
+- **Pulihkan draf.** Selama 30 hari sejak dibuang, pembuat dapat memilih **Pulihkan draf**. Setelah batas itu, pemulihan ditolak dengan pesan "Masa pemulihan draf ini sudah berakhir", meskipun pembersihan belum berjalan.
+- **Pembersihan.** Worker (`OrderDraftPurgeWorker`) memeriksa setiap 6 jam. Draf yang batas pemulihannya lewat dihapus permanen, dalam batch berisi paling banyak 200 draf dan satu transaksi per draf. Yang dihapus: head draf, semua versi termasuk alamat pengiriman, receipt simpan/buang/pulihkan, event outbox draf, dan baris buang.
+- **Jejak audit tetap disimpan.** Event `ordering.draft.saved`, `ordering.draft.discarded` dan `ordering.draft.restored` tetap ada. Pembersihan menambah satu event `ordering.draft.purged` per draf, berisi ID dan jumlah saja, tanpa isi draf atau data kontak.
+- **Integritas.** Baris buang yang tanggalnya tidak cocok dengan event auditnya tidak pernah dihapus lebih awal. Worker mencatat status `integrity_refused`, dan baris itu perlu diperiksa sebelum dibersihkan manual.
+- **Menonaktifkan.** Setel `Retention:OrderDraftPurge:Enabled=false` pada worker hanya bila ada perintah penahanan data (legal hold). Worker lalu mencatat peringatan saat mulai. Pengaturan ini tidak mengubah tombol buang dan pulihkan.
+
+Migrasi 118 hanya membuat koleksi kosong `orderDraftDiscards`, lengkap dengan validator ketat (batas pemulihan tepat 30 hari setelah dibuang) dan indeks `restorableUntil`. Draf yang sudah ada tetap aktif.

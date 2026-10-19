@@ -41,6 +41,28 @@ export function parseDraftResult(value: unknown) {
   const row = record(value); return { draftId: priceId(row.draftId), versionId: priceId(row.versionId), revision: priceId(row.revision), recordedAt: time(row.recordedAt) };
 }
 export type DraftResult = ReturnType<typeof parseDraftResult>;
+/** Discarded drafts stay restorable for exactly 30 days (approved D02 rule); anything else is an invalid response. */
+export const DISCARD_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
+function window30(discardedAt: string, restorableUntil: string) { return Date.parse(restorableUntil) - Date.parse(discardedAt) === DISCARD_WINDOW_MS; }
+export function parseDiscardResult(value: unknown) {
+  const row = record(value), discardedAt = time(row.discardedAt), restorableUntil = time(row.restorableUntil);
+  return window30(discardedAt, restorableUntil) ? { draftId: priceId(row.draftId), revision: priceId(row.revision), discardedAt, restorableUntil } : invalid();
+}
+export function parseRestoreResult(value: unknown) {
+  const row = record(value); return { draftId: priceId(row.draftId), revision: priceId(row.revision), restoredAt: time(row.restoredAt) };
+}
+export function parseDiscardedDraft(value: unknown) {
+  const row = record(value), discardedAt = time(row.discardedAt), restorableUntil = time(row.restorableUntil);
+  return window30(discardedAt, restorableUntil) ? { id: priceId(row.id), revision: priceId(row.revision), discardedAt, restorableUntil, input: parseDraftInput(row.input) } : invalid();
+}
+export type DiscardedDraft = ReturnType<typeof parseDiscardedDraft>;
+/** Messages for discard/restore conflicts; other failures fall back to draftMessage. */
+export function discardConflictMessage(code: string): string | null {
+  if (code === 'order_draft_discarded') return 'Draf ini sudah dibuang. Pulihkan dulu dari daftar Draf yang dibuang untuk mengubahnya.';
+  if (code === 'order_draft_restore_expired') return 'Masa pemulihan draf ini sudah berakhir. Draf akan dihapus permanen.';
+  if (code === 'order_draft_not_discarded') return 'Draf ini sudah aktif kembali.';
+  return null;
+}
 export function prepareDraftCommand(actorId: string, draftId: string | null, expectedRevision: string, input: DraftInput, reason: string) {
   try {
     if (draftId === null ? expectedRevision !== '0' : priceId(expectedRevision) === '9223372036854775807') throw new AccessFailure(400, 'invalid_order_draft_revision');
@@ -81,6 +103,24 @@ export function createOrderDraftGateway(client: ReturnType<typeof createUnitToko
       if (!isCurrent()) throw new AccessFailure(503, 'commit_outcome_unknown');
       if (frozen.draftId !== null && result.draftId !== frozen.draftId || BigInt(result.revision) !== BigInt(frozen.expectedRevision) + BigInt(1)) return invalid();
       return result;
+    },
+    async discard(actorId: string, id: string, revision: string, reason: string, requestKey: string) {
+      const result = parseDiscardResult(data(await client.POST('/api/v1/ordering/drafts/{id}/discard', { body: { reason: text(reason, 1000) },
+        params: { path: { id: priceId(id) }, header: { ...headers(actorId), 'Idempotency-Key': key(requestKey), 'If-Match': '"' + priceId(revision) + '"' } } })));
+      return result.draftId === id ? result : invalid();
+    },
+    async restore(actorId: string, id: string, reason: string, requestKey: string) {
+      const result = parseRestoreResult(data(await client.POST('/api/v1/ordering/drafts/{id}/restore', { body: { reason: text(reason, 1000) },
+        params: { path: { id: priceId(id) }, header: { ...headers(actorId), 'Idempotency-Key': key(requestKey) } } })));
+      return result.draftId === id ? result : invalid();
+    },
+    async listDiscarded(actorId: string, context: DraftInput['context'], beforeId: string | null = null, signal?: AbortSignal) {
+      const row = record(data(await client.POST('/api/v1/ordering/drafts/discarded/query', { body: { purpose: 'order-preparation', context: parseOrderContext(context),
+        beforeId: beforeId === null ? null : priceId(beforeId), limit: 25 }, params: { header: headers(actorId) }, signal })));
+      if (!Array.isArray(row.items) || row.items.length > 25 || typeof row.hasMore !== 'boolean') return invalid();
+      const items = row.items.map(parseDiscardedDraft);
+      if (items.some(item => orderContextKey(item.input.context) !== orderContextKey(context))) return invalid();
+      return { items, hasMore: row.hasMore };
     },
     async recover(actorId: string, requestKey: string, signal?: AbortSignal) {
       const row = record(data(await client.POST('/api/v1/ordering/drafts/operations/query', { body: { purpose: 'operation-recovery', key: key(requestKey) }, params: { header: headers(actorId) }, signal })));

@@ -42,6 +42,12 @@ public sealed record OrderDraftDto(LongId Id, string Revision, DateTimeOffset Cr
 public sealed record OrderDraftPageDto(OrderDraftDto[] Items, bool HasMore);
 public sealed record OrderDraftResultDto(LongId DraftId, LongId VersionId, string Revision, DateTimeOffset RecordedAt);
 public sealed record OrderDraftReceiptDto(string Status, OrderDraftResultDto? Result);
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record OrderDraftReasonDto([property: JsonRequired] string Reason);
+public sealed record OrderDraftDiscardResultDto(LongId DraftId, string Revision, DateTimeOffset DiscardedAt, DateTimeOffset RestorableUntil);
+public sealed record OrderDraftRestoreResultDto(LongId DraftId, string Revision, DateTimeOffset RestoredAt);
+public sealed record OrderDraftDiscardedDto(LongId Id, string Revision, DateTimeOffset DiscardedAt, DateTimeOffset RestorableUntil, OrderDraftInputDto Input);
+public sealed record OrderDraftDiscardedPageDto(OrderDraftDiscardedDto[] Items, bool HasMore);
 
 public static class OrderDraftEndpoints
 {
@@ -74,7 +80,28 @@ public static class OrderDraftEndpoints
             var result = await service.RecoverAsync(http.Features.Get<ResolvedActor>()!.Actor, request.Key, ct);
             return TypedResults.Ok(new OrderDraftReceiptDto(result is null ? "not_confirmed" : "committed", result is null ? null : Result(result)));
         }).WithName("RecoverOrderDraftSave");
+        // D02: discard hides a draft for 30 days (restorable), then the worker purges it. Same key replays the original result.
+        group.MapPost("/discarded/query", async (OrderDraftListDto request, HttpContext http, [FromServices] OrderDraftService service, CancellationToken ct) => {
+            Purpose(request.Purpose); if (request.Context is null) throw Invalid();
+            var result = await service.ListDiscardedAsync(http.Features.Get<ResolvedActor>()!.Actor, request.Context.Domain(), request.BeforeId?.Value, request.Limit, ct);
+            return TypedResults.Ok(new OrderDraftDiscardedPageDto([.. result.Items.Select(item => new OrderDraftDiscardedDto(item.Id, OrderDraftInputDto.Number(item.Revision),
+                item.DiscardedAt, item.RestorableUntil, OrderDraftInputDto.From(item.Input)))], result.HasMore));
+        }).WithName("OrderDraftDiscardedList");
+        group.MapPost("/{id}/discard", async (string id, OrderDraftReasonDto request, HttpContext http, [FromServices] OrderDraftService service,
+            [FromHeader(Name = "Idempotency-Key")] string key, [FromHeader(Name = "If-Match")] string expected, CancellationToken ct) => {
+            var result = await service.DiscardAsync(http.Features.Get<ResolvedActor>()!.Actor, LongId.Parse(id).Value, AccessRequestMetadata.ExpectedVersion(http.Request),
+                new(AccessRequestMetadata.IdempotencyKey(http.Request), request.Reason, http.TraceIdentifier), ct);
+            return TypedResults.Ok(new OrderDraftDiscardResultDto(new(result["draftId"].AsInt64), OrderDraftInputDto.Number(result["revision"].AsInt64),
+                Time(result["discardedAt"]), Time(result["restorableUntil"])));
+        }).WithName("DiscardOrderDraft");
+        group.MapPost("/{id}/restore", async (string id, OrderDraftReasonDto request, HttpContext http, [FromServices] OrderDraftService service,
+            [FromHeader(Name = "Idempotency-Key")] string key, CancellationToken ct) => {
+            var result = await service.RestoreAsync(http.Features.Get<ResolvedActor>()!.Actor, LongId.Parse(id).Value,
+                new(AccessRequestMetadata.IdempotencyKey(http.Request), request.Reason, http.TraceIdentifier), ct);
+            return TypedResults.Ok(new OrderDraftRestoreResultDto(new(result["draftId"].AsInt64), OrderDraftInputDto.Number(result["revision"].AsInt64), Time(result["restoredAt"])));
+        }).WithName("RestoreOrderDraft");
     }
+    private static DateTimeOffset Time(BsonValue value) => DateTimeOffset.FromUnixTimeMilliseconds(value.AsBsonDateTime.MillisecondsSinceEpoch);
     private static OrderDraftDto From(OrderDraftView value) => new(value.Id, OrderDraftInputDto.Number(value.Revision), value.CreatedAt, value.UpdatedAt, OrderDraftInputDto.From(value.Input));
     private static OrderDraftResultDto Result(BsonDocument value) => new(new(value["draftId"].AsInt64), new(value["versionId"].AsInt64),
         OrderDraftInputDto.Number(value["revision"].AsInt64), DateTimeOffset.FromUnixTimeMilliseconds(value["recordedAt"].AsBsonDateTime.MillisecondsSinceEpoch));

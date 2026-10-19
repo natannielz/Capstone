@@ -9,7 +9,8 @@ namespace UnitToko.Platform.Ordering;
 
 internal static class OrderDraftBson
 {
-    internal const string Heads = "orderDrafts", Versions = "orderDraftVersions", Operation = "ordering.draft.save";
+    internal const string Heads = "orderDrafts", Versions = "orderDraftVersions", Operation = "ordering.draft.save",
+        DiscardOperation = "ordering.draft.discard", RestoreOperation = "ordering.draft.restore";
     internal static BsonDocument Context(OrderBuyingContext value) => new() {
         { "organizationId", value.OrganizationId.Value }, { "branchId", value.BranchId.Value },
         { "divisionId", value.DivisionId is { } division ? new BsonInt64(division.Value) : BsonNull.Value } };
