@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { Menu } from "lucide-react";
 import { CommandPalette, PaletteButton } from "@/components/workspace-kit/command-palette";
+import { HelpLink } from "@/components/workspace-kit/shell-links";
 import { Sheet, SheetContent, SheetDescription, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { NAVIGATION_HREFS, navigationClick, workspaceNavigation, type NavigationGroup, type NavigationId } from "../identity/workspace-navigation";
 
@@ -21,6 +22,7 @@ export function AdministrationNavigation({ current, actions, locked = false }: {
       <Link href="/identity/account" className="workspace-sidebar-brand" aria-disabled={locked} onClick={navigationClick(locked)}>Unit Toko</Link>
       <PaletteButton locked={locked} onOpen={() => setPaletteOpen(true)} />
       <NavigationList groups={groups} locked={locked} />
+      <HelpLink phone={process.env.NEXT_PUBLIC_UNIT_TOKO_HELP_WHATSAPP} />
     </aside>
     <div className="workspace-topbar">
       <Sheet open={open} onOpenChange={setOpen}>
@@ -29,6 +31,7 @@ export function AdministrationNavigation({ current, actions, locked = false }: {
           <SheetTitle>Unit Toko</SheetTitle>
           <SheetDescription>Pilih ruang kerja sesuai penugasan akun Anda.</SheetDescription>
           <NavigationList groups={groups} locked={locked} onNavigate={() => setOpen(false)} />
+          <HelpLink phone={process.env.NEXT_PUBLIC_UNIT_TOKO_HELP_WHATSAPP} />
         </SheetContent>
       </Sheet>
       <span className="workspace-topbar-current" aria-current="page">{currentLabel}</span>

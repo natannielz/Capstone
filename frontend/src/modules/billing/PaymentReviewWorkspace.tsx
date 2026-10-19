@@ -32,6 +32,8 @@ import { paymentSupplementOwner } from './payment-pdf-supplement-client';
 import common from '../administration/access.module.css';
 import styles from './invoice.module.css';
 import { dateFormatter } from '@/lib/format';
+import { EmptyState } from '@/components/workspace-kit/empty-state';
+import { autoLoadEndsSession } from './payment-review-session';
 
 type Account = { actorId: string; actions: readonly string[]; session: IdentitySession; observedAt: number };
 const rupiah = (value: string) => orderAmount('IDR', value);
@@ -99,9 +101,9 @@ function ReviewDesk({ account, fresh, onDenied }: { account: Account; fresh: boo
   const handoverSettled = useCallback(() => {clearPreview(); setSelected(null); setOcr(null); setRememberedObservations([]); setRefresh(value => value + 1);}, [clearPreview]);
   function refreshPage(next: string | null) { clearPreview(); setSelected(null); setOcr(null); setRememberedObservations([]); setBefore(next); setRefresh(value => value + 1); }
   async function open(id: string) { clearPreview(); setSelected(null); setOcr(null); setRememberedObservations([]); const result = await gateway.read(account.actorId, id); if (!current()) return; setSelected(result);
-    // Opening a submission also loads its OCR suggestions; an unavailable result leaves "Muat hasil OCR" for retry (session/access failures still propagate).
+    // Opening a submission also loads its OCR suggestions; an unavailable result leaves "Muat hasil OCR" for retry (a lost session or changed account still propagates; a 403 on this evidence does not eject the reviewer).
     try { const view = await gateway.ocr(account.actorId, result); if (current()) setOcr(view); }
-    catch (failure) { if (failure instanceof AccessFailure && (failure.status === 401 || failure.status === 403 || failure.code === 'actor_changed')) throw failure; } }
+    catch (failure) { if (autoLoadEndsSession(failure)) throw failure; } }
   async function showOriginal() {
     if (!selected) return; clearPreview(); const version = epoch.current;
     const blob = await gateway.original(account.actorId, selected, () => current() && epoch.current === version);
@@ -135,9 +137,9 @@ function ReviewDesk({ account, fresh, onDenied }: { account: Account; fresh: boo
       <label htmlFor="payment-queue-filter">Tampilan halaman ini</label><select id="payment-queue-filter" value={filter} disabled={locked} onChange={event => setFilter(event.target.value)}><option value="all">Semua pengajuan</option><option value="pending">Belum ditugaskan</option><option value="assigned">Dalam pemeriksaan</option><option value="attention">Perlu perhatian OCR</option><option value="closed">Tindak lanjut ditutup</option></select>
       <p>Ringkasan dan usia mengikuti waktu server saat dimuat. Filter berlaku pada halaman ini; hasil OCR tidak menetapkan dana masuk.</p>
       {busy && <p role="status">Memuat data…</p>}
-      {!busy && page.items.length === 0 && <p>Belum ada pengajuan yang dapat Anda periksa.</p>}
-      {!busy && page.items.length > 0 && visible.length === 0 && <p>Tidak ada pengajuan untuk tampilan ini. Periksa halaman lain atau ubah tampilan.</p>}
-      <ListTable caption="Pengajuan pada halaman ini" rows={visible} getKey={row => row.declaration.id}
+      {!busy && page.items.length === 0 && <EmptyState kind="first-use" title="Belum ada pengajuan yang dapat Anda periksa." body="Bukti pembayaran yang diajukan cabang dalam cakupan Anda akan muncul di sini." />}
+      {!busy && page.items.length > 0 && visible.length === 0 && <EmptyState kind="no-results" title="Tidak ada pengajuan untuk tampilan ini. Periksa halaman lain atau ubah tampilan." body="Pilih tampilan lain atau buka halaman berikutnya." />}
+      <ListTable caption="Pengajuan pada halaman ini" rows={visible} disabled={locked} getKey={row => row.declaration.id}
         selectedKey={selected?.id ?? null} onOpen={row => { if (!locked) void perform(() => open(row.declaration.id)); }} openLabel={row => 'Periksa pengajuan ' + row.declaration.id}
         columns={[
           { key: 'payer', header: 'Pembayar', render: ({ declaration: item }) => <><strong>{item.input.payerName}</strong><p className={styles.queueMeta}>{item.invoices[0].buyerName} · {item.invoices[0].sellerName}</p></> },

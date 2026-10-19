@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { paletteSearch, isPaletteShortcut } from "../src/components/workspace-kit/palette-search";
+import { paletteSearch, isPaletteShortcut, paletteComboboxProps } from "../src/components/workspace-kit/palette-search";
 import type { NavigationGroup } from "../src/modules/identity/workspace-navigation";
 
 const groups: NavigationGroup[] = [
@@ -31,4 +31,10 @@ test("Ctrl/⌘+K opens the palette except while typing in a field", () => {
   assert.equal(isPaletteShortcut({ key: "k", ctrlKey: true, metaKey: false, targetTag: "INPUT", editable: false }), false);
   assert.equal(isPaletteShortcut({ key: "k", ctrlKey: true, metaKey: false, targetTag: "DIV", editable: true }), false);
   assert.equal(isPaletteShortcut({ key: "k", ctrlKey: false, metaKey: false, targetTag: "DIV", editable: false }), false);
+});
+
+// The combobox only claims an open, controlled list when results exist; it always declares list autocompletion.
+test("palette combobox attributes follow the results", () => {
+  assert.deepEqual(paletteComboboxProps("list", 3, 1), { role: "combobox", "aria-autocomplete": "list", "aria-expanded": true, "aria-controls": "list", "aria-activedescendant": "list-1" });
+  assert.deepEqual(paletteComboboxProps("list", 0, 0), { role: "combobox", "aria-autocomplete": "list", "aria-expanded": false, "aria-controls": undefined, "aria-activedescendant": undefined });
 });

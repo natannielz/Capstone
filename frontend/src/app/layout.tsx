@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
 import { isPilotRelease } from "../lib/release-scope";
+import { SkipLink } from "../components/workspace-kit/shell-links";
 
 const bodyFont = localFont({src:"../../public/fonts/dm-sans-variable.ttf",variable:"--font-body",display:"swap",weight:"100 1000"});
 const displayFont = localFont({src:"../../public/fonts/archivo-black.ttf",variable:"--font-display",display:"swap",weight:"400"});
@@ -25,6 +26,7 @@ export default function RootLayout({
   return (
     <html lang="id" data-scroll-behavior="smooth" className={`${bodyFont.variable} ${displayFont.variable}`}>
       <body className="antialiased">
+        <SkipLink />
         {isPilotRelease && process.env.VERCEL && !process.env.UNIT_TOKO_API_ORIGIN && (
           <aside role="status" style={{ background: "#fff3d4", color: "#513d12", padding: "16px 24px", borderBottom: "1px solid #dbc48f", lineHeight: 1.6 }}>
             <strong>Pratinjau Release 1 — layanan daring belum diaktifkan.</strong>{" "}

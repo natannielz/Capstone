@@ -10,15 +10,17 @@ import type { PaymentDraft } from './payment-client';
 import type { PaymentVerificationDetail } from './payment-verification-client';
 import styles from '../administration/access.module.css';
 import invoice from './invoice.module.css';
+import { rupiahAmount } from '@/lib/rupiah-input';
 
 const rupiah = (value: string) => orderAmount('IDR', value);
 export const allocationInvoiceNumber = (item: PaymentAllocationView['invoices'][number]) => `${item.numberEntity}/${item.numberChannel}/${item.numberYear}/${item.number.padStart(6, '0')}`;
 const number = allocationInvoiceNumber;
 const statuses: Record<string, string> = { unpaid: 'Belum dibayar', partial: 'Dibayar sebagian', paid: 'Lunas', credited: 'Dikreditkan', settled: 'Selesai', overdue: 'Lewat jatuh tempo', due: 'Jatuh tempo hari ini', not_due: 'Belum jatuh tempo' };
 export function allocationAmount(value: string) {
-  const found = /^(0|[1-9][0-9]{0,14})(?:[.,]([0-9]{1,2}))?$(?![\s\S])/.exec(value.trim());
-  if (!found || !/[1-9]/.test(value)) throw new AccessFailure(400, 'invalid_payment_allocation');
-  return found[1] + '.' + (found[2] ?? '').padEnd(2, '0');
+  // Accepts "1.000,50", "1000,50" or "1000.50"; the API receives exactly two decimals.
+  const amount = rupiahAmount(value, true);
+  if (amount === null || !/[1-9]/.test(amount)) throw new AccessFailure(400, 'invalid_payment_allocation');
+  return amount;
 }
 function message(error: unknown) {
   if (error instanceof AccessFailure) {

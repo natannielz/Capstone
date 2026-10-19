@@ -49,6 +49,12 @@ export function formatMoneyText(value: string): string {
   try { return formatRupiah(text, { decimals: 2 }); } catch { return `Rp${text}`; }
 }
 
+/** "1,5" — up to maxFractionDigits decimals, trailing zeros dropped (durations, measured quantities). */
+export function formatDecimal(value: Decimal, maxFractionDigits: number): string {
+  // With decimals the comma is always present, so only fraction zeros (and a bare comma) can match.
+  return maxFractionDigits > 0 ? formatNumber(value, maxFractionDigits).replace(/,?0+$/, "") : formatNumber(value, 0);
+}
+
 /** "1.234.567"; fractionDigits fixes the comma decimals ("2,5"). */
 export function formatNumber(value: Decimal, fractionDigits = 0): string {
   const { negative, whole, fraction } = decimalParts(value, fractionDigits);

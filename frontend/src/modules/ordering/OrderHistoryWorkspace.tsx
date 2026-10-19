@@ -19,6 +19,7 @@ import { prepareReorderDraft } from './order-reorder';
 import common from '../administration/access.module.css';
 import styles from './order-draft.module.css';
 import { dateTimeFormatter } from '@/lib/format';
+import { EmptyState } from '@/components/workspace-kit/empty-state';
 
 type Account = { actorId: string; actions: readonly string[]; session: IdentitySession; observedAt: number };
 function status(order: SubmittedOrder) {
@@ -146,8 +147,8 @@ function OrderHistoryDesk({ account, onFailure }: { account: Account; onFailure:
     </div>}
     {error !== null && <p role="alert" className={common.alert}>{message(error)}</p>}
     <section className={common.accountSection} aria-label="Daftar pesanan saya" aria-busy={busy}><h2>Pesanan yang diajukan</h2>
-      {busy && <p role="status">Memuat pesanan…</p>}{!busy && page.items.length === 0 && <p>Belum ada pesanan pada halaman ini.</p>}
-      {page.items.length > 0 && <ListTable caption="Pesanan pada halaman ini" rows={page.items} getKey={order => order.submission.orderId}
+      {busy && <p role="status">Memuat pesanan…</p>}{!busy && page.items.length === 0 && <EmptyState kind="first-use" title="Belum ada pesanan pada halaman ini." body="Pesanan yang diajukan dari draf akan muncul di sini, lengkap dengan statusnya." />}
+      {page.items.length > 0 && <ListTable caption="Pesanan pada halaman ini" rows={page.items} disabled={locked} getKey={order => order.submission.orderId}
         onOpen={order => { if (!locked) void select(order.submission.orderId); }} openLabel={order => 'Lihat pesanan ' + order.submission.orderId}
         columns={[
           { key: 'order', header: 'Pesanan', render: order => <><strong>Pesanan {order.submission.orderId}</strong><p className={styles.listMeta}>{order.buyerName}</p></> },

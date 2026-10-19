@@ -22,6 +22,8 @@ import { createPaymentSupplementGateway, paymentSupplementOwner } from './paymen
 import { SupplementJournal, supplementKeyBinding, isSupplementOperation } from './payment-pdf-supplement-recovery';
 import { paymentSupplementReloadRecoveryAdapter } from './payment-pdf-supplement-recovery-adapter';
 import { dateTimeFormatter, jakartaDateKey, longDateFormatter } from "@/lib/format";
+import { RupiahInput } from '@/components/workspace-kit/rupiah-input';
+import { rupiahAmount } from '@/lib/rupiah-input';
 
 type Account = { actorId: string; actions: readonly string[]; session: IdentitySession; observedAt: number };
 const rupiah = (value: string) => orderAmount('IDR', value);
@@ -132,7 +134,9 @@ function PaymentDesk({ account, now, fresh, onDenied }: { account: Account; now:
   async function save() {
     if (locked || selected?.state === 'submitted' || confirmation) return; closePreview(); await perform(async () => {
       if (recovery.journal.list(account.actorId).length) throw new AccessFailure(400, 'resolve_previous_attempt');
-      const command = preparePayment(account.actorId, selected?.id ?? null, selected?.revision ?? '0', input, reason.trim());
+      // The amount is typed the Indonesian way ("150.000"); the API receives its canonical decimal ("150000").
+      const command = preparePayment(account.actorId, selected?.id ?? null, selected?.revision ?? '0',
+        { ...input, declaredAmount: rupiahAmount(input.declaredAmount) ?? input.declaredAmount }, reason.trim());
       const result = await submitTrackedRequest(ledger, recovery.journal, account.actorId, 'billing.payment.draft.save', 'billing.payment.draft.save', command, key => gateway.save(command, key, current));
       if (current()) { await open(result.declarationId); if (current()) { setNotice('Draf tersimpan. Pembayaran belum diajukan atau diverifikasi.'); setBefore(null); setRefresh(value => value + 1); } }
     });
@@ -240,8 +244,8 @@ function PaymentDesk({ account, now, fresh, onDenied }: { account: Account; now:
         <span><strong>{item.number}</strong><span>{item.buyerName} · {item.sellerName}</span><span>Total invoice {rupiah(item.total)}</span></span></label></li>)}</ul>
         {!choices.size && !busy && <p>Belum ada invoice dalam akses Anda.</p>}
         {invoicePage.hasMore && <button type="button" className={common.secondary} onClick={() => setInvoiceBefore(invoicePage.items.at(-1)!.id)}>Invoice lebih lama</button>}
-        <label>Jumlah transfer (IDR)<input required inputMode="decimal" pattern="(?:0|[1-9][0-9]{0,14})(?:\.[0-9]{1,2})?" maxLength={18} value={input.declaredAmount} onChange={event => setInput(value => ({ ...value, declaredAmount: event.target.value }))} aria-describedby="payment-amount-help" /></label>
-        <p id="payment-amount-help">Tanpa pemisah ribuan. Gunakan titik untuk sen, misalnya 150000.00.</p>
+        <RupiahInput id="payment-amount" label="Jumlah transfer (IDR)" required value={input.declaredAmount} placeholder="Contoh: 150.000"
+          onChange={text => setInput(value => ({ ...value, declaredAmount: text }))} />
         <label>Tanggal transfer<input type="date" required max={dayAt(now)} value={input.transferDate} onChange={event => setInput(value => ({ ...value, transferDate: event.target.value }))} /></label>
         <label>Nama pengirim<input required maxLength={160} value={input.payerName} onChange={event => setInput(value => ({ ...value, payerName: event.target.value }))} /></label>
         <label>Referensi bank (opsional)<input maxLength={160} value={input.bankReference ?? ''} onChange={event => setInput(value => ({ ...value, bankReference: event.target.value || null }))} /></label>

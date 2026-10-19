@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { dateFormatter, dateTimeFormatter, formatDate, formatDateTime, formatMoney, formatMoneyText, formatMonth, formatNumber, formatPercent, formatRupiah, formatTime, jakartaDateKey, numberFormatter } from "../src/lib/format";
+import { dateFormatter, dateTimeFormatter, formatDate, formatDateTime, formatMoney, formatMoneyText, formatMonth, formatDecimal, formatNumber, formatPercent, formatRupiah, formatTime, jakartaDateKey, numberFormatter } from "../src/lib/format";
 
 // EYD V: "Rp1.250.000" (no space after Rp), dot thousands, comma decimals; times "14.30 WIB".
 test("formatRupiah writes EYD V rupiah without a space and with explicit fraction digits", () => {
@@ -60,4 +60,12 @@ test("formatMoneyText formats valid amounts and shows text still being typed as 
   assert.equal(formatMoneyText("1250000"), "Rp1.250.000,00");
   assert.equal(formatMoneyText(" 12. "), "Rp12.");
   assert.equal(formatMoneyText(""), "Rp—");
+});
+
+test("formatDecimal keeps up to the given decimals without trailing zeros", () => {
+  assert.equal(formatDecimal(1.5, 3), "1,5");
+  assert.equal(formatDecimal(0.5, 3), "0,5");
+  assert.equal(formatDecimal(2, 3), "2");
+  assert.equal(formatDecimal(1.2345, 3), "1,235");
+  assert.equal(formatDecimal(12500, 3), "12.500");
 });

@@ -1015,7 +1015,7 @@
   font-size: 12px;
   color: var(--shop-muted);
 }
-.shop-field-error {
+.shop-v7 .shop-field-error {
   font-size: 12px;
   color: #a33721;
   margin-top: 7px;
@@ -1197,7 +1197,7 @@
   font-weight: 450;
   color: var(--shop-muted);
 }
-.shop-remove-item {
+.shop-v7 .shop-remove-item {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -2274,7 +2274,7 @@
   .shop-cart-row-controls .shop-quantity-wrap > label {
     font-size: 10px;
   }
-  .shop-remove-item {
+  .shop-v7 .shop-remove-item {
     font-size: 10px;
     gap: 4px;
     min-height: 40px;

@@ -52,3 +52,10 @@ test("every legacy current id used by workspaces resolves to an href", () => {
   for (const [id, href] of Object.entries(NAVIGATION_HREFS)) assert.match(href, /^\//, id);
   assert.equal(NAVIGATION_HREFS["payment-reviews"], "/billing/payment-reviews");
 });
+
+// Without permission for the current page, the "Halaman ini" entry still names the page the person is on.
+test("the current page keeps its own name when access to it is unavailable", () => {
+  const groups = workspaceNavigation([], "/billing/payment-reviews", { pilot: false });
+  const current = groups.find(group => group.id === "current")!.items[0];
+  assert.deepEqual([current.label, current.available, current.current], ["Pemeriksaan pembayaran", false, true]);
+});

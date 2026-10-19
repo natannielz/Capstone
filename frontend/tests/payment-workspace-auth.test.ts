@@ -1,4 +1,6 @@
 import * as displayFormat from '../src/lib/format';
+import * as rupiahInputModule from '../src/lib/rupiah-input';
+import * as rupiahInputKit from '../src/components/workspace-kit/rupiah-input';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import * as React from 'react';
@@ -108,6 +110,8 @@ function mountPayment(replies: {save?: () => Response; recoverDraft?: () => Resp
     if (name === './payment-pdf-supplement-recovery') return supplementRecovery;
     if (name === './payment-pdf-supplement-recovery-adapter') return supplementAdapter;
     if (name === '@/lib/format') return displayFormat;
+    if (name === '@/lib/rupiah-input') return rupiahInputModule;
+    if (name === '@/components/workspace-kit/rupiah-input') return rupiahInputKit;
     throw new Error('Unexpected mounted payment import: ' + name);
   };
   function load(file: string) {
