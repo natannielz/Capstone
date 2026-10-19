@@ -45,6 +45,24 @@ public sealed class ProvenanceSealTests
     }
 
     [Fact]
+    public void Sealed_facts_are_covered_by_the_mac_and_seals_without_facts_are_unchanged() {
+        var ring = SealKeyRing.ForKeys("k1", new Dictionary<string, byte[]> { ["k1"] = KeyA });
+        var facts = new BsonDocument { { "factsVersion", 1 }, { "revision", 4L }, { "spendingState", "Approved" } };
+        var withFacts = ProvenanceSeal.Create(ring, "ordering.orderProgress", 7, new string('b', 64), Members(), [], DateTimeOffset.UnixEpoch, facts);
+        Assert.True(ProvenanceSeal.MacValid(ring, withFacts));
+        Assert.True(ProvenanceSeal.MacValid(ring, MongoDB.Bson.Serialization.BsonSerializer.Deserialize<BsonDocument>(withFacts.ToBson())));
+        Assert.Equal(facts, withFacts["facts"]);
+        var edited = withFacts.DeepClone().AsBsonDocument; edited["facts"]["revision"] = 5L;
+        Assert.False(ProvenanceSeal.MacValid(ring, edited));
+        var stripped = withFacts.DeepClone().AsBsonDocument; stripped.Remove("facts");
+        Assert.False(ProvenanceSeal.MacValid(ring, stripped));
+        // Existing kinds never carry facts; their seal bytes are unchanged by the optional field.
+        var plain = ProvenanceSeal.Create(ring, "inventory.receiptOrigin", 7, new string('b', 64), Members(), [], DateTimeOffset.UnixEpoch);
+        Assert.False(plain.Contains("facts"));
+        Assert.True(ProvenanceSeal.MacValid(ring, plain));
+    }
+
+    [Fact]
     public void Sealable_enforces_the_stored_scope_and_member_limits() {
         static BsonArray Scopes(int scopes, int members) => new(Enumerable.Range(0, scopes).Select(scope => new BsonDocument {
             { "collection", "c" }, { "filter", new BsonDocument("s", scope) },
@@ -62,5 +80,22 @@ public sealed class ProvenanceSealTests
         var changed = row.DeepClone().AsBsonDocument; changed["value"] = "y";
         Assert.Equal(ProvenanceSeal.RowHash(row), ProvenanceSeal.RowHash(advanced));
         Assert.NotEqual(ProvenanceSeal.RowHash(row), ProvenanceSeal.RowHash(changed));
+    }
+
+    [Fact]
+    public void Outbox_members_bind_the_event_but_not_its_later_processing_state() {
+        var row = new BsonDocument { { "_id", ObjectId.GenerateNewId() }, { "schemaVersion", 1 }, { "sourceKey", "s:1" }, { "kind", "k" },
+            { "payload", new BsonDocument("id", 1L) }, { "status", "pending" }, { "attempts", 0 }, { "dueAt", DateTime.UnixEpoch }, { "createdAt", DateTime.UnixEpoch } };
+        var processed = row.DeepClone().AsBsonDocument;
+        processed["status"] = "completed"; processed["attempts"] = 1; processed["completedAt"] = DateTime.UtcNow; processed["processingFence"] = 2L;
+        processed["dueAt"] = DateTime.UtcNow; processed["leaseOwner"] = "w"; processed["processingReceipt"] = new BsonDocument("r", 1);
+        Assert.Equal(ProvenanceSeal.MemberHash("outboxEvents", row), ProvenanceSeal.MemberHash("outboxEvents", processed));
+        foreach (var field in new[] { "sourceKey", "kind", "createdAt", "payload" }) {
+            var changed = row.DeepClone().AsBsonDocument; changed[field] = field == "createdAt" ? DateTime.UtcNow : "x";
+            Assert.NotEqual(ProvenanceSeal.MemberHash("outboxEvents", row), ProvenanceSeal.MemberHash("outboxEvents", changed));
+        }
+        // Every other collection keeps the whole-row hash (only the fence is ignored).
+        Assert.NotEqual(ProvenanceSeal.MemberHash("auditEvents", row), ProvenanceSeal.MemberHash("auditEvents", processed));
+        Assert.Equal(ProvenanceSeal.RowHash(row), ProvenanceSeal.MemberHash("auditEvents", row));
     }
 }

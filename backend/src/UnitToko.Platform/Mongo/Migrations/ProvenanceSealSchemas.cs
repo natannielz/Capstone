@@ -15,6 +15,15 @@ internal static class ProvenanceSealSchemas
     private static BsonDocument Hash => new() { { "bsonType", "string" }, { "pattern", "^[0-9a-f]{64}$" } };
     private static BsonDocument Array(BsonDocument item, int maximum) => new() { { "bsonType", "array" }, { "maxItems", maximum }, { "items", item } };
     internal static readonly (string Name, BsonDocument Key, bool Unique)[] Keys = [("kind_owner", new BsonDocument { { "kind", 1 }, { "ownerId", 1 } }, true)];
+    /// <summary>Checkpoint seal stores additionally require MAC-covered derived facts with a facts version.</summary>
+    internal static BsonDocument Validator(string kind, bool facts) {
+        if (!facts) return Validator(kind);
+        var schema = Validator(kind).DeepClone().AsBsonDocument; var json = schema["$jsonSchema"].AsBsonDocument;
+        json["properties"]["facts"] = new BsonDocument { { "bsonType", "object" }, { "required", new BsonArray { "factsVersion" } },
+            { "properties", new BsonDocument("factsVersion", new BsonDocument { { "bsonType", "int" }, { "minimum", 1 } }) } };
+        json["required"].AsBsonArray.Add("facts");
+        return schema;
+    }
     internal static BsonDocument Validator(string kind) => new("$jsonSchema", S.Object(new() {
         { "_id", S.Number(1) }, { "schemaVersion", new BsonDocument { { "bsonType", "int" }, { "enum", new BsonArray { 1 } } } },
         { "kind", S.Choice(kind) }, { "ownerId", S.Number(1) }, { "recordHash", Hash },
