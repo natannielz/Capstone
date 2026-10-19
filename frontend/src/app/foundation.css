@@ -40,6 +40,8 @@
 }
 /* Workspace kit: outcome states, list table, review panel. */
 @layer components{
+.camera-scanner{display:grid;gap:10px;margin:8px 0}
+.camera-scanner video{width:100%;max-width:480px;aspect-ratio:4/3;object-fit:cover;border-radius:10px;background:var(--foreground)}
 .outcome-state{display:grid;gap:6px;padding:16px;border:1px solid var(--border);border-radius:10px;background:var(--card);color:var(--foreground)}
 .outcome-state p{margin:0;color:var(--muted-foreground)}
 .outcome-state[data-kind="unknown"],.outcome-state[data-kind="conflict"]{background:var(--tone-warning);border-color:transparent}
