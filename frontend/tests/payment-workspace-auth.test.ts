@@ -1,3 +1,4 @@
+import * as proofFile from '../src/modules/billing/payment-proof-file';
 import * as displayFormat from '../src/lib/format';
 import * as rupiahInputModule from '../src/lib/rupiah-input';
 import * as rupiahInputKit from '../src/components/workspace-kit/rupiah-input';
@@ -111,6 +112,7 @@ function mountPayment(replies: {save?: () => Response; recoverDraft?: () => Resp
     if (name === './payment-pdf-supplement-recovery-adapter') return supplementAdapter;
     if (name === '@/lib/format') return displayFormat;
     if (name === '@/lib/rupiah-input') return rupiahInputModule;
+    if (name === './payment-proof-file') return proofFile;
     if (name === '@/components/workspace-kit/rupiah-input') return rupiahInputKit;
     throw new Error('Unexpected mounted payment import: ' + name);
   };

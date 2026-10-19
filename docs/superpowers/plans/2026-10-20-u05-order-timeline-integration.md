@@ -55,3 +55,9 @@
 ### Task 3: Close
 
 - [ ] Run `verify-order-timeline-browser.mjs` in the Phase E browser sweep. Then update the register row, the ledger and the final review, and commit.
+
+## Status (20 October 2026)
+
+All production hunks applied and compiled cleanly against main. The candidate's tests do not compile: `InvoiceReleaseTestData` needs `InvoiceReleaseService` (maker/checker invoice release) from the separate invoice-release candidate, which numbered its migration 116; in main, 116 is `InventorySealMigration`. The work is parked in `tmp/u05-integration-wip/` (`tracked.patch` plus 21 new files).
+
+Order of work: integrate invoice release first (renumbering its migration to the next free version), then reapply this patch and add the missing `using UnitToko.Tests.Documents;` / `using UnitToko.Tests.Inventory;` for `WindowsStorageFact` / `LocalStockBrowserFact`.

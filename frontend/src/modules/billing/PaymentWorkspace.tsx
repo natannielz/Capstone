@@ -24,6 +24,7 @@ import { paymentSupplementReloadRecoveryAdapter } from './payment-pdf-supplement
 import { dateTimeFormatter, jakartaDateKey, longDateFormatter } from "@/lib/format";
 import { RupiahInput } from '@/components/workspace-kit/rupiah-input';
 import { rupiahAmount } from '@/lib/rupiah-input';
+import { proofDimensionProblem, proofFileMessage, proofFileProblem, type ProofFileProblem } from './payment-proof-file';
 
 type Account = { actorId: string; actions: readonly string[]; session: IdentitySession; observedAt: number };
 const rupiah = (value: string) => orderAmount('IDR', value);
@@ -35,6 +36,7 @@ function message(error: unknown) {
   if (error instanceof AccessFailure && error.code === 'evidence_capacity_exhausted') return 'Kapasitas unggah sedang penuh. Hubungi penanggung jawab sebelum mencoba kembali.';
   if (error instanceof AccessFailure && ['payment_draft_changed', 'evidence_target_revision_conflict', 'payment_parties_locked'].includes(error.code)) return 'Draf atau kelompok penjual berubah. Muat draf terbaru dan periksa pilihan invoice.';
   if (error instanceof AccessFailure && error.code === 'payment_image_required') return 'Pilih satu foto JPG atau PNG yang tidak kosong, maksimal 10 MB.';
+  if (error instanceof AccessFailure && /^payment_image_(empty|too_large|heic|type|too_small)$/.test(error.code)) return proofFileMessage(error.code.slice('payment_image_'.length) as ProofFileProblem);
   if (error instanceof AccessFailure && error.code === 'payment_replacement_exists') return 'Draf pengganti sudah dibuat. Muat permintaan terbaru untuk membuka draf tersebut.';
   if (error instanceof AccessFailure && ['evidence_read_not_eligible', 'evidence_read_policy_unavailable'].includes(error.code)) return 'Bukti belum dapat ditampilkan. Muat status terbaru atau hubungi penanggung jawab pemeriksaan bukti.';
   if (error instanceof AccessFailure && ['evidence_read_lease_expired', 'evidence_read_reference_changed', 'evidence_read_integrity_unavailable', 'evidence_validation_integrity', 'payment_response_invalid'].includes(error.code)) return 'Bukti tidak dapat ditampilkan dengan aman. Muat draf terbaru dan periksa kembali; hubungi penanggung jawab jika masalah berlanjut.';
@@ -88,13 +90,16 @@ function PaymentDesk({ account, now, fresh, onDenied }: { account: Account; now:
   const [uploadLedgers] = useState(() => new Map<string, MutationLedger>());
   const [submissionLedgers] = useState(() => new Map<string, MutationLedger>());
   const [replacementLedgers] = useState(() => new Map<string, MutationLedger>());
+  const [smallProof, setSmallProof] = useState(false);
   function setFile(next: File | null) {
     setError(null);
-    if (localPreviewUrl.current) URL.revokeObjectURL(localPreviewUrl.current); localPreviewUrl.current = null; setLocalPreview(null); setFileState(null);
+    if (localPreviewUrl.current) URL.revokeObjectURL(localPreviewUrl.current); localPreviewUrl.current = null; setLocalPreview(null); setFileState(null); setSmallProof(false);
     if (fileInput.current) fileInput.current.value = ''; if (cameraInput.current) cameraInput.current.value = '';
     if (!next) return;
-    if (next.size <= 0 || next.size > 10 * 1024 * 1024 || !['image/jpeg', 'image/png'].includes(next.type)) { setError(new AccessFailure(400, 'payment_image_required')); return; }
+    const problem = proofFileProblem(next); if (problem) { setError(new AccessFailure(400, 'payment_image_' + problem)); return; }
     const url = URL.createObjectURL(next); localPreviewUrl.current = url; setFileState(next); setLocalPreview({ url, rotation: 0 });
+    // Pixel size is known only once decoded; a small image stays selected with advice (the server decides what it accepts).
+    if (typeof window.Image === 'function') { const probe = new window.Image(); probe.onload = () => { if (localPreviewUrl.current === url) setSmallProof(proofDimensionProblem(probe.naturalWidth, probe.naturalHeight) !== null); }; probe.src = url; }
   }
   useEffect(() => () => { if (localPreviewUrl.current) URL.revokeObjectURL(localPreviewUrl.current); localPreviewUrl.current = null; }, []);
   const [confirmation, setConfirmation] = useState<ReturnType<typeof preparePaymentSubmission> | null>(null);
@@ -144,7 +149,7 @@ function PaymentDesk({ account, now, fresh, onDenied }: { account: Account; now:
   async function upload(existing?: PaymentEvidenceStatus) {
     if (locked || !selected || selected.state !== 'draft' || confirmation || !file || JSON.stringify(input) !== JSON.stringify(selected.input)) return; const owner = selected, chosen = file;
     setUploading(true); try { await perform(async () => {
-      if (chosen.size <= 0 || chosen.size > 10 * 1024 * 1024 || !['image/jpeg', 'image/png'].includes(chosen.type)) throw new AccessFailure(400, 'payment_image_required');
+      const problem = proofFileProblem(chosen); if (problem) throw new AccessFailure(400, 'payment_image_' + problem);
       if (recovery.journal.list(account.actorId).length) throw new AccessFailure(400, 'resolve_previous_attempt');
       const ownerLedger = uploadLedgers.get(owner.id) ?? new MutationLedger(() => 'p.' + owner.id + '.' + crypto.randomUUID()); uploadLedgers.set(owner.id, ownerLedger);
       const reservation = existing ?? await submitTrackedRequest(ownerLedger, recovery.journal, account.actorId, 'evidence.payment-image.reserve', 'evidence.payment-image.reserve', { declarationId: owner.id, revision: owner.revision }, key => gateway.reserve(account.actorId, owner.id, owner.revision, key, current));
@@ -279,6 +284,7 @@ function PaymentDesk({ account, now, fresh, onDenied }: { account: Account; now:
       {file && <p>{file.name} · {Math.ceil(file.size / 1024)} KB</p>}
       {localPreview && <section className={styles.evidencePreview} aria-label="Pratinjau berkas pilihan"><h3>Pratinjau berkas pilihan</h3><p>Putar tampilan untuk memeriksa keterbacaan. Berkas asli tetap utuh; gambar belum diunggah atau lolos pemeriksaan keamanan.</p>
         <div className={styles.evidenceImage} style={{ width: 'min(100%, 560px)', height: 'auto', minHeight: 0, aspectRatio: '1' }}><Image key={localPreview.url} src={localPreview.url} alt="Bukti pembayaran pilihan sebelum unggah" fill unoptimized sizes="(max-width: 600px) 90vw, 560px" style={{ objectFit: 'contain', transform: `rotate(${localPreview.rotation}deg)` }} onError={() => { if (localPreviewUrl.current !== localPreview.url) return; setFile(null); setError(new AccessFailure(400, 'payment_image_required')); }} /></div>
+        {smallProof && <p role="status" className="warning-text">{proofFileMessage('too_small')}</p>}
         <button type="button" className={common.secondary} disabled={locked || confirmation !== null} onClick={() => setLocalPreview(value => value ? { ...value, rotation: (value.rotation + 90) % 360 } : null)}>Putar tampilan 90°</button>
         <button type="button" className={common.secondary} disabled={locked || confirmation !== null} onClick={() => { setFile(null); fileInput.current?.focus(); }}>Hapus pilihan berkas</button>
       </section>}
