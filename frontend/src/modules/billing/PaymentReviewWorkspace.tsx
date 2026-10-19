@@ -8,6 +8,8 @@ import { IdentityFailure, sessionTiming, type IdentitySession } from '../identit
 import { createAccessGateway } from '../administration/access-client';
 import { AccessFailure, accessMessage } from '../administration/workflow';
 import { AdministrationNavigation } from '../administration/AdministrationNavigation';
+import { ListTable } from '@/components/workspace-kit/list-table';
+import { StatusBadge } from '@/components/workspace-kit/status-badge';
 import { orderAmount } from '../ordering/order-quote-client';
 import { createPaymentReviewGateway, type PaymentReviewQueueEntry } from './payment-review-client';
 import { OperationRecovery, useOperationRecovery } from '../administration/OperationRecovery';
@@ -96,7 +98,10 @@ function ReviewDesk({ account, fresh, onDenied }: { account: Account; fresh: boo
   const locked = busy || offline || recovering || editingBusy || handoverLocked;
   const handoverSettled = useCallback(() => {clearPreview(); setSelected(null); setOcr(null); setRememberedObservations([]); setRefresh(value => value + 1);}, [clearPreview]);
   function refreshPage(next: string | null) { clearPreview(); setSelected(null); setOcr(null); setRememberedObservations([]); setBefore(next); setRefresh(value => value + 1); }
-  async function open(id: string) { clearPreview(); setSelected(null); setOcr(null); setRememberedObservations([]); const result = await gateway.read(account.actorId, id); if (current()) setSelected(result); }
+  async function open(id: string) { clearPreview(); setSelected(null); setOcr(null); setRememberedObservations([]); const result = await gateway.read(account.actorId, id); if (!current()) return; setSelected(result);
+    // Opening a submission also loads its OCR suggestions; an unavailable result leaves "Muat hasil OCR" for retry (session/access failures still propagate).
+    try { const view = await gateway.ocr(account.actorId, result); if (current()) setOcr(view); }
+    catch (failure) { if (failure instanceof AccessFailure && (failure.status === 401 || failure.status === 403 || failure.code === 'actor_changed')) throw failure; } }
   async function showOriginal() {
     if (!selected) return; clearPreview(); const version = epoch.current;
     const blob = await gateway.original(account.actorId, selected, () => current() && epoch.current === version);
@@ -132,15 +137,15 @@ function ReviewDesk({ account, fresh, onDenied }: { account: Account; fresh: boo
       {busy && <p role="status">Memuat data…</p>}
       {!busy && page.items.length === 0 && <p>Belum ada pengajuan yang dapat Anda periksa.</p>}
       {!busy && page.items.length > 0 && visible.length === 0 && <p>Tidak ada pengajuan untuk tampilan ini. Periksa halaman lain atau ubah tampilan.</p>}
-      <ul className={styles.candidates}>{visible.map(({ declaration: item, ...queue }) => <li key={item.id}><strong>{item.input.payerName}</strong><p>{item.invoices[0].buyerName} · {item.invoices[0].sellerName}</p>
-        <p>{rupiah(item.input.declaredAmount)} · Diajukan {date(item.submission!.submittedAt)}</p>
-        <p>{{ pending: 'Belum ditugaskan', assigned: 'Dalam pemeriksaan', rejected: 'Pengajuan ditolak', replacement_requested: 'Bukti pengganti diminta' }[queue.state]}{queue.assigneeId && ` · Penanggung jawab: akun ${queue.assigneeId}`}</p>
-        <p>Usia pengajuan: {Math.floor((Date.parse(page.observedAt!) - Date.parse(item.submission!.submittedAt)) / 60000)} menit menurut waktu server.</p>
-        {queue.notification.state !== 'not_applicable' && <p>Notifikasi aplikasi: {{ pending: 'Menunggu layanan', running: 'Sedang diproses', retry: 'Menunggu pengulangan layanan', failed: 'Gagal; perlu tindak lanjut petugas', available: 'Tersedia pada akun pembeli' }[queue.notification.state]}. Ketersediaan tidak membuktikan pesan telah dibaca atau email terkirim.</p>}
-        <p>OCR: {{ queued: 'Menunggu pembacaan', running: 'Sedang dibaca', retry: 'Pembacaan perlu diulang oleh layanan', dead: 'Pembacaan perlu tindak lanjut petugas', succeeded: 'Hasil pembacaan tersedia' }[queue.ocrState]}</p>
-        {queue.discrepancies.length > 0 && <ul aria-label="Perhatian pada bukti">{queue.discrepancies.map(flag => <li key={flag}>{{ amount_unknown: 'Nominal bukti belum diketahui', amount_differs: 'Nominal pada bukti berbeda dari pengajuan', date_unknown: 'Tanggal pada bukti belum diketahui', date_differs: 'Tanggal pada bukti berbeda dari pengajuan', currency_unknown: 'Mata uang belum diketahui', ocr_quality: 'Keterbacaan perlu diperiksa', human_corrected: 'Ada koreksi manusia yang tersimpan' }[flag]}</li>)}</ul>}
-        <p>Buka pengajuan untuk melihat hasil verifikasi terbaru.</p>
-        <button className={common.secondary} disabled={locked} onClick={() => void perform(() => open(item.id))}>Periksa pengajuan {item.id}</button></li>)}</ul>
+      <ListTable caption="Pengajuan pada halaman ini" rows={visible} getKey={row => row.declaration.id}
+        selectedKey={selected?.id ?? null} onOpen={row => { if (!locked) void perform(() => open(row.declaration.id)); }} openLabel={row => 'Periksa pengajuan ' + row.declaration.id}
+        columns={[
+          { key: 'payer', header: 'Pembayar', render: ({ declaration: item }) => <><strong>{item.input.payerName}</strong><p className={styles.queueMeta}>{item.invoices[0].buyerName} · {item.invoices[0].sellerName}</p></> },
+          { key: 'amount', header: 'Jumlah', align: 'end', render: ({ declaration: item }) => rupiah(item.input.declaredAmount) },
+          { key: 'submitted', header: 'Diajukan', render: ({ declaration: item }) => <>{date(item.submission!.submittedAt)}<p className={styles.queueMeta}>Usia pengajuan: {Math.floor((Date.parse(page.observedAt!) - Date.parse(item.submission!.submittedAt)) / 60000)} menit menurut waktu server.</p></> },
+          { key: 'state', header: 'Status', render: (queue) => <><StatusBadge text={{ pending: 'Belum ditugaskan', assigned: 'Dalam pemeriksaan', rejected: 'Pengajuan ditolak', replacement_requested: 'Bukti pengganti diminta' }[queue.state]} />{queue.assigneeId && <p className={styles.queueMeta}>Penanggung jawab: akun {queue.assigneeId}</p>}</> },
+          { key: 'checks', header: 'Pemeriksaan', render: (queue) => <><p className={styles.queueMeta}>OCR: {{ queued: 'Menunggu pembacaan', running: 'Sedang dibaca', retry: 'Pembacaan perlu diulang oleh layanan', dead: 'Pembacaan perlu tindak lanjut petugas', succeeded: 'Hasil pembacaan tersedia' }[queue.ocrState]}</p>{queue.notification.state !== 'not_applicable' && <p className={styles.queueMeta}>Notifikasi aplikasi: {{ pending: 'Menunggu layanan', running: 'Sedang diproses', retry: 'Menunggu pengulangan layanan', failed: 'Gagal; perlu tindak lanjut petugas', available: 'Tersedia pada akun pembeli' }[queue.notification.state]}. Ketersediaan tidak membuktikan pesan telah dibaca atau email terkirim.</p>}{queue.discrepancies.length > 0 && <ul aria-label="Perhatian pada bukti">{queue.discrepancies.map(flag => <li key={flag}>{{ amount_unknown: 'Nominal bukti belum diketahui', amount_differs: 'Nominal pada bukti berbeda dari pengajuan', date_unknown: 'Tanggal pada bukti belum diketahui', date_differs: 'Tanggal pada bukti berbeda dari pengajuan', currency_unknown: 'Mata uang belum diketahui', ocr_quality: 'Keterbacaan perlu diperiksa', human_corrected: 'Ada koreksi manusia yang tersimpan' }[flag]}</li>)}</ul>}</> },
+        ]} />
       {page.hasMore && <button className={common.secondary} disabled={locked} onClick={() => refreshPage(page.items.at(-1)!.declaration.id)}>Pengajuan lebih lama</button>}
     </section>
     {selected && <section className={common.accountSection} aria-label="Rincian pengajuan pembayaran"><h2 ref={heading} tabIndex={-1}>Pengajuan {selected.id}</h2><p>Pengajuan telah dikirim untuk pemeriksaan.</p>

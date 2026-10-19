@@ -7,6 +7,7 @@ import { IdentityFailure, sessionTiming, type IdentitySession } from '../identit
 import { createAccessGateway } from '../administration/access-client';
 import { AccessFailure, accessMessage } from '../administration/workflow';
 import { AdministrationNavigation } from '../administration/AdministrationNavigation';
+import { ListTable } from '@/components/workspace-kit/list-table';
 import { createOrderSubmitGateway, type SubmittedOrder } from './order-submit-client';
 import { orderAmount } from './order-quote-client';
 import { OrderSavedViewPanel } from './OrderSavedViewPanel';
@@ -146,10 +147,15 @@ function OrderHistoryDesk({ account, onFailure }: { account: Account; onFailure:
     {error !== null && <p role="alert" className={common.alert}>{message(error)}</p>}
     <section className={common.accountSection} aria-label="Daftar pesanan saya" aria-busy={busy}><h2>Pesanan yang diajukan</h2>
       {busy && <p role="status">Memuat pesanan…</p>}{!busy && page.items.length === 0 && <p>Belum ada pesanan pada halaman ini.</p>}
-      <ul className={styles.lines}>{page.items.map(order => <li className={styles.line} key={order.submission.orderId}><strong>{order.buyerName}</strong> · Pesanan {order.submission.orderId}
-        <p>{date(order.submission.recordedAt)} · {order.quote.lines.length} jenis kemasan</p><p>{status(order)}</p>
-        <p>Total saat pengajuan: <strong>{orderAmount(order.quote.currency, order.total)}</strong></p>
-        <button className={common.secondary} disabled={locked} onClick={() => void select(order.submission.orderId)}>Lihat pesanan {order.submission.orderId}</button></li>)}</ul>
+      {page.items.length > 0 && <ListTable caption="Pesanan pada halaman ini" rows={page.items} getKey={order => order.submission.orderId}
+        onOpen={order => { if (!locked) void select(order.submission.orderId); }} openLabel={order => 'Lihat pesanan ' + order.submission.orderId}
+        columns={[
+          { key: 'order', header: 'Pesanan', render: order => <><strong>Pesanan {order.submission.orderId}</strong><p className={styles.listMeta}>{order.buyerName}</p></> },
+          { key: 'date', header: 'Diajukan', render: order => date(order.submission.recordedAt) },
+          { key: 'lines', header: 'Kemasan', align: 'end', render: order => order.quote.lines.length + ' jenis kemasan' },
+          { key: 'status', header: 'Status', render: order => status(order) },
+          { key: 'total', header: 'Total saat pengajuan', align: 'end', render: order => <strong>{orderAmount(order.quote.currency, order.total)}</strong> },
+        ]} />}
       <div className={common.actions}><button className={common.secondary} disabled={locked} onClick={() => { setCursor(null); setReload(value => value + 1); }}>{filter?.sort === 'oldest' ? 'Muat pesanan pertama' : 'Muat pesanan terbaru'}</button>
         {page.hasMore && <button className={common.secondary} disabled={locked} onClick={() => setCursor(nextCursor)}>{filter?.sort === 'oldest' ? 'Pesanan lebih baru' : 'Pesanan lebih lama'}</button>}
         {account.actions.includes('order.submit') && !locked && <Link href="/ordering/drafts" className={common.secondary}>Draf pesanan</Link>}</div>

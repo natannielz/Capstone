@@ -14,3 +14,4 @@
 .review { padding: 20px; border: 2px solid #087f8c; background: #f2faf8; overflow-wrap: anywhere; }
 .address { white-space: pre-wrap; }
 @media (max-width: 850px) { .desk { grid-template-columns: minmax(0, 1fr); } .editor { padding: 18px; } }
+.listMeta{margin:2px 0 0;font-size:13px;line-height:1.45;color:var(--muted-foreground)}
