@@ -13,6 +13,7 @@ import { OrderBulkEntry } from './OrderBulkEntry';
 import common from '../administration/access.module.css';
 import styles from './order-draft.module.css';
 import { formatDateTime } from '@/lib/format';
+import { QuantityStepper } from '@/components/workspace-kit/quantity-stepper';
 
 export function OrderDraftEditor({ actorId, draft, initialQuote, initialIssue, locked, isCurrent, onSubmit, onFailure, reorderSourceId }: {
   actorId: string; draft: Pick<OrderDraft, 'input' | 'revision'> & { id: string | null }; reorderSourceId?: string; initialQuote: OrderQuote | null; initialIssue: unknown; locked: boolean;
@@ -118,7 +119,9 @@ export function OrderDraftEditor({ actorId, draft, initialQuote, initialIssue, l
         const label = labels.get(item.skuId);
         return <li className={styles.line} key={item.skuId}><h3>{label ? label.name + ' — ' + label.definition.packageLabel : 'Kemasan yang perlu diperiksa'}</h3>
           {label ? <p>Referensi SKU: {label.code} · {label.definition.baseUnitsPerPackage} {label.definition.baseUnitCode} per kemasan</p> : <p className={common.help}>Buka katalog untuk memilih kemasan terbaru, lalu hapus pilihan lama jika sudah diganti.</p>}
-          <label>Jumlah kemasan {index + 1}<input required inputMode="numeric" maxLength={7} value={quantities[index]} disabled={disabled} onChange={event => setQuantities(values => values.map((value, position) => position === index ? event.target.value : value))} /></label>
+          <QuantityStepper id={'draft-quantity-' + item.skuId} label={'Jumlah kemasan ' + (index + 1)} value={quantities[index]} disabled={disabled}
+            minimum={label?.definition.minimumOrderPackages ?? 1} increment={label?.definition.orderIncrementPackages ?? 1}
+            onChange={text => setQuantities(values => values.map((value, position) => position === index ? text : value))} />
           {label && <p className={common.help}>Minimum {label.definition.minimumOrderPackages}; kelipatan {label.definition.orderIncrementPackages}.</p>}
           <button type="button" className={common.secondary} disabled={disabled} onClick={() => { setSelections(values => values.filter((_, position) => position !== index)); setQuantities(values => values.filter((_, position) => position !== index)); }}>Hapus kemasan {index + 1}</button>
         </li>;
