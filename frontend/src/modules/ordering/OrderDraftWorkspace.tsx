@@ -7,7 +7,8 @@ import { IdentityFailure, sessionTiming, type IdentitySession } from '../identit
 import { createAccessGateway } from '../administration/access-client';
 import { AccessFailure } from '../administration/workflow';
 import { CatalogReadGate } from '../catalog/catalog-editor-state';
-import { createOrderDraftGateway, type OrderDraft } from './order-draft-client';
+import { createOrderDraftGateway, discardConflictMessage, type DiscardedDraft, type OrderDraft } from './order-draft-client';
+import { DiscardReview, DiscardedDraftList, discardedNotice, draftLabel } from './DraftDiscard';
 import { createOrderQuoteGateway, orderContextKey, type OrderContextOption, type OrderQuote } from './order-quote-client';
 import { draftMessage, useDraftSave } from './DraftSave';
 import { OrderDraftEditor } from './OrderDraftEditor';
@@ -51,7 +52,7 @@ export function OrderDraftWorkspace() {
   return <main className={common.page}><header className={common.header}><div><Link className={common.brand} href="/identity/account">Unit Toko</Link>
     <h1>Draf pesanan</h1><p>Susun kebutuhan cabang dan lanjutkan kapan saja. Draf hanya terlihat oleh akun pembuatnya.</p></div>
     <nav className={common.actions}><Link className={common.secondary} href="/catalog/browse">Katalog kemasan</Link><Link className={common.secondary} href="/identity/account">Akun saya</Link></nav></header>
-    {error !== null && <p role="alert" className={common.alert}>{draftMessage(error, true)}</p>}
+    {error !== null && <p role="alert" className={common.alert}>{(error instanceof AccessFailure && discardConflictMessage(error.code)) || draftMessage(error, true)}</p>}
     {loading ? <p role="status">Memeriksa akun dan cabang…</p> : !account || expired ? <section className={common.state}><h2>Periksa sesi dan akses</h2>
       {expired && <p>Sesi telah berakhir.</p>}<Link href="/identity/login?returnPath=%2Fordering%2Fdrafts">Masuk kembali</Link>
       <button className={common.secondary} onClick={() => setRevision(value => value + 1)}>Perbarui sesi dan akses</button></section>
@@ -65,6 +66,7 @@ function DraftDesk({ account, onFailure }: { account: Account; onFailure: (error
   const [branch, setBranch] = useState(''), [rows, setRows] = useState<OrderDraft[]>([]), [hasMore, setHasMore] = useState(false), [after, setAfter] = useState<string | null>(null);
   const [loaded, setLoaded] = useState<{ draft: OrderDraft; quote: OrderQuote | null; issue: unknown; sequence: number } | null>(null);
   const [loading, setLoading] = useState(false), [error, setError] = useState<unknown>(null), [notice, setNotice] = useState('');
+  const [discarded, setDiscarded] = useState<DiscardedDraft[]>([]), [confirming, setConfirming] = useState(false), [acting, setActing] = useState(false);
   const alive = useRef(false), pending = useRef(false), sequence = useRef(0);
   const current = () => alive.current && !sessionTiming(account.session, performance.now() - account.observedAt).expired;
   const save = useDraftSave(actorId, current, result => { setNotice('Draf tersimpan. Pesanan belum diajukan.'); void reload(null, result.draftId); }, onFailure, loading);
@@ -83,7 +85,9 @@ function DraftDesk({ account, onFailure }: { account: Account; onFailure: (error
       if (!options.some(value => orderContextKey(value.context) === contextKey)) throw new AccessFailure(403, 'order_scope_unavailable');
       setBranch(contextKey);
       const page = await gateway.list(actorId, context, cursor, request.signal); if (!request.current() || !current()) return;
-      setRows(page.items); setHasMore(page.hasMore); setAfter(cursor);
+      setRows(page.items); setHasMore(page.hasMore); setAfter(cursor); setConfirming(false);
+      const hidden = await gateway.listDiscarded(actorId, context, null, request.signal); if (!request.current() || !current()) return;
+      setDiscarded(hidden.items);
       if (draftId) {
         const draft = recovered ?? await gateway.read(actorId, draftId, request.signal); if (!request.current() || !current()) return;
         if (orderContextKey(draft.input.context) !== contextKey) throw new AccessFailure(409, 'draft_context_changed');
@@ -98,14 +102,24 @@ function DraftDesk({ account, onFailure }: { account: Account; onFailure: (error
     } catch (failure) { if (request.current() && current()) { setError(failure); setRows([]); onFailure(failure); } }
     finally { pending.current = false; if (request.current()) setLoading(false); }
   }
-  const locked = loading || save.locked;
+  const locked = loading || save.locked || acting;
+  // Discard and restore each use a fresh request key; a repeated click after an unknown outcome reads the conflict, never a duplicate.
+  async function act(run: () => Promise<string>, after: (draftId?: string) => void) {
+    if (!current() || acting || pending.current) return;
+    setActing(true); setError(null); setNotice('');
+    try { const message = await run(); if (current()) { setNotice(message); after(); } }
+    catch (failure) { if (current()) { setError(failure); onFailure(failure); } }
+    finally { if (alive.current) setActing(false); }
+  }
+  const discard = (draft: OrderDraft) => void act(async () => discardedNotice((await gateway.discard(actorId, draft.id, draft.revision, 'Draf dibuang oleh pembuatnya', crypto.randomUUID())).restorableUntil), () => void reload());
+  const restore = (draft: DiscardedDraft) => void act(async () => { await gateway.restore(actorId, draft.id, 'Draf dipulihkan oleh pembuatnya', crypto.randomUUID()); return 'Draf dipulihkan dan dapat dilanjutkan.'; }, () => void reload(null, draft.id));
   return <>
     <section className={common.accountSection}><h2>Kebutuhan cabang</h2><p className={common.help}>Penyimpanan draf tidak mengunci harga, memesan stok, atau memulai penagihan.</p>
       <label><span id={branchLabelId}>Cabang pemesan</span><select aria-labelledby={branchLabelId} value={branch} disabled={locked} onChange={event => { setBranch(event.target.value); setNotice(''); void reload(null, undefined, event.target.value); }}>
         <option value="">Pilih cabang</option>{options.map(option => <option key={orderContextKey(option.context)} value={orderContextKey(option.context)}>{branchLabel(option)}</option>)}</select></label>
       {options.length === 0 && <p>Belum ada cabang pemesan yang tersedia untuk akun Anda.</p>}</section>
     {save.recoveryView}
-    {error !== null && <p role="alert" className={common.alert}>{draftMessage(error, true)}</p>}
+    {error !== null && <p role="alert" className={common.alert}>{(error instanceof AccessFailure && discardConflictMessage(error.code)) || draftMessage(error, true)}</p>}
     {notice && <p role="status" className={common.success}>{notice}</p>}
     {branch && <div className={styles.desk}><section className={common.queue} aria-label="Daftar draf" aria-busy={loading}><div className={common.queueHeader}><h2>Draf saya</h2>
       <button className={common.secondary} disabled={locked} onClick={() => void reload()}>Muat kembali draf</button></div>
@@ -115,8 +129,12 @@ function DraftDesk({ account, onFailure }: { account: Account; onFailure: (error
           <span>{draft.input.selections.length} jenis kemasan · versi {draft.revision}</span><small>{formatDateTime(draft.updatedAt)}</small></button></li>)}</ul>}
       <div className={common.pagination}><button className={common.secondary} disabled={locked || after === null} onClick={() => void reload()}>Awal daftar</button>
         <button className={common.secondary} disabled={locked || !hasMore} onClick={() => void reload(rows.at(-1)!.id)}>Berikutnya</button></div></section>
-      {loaded ? <OrderDraftEditor key={loaded.draft.id + ':' + loaded.draft.revision + ':' + loaded.sequence} actorId={actorId} draft={loaded.draft} initialQuote={loaded.quote} initialIssue={loaded.issue}
-        locked={locked} isCurrent={current} onSubmit={save.submit} onFailure={onFailure} /> : <section className={common.state}><h2>Lanjutkan draf Anda</h2><p>Pilih draf untuk memeriksa kemasan, jumlah, dan rencana pengiriman.</p></section>}
+      {loaded ? <div><OrderDraftEditor key={loaded.draft.id + ':' + loaded.draft.revision + ':' + loaded.sequence} actorId={actorId} draft={loaded.draft} initialQuote={loaded.quote} initialIssue={loaded.issue}
+        locked={locked} isCurrent={current} onSubmit={save.submit} onFailure={onFailure} />
+        {confirming ? <DiscardReview label={draftLabel(loaded.draft)} now={Date.now()} busy={acting} onConfirm={() => discard(loaded.draft)} onCancel={() => setConfirming(false)} />
+          : <div className={styles.discardAction}><button type="button" className={common.secondary} disabled={locked} onClick={() => setConfirming(true)}>Buang draf</button></div>}
+      </div> : <section className={common.state}><h2>Lanjutkan draf Anda</h2><p>Pilih draf untuk memeriksa kemasan, jumlah, dan rencana pengiriman.</p></section>}
     </div>}
+    {branch && !loading && <DiscardedDraftList items={discarded} locked={locked} onRestore={restore} />}
   </>;
 }

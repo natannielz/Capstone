@@ -13,8 +13,8 @@ namespace UnitToko.Tests.Ordering;
 [Collection("Mongo")]
 public sealed class OrderDraftServiceTests(MongoFixture fixture)
 {
-    private static OrderDraftService Service(CatalogPriceTestData data) => new(data.Catalog.Database, new(data.Catalog.Client), new(data.Catalog.Database), data.Catalog.Clock);
-    private static async Task<OrderDraftInput> Prepare(CatalogPriceTestData data) {
+    internal static OrderDraftService Service(CatalogPriceTestData data) => new(data.Catalog.Database, new(data.Catalog.Client), new(data.Catalog.Database), data.Catalog.Clock);
+    internal static async Task<OrderDraftInput> Prepare(CatalogPriceTestData data) {
         await new CollectionMigrations(data.Catalog.Database, data.Catalog.Clock).ApplyAsync();
         await data.Catalog.Base.AddGrantAsync(data.Catalog.Buyer, 6200, CatalogAuthoringTestData.Audience, [Permissions.OrderSubmit]);
         await data.Catalog.AssortmentsAsync();

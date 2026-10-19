@@ -19,7 +19,7 @@ public sealed record OrderDraftView(LongId Id, long Revision, DateTimeOffset Cre
 public sealed record OrderDraftPage(ImmutableArray<OrderDraftView> Items, bool HasMore);
 
 /// <summary>Private, versioned buyer drafts. Save has no order submission, stock reservation, payment or external message effect.</summary>
-public sealed class OrderDraftService
+public sealed partial class OrderDraftService
 {
     private static readonly FilterDefinitionBuilder<BsonDocument> F = Builders<BsonDocument>.Filter;
     private readonly IMongoDatabase database;
@@ -47,6 +47,7 @@ public sealed class OrderDraftService
         if (!await new CollectionMigrations(database, clock).IsCurrentAsync(ct)) throw B.Invalid("order_draft_storage_unavailable");
         foreach (var name in OrderDraftSchemas.Collections)
             await InventoryRepository.RequireStorageAsync(database, name, OrderDraftSchemas.Validator(name), OrderDraftSchemas.Key(name), ct);
+        await OrderDraftDiscardSchemas.RequireStorageAsync(database, ct);
     }
     public async Task<BsonDocument> SaveAsync(ActorContext actor, long? draftId, long expectedRevision, OrderDraftInput input,
         AuthorizationCommandMetadata metadata, CancellationToken ct = default)
@@ -68,6 +69,8 @@ public sealed class OrderDraftService
             if (draftId.HasValue) {
                 previous = await HeadAsync(actor, snapshot, tx, draftId.Value, token);
                 if (B.Context(previous["context"].AsBsonDocument) != input.Context) throw B.Invalid("order_draft_branch_locked");
+                // A discarded draft is hidden; editing it would silently resurrect it. Restore first.
+                if (await DiscardRowAsync(tx, previous, token) is not null) throw Discarded();
             }
             var resource = input.Context.Resource(actor.UserId);
             return new(ScopePolicy.Authorize(actor, snapshot, Permissions.OrderSubmit, resource, clock.UtcNow),
@@ -112,6 +115,7 @@ public sealed class OrderDraftService
         if (draftId <= 0) throw B.Invalid(); await StorageAsync(ct);
         return await authorization.ReadAsync(actor, async (snapshot, tx, token) => {
             var head = await HeadAsync(actor, snapshot, tx, draftId, token); var version = await VersionAsync(tx, head["versionId"].AsInt64, token);
+            if (await DiscardRowAsync(tx, head, token) is not null) throw Discarded();
             await TouchAsync(tx, head, token); var input = B.Input(version["input"].AsBsonDocument);
             await authority.FenceAsync(actor, snapshot, tx, [input.Context], token);
             return new OrderDraftView(new(draftId), head["revision"].AsInt64, B.Time(head["createdAt"]), B.Time(head["updatedAt"]), input);
@@ -124,7 +128,11 @@ public sealed class OrderDraftService
             var filter = F.Eq("createdBy", actor.UserId) & F.Eq("context.organizationId", context.OrganizationId.Value) &
                 F.Eq("context.branchId", context.BranchId.Value) & F.Eq<BsonValue>("context.divisionId", context.DivisionId is { } division ? new BsonInt64(division.Value) : BsonNull.Value);
             if (beforeId.HasValue) filter &= F.Lt("_id", beforeId.Value);
-            var rows = await Rows(B.Heads).Find(tx, filter).Sort(new BsonDocument("_id", -1)).Limit(limit + 1).ToListAsync(token);
+            // Discarded drafts are hidden here and listed by ListDiscardedAsync; excluded before the page limit so pages stay full.
+            var rows = await Rows(B.Heads).Aggregate(tx).Match(filter).Sort(new BsonDocument("_id", -1))
+                .AppendStage<BsonDocument>(new BsonDocument("$lookup", new BsonDocument { { "from", OrderDraftDiscardSchemas.Collection },
+                    { "localField", "_id" }, { "foreignField", "_id" }, { "as", "discard" } }))
+                .Match(F.Size("discard", 0)).Limit(limit + 1).ToListAsync(token);
             var result = ImmutableArray.CreateBuilder<OrderDraftView>();
             foreach (var candidate in rows.Take(limit)) {
                 var head = await HeadAsync(actor, snapshot, tx, candidate["_id"].AsInt64, token);

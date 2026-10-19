@@ -78,6 +78,13 @@ if (paymentNotices) {
     builder.Services.AddHostedService<PaymentReviewNotificationWorker>();
 }
 
+// D02 retention: discarded order drafts are purged after their 30-day restore window (on unless explicitly disabled).
+var draftPurge = !migrate && builder.Configuration.GetValue("Retention:OrderDraftPurge:Enabled", true);
+if (draftPurge) {
+    builder.Services.AddSingleton(sp => new UnitToko.Platform.Ordering.OrderDraftPurge(sp.GetRequiredService<IMongoDatabase>(),
+        sp.GetRequiredService<MongoUnitOfWork>(), sp.GetRequiredService<IdAllocator>(), sp.GetRequiredService<IClock>()));
+    builder.Services.AddHostedService<OrderDraftPurgeWorker>();
+}
 using var host = builder.Build();
 var logger = host.Services.GetRequiredService<ILoggerFactory>().CreateLogger("UnitToko.Worker");
 if (migrate)
@@ -102,6 +109,7 @@ else logger.LogInformation("Supplier document OCR pipeline configured: {Pipeline
 if (supplierPdfOcrOptions is null) logger.LogWarning("Whole-PDF supplier OCR is unconfigured; its distinct document jobs will not be claimed.");
 foreach (var runtime in host.Services.GetServices<PdfDocumentOcrRuntime>())
     logger.LogInformation("Whole-PDF {SourceKind} pipeline configured: {PipelineId}; independent finite host, raster, model and source policy approvals remain required", runtime.SourceKind, runtime.PipelineId);
+if (!draftPurge) logger.LogWarning("Order draft purge is disabled; discarded drafts will not be deleted after 30 days.");
 if (!paymentNotices) logger.LogWarning("Payment in-app notices are unconfigured; review events will remain pending.");
 else logger.LogInformation("Payment in-app notice worker enabled; availability is private and sends no external messages");
 await host.RunAsync();

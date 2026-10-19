@@ -15,3 +15,7 @@
 .address { white-space: pre-wrap; }
 @media (max-width: 850px) { .desk { grid-template-columns: minmax(0, 1fr); } .editor { padding: 18px; } }
 .listMeta{margin:2px 0 0;font-size:13px;line-height:1.45;color:var(--muted-foreground)}
+.discarded{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;border-bottom:1px solid var(--border)}
+.discarded>div{display:grid;gap:4px;min-width:0}
+.discarded span{color:var(--muted-foreground);font-size:14px}
+.discardAction{display:flex;justify-content:flex-end;margin-top:12px}
