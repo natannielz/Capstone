@@ -7,7 +7,6 @@ Use Node 24 and the .NET SDK pinned by `backend/global.json` (currently 10.0.401
 ## Install and verify
 
 ```powershell
-npm ci --prefix backend/legacy
 npm ci --prefix frontend
 npm ci --prefix backend/contracts --ignore-scripts
 npm run typecheck --prefix frontend
@@ -16,7 +15,7 @@ npm test --prefix frontend
 npm run build --prefix frontend
 ```
 
-The legacy package has its own runtime dependencies; neither a root `node_modules` directory nor dependencies from another checkout are required. The frontend test command runs the preserved suite, a future-date repository replay, and the executable legacy golden scenarios. These tests do not establish parity with the new C# business modules.
+The frontend test command runs the unit suite. The executable legacy golden scenarios. These tests do not establish parity with the new C# business modules.
 
 Start the disposable local MongoDB replica-set server before the backend tests:
 

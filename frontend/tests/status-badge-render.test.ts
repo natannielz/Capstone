@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { StatusBadge } from "../src/components/workspace-kit/status-badge";
@@ -17,9 +17,10 @@ test("status badge carries its tone and no utility colour that would override it
 });
 
 test("every tone badge renders through the one StatusBadge", () => {
-  for (const file of ["src/components/workspace.tsx", "src/components/order-experience.tsx"]) {
-    const source = readFileSync(file, "utf8");
-    assert.doesNotMatch(source, /<Badge[^>]*status-badge/, `${file} renders its own Badge-based status`);
-    assert.match(source, /StatusBadge/, file);
-  }
+  // The legacy screens that once drew their own Badge-based statuses are retired; no live file may bring one back.
+  const files: string[] = [];
+  (function walk(dir: string) { for (const name of readdirSync(dir)) { const path = dir + "/" + name;
+    if (statSync(path).isDirectory()) walk(path); else if (path.endsWith(".tsx")) files.push(path); } })("src");
+  for (const file of files) assert.doesNotMatch(readFileSync(file, "utf8"), /<Badge[^>]*status-badge/, `${file} renders its own Badge-based status`);
+  assert.match(readFileSync("src/modules/billing/PaymentReviewWorkspace.tsx", "utf8"), /StatusBadge/);
 });

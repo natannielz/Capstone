@@ -42,7 +42,7 @@ jobs:
           # Generated API types must also recheck their server contract; a frontend-only
           # pass does not prove the generated file matches the published OpenAPI.
           backend = infrastructure or any(p.startswith(("backend/", "frontend/src/api/generated/")) for p in files)
-          frontend = infrastructure or any(p.startswith(("frontend/", "backend/legacy/", "backend/contracts/")) for p in files)
+          frontend = infrastructure or any(p.startswith(("frontend/", "backend/contracts/")) for p in files)
           security = infrastructure or any(p.startswith((
               "backend/src/UnitToko.Platform/Authorization/", "backend/src/UnitToko.Platform/Identity/",
               "backend/src/UnitToko.Modules/Identity/", "backend/src/UnitToko.Platform/Mongo/",
@@ -75,8 +75,6 @@ jobs:
           cache: npm
           cache-dependency-path: |
             frontend/package-lock.json
-            backend/legacy/package-lock.json
-      - run: npm ci --prefix backend/legacy
       - run: npm ci --prefix frontend
       - run: npm run typecheck --prefix frontend
       - run: npm run lint --prefix frontend

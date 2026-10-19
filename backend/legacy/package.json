@@ -1,1 +1,0 @@
-{"name":"@unit-toko/legacy","private":true,"type":"module","version":"0.1.0","scripts":{"db:generate":"drizzle-kit generate"},"devDependencies":{"drizzle-kit":"0.31.10"},"dependencies":{"@libsql/client":"^0.18.0","@vercel/blob":"^2.8.0","drizzle-orm":"0.45.2"}}
