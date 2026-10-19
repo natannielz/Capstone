@@ -43,7 +43,7 @@ Owner approval covers the Next.js upgrade and dependency upgrades. Research basi
 
 ### Task 1: Retire the old frontend app (reachability-driven)
 
-- [ ] Delete every unreachable file under:
+- [x] Delete every unreachable file under:
   - `src/components` (except `ui/*` still used);
   - `src/lib/domain`;
   - `src/lib/client`;
@@ -52,37 +52,38 @@ Owner approval covers the Next.js upgrade and dependency upgrades. Research basi
   - `src/app/chatgpt-auth.ts`;
   - the unused `src/components/ui/*`.
   Keep `src/lib/security-headers.ts`, which `next.config.ts` imports, `src/types/*.d.ts`, and test helpers that live tests use.
-- [ ] Delete the frontend tests that import only deleted code. Update the guard tests that list legacy files.
-- [ ] Verify with tsc, lint, the full unit suite and `next build`.
+- [x] Delete the frontend tests that import only deleted code. Update the guard tests that list legacy files.
+- [x] Verify with tsc, lint, the full unit suite and `next build`.
 
 ### Task 2: Retire `backend/legacy` and the leftover `website/` folder
 
-- [ ] Remove `backend/legacy` (37 tracked files plus its local `node_modules`) and `website/`.
-- [ ] Remove references to both:
+- [x] Remove `backend/legacy` (37 tracked files plus its local `node_modules`) and `website/`.
+- [x] Remove references to both:
   - the legacy golden run and `UNIT_TOKO_LEGACY_MIGRATIONS` in `scripts/test-domain.mjs`;
   - the `test:api:legacy` script in `package.json`;
   - `tsconfig` includes;
   - the CI steps that run `npm ci --prefix backend/legacy`;
   - documentation pointers.
-- [ ] Verify with tsc, the suite, the build, and the CI YAML parse.
+- [x] Verify with tsc, the suite, the build, and the CI YAML parse.
 
 ### Task 3: Retire the legacy stylesheets
 
-- [ ] For each file imported with `layer(legacy)` in `globals.css`, extract its class selectors and check whether any reachable TSX uses them. Delete unused rules or files. Move the rules still used into the owning component's CSS Module or into `foundation.css`.
-- [ ] When the layer is empty, remove it from the `@layer` statement and update `css-cascade.test.ts`.
-- [ ] Compare the visual baseline before and after.
+- [x] For each file imported with `layer(legacy)` in `globals.css`, extract its class selectors and check whether any reachable TSX uses them. Delete unused rules or files. Move the rules still used into the owning component's CSS Module or into `foundation.css`.
+- [x] When the layer is empty, remove it from the `@layer` statement and update `css-cascade.test.ts`.
+- [x] Compare the visual baseline before and after.
 
 ### Task 4: Upgrade dependencies
 
-- [ ] Upgrade `next` to 16.4.2 and run `npm audit fix` (sharp, source-map-js, baseline-browser-mapping). Review the other outdated packages with `npm outdated` and upgrade those whose release notes show no breaking change for this app.
-- [ ] Verify with tsc, lint, the suite, the build and `npm audit --omit=dev` (0 high or critical).
+- [x] Upgrade `next` to 16.4.2 and run `npm audit fix` (sharp, source-map-js, baseline-browser-mapping). Review the other outdated packages with `npm outdated` and upgrade those whose release notes show no breaking change for this app.
+- [x] Verify with tsc, lint, the suite, the build and `npm audit --omit=dev` (0 high or critical).
 
 ### Task 5: Landing page with a custom 3D scene
 
-- [ ] Design direction through the frontend-design skill: a scene that means something for Unit Toko, built from its own vocabulary (packages, branches, the cooperative shop), not stock blobs.
-- [ ] Capability gate `sceneMode(window)`: returns `"animated" | "still" | "none"` from WebGL support, `prefers-reduced-motion` and save-data. Unit-test it.
-- [ ] Load the scene as a client island with `next/dynamic` and `ssr: false`. Cap DPR at 2, pause on `visibilitychange`, and dispose on unmount.
-- [ ] Rebuild the landing copy and layout around it, with the CTA to Masuk and to Katalog.
+- [x] Design direction through the frontend-design skill: a scene that means something for Unit Toko, built from its own vocabulary (packages, branches, the cooperative shop), not stock blobs.
+- [x] Capability gate `sceneMode(window)`: returns `"animated" | "still" | "none"` from WebGL support, `prefers-reduced-motion` and save-data. Unit-test it.
+- [x] Load the scene as a client island with `next/dynamic` and `ssr: false`. Cap DPR at 2, pause on `visibilitychange`, and dispose on unmount.
+  - Ruling: a dynamic `import()` inside the stage effect replaces `next/dynamic`. It is equally client-only and code-split (three.js builds into its own chunks, absent from the page entry), it keeps the server-rendered poster as the fallback, and it lets the landing render in the node test suite. Cost if wrong: a one-line switch back to `next/dynamic`.
+- [x] Rebuild the landing copy and layout around it, with the CTA to Masuk and to Katalog.
 
 #### Task 5 design plan (frontend-design, two passes)
 
@@ -133,7 +134,7 @@ Text is left-aligned throughout. On phones the stage follows the text and the la
 
 ### Task 6: Login and core screens
 
-- [ ] Login: a two-column layout with the brand panel and a clear sign-in card, showing which account types exist and what to expect next. Error and session states use `OutcomeState`.
+- [x] Login: a two-column layout with the brand panel and a clear sign-in card, showing which account types exist and what to expect next. Error and session states use `OutcomeState`.
 - [ ] Account ("Pekerjaan saya"), catalog, drafts and payment screens: apply the workspace kit consistently, using page headers, spacing rhythm, cards and tables.
 - [ ] Re-capture the visual baseline and review it.
 
