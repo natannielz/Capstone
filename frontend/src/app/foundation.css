@@ -115,3 +115,10 @@
 .empty-state[data-kind="done"] p{color:var(--tone-success-foreground)}
 .empty-state-action{margin-top:6px}
 }
+@layer components{
+.quantity-stepper{display:grid;gap:6px}
+.quantity-stepper-controls{display:flex;align-items:stretch;gap:6px;max-width:240px}
+.quantity-stepper-controls input{flex:1;min-width:0;min-height:44px;text-align:center;font-variant-numeric:tabular-nums}
+.quantity-stepper-controls button{min-width:44px;min-height:44px;border:1px solid var(--border);border-radius:8px;background:var(--card);color:var(--foreground);font-size:20px;font-weight:700}
+.quantity-stepper-controls button:disabled{color:var(--muted-foreground);cursor:not-allowed}
+}
