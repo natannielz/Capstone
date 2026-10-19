@@ -10,6 +10,7 @@ import { IdentityFailure, identityMessage, identityReturnPath, sessionTiming, st
 import { ProtectedNavigationForm } from "./ProtectedNavigationForm";
 import { WorkspaceDirectory } from "./WorkspaceDirectory";
 import { WorkSummary } from "./WorkSummary";
+import { Brand } from "../../components/brand";
 import { AccountContactPanel } from "./AccountContactPanel";
 import styles from "./identity.module.css";
 import { isPilotRelease } from '../../lib/release-scope';
@@ -82,8 +83,8 @@ export function IdentityAccount() {
 
   return <main className={styles.page}>
     <a className={styles.skip} href="#account-content">Langsung ke akun</a>
-    <header className={styles.masthead}><Link href="/identity/account" className={styles.brand}>Unit Toko</Link><span className={styles.kicker}>Layanan organisasi</span></header>
-    <div className={styles.accountHeader}><div><span className={styles.eyebrow}>AKUN SAYA</span><h1>Akses kerja Anda</h1><p>Periksa sesi dan lanjutkan ke tugas yang telah disetujui.</p></div>
+    <header className={styles.masthead}><div className={styles.mastheadInner}><Brand inverse href="/identity/account" context="Layanan organisasi" /></div></header>
+    <div className={styles.accountHeader}><div><h1>Akses kerja Anda</h1><p>Periksa sesi dan lanjutkan ke tugas yang telah disetujui.</p></div>
       <button type="button" className={styles.secondary} disabled={loading} onClick={reload}>Periksa sesi</button></div>
     <div id="account-content">
       {loading && <section className={styles.card} aria-busy="true"><p role="status">Memeriksa akun dan izin terbaru…</p></section>}
@@ -97,7 +98,7 @@ export function IdentityAccount() {
         <Link href="/identity/login" className={styles.primary}>Ke halaman masuk</Link>
       </section>}
       {!loading && session?.account && !timing.expired && <>
-        {!isPilotRelease && navigationError === null && <WorkSummary key={session.account.userId} actorId={session.account.userId} actions={actions} />}
+        {!isPilotRelease && navigationError === null && <WorkSummary key={"work:" + session.account.userId} actorId={session.account.userId} actions={actions} />}
         <WorkspaceDirectory actions={actions} accessState={navigationError} />
         <div className={styles.accountGrid}>
           <section className={styles.card} aria-labelledby="profile-heading"><span className={styles.status}>Akun terverifikasi</span>
@@ -119,10 +120,10 @@ export function IdentityAccount() {
             </> : <p className={styles.help}>Belum ada tindakan dalam penugasan Anda yang memerlukan verifikasi tambahan melalui halaman ini.</p>}
           </section>
         </div>
-        {!isPilotRelease && <AccountContactPanel key={session.account.userId} actorId={session.account.userId} />}
+        {!isPilotRelease && <AccountContactPanel key={"contact:" + session.account.userId} actorId={session.account.userId} />}
         <aside className={styles.support}><h2>Perlu memulihkan akses?</h2><p>Hubungi pengelola organisasi untuk memulai pemulihan melalui proses resmi. Anda sendiri yang menetapkan kembali akses di layanan akun. Pengelola tidak perlu mengetahui kata sandi atau kode verifikasi Anda.</p></aside>
       </>}
     </div>
-    <footer className={styles.footer}>Unit Toko · Akses khusus organisasi yang disetujui</footer>
+    <footer className={styles.footer}>Unit Toko. Akses khusus organisasi yang disetujui.</footer>
   </main>;
 }

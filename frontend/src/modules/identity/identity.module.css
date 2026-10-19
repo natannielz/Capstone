@@ -16,7 +16,23 @@
 .page input:disabled, .page select:disabled, .page textarea:disabled { background: var(--workspace-surface-disabled); color: var(--workspace-text-muted); }
 .page input::placeholder, .page textarea::placeholder { color: var(--workspace-text-placeholder); opacity: 1; }
 .page input[aria-invalid="true"], .page select[aria-invalid="true"], .page textarea[aria-invalid="true"] { border-color: var(--workspace-critical-border); }
-.masthead { max-width: 1280px; margin: 0 auto; padding: 24px 0; border-bottom: 1px solid var(--workspace-border); display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 20px; }
+/* Account hub masthead: the landing page's dock band, full bleed across the page padding. */
+.masthead { margin-inline: calc(-1 * clamp(20px, 5vw, 80px)); padding: 18px clamp(20px, 5vw, 80px); background: #0F4C52; color: #fff; }
+.mastheadInner { max-width: 1280px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 12px 20px; }
+.masthead :where(a):focus-visible { outline-color: #E0BE8E; }
+
+/* Waiting work, oldest first: one link per queue, the count set large so the page answers "how much is waiting?". */
+.queue { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: 12px; margin: 0; padding: 0; list-style: none; }
+.queue > li { display: grid; }
+.queueItem { display: grid; grid-template-columns: minmax(64px, auto) 1fr; align-items: center; gap: 18px; min-height: 76px; padding: 14px 22px; border: 1px solid var(--workspace-border); border-left: 4px solid var(--workspace-ink); border-radius: 6px; background: var(--workspace-surface); color: var(--workspace-ink); text-decoration: none; }
+.queueItem:hover { background: var(--workspace-surface-selected); }
+.queueItem[data-unavailable] { border-left-color: var(--workspace-border-interactive); }
+.queueCount { font-size: 34px; font-weight: 760; line-height: 1; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.queueText { display: grid; gap: 2px; min-width: 0; }
+.queueArea { color: var(--workspace-text-muted); font-size: 13px; font-weight: 600; }
+.queueLabel { font-size: 17px; font-weight: 650; line-height: 1.35; text-decoration: underline; text-decoration-color: transparent; text-underline-offset: 4px; }
+.queueItem:hover .queueLabel { text-decoration-color: currentColor; }
+.queueAge { color: var(--workspace-text-muted); font-size: 14px; }
 .brand { display: inline-flex; align-items: center; min-height: 44px; font: 400 25px/1.2 var(--font-display), var(--font-body), sans-serif; letter-spacing: -.035em; color: var(--workspace-ink); text-decoration: none; }
 .brand:hover { color: var(--workspace-accent); }
 .kicker { color: var(--workspace-text-muted); font-size: 13px; }
@@ -76,7 +92,7 @@
 .directoryGroup { display: grid; gap: 15px; }
 .directoryGroup header { display: grid; gap: 5px; padding-left: 12px; border-left: 3px solid var(--workspace-accent); }
 .directoryGroup h3, .directoryHeader h2, .card h2 { scroll-margin-top: 24px; }
-.destinationTitle { margin: 0; font: 650 17px/1.4 var(--font-body), "Segoe UI", sans-serif; display: flex; justify-content: space-between; gap: 16px; overflow-wrap: anywhere; }
+.destinationTitle { margin: 0; font: 650 17px/1.4 var(--font-body), sans-serif; display: flex; justify-content: space-between; gap: 16px; overflow-wrap: anywhere; }
 .emptyDirectory { padding: 24px; border: 1px dashed var(--workspace-border-input); border-radius: 6px; background: var(--workspace-surface); }
 .destinationGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
 .destination { border: 1px solid var(--workspace-border); border-radius: 6px; background: var(--workspace-surface); padding: 24px; color: var(--workspace-ink); text-decoration: none; display: grid; align-content: start; gap: 12px; min-width: 0; }
@@ -89,7 +105,7 @@
 .srOnly { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 @media (max-width: 1080px) { .destinationGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 960px) { .loginGrid { gap: 36px; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .accountGrid { grid-template-columns: minmax(0, 1fr); } .directoryHeader { flex-wrap: wrap; gap: 12px; } }
-@media (max-width: 720px) { .page { padding-inline: 20px; } .masthead { padding: 18px 0; } .brand { font-size: 22px; } .kicker { font-size: 12px; } .loginGrid { margin: 32px 0 44px; grid-template-columns: minmax(0, 1fr); gap: 32px; } .introduction > p { margin: 18px 0 24px; font-size: 16px; } .steps { gap: 18px; } .accountHeader { margin-top: 30px; flex-wrap: wrap; gap: 18px; } .facts { grid-template-columns: minmax(0, 1fr); } .card { padding: 24px; } .destinationGrid { grid-template-columns: minmax(0, 1fr); } .destination { padding: 20px; } }
+@media (max-width: 720px) { .page { padding-inline: 20px; } .masthead { margin-inline: -20px; padding: 14px 20px; } .queueItem { grid-template-columns: minmax(60px, auto) 1fr; gap: 14px; padding: 12px 16px; } .queueCount { font-size: 28px; } .brand { font-size: 22px; } .kicker { font-size: 12px; } .loginGrid { margin: 32px 0 44px; grid-template-columns: minmax(0, 1fr); gap: 32px; } .introduction > p { margin: 18px 0 24px; font-size: 16px; } .steps { gap: 18px; } .accountHeader { margin-top: 30px; flex-wrap: wrap; gap: 18px; } .facts { grid-template-columns: minmax(0, 1fr); } .card { padding: 24px; } .destinationGrid { grid-template-columns: minmax(0, 1fr); } .destination { padding: 20px; } }
 @media (max-width: 720px) { .directoryHeader, .directorySearch { flex-direction: column; align-items: stretch; gap: 12px; } .directorySearch button { align-self: start; } .workspaceSections { gap: 7px; } .workspaceSections a { font-size: 13px; padding-inline: 10px; } }
 @media (max-width: 420px) { .page { padding-inline: 16px; } .card { padding: 20px; } .workspaceSections a { flex: 1 1 130px; justify-content: center; text-align: center; } }
 @media (prefers-reduced-motion: reduce) { .page *, .page *::before, .page *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
