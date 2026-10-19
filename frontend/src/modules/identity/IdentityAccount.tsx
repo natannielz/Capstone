@@ -9,6 +9,7 @@ import { createIdentityGateway } from "./identity-client";
 import { IdentityFailure, identityMessage, identityReturnPath, sessionTiming, stepUpFields, type IdentitySession } from "./identity-workflow";
 import { ProtectedNavigationForm } from "./ProtectedNavigationForm";
 import { WorkspaceDirectory } from "./WorkspaceDirectory";
+import { WorkSummary } from "./WorkSummary";
 import { AccountContactPanel } from "./AccountContactPanel";
 import styles from "./identity.module.css";
 import { isPilotRelease } from '../../lib/release-scope';
@@ -96,6 +97,7 @@ export function IdentityAccount() {
         <Link href="/identity/login" className={styles.primary}>Ke halaman masuk</Link>
       </section>}
       {!loading && session?.account && !timing.expired && <>
+        {!isPilotRelease && navigationError === null && <WorkSummary key={session.account.userId} actorId={session.account.userId} />}
         <WorkspaceDirectory actions={actions} accessState={navigationError} />
         <div className={styles.accountGrid}>
           <section className={styles.card} aria-labelledby="profile-heading"><span className={styles.status}>Akun terverifikasi</span>
