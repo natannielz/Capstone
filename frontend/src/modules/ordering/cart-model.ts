@@ -1,6 +1,8 @@
 import { AccessFailure } from '../administration/workflow';
 import { orderQuantity, type OrderSelection } from './order-quote-client';
 import type { OrderDraft } from './order-draft-client';
+import type { BuyerVariant } from '../catalog/catalog-buyer-client';
+import { stepQuantity } from '@/components/workspace-kit/quantity-stepper';
 
 /** The keranjang is not a new record: it is the buyer's saved draft for one branch, changed most recently.
  *  Saving it keeps every draft rule (owner and branch scope, revision fence, price check), so a cart is never looser than a draft. */
@@ -9,7 +11,7 @@ export type CartRule = { minimum: number; increment: number };
 export type CurrentPackage = { skuId: string; definitionId: string; definitionVersion: string; priceId: string | null; priceVersion: string | null };
 export type CartLineState = 'ready' | 'price-changed' | 'package-changed' | 'unavailable';
 export const cartReasons = { add: 'Tambah barang ke keranjang', quantity: 'Ubah jumlah barang di keranjang', remove: 'Hapus barang dari keranjang',
-  refresh: 'Setujui harga terbaru di keranjang' } as const;
+  refresh: 'Setujui harga terbaru di keranjang', reorder: 'Pesan lagi dari pesanan sebelumnya' } as const;
 
 export function pickCart<T extends Pick<OrderDraft, 'id' | 'updatedAt'>>(drafts: readonly T[]): T | null {
   let chosen: T | null = null;
@@ -56,3 +58,24 @@ const decimal = (value: bigint) => { const text = value.toString().padStart(3, '
 /** Unit price × packages as an exact two-decimal string. */
 export function lineAmount(unitPrice: string, packages: number) { return decimal(cents(unitPrice) * BigInt(packages)); }
 export function cartAmount(amounts: readonly string[]) { return decimal(amounts.reduce((sum, amount) => sum + cents(amount), BigInt(0))); }
+
+/** The newest package and price the buyer has now seen and accepted; a quantity the new package no longer allows moves to its nearest valid amount. */
+export function acceptCurrent(saved: OrderSelection, variant: BuyerVariant): OrderSelection {
+  const minimum = variant.definition.minimumOrderPackages, increment = variant.definition.orderIncrementPackages;
+  let packages: number;
+  try { packages = orderQuantity(String(saved.packages), minimum, increment); }
+  catch { packages = Number(stepQuantity(String(saved.packages - 1), minimum, increment, 1)); }
+  return { skuId: saved.skuId, definitionId: variant.definition.id, definitionVersion: variant.definition.version,
+    priceId: variant.currentPrice!.id, priceVersion: variant.currentPrice!.version, packages };
+}
+
+/** "Pesan lagi": an earlier order's packages at today's package and price. Packages the buyer can no longer order are named, not dropped silently. */
+export function reorderChoices(selections: readonly OrderSelection[], current: ReadonlyMap<string, BuyerVariant>) {
+  const choices: Array<{ choice: OrderSelection; rule: CartRule }> = [], unavailable: string[] = [];
+  for (const saved of selections) {
+    const variant = current.get(saved.skuId);
+    if (!variant?.currentPrice) { unavailable.push(saved.skuId); continue; }
+    choices.push({ choice: acceptCurrent(saved, variant), rule: { minimum: variant.definition.minimumOrderPackages, increment: variant.definition.orderIncrementPackages } });
+  }
+  return { choices, unavailable };
+}

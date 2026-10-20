@@ -9,12 +9,12 @@ import { createIdentityGateway } from '../identity/identity-client';
 import { IdentityFailure } from '../identity/identity-workflow';
 import { createBuyerCatalogGateway, type BuyerVariant } from '../catalog/catalog-buyer-client';
 import { SessionAccessState } from '@/components/workspace-kit/session-access-state';
-import { QuantityStepper, stepQuantity } from '@/components/workspace-kit/quantity-stepper';
+import { QuantityStepper } from '@/components/workspace-kit/quantity-stepper';
 import { formatMoney, formatNumber } from '@/lib/format';
 import { createOrderQuoteGateway, orderContextKey, orderQuantity, type OrderContextOption, type OrderSelection } from './order-quote-client';
 import type { OrderDraft } from './order-draft-client';
 import { CartOutcomeUnknown, createCartGateway } from './cart-client';
-import { cartAmount, cartLineState, cartReasons, lineAmount, removeFromCart, setCartQuantity, type CartLineState } from './cart-model';
+import { acceptCurrent, cartAmount, cartLineState, cartReasons, lineAmount, removeFromCart, setCartQuantity, type CartLineState } from './cart-model';
 import { announceCart, branchLabel, cartBranch, rememberCartBranch } from './cart-branch';
 import { addToCartMessage } from './AddToCartPanel';
 import styles from './cart.module.css';
@@ -29,16 +29,6 @@ export function cartRows(selections: readonly OrderSelection[], current: Readonl
     return { saved, current: variant, state: cartLineState(saved, variant && { skuId: variant.skuId, definitionId: variant.definition.id,
       definitionVersion: variant.definition.version, priceId: variant.currentPrice?.id ?? null, priceVersion: variant.currentPrice?.version ?? null }) };
   });
-}
-
-/** The newest package and price the buyer has now seen and accepted; a quantity the new package no longer allows moves to its nearest valid amount. */
-export function acceptCurrent(saved: OrderSelection, variant: BuyerVariant): OrderSelection {
-  const minimum = variant.definition.minimumOrderPackages, increment = variant.definition.orderIncrementPackages;
-  let packages: number;
-  try { packages = orderQuantity(String(saved.packages), minimum, increment); }
-  catch { packages = Number(stepQuantity(String(saved.packages - 1), minimum, increment, 1)); }
-  return { skuId: saved.skuId, definitionId: variant.definition.id, definitionVersion: variant.definition.version,
-    priceId: variant.currentPrice!.id, priceVersion: variant.currentPrice!.version, packages };
 }
 
 export function CartWorkspace() {
@@ -76,6 +66,7 @@ function CartDesk({ actorId, onLost }: { actorId: string; onLost: (failure: unkn
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading'), [reload, setReload] = useState(0);
   const [typed, setTyped] = useState<Record<string, string>>({}), [saving, setSaving] = useState(false), [error, setError] = useState<unknown>(null);
   const timers = useRef(new Map<string, number>()), alive = useRef(true);
+  const [skipped] = useState(() => { try { const value = Number(new URLSearchParams(window.location.search).get('terlewat')); return Number.isSafeInteger(value) && value > 0 && value <= 100 ? value : 0; } catch { return 0; } });
   useEffect(() => { alive.current = true; const pending = timers.current; return () => { alive.current = false; pending.forEach(timer => window.clearTimeout(timer)); }; }, []);
   useEffect(() => {
     const controller = new AbortController();
@@ -144,6 +135,7 @@ function CartDesk({ actorId, onLost }: { actorId: string; onLost: (failure: unkn
         setBranch(next); setDraft(null); setVariants(new Map()); if (next) rememberCartBranch(actorId, next.context);
       }}><option value="">Pilih cabang</option>{options.map(option => <option key={orderContextKey(option.context)} value={orderContextKey(option.context)}>{branchLabel(option)}</option>)}</select></label>}
     {options.length === 1 && branch && <p className={styles.branchNote}>Untuk {branchLabel(branch)}</p>}
+    {skipped > 0 && <p role="status" className={styles.notice}>{skipped} barang dari pesanan sebelumnya tidak lagi tersedia untuk cabang Anda dan tidak dimasukkan.</p>}
     {error !== null && <p role="alert" className={styles.alert}>{addToCartMessage(error)}{error instanceof CartOutcomeUnknown && <> <button type="button" className={styles.secondary} disabled={saving} onClick={() => void resend(error)}>Coba lagi</button></>}</p>}
     {!branch ? <p>Pilih cabang untuk melihat keranjangnya.</p> : state === 'loading' && !draft ? <p role="status">Memuat keranjang…</p>
       : state === 'error' && !draft ? <section className={styles.empty}><h2>Keranjang belum dapat dimuat</h2><p>Periksa koneksi, lalu coba lagi.</p>

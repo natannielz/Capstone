@@ -19,3 +19,20 @@
 .discarded>div{display:grid;gap:4px;min-width:0}
 .discarded span{color:var(--muted-foreground);font-size:14px}
 .discardAction{display:flex;justify-content:flex-end;margin-top:12px}
+
+/* Buyer order list: one card per order with its status, first items, total and the next action. */
+.filters { margin-bottom: 18px; border: 1px solid var(--workspace-border); border-radius: 10px; background: var(--workspace-surface); }
+.filters > summary { min-height: 44px; padding: 10px 18px; font-weight: 700; cursor: pointer; }
+.filters[open] > summary { border-bottom: 1px solid var(--workspace-border); }
+.filters > section, .filters > div { margin: 0; border: 0; }
+.orderCards { display: grid; gap: 14px; margin: 0 0 16px; padding: 0; list-style: none; }
+.orderCard { display: grid; gap: 10px; padding: 16px 18px; border: 1px solid var(--workspace-border); border-radius: 10px; background: var(--workspace-surface); }
+.orderCardHead { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px 16px; padding-bottom: 10px; border-bottom: 1px solid var(--workspace-border); }
+.orderLines { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.orderLines li { display: flex; align-items: center; gap: 12px; }
+.orderLines strong { display: block; }
+.orderLines small { color: var(--workspace-text-muted); font-size: 13px; }
+.orderThumb { display: grid; place-items: center; flex: none; width: 48px; height: 48px; border-radius: 8px; background: var(--workspace-surface-selected); color: var(--workspace-ink); }
+.orderNext { margin: 0; color: var(--workspace-text-muted); font-size: 14px; }
+.orderCardFoot { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px 16px; padding-top: 10px; border-top: 1px solid var(--workspace-border); }
+.orderCardFoot strong { font-size: 18px; }
