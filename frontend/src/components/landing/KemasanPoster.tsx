@@ -21,12 +21,15 @@ function onFace(origin: P3, across: P3, down: P3): string {
 
 export function KemasanPoster({ className }: { className?: string }) {
   const x0 = -W / 2, x1 = W / 2, z0 = -D / 2, z1 = D / 2;
-  const [minX, minY] = project([x0, H + 0.4, z0]), [maxX] = project([x1, 0, z1]), [, maxY] = project([x1, -0.3, z1]);
-  const left = Math.min(minX, project([x0, 0, z1])[0]) - 40, right = Math.max(maxX, project([x1, 0, z0])[0]) + 40;
-  const viewBox = `${left.toFixed(0)} ${(minY - 40).toFixed(0)} ${(right - left).toFixed(0)} ${(maxY - minY + 80).toFixed(0)}`;
-  const shadow = project([0, 0, 0]);
+  // Frame every corner of the box (and a little floor for the shadow), so no edge is ever cropped.
+  const corners = [x0, x1].flatMap(x => [0, H].flatMap(y => [z0, z1].map(z => project([x, y, z]))));
+  const xs = corners.map(([x]) => x), ys = corners.map(([, y]) => y), pad = 36;
+  const left = Math.min(...xs) - pad, right = Math.max(...xs) + pad, top = Math.min(...ys) - pad, bottom = Math.max(...ys) + pad;
+  const viewBox = `${left.toFixed(0)} ${top.toFixed(0)} ${(right - left).toFixed(0)} ${(bottom - top).toFixed(0)}`;
+  const shadow = project([0.06, 0, 0.06]);
   return <svg className={className} viewBox={viewBox} preserveAspectRatio="xMidYMid meet" role="presentation" aria-hidden="true" focusable="false">
-    <ellipse cx={shadow[0]} cy={shadow[1] + 8} rx={W * C * SCALE * 1.05} ry={D * S * SCALE * 1.05} fill="#0E3438" opacity="0.16" />
+    <defs><filter id="kemasan-poster-shadow" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="10" /></filter></defs>
+    <ellipse cx={shadow[0]} cy={shadow[1]} rx={W * C * SCALE * 0.82} ry={D * S * SCALE * 0.95} fill="#0E3438" opacity="0.18" filter="url(#kemasan-poster-shadow)" />
     {/* Front (+z) and right (+x) walls, then the lid. */}
     <polygon points={points([[x0, 0, z1], [x1, 0, z1], [x1, H, z1], [x0, H, z1]])} fill={TONE.front} />
     <polygon points={points([[x1, 0, z1], [x1, 0, z0], [x1, H, z0], [x1, H, z1]])} fill={TONE.side} />

@@ -16,10 +16,10 @@
 .page input:disabled, .page select:disabled, .page textarea:disabled { background: var(--workspace-surface-disabled); color: var(--workspace-text-muted); }
 .page input::placeholder, .page textarea::placeholder { color: var(--workspace-text-placeholder); opacity: 1; }
 .page input[aria-invalid="true"], .page select[aria-invalid="true"], .page textarea[aria-invalid="true"] { border-color: var(--workspace-critical-border); }
-/* Account hub masthead: the landing page's dock band, full bleed across the page padding. */
-.masthead { margin-inline: calc(-1 * clamp(20px, 5vw, 80px)); padding: 18px clamp(20px, 5vw, 80px); background: #0F4C52; color: #fff; }
+/* Account hub masthead: the landing page's light header, full bleed across the page padding. */
+.masthead { margin-inline: calc(-1 * clamp(20px, 5vw, 80px)); padding: 18px clamp(20px, 5vw, 80px); background: #DCE4E1; color: #0E3438; border-bottom: 1px solid rgb(14 52 56 / 0.12); }
 .mastheadInner { max-width: 1280px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 12px 20px; }
-.masthead :where(a):focus-visible { outline-color: #E0BE8E; }
+.masthead :where(a):focus-visible { outline-color: #B4461A; }
 
 /* Waiting work, oldest first: one link per queue, the count set large so the page answers "how much is waiting?". */
 .queue { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: 12px; margin: 0; padding: 0; list-style: none; }
