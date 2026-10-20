@@ -16,6 +16,7 @@ import { createDispatchGateway, prepareDispatchCommand, type CourierChoice, type
 import common from '../administration/access.module.css';
 import styles from '../ordering/order-draft.module.css';
 import { SessionAccessState } from "@/components/workspace-kit/session-access-state";
+import { orderNumber } from '@/lib/document-numbers';
 
 type Account = { actorId: string; actions: readonly string[]; session: IdentitySession; observedAt: number };
 function message(error: unknown) {
@@ -128,14 +129,14 @@ function DispatchDesk({ account, onFailure }: { account: Account; onFailure: (er
       <p>Stok dan sisa pesanan sudah diperbarui. Penerimaan barang oleh cabang belum dicatat.</p></section>}
     <section className={common.accountSection} aria-label="Persiapan untuk diberangkatkan" aria-busy={busy}><h2>Persiapan tersimpan</h2>
       {busy && !dispatchPending && <p role="status">Memuat pengiriman…</p>}{!busy && page.items.length === 0 && <p>Belum ada persiapan dalam penugasan ini.</p>}
-      <ul className={styles.lines}>{page.items.map(item => <li className={styles.line} key={item.preparationId}><strong>{item.source.buyerName}</strong> · Pesanan {item.source.orderId}
+      <ul className={styles.lines}>{page.items.map(item => <li className={styles.line} key={item.preparationId}><strong>{item.source.buyerName}</strong> · Pesanan {orderNumber(item.source.orderId)}
         <p>{item.lines.map(line => { const product = item.source.lines.find(product => sameOrderLine(product, line))!; return `${product.productName} — ${line.packages} ${product.definition.packageLabel}`; }).join(', ')}</p>
-        {item.canDispatch ? <button className={common.secondary} disabled={locked} onClick={() => void select(item.source.suborderId)}>Periksa keberangkatan pesanan {item.source.orderId}</button>
+        {item.canDispatch ? <button className={common.secondary} disabled={locked} onClick={() => void select(item.source.suborderId)}>Periksa keberangkatan pesanan {orderNumber(item.source.orderId)}</button>
           : <p>{item.source.canPrepare ? 'Sisa pesanan berubah. Perbarui persiapan untuk pengiriman berikutnya.' : 'Pesanan ini tidak memiliki sisa yang dapat diberangkatkan.'}</p>}</li>)}</ul>
       <div className={common.actions}><button className={common.secondary} disabled={locked} onClick={() => { setBefore(null); setReload(value => value + 1); }}>Muat persiapan terbaru</button>
         {page.hasMore && <button className={common.secondary} disabled={locked} onClick={() => setBefore(page.items.at(-1)!.preparationId)}>Persiapan lebih lama</button>}</div>
     </section>
-    {prepared && <section ref={panel} tabIndex={-1} className={styles.review} aria-label="Pemeriksaan keberangkatan"><h2>Keberangkatan pesanan {prepared.source.orderId}</h2>
+    {prepared && <section ref={panel} tabIndex={-1} className={styles.review} aria-label="Pemeriksaan keberangkatan"><h2>Keberangkatan pesanan {orderNumber(prepared.source.orderId)}</h2>
       <p>{prepared.source.buyerName}</p><p className={styles.address}>{prepared.source.delivery.recipientName} · {prepared.source.delivery.phone}{'\n'}{prepared.source.delivery.address}{'\n'}{prepared.source.delivery.city} {prepared.source.delivery.postalCode}</p>
       <ul>{prepared.lines.map(line => { const item = prepared.source.lines.find(item => sameOrderLine(item, line))!;
         return <li key={orderLineKey(line)}>{item.productName} — {line.packages} {item.definition.packageLabel} · total {(BigInt(line.packages) * BigInt(item.definition.baseUnitsPerPackage)).toString()} {item.definition.baseUnitCode}</li>; })}</ul>

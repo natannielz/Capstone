@@ -14,6 +14,7 @@ import common from '../administration/access.module.css';
 import styles from './order-draft.module.css';
 import { formatDateTime } from '@/lib/format';
 import { QuantityStepper } from '@/components/workspace-kit/quantity-stepper';
+import { orderNumber } from '@/lib/document-numbers';
 
 export function OrderDraftEditor({ actorId, draft, initialQuote, initialIssue, locked, isCurrent, onSubmit, onFailure, reorderSourceId }: {
   actorId: string; draft: Pick<OrderDraft, 'input' | 'revision'> & { id: string | null }; reorderSourceId?: string; initialQuote: OrderQuote | null; initialIssue: unknown; locked: boolean;
@@ -151,7 +152,7 @@ export function OrderDraftEditor({ actorId, draft, initialQuote, initialIssue, l
       <button className={common.primary} disabled={disabled || selections.length === 0}>{busy ? 'Memeriksa…' : 'Tinjau perubahan draf'}</button>
     </form>
     {review && <div className={styles.review} ref={reviewRef} role="region" aria-label="Konfirmasi draf" tabIndex={-1}><h3>Periksa sebelum menyimpan</h3>
-      {draft.id === null && <p>Draf baru dari pesanan {reorderSourceId}. Kemasan dan harga pada tinjauan ini diperiksa kembali untuk cabang pemesan. Pesanan sebelumnya tetap utuh.</p>}
+      {draft.id === null && <p>Draf baru dari pesanan {reorderSourceId ? orderNumber(reorderSourceId) : "sebelumnya"}. Kemasan dan harga pada tinjauan ini diperiksa kembali untuk cabang pemesan. Pesanan sebelumnya tetap utuh.</p>}
       <ul>{review.quote.lines.map(line => <li key={line.definition.skuId}>{line.familyName} — {line.packages} {line.definition.packageLabel} · {line.baseUnits} {line.definition.baseUnitCode} · {orderAmount(review.quote.currency, line.catalogSubtotal)}</li>)}</ul>
       <p><strong>Subtotal barang {orderAmount(review.quote.currency, review.quote.catalogSubtotal)}</strong></p><p>Referensi: {review.command.input.purchaseReference ?? 'Belum diisi'}</p>
       {review.command.input.delivery && <p className={styles.address}>{review.command.input.delivery.recipientName} · {review.command.input.delivery.phone}{'\n'}{review.command.input.delivery.address}{'\n'}{review.command.input.delivery.city} {review.command.input.delivery.postalCode}</p>}

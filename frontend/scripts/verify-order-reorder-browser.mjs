@@ -1,6 +1,8 @@
 // Real Next/Kestrel/Mongo: repeating a historical order saves one private draft only.
 import assert from 'node:assert/strict';
 import {resolve} from 'node:path';
+// Order numbers as the screens show them (src/lib/document-numbers.ts).
+const orderNumber = id => 'PSN-' + String(id).padStart(6, '0');
 
 export async function verifyOrderReorderBrowser({config, buyer, user, origin, directory, restartUser}) {
   const writes = [], quotes = [], recoveries = [], unexpectedWrites = [], errors = [], pages = [];
@@ -36,7 +38,7 @@ export async function verifyOrderReorderBrowser({config, buyer, user, origin, di
     });
   }
   async function selected(page) {
-    await page.getByRole('button', {name: 'Lihat pesanan ' + config.orderId, exact: true}).click();
+    await page.getByRole('button', {name: 'Lihat rincian pesanan ' + orderNumber(config.orderId), exact: true}).click();
     await page.getByRole('region', {name: 'Rincian pesanan', exact: true}).waitFor();
     await page.getByRole('button', {name: 'Pesan ulang sebagai draf', exact: true}).click();
     await repeat(page).waitFor();

@@ -15,6 +15,7 @@ import common from '../administration/access.module.css';
 import styles from './invoice.module.css';
 import { longDateFormatter } from '@/lib/format';
 import { SessionAccessState } from "@/components/workspace-kit/session-access-state";
+import { orderNumber } from '@/lib/document-numbers';
 
 type Account = { actorId: string; actions: readonly string[]; session: IdentitySession; observedAt: number };
 const number = (item: Invoice) => `${item.numberEntity}/${item.numberChannel}/${item.numberYear}/${item.number}`;
@@ -59,7 +60,7 @@ function InvoiceDetail({ value }: { value: InvoicePreview | ReturnType<typeof pr
     <div><dt>Ketentuan pembayaran</dt><dd>{value.termDays} {value.dayRule === 'working_days' ? 'hari kerja' : 'hari kalender'} sejak {origins[value.termOrigin]}</dd></div>
     <div><dt>Periode penerimaan</dt><dd>{date(value.periodFrom)}–{date(value.periodTo)}</dd></div></dl>
     <ul className={styles.lines}>{value.lines.map(line => <li key={line.receiptId + ':' + line.skuId}><strong>{line.productName}</strong><p>{line.skuCode} · {line.packageLabel} · {line.baseUnitsPerPackage} {line.baseUnitCode} per kemasan</p>
-      <p>Diterima: {line.acceptedBaseUnits} {line.baseUnitCode} · Bukti {line.receiptId} · Pesanan {line.orderId}</p><p>Bersih {rupiah(line.net)} · Pajak {rupiah(line.tax)} · Biaya {rupiah(line.charges)}</p></li>)}</ul>
+      <p>Diterima: {line.acceptedBaseUnits} {line.baseUnitCode} · Bukti {line.receiptId} · Pesanan {orderNumber(line.orderId)}</p><p>Bersih {rupiah(line.net)} · Pajak {rupiah(line.tax)} · Biaya {rupiah(line.charges)}</p></li>)}</ul>
     <div className={styles.total}><span>Total invoice</span><strong>{rupiah(value.total)}</strong></div><p>{value.taxDocumentProcess}</p></>;
 }
 function InvoiceDesk({ account, onDenied }: { account: Account; onDenied: (error: unknown) => void }) {

@@ -29,6 +29,7 @@ import { dateTimeFormatter } from '@/lib/format';
 import { EmptyState } from '@/components/workspace-kit/empty-state';
 import { OrderTimelinePanel } from './OrderTimelinePanel';
 import { SessionAccessState } from "@/components/workspace-kit/session-access-state";
+import { orderNumber } from '@/lib/document-numbers';
 
 type Account = { actorId: string; actions: readonly string[]; session: IdentitySession; observedAt: number };
 function status(order: SubmittedOrder) {
@@ -161,7 +162,7 @@ function OrderHistoryDesk({ account, onFailure }: { account: Account; onFailure:
         <Link className={common.secondary} href="/ordering/drafts">Daftar draf saya</Link></div>
     </section>}
     {repeat && <div ref={repeatRegion} tabIndex={-1} role="region" aria-label="Pemesanan ulang">
-      <p>Pilihan dari pesanan {repeat.sourceOrderId} menjadi awal draf baru untuk cabang yang sama. Jumlah dan rencana pengiriman masih perlu Anda periksa. Referensi pembelian lama tidak disalin.</p>
+      <p>Pilihan dari pesanan {orderNumber(repeat.sourceOrderId)} menjadi awal draf baru untuk cabang yang sama. Jumlah dan rencana pengiriman masih perlu Anda periksa. Referensi pembelian lama tidak disalin.</p>
       <p>Kemasan yang sudah berubah, harga yang tidak berlaku, atau akses cabang yang dicabut harus diperiksa kembali; sistem tidak menggantinya otomatis.</p>
       <OrderDraftEditor key={repeat.sourceOrderId} actorId={account.actorId} draft={repeat.draft} initialQuote={repeat.historicalQuote} initialIssue={null}
         reorderSourceId={repeat.sourceOrderId} locked={busy || save.locked} isCurrent={current} onSubmit={save.submit} onFailure={onFailure} />
@@ -173,14 +174,14 @@ function OrderHistoryDesk({ account, onFailure }: { account: Account; onFailure:
       {page.items.length > 0 && <ul className={styles.orderCards}>{page.items.map(order => {
         const id = order.submission.orderId, status = buyerOrderStatus(order), extra = order.quote.lines.length - 2;
         return <li key={id} className={styles.orderCard}>
-          <div className={styles.orderCardHead}><span><strong>Pesanan {id}</strong> · {date(order.submission.recordedAt)}</span><StatusBadge text={status.label} /></div>
+          <div className={styles.orderCardHead}><span><strong>{orderNumber(id)}</strong> · {date(order.submission.recordedAt)}</span><StatusBadge text={status.label} /></div>
           <ul className={styles.orderLines}>{order.quote.lines.slice(0, 2).map(line => <li key={line.definition.skuId}>
             <span className={styles.orderThumb}><PackageOpen size={22} strokeWidth={1.4} aria-hidden="true" /></span>
             <span><strong>{line.familyName}</strong><small>{line.packages} × {line.definition.packageLabel} · {orderAmount(order.quote.currency, line.price.unitPrice)}</small></span></li>)}</ul>
           {extra > 0 && <p className={styles.listMeta}>+{extra} barang lain</p>}
           <p className={styles.orderNext}>{status.detail}</p>
           <div className={styles.orderCardFoot}><span>Total <strong>{orderAmount(order.quote.currency, order.total)}</strong></span>
-            <div className={common.actions}><button type="button" className={common.secondary} disabled={locked} aria-label={'Lihat pesanan ' + id} onClick={() => void select(id)}>Lihat rincian</button>
+            <div className={common.actions}><button type="button" className={common.secondary} disabled={locked} aria-label={'Lihat rincian pesanan ' + orderNumber(id)} onClick={() => void select(id)}>Lihat rincian</button>
               {account.actions.includes('order.submit') && <button type="button" className={common.primary} disabled={locked} onClick={() => void orderAgain(order)}>Pesan lagi</button>}</div></div>
         </li>;
       })}</ul>}
@@ -188,8 +189,8 @@ function OrderHistoryDesk({ account, onFailure }: { account: Account; onFailure:
         {page.hasMore && <button className={common.secondary} disabled={locked} onClick={() => setCursor(nextCursor)}>{filter?.sort === 'oldest' ? 'Pesanan lebih baru' : 'Pesanan lebih lama'}</button>}
         {account.actions.includes('order.submit') && !locked && <Link href="/ordering/drafts" className={common.secondary}>Draf pesanan</Link>}</div>
     </section>
-    {selected && <section ref={detail} tabIndex={-1} className={styles.review} aria-label="Rincian pesanan"><h2>Pesanan {selected.submission.orderId}</h2>
-      <p>{selected.buyerName} · {date(selected.submission.recordedAt)}</p><p role="status"><StatusBadge text={buyerOrderStatus(selected).label} /> {status(selected)}</p>
+    {selected && <section ref={detail} tabIndex={-1} className={styles.review} aria-label="Rincian pesanan"><h2>Pesanan {orderNumber(selected.submission.orderId)}</h2>
+      <p>{selected.buyerName} · {date(selected.submission.recordedAt)}</p><p role="status"><StatusBadge text={buyerOrderStatus(selected).label} /> <span>{status(selected)}</span></p>
       {selected.input.purchaseReference && <p>Referensi pembelian: {selected.input.purchaseReference}</p>}
       <h3>Kemasan saat pengajuan</h3><ul>{selected.quote.lines.map(line => <li key={line.definition.skuId}><strong>{line.familyName} — {line.definition.packageLabel}</strong>
         <p>{line.packages} kemasan · {line.definition.baseUnitsPerPackage} {line.definition.baseUnitCode} per kemasan · total {line.baseUnits} {line.definition.baseUnitCode}</p>

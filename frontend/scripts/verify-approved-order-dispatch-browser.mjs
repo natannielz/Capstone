@@ -9,6 +9,8 @@ import { resolve } from 'node:path';
 import { createHash } from 'node:crypto';
 import { EventEmitter, once } from 'node:events';
 import next from 'next';
+// Order numbers as the screens show them (src/lib/document-numbers.ts).
+const orderNumber = id => 'PSN-' + String(id).padStart(6, '0');
 
 const input = []; for await (const chunk of process.stdin) input.push(chunk);
 const config = JSON.parse(Buffer.concat(input).toString('utf8')), api = new URL(config.apiAddress), origin = new URL(config.origin);
@@ -174,26 +176,26 @@ try {
     await capture(buyer.page, 'submit-uncertain'); const state = await control('state'); assertUnconsumed(state, before); assert.equal(state.reservations, 1);
     assert.equal(BigInt(state.reserved), BigInt(before.reserved) + BigInt(config.packages));
     await buyer.page.reload(); await buyer.page.getByRole('button', { name: 'Periksa hasil', exact: true }).click();
-    await buyer.page.getByRole('heading', { name: 'Pesanan ' + orderId + ' tercatat', exact: true }).waitFor();
+    await buyer.page.getByRole('heading', { name: 'Pesanan ' + orderNumber(orderId) + ' tercatat', exact: true }).waitFor();
     assert.equal(success('submit').length, 1); assert.equal(writes.filter(record => record.key === submitRecord.key).length, 1);
     assert.ok(recoveries.some(record => record.path === '/api/v1/ordering/orders/operations/query' && record.body.key === submitRecord.key && record.response.status === 'committed' && record.response.result.orderId === orderId));
     await dispatcher.page.goto(origin.origin + '/identity/account'); const wrong = await query(dispatcher, '/api/v1/ordering/orders/operations/query', { purpose: 'operation-recovery', key: submitRecord.key }); assert.equal(wrong.status, 403); assert.equal(Object.hasOwn(wrong.body, 'result'), false);
-    await buyer.page.goto(origin.origin + '/ordering/orders'); await buyer.page.getByRole('button', { name: 'Lihat pesanan ' + orderId, exact: true }).click();
+    await buyer.page.goto(origin.origin + '/ordering/orders'); await buyer.page.getByRole('button', { name: 'Lihat rincian pesanan ' + orderNumber(orderId), exact: true }).click();
     await buyer.page.getByRole('region', { name: 'Rincian pesanan', exact: true }).getByText('Menunggu persetujuan belanja', { exact: true }).waitFor(); await capture(buyer.page, 'submitted-order');
   });
   await check('independent spending then exact store acceptance precede preparation and physical dispatch', async () => {
-    await renew(spender); await spender.page.goto(origin.origin + '/ordering/reviews'); await spender.page.getByRole('button', { name: 'Tinjau pesanan ' + orderId, exact: true }).click();
+    await renew(spender); await spender.page.goto(origin.origin + '/ordering/reviews'); await spender.page.getByRole('button', { name: 'Tinjau pesanan ' + orderNumber(orderId), exact: true }).click();
     let panel = spender.page.getByRole('region', { name: 'Tinjauan keputusan', exact: true }); await panel.getByLabel('Catatan peninjauan', { exact: true }).fill('Synthetic independent buyer spending review');
     await panel.getByRole('button', { name: 'Setujui belanja', exact: true }).click(); await capture(spender.page, 'spending-review');
     await panel.getByRole('button', { name: 'Konfirmasi persetujuan belanja', exact: true }).click();
     await panel.getByText('Peninjauan selesai atau tidak ada cadangan yang dapat dibatalkan.', { exact: true }).waitFor();
     await renew(dispatcher); await dispatcher.page.goto(origin.origin + '/ordering/reviews');
-    await dispatcher.page.getByRole('button', { name: 'Tinjau pesanan ' + orderId + ' / ' + suborderId, exact: true }).click(); panel = dispatcher.page.getByRole('region', { name: 'Tinjauan keputusan', exact: true });
+    await dispatcher.page.getByRole('button', { name: 'Tinjau pesanan ' + orderNumber(orderId) + ' / ' + suborderId, exact: true }).click(); panel = dispatcher.page.getByRole('region', { name: 'Tinjauan keputusan', exact: true });
     await panel.getByLabel('Catatan peninjauan', { exact: true }).fill('Synthetic actual store acceptance'); await panel.getByRole('button', { name: 'Terima pesanan toko', exact: true }).click(); await capture(dispatcher.page, 'store-review');
     await panel.getByRole('button', { name: 'Konfirmasi penerimaan toko', exact: true }).click(); await panel.getByText('Bagian pesanan ini sudah diterima toko.', { exact: true }).waitFor();
     assert.equal(success('decision').length, 2); assert.deepEqual(success('decision').map(record => record.actor), [config.actorIds.spender, config.actorIds.dispatcher]);
     assert.deepEqual(success('decision').map(record => record.body.stage), ['Spending', 'Store']); assertUnconsumed(await control('state'), before);
-    await dispatcher.page.goto(origin.origin + '/fulfillment/preparations'); await dispatcher.page.getByRole('button', { name: 'Siapkan pesanan ' + orderId + ' / ' + suborderId, exact: true }).click();
+    await dispatcher.page.goto(origin.origin + '/fulfillment/preparations'); await dispatcher.page.getByRole('button', { name: 'Siapkan pesanan ' + orderNumber(orderId) + ' / ' + suborderId, exact: true }).click();
     panel = dispatcher.page.getByRole('region', { name: 'Rencana persiapan', exact: true }); assert.equal(await panel.getByRole('checkbox').isChecked(), false);
     await panel.getByRole('checkbox').check(); await panel.getByLabel(/^Jumlah /).fill(String(config.packages)); await panel.getByLabel('Catatan persiapan', { exact: true }).fill('Synthetic full actual reserved demand preparation');
     await panel.getByRole('button', { name: 'Tinjau persiapan', exact: true }).click(); await panel.getByRole('heading', { name: 'Periksa kemasan yang dipilih', exact: true }).waitFor(); await capture(dispatcher.page, 'preparation-review');
@@ -242,10 +244,10 @@ try {
     assert.deepEqual(await control('state'), committed); await capture(dispatcher.page, 'dispatch-recovered');
   });
   await check('buyer exact order and shipment history survive reload with current actor CSRF and fulfillment guards', async () => {
-    await renew(buyer); await buyer.page.goto(origin.origin + '/ordering/orders'); await buyer.page.getByRole('button', { name: 'Lihat pesanan ' + orderId, exact: true }).click();
+    await renew(buyer); await buyer.page.goto(origin.origin + '/ordering/orders'); await buyer.page.getByRole('button', { name: 'Lihat rincian pesanan ' + orderNumber(orderId), exact: true }).click();
     const detail = buyer.page.getByRole('region', { name: 'Rincian pesanan', exact: true }); await detail.getByText('Diterima toko — menunggu pemenuhan', { exact: true }).waitFor();
     assert.equal(await detail.evaluate(element => element === document.activeElement), true); await capture(buyer.page, 'buyer-order-history');
-    await buyer.page.reload(); await buyer.page.getByRole('button', { name: 'Lihat pesanan ' + orderId, exact: true }).click(); await detail.waitFor();
+    await buyer.page.reload(); await buyer.page.getByRole('button', { name: 'Lihat rincian pesanan ' + orderNumber(orderId), exact: true }).click(); await detail.waitFor();
     const read = '/api/v1/ordering/orders/' + orderId + '/query', readBody = { purpose: 'order-preparation' };
     for (const [options, status] of [[{ omit: ['X-CSRF-Token'] }, 403], [{ headers: { 'X-Expected-Actor-Id': config.actorIds.dispatcher } }, 409]]) assert.equal((await query(buyer, read, readBody, options)).status, status);
     assert.equal((await query(buyer, '/api/v1/fulfillment/dispatches/' + suborderId + '/query', { purpose: 'shipment-dispatch' })).status, 403);

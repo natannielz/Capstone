@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import {resolve} from 'node:path';
+// Order numbers as the screens show them (src/lib/document-numbers.ts).
+const orderNumber = id => 'PSN-' + String(id).padStart(6, '0');
 
 // Genuine Next/API/Mongo owners. Only committed HTTP replies are deliberately lost.
 export async function verifyOrderViewsBrowser({config, buyer, user, origin, directory, restartUser}) {
@@ -51,7 +53,7 @@ export async function verifyOrderViewsBrowser({config, buyer, user, origin, dire
     return {status: response.status, body: await response.json()};
   }, {actor, endpoint, body});
   let current = buyer; observe(current.page); await intercept(current.context); await current.page.goto(origin.origin + path); await ready(current.page);
-  await current.page.getByRole('button', {name: 'Lihat pesanan ' + config.orderId, exact: true}).waitFor();
+  await current.page.getByRole('button', {name: 'Lihat rincian pesanan ' + orderNumber(config.orderId), exact: true}).waitFor();
   await current.page.getByRole('combobox', {name: 'Cabang atau divisi pesanan', exact: true}).selectOption(contextKey);
   await current.page.getByRole('combobox', {name: 'Urutan pesanan', exact: true}).selectOption('oldest');
   await current.page.getByRole('button', {name: 'Terapkan filter', exact: true}).click();
@@ -108,7 +110,7 @@ export async function verifyOrderViewsBrowser({config, buyer, user, origin, dire
         assert.deepEqual(ownPage.items, []); assert.equal(ownPage.hasMore, false); assert.equal(ownPage.nextCursor, null);
         await ready(recipient.page);
         await recipient.page.getByText('Belum ada pesanan pada halaman ini.', {exact: true}).waitFor();
-        assert.equal(await recipient.page.getByRole('button', {name: 'Lihat pesanan ' + config.orderId, exact: true}).count(), 0);
+        assert.equal(await recipient.page.getByRole('button', {name: 'Lihat rincian pesanan ' + orderNumber(config.orderId), exact: true}).count(), 0);
         const deniedView = await query(recipient.page, config.recipientId, api + '/' + write.result.viewId + '/query', {purpose: 'order-history'});
         assert.equal(deniedView.status, 403); assert.equal(Object.hasOwn(deniedView.body, 'filter'), false); await recipient.context.close();
       }

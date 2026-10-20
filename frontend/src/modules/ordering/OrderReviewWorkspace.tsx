@@ -14,6 +14,7 @@ import { orderAmount } from './order-quote-client';
 import common from '../administration/access.module.css';
 import styles from './order-draft.module.css';
 import { SessionAccessState } from "@/components/workspace-kit/session-access-state";
+import { orderNumber } from '@/lib/document-numbers';
 
 type Account = { actorId: string; actions: readonly string[]; session: IdentitySession; observedAt: number };
 const factorHref = '/identity/account?operation=order.spend.approve&returnPath=%2Fordering%2Freviews';
@@ -138,14 +139,14 @@ function ReviewDesk({ account, elapsed, onFailure, onRefresh }: { account: Accou
     {notice && <p role="status" className={common.success}>{notice}</p>}
     <section className={common.accountSection} aria-label="Pesanan sesuai akses" aria-busy={busy}><h2>{stage === 'Store' ? 'Bagian pesanan toko' : stage === 'Spending' ? 'Pesanan cabang' : 'Pesanan untuk ditinjau pembatalannya'}</h2>
       {!busy && page.items.length === 0 && <p>Belum ada pesanan yang dapat ditinjau dalam penugasan ini.</p>}
-      <ul className={styles.lines}>{page.items.map(item => <li key={item.suborderId ?? item.orderId}><strong>{item.buyerName}</strong> · Pesanan {item.orderId} · {item.quote.lines.length} kemasan
+      <ul className={styles.lines}>{page.items.map(item => <li key={item.suborderId ?? item.orderId}><strong>{item.buyerName}</strong> · Pesanan {orderNumber(item.orderId)} · {item.quote.lines.length} kemasan
         <p>{statusText(item)}</p>
-        <button className={common.secondary} disabled={locked || !fresh} onClick={() => void select(item)}>Tinjau pesanan {item.orderId}{item.suborderId ? ' / ' + item.suborderId : ''}</button></li>)}</ul>
+        <button className={common.secondary} disabled={locked || !fresh} onClick={() => void select(item)}>Tinjau pesanan {orderNumber(item.orderId)}{item.suborderId ? ' / ' + item.suborderId : ''}</button></li>)}</ul>
       <div className={common.actions}><button className={common.secondary} disabled={locked} onClick={() => { setBefore(null); setReload(value => value + 1); }}>Muat pesanan terbaru</button>
         {page.hasMore && <button className={common.secondary} disabled={locked} onClick={() => { const last = page.items.at(-1); if (last) setBefore(last.suborderId ?? last.orderId); }}>Pesanan lebih lama</button>}</div>
     </section>
     {selected && <section ref={reviewPanel} tabIndex={-1} className={styles.review} aria-label="Tinjauan keputusan"><h2>{selected.stage === 'Spending' ? 'Tinjau belanja cabang' : selected.stage === 'Store' ? 'Tinjau penerimaan toko' : 'Tinjau pembatalan sisa pesanan'}</h2>
-      <p>{selected.buyerName} · Pesanan {selected.orderId} · versi keputusan {selected.revision}</p>
+      <p>{selected.buyerName} · Pesanan {orderNumber(selected.orderId)} · versi keputusan {selected.revision}</p>
       <ul>{selected.quote.lines.map(line => <li key={`${line.definition.skuId}:${line.lineRevision}`}>{line.familyName} — {line.packages} {line.definition.packageLabel} · {line.baseUnits} {line.definition.baseUnitCode} · {orderAmount(selected.quote.currency, line.catalogSubtotal)} · {line.lineRevision === '0' ? 'rincian awal' : `persetujuan ${line.lineRevision}`}</li>)}</ul>
       <p className={styles.address}>{selected.input.delivery!.recipientName} · {selected.input.delivery!.phone}{'\n'}{selected.input.delivery!.address}{'\n'}{selected.input.delivery!.city} {selected.input.delivery!.postalCode}</p>
       <p>Subtotal barang: {orderAmount(selected.quote.currency, selected.quote.catalogSubtotal)}</p>

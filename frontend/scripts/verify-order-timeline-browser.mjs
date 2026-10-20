@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import {resolve} from 'node:path';
+// Order numbers as the screens show them (src/lib/document-numbers.ts).
+const orderNumber = id => 'PSN-' + String(id).padStart(6, '0');
 
 export async function verifyOrderTimelineBrowser({config, buyer, user, origin, directory, restartUser}) {
   const errors = [], operationalWrites = [], observedReads = [];
@@ -14,7 +16,7 @@ export async function verifyOrderTimelineBrowser({config, buyer, user, origin, d
     });
   }
   async function select(page, order) {
-    await page.getByRole('button', {name: 'Lihat pesanan ' + order, exact: true}).click();
+    await page.getByRole('button', {name: 'Lihat rincian pesanan ' + orderNumber(order), exact: true}).click();
     await timeline(page).waitFor();
     for (const title of ['Pengiriman', 'Invoice', 'Pengajuan pembayaran saya', 'Kasus, retur, dan refund'])
       await timeline(page).getByRole('button', {name: 'Muat ' + title.toLowerCase() + ' terbaru', exact: true}).click({trial: true});
