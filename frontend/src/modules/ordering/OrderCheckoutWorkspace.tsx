@@ -16,6 +16,7 @@ import { createOrderSubmitGateway, orderSubmitOperation, readCheckoutGroupAttemp
 import { OrderCheckoutDetails } from './order-checkout-details';
 import common from '../administration/access.module.css';
 import styles from './order-checkout.module.css';
+import { SessionAccessState } from "@/components/workspace-kit/session-access-state";
 
 type Account = { actorId: string; session: IdentitySession; observedAt: number; draftId: string | null };
 function message(error: unknown, reading = false) {
@@ -64,8 +65,7 @@ export function OrderCheckoutWorkspace() {
       <Link href="/ordering/drafts" className={styles.back}><ArrowLeft size={16} aria-hidden="true" />Kembali ke draf</Link>
       <h1>Pengajuan pesanan</h1><p>Tinjau kemasan, tujuan pengiriman, dan jumlah biaya sebelum mengajukan kebutuhan cabang.</p></header>
     {error !== null && <p className={common.alert} role="alert">{message(error, true)}</p>}
-    {loading ? <p className={styles.loading} role="status">Memeriksa akun…</p> : !account || expired ? <section className={common.state}><h2>Periksa sesi dan akses</h2>
-      <Link href="/identity/login?returnPath=%2Fordering%2Fcheckout">Masuk kembali</Link><button className={common.secondary} onClick={() => setRevision(value => value + 1)}>Perbarui sesi dan akses</button></section>
+    {loading ? <p className={styles.loading} role="status">Memeriksa akun…</p> : !account || expired ? <SessionAccessState error={error} returnPath="/ordering/checkout" onRetry={() => setRevision(value => value + 1)} />
       : <CheckoutDesk key={account.actorId + ':' + account.observedAt} account={account} onFailure={failed} />}
   </main><footer className={styles.footer}>Unit Toko · Kebutuhan cabang dan organisasi</footer></div>;
 }

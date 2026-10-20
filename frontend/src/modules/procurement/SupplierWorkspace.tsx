@@ -16,6 +16,7 @@ import { createSupplierGateway, supplierInput, supplierOwnerKey, supplierTime, s
 import styles from '../administration/access.module.css';
 import { packageMatchExplanation, type PackageMatching } from './package-matching';
 import { dateTimeFormatter } from '@/lib/format';
+import { SessionAccessState } from "@/components/workspace-kit/session-access-state";
 
 type Account = { actorId: string; actions: readonly string[]; session: IdentitySession; observedAt: number };
 type DetailDraft = Omit<SupplierDetails, 'contactMethod'> & { contactMethod: SupplierDetails['contactMethod'] | '' };
@@ -76,7 +77,7 @@ export function SupplierWorkspace() {
     window.addEventListener('pageshow', restored); return () => { window.clearInterval(timer); window.removeEventListener('pageshow', restored); }; }, [account]);
   const denied = useCallback((failure: unknown) => { if (failure instanceof AccessFailure && (failure.status === 401 || failure.code === 'actor_changed' || failure.code === 'session_expired')) { setAccount(null); setError(failure); } }, []);
   return <main className={styles.page}><header className={styles.header}><div><Link className={styles.brand} href="/identity/account">Unit Toko</Link><h1>Pemasok dan kode sumber</h1><p>Ajukan identitas dan pemetaan barang. Pemeriksa menggunakan kanal verifikasi yang telah disetujui.</p></div><Link className={styles.secondary} href="/identity/account">Akun saya</Link></header>
-    {error !== null && <p role="alert" className={styles.alert}>{message(error)}</p>}{loading ? <p role="status">Memeriksa akun dan akses…</p> : !account || sessionTiming(account.session, elapsed).expired ? <section className={styles.state}><h2>Periksa sesi dan akses</h2><Link href={`/identity/login?returnPath=${encodeURIComponent(path)}`}>Masuk kembali</Link><button className={styles.secondary} onClick={() => setRevision(value => value + 1)}>Perbarui sesi dan akses</button></section>
+    {error !== null && account !== null && <p role="alert" className={styles.alert}>{message(error)}</p>}{loading ? <p role="status">Memeriksa akun dan akses…</p> : !account || sessionTiming(account.session, elapsed).expired ? <SessionAccessState error={error} returnPath={path} onRetry={() => setRevision(value => value + 1)} />
       : <SupplierDesk key={account.actorId + ':' + account.observedAt} account={account} elapsed={elapsed} fresh={sessionTiming(account.session, elapsed).fresh} onDenied={denied} />}</main>;
 }
 function SupplierDesk({ account, elapsed, fresh, onDenied }: { account: Account; elapsed: number; fresh: boolean; onDenied: (failure: unknown) => void }) {

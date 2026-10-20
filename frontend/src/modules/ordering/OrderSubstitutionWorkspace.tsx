@@ -15,6 +15,7 @@ import { createOrderSubstitutionGateway, replacementSelection, substitutionOpera
   type SubstitutionResult, type SubstitutionTarget } from './order-substitution-client';
 import styles from '../administration/access.module.css';
 import { formatDateTime } from '@/lib/format';
+import { SessionAccessState } from "@/components/workspace-kit/session-access-state";
 
 type Account = { actorId: string; actions: readonly string[]; session: IdentitySession; observedAt: number };
 type Page<T> = { items: T[]; hasMore: boolean };
@@ -58,9 +59,8 @@ export function OrderSubstitutionWorkspace({ orderId = null }: { orderId?: strin
   return <main className={styles.page}><header className={styles.header}><div><Link href="/identity/account" className={styles.brand}>Unit Toko</Link>
     <h1>Penggantian barang pesanan</h1><p>Petugas mengajukan pilihan pengganti. Pembeli memeriksa kemasan, jumlah, dan harga sebelum menyetujuinya.</p></div>
     <Link href="/ordering/orders" className={styles.secondary}>Riwayat pesanan</Link></header>
-    {error !== null && <p role="alert" className={styles.alert}>{message(error)}</p>}
-    {loading ? <p role="status">Memeriksa akun…</p> : !account || sessionTiming(account.session, elapsed).expired ? <section className={styles.state}><h2>Periksa sesi dan akses</h2>
-      <Link href="/identity/login?returnPath=%2Fordering%2Fsubstitutions">Masuk kembali</Link><button className={styles.secondary} onClick={() => setRevision(value => value + 1)}>Perbarui sesi dan akses</button></section>
+    {error !== null && account !== null && <p role="alert" className={styles.alert}>{message(error)}</p>}
+    {loading ? <p role="status">Memeriksa akun…</p> : !account || sessionTiming(account.session, elapsed).expired ? <SessionAccessState error={error} returnPath="/ordering/substitutions" onRetry={() => setRevision(value => value + 1)} />
       : <SubstitutionDesk key={account.actorId + ':' + account.observedAt} account={account} orderId={orderId} onFailure={failed} />}
   </main>;
 }

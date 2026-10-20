@@ -89,6 +89,7 @@ function mountDispatch() {
       if (!previous || changed(previous.dependencies, dependencies)) active.slots[index] = {value: callback, dependencies}; return (active.slots[index] as {value: unknown}).value;},
     useEffect(effect: () => void | (() => void), dependencies?: readonly unknown[]) {effects.push({frame: active, index: position++, effect, dependencies});}};
   const runtimeRequire = createRequire(resolve('package.json')), ts = runtimeRequire('typescript') as typeof import('typescript'), marker = () => null;
+  let sessionStateKit: Record<string, unknown> | undefined;
   const imports = (name: string): unknown => {
     if (name === 'react') return react; if (name === 'react/jsx-runtime') return runtimeRequire(name);
     if (name === 'next/link') return {__esModule: true, default: 'a'};
@@ -106,6 +107,7 @@ function mountDispatch() {
     if (name === '../ordering/order-line-identity') return lineIdentity;
     if (name === './dispatch-client') return {...dispatch, createDispatchGateway: () => gateway};
     if (name === '@/lib/format') return displayFormat;
+    if (name === '@/components/workspace-kit/session-access-state') return sessionStateKit ??= load('src/components/workspace-kit/session-access-state.tsx');
     throw new Error('Unexpected mounted dispatch import: ' + name);
   };
   function load(file: string) {

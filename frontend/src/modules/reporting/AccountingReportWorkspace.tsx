@@ -13,6 +13,7 @@ import {accountingReportBookKey, createAccountingReportGateway, formatAccounting
 import common from '../administration/access.module.css';
 import styles from './reporting.module.css';
 import { dateTimeFormatter, jakartaDateKey } from "@/lib/format";
+import { SessionAccessState } from "@/components/workspace-kit/session-access-state";
 
 type Account = {actorId: string; session: IdentitySession; observedAt: number};
 const path = '/reporting/accounts', pageSize = 20;
@@ -68,12 +69,10 @@ export function AccountingReportWorkspace() {
     <header className={common.header}><div><Link className={common.brand} href="/identity/account">Unit Toko</Link><h1>Laporan akun dan jurnal</h1>
       <p>Baca saldo kumulatif dari jurnal yang telah tersimpan pada buku operasional. Pilih organisasi, toko, kanal, mata uang, dan tanggal akhir yang jelas.</p></div>
       <Link className={common.secondary} href="/identity/account">Akun saya</Link></header>
-    {error !== null && <p role="alert" className={common.alert}>{message(error)}</p>}
+    {error !== null && account !== null && <p role="alert" className={common.alert}>{message(error)}</p>}
     <div id="accounting-report-content">
       {loading ? <p role="status">Memeriksa sesi dan izin laporan…</p> : !account || sessionTiming(account.session, elapsed).expired
-        ? <section className={common.state}><h2>Periksa sesi dan akses laporan</h2><p>Laporan hanya tersedia melalui akun dan cakupan pelaporan yang disetujui.</p>
-          <Link className={common.secondary} href={`/identity/login?returnPath=${encodeURIComponent(path)}`}>Masuk kembali</Link>
-          <button type="button" className={common.secondary} onClick={() => setAttempt(value => value + 1)}>Perbarui sesi dan akses</button></section>
+        ? <SessionAccessState error={error} returnPath={path} onRetry={() => setAttempt(value => value + 1)} />
         : <ReportDesk key={account.actorId + ':' + account.observedAt} account={account} onDenied={denied} />}
     </div>
   </main>;

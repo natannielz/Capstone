@@ -16,6 +16,7 @@ import { createSpendingPolicyGateway, spendingPolicyInput, spendingPolicyThresho
   type SpendingPolicyDecisionPreview, type SpendingPolicyDecision } from './order-spending-policy-client';
 import styles from '../administration/access.module.css';
 import { dateTimeFormatter } from '@/lib/format';
+import { SessionAccessState } from "@/components/workspace-kit/session-access-state";
 
 type Account = { actorId: string; actions: readonly string[]; session: IdentitySession; observedAt: number };
 const path = '/ordering/spending-policies', readPermission = 'order.spending.policy.read', proposePermission = 'order.spending.policy.propose', approvePermission = 'order.spending.policy.approve';
@@ -55,9 +56,8 @@ export function OrderSpendingPolicyWorkspace() {
   const denied = useCallback((failure: unknown) => { if (failure instanceof AccessFailure && (failure.status === 401 || failure.code === 'actor_changed' || failure.code === 'session_expired')) { setAccount(null); setError(failure); } }, []);
   return <main className={styles.page}><header className={styles.header}><div><Link href="/identity/account" className={styles.brand}>Unit Toko</Link>
     <h1>Persetujuan belanja</h1><p>Tentukan kapan pesanan cabang atau divisi perlu diperiksa sebelum diproses.</p></div><Link className={styles.secondary} href="/identity/account">Akun saya</Link></header>
-    {error !== null && <p role="alert" className={styles.alert}>{message(error)}</p>}
-    {loading ? <p role="status">Memeriksa akun dan akses…</p> : !account || sessionTiming(account.session, elapsed).expired ? <section className={styles.state}><h2>Periksa sesi dan akses</h2>
-      <Link href={`/identity/login?returnPath=${encodeURIComponent(path)}`}>Masuk kembali</Link><button className={styles.secondary} onClick={() => setRevision(value => value + 1)}>Perbarui sesi dan akses</button></section>
+    {error !== null && account !== null && <p role="alert" className={styles.alert}>{message(error)}</p>}
+    {loading ? <p role="status">Memeriksa akun dan akses…</p> : !account || sessionTiming(account.session, elapsed).expired ? <SessionAccessState error={error} returnPath={path} onRetry={() => setRevision(value => value + 1)} />
       : <PolicyDesk key={account.actorId + ':' + account.observedAt} account={account} elapsed={elapsed} fresh={sessionTiming(account.session, elapsed).fresh} onDenied={denied} />}
   </main>;
 }

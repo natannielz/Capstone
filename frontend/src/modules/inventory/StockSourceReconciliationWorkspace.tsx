@@ -14,6 +14,7 @@ import { stockLocationKey, type StockWarehouse } from './stock-count-workflow';
 import { createSourceReconciliationGateway, prepareSourceReconciliation, prepareSourceReconciliationDecision, sourceReconciliationObservation, reconciliationObservationTime, reconciliationDifferences, reconciliationObservationCurrent, type SourceReconciliationBaseline, type SourceReconciliationRead, type SourceReconciliationObservation, type SourceReconciliationDecisionPreview, type SourceReconciliationTarget } from './stock-source-reconciliation-client';
 import { ReconciliationSourceFacts, ReconciliationBalanceFacts, ReconciliationObservationFields, ReconciliationObservations, reconciliationNotice, reconciliationWhen } from './stock-source-reconciliation-forms';
 import styles from '../administration/access.module.css';
+import { SessionAccessState } from "@/components/workspace-kit/session-access-state";
 
 const path = '/inventory/source-reconciliations', permission = 'stock.source.reconciliation.';
 const consent = 'Saya telah memeriksa seluruh lot, waktu dan referensi pengamatan. Pencatatan ini tidak mengaktifkan sumber atau melepas stok.';
@@ -61,7 +62,7 @@ export function StockSourceReconciliationWorkspace() {
   return <main className={styles.page}>
     <header className={styles.header}><div><Link className={styles.brand} href="/identity/account">Unit Toko</Link><h1>Rekonsiliasi jumlah fisik</h1><p>Bandingkan pengamatan seluruh lot dengan catatan sumber dan pemeriksaan orang berbeda.</p></div><Link className={styles.secondary} href="/identity/account">Akun saya</Link></header>
     {error !== null && <p className={styles.alert} role="alert">{message(error)}</p>}
-    {loading ? <p role="status">Memeriksa akun dan akses…</p> : !account || sessionTiming(account.session, elapsed).expired ? <section className={styles.state}><h2>Periksa sesi dan akses</h2><Link href={`/identity/login?returnPath=${encodeURIComponent(path)}`}>Masuk kembali</Link><button className={styles.secondary} onClick={() => setRevision(value => value + 1)}>Perbarui sesi dan akses</button></section> :
+    {loading ? <p role="status">Memeriksa akun dan akses…</p> : !account || sessionTiming(account.session, elapsed).expired ? <SessionAccessState error={error} returnPath={path} onRetry={() => setRevision(value => value + 1)} /> :
       <ReconciliationDesk key={account.actorId + ':' + account.observedAt} account={account} fresh={sessionTiming(account.session, elapsed).fresh} now={Date.parse(account.session.serverTime) + Math.max(0, elapsed)} onDenied={denied} />}
   </main>;
 }
@@ -143,7 +144,7 @@ function ReconciliationDesk({ account, fresh, now, onDenied }: { account: Accoun
   return <>
     {(canPropose || canDecide) && !fresh && <div className={styles.alert}><p>Perbarui verifikasi kedua sebelum menyimpan pengajuan atau keputusan.</p>{['propose', 'decide'].filter(action => account.actions.includes(permission + action) && account.session.stepUpOperations.includes(permission + action)).map(action => <Link key={action} href={`/identity/account?operation=${permission + action}&returnPath=${encodeURIComponent(path)}`}>{action === 'propose' ? 'Verifikasi untuk pengajuan rekonsiliasi' : 'Verifikasi untuk pemeriksaan rekonsiliasi'}</Link>)}</div>}
     {offline && <p role="alert" className={styles.alert}>Koneksi terputus. Data sebelumnya disembunyikan; referensi permintaan tetap tersimpan untuk akun semula.</p>}
-    {error !== null && <p role="alert" className={styles.alert}>{message(error)}</p>}
+    {error !== null && account !== null && <p role="alert" className={styles.alert}>{message(error)}</p>}
     {notice && <p role="status" className={styles.success}>{notice}</p>}
     <OperationRecovery entries={recovery.entries} journal={recovery.journal} disabled={busy || offline} onBusyChange={setRecovering} onFailure={failure => { setError(failure); onDenied(failure); }} onResolved={reconcile} recoveryAdapters={{ 'stock.source.reconciliation': { lookup: entry => gateway.recover(entry.actorId, entry.operation, entry.key, canRead) } }} />
     {!canRead ? <section className={styles.state}><h2>Akses baca diperlukan untuk pekerjaan baru</h2><p>Akun ini dapat memeriksa hasil permintaan miliknya yang belum terkonfirmasi. Membuka sumber atau riwayat memerlukan izin baca rekonsiliasi dalam penugasan yang sama.</p></section> : <section className={styles.accountSection} aria-busy={busy}>
