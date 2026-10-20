@@ -152,6 +152,11 @@ export function identityDestinations(actions: readonly string[]) {
   return destinationEntries(actions).filter(item => item.visible && (!isPilotRelease || isPilotPathAllowed(item.href)));
 }
 
+/** Every destination path, regardless of the actor's permissions (for marking the open page in navigation). */
+export function destinationHrefs(): string[] {
+  return destinationEntries([]).map(entry => entry.href);
+}
+
 /** A destination's own name regardless of the actor's permissions (e.g. the current page when access is unavailable). */
 export function destinationLabel(href: string): string | undefined {
   return destinationEntries([]).find(entry => entry.href === href)?.label;

@@ -1,5 +1,5 @@
 import { isPilotPathAllowed, isPilotRelease } from '../../lib/release-scope';
-import { destinationLabel } from './identity-workflow';
+import { destinationHrefs, destinationLabel } from './identity-workflow';
 import { workspaceDirectory } from './workspace-directory';
 
 /** Former AdministrationNavigation `current` ids → their workspace path (kept so the 33 call sites stay unchanged). */
@@ -72,6 +72,16 @@ export function workspaceNavigation(actions: readonly string[], current: string 
   }
   groups.push({ id: 'account', label: 'Akun', items: [item(ACCOUNT, true)] });
   return groups;
+}
+
+/** The sidebar entry for an open page: the page itself when it is a destination, else the closest parent destination
+ * (a record view under /inventory/sources marks Sumber stok), else the path as it is. */
+export function currentNavigationHref(pathname: string): string {
+  const known = new Set<string>([HOME.href, ...Object.values(NAVIGATION_HREFS), ...destinationHrefs()]);
+  if (known.has(pathname)) return pathname;
+  let best: string | null = null;
+  for (const href of known) if (pathname.startsWith(href + '/') && (!best || href.length > best.length)) best = href;
+  return best ?? pathname;
 }
 
 /** Click guard shared by sidebar, sheet and palette: while a command is in flight, navigation is blocked. */

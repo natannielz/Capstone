@@ -121,3 +121,7 @@
 @media (max-width: 700px) { .page { padding: 20px 16px 40px; } .header { gap: 16px; padding-bottom: 22px; margin-bottom: 22px; } .brand { font-size: 21px; } .accountSection, .form, .review { padding: 20px; } .lookup label { width: 100%; } .facts { grid-template-columns: minmax(0, 1fr); } .accessLists li { flex-wrap: wrap; } .administrationNav { gap: 6px 18px; } .page th, .page td { padding: 10px; } }
 @media (max-width: 420px) { .accountSection, .form, .review { padding: 16px; } .actions > button, .actions > a { flex: 1 1 130px; } .pagination button { flex: 1 1 100px; } }
 @media (prefers-reduced-motion: reduce) { .page *, .page *::before, .page *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
+/* Inside the shared workspace frame the sidebar carries the brand and the way back to the account hub. */
+:global([data-workspace-frame]) .brand { display: none; }
+:global([data-workspace-frame]) .header a[href="/identity/account"] { display: none; }
+:global([data-workspace-frame]) .page { min-height: auto; }

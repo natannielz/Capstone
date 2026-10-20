@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { identityDestinations } from "../src/modules/identity/identity-workflow";
 import { workspaceDirectory } from "../src/modules/identity/workspace-directory";
-import { navigationClick, NAVIGATION_HREFS, workspaceNavigation } from "../src/modules/identity/workspace-navigation";
+import { currentNavigationHref, navigationClick, NAVIGATION_HREFS, workspaceNavigation } from "../src/modules/identity/workspace-navigation";
 
 // A broad actor: every action string the destinations check for.
 const everything = ["order.request.read", "order.request.submit", "order.request.decide", "order.read", "order.spend.approve", "order.accept", "order.cancel",
@@ -58,4 +58,16 @@ test("the current page keeps its own name when access to it is unavailable", () 
   const groups = workspaceNavigation([], "/billing/payment-reviews", { pilot: false });
   const current = groups.find(group => group.id === "current")!.items[0];
   assert.deepEqual([current.label, current.available, current.current], ["Pemeriksaan pembayaran", false, true]);
+});
+
+// The shared workspace frame marks the sidebar entry for whatever page is open, including nested pages and record views.
+test("any workspace URL resolves to its own sidebar entry, else the closest parent entry", () => {
+  assert.equal(currentNavigationHref("/billing/invoices"), "/billing/invoices");
+  assert.equal(currentNavigationHref("/ordering/requests/incoming"), "/ordering/requests/incoming");
+  assert.equal(currentNavigationHref("/ordering/requests"), "/ordering/requests");
+  assert.equal(currentNavigationHref("/inventory/sources/policies"), "/inventory/sources/policies");
+  assert.equal(currentNavigationHref("/inventory/sources/42"), "/inventory/sources");
+  assert.equal(currentNavigationHref("/identity/account"), "/identity/account");
+  assert.equal(currentNavigationHref("/billing/invoices-archive"), "/billing/invoices-archive", "a shared prefix is not a parent");
+  assert.equal(currentNavigationHref("/unknown/page"), "/unknown/page");
 });
