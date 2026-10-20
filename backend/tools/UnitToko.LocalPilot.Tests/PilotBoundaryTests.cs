@@ -12,11 +12,12 @@ namespace UnitToko.LocalPilot.Tests;
 public sealed class PilotBoundaryTests
 {
     [Theory]
-    [InlineData("mongodb://remote.internal:27029/?replicaSet=unitTokoPilot", PilotBoundary.DatabaseName)]
-    [InlineData("mongodb://127.0.0.1:27028/?replicaSet=unitTokoPilot", PilotBoundary.DatabaseName)]
-    [InlineData("mongodb://127.0.0.1:27029/?replicaSet=rs0", PilotBoundary.DatabaseName)]
-    [InlineData("mongodb://127.0.0.1:27029/other?replicaSet=unitTokoPilot", PilotBoundary.DatabaseName)]
-    [InlineData(PilotBoundary.MongoUri, "production")]
+    // The default (release1) profile's own database and replica set; profile values are not compile-time constants.
+    [InlineData("mongodb://remote.internal:27029/?replicaSet=unitTokoPilot", "unittoko_local_pilot_release1")]
+    [InlineData("mongodb://127.0.0.1:27028/?replicaSet=unitTokoPilot", "unittoko_local_pilot_release1")]
+    [InlineData("mongodb://127.0.0.1:27029/?replicaSet=rs0", "unittoko_local_pilot_release1")]
+    [InlineData("mongodb://127.0.0.1:27029/other?replicaSet=unitTokoPilot", "unittoko_local_pilot_release1")]
+    [InlineData("mongodb://127.0.0.1:27029/?replicaSet=unitTokoPilot", "production")]
     public void Bootstrap_refuses_foreign_or_disposable_database_targets(string uri, string database) =>
         Assert.Throws<InvalidOperationException>(() => PilotBoundary.RequireDatabase(uri, database));
 
