@@ -41,3 +41,14 @@ Each phase is committed and pushed, with a check, before the next one starts.
 
 ## Phase F: discovery depth (P2)
 - Search synonyms and codes, filters with chips, a card stack with unit price and minimum order, "Muat lebih banyak" with position restore, and "Pernah dibeli".
+
+## Progress (21 October, night)
+- Phase A: done (fd767b1).
+- Phase B: done. The staff "Katalog publik" page (`/catalog/public`) lists shop catalogs by shop and warehouse name, with propose / approve / reject by two different people (d818cb8).
+- Phase C: done (96acd32).
+- Phase E, cart: `/cart` is the buyer's latest branch draft. The product page has "Tambah ke keranjang", quantities save on their own, and changed prices are shown for the buyer to accept. A lost answer is resent with the same key. The header shows the cart count (d818cb8).
+- Phase E, checkout: delivery is entered on the checkout page, with "Isi dari alamat cabang". The submit button reads "Ajukan untuk persetujuan" or "Ajukan pesanan". There is no second header (7fe50f7).
+- Phase E, orders: "Pesanan saya" shows order cards with a status badge, "Lihat rincian" and "Pesan lagi" into the cart. Filters are folded away (5b35175).
+- Product page in marketplace order (a166d73).
+- Local full pilot rebuilt and restarted. The guest catalog stays empty until staff open a shop catalog, and no pilot account holds `catalog.public.propose` / `catalog.public.approve` yet (account changes are the owner's decision).
+- Still open: D (public photo renditions), F (search depth, filters, "Pernah dibeli"), status tabs backed by a server-side filter, and a backend regression run of AccessHttpTests on an idle machine.
