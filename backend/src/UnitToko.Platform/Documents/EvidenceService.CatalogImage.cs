@@ -114,7 +114,7 @@ internal sealed partial class EvidenceService
             if (Reference(bundle) != reference) throw Conflict("evidence_read_reference_changed");
             var eligible = await ReadEligibilityAsync(tx, bundle, token);
             var started = Stopwatch.GetTimestamp();
-            var now = clock.UtcNow;
+            var now = LeaseNow();
             var deadline = now.AddMilliseconds(eligible.Policy["requestDurationMs"].AsInt64);
             until = ReadUntil(eligible, deadline);
             var row = new BsonDocument {
@@ -200,7 +200,7 @@ internal sealed partial class EvidenceService
             if (metadata is null || metadata.Purpose != "catalog-photo-current" || !Text(metadata.CorrelationId, 128)) throw Invalid();
             var bundle = await LoadAsync(tx, selected.Proof.ReservationId, ct);
             var eligible = await DurableCatalogEligibilityAsync(tx, selected, bundle, ct);
-            var now = clock.UtcNow;
+            var now = LeaseNow();
             var leaseStarted = Stopwatch.GetTimestamp();
             var deadline = now.AddMilliseconds(eligible.Policy["requestDurationMs"].AsInt64);
             var until = ReadUntil(eligible, deadline);
