@@ -1,100 +1,79 @@
 import {
-  BoxGeometry, BufferGeometry, CanvasTexture, DoubleSide, CylinderGeometry, LatheGeometry, Material, MeshBasicMaterial, MeshPhysicalMaterial,
-  MeshStandardMaterial, PlaneGeometry, RepeatWrapping, SRGBColorSpace, SpriteMaterial, Texture, Vector2, type WebGLRenderer,
+  type BufferGeometry, CanvasTexture, Color, type Material, MeshBasicMaterial, MeshPhysicalMaterial, MeshStandardMaterial, RepeatWrapping, SRGBColorSpace,
+  SpriteMaterial, type Texture, Vector2, type WebGLRenderer,
 } from "three";
-import { CARTON } from "../kemasan-timeline";
 import {
-  INK, KRAFT, KRAFT_INSIDE, KRAFT_TEXT, MARKER, board, bayMarking, bottleWrap, branchSign, checkBadge, contactShadow, corrugationBump,
-  fluteEdge, invoiceSheet, labelBand, pavement, printedLong, printedShort, road, shippingLabel, vanSide, woodGrain, type Fonts, type LabelText,
+  INK, KRAFT, ORANGE, PAPER, STAGE, boxInside, kraft, boxPrint, branchSign, checkBadge, coffeeArt, fluteEdge, invoiceSheet, normalFromHeight, paperArt, pensArt,
+  receiptSlip, routeLine, sanitizerLabel, shippingLabel, studioFloor, tape, teaArt, type Fonts, type PackageArt,
 } from "./textures";
 
-export const W = CARTON.width, D = CARTON.depth, H = CARTON.height, T = CARTON.wall;
-export const BOTTLE_HEIGHT = 0.53, CAP_HEIGHT = 0.06, BAND_HEIGHT = 0.12, BAND_Y = 0.19, LABEL_SIZE: [number, number] = [0.62, 0.4];
-
 /** Every material, texture and geometry the scene shares, created once and disposed together. */
-export function createKit(renderer: WebGLRenderer, fonts: Fonts) {
-  const anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
-  const textures: Texture[] = [];
+export function createKit(renderer: WebGLRenderer, fonts: Fonts, cinematic: boolean) {
+  const anisotropy = Math.min(12, renderer.capabilities.getMaxAnisotropy());
+  const textures: Texture[] = [], geometries: BufferGeometry[] = [];
   const texture = (source: HTMLCanvasElement, color = true) => {
     const value = new CanvasTexture(source); if (color) value.colorSpace = SRGBColorSpace; value.anisotropy = anisotropy; textures.push(value); return value;
   };
-  const bump = texture(corrugationBump(), false); bump.wrapS = bump.wrapT = RepeatWrapping; bump.repeat.set(3, 1);
-  const kraft = (map: Texture, roughness = 0.9) => new MeshStandardMaterial({ map, roughness, bumpMap: bump, bumpScale: 0.35 });
-  const labelText: LabelText = { number: "PT-00000142", from: "Kantor Cabang Uji Selatan", to: "Unit Toko Pusat", summary: "2 KARTON  48 BOTOL" };
-  const labelMap = texture(shippingLabel(fonts, labelText, false)), stampedMap = texture(shippingLabel(fonts, labelText, true));
-  const invoiceMap = texture(invoiceSheet(fonts, "PT-00000142  2 karton"));
+  // Corrugated board: printed liner, fibre normals and a faint sheen from the paper surface.
+  const board = (sheet: { color: HTMLCanvasElement; height: HTMLCanvasElement }, roughness: number) => new MeshPhysicalMaterial({
+    map: texture(sheet.color), normalMap: texture(normalFromHeight(sheet.height, 2.2), false), normalScale: new Vector2(0.55, 0.55),
+    roughness, sheen: 0.35, sheenRoughness: 0.8, sheenColor: new Color("#F2DDB8"),
+  });
+  const printed = (art: PackageArt) => {
+    // A coated carton: the art on the front and back, plain colour elsewhere, a light satin sheen.
+    const front = new MeshPhysicalMaterial({ map: texture(art.front), roughness: 0.42, clearcoat: 0.35, clearcoatRoughness: 0.35 });
+    const side = new MeshPhysicalMaterial({ color: art.side, roughness: 0.5, clearcoat: 0.25, clearcoatRoughness: 0.4 });
+    const top = new MeshPhysicalMaterial({ color: art.top, roughness: 0.5, clearcoat: 0.25, clearcoatRoughness: 0.4 });
+    // BoxGeometry face order: +x, -x, +y, -y, +z (front), -z (back).
+    return [side, side, top, top, front, front];
+  };
+  const floorMap = texture(studioFloor()); floorMap.wrapS = floorMap.wrapT = RepeatWrapping; floorMap.repeat.set(6, 6);
+  const routeMap = texture(routeLine()); routeMap.wrapS = RepeatWrapping;
+  const labelMap = texture(shippingLabel(fonts, { number: "PT-00000142", from: "Kantor Cabang A", to: "Unit Toko Pusat", summary: "5 KEMASAN" }));
+  const receiptMap = texture(receiptSlip(fonts, false)), stampedMap = texture(receiptSlip(fonts, true));
 
   const material = {
-    edge: new MeshStandardMaterial({ map: texture(fluteEdge()), roughness: 0.95 }),
-    plain: kraft(texture(board(512, 512, KRAFT, 3).canvas)),
-    inside: kraft(texture(board(512, 512, KRAFT_INSIDE, 5).canvas), 0.96),
-    long: kraft(texture(printedLong(fonts))),
-    short: kraft(texture(printedShort(fonts))),
-    tape: new MeshPhysicalMaterial({ color: "#D9C28B", roughness: 0.28, clearcoat: 0.6, clearcoatRoughness: 0.2 }),
-    cut: new MeshBasicMaterial({ color: "#3B2A17" }),
-    wood: new MeshStandardMaterial({ map: texture(woodGrain(13)), roughness: 0.85 }),
-    bottle: new MeshPhysicalMaterial({ map: texture(bottleWrap()), roughness: 0.12, clearcoat: 1, clearcoatRoughness: 0.05 }),
-    // Cinematic tier: clear PET that refracts what is behind it, tinted faintly by the water; the label is a separate band.
-    bottleGlass: new MeshPhysicalMaterial({ color: "#F4FBFA", transmission: 1, thickness: 0.2, roughness: 0.035, ior: 1.46, clearcoat: 1,
-      clearcoatRoughness: 0.03, attenuationColor: "#BFE6E1", attenuationDistance: 0.7, specularIntensity: 1 }),
-    bottleBand: new MeshStandardMaterial({ map: texture(labelBand()), roughness: 0.45 }),
-    cap: new MeshPhysicalMaterial({ color: MARKER, roughness: 0.35, clearcoat: 0.4 }),
-    shadow: new MeshBasicMaterial({ map: texture(contactShadow()), transparent: true, depthWrite: false }),
-    label: new MeshStandardMaterial({ map: labelMap, roughness: 0.6, polygonOffset: true, polygonOffsetFactor: -2 }),
-    labelStamped: new MeshStandardMaterial({ map: stampedMap, roughness: 0.6, transparent: true, opacity: 0, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4 }),
-    floorPaint: new MeshBasicMaterial({ map: texture(bayMarking(fonts)), transparent: true, depthWrite: false, toneMapped: false }),
-    road: new MeshBasicMaterial({ map: texture(road()), transparent: true, depthWrite: false, toneMapped: false }),
-    pavement: new MeshBasicMaterial({ map: texture(pavement()), transparent: true, depthWrite: false, toneMapped: false }),
-    wall: new MeshStandardMaterial({ color: "#E9EFEA", roughness: 0.75 }),
-    trim: new MeshStandardMaterial({ color: "#0B3D42", roughness: 0.6 }),
-    glass: new MeshPhysicalMaterial({ color: "#14383D", roughness: 0.06, metalness: 0.3, clearcoat: 1 }),
-    awning: new MeshStandardMaterial({ color: KRAFT_TEXT, roughness: 0.7 }),
-    sign: new MeshStandardMaterial({ map: texture(branchSign(fonts)), roughness: 0.5 }),
-    leaf: new MeshStandardMaterial({ color: "#2F6E62", roughness: 0.85 }),
-    vanBody: new MeshStandardMaterial({ color: "#F4F6F2", roughness: 0.45 }),
-    cargoInside: new MeshStandardMaterial({ color: "#1B2A2C", roughness: 0.9 }),
-    vanSide: new MeshStandardMaterial({ map: texture(vanSide(fonts)), roughness: 0.45 }),
-    vanCab: new MeshPhysicalMaterial({ color: "#1B6A72", roughness: 0.35, clearcoat: 0.8 }),
-    rubber: new MeshStandardMaterial({ color: "#1C2729", roughness: 0.9 }),
-    hub: new MeshStandardMaterial({ color: "#B9C3C2", roughness: 0.3, metalness: 0.7 }),
-    lamp: new MeshBasicMaterial({ color: "#FFF4D6" }),
-    stampBody: new MeshPhysicalMaterial({ color: INK, roughness: 0.3, clearcoat: 0.7 }),
-    stampHandle: new MeshStandardMaterial({ color: "#B88A5A", roughness: 0.55 }),
-    stampRubber: new MeshStandardMaterial({ color: MARKER, roughness: 0.8 }),
-    invoice: new MeshStandardMaterial({ map: invoiceMap, roughness: 0.7, side: DoubleSide }),
-    check: new SpriteMaterial({ map: texture(checkBadge()), transparent: true, depthTest: false }),
-  } as const;
-
-  const geometry = {
-    longWall: new BoxGeometry(W, H, T), shortWall: new BoxGeometry(T, H, D - 2 * T), floor: new BoxGeometry(W - 2 * T, T, D - 2 * T),
-    longFlap: new BoxGeometry(W, T, D / 2), shortFlap: new BoxGeometry(D / 2, T, D - 2 * T),
-    tape: new BoxGeometry(W + 0.004, 0.004, 0.11), tapeTail: new BoxGeometry(0.004, 0.16, 0.22), cut: new BoxGeometry(W, 0.006, 0.01),
-    reseal: new BoxGeometry(W + 0.006, 0.005, 0.22),
-    board: new BoxGeometry(3.6, 0.045, 0.3), block: new BoxGeometry(0.28, 0.13, 0.28), runner: new BoxGeometry(0.3, 0.04, 2.6),
-    shadow: new PlaneGeometry(5.6, 4.4), label: new PlaneGeometry(LABEL_SIZE[0], LABEL_SIZE[1]),
-    bottle: new LatheGeometry([[0, 0], [0.092, 0], [0.1, 0.02], [0.1, 0.34], [0.088, 0.41], [0.052, 0.46], [0.041, 0.49], [0.041, BOTTLE_HEIGHT]]
-      .map(([radius, y]) => new Vector2(radius, y)), 24),
-    cap: new CylinderGeometry(0.046, 0.046, CAP_HEIGHT, 18),
-    band: new CylinderGeometry(0.1025, 0.1025, BAND_HEIGHT, 28, 1, true),
-    unit: new BoxGeometry(1, 1, 1), plane: new PlaneGeometry(1, 1),
-    wheel: new CylinderGeometry(0.34, 0.34, 0.26, 28), hub: new CylinderGeometry(0.17, 0.17, 0.27, 18),
-    handle: new CylinderGeometry(0.06, 0.08, 0.34, 18), knob: new CylinderGeometry(0.1, 0.1, 0.08, 20),
-    bush: new CylinderGeometry(0.0, 0.32, 0.7, 7),
-  } as const;
+    long: board(boxPrint(fonts, "long", 3), 0.9),
+    short: board(boxPrint(fonts, "short", 5), 0.9),
+    inside: board(boxInside(9), 0.95),
+    plain: board(kraft(1024, 1024, KRAFT, 11), 0.9),
+    edge: new MeshStandardMaterial({ map: texture(fluteEdge()), roughness: 0.96 }),
+    tape: new MeshPhysicalMaterial({ map: texture(tape(fonts)), roughness: 0.2, clearcoat: 1, clearcoatRoughness: 0.12, transparent: true, opacity: 0.9 }),
+    label: new MeshStandardMaterial({ map: labelMap, roughness: 0.72 }),
+    coffee: printed(coffeeArt(fonts)), tea: printed(teaArt(fonts)), paper: printed(paperArt(fonts)), pens: printed(pensArt(fonts)),
+    // Clear PET with a faintly blue gel on the cinematic tier; a satin opaque bottle on the balanced one.
+    bottle: cinematic
+      ? new MeshPhysicalMaterial({ color: "#F6FBFC", transmission: 1, thickness: 0.18, roughness: 0.04, ior: 1.46, clearcoat: 1, clearcoatRoughness: 0.03,
+        attenuationColor: "#9FD3DE", attenuationDistance: 0.5, specularIntensity: 1 })
+      : new MeshPhysicalMaterial({ color: "#CFE7EC", roughness: 0.18, clearcoat: 1, clearcoatRoughness: 0.08 }),
+    bottleLabel: new MeshStandardMaterial({ map: texture(sanitizerLabel(fonts)), roughness: 0.55 }),
+    pump: new MeshPhysicalMaterial({ color: "#F4F6F6", roughness: 0.35, clearcoat: 0.6 }),
+    floor: new MeshStandardMaterial({ map: floorMap, roughness: 0.88, metalness: 0 }),
+    backdrop: new MeshStandardMaterial({ color: STAGE, roughness: 1 }),
+    route: new MeshBasicMaterial({ map: routeMap, transparent: true, depthWrite: false }),
+    metal: new MeshStandardMaterial({ color: "#2B353A", metalness: 1, roughness: 0.32 }),
+    rubber: new MeshStandardMaterial({ color: "#16191B", roughness: 0.85 }),
+    hub: new MeshStandardMaterial({ color: ORANGE, roughness: 0.45, metalness: 0.1 }),
+    oak: new MeshStandardMaterial({ color: "#C9A57A", roughness: 0.55 }),
+    panel: new MeshStandardMaterial({ color: INK, roughness: 0.6 }),
+    wall: new MeshStandardMaterial({ color: "#EEF2F0", roughness: 0.9 }),
+    sign: new MeshStandardMaterial({ map: texture(branchSign(fonts)), roughness: 0.6 }),
+    paperSheet: new MeshStandardMaterial({ color: PAPER, roughness: 0.75 }),
+    receipt: new MeshStandardMaterial({ map: receiptMap, roughness: 0.75 }),
+    receiptStamped: new MeshStandardMaterial({ map: stampedMap, roughness: 0.75 }),
+    invoice: new MeshStandardMaterial({ map: texture(invoiceSheet(fonts)), roughness: 0.75 }),
+    stampWood: new MeshStandardMaterial({ color: "#8A5A34", roughness: 0.5 }),
+    stampFoot: new MeshStandardMaterial({ color: ORANGE, roughness: 0.7 }),
+    check: new SpriteMaterial({ map: texture(checkBadge()), depthTest: false, transparent: true }),
+  };
 
   return {
-    material, geometry,
-    /** Repaint the label and invoice for the carton count chosen on the landing page stepper. */
-    setCartonCount(cartons: number) {
-      labelText.summary = `${cartons} KARTON  ${cartons * CARTON.perCarton} BOTOL`;
-      labelMap.image = shippingLabel(fonts, labelText, false); stampedMap.image = shippingLabel(fonts, labelText, true);
-      invoiceMap.image = invoiceSheet(fonts, `PT-00000142  ${cartons} karton`);
-      labelMap.needsUpdate = stampedMap.needsUpdate = invoiceMap.needsUpdate = true;
-    },
+    material, texture,
+    /** Registers a geometry built by a scene module so the kit disposes it with everything else. */
+    track<T extends BufferGeometry>(geometry: T): T { geometries.push(geometry); return geometry; },
     dispose() {
-      textures.forEach(value => value.dispose());
-      Object.values(material).forEach((value: Material) => value.dispose());
-      Object.values(geometry).forEach((value: BufferGeometry) => value.dispose());
+      textures.forEach(value => value.dispose()); geometries.forEach(value => value.dispose());
+      for (const value of Object.values(material)) (Array.isArray(value) ? value : [value]).forEach((entry: Material) => entry.dispose());
     },
   };
 }

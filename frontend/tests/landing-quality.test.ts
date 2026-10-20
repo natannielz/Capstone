@@ -19,7 +19,7 @@ test("the cinematic tier steps down when the measured frames are slow, never on 
   assert.equal(shouldDowngrade(Array.from({ length: 60 }, (_, index) => index % 10 === 0 ? 120 : 15)), false, "a few spikes do not count");
 });
 
-test("depth of field is shallow in the label close-ups and deeper on the road", () => {
+test("depth of field is shallowest over the packing close-up and deeper on the road", () => {
   const close = focusForShot(1.5), road = focusForShot(2.8), hero = focusForShot(0);
   assert.ok(close.aperture > road.aperture && close.aperture > hero.aperture);
   assert.ok(road.aperture > 0, "a little miniature blur stays on the road");

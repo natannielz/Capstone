@@ -5,24 +5,29 @@ import { KemasanJourney, type JourneyAct } from "./KemasanJourney";
 import styles from "./landing.module.css";
 
 const SUBMITTED: JourneyAct = { status: "Diajukan", time: "Sen 09.12", detail: "PT-00000142",
-  text: "PIC cabang memilih kemasan dan mengajukannya ke toko. Permintaan langsung bernomor dan tercatat di akun cabang." };
+  text: "PIC cabang memilih barang dari katalog dan jumlah kemasannya, lalu mengajukannya ke toko. Permintaan langsung bernomor dan tercatat di akun cabang." };
 const PILOT_ACTS: JourneyAct[] = [SUBMITTED,
   { status: "Ditinjau toko", time: "Sen 10.40", detail: "Diterima untuk diproses",
-    text: "Petugas toko memeriksa barang, jumlah kemasan, dan catatan. Hasil peninjauan beserta alasannya tampil di akun Anda." },
+    text: "Petugas toko memeriksa setiap barang dan jumlah kemasannya. Hasil peninjauan beserta alasannya tampil di akun Anda." },
 ];
 const FULL_ACTS: JourneyAct[] = [SUBMITTED,
-  { status: "Ditinjau toko", time: "Sen 10.40", detail: "Diterima untuk diproses",
-    text: "Petugas toko memeriksa barang, jumlah kemasan, dan catatan. Diterima atau ditolak, alasannya tampil di akun Anda." },
+  { status: "Ditinjau toko", time: "Sen 10.40", detail: "Disiapkan dalam 1 kardus",
+    text: "Petugas toko memeriksa setiap barang dan jumlah kemasannya, lalu menyiapkannya dalam satu kardus bertanda nomor permintaan. Bila ada yang ditolak, alasannya tampil di akun Anda." },
   { status: "Dikirim", time: "Sel 08.15", detail: "Nomor kiriman KRM-0388",
-    text: "Barang disiapkan utuh per karton, lalu berangkat dengan nomor pengiriman yang bisa Anda ikuti." },
+    text: "Kardus berangkat ke cabang dengan nomor kiriman yang bisa Anda ikuti dari akun yang sama." },
   { status: "Diterima", time: "Sel 11.20", detail: "Tagihan terbit",
     text: "PIC cabang mencatat barang yang diterima, termasuk bila ada selisih. Tagihan terbit sesuai barang yang benar-benar diterima." },
 ];
 
-const PACKING = [
-  { need: "Pantry harian", items: "Kopi, teh, gula, camilan", pack: "Dus isi 24 sachet" },
-  { need: "Kebutuhan rapat", items: "Air mineral, snack box, alat tulis", pack: "Karton isi 24 botol" },
-  { need: "Kegiatan tim", items: "Tumbler, tas kanvas, kaos", pack: "Kotak isi 1 sampai 12" },
+const CATALOG = [
+  { category: "Air dan minuman", item: "Air mineral 600 ml", pack: "Karton isi 24 botol", minimum: "1 karton" },
+  { category: "Pantry kopi dan teh", item: "Kopi bubuk sachet", pack: "Dus isi 24 sachet", minimum: "1 dus" },
+  { category: "Pantry kopi dan teh", item: "Teh celup melati", pack: "Kotak isi 25 kantong", minimum: "2 kotak" },
+  { category: "Snack rapat", item: "Snack box rapat", pack: "Kotak per porsi", minimum: "10 kotak" },
+  { category: "Alat tulis kantor", item: "Kertas HVS A4 70 gsm", pack: "Rim isi 500 lembar", minimum: "1 rim" },
+  { category: "Alat tulis kantor", item: "Pulpen hitam", pack: "Dus isi 12 batang", minimum: "1 dus" },
+  { category: "Kebersihan", item: "Tisu wajah 250 lembar", pack: "Karton isi 48 bungkus", minimum: "1 karton" },
+  { category: "Merchandise", item: "Tumbler 500 ml", pack: "Satuan dalam kotak", minimum: "5 buah" },
 ];
 
 /** Public landing page. `pilot` limits the story to what Release 1 does: request and store review. */
@@ -30,7 +35,7 @@ export function Landing({ pilot }: { pilot: boolean }) {
   return <div className={styles.page}>
     <a href="#konten" className={styles.skip}>Lewati navigasi</a>
     <header className={styles.header}>
-      <Brand inverse context="Kebutuhan kerja & harian" />
+      <Brand context="Kebutuhan kerja & harian" />
       <nav aria-label="Navigasi utama" className={styles.nav}>
         <Link href="/shop">Katalog toko</Link>
         <Link href="/ordering/requests">Permintaan saya</Link>
@@ -68,9 +73,11 @@ export function Landing({ pilot }: { pilot: boolean }) {
             <Link href="/shop" className={styles.inlineLink}>Buka katalog</Link>
           </div>
           <table className={styles.packing}>
-            <caption>Contoh. Isi katalog mengikuti akun organisasi Anda.</caption>
-            <thead><tr><th scope="col">Kebutuhan</th><th scope="col">Contoh barang</th><th scope="col">Contoh kemasan</th></tr></thead>
-            <tbody>{PACKING.map(row => <tr data-row key={row.need}><th scope="row">{row.need}</th><td>{row.items}</td><td>{row.pack}</td></tr>)}</tbody>
+            <caption>Contoh dari katalog toko. Isi katalog mengikuti akun organisasi Anda.</caption>
+            <thead><tr><th scope="col">Barang</th><th scope="col">Kemasan</th><th scope="col">Minimum</th></tr></thead>
+            <tbody>{CATALOG.map(row => <tr data-row key={row.item}>
+              <th scope="row"><span className={styles.category}>{row.category}</span>{row.item}</th><td>{row.pack}</td><td>{row.minimum}</td>
+            </tr>)}</tbody>
           </table>
         </section>
 

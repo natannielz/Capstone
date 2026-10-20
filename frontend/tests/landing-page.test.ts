@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Landing } from "../src/components/landing/Landing";
-import { kemasanSummary } from "../src/components/landing/KemasanLabel";
+import { kardusSummary } from "../src/components/landing/KemasanLabel";
 
 const render = (pilot: boolean) => renderToStaticMarkup(createElement(Landing, { pilot }));
 
@@ -15,14 +15,15 @@ test("the landing page states the package rule and offers sign-in and the catalo
   assert.doesNotMatch(html, /→|home13-|home-topline/, "no arrow-suffixed buttons and no legacy landing classes");
 });
 
-test("the 3D stage is decorative and the label carries the same information as text", () => {
+test("the 3D stage is decorative and the request card carries the same information as text", () => {
   const html = render(true);
   assert.match(html, /<div[^>]*aria-hidden="true"[^>]*data-stage="kemasan"/, "stage is hidden from assistive technology");
-  assert.match(html, /<label for="contoh-jumlah">Jumlah karton<\/label>/);
-  assert.match(html, /aria-live="polite"[^>]*>2 karton berisi 48 botol</);
-  assert.match(html, /Isi per kemasan/); assert.match(html, /24 botol per karton/); assert.match(html, /Minimum/);
-  assert.equal(kemasanSummary(3), "3 karton berisi 72 botol");
-  assert.equal(kemasanSummary(1), "1 karton berisi 24 botol");
+  assert.match(html, /<h2[^>]*id="isi-kardus"[^>]*>Isi kardus permintaan PT-00000142<\/h2>/);
+  assert.match(html, /<label for="contoh-jumlah">Jumlah dus<\/label>/);
+  assert.match(html, /aria-live="polite"[^>]*>5 kemasan dalam 1 kardus, termasuk 24 sachet kopi</);
+  for (const item of ["Kopi bubuk sachet", "Kertas HVS A4 70 gsm", "Teh celup melati", "Pulpen hitam", "Penyanitasi tangan 500 ml"]) assert.match(html, new RegExp(item));
+  assert.equal(kardusSummary(3), "7 kemasan dalam 1 kardus, termasuk 72 sachet kopi");
+  assert.equal(kardusSummary(1), "5 kemasan dalam 1 kardus, termasuk 24 sachet kopi");
 });
 
 test("the story follows one request; the pilot ends at the review, the full release at receipt and invoice", () => {
@@ -30,7 +31,7 @@ test("the story follows one request; the pilot ends at the review, the full rele
   assert.deepEqual(steps(render(true)), ["Diajukan", "Ditinjau toko"]);
   assert.deepEqual(steps(render(false)), ["Diajukan", "Ditinjau toko", "Dikirim", "Diterima"]);
   const html = render(false);
-  assert.match(html, /<h2[^>]*>Satu karton, dari dok ke cabang\.<\/h2>/);
+  assert.match(html, /<h2[^>]*>Satu kardus, dari permintaan sampai cabang\.<\/h2>/);
   assert.match(html, /<ol[^>]*aria-label="Perjalanan satu permintaan"/);
   assert.equal([...html.matchAll(/<p[^>]*data-act-time[^>]*>[^<]* WIB<\/p>/g)].length, 4, "each act carries its time from the example record");
   assert.match(html, /Gulir untuk mengikuti satu permintaan/);
@@ -46,9 +47,10 @@ test("the story closes with the next step after the last act", () => {
   assert.ok(html.indexOf("data-story-end") > html.indexOf('data-step="Ditinjau toko"'), "after the last act");
 });
 
-test("the catalog section is an honest example table", () => {
+test("the catalog section is an honest example table drawn from the catalog", () => {
   const html = render(true);
-  assert.match(html, /<table[^>]*><caption>Contoh\./, "the caption comes first and says it is an example");
-  assert.equal([...html.matchAll(/<tr data-row/g)].length, 3);
+  assert.match(html, /<table[^>]*><caption>Contoh dari katalog toko\./, "the caption comes first and says it is an example");
+  assert.equal([...html.matchAll(/<tr data-row/g)].length, 8);
+  assert.match(html, /Kertas HVS A4 70 gsm/); assert.match(html, /Rim isi 500 lembar/);
   assert.match(html, /Isi katalog mengikuti akun organisasi Anda/);
 });

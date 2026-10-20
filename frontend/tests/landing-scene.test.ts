@@ -1,10 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { sceneMode } from "../src/components/landing/scene-mode";
-import { CARTON, LEAVE_MS, MAX_CARTONS, OPENING_MS, cartonSlots, entryOffset, leaveOffset, openingFrame, restingFrame } from "../src/components/landing/kemasan-timeline";
+import { BOX, COFFEE_MAXIMUM, COFFEE_MINIMUM, storyItems } from "../src/components/landing/journey";
 
-// Phase G task 5: the landing scene is decorative. It animates only when WebGL exists and nothing asks for less motion
-// or data; otherwise it shows the final frame, and without WebGL the page keeps its static poster.
+// The landing scene is decorative. It animates only when WebGL exists and nothing asks for less motion or data;
+// otherwise it shows the act being read as a still, and without WebGL the page keeps its static poster.
 test("the scene gate picks animated, still or none", () => {
   assert.equal(sceneMode({ webgl: false, reducedMotion: false, saveData: false }), "none");
   assert.equal(sceneMode({ webgl: false, reducedMotion: true, saveData: true }), "none");
@@ -13,42 +13,26 @@ test("the scene gate picks animated, still or none", () => {
   assert.equal(sceneMode({ webgl: true, reducedMotion: false, saveData: false }), "animated");
 });
 
-test("the opening starts sealed and ends exactly on the still frame", () => {
-  const start = openingFrame(0), end = openingFrame(OPENING_MS), rest = restingFrame();
-  assert.equal(start.longFlap, 0); assert.equal(start.shortFlap, 0); assert.equal(start.tape, 0);
-  assert.ok(start.items.every(offset => offset < 0), "bottles start hidden below the rim");
-  assert.deepEqual(end, rest, "reduced motion shows the frame the animation ends on");
-  assert.deepEqual(openingFrame(OPENING_MS * 3), rest, "time past the end stays on the final frame");
-  assert.equal(rest.items.length, CARTON.perCarton);
-  assert.ok(rest.items.every(offset => offset === 0));
-});
+type Bounds = { min: number[]; max: number[] };
+const bounds = (slot: readonly number[], size: readonly number[]): Bounds =>
+  ({ min: slot.map((value, axis) => value - size[axis] / 2), max: slot.map((value, axis) => value + size[axis] / 2) });
 
-test("flaps only open and bottles rise in a wave from the back row", () => {
-  let previous = openingFrame(0);
-  for (let ms = 50; ms <= OPENING_MS; ms += 50) {
-    const frame = openingFrame(ms);
-    assert.ok(frame.longFlap >= previous.longFlap - 1e-9 && frame.shortFlap >= previous.shortFlap - 1e-9, `flaps never close at ${ms} ms`);
-    previous = frame;
+// The packed box must be physically plausible: every package inside the walls, under the closed flaps, on the floor
+// or on another package, and no two packages occupying the same space.
+test("every package fits inside the box, rests on something and overlaps nothing", () => {
+  for (let coffee = COFFEE_MINIMUM; coffee <= COFFEE_MAXIMUM; coffee++) {
+    const items = storyItems(coffee).map(spec => ({ kind: spec.kind, box: bounds(spec.slot, spec.size) }));
+    for (const { kind, box } of items) {
+      assert.ok(box.min[0] >= -BOX.width / 2 && box.max[0] <= BOX.width / 2, `${kind} inside the end walls`);
+      assert.ok(box.min[2] >= -BOX.depth / 2 && box.max[2] <= BOX.depth / 2, `${kind} inside the side walls`);
+      assert.ok(box.max[1] <= BOX.height, `${kind} below the closed flaps`);
+      const resting = Math.abs(box.min[1] - 0.03) < 1e-9 || items.some(other => other.box !== box && Math.abs(other.box.max[1] - box.min[1]) < 1e-9);
+      assert.ok(resting, `${kind} rests on the floor or a package`);
+    }
+    for (let i = 0; i < items.length; i++) for (let j = i + 1; j < items.length; j++) {
+      const a = items[i].box, b = items[j].box;
+      const overlap = [0, 1, 2].every(axis => a.min[axis] < b.max[axis] - 1e-9 && b.min[axis] < a.max[axis] - 1e-9);
+      assert.equal(overlap, false, `${items[i].kind} and ${items[j].kind} overlap with ${coffee} dus of coffee`);
+    }
   }
-  const middle = openingFrame(OPENING_MS * 0.62);
-  assert.ok(middle.items[0] > middle.items[CARTON.perCarton - 1], "the first bottle leads the last one");
-  assert.ok(openingFrame(OPENING_MS * 0.3).longFlap > openingFrame(OPENING_MS * 0.3).shortFlap, "long flaps open before short flaps");
-});
-
-test("cartons take fixed pallet slots, front-left first, clamped to the demo range", () => {
-  assert.equal(cartonSlots(0).length, 1);
-  assert.equal(cartonSlots(9).length, MAX_CARTONS);
-  const four = cartonSlots(4);
-  assert.equal(new Set(four.map(slot => slot.x + ":" + slot.z)).size, 4, "no two cartons share a slot");
-  assert.ok(four[0].x < 0 && four[0].z > 0, "the open carton stands front-left, nearest the camera");
-  assert.deepEqual(cartonSlots(2), four.slice(0, 2), "adding a carton never moves the others");
-  for (const slot of four) assert.ok(Math.abs(slot.x) + CARTON.width / 2 <= 1.8 && Math.abs(slot.z) + CARTON.depth / 2 <= 1.3, "inside the pallet");
-});
-
-test("a carton drops onto the pallet and settles, and a removed one lifts off", () => {
-  assert.ok(entryOffset(0) > 1, "starts above the pallet");
-  assert.equal(entryOffset(10_000), 0);
-  assert.ok(entryOffset(200) < entryOffset(0));
-  assert.equal(leaveOffset(0), 0);
-  assert.ok(leaveOffset(LEAVE_MS) > 2, "gone from view when the lift ends");
 });

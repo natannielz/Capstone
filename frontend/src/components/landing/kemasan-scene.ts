@@ -1,34 +1,33 @@
 import {
-  Color, DirectionalLight, Fog, HemisphereLight, Mesh, NeutralToneMapping, Object3D, PCFSoftShadowMap, PMREMGenerator, PerspectiveCamera,
+  AgXToneMapping, Color, DirectionalLight, Fog, HemisphereLight, MeshPhysicalMaterial, Object3D, PCFSoftShadowMap, PMREMGenerator, PerspectiveCamera,
   SRGBColorSpace, Scene, Vector3, WebGLRenderer,
 } from "three";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
-import { OPENING_MS, cartonSlots, entryOffset, leaveOffset, LEAVE_MS, openingFrame, restingFrame } from "./kemasan-timeline";
-import { BRANCH_DOOR, VAN_DOCK_X, activeAct, journeyFrame } from "./journey";
+import { BOX, COFFEE_MAXIMUM, COFFEE_MINIMUM, activeAct, storyFrame, storyItems } from "./journey";
 import { createKit } from "./scene/kit";
-import { applyFlaps, buildBottles, buildCarton, buildPallet, type Carton } from "./scene/carton";
-import { buildBranch, buildFinale, buildGround, buildLabel, buildStamp, buildVan } from "./scene/diorama";
+import { buildBox } from "./scene/box";
+import { buildItems } from "./scene/items";
+import { buildBranch, buildRoute, buildTrolley } from "./scene/delivery";
+import { buildContactShadows, buildStudio } from "./scene/studio";
 import type { Fonts } from "./scene/textures";
-import { buildAtmosphere } from "./scene/atmosphere";
 import { createPipeline, type Pipeline } from "./scene/pipeline";
 import { focusForShot, qualityOverride, qualityTier, shouldDowngrade } from "./scene/quality";
 
 /**
- * "Satu karton, dari dok ke cabang". The hero shows cartons of bottled water on a pallet; the front carton is cut
- * open and its bottles rise once. Scrolling then drives journeyFrame: the carton is closed, labelled, stamped, carried
- * by van and delivered to a branch office. Rendering is on demand: frames run only while the scroll target, the
- * opening or a dropped carton is still moving, and never while the tab is hidden or the stage is off screen. Every
- * surface is painted locally, which keeps the scene inside the site CSP.
+ * "Satu kardus": one corrugated box carries one branch request. The hero shows it open with the requested packages
+ * floating above it; scrolling drives storyFrame, which drops the packages in, closes, tapes and labels the box,
+ * wheels it to the branch counter and records the receipt and invoice. Rendering is on demand: frames run only while
+ * the story is moving (or the hero's packages float), never while the tab is hidden or the stage is off screen.
+ * Every surface is painted locally, which keeps the scene inside the site CSP.
  */
-export type KemasanScene = { setCartons(count: number): void; setJourney(progress: number): void; dispose(): void };
-export type KemasanSceneOptions = { mode: "animated" | "still"; cartons: number; acts: number; fonts: Fonts; onLost(): void };
+export type KemasanScene = { setCoffee(count: number): void; setJourney(progress: number): void; dispose(): void };
+export type KemasanSceneOptions = { mode: "animated" | "still"; coffee: number; acts: number; fonts: Fonts; onLost(): void };
 
-const DOCK = "#0F4C52";
-const clamp01 = (value: number) => Math.min(1, Math.max(0, value));
-const easeBack = (t: number) => 1 + 2.70158 * (t - 1) ** 3 + 1.70158 * (t - 1) ** 2;
+const STAGE = "#DCE4E1";
+const clampCoffee = (value: number) => Math.min(COFFEE_MAXIMUM, Math.max(COFFEE_MINIMUM, Math.round(value)));
 
 async function fontsReady(fonts: Fonts) {
-  // The print uses the self-hosted stencil face; draw with the fallback rather than wait long for it.
+  // Package print uses the self-hosted stencil face; draw with the fallback rather than wait long for it.
   try {
     await Promise.race([Promise.all([document.fonts.load(`66px ${fonts.stencil}`), document.fonts.load(`600 26px ${fonts.body}`)]),
       new Promise(resolve => setTimeout(resolve, 1500))]);
@@ -42,58 +41,35 @@ export async function createKemasanScene(canvas: HTMLCanvasElement, options: Kem
   let tier = qualityTier({ phone, cores: navigator.hardwareConcurrency || 4, override: forced });
   const renderer = new WebGLRenderer({ canvas, antialias: tier === "balanced", powerPreference: "high-performance" });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, phone ? 1.5 : tier === "cinematic" ? 1.75 : 2));
-  renderer.outputColorSpace = SRGBColorSpace; renderer.toneMapping = NeutralToneMapping; renderer.toneMappingExposure = 1.0;
+  // AgX keeps highlights on paper and plastic soft and the kraft's warmth intact, like a product photograph.
+  renderer.outputColorSpace = SRGBColorSpace; renderer.toneMapping = AgXToneMapping; renderer.toneMappingExposure = 1.15;
   renderer.shadowMap.enabled = true; renderer.shadowMap.type = PCFSoftShadowMap;
 
-  // Image-based light from three's procedural room (no files), a warm key that casts shadows and a cool rim.
+  // Studio light: a procedural room for reflections, a large warm key that casts soft shadows, a cool fill and a rim.
   const scene = new Scene(), pmrem = new PMREMGenerator(renderer), room = new RoomEnvironment();
-  scene.environment = pmrem.fromScene(room, 0.04).texture; scene.environmentIntensity = 0.6;
-  scene.background = new Color(DOCK); scene.fog = new Fog(DOCK, 34, 80);
-  const camera = new PerspectiveCamera(26, 1, 0.1, 140), up = new Vector3(0, 1, 0), keyOffset = new Vector3(-3.5, 6.5, 4.5);
-  const key = new DirectionalLight("#FFF0DA", 2.3), keyTarget = new Object3D(); key.target = keyTarget; key.castShadow = true;
-  key.shadow.mapSize.set(phone ? 1024 : 2048, phone ? 1024 : 2048); key.shadow.bias = -0.0004; key.shadow.normalBias = 0.02; key.shadow.radius = tier === "cinematic" ? 5 : 3;
-  const rim = new DirectionalLight("#9FD6D2", 0.8); rim.position.set(4.5, 3, -4.5);
-  scene.add(new HemisphereLight("#E3F1EE", "#3B2B1A", 0.55), key, keyTarget, rim);
+  scene.environment = pmrem.fromScene(room, 0.03).texture; scene.environmentIntensity = 0.7;
+  scene.background = new Color(STAGE); scene.fog = new Fog(STAGE, 16, 46);
+  const camera = new PerspectiveCamera(28, 1, 0.1, 120), up = new Vector3(0, 1, 0), keyOffset = new Vector3(-3.2, 7.5, 5.2);
+  const key = new DirectionalLight("#FFF3E2", 2.6), keyTarget = new Object3D(); key.target = keyTarget; key.castShadow = true;
+  key.shadow.mapSize.set(phone ? 1024 : 2048, phone ? 1024 : 2048); key.shadow.bias = -0.0003; key.shadow.normalBias = 0.015;
+  key.shadow.radius = tier === "cinematic" ? 6 : 4; key.shadow.blurSamples = 16;
+  const rim = new DirectionalLight("#CFE9EE", 1.1); rim.position.set(5, 4, -6);
+  scene.add(new HemisphereLight("#F2F7F6", "#8C9A97", 0.55), key, keyTarget, rim);
 
-  const kit = createKit(renderer, options.fonts);
-  const { ground, dispose: disposeGround } = buildGround(kit);
-  const branch = buildBranch(kit), van = buildVan(kit), stamp = buildStamp(kit), finale = buildFinale(kit), label = buildLabel(kit);
-  const pallet = buildPallet(kit), bottles = buildBottles(kit, tier === "cinematic"), atmosphere = buildAtmosphere();
-  const contact = new Mesh(kit.geometry.shadow, kit.material.shadow); contact.rotation.x = -Math.PI / 2; contact.position.y = -0.21;
-  scene.add(ground, branch, van.van, stamp, finale.invoice, pallet, contact, atmosphere.group);
-  const overlay = new Scene(); overlay.add(finale.check);
-  stamp.visible = false; van.van.visible = false;
+  const kit = createKit(renderer, options.fonts, tier === "cinematic");
+  const studio = buildStudio(kit), box = buildBox(kit), items = buildItems(kit), trolley = buildTrolley(kit), branch = buildBranch(kit), route = buildRoute(kit);
+  items.all.forEach(item => box.content.add(item));
+  const shadows = buildContactShadows(renderer, kit, { size: 5, resolution: phone ? 256 : 512, far: 1.4, blur: 2.6, opacity: 0.62 });
+  scene.add(studio.group, box.root, trolley.root, branch.group, route.route, shadows.plane);
+  const overlay = new Scene(); items.checks.forEach(check => overlay.add(check));
+  const shadowExcluded = [...studio.excluded, route.route];
 
-  const cartons: Carton[] = [];
-  const addCarton = (slot: number, enteredAt: number) => {
-    const carton = buildCarton(kit, slot, enteredAt), position = cartonSlots(slot + 1)[slot];
-    carton.group.position.set(position.x, 0, position.z); scene.add(carton.group); cartons.push(carton);
-    applyFlaps(carton, openingFrame(0), 1, 0); return carton;
-  };
-  const front = addCarton(0, -Infinity);
-  front.group.add(bottles.bodies, bottles.caps, bottles.bands, label.label);
   let pipeline: Pipeline = createPipeline(renderer, scene, overlay, camera, tier);
   const frameTimes: number[] = [];
-  let opening = options.mode === "still" ? restingFrame() : openingFrame(0);
-  bottles.place(opening.items); applyFlaps(front, opening, 0, 0);
+  let clock = 0, targetProgress = 0, shownProgress = 0, yaw = 0, targetYaw = 0, aspect = 1, coffee = clampCoffee(options.coffee);
+  let shadowsDirty = true;
 
-  let clock = 0, openingStart: number | null = options.mode === "still" ? -OPENING_MS : null;
-  let targetProgress = 0, shownProgress = 0, yaw = 0, targetYaw = 0, aspect = 1, cartonCount = 0;
-
-  // Cartons on the pallet at load stand still; later changes drop in or lift off (instantly in still mode).
-  function setCartons(count: number, immediate = options.mode === "still") {
-    const at = immediate ? -Infinity : clock, wanted = cartonSlots(count).length;
-    if (wanted !== cartonCount) { cartonCount = wanted; kit.setCartonCount(wanted); }
-    const present = cartons.filter(carton => carton.leavingAt === null);
-    for (let slot = present.length; slot < wanted; slot++) {
-      const leaving = cartons.find(carton => carton.slot === slot);
-      if (leaving) { leaving.leavingAt = null; leaving.enteredAt = at; continue; }
-      addCarton(slot, at);
-    }
-    for (const carton of present) if (carton.slot >= wanted && carton.slot > 0) carton.leavingAt = at;
-    invalidate();
-  }
-
+  function setCoffee(count: number) { const next = clampCoffee(count); if (next !== coffee) { coffee = next; shadowsDirty = true; invalidate(); } }
   // Reduced motion jumps between finished acts; otherwise the story follows the scroll position.
   function setJourney(progress: number) {
     targetProgress = options.mode === "still" ? activeAct(progress) : progress;
@@ -101,66 +77,61 @@ export async function createKemasanScene(canvas: HTMLCanvasElement, options: Kem
     invalidate();
   }
 
-  const position = new Vector3(), target = new Vector3(), focusPoint = new Vector3();
+  const position = new Vector3(), target = new Vector3(), focusPoint = new Vector3(), world = new Vector3(), shift = new Vector3();
+  let lastBox = "";
   function update(dt: number): boolean {
     let busy = false;
-    if (openingStart === null) openingStart = clock;
-    const elapsed = clock - openingStart;
-    opening = elapsed >= OPENING_MS ? restingFrame() : openingFrame(elapsed); busy ||= elapsed < OPENING_MS;
     // The visible story eases toward the scroll position, so a wheel notch glides instead of jumping.
-    shownProgress += (targetProgress - shownProgress) * (1 - Math.exp(-dt / 140));
+    shownProgress += (targetProgress - shownProgress) * (1 - Math.exp(-dt / 160));
     if (Math.abs(targetProgress - shownProgress) < 0.0005) shownProgress = targetProgress; else busy = true;
-    const frame = journeyFrame(shownProgress, options.acts), [cx, cy, cz] = frame.carton;
+    const floating = options.mode === "animated" && shownProgress < 0.95;
+    const frame = storyFrame(shownProgress, options.acts, coffee, floating ? clock / 1000 : null);
+    busy ||= floating;
 
-    bottles.place(opening.items); applyFlaps(front, opening, frame.flapClose, frame.tape);
-    front.group.position.set(cx, cy, cz);
-    // The label flies in from above with a small overshoot and lands flat on the lid; the stamped print fades over it.
-    label.label.visible = frame.label > 0;
-    if (label.label.visible) {
-      const lift = 1 - easeBack(frame.label), tilt = 1 - frame.label;
-      label.label.position.set(label.rest.x + 0.1 * lift, label.rest.y + 1.1 * lift, label.rest.z + 0.5 * lift);
-      label.label.rotation.set(0.9 * tilt, 0, 0.4 * tilt);
-    }
-    kit.material.labelStamped.opacity = frame.stamp.imprint;
-    stamp.visible = frame.stamp.shown;
-    if (stamp.visible) stamp.position.set(cx + label.rest.x + 0.108, cy + label.rest.y + 0.003 + frame.stamp.height, cz + label.rest.z + 0.01);
-
-    van.van.visible = frame.van.visible;
-    const docked = shownProgress - 2, atDock = frame.van.visible && Math.abs(frame.van.x - VAN_DOCK_X) < 0.01;
-    van.update(frame.van.x, atDock ? clamp01((docked - 0.26) / 0.04) * clamp01((0.6 - docked) / 0.05) : 0);
-    finale.check.visible = frame.check > 0; finale.check.scale.setScalar(0.55 * easeBack(frame.check));
-    finale.check.position.set(BRANCH_DOOR[0], 1.5, BRANCH_DOOR[2]);
-    finale.invoice.visible = frame.invoice > 0; finale.invoice.rotation.y = -0.35;
-    finale.invoice.position.set(BRANCH_DOOR[0] + 0.95, -0.2 + 0.85 * frame.invoice, BRANCH_DOOR[2] + 0.15);
-
-    for (const carton of [...cartons]) {
-      if (carton === front) continue;
-      if (carton.leavingAt !== null) {
-        const lifted = clock - carton.leavingAt;
-        if (lifted >= LEAVE_MS) { scene.remove(carton.group); cartons.splice(cartons.indexOf(carton), 1); continue; }
-        carton.group.position.y = leaveOffset(lifted); busy = true;
-      } else { carton.group.position.y = entryOffset(clock - carton.enteredAt); busy ||= carton.group.position.y > 0; }
-    }
+    box.set(frame.flaps, frame.tape, frame.label);
+    box.place(...frame.box.position, frame.box.tilt);
+    trolley.root.visible = frame.trolley.visible; trolley.place(frame.trolley.x, frame.trolley.tilt);
+    route.reveal(frame.route);
+    branch.set(frame.receipt, frame.stamp.height, frame.stamp.imprint, frame.invoice);
+    const placed = items.apply(frame, coffee);
+    box.root.updateMatrixWorld(true);
+    // A package stacked on another gets its check beside the lower one's, so the two never sit on top of each other.
+    const specs = storyItems(coffee);
+    items.checks.forEach((check, index) => {
+      // Below a fifth of its size a fading check reads as a stray dot, so it simply goes.
+      const pop = frame.checks[index] ?? 0, item = placed[index]; check.visible = pop > 0.2 && !!item && shownProgress < 2.05;
+      if (!check.visible || !item) return;
+      const spec = specs[index], stacked = !!spec && spec.slot[1] - spec.size[1] / 2 > 0.05;
+      item.getWorldPosition(world); check.position.set(world.x + (stacked ? 0.18 : 0), world.y + 0.32, world.z); check.scale.setScalar(0.16 * pop);
+    });
 
     // Pointer parallax belongs to the hero; it fades out once the story starts. Narrow stages pull the camera back.
     yaw += (targetYaw - yaw) * 0.08; busy ||= Math.abs(targetYaw - yaw) > 0.0005;
     const hero = Math.max(0, 1 - shownProgress), distance = Math.min(1.9, Math.max(1, 1.05 / (camera.view?.enabled ? aspect * 0.62 : aspect)));
     target.set(...frame.camera.target);
-    camera.position.copy(position.set(...frame.camera.position)).sub(target).multiplyScalar(distance).applyAxisAngle(up, yaw * hero).add(target);
-    camera.lookAt(target);
-    // Focus on what the camera looks at; the aperture follows the shot (shallow on the label, a little on the road).
-    // On the dock the subject is the label the camera looks at; once the carton travels, the lens follows the carton.
-    camera.updateMatrixWorld();
-    const subject = shownProgress > 2 ? focusPoint.set(cx, cy + 0.35, cz) : focusPoint.copy(target);
-    const focus = focusForShot(shownProgress); pipeline.setFocus(-subject.applyMatrix4(camera.matrixWorldInverse).z, focus.aperture, focus.maxBlur);
-    atmosphere.update(1 - clamp01((shownProgress - 1.6) / 0.8), options.mode === "still" ? null : clock / 1000);
-    // The shadow-casting light follows what the camera looks at; its frustum widens with the shot.
-    const reach = Math.min(16, Math.max(4.5, camera.position.distanceTo(target) * 0.42));
+    // The hero frames the box left of the request card; a narrow stage has no card beside it, so centre the box.
+    const recentre = camera.view?.enabled ? 0 : 1.1 * hero;
+    target.x -= recentre;
+    camera.position.copy(position.set(...frame.camera.position)).add(shift.set(-recentre, 0, 0)).sub(target).multiplyScalar(distance).applyAxisAngle(up, yaw * hero).add(target);
+    camera.lookAt(target); camera.updateMatrixWorld();
+    // Focus follows the box; the aperture opens for the packing close-ups and narrows for the wide shots.
+    focusPoint.set(frame.box.position[0], frame.box.position[1] + BOX.height * 0.6, frame.box.position[2]);
+    const focus = focusForShot(shownProgress); pipeline.setFocus(-focusPoint.applyMatrix4(camera.matrixWorldInverse).z, focus.aperture, focus.maxBlur);
+    // The shadow-casting light follows the box; its frustum stays tight for crisp, soft contact edges.
+    const reach = Math.min(9, Math.max(3.2, camera.position.distanceTo(target) * 0.32));
     keyTarget.position.copy(target); key.position.copy(target).add(keyOffset);
     if (key.shadow.camera.right !== reach) {
-      Object.assign(key.shadow.camera, { left: -reach, right: reach, top: reach, bottom: -reach, near: 0.5, far: 40 });
+      Object.assign(key.shadow.camera, { left: -reach, right: reach, top: reach, bottom: -reach, near: 0.5, far: 30 });
       key.shadow.camera.updateProjectionMatrix();
     }
+    // Contact shadows ground the box on the floor; they are redrawn only when the box or what it holds has moved.
+    // (Floating packages hover above the shadow camera's reach, so the hero's idle motion never redraws them.)
+    const grounded = frame.box.position[1] < 0.5, signature = shownProgress.toFixed(4) + ":" + coffee;
+    if (grounded && (shadowsDirty || signature !== lastBox)) {
+      lastBox = signature; shadowsDirty = false;
+      shadows.render(scene, shadowExcluded, frame.box.position[0] + 0.1, frame.box.position[2]);
+    }
+    shadows.plane.visible = grounded;
     return busy;
   }
 
@@ -171,9 +142,15 @@ export async function createKemasanScene(canvas: HTMLCanvasElement, options: Kem
     // Measure the cinematic tier while it animates; step down once if it cannot hold about 40 fps.
     if (tier === "cinematic" && !forced && busy && last && frameTimes.length < 90) {
       frameTimes.push(dt);
-      if (shouldDowngrade(frameTimes)) { tier = "balanced"; pipeline.dispose(); pipeline = createPipeline(renderer, scene, overlay, camera, tier); bottles.useOpaque(); frameTimes.length = 90; }
+      if (shouldDowngrade(frameTimes)) {
+        tier = "balanced"; pipeline.dispose(); pipeline = createPipeline(renderer, scene, overlay, camera, tier); switchToOpaqueBottle(); frameTimes.length = 90;
+      }
     }
     if (busy && onScreen && pageVisible) frameRequest = requestAnimationFrame(frame); else last = 0;
+  }
+  function switchToOpaqueBottle() {
+    const bottle = kit.material.bottle as MeshPhysicalMaterial;
+    bottle.transmission = 0; bottle.color.set("#CFE7EC"); bottle.roughness = 0.18; bottle.needsUpdate = true;
   }
   function invalidate() { if (alive && !frameRequest && onScreen && pageVisible) frameRequest = requestAnimationFrame(frame); }
   function pause() { cancelAnimationFrame(frameRequest); frameRequest = 0; last = 0; }
@@ -198,16 +175,16 @@ export async function createKemasanScene(canvas: HTMLCanvasElement, options: Kem
   const lost = (event: Event) => { event.preventDefault(); pause(); options.onLost(); };
   canvas.addEventListener("webglcontextlost", lost);
 
-  setCartons(options.cartons, true); resize();
+  resize();
 
   return {
-    setCartons: count => setCartons(count),
+    setCoffee,
     setJourney,
     dispose() {
       alive = false; pause(); sized.disconnect(); seen.disconnect();
       document.removeEventListener("visibilitychange", visibility); window.removeEventListener("pointermove", pointer);
       canvas.removeEventListener("webglcontextlost", lost);
-      pipeline.dispose(); atmosphere.dispose(); kit.dispose(); disposeGround(); bottles.bodies.dispose(); bottles.caps.dispose(); bottles.bands.dispose();
+      pipeline.dispose(); shadows.dispose(); kit.dispose();
       scene.environment?.dispose(); pmrem.dispose(); room.dispose();
       renderer.dispose(); renderer.forceContextLoss();
     },
