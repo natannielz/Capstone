@@ -48,7 +48,8 @@ export function createKit(renderer: WebGLRenderer, fonts: Fonts, cinematic: bool
       : new MeshPhysicalMaterial({ color: "#CFE7EC", roughness: 0.18, clearcoat: 1, clearcoatRoughness: 0.08 }),
     bottleLabel: new MeshStandardMaterial({ map: texture(sanitizerLabel(fonts)), roughness: 0.55 }),
     pump: new MeshPhysicalMaterial({ color: "#F4F6F6", roughness: 0.35, clearcoat: 0.6 }),
-    floor: new MeshStandardMaterial({ map: floorMap, roughness: 0.88, metalness: 0 }),
+    // A warm, lightly polished shop floor rather than a white studio sweep.
+    floor: new MeshStandardMaterial({ map: floorMap, color: "#CFC7B9", roughness: 0.58, metalness: 0 }),
     backdrop: new MeshStandardMaterial({ color: STAGE, roughness: 1 }),
     route: new MeshBasicMaterial({ map: routeMap, transparent: true, depthWrite: false }),
     metal: new MeshStandardMaterial({ color: "#2B353A", metalness: 1, roughness: 0.32 }),

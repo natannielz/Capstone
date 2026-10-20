@@ -27,7 +27,7 @@ export function shouldDowngrade(frameTimes: readonly number[]): boolean {
 
 /** Bokeh aperture per shot: gentle on the hero, shallowest over the packing close-up, deeper on the road, soft at the counter. */
 export function focusForShot(progress: number): { aperture: number; maxBlur: number } {
-  const keys = [0.0009, 0.0014, 0.002, 0.0008, 0.0005], index = Math.max(0, Math.min(keys.length - 2, Math.floor(progress)));
+  const keys = [0.0016, 0.0021, 0.0024, 0.0008, 0.0005], index = Math.max(0, Math.min(keys.length - 2, Math.floor(progress)));
   const t = Math.max(0, Math.min(1, progress - index)), aperture = keys[index] + (keys[index + 1] - keys[index]) * t;
   return { aperture, maxBlur: 0.009 };
 }

@@ -9,6 +9,7 @@ import { buildBox } from "./scene/box";
 import { buildItems } from "./scene/items";
 import { buildBranch, buildRoute, buildTrolley } from "./scene/delivery";
 import { buildContactShadows, buildStudio } from "./scene/studio";
+import { buildBranchDressing, buildShopSet } from "./scene/set";
 import type { Fonts } from "./scene/textures";
 import { createPipeline, type Pipeline } from "./scene/pipeline";
 import { focusForShot, qualityOverride, qualityTier, shouldDowngrade } from "./scene/quality";
@@ -24,6 +25,7 @@ export type KemasanScene = { setCoffee(count: number): void; setJourney(progress
 export type KemasanSceneOptions = { mode: "animated" | "still"; coffee: number; acts: number; fonts: Fonts; onLost(): void };
 
 const STAGE = "#DCE4E1";
+const smoothstep = (value: number, low: number, high: number) => { const t = Math.min(1, Math.max(0, (value - low) / (high - low))); return t * t * (3 - 2 * t); };
 const clampCoffee = (value: number) => Math.min(COFFEE_MAXIMUM, Math.max(COFFEE_MINIMUM, Math.round(value)));
 
 async function fontsReady(fonts: Fonts) {
@@ -42,27 +44,30 @@ export async function createKemasanScene(canvas: HTMLCanvasElement, options: Kem
   const renderer = new WebGLRenderer({ canvas, antialias: tier === "balanced", powerPreference: "high-performance" });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, phone ? 1.5 : tier === "cinematic" ? 1.75 : 2));
   // AgX keeps highlights on paper and plastic soft and the kraft's warmth intact, like a product photograph.
-  renderer.outputColorSpace = SRGBColorSpace; renderer.toneMapping = AgXToneMapping; renderer.toneMappingExposure = 1.15;
+  renderer.outputColorSpace = SRGBColorSpace; renderer.toneMapping = AgXToneMapping; renderer.toneMappingExposure = 1.05;
   renderer.shadowMap.enabled = true; renderer.shadowMap.type = PCFSoftShadowMap;
 
   // Studio light: a procedural room for reflections, a large warm key that casts soft shadows, a cool fill and a rim.
   const scene = new Scene(), pmrem = new PMREMGenerator(renderer), room = new RoomEnvironment();
-  scene.environment = pmrem.fromScene(room, 0.03).texture; scene.environmentIntensity = 0.7;
+  scene.environment = pmrem.fromScene(room, 0.03).texture; scene.environmentIntensity = 0.58;
   scene.background = new Color(STAGE); scene.fog = new Fog(STAGE, 16, 46);
   const camera = new PerspectiveCamera(28, 1, 0.1, 120), up = new Vector3(0, 1, 0), keyOffset = new Vector3(-3.2, 7.5, 5.2);
   const key = new DirectionalLight("#FFF3E2", 2.6), keyTarget = new Object3D(); key.target = keyTarget; key.castShadow = true;
   key.shadow.mapSize.set(phone ? 1024 : 2048, phone ? 1024 : 2048); key.shadow.bias = -0.0003; key.shadow.normalBias = 0.015;
   key.shadow.radius = tier === "cinematic" ? 6 : 4; key.shadow.blurSamples = 16;
   const rim = new DirectionalLight("#CFE9EE", 1.1); rim.position.set(5, 4, -6);
-  scene.add(new HemisphereLight("#F2F7F6", "#8C9A97", 0.55), key, keyTarget, rim);
+  scene.add(new HemisphereLight("#F2F7F6", "#8C9A97", 0.38), key, keyTarget, rim);
 
   const kit = createKit(renderer, options.fonts, tier === "cinematic");
   const studio = buildStudio(kit), box = buildBox(kit), items = buildItems(kit), trolley = buildTrolley(kit), branch = buildBranch(kit), route = buildRoute(kit);
+  const shop = buildShopSet(kit), dressing = buildBranchDressing(kit);
   items.all.forEach(item => box.content.add(item));
   const shadows = buildContactShadows(renderer, kit, { size: 5, resolution: phone ? 256 : 512, far: 1.4, blur: 2.6, opacity: 0.62 });
-  scene.add(studio.group, box.root, trolley.root, branch.group, route.route, shadows.plane);
+  scene.add(studio.group, shop.group, dressing.group, box.root, trolley.root, branch.group, route.route, shadows.plane);
   const overlay = new Scene(); items.checks.forEach(check => overlay.add(check));
-  const shadowExcluded = [...studio.excluded, route.route];
+  const shadowExcluded = [...studio.excluded, ...shop.excluded, dressing.group, route.route];
+  // Time of day in the light: warm morning through the shop window, neutral daylight on the road, a cooler office at the branch.
+  const morningKey = new Color("#FFE4C2"), dayKey = new Color("#FFF5EA"), officeKey = new Color("#EAF1FF");
 
   let pipeline: Pipeline = createPipeline(renderer, scene, overlay, camera, tier);
   const frameTimes: number[] = [];
@@ -105,6 +110,12 @@ export async function createKemasanScene(canvas: HTMLCanvasElement, options: Kem
       item.getWorldPosition(world); check.position.set(world.x + (stacked ? 0.18 : 0), world.y + 0.32, world.z); check.scale.setScalar(0.16 * pop);
     });
 
+    const morning = 1 - smoothstep(shownProgress, 2.0, 2.45), office = smoothstep(shownProgress, 3.0, 3.4);
+    key.color.copy(dayKey).lerp(morningKey, morning).lerp(officeKey, office); key.intensity = 2.8 + 0.5 * morning - 0.2 * office;
+    shop.update(morning, 1 - smoothstep(shownProgress, 0.9, 1.2), clock / 1000); pipeline.setTime(clock / 1000);
+    // Each place appears only in its own acts: the shop until the trolley has left it, the branch office once it is near.
+    shop.group.visible = shownProgress < 2.7; dressing.group.visible = shownProgress > 2.2;
+
     // Pointer parallax belongs to the hero; it fades out once the story starts. Narrow stages pull the camera back.
     yaw += (targetYaw - yaw) * 0.08; busy ||= Math.abs(targetYaw - yaw) > 0.0005;
     const hero = Math.max(0, 1 - shownProgress), distance = Math.min(1.9, Math.max(1, 1.05 / (camera.view?.enabled ? aspect * 0.62 : aspect)));
@@ -113,6 +124,8 @@ export async function createKemasanScene(canvas: HTMLCanvasElement, options: Kem
     const recentre = camera.view?.enabled ? 0 : 1.1 * hero;
     target.x -= recentre;
     camera.position.copy(position.set(...frame.camera.position)).add(shift.set(-recentre, 0, 0)).sub(target).multiplyScalar(distance).applyAxisAngle(up, yaw * hero).add(target);
+    // While the hero rests, the camera breathes a little, like a hand-held shot; it settles as soon as the story moves.
+    if (floating) { const t = clock / 1000; camera.position.x += Math.sin(t * 0.37) * 0.03 * hero; camera.position.y += Math.sin(t * 0.29 + 1.3) * 0.02 * hero; }
     camera.lookAt(target); camera.updateMatrixWorld();
     // Focus follows the box; the aperture opens for the packing close-ups and narrows for the wide shots.
     focusPoint.set(frame.box.position[0], frame.box.position[1] + BOX.height * 0.6, frame.box.position[2]);
@@ -184,7 +197,7 @@ export async function createKemasanScene(canvas: HTMLCanvasElement, options: Kem
       alive = false; pause(); sized.disconnect(); seen.disconnect();
       document.removeEventListener("visibilitychange", visibility); window.removeEventListener("pointermove", pointer);
       canvas.removeEventListener("webglcontextlost", lost);
-      pipeline.dispose(); shadows.dispose(); kit.dispose();
+      pipeline.dispose(); shadows.dispose(); shop.dispose(); dressing.dispose(); kit.dispose();
       scene.environment?.dispose(); pmrem.dispose(); room.dispose();
       renderer.dispose(); renderer.forceContextLoss();
     },
