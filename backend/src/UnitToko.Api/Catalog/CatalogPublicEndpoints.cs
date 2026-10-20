@@ -22,7 +22,7 @@ public sealed record CatalogPublicShowcaseProposeDto(bool MakePublic, string Rea
 public sealed record CatalogPublicShowcaseDecideDto(string Reason);
 public sealed record CatalogPublicShowcaseOwnerDto(string Kind, LongId OrganizationId, LongId? ShopId, LongId? WarehouseId, LongId? ChannelId);
 public sealed record CatalogPublicShowcasePendingDto(LongId ProposalId, bool MakePublic, LongId ProposedBy, DateTimeOffset ProposedAt, string Reason);
-public sealed record CatalogPublicShowcaseDto(LongId AssortmentId, CatalogPublicShowcaseOwnerDto Owner, string ListedProducts, bool IsPublic, string Revision,
+public sealed record CatalogPublicShowcaseDto(LongId AssortmentId, CatalogPublicShowcaseOwnerDto Owner, string? OwnerName, string ListedProducts, bool IsPublic, string Revision,
     CatalogPublicShowcasePendingDto? Pending);
 public sealed record CatalogPublicShowcaseListDto(CatalogPublicShowcaseDto[] Items);
 public sealed record CatalogPublicShowcaseCommandDto(LongId ProposalId, LongId? DecisionId, LongId AssortmentId, string? Status, string? HeadRevision);
@@ -62,7 +62,7 @@ public static class CatalogPublicEndpoints
             var items = await service.ListAsync(Actor(http), ct);
             return TypedResults.Ok(new CatalogPublicShowcaseListDto([.. items.Select(item => new CatalogPublicShowcaseDto(new(item.AssortmentId),
                 new(item.Owner.Kind == UnitToko.Modules.Organizations.GrantScopeKind.FulfillmentShop ? "fulfillmentShop" : "fulfillmentWarehouse",
-                    new(item.Owner.OrganizationId ?? 0), Id(item.Owner.ShopId), Id(item.Owner.WarehouseId), Id(item.Owner.ChannelId)),
+                    new(item.Owner.OrganizationId ?? 0), Id(item.Owner.ShopId), Id(item.Owner.WarehouseId), Id(item.Owner.ChannelId)), item.OwnerName,
                 item.ListedProducts.ToString(CultureInfo.InvariantCulture), item.IsPublic, item.Revision.ToString(CultureInfo.InvariantCulture),
                 item.Pending is null ? null : new(new(item.Pending.ProposalId), item.Pending.MakePublic, new(item.Pending.ProposedBy), item.Pending.ProposedAt, item.Pending.Reason)))]));
         }).WithName("CatalogPublicShowcaseList");

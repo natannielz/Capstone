@@ -3745,6 +3745,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/catalog/variants/by-sku/query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["CatalogBuyerVariantsBySku"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/catalog/variants/exact-skus/query": {
         parameters: {
             query?: never;
@@ -12857,6 +12873,9 @@ export interface components {
             publicId: string;
             skuId: components["schemas"]["LongId"];
         };
+        CatalogBuyerVariantListDto: {
+            items: components["schemas"]["CatalogBuyerVariantDto"][];
+        };
         CatalogBuyerVariantPageDto: {
             categories: components["schemas"]["CatalogBuyerCategoryCountDto"][];
             items: components["schemas"]["CatalogBuyerVariantDto"][];
@@ -13320,6 +13339,7 @@ export interface components {
             isPublic: boolean;
             listedProducts: string;
             owner: components["schemas"]["CatalogPublicShowcaseOwnerDto"];
+            ownerName: null | string;
             pending: null | components["schemas"]["CatalogPublicShowcasePendingDto"];
             revision: string;
         };
@@ -13445,6 +13465,9 @@ export interface components {
             sort?: null | string;
         };
         CatalogVariantReadDto: Record<string, never>;
+        CatalogVariantSkuQueryDto: {
+            skuIds: string[];
+        };
         CsrfTokenResponse: {
             requestToken: string;
         };
@@ -41921,6 +41944,80 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CatalogBuyerVariantDto"] | null;
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    CatalogBuyerVariantsBySku: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
+                /** @description The account reference that reviewed this request. Compared with the verified session; never used to authenticate. */
+                "X-Expected-Actor-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CatalogVariantSkuQueryDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogBuyerVariantListDto"];
                 };
             };
             /** @description Bad Request */

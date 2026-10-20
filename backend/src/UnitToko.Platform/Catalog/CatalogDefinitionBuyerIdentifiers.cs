@@ -88,6 +88,25 @@ public sealed partial class CatalogDefinitionQueryService
         }, cancellationToken);
     }
 
+    /// <summary>The current buyer view of packages already in a cart. A package that is no longer active or visible to this buyer
+    /// is simply absent, so the cart can point at the one line that needs attention instead of refusing the whole read.</summary>
+    public async Task<ImmutableArray<CatalogBuyerVariant>> ReadBuyerSkusAsync(ActorContext actor, ImmutableArray<long> skuIds,
+        CancellationToken cancellationToken = default)
+    {
+        if (skuIds.IsDefaultOrEmpty || skuIds.Length > 100 || skuIds.Any(id => id <= 0) || skuIds.Distinct().Count() != skuIds.Length)
+            throw new DomainValidationException("invalid_cart_sku_query", "Choose up to 100 distinct packages");
+        await CatalogIdentifierRecords.RequireStorageAsync(database, cancellationToken);
+        return await visibility.ReadCurrentAsync(actor, F.In("_id", skuIds) & F.Eq("active", true), async (tx, filter, ct) => {
+            var pipeline = VisiblePipeline(filter); pipeline.Add(new("$project", new BsonDocument("_id", 1)));
+            var ids = (await repository.Rows("skus").Aggregate<BsonDocument>(tx, pipeline).ToListAsync(ct)).Select(row => row["_id"].AsInt64).ToArray();
+            var rows = await repository.Rows("skus").Find(tx, filter & F.In("_id", ids)).Sort(new BsonDocument("_id", 1)).ToListAsync(ct);
+            if (rows.Count != ids.Length) throw CatalogRepository.Invalid();
+            var items = ImmutableArray.CreateBuilder<CatalogBuyerVariant>();
+            foreach (var row in rows) items.Add((await ReadBuyerProjectionAsync(tx, row, ct)).View);
+            return items.ToImmutable();
+        }, cancellationToken);
+    }
+
     /// <summary>Exact active internal identifiers only. No supplier/GTIN namespace, fuzzy match, partial batch or quantity merge.</summary>
     public async Task<ImmutableArray<CatalogBuyerCodeMatch>> ReadExactBuyerIdentifiersAsync(ActorContext actor,
         ImmutableArray<string> codes, CancellationToken cancellationToken = default)

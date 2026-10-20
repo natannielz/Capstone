@@ -93,11 +93,25 @@ public sealed class CatalogPublicShowcaseService
                 var head = await Rows(B.Heads).Find(tx, F.Eq("_id", assortment["_id"])).SingleOrDefaultAsync(token);
                 var pending = await PendingAsync(tx, assortment["_id"].AsInt64, token);
                 var listed = await Rows("skus").CountDocumentsAsync(tx, F.Eq("active", true) & F.ElemMatch<BsonDocument>("catalogListings", F.Eq("assortmentId", assortment["_id"])), cancellationToken: token);
-                result.Add(new(assortment["_id"].AsInt64, owner, listed, head?["isPublic"].AsBoolean ?? false, head?["revision"].AsInt64 ?? 0,
+                result.Add(new(assortment["_id"].AsInt64, owner, null, listed, head?["isPublic"].AsBoolean ?? false, head?["revision"].AsInt64 ?? 0,
                     pending is null ? null : new(pending["_id"].AsInt64, pending["makePublic"].AsBoolean, pending["proposedBy"].AsInt64,
                         CatalogRepository.Date(pending["proposedAt"]), pending["reason"].AsString)));
             }
-            return result.ToImmutable();
+            // Staff recognise a catalog by its shop and warehouse names; an unnamed or malformed profile leaves the name out instead of guessing.
+            var ids = result.SelectMany(item => new[] { item.Owner.OrganizationId, item.Owner.ShopId, item.Owner.WarehouseId }).OfType<long>().Distinct().ToArray();
+            var names = new Dictionary<long, string>();
+            foreach (var profile in await Rows("organizationProfiles").Find(tx, F.In("_id", ids)).ToListAsync(token))
+                if (profile.TryGetValue("_id", out var key) && key.IsInt64 && profile.TryGetValue("name", out var name) && name.IsString &&
+                    name.AsString.Trim() is { Length: > 0 and <= 200 } text && !text.Any(char.IsControl)) names[key.AsInt64] = text;
+            string? Named(long? id) => id is { } value && names.TryGetValue(value, out var text) ? text : null;
+            string? Label(GrantScope owner)
+            {
+                if (owner.ShopId is null) return Named(owner.OrganizationId);
+                var shop = Named(owner.ShopId);
+                if (shop is null || owner.WarehouseId is null) return shop;
+                return Named(owner.WarehouseId) is { } warehouse ? shop + " · " + warehouse : null;
+            }
+            return result.Select(item => item with { OwnerName = Label(item.Owner) }).ToImmutableArray();
         }, ct);
     }
 

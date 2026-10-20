@@ -8,7 +8,7 @@ function maintainedDestination(raw: string | string[] | undefined): string {
   // Discard old query selectors and fragments before applying the maintained allowlist.
   const path = raw.split(/[?#]/, 1)[0];
   if (path === "/account" || path === "/workspace") return "/identity/account";
-  if (path === "/cart") return isPilotRelease ? "/ordering/requests" : "/ordering/drafts";
+  if (path === "/cart") return isPilotRelease ? "/ordering/requests" : "/cart";
   if (path === "/checkout") return isPilotRelease ? "/ordering/requests" : "/ordering/checkout";
   if (path === "/account/orders" || /^\/account\/orders\/[A-Za-z0-9_-]+$/.test(path)) {
     return isPilotRelease ? "/ordering/requests" : "/ordering/orders";

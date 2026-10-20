@@ -104,5 +104,16 @@ export function createBuyerCatalogGateway(client: ReturnType<typeof createUnitTo
       if (row === null) return null;
       const variant = parseBuyerVariant(row); return variant.publicId === id && variant.buyerIdentity !== null ? variant : invalid();
     },
+    /** The cart's packages as the buyer may see them now. A package missing from the answer is no longer available. */
+    async bySku(actorId: string, skuIds: readonly string[], signal?: AbortSignal): Promise<Map<string, BuyerVariant>> {
+      const ids = skuIds.map(priceId);
+      if (ids.length === 0 || ids.length > 100 || new Set(ids).size !== ids.length) throw new AccessFailure(400, 'invalid_cart_sku_query');
+      const row = record(data(await client.POST('/api/v1/catalog/variants/by-sku/query', {
+        body: { skuIds: ids }, params: { header: { 'X-Expected-Actor-Id': priceId(actorId) } }, signal })));
+      if (!Array.isArray(row.items) || row.items.length > ids.length) return invalid();
+      const items = row.items.map(parseBuyerVariant), asked = new Set(ids);
+      if (items.some(item => item.buyerIdentity === null || !asked.has(item.skuId)) || new Set(items.map(item => item.skuId)).size !== items.length) return invalid();
+      return new Map(items.map(item => [item.skuId, item]));
+    },
   };
 }

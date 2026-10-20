@@ -5,9 +5,10 @@ import {storeMember, storeLinks, storeSignInHref} from '../src/components/store/
 const buyer = ['catalog.read', 'order.request.read', 'order.request.submit', 'branch.pic', 'order.submit', 'order.read', 'invoice.read'];
 
 test('buyers, approvers and staff are told apart by their permissions, never by their name', () => {
-  assert.deepEqual(storeMember('Rina', buyer), {kind: 'member', name: 'Rina', staff: false, approver: false});
-  assert.deepEqual(storeMember('Andi', [...buyer, 'order.spend.approve']), {kind: 'member', name: 'Andi', staff: false, approver: true});
+  assert.deepEqual(storeMember('Rina', buyer), {kind: 'member', name: 'Rina', staff: false, approver: false, orders: true});
+  assert.deepEqual(storeMember('Andi', [...buyer, 'order.spend.approve']), {kind: 'member', name: 'Andi', staff: false, approver: true, orders: true});
   assert.equal(storeMember('Petugas', ['catalog.read', 'catalog.manage']).staff, true);
+  assert.equal(storeMember('Petugas', ['catalog.read', 'catalog.manage']).orders, false);
   assert.equal(storeMember('Peninjau', ['catalog.read', 'pricing.approve']).staff, true);
 });
 

@@ -39,20 +39,24 @@ async function loadRoutes(profile: "pilot" | "full"): Promise<Routes> {
         throw new Error("A compatibility page must not load legacy authentication or storefront state.");
       });
       builder.onResolve({filter: /^next\/navigation$/}, () => ({path: "redirect", namespace: "test"}));
-      builder.onLoad({filter: /.*/, namespace: "test"}, () => ({
-        contents: "export function redirect(destination) { throw Object.assign(new Error('redirect'), {destination}); }", loader: "js",
+      // The full release renders a real cart; only its screen is stubbed, so the page file itself still runs.
+      builder.onResolve({filter: /modules[\\/]ordering[\\/]CartWorkspace$/}, () => ({path: "cart", namespace: "test"}));
+      builder.onLoad({filter: /.*/, namespace: "test"}, args => ({
+        contents: args.path === "cart" ? "export function CartWorkspace() { return null; }"
+          : "export function redirect(destination) { throw Object.assign(new Error('redirect'), {destination}); }", loader: "js",
       }));
     }}],
   });
   return import(`data:text/javascript;base64,${Buffer.from(result.outputFiles[0].text).toString("base64")}`);
 }
 
-async function destination(page: Page, next?: string | string[], id = "41"): Promise<string> {
+async function destination(page: Page, next?: string | string[], id = "41", renders = false): Promise<string> {
   try { await page({searchParams: Promise.resolve({next}), params: Promise.resolve({id})}); }
   catch (error) {
     if (error instanceof Error && "destination" in error && typeof error.destination === "string") return error.destination;
     throw error;
   }
+  if (renders) return "rendered";
   throw new Error("The compatibility page did not redirect.");
 }
 
@@ -65,7 +69,7 @@ for (const profile of ["pilot", "full"] as const) {
     for (const id of ["41", "9223372036854775807", "order_old", "not-a-current-order"]) {
       assert.equal(await destination(routes.order, undefined, id), requests);
     }
-    assert.equal(await destination(routes.cart), profile === "pilot" ? requests : "/ordering/drafts");
+    assert.equal(await destination(routes.cart, undefined, "41", true), profile === "pilot" ? requests : "rendered");
     assert.equal(await destination(routes.checkout), profile === "pilot" ? requests : "/ordering/checkout");
 
     for (const login of [routes.login, routes.customerLogin, routes.staffLogin]) {
@@ -73,7 +77,7 @@ for (const profile of ["pilot", "full"] as const) {
         ["/account", "/identity/account"], ["/workspace?view=admin", "/identity/account"],
         ["/shop?category=pantry", "/shop"], ["/shop/legacy-product?sku=OLD", "/shop"],
         ["/account/orders/41?orderId=41#details", requests],
-        ["/cart", profile === "pilot" ? requests : "/ordering/drafts"],
+        ["/cart", profile === "pilot" ? requests : "/cart"],
         ["/checkout?draftId=41", profile === "pilot" ? requests : "/ordering/checkout"],
         ["/ordering/requests", "/ordering/requests"],
         ["/ordering/orders?orderId=41", profile === "pilot" ? "/identity/account" : "/ordering/orders"],
