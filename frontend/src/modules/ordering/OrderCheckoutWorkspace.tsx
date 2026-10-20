@@ -3,7 +3,6 @@
 import Link from 'next/link';
 import { ArrowLeft, ArrowRight, Check, ClipboardList, FileText, PackageCheck, ShoppingBag } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Brand } from '../../components/brand';
 import { createIdentityGateway } from '../identity/identity-client';
 import { IdentityFailure, sessionTiming, type IdentitySession } from '../identity/identity-workflow';
 import { createAccessGateway } from '../administration/access-client';
@@ -14,6 +13,7 @@ import { priceId } from '../catalog/catalog-price-workflow';
 import { createOrderDraftGateway, type OrderDraft } from './order-draft-client';
 import { createOrderSubmitGateway, orderSubmitOperation, readCheckoutGroupAttempt, type CheckoutGroup, type CheckoutReview, type OrderSubmitResult, type SubmittedOrder } from './order-submit-client';
 import { OrderCheckoutDetails } from './order-checkout-details';
+import { OrderDeliveryPanel } from './OrderDeliveryPanel';
 import common from '../administration/access.module.css';
 import styles from './order-checkout.module.css';
 import { SessionAccessState } from "@/components/workspace-kit/session-access-state";
@@ -59,15 +59,15 @@ export function OrderCheckoutWorkspace() {
     if (failure instanceof AccessFailure && ([401, 403].includes(failure.status) || failure.code === 'actor_changed')) { setAccount(null); setError(failure); }
   }, []);
   const expired = account !== null && sessionTiming(account.session, elapsed).expired;
-  return <div className={styles.shell}><a className={styles.skip} href="#checkout-main">Langsung ke pengajuan pesanan</a>
-    <header className={styles.siteHeader}><Brand context="Kebutuhan kerja & harian" /><nav aria-label="Navigasi belanja"><Link href="/shop">Katalog kemasan</Link><Link href="/ordering/drafts">Draf pesanan</Link><Link href="/identity/account">Akun saya</Link></nav></header>
+  // The storefront frame supplies the header, search and footer; this page only carries the checkout itself.
+  return <div className={styles.shell}>
     <main id="checkout-main" tabIndex={-1} className={`${common.page} ${styles.page}`}><header className={styles.heading}>
-      <Link href="/ordering/drafts" className={styles.back}><ArrowLeft size={16} aria-hidden="true" />Kembali ke draf</Link>
-      <h1>Pengajuan pesanan</h1><p>Tinjau kemasan, tujuan pengiriman, dan jumlah biaya sebelum mengajukan kebutuhan cabang.</p></header>
+      <Link href="/cart" className={styles.back}><ArrowLeft size={16} aria-hidden="true" />Kembali ke keranjang</Link>
+      <h1>Pengajuan pesanan</h1><p>Isi pengiriman, tinjau biaya, lalu ajukan. Pesanan yang memerlukan persetujuan belanja dikirim ke penyetuju cabang.</p></header>
     {error !== null && <p className={common.alert} role="alert">{message(error, true)}</p>}
     {loading ? <p className={styles.loading} role="status">Memeriksa akun…</p> : !account || expired ? <SessionAccessState error={error} returnPath="/ordering/checkout" onRetry={() => setRevision(value => value + 1)} />
       : <CheckoutDesk key={account.actorId + ':' + account.observedAt} account={account} onFailure={failed} />}
-  </main><footer className={styles.footer}>Unit Toko · Kebutuhan cabang dan organisasi</footer></div>;
+  </main></div>;
 }
 
 type DeskGroup = { group: CheckoutGroup; requestKey: string; review: CheckoutReview | null; result: OrderSubmitResult | null;
@@ -170,7 +170,7 @@ function CheckoutDesk({ account, onFailure }: { account: Account; onFailure: (er
   const allComplete = groups.length > 0 && completed === groups.length;
   return <>
     <nav className={styles.progress} aria-label="Tahapan pengajuan pesanan"><ol>
-      <li><Link href="/ordering/drafts"><ShoppingBag size={18} aria-hidden="true" /><span>Draf pesanan</span></Link></li>
+      <li><Link href="/cart"><ShoppingBag size={18} aria-hidden="true" /><span>Keranjang</span></Link></li>
       <li aria-hidden="true" className={styles.progressArrow}><ArrowRight size={16} /></li>
       <li aria-current={!allComplete ? 'step' : undefined}><span><ClipboardList size={18} aria-hidden="true" />Periksa pesanan</span></li>
       <li aria-hidden="true" className={styles.progressArrow}><ArrowRight size={16} /></li>
@@ -194,11 +194,13 @@ function CheckoutDesk({ account, onFailure }: { account: Account; onFailure: (er
     {recovery.error !== null && <p role="alert" className={common.alert}>{accessMessage(recovery.error)}</p>}
     {error && <p role="alert" className={common.alert}>{message(error.value, error.reading)}</p>}
     {otherReceipt && <section className={styles.confirmed}><h2>Pesanan {otherReceipt.orderId} tercatat</h2><p>Hasil permintaan semula telah terkonfirmasi. Buka riwayat untuk melihat isinya.</p><Link href="/ordering/orders">Buka pesanan saya</Link></section>}
-    {draft && <section className={styles.draft}><div><h2>Draf tersimpan yang akan diajukan</h2><p className={styles.draftReference}>{draft.input.purchaseReference ?? 'Kebutuhan cabang'} · {draft.input.selections.length} jenis kemasan · versi {draft.revision}</p>
-      <p className={common.help}>Pengajuan menggunakan isi draf yang telah tersimpan. Pastikan perubahan di halaman draf sudah disimpan.</p>
-      {!draft.input.delivery && <p className={styles.missingDelivery}>Lengkapi rencana pengiriman pada draf terlebih dahulu.</p>}</div>
+    {draft && groups.length === 0 && <OrderDeliveryPanel key={draft.id} actorId={actorId} draft={draft} locked={locked} onFailure={onFailure}
+      onSaved={async () => { const saved = await drafts.read(actorId, draft.id, signal()); if (current()) setDraft(saved); }} />}
+    {draft && <section className={styles.draft}><div><h2>Barang dari keranjang</h2><p className={styles.draftReference}>{draft.input.selections.length} barang{draft.input.purchaseReference ? ' · ' + draft.input.purchaseReference : ''}</p>
+      <p className={common.help}>Harga, stok dan aturan belanja diperiksa ulang saat Anda meninjau. <Link href="/cart">Ubah isi keranjang</Link></p>
+      {!draft.input.delivery && <p className={styles.missingDelivery}>Simpan pengiriman di atas untuk melanjutkan.</p>}</div>
       {groups.length === 0 && <div className={styles.draftAction}><button className={common.primary} disabled={locked || !draft.input.delivery} onClick={() => void prepare()}>{busy ? 'Memeriksa…' : 'Tinjau pesanan dan biaya'}</button><p>Setiap kanal toko diperiksa dan diajukan secara terpisah.</p></div>}</section>}
-    {!draft && !busy && !recovery.locked && <section className={common.state}><h2>Pilih draf untuk melanjutkan</h2><Link href="/ordering/drafts">Buka draf pesanan</Link></section>}
+    {!draft && !busy && !recovery.locked && <section className={common.state}><h2>Keranjang belum dipilih</h2><p>Buka keranjang, lalu tekan Lanjut ke pengajuan.</p><Link href="/cart">Buka keranjang</Link></section>}
     {groups.length > 0 && <div ref={reviewPanel} tabIndex={-1} aria-label="Kelompok pesanan">
       <h2>Pesanan menurut kanal toko</h2><p role="status">{completed} dari {groups.length} kelompok tercatat; {groups.length - completed - uncertain} belum diajukan; {uncertain} belum terkonfirmasi.</p>
       <p className={common.help}>Kelompok yang sudah tercatat tetap tersimpan jika kelompok lain belum berhasil. Untuk mengganti pesanan yang sudah tercatat, buat draf baru.</p>
@@ -219,7 +221,7 @@ function CheckoutDesk({ account, onFailure }: { account: Account; onFailure: (er
           {shown && <OrderCheckoutDetails value={shown} reviewing={item.review !== null}>
             {item.review && <><p>{item.review.spendingState === 'Pending' ? 'Pesanan memerlukan persetujuan belanja cabang sebelum diterima toko.' : 'Aturan pembelian yang berlaku tidak memerlukan persetujuan belanja tambahan.'}</p>
               <p className={common.help}>Stok kelompok ini diperiksa dan dicadangkan saat pengajuannya berhasil. Kelompok lain memerlukan konfirmasi terpisah.</p>
-              <div className={styles.submitActions}><button className={common.primary} disabled={locked} onClick={() => void submit(item)}>Konfirmasi ajukan pesanan</button>
+              <div className={styles.submitActions}><button className={common.primary} disabled={locked} onClick={() => void submit(item)}>{item.review.spendingState === 'Pending' ? 'Ajukan untuk persetujuan' : 'Ajukan pesanan'}</button>
                 <button className={common.secondary} disabled={locked} onClick={() => update(item.group.groupKey, { review: null })}>Batal pengajuan</button></div></>}
           </OrderCheckoutDetails>}
         </section>;

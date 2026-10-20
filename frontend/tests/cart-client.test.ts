@@ -67,3 +67,17 @@ test('a changed price is reported, not retried, and an emptied cart is discarded
   assert.equal((await emptied.gateway.apply('7', context, () => [], 'remove')).draftId, null);
   assert.deepEqual(emptied.discarded, [{ id: '41', revision: '3', key: 'cart-key-1' }]);
 });
+
+test('delivery details are saved into the same draft at its current revision, keeping its packages', async () => {
+  const sent: DraftCommand[] = [];
+  let reads = 0;
+  const gateway = createCartGateway({ newKey: () => 'details-key', drafts: {
+    read: async () => (++reads === 1 ? saved('41', '3') : saved('41', '4')),
+    submit: async (command: DraftCommand) => { sent.push(command); if (sent.length === 1) throw new AccessFailure(409, 'order_draft_revision_changed'); return ok('41', '5')(); },
+  } as never });
+  const delivery = { recipientName: 'Rina', phone: '0812-3456-7890', address: 'Jl. Sudirman 1', city: 'Jakarta', postalCode: null, instructions: null };
+  const result = await gateway.saveDetails('7', '41', delivery, 'PO-8');
+  assert.equal(result.revision, '5');
+  assert.equal(sent[1].expectedRevision, '4'); assert.deepEqual(sent[1].input.delivery, delivery); assert.equal(sent[1].input.purchaseReference, 'PO-8');
+  assert.deepEqual(sent[1].input.selections, saved('41', '4').input.selections);
+});

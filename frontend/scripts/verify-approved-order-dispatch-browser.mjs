@@ -157,7 +157,7 @@ try {
     await buyer.page.getByRole('heading', { name: 'Pesanan menurut kanal toko', exact: true }).waitFor();
     await buyer.page.getByRole('button', { name: 'Tinjau pesanan dan biaya', exact: true }).waitFor();
     assert.equal(await buyer.page.getByRole('button', { name: 'Tinjau pesanan dan biaya', exact: true }).isDisabled(), true);
-    assert.equal(await buyer.page.getByRole('button', { name: 'Konfirmasi ajukan pesanan', exact: true }).count(), 0); await capture(buyer.page, 'checkout-loading'); releasePreviewHold();
+    assert.equal(await buyer.page.getByRole('button', { name: /^Ajukan (pesanan|untuk persetujuan)$/ }).count(), 0); await capture(buyer.page, 'checkout-loading'); releasePreviewHold();
     await buyer.page.getByRole('heading', { name: 'Periksa sebelum mengajukan', exact: true }).waitFor(); assert.equal(writes.length, 0);
     const review = responses.find(row => row.path === '/api/v1/ordering/orders/preview/query' && row.status === 200).value;
     assert.equal(review.lines.length, 1); assert.equal(review.lines[0].definition.skuId, config.skuId); assert.equal(review.lines[0].packages, config.packages);
@@ -167,7 +167,7 @@ try {
     await buyer.page.getByRole('button', { name: 'Tinjau pesanan dan biaya', exact: true }).click(); await buyer.page.getByRole('heading', { name: 'Periksa sebelum mengajukan', exact: true }).waitFor();
   });
   await check('lost genuine first-order result resolves original key after reload with reservation and no value consumption', async () => {
-    fault.armed = 'submit'; await buyer.page.getByRole('button', { name: 'Konfirmasi ajukan pesanan', exact: true }).click();
+    fault.armed = 'submit'; await buyer.page.getByRole('button', { name: /^Ajukan (pesanan|untuk persetujuan)$/ }).click();
     await buyer.page.getByRole('button', { name: 'Periksa hasil', exact: true }).waitFor(); submitRecord = success('submit')[0]; assert.ok(submitRecord);
     orderId = submitRecord.response.orderId; suborderId = submitRecord.response.suborderIds[0]; assert.equal(submitRecord.response.suborderIds.length, 1);
     assert.equal(submitRecord.actor, config.actorIds.buyer); assert.equal(submitRecord.version, '"0"'); await pending(buyer.page, 'ordering.order.submit', submitRecord);
