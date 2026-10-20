@@ -25,11 +25,17 @@ test("the 3D stage is decorative and the label carries the same information as t
   assert.equal(kemasanSummary(1), "1 karton berisi 24 botol");
 });
 
-test("the status trail follows the release: the pilot ends at the review, the full release at the invoice", () => {
-  const steps = (html: string) => [...html.matchAll(/<li data-step="([^"]+)"/g)].map(match => match[1]);
-  assert.deepEqual(steps(render(true)), ["Diajukan", "Ditinjau toko", "Hasil peninjauan"]);
-  assert.deepEqual(steps(render(false)), ["Diajukan", "Ditinjau toko", "Disiapkan", "Dikirim", "Diterima cabang", "Tagihan terbit"]);
-  assert.match(render(true), /<ol[^>]*aria-label="Contoh riwayat permintaan"/);
+test("the story follows one request; the pilot ends at the review, the full release at receipt and invoice", () => {
+  const steps = (html: string) => [...html.matchAll(/<li[^>]*data-step="([^"]+)"/g)].map(match => match[1]);
+  assert.deepEqual(steps(render(true)), ["Diajukan", "Ditinjau toko"]);
+  assert.deepEqual(steps(render(false)), ["Diajukan", "Ditinjau toko", "Dikirim", "Diterima"]);
+  const html = render(false);
+  assert.match(html, /<h2[^>]*>Satu karton, dari dok ke cabang\.<\/h2>/);
+  assert.match(html, /<ol[^>]*aria-label="Perjalanan satu permintaan"/);
+  assert.equal([...html.matchAll(/<p[^>]*data-act-time[^>]*>[^<]* WIB<\/p>/g)].length, 4, "each act carries its time from the example record");
+  assert.match(html, /Gulir untuk mengikuti satu permintaan/);
+  assert.match(html, /data-journey="4"/);
+  assert.match(render(true), /data-journey="2"/);
 });
 
 test("the catalog section is an honest example table", () => {
