@@ -135,12 +135,19 @@ public sealed partial class AfterSalesCaseService
             await FenceAsync(actor, authority, tx, row, Permissions.CaseRead, token); return await ViewAsync(tx, row, token);
         }, ct);
     }
-    public async Task<AfterSalesCasePage> ListAsync(ActorContext actor, long? beforeId = null, CancellationToken ct = default) {
+    public Task<AfterSalesCasePage> ListAsync(ActorContext actor, long? beforeId = null, CancellationToken ct = default) =>
+        ListCoreAsync(actor, beforeId, null, ct);
+    public Task<AfterSalesCasePage> ListForOrderAsync(ActorContext actor, long orderId, long? beforeId = null, CancellationToken ct = default) {
+        if (orderId <= 0) throw AfterSalesCasePolicy.Invalid();
+        return ListCoreAsync(actor, beforeId, orderId, ct);
+    }
+    private async Task<AfterSalesCasePage> ListCoreAsync(ActorContext actor, long? beforeId, long? orderId, CancellationToken ct) {
         if (beforeId is <= 0) throw AfterSalesCasePolicy.Invalid(); await StorageAsync(ct);
         return await authorization.ReadAsync(actor, async (authority, tx, token) => {
             var query = Query(actor, authority, Permissions.CaseRead);
             var filter = ScopeQuery.Create(query).Render(new RenderArgs<BsonDocument>(BsonSerializer.SerializerRegistry.GetSerializer<BsonDocument>(), BsonSerializer.SerializerRegistry));
             var pipeline = new List<BsonDocument>(); if (beforeId.HasValue) pipeline.Add(new("$match", new BsonDocument("_id", new BsonDocument("$lt", beforeId.Value))));
+            if (orderId.HasValue) pipeline.Add(new("$match", ReportedOrderFilter(orderId.Value)));
             // Every constituent scope matches before pagination, including the sentinel that determines HasMore.
             pipeline.Add(new("$set", new BsonDocument("scopeCount", new BsonDocument("$size", "$scopes")))); pipeline.Add(new("$unwind", "$scopes"));
             pipeline.Add(new("$replaceRoot", new BsonDocument("newRoot", new BsonDocument("$mergeObjects", new BsonArray { "$scopes", new BsonDocument { { "caseId", "$_id" }, { "scopeCount", "$scopeCount" } } }))));
@@ -155,6 +162,18 @@ public sealed partial class AfterSalesCaseService
             return new AfterSalesCasePage([.. views.Take(25)], candidates.Count > 25);
         }, ct);
     }
+    private static BsonDocument ReportedOrderFilter(long orderId) => new() {
+        { "source.lines.orderId", orderId },
+        // A grouped invoice is not evidence that this case reports every order on it.
+        { "$expr", new BsonDocument("$anyElementTrue", new BsonArray { new BsonDocument("$map", new BsonDocument {
+            { "input", "$input.lines" }, { "as", "reported" }, { "in", new BsonDocument("$anyElementTrue", new BsonArray {
+                new BsonDocument("$map", new BsonDocument { { "input", "$source.lines" }, { "as", "source" },
+                    { "in", new BsonDocument("$and", new BsonArray {
+                        new BsonDocument("$eq", new BsonArray { "$$source.orderId", orderId }),
+                        new BsonDocument("$eq", new BsonArray { "$$source.receiptId", "$$reported.receiptId" }),
+                        new BsonDocument("$eq", new BsonArray { "$$source.skuId", "$$reported.skuId" }) }) } }) }) }
+        }) }) }
+    };
     public async Task<BsonDocument?> RecoverAsync(ActorContext actor, string key, CancellationToken ct = default) {
         AuthorizationStore.ValidateMetadata(new(key, "Recover original case request", "case-recovery")); await StorageAsync(ct);
         return await authorization.ReadAsync<BsonDocument?>(actor, async (authority, tx, token) => {

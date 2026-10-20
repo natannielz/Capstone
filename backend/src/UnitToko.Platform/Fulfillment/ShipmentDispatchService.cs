@@ -201,6 +201,7 @@ public sealed partial class ShipmentDispatchService
                 if (valueContext is not null) await RecordMovementAsync(valueContext, movement, pool, token);
             }
             if (valueContext is not null) { await ConsumeValuesAsync(valueContext, metadata, token); row = valueContext.Row; }
+            await new ShipmentCourierRecords(database, clock).InitializeAsync(tx, row, token);
             await Rows("auditEvents").InsertOneAsync(tx, B.Audit(row), cancellationToken: token);
             await Rows("outboxEvents").InsertOneAsync(tx, new BsonDocument { { "_id", ObjectId.GenerateNewId() }, { "schemaVersion", 1 },
                 { "kind", "fulfillment.shipment.dispatched" }, { "sourceKey", "fulfillment.shipment.dispatched:" + id }, { "payload", B.Result(row) },

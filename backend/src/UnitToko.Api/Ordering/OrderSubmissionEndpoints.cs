@@ -32,6 +32,7 @@ public static class OrderSubmissionEndpoints
 {
     public static void MapOrderSubmissionEndpoints(this WebApplication app)
     {
+        app.MapOrderTimelineEndpoints();
         var group = app.MapGroup("/api/v1/ordering/orders").RequireAuthorization().AddEndpointFilter<ActorRequiredFilter>();
         foreach (var status in new[] { 400, 401, 403, 409, 413, 503 }) group.WithMetadata(new ProducesResponseTypeMetadata(status, typeof(ApiProblem), ["application/problem+json"]));
         group.MapPost("/preview/query", async (OrderCheckoutDto request, HttpContext http, [FromServices] OrderSubmissionService service, CancellationToken ct) => {

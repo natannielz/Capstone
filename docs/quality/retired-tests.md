@@ -204,3 +204,24 @@ Root cause: commit 7f8541b (7 October) changed the shared procurement fixtures t
 | `AfterSalesStockSourceTests.Independent_parallel_verifications_have_one_immutable_result_and_one_genuine_source_append` | Assert.False() Failure | Open: pending rewrite |
 | `ProcurementStockSourceTests.Actual_completed_held_receipt_advances_genuine_producer_once_and_partial_reader_never_claims_inbound_completeness` | PersistenceConflictException: Procurement causal source membership is missing or cannot be authenticated | Open: pending rewrite |
 | `ProcurementStockSourceCoverageTests.Real_unbound_PO_and_private_inspection_cannot_authorize_a_new_held_stock_leg` | Assert.False() Failure (a purchase-order inbound selection already exists) | Open: pending rewrite |
+
+### D3 integrations: populated predecessor replays (retired, 20 October 2026)
+
+Same reason as `Retired.HistoricalUpgrade`. These tests need a populated database at the schema just before the new migration (a pinned "genuine stopped" capsule, or a legacy invoice produced at 118). No deployable database will hold either, and today's order services refuse to run below the current schema. Each migration's own empty-install, refusal and interrupted-resume tests run at its real number.
+
+| Test | Root cause (run log) | Outcome |
+| --- | --- | --- |
+| `ShipmentCourierPredecessorTests.Genuine_stopped117_open_visit_pending_QR_and_received_shipment_survive118_with_exact_historical_bindings` | InvalidOperationException: exact accepted predecessor product and producer hashes are not pinned; no populated 119 database exists to upgrade | Retired: `HistoricalUpgrade` |
+| `InvoiceReleaseMigrationTests.Real_118_invoice_classification_preserves_original_receipt_journal_document_and_financial_bytes` | DomainValidationException: order services refuse below the current schema, so no populated 118 invoice can be produced to upgrade | Retired: `HistoricalUpgrade` |
+
+## Open test debt: transaction latency (pending, not retired)
+
+These U05 timeline scenarios are correct, but a command inside them (invoice release propose or decide on two orders, the second stock release, or procurement inbound-binding history replay) still exceeds MongoDB's 60 s transaction bound, even with provenance seals configured as in production. The 60 s bound is never weakened. The fix is the latency workstream (next-wave plan E): memoised immutable proofs and narrower reads. The tests return when their commands fit.
+
+| Test | Root cause (run log) | Outcome |
+| --- | --- | --- |
+| `OrderTimelineOutcomeTests.Genuine_case_events_follow_received_and_inspected_goods_without_exposing_private_notes_or_implying_refund` | transactionLifetimeLimitSeconds exceeded in procurement inbound-binding history replay (sealed run) | Open: pending latency |
+| `OrderTimelineListTests.Genuine_grouped_invoice_keeps_shipments_payments_and_reported_cases_bound_to_the_exact_order_without_business_writes` | transactionLifetimeLimitSeconds exceeded in the grouped invoice release decision | Open: pending latency |
+| `OrderTimelineOutcomeTests.Genuine_grouped_invoice_financial_events_are_verified_private_scoped_and_do_not_claim_whole_order_settlement` | transactionLifetimeLimitSeconds exceeded in the grouped invoice release proposal | Open: pending latency |
+| `OrderTimelineOutcomeTests.Genuine_invoice_draft_is_not_bank_verified_and_current_creator_order_and_final_grants_are_required` | transactionLifetimeLimitSeconds exceeded in an aggregate during the timeline read | Open: pending latency |
+| `OrderTimelineFenceTests.Genuine_financial_capture_refuses_warmed_missing_bank_proofs_and_added_effects_in_nonempty_and_empty_memberships` | transactionLifetimeLimitSeconds exceeded in the second stock release decision | Open: pending latency |

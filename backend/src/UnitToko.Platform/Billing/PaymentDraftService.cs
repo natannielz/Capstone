@@ -177,17 +177,29 @@ public sealed partial class PaymentDraftService
             await records.TouchAsync(tx, head, token); await FenceAsync(actor, authority, tx, head["scopes"].AsBsonArray, token); return view;
         }, ct);
     }
-    public async Task<PaymentDraftPage> ListAsync(ActorContext actor, long? beforeId = null, CancellationToken ct = default) {
+    public Task<PaymentDraftPage> ListAsync(ActorContext actor, long? beforeId = null, CancellationToken ct = default) =>
+        ListCoreAsync(actor, beforeId, null, ct);
+    public Task<PaymentDraftPage> ListForOrderAsync(ActorContext actor, long orderId, long? beforeId = null, CancellationToken ct = default) {
+        if (orderId <= 0) throw B.Invalid();
+        return ListCoreAsync(actor, beforeId, orderId, ct);
+    }
+    private async Task<PaymentDraftPage> ListCoreAsync(ActorContext actor, long? beforeId, long? orderId, CancellationToken ct) {
         if (beforeId is <= 0) throw B.Invalid(); await StorageAsync(ct);
         return await authorization.ReadAsync(actor, async (authority, tx, token) => {
             var query = Query(actor, authority);
             var match = new BsonDocument("recordedBy", actor.UserId); if (beforeId.HasValue) match.Add("_id", new BsonDocument("$lt", beforeId.Value));
             var scoped = ScopeQuery.Create(query).Render(new RenderArgs<BsonDocument>(BsonSerializer.SerializerRegistry.GetSerializer<BsonDocument>(), BsonSerializer.SerializerRegistry));
+            var pipeline = new List<BsonDocument> { new("$match", match) };
+            if (orderId.HasValue) {
+                pipeline.Add(new("$lookup", new BsonDocument { { "from", B.Versions }, { "localField", "versionId" }, { "foreignField", "_id" }, { "as", "timelineVersion" } }));
+                pipeline.Add(new("$lookup", new BsonDocument { { "from", InvoiceBson.Invoices }, { "localField", "timelineVersion.input.invoiceIds" }, { "foreignField", "_id" }, { "as", "timelineInvoices" } }));
+                pipeline.Add(new("$match", new BsonDocument("timelineInvoices.orderIds", orderId.Value)));
+            }
             // Current scope filtering precedes paging, including multi-invoice declarations.
-            BsonDocument[] pipeline = [new("$match", match), new("$set", new BsonDocument("scopeCount", new BsonDocument("$size", "$scopes"))), new("$unwind", "$scopes"),
+            pipeline.AddRange([new("$set", new BsonDocument("scopeCount", new BsonDocument("$size", "$scopes"))), new("$unwind", "$scopes"),
                 new("$replaceRoot", new BsonDocument("newRoot", new BsonDocument("$mergeObjects", new BsonArray { "$scopes", new BsonDocument { { "declarationId", "$_id" }, { "scopeCount", "$scopeCount" } } }))),
                 new("$match", scoped), new("$group", new BsonDocument { { "_id", "$declarationId" }, { "matches", new BsonDocument("$sum", 1) }, { "expected", new BsonDocument("$first", "$scopeCount") } }),
-                new("$match", new BsonDocument("$expr", new BsonDocument("$eq", new BsonArray { "$matches", "$expected" }))), new("$sort", new BsonDocument("_id", -1)), new("$limit", 26)];
+                new("$match", new BsonDocument("$expr", new BsonDocument("$eq", new BsonArray { "$matches", "$expected" }))), new("$sort", new BsonDocument("_id", -1)), new("$limit", 26)]);
             var ids = await records.Rows(B.Heads).Aggregate<BsonDocument>(tx, pipeline).ToListAsync(token); var result = ImmutableArray.CreateBuilder<PaymentDraftView>(); var allScopes = new BsonArray();
             foreach (var value in ids) {
                 var head = await HeadAsync(actor, authority, tx, value["_id"].AsInt64, token); var version = await records.VersionAsync(tx, head["versionId"].AsInt64, token);

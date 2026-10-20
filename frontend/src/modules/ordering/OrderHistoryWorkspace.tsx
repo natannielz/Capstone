@@ -20,6 +20,7 @@ import common from '../administration/access.module.css';
 import styles from './order-draft.module.css';
 import { dateTimeFormatter } from '@/lib/format';
 import { EmptyState } from '@/components/workspace-kit/empty-state';
+import { OrderTimelinePanel } from './OrderTimelinePanel';
 
 type Account = { actorId: string; actions: readonly string[]; session: IdentitySession; observedAt: number };
 function status(order: SubmittedOrder) {
@@ -174,6 +175,8 @@ function OrderHistoryDesk({ account, onFailure }: { account: Account; onFailure:
       <p>Pajak: {orderAmount(selected.quote.currency, selected.tax)} · Biaya lain: {orderAmount(selected.quote.currency, selected.charges)}</p><p><strong>Total: {orderAmount(selected.quote.currency, selected.total)}</strong></p>
       <p>Bagian toko: {selected.progress.acceptedSuborders.length} diterima, {selected.progress.rejectedSuborders.length} ditolak, dari {selected.submission.suborderIds.length} bagian.</p>
       {(selected.progress.cancelled || selected.progress.spendingState === 'Rejected' || selected.progress.rejectedSuborders.length > 0) && <p>Angka di atas menyimpan biaya pengajuan awal. Penolakan atau pembatalan bukan bukti pembayaran maupun pengembalian dana.</p>}
+      <OrderTimelinePanel key={selected.submission.orderId} actorId={account.actorId} orderId={selected.submission.orderId}
+        actions={account.actions} isCurrent={current} onFailure={onFailure} />
       <div className={common.actions}><button className={common.secondary} disabled={locked} onClick={() => void select(selected.submission.orderId)}>Perbarui perkembangan</button>
         {account.actions.includes('order.submit') && <button className={common.primary} disabled={locked} onClick={() => void beginRepeat(selected.submission.orderId)}>Pesan ulang sebagai draf</button>}
       </div>

@@ -8,7 +8,7 @@ using UnitToko.Platform.Mongo.Migrations;
 
 namespace UnitToko.Platform.Fulfillment;
 
-internal sealed class DeliveryAttemptRecords(IMongoDatabase database)
+internal sealed class DeliveryAttemptRecords(IMongoDatabase database, UnitToko.Platform.IClock? clock = null)
 {
     internal const string Attempts = "deliveryAttempts", Revocations = "receiptChallengeRevocations", Operation = "fulfillment.delivery-attempt.record";
     internal IMongoCollection<BsonDocument> Rows(string name) => database.GetCollection<BsonDocument>(name);
@@ -34,11 +34,12 @@ internal sealed class DeliveryAttemptRecords(IMongoDatabase database)
             var occurred = ShipmentReceiptRecords.Time(row["occurredAt"]); var recorded = ShipmentReceiptRecords.Time(row["recordedAt"]);
             DeliveryAttemptPolicy.Require(sequence - 1, row["outcome"].AsString, occurred, ShipmentReceiptRecords.Time(source.Snapshot["dispatchedAt"]), recorded, row["reason"].AsString);
             if (row["sequence"] != sequence || row["shipmentRevision"] != source.Snapshot["shipmentRevision"] || row["dispatchHash"] != source.Snapshot["dispatchHash"] ||
-                row["actorId"] != source.Snapshot["courierId"] || row["courierId"] != row["actorId"] ||
+                row["courierId"] != row["actorId"] ||
                 row["previousAttemptId"] != (previous is null ? BsonNull.Value : previous["_id"]) ||
                 row["previousHash"] != (previous is null ? BsonNull.Value : new BsonString(CatalogRepository.Digest(previous))) ||
                 previous is not null && (recorded < ShipmentReceiptRecords.Time(previous["recordedAt"]) || occurred < ShipmentReceiptRecords.Time(previous["occurredAt"])) ||
                 row["bodyHash"] != AuthorizationStore.CommandHash(Body(shipmentId, sequence - 1, row["outcome"].AsString, occurred), row["reason"].AsString)) throw Invalid();
+            await new ShipmentCourierRecords(database, clock ?? new UnitToko.Platform.SystemClock()).RequireBindingAsync(tx, source, "attempt", row, ct);
             var audit = await Rows("auditEvents").Find(tx, new BsonDocument("_id", row["auditId"])).SingleOrDefaultAsync(ct);
             var receipt = await Rows("idempotencyRecords").Find(tx, new BsonDocument { { "actorId", row["actorId"] }, { "operation", Operation }, { "key", row["requestKey"] } }).SingleOrDefaultAsync(ct);
             if (audit is null || !CatalogSchemas.SemanticEquals(audit, Audit(row)) || receipt is null || receipt.GetValue("bodyHash", BsonNull.Value) != row["bodyHash"] ||

@@ -29,7 +29,7 @@ public sealed partial class ShipmentReceiptService
         if (asRecipient) {
             if (receipt["recipientId"] != actor.UserId) throw ShipmentReceiptRecords.Invalid();
             target = await recipients.ReadAsync(tx, authority, shipment.Resource, actor.UserId, ct);
-            people = await recipients.IndependenceAsync(tx, shipment.Snapshot["courierId"].AsInt64, actor.UserId, ct);
+            people = await recipients.IndependenceAsync(tx, receipt["courierId"].AsInt64, actor.UserId, ct);
         }
         var copy = shipment.Snapshot.DeepClone().AsBsonDocument;
         var consent = new BsonDocument { { "id", receipt["_id"] }, { "recordHash", CatalogRepository.Digest(receipt) } };

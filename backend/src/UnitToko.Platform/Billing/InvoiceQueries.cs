@@ -73,13 +73,20 @@ public sealed partial class InvoiceService
             return View(await AuthorizedInvoiceAsync(actor, authority, tx, rows[0]["_id"].AsInt64, Permissions.InvoiceIssue, token));
         }, ct);
     }
-    public async Task<InvoicePage> ListAsync(ActorContext actor, long? beforeId = null, CancellationToken ct = default) {
+    public Task<InvoicePage> ListAsync(ActorContext actor, long? beforeId = null, CancellationToken ct = default) =>
+        ListCoreAsync(actor, beforeId, null, ct);
+    public Task<InvoicePage> ListForOrderAsync(ActorContext actor, long orderId, long? beforeId = null, CancellationToken ct = default) {
+        if (orderId <= 0) throw InvoiceRecords.Invalid();
+        return ListCoreAsync(actor, beforeId, orderId, ct);
+    }
+    private async Task<InvoicePage> ListCoreAsync(ActorContext actor, long? beforeId, long? orderId, CancellationToken ct) {
         if (beforeId is <= 0) throw InvoiceRecords.Invalid(); await StorageAsync(ct);
         return await authorization.ReadAsync(actor, async (authority, tx, token) => {
             var query = ScopePolicy.Compile(actor, authority, Permissions.InvoiceRead, clock.UtcNow); AuthorizationStore.Require(query);
             var scoped = ScopeQuery.Create(query).Render(new RenderArgs<BsonDocument>(BsonSerializer.SerializerRegistry.GetSerializer<BsonDocument>(), BsonSerializer.SerializerRegistry));
             var pipeline = new List<BsonDocument>();
             if (beforeId.HasValue) pipeline.Add(new("$match", new BsonDocument("_id", new BsonDocument("$lt", beforeId.Value))));
+            if (orderId.HasValue) pipeline.Add(new("$match", new BsonDocument("orderIds", orderId.Value)));
             // Every constituent scope must match before any pagination or existence disclosure.
             pipeline.Add(new("$set", new BsonDocument("scopeCount", new BsonDocument("$size", "$scopes"))));
             pipeline.Add(new("$unwind", "$scopes"));

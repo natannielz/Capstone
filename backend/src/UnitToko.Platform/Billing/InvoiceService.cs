@@ -35,7 +35,9 @@ public sealed partial class InvoiceService
     private readonly IInvoiceAdmissionReader? admission;
     private readonly AuthorizationStore authorization;
     private readonly InvoiceRecords records;
-    public InvoiceService(IMongoDatabase database, MongoUnitOfWork unit, IdAllocator ids, IClock clock, ShipmentReceiptService receipts) : this(database, unit, ids, clock, receipts, null) { }
+    public InvoiceService(IMongoDatabase database, MongoUnitOfWork unit, IdAllocator ids, IClock clock, ShipmentReceiptService receipts) : this(database, unit, ids, clock, receipts, (IInvoiceAdmissionReader?)null) { }
+    public InvoiceService(IMongoDatabase database, MongoUnitOfWork unit, IdAllocator ids, IClock clock, ShipmentReceiptService receipts,
+        InvoiceReleaseService release) : this(database, unit, ids, clock, receipts, release.CreateReader()) { }
     internal InvoiceService(IMongoDatabase database, MongoUnitOfWork unit, IdAllocator ids, IClock clock, ShipmentReceiptService receipts, IInvoiceAdmissionReader? admission) {
         foreach (var source in new[] { receipts.SourceDatabase, admission?.Database }.Where(source => source is not null))
             if (!ReferenceEquals(source!.Client, database.Client) || !source.DatabaseNamespace.Equals(database.DatabaseNamespace)) throw new ArgumentException("Invoice owners must share one database transaction");
@@ -103,8 +105,9 @@ public sealed partial class InvoiceService
         if (review is null || !Regex.IsMatch(review, @"\A[0-9a-f]{64}\z", RegexOptions.CultureInvariant)) throw InvoicePolicy.Invalid();
         await StorageAsync(ct); var id = (await ids.NextAsync(InvoiceBson.Invoices, ct)).Value; var audit = (await ids.NextAsync("auditEvents", ct)).Value;
         var body = InvoiceBson.Body(copied, review); ImmutableArray<InvoiceReceiptSource> sources = []; InvoiceTerms? approved = null; BsonDocument final = null!;
+        IClientSessionHandle? operationTransaction = null;
         await authorization.ExecuteCommandAsync(actor, InvoiceBson.Operation, metadata, body, async (authority, tx, token) => {
-            approved = null; sources = await SourcesAsync(actor, authority, tx, copied, Permissions.InvoiceIssue, token);
+            operationTransaction = tx; approved = null; sources = await SourcesAsync(actor, authority, tx, copied, Permissions.InvoiceIssue, token);
             foreach (var source in sources) if (!ScopePolicy.Authorize(actor, authority, Permissions.InvoiceIssue, source.Resource, clock.UtcNow).Allowed) throw InvoiceRecords.Invalid();
             return new(ScopePolicy.Authorize(actor, authority, Permissions.InvoiceIssue, sources[0].Resource, clock.UtcNow),
                 [.. sources.SelectMany(source => ScopePolicy.RequiredNodes(source.Resource, authority.Directory)).Distinct()], Permissions.InvoiceIssue, new(sources[0].Resource));
@@ -136,10 +139,15 @@ public sealed partial class InvoiceService
             return InvoiceBson.Result(row);
         }, ct, async (authority, tx, token) => {
             var original = await records.Rows(InvoiceBson.Invoices).Find(tx, new BsonDocument { { "issuedBy", actor.UserId }, { "requestKey", metadata.IdempotencyKey } }).SingleOrDefaultAsync(token) ?? throw InvoiceRecords.Invalid();
+            if (approved is not null && admission is IInvoiceReleaseWriter releaseWriter)
+                await releaseWriter.BindPostedAsync(tx, actor, approved, original, token);
             final = await records.VerifyAsync(actor, tx, original, token);
             if (final["bodyHash"] != AuthorizationStore.CommandHash(body, metadata.Reason) || !InvoiceRecords.Equal(final["sources"], InvoiceBson.Sources(sources))) throw InvoiceRecords.Invalid();
             if (approved is not null) { await admission!.CompleteAsync(tx, actor, approved, token); InvoiceAdmissionPolicy.Current(approved, clock.UtcNow); }
             await receipts.InvoiceFenceAsync(actor, authority, tx, sources.Select(source => source.Resource), Permissions.InvoiceIssue, token);
+        }, validateCurrent: () => {
+            if (approved is not null && admission is IInvoiceReleaseWriter releaseWriter)
+                releaseWriter.RequireCurrent(operationTransaction ?? throw InvoiceRecords.Invalid(), actor, approved);
         });
         return View(final);
     }

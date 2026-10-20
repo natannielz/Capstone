@@ -6,7 +6,7 @@ import { identityReturnPath } from '../src/modules/identity/identity-workflow';
 import { actorId, sku, definition } from './catalog-fixtures';
 
 const shipment = { id: '9007199254741090', revision: '1', orderId: '9007199254741001', suborderId: '9007199254741002', numberEntity: '100', numberChannel: '103', numberYear: '2026', number: '9007199254741021',
-  dispatchedAt: definition.effectiveAt, buyerName: 'Cabang fixture', courierId: '9100', courierName: 'Kurir fixture',
+  dispatchedAt: definition.effectiveAt, buyerName: 'Cabang fixture', courierId: '9100', courierName: 'Kurir fixture', currentAssignment: {revision: '1', courierId: '9100', courierName: 'Kurir fixture', effectiveAt: definition.effectiveAt},
   delivery: { recipientName: 'Penerima', phone: '081234567890', address: 'Alamat fixture', city: 'Jakarta', postalCode: null, instructions: null },
   lines: [{ skuId: sku.id, skuCode: sku.code, productName: 'Pena biru', definition, packages: 1, baseUnits: String(definition.baseUnitsPerPackage) }] };
 test('shipment views retain exact dispatched packaging and lossless document references', () => {

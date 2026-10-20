@@ -9,7 +9,7 @@ using UnitToko.Platform.Ordering;
 
 namespace UnitToko.Platform.Fulfillment;
 
-internal sealed record ShipmentDocumentSource(ResourceScope Resource, BsonDocument Snapshot);
+internal sealed record ShipmentDocumentSource(ResourceScope Resource, BsonDocument Snapshot, ShipmentCourierRecords.Capture? Assignment = null);
 
 public sealed partial class ShipmentQueryService
 {
@@ -18,12 +18,15 @@ public sealed partial class ShipmentQueryService
     internal async Task<ShipmentDocumentSource> DocumentSourceAsync(ActorContext actor, AuthorizationSnapshot snapshot,
         IClientSessionHandle tx, long shipmentId, string permission, CancellationToken ct,
         ShipmentDispatchValueRecords.HistoricalRead? history = null) {
-        if (permission is not (Permissions.ShipmentRead or Permissions.ShipmentPrepare or Permissions.DeliveryAttempt or Permissions.DeliveryEvidence or Permissions.ReceiptAccept or Permissions.InvoiceRead or Permissions.InvoiceIssue or Permissions.CaseRead or Permissions.CaseRequest or Permissions.CaseManage) || shipmentId <= 0) throw ShipmentDispatchRecords.Invalid();
-        var scoped = await Rows("shipments").Find(tx, F.Eq("_id", shipmentId) & ScopeQuery.Create(Query(actor, snapshot, permission))).SingleOrDefaultAsync(ct)
-            ?? throw ShipmentDispatchRecords.Invalid();
+        if (permission is not (Permissions.ShipmentRead or Permissions.ShipmentAssign or Permissions.ShipmentPrepare or Permissions.DeliveryAttempt or Permissions.DeliveryEvidence or Permissions.ReceiptAccept or Permissions.InvoiceRead or Permissions.InvoiceIssue or Permissions.CaseRead or Permissions.CaseRequest or Permissions.CaseManage) || shipmentId <= 0) throw ShipmentDispatchRecords.Invalid();
+        if ((await CurrentRowsAsync(actor, snapshot, tx, permission, null, null, shipmentId, ct)).Count != 1) throw ShipmentDispatchRecords.Invalid();
         history ??= orders.StockSourceHistory ?? new ShipmentDispatchValueRecords.HistoricalRead(database, clock, tx);
         var row = await new ShipmentDispatchRecords(database, clock, history, orders.StockSourceLiveRead).ReadAsync(tx, shipmentId, ct);
-        return new(Resource(scoped), await DocumentFactsAsync(actor, tx, row, ct, history));
+        var assignment = await new ShipmentCourierRecords(database, clock).ReadAsync(tx, row, ct);
+        var resource = CurrentResource(assignment);
+        if (!Query(actor, snapshot, permission).Matches(resource)) throw ShipmentDispatchRecords.Invalid();
+        await assignment.CompleteAsync(tx, ct);
+        return new(resource, await DocumentFactsAsync(actor, tx, row, ct, history), assignment);
     }
     private async Task<BsonDocument> DocumentFactsAsync(ActorContext actor, IClientSessionHandle tx, BsonDocument row, CancellationToken ct,
         ShipmentDispatchValueRecords.HistoricalRead? history = null) {

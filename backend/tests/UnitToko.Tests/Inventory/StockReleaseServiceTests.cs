@@ -247,9 +247,10 @@ public sealed class StockReleaseServiceTests(MongoFixture fixture, ITestOutputHe
                 B.Expected(preview["expected"]), preview["binding"].AsString, Meta(key));
         }
         internal static async Task<Data> CreateAsync(MongoFixture fixture, Action<string>? diagnostics = null, bool useSystemClock = false, DateOnly? inspectedExpiry = null,
-            bool includeCogsMapping = false, long reviewedSafetyBufferBaseUnits = 12, bool includeCustomerMappings = false) {
+            bool includeCogsMapping = false, long reviewedSafetyBufferBaseUnits = 12, bool includeCustomerMappings = false, bool includeCustomerCashMappings = false) {
             var valuation = await ProcurementStockValuationTestData.CreateAsync(fixture, activateEmptySource: true, useSystemClock: useSystemClock, inspectedExpiry: inspectedExpiry,
-                includeCogsMapping: includeCogsMapping, reviewedSafetyBufferBaseUnits: reviewedSafetyBufferBaseUnits, includeCustomerMappings: includeCustomerMappings);
+                includeCogsMapping: includeCogsMapping, reviewedSafetyBufferBaseUnits: reviewedSafetyBufferBaseUnits, includeCustomerMappings: includeCustomerMappings,
+                includeCustomerCashMappings: includeCustomerCashMappings);
             diagnostics?.Invoke("fixture");
             var data = new Data(valuation);
             try {

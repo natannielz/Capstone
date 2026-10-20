@@ -55,13 +55,13 @@ public sealed partial class ShipmentReceiptService
         new { challengeId = challenge, tokenHash, consentVersion = DeliveryReceiptPolicy.ConsentVersion, consent = true, lines = lines.OrderBy(line => line.SkuId.Value).ToImmutableArray() };
     private static CommandAuthorization Allow(ActorContext actor, AuthorizationSnapshot snapshot, ShipmentDocumentSource source, string permission, DateTimeOffset now) =>
         new(ScopePolicy.Authorize(actor, snapshot, permission, source.Resource, now), ScopePolicy.RequiredNodes(source.Resource, snapshot.Directory), permission, new(source.Resource));
-    private static void Courier(ActorContext actor, ShipmentDocumentSource source) { if (source.Snapshot["courierId"] != actor.UserId) throw ShipmentReceiptRecords.Invalid(); }
+    private static void Courier(ActorContext actor, ShipmentDocumentSource source) { if (source.Assignment?.CourierId != actor.UserId) throw ShipmentReceiptRecords.Invalid(); }
     private ShipmentReceiptChallengeView Challenge(BsonDocument row, string? secret = null) => new(new(row["_id"].AsInt64), new(row["shipmentId"].AsInt64),
         new(row["documentId"].AsInt64), new(row["recipientId"].AsInt64), row["recipientName"].AsString, ShipmentReceiptRecords.Time(row["expiresAt"]), Now, secret);
     private static BsonDocument Header(long id, ActorContext actor, ShipmentDocumentSource source, BsonDocument document, ShipmentRecipientTarget target,
         AuthorizationCommandMetadata meta, object body, long audit, DateTimeOffset now) => new() {
         { "_id", id }, { "schemaVersion", 1 }, { "shipmentId", source.Snapshot["shipmentId"] }, { "documentId", document["_id"] },
-        { "documentVersion", document["version"] }, { "documentHash", document["contentHash"] }, { "courierId", source.Snapshot["courierId"] },
+        { "documentVersion", document["version"] }, { "documentHash", document["contentHash"] }, { "courierId", source.Assignment?.CourierId ?? throw ShipmentCourierRecords.Invalid() },
         { "recipientId", target.UserId }, { "recipientName", target.Name }, { "recipientProfileVersion", target.ProfileVersion },
         { "actorId", actor.UserId }, { "actorGrantVersion", actor.GrantVersion }, { "requestKey", meta.IdempotencyKey }, { "bodyHash", AuthorizationStore.CommandHash(body, meta.Reason) },
         { "recordedAt", now.UtcDateTime }, { "auditId", audit }, { "reason", meta.Reason }, { "correlationId", meta.CorrelationId }
@@ -70,7 +70,9 @@ public sealed partial class ShipmentReceiptService
         string permission, ShipmentRecipientTarget target, PersonAuthorityProof proof, CancellationToken ct) {
         await recipients.FenceAsync(actor, snapshot, tx, source.Resource, target, ct);
         await new PersonAuthorizationFence(database, clock).TouchAsync(tx, proof, ct);
+        await shipments.CompleteAssignmentAsync(tx, source, ct);
         await shipments.FenceAsync(actor, snapshot, tx, [source.Resource], ct, permission);
+        (source.Assignment ?? throw ShipmentCourierRecords.Invalid()).Require(tx);
         recipients.RequireCurrent(snapshot, source.Resource, target); proof.RequireCurrent(tx, clock.UtcNow);
     }
     public async Task<ShipmentRecipientPage> RecipientsAsync(ActorContext actor, long shipmentId, long? beforeId = null, CancellationToken ct = default) {
@@ -79,7 +81,9 @@ public sealed partial class ShipmentReceiptService
             var source = await shipments.DocumentSourceAsync(actor, snapshot, tx, shipmentId, Permissions.DeliveryEvidence, token); Courier(actor, source);
             var targets = await recipients.ListAsync(tx, snapshot, source.Resource, beforeId, token);
             foreach (var target in targets) await recipients.FenceAsync(actor, snapshot, tx, source.Resource, target, token);
+            await shipments.CompleteAssignmentAsync(tx, source, token);
             await shipments.FenceAsync(actor, snapshot, tx, [source.Resource], token, Permissions.DeliveryEvidence);
+            (source.Assignment ?? throw ShipmentCourierRecords.Invalid()).Require(tx);
             foreach (var target in targets) recipients.RequireCurrent(snapshot, source.Resource, target);
             return new ShipmentRecipientPage(targets.Take(25).Select(target => new ShipmentRecipientView(new(target.UserId), target.Name)).ToImmutableArray(), targets.Length > 25);
         }, ct);
@@ -112,6 +116,7 @@ public sealed partial class ShipmentReceiptService
             row.AddRange(new BsonDocument { { "tokenHash", Hash(secret) }, { "expiresAt", now.Add(DeliveryReceiptPolicy.ChallengeLifetime).UtcDateTime },
                 { "failedAttempts", 0 }, { "consumedReceiptId", BsonNull.Value }, { "consumedAt", BsonNull.Value } });
             await Rows(ShipmentReceiptRecords.Challenges).InsertOneAsync(tx, row, cancellationToken: token);
+            await new ShipmentCourierRecords(database, clock).BindAsync(tx, source, "challenge", row, token);
             await records.EffectsAsync(tx, row, ShipmentReceiptRecords.Issue, token); return ShipmentReceiptRecords.Result(row, ShipmentReceiptRecords.Issue);
         }, ct, async (snapshot, tx, token) => {
             final = await Rows(ShipmentReceiptRecords.Challenges).Find(tx, F.Eq("actorId", actor.UserId) & F.Eq("requestKey", metadata.IdempotencyKey)).SingleOrDefaultAsync(token) ?? throw ShipmentReceiptRecords.Invalid();
@@ -124,7 +129,8 @@ public sealed partial class ShipmentReceiptService
     }
     private async Task VerifyChallengeAsync(IClientSessionHandle tx, BsonDocument row, ShipmentDocumentSource source, CancellationToken ct) {
         var document = await documents.RequireReceiptDocumentAsync(tx, source, row["documentId"].AsInt64, ct);
-        if (row["shipmentId"] != source.Snapshot["shipmentId"] || row["courierId"] != source.Snapshot["courierId"] || row["actorId"] != row["courierId"] ||
+        await new ShipmentCourierRecords(database, clock).RequireBindingAsync(tx, source, "challenge", row, ct);
+        if (row["shipmentId"] != source.Snapshot["shipmentId"] || row["actorId"] != row["courierId"] ||
             row["documentHash"] != document["contentHash"] || row["documentVersion"] != document["version"] ||
             row["bodyHash"] != AuthorizationStore.CommandHash(IssueBody(row["shipmentId"].AsInt64, row["documentId"].AsInt64, row["recipientId"].AsInt64), row["reason"].AsString) ||
             ShipmentReceiptRecords.Time(row["expiresAt"]) != ShipmentReceiptRecords.Time(row["recordedAt"]).Add(DeliveryReceiptPolicy.ChallengeLifetime) ||
@@ -135,6 +141,9 @@ public sealed partial class ShipmentReceiptService
         await DeliveryAttempts.RequireUsableChallengeAsync(tx, source, row["challengeId"].AsInt64, ct);
         var challenge = await Rows(ShipmentReceiptRecords.Challenges).Find(tx, F.Eq("_id", row["challengeId"])).SingleOrDefaultAsync(ct) ?? throw ShipmentReceiptRecords.Invalid();
         await VerifyChallengeAsync(tx, challenge, source, ct);
+        var assignments = new ShipmentCourierRecords(database, clock);
+        if (await assignments.RequireBindingAsync(tx, source, "receipt", row, ct) !=
+            await assignments.RequireBindingAsync(tx, source, "challenge", challenge, ct)) throw ShipmentReceiptRecords.Invalid();
         var lines = DeliveryReceiptPolicy.Require(ShipmentReceiptRecords.Dispatched(source.Snapshot), ShipmentReceiptRecords.Declarations(row["lines"].AsBsonArray));
         foreach (var name in new[] { "shipmentId", "documentId", "documentVersion", "documentHash", "courierId", "recipientId", "tokenHash" })
             if (row[name] != challenge[name]) throw ShipmentReceiptRecords.Invalid();

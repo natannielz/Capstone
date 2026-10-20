@@ -33,6 +33,7 @@ public static class Permissions
     public const string AnomalyRead = "operations.anomaly.read", AnomalyReview = "operations.anomaly.review";
     public const string AnomalyPolicyConfigure = "operations.anomaly.policy.configure";
     public const string SourcePrepare = "source.prepare", SourceReconcile = "source.reconcile", ReportPrepare = "report.prepare", PeriodSubmit = "period.submit", PeriodApprove = "period.approve", PeriodClose = "period.close", PeriodReopenRequest = "period.reopen.request", PeriodReopenApprove = "period.reopen.approve";
+    public const string InvoiceReleaseRead = "invoice.release.read", InvoiceReleasePropose = "invoice.release.propose", InvoiceReleaseApprove = "invoice.release.approve";
     public const string InvoiceRead = "invoice.read", InvoiceIssue = "invoice.issue", PaymentEvidence = "payment.evidence", PaymentRecord = "payment.record", PaymentAllocate = "payment.allocate", PaymentVerify = "payment.verify";
     public const string ReceivingAccountRead = "receiving.account.read", ReceivingAccountDetailsRead = "receiving.account.details.read", ReceivingAccountPropose = "receiving.account.propose", ReceivingAccountVerify = "receiving.account.verify", ReceivingAccountApprove = "receiving.account.approve";
     public const string BankReceiptRead = "bank.receipt.read", BankReceiptConfirm = "bank.receipt.confirm";
@@ -87,6 +88,9 @@ public static class Permissions
         Add(OrderCommercialPolicyRead, [GrantScopeKind.BuyingDivision, GrantScopeKind.BuyingBranch, GrantScopeKind.BuyingOrganization, GrantScopeKind.FulfillmentShop]);
         foreach (var name in new[] { OrderCommercialPolicyPropose, OrderCommercialPolicyApprove }) Add(name, [GrantScopeKind.FulfillmentShop], true);
         Add(SubstitutionAccept, Buying);
+        Add(InvoiceReleaseRead, Operations);
+        Add(InvoiceReleasePropose, Operations, true);
+        Add(InvoiceReleaseApprove, Operations, true);
         Add(AccountingBookRead, [GrantScopeKind.FulfillmentShop]);
         Add(AccountingBookPropose, [GrantScopeKind.FulfillmentShop], true);
         Add(AccountingBookApprove, [GrantScopeKind.FulfillmentShop], true);

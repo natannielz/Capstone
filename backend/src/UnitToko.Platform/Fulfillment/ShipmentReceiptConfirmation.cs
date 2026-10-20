@@ -34,7 +34,10 @@ public sealed partial class ShipmentReceiptService
             if (receipt is not null) {
                 await VerifyReceiptAsync(tx, receipt, source, token);
                 if (!allowAccepted || receipt["challengeId"] != challengeId || receipt["recipientId"] != actor.UserId || !TokenMatches(challenge, secret)) throw ShipmentReceiptRecords.Invalid();
-            } else RequireOpen(challenge);
+            } else {
+                await new ShipmentCourierRecords(database, clock).RequireCurrentChallengeAsync(tx, source, challenge, token);
+                RequireOpen(challenge);
+            }
             if (!TokenMatches(challenge, secret)) {
                 if ((await Rows(ShipmentReceiptRecords.Challenges).UpdateOneAsync(tx, F.Eq("_id", challengeId) & F.Eq("failedAttempts", challenge["failedAttempts"]) & F.Eq("consumedReceiptId", BsonNull.Value),
                     Builders<BsonDocument>.Update.Inc("failedAttempts", 1), cancellationToken: token)).ModifiedCount != 1) throw ShipmentReceiptRecords.Invalid();
@@ -77,6 +80,7 @@ public sealed partial class ShipmentReceiptService
             lines = DeliveryReceiptPolicy.Require(ShipmentReceiptRecords.Dispatched(source.Snapshot), declarations);
             var existing = await records.FindReceiptAsync(tx, challenge["shipmentId"].AsInt64, token);
             if (existing is not null) await VerifyReceiptAsync(tx, existing, source, token);
+            else await new ShipmentCourierRecords(database, clock).RequireCurrentChallengeAsync(tx, source, challenge, token);
             return Allow(actor, snapshot, source, Permissions.ReceiptAccept, clock.UtcNow);
         }, async (tx, token) => {
             if (await records.FindReceiptAsync(tx, challenge["shipmentId"].AsInt64, token) is not null) throw new PersistenceConflictException("shipment_already_received", "Use the original receipt request or read the existing receipt");
@@ -91,6 +95,7 @@ public sealed partial class ShipmentReceiptService
                 F.Eq("failedAttempts", challenge["failedAttempts"]) & F.Gt("expiresAt", now.UtcDateTime), Builders<BsonDocument>.Update.Set("consumedReceiptId", id).Set("consumedAt", now.UtcDateTime), cancellationToken: token)).ModifiedCount != 1)
                 throw ShipmentReceiptRecords.Invalid();
             await Rows(ShipmentReceiptRecords.Receipts).InsertOneAsync(tx, row, cancellationToken: token);
+            await new ShipmentCourierRecords(database, clock).BindAsync(tx, source, "receipt", row, token);
             await records.EffectsAsync(tx, row, ShipmentReceiptRecords.Confirm, token);
             wrote = true;
             return ShipmentReceiptRecords.Result(row, ShipmentReceiptRecords.Confirm);
@@ -110,6 +115,7 @@ public sealed partial class ShipmentReceiptService
             var source = await shipments.DocumentSourceAsync(actor, snapshot, tx, shipmentId, Permissions.ShipmentRead, token);
             var row = await records.FindReceiptAsync(tx, shipmentId, token);
             var result = row is null ? null : Receipt(row, await VerifyReceiptAsync(tx, row, source, token));
+            await shipments.CompleteAssignmentAsync(tx, source, token);
             await shipments.FenceAsync(actor, snapshot, tx, [source.Resource], token); return result;
         }, ct);
     }
