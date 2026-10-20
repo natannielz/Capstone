@@ -17,7 +17,7 @@ namespace UnitToko.LocalPilot;
 /// Idempotency keys make a rerun after an interruption return the original results.</summary>
 public static class PilotCatalog
 {
-    public const int Version = 1;
+    public const int Version = 2;
 
     internal sealed record Item(string Category, string Code, string Name, string Description, string PackageLabel, string PackageKind,
         string BaseUnit, int UnitsPerPackage, int Minimum, string Price, (string Key, string Value)[] Attributes);
@@ -83,7 +83,15 @@ public static class PilotCatalog
         string profile, CancellationToken ct)
     {
         var marker = await markers.Find(new BsonDocument("_id", profile)).SingleAsync(ct);
-        if (marker.GetValue("catalogExpansion", 0).ToInt32() >= Version) return;
+        var applied = marker.GetValue("catalogExpansion", 0).ToInt32();
+        if (applied >= Version) return;
+        if (applied < 1) await ExpandV1Async(database, client, secrets, markers, profile, ct);
+        await ExpandDemoProductsAsync(database, client, secrets, markers, profile, ct);
+    }
+
+    private static async Task ExpandV1Async(IMongoDatabase database, MongoClient client, PilotSecrets secrets, IMongoCollection<BsonDocument> markers,
+        string profile, CancellationToken ct)
+    {
         var clock = new SystemClock(); var unit = new MongoUnitOfWork(client);
         var actor = new ActorContext(2001, PilotBoundary.Issuer, secrets.Accounts.Single(x => x.Id == 2001).Subject, 1, clock.UtcNow, FactorAssurance.MultiFactor);
         var reviewer = new ActorContext(2002, PilotBoundary.Issuer, secrets.Accounts.Single(x => x.Id == 2002).Subject, 1, clock.UtcNow, FactorAssurance.MultiFactor);
@@ -120,6 +128,60 @@ public static class PilotCatalog
                         "SYNTHETIC independent price review for the demo catalog", Meta("price-approve-" + item.Code), ct);
                 }
             }
+        }
+        await markers.UpdateOneAsync(new BsonDocument("_id", profile), Builders<BsonDocument>.Update.Set("catalogExpansion", 1), cancellationToken: ct);
+    }
+
+    internal sealed record DemoProduct(string Sku, string Name, string Description, string Unit, long Price, string Group, string Image);
+    /// <summary>The first demo's groups map onto the catalog's existing categories.</summary>
+    private static readonly Dictionary<string, string> GroupCategory = new(StringComparer.Ordinal) {
+        ["Minuman"] = "AIR-MINUMAN", ["Pantry & konsumsi"] = "PANTRY", ["Kebutuhan kantor"] = "ATK", ["Merchandise"] = "MERCHANDISE",
+    };
+    private static readonly HashSet<string> LooseUnits = new(StringComparer.Ordinal) { "buah", "set", "buku", "pasang", "batang", "roll", "pad", "gelas" };
+    internal static DemoProduct[] DemoProducts()
+    {
+        using var stream = typeof(PilotCatalog).Assembly.GetManifestResourceStream("demo-products.json") ?? throw new InvalidOperationException("demo-products.json is missing.");
+        return System.Text.Json.JsonSerializer.Deserialize<DemoProduct[]>(stream, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true })
+            ?? throw new InvalidOperationException("demo-products.json is empty.");
+    }
+
+    /// <summary>Version 2: the first demo's 200 products, so the catalog looks like a real shop. Same real services and
+    /// idempotency as version 1; each item is sold per its own unit (one bottle, one box), minimum one.</summary>
+    private static async Task ExpandDemoProductsAsync(IMongoDatabase database, MongoClient client, PilotSecrets secrets, IMongoCollection<BsonDocument> markers,
+        string profile, CancellationToken ct)
+    {
+        var clock = new SystemClock(); var unit = new MongoUnitOfWork(client);
+        var actor = new ActorContext(2001, PilotBoundary.Issuer, secrets.Accounts.Single(x => x.Id == 2001).Subject, 1, clock.UtcNow, FactorAssurance.MultiFactor);
+        var reviewer = new ActorContext(2002, PilotBoundary.Issuer, secrets.Accounts.Single(x => x.Id == 2002).Subject, 1, clock.UtcNow, FactorAssurance.MultiFactor);
+        var service = new CatalogAuthoringService(database, unit, new(database), clock);
+        var prices = new CatalogPriceService(database, unit, new(database), clock);
+        var owner = new GrantScope(GrantScopeKind.FulfillmentWarehouse, 100, ShopId: 101, WarehouseId: 102, ChannelId: 103);
+        static AuthorizationCommandMetadata Meta(string key) => new("local-pilot.catalog-v2." + key, "SYNTHETIC demo catalog; no real product, stock or price", "local-pilot-catalog");
+        var categories = new Dictionary<string, LongId>(StringComparer.Ordinal);
+        foreach (var row in await database.GetCollection<BsonDocument>("catalogCategories").Find(FilterDefinition<BsonDocument>.Empty).ToListAsync(ct))
+            categories[row["code"].AsString] = new(row["_id"].AsInt64);
+        var assortments = database.GetCollection<BsonDocument>("catalogAssortments");
+        foreach (var item in DemoProducts())
+        {
+            var label = char.ToUpperInvariant(item.Unit[0]) + item.Unit[1..];
+            var family = await service.CreateFamilyAsync(actor, new(owner, categories[GroupCategory[item.Group]], item.Name,
+                item.Description + " Data contoh sintetis untuk demo.", []), Meta("family-" + item.Sku), ct);
+            var sku = await service.CreateSkuAsync(actor, new(family.Id, family.Version, item.Sku, "synthetic-demo-" + item.Sku.ToLowerInvariant(),
+                new DefinitionInput(item.Unit == "buah" ? "Satuan" : label, LooseUnits.Contains(item.Unit) ? "loose" : "sealed", item.Unit, 1,
+                    ImmutableSortedDictionary.Create<string, string>(StringComparer.Ordinal), [], 1, 1)), Meta("sku-" + item.Sku), ct);
+            var stored = await database.GetCollection<BsonDocument>("skus").Find(new BsonDocument("_id", sku.Id.Value)).SingleAsync(ct);
+            if (!stored["catalogListings"].AsBsonArray.Any(listing => listing["assortmentId"] == 501L))
+            {
+                var assortment = await assortments.Find(new BsonDocument("_id", 501L)).SingleAsync(ct);
+                await service.SetPublicationsAsync(actor, new(sku.Id, sku.Version, [new(501)], [new(new(501), assortment["version"].ToInt64())]), Meta("publish-" + item.Sku), ct);
+            }
+            if (profile != "full") continue;
+            var preview = await prices.PreviewAsync(actor, sku.Id.Value, CatalogPriceAccess.Prepare, ct);
+            if (preview.Current is not null) continue;
+            var proposal = await prices.ProposeAsync(actor, sku.Id.Value, preview.Expected,
+                new("IDR", UnitToko.Modules.Accounting.Money.Parse(item.Price.ToString(System.Globalization.CultureInfo.InvariantCulture) + ".00")), Meta("price-" + item.Sku), ct);
+            await prices.DecideAsync(reviewer, proposal["proposalId"].AsInt64, 1, CatalogPriceDecision.Approve,
+                "SYNTHETIC independent price review for the demo catalog", Meta("price-approve-" + item.Sku), ct);
         }
         await markers.UpdateOneAsync(new BsonDocument("_id", profile), Builders<BsonDocument>.Update.Set("catalogExpansion", Version), cancellationToken: ct);
     }

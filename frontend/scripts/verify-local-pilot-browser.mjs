@@ -82,7 +82,7 @@ async function user(id, mobile = false) {
   await page.getByLabel('Nama masuk', { exact: true }).fill(account.Username);
   await page.getByLabel('Kata sandi lokal', { exact: true }).fill(account.Password);
   await page.getByLabel('Kode faktor SIMULASI', { exact: true }).fill(account.FactorCode);
-  await page.getByRole('button', { name: 'Masuk dengan identitas sintetis', exact: true }).click();
+  await page.getByRole('button', { name: 'Masuk', exact: true }).click();
   await page.waitForURL(url => url.origin === origin && url.pathname === '/identity/account');
   await page.getByRole('heading', { name: 'Akses kerja Anda', exact: true }).waitFor();
   const session = await page.evaluate(async () => { const response = await fetch('/api/v1/identity/session', { cache: 'no-store' }); return { status: response.status, value: await response.json() }; });

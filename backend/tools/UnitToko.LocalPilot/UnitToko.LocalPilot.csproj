@@ -9,5 +9,7 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.12" />
     <ProjectReference Include="../../src/UnitToko.Api/UnitToko.Api.csproj" />
+    <!-- The first demo's 200 products (names, descriptions, units, prices, groups, photo paths), SYNTHETIC. -->
+    <EmbeddedResource Include="demo-products.json" LogicalName="demo-products.json" />
   </ItemGroup>
 </Project>
