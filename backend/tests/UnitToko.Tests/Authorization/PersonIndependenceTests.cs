@@ -171,11 +171,22 @@ public sealed class PersonIndependenceTests
     public void Operational_consent_preserves_account_evidence_without_person_proof()
     {
         Assert.False(PersonApprovalPolicy.RequiresEvidence(Permissions.OrderAccept));
-        Assert.False(PersonApprovalPolicy.RequiresEvidence(Permissions.SubstitutionAccept));
         Assert.True(PersonApprovalPolicy.Evaluate(101, Permissions.OrderAccept, new(3, 3, RequestedBy: 101), default).Allowed);
-        Assert.True(PersonApprovalPolicy.Evaluate(101, Permissions.SubstitutionAccept,
-            new(3, 3, RequestedBy: 101, ProposedBy: 101), default).Allowed);
         Assert.False(PersonApprovalPolicy.Evaluate(101, Permissions.OrderAccept, null, default).Allowed);
+    }
+
+    // R02 (schema 115): buyer consent to a substitute is a decision on someone else's proposal, so it needs person proof
+    // that the consenting person is not the store staff member who proposed it.
+    [Fact]
+    public void Substitution_consent_requires_a_person_other_than_the_proposer()
+    {
+        Assert.True(PersonApprovalPolicy.RequiresEvidence(Permissions.SubstitutionAccept));
+        var proposed = new ApprovalRequest(3, 3, RequestedBy: 101, ProposedBy: 201);
+        Assert.True(PersonApprovalPolicy.Evaluate(101, Permissions.SubstitutionAccept, proposed, [Person(101, 900), Person(201, 901)]).Allowed);
+        Assert.False(PersonApprovalPolicy.Evaluate(101, Permissions.SubstitutionAccept, proposed, [Person(101, 900), Person(201, 900)]).Allowed);
+        Assert.False(PersonApprovalPolicy.Evaluate(101, Permissions.SubstitutionAccept, proposed, default).Allowed);
+        Assert.False(PersonApprovalPolicy.Evaluate(101, Permissions.SubstitutionAccept,
+            new(3, 3, RequestedBy: 101, ProposedBy: 101), [Person(101, 900)]).Allowed);
         Assert.False(PersonApprovalPolicy.Evaluate(101, Permissions.SubstitutionAccept, new(3, 3, RequestedBy: 101), default).Allowed);
     }
 

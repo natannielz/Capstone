@@ -139,6 +139,23 @@ jobs:
       - name: Build pinned SDK solution
         working-directory: backend
         run: dotnet build UnitToko.slnx --nologo
+      - name: Self-contained backend unit tests (no database or local tools)
+        working-directory: backend
+        env:
+          # The Mongo fixture refuses this address, so a selected test that secretly needs the database fails loudly.
+          UNITTOKO_TEST_MONGO_URI: mongodb://127.0.0.1:1/
+        run: |
+          filter="$(python3 tests/unit-test-filter.py)"
+          dotnet test tests/UnitToko.Tests/UnitToko.Tests.csproj --no-build --nologo --filter "$filter" \
+            --logger 'trx;LogFileName=unit.trx' --logger 'console;verbosity=minimal' --results-directory ../tmp/focused-ci
+          python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+          root = ET.parse("../tmp/focused-ci/unit.trx").getroot()
+          counters = root.find(".//{http://microsoft.com/schemas/VisualStudio/TeamTest/2010}Counters")
+          assert counters is not None, "Missing unit test results"
+          total = int(counters.get("total", "0"))
+          assert total > 0 and int(counters.get("passed", "0")) == total, "Missing, skipped or failing unit tests"
+          PY
       - name: Auth0 Action policy fixtures
         run: node --test backend/integrations/auth0/v1/actions.test.cjs
       - name: Check server OpenAPI contract
