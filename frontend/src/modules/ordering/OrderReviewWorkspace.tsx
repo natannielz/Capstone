@@ -15,6 +15,8 @@ import common from '../administration/access.module.css';
 import styles from './order-draft.module.css';
 import { SessionAccessState } from "@/components/workspace-kit/session-access-state";
 import { orderNumber } from '@/lib/document-numbers';
+import { reviewWaiting } from './order-status';
+import { StatusBadge } from '@/components/workspace-kit/status-badge';
 
 type Account = { actorId: string; actions: readonly string[]; session: IdentitySession; observedAt: number };
 const factorHref = '/identity/account?operation=order.spend.approve&returnPath=%2Fordering%2Freviews';
@@ -86,6 +88,8 @@ function ReviewDesk({ account, elapsed, onFailure, onRefresh }: { account: Accou
   const timing = sessionTiming(account.session, elapsed), locked = busy || recovering || recovery.locked;
   const fresh = stage !== 'Spending' || timing.fresh;
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 60000); return () => window.clearInterval(timer); }, []);
   useEffect(() => {
     let active = true; const controller = new AbortController();
     void Promise.resolve().then(async () => {
@@ -140,7 +144,7 @@ function ReviewDesk({ account, elapsed, onFailure, onRefresh }: { account: Accou
     <section className={common.accountSection} aria-label="Pesanan sesuai akses" aria-busy={busy}><h2>{stage === 'Store' ? 'Bagian pesanan toko' : stage === 'Spending' ? 'Pesanan cabang' : 'Pesanan untuk ditinjau pembatalannya'}</h2>
       {!busy && page.items.length === 0 && <p>Belum ada pesanan yang dapat ditinjau dalam penugasan ini.</p>}
       <ul className={styles.lines}>{page.items.map(item => <li key={item.suborderId ?? item.orderId}><strong>{item.buyerName}</strong> · Pesanan {orderNumber(item.orderId)} · {item.quote.lines.length} kemasan
-        <p>{statusText(item)}</p>
+        <p>{statusText(item)} · {reviewWaiting(item.orderedAt, now).age}{reviewWaiting(item.orderedAt, now).overdue && <> <StatusBadge text="Lewat 1 hari" /></>}</p>
         <button className={common.secondary} disabled={locked || !fresh} onClick={() => void select(item)}>Tinjau pesanan {orderNumber(item.orderId)}{item.suborderId ? ' / ' + item.suborderId : ''}</button></li>)}</ul>
       <div className={common.actions}><button className={common.secondary} disabled={locked} onClick={() => { setBefore(null); setReload(value => value + 1); }}>Muat pesanan terbaru</button>
         {page.hasMore && <button className={common.secondary} disabled={locked} onClick={() => { const last = page.items.at(-1); if (last) setBefore(last.suborderId ?? last.orderId); }}>Pesanan lebih lama</button>}</div>
