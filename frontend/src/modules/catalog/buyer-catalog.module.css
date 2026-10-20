@@ -129,3 +129,18 @@
 .searchTerm { display: flex; align-items: center; gap: 10px; margin: 0; font-size: 15px; }
 .searchTerm button { min-height: 36px; padding: 0 12px; border: 1px solid #a7bac2; border-radius: 6px; background: #fff; font: inherit; font-size: 14px; cursor: pointer; }
 :global([data-store-frame]) .toolbar { padding: 12px 0; border: 0; border-bottom: 1px solid #d5e3e1; background: transparent; margin-bottom: 20px; align-items: center; }
+
+/* Product page: photo | name, price and buy box; specifications and description underneath. */
+.productPage { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 20px 40px; align-items: start; }
+.productMedia { position: sticky; top: 96px; }
+.productMain { display: grid; gap: 8px; min-width: 0; }
+.productMain > p { margin: 0; }
+.productTitle { margin: 0; font-size: clamp(24px, 3vw, 34px); line-height: 1.2; letter-spacing: -.01em; overflow-wrap: anywhere; }
+.productVariant { color: var(--muted-foreground); font-size: 15px; }
+.productMain > .productPrice { margin: 6px 0 10px; font-size: 28px; font-weight: 700; }
+.productPrice span { font-size: 15px; font-weight: 400; color: var(--muted-foreground); }
+.productSpecs, .productDescription { grid-column: 1 / -1; max-width: 860px; }
+.productSpecs { margin-top: 12px; padding-top: 20px; border-top: 1px solid var(--border); }
+.productSpecs h2, .productDescription h2 { margin: 0 0 10px; font-size: 18px; }
+.productDescription p { margin: 0; line-height: 1.7; white-space: pre-line; }
+@media (max-width: 860px) { .productPage { grid-template-columns: minmax(0, 1fr); } .productMedia { position: static; } }
