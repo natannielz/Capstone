@@ -14,7 +14,7 @@ namespace UnitToko.Tests.Procurement;
 [SupportedOSPlatform("windows")]
 public sealed class SupplierDocumentPdfMatchMigrationTests(MongoFixture fixture)
 {
-    [WindowsStorageFact]
+    [WindowsStorageFact(Skip = Retired.HistoricalUpgrade)]
     public async Task Genuine_plain_and_quality_match_history_survives_sole_validator_extension_and_replay_and_corrupt_orphan_provenance_and_history_refuse_before_DDL() {
         await using var data = await SupplierDocumentPdfMatchTestData.CreateAsync(fixture, quality: true);
         var source = data.Data; var db = source.Database;

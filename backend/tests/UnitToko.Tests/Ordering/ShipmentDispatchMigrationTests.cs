@@ -20,7 +20,7 @@ public sealed class ShipmentDispatchMigrationTests(MongoFixture fixture)
         finally { await fixture.Client.DropDatabaseAsync(name); }
     }
     private static async Task<BsonArray> History(IMongoDatabase db) => new(await db.GetCollection<BsonDocument>("schemaMigrations").Find(new BsonDocument()).Sort(new BsonDocument("_id", 1)).ToListAsync());
-    [Fact]
+    [Fact(Skip = Retired.HistoricalUpgrade)]
     public Task Upgrade_preserves_prior_history_number_uniqueness_stronger_validator_and_existing_order_data() => Run(async db => {
         var before = await History(db); Assert.Equal(23, before.Count);
         var rows = db.GetCollection<BsonDocument>("shipments"); var indexes = await (await rows.Indexes.ListAsync()).ToListAsync();

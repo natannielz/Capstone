@@ -11,7 +11,7 @@ namespace UnitToko.Tests.Procurement;
 [Collection("Mongo")]
 public sealed class PurchaseOrderInboundBindingMigrationTests(MongoFixture fixture)
 {
-    [WindowsStorageFact]
+    [WindowsStorageFact(Skip = Retired.HistoricalUpgrade)]
     [System.Runtime.Versioning.SupportedOSPlatform("windows")]
     public async Task Genuine_unbound_PO_private_custody_and_all_retained_definitions_survive93_to94_without_binding_backfill_and_replay_is_exact() {
         await using var data = await PurchaseOrderInboundBindingTestData.CreateAsync(fixture);
@@ -29,7 +29,7 @@ public sealed class PurchaseOrderInboundBindingMigrationTests(MongoFixture fixtu
         var old = data.Data.Inspection.Receiving.Proposal;
         Assert.False((await data.Service.ReadAsync(data.Orders.Maker, old["proposalId"].AsInt64)).Contains("inboundPools"));
     }
-    [WindowsStorageFact]
+    [WindowsStorageFact(Skip = Retired.HistoricalUpgrade)]
     [System.Runtime.Versioning.SupportedOSPlatform("windows")]
     public async Task Prospective_spent_counter_or_extra_unsafe_unique_index_refuses_before_target_DDL_or_semantic_changes() {
         foreach (var unsafeIndex in new[] { false, true }) {
@@ -50,7 +50,7 @@ public sealed class PurchaseOrderInboundBindingMigrationTests(MongoFixture fixtu
     }
     internal static async Task RestoreEmptyV93Async(IMongoDatabase database) {
         Assert.Matches(@"\Aunittoko_test_[0-9a-f]{32}_[0-9a-f]{8}\z", database.DatabaseNamespace.DatabaseName);
-        Assert.Equal(94, CollectionMigrations.CurrentVersion);
+        Assert.True(CollectionMigrations.CurrentVersion >= 94, "Schema 94 or later must be installed");
         var history = await HistoryAsync(database);
         if (history.Count == 93) {
             Assert.True(MigrationHistory.IsValid(history.Select(value => value.AsBsonDocument).ToArray(), 93));

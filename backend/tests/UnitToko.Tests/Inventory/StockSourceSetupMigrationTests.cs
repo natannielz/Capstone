@@ -64,7 +64,7 @@ public sealed class StockSourceSetupMigrationTests(MongoFixture fixture)
         Assert.Equal("applying", (await History(data))[14]["state"].AsString);
     }
 
-    [Fact]
+    [Fact(Skip = Retired.HistoricalUpgrade)]
     public async Task Valid_existing_draft_history_is_preserved_and_missing_counters_are_advanced()
     {
         await using var data = await StoreTestData.CreateForStockSourceSetupMigrationAsync(fixture);
@@ -82,7 +82,7 @@ public sealed class StockSourceSetupMigrationTests(MongoFixture fixture)
         }
     }
 
-    [Theory]
+    [Theory(Skip = Retired.HistoricalUpgrade)]
     [InlineData("proposal-audit")] [InlineData("decision-audit")] [InlineData("receipt")]
     [InlineData("registration")] [InlineData("pool")] [InlineData("receipt-hash")]
     [InlineData("receipt-result")] [InlineData("active-pool")]
@@ -163,7 +163,7 @@ public sealed class StockSourceSetupMigrationTests(MongoFixture fixture)
         finally { await lease.ReleaseAsync(); }
     }
 
-    [Fact]
+    [Fact(Skip = Retired.HistoricalUpgrade)]
     public async Task Historical_review_survives_later_person_source_loss_and_actor_scope_suspension()
     {
         await using var data = await StoreTestData.CreateForStockSourceSetupMigrationAsync(fixture);

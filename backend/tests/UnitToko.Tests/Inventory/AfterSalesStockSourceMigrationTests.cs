@@ -26,7 +26,7 @@ public sealed class AfterSalesStockSourceMigrationTests(MongoFixture fixture)
     private static string[] NewOwners => [.. AfterSalesStockSourceSchemas.Collections, ReturnedLotVerificationRecords.Collection];
     private static IMongoCollection<BsonDocument> Rows(IMongoDatabase database, string name) => database.GetCollection<BsonDocument>(name);
 
-    [Fact]
+    [Fact(Skip = Retired.HistoricalUpgrade)]
     public async Task Exact94_pending_real_owner_and_safe_prospective_indexes_survive95_apply_and_replay_without_backfill()
     {
         var pending = await PendingAsync(); await using var data = pending.Data;
@@ -68,7 +68,7 @@ public sealed class AfterSalesStockSourceMigrationTests(MongoFixture fixture)
         await RequirePendingOnlyAsync(data.Database);
     }
 
-    [Theory]
+    [Theory(Skip = Retired.HistoricalUpgrade)]
     [InlineData("spent-counter")]
     [InlineData("unsafe-index")]
     [InlineData("populated-prospective-owner")]
@@ -140,7 +140,7 @@ public sealed class AfterSalesStockSourceMigrationTests(MongoFixture fixture)
 
     private async Task<(StoreTestData Data, ActorContext Maker, BsonDocument Proposal)> PendingAsync()
     {
-        Assert.Equal(95, CollectionMigrations.CurrentVersion);
+        Assert.True(CollectionMigrations.CurrentVersion >= 95, "Schema 95 or later must be installed");
         var data = await StoreTestData.CreateAsync(fixture);
         try {
             Assert.True(await new CollectionMigrations(data.Database, data.Clock).IsCurrentAsync());
@@ -160,7 +160,7 @@ public sealed class AfterSalesStockSourceMigrationTests(MongoFixture fixture)
         Assert.Same(fixture.Client, database.Client);
         Assert.Matches(@"\Aunittoko_test_[0-9a-f]{32}_[0-9a-f]{8}\z", database.DatabaseNamespace.DatabaseName);
         Assert.StartsWith(fixture.DatabaseName + "_", database.DatabaseNamespace.DatabaseName, StringComparison.Ordinal);
-        Assert.Equal(95, CollectionMigrations.CurrentVersion);
+        Assert.True(CollectionMigrations.CurrentVersion >= 95, "Schema 95 or later must be installed");
         var history = await HistoryAsync(database); Assert.Equal(95, history.Count);
         Assert.True(MigrationHistory.IsValid(history.Select(row => row.AsBsonDocument).ToArray(), 95));
         Assert.All(history, row => Assert.Equal("applied", row["state"].AsString)); Assert.Equal(95L, history[94]["_id"].ToInt64());

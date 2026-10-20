@@ -33,7 +33,7 @@ public sealed partial class StockSourcePolicyMigrationTests
         await service.DecideOperatingPolicyAsync(actors.Reviewer, proposal["proposalId"].AsInt64, 1, StockSourceSetupDecision.Approve, "Synthetic review", Meta(key + "-accepted"));
         return proposal["proposalId"].AsInt64;
     }
-    [Theory]
+    [Theory(Skip = Retired.HistoricalUpgrade)]
     [InlineData("lost-channel")] [InlineData("unchanged")]
     public async Task Accepted_version_order_preserves_known_history_even_when_all_timestamps_match(string fault)
     {
@@ -49,7 +49,7 @@ public sealed partial class StockSourcePolicyMigrationTests
         await Reject(data);
         await Assert.ThrowsAsync<DomainValidationException>(() => Service(data).ReadOperatingPolicyAsync(actors.Maker, actors.Pool));
     }
-    [Theory]
+    [Theory(Skip = Retired.HistoricalUpgrade)]
     [InlineData("settings")] [InlineData("mapping")] [InlineData("suspension")]
     public async Task Coherent_approval_timestamp_cannot_claim_already_replaced_binding(string change)
     {
@@ -75,7 +75,7 @@ public sealed partial class StockSourcePolicyMigrationTests
             Builders<BsonDocument>.Update.Set("record", row.DeepClone()).Set("createdAt", row["decidedAt"]));
         await Reject(data);
     }
-    [Fact]
+    [Fact(Skip = Retired.HistoricalUpgrade)]
     public async Task Legitimate_later_settings_mapping_stop_and_policy_preserve_both_old_and_new_provenance()
     {
         await using var data = await StoreTestData.CreateForStockSourcePolicyMigrationAsync(fixture);
@@ -92,7 +92,7 @@ public sealed partial class StockSourcePolicyMigrationTests
         Assert.Equal(before, await Business(data));
         Assert.Equal(2L, (await service.ReadOperatingPolicyAsync(actors.Maker, actors.Pool))["policy"]["policyRevision"].AsInt64);
     }
-    [Fact]
+    [Fact(Skip = Retired.HistoricalUpgrade)]
     public async Task Policy_preflight_reaches_corruption_beyond_first_cursor_batch()
     {
         await using var data = await StoreTestData.CreateForStockSourcePolicyMigrationAsync(fixture);

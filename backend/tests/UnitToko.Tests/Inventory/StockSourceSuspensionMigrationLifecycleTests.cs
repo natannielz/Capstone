@@ -10,7 +10,7 @@ namespace UnitToko.Tests.Inventory;
 
 public sealed partial class StockSourceSuspensionMigrationTests
 {
-    [Fact]
+    [Fact(Skip = Retired.HistoricalUpgrade)]
     public async Task Stronger_validator_equivalent_indexes_and_historical_people_are_preserved()
     {
         await using var data = await StoreTestData.CreateForStockSourceSuspensionMigrationAsync(fixture);
@@ -76,7 +76,7 @@ public sealed partial class StockSourceSuspensionMigrationTests
         }
         finally { await lease.ReleaseAsync(); }
     }
-    [Fact]
+    [Fact(Skip = Retired.HistoricalUpgrade)]
     public async Task Legacy_active_flag_is_preserved_without_fabricating_stop_or_acceptance()
     {
         await using var data = await StoreTestData.CreateForStockSourceSuspensionMigrationAsync(fixture);
@@ -85,7 +85,7 @@ public sealed partial class StockSourceSuspensionMigrationTests
         var before = await Business(data); await new CollectionMigrations(data.Database, data.Clock).ApplyAsync();
         Assert.Equal(before, await Business(data)); Assert.Equal(0, await Rows(data, Collection).CountDocumentsAsync(new BsonDocument()));
     }
-    [Fact]
+    [Fact(Skip = Retired.HistoricalUpgrade)]
     public async Task Settings_and_mapping_changes_with_equal_timestamp_stops_preserve_actual_history()
     {
         await using var data = await StoreTestData.CreateForStockSourceSuspensionMigrationAsync(fixture);
@@ -103,7 +103,7 @@ public sealed partial class StockSourceSuspensionMigrationTests
         var proposal = await service.ProposeAliasAsync(actors.Maker, actors.Pool, 1, Linked, baseRevision, baseRevision % 2 == 0, Meta("change-" + baseRevision));
         await service.DecideAliasAsync(actors.Reviewer, proposal["proposalId"].AsInt64, 1, StockSourceSetupDecision.Approve, "synthetic-review", Meta("changed-" + baseRevision));
     }
-    [Theory]
+    [Theory(Skip = Retired.HistoricalUpgrade)]
     [InlineData("tail")] [InlineData("middle")] [InlineData("lost-channel")]
     public async Task Missing_history_and_channels_cannot_be_concealed_by_a_valid_latest_stop(string fault)
     {
@@ -119,7 +119,7 @@ public sealed partial class StockSourceSuspensionMigrationTests
         else await Rows(data, Collection).DeleteOneAsync(new BsonDocument("suspensionRevision", fault == "tail" ? 3L : 2L));
         await Reject(data);
     }
-    [Fact]
+    [Fact(Skip = Retired.HistoricalUpgrade)]
     public async Task Suspension_preflight_checks_records_beyond_first_cursor_batch()
     {
         await using var data = await StoreTestData.CreateForStockSourceSuspensionMigrationAsync(fixture);

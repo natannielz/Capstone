@@ -47,7 +47,7 @@ internal sealed class OrderSubmissionTestData(CatalogPriceTestData prices) : IAs
             // Exercise the real registered order migration. Only external policy/source inputs below
             // remain synthetic; the fixture never installs or weakens order validators itself.
             foreach (var name in OrderSubmissionSchemas.Collections) {
-                await InventoryRepository.RequireStorageAsync(data.Database, name, OrderSubmissionSchemas.Validator(name), OrderSubmissionSchemas.Key(name), default);
+                await InventoryRepository.RequireStorageAsync(data.Database, name, OrderLineageSchemas.OrderValidator(name), OrderLineageSchemas.OrderKey(name), default);
             }
             await InventoryGraphTests.InstallBalances(catalog.Base);
             await InventoryRepository.RequireStorageAsync(data.Database, "movements", InventoryMovementSchemas.Validator(), InventoryMovementSchemas.Key(), default);

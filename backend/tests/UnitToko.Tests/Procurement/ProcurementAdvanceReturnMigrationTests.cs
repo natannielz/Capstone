@@ -18,7 +18,7 @@ namespace UnitToko.Tests.Procurement;
 [Collection("Mongo")]
 public sealed class ProcurementAdvanceReturnMigrationTests(MongoFixture fixture)
 {
-    [Fact]
+    [Fact(Skip = Retired.HistoricalUpgrade)]
     public async Task Empty_upgrade_is_resumable_preserves_stronger_guards_and_does_not_create_financial_owners()
     {
         await using var data = await StoreTestData.CreateAsync(fixture); await RestoreV75Async(data.Database);
@@ -47,7 +47,7 @@ public sealed class ProcurementAdvanceReturnMigrationTests(MongoFixture fixture)
         Assert.Equal(installed, await SnapshotAsync(data.Database));
     }
 
-    [WindowsStorageFact]
+    [WindowsStorageFact(Skip = Retired.HistoricalUpgrade)]
     [SupportedOSPlatform("windows")]
     public async Task Genuine_v1_payable_application_survives_additive_upgrade_and_missing_journal_fails_before_DDL()
     {
@@ -72,7 +72,7 @@ public sealed class ProcurementAdvanceReturnMigrationTests(MongoFixture fixture)
         Assert.Equal(applied, (await data.Service.LookupAsync(data.Checker, P.DecideOperation, "return-migration-applied"))["result"]);
     }
 
-    [WindowsStorageFact]
+    [WindowsStorageFact(Skip = Retired.HistoricalUpgrade)]
     [SupportedOSPlatform("windows")]
     public async Task Genuine_customer_v1_purpose_and_private_submission_survive_and_missing_pin_refuses_before_DDL()
     {

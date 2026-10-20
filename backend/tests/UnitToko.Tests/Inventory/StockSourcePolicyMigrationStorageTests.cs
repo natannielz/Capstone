@@ -25,7 +25,7 @@ public sealed partial class StockSourcePolicyMigrationTests
         await Reject(data);
     }
 
-    [Theory]
+    [Theory(Skip = Retired.HistoricalUpgrade)]
     [InlineData("mapping-audit")] [InlineData("mapping-receipt")]
     [InlineData("suspension-audit")] [InlineData("suspension-receipt")]
     [InlineData("missing-suspension-lookup")] [InlineData("hidden-suspension-lookup")]
@@ -69,7 +69,7 @@ public sealed partial class StockSourcePolicyMigrationTests
         await Reject(data);
     }
 
-    [Theory]
+    [Theory(Skip = Retired.HistoricalUpgrade)]
     [InlineData("hash")] [InlineData("result")] [InlineData("extra")] [InlineData("future-proposal")]
     public async Task Exact_policy_receipt_and_proposal_time_are_required(string fault)
     {

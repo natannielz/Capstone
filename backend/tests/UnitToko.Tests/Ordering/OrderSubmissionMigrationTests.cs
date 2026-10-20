@@ -20,7 +20,7 @@ public sealed class OrderSubmissionMigrationTests(MongoFixture fixture)
         try { await LegacyOrderSubmissionTestSchema.ApplyV21Async(db, Clock); await work(db); }
         finally { await fixture.Client.DropDatabaseAsync(name); }
     }
-    [Fact]
+    [Fact(Skip = Retired.HistoricalUpgrade)]
     public Task Forward_storage_preserves_predecessors_and_stronger_validator_and_is_idempotent() => Run(async db => {
         var before = await History(db); Assert.Equal(21, before.Count);
         var stronger = new BsonDocument("$and", new BsonArray { OrderSubmissionSchemas.Validator("orders"), new BsonDocument("branchId", 11L) });
@@ -31,7 +31,7 @@ public sealed class OrderSubmissionMigrationTests(MongoFixture fixture)
         Assert.False(await new CollectionMigrations(db, Clock).IsCurrentAsync());
         await new CollectionMigrations(db, Clock).ApplyAsync(); var after = await History(db);
         Assert.Equal(CollectionMigrations.CurrentVersion, after.Count); Assert.Equal(before, new BsonArray(after.Take(21)));
-        foreach (var name in OrderSubmissionSchemas.Collections) await InventoryRepository.RequireStorageAsync(db, name, OrderSubmissionSchemas.Validator(name), OrderSubmissionSchemas.Key(name), default);
+        foreach (var name in OrderSubmissionSchemas.Collections) await InventoryRepository.RequireStorageAsync(db, name, OrderLineageSchemas.OrderValidator(name), OrderLineageSchemas.OrderKey(name), default);
         var definition = await (await db.ListCollectionsAsync(new ListCollectionsOptions { Filter = new BsonDocument("name", "orders") })).SingleAsync();
         Assert.Equal(stronger, definition["options"]["validator"]);
         Assert.Equal(unrelated, await ReadRows(db, "purchaseOrders"));

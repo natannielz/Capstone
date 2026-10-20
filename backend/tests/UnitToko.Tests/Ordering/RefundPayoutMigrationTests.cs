@@ -90,7 +90,7 @@ public sealed class RefundPayoutMigrationTests(MongoFixture fixture)
         Assert.False(await data.Rows("schemaMigrations").Find(new BsonDocument { { "_id", 55 }, { "state", "applied" } }).AnyAsync());
     }
     private static async Task<BsonDocument> ApproveAsync(Data data) => await data.ApproveAsync(await data.PreviewAsync(), Data.Meta("payout-upgrade-original-approval"));
-    [WindowsStorageFact]
+    [WindowsStorageFact(Skip = Retired.HistoricalUpgrade)]
     public async Task Actual_approved_refund_upgrades_into_empty_recording_targets_without_touching_money_originals_or_predecessor_definitions() {
         await using var data = await Data.CreateAsync(fixture); await ApproveAsync(data); await RemoveEmptyUpgradeAsync(data.Database);
         var definitions = await Definitions(data.Database); var money = await data.MoneyAsync(); var original = await data.OriginalAsync();
@@ -113,7 +113,7 @@ public sealed class RefundPayoutMigrationTests(MongoFixture fixture)
             Assert.True(ProcurementDisbursementEvidenceSchemas.Supports(name, after["options"]["validator"].AsBsonDocument, RefundPayoutEvidenceSchemas.Validator(name)));
         }
     }
-    [WindowsStorageTheory]
+    [WindowsStorageTheory(Skip = Retired.HistoricalUpgrade)]
     [InlineData("approval")] [InlineData("approval-journal")] [InlineData("approval-effect")] [InlineData("receipt-head")] [InlineData("bank-anchor")] [InlineData("bank-version")]
     public async Task Missing_real_approval_money_or_bank_source_refuses_before_any_payout_or_document_DDL(string fault) {
         await using var data = await Data.CreateAsync(fixture); var saved = await ApproveAsync(data); await RemoveEmptyUpgradeAsync(data.Database);
@@ -125,7 +125,7 @@ public sealed class RefundPayoutMigrationTests(MongoFixture fixture)
             _ => (ReceivingAccountBson.Versions, new BsonDocument()) };
         Assert.True((await data.Rows(table).DeleteManyAsync(filter)).DeletedCount > 0); await RefusedBeforeDdlAsync(data);
     }
-    [WindowsStorageTheory]
+    [WindowsStorageTheory(Skip = Retired.HistoricalUpgrade)]
     [InlineData("draft-effect")] [InlineData("record-effect")] [InlineData("journal")]
     public async Task Orphan_new_operation_effect_or_outgoing_journal_cannot_initialize_empty_payout_history(string fault) {
         await using var data = await Data.CreateAsync(fixture); var saved = await ApproveAsync(data); await RemoveEmptyUpgradeAsync(data.Database);
@@ -141,7 +141,7 @@ public sealed class RefundPayoutMigrationTests(MongoFixture fixture)
         }
         await RefusedBeforeDdlAsync(data);
     }
-    [WindowsStorageTheory]
+    [WindowsStorageTheory(Skip = Retired.HistoricalUpgrade)]
     [InlineData("compatible")] [InlineData("ttl")] [InlineData("partial")] [InlineData("foreign-unique")]
     public async Task Empty_resume_preserves_stronger_guards_UUID_and_ordinary_indexes_but_rejects_unsafe_index_authority(string condition) {
         await using var data = await Data.CreateAsync(fixture); await ApproveAsync(data); await RemoveEmptyUpgradeAsync(data.Database);

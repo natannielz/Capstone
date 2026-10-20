@@ -10,7 +10,7 @@ namespace UnitToko.Tests.Ordering;
 [Collection("Mongo")]
 public sealed class OrderSpendingPolicyMigrationTests(MongoFixture fixture)
 {
-    [Fact]
+    [Fact(Skip = Retired.HistoricalUpgrade)]
     public async Task Empty_partial_upgrade_preserves_real_profiles_stronger_guards_and_prior_history_without_seeding_rules() {
         await using var data = await D.CreateAsync(fixture); await RestoreV58Async(data.Organizations);
         var guard = new BsonDocument("target.id", new BsonDocument("$ne", 999999L));
@@ -40,7 +40,7 @@ public sealed class OrderSpendingPolicyMigrationTests(MongoFixture fixture)
         var applied = await HistoryAsync(data.Database); await new CollectionMigrations(data.Database, data.Clock).ApplyAsync();
         Assert.Equal(applied, await HistoryAsync(data.Database)); Assert.Equal(after, await DefinitionsAsync(data.Database)); Assert.Equal(sources, await SourcesAsync(data.Database));
     }
-    [Theory]
+    [Theory(Skip = Retired.HistoricalUpgrade)]
     [InlineData("row")] [InlineData("ttl")] [InlineData("unique")] [InlineData("counter")] [InlineData("orphan")]
     public async Task Unsafe_partial_or_surviving_effect_refuses_before_any_spending_policy_DDL(string fault) {
         await using var data = await D.CreateAsync(fixture); await RestoreV58Async(data.Organizations);

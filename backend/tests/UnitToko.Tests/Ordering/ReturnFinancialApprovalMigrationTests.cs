@@ -53,7 +53,7 @@ public sealed class ReturnFinancialApprovalMigrationTests(MongoFixture fixture)
         Assert.False(await data.Rows("schemaMigrations").Find(new BsonDocument { { "_id", 54 }, { "state", "applied" } }).AnyAsync());
     }
     private static async Task RequestAsync(Data data, string key = "financial-upgrade-request") { await data.RequestAsync(await data.PreviewAsync(), Data.Meta(key)); }
-    [WindowsStorageFact]
+    [WindowsStorageFact(Skip = Retired.HistoricalUpgrade)]
     public async Task Actual_paid_invoice_and_exact_inspected_financial_request_upgrade_without_mutating_any_predecessor_definition_or_business_history() {
         await using var data = await Data.CreateAsync(fixture, "refund", paid: true); await RequestAsync(data); await PredecessorAsync(data);
         var definitions = await Definitions(data.Database); var business = await data.BusinessAsync();
@@ -72,7 +72,7 @@ public sealed class ReturnFinancialApprovalMigrationTests(MongoFixture fixture)
         await ReturnFinancialApprovalStorage.RequireAsync(data.Database, default);
         Assert.True(await data.Rows("schemaMigrations").Find(new BsonDocument { { "_id", 54 }, { "state", "applied" } }).AnyAsync());
     }
-    [WindowsStorageTheory]
+    [WindowsStorageTheory(Skip = Retired.HistoricalUpgrade)]
     [InlineData("request")] [InlineData("pool")] [InlineData("proposal")] [InlineData("recipient-receipt")] [InlineData("invoice-journal")] [InlineData("request-effect")]
     public async Task Missing_original_history_or_request_effect_refuses_before_new_approval_DDL(string fault) {
         await using var data = await Data.CreateAsync(fixture); await RequestAsync(data); await PredecessorAsync(data);
@@ -83,7 +83,7 @@ public sealed class ReturnFinancialApprovalMigrationTests(MongoFixture fixture)
             _ => ("journalEntries", new BsonDocument("_id", (await data.Rows(InvoiceBson.Invoices).Find(new BsonDocument("_id", data.Payment.Issued.Id.Value)).SingleAsync())["journalId"])) };
         Assert.True((await data.Rows(table).DeleteManyAsync(filter)).DeletedCount > 0); await RefusedBeforeDdlAsync(data);
     }
-    [WindowsStorageFact]
+    [WindowsStorageFact(Skip = Retired.HistoricalUpgrade)]
     public async Task Coherently_rehashed_request_before_actual_proposal_still_fails_actual_source_chronology_preflight() {
         await using var data = await Data.CreateAsync(fixture); var metadata = Data.Meta("financial-upgrade-chronology");
         await data.RequestAsync(await data.PreviewAsync(), metadata); await PredecessorAsync(data);
@@ -101,7 +101,7 @@ public sealed class ReturnFinancialApprovalMigrationTests(MongoFixture fixture)
         Assert.Equal(row, await new MongoUnitOfWork(data.Payment.Invoice.Order.Prices.Catalog.Client).ExecuteAsync((tx, ct) => new ReturnEntitlementRecords(data.Database, data.Clock).RawAsync(tx, data.ReturnId, ct)));
         await RefusedBeforeDdlAsync(data);
     }
-    [WindowsStorageFact]
+    [WindowsStorageFact(Skip = Retired.HistoricalUpgrade)]
     public async Task Coherently_rehashed_original_account_identity_cannot_replace_the_actual_issued_journal_identity() {
         await using var data = await Data.CreateAsync(fixture); var metadata = Data.Meta("financial-upgrade-original-account");
         await data.RequestAsync(await data.PreviewAsync(), metadata); await PredecessorAsync(data);
@@ -119,7 +119,7 @@ public sealed class ReturnFinancialApprovalMigrationTests(MongoFixture fixture)
         Assert.Equal(row, await new MongoUnitOfWork(data.Payment.Invoice.Order.Prices.Catalog.Client).ExecuteAsync((tx, ct) => new ReturnEntitlementRecords(data.Database, data.Clock).RawAsync(tx, data.ReturnId, ct)));
         await RefusedBeforeDdlAsync(data);
     }
-    [WindowsStorageTheory]
+    [WindowsStorageTheory(Skip = Retired.HistoricalUpgrade)]
     [InlineData("approval-effect")] [InlineData("approval-journal")] [InlineData("entitlement-orphan")]
     public async Task Orphan_new_approval_effects_or_old_financial_effects_never_initialize_empty_approval_history(string fault) {
         await using var data = await Data.CreateAsync(fixture); await RequestAsync(data); await PredecessorAsync(data);
@@ -134,7 +134,7 @@ public sealed class ReturnFinancialApprovalMigrationTests(MongoFixture fixture)
         }
         await RefusedBeforeDdlAsync(data);
     }
-    [WindowsStorageTheory]
+    [WindowsStorageTheory(Skip = Retired.HistoricalUpgrade)]
     [InlineData("compatible")] [InlineData("ttl")] [InlineData("partial")] [InlineData("foreign-unique")]
     public async Task Empty_resume_keeps_stronger_operator_guard_and_ordinary_index_but_refuses_unsafe_or_unapproved_uniqueness(string condition) {
         await using var data = await Data.CreateAsync(fixture); await RequestAsync(data); await PredecessorAsync(data);

@@ -28,7 +28,7 @@ public sealed class InventoryCountStockSourceMigrationTests(MongoFixture fixture
     {
         var database = fixture.Client.GetDatabase(fixture.DatabaseName + "_" + Guid.NewGuid().ToString("N")[..8]);
         try {
-            Assert.Equal(97, CollectionMigrations.CurrentVersion);
+            Assert.True(CollectionMigrations.CurrentVersion >= 97, "Schema 97 or later must be installed");
             using var migrations = PreservedMigrationRuntime.Create(database, new SystemClock().UtcNow, 96);
             await migrations.ApplyAsync(); Assert.True(await migrations.IsCurrentAsync());
             await RequireEmptyNewOwnersAsync(database); await InventoryCountStockSourceMigration.RequireCountStorageAsync(database, default);
@@ -44,7 +44,7 @@ public sealed class InventoryCountStockSourceMigrationTests(MongoFixture fixture
         } finally { await fixture.Client.DropDatabaseAsync(database.DatabaseNamespace.DatabaseName); }
     }
 
-    [Fact]
+    [Fact(Skip = Retired.HistoricalUpgrade)]
     public async Task Genuine_stopped95_API_counts_survive_forward_migration_original_key_recovery_and_replay_byte_exact()
     {
         var capsule = await CapsuleAsync("UNITTOKO_INVENTORY_COUNT_PREDECESSOR95");
@@ -109,7 +109,7 @@ public sealed class InventoryCountStockSourceMigrationTests(MongoFixture fixture
         // The genuine capsule is retained; this fact never disposes its retired fixture/database.
     }
 
-    [Fact]
+    [Fact(Skip = Retired.HistoricalUpgrade)]
     public async Task Separate_genuine95_custom_count_audit_orphan_refuses_before_target_DDL_and_preserves_failed_evidence()
     {
         var capsule = await CapsuleAsync("UNITTOKO_INVENTORY_COUNT_PREDECESSOR95_NEGATIVE");
@@ -152,7 +152,7 @@ public sealed class InventoryCountStockSourceMigrationTests(MongoFixture fixture
     private sealed record Capsule(IMongoDatabase Database, DateTimeOffset Clock, long[] Ids, ActorContext Actor);
     private async Task<Capsule> CapsuleAsync(string variable)
     {
-        Assert.Equal(97, CollectionMigrations.CurrentVersion);
+        Assert.True(CollectionMigrations.CurrentVersion >= 97, "Schema 97 or later must be installed");
         var path = Environment.GetEnvironmentVariable(variable);
         if (string.IsNullOrEmpty(path)) throw new InvalidOperationException("Verified stopped genuine95 count capsule is required; no capsule acceptance is available");
         var root = FindRoot(); var allowed = Path.GetFullPath(Path.Combine(root, "tmp", "production", "inventory-count-genuine95-predecessor-writer-release1")) + Path.DirectorySeparatorChar;

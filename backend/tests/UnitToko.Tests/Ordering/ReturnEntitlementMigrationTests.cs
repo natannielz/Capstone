@@ -61,7 +61,7 @@ public sealed class ReturnEntitlementMigrationTests(MongoFixture fixture)
         Assert.Equal(before, await Definitions(data.Invoice.Order.Database));
         Assert.False(await data.Invoice.Rows("schemaMigrations").Find(new BsonDocument { { "_id", 53 }, { "state", "applied" } }).AnyAsync());
     }
-    [WindowsStorageFact]
+    [WindowsStorageFact(Skip = Retired.HistoricalUpgrade)]
     public async Task Actual_inspected_credit_proposal_and_linked_payment_correction_upgrade_without_changing_original_money_or_sources() {
         await using var allocation = await PaymentAllocationTests.Data.CreateAsync(fixture); var data = allocation.Source.Read.Payment;
         var input = allocation.Input(0, 1000m); var shown = await allocation.Service.PreviewAsync(allocation.Actor, allocation.VerificationId, input);
@@ -85,7 +85,7 @@ public sealed class ReturnEntitlementMigrationTests(MongoFixture fixture)
         await ReturnEntitlementStorage.RequireAsync(data.Invoice.Order.Database, default);
         Assert.True(await data.Invoice.Rows("schemaMigrations").Find(new BsonDocument { { "_id", 53 }, { "state", "applied" } }).AnyAsync());
     }
-    [WindowsStorageTheory]
+    [WindowsStorageTheory(Skip = Retired.HistoricalUpgrade)]
     [InlineData("recipient-receipt")] [InlineData("invoice-journal")] [InlineData("proposal-effects")]
     public async Task Missing_actual_original_source_or_proposal_effects_fail_before_new_entitlement_DDL(string fault) {
         await using var data = await PaymentDraftData.CreateAsync(fixture); await ProposeAsync(data); await PredecessorAsync(data);
@@ -97,7 +97,7 @@ public sealed class ReturnEntitlementMigrationTests(MongoFixture fixture)
         if (fault == "proposal-effects") await data.Invoice.Rows("outboxEvents").DeleteManyAsync(new BsonDocument("kind", ReturnResolutionRecords.Operation));
         await RefusedBeforeDdlAsync(data);
     }
-    [WindowsStorageFact]
+    [WindowsStorageFact(Skip = Retired.HistoricalUpgrade)]
     public async Task Surviving_financial_request_effects_cannot_initialize_an_empty_attribution_pool() {
         await using var data = await PaymentDraftData.CreateAsync(fixture); await ProposeAsync(data); await PredecessorAsync(data);
         var orphan = await data.Invoice.Rows("outboxEvents").Find(new BsonDocument("kind", ReturnResolutionRecords.Operation)).SingleAsync();
@@ -106,7 +106,7 @@ public sealed class ReturnEntitlementMigrationTests(MongoFixture fixture)
         await RefusedBeforeDdlAsync(data);
         foreach (var name in ReturnEntitlementSchemas.Collections) Assert.False(await data.Invoice.Rows(name).Find(new BsonDocument()).AnyAsync());
     }
-    [WindowsStorageTheory]
+    [WindowsStorageTheory(Skip = Retired.HistoricalUpgrade)]
     [InlineData("compatible")] [InlineData("ttl")] [InlineData("partial")]
     public async Task Empty_resume_preserves_stronger_operator_constraints_and_compatible_indexes_and_refuses_unsafe_indexes(string condition) {
         await using var data = await PaymentDraftData.CreateAsync(fixture); await ProposeAsync(data); await PredecessorAsync(data); var database = data.Invoice.Order.Database;

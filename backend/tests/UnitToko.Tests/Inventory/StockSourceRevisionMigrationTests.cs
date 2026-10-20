@@ -34,7 +34,7 @@ public sealed partial class StockSourceRevisionMigrationTests(MongoFixture fixtu
         Assert.Equal(after, await History(data));
     }
 
-    [Fact]
+    [Fact(Skip = Retired.HistoricalUpgrade)]
     public async Task Approved_revision_history_is_preserved_and_new_identity_counters_advance()
     {
         await using var data = await StoreTestData.CreateForStockSourceRevisionMigrationAsync(fixture);

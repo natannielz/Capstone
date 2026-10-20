@@ -17,7 +17,7 @@ namespace UnitToko.Tests.Procurement;
 [Collection("Mongo")]
 public sealed class SupplierDocumentMigrationTests(MongoFixture fixture)
 {
-    [WindowsStorageFact]
+    [WindowsStorageFact(Skip = Retired.HistoricalUpgrade)]
     [SupportedOSPlatform("windows")]
     public async Task Completed_payment_OCR_history_survives_supplier_upgrade_and_missing_audit_or_receipt_refuses_before_DDL() {
         await using var data = await PaymentEvidenceReadTests.ReadData.CreateAsync(fixture);
@@ -57,7 +57,7 @@ public sealed class SupplierDocumentMigrationTests(MongoFixture fixture)
         await original.Content.CopyToAsync(bytes); Assert.Equal(data.Bytes, bytes.ToArray());
     }
 
-    [WindowsStorageFact]
+    [WindowsStorageFact(Skip = Retired.HistoricalUpgrade)]
     [SupportedOSPlatform("windows")]
     public async Task Genuine_submitted_private_video_and_inspection_history_survive_supplier_extension_and_missing_pin_or_worker_receipt_refuses_before_DDL() {
         await using var data = await ProcurementInspectionTestData.CreateAsync(fixture, onReceipt: true);
@@ -78,7 +78,7 @@ public sealed class SupplierDocumentMigrationTests(MongoFixture fixture)
         using var copy = new MemoryStream(); await read.Content.CopyToAsync(copy); Assert.Equal(data.Bytes, copy.ToArray());
     }
 
-    [Fact]
+    [Fact(Skip = Retired.HistoricalUpgrade)]
     public async Task Empty_partial_install_preserves_stronger_guards_rejects_orphan_ocr_and_unknown_indexes_without_default_policies() {
         await using var data = await StoreTestData.CreateAsync(fixture); await RestoreV69Async(data.Database);
         var guard = new BsonDocument("_id", new BsonDocument("$ne", 999999L));

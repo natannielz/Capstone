@@ -28,7 +28,8 @@ public sealed class ShipmentPreparationMigrationTests(MongoFixture fixture)
         await db.GetCollection<BsonDocument>("idCounters").InsertOneAsync(new BsonDocument { { "_id", ShipmentPreparationBson.Heads }, { "value", 9007199254740993L } });
         await new CollectionMigrations(db, Clock).ApplyAsync(); var after = await History(db);
         Assert.Equal(CollectionMigrations.CurrentVersion, after.Count); Assert.Equal(before, new BsonArray(after.Take(22)));
-        foreach (var name in ShipmentPreparationSchemas.Collections) await InventoryRepository.RequireStorageAsync(db, name, ShipmentPreparationSchemas.Validator(name), ShipmentPreparationSchemas.Key(name), default);
+        // After the full upgrade the service requires the contract migration 114 widened for substitution lineage (as ShipmentPreparationService does).
+        foreach (var name in ShipmentPreparationSchemas.Collections) await InventoryRepository.RequireStorageAsync(db, name, OrderLineageSchemas.PreparationValidator(name), ShipmentPreparationSchemas.Key(name), default);
         var definition = await (await db.ListCollectionsAsync(new ListCollectionsOptions { Filter = new BsonDocument("name", ShipmentPreparationBson.Heads) })).SingleAsync();
         Assert.Equal(stronger, definition["options"]["validator"]);
         Assert.Equal(9007199254740993L, (await db.GetCollection<BsonDocument>("idCounters").Find(new BsonDocument("_id", ShipmentPreparationBson.Heads)).SingleAsync())["value"].AsInt64);

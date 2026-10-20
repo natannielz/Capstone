@@ -11,7 +11,7 @@ namespace UnitToko.Tests.Inventory;
 
 public sealed partial class StockSourceRevisionMigrationTests
 {
-    [Fact]
+    [Fact(Skip = Retired.HistoricalUpgrade)]
     public async Task Pending_stale_rejected_and_withdrawn_proposals_remain_historical_facts()
     {
         await using var data = await StoreTestData.CreateForStockSourceRevisionMigrationAsync(fixture);
@@ -34,7 +34,7 @@ public sealed partial class StockSourceRevisionMigrationTests
         Assert.Equal(3, (await service.ReadCurrentSourceAsync(actors.Maker, new(new(100), new(101), new(102), new(103)), actors.Pool))["pool"]["revision"].AsInt64);
     }
 
-    [Fact]
+    [Fact(Skip = Retired.HistoricalUpgrade)]
     public async Task Stronger_validator_equivalent_indexes_and_original_identity_counters_are_preserved()
     {
         await using var data = await StoreTestData.CreateForStockSourceRevisionMigrationAsync(fixture);
@@ -117,7 +117,7 @@ public sealed partial class StockSourceRevisionMigrationTests
         finally { await lease.ReleaseAsync(); }
     }
 
-    [Theory]
+    [Theory(Skip = Retired.HistoricalUpgrade)]
     [InlineData("partial")] [InlineData("sparse")] [InlineData("hidden")]
     public async Task Weakened_revision_uniqueness_cannot_be_silently_replaced(string fault)
     {

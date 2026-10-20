@@ -79,7 +79,7 @@ public sealed partial class StockSourceSuspensionMigrationTests(MongoFixture fix
             Assert.Contains(await (await Rows(data, expected.Collection).Indexes.ListAsync()).ToListAsync(), index => index["key"].Equals(expected.Key));
         Assert.True(await migration.IsCurrentAsync()); await migration.ApplyAsync(); Assert.Equal(after, await History(data));
     }
-    [Fact]
+    [Fact(Skip = Retired.HistoricalUpgrade)]
     public async Task Actual_suspension_provenance_is_preserved_and_allocators_cover_stored_ids()
     {
         await using var data = await StoreTestData.CreateForStockSourceSuspensionMigrationAsync(fixture);

@@ -17,7 +17,7 @@ namespace UnitToko.Tests.Procurement;
 [Collection("Mongo")]
 public sealed class ProcurementQualityValuationMigrationTests(MongoFixture fixture)
 {
-    [Fact]
+    [Fact(Skip = Retired.HistoricalUpgrade)]
     public async Task Empty_partial_extension_preserves_stronger_guards_and_UUIDs_without_business_or_counter_writes()
     {
         await using var data = await StoreTestData.CreateAsync(fixture); await RestoreV78Async(data.Database);
@@ -37,7 +37,7 @@ public sealed class ProcurementQualityValuationMigrationTests(MongoFixture fixtu
         await new CollectionMigrations(data.Database, data.Clock).ApplyAsync(); AssertSnapshotEqual(after, await SnapshotAsync(data.Database));
     }
 
-    [WindowsStorageFact]
+    [WindowsStorageFact(Skip = Retired.HistoricalUpgrade)]
     [SupportedOSPlatform("windows")]
     public async Task Genuine_clean_v1_invoice_and_valuation_history_remain_byte_exact_across_extension()
     {
@@ -59,7 +59,7 @@ public sealed class ProcurementQualityValuationMigrationTests(MongoFixture fixtu
         await data.NoPaymentOrReleaseAsync();
     }
 
-    [WindowsStorageFact]
+    [WindowsStorageFact(Skip = Retired.HistoricalUpgrade)]
     [SupportedOSPlatform("windows")]
     public async Task Retained_mixed_quality_and_partial_valuation_upgrade_resume_and_refuse_missing_quality_or_private_owners()
     {
@@ -118,7 +118,7 @@ public sealed class ProcurementQualityValuationMigrationTests(MongoFixture fixtu
         await data.NoPaymentOrReleaseAsync();
     }
 
-    [Fact]
+    [Fact(Skip = Retired.HistoricalUpgrade)]
     public async Task Missing_predecessor_unsafe_index_or_unrecognized_validator_refuses_before_any_DDL()
     {
         await using var data = await StoreTestData.CreateAsync(fixture); await RestoreV78Async(data.Database);

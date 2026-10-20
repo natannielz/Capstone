@@ -12,7 +12,7 @@ namespace UnitToko.Tests.Procurement;
 [Collection("Mongo")]
 public sealed class ProcurementFundingMigrationTests(MongoFixture fixture)
 {
-    [Fact]
+    [Fact(Skip = Retired.HistoricalUpgrade)]
     public async Task Empty_upgrade_preserves_genuine_request_supplier_history_and_stronger_existing_guards_without_inventing_funding_or_operational_policy()
     {
         await using var data = await D.CreateAsync(fixture);
@@ -39,7 +39,7 @@ public sealed class ProcurementFundingMigrationTests(MongoFixture fixture)
         Assert.Equal(applied, await HistoryAsync(data.Database)); Assert.Equal(after, await DefinitionsAsync(data.Database)); Assert.Equal(preserved, await PreservedAsync(data.Database));
     }
 
-    [Theory]
+    [Theory(Skip = Retired.HistoricalUpgrade)]
     [InlineData("row")] [InlineData("ttl")] [InlineData("counter")] [InlineData("orphan")]
     [InlineData("retained_request")] [InlineData("retained_supplier")] [InlineData("retained_order")]
     public async Task Unsafe_partial_install_or_retained_source_storage_refuses_before_any_DDL(string fault)

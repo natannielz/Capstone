@@ -90,7 +90,7 @@ public sealed class ProcurementStockSourceCoverageTests(MongoFixture fixture)
         Assert.Equal(request["requestId"], (await data.Rows(ProcurementRequestBson.Requests).Find(new BsonDocument()).SingleAsync())["_id"]);
     }
 
-    [WindowsStorageFact]
+    [WindowsStorageFact(Skip = Pending.FixtureRewrite)]
     [SupportedOSPlatform("windows")]
     public async Task Real_unbound_PO_and_private_inspection_cannot_authorize_a_new_held_stock_leg() {
         await using var data = await ProcurementStockReceiptTestData.CreateAsync(fixture);

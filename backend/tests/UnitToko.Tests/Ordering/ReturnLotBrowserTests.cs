@@ -46,7 +46,7 @@ public sealed class ReturnLotBrowserTests(MongoFixture fixture, ITestOutputHelpe
         Assert.True(Path.IsPathFullyQualified(node ?? "") && File.Exists(node));
         Assert.True(Path.IsPathFullyQualified(playwright ?? "") && File.Exists(playwright));
         Assert.True(File.Exists(Path.Combine(root, "frontend", ".next-full", "BUILD_ID")));
-        Assert.Equal(95, CollectionMigrations.CurrentVersion);
+        Assert.True(CollectionMigrations.CurrentVersion >= 95, "The M95 return-lot schema must be installed");
         await using var data = await WholePackageAsync();
         var invoice = data.Invoice; var catalog = invoice.Order.Prices.Catalog; var clock = catalog.Clock;
         var units = Assert.Single(data.Issued.Detail.Lines).BaseUnitsPerPackage; Assert.True(units > 1);

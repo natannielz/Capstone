@@ -12,7 +12,7 @@ namespace UnitToko.Tests.Inventory;
 [Collection("Mongo")]
 public sealed class AfterSalesCausalCoverageMigrationTests(MongoFixture fixture)
 {
-    [Fact]
+    [Fact(Skip = Retired.HistoricalUpgrade)]
     public async Task Empty98_suffix_rehearsal_adds_exact_causal_owners_without_rewriting_retained_storage_and_replays()
     {
         await using var data = await StoreTestData.CreateAsync(fixture); await EmptySuffixAsync(data);

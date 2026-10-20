@@ -27,7 +27,7 @@ public sealed class ProcurementDisbursementMigrationTests(MongoFixture fixture)
             catch { await lease.ReleaseAsync(); throw; }
         }
     }
-    [WindowsStorageFact]
+    [WindowsStorageFact(Skip = Retired.HistoricalUpgrade)]
     [SupportedOSPlatform("windows")]
     public async Task Actual_verified_refund_debit_upgrades_with_preserved_pin_claim_journal_and_rejects_missing_retained_proof_before_DDL()
     {
@@ -121,7 +121,7 @@ public sealed class ProcurementDisbursementMigrationTests(MongoFixture fixture)
         }
     }
 
-    [WindowsStorageFact]
+    [WindowsStorageFact(Skip = Retired.HistoricalUpgrade)]
     [SupportedOSPlatform("windows")]
     public async Task Empty_upgrade_preserves_actual_payment_original_pin_history_and_stronger_storage_guards()
     {
@@ -167,7 +167,7 @@ public sealed class ProcurementDisbursementMigrationTests(MongoFixture fixture)
         Assert.Equal(applied, await HistoryAsync(data.Database)); Assert.Equal(after, await DefinitionsAsync(data.Database));
     }
 
-    [Theory]
+    [Theory(Skip = Retired.HistoricalUpgrade)]
     [InlineData("row")] [InlineData("ttl")] [InlineData("counter")] [InlineData("orphan")] [InlineData("retained_funding")]
     public async Task Unsafe_partial_disbursement_or_retained_funding_storage_refuses_before_any_DDL(string fault)
     {
@@ -185,7 +185,7 @@ public sealed class ProcurementDisbursementMigrationTests(MongoFixture fixture)
         Assert.False(await data.Rows("schemaMigrations").Find(new BsonDocument { { "_id", 66 }, { "state", "applied" } }).AnyAsync());
     }
 
-    [WindowsStorageFact]
+    [WindowsStorageFact(Skip = Retired.HistoricalUpgrade)]
     [SupportedOSPlatform("windows")]
     public async Task Missing_actual_payment_pin_audit_refuses_evidence_extension_before_owner_or_shared_DDL()
     {

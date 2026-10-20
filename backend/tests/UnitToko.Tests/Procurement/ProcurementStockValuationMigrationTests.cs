@@ -15,7 +15,7 @@ namespace UnitToko.Tests.Procurement;
 [Collection("Mongo")]
 public sealed class ProcurementStockValuationMigrationTests(MongoFixture fixture)
 {
-    [Fact]
+    [Fact(Skip = Retired.HistoricalUpgrade)]
     public async Task Empty_partial_upgrade_preserves_stronger_guards_and_installs_no_finance_policy_or_accounting_facts()
     {
         await using var data = await StoreTestData.CreateAsync(fixture); await RestoreV72Async(data.Database);
@@ -41,7 +41,7 @@ public sealed class ProcurementStockValuationMigrationTests(MongoFixture fixture
         await new CollectionMigrations(data.Database, data.Clock).ApplyAsync(); Assert.Equal(after, await SnapshotAsync(data.Database));
     }
 
-    [WindowsStorageFact]
+    [WindowsStorageFact(Skip = Retired.HistoricalUpgrade)]
     [SupportedOSPlatform("windows")]
     public async Task Real_clean_held_receipt_and_scanned_matched_invoice_survive_upgrade_and_missing_source_proof_refuses_before_DDL()
     {

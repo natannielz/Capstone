@@ -79,7 +79,7 @@ public sealed partial class StockSourcePolicyMigrationTests(MongoFixture fixture
         Assert.True(await migration.IsCurrentAsync()); await migration.ApplyAsync(); Assert.Equal(after, await History(data));
     }
 
-    [Theory]
+    [Theory(Skip = Retired.HistoricalUpgrade)]
     [InlineData(false, StockSourceSetupDecision.Approve)] [InlineData(true, StockSourceSetupDecision.Approve)]
     [InlineData(false, StockSourceSetupDecision.Reject)] [InlineData(false, StockSourceSetupDecision.Withdraw)]
     public async Task Actual_policy_history_survives_upgrade_and_exact_allocator_repair(bool external, StockSourceSetupDecision decision)

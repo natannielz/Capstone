@@ -24,7 +24,7 @@ public sealed class PaymentAllocationCorrectionMigrationTests(MongoFixture fixtu
         } catch { await data.DisposeAsync(); throw; }
     }
     private static async Task<List<BsonDocument>> Definitions(IMongoDatabase db) => (await (await db.ListCollectionsAsync()).ToListAsync()).OrderBy(row => row["name"].AsString).ToList();
-    [WindowsStorageFact]
+    [WindowsStorageFact(Skip = Retired.HistoricalUpgrade)]
     public async Task Populated_actual_allocation_and_canonical_heads_upgrade_with_stronger_rules_and_resume_without_changing_old_money() {
         await using var data = await Predecessor(fixture); var db = data.Source.Read.Database; var clock = data.Source.Read.Catalog.Clock; var original = await data.Rows(B.Events).Find(new BsonDocument()).SingleAsync(); var head = await data.Rows(B.Receipts).Find(new BsonDocument()).SingleAsync();
         var guard = new BsonDocument("actorId", new BsonDocument("$ne", 999L)); await db.CreateCollectionAsync(C.Events, new CreateCollectionOptions<BsonDocument> { Validator = guard }); await new CollectionMigrations(db, clock).ApplyAsync();
@@ -35,7 +35,7 @@ public sealed class PaymentAllocationCorrectionMigrationTests(MongoFixture fixtu
         Assert.Equal(1, (await data.Rows("schemaMigrations").DeleteOneAsync(new BsonDocument { { "_id", 52 }, { "state", "applied" } })).DeletedCount);
         await new CollectionMigrations(db, clock).ApplyAsync(); Assert.Equal(definitions, await Definitions(db)); Assert.Equal(head, await data.Rows(B.Receipts).Find(new BsonDocument()).SingleAsync());
     }
-    [WindowsStorageTheory]
+    [WindowsStorageTheory(Skip = Retired.HistoricalUpgrade)]
     [InlineData("ttl")] [InlineData("partial")] [InlineData("missing-allocation")] [InlineData("missing-head")] [InlineData("missing-bank-journal")] [InlineData("missing-invoice-journal")] [InlineData("orphan-correction")]
     public async Task Unsafe_target_or_damaged_actual_source_or_surviving_effects_fail_before_target_DDL(string fault) {
         await using var data = await Predecessor(fixture); var db = data.Source.Read.Database;

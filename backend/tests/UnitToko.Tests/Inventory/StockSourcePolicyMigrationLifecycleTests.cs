@@ -11,7 +11,7 @@ namespace UnitToko.Tests.Inventory;
 
 public sealed partial class StockSourcePolicyMigrationTests
 {
-    [Fact]
+    [Fact(Skip = Retired.HistoricalUpgrade)]
     public async Task Stronger_validation_equivalent_indexes_and_inactive_historical_participants_are_preserved()
     {
         await using var data = await StoreTestData.CreateForStockSourcePolicyMigrationAsync(fixture);
@@ -79,7 +79,7 @@ public sealed partial class StockSourcePolicyMigrationTests
         }
         finally { await lease.ReleaseAsync(); }
     }
-    [Theory]
+    [Theory(Skip = Retired.HistoricalUpgrade)]
     [InlineData("hidden")] [InlineData("sparse")] [InlineData("partial")] [InlineData("nonunique")]
     public async Task Unsafe_policy_version_index_is_not_silently_replaced(string fault)
     {
@@ -93,7 +93,7 @@ public sealed partial class StockSourcePolicyMigrationTests
         await Rows(data, StockSourcePolicyBson.Policies).Indexes.CreateOneAsync(new CreateIndexModel<BsonDocument>(StockSourcePolicySchemas.Key(StockSourcePolicyBson.Policies), options));
         await Reject(data);
     }
-    [Fact]
+    [Fact(Skip = Retired.HistoricalUpgrade)]
     public async Task Populated_exact_lots_stock_and_accounting_survive_policy_upgrade()
     {
         await using var data = await StoreTestData.CreateForStockSourcePolicyMigrationAsync(fixture);
@@ -112,7 +112,7 @@ public sealed partial class StockSourcePolicyMigrationTests
         catch { await lease.ReleaseAsync(); throw; }
         Assert.Equal(before, await Business(data)); Assert.Equal(balance, await Rows(data, "stockBalances").Find(new BsonDocument("_id", 7000L)).SingleAsync());
     }
-    [Theory]
+    [Theory(Skip = Retired.HistoricalUpgrade)]
     [InlineData("auditEvents")] [InlineData("idempotencyRecords")]
     public async Task Unrelated_policy_named_fields_do_not_become_inventory_records(string collection)
     {

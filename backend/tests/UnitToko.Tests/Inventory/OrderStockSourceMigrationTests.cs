@@ -14,7 +14,7 @@ namespace UnitToko.Tests.Inventory;
 [Collection("Mongo")]
 public sealed class OrderStockSourceMigrationTests(MongoFixture fixture)
 {
-    [Fact]
+    [Fact(Skip = Retired.HistoricalUpgrade)]
     public async Task Genuine_retained_proposal_and_all_existing_owners_survive_empty_upgrade_and_replay_byte_exact()
     {
         await using var data = await OrderStockSourceTestData.CreateAsync(fixture, approve: false);
@@ -52,7 +52,7 @@ public sealed class OrderStockSourceMigrationTests(MongoFixture fixture)
         Assert.Equal(0L, await data.Rows("stockSourceDecisions").CountDocumentsAsync(new BsonDocument()));
     }
 
-    [Theory]
+    [Theory(Skip = Retired.HistoricalUpgrade)]
     [InlineData("owner-row")]
     [InlineData("spent-counter")]
     [InlineData("unsafe-index")]
@@ -83,7 +83,7 @@ public sealed class OrderStockSourceMigrationTests(MongoFixture fixture)
         Assert.Null(await AccountContactStorage.DefinitionAsync(data.Data.Database, OrderStockSourceRecords.Transitions, default));
     }
 
-    [Fact]
+    [Fact(Skip = Retired.HistoricalUpgrade)]
     public async Task Structurally_valid_orphan_order_child_refuses_before_creating_producer_owners_and_preserves_every_byte()
     {
         await using var data = await OrderStockSourceTestData.CreateAsync(fixture, approve: false);

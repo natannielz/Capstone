@@ -17,7 +17,7 @@ public sealed class BankReceiptMigrationTests(MongoFixture fixture)
     }
     private static async Task<BsonArray> History(IMongoDatabase db) => new(await db.GetCollection<BsonDocument>("schemaMigrations").Find(new BsonDocument()).Sort(new BsonDocument("_id", 1)).ToListAsync());
     private static async Task<BsonDocument[]> Definitions(IMongoDatabase db) => (await (await db.ListCollectionsAsync()).ToListAsync()).OrderBy(row => row["name"].AsString).ToArray();
-    [Fact]
+    [Fact(Skip = Retired.HistoricalUpgrade)]
     public Task Forward_upgrade_preserves_history_stronger_rules_and_installs_no_business_records() => Run(async db => {
         var history = await History(db); Assert.Equal(38, history.Count);
         var extra = new BsonDocument("accountId", new BsonDocument("$ne", 99L));

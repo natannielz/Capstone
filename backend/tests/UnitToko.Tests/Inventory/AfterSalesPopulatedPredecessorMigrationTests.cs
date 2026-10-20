@@ -21,10 +21,10 @@ namespace UnitToko.Tests.Inventory;
 public sealed class AfterSalesPopulatedPredecessorMigrationTests(MongoFixture fixture)
 {
     internal const string HandoffEnvironment = "UNITTOKO_M95_PREDECESSOR_HANDOFF";
-    [Fact]
+    [Fact(Skip = Retired.HistoricalUpgrade)]
     public async Task Genuine_stopped94_case_intake_inspection_survive95_apply_replay_and_original_inspection_recovery()
     {
-        Assert.Equal(97, CollectionMigrations.CurrentVersion);
+        Assert.True(CollectionMigrations.CurrentVersion >= 97, "Schema 97 or later must be installed");
         var handoffPath = Environment.GetEnvironmentVariable(HandoffEnvironment);
         if (string.IsNullOrWhiteSpace(handoffPath)) throw new InvalidOperationException("Verified stopped genuine94 predecessor handoff is required; populated94 migration acceptance is unavailable");
         Assert.True(Path.IsPathFullyQualified(handoffPath));

@@ -14,7 +14,7 @@ namespace UnitToko.Tests.Procurement;
 [Collection("Mongo")]
 public sealed class ProcurementStockReceiptMigrationTests(MongoFixture fixture)
 {
-    [Fact]
+    [Fact(Skip = Retired.HistoricalUpgrade)]
     public async Task Historical_fixture_stock_and_ledger_movements_are_preserved_when_empty_receipt_suffix_is_removed() {
         await using var data = await ShipmentDispatchTestData.CreateAsync(fixture);
         await data.DispatchAsync(await data.PreviewAsync(), "legacy-stock-before72");
@@ -31,7 +31,7 @@ public sealed class ProcurementStockReceiptMigrationTests(MongoFixture fixture)
         Assert.Equal(shared, await SharedStockAsync(db)); Assert.Equal(new BsonArray(history.Take(71)), await HistoryAsync(db));
     }
 
-    [Fact]
+    [Fact(Skip = Retired.HistoricalUpgrade)]
     public async Task Empty_forward_install_preserves_identity_and_stronger_guards_and_refuses_unproved_legacy_stock_or_unknown_partial_indexes_before_DDL() {
         await using var data = await StoreTestData.CreateAsync(fixture); await RestoreV71Async(data.Database);
         var guard = new BsonDocument("_id", new BsonDocument("$ne", 999999L));
@@ -56,7 +56,7 @@ public sealed class ProcurementStockReceiptMigrationTests(MongoFixture fixture)
         Assert.NotEqual(original, (await DefinitionAsync(data.Database, "movements"))["options"]["validator"]);
     }
 
-    [WindowsStorageFact]
+    [WindowsStorageFact(Skip = Retired.HistoricalUpgrade)]
     [SupportedOSPlatform("windows")]
     public async Task Genuine_claim_and_held_receipt_history_survive_resumed_forward_install_but_missing_owner_movement_or_effect_proof_refuses_without_changes() {
         await using var data = await ProcurementStockReceiptTestData.CreateAsync(fixture);

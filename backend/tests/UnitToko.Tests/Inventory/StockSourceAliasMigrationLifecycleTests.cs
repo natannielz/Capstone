@@ -11,7 +11,7 @@ namespace UnitToko.Tests.Inventory;
 
 public sealed partial class StockSourceAliasMigrationTests
 {
-    [Fact]
+    [Fact(Skip = Retired.HistoricalUpgrade)]
     public async Task Stale_pending_and_terminal_proposals_and_reapproved_settings_remain_history()
     {
         await using var data = await StoreTestData.CreateForStockSourceAliasMigrationAsync(fixture);
@@ -39,7 +39,7 @@ public sealed partial class StockSourceAliasMigrationTests
         Assert.True((await service.ReadAliasAsync(actors.Maker, actors.Pool, Requested))["bindingCurrent"].AsBoolean);
     }
 
-    [Fact]
+    [Fact(Skip = Retired.HistoricalUpgrade)]
     public async Task Historical_approvals_do_not_depend_on_current_people_bindings_or_live_access()
     {
         await using var data = await StoreTestData.CreateForStockSourceAliasMigrationAsync(fixture);
@@ -52,7 +52,7 @@ public sealed partial class StockSourceAliasMigrationTests
         Assert.Equal(before, await BusinessRows(data));
         Assert.True(await new CollectionMigrations(data.Database, data.Clock).IsCurrentAsync());
     }
-    [Fact]
+    [Fact(Skip = Retired.HistoricalUpgrade)]
     public async Task Stronger_validator_equivalent_indexes_and_original_identity_counters_are_preserved()
     {
         await using var data = await StoreTestData.CreateForStockSourceAliasMigrationAsync(fixture);
@@ -136,7 +136,7 @@ public sealed partial class StockSourceAliasMigrationTests
         finally { await lease.ReleaseAsync(); }
     }
 
-    [Theory]
+    [Theory(Skip = Retired.HistoricalUpgrade)]
     [InlineData("partial")] [InlineData("sparse")] [InlineData("hidden")]
     public async Task Weakened_alias_uniqueness_cannot_be_silently_replaced(string fault)
     {

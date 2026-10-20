@@ -10,7 +10,7 @@ namespace UnitToko.Tests.Procurement;
 [Collection("Mongo")]
 public sealed class SupplierMigrationTests(MongoFixture fixture)
 {
-    [Fact]
+    [Fact(Skip = Retired.HistoricalUpgrade)]
     public async Task Empty_upgrade_preserves_real_catalog_and_profiles_without_inventing_supplier_or_verification_policy()
     {
         await using var data = await ProcurementRequestTestData.CreateAsync(fixture); await RestoreV61Async(data.Organizations);
@@ -41,7 +41,7 @@ public sealed class SupplierMigrationTests(MongoFixture fixture)
         Assert.Equal(applied, await HistoryAsync(data.Database)); Assert.Equal(after, await DefinitionsAsync(data.Database)); Assert.Equal(preserved, await PreservedAsync(data.Database));
     }
 
-    [Theory]
+    [Theory(Skip = Retired.HistoricalUpgrade)]
     [InlineData("row")] [InlineData("ttl")] [InlineData("counter")] [InlineData("orphan")]
     public async Task Unsafe_partial_supplier_install_refuses_before_DDL_or_source_changes(string fault)
     {

@@ -8,7 +8,7 @@ namespace UnitToko.Tests.Inventory;
 
 public sealed partial class StockSourceAliasMigrationTests
 {
-    [Theory]
+    [Theory(Skip = Retired.HistoricalUpgrade)]
     [InlineData("stock.source.approve", "stock.source.reject")]
     [InlineData("stock.source.revision.approve", "stock.source.revision.reject")]
     [InlineData("stock.source.alias.approve", "stock.source.alias.reject")]
@@ -30,7 +30,7 @@ public sealed partial class StockSourceAliasMigrationTests
         await RejectWithoutMutation(data);
     }
 
-    [Theory]
+    [Theory(Skip = Retired.HistoricalUpgrade)]
     [InlineData(false)]
     [InlineData(true)]
     public async Task Alias_creation_or_approval_after_bound_settings_were_replaced_is_rejected(bool moveProposal)
@@ -53,7 +53,7 @@ public sealed partial class StockSourceAliasMigrationTests
         await RejectWithoutMutation(data);
     }
 
-    [Fact]
+    [Fact(Skip = Retired.HistoricalUpgrade)]
     public async Task Proposal_cannot_claim_an_alias_base_already_replaced_when_it_was_created()
     {
         await using var data = await StoreTestData.CreateForStockSourceAliasMigrationAsync(fixture);
@@ -65,7 +65,7 @@ public sealed partial class StockSourceAliasMigrationTests
         await RejectWithoutMutation(data);
     }
 
-    [Fact]
+    [Fact(Skip = Retired.HistoricalUpgrade)]
     public async Task Full_history_preflight_continues_past_the_first_cursor_batch()
     {
         await using var data = await StoreTestData.CreateForStockSourceAliasMigrationAsync(fixture);

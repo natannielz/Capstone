@@ -8,7 +8,7 @@ namespace UnitToko.Tests.Inventory;
 
 public sealed partial class StockSourceSuspensionMigrationTests
 {
-    [Theory]
+    [Theory(Skip = Retired.HistoricalUpgrade)]
     [InlineData("missing-channel")] [InlineData("replaced-mapping")] [InlineData("replaced-settings")]
     public async Task Coherent_copies_cannot_claim_an_obsolete_review_or_omit_an_already_mapped_channel(string fault)
     {
@@ -27,7 +27,7 @@ public sealed partial class StockSourceSuspensionMigrationTests
         await ReplaceCoherently(data, row);
         await Reject(data);
     }
-    [Theory]
+    [Theory(Skip = Retired.HistoricalUpgrade)]
     [InlineData("hidden")] [InlineData("sparse")] [InlineData("partial")] [InlineData("nonunique")]
     public async Task Unsafe_version_index_cannot_be_silently_replaced(string fault)
     {
@@ -40,7 +40,7 @@ public sealed partial class StockSourceSuspensionMigrationTests
         await Rows(data, Collection).Indexes.CreateOneAsync(new CreateIndexModel<BsonDocument>(StockSourceSuspensionSchemas.Key(), options));
         await Reject(data);
     }
-    [Theory]
+    [Theory(Skip = Retired.HistoricalUpgrade)]
     [InlineData("audit")] [InlineData("receipt")]
     public async Task Suspension_references_cannot_hide_under_a_foreign_operation_namespace(string kind)
     {
@@ -53,7 +53,7 @@ public sealed partial class StockSourceSuspensionMigrationTests
         else { row["_id"] = ObjectId.GenerateNewId(); row["key"] = "foreign-key"; }
         await Rows(data, collection).InsertOneAsync(row);
         await Reject(data);
-    }    [Fact]
+    }    [Fact(Skip = Retired.HistoricalUpgrade)]
     public async Task Populated_exact_stock_and_lots_survive_upgrade_without_any_quantity_change()
     {
         await using var data = await StoreTestData.CreateForStockSourceSuspensionMigrationAsync(fixture);

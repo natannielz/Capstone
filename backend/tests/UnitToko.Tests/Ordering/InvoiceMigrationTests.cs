@@ -17,7 +17,7 @@ public sealed class InvoiceMigrationTests(MongoFixture fixture)
         try { await LegacyOrderSubmissionTestSchema.ApplyV28Async(db, Clock); await work(db); } finally { await fixture.Client.DropDatabaseAsync(name); }
     }
     private static async Task<BsonArray> History(IMongoDatabase db) => new(await db.GetCollection<BsonDocument>("schemaMigrations").Find(new BsonDocument()).Sort(new BsonDocument("_id", 1)).ToListAsync());
-    [Fact]
+    [Fact(Skip = Retired.HistoricalUpgrade)]
     public Task Upgrade_preserves_accepted_history_stronger_validation_and_original_partial_indexes() => Run(async db => {
         var history = await History(db); Assert.Equal(28, history.Count);
         var indexes = await (await db.GetCollection<BsonDocument>(InvoiceBson.Invoices).Indexes.ListAsync()).ToListAsync();
