@@ -11,7 +11,7 @@ import { EmptyState } from '@/components/workspace-kit/empty-state';
 type State = { kind: 'loading' } | { kind: 'ready'; summary: Summary } | { kind: 'offline' } | { kind: 'denied' } | { kind: 'error' };
 
 /** "Pekerjaan saya": waiting work across owners, oldest first. Each count comes from the owner's own authorised queue. */
-export function WorkSummary({ actorId, actions }: { actorId: string; actions: readonly string[] }) {
+export function WorkSummary({ actorId, actions, heading = 'Pekerjaan saya' }: { actorId: string; actions: readonly string[]; heading?: string }) {
   const [gateway] = useState(createWorkSummaryGateway);
   const [state, setState] = useState<State>({ kind: 'loading' });
   const [refresh, setRefresh] = useState(0);
@@ -33,7 +33,7 @@ export function WorkSummary({ actorId, actions }: { actorId: string; actions: re
 
   const items = state.kind === 'ready' ? visibleWorkItems(state.summary.items, actions) : [];
   return <section className={styles.workspace} aria-labelledby="work-heading">
-    <div className={styles.directoryHeader}><div><h2 id="work-heading" tabIndex={-1}>Pekerjaan saya</h2>
+    <div className={styles.directoryHeader}><div><h2 id="work-heading" tabIndex={-1}>{heading}</h2>
       <p className={styles.help}>Pekerjaan yang menunggu Anda, dari yang paling lama. Jumlah dihitung dari antrean yang dapat Anda buka.</p></div>
       <button type="button" className={styles.secondary} onClick={() => setRefresh(value => value + 1)} disabled={state.kind === 'loading'}>Muat ulang</button></div>
     {state.kind === 'loading' && <OutcomeState kind="loading" />}
