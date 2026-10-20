@@ -84,3 +84,8 @@
   .tabs a { display: grid; justify-items: center; gap: 2px; padding: 8px 4px 9px; font-size: 12px; font-weight: 600; color: var(--muted-foreground); text-decoration: none; }
   .tabs a[aria-current="page"] { color: var(--primary); }
 }
+
+/* Cart count on the icon, as marketplace headers show it. */
+.cartIcon { position: relative; display: inline-flex; margin-right: 6px; }
+.badge { position: absolute; top: -7px; right: -10px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: var(--destructive);
+  color: var(--primary-foreground); font-size: 11px; font-weight: 700; line-height: 18px; text-align: center; }

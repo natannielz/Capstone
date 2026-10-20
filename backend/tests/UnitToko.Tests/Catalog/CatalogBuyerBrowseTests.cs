@@ -50,6 +50,21 @@ public sealed class CatalogBuyerBrowseTests(MongoFixture fixture)
     }
 
     [Fact]
+    public async Task A_cart_reads_its_own_packages_and_a_package_the_buyer_cannot_see_is_simply_absent()
+    {
+        await using var data = await Ready(); var catalog = data.Catalog;
+        var pantry = await catalog.Service.SaveCategoryAsync(data.Maker, new(Shop, null, 0, "PANTRY", "Pantry"), Metadata("category-pantry"));
+        var tea = await Sku(data, pantry.Id, "Teh celup melati", "TEA-25", 501);
+        var hidden = await Sku(data, pantry.Id, "Barang khusus", "PRIVATE-1", 502);
+
+        var items = await catalog.BuyerService.ReadBuyerSkusAsync(catalog.Buyer, [hidden, tea, data.SkuId, 987654321]);
+        Assert.Equal(new[] { data.SkuId, tea }.Order(), items.Select(item => item.Variant.Sku.Id.Value));
+        Assert.Equal("TEA-25", Assert.Single(items, item => item.Variant.Sku.Id.Value == tea).Variant.Sku.Code);
+        await Assert.ThrowsAsync<UnitToko.Modules.Contracts.DomainValidationException>(() => catalog.BuyerService.ReadBuyerSkusAsync(catalog.Buyer, [tea, tea]));
+        await Assert.ThrowsAsync<UnitToko.Modules.Contracts.DomainValidationException>(() => catalog.BuyerService.ReadBuyerSkusAsync(catalog.Buyer, [.. Enumerable.Range(1, 101).Select(id => (long)id)]));
+    }
+
+    [Fact]
     public async Task An_invalid_category_filter_is_refused()
     {
         await using var data = await Ready();
@@ -65,11 +80,12 @@ public sealed class CatalogBuyerBrowseTests(MongoFixture fixture)
             return data;
         } catch { await data.DisposeAsync(); throw; }
     }
-    private static async Task Sku(CatalogPriceTestData data, UnitToko.Modules.Contracts.LongId categoryId, string family, string code, long assortmentId)
+    private static async Task<long> Sku(CatalogPriceTestData data, UnitToko.Modules.Contracts.LongId categoryId, string family, string code, long assortmentId)
     {
         var created = await data.Catalog.Service.CreateFamilyAsync(data.Maker, new(Shop, categoryId, family, "Deskripsi", []), Metadata("family-" + code));
         var sku = await data.Catalog.Service.CreateSkuAsync(data.Maker, new(created.Id, created.Version, code, code.ToLowerInvariant(), Definition()), Metadata("sku-" + code));
         await Publish(data, sku.Id.Value, assortmentId, "publish-" + code);
+        return sku.Id.Value;
     }
     private static async Task Publish(CatalogPriceTestData data, long skuId, long assortmentId, string key)
     {

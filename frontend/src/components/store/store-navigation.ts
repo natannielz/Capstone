@@ -1,5 +1,5 @@
 /** Who is looking at the storefront. Display only: every API authorises independently. */
-export type StoreViewer = { kind: 'loading' } | { kind: 'guest' } | { kind: 'member'; name: string; staff: boolean; approver: boolean };
+export type StoreViewer = { kind: 'loading' } | { kind: 'guest' } | { kind: 'member'; name: string; staff: boolean; approver: boolean; orders: boolean };
 
 // Everything a branch buyer or branch approver may hold. Any other permission belongs to the cooperative's back office.
 const buyerActions = new Set(['catalog.read', 'order.request.read', 'order.request.submit', 'branch.pic', 'order.submit', 'order.read',
@@ -7,7 +7,8 @@ const buyerActions = new Set(['catalog.read', 'order.request.read', 'order.reque
 
 export type StoreMember = Extract<StoreViewer, { kind: 'member' }>;
 export function storeMember(name: string, actions: readonly string[]): StoreMember {
-  return { kind: 'member', name, staff: actions.some(action => !buyerActions.has(action)), approver: actions.includes('order.spend.approve') };
+  return { kind: 'member', name, staff: actions.some(action => !buyerActions.has(action)), approver: actions.includes('order.spend.approve'),
+    orders: actions.includes('order.submit') };
 }
 
 export function storeSignInHref(returnPath: string) { return '/identity/login?returnPath=' + encodeURIComponent(returnPath); }

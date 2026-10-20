@@ -24,6 +24,7 @@ export const NAVIGATION_HREFS = {
   "orders": "/ordering/orders",
   "order-reviews": "/ordering/reviews",
   "prices": "/catalog/prices",
+  "public-showcase": "/catalog/public",
   "source-policies": "/inventory/sources/policies",
   "source-activations": "/inventory/sources/activations",
   "source-suspensions": "/inventory/sources/suspensions",

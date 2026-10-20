@@ -1,4 +1,5 @@
 using MongoDB.Bson;
+using MongoDB.Driver;
 using UnitToko.Modules.Catalog;
 using UnitToko.Modules.Contracts;
 using UnitToko.Modules.Identity;
@@ -35,9 +36,16 @@ public sealed class CatalogPublicTests(MongoFixture fixture)
         Assert.Equal(0, (await data.BuyerService.QueryPublicAsync(0, 24, null)).Total);
         Assert.Null(await data.BuyerService.ReadPublicItemAsync(publicId));
 
+        Assert.Null(Assert.Single(await service.ListAsync(maker), item => item.AssortmentId == 501).OwnerName);
+        var shop = await data.Rows("authorizationScopes").Find(new BsonDocument("_id", 101L)).SingleAsync();
+        await data.Rows("organizationProfiles").InsertOneAsync(new BsonDocument {
+            { "_id", 101L }, { "schemaVersion", 1 }, { "kind", shop["kind"] }, { "parentId", shop.GetValue("parentId", BsonNull.Value) },
+            { "code", "TOKO-MELATI" }, { "normalizedCode", "TOKO-MELATI" }, { "name", "Toko Melati" }, { "version", 1L }, { "createdBy", 998L }, { "updatedBy", 999L },
+            { "createdAt", data.Clock.UtcNow.UtcDateTime }, { "updatedAt", data.Clock.UtcNow.UtcDateTime }, { "approvedProposalId", 10101L } });
         var listed = await service.ListAsync(maker);
         Assert.Equal([501L, 502L], listed.Select(item => item.AssortmentId).Order());
         var first = Assert.Single(listed, item => item.AssortmentId == 501);
+        Assert.Equal("Toko Melati", first.OwnerName);
         Assert.False(first.IsPublic); Assert.Equal(0, first.Revision); Assert.Equal(1, first.ListedProducts); Assert.Null(first.Pending);
 
         var proposal = await service.ProposeAsync(maker, 501, 0, true, CatalogAuthoringTestData.Metadata("public-501-open", "Tampilkan katalog pantry di halaman publik"));

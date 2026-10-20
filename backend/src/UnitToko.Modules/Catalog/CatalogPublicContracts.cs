@@ -15,6 +15,6 @@ public enum PublicCatalogSort { Added, Name }
 
 /// <summary>Staff view of one assortment's public state and any proposal waiting for its independent checker.</summary>
 public sealed record CatalogPublicShowcaseProposal(long ProposalId, bool MakePublic, long ProposedBy, DateTimeOffset ProposedAt, string Reason);
-public sealed record CatalogPublicShowcase(long AssortmentId, GrantScope Owner, long ListedProducts, bool IsPublic, long Revision,
+public sealed record CatalogPublicShowcase(long AssortmentId, GrantScope Owner, string? OwnerName, long ListedProducts, bool IsPublic, long Revision,
     CatalogPublicShowcaseProposal? Pending);
 public enum CatalogPublicShowcaseDecision { Approve, Reject }

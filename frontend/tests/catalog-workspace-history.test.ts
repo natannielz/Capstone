@@ -85,7 +85,7 @@ function mountCatalog(context: ReturnType<typeof browser>, returnPath: '/shop' |
     if (name === './catalog-buyer-client') return {...catalog, createBuyerCatalogGateway: () => gateway};
     if (name === './catalog-history') return history;
     if (name === './CatalogBuyerPhoto') return {CatalogBuyerPhoto: marker};
-    if (name === '../ordering/OrderQuotePanel') return {OrderQuotePanel: marker};
+    if (name === '../ordering/AddToCartPanel') return {AddToCartPanel: marker};
     if (name === '@/lib/format') return displayFormat;
     // Guest redirect only: a signed-in catalog never navigates through the router in these cases.
     if (name === 'next/navigation') return {useRouter: () => ({replace() {}, push() {}})};

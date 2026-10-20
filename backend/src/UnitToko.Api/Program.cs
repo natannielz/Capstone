@@ -573,6 +573,7 @@ app.MapStockSourceReconciliationEndpoints();
 }
 // The signed-out catalog (no prices) is part of every release.
 app.MapCatalogPublicEndpoints();
+app.MapCatalogCartEndpoints();
 app.MapGet("/health/live", () => TypedResults.Ok(new HealthStatus("live"))).AllowAnonymous().WithName("Liveness");
 app.MapGet("/health/ready", async (HttpContext context, MongoConnection mongo,
     CollectionMigrations migrations, CancellationToken cancellationToken) =>

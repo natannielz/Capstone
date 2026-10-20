@@ -10,6 +10,9 @@ import { createAccessGateway } from '@/modules/administration/access-client';
 import { createIdentityGateway } from '@/modules/identity/identity-client';
 import { ProtectedNavigationForm } from '@/modules/identity/ProtectedNavigationForm';
 import { isPilotRelease } from '@/lib/release-scope';
+import { createOrderQuoteGateway } from '@/modules/ordering/order-quote-client';
+import { createCartGateway } from '@/modules/ordering/cart-client';
+import { CART_CHANGED_EVENT, cartBranch } from '@/modules/ordering/cart-branch';
 import { storeLinks, storeMember, type StoreViewer } from './store-navigation';
 import styles from './store-frame.module.css';
 
@@ -42,6 +45,25 @@ export function StoreFrame({ children }: { children: React.ReactNode }) {
     })();
     return () => { alive = false; };
   }, []);
+  const [cartLines, setCartLines] = useState<number | null>(null);
+  const orders = viewer.kind === 'member' && viewer.orders;
+  useEffect(() => {
+    // The count is a convenience: one quiet read when the frame opens, then whatever the page announces after a save.
+    if (!session || !orders || isPilotRelease) return;
+    let alive = true;
+    void (async () => {
+      try {
+        const branch = cartBranch(session.userId, await createOrderQuoteGateway().contexts(session.userId)); if (!branch || !alive) return;
+        const cart = await createCartGateway().read(session.userId, branch.context);
+        if (alive) setCartLines(cart?.input.selections.length ?? 0);
+      } catch { /* leave the icon without a count */ }
+    })();
+    const changed = (event: Event) => { const lines = (event as CustomEvent<number>).detail; if (Number.isSafeInteger(lines)) setCartLines(lines); };
+    window.addEventListener(CART_CHANGED_EVENT, changed);
+    return () => { alive = false; window.removeEventListener(CART_CHANGED_EVENT, changed); };
+  }, [session, orders]);
+  const cartName = isPilotRelease ? 'Permintaan' : cartLines ? 'Keranjang, ' + cartLines + ' barang' : 'Keranjang';
+  const badge = !isPilotRelease && cartLines ? <span className={styles.badge} aria-hidden="true">{cartLines > 99 ? '99+' : cartLines}</span> : null;
   const links = storeLinks(viewer, isPilotRelease, pathname);
   const help = whatsappLink(process.env.NEXT_PUBLIC_UNIT_TOKO_HELP_WHATSAPP, 'Halo, saya perlu bantuan memesan di Unit Toko.');
   const member = viewer.kind === 'member' ? viewer : null;
@@ -69,8 +91,8 @@ export function StoreFrame({ children }: { children: React.ReactNode }) {
       {searchForm(styles.search)}
       <div className={styles.actions}>
         {member?.staff && <Link className={styles.workspace} href="/workspace"><Briefcase size={17} aria-hidden="true" />Ruang kerja</Link>}
-        {viewer.kind !== 'loading' && <Link className={styles.iconLink} href={links.cart} aria-label={isPilotRelease ? 'Permintaan' : 'Keranjang'}>
-          <ShoppingCart size={21} aria-hidden="true" /><span className={styles.iconLabel}>{isPilotRelease ? 'Permintaan' : 'Keranjang'}</span></Link>}
+        {viewer.kind !== 'loading' && <Link className={styles.iconLink} href={links.cart} aria-label={cartName}>
+          <span className={styles.cartIcon}><ShoppingCart size={21} aria-hidden="true" />{badge}</span><span className={styles.iconLabel}>{isPilotRelease ? 'Permintaan' : 'Keranjang'}</span></Link>}
         {viewer.kind === 'guest' && <Link className={styles.signIn} href={links.signIn}>Masuk</Link>}
         {member && session && <AccountMenu name={member.name} approver={member.approver} staff={member.staff} orders={links.orders} actorId={session.userId} />}
         {viewer.kind === 'loading' && <span className={styles.pending} aria-hidden="true" />}
@@ -82,7 +104,7 @@ export function StoreFrame({ children }: { children: React.ReactNode }) {
     <StoreFooter staffDoor={links.staffDoor ?? '/workspace'} member={member !== null} />
     {!focusedPath(pathname) && <nav className={styles.tabs} aria-label="Navigasi toko">
       <Link href={links.catalog} aria-current={pathname.startsWith('/shop') ? 'page' : undefined}><LayoutGrid size={20} aria-hidden="true" />Katalog</Link>
-      <Link href={links.cart} aria-current={pathname === '/cart' ? 'page' : undefined}><ShoppingCart size={20} aria-hidden="true" />{isPilotRelease ? 'Permintaan' : 'Keranjang'}</Link>
+      <Link href={links.cart} aria-label={cartName} aria-current={pathname === '/cart' ? 'page' : undefined}><span className={styles.cartIcon}><ShoppingCart size={20} aria-hidden="true" />{badge}</span>{isPilotRelease ? 'Permintaan' : 'Keranjang'}</Link>
       <Link href={links.orders} aria-current={pathname.startsWith('/ordering/orders') ? 'page' : undefined}><ClipboardList size={20} aria-hidden="true" />Pesanan</Link>
       <Link href={links.account} aria-current={pathname === '/identity/account' ? 'page' : undefined}><UserRound size={20} aria-hidden="true" />{member ? 'Akun' : 'Masuk'}</Link>
     </nav>}

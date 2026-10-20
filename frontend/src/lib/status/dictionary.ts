@@ -7,7 +7,7 @@ export type StatusTone = "neutral" | "info" | "warning" | "success" | "danger";
 const groups: Record<Exclude<StatusTone, "neutral">, readonly string[]> = {
   warning: ["Menunggu tinjauan", "Menunggu verifikasi", "Menunggu persetujuan", "Siap dikirim"],
   info: ["Diproses", "Dalam perjalanan", "Dalam pengiriman"],
-  success: ["Terpenuhi", "Diterima", "Lunas", "Terverifikasi", "Disetujui", "Transaksi final", "Aktif"],
+  success: ["Terpenuhi", "Diterima", "Lunas", "Terverifikasi", "Disetujui", "Transaksi final", "Aktif", "Terbuka untuk umum"],
   danger: ["Lewat jatuh tempo", "Ditolak", "Gagal dikirim", "Belum teridentifikasi"],
 };
 
