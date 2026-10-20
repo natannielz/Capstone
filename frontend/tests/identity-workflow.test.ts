@@ -63,3 +63,10 @@ test("personal delegation discovery does not expose administrative write workflo
   assert.deepEqual(identityDestinations([]).map(item => item.href), ["/administration/delegations"]);
   assert.deepEqual(loginFields("/administration/delegations", "", ""), { returnPath: "/administration/delegations" });
 });
+
+test("staff sign in straight into their back office and guests return to the public catalog", async () => {
+  const { identityReturnPath } = await import("../src/modules/identity/identity-workflow");
+  assert.equal(identityReturnPath("/workspace"), "/workspace");
+  assert.equal(identityReturnPath("/katalog"), "/katalog");
+  assert.deepEqual(loginFields("/workspace", "", ""), { returnPath: "/workspace" });
+});

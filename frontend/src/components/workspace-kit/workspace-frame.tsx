@@ -48,7 +48,7 @@ export function WorkspaceFrame({ children }: { children: React.ReactNode }) {
   const who = viewer.state === "ready" ? viewer.name : viewer.state === "loading" ? "Memeriksa akun…" : "Belum masuk";
   return <>
     <aside className="workspace-sidebar" aria-label="Navigasi ruang kerja">
-      <Brand compact href="/identity/account" context="Ruang kerja" className="workspace-sidebar-brand" />
+      <Brand compact href="/" context="Ruang kerja" className="workspace-sidebar-brand" />
       <PaletteButton locked={locked} onOpen={() => setPaletteOpen(true)} />
       <NavigationList groups={groups} locked={locked} label="Ruang kerja" />
       <div className="workspace-sidebar-foot">

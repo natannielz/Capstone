@@ -1,4 +1,4 @@
-import { BuyerCatalog } from '../../../modules/catalog/BuyerCatalog';
-import { isPilotRelease } from '../../../lib/release-scope';
-export const metadata = { title: 'Katalog kemasan | Unit Toko' };
-export default function Page() { return <BuyerCatalog requestOnly={isPilotRelease} />; }
+import { redirect } from 'next/navigation';
+
+/** One buyer catalog: the older browse route forwards to it. */
+export default function Page() { redirect('/shop'); }

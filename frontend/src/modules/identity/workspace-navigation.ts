@@ -49,7 +49,7 @@ export type NavigationId = keyof typeof NAVIGATION_HREFS;
 export type NavigationItem = { href: string; label: string; description: string; current: boolean; available: boolean };
 export type NavigationGroup = { id: string; label: string; items: NavigationItem[] };
 
-const HOME: Omit<NavigationItem, 'current' | 'available'> = { href: '/identity/account', label: 'Pekerjaan saya', description: 'Ruang kerja dan tugas yang tersedia untuk akun Anda.' };
+const HOME: Omit<NavigationItem, 'current' | 'available'> = { href: '/workspace', label: 'Pekerjaan saya', description: 'Ruang kerja dan tugas yang tersedia untuk akun Anda.' };
 const ACCOUNT: Omit<NavigationItem, 'current' | 'available'> = { href: '/identity/account#profile-heading', label: 'Akun saya', description: 'Sesi, verifikasi dan kontak akun Anda.' };
 
 /**

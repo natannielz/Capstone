@@ -20,7 +20,7 @@ test("every discovered destination belongs to a navigation area (none silently h
 
 test("navigation groups follow the directory areas, starting with Pekerjaan saya and ending with Akun saya", () => {
   const groups = workspaceNavigation(["payment.review.read", "invoice.read"], "/billing/payment-reviews");
-  assert.equal(groups[0].items[0].href, "/identity/account");
+  assert.equal(groups[0].items[0].href, "/workspace");
   assert.equal(groups[0].items[0].label, "Pekerjaan saya");
   const finance = groups.find(group => group.id === "finance");
   assert.ok(finance);

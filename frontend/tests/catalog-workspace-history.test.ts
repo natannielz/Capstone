@@ -35,7 +35,7 @@ function browser(urls: string[]) {
     removeEventListener(kind: string, listener: EventListenerOrEventListenerObject) {listeners.get(kind)?.delete(listener); events.removeEventListener(kind, listener);},
     setInterval(callback: () => void) {intervals.set(++timer, callback); return timer;}, clearInterval(id: number) {intervals.delete(id);}};
   return {window, get href() {return window.location.pathname + window.location.search + window.location.hash;},
-    snapshot: () => structuredClone(entries), listenerCount: (kind: string) => listeners.get(kind)?.size ?? 0, timerCount: () => intervals.size};
+    notify: () => events.dispatchEvent(new Event('popstate')), snapshot: () => structuredClone(entries), listenerCount: (kind: string) => listeners.get(kind)?.size ?? 0, timerCount: () => intervals.size};
 }
 type Query = {search: string; offset: number; signal: AbortSignal; finish?: (response: Response) => void};
 type Effect = {dependencies?: readonly unknown[]; cleanup?: () => void};
@@ -104,8 +104,8 @@ function mountCatalog(context: ReturnType<typeof browser>, returnPath: '/shop' |
   function find(predicate: (node: Node) => boolean) {const node = nodes(tree).find(predicate); assert.ok(node, 'Expected mounted catalog control'); return node;}
   function button(label: string) {return find(node => node.type === 'button' && text(node.props.children).trim() === label);}
   async function click(label: string) {const node = button(label); assert.notEqual(node.props.disabled, true); (node.props.onClick as () => void)(); await settle();}
-  async function search(value: string) {(find(node => node.type === 'input' && node.props.placeholder === 'Nama barang, kode, atau jenis kemasan').props.onChange as (event: unknown) => void)({target: {value}}); await settle();
-    (find(node => node.type === 'form').props.onSubmit as (event: unknown) => void)({preventDefault() {}}); await settle();}
+  // The storefront header owns search: it moves the address to ?q= and notifies the catalog, which re-reads it.
+  async function search(value: string) {context.window.history.pushState({}, '', returnPath + '?q=' + encodeURIComponent(value.trim())); context.notify(); await settle();}
   return {queries, settle, click, search, button, find, get tree() {return tree;},
     finishOld() {assert.ok(queries[0].finish); queries[0].finish(reply(queries[0], 'LATE_OLD_REPLY_MUST_NOT_RENDER'));},
     unmount() {mounted = false; for (const effect of effects.values()) effect.cleanup?.(); effects.clear();
@@ -122,7 +122,7 @@ test('actual buyer catalog canonicalizes its URL and restores query/page through
     await mounted.click('Berikutnya'); assert.equal(context.href, path + '?q=Caf%C3%A9+%26+PENA&page=3#catalog-list');
     context.window.history.back(); await mounted.settle(); assert.equal(mounted.queries.at(-1)!.offset, 25); assert.match(text(mounted.tree), /Halaman 2/);
     context.window.history.forward(); await mounted.settle(); assert.equal(mounted.queries.at(-1)!.offset, 50); assert.match(text(mounted.tree), /Halaman 3/);
-    await mounted.search(' TAS '); assert.equal(context.href, path + '?q=TAS#catalog-list'); assert.match(text(mounted.tree), /Halaman 1/);
+    await mounted.search(' TAS '); assert.equal(context.href, path + '?q=TAS'); assert.match(text(mounted.tree), /Halaman 1/);
     context.window.history.back(); await mounted.settle(); assert.equal(mounted.queries.at(-1)!.search, 'Café & PENA');
     context.window.history.forward(); await mounted.settle(); assert.equal(mounted.queries.at(-1)!.search, 'TAS');
     const oldClick = mounted.button('Berikutnya').props.onClick as () => void, catalogUrl = context.href;
@@ -132,7 +132,7 @@ test('actual buyer catalog canonicalizes its URL and restores query/page through
     context.window.history.forward(); await mounted.settle(); const storedHistory = context.snapshot(); mounted.unmount();
     mounted = mountCatalog(context, path); await mounted.settle();
     assert.deepEqual(mounted.queries.map(query => [query.search, query.offset]), [['TAS', 0]]); assert.deepEqual(context.snapshot(), storedHistory);
-    assert.equal(mounted.find(node => node.type === 'input').props.value, 'TAS'); assert.match(text(mounted.tree), /Halaman 1/);
+    assert.match(text(mounted.tree), /Pencarian: TAS/); assert.match(text(mounted.tree), /Halaman 1/);
   }
 });
 
@@ -144,7 +144,7 @@ test('actual buyer catalog cancels a superseded list, refuses its late reply and
   assert.equal(mounted.queries[0].signal.aborted, true); assert.match(text(mounted.tree), /NEW \/ 50/);
   mounted.finishOld(); await mounted.settle();
   assert.doesNotMatch(text(mounted.tree), /LATE_OLD_REPLY_MUST_NOT_RENDER/); assert.match(text(mounted.tree), /NEW \/ 50/);
-  assert.equal(context.href, '/shop?q=NEW&page=3#catalog-main'); assert.equal(mounted.find(node => node.type === 'input').props.value, 'NEW');
+  assert.equal(context.href, '/shop?q=NEW&page=3#catalog-main'); assert.match(text(mounted.tree), /Pencarian: NEW/);
   mounted.unmount(); assert.equal(mounted.queries[1].signal.aborted, true);
   context.window.history.back(); await mounted.settle(); assert.equal(mounted.queries.length, 2);
 });

@@ -1,4 +1,4 @@
-import { WorkspaceFrame } from "@/components/workspace-kit/workspace-frame";
+import { StoreFrame } from "@/components/store/store-frame";
 
-/** Every page in this area sits in the shared workspace frame (sidebar, menu, workspace search and help). */
-export default function Layout({ children }: { children: React.ReactNode }) { return <WorkspaceFrame>{children}</WorkspaceFrame>; }
+/** "Akun saya" for buyers sits in the storefront; staff have the same hub as their back-office home at /workspace. */
+export default function Layout({ children }: { children: React.ReactNode }) { return <StoreFrame>{children}</StoreFrame>; }

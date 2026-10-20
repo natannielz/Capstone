@@ -121,3 +121,11 @@
 @media (max-width: 860px) { .packagePage .packageLayout { grid-template-columns: minmax(0, 1fr); } .packagePage .quoteArea { border-left: 0; border-top: 1px solid #d7e3e7; padding: 24px 0 0; } }
 @media (max-width: 720px) { .editorial { grid-template-columns: 1fr; } .editorialPhoto { min-height: 265px; } .editorialPhoto img { object-position: center 56%; } .assurances { grid-template-columns: 1fr; margin-bottom: 32px; } .assurances p { justify-content: start; padding: 13px 18px; } .assurances p + p { border-left: 0; border-top: 1px solid #d5e3e1; } .sectionHeading { align-items: start; flex-direction: column; gap: 10px; } .accessState { flex-direction: column; gap: 20px; } }
 @media (max-width: 520px) { .page.page { padding: 18px 22px 48px; } .toolbar { padding: 16px; } .search { width: 100%; } .search label { min-width: 0; } .toolbar > button { width: 100%; } .card { padding: 18px; } .detailToolbar > button { width: 100%; } .skeletonGrid { grid-template-columns: 1fr; } .skeletonGrid span:not(:first-child) { display: none; } }
+
+/* Storefront heading: the header owns search, the page names what is shown. */
+.storeHeading { margin: 4px 0 20px; }
+.storeHeading h1 { margin: 0; font-size: clamp(26px, 3vw, 34px); line-height: 1.15; letter-spacing: -.02em; }
+.storeHeading .breadcrumb { margin-bottom: 10px; }
+.searchTerm { display: flex; align-items: center; gap: 10px; margin: 0; font-size: 15px; }
+.searchTerm button { min-height: 36px; padding: 0 12px; border: 1px solid #a7bac2; border-radius: 6px; background: #fff; font: inherit; font-size: 14px; cursor: pointer; }
+:global([data-store-frame]) .toolbar { padding: 12px 0; border: 0; border-bottom: 1px solid #d5e3e1; background: transparent; margin-bottom: 20px; align-items: center; }

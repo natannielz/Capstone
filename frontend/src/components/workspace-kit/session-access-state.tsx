@@ -32,7 +32,7 @@ export function SessionAccessState({ error, returnPath, onRetry }: { error: unkn
     </> : kind === "denied" ? <>
       <h2 id="workspace-access-state">Halaman ini di luar tugas akun Anda</h2>
       <p>Akun Anda belum mendapat peran untuk halaman ini. Minta penanggung jawab akses di unit Anda menambahkan peran yang sesuai, lalu periksa ulang.</p>
-      <div className={common.actions}><Link className={common.primary} href="/identity/account">Ke Pekerjaan saya</Link>
+      <div className={common.actions}><Link className={common.primary} href="/workspace">Ke Pekerjaan saya</Link>
         <button type="button" className={common.secondary} onClick={onRetry}>Periksa ulang akses</button></div>
     </> : <>
       <h2 id="workspace-access-state">Halaman belum dapat dibuka</h2>
