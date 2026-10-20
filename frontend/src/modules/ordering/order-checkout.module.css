@@ -75,3 +75,18 @@
 @media (max-width: 1050px) { .reviewGrid { grid-template-columns: minmax(0, 1fr) 310px; gap: 20px; } .panel, .summary { padding: 22px 20px; } .lines > li { grid-template-columns: 60px minmax(0, 1fr); gap: 12px; } .lineTotal { grid-column: 2; text-align: left; max-width: none; } }
 @media (max-width: 760px) { .siteHeader { flex-wrap: wrap; padding-block: 18px 12px; gap: 10px; } .siteHeader nav { gap: 8px 22px; font-size: 13px; } .page.page { padding-top: 16px; } .progress { margin-bottom: 22px; gap: 0 12px; } .progress ol { gap: 2px; } .progress li { font-size: 12px; } .progress li > a, .progress li > span { gap: 5px; padding-inline: 6px; } .progress li > a svg, .progress li > span svg { display: none; } .progressArrow > svg { width: 13px; } .draft { grid-template-columns: minmax(0, 1fr); gap: 18px; padding: 22px 20px; } .draftAction { justify-items: start; } .reviewGrid { grid-template-columns: minmax(0, 1fr); } .summary { position: static; } .delivery { grid-template-columns: minmax(0, 1fr); gap: 16px; } .confirmed { padding: 22px 20px; } }
 @media (max-width: 380px) { .panel, .summary { padding: 20px 16px; } .progress li { font-size: 11px; } .progress li > a, .progress li > span { padding-inline: 4px; } .lineCopy h4 { font-size: 15px; } .draftAction > button { width: 100%; } }
+
+/* Delivery on the checkout page itself: a short form once, then a summary with "Ubah". */
+.shipping { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 16px 24px; margin-bottom: 24px; padding: 22px 26px;
+  border: 1px solid var(--workspace-border); border-radius: 10px; background: var(--workspace-surface); }
+.shipping h2 { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; font-size: 18px; }
+.shipping p { margin: 0 0 4px; }
+.shippingAddress { white-space: pre-wrap; }
+.shippingForm { display: grid; gap: 12px; width: 100%; }
+.shippingForm > button { justify-self: start; }
+.shippingFields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 18px; }
+.shippingFields label { display: block; margin-bottom: 6px; font-size: 14px; font-weight: 600; }
+.shippingFields input, .shippingFields textarea { width: 100%; }
+.wide { grid-column: 1 / -1; }
+.fieldError { margin: 6px 0 0; color: var(--workspace-critical-text, var(--tone-danger-foreground)); font-size: 13px; }
+@media (max-width: 760px) { .shipping { padding: 18px; } .shippingFields { grid-template-columns: minmax(0, 1fr); } }

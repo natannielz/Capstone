@@ -99,7 +99,7 @@ try {
   await captureCheckout(page, 'checkout');
   await page.getByRole('button', { name: 'Batal pengajuan', exact: true }).click(); assert.equal(writes.length, 0);
   await page.getByRole('button', { name: 'Tinjau pesanan dan biaya', exact: true }).click(); await review.waitFor();
-  dropNext = true; await page.getByRole('button', { name: 'Konfirmasi ajukan pesanan', exact: true }).click();
+  dropNext = true; await page.getByRole('button', { name: /^Ajukan (pesanan|untuk persetujuan)$/ }).click();
   await page.getByRole('button', { name: 'Periksa hasil', exact: true }).waitFor();
   const entries = await page.evaluate(() => Object.keys(localStorage).filter(key => key.startsWith('unit-toko:pending:v1:')).map(key => JSON.parse(localStorage[key])));
   assert.equal(entries.length, 1); assert.equal(entries[0].operation, 'ordering.order.submit'); assert.equal(entries[0].key, writes[0].key);
@@ -111,7 +111,7 @@ try {
   await page.getByRole('heading', { name: 'Rincian pesanan tersimpan', exact: true }).waitFor();
   assert.match(await confirmed.innerText(), /Menunggu persetujuan belanja cabang/); assert.match(await confirmed.innerText(), /Stok pesanan telah dicadangkan/);
   assert.equal(writes.length, 1); assert.equal(dropped, 1);
-  assert.equal(await page.getByRole('button', { name: 'Konfirmasi ajukan pesanan', exact: true }).count(), 0);
+  assert.equal(await page.getByRole('button', { name: /^Ajukan (pesanan|untuk persetujuan)$/ }).count(), 0);
   assert.equal(await page.getByRole('button', { name: /Selesaikan dan tutup/ }).count(), 0);
   await page.getByRole('button', { name: 'Muat kembali pesanan', exact: true }).click(); await page.getByRole('heading', { name: 'Rincian pesanan tersimpan', exact: true }).waitFor();
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
@@ -214,7 +214,7 @@ try {
   // A deliberate new order may now use the released stock. Reject it through the branch screen.
   await page.goto(origin.origin + '/ordering/checkout?draft=' + config.draftId);
   await page.getByRole('button', { name: 'Tinjau pesanan dan biaya', exact: true }).click();
-  await page.getByRole('button', { name: 'Konfirmasi ajukan pesanan', exact: true }).click();
+  await page.getByRole('button', { name: /^Ajukan (pesanan|untuk persetujuan)$/ }).click();
   await confirmed.waitFor(); await page.getByRole('heading', { name: 'Rincian pesanan tersimpan', exact: true }).waitFor();
   const rejectedOrderId = (await confirmed.getByRole('heading').innerText()).match(/[0-9]+/)[0]; assert.notEqual(rejectedOrderId, orderId);
   await approver.page.reload(); await approver.page.getByRole('button', { name: 'Tinjau pesanan ' + rejectedOrderId, exact: true }).click();
