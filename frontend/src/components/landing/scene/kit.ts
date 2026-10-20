@@ -5,11 +5,11 @@ import {
 import { CARTON } from "../kemasan-timeline";
 import {
   INK, KRAFT, KRAFT_INSIDE, KRAFT_TEXT, MARKER, board, bayMarking, bottleWrap, branchSign, checkBadge, contactShadow, corrugationBump,
-  fluteEdge, invoiceSheet, pavement, printedLong, printedShort, road, shippingLabel, vanSide, woodGrain, type Fonts, type LabelText,
+  fluteEdge, invoiceSheet, labelBand, pavement, printedLong, printedShort, road, shippingLabel, vanSide, woodGrain, type Fonts, type LabelText,
 } from "./textures";
 
 export const W = CARTON.width, D = CARTON.depth, H = CARTON.height, T = CARTON.wall;
-export const BOTTLE_HEIGHT = 0.53, CAP_HEIGHT = 0.06, LABEL_SIZE: [number, number] = [0.62, 0.4];
+export const BOTTLE_HEIGHT = 0.53, CAP_HEIGHT = 0.06, BAND_HEIGHT = 0.12, BAND_Y = 0.19, LABEL_SIZE: [number, number] = [0.62, 0.4];
 
 /** Every material, texture and geometry the scene shares, created once and disposed together. */
 export function createKit(renderer: WebGLRenderer, fonts: Fonts) {
@@ -34,6 +34,10 @@ export function createKit(renderer: WebGLRenderer, fonts: Fonts) {
     cut: new MeshBasicMaterial({ color: "#3B2A17" }),
     wood: new MeshStandardMaterial({ map: texture(woodGrain(13)), roughness: 0.85 }),
     bottle: new MeshPhysicalMaterial({ map: texture(bottleWrap()), roughness: 0.12, clearcoat: 1, clearcoatRoughness: 0.05 }),
+    // Cinematic tier: clear PET that refracts what is behind it, tinted faintly by the water; the label is a separate band.
+    bottleGlass: new MeshPhysicalMaterial({ color: "#F4FBFA", transmission: 1, thickness: 0.2, roughness: 0.035, ior: 1.46, clearcoat: 1,
+      clearcoatRoughness: 0.03, attenuationColor: "#BFE6E1", attenuationDistance: 0.7, specularIntensity: 1 }),
+    bottleBand: new MeshStandardMaterial({ map: texture(labelBand()), roughness: 0.45 }),
     cap: new MeshPhysicalMaterial({ color: MARKER, roughness: 0.35, clearcoat: 0.4 }),
     shadow: new MeshBasicMaterial({ map: texture(contactShadow()), transparent: true, depthWrite: false }),
     label: new MeshStandardMaterial({ map: labelMap, roughness: 0.6, polygonOffset: true, polygonOffsetFactor: -2 }),
@@ -71,6 +75,7 @@ export function createKit(renderer: WebGLRenderer, fonts: Fonts) {
     bottle: new LatheGeometry([[0, 0], [0.092, 0], [0.1, 0.02], [0.1, 0.34], [0.088, 0.41], [0.052, 0.46], [0.041, 0.49], [0.041, BOTTLE_HEIGHT]]
       .map(([radius, y]) => new Vector2(radius, y)), 24),
     cap: new CylinderGeometry(0.046, 0.046, CAP_HEIGHT, 18),
+    band: new CylinderGeometry(0.1025, 0.1025, BAND_HEIGHT, 28, 1, true),
     unit: new BoxGeometry(1, 1, 1), plane: new PlaneGeometry(1, 1),
     wheel: new CylinderGeometry(0.34, 0.34, 0.26, 28), hub: new CylinderGeometry(0.17, 0.17, 0.27, 18),
     handle: new CylinderGeometry(0.06, 0.08, 0.34, 18), knob: new CylinderGeometry(0.1, 0.1, 0.08, 20),

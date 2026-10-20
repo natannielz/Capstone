@@ -1,5 +1,5 @@
 import {
-  DirectionalLight, Fog, HemisphereLight, Mesh, NeutralToneMapping, Object3D, PCFSoftShadowMap, PMREMGenerator, PerspectiveCamera,
+  Color, DirectionalLight, Fog, HemisphereLight, Mesh, NeutralToneMapping, Object3D, PCFSoftShadowMap, PMREMGenerator, PerspectiveCamera,
   SRGBColorSpace, Scene, Vector3, WebGLRenderer,
 } from "three";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
@@ -9,6 +9,9 @@ import { createKit } from "./scene/kit";
 import { applyFlaps, buildBottles, buildCarton, buildPallet, type Carton } from "./scene/carton";
 import { buildBranch, buildFinale, buildGround, buildLabel, buildStamp, buildVan } from "./scene/diorama";
 import type { Fonts } from "./scene/textures";
+import { buildAtmosphere } from "./scene/atmosphere";
+import { createPipeline, type Pipeline } from "./scene/pipeline";
+import { focusForShot, qualityOverride, qualityTier, shouldDowngrade } from "./scene/quality";
 
 /**
  * "Satu karton, dari dok ke cabang". The hero shows cartons of bottled water on a pallet; the front carton is cut
@@ -35,27 +38,30 @@ async function fontsReady(fonts: Fonts) {
 export async function createKemasanScene(canvas: HTMLCanvasElement, options: KemasanSceneOptions): Promise<KemasanScene> {
   await fontsReady(options.fonts);
   const phone = window.matchMedia("(max-width: 900px)").matches;
-  const renderer = new WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: "high-performance" });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, phone ? 1.5 : 2));
+  const forced = qualityOverride(window.location.search);
+  let tier = qualityTier({ phone, cores: navigator.hardwareConcurrency || 4, override: forced });
+  const renderer = new WebGLRenderer({ canvas, antialias: tier === "balanced", powerPreference: "high-performance" });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, phone ? 1.5 : tier === "cinematic" ? 1.75 : 2));
   renderer.outputColorSpace = SRGBColorSpace; renderer.toneMapping = NeutralToneMapping; renderer.toneMappingExposure = 1.0;
   renderer.shadowMap.enabled = true; renderer.shadowMap.type = PCFSoftShadowMap;
 
   // Image-based light from three's procedural room (no files), a warm key that casts shadows and a cool rim.
   const scene = new Scene(), pmrem = new PMREMGenerator(renderer), room = new RoomEnvironment();
   scene.environment = pmrem.fromScene(room, 0.04).texture; scene.environmentIntensity = 0.6;
-  scene.fog = new Fog(DOCK, 34, 80);
+  scene.background = new Color(DOCK); scene.fog = new Fog(DOCK, 34, 80);
   const camera = new PerspectiveCamera(26, 1, 0.1, 140), up = new Vector3(0, 1, 0), keyOffset = new Vector3(-3.5, 6.5, 4.5);
   const key = new DirectionalLight("#FFF0DA", 2.3), keyTarget = new Object3D(); key.target = keyTarget; key.castShadow = true;
-  key.shadow.mapSize.set(phone ? 1024 : 2048, phone ? 1024 : 2048); key.shadow.bias = -0.0004; key.shadow.normalBias = 0.02; key.shadow.radius = 3;
+  key.shadow.mapSize.set(phone ? 1024 : 2048, phone ? 1024 : 2048); key.shadow.bias = -0.0004; key.shadow.normalBias = 0.02; key.shadow.radius = tier === "cinematic" ? 5 : 3;
   const rim = new DirectionalLight("#9FD6D2", 0.8); rim.position.set(4.5, 3, -4.5);
   scene.add(new HemisphereLight("#E3F1EE", "#3B2B1A", 0.55), key, keyTarget, rim);
 
   const kit = createKit(renderer, options.fonts);
   const { ground, dispose: disposeGround } = buildGround(kit);
   const branch = buildBranch(kit), van = buildVan(kit), stamp = buildStamp(kit), finale = buildFinale(kit), label = buildLabel(kit);
-  const pallet = buildPallet(kit), bottles = buildBottles(kit);
+  const pallet = buildPallet(kit), bottles = buildBottles(kit, tier === "cinematic"), atmosphere = buildAtmosphere();
   const contact = new Mesh(kit.geometry.shadow, kit.material.shadow); contact.rotation.x = -Math.PI / 2; contact.position.y = -0.21;
-  scene.add(ground, branch, van.van, stamp, finale.check, finale.invoice, pallet, contact);
+  scene.add(ground, branch, van.van, stamp, finale.invoice, pallet, contact, atmosphere.group);
+  const overlay = new Scene(); overlay.add(finale.check);
   stamp.visible = false; van.van.visible = false;
 
   const cartons: Carton[] = [];
@@ -65,7 +71,9 @@ export async function createKemasanScene(canvas: HTMLCanvasElement, options: Kem
     applyFlaps(carton, openingFrame(0), 1, 0); return carton;
   };
   const front = addCarton(0, -Infinity);
-  front.group.add(bottles.bodies, bottles.caps, label.label);
+  front.group.add(bottles.bodies, bottles.caps, bottles.bands, label.label);
+  let pipeline: Pipeline = createPipeline(renderer, scene, overlay, camera, tier);
+  const frameTimes: number[] = [];
   let opening = options.mode === "still" ? restingFrame() : openingFrame(0);
   bottles.place(opening.items); applyFlaps(front, opening, 0, 0);
 
@@ -93,7 +101,7 @@ export async function createKemasanScene(canvas: HTMLCanvasElement, options: Kem
     invalidate();
   }
 
-  const position = new Vector3(), target = new Vector3();
+  const position = new Vector3(), target = new Vector3(), focusPoint = new Vector3();
   function update(dt: number): boolean {
     let busy = false;
     if (openingStart === null) openingStart = clock;
@@ -140,6 +148,12 @@ export async function createKemasanScene(canvas: HTMLCanvasElement, options: Kem
     target.set(...frame.camera.target);
     camera.position.copy(position.set(...frame.camera.position)).sub(target).multiplyScalar(distance).applyAxisAngle(up, yaw * hero).add(target);
     camera.lookAt(target);
+    // Focus on what the camera looks at; the aperture follows the shot (shallow on the label, a little on the road).
+    // On the dock the subject is the label the camera looks at; once the carton travels, the lens follows the carton.
+    camera.updateMatrixWorld();
+    const subject = shownProgress > 2 ? focusPoint.set(cx, cy + 0.35, cz) : focusPoint.copy(target);
+    const focus = focusForShot(shownProgress); pipeline.setFocus(-subject.applyMatrix4(camera.matrixWorldInverse).z, focus.aperture, focus.maxBlur);
+    atmosphere.update(1 - clamp01((shownProgress - 1.6) / 0.8), options.mode === "still" ? null : clock / 1000);
     // The shadow-casting light follows what the camera looks at; its frustum widens with the shot.
     const reach = Math.min(16, Math.max(4.5, camera.position.distanceTo(target) * 0.42));
     keyTarget.position.copy(target); key.position.copy(target).add(keyOffset);
@@ -153,7 +167,12 @@ export async function createKemasanScene(canvas: HTMLCanvasElement, options: Kem
   let frameRequest = 0, last = 0, onScreen = true, pageVisible = document.visibilityState !== "hidden", alive = true;
   function frame(now: number) {
     frameRequest = 0; const dt = last ? Math.min(now - last, 50) : 16; clock += dt; last = now;
-    const busy = update(dt); renderer.render(scene, camera);
+    const busy = update(dt); pipeline.render();
+    // Measure the cinematic tier while it animates; step down once if it cannot hold about 40 fps.
+    if (tier === "cinematic" && !forced && busy && last && frameTimes.length < 90) {
+      frameTimes.push(dt);
+      if (shouldDowngrade(frameTimes)) { tier = "balanced"; pipeline.dispose(); pipeline = createPipeline(renderer, scene, overlay, camera, tier); bottles.useOpaque(); frameTimes.length = 90; }
+    }
     if (busy && onScreen && pageVisible) frameRequest = requestAnimationFrame(frame); else last = 0;
   }
   function invalidate() { if (alive && !frameRequest && onScreen && pageVisible) frameRequest = requestAnimationFrame(frame); }
@@ -162,7 +181,7 @@ export async function createKemasanScene(canvas: HTMLCanvasElement, options: Kem
   function resize() {
     const host = canvas.parentElement; if (!host) return;
     const width = Math.max(1, host.clientWidth), height = Math.max(1, host.clientHeight);
-    renderer.setSize(width, height, false); aspect = width / height; camera.aspect = aspect;
+    renderer.setSize(width, height, false); pipeline.setSize(width, height); aspect = width / height; camera.aspect = aspect;
     // On wide screens the stage runs behind the copy, so the subject is drawn right of centre, in the open space.
     const focus = window.matchMedia("(min-width: 901px)").matches ? 0.68 : 0.5;
     if (focus === 0.5) camera.clearViewOffset(); else camera.setViewOffset(width, height, -(focus - 0.5) * width, 0, width, height);
@@ -188,7 +207,7 @@ export async function createKemasanScene(canvas: HTMLCanvasElement, options: Kem
       alive = false; pause(); sized.disconnect(); seen.disconnect();
       document.removeEventListener("visibilitychange", visibility); window.removeEventListener("pointermove", pointer);
       canvas.removeEventListener("webglcontextlost", lost);
-      kit.dispose(); disposeGround(); bottles.bodies.dispose(); bottles.caps.dispose();
+      pipeline.dispose(); atmosphere.dispose(); kit.dispose(); disposeGround(); bottles.bodies.dispose(); bottles.caps.dispose(); bottles.bands.dispose();
       scene.environment?.dispose(); pmrem.dispose(); room.dispose();
       renderer.dispose(); renderer.forceContextLoss();
     },
