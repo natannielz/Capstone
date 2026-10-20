@@ -68,7 +68,10 @@ export function buildShopSet(kit: Kit) {
   const steel = new MeshStandardMaterial({ color: "#6F7C7C", metalness: 0.6, roughness: 0.45 });
   const board = new MeshStandardMaterial({ color: "#B9A27E", roughness: 0.8 });
   owned.push(steel, board);
-  const cartons = [m.coffee, m.tea, m.paper, m.pens, m.plain, m.plain, m.plain];
+  // Stock on the shelves is a step darker than the packages in the request, so the request always reads in front.
+  const dim = <T extends { clone(): T; color: Color }>(material: T) => { const copy = material.clone(); copy.color.multiplyScalar(0.78); owned.push(copy as unknown as { dispose(): void }); return copy; };
+  const printed = (set: typeof m.coffee) => set.map(material => dim(material as MeshStandardMaterial)) as unknown as typeof m.coffee;
+  const cartons = [printed(m.coffee), printed(m.tea), printed(m.paper), printed(m.pens), m.plain, m.plain, m.plain];
   // Two bays of shelving along the back of the packing corner.
   for (const [x0, x1] of [[-3.3, -0.1], [0.3, 3.5]]) {
     const width = x1 - x0, depth = 0.62, z = -5.3;
@@ -105,6 +108,10 @@ export function buildShopSet(kit: Kit) {
     const bar = new Mesh(kit.track(new BoxGeometry(w, h, 0.06)), frame); bar.position.set(x, y, 0.02); window.add(bar);
   }
   const wall = shaded(new Mesh(kit.track(new PlaneGeometry(18, 6)), m.wall), false); wall.position.set(-1, 3, -6);
+  // Atmosphere: a faint warm haze between the box and the shelving gives the room depth and keeps the stock behind.
+  const hazeMaterial = new MeshBasicMaterial({ color: "#EDE7DC", transparent: true, opacity: 0.34, depthWrite: false, fog: false });
+  owned.push(hazeMaterial);
+  const haze = new Mesh(kit.track(new PlaneGeometry(22, 7)), hazeMaterial); haze.position.set(0, 3.2, -4.55); stock.add(haze);
   group.add(wall, window);
 
   // Light shafts from the window towards the box, as crossed additive ribbons (no geometry casts or receives).
