@@ -53,3 +53,10 @@ Hosting, Auth0 tenant, domain and TLS, keys, real master data, real Surat Jalan 
 4. G5 to under 3 s, which also unblocks the latency-pending tests.
 5. G3 F12 and reports, then the dashboard in G2.3.
 6. G4 proving pass, module by module.
+
+## Progress log
+
+**20 October, evening**
+- G1: the story now plays in a real shop (stocked shelving, a window with a view, its light as a pool and shafts with dust, warm floor, atmospheric haze) and a dressed branch office; time-of-day light; a film grade on the cinematic tier. The 24-second film is rendered locally and free (`frontend/scripts/render-landing-film.mjs`, HyperFrames-style frame seeking with motion blur, browser WebCodecs, built-in WebM writer) and appears as "Satu kardus, 24 detik." plus the no-WebGL fallback. Commits aa12de5, 062f78f, 131736d.
+- G2.1: one workspace frame around every staff page (bcfd59a, 419de08). G2.2 and G2.3 open.
+- G5: transaction read memo; stock decision 13.3 s to 6.8 s, proposal 11.6 s to 6.2 s; regression batch running (no memo-caused failures so far; historical-replay tests found and retired).
