@@ -3,12 +3,12 @@ export const isPilotRelease = process.env.NEXT_PUBLIC_UNIT_TOKO_RELEASE !== "ful
 
 const pilotPages = new Set([
   "/", "/shop", "/catalog/browse", "/ordering/requests", "/ordering/requests/incoming",
-  "/identity/login", "/identity/account", "/workspace", "/administration/catalog", "/operations/health",
+  "/identity/login", "/identity/account", "/workspace", "/katalog", "/administration/catalog", "/operations/health",
 ]);
 
 /** Navigation visibility only. The API independently enforces release scope and authorization. */
 export function isPilotPathAllowed(path: string): boolean {
-  return pilotPages.has(path) || /^\/shop\/[A-Za-z0-9_-]+$/.test(path);
+  return pilotPages.has(path) || /^\/(shop|katalog)\/[A-Za-z0-9_-]+$/.test(path);
 }
 
 /** These pages only redirect to maintained journeys; no legacy API is admitted. */

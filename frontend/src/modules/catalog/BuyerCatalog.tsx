@@ -2,9 +2,8 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowRight, ArrowUpRight, ClipboardList, LayoutGrid, List, PackageOpen, Search, ShieldCheck } from 'lucide-react';
+import { ArrowRight, ArrowUpRight, ClipboardList, LayoutGrid, List, PackageOpen, ShieldCheck } from 'lucide-react';
 import { Art } from '../../components/art';
-import { PilotSiteHeader, PilotSiteFooter } from '../../components/pilot-site-chrome';
 import { createAccessGateway } from '../administration/access-client';
 import { AccessFailure } from '../administration/workflow';
 import { createIdentityGateway } from '../identity/identity-client';
@@ -12,7 +11,7 @@ import { IdentityFailure, sessionTiming, type IdentitySession } from '../identit
 import { CatalogReadGate } from './catalog-editor-state';
 import { buyerCurrentCode, createBuyerCatalogGateway, type BuyerCategoryCount, type BuyerVariant } from './catalog-buyer-client';
 import { CatalogBuyerPhoto } from './CatalogBuyerPhoto';
-import { catalogHistoryUrl, normalizeCatalogHistorySearch, readCatalogHistoryQuery, type CatalogHistoryQuery } from './catalog-history';
+import { catalogHistoryUrl, readCatalogHistoryQuery, type CatalogHistoryQuery } from './catalog-history';
 import shared from '../administration/access.module.css';
 import styles from './buyer-catalog.module.css';
 import { OrderQuotePanel } from '../ordering/OrderQuotePanel';
@@ -55,7 +54,7 @@ export function BuyerCatalog({ publicId, returnPath = '/catalog/browse', request
   const [identity] = useState(() => createIdentityGateway()), [access] = useState(() => createAccessGateway());
   const [gateway] = useState(() => createBuyerCatalogGateway()), [listGate] = useState(() => new CatalogReadGate()), [detailGate] = useState(() => new CatalogReadGate());
   const [account, setAccount] = useState<Account | null>(null), [items, setItems] = useState<BuyerVariant[]>([]), [total, setTotal] = useState('0');
-  const [search, setSearch] = useState(''), [catalogQuery, setCatalogQuery] = useState<CatalogHistoryQuery | null>(null), [revision, setRevision] = useState(0);
+  const [catalogQuery, setCatalogQuery] = useState<CatalogHistoryQuery | null>(null), [revision, setRevision] = useState(0);
   const query = catalogQuery?.search ?? '', offset = catalogQuery?.offset ?? 0, category = catalogQuery?.category, sort = catalogQuery?.sort;
   const [categories, setCategories] = useState<BuyerCategoryCount[]>([]), [layout, setLayout] = useState<'grid' | 'list'>('grid');
   const [busy, setBusy] = useState(true), [detailBusy, setDetailBusy] = useState<string | null>(null), [selected, setSelected] = useState<BuyerVariant | null>(null);
@@ -69,7 +68,7 @@ export function BuyerCatalog({ publicId, returnPath = '/catalog/browse', request
     if (applied?.search === next.search && applied.offset === next.offset && applied.category === next.category && applied.sort === next.sort) return;
     appliedQuery.current = next;
     listGate.cancel(); detailGate.cancel();
-    setCatalogQuery(next); setSearch(next.search);
+    setCatalogQuery(next);
   }, [listGate, detailGate]);
   useEffect(() => {
     alive.current = true; const timer = window.setInterval(() => { if (account) setElapsed(performance.now() - account.observedAt); }, 1000);
@@ -136,7 +135,6 @@ export function BuyerCatalog({ publicId, returnPath = '/catalog/browse', request
     if (window.location.pathname + window.location.search + window.location.hash !== canonical)
       window.history.pushState({}, '', canonical);
     changeCatalogQuery(next);
-    if (reload) setSearch(next.search);
     if (reload) refresh();
   }
   function at(change: Partial<CatalogHistoryQuery>): CatalogHistoryQuery {
@@ -148,7 +146,7 @@ export function BuyerCatalog({ publicId, returnPath = '/catalog/browse', request
   const categoryName = (code: string) => categories.find(item => item.code === code)?.name ?? code;
   const everything = categories.reduce((sum, item) => sum + item.count, 0), filtered = query !== '' || category !== undefined;
   const needsSignIn = error instanceof IdentityFailure && error.status === 401;
-  return <div className={styles.storefront}>{requestOnly && <><a className={styles.skip} href="#catalog-main">Langsung ke katalog</a><PilotSiteHeader active="catalog" /></>}
+  return <div className={styles.storefront}>
     <main id="catalog-main" tabIndex={-1} className={`${shared.page} ${styles.page}`}>
     {requestOnly ? <>
       <nav className={styles.breadcrumb} aria-label="Jejak halaman"><Link href="/">Beranda</Link><span aria-hidden="true">/</span><span>{publicId === undefined ? 'Katalog' : 'Rincian kemasan'}</span></nav>
@@ -159,15 +157,15 @@ export function BuyerCatalog({ publicId, returnPath = '/catalog/browse', request
       <div className={styles.assurances}><p><PackageOpen size={20} aria-hidden="true" /><span>Isi & satuan kemasan jelas</span></p><p><ShieldCheck size={20} aria-hidden="true" /><span>Akses sesuai akun organisasi</span></p><p><ClipboardList size={20} aria-hidden="true" /><span>Permintaan dapat ditelusuri</span></p></div>
       <div className={styles.sectionHeading} id="catalog-list"><div><p className={styles.eyebrow}>Katalog Unit Toko</p><h2>{publicId === undefined ? 'Katalog kemasan' : 'Informasi kemasan'}</h2></div><Link href="/ordering/requests">Permintaan saya <ArrowUpRight size={18} aria-hidden="true" /></Link></div>
       <p className={styles.availability}>Harga, stok, dan pemenuhan dikonfirmasi petugas. Permintaan yang diterima belum menjadi pemesanan dengan harga mengikat, reservasi stok, pembayaran, atau invoice.</p>
-    </> : <header className={shared.header}><div><Link className={shared.brand} href="/identity/account">Unit Toko</Link><h1>{publicId === undefined ? 'Katalog kemasan' : 'Rincian kemasan'}</h1>
-    <p>Periksa isi, satuan, dan harga setiap kemasan sebelum menyusun pesanan.</p></div><nav className={shared.actions} aria-label="Navigasi belanja">{publicId !== undefined && <Link className={shared.secondary} href={returnPath}>Katalog kemasan</Link>}<Link className={shared.secondary} href="/ordering/drafts">Draf pesanan</Link><Link className={shared.secondary} href="/identity/account">Akun saya</Link></nav></header>}
-    {publicId === undefined ? <section className={styles.toolbar} aria-label="Pencarian katalog"><form className={styles.search} onSubmit={event => { event.preventDefault(); navigateCatalog(at({ search: normalizeCatalogHistorySearch(search) }), true); }}>
-      <label>Cari kode atau kemasan<input value={search} placeholder="Nama barang, kode, atau jenis kemasan" maxLength={128} disabled={busy || detailBusy !== null || !account} onChange={event => setSearch(event.target.value)} /></label><button className={shared.primary} disabled={busy || detailBusy !== null || !account}><Search size={17} aria-hidden="true" /> Cari</button></form>
+    </> : <header className={styles.storeHeading}><nav className={styles.breadcrumb} aria-label="Jejak halaman"><Link href="/">Beranda</Link><span aria-hidden="true">/</span>
+      {publicId === undefined ? <span>Katalog</span> : <><Link href={returnPath}>Katalog</Link><span aria-hidden="true">/</span><span>Rincian produk</span></>}</nav>
+      <h1>{publicId !== undefined ? 'Rincian produk' : query ? `Hasil untuk “${query}”` : category ? categoryName(category) : 'Katalog'}</h1></header>}
+    {publicId === undefined ? <section className={styles.toolbar} aria-label="Pencarian katalog">{query ? <p className={styles.searchTerm}>Pencarian: <strong>{query}</strong><button type="button" disabled={busy || detailBusy !== null} onClick={() => navigateCatalog(at({ search: '' }), true)}>Hapus pencarian</button></p> : <span />}
       <div className={styles.browseControls}><label className={styles.order}>Urutkan<select value={sort ?? 'added'} disabled={busy || detailBusy !== null || !account}
         onChange={event => navigateCatalog(at({ sort: event.target.value === 'name' ? 'name' : undefined }))}><option value="added">Terbaru ditambahkan</option><option value="name">Nama A–Z</option></select></label>
         <div className={styles.layoutToggle} role="group" aria-label="Tampilan daftar">{([['grid', 'Kisi', LayoutGrid], ['list', 'Daftar', List]] as const).map(([value, label, Icon]) =>
           <button key={value} type="button" aria-pressed={layout === value} onClick={() => setLayout(value)}><Icon size={16} aria-hidden="true" />{label}</button>)}</div>
-        <button className={shared.secondary} disabled={busy || detailBusy !== null} onClick={refresh}>Muat kembali katalog</button></div></section> : <div className={styles.detailToolbar}><Link href={returnPath}>Kembali ke katalog</Link><button className={shared.secondary} disabled={busy} onClick={refresh}>Muat kembali kemasan</button></div>}
+</div></section> : <div className={styles.detailToolbar}><Link href={returnPath}>Kembali ke katalog</Link><button className={shared.secondary} disabled={busy} onClick={refresh}>Muat kembali kemasan</button></div>}
     {error !== null && <div role={needsSignIn ? 'status' : 'alert'} className={styles.accessState}><div className={styles.stateIcon}><ShieldCheck size={27} strokeWidth={1.5} aria-hidden="true" /></div><div><h2>{needsSignIn ? 'Katalog khusus untuk akun Anda.' : 'Katalog belum dapat ditampilkan.'}</h2><p>{needsSignIn ? 'Masuk dengan akun yang telah disetujui untuk melihat pilihan kemasan dan mengajukan kebutuhan cabang Anda.' : message(error)}</p>{!needsSignIn && <p className={styles.stateHint}>Daftar barang akan tampil setelah layanan tersedia dan akses akun Anda terverifikasi.</p>}<Link className={styles.stateAction} href={'/identity/login?returnPath=' + encodeURIComponent(returnPath)}>Masuk atau periksa akun <ArrowRight size={17} aria-hidden="true" /></Link></div></div>}
     {expired && <p role="alert" className={shared.alert}>Sesi telah berakhir. Masuk kembali untuk membuka katalog.</p>}
     {(expired || !account && !busy && error === null) && <Link className={styles.stateAction} href={'/identity/login?returnPath=' + encodeURIComponent(returnPath)}>Masuk atau periksa akun <ArrowRight size={17} aria-hidden="true" /></Link>}
@@ -199,5 +197,5 @@ export function BuyerCatalog({ publicId, returnPath = '/catalog/browse', request
       {selected && !expired && <><div className={styles.dialogHeader}><p className={styles.code}>{buyerCurrentCode(selected)}</p><button className={shared.secondary} onClick={close}>Tutup rincian</button></div>
         {account && <PackageReview item={selected} account={account} isCurrent={current} requestOnly={requestOnly} />}</>}
     </dialog>}
-  </main>{requestOnly && <PilotSiteFooter />}</div>;
+  </main></div>;
 }

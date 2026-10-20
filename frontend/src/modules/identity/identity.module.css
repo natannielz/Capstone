@@ -112,4 +112,4 @@
 @media (max-width: 420px) { .page { padding-inline: 16px; } .card { padding: 20px; } .workspaceSections a { flex: 1 1 130px; justify-content: center; text-align: center; } }
 @media (prefers-reduced-motion: reduce) { .page *, .page *::before, .page *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
 /* Inside the shared workspace frame the sidebar replaces the account hub's masthead. */
-:global([data-workspace-frame]) .masthead { display: none; }
+:global([data-workspace-frame]) .masthead, :global([data-store-frame]) .masthead { display: none; }

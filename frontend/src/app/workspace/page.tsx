@@ -1,3 +1,5 @@
-import { redirect } from "next/navigation";
+import type { Metadata } from "next";
+import { IdentityAccount } from "../../modules/identity/IdentityAccount";
 
-export default function WorkspacePage() { redirect("/identity/account#workspace-heading"); }
+export const metadata: Metadata = { title: "Pekerjaan saya | Unit Toko", description: "Ruang kerja petugas Unit Toko.", robots: { index: false, follow: false }, referrer: "same-origin" };
+export default function WorkspacePage() { return <IdentityAccount />; }
