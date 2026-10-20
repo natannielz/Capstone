@@ -61,7 +61,8 @@ export function createKit(renderer: WebGLRenderer, fonts: Fonts, cinematic: bool
     paperSheet: new MeshStandardMaterial({ color: PAPER, roughness: 0.75 }),
     receipt: new MeshStandardMaterial({ map: receiptMap, roughness: 0.75 }),
     receiptStamped: new MeshStandardMaterial({ map: stampedMap, roughness: 0.75 }),
-    invoice: new MeshStandardMaterial({ map: texture(invoiceSheet(fonts)), roughness: 0.75 }),
+    // Tinted down a little: tilted up into the key light, white paper otherwise clips into the bloom threshold.
+    invoice: new MeshStandardMaterial({ map: texture(invoiceSheet(fonts)), color: "#CFCCC4", roughness: 0.9 }),
     stampWood: new MeshStandardMaterial({ color: "#8A5A34", roughness: 0.5 }),
     stampFoot: new MeshStandardMaterial({ color: ORANGE, roughness: 0.7 }),
     check: new SpriteMaterial({ map: texture(checkBadge()), depthTest: false, transparent: true }),
