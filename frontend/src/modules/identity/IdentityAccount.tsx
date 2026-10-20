@@ -83,7 +83,7 @@ export function IdentityAccount() {
 
   return <main className={styles.page}>
     <a className={styles.skip} href="#account-content">Langsung ke akun</a>
-    <header className={styles.masthead}><div className={styles.mastheadInner}><Brand inverse href="/identity/account" context="Layanan organisasi" /></div></header>
+    <header className={styles.masthead}><div className={styles.mastheadInner}><Brand href="/identity/account" context="Layanan organisasi" /></div></header>
     <div className={styles.accountHeader}><div><h1>Akses kerja Anda</h1><p>Periksa sesi dan lanjutkan ke tugas yang telah disetujui.</p></div>
       <button type="button" className={styles.secondary} disabled={loading} onClick={reload}>Periksa sesi</button></div>
     <div id="account-content">

@@ -1,7 +1,8 @@
-/* Sign-in page: the landing page's dock panel and shipping-label sheet (palette in the Phase G plan, Task 5). */
+/* Sign-in page: the landing page's light studio panel and a shipping-label sheet, in the landing's palette. */
 .page {
-  --dock: #0F4C52;
-  --dock-text: #B5D0CC;
+  --dock: #0E4448;
+  --stage: #DCE4E1;
+  --stage-text: #35504F;
   --label: #F1F4EF;
   --paper: #FFFFFF;
   --ink: #12343A;
@@ -25,21 +26,21 @@
 .skip { position: fixed; top: 12px; left: 12px; z-index: 100; padding: 12px 18px; background: var(--paper); color: var(--ink); border-radius: 8px; font-weight: 650; transform: translateY(-200%); }
 .skip:focus { transform: none; }
 
-/* Dock panel: brand on top, the account types, then the carton drawing at the foot. */
-.top, .context { background: var(--dock); color: #FFFFFF; padding-inline: clamp(20px, 4vw, 56px); }
+/* Studio panel: brand on top, the account types, then the packed box at the foot (the landing's stage colour). */
+.top, .context { background: var(--stage); color: var(--ink); padding-inline: clamp(20px, 4vw, 56px); }
 .top { grid-area: top; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-block: 24px; }
-.top :where(a):focus-visible, .context :where(a):focus-visible { outline-color: var(--kraft-text); }
-.home { display: inline-flex; align-items: center; min-height: 44px; padding: 0 14px; border: 1.5px solid rgb(255 255 255 / 0.5); border-radius: 8px; color: #FFFFFF; font-size: 15px; font-weight: 600; text-decoration: none; }
-.home:hover { border-color: #FFFFFF; }
-.context { grid-area: context; display: flex; flex-direction: column; gap: 28px; padding-block: 24px 0; overflow: hidden; box-shadow: 0 -2px 0 var(--dock); }
+.home { display: inline-flex; align-items: center; min-height: 44px; padding: 0 14px; border: 1.5px solid rgb(14 52 56 / 0.4); border-radius: 8px; color: var(--ink); font-size: 15px; font-weight: 600; text-decoration: none; background: rgb(255 255 255 / 0.5); }
+.home:hover { border-color: var(--ink); background: var(--paper); }
+.context { grid-area: context; display: flex; flex-direction: column; gap: 28px; padding-block: 24px 0; overflow: hidden; box-shadow: 0 -2px 0 var(--stage); }
 .statement { max-width: 18ch; font-size: clamp(28px, 2.9vw, 40px); font-weight: 740; line-height: 1.08; letter-spacing: -0.03em; text-wrap: balance; }
-.audiences { display: grid; gap: 0; border-top: 1.5px solid rgb(255 255 255 / 0.35); }
-.audiences > div { padding: 14px 0; border-bottom: 1px solid rgb(255 255 255 / 0.18); }
+.audiences { display: grid; gap: 0; border-top: 1.5px solid rgb(14 52 56 / 0.3); }
+.audiences > div { padding: 14px 0; border-bottom: 1px solid rgb(14 52 56 / 0.14); }
 .audiences dt { font-weight: 700; }
-.audiences dd { margin-top: 2px; color: var(--dock-text); font-size: 15px; }
-.accessNote { color: var(--dock-text); font-size: 14px; }
-.drawing { margin-top: auto; margin-inline: -8%; }
-.drawing svg { display: block; width: 100%; height: auto; max-height: 300px; }
+.audiences dd { margin-top: 2px; color: var(--stage-text); font-size: 15px; }
+.accessNote { color: var(--stage-text); font-size: 14px; }
+/* The box takes whatever height is left and is drawn whole, never cropped at the panel's foot. */
+.drawing { flex: 1 1 0; min-height: 180px; display: grid; place-items: end center; padding-bottom: 32px; }
+.drawing svg { display: block; width: 100%; height: 100%; max-height: 300px; }
 
 /* The sheet: white label stock with an ink bar. */
 .formSide { grid-area: form; display: grid; align-content: center; justify-items: center; padding: 48px clamp(16px, 5vw, 72px); outline: none; }
@@ -77,7 +78,7 @@
   .page { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto auto; grid-template-areas: "top" "form" "context"; }
   .formSide { padding: 28px 16px 40px; align-content: start; }
   .context { padding-block: 36px 0; }
-  .drawing { max-width: 480px; margin-inline: auto; }
+  .drawing { flex: none; height: 240px; width: min(100%, 420px); margin-inline: auto; }
 }
 
 @media (prefers-reduced-motion: reduce) {

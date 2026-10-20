@@ -51,7 +51,7 @@ export function IdentityLogin() {
   return <div className={styles.page}>
     <a className={styles.skip} href="#identity-content">Langsung ke formulir masuk</a>
     <header className={styles.top}>
-      <Brand inverse context="Kebutuhan kerja & harian" />
+      <Brand context="Kebutuhan kerja & harian" />
       <Link className={styles.home} href="/">Beranda</Link>
     </header>
     <main className={styles.formSide} id="identity-content" tabIndex={-1}>
