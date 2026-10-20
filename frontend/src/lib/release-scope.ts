@@ -3,7 +3,7 @@ export const isPilotRelease = process.env.NEXT_PUBLIC_UNIT_TOKO_RELEASE !== "ful
 
 const pilotPages = new Set([
   "/", "/shop", "/catalog/browse", "/ordering/requests", "/ordering/requests/incoming",
-  "/identity/login", "/identity/account", "/workspace", "/administration/catalog",
+  "/identity/login", "/identity/account", "/workspace", "/administration/catalog", "/operations/health",
 ]);
 
 /** Navigation visibility only. The API independently enforces release scope and authorization. */
@@ -19,6 +19,6 @@ export function isMaintainedEntryAlias(path: string): boolean {
 
 export function isPilotApiPathAllowed(path: string): boolean {
   return ["/api/v1/system/status", "/api/v1/access/current", "/api/v1/identity/session", "/api/v1/identity/csrf"].includes(path) || [
-    "/api/v1/catalog/administration", "/api/v1/catalog/variants", "/api/v1/ordering/requests",
+    "/api/v1/catalog/administration", "/api/v1/catalog/variants", "/api/v1/ordering/requests", "/api/v1/operations/health",
   ].some(prefix => path === prefix || path.startsWith(prefix + "/"));
 }

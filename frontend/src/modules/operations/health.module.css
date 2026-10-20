@@ -1,0 +1,25 @@
+.report { display: grid; gap: 1.5rem; margin-top: 2rem; }
+.summary { padding: 1.25rem 1.25rem 1rem; border: 1px solid var(--workspace-border); border-left-width: 6px; border-radius: 6px; background: var(--workspace-canvas); }
+.summary[data-tone="success"] { border-left-color: var(--workspace-success-border); }
+.summary[data-tone="warning"] { border-left-color: var(--workspace-caution-border); background: var(--workspace-caution-surface); }
+.summary[data-tone="danger"] { border-left-color: var(--workspace-critical-border); background: var(--workspace-critical-surface); }
+.summary h2 { margin: 0; font-size: 1.375rem; line-height: 1.25; }
+.summary > p { margin: .25rem 0 0; color: var(--workspace-text-muted); font-variant-numeric: tabular-nums; }
+.findings { display: grid; gap: .5rem; margin: 1rem 0 0; padding: 0; list-style: none; }
+.findings li { display: flex; flex-wrap: wrap; align-items: baseline; gap: .5rem .75rem; overflow-wrap: anywhere; }
+.findings li > span:first-child { flex: none; }
+.tableFrame { overflow-x: auto; }
+.queues { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.queues caption { text-align: left; font-weight: 600; font-size: 1.0625rem; padding-bottom: .5rem; }
+.queues th, .queues td { padding: .625rem .75rem; border-bottom: 1px solid var(--workspace-border-row, var(--workspace-border)); text-align: right; white-space: nowrap; }
+.queues th:first-child { text-align: left; }
+.queues thead th { font-weight: 500; color: var(--workspace-text-muted); font-size: .875rem; }
+.queues td[data-alert] { color: var(--workspace-critical-text); font-weight: 600; }
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: 1rem 1.5rem; margin: 0; }
+.facts dt { font-size: .875rem; color: var(--workspace-text-muted); }
+.facts dd { margin: .25rem 0 0; font-weight: 500; overflow-wrap: anywhere; }
+.actions { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem 1rem; margin-top: 1.5rem; }
+.actions button { min-height: 44px; padding: .625rem 1rem; font: inherit; border: 1px solid var(--workspace-border-input); border-radius: 4px; background: var(--workspace-canvas); cursor: pointer; }
+.actions button:disabled { cursor: default; opacity: .6; }
+.notice { padding: 1rem; border-left: 4px solid var(--workspace-scope-marker); background: var(--workspace-surface-selected); }
+.tableFrame:focus-visible { outline: 2px solid var(--color-ring, currentColor); outline-offset: 2px; }

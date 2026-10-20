@@ -50,6 +50,17 @@ public sealed class ReleaseProfileTests
         Assert.Equal(HttpStatusCode.Unauthorized, retained.StatusCode);
     }
 
+    // Q10: the first release is the one operators must watch, so the health report is part of the pilot surface.
+    [Fact]
+    public void Pilot_maps_the_operator_health_report()
+    {
+        using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(web =>
+            web.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(new Dictionary<string, string?>
+            { ["Release:Profile"] = "release1", ["Mongo:Uri"] = "mongodb://127.0.0.1:27028/?replicaSet=rs0", ["Mongo:Database"] = "unittoko_release_scope" })));
+        Assert.Contains(factory.Services.GetRequiredService<EndpointDataSource>().Endpoints.OfType<RouteEndpoint>(),
+            endpoint => endpoint.RoutePattern.RawText?.TrimEnd('/') == "/api/v1/operations/health/query");
+    }
+
     private static IConfiguration Settings(string profile) => new ConfigurationBuilder()
         .AddInMemoryCollection(new Dictionary<string, string?> { ["Release:Profile"] = profile }).Build();
 }
