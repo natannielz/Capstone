@@ -34,3 +34,11 @@ test('local search matches user-facing words across case and spacing without exp
   assert.deepEqual(links(actions, '０００９'), []);
   assert.deepEqual(links(actions, ' 	 '), links(actions));
 });
+
+test('system health sits with organisation and access, not with the catalog', () => {
+  const groups = workspaceDirectory(['technical.configure']);
+  const area = groups.find(group => group.items.some(item => item.href === '/operations/health'));
+  assert.equal(area?.id, 'organization');
+  assert.match(area?.description ?? '', /kesehatan sistem/);
+  assert.deepEqual(links(['technical.configure'], 'antrean'), ['/operations/health']);
+});
