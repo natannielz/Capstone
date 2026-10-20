@@ -19,7 +19,9 @@ import { dateTimeFormatter } from "@/lib/format";
 const displayTime = (value: string | null) => value ? dateTimeFormatter.format(new Date(value)) : "—";
 const availableStepUp = (session: IdentitySession) => session.stepUpOperations.filter(operation => !isPilotRelease || ['catalog.manage', 'order.request.submit', 'order.request.decide', 'order.request.read'].includes(operation));
 
-export function IdentityAccount() {
+/** The account page, or with variant "workspace" the staff home: waiting work and workspaces first, account settings one link away. */
+export function IdentityAccount({ variant = "account" }: { variant?: "account" | "workspace" } = {}) {
+  const home = variant === "workspace";
   const [gateway] = useState(() => createIdentityGateway());
   const [access] = useState(() => createAccessGateway());
   const [session, setSession] = useState<IdentitySession | null>(null);
@@ -84,7 +86,8 @@ export function IdentityAccount() {
   return <main className={styles.page}>
     <a className={styles.skip} href="#account-content">Langsung ke akun</a>
     <header className={styles.masthead}><div className={styles.mastheadInner}><Brand href="/identity/account" context="Layanan organisasi" /></div></header>
-    <div className={styles.accountHeader}><div><h1>Akses kerja Anda</h1><p>Periksa sesi dan lanjutkan ke tugas yang telah disetujui.</p></div>
+    <div className={styles.accountHeader}><div>{home ? <><h1>Pekerjaan saya</h1><p>{session?.account?.displayName ? "Halo, " + session.account.displayName + ". " : ""}Pekerjaan yang menunggu Anda dan ruang kerja sesuai penugasan.</p></>
+      : <><h1>Akses kerja Anda</h1><p>Periksa sesi dan lanjutkan ke tugas yang telah disetujui.</p></>}</div>
       <button type="button" className={styles.secondary} disabled={loading} onClick={reload}>Periksa sesi</button></div>
     <div id="account-content">
       {loading && <section className={styles.card} aria-busy="true"><p role="status">Memeriksa akun dan izin terbaru…</p></section>}
@@ -98,8 +101,9 @@ export function IdentityAccount() {
         <Link href="/identity/login" className={styles.primary}>Ke halaman masuk</Link>
       </section>}
       {!loading && session?.account && !timing.expired && <>
-        {!isPilotRelease && navigationError === null && <WorkSummary key={"work:" + session.account.userId} actorId={session.account.userId} actions={actions} />}
+        {!isPilotRelease && navigationError === null && <WorkSummary key={"work:" + session.account.userId} actorId={session.account.userId} actions={actions} heading={home ? "Menunggu tindakan Anda" : undefined} />}
         <WorkspaceDirectory actions={actions} accessState={navigationError} />
+        {home ? <p className={styles.help}>Profil, verifikasi dua langkah untuk persetujuan, kontak dan keluar ada di <Link href="/identity/account#profile-heading">Akun saya</Link>.</p> : <>
         <div className={styles.accountGrid}>
           <section className={styles.card} aria-labelledby="profile-heading"><span className={styles.status}>Akun terverifikasi</span>
             <h2 id="profile-heading" tabIndex={-1}>{session.account.displayName ?? "Akun organisasi"}</h2>
@@ -121,7 +125,7 @@ export function IdentityAccount() {
           </section>
         </div>
         {!isPilotRelease && <AccountContactPanel key={"contact:" + session.account.userId} actorId={session.account.userId} />}
-        <aside className={styles.support}><h2>Perlu memulihkan akses?</h2><p>Hubungi pengelola organisasi untuk memulai pemulihan melalui proses resmi. Anda sendiri yang menetapkan kembali akses di layanan akun. Pengelola tidak perlu mengetahui kata sandi atau kode verifikasi Anda.</p></aside>
+        <aside className={styles.support}><h2>Perlu memulihkan akses?</h2><p>Hubungi pengelola organisasi untuk memulai pemulihan melalui proses resmi. Anda sendiri yang menetapkan kembali akses di layanan akun. Pengelola tidak perlu mengetahui kata sandi atau kode verifikasi Anda.</p></aside></>}
       </>}
     </div>
     <footer className={styles.footer}>Unit Toko. Akses khusus organisasi yang disetujui.</footer>
