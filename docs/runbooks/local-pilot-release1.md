@@ -80,3 +80,21 @@ The full profile keeps its own state in `tmp/pilot/full`, its own database `unit
 - **`peninjau`:** price approval.
 
 The three sample packages receive prices through the real maker/checker price service, so requesters can prepare drafts. Everything stays SYNTHETIC. Only one profile can run at a time, because both use port 443.
+
+### Product photos (full profile)
+
+The catalog's 251 products include the first demo's 200, and their photos go through the real private-evidence path, not a public folder:
+- **Scanner:** ClamAV for Windows, unpacked once under `.tools/clamav/clamav-<version>.win.x64` (official Cisco-Talos release zip, SHA-256 checked against the release). The launcher writes `tmp/pilot/full/photos/clamd.conf`, then starts `clamd` on `127.0.0.1:3310` only, with `TZ=UTC` so its version reply carries the UTC signature time the scanner requires. Signatures live in `tmp/pilot/full/photos/clamav-db`. ClamAV's own `freshclam` refreshes them at start-up and every 20 hours while the pilot runs. A failed update keeps the old signatures, and the scanner refuses signatures older than a week.
+- **Decoder:** on first use the launcher copies the built `UnitToko.ImageDecoder` into `tmp/pilot/full/photos/decoder` and pins its files in `installation.json`. Later rebuilds do not change it. To install a newer decoder deliberately, delete that folder and its installation file. The worker approvals then move to a new revision, and the photos are rescanned.
+- **Store and approvals:** a private store at `%LOCALAPPDATA%\UnitToko.LocalPilot\full\evidence` (owner: this user; access: this user, SYSTEM and Administrators). It lives outside the checkout because the store refuses any root whose ancestor folders grant write access to other identities, and checkout folders can carry such grants from other tools. The launcher, acting as operator for this synthetic store only, provisions:
+  - the store policy (2 MiB maximum);
+  - the read policy (a verdict counts for 24 hours, signatures for 7 days);
+  - one worker approval per pipeline fingerprint, valid for 30 days and extended automatically.
+
+  The API receives `Evidence:PrivateWindows` and `Evidence:ImageRevalidation`, so payment proofs and staff photo uploads use the same store.
+- **Photos:**
+  - Once, the launcher converts each `frontend/public/images/products/generated/*.webp` to an 800 px baseline JPEG and uploads it as `petugas` through reserve, upload, scan, decode and associate.
+  - Every hour it requests a rescan of any photo whose verdict is older than 12 hours, so buyers keep seeing photos.
+  - After the pilot has been stopped for more than a day, photos reappear a few minutes after start-up, once the rescan finishes.
+
+Without `.tools/clamav` the full profile runs without photos and says so at start-up.

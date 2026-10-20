@@ -21,15 +21,31 @@ function failureMessage(error: unknown) {
 /** Reloading is offered only when there is something to recover from; a loaded or absent photo needs no action. */
 export function photoRefreshOffered(kind: State["kind"]): boolean { return kind === "error" || kind === "hidden"; }
 
+/** Each buyer's private photo reads run one at a time, so a card waits until it is about to scroll into view: the photos a
+ *  person is looking at come first and a long page does not queue every card at once. */
+export const photoViewportMargin = '400px 0px';
+export function photoReadAllowed(nearViewport: boolean, observable: boolean): boolean { return nearViewport || !observable; }
+
 export function CatalogBuyerPhoto(props: Props) {
   return <PrivatePhoto key={buyerPhotoIdentity(props.actorId, buyerPhotoTarget(props.item))} {...props}/>;
 }
 function PrivatePhoto({actorId, item, isCurrent}: Props) {
   const [gateway] = useState(() => createBuyerPhotoGateway()), [target] = useState(() => buyerPhotoTarget(item));
   const [revision, setRevision] = useState(0), [state, setState] = useState<State>({kind: 'loading'});
-  const activeUrl = useRef<string | null>(null), activeRequest = useRef<AbortController | null>(null);
+  const activeUrl = useRef<string | null>(null), activeRequest = useRef<AbortController | null>(null), frame = useRef<HTMLDivElement>(null);
+  const [observable] = useState(() => typeof IntersectionObserver !== 'undefined'), [near, setNear] = useState(false);
+  const allowed = photoReadAllowed(near, observable);
+  useEffect(() => {
+    if (allowed || !frame.current) return;
+    const observer = new IntersectionObserver(entries => {
+      if (entries.some(entry => entry.isIntersecting)) { setNear(true); observer.disconnect(); }
+    }, {rootMargin: photoViewportMargin});
+    observer.observe(frame.current);
+    return () => observer.disconnect();
+  }, [allowed]);
   const revoke = () => { if (activeUrl.current) URL.revokeObjectURL(activeUrl.current); activeUrl.current = null; };
   useEffect(() => {
+    if (!allowed) return;
     let active = true; const abort = new AbortController(); activeRequest.current = abort;
     const current = () => active && !abort.signal.aborted && navigator.onLine && isCurrent();
     const hide = () => { abort.abort(); revoke(); if (active) setState({kind: 'hidden'}); };
@@ -47,14 +63,14 @@ function PrivatePhoto({actorId, item, isCurrent}: Props) {
       } catch (error) { if (current()) { revoke(); setState({kind: 'error', message: failureMessage(error)}); } }
     });
     return () => { active = false; abort.abort(); revoke(); window.removeEventListener('pagehide', hide); window.removeEventListener('pageshow', restored); window.removeEventListener('offline', hide); };
-  }, [actorId, gateway, isCurrent, revision, target]);
+  }, [actorId, allowed, gateway, isCurrent, revision, target]);
   function refresh() {
     activeRequest.current?.abort(); revoke();
     if (!navigator.onLine || !isCurrent()) { setState({kind: 'hidden'}); return; }
     setState({kind: 'loading'}); setRevision(value => value + 1);
   }
   return <section className={styles.buyerPhoto} aria-label={`Foto kemasan ${item.code}`} aria-busy={state.kind === 'loading'}>
-    <div className={styles.buyerPhotoFrame}>
+    <div className={styles.buyerPhotoFrame} ref={frame}>
       {state.kind === 'ready' ?
         // A verified private blob must not be sent to a public URL or image optimizer.
         // eslint-disable-next-line @next/next/no-img-element

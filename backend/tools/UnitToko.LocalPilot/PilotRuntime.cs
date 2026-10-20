@@ -14,10 +14,13 @@ using UnitToko.Api.Identity;
 namespace UnitToko.LocalPilot;
 
 [SupportedOSPlatform("windows")]
-internal sealed class PilotApiFactory(string repository, PilotState state, SyntheticOidcProvider provider) : WebApplicationFactory<global::Program>
+internal sealed class PilotApiFactory(string repository, PilotState state, SyntheticOidcProvider provider,
+    IReadOnlyDictionary<string, string?>? evidence = null) : WebApplicationFactory<global::Program>
 {
     protected override IHost CreateHost(IHostBuilder builder)
     {
+        // The private photo store and image rescan settings, when the pilot started its local scanner (full profile).
+        if (evidence is not null) builder.ConfigureHostConfiguration(config => config.AddInMemoryCollection(evidence));
         builder.ConfigureHostConfiguration(config => config.AddInMemoryCollection(new Dictionary<string, string?>
         {
             ["Mongo:Uri"] = PilotBoundary.MongoUri, ["Mongo:Database"] = PilotBoundary.DatabaseName,
