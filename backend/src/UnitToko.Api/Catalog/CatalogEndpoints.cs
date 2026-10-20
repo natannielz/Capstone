@@ -137,7 +137,11 @@ public static class CatalogEndpoints
             [FromServices] CatalogDefinitionQueryService service, CancellationToken ct) =>
         {
             Page(request.Offset, request.Limit); Search(request.Search);
-            return TypedResults.Ok(CatalogBuyerIdentifierResponses.From(await service.QueryBuyerAsync(Actor(http), request.Offset, request.Limit, request.Search, ct)));
+            var sort = request.Sort switch {
+                null or "added" => CatalogBuyerSort.Added, "name" => CatalogBuyerSort.Name,
+                _ => throw new DomainValidationException("catalog_query_invalid", "Choose a supported catalog order") };
+            return TypedResults.Ok(CatalogBuyerIdentifierResponses.From(await service.QueryBuyerAsync(Actor(http), request.Offset, request.Limit,
+                request.Search, request.Category, sort, ct)));
         }).WithName("CatalogPublishedVariantQuery");
         buyer.MapPost("/{publicId}/query", async Task<CatalogBuyerVariantDto?> (string publicId, CatalogVariantReadDto request, HttpContext http,
             [FromServices] CatalogDefinitionQueryService service, CancellationToken ct) =>

@@ -97371,6 +97371,26 @@
         },
         "additionalProperties": false
       },
+      "CatalogBuyerCategoryCountDto": {
+        "required": [
+          "code",
+          "name",
+          "count"
+        ],
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "count": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
       "CatalogBuyerCodeDto": {
         "required": [
           "identifierId",
@@ -97545,7 +97565,8 @@
       "CatalogBuyerVariantPageDto": {
         "required": [
           "total",
-          "items"
+          "items",
+          "categories"
         ],
         "type": "object",
         "properties": {
@@ -97556,6 +97577,12 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/CatalogBuyerVariantDto"
+            }
+          },
+          "categories": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CatalogBuyerCategoryCountDto"
             }
           }
         },
@@ -99722,6 +99749,18 @@
             "default": 25
           },
           "search": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "category": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "sort": {
             "type": [
               "null",
               "string"

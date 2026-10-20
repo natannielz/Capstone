@@ -19,14 +19,21 @@ public sealed record CatalogBuyerMatchedIdentifier(LongId IdentifierId, long Ide
     LongId SkuId, long SkuRevision, LongId DefinitionId, long DefinitionVersion);
 public sealed record CatalogBuyerCodeMatch(string RequestedCode, CatalogBuyerMatchedIdentifier MatchedIdentifier,
     CatalogBuyerVariant Variant);
+/// <summary>A category chip: how many visible packages match the search in this category.</summary>
+public sealed record CatalogBuyerCategoryCount(string Code, string Name, long Count);
+/// <summary>One page of the buyer catalog, plus the per-category counts for the same search (ignoring the category filter).</summary>
+public sealed record CatalogBuyerPage(long Total, ImmutableArray<CatalogBuyerVariant> Items, ImmutableArray<CatalogBuyerCategoryCount> Categories);
+public enum CatalogBuyerSort { Added, Name }
 
 public sealed partial class CatalogDefinitionQueryService
 {
-    public async Task<CatalogPage<CatalogBuyerVariant>> QueryBuyerAsync(ActorContext actor, int offset, int limit,
-        string? search, CancellationToken cancellationToken = default)
+    public async Task<CatalogBuyerPage> QueryBuyerAsync(ActorContext actor, int offset, int limit,
+        string? search, string? category = null, CatalogBuyerSort sort = CatalogBuyerSort.Added, CancellationToken cancellationToken = default)
     {
         AuthorizationStore.ValidatePage(offset, limit);
         if (search is not null && search.Length > 128) throw new DomainValidationException("catalog_query_invalid", "Use a bounded catalog search");
+        if (!Enum.IsDefined(sort)) throw new DomainValidationException("catalog_query_invalid", "Choose a supported catalog order");
+        var categoryCode = string.IsNullOrWhiteSpace(category) ? null : CatalogPolicy.NormalizeSkuCode(category);
         await CatalogIdentifierRecords.RequireStorageAsync(database, cancellationToken);
         return await visibility.ReadCurrentAsync(actor, F.Eq("active", true), async (tx, filter, ct) => {
             var pipeline = VisiblePipeline(filter); AddBuyerIdentifierLookup(pipeline);
@@ -37,18 +44,31 @@ public sealed partial class CatalogDefinitionQueryService
                     new BsonDocument("buyerIdentifiers.canonicalValue", literal),
                     new BsonDocument("family.name", literal), new BsonDocument("definition.packageLabel", literal) })));
             }
+            // Category counts cover the whole search result; the category filter narrows only the count and the page.
+            var inCategory = new BsonDocument("$match", categoryCode is null ? new BsonDocument() : new BsonDocument("category.code", categoryCode));
+            var order = sort == CatalogBuyerSort.Name
+                ? new BsonDocument { { "sortName", 1 }, { "sortLabel", 1 }, { "_id", 1 } } : new BsonDocument("_id", 1);
             pipeline.Add(new("$facet", new BsonDocument {
-                { "count", new BsonArray { new BsonDocument("$count", "total") } },
-                { "page", new BsonArray { new BsonDocument("$sort", new BsonDocument("_id", 1)),
-                    new BsonDocument("$skip", offset), new BsonDocument("$limit", limit), new BsonDocument("$project", new BsonDocument("_id", 1)) } } }));
+                { "count", new BsonArray { inCategory, new BsonDocument("$count", "total") } },
+                { "page", new BsonArray { inCategory,
+                    new BsonDocument("$addFields", new BsonDocument { { "sortName", new BsonDocument("$toLower", "$family.name") },
+                        { "sortLabel", new BsonDocument("$toLower", "$definition.packageLabel") } }),
+                    new BsonDocument("$sort", order), new BsonDocument("$skip", offset), new BsonDocument("$limit", limit),
+                    new BsonDocument("$project", new BsonDocument("_id", 1)) } },
+                { "categories", new BsonArray {
+                    new BsonDocument("$group", new BsonDocument { { "_id", "$category.code" }, { "name", new BsonDocument("$first", "$category.name") },
+                        { "count", new BsonDocument("$sum", 1) } }),
+                    new BsonDocument("$sort", new BsonDocument("_id", 1)), new BsonDocument("$limit", 200) } } }));
             var page = await repository.Rows("skus").Aggregate<BsonDocument>(tx, pipeline).SingleAsync(ct);
             var total = page["count"].AsBsonArray.Count == 0 ? 0L : page["count"][0]["total"].ToInt64();
             var ids = page["page"].AsBsonArray.Select(item => item["_id"].AsInt64).ToArray();
-            var rows = await repository.Rows("skus").Find(tx, filter & F.In("_id", ids)).Sort(new BsonDocument("_id", 1)).ToListAsync(ct);
+            var rows = (await repository.Rows("skus").Find(tx, filter & F.In("_id", ids)).ToListAsync(ct)).ToDictionary(row => row["_id"].AsInt64);
             if (rows.Count != ids.Length) throw CatalogRepository.Invalid();
             var result = ImmutableArray.CreateBuilder<CatalogBuyerVariant>();
-            foreach (var row in rows) result.Add((await ReadBuyerProjectionAsync(tx, row, ct)).View);
-            return new CatalogPage<CatalogBuyerVariant>(total, result.ToImmutable());
+            foreach (var id in ids) result.Add((await ReadBuyerProjectionAsync(tx, rows[id], ct)).View);
+            var categories = page["categories"].AsBsonArray.Select(item =>
+                new CatalogBuyerCategoryCount(item["_id"].AsString, item["name"].AsString, item["count"].ToInt64()));
+            return new CatalogBuyerPage(total, result.ToImmutable(), [.. categories]);
         }, cancellationToken);
     }
 

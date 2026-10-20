@@ -56,3 +56,25 @@ test('revoked access, wrong detail and ambiguous pages never become a usable buy
   await assert.rejects(() => gateway(async () => Response.json({ total: '0', items: [item] })).query(actorId));
   assert.equal(await gateway(async () => Response.json(null)).variant(actorId, sku.publicId), null);
 });
+test('buyer query sends the category chip and order and reads per-category counts', async () => {
+  const categories = [{ code: 'ATK', name: 'Alat tulis', count: '3' }, { code: 'PANTRY', name: 'Pantry kopi dan teh', count: '1' }];
+  const client = gateway(async request => {
+    assert.deepEqual(await request.json(), { search: '', offset: 0, limit: 25, category: 'PANTRY', sort: 'name' });
+    return Response.json({ total: '1', items: [item], categories });
+  });
+  const page = await client.query(actorId, '', 0, undefined, { category: 'PANTRY', sort: 'name' });
+  assert.deepEqual(page.categories, [{ code: 'ATK', name: 'Alat tulis', count: 3 }, { code: 'PANTRY', name: 'Pantry kopi dan teh', count: 1 }]);
+  assert.deepEqual((await gateway(async () => Response.json({ total: '1', items: [item] })).query(actorId)).categories, [], 'an older server sends no chips');
+  for (const bad of [[{ ...categories[0], count: '0' }], [categories[0], categories[0]], [{ ...categories[0], code: 'atk' }], [{ ...categories[0], name: '' }], 'ATK',
+    Array.from({ length: 201 }, (_, index) => ({ code: 'C' + index, name: 'Kategori', count: '1' }))]) {
+    await assert.rejects(() => gateway(async () => Response.json({ total: '1', items: [item], categories: bad })).query(actorId), JSON.stringify(bad).slice(0, 60));
+  }
+});
+test('alphabetical pages may list packages in any id order; added order must stay ascending', async () => {
+  const otherId = '41', other = { ...item, skuId: otherId, publicId: '12345678-1234-4123-8123-123456789abe', definition: { ...definition, skuId: otherId },
+    buyerIdentity: { ...item.buyerIdentity, skuId: otherId }, currentPrice: { ...item.currentPrice, skuId: otherId } };
+  const page = () => gateway(async () => Response.json({ total: '2', items: [item, other] }));
+  assert.equal((await page().query(actorId, '', 0, undefined, { sort: 'name' })).items.length, 2);
+  await assert.rejects(() => page().query(actorId));
+  await assert.rejects(() => page().query(actorId, '', 0, undefined, { category: 'not a code' }));
+});

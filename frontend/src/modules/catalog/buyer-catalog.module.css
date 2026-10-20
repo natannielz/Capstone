@@ -59,6 +59,37 @@
 .price { font-size: 22px; font-weight: 700; margin: 8px 0; }
 .price span { display: block; font-size: 14px; font-weight: 400; color: #4d6570; }
 .pagination { justify-content: center; align-items: center; }
+.browseControls { display: flex; gap: 12px; align-items: end; flex-wrap: wrap; }
+.order { display: grid; gap: 7px; font-size: 14px; }
+.order select { min-height: 44px; border: 1px solid #a7bac2; border-radius: 6px; padding: 9px 12px; background: #fff; color: #073b45; }
+.layoutToggle { display: inline-flex; border: 1px solid #a7bac2; border-radius: 6px; overflow: hidden; }
+.layoutToggle button { display: inline-flex; align-items: center; gap: 6px; min-height: 42px; padding: 0 14px; border: 0; background: #fff; color: #073b45; font-size: 13px; cursor: pointer; }
+.layoutToggle button + button { border-left: 1px solid #a7bac2; }
+.layoutToggle button[aria-pressed="true"] { background: #073b45; color: #fff; }
+.layoutToggle button:focus-visible, .chips button:focus-visible, .order select:focus-visible { outline: 3px solid #b4461a; outline-offset: 2px; }
+.chips { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 14px; }
+.chips button { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 14px; border: 1px solid #a7bac2; border-radius: 999px; background: #fff; color: #073b45; font-size: 14px; cursor: pointer; }
+.chips button span { font-variant-numeric: tabular-nums; font-size: 12px; color: #48605f; }
+.chips button[aria-pressed="true"] { background: #073b45; border-color: #073b45; color: #fff; }
+.chips button[aria-pressed="true"] span { color: #d7e6e3; }
+.chips button:disabled { cursor: wait; opacity: .6; }
+.grid.list { grid-template-columns: minmax(0, 1fr); gap: 0; border-top: 1px solid #d5e3e1; }
+.grid.list .card { display: block; position: relative; min-height: 124px; border-width: 0 0 1px; padding: 14px 236px 14px 118px; }
+.grid.list .card > :first-child { position: absolute; left: 4px; top: 14px; width: 96px; height: 96px; min-height: 0; margin: 0; }
+.grid.list .card .buyerPhotoFrame { height: 96px; }
+.grid.list .card .buyerPhotoFrame img { padding: 6px; }
+.grid.list .card .photoPlaceholder p { display: none; }
+.grid.list .card h2 { font-size: 18px; margin: 2px 0; }
+.grid.list .card h3 { display: inline; margin: 0 8px 0 0; font-size: 14px; }
+.grid.list .contents { display: inline; font-size: 16px; margin: 0; }
+.grid.list .contents span { font-size: 14px; }
+.grid.list .price { font-size: 17px; margin: 4px 0 0; }
+.grid.list .price span { display: inline; margin-left: 4px; }
+.grid.list .cardActions { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); width: 212px; padding-top: 0; }
+@media (max-width: 640px) { .chips { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 6px; scrollbar-width: thin; } .chips button { flex: 0 0 auto; }
+  .browseControls { width: 100%; } .order { flex: 1; }
+  .grid.list .card { padding: 14px 4px 14px 88px; } .grid.list .card > :first-child { width: 72px; height: 72px; } .grid.list .card .buyerPhotoFrame { height: 72px; }
+  .grid.list .cardActions { position: static; transform: none; width: 100%; padding-top: 10px; } }
 .dialog { width: min(680px, calc(100vw - 32px)); max-height: calc(100dvh - 48px); overflow-y: auto; padding: clamp(20px, 4vw, 36px); margin: auto; border: 1px solid #a7bac2; border-radius: 10px; color: #1d3640; background: white; }
 .dialog::backdrop { background: rgb(17 40 47 / 55%); }
 .dialogHeader { justify-content: space-between; align-items: center; }

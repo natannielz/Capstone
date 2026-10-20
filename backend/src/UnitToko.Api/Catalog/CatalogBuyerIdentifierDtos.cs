@@ -11,7 +11,8 @@ public sealed record CatalogBuyerIdentityDto(LongId SkuId, string SkuRevision, L
 public sealed record CatalogBuyerVariantDto(LongId FamilyId, string FamilyPublicId, string FamilyName,
     string Description, string CategoryCode, LongId SkuId, string PublicId, string Code,
     CatalogDefinitionDto Definition, CatalogPriceDto? CurrentPrice, CatalogBuyerIdentityDto BuyerIdentity);
-public sealed record CatalogBuyerVariantPageDto(string Total, CatalogBuyerVariantDto[] Items);
+public sealed record CatalogBuyerVariantPageDto(string Total, CatalogBuyerVariantDto[] Items, CatalogBuyerCategoryCountDto[] Categories);
+public sealed record CatalogBuyerCategoryCountDto(string Code, string Name, string Count);
 public sealed record CatalogBuyerMatchedIdentifierDto(LongId IdentifierId, string IdentifierRevision, string Code,
     LongId SkuId, string SkuRevision, LongId DefinitionId, string DefinitionVersion, string Kind, string Namespace);
 public sealed record CatalogBuyerCodeMatchDto(string RequestedCode, CatalogBuyerMatchedIdentifierDto MatchedIdentifier,
@@ -28,7 +29,8 @@ internal static class CatalogBuyerIdentifierResponses
             new(identity.SkuId, Number(identity.SkuRevision), identity.DefinitionId, Number(identity.DefinitionVersion),
                 new(identity.CurrentPrimary.IdentifierId, Number(identity.CurrentPrimary.IdentifierRevision), identity.CurrentPrimary.Code)));
     }
-    internal static CatalogBuyerVariantPageDto From(CatalogPage<CatalogBuyerVariant> page) => new(Number(page.Total), [.. page.Items.Select(From)]);
+    internal static CatalogBuyerVariantPageDto From(CatalogBuyerPage page) => new(Number(page.Total), [.. page.Items.Select(From)],
+        [.. page.Categories.Select(item => new CatalogBuyerCategoryCountDto(item.Code, item.Name, Number(item.Count)))]);
     internal static CatalogBuyerCodeMatchDto From(CatalogBuyerCodeMatch item)
     {
         var binding = item.MatchedIdentifier;
