@@ -254,6 +254,9 @@ internal sealed partial class EvidenceService
     private static BsonDocument Target(EvidenceTargetRef target) => new() { { "kind", target.Kind.ToString() }, { "id", target.Id } };
     private static EvidenceTargetRef ReadTarget(BsonDocument row) => new(Enum.Parse<EvidenceTargetKind>(row["target"]["kind"].AsString), row["target"]["id"].AsInt64);
     private static DateTimeOffset Date(BsonValue date) => DateTimeOffset.FromUnixTimeMilliseconds(date.AsBsonDateTime.MillisecondsSinceEpoch);
+    // A read lease keeps its deadline both in the claim and as a stored BSON date (whole milliseconds), and every later step
+    // compares the two exactly. Starting from a whole millisecond keeps that true on a system clock with finer ticks.
+    private DateTimeOffset LeaseNow() => DateTimeOffset.FromUnixTimeMilliseconds(clock.UtcNow.ToUnixTimeMilliseconds());
     private static long Next(BsonValue value) => value.IsInt64 && value.AsInt64 is > 0 and < long.MaxValue ? value.AsInt64 + 1 : throw Conflict("evidence_revision_exhausted");
     private static long NextFence(BsonValue value) => value.IsInt64 && value.AsInt64 is >= 0 and < long.MaxValue ? value.AsInt64 + 1 : throw Conflict("evidence_revision_exhausted");
     private static string Token() => Convert.ToHexString(RandomNumberGenerator.GetBytes(32)).ToLowerInvariant();

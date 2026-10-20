@@ -94,6 +94,43 @@ public sealed class CatalogPhotoTests(MongoFixture fixture)
         Assert.Equal(0, await data.Rows("journalEntries").CountDocumentsAsync(new BsonDocument()));
     }
 
+    [WindowsStorageFact]
+    public async Task Photo_association_and_buyer_read_work_with_a_clock_finer_than_a_millisecond()
+    {
+        // A real system clock carries 100 ns ticks while Mongo keeps milliseconds; every lease deadline the
+        // service compares with its stored copy must survive that round trip.
+        await using var data = await EvidenceAdmissionTestData.CreateAsync(fixture, sku: true);
+        var workflow = new CatalogPhotoWorkflow(data.DB, data.Unit, new(data.DB), data.Catalog.Clock,
+            data.Catalog.Service, data.Registration);
+        var sku = await data.Catalog.RowAsync("skus", data.Target.Id);
+        await data.Catalog.AssortmentsAsync();
+        await data.Catalog.Service.SetPublicationsAsync(data.Actor,
+            new(new(data.Target.Id), sku["revision"].AsInt64, [new(501)], [new(new(501), 1)]),
+            CatalogAuthoringTestData.Metadata("fine-clock-publication"));
+        sku = await data.Catalog.RowAsync("skus", data.Target.Id);
+        var reservation = await workflow.ReserveAsync(data.Actor, data.Target.Id, sku["revision"].AsInt64,
+            EvidenceAdmissionTestData.Meta("fine-clock-reserve"));
+        var bytes = ImageDecoderTests.Png(13, 7);
+        using (var original = new MemoryStream(bytes))
+            _ = await workflow.UploadAsync(data.Actor, data.Target.Id, reservation.ReservationId, reservation.Revision,
+                original, EvidenceAdmissionTestData.Meta("fine-clock-upload"));
+        var processor = EvidenceValidationTests.Processor(data, new EvidenceValidationTests.FixtureScanner(signaturesAt: data.Catalog.Clock.UtcNow.AddHours(-1)));
+        await EvidenceValidationTests.Policy(data, processor.PipelineId);
+        Assert.Equal("completed", await processor.RunOnceAsync());
+        await ReadPolicyAsync(data);
+        var reference = Assert.IsType<EvidenceRef>((await workflow.StatusAsync(data.Actor, data.Target.Id, reservation.ReservationId)).Reference);
+        data.Catalog.Clock.UtcNow = data.Catalog.Clock.UtcNow.AddTicks(4_321);
+        var associated = await workflow.AssociateAsync(data.Actor,
+            new(new(data.Target.Id), sku["revision"].AsInt64, 0, reservation.ReservationId, reference),
+            CatalogAuthoringTestData.Metadata("fine-clock-associate"));
+        Assert.Equal(associated.AssociationId, (await workflow.CurrentAsync(data.Actor, data.Target.Id)).Photo?.AssociationId);
+        data.Catalog.Clock.UtcNow = data.Catalog.Clock.UtcNow.AddTicks(1_234);
+        await using var buyer = Assert.IsType<ProtectedEvidenceRead>(await workflow.OpenBuyerAsync(data.Catalog.Buyer,
+            sku["publicId"].AsString, new AuthorizationReadMetadata("catalog-photo-current", "fine-clock-current-photo")));
+        using var received = new MemoryStream(); await buyer.Content.CopyToAsync(received);
+        Assert.Equal(bytes, received.ToArray());
+    }
+
     private static async Task ReadPolicyAsync(EvidenceAdmissionTestData data) =>
         await data.Rows("evidenceReadPolicies").InsertOneAsync(new BsonDocument {
             { "_id", (await new IdAllocator(data.DB).NextAsync("evidenceReadPolicies")).Value },

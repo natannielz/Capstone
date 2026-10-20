@@ -82,7 +82,7 @@ internal sealed partial class EvidenceService
             // Admission precedes the lease. Allocator/insertion waits, final owner fences
             // and commit all consume its lifetime from this point, including with a frozen UTC clock.
             var leaseStarted = Stopwatch.GetTimestamp();
-            var now = clock.UtcNow; deadline = now.AddMilliseconds(eligible.Policy["requestDurationMs"].AsInt64);
+            var now = LeaseNow(); deadline = now.AddMilliseconds(eligible.Policy["requestDurationMs"].AsInt64);
             if (authority.OwnerApprovalUntil is { } approvalUntil && approvalUntil < deadline.Value) deadline = approvalUntil;
             var until = ReadUntil(eligible, deadline.Value);
             var row = new BsonDocument {
