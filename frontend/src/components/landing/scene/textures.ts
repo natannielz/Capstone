@@ -220,3 +220,14 @@ export function contactShadow() {
   context.fillStyle = gradient; context.fillRect(0, 0, 256, 256);
   return element;
 }
+
+/** The printed band around a glass bottle: teal with a pale wave and the brand's light stripe. */
+export function labelBand() {
+  const { element, context } = canvas(256, 64);
+  context.fillStyle = INK; context.fillRect(0, 0, 256, 64);
+  context.strokeStyle = "#DCEFEC"; context.lineWidth = 3; context.beginPath();
+  for (let x = 0; x <= 256; x += 4) context.lineTo(x, 34 + Math.sin(x / 256 * Math.PI * 6) * 6);
+  context.stroke();
+  context.fillStyle = "rgba(255,255,255,0.7)"; context.fillRect(0, 4, 256, 3); context.fillRect(0, 57, 256, 3);
+  return element;
+}

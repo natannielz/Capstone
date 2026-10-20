@@ -1,6 +1,6 @@
 import { BufferGeometry, Group, InstancedMesh, Material, Matrix4, Mesh, Quaternion, Vector3 } from "three";
 import { bottleSpots, type OpeningFrame } from "../kemasan-timeline";
-import { BOTTLE_HEIGHT, CAP_HEIGHT, D, H, T, W, type Kit } from "./kit";
+import { BAND_Y, BOTTLE_HEIGHT, CAP_HEIGHT, D, H, T, W, type Kit } from "./kit";
 
 export type Carton = {
   group: Group; front: Group; back: Group; left: Group; right: Group; cut: Mesh; reseal: Mesh;
@@ -57,20 +57,24 @@ export function buildPallet(kit: Kit) {
   return pallet;
 }
 
-/** The 24 bottles of the front carton as two instanced meshes (bodies and caps). */
-export function buildBottles(kit: Kit) {
+/** The 24 bottles of the front carton as instanced meshes: bodies, caps and (glass only) printed label bands. */
+export function buildBottles(kit: Kit, glass: boolean) {
   const spots = bottleSpots();
-  const bodies = new InstancedMesh(kit.geometry.bottle, kit.material.bottle, spots.length);
+  const bodies = new InstancedMesh(kit.geometry.bottle, glass ? kit.material.bottleGlass : kit.material.bottle, spots.length);
   const caps = new InstancedMesh(kit.geometry.cap, kit.material.cap, spots.length);
-  bodies.castShadow = caps.castShadow = true; bodies.receiveShadow = true;
+  const bands = new InstancedMesh(kit.geometry.band, kit.material.bottleBand, spots.length);
+  bodies.castShadow = caps.castShadow = bands.castShadow = true; bodies.receiveShadow = bands.receiveShadow = true; bands.visible = glass;
   const matrix = new Matrix4(), turn = new Quaternion(), one = new Vector3(1, 1, 1), none = new Vector3(0, 0, 0), at = new Vector3();
   function place(offsets: readonly number[]) {
     offsets.forEach((offset, index) => {
-      const scale = offset <= -0.499 ? none : one;
-      bodies.setMatrixAt(index, matrix.compose(at.set(spots[index].x, T + offset, spots[index].z), turn, scale));
-      caps.setMatrixAt(index, matrix.compose(at.set(spots[index].x, T + BOTTLE_HEIGHT + CAP_HEIGHT / 2 + offset, spots[index].z), turn, scale));
+      const scale = offset <= -0.499 ? none : one, { x, z } = spots[index];
+      bodies.setMatrixAt(index, matrix.compose(at.set(x, T + offset, z), turn, scale));
+      caps.setMatrixAt(index, matrix.compose(at.set(x, T + BOTTLE_HEIGHT + CAP_HEIGHT / 2 + offset, z), turn, scale));
+      bands.setMatrixAt(index, matrix.compose(at.set(x, T + BAND_Y + offset, z), turn, scale));
     });
-    bodies.instanceMatrix.needsUpdate = caps.instanceMatrix.needsUpdate = true;
+    bodies.instanceMatrix.needsUpdate = caps.instanceMatrix.needsUpdate = bands.instanceMatrix.needsUpdate = true;
   }
-  return { bodies, caps, place };
+  /** Back to the opaque printed bottle when the renderer steps down from the cinematic tier. */
+  function useOpaque() { bodies.material = kit.material.bottle; bands.visible = false; }
+  return { bodies, caps, bands, place, useOpaque };
 }
