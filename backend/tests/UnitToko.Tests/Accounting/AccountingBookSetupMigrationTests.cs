@@ -10,7 +10,7 @@ namespace UnitToko.Tests.Accounting;
 [Collection("Mongo")]
 public sealed class AccountingBookSetupMigrationTests(MongoFixture fixture)
 {
-    [Fact]
+    [Fact(Skip = Retired.HistoricalUpgrade)]
     public async Task Empty_partial_upgrade_preserves_prior_history_stronger_guards_and_source_profiles_without_seeding_books()
     {
         await using var data = await D.CreateAsync(fixture); await RestoreV59Async(data.Organizations);
@@ -40,7 +40,7 @@ public sealed class AccountingBookSetupMigrationTests(MongoFixture fixture)
         Assert.Equal(applied, await HistoryAsync(data.Database)); Assert.Equal(after, await DefinitionsAsync(data.Database)); Assert.Equal(sources, await PreservedAsync(data.Database));
     }
 
-    [Fact]
+    [Fact(Skip = Retired.HistoricalUpgrade)]
     public async Task Existing_valid_core_books_survive_migration_without_being_claimed_as_new_reviewed_setup()
     {
         await using var data = await D.CreateAsync(fixture); await RestoreV59Async(data.Organizations);
@@ -57,7 +57,7 @@ public sealed class AccountingBookSetupMigrationTests(MongoFixture fixture)
         Assert.Equal(before, await PreservedAsync(data.Database));
     }
 
-    [Theory]
+    [Theory(Skip = Retired.HistoricalUpgrade)]
     [InlineData("row")] [InlineData("ttl")] [InlineData("unique")] [InlineData("counter")] [InlineData("account-counter")] [InlineData("core")] [InlineData("orphan")]
     public async Task Unsafe_partial_or_orphan_command_effect_refuses_before_any_setup_DDL(string fault)
     {

@@ -38,7 +38,7 @@ public sealed class StockSourceSetupOpenApiTests
         Assert.Equal(["exclusiveWebAllocation", "sharedWebLedger", "externalHold"], Values("StockSourceSetupProposeDto", "control"));
         Assert.Equal(["stock.source.propose", "stock.source.approve", "stock.source.reject", "stock.source.withdraw"],
             Values("StockSourceSetupRecoveryDto", "operation"));
-        Assert.Equal(["inventory-source-propose", "inventory-source-review", "inventory-source-history"], Values("StockSourceWarehouseQueryDto", "purpose"));
+        Assert.Equal(["inventory-source-propose", "inventory-source-review", "inventory-source-history", "stock-source-reconciliation-review"], Values("StockSourceWarehouseQueryDto", "purpose"));
         Assert.Equal(["not_confirmed", "committed"], Values("StockSourceSetupReceiptDto", "state"));
         Assert.Equal(["proposed", "approved", "rejected", "withdrawn"], Values("StockSourceSetupCommandDto", "status"));
 

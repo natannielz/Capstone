@@ -1,5 +1,6 @@
 using MongoDB.Bson;
 using MongoDB.Driver;
+using UnitToko.Platform.Mongo;
 using UnitToko.Modules.Organizations;
 using UnitToko.Platform.Authorization;
 using UnitToko.Platform.Inventory;
@@ -97,7 +98,10 @@ internal sealed class PurchaseOrderSourceReadCapture
     internal async Task<BsonDocument?> OneAsync(IMongoDatabase database, IClientSessionHandle tx, string collection,
         BsonDocument filter, CancellationToken ct) {
         Context(database, tx);
-        var row = await database.GetCollection<BsonDocument>(collection).Find(tx, filter).SingleOrDefaultAsync(ct);
+        // Many captures in one transaction read the same ancestor with the same full-schema filter; the read itself is
+        // remembered for the transaction attempt (until it writes), and each capture still records what it read.
+        var row = await TransactionReadMemo.GetOrAddAsync<BsonDocument?>(tx, MemoKey("one", database, collection, filter),
+            async () => (BsonDocument?)await database.GetCollection<BsonDocument>(collection).Find(tx, filter).SingleOrDefaultAsync(ct), value => value?.DeepClone().AsBsonDocument);
         // The real read above retains its full schema predicate. A successful
         // exact-ID read can replay the actual row plus byte equality without
         // replanning its static schema, including conjunctive owner validators.
@@ -132,12 +136,28 @@ internal sealed class PurchaseOrderSourceReadCapture
         // Do not emit an empty $and, or descend into disjunctions/expressions.
         return remaining.Count == 0 ? null : new BsonDocument("$and", remaining);
     }
+    private static string MemoKey(string kind, IMongoDatabase database, string collection, BsonDocument filter) =>
+        "capture." + kind + ":" + database.DatabaseNamespace.DatabaseName + ":" + collection + ":" + filter.ToJson();
     internal async Task<bool> AnyAsync(IMongoDatabase database, IClientSessionHandle tx, string collection,
         BsonDocument filter, CancellationToken ct) {
         Context(database, tx);
-        var exists = await database.GetCollection<BsonDocument>(collection).Find(tx, filter).AnyAsync(ct);
+        var exists = await TransactionReadMemo.GetOrAddAsync(tx, MemoKey("any", database, collection, filter),
+            () => database.GetCollection<BsonDocument>(collection).Find(tx, filter).AnyAsync(ct));
         if (!exists) Record(collection, filter, []);
         return exists;
+    }
+    /// <summary>Adds everything another capture of the same transaction recorded, as if this capture had made those reads
+    /// itself: the same filters, rows (still compared by id), counts, pools and history owner.</summary>
+    internal void Absorb(PurchaseOrderSourceReadCapture child) {
+        if (sealedScopes is not null || child.sealedScopes is not null || ReferenceEquals(child, this)) throw Q.Broken();
+        if (child.boundDatabase is not null) Context(child.boundDatabase, child.boundTransaction!);
+        foreach (var owner in child.sourceOwners) RecordSourceOwner(owner);
+        foreach (var (collection, selected) in child.filters) {
+            IEnumerable<BsonDocument> actual = child.rows.TryGetValue(collection, out var frozen) ? frozen.Values : [];
+            foreach (var filter in selected) Record(collection, filter, actual);
+        }
+        foreach (var count in child.counts) RecordCount(count.Collection, count.Filter, count.Value);
+        foreach (var pool in child.pools.Values) RecordPool(pool);
     }
     internal void RecordSourceOwner(StockSourceSetupService owner) {
         if (sealedScopes is not null) throw Q.Broken();

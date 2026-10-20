@@ -20,7 +20,7 @@ internal sealed class ProcurementStockReceiptRecords(IMongoDatabase database, Mo
 {
     private IMongoCollection<BsonDocument> Rows(string table) => database.GetCollection<BsonDocument>(table);
     private async Task<BsonDocument?> OriginOneAsync(IClientSessionHandle tx, string table, BsonDocument filter, CancellationToken ct) =>
-        originCapture is null ? await Rows(table).Find(tx, filter).SingleOrDefaultAsync(ct) : await originCapture.OneAsync(database, tx, table, filter, ct);
+        originCapture is null ? await TransactionReadMemo.OneAsync(Rows(table), tx, filter, ct) : await originCapture.OneAsync(database, tx, table, filter, ct);
     internal static void Equal(BsonValue actual, BsonValue expected) { if (!actual.Equals(expected)) throw B.Broken(); }
     internal static async Task<HeldReceiptMovementState> RequireMovementsAsync(IMongoDatabase database,
         MongoUnitOfWork unit, IClock clock, IClientSessionHandle tx, BsonDocument receipt, CancellationToken ct,
@@ -58,7 +58,9 @@ internal sealed class ProcurementStockReceiptRecords(IMongoDatabase database, Mo
     private enum ReceiptExtent { Current, Origin }
     private async Task<BsonDocument> ReadReceiptAsync(IClientSessionHandle tx, long id, ReceiptExtent extent, CancellationToken ct) {
         using var receiptStage = SupplierDocumentMatchDiagnostics.Begin("receipt.history");
-        var row = await OriginOneAsync(tx, B.Receipts, new BsonDocument { { "_id", id }, { "$and", new BsonArray { ProcurementStockReceiptSchemas.Validator(B.Receipts) } } }, ct) ?? throw B.Broken();
+        BsonDocument Filter() => new() { { "_id", id }, { "$and", new BsonArray { ProcurementStockReceiptSchemas.Validator(B.Receipts) } } };
+        var row = (originCapture is null ? await TransactionReadMemo.RowAsync(Rows(B.Receipts), tx, "receipt-schema:" + id, () => Filter(), ct)
+            : await OriginOneAsync(tx, B.Receipts, Filter(), ct)) ?? throw B.Broken();
         Equal(row["snapshotHash"], B.Hash(row)); var input = B.Input(row["input"]); Equal(row["input"], B.Input(input)); Equal(row["receiptId"], id); Equal(row["revision"], 1L);
         foreach (var field in new[] { "location", "orderId", "inspectionId", "inspectionLineNumber", "poolId", "receiptReference", "reason" }) Equal(row[field], row["input"][field]);
         BsonDocument source;

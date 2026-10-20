@@ -7,8 +7,18 @@ namespace UnitToko.Platform.Inventory;
 
 public sealed partial class StockSourceSetupService
 {
-    private sealed record OperatingPolicyHistory(IReadOnlyDictionary<long, BsonDocument> Views, BsonDocument? Latest);
-    private async Task<OperatingPolicyHistory> OperatingPolicyHistoryAsync(IClientSessionHandle tx, SuspensionContext source, CancellationToken ct)
+    private sealed record OperatingPolicyHistory(IReadOnlyDictionary<long, BsonDocument> Views, BsonDocument? Latest)
+    {
+        public static OperatingPolicyHistory Copy(OperatingPolicyHistory value) =>
+            new(value.Views.ToDictionary(item => item.Key, item => item.Value.DeepClone().AsBsonDocument), value.Latest?.DeepClone().AsBsonDocument);
+    }
+    // The whole policy history of a pool is re-proved for every held receipt and lot a stock decision touches; it is keyed by the
+    // exact pool context it is proved against (see RememberedProofAsync).
+    private Task<OperatingPolicyHistory> OperatingPolicyHistoryAsync(IClientSessionHandle tx, SuspensionContext source, CancellationToken ct) =>
+        RememberedProofAsync(tx, "policy-history:" + StockSourceSuspensionBson.Hash(new BsonDocument {
+                { "current", source.Current }, { "configuration", source.Configuration }, { "latest", (BsonValue?)source.Latest ?? BsonNull.Value } }),
+            reader => reader.OperatingPolicyHistoryCoreAsync(tx, source, ct), OperatingPolicyHistory.Copy);
+    private async Task<OperatingPolicyHistory> OperatingPolicyHistoryCoreAsync(IClientSessionHandle tx, SuspensionContext source, CancellationToken ct)
     {
         var poolId = source.Pool["_id"].AsInt64; var views = new Dictionary<long, BsonDocument>(); var accepted = new SortedDictionary<long, BsonDocument>();
         long decisions = 0;

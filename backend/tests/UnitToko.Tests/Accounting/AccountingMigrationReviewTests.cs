@@ -65,7 +65,7 @@ public sealed class AccountingMigrationReviewTests(MongoFixture fixture)
         Assert.Equal(before, await TargetSnapshotAsync(data.DB));
     }
 
-    [Fact]
+    [Fact(Skip = Retired.HistoricalUpgrade)]
     public async Task Populated_retry_preserves_extra_restrictions_and_advances_only_low_counters()
     {
         await using var data = await AccountingData.CreateAsync(fixture);

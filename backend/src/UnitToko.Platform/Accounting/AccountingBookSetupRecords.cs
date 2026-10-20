@@ -1,5 +1,6 @@
 using MongoDB.Bson;
 using MongoDB.Driver;
+using UnitToko.Platform.Mongo;
 using UnitToko.Modules.Accounting;
 using UnitToko.Modules.Identity;
 using UnitToko.Modules.Organizations;
@@ -15,7 +16,8 @@ internal sealed class AccountingBookSetupRecords(IMongoDatabase database)
     private IMongoCollection<BsonDocument> Rows(string name) => database.GetCollection<BsonDocument>(name);
     private static void Equal(BsonValue actual, BsonValue expected) { if (!actual.Equals(expected)) throw B.Broken(); }
     private async Task<BsonDocument> RowAsync(IClientSessionHandle tx, string name, long id, CancellationToken ct) =>
-        await Rows(name).Find(tx, new BsonDocument { { "_id", id }, { "$and", new BsonArray { AccountingBookSetupSchemas.Validator(name) } } }).SingleOrDefaultAsync(ct) ?? throw B.Broken();
+        await TransactionReadMemo.RowAsync(Rows(name), tx, "book-setup-schema:" + id,
+            () => new BsonDocument { { "_id", id }, { "$and", new BsonArray { AccountingBookSetupSchemas.Validator(name) } } }, ct) ?? throw B.Broken();
     private static void People(BsonDocument row, params long[] users) {
         var people = row["people"].AsBsonArray.Select(B.Person).ToArray();
         if (!people.Select(p => p.UserId).SequenceEqual(users.Distinct().Order()) || people.Any(p => p is not { Verification: PersonVerification.Verified, PersonId: > 0, Version: > 0 })) throw B.Broken();
@@ -80,7 +82,12 @@ internal sealed class AccountingBookSetupRecords(IMongoDatabase database)
         var row = await Rows(B.Decisions).Find(tx, new BsonDocument("proposalId", proposal["_id"])).SingleOrDefaultAsync(ct);
         return row is null ? null : await DecisionAsync(tx, row["_id"].AsInt64, proposal, ct);
     }
-    internal async Task<BsonDocument?> ApprovedAsync(IClientSessionHandle tx, OperationalBookKey key, CancellationToken ct) {
+    // Every dispatch value and invoice line in one command asks for the same approved book setup; the full proof (proposal,
+    // decision, book, chart, periods and their receipts) runs once per transaction attempt until the transaction writes.
+    internal Task<BsonDocument?> ApprovedAsync(IClientSessionHandle tx, OperationalBookKey key, CancellationToken ct) =>
+        TransactionReadMemo.GetOrAddAsync(tx, "accounting.book-setup.approved:" + database.DatabaseNamespace.DatabaseName + ":" + B.Key(key).ToJson(),
+            () => ApprovedCoreAsync(tx, key, ct), value => value?.DeepClone().AsBsonDocument);
+    private async Task<BsonDocument?> ApprovedCoreAsync(IClientSessionHandle tx, OperationalBookKey key, CancellationToken ct) {
         var rows = await Rows(B.Decisions).Find(tx, new BsonDocument { { "key", B.Key(key) }, { "decision", "approve" } }).Limit(2).ToListAsync(ct);
         if (rows.Count > 1) throw B.Broken(); if (rows.Count == 0) return null;
         var proposal = await ProposalAsync(tx, rows[0]["proposalId"].AsInt64, ct); _ = await DecisionAsync(tx, rows[0]["_id"].AsInt64, proposal, ct); return proposal;

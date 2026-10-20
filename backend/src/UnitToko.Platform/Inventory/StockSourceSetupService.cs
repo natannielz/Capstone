@@ -34,10 +34,22 @@ public sealed partial class StockSourceSetupService(IMongoDatabase database, Mon
     }
     internal bool SameCapturedHistoryOwner(StockSourceSetupService other) => ReferenceEquals(database.Client, other.HistoryOwnerDatabase.Client) &&
         database.DatabaseNamespace.Equals(other.HistoryOwnerDatabase.DatabaseNamespace) && ReferenceEquals(clock, other.HistoryOwnerClock);
+    /// <summary>A pool-level history proof answered once per transaction attempt until the transaction writes. A plain reader
+    /// reuses the result; a capturing reader runs the proof into a child capture once and then absorbs that child, so it records
+    /// exactly the rows, counts and pools the full proof would have recorded.</summary>
+    private async Task<T> RememberedProofAsync<T>(IClientSessionHandle tx, string key, Func<StockSourceSetupService, Task<T>> prove, Func<T, T> copy)
+    {
+        key = "stock-source." + key + ":" + database.DatabaseNamespace.DatabaseName;
+        if (historyCapture is null) return await TransactionReadMemo.GetOrAddAsync(tx, key, () => prove(this), copy);
+        var (value, child) = await TransactionReadMemo.GetOrAddAsync(tx, key + ":captured", async () => {
+            var recorded = new PurchaseOrderSourceReadCapture(); var result = await prove(CaptureHistory(recorded)); return (result, recorded);
+        }, entry => (copy(entry.result), entry.recorded));
+        historyCapture.Absorb(child); return value;
+    }
     private static BsonDocument HistoryFilter(FilterDefinition<BsonDocument> filter) =>
         filter.Render(new(BsonDocumentSerializer.Instance, BsonSerializer.SerializerRegistry));
     private async Task<BsonDocument?> HistoryOneAsync(IClientSessionHandle tx, string name, FilterDefinition<BsonDocument> filter, CancellationToken ct) =>
-        historyCapture is null ? await Rows(name).Find(tx, filter).SingleOrDefaultAsync(ct) : await historyCapture.OneAsync(database, tx, name, HistoryFilter(filter), ct);
+        historyCapture is null ? await TransactionReadMemo.OneAsync(Rows(name), tx, HistoryFilter(filter), ct) : await historyCapture.OneAsync(database, tx, name, HistoryFilter(filter), ct);
     private async Task<BsonDocument?> HistoryLatestAsync(IClientSessionHandle tx, string name, FilterDefinition<BsonDocument> filter,
         SortDefinition<BsonDocument> sort, CancellationToken ct) {
         if (historyCapture is null) return await Rows(name).Find(tx, filter).Sort(sort).FirstOrDefaultAsync(ct);

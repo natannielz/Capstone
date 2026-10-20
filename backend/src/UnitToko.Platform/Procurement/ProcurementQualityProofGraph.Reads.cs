@@ -110,9 +110,9 @@ internal sealed partial class ProcurementQualityProofGraph
             RequireDatabase(database, current, inspectionId);
             return Clone(history);
         }
-        var inspection = await database.GetCollection<BsonDocument>(I.Submissions).Find(current, new BsonDocument {
+        var inspection = await TransactionReadMemo.RowAsync(database.GetCollection<BsonDocument>(I.Submissions), current, "inspection-schema:" + inspectionId, () => new BsonDocument {
             { "_id", inspectionId }, { "$and", new BsonArray { ProcurementInspectionSchemas.Validator(I.Submissions) } }
-        }).SingleOrDefaultAsync(ct) ?? throw Q.Broken();
+        }, ct) ?? throw Q.Broken();
         var verified = await new SupplierDocumentRecords(database, unit, clock, catalog, orders, this)
             .InspectionAsync(current, inspectionId, ct);
         Equal(inspection, verified.Submissions.SingleOrDefault(row => row["_id"] == inspectionId) ?? throw Q.Broken());
@@ -158,9 +158,9 @@ internal sealed partial class ProcurementQualityProofGraph
             else RequireOriginRead(database, current, originProof);
             return originProof.Receipt;
         }
-        var receipt = await database.GetCollection<BsonDocument>(R.Receipts).Find(current, new BsonDocument {
+        var receipt = await TransactionReadMemo.RowAsync(database.GetCollection<BsonDocument>(R.Receipts), current, "receipt-schema:" + receiptId, () => new BsonDocument {
             { "_id", receiptId }, { "$and", new BsonArray { ProcurementStockReceiptSchemas.Validator(R.Receipts) } }
-        }).SingleOrDefaultAsync(ct) ?? throw Q.Broken();
+        }, ct) ?? throw Q.Broken();
         if (receipt["snapshotHash"] != R.Hash(receipt)) throw Q.Broken();
         if (completedReceipts.TryGetValue(receiptId, out var completed)) {
             if (clock.UtcNow < completed.At) throw Q.Broken();

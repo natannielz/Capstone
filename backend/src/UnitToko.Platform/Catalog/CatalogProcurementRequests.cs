@@ -105,13 +105,17 @@ public sealed partial class CatalogAuthoringService
         PurchaseOrderSourceReadCapture? sourceCapture = null) {
         _ = CatalogReceiptRules.RequireAudit(audit);
         if (!ProcurementMaster(audit["after"][part].AsBsonDocument).Equals(ProcurementMaster(row))) throw CatalogRepository.Invalid();
-        var receipts = await repository.Rows("idempotencyRecords").Find(tx, new BsonDocument("catalogAuthoring.auditId", audit["_id"])).Limit(2).ToListAsync(ct);
+        // Each catalog ancestor is proved for every line and lot of a command; its rows are read once per transaction attempt
+        // until the transaction writes (TransactionReadMemo), and a capturing reader still records each read.
+        var receipts = await TransactionReadMemo.GetOrAddAsync(tx, "catalog.receipts:" + database.DatabaseNamespace.DatabaseName + ":" + audit["_id"].ToJson(),
+            () => repository.Rows("idempotencyRecords").Find(tx, new BsonDocument("catalogAuthoring.auditId", audit["_id"])).Limit(2).ToListAsync(ct),
+            rows => rows.Select(row => row.DeepClone().AsBsonDocument).ToList());
         sourceCapture?.Record("idempotencyRecords", new BsonDocument("catalogAuthoring.auditId", audit["_id"]), receipts);
         if (receipts.Count != 1) throw CatalogRepository.Invalid(); var receipt = receipts[0];
         CatalogReceiptRules.RequireReceipt(receipt, audit["actorId"].AsInt64, audit["operation"].AsString, receipt["key"].AsString);
         if (receipt["bodyHash"] != audit["bodyHash"] || receipt["result"] != audit["result"] || receipt["createdAt"] != audit["createdAt"]) throw CatalogRepository.Invalid();
         var effectFilter = new BsonDocument("sourceKey", "catalog.command:" + audit["_id"].AsInt64);
-        var effect = (sourceCapture is null ? await repository.Rows("outboxEvents").Find(tx, effectFilter).SingleOrDefaultAsync(ct)
+        var effect = (sourceCapture is null ? await TransactionReadMemo.OneAsync(repository.Rows("outboxEvents"), tx, effectFilter, ct)
             : await sourceCapture.OneAsync(database, tx, "outboxEvents", effectFilter, ct)) ?? throw CatalogRepository.Invalid();
         var expected = new BsonDocument { { "kind", audit["result"]["kind"] }, { "id", audit["result"]["id"] }, { "version", audit["result"]["version"] } };
         if (effect["kind"] != "catalog.changed" || effect["createdAt"] != audit["createdAt"] || effect["payload"] != expected) throw CatalogRepository.Invalid();
@@ -124,11 +128,12 @@ public sealed partial class CatalogAuthoringService
         if (!ScopePolicy.ContainsScope(RowOwner(sku), scope) || RowOwner(family) != RowOwner(sku) || RowOwner(category) != RowOwner(sku) ||
             sku["familyId"] != family["_id"] || family["categoryId"] != category["_id"] || family["categoryCode"] != category["code"]) throw CatalogRepository.Invalid();
         RequirePair(sku, definition); RequireActive(sku); RequireActive(family); RequireActive(category);
-        var actualDefinition = await repository.GetAsync(tx, "variantDefinitions", definition["_id"].AsInt64, ct);
+        var actualDefinition = await TransactionReadMemo.GetOrAddAsync(tx, "catalog.definition:" + database.DatabaseNamespace.DatabaseName + ":" + definition["_id"].ToJson(),
+            () => repository.GetAsync(tx, "variantDefinitions", definition["_id"].AsInt64, ct), row => row.DeepClone().AsBsonDocument);
         sourceCapture?.Record("variantDefinitions", new BsonDocument("_id", definition["_id"]), [actualDefinition]);
         if (!definition.Equals(actualDefinition)) throw CatalogRepository.Invalid();
         foreach (var (name, row) in new[] { ("sku", sku), ("family", family), ("category", category) }) {
-            var audit = await repository.Rows("auditEvents").Find(tx, new BsonDocument("_id", source["audits"][name])).SingleOrDefaultAsync(ct) ?? throw CatalogRepository.Invalid();
+            var audit = await TransactionReadMemo.OneAsync(repository.Rows("auditEvents"), tx, new BsonDocument("_id", source["audits"][name]), ct) ?? throw CatalogRepository.Invalid();
             sourceCapture?.Record("auditEvents", new BsonDocument("_id", source["audits"][name]), [audit]);
             await RequireProcurementAuditAsync(tx, audit, name, row, ct, sourceCapture);
         }

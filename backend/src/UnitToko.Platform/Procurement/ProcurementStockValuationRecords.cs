@@ -132,10 +132,10 @@ internal sealed class ProcurementStockValuationRecords(IMongoDatabase database, 
         var match = history.Matches.SingleOrDefault(row => row["_id"] == input.InvoiceMatchId) ?? throw B.Changed("procurement_stock_valuation_match_unavailable");
         // HistoryAsync has already authenticated every match against this exact private invoice,
         // its inspected source, ordered capacity head, and retained operation effects.
-        var currentMatch = await Rows(SupplierDocumentBson.Matches).Find(tx, new BsonDocument {
+        var currentMatch = await TransactionReadMemo.RowAsync(Rows(SupplierDocumentBson.Matches), tx, "current-document-schema:" + input.InvoiceMatchId, () => new BsonDocument {
             { "_id", input.InvoiceMatchId },
             { "$and", new BsonArray { ProcurementQualityValuationSchemas.CurrentDocumentValidator(SupplierDocumentBson.Matches) } }
-        }).SingleOrDefaultAsync(ct) ?? throw B.Broken();
+        }, ct) ?? throw B.Broken();
         Equal(currentMatch, match);
         if (input.MatchLineNumber > match["lines"].AsBsonArray.Count) throw B.Changed("procurement_stock_valuation_match_unavailable");
         var line = match["lines"][input.MatchLineNumber - 1].AsBsonDocument;

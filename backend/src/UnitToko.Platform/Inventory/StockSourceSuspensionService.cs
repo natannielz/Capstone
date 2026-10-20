@@ -98,6 +98,9 @@ public sealed partial class StockSourceSetupService
     private sealed record SuspensionContext(BsonDocument Current, BsonDocument Configuration, BsonDocument? Latest,
         StockLocation[] Locations, ResourceScope[] Resources, DateTimeOffset ApprovedAt)
     {
+        /// <summary>A copy no caller can change through, for values remembered across one transaction attempt.</summary>
+        public static SuspensionContext Copy(SuspensionContext value) => new(value.Current.DeepClone().AsBsonDocument, value.Configuration.DeepClone().AsBsonDocument,
+            value.Latest?.DeepClone().AsBsonDocument, [.. value.Locations], [.. value.Resources], value.ApprovedAt);
         internal BsonDocument Pool => Current["pool"].AsBsonDocument;
     }
     private async Task<SuspensionContext> SuspensionContextAsync(ActorContext actor, AuthorizationSnapshot snapshot,

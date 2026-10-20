@@ -71,8 +71,8 @@ internal sealed class HeldReceiptMovementHistory(IMongoDatabase database, MongoU
             if (capturedAt == default || capturedAt.Offset != TimeSpan.Zero || ownerReceipt is null) throw Unavailable();
             var receipt = ownerReceipt.DeepClone().AsBsonDocument;
             await RequireStorageAsync(ct);
-            var actual = await Rows(B.Receipts).Find(tx, F.Eq("_id", receipt["_id"]) &
-                ProcurementStockReceiptSchemas.Validator(B.Receipts)).SingleOrDefaultAsync(ct) ?? throw Unavailable();
+            var actual = await TransactionReadMemo.RowAsync(Rows(B.Receipts), tx, "receipt-schema-and:" + receipt["_id"].ToJson(),
+                () => F.Eq("_id", receipt["_id"]) & ProcurementStockReceiptSchemas.Validator(B.Receipts), ct) ?? throw Unavailable();
             Equal(actual, receipt);
             Equal(receipt["snapshotHash"], B.Hash(receipt));
             var input = B.Input(receipt["input"]);

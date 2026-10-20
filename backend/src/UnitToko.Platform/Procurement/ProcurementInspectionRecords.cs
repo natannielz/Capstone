@@ -23,7 +23,8 @@ internal sealed class ProcurementInspectionRecords(IMongoDatabase database, Mong
     private IMongoCollection<BsonDocument> Rows(string name) => database.GetCollection<BsonDocument>(name);
     internal static void Equal(BsonValue actual, BsonValue expected) { if (!actual.Equals(expected)) throw B.Broken(); }
     internal async Task<BsonDocument> RowAsync(IClientSessionHandle tx, string table, long id, CancellationToken ct) =>
-        await Rows(table).Find(tx, new BsonDocument { { "_id", id }, { "$and", new BsonArray { ProcurementInspectionSchemas.Validator(table) } } }).SingleOrDefaultAsync(ct) ?? throw B.Broken();
+        await TransactionReadMemo.RowAsync(Rows(table), tx, "inspection-schema:" + id,
+            () => new BsonDocument { { "_id", id }, { "$and", new BsonArray { ProcurementInspectionSchemas.Validator(table) } } }, ct) ?? throw B.Broken();
     internal static void Review(ProcurementInspectionInput input, BsonDocument source, DateTimeOffset at) {
         input = ProcurementInspectionRules.Copy(input); var notice = source["notice"]; var intake = source["intake"];
         Equal(input.NoticeId, notice["_id"]); Equal(input.IntakeId, intake["_id"]); Equal(R.Location(input.Location), notice["location"]);
