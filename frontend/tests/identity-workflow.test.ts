@@ -70,3 +70,10 @@ test("staff sign in straight into their back office and guests return to the pub
   assert.equal(identityReturnPath("/katalog"), "/katalog");
   assert.deepEqual(loginFields("/workspace", "", ""), { returnPath: "/workspace" });
 });
+
+test("signing in from a public product returns to that product's priced page, and only a canonical product address qualifies", async () => {
+  const { identityReturnPath } = await import("../src/modules/identity/identity-workflow");
+  assert.equal(identityReturnPath("/shop/00000065-0000-4000-8000-000000000101"), "/shop/00000065-0000-4000-8000-000000000101");
+  for (const forged of ["/shop/00000065-0000-4000-8000-000000000101/x", "/shop/../identity/account", "/shop/ABCDEF65-0000-4000-8000-000000000101", "/shop/1"])
+    assert.equal(identityReturnPath(forged), "/identity/account");
+});

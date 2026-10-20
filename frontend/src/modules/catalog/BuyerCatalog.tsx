@@ -1,5 +1,6 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowRight, ArrowUpRight, ClipboardList, LayoutGrid, List, PackageOpen, ShieldCheck } from 'lucide-react';
@@ -146,6 +147,14 @@ export function BuyerCatalog({ publicId, returnPath = '/catalog/browse', request
   const categoryName = (code: string) => categories.find(item => item.code === code)?.name ?? code;
   const everything = categories.reduce((sum, item) => sum + item.count, 0), filtered = query !== '' || category !== undefined;
   const needsSignIn = error instanceof IdentityFailure && error.status === 401;
+  // Someone who has not signed in browses the public catalog (no prices) instead of meeting a sign-in wall.
+  const router = useRouter();
+  useEffect(() => {
+    if (!needsSignIn || requestOnly) return;
+    const search = new URLSearchParams(window.location.search), next = new URLSearchParams();
+    for (const key of ['q', 'kategori', 'urut']) { const value = search.get(key); if (value) next.set(key, value); }
+    router.replace(publicId !== undefined ? '/katalog/' + publicId : '/katalog' + (next.size ? '?' + next.toString() : ''));
+  }, [needsSignIn, requestOnly, publicId, router]);
   return <div className={styles.storefront}>
     <main id="catalog-main" tabIndex={-1} className={`${shared.page} ${styles.page}`}>
     {requestOnly ? <>

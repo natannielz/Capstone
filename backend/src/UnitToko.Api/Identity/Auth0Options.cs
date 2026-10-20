@@ -51,10 +51,13 @@ public static class ReturnPathPolicy
     public static bool IsCanonicalPath(string? path) => path is { Length: > 0 and <= 200 } && path.StartsWith('/') &&
         !path.Contains("//", StringComparison.Ordinal) && !path.Any(character => char.IsWhiteSpace(character) || char.IsControl(character) || character is '\\' or '%' or '?' or '#' or ':') &&
         !path.Split('/').Any(segment => segment is "." or "..");
+    /// <summary>A catalog product page, by its canonical public UUID only, so signing in from a public product returns to it.</summary>
+    public static bool IsProductPath(string path) => System.Text.RegularExpressions.Regex.IsMatch(path,
+        @"\A/shop/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\z", System.Text.RegularExpressions.RegexOptions.CultureInvariant);
     public static string Require(string? path, Auth0Options options)
     {
         var selected = path ?? "/";
-        if (!IsCanonicalPath(selected) || !options.AllowedReturnPaths.Contains(selected, StringComparer.Ordinal))
+        if (!IsCanonicalPath(selected) || !options.AllowedReturnPaths.Contains(selected, StringComparer.Ordinal) && !IsProductPath(selected))
             throw new UnitToko.Modules.Contracts.DomainValidationException("invalid_return_path", "Return destination is not allowed");
         return selected;
     }
