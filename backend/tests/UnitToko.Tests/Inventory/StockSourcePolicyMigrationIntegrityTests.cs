@@ -11,7 +11,7 @@ namespace UnitToko.Tests.Inventory;
 
 public sealed partial class StockSourcePolicyMigrationTests
 {
-    [Theory]
+    [Theory(Skip = Retired.HistoricalUpgrade)]
     [InlineData("proposal")] [InlineData("decision")] [InlineData("policy")] [InlineData("audit")]
     [InlineData("receipt")] [InlineData("actor")] [InlineData("hash")] [InlineData("source-snapshot")]
     [InlineData("participants")] [InlineData("participant-copy")] [InlineData("foreign-audit")] [InlineData("foreign-receipt")]

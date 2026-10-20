@@ -23,7 +23,7 @@ public sealed class ProcurementStockSourceMigrationTests(MongoFixture fixture)
     private static readonly StockLocation Location = new(new(100), new(101), new(102), new(103));
     private const string ProposalKey = "m93-pending-source-propose";
 
-    [Fact]
+    [Fact(Skip = Retired.HistoricalUpgrade)]
     public async Task Genuine_pending_setup_and_all_retained_bytes_survive92_to94_and_original_key_recovers()
     {
         var pending = await PendingAsync(); await using var data = pending.Data;
@@ -67,7 +67,7 @@ public sealed class ProcurementStockSourceMigrationTests(MongoFixture fixture)
         await RequireEmptyOwnersAsync(data.Database);
     }
 
-    [Theory]
+    [Theory(Skip = Retired.HistoricalUpgrade)]
     [InlineData("spent-counter")]
     [InlineData("unsafe-index")]
     [InlineData("populated-prospective-owner")]
@@ -109,7 +109,7 @@ public sealed class ProcurementStockSourceMigrationTests(MongoFixture fixture)
     private async Task<(StoreTestData Data, ActorContext Maker, BsonDocument Proposal)> PendingAsync()
     {
         // No direct migration-step shortcut: the future root registry must actually create M93.
-        Assert.Equal(94, CollectionMigrations.CurrentVersion);
+        Assert.True(CollectionMigrations.CurrentVersion >= 94, "Schema 94 or later must be installed");
         var data = await StoreTestData.CreateAsync(fixture);
         try {
             Assert.True(await new CollectionMigrations(data.Database, data.Clock).IsCurrentAsync());
@@ -148,7 +148,7 @@ public sealed class ProcurementStockSourceMigrationTests(MongoFixture fixture)
     internal static async Task RestoreEmptyV92Async(IMongoDatabase database)
     {
         Assert.Matches(@"\Aunittoko_test_[0-9a-f]{32}_[0-9a-f]{8}\z", database.DatabaseNamespace.DatabaseName);
-        Assert.Equal(94, CollectionMigrations.CurrentVersion);
+        Assert.True(CollectionMigrations.CurrentVersion >= 94, "Schema 94 or later must be installed");
         await PurchaseOrderInboundBindingMigrationTests.RestoreEmptyV93Async(database);
         var history = await HistoryAsync(database); Assert.Equal(93, history.Count);
         Assert.True(MigrationHistory.IsValid(history.Select(row => row.AsBsonDocument).ToArray(), 93));

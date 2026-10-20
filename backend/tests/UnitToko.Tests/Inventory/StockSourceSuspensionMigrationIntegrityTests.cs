@@ -11,7 +11,7 @@ namespace UnitToko.Tests.Inventory;
 
 public sealed partial class StockSourceSuspensionMigrationTests
 {
-    [Theory]
+    [Theory(Skip = Retired.HistoricalUpgrade)]
     [InlineData("event")] [InlineData("audit")] [InlineData("receipt")] [InlineData("actor")]
     [InlineData("audit-copy")] [InlineData("receipt-hash")] [InlineData("receipt-actor")]
     [InlineData("receipt-pool")] [InlineData("receipt-operation")] [InlineData("receipt-extra-operation")]

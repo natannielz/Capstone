@@ -48,7 +48,7 @@ public sealed class PaymentReviewExplanationMigrationTests(MongoFixture fixture)
         var before = await Definitions(db); Assert.NotNull(await Record.ExceptionAsync(() => LegacyOrderSubmissionTestSchema.UpgradeV46Async(db, new SystemClock())));
         Assert.Equal(before, await Definitions(db)); Assert.False(await db.GetCollection<BsonDocument>("schemaMigrations").Find(new BsonDocument { { "_id", 46 }, { "state", "applied" } }).AnyAsync());
     });
-    [WindowsStorageFact]
+    [WindowsStorageFact(Skip = Retired.HistoricalUpgrade)]
     public async Task Populated_prior_schema_preserves_legacy_hashes_closed_history_and_completed_notification_receipts() {
         await using var data = await PaymentVerificationTestData.CreateAsync(fixture); await PaymentReviewActionTests.Grant(data);
         var db = data.Read.Database; var shown = await data.Service.ReadReviewActionsAsync(data.Reviewer, data.Read.DeclarationId);

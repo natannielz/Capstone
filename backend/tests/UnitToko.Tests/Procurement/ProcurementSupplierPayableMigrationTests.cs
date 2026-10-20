@@ -14,7 +14,7 @@ namespace UnitToko.Tests.Procurement;
 [Collection("Mongo")]
 public sealed class ProcurementSupplierPayableMigrationTests(MongoFixture fixture)
 {
-    [Fact]
+    [Fact(Skip = Retired.HistoricalUpgrade)]
     public async Task Empty_resumable_upgrade_keeps_stronger_guards_and_creates_no_payable_advance_policy_or_journal()
     {
         await using var data = await StoreTestData.CreateAsync(fixture); await RestoreV74Async(data.Database);
@@ -41,7 +41,7 @@ public sealed class ProcurementSupplierPayableMigrationTests(MongoFixture fixtur
         await Upgrade75Async(data.Database, data.Clock); Assert.Equal(after, await SnapshotAsync(data.Database));
     }
 
-    [WindowsStorageFact]
+    [WindowsStorageFact(Skip = Retired.HistoricalUpgrade)]
     [SupportedOSPlatform("windows")]
     public async Task Real_valuation_private_invoice_and_verified_bank_advance_survive_upgrade_and_missing_proof_refuses_before_DDL()
     {

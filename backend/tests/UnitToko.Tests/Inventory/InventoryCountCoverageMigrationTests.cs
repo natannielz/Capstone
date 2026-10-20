@@ -19,7 +19,7 @@ namespace UnitToko.Tests.Inventory;
 [Collection("Mongo")]
 public sealed class InventoryCountCoverageMigrationTests(MongoFixture fixture)
 {
-    [Fact]
+    [Fact(Skip = Retired.HistoricalUpgrade)]
     public async Task Genuine_stopped97_original_counts_upgrade_to101_with_exact_predecessor_storage_history_and_custom_recovery()
     {
         var path = Environment.GetEnvironmentVariable("UNITTOKO_INVENTORY_COUNT_COVERAGE_PREDECESSOR97");

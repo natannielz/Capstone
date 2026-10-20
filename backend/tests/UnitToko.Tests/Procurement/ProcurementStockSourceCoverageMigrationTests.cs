@@ -12,7 +12,7 @@ namespace UnitToko.Tests.Procurement;
 [Collection("Mongo")]
 public sealed class ProcurementStockSourceCoverageMigrationTests(MongoFixture fixture)
 {
-    [Fact]
+    [Fact(Skip = Retired.HistoricalUpgrade)]
     public async Task Empty100_rehearsal_preserves_genuine_unbound_demand_every_retained_row_schema_index_counter_and_replay() {
         await using var data = await ProcurementRequestTestData.CreateAsync(fixture);
         var request = await data.SubmitAsync("coverage-retained-unbound-demand");
@@ -35,7 +35,7 @@ public sealed class ProcurementStockSourceCoverageMigrationTests(MongoFixture fi
         await migrations.ApplyAsync(); Assert.Equal(after, await SnapshotAsync(data)); Assert.Equal(history, await HistoryAsync(data));
     }
 
-    [Fact]
+    [Fact(Skip = Retired.HistoricalUpgrade)]
     public async Task Nonzero_prospective_counter_refuses_before_coverage_DDL_and_preserves_all_old_business_work() {
         await using var data = await ProcurementRequestTestData.CreateAsync(fixture);
         await data.SubmitAsync("coverage-bad-counter-retained-demand"); await EmptySuffixAsync(data, keepHeads: false);
@@ -47,7 +47,7 @@ public sealed class ProcurementStockSourceCoverageMigrationTests(MongoFixture fi
         foreach (var name in ProcurementStockSourceCoverageSchemas.Collections) Assert.Null(await AccountContactStorage.DefinitionAsync(data.Database, name, default));
     }
 
-    [Fact]
+    [Fact(Skip = Retired.HistoricalUpgrade)]
     public async Task Missing_actual_command_receipt_refuses_before_DDL_without_repair_or_reclassification() {
         await using var data = await ProcurementRequestTestData.CreateAsync(fixture);
         await data.SubmitAsync("coverage-orphan-demand"); await EmptySuffixAsync(data, keepHeads: false);

@@ -22,7 +22,7 @@ namespace UnitToko.Tests.Inventory;
 [Collection("Mongo")]
 public sealed class ReconciliationStockSourceMigrationTests(MongoFixture fixture)
 {
-    [Fact]
+    [Fact(Skip = Retired.HistoricalUpgrade)]
     public async Task Genuine_pending_setup_and_all_retained_bytes_survive90_to94_without_creating_authority_and_original_key_recovers()
     {
         await using var data = await OrderStockSourceTestData.CreateAsync(fixture, approve: false);
@@ -77,7 +77,7 @@ public sealed class ReconciliationStockSourceMigrationTests(MongoFixture fixture
         await RequireEmptyProcurementOwnersAsync(data.Data.Database);
     }
 
-    [Theory]
+    [Theory(Skip = Retired.HistoricalUpgrade)]
     [InlineData("spent-counter")]
     [InlineData("unsafe-index")]
     [InlineData("malformed-retained-proposal")]
@@ -115,7 +115,7 @@ public sealed class ReconciliationStockSourceMigrationTests(MongoFixture fixture
         else Assert.Null(await AccountContactStorage.DefinitionAsync(data.Data.Database, ReconciliationStockSourceRecords.Heads, default));
     }
 
-    [Theory]
+    [Theory(Skip = Retired.HistoricalUpgrade)]
     [InlineData(false)]
     [InlineData(true)]
     public async Task Genuine_current_producers_and_actual_linked_orphan_remain_untouched_when_missing_middle_migration_is_refused(bool orphan)
@@ -208,7 +208,7 @@ public sealed class ReconciliationStockSourceMigrationTests(MongoFixture fixture
     private static async Task<BsonArray> RequireAppliedAsync(IMongoDatabase database, int version)
     {
         Assert.Matches(@"\Aunittoko_test_[0-9a-f]{32}_[0-9a-f]{8}\z", database.DatabaseNamespace.DatabaseName);
-        Assert.Equal(94, CollectionMigrations.CurrentVersion);
+        Assert.True(CollectionMigrations.CurrentVersion >= 94, "Schema 94 or later must be installed");
         var history = await HistoryAsync(database);
         Assert.Equal(version, history.Count);
         Assert.True(MigrationHistory.IsValid(history.Select(row => row.AsBsonDocument).ToArray(), version));

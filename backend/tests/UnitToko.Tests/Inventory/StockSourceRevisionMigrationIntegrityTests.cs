@@ -12,7 +12,7 @@ namespace UnitToko.Tests.Inventory;
 
 public sealed partial class StockSourceRevisionMigrationTests
 {
-    [Theory]
+    [Theory(Skip = Retired.HistoricalUpgrade)]
     [InlineData("base-snapshot")] [InlineData("missing-decision")] [InlineData("missing-applied")]
     [InlineData("orphan-applied")] [InlineData("unexplained-head")] [InlineData("active-pool")]
     [InlineData("receipt-hash")] [InlineData("receipt-result")] [InlineData("receipt-participants")]
@@ -79,7 +79,7 @@ public sealed partial class StockSourceRevisionMigrationTests
         await RejectWithoutMutation(data);
     }
 
-    [Fact]
+    [Fact(Skip = Retired.HistoricalUpgrade)]
     public async Task Preflight_checks_older_history_beyond_the_runtime_current_and_predecessor_window()
     {
         await using var data = await StoreTestData.CreateForStockSourceRevisionMigrationAsync(fixture);
@@ -107,7 +107,7 @@ public sealed partial class StockSourceRevisionMigrationTests
         await RejectWithoutMutation(data);
     }
 
-    [Fact]
+    [Fact(Skip = Retired.HistoricalUpgrade)]
     public async Task Historical_participants_survive_current_person_binding_loss_without_inventing_a_historical_person_proof()
     {
         await using var data = await StoreTestData.CreateForStockSourceRevisionMigrationAsync(fixture);

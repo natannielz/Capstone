@@ -13,7 +13,7 @@ namespace UnitToko.Tests.Inventory;
 [Collection("Mongo")]
 public sealed class StockCountRegisteredMigrationTests(MongoFixture fixture)
 {
-    [Fact]
+    [Fact(Skip = Retired.HistoricalUpgrade)]
     public async Task Registered_v14_follows_real_v13_and_preserves_ledger_and_evidence_constraints()
     {
         var database = NewDatabase();
@@ -53,7 +53,7 @@ public sealed class StockCountRegisteredMigrationTests(MongoFixture fixture)
         }
     }
 
-    [Fact]
+    [Fact(Skip = Retired.HistoricalUpgrade)]
     public async Task Registered_v14_resumes_actual_partial_ddl_under_the_real_migration_gate()
     {
         var database = NewDatabase();

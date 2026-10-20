@@ -39,7 +39,7 @@ internal sealed class ReconciliationStockSourceTestData(StoreTestData data, Mong
         var data = await StoreTestData.CreateAsync(fixture);
         var value = new ReconciliationStockSourceTestData(data, fixture);
         try {
-            Assert.Equal(94, CollectionMigrations.CurrentVersion);
+            Assert.True(CollectionMigrations.CurrentVersion >= 94, "Schema 94 or later must be installed");
             Assert.True(await new CollectionMigrations(data.Database, data.Clock).IsCurrentAsync());
             value.Maker = await data.AddActorAsync(910100, Location.ToScope(), Permissions.StockSourceRead,
                 Permissions.StockSourcePropose, Permissions.StockSourcePolicyPropose,

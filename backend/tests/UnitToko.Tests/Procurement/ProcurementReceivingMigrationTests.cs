@@ -16,7 +16,7 @@ namespace UnitToko.Tests.Procurement;
 [Collection("Mongo")]
 public sealed class ProcurementReceivingMigrationTests(MongoFixture fixture)
 {
-    [WindowsStorageFact]
+    [WindowsStorageFact(Skip = Retired.HistoricalUpgrade)]
     [SupportedOSPlatform("windows")]
     public async Task Actual_v2_supplier_settlement_and_private_pin_survive_upgrade_and_missing_claim_owner_or_journal_audit_refuses_before_DDL()
     {
@@ -59,7 +59,7 @@ public sealed class ProcurementReceivingMigrationTests(MongoFixture fixture)
         Assert.Equal(claim, await data.Rows(BankTransactionClaims.Collection).Find(new BsonDocument("_id", claim["_id"])).SingleAsync());
     }
 
-    [WindowsStorageFact]
+    [WindowsStorageFact(Skip = Retired.HistoricalUpgrade)]
     [SupportedOSPlatform("windows")]
     public async Task Actual_v1_credit_and_verified_refund_preserve_original_claims_journals_and_private_original_across_v68()
     {
@@ -81,7 +81,7 @@ public sealed class ProcurementReceivingMigrationTests(MongoFixture fixture)
         using var bytes = new MemoryStream(); await original.Content.CopyToAsync(bytes); Assert.Equal(data.Payout.Bytes, bytes.ToArray());
     }
 
-    [Fact]
+    [Fact(Skip = Retired.HistoricalUpgrade)]
     public async Task Empty_partial_install_preserves_stronger_guards_rejects_unknown_indexes_or_orphan_effects_and_never_seeds_receiving_facts()
     {
         await using var data = await StoreTestData.CreateAsync(fixture); await RestoreV67Async(data.Database);

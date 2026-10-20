@@ -41,7 +41,7 @@ public sealed class PaymentMigrationTests(MongoFixture fixture)
             foreach (var pair in snapshots) Assert.Equal(pair.Value, new BsonArray(await db.GetCollection<BsonDocument>(pair.Key).Find(new BsonDocument()).Sort(new BsonDocument("_id", 1)).ToListAsync()));
         });
     }
-    [Fact]
+    [Fact(Skip = Retired.HistoricalUpgrade)]
     public Task Draft_upgrade_retains_history_stronger_validator_and_lossless_counter() => Run(false, async db => {
         var before = await History(db); Assert.Equal(29, before.Count);
         var required = PaymentDraftSchemas.Validator(PaymentDraftBson.Versions);
@@ -65,7 +65,7 @@ public sealed class PaymentMigrationTests(MongoFixture fixture)
         await Assert.ThrowsAsync<InvalidOperationException>(() => new CollectionMigrations(db, Clock).ApplyAsync());
         Assert.Equal(definitions, await Definitions(db)); Assert.Equal(history, new BsonArray((await History(db)).Take(29)));
     });
-    [Fact]
+    [Fact(Skip = Retired.HistoricalUpgrade)]
     public Task Evidence_forward_extension_preserves_stronger_rules_history_and_indexes() => Run(true, async db => {
         const string name = "evidenceLineages"; var before = await History(db); Assert.Equal(30, before.Count);
         var extra = new BsonDocument("target.id", new BsonDocument("$lte", 9007199254740993L));

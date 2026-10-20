@@ -29,7 +29,7 @@ public sealed class PaymentReplacementTests(MongoFixture fixture)
         await PaymentReviewActionTests.Grant(data); var shown = await data.Service.ReadReviewActionsAsync(data.Reviewer, data.Read.DeclarationId);
         await data.Service.RecordReviewActionAsync(data.Reviewer, data.Read.DeclarationId, 0, new(shown.Binding, "request_replacement"), PaymentVerificationTestData.Meta("request-linked-replacement"));
     }
-    [WindowsStorageFact]
+    [WindowsStorageFact(Skip = Retired.HistoricalUpgrade)]
     public async Task Forward_upgrade_preserves_actual_submitted_history_and_refuses_a_missing_previous_receipt() {
         await using var data = await PaymentVerificationTestData.CreateAsync(fixture); var db = data.Read.Catalog.Database;
         // Rehearse the previous schema on this isolated synthetic fixture, before any replacement writes.

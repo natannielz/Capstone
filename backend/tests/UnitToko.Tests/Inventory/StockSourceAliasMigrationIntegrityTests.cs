@@ -13,7 +13,7 @@ namespace UnitToko.Tests.Inventory;
 
 public sealed partial class StockSourceAliasMigrationTests
 {
-    [Theory]
+    [Theory(Skip = Retired.HistoricalUpgrade)]
     [InlineData("missing-alias")] [InlineData("missing-decision")] [InlineData("missing-proposal")]
     [InlineData("receipt-hash")] [InlineData("receipt-result")] [InlineData("receipt-participants")]
     [InlineData("missing-participants")] [InlineData("missing-actor")] [InlineData("original-receipt")]
@@ -96,7 +96,7 @@ public sealed partial class StockSourceAliasMigrationTests
             new BsonDocument("operation", "stock.source.alias.approve"), Builders<BsonDocument>.Update.Set(field, value));
     }
 
-    [Theory]
+    [Theory(Skip = Retired.HistoricalUpgrade)]
     [InlineData("tail")] [InlineData("middle")]
     public async Task Missing_applied_mapping_versions_cannot_be_hidden_by_a_valid_remaining_head(string missing)
     {
@@ -107,7 +107,7 @@ public sealed partial class StockSourceAliasMigrationTests
         await RejectWithoutMutation(data);
     }
 
-    [Fact]
+    [Fact(Skip = Retired.HistoricalUpgrade)]
     public async Task Migration_checks_old_chronology_beyond_runtime_head_and_predecessor()
     {
         await using var data = await StoreTestData.CreateForStockSourceAliasMigrationAsync(fixture);

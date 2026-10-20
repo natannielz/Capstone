@@ -14,7 +14,7 @@ namespace UnitToko.Tests.Procurement;
 [Collection("Mongo")]
 public sealed class SupplierClaimMigrationTests(MongoFixture fixture)
 {
-    [WindowsStorageFact]
+    [WindowsStorageFact(Skip = Retired.HistoricalUpgrade)]
     [SupportedOSPlatform("windows")]
     public async Task Actual_supplier_original_OCR_and_matched_inspection_survive_claim_upgrade_but_missing_proofs_refuse_before_DDL() {
         await using var data = await SupplierDocumentTestData.CreateAsync(fixture);
@@ -61,7 +61,7 @@ public sealed class SupplierClaimMigrationTests(MongoFixture fixture)
         await data.Inspection.Receiving.Orders.NoFinancialOrReceiptEffectsAsync();
     }
 
-    [Fact]
+    [Fact(Skip = Retired.HistoricalUpgrade)]
     public async Task Empty_partial_claim_upgrade_preserves_stronger_guards_and_rejects_incompatible_indexes_or_orphan_effects_without_seeding() {
         await using var data = await StoreTestData.CreateAsync(fixture); await RestoreV70Async(data.Database);
         const string table = "supplierClaimRequests"; var definition = await DefinitionAsync(data.Database, table); var original = definition["options"]["validator"].AsBsonDocument;

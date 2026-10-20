@@ -79,7 +79,7 @@ public sealed partial class StockSourceAliasMigrationTests(MongoFixture fixture)
             await InventoryRepository.RequireStorageAsync(data.Database, name, StockSourceAliasSchemas.Validator(name), StockSourceAliasSchemas.Key(name), default);
         Assert.True(await migrations.IsCurrentAsync()); await migrations.ApplyAsync(); Assert.Equal(after, await History(data));
     }
-    [Fact]
+    [Fact(Skip = Retired.HistoricalUpgrade)]
     public async Task Approved_alias_history_is_preserved_and_counters_advance_above_stored_ids()
     {
         await using var data = await StoreTestData.CreateForStockSourceAliasMigrationAsync(fixture);

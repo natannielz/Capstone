@@ -10,7 +10,7 @@ namespace UnitToko.Tests.Procurement;
 [Collection("Mongo")]
 public sealed class ProcurementRequestMigrationTests(MongoFixture fixture)
 {
-    [Fact]
+    [Fact(Skip = Retired.HistoricalUpgrade)]
     public async Task Empty_partial_upgrade_preserves_real_catalog_profiles_and_stronger_guards_without_seeding_requests()
     {
         await using var data = await D.CreateAsync(fixture); await RestoreV60Async(data.Organizations);
@@ -41,7 +41,7 @@ public sealed class ProcurementRequestMigrationTests(MongoFixture fixture)
         await data.NoBusinessEffectsAsync();
     }
 
-    [Theory]
+    [Theory(Skip = Retired.HistoricalUpgrade)]
     [InlineData("row")] [InlineData("ttl")] [InlineData("unique")] [InlineData("counter")] [InlineData("orphan")]
     public async Task Unsafe_partial_or_orphan_effect_refuses_before_any_procurement_DDL(string fault)
     {

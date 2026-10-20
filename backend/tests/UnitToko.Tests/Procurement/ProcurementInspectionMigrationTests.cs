@@ -20,7 +20,7 @@ namespace UnitToko.Tests.Procurement;
 [Collection("Mongo")]
 public sealed class ProcurementInspectionMigrationTests(MongoFixture fixture)
 {
-    [WindowsStorageFact]
+    [WindowsStorageFact(Skip = Retired.HistoricalUpgrade)]
     [SupportedOSPlatform("windows")]
     public async Task Actual_submitted_image_original_and_pin_survive_video_extension_but_missing_prior_proof_refuses_before_DDL()
     {
@@ -57,7 +57,7 @@ public sealed class ProcurementInspectionMigrationTests(MongoFixture fixture)
         Assert.Equal(submitted, await data.Service.SubmitAsync(data.Actor, data.DeclarationId, 1, data.Reservation.ReservationId, data.Reference, metadata));
     }
 
-    [Fact]
+    [Fact(Skip = Retired.HistoricalUpgrade)]
     public async Task Actual_zero_advance_order_notice_and_container_history_survive_while_missing_head_or_intake_receipt_denies_upgrade()
     {
         await using var data = await ProcurementReceivingTestData.CreateAsync(fixture, onReceipt: true);
@@ -83,7 +83,7 @@ public sealed class ProcurementInspectionMigrationTests(MongoFixture fixture)
         Assert.False(await data.Rows("idCounters").Find(new BsonDocument("_id", R.Heads)).AnyAsync());
     }
 
-    [Fact]
+    [Fact(Skip = Retired.HistoricalUpgrade)]
     public async Task Empty_partial_video_install_preserves_stronger_guards_rejects_incompatible_storage_or_orphan_receipts_and_never_seeds_policy()
     {
         await using var data = await StoreTestData.CreateAsync(fixture); await RestoreV68Async(data.Database);

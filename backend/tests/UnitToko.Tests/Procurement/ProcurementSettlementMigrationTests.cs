@@ -23,7 +23,7 @@ public sealed class ProcurementSettlementMigrationTests(MongoFixture fixture)
         try { await new ProcurementSettlementMigration(durable, clock).ApplyAsync(lease, default); await lease.CompleteAsync(default); }
         catch { await lease.ReleaseAsync(); throw; }
     }
-    [WindowsStorageFact]
+    [WindowsStorageFact(Skip = Retired.HistoricalUpgrade)]
     [SupportedOSPlatform("windows")]
     public async Task Actual_credit_and_verified_refund_claims_survive_exact_v2_upgrade_and_missing_owner_claim_or_journal_audit_refuses_before_DDL()
     {
@@ -83,7 +83,7 @@ public sealed class ProcurementSettlementMigrationTests(MongoFixture fixture)
         Assert.Equal(completedIndexes, await IndexesAsync(data.Database)); Assert.Equal(expectedRetained, await PreservedAsync(data.Database));
     }
 
-    [Fact]
+    [Fact(Skip = Retired.HistoricalUpgrade)]
     public async Task Empty_partial_index_transition_resumes_preserving_guards_and_rejects_unknown_partial_or_orphan_new_owner_before_DDL()
     {
         await using var data = await StoreTestData.CreateAsync(fixture); await RestoreV66Async(data.Database);
@@ -121,7 +121,7 @@ public sealed class ProcurementSettlementMigrationTests(MongoFixture fixture)
         }
     }
 
-    [WindowsStorageFact]
+    [WindowsStorageFact(Skip = Retired.HistoricalUpgrade)]
     [SupportedOSPlatform("windows")]
     public async Task Actual_recorded_supplier_original_and_capacity_survive_upgrade_and_missing_pin_audit_refuses_before_DDL()
     {

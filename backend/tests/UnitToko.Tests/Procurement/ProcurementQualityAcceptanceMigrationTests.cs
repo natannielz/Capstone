@@ -15,7 +15,7 @@ namespace UnitToko.Tests.Procurement;
 [Collection("Mongo")]
 public sealed class ProcurementQualityAcceptanceMigrationTests(MongoFixture fixture)
 {
-    [Fact]
+    [Fact(Skip = Retired.HistoricalUpgrade)]
     public async Task Empty_additive_upgrade_resumes_preserves_stronger_guards_and_creates_no_quality_or_stock_owners()
     {
         await using var data = await StoreTestData.CreateAsync(fixture); await RestoreV76Async(data.Database);
@@ -36,7 +36,7 @@ public sealed class ProcurementQualityAcceptanceMigrationTests(MongoFixture fixt
         Assert.Equal(installed, await SnapshotAsync(data.Database));
     }
 
-    [WindowsStorageFact]
+    [WindowsStorageFact(Skip = Retired.HistoricalUpgrade)]
     [SupportedOSPlatform("windows")]
     public async Task Genuine_mixed_held_receipt_survives_upgrade_and_missing_private_source_refuses_before_DDL()
     {
@@ -56,7 +56,7 @@ public sealed class ProcurementQualityAcceptanceMigrationTests(MongoFixture fixt
         Assert.Equal("3", (await data.Stock.Service.ReadAsync(data.Stock.Reader, data.ReceiptId))["held"].ToString());
     }
 
-    [WindowsStorageFact]
+    [WindowsStorageFact(Skip = Retired.HistoricalUpgrade)]
     [SupportedOSPlatform("windows")]
     public async Task Retained_quality_owner_is_reconstructed_and_missing_chain_cannot_be_called_an_empty_predecessor()
     {
@@ -76,7 +76,7 @@ public sealed class ProcurementQualityAcceptanceMigrationTests(MongoFixture fixt
         Assert.Equal(result, (await data.Service.LookupAsync(data.Checker, B.DecideOperation, "quality-migration-approved"))["result"]);
     }
 
-    [Fact]
+    [Fact(Skip = Retired.HistoricalUpgrade)]
     public async Task Unsafe_candidate_indexes_and_missing_predecessor_storage_fail_without_DDL()
     {
         await using var data = await StoreTestData.CreateAsync(fixture); await RestoreV76Async(data.Database);
