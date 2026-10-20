@@ -16,6 +16,7 @@ import { OperationRecovery, useOperationRecovery } from '../administration/Opera
 import common from '../administration/access.module.css';
 import styles from '../ordering/order-draft.module.css';
 import { dateTimeFormatter } from '@/lib/format';
+import { SessionAccessState } from "@/components/workspace-kit/session-access-state";
 
 type Account = { actorId: string; actions: readonly string[]; session: IdentitySession; observedAt: number };
 const time = (value: string) => dateTimeFormatter.format(new Date(value));
@@ -54,9 +55,8 @@ export function ShipmentWorkspace() {
   const expired = account !== null && sessionTiming(account.session, elapsed).expired;
   return <main className={common.page}><header className={common.header}><div><Link href="/identity/account" className={common.brand}>Unit Toko</Link>
     <h1>Kiriman</h1><p>Periksa kemasan yang diberangkatkan, tujuan dan kurir dalam akses Anda.</p></div><Link href="/identity/account" className={common.secondary}>Akun saya</Link></header>
-    {error !== null && <p role="alert" className={common.alert}>{message(error)}</p>}
-    {loading ? <p role="status">Memeriksa akun…</p> : !account || expired ? <section className={common.state}><h2>Periksa sesi dan akses</h2>
-      <Link href="/identity/login?returnPath=%2Ffulfillment%2Fshipments">Masuk kembali</Link><button className={common.secondary} onClick={() => setRevision(value => value + 1)}>Perbarui sesi dan akses</button></section>
+    {error !== null && account !== null && <p role="alert" className={common.alert}>{message(error)}</p>}
+    {loading ? <p role="status">Memeriksa akun…</p> : !account || expired ? <SessionAccessState error={error} returnPath="/fulfillment/shipments" onRetry={() => setRevision(value => value + 1)} />
       : <ShipmentList key={account.actorId + ':' + account.observedAt} account={account} onDenied={denied} />}
   </main>;
 }

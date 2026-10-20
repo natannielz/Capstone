@@ -15,6 +15,7 @@ import { OrderDraftEditor } from './OrderDraftEditor';
 import common from '../administration/access.module.css';
 import styles from './order-draft.module.css';
 import { formatDateTime } from '@/lib/format';
+import { SessionAccessState } from "@/components/workspace-kit/session-access-state";
 
 type Account = { actorId: string; session: IdentitySession; observedAt: number; options: OrderContextOption[] };
 export const branchLabel = (option: OrderContextOption) => `${option.organizationName ?? 'Organisasi ' + option.context.organizationId} · ${option.branchName ?? 'Cabang ' + option.context.branchId}${option.context.divisionId ? ' · ' + (option.divisionName ?? 'Divisi ' + option.context.divisionId) : ''}`;
@@ -52,10 +53,8 @@ export function OrderDraftWorkspace() {
   return <main className={common.page}><header className={common.header}><div><Link className={common.brand} href="/identity/account">Unit Toko</Link>
     <h1>Draf pesanan</h1><p>Susun kebutuhan cabang dan lanjutkan kapan saja. Draf hanya terlihat oleh akun pembuatnya.</p></div>
     <nav className={common.actions}><Link className={common.secondary} href="/catalog/browse">Katalog kemasan</Link><Link className={common.secondary} href="/identity/account">Akun saya</Link></nav></header>
-    {error !== null && <p role="alert" className={common.alert}>{(error instanceof AccessFailure && discardConflictMessage(error.code)) || draftMessage(error, true)}</p>}
-    {loading ? <p role="status">Memeriksa akun dan cabang…</p> : !account || expired ? <section className={common.state}><h2>Periksa sesi dan akses</h2>
-      {expired && <p>Sesi telah berakhir.</p>}<Link href="/identity/login?returnPath=%2Fordering%2Fdrafts">Masuk kembali</Link>
-      <button className={common.secondary} onClick={() => setRevision(value => value + 1)}>Perbarui sesi dan akses</button></section>
+    {error !== null && account !== null && <p role="alert" className={common.alert}>{(error instanceof AccessFailure && discardConflictMessage(error.code)) || draftMessage(error, true)}</p>}
+    {loading ? <p role="status">Memeriksa akun dan cabang…</p> : !account || expired ? <SessionAccessState error={error} returnPath="/ordering/drafts" onRetry={() => setRevision(value => value + 1)} />
       : <DraftDesk key={account.actorId + ':' + account.observedAt} account={account} onFailure={failed} />}
   </main>;
 }

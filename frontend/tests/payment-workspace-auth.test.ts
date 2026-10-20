@@ -86,7 +86,7 @@ function mountPayment(replies: {save?: () => Response; recoverDraft?: () => Resp
     useCallback(callback: unknown, dependencies?: readonly unknown[]) {const index = position++, previous = active.slots[index] as {value: unknown; dependencies?: readonly unknown[]} | undefined;
       if (!previous || changed(previous.dependencies, dependencies)) active.slots[index] = {value: callback, dependencies}; return (active.slots[index] as {value: unknown}).value;},
     useEffect(effect: () => void | (() => void), dependencies?: readonly unknown[]) {pending.push({frame: active, index: position++, effect, dependencies});}};
-  let rupiahInputKit: Record<string, unknown> | undefined;
+  let rupiahInputKit: Record<string, unknown> | undefined, sessionStateKit: Record<string, unknown> | undefined;
   const runtimeRequire = createRequire(resolve('package.json')), ts = runtimeRequire('typescript') as typeof import('typescript');
   const marker = () => null;
   const imports = (name: string): unknown => {
@@ -115,6 +115,7 @@ function mountPayment(replies: {save?: () => Response; recoverDraft?: () => Resp
     if (name === './payment-proof-file') return proofFile;
     // Loaded through this harness so its useState runs on the mounted hook slots, not React's dispatcher.
     if (name === '@/components/workspace-kit/rupiah-input') return rupiahInputKit ??= load('src/components/workspace-kit/rupiah-input.tsx');
+    if (name === '@/components/workspace-kit/session-access-state') return sessionStateKit ??= load('src/components/workspace-kit/session-access-state.tsx');
     throw new Error('Unexpected mounted payment import: ' + name);
   };
   function load(file: string) {
@@ -180,7 +181,7 @@ test('mounted uncertain payment submission keeps its original recovery reference
   assert.deepEqual(Object.keys(original).sort(), ['actorId', 'createdAt', 'key', 'operation']);
   assert.deepEqual(journal.list('99'), []); assert.doesNotMatch([...harness.storage.values.values()].join(''), /Private|4000|BANK-REF/);
   await harness.click('Periksa hasil'); assertSignedOut(harness); assert.deepEqual(journal.list(actor), [original]);
-  harness.allowRecoveryRead(); await harness.click('Perbarui sesi dan akses'); await harness.click('Periksa hasil');
+  harness.allowRecoveryRead(); await harness.click('Periksa ulang'); await harness.click('Periksa hasil');
   assert.deepEqual(journal.list(actor), [original]); assert.equal(harness.writes.length, 1); assert.equal(harness.lookups.length, 2);
   for (const lookup of harness.lookups) assert.deepEqual(await lookup.json(), {purpose: 'operation-recovery', key: original.key});
   assert.equal(harness.find(node => node.type === 'button' && text(node.props.children) === 'Simpan draf pembayaran').props.disabled, true);

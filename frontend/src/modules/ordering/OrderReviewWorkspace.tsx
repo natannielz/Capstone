@@ -13,6 +13,7 @@ import { createOrderReviewGateway, orderDecisionOperation, orderDecisionSelectio
 import { orderAmount } from './order-quote-client';
 import common from '../administration/access.module.css';
 import styles from './order-draft.module.css';
+import { SessionAccessState } from "@/components/workspace-kit/session-access-state";
 
 type Account = { actorId: string; actions: readonly string[]; session: IdentitySession; observedAt: number };
 const factorHref = '/identity/account?operation=order.spend.approve&returnPath=%2Fordering%2Freviews';
@@ -67,9 +68,8 @@ export function OrderReviewWorkspace() {
   return <main className={common.page}><header className={common.header}><div><Link href="/identity/account" className={common.brand}>Unit Toko</Link>
     <h1>Peninjauan pesanan</h1><p>Tinjau belanja, penerimaan toko, atau pembatalan sesuai penugasan Anda.</p></div>
     <nav className={common.actions}><Link href="/identity/account" className={common.secondary}>Akun saya</Link></nav></header>
-    {error !== null && <p role="alert" className={common.alert}>{message(error)}</p>}
-    {loading ? <p role="status">Memeriksa akun…</p> : !account || expired ? <section className={common.state}><h2>Periksa sesi dan akses</h2>
-      <Link href="/identity/login?returnPath=%2Fordering%2Freviews">Masuk kembali</Link><button className={common.secondary} onClick={() => setRevision(value => value + 1)}>Perbarui sesi dan akses</button></section>
+    {error !== null && account !== null && <p role="alert" className={common.alert}>{message(error)}</p>}
+    {loading ? <p role="status">Memeriksa akun…</p> : !account || expired ? <SessionAccessState error={error} returnPath="/ordering/reviews" onRetry={() => setRevision(value => value + 1)} />
       : <ReviewDesk key={account.actorId + ':' + account.observedAt} account={account} elapsed={elapsed} onFailure={failed} onRefresh={() => setRevision(value => value + 1)} />}
   </main>;
 }

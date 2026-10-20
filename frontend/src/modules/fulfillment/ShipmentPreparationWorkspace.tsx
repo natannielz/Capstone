@@ -15,6 +15,7 @@ import { submitTrackedRequest } from '../administration/operation-journal';
 import { createPreparationGateway, initialPreparationValues, prepareShipmentCommand, type FulfillmentOrder, type Preparation, type PreparationCommand, type PreparationResult } from './preparation-client';
 import common from '../administration/access.module.css';
 import styles from '../ordering/order-draft.module.css';
+import { SessionAccessState } from "@/components/workspace-kit/session-access-state";
 
 type Account = { actorId: string; actions: readonly string[]; session: IdentitySession; observedAt: number };
 function message(error: unknown) {
@@ -52,9 +53,8 @@ export function ShipmentPreparationWorkspace() {
   const expired = account !== null && sessionTiming(account.session, elapsed).expired;
   return <main className={common.page}><header className={common.header}><div><Link href="/identity/account" className={common.brand}>Unit Toko</Link>
     <h1>Persiapan kiriman</h1><p>Siapkan jumlah kemasan dari pesanan toko yang sudah diterima. Persiapan dapat mencakup sebagian pesanan.</p></div><Link href="/identity/account" className={common.secondary}>Akun saya</Link></header>
-    {error !== null && <p role="alert" className={common.alert}>{message(error)}</p>}
-    {loading ? <p role="status">Memeriksa akun…</p> : !account || expired ? <section className={common.state}><h2>Periksa sesi dan akses</h2>
-      <Link href="/identity/login?returnPath=%2Ffulfillment%2Fpreparations">Masuk kembali</Link><button className={common.secondary} onClick={() => setRevision(value => value + 1)}>Perbarui sesi dan akses</button></section>
+    {error !== null && account !== null && <p role="alert" className={common.alert}>{message(error)}</p>}
+    {loading ? <p role="status">Memeriksa akun…</p> : !account || expired ? <SessionAccessState error={error} returnPath="/fulfillment/preparations" onRetry={() => setRevision(value => value + 1)} />
       : <PreparationDesk key={account.actorId + ':' + account.observedAt} account={account} onFailure={failed} />}
   </main>;
 }

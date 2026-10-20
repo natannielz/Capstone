@@ -17,6 +17,7 @@ import styles from './invoice.module.css';
 import sheet from './bank-statement.module.css';
 import { dateTimeFormatter } from '@/lib/format';
 import { rupiahAmount } from '@/lib/rupiah-input';
+import { SessionAccessState } from "@/components/workspace-kit/session-access-state";
 
 type Account = { actorId: string; actions: readonly string[]; session: IdentitySession; observedAt: number };
 const rupiah = (value: string) => orderAmount('IDR', value);
@@ -65,9 +66,8 @@ export function BankReceiptWorkspace() {
     window.addEventListener('pageshow', restored); return () => { window.clearInterval(timer); window.removeEventListener('pageshow', restored); }; }, [account]);
   const denied = useCallback((failure: unknown) => { if (failure instanceof AccessFailure && failure.code !== 'step_up_required' && (failure.status === 401 || failure.status === 403 || failure.code === 'actor_changed')) { setAccount(null); setError(failure); } }, []);
   return <main className={common.page}><header className={common.header}><div><Link href="/identity/account" className={common.brand}>Unit Toko</Link><h1>Penerimaan bank</h1><p>Periksa dana masuk secara independen dan telusuri pencatatan kasnya.</p></div></header>
-    {error !== null && <p role="alert" className={common.alert}>{message(error)}</p>}
-    {loading ? <p role="status">Memeriksa akun…</p> : !account || sessionTiming(account.session, elapsed).expired ? <section className={common.state}><h2>Periksa sesi dan akses</h2>
-      <Link href="/identity/login?returnPath=%2Fbilling%2Fbank-receipts">Masuk kembali</Link><button className={common.secondary} onClick={() => setRefresh(value => value + 1)}>Perbarui sesi dan akses</button></section>
+    {error !== null && account !== null && <p role="alert" className={common.alert}>{message(error)}</p>}
+    {loading ? <p role="status">Memeriksa akun…</p> : !account || sessionTiming(account.session, elapsed).expired ? <SessionAccessState error={error} returnPath="/billing/bank-receipts" onRetry={() => setRefresh(value => value + 1)} />
       : <ReceiptDesk key={account.actorId + ':' + account.observedAt} account={account} fresh={sessionTiming(account.session, elapsed).fresh} onDenied={denied} />}
   </main>;
 }

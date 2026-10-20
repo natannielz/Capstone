@@ -21,6 +21,7 @@ import styles from './order-draft.module.css';
 import { dateTimeFormatter } from '@/lib/format';
 import { EmptyState } from '@/components/workspace-kit/empty-state';
 import { OrderTimelinePanel } from './OrderTimelinePanel';
+import { SessionAccessState } from "@/components/workspace-kit/session-access-state";
 
 type Account = { actorId: string; actions: readonly string[]; session: IdentitySession; observedAt: number };
 function status(order: SubmittedOrder) {
@@ -68,9 +69,8 @@ export function OrderHistoryWorkspace() {
   return <main className={common.page}><header className={common.header}><div><Link href="/identity/account" className={common.brand}>Unit Toko</Link>
     <h1>Pesanan saya</h1><p>Lihat pesanan yang telah Anda ajukan, rincian yang disepakati, dan perkembangan peninjauannya.</p></div>
     <Link href="/identity/account" className={common.secondary}>Akun saya</Link></header>
-    {error !== null && <p role="alert" className={common.alert}>{message(error)}</p>}
-    {loading ? <p role="status">Memeriksa akun…</p> : !account || expired ? <section className={common.state}><h2>Periksa sesi dan akses</h2>
-      <Link href="/identity/login?returnPath=%2Fordering%2Forders">Masuk kembali</Link><button className={common.secondary} onClick={() => setRevision(value => value + 1)}>Perbarui sesi dan akses</button></section>
+    {error !== null && account !== null && <p role="alert" className={common.alert}>{message(error)}</p>}
+    {loading ? <p role="status">Memeriksa akun…</p> : !account || expired ? <SessionAccessState error={error} returnPath="/ordering/orders" onRetry={() => setRevision(value => value + 1)} />
       : <OrderHistoryDesk key={account.actorId + ':' + account.observedAt} account={account} onFailure={failed} />}
   </main>;
 }

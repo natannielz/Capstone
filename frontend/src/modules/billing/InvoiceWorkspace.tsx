@@ -14,6 +14,7 @@ import { createInvoiceGateway, prepareInvoice, type Invoice, type InvoiceCandida
 import common from '../administration/access.module.css';
 import styles from './invoice.module.css';
 import { longDateFormatter } from '@/lib/format';
+import { SessionAccessState } from "@/components/workspace-kit/session-access-state";
 
 type Account = { actorId: string; actions: readonly string[]; session: IdentitySession; observedAt: number };
 const number = (item: Invoice) => `${item.numberEntity}/${item.numberChannel}/${item.numberYear}/${item.number}`;
@@ -46,9 +47,8 @@ export function InvoiceWorkspace() {
     window.addEventListener('pageshow', restored); return () => { window.clearInterval(timer); window.removeEventListener('pageshow', restored); }; }, [account]);
   const denied = useCallback((failure: unknown) => { if (failure instanceof AccessFailure && (failure.status === 401 || failure.status === 403 || failure.code === 'actor_changed')) { setAccount(null); setError(failure); } }, []);
   return <main className={common.page}><header className={common.header}><div><Link href="/identity/account" className={common.brand}>Unit Toko</Link><h1>Tagihan</h1><p>Terbitkan dan periksa invoice berdasarkan barang yang telah diterima.</p></div><Link href="/identity/account" className={common.secondary}>Akun saya</Link></header>
-    {error !== null && <p role="alert" className={common.alert}>{message(error)}</p>}
-    {loading ? <p role="status">Memeriksa akun…</p> : !account || sessionTiming(account.session, elapsed).expired ? <section className={common.state}><h2>Periksa sesi dan akses</h2>
-      <Link href="/identity/login?returnPath=%2Fbilling%2Finvoices">Masuk kembali</Link><button className={common.secondary} onClick={() => setRevision(value => value + 1)}>Perbarui sesi dan akses</button></section>
+    {error !== null && account !== null && <p role="alert" className={common.alert}>{message(error)}</p>}
+    {loading ? <p role="status">Memeriksa akun…</p> : !account || sessionTiming(account.session, elapsed).expired ? <SessionAccessState error={error} returnPath="/billing/invoices" onRetry={() => setRevision(value => value + 1)} />
       : <InvoiceDesk key={account.actorId + ':' + account.observedAt} account={account} onDenied={denied} />}
   </main>;
 }

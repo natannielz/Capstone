@@ -16,6 +16,7 @@ import { addressPurposeLabels, createOrganizationAddressGateway, organizationAdd
 import styles from '../administration/access.module.css';
 import orgStyles from './organizations.module.css';
 import { dateTimeFormatter } from '@/lib/format';
+import { SessionAccessState } from "@/components/workspace-kit/session-access-state";
 
 type Account = { actorId: string; actions: readonly string[]; session: IdentitySession; observedAt: number };
 const path = '/administration/organizations/addresses';
@@ -54,10 +55,8 @@ export function OrganizationAddressWorkspace() {
   const denied = useCallback((failure: unknown) => { if (failure instanceof AccessFailure && (failure.status === 401 || failure.code === 'actor_changed' || failure.code === 'session_expired')) { setAccount(null); setError(failure); } }, []);
   return <main className={styles.page}><header className={styles.header}><div><Link href="/identity/account" className={styles.brand}>Unit Toko</Link>
     <h1>Alamat organisasi</h1><p>Ajukan dan periksa alamat penagihan legal, pengiriman cabang dan keberangkatan gudang sesuai penugasan.</p></div></header>
-    {error !== null && <p role="alert" className={styles.alert}>{message(error)}</p>}
-    {loading ? <p role="status">Memeriksa akun dan akses…</p> : !account || sessionTiming(account.session, elapsed).expired ? <section className={styles.state}>
-      <h2>Periksa sesi dan akses</h2><Link href={`/identity/login?returnPath=${encodeURIComponent(path)}`}>Masuk kembali</Link>
-      <button className={styles.secondary} onClick={() => setRevision(value => value + 1)}>Perbarui sesi dan akses</button></section>
+    {error !== null && account !== null && <p role="alert" className={styles.alert}>{message(error)}</p>}
+    {loading ? <p role="status">Memeriksa akun dan akses…</p> : !account || sessionTiming(account.session, elapsed).expired ? <SessionAccessState error={error} returnPath={path} onRetry={() => setRevision(value => value + 1)} />
       : <AddressDesk key={account.actorId + ':' + account.observedAt} account={account} fresh={sessionTiming(account.session, elapsed).fresh} onDenied={denied} />}
   </main>;
 }

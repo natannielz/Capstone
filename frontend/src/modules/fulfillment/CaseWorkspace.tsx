@@ -25,6 +25,7 @@ import { RefundSettlementPanel } from './RefundSettlementPanel';
 import { canVerifyRefundSettlement, createRefundSettlementGateway } from './refund-settlement-client';
 import common from '../administration/access.module.css';
 import styles from '../ordering/order-draft.module.css';
+import { SessionAccessState } from "@/components/workspace-kit/session-access-state";
 
 type Account = { actorId: string; actions: readonly string[]; session: IdentitySession; observedAt: number };
 const issues = { wrong_item: 'Barang tidak sesuai', damaged: 'Barang rusak', missing: 'Barang kurang', other: 'Masalah lainnya' };
@@ -55,9 +56,8 @@ export function CaseWorkspace() {
   const denied = useCallback((failure: unknown) => { if (failure instanceof AccessFailure && failure.code !== 'step_up_required' && (failure.status === 401 || failure.status === 403 || failure.code === 'actor_changed')) { setAccount(null); setError(failure); } }, []);
   return <main className={common.page}><header className={common.header}><div><Link href="/identity/account" className={common.brand}>Unit Toko</Link><h1>Keluhan barang</h1>
     <p>Laporkan masalah pada barang yang diterima. Penanggung jawab akan memeriksa pengajuan sebelum menentukan penyelesaiannya.</p></div><Link href="/identity/account" className={common.secondary}>Akun saya</Link></header>
-    {error !== null && <p role="alert" className={common.alert}>{message(error)}</p>}
-    {loading ? <p role="status">Memeriksa akun…</p> : !account || sessionTiming(account.session, elapsed).expired ? <section className={common.state}><h2>Periksa sesi dan akses</h2>
-      <Link href="/identity/login?returnPath=%2Ffulfillment%2Fcases">Masuk kembali</Link><button className={common.secondary} onClick={() => setRevision(value => value + 1)}>Perbarui sesi dan akses</button></section>
+    {error !== null && account !== null && <p role="alert" className={common.alert}>{message(error)}</p>}
+    {loading ? <p role="status">Memeriksa akun…</p> : !account || sessionTiming(account.session, elapsed).expired ? <SessionAccessState error={error} returnPath="/fulfillment/cases" onRetry={() => setRevision(value => value + 1)} />
       : <CaseDesk key={account.actorId + ':' + account.observedAt} account={account} fresh={sessionTiming(account.session, elapsed).fresh} onDenied={denied} />}
   </main>;
 }

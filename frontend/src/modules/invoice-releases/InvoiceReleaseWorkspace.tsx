@@ -14,6 +14,7 @@ import {InvoiceReleaseJournal, invoiceReleaseJournalPrefix, type InvoiceReleaseR
 import common from '../administration/access.module.css';
 import styles from '../billing/invoice.module.css';
 import {formatDate, formatDateTime} from '@/lib/format';
+import { SessionAccessState } from "@/components/workspace-kit/session-access-state";
 
 type Account = {actorId: string; actions: readonly string[]; session: IdentitySession; observedAt: number};
 const currency = (value: string) => orderAmount('IDR', value);
@@ -53,9 +54,8 @@ export function InvoiceReleaseWorkspace() {
   return <main className={common.page}><header className={common.header}><div><Link href="/identity/account" className={common.brand}>Unit Toko</Link>
     <h1>Persetujuan penerbitan invoice</h1><p>Periksa penerimaan, ketentuan tagihan, dan pembukuan sebelum memberikan persetujuan penerbitan.</p></div>
     <Link href="/identity/account" className={common.secondary}>Akun saya</Link></header>
-    {failure !== null && <p role="alert" className={common.alert}>{message(failure)}</p>}
-    {busy ? <p role="status">Memeriksa akun…</p> : !account || sessionTiming(account.session, elapsed).expired ? <section className={common.state}><h2>Periksa sesi dan akses</h2>
-      <Link href="/identity/login?returnPath=%2Fbilling%2Finvoice-releases">Masuk kembali</Link><button className={common.secondary} onClick={() => setRefresh(value => value + 1)}>Perbarui sesi dan akses</button></section>
+    {failure !== null && account !== null && <p role="alert" className={common.alert}>{message(failure)}</p>}
+    {busy ? <p role="status">Memeriksa akun…</p> : !account || sessionTiming(account.session, elapsed).expired ? <SessionAccessState error={failure} returnPath="/billing/invoice-releases" onRetry={() => setRefresh(value => value + 1)} />
       : <ReleaseDesk key={account.actorId + ':' + account.observedAt} account={account} onDenied={denied} />}</main>;
 }
 function Facts({value}: {value: InvoiceReleaseFacts}) {
@@ -167,7 +167,7 @@ function ReleaseDesk({account, onDenied}: {account: Account; onDenied: (error: u
     });
   }
   const update = (key: keyof ReturnType<typeof blank>, value: string) => setFields(previous => ({...previous, [key]: value}));
-  return <>{error !== null && <p role="alert" className={common.alert}>{message(error)}</p>}{notice && <p role="status">{notice}</p>}
+  return <>{error !== null && account !== null && <p role="alert" className={common.alert}>{message(error)}</p>}{notice && <p role="status">{notice}</p>}
     {offline && <p role="status">Koneksi belum tersedia. Referensi permintaan tetap disimpan.</p>}{storageFailed && <p role="alert">Penyimpanan referensi pemulihan belum tersedia. Periksa penyimpanan browser sebelum membuat perubahan.</p>}
     {pending.length > 0 && <section className={common.accountSection} aria-label="Pemulihan persetujuan invoice"><h2>Periksa hasil permintaan asli</h2>
       {pending.map(reference => <p key={reference.action + reference.key}>{actionText[reference.action]} · referensi {reference.key}<button className={common.secondary} disabled={busy || offline || storageFailed} onClick={() => void recover(reference)}>Periksa hasil {actionText[reference.action].toLowerCase()}</button></p>)}</section>}
