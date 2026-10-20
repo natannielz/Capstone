@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { activeAct, progressFromAnchors } from "./journey";
-import { DEMO_MAXIMUM, DEMO_MINIMUM, KemasanLabel } from "./KemasanLabel";
+import { COFFEE_MAXIMUM, COFFEE_MINIMUM } from "./journey";
+import { KemasanLabel } from "./KemasanLabel";
 import { KemasanStage } from "./KemasanStage";
 import type { KemasanScene } from "./kemasan-scene";
 import styles from "./landing.module.css";
@@ -10,18 +11,18 @@ import styles from "./landing.module.css";
 export type JourneyAct = { status: string; time: string; text: string; detail: string };
 
 /** Typed text that is not a whole number in range keeps the stage on the nearest valid count. */
-function cartonCount(text: string): number {
-  const typed = /^[0-9]{1,2}$/.test(text.trim()) ? Number(text.trim()) : DEMO_MINIMUM;
-  return Math.min(DEMO_MAXIMUM, Math.max(DEMO_MINIMUM, typed));
+function coffeeCount(text: string): number {
+  const typed = /^[0-9]{1,2}$/.test(text.trim()) ? Number(text.trim()) : COFFEE_MINIMUM;
+  return Math.min(COFFEE_MAXIMUM, Math.max(COFFEE_MINIMUM, typed));
 }
 
 /**
- * The hero and the story share one pinned stage. Scrolling moves the scene through the acts: the hero copy's bottom
+ * The hero and the story share one pinned stage: one box, packed, sealed and delivered as the request moves on. Scrolling moves the scene through the acts: the hero copy's bottom
  * edge and each act card's centre are anchors, and an act is reached when its anchor rises to the focus line.
  */
 export function KemasanJourney({ acts, children, closing }: { acts: readonly JourneyAct[]; children: ReactNode; closing: ReactNode }) {
-  const [value, setValue] = useState(String(DEMO_MINIMUM)), [current, setCurrent] = useState(0);
-  const cartons = cartonCount(value);
+  const [value, setValue] = useState(String(COFFEE_MINIMUM)), [current, setCurrent] = useState(0);
+  const coffee = coffeeCount(value);
   const sceneRef = useRef<KemasanScene | null>(null), copyRef = useRef<HTMLDivElement>(null), actRefs = useRef<(HTMLLIElement | null)[]>([]);
   const progressRef = useRef(0);
 
@@ -31,7 +32,9 @@ export function KemasanJourney({ acts, children, closing }: { acts: readonly Jou
     const anchors = [copy.getBoundingClientRect().bottom, ...actRefs.current.slice(0, acts.length).map(card => {
       const box = card?.getBoundingClientRect(); return box ? box.top + box.height / 2 : Infinity;
     })];
-    const progress = progressFromAnchors(anchors, focus);
+    // `?story=1.6` pins the scene to one moment for visual checks (like `?scene=` for the quality tier).
+    const pinned = Number(new URLSearchParams(window.location.search).get("story") ?? NaN);
+    const progress = Number.isFinite(pinned) ? Math.max(0, pinned) : progressFromAnchors(anchors, focus);
     progressRef.current = progress; sceneRef.current?.setJourney(progress);
     setCurrent(previous => previous === activeAct(progress) ? previous : activeAct(progress));
   }, [acts.length]);
@@ -48,10 +51,10 @@ export function KemasanJourney({ acts, children, closing }: { acts: readonly Jou
 
   return <div className={styles.journey} data-journey={acts.length} data-act={current}>
     <div className={styles.copy} ref={copyRef}>{children}</div>
-    <div className={styles.stageColumn}><KemasanStage cartons={cartons} acts={acts.length} onScene={onScene} /></div>
-    <div className={styles.labelSlot}><KemasanLabel value={value} cartons={cartons} onChange={setValue} /></div>
+    <div className={styles.stageColumn}><KemasanStage coffee={coffee} acts={acts.length} onScene={onScene} /></div>
+    <div className={styles.labelSlot}><KemasanLabel value={value} coffee={coffee} onChange={setValue} /></div>
     <div className={styles.storyIntro}>
-      <h2>Satu karton, dari dok ke cabang.</h2>
+      <h2>Satu kardus, dari permintaan sampai cabang.</h2>
       <p>Ikuti satu permintaan dari pengajuan sampai {acts.length > 2 ? "tagihan terbit" : "hasil peninjauan toko"}. Setiap tahap di bawah adalah status yang juga Anda lihat di akun.</p>
     </div>
     <ol className={styles.acts} aria-label="Perjalanan satu permintaan">

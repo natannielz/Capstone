@@ -1,30 +1,38 @@
 import { QuantityStepper } from "../workspace-kit/quantity-stepper";
-import { CARTON } from "./kemasan-timeline";
+import { COFFEE_MAXIMUM, COFFEE_MINIMUM } from "./journey";
 import styles from "./landing.module.css";
 
-export const DEMO_MINIMUM = 2, DEMO_MAXIMUM = 4;
+export const SACHETS_PER_DUS = 24, OTHER_PACKAGES = 4;
 
-export function kemasanSummary(cartons: number): string {
-  return `${cartons} karton berisi ${cartons * CARTON.perCarton} botol`;
+export function kardusSummary(coffee: number): string {
+  return `${coffee + OTHER_PACKAGES} kemasan dalam 1 kardus, termasuk ${coffee * SACHETS_PER_DUS} sachet kopi`;
 }
 
-/** A shipping label: real fields, and the stepper the order screen uses. The total is announced politely. */
-export function KemasanLabel({ value, cartons, onChange }: { value: string; cartons: number; onChange: (text: string) => void }) {
-  const outOfRange = value.trim() !== String(cartons);
-  return <aside className={styles.label} aria-labelledby="contoh-kemasan">
-    <h2 id="contoh-kemasan" className={styles.labelTitle}>Contoh kemasan</h2>
-    <dl className={styles.labelFields}>
-      <div><dt>Barang</dt><dd>Air mineral 600 ml</dd></div>
-      <div><dt>Isi per kemasan</dt><dd>{CARTON.perCarton} botol per karton</dd></div>
-      <div><dt>Minimum</dt><dd>{DEMO_MINIMUM} karton</dd></div>
-    </dl>
-    <div className={styles.labelQuantity}>
-      <QuantityStepper id="contoh-jumlah" label="Jumlah karton" value={value} minimum={DEMO_MINIMUM} increment={1} maximum={DEMO_MAXIMUM} onChange={onChange} />
-      <p className={styles.total}>
-        <span className={styles.totalNumber} aria-hidden="true">{cartons * CARTON.perCarton}</span>
-        <span className={styles.totalText} aria-live="polite">{kemasanSummary(cartons)}</span>
-      </p>
-    </div>
-    <p className={styles.labelNote}>{outOfRange ? `Contoh ini memakai ${DEMO_MINIMUM} sampai ${DEMO_MAXIMUM} karton.` : "Jumlah selalu bulat per kemasan. Harga dan ketersediaan mengikuti katalog akun Anda."}</p>
+const FIXED = [
+  { item: "Kertas HVS A4 70 gsm", pack: "1 rim isi 500 lembar" },
+  { item: "Teh celup melati", pack: "1 kotak isi 25 kantong" },
+  { item: "Pulpen hitam", pack: "1 dus isi 12 batang" },
+  { item: "Penyanitasi tangan 500 ml", pack: "1 botol" },
+];
+
+/** The request the box carries: real catalog packages, and the stepper the order screen uses. The total is announced politely. */
+export function KemasanLabel({ value, coffee, onChange }: { value: string; coffee: number; onChange: (text: string) => void }) {
+  const outOfRange = value.trim() !== String(coffee);
+  return <aside className={styles.label} aria-labelledby="isi-kardus">
+    <h2 id="isi-kardus" className={styles.labelTitle}>Isi kardus permintaan PT-00000142</h2>
+    <ul className={styles.labelItems}>
+      <li className={styles.labelVariable}>
+        <div><p className={styles.labelItem}>Kopi bubuk sachet</p><p className={styles.labelPack}>dus isi {SACHETS_PER_DUS} sachet</p></div>
+        <QuantityStepper id="contoh-jumlah" label="Jumlah dus" value={value} minimum={COFFEE_MINIMUM} increment={1} maximum={COFFEE_MAXIMUM} onChange={onChange} />
+      </li>
+      {FIXED.map(row => <li key={row.item}><p className={styles.labelItem}>{row.item}</p><p className={styles.labelPack}>{row.pack}</p></li>)}
+    </ul>
+    <p className={styles.total}>
+      <span className={styles.totalNumber} aria-hidden="true">{coffee + OTHER_PACKAGES}</span>
+      <span className={styles.totalText} aria-live="polite">{kardusSummary(coffee)}</span>
+    </p>
+    <p className={styles.labelNote}>{outOfRange
+      ? `Contoh ini memakai ${COFFEE_MINIMUM} sampai ${COFFEE_MAXIMUM} dus kopi.`
+      : "Jumlah selalu bulat per kemasan. Harga dan ketersediaan mengikuti katalog akun Anda."}</p>
   </aside>;
 }

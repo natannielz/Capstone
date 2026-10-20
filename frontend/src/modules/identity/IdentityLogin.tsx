@@ -99,7 +99,7 @@ export function IdentityLogin() {
         <div><dt>Petugas toko</dt><dd>Meninjau permintaan dan mengelola katalog sesuai penugasan.</dd></div>
       </dl>
       <p className={styles.accessNote}>Akses mengikuti keanggotaan dan penugasan Anda.</p>
-      <div className={styles.drawing} aria-hidden="true"><KemasanPoster cartons={2} /></div>
+      <div className={styles.drawing} aria-hidden="true"><KemasanPoster /></div>
     </aside>
   </div>;
 }

@@ -25,9 +25,9 @@ export function shouldDowngrade(frameTimes: readonly number[]): boolean {
   return sorted[Math.floor(sorted.length / 2)] > FRAME_BUDGET_MS;
 }
 
-/** Bokeh aperture per shot: shallow on the label close-ups, a little miniature blur on the road, gentle elsewhere. */
+/** Bokeh aperture per shot: gentle on the hero, shallowest over the packing close-up, deeper on the road, soft at the counter. */
 export function focusForShot(progress: number): { aperture: number; maxBlur: number } {
-  const keys = [0.0007, 0.0017, 0.0019, 0.0009, 0.0011], index = Math.max(0, Math.min(keys.length - 2, Math.floor(progress)));
+  const keys = [0.0009, 0.0014, 0.002, 0.0008, 0.0013], index = Math.max(0, Math.min(keys.length - 2, Math.floor(progress)));
   const t = Math.max(0, Math.min(1, progress - index)), aperture = keys[index] + (keys[index + 1] - keys[index]) * t;
   return { aperture, maxBlur: 0.009 };
 }
