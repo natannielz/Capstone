@@ -125,7 +125,15 @@
 .intro p { max-width: 46ch; margin-top: 18px; color: var(--ink-muted); }
 .inlineLink { display: inline-flex; align-items: center; min-height: 44px; margin-top: 14px; color: var(--ink); font-weight: 650; text-decoration: underline; text-decoration-thickness: 1.5px; text-underline-offset: 6px; }
 .inlineLink:hover { color: var(--marker); }
-.catalog, .access, .film { width: 100%; max-width: 1240px; margin: 0 auto; }
+.catalog, .access, .film, .benefits { width: 100%; max-width: 1240px; margin: 0 auto; }
+.benefits h2 { max-width: 20ch; font-size: clamp(30px, 3.4vw, 46px); font-weight: 740; line-height: 1.05; letter-spacing: -0.032em; text-wrap: balance; }
+.benefits ul { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; margin: 36px 0 0; padding: 0; list-style: none; border-top: 2px solid var(--ink); }
+.benefits li { padding: 26px clamp(16px, 2.4vw, 32px) 28px 0; border-bottom: 1px solid var(--rule); }
+.benefits li:not(:nth-child(3n + 1)) { padding-left: clamp(16px, 2.4vw, 32px); border-left: 1px solid var(--rule); }
+.benefits h3 { font-size: 19px; font-weight: 720; letter-spacing: -0.012em; }
+.benefits p { max-width: 36ch; margin-top: 8px; color: var(--ink-muted); }
+.film :global(.film-note) { margin-top: 10px; font-size: 14px; }
+@media (max-width: 900px) { .benefits ul { grid-template-columns: minmax(0, 1fr); } .benefits li, .benefits li:not(:nth-child(3n + 1)) { padding: 20px 0; border-left: 0; } }
 .film { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 8fr); gap: clamp(28px, 5vw, 80px); align-items: center; }
 .film h2 { max-width: 14ch; font-size: clamp(30px, 3.4vw, 46px); font-weight: 740; line-height: 1.05; letter-spacing: -0.032em; text-wrap: balance; }
 .film p { max-width: 40ch; margin-top: 18px; color: var(--ink-muted); }

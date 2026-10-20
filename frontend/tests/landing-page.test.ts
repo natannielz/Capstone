@@ -55,11 +55,21 @@ test("the catalog section is an honest example table drawn from the catalog", ()
   assert.match(html, /Isi katalog mengikuti akun organisasi Anda/);
 });
 
-test("the full release offers the story as a 24-second film that plays only when asked; the pilot does not", () => {
+test("the full release offers the story as a film that plays only when asked and makes no promise of timing; the pilot does not", () => {
   const html = render(false);
-  assert.match(html, /<h2[^>]*id="judul-film"[^>]*>Satu kardus, 24 detik\.<\/h2>/);
+  assert.match(html, /<h2[^>]*id="judul-film"[^>]*>Lihat satu permintaan berjalan\.<\/h2>/);
+  assert.match(html, /Lama setiap langkah mengikuti jadwal peninjauan toko dan pengiriman/);
+  assert.doesNotMatch(html, /24 detik/, "the film's length is not presented as the process time");
   assert.match(html, /<video[^>]*controls[^>]*preload="none"[^>]*poster="\/media\/satu-kardus-poster\.jpg"[^>]*aria-describedby="isi-film"/);
   assert.match(html, /<source src="\/media\/satu-kardus\.webm" type="video\/webm"\/>/);
   assert.doesNotMatch(html, /<video[^>]*autoplay/i, "nothing plays by itself on the page");
   assert.doesNotMatch(render(true), /judul-film/);
+});
+
+test("benefits state what the system does, and the pilot claims only what the pilot offers", () => {
+  const full = render(false), pilot = render(true);
+  assert.equal([...full.matchAll(/<section[^>]*id="manfaat"[\s\S]*?<\/section>/g)].length, 1);
+  for (const title of ["Jumlah selalu per kemasan", "Satu nomor sampai tagihan", "Tagihan sesuai barang diterima", "Diperiksa orang yang berbeda"]) assert.match(full, new RegExp(title));
+  assert.doesNotMatch(pilot, /Tagihan sesuai barang diterima|Satu nomor sampai tagihan/, "the pilot has no shipping or billing");
+  assert.match(pilot, /Jumlah selalu per kemasan/);
 });
