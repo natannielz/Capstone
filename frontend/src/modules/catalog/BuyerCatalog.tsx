@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowRight, ArrowUpRight, ClipboardList, PackageOpen, Search, ShieldCheck } from 'lucide-react';
+import { ArrowRight, ArrowUpRight, ClipboardList, LayoutGrid, List, PackageOpen, Search, ShieldCheck } from 'lucide-react';
 import { Art } from '../../components/art';
 import { PilotSiteHeader, PilotSiteFooter } from '../../components/pilot-site-chrome';
 import { createAccessGateway } from '../administration/access-client';
@@ -10,7 +10,7 @@ import { AccessFailure } from '../administration/workflow';
 import { createIdentityGateway } from '../identity/identity-client';
 import { IdentityFailure, sessionTiming, type IdentitySession } from '../identity/identity-workflow';
 import { CatalogReadGate } from './catalog-editor-state';
-import { buyerCurrentCode, createBuyerCatalogGateway, type BuyerVariant } from './catalog-buyer-client';
+import { buyerCurrentCode, createBuyerCatalogGateway, type BuyerCategoryCount, type BuyerVariant } from './catalog-buyer-client';
 import { CatalogBuyerPhoto } from './CatalogBuyerPhoto';
 import { catalogHistoryUrl, normalizeCatalogHistorySearch, readCatalogHistoryQuery, type CatalogHistoryQuery } from './catalog-history';
 import shared from '../administration/access.module.css';
@@ -56,7 +56,8 @@ export function BuyerCatalog({ publicId, returnPath = '/catalog/browse', request
   const [gateway] = useState(() => createBuyerCatalogGateway()), [listGate] = useState(() => new CatalogReadGate()), [detailGate] = useState(() => new CatalogReadGate());
   const [account, setAccount] = useState<Account | null>(null), [items, setItems] = useState<BuyerVariant[]>([]), [total, setTotal] = useState('0');
   const [search, setSearch] = useState(''), [catalogQuery, setCatalogQuery] = useState<CatalogHistoryQuery | null>(null), [revision, setRevision] = useState(0);
-  const query = catalogQuery?.search ?? '', offset = catalogQuery?.offset ?? 0;
+  const query = catalogQuery?.search ?? '', offset = catalogQuery?.offset ?? 0, category = catalogQuery?.category, sort = catalogQuery?.sort;
+  const [categories, setCategories] = useState<BuyerCategoryCount[]>([]), [layout, setLayout] = useState<'grid' | 'list'>('grid');
   const [busy, setBusy] = useState(true), [detailBusy, setDetailBusy] = useState<string | null>(null), [selected, setSelected] = useState<BuyerVariant | null>(null);
   const [error, setError] = useState<unknown>(null), [notice, setNotice] = useState(''), [elapsed, setElapsed] = useState(0);
   const dialog = useRef<HTMLDialogElement>(null), alive = useRef(false), opener = useRef<HTMLButtonElement | null>(null);
@@ -64,7 +65,8 @@ export function BuyerCatalog({ publicId, returnPath = '/catalog/browse', request
   const current = useCallback(() => alive.current && account !== null && !sessionTiming(account.session, performance.now() - account.observedAt).expired, [account]);
   const refresh = useCallback(() => { detailGate.cancel(); setSelected(null); setDetailBusy(null); setRevision(value => value + 1); }, [detailGate]);
   const changeCatalogQuery = useCallback((next: CatalogHistoryQuery) => {
-    if (appliedQuery.current?.search === next.search && appliedQuery.current.offset === next.offset) return;
+    const applied = appliedQuery.current;
+    if (applied?.search === next.search && applied.offset === next.offset && applied.category === next.category && applied.sort === next.sort) return;
     appliedQuery.current = next;
     listGate.cancel(); detailGate.cancel();
     setCatalogQuery(next); setSearch(next.search);
@@ -92,25 +94,25 @@ export function BuyerCatalog({ publicId, returnPath = '/catalog/browse', request
   }, [publicId, returnPath, changeCatalogQuery]);
   useEffect(() => {
     if (publicId === undefined && catalogQuery === null) return;
-    const request = listGate.begin('session', publicId ?? query + ':' + offset); let active = true;
+    const request = listGate.begin('session', publicId ?? [query, offset, category ?? '', sort ?? ''].join(':')); let active = true;
     void Promise.resolve().then(async () => {
-      if (!active) return; setBusy(true); setItems([]); setAccount(null); setSelected(null); setError(null); setNotice(''); setTotal('0');
+      if (!active) return; setBusy(true); setItems([]); setCategories([]); setAccount(null); setSelected(null); setError(null); setNotice(''); setTotal('0');
       try {
         const session = await identity.session(request.signal), observedAt = performance.now(); if (!request.current()) return;
         if (!session.authenticated || !session.account) throw new IdentityFailure(401, 'unauthenticated');
         const scope = await access.current(); if (!request.current()) return;
         if (scope.userId !== session.account.userId) throw new AccessFailure(409, 'actor_changed');
-        const page = publicId === undefined ? await gateway.query(scope.userId, query, offset, request.signal) : null;
+        const page = publicId === undefined ? await gateway.query(scope.userId, query, offset, request.signal, { category, sort }) : null;
         const variant = publicId === undefined ? null : await gateway.variant(scope.userId, publicId, request.signal); if (!request.current()) return;
         if (sessionTiming(session, performance.now() - observedAt).expired) throw new IdentityFailure(401, 'session_expired');
         setAccount({ actorId: scope.userId, name: session.account.displayName ?? 'Akun Anda', actions: scope.allowedActions, session, observedAt });
-        setElapsed(performance.now() - observedAt); setItems(page?.items ?? []); setTotal(page?.total ?? '0'); setSelected(variant);
+        setElapsed(performance.now() - observedAt); setItems(page?.items ?? []); setTotal(page?.total ?? '0'); setCategories(page?.categories ?? []); setSelected(variant);
         if (publicId !== undefined && variant === null) setNotice('Kemasan ini belum tersedia untuk akun Anda. Kembali ke katalog untuk memeriksa pilihan yang tersedia.');
       } catch (failure) { if (request.current()) setError(failure); }
       finally { if (request.current()) setBusy(false); }
     });
     return () => { active = false; listGate.cancel(); detailGate.cancel(); };
-  }, [identity, access, gateway, listGate, detailGate, query, offset, revision, publicId, catalogQuery]);
+  }, [identity, access, gateway, listGate, detailGate, query, offset, category, sort, revision, publicId, catalogQuery]);
   const expired = account !== null && sessionTiming(account.session, elapsed).expired;
   useEffect(() => {
     if (publicId === undefined && selected && !expired) dialog.current?.showModal(); else dialog.current?.close();
@@ -137,6 +139,14 @@ export function BuyerCatalog({ publicId, returnPath = '/catalog/browse', request
     if (reload) setSearch(next.search);
     if (reload) refresh();
   }
+  function at(change: Partial<CatalogHistoryQuery>): CatalogHistoryQuery {
+    const merged = { search: query, offset: 0, category, sort, ...change }, next: CatalogHistoryQuery = { search: merged.search, offset: merged.offset };
+    if (merged.category) next.category = merged.category;
+    if (merged.sort) next.sort = merged.sort;
+    return next;
+  }
+  const categoryName = (code: string) => categories.find(item => item.code === code)?.name ?? code;
+  const everything = categories.reduce((sum, item) => sum + item.count, 0), filtered = query !== '' || category !== undefined;
   const needsSignIn = error instanceof IdentityFailure && error.status === 401;
   return <div className={styles.storefront}>{requestOnly && <><a className={styles.skip} href="#catalog-main">Langsung ke katalog</a><PilotSiteHeader active="catalog" /></>}
     <main id="catalog-main" tabIndex={-1} className={`${shared.page} ${styles.page}`}>
@@ -151,27 +161,39 @@ export function BuyerCatalog({ publicId, returnPath = '/catalog/browse', request
       <p className={styles.availability}>Harga, stok, dan pemenuhan dikonfirmasi petugas. Permintaan yang diterima belum menjadi pemesanan dengan harga mengikat, reservasi stok, pembayaran, atau invoice.</p>
     </> : <header className={shared.header}><div><Link className={shared.brand} href="/identity/account">Unit Toko</Link><h1>{publicId === undefined ? 'Katalog kemasan' : 'Rincian kemasan'}</h1>
     <p>Periksa isi, satuan, dan harga setiap kemasan sebelum menyusun pesanan.</p></div><nav className={shared.actions} aria-label="Navigasi belanja">{publicId !== undefined && <Link className={shared.secondary} href={returnPath}>Katalog kemasan</Link>}<Link className={shared.secondary} href="/ordering/drafts">Draf pesanan</Link><Link className={shared.secondary} href="/identity/account">Akun saya</Link></nav></header>}
-    {publicId === undefined ? <section className={styles.toolbar} aria-label="Pencarian katalog"><form className={styles.search} onSubmit={event => { event.preventDefault(); navigateCatalog({ search: normalizeCatalogHistorySearch(search), offset: 0 }, true); }}>
+    {publicId === undefined ? <section className={styles.toolbar} aria-label="Pencarian katalog"><form className={styles.search} onSubmit={event => { event.preventDefault(); navigateCatalog(at({ search: normalizeCatalogHistorySearch(search) }), true); }}>
       <label>Cari kode atau kemasan<input value={search} placeholder="Nama barang, kode, atau jenis kemasan" maxLength={128} disabled={busy || detailBusy !== null || !account} onChange={event => setSearch(event.target.value)} /></label><button className={shared.primary} disabled={busy || detailBusy !== null || !account}><Search size={17} aria-hidden="true" /> Cari</button></form>
-      <button className={shared.secondary} disabled={busy || detailBusy !== null} onClick={refresh}>Muat kembali katalog</button></section> : <div className={styles.detailToolbar}><Link href={returnPath}>Kembali ke katalog</Link><button className={shared.secondary} disabled={busy} onClick={refresh}>Muat kembali kemasan</button></div>}
+      <div className={styles.browseControls}><label className={styles.order}>Urutkan<select value={sort ?? 'added'} disabled={busy || detailBusy !== null || !account}
+        onChange={event => navigateCatalog(at({ sort: event.target.value === 'name' ? 'name' : undefined }))}><option value="added">Terbaru ditambahkan</option><option value="name">Nama A–Z</option></select></label>
+        <div className={styles.layoutToggle} role="group" aria-label="Tampilan daftar">{([['grid', 'Kisi', LayoutGrid], ['list', 'Daftar', List]] as const).map(([value, label, Icon]) =>
+          <button key={value} type="button" aria-pressed={layout === value} onClick={() => setLayout(value)}><Icon size={16} aria-hidden="true" />{label}</button>)}</div>
+        <button className={shared.secondary} disabled={busy || detailBusy !== null} onClick={refresh}>Muat kembali katalog</button></div></section> : <div className={styles.detailToolbar}><Link href={returnPath}>Kembali ke katalog</Link><button className={shared.secondary} disabled={busy} onClick={refresh}>Muat kembali kemasan</button></div>}
     {error !== null && <div role={needsSignIn ? 'status' : 'alert'} className={styles.accessState}><div className={styles.stateIcon}><ShieldCheck size={27} strokeWidth={1.5} aria-hidden="true" /></div><div><h2>{needsSignIn ? 'Katalog khusus untuk akun Anda.' : 'Katalog belum dapat ditampilkan.'}</h2><p>{needsSignIn ? 'Masuk dengan akun yang telah disetujui untuk melihat pilihan kemasan dan mengajukan kebutuhan cabang Anda.' : message(error)}</p>{!needsSignIn && <p className={styles.stateHint}>Daftar barang akan tampil setelah layanan tersedia dan akses akun Anda terverifikasi.</p>}<Link className={styles.stateAction} href={'/identity/login?returnPath=' + encodeURIComponent(returnPath)}>Masuk atau periksa akun <ArrowRight size={17} aria-hidden="true" /></Link></div></div>}
     {expired && <p role="alert" className={shared.alert}>Sesi telah berakhir. Masuk kembali untuk membuka katalog.</p>}
     {(expired || !account && !busy && error === null) && <Link className={styles.stateAction} href={'/identity/login?returnPath=' + encodeURIComponent(returnPath)}>Masuk atau periksa akun <ArrowRight size={17} aria-hidden="true" /></Link>}
     {notice && <p role="status">{notice}</p>}
     {publicId !== undefined ? <section className={styles.packagePage} aria-busy={busy} aria-label="Rincian kemasan">{busy ? <p role="status">Memuat kemasan untuk akun Anda…</p> : account && !expired && selected && <PackageReview item={selected} account={account} isCurrent={current} requestOnly={requestOnly} />}</section>
       : <section aria-busy={busy} aria-label="Kemasan yang tersedia">{busy ? <div className={styles.loading}><p role="status">Memuat katalog untuk akun Anda…</p><div className={styles.skeletonGrid} aria-hidden="true"><span /><span /><span /></div></div> : account && !expired && <>
-      <p className={shared.help}>{account.name} · {formatNumber(BigInt(total))} kemasan dalam katalog</p>
-      {items.length === 0 ? <div className={styles.empty}><PackageOpen size={36} strokeWidth={1.25} aria-hidden="true" /><h3>Belum ada kemasan yang sesuai.</h3><p>Ubah pencarian atau periksa kembali nanti.</p></div> : <ul className={styles.grid}>{items.map(item => <li className={styles.card} key={item.skuId}>
+      {categories.length > 0 && <div className={styles.chips} role="group" aria-label="Kategori">
+        <button type="button" aria-pressed={category === undefined} disabled={detailBusy !== null} onClick={() => navigateCatalog(at({ category: undefined }))}>Semua<span>{formatNumber(everything)}</span></button>
+        {categories.map(item => <button key={item.code} type="button" aria-pressed={category === item.code} disabled={detailBusy !== null}
+          onClick={() => navigateCatalog(at({ category: item.code }))}>{item.name}<span>{formatNumber(item.count)}</span></button>)}</div>}
+      <p className={shared.help} role="status">{account.name} · {formatNumber(BigInt(total))} kemasan{category ? ' di ' + categoryName(category) : ' dalam katalog'}{query ? ' untuk “' + query + '”' : ''}</p>
+      {items.length === 0 ? <div className={styles.empty}><PackageOpen size={36} strokeWidth={1.25} aria-hidden="true" />{filtered ? <><h3>Tidak ada kemasan yang cocok.</h3>
+        <p>{query ? 'Tidak ada hasil untuk “' + query + '”' : 'Kategori ini belum berisi kemasan'}{category ? ' di ' + categoryName(category) : ''}. Coba kata lain atau lihat semua kategori.</p>
+        <button type="button" className={shared.secondary} disabled={detailBusy !== null} onClick={() => navigateCatalog({ search: '', offset: 0 }, true)}>Hapus pencarian dan filter</button></>
+        : <><h3>Belum ada kemasan di katalog Anda.</h3><p>Kemasan akan tampil setelah toko menerbitkannya untuk akun Anda.</p></>}</div>
+        : <ul className={layout === 'list' ? `${styles.grid} ${styles.list}` : styles.grid}>{items.map(item => <li className={styles.card} key={item.skuId}>
         {requestOnly ? <div className={styles.photoPlaceholder}><PackageOpen size={48} strokeWidth={1} aria-hidden="true" /><p>Foto belum tersedia</p></div> : <CatalogBuyerPhoto actorId={account.actorId} item={item} isCurrent={current}/>}
-        <span className={styles.category}>{item.categoryCode}</span><h2>{item.familyName}</h2><BuyerCodeLabel item={item} /><h3>{item.definition.packageLabel}</h3>
+        <span className={styles.category}>{categoryName(item.categoryCode)}</span><h2>{item.familyName}</h2><BuyerCodeLabel item={item} /><h3>{item.definition.packageLabel}</h3>
         <p className={styles.contents}>{formatNumber(item.definition.baseUnitsPerPackage)} <span>{item.definition.baseUnitCode} per kemasan</span></p>
         {!requestOnly && <p className={styles.price}>{price(item.currentPrice)}<span> per {item.definition.packageLabel}</span></p>}
         <p className={shared.help}>Minimum {item.definition.minimumOrderPackages}; kelipatan {item.definition.orderIncrementPackages} kemasan</p>
         <div className={styles.cardActions}><button className={shared.primary} aria-label={'Rincian ' + buyerCurrentCode(item) + ' ' + item.definition.packageLabel} disabled={detailBusy !== null} onClick={event => void details(item, event.currentTarget)}>{detailBusy === item.skuId ? 'Memuat…' : 'Periksa kemasan'}</button>
           <Link className={styles.packageLink} href={'/shop/' + item.publicId} aria-label={'Halaman ' + buyerCurrentCode(item) + ' ' + item.definition.packageLabel}>Buka halaman kemasan</Link></div>
       </li>)}</ul>}
-      <nav className={styles.pagination} aria-label="Halaman katalog"><button className={shared.secondary} disabled={offset === 0 || detailBusy !== null} onClick={() => navigateCatalog({ search: query, offset: Math.max(0, offset - 25) })}>Sebelumnya</button>
-        <span>Halaman {offset / 25 + 1}</span><button className={shared.secondary} disabled={offset >= 10000 || BigInt(offset + items.length) >= BigInt(total) || items.length === 0 || detailBusy !== null} onClick={() => navigateCatalog({ search: query, offset: offset + 25 })}>Berikutnya</button></nav>
+      <nav className={styles.pagination} aria-label="Halaman katalog"><button className={shared.secondary} disabled={offset === 0 || detailBusy !== null} onClick={() => navigateCatalog(at({ offset: Math.max(0, offset - 25) }))}>Sebelumnya</button>
+        <span>Halaman {offset / 25 + 1}</span><button className={shared.secondary} disabled={offset >= 10000 || BigInt(offset + items.length) >= BigInt(total) || items.length === 0 || detailBusy !== null} onClick={() => navigateCatalog(at({ offset: offset + 25 }))}>Berikutnya</button></nav>
     </>}</section>}
     {publicId === undefined && <dialog ref={dialog} className={styles.dialog} aria-labelledby="buyer-package-title" onCancel={event => { event.preventDefault(); close(); }}>
       {selected && !expired && <><div className={styles.dialogHeader}><p className={styles.code}>{buyerCurrentCode(selected)}</p><button className={shared.secondary} onClick={close}>Tutup rincian</button></div>

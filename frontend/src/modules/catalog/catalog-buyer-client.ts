@@ -3,6 +3,23 @@ import { AccessFailure } from '../administration/workflow';
 import { catalogText } from './catalog-editor-state';
 import { catalogDescription, parseCatalogDefinition } from './catalog-workflow';
 import { parsePrice, priceId } from './catalog-price-workflow';
+import { normalizeCatalogCategory } from './catalog-history';
+
+/** One category chip from the server: visible packages matching the current search in that category. */
+export type BuyerCategoryCount = { code: string; name: string; count: number };
+export type BuyerCatalogBrowse = { category?: string; sort?: 'name' };
+function parseCategories(value: unknown): BuyerCategoryCount[] {
+  // Servers before category browsing send no chips; anything else must be a bounded list of distinct, positive counts.
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || value.length > 200) return invalid();
+  const result = value.map(entry => {
+    const row = record(entry), code = text(row.code, 64), count = priceId(row.count);
+    if (normalizeCatalogCategory(code) !== code || !Number.isSafeInteger(Number(count)) || Number(count) < 1) return invalid();
+    const name = text(row.name, 160); if (!name.trim()) return invalid();
+    return { code, name, count: Number(count) };
+  });
+  return new Set(result.map(item => item.code)).size === result.length ? result : invalid();
+}
 
 const invalid = (): never => { throw new AccessFailure(502, 'buyer_catalog_response_invalid'); };
 function record(value: unknown): Record<string, unknown> {
@@ -63,18 +80,22 @@ function data<T>(result: { data?: T; error?: unknown; response: Response }): T {
 }
 export function createBuyerCatalogGateway(client: ReturnType<typeof createUnitTokoClient> = createUnitTokoClient()) {
   return {
-    async query(actorId: string, search = '', offset = 0, signal?: AbortSignal) {
+    async query(actorId: string, search = '', offset = 0, signal?: AbortSignal, browse: BuyerCatalogBrowse = {}) {
       if (!Number.isSafeInteger(offset) || offset < 0 || offset > 10000 || search.length > 128) throw new AccessFailure(400, 'catalog_query_invalid');
+      const category = browse.category === undefined ? undefined : normalizeCatalogCategory(browse.category);
+      if (browse.category !== undefined && category === undefined || browse.sort !== undefined && browse.sort !== 'name') throw new AccessFailure(400, 'catalog_query_invalid');
       const row = record(data(await client.POST('/api/v1/catalog/variants/query', {
-        body: { search: search.trim(), offset, limit: 25 }, params: { header: { 'X-Expected-Actor-Id': priceId(actorId) } }, signal,
+        body: { search: search.trim(), offset, limit: 25, ...(category ? { category } : {}), ...(browse.sort ? { sort: browse.sort } : {}) },
+        params: { header: { 'X-Expected-Actor-Id': priceId(actorId) } }, signal,
       })));
       const total = row.total === '0' ? '0' : priceId(row.total);
       if (!Array.isArray(row.items) || row.items.length > 25) return invalid();
       const items = row.items.map(parseBuyerVariant);
       if (items.some(item => item.buyerIdentity === null)) return invalid();
+      // The added order is ascending SKU id; alphabetical pages follow names, so only distinctness applies there.
       if (BigInt(total) < BigInt(items.length) || new Set(items.map(item => item.skuId)).size !== items.length ||
-        items.some((item, index) => index > 0 && BigInt(item.skuId) <= BigInt(items[index - 1].skuId))) return invalid();
-      return { total, items };
+        !browse.sort && items.some((item, index) => index > 0 && BigInt(item.skuId) <= BigInt(items[index - 1].skuId))) return invalid();
+      return { total, items, categories: parseCategories(row.categories) };
     },
     async variant(actorId: string, id: string, signal?: AbortSignal) {
       const row = data(await client.POST('/api/v1/catalog/variants/{publicId}/query', {

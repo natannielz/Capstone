@@ -98,3 +98,15 @@ test('native list history restores search and page without rewriting another rou
     assert.equal(/actorId|session|private|skuId|priceId|__NA|__PRIVATE_NEXTJS_INTERNALS_TREE/.test(JSON.stringify(entry)), false);
   }
 });
+
+test('catalog history keeps one category chip and the name order in the URL and drops anything malformed', () => {
+  assert.deepEqual(readCatalogHistoryQuery('?kategori=pantry&urut=nama&page=2'), { search: '', offset: 25, category: 'PANTRY', sort: 'name' });
+  assert.equal(catalogHistoryUrl('/shop', { search: 'teh', offset: 25, category: 'PANTRY', sort: 'name' }), '/shop?q=teh&kategori=PANTRY&urut=nama&page=2');
+  assert.equal(catalogHistoryUrl('/shop', { search: '', offset: 0, category: 'bad code', sort: 'price' as 'name' }), '/shop');
+  for (const raw of ['?kategori=', '?kategori=a%20b', '?kategori=PANTRY&kategori=ATK', '?kategori=' + 'A'.repeat(65), '?kategori=%C3%85', '?urut=harga', '?urut=nama&urut=nama', '?urut=NAMA']) {
+    assert.deepEqual(readCatalogHistoryQuery(raw), { search: '', offset: 0 }, raw);
+  }
+  const query = { search: 'Teh', offset: 50, category: 'SNACK-RAPAT', sort: 'name' as const };
+  const url = new URL(catalogHistoryUrl('/catalog/browse', query), 'https://unit-toko.test');
+  assert.deepEqual(readCatalogHistoryQuery(url.search), query);
+});

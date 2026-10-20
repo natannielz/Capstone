@@ -90,7 +90,7 @@ public sealed record CatalogPublicationSaveDto([property: JsonRequired] LongId[]
 }
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 [JsonNumberHandling(JsonNumberHandling.Strict)]
-public sealed record CatalogVariantQueryDto(int Offset = 0, int Limit = 25, string? Search = null);
+public sealed record CatalogVariantQueryDto(int Offset = 0, int Limit = 25, string? Search = null, string? Category = null, string? Sort = null);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record CatalogVariantReadDto;
 

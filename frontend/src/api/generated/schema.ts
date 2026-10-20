@@ -12715,6 +12715,11 @@ export interface components {
         CatalogBulkSkuQueryDto: {
             codes: null | string[];
         };
+        CatalogBuyerCategoryCountDto: {
+            code: string;
+            count: string;
+            name: string;
+        };
         CatalogBuyerCodeDto: {
             code: string;
             identifierId: components["schemas"]["LongId"];
@@ -12757,6 +12762,7 @@ export interface components {
             skuId: components["schemas"]["LongId"];
         };
         CatalogBuyerVariantPageDto: {
+            categories: components["schemas"]["CatalogBuyerCategoryCountDto"][];
             items: components["schemas"]["CatalogBuyerVariantDto"][];
             total: string;
         };
@@ -13285,6 +13291,7 @@ export interface components {
             purpose: string;
         };
         CatalogVariantQueryDto: {
+            category?: null | string;
             /**
              * Format: int32
              * @default 25
@@ -13296,6 +13303,7 @@ export interface components {
              */
             offset: number;
             search?: null | string;
+            sort?: null | string;
         };
         CatalogVariantReadDto: Record<string, never>;
         CsrfTokenResponse: {
