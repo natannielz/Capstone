@@ -60,3 +60,21 @@ Hosting, Auth0 tenant, domain and TLS, keys, real master data, real Surat Jalan 
 - G1: the story now plays in a real shop (stocked shelving, a window with a view, its light as a pool and shafts with dust, warm floor, atmospheric haze) and a dressed branch office; time-of-day light; a film grade on the cinematic tier. The 24-second film is rendered locally and free (`frontend/scripts/render-landing-film.mjs`, HyperFrames-style frame seeking with motion blur, browser WebCodecs, built-in WebM writer) and appears as "Satu kardus, 24 detik." plus the no-WebGL fallback. Commits aa12de5, 062f78f, 131736d.
 - G2.1: one workspace frame around every staff page (bcfd59a, 419de08). G2.2 and G2.3 open.
 - G5: transaction read memo; stock decision 13.3 s to 6.8 s, proposal 11.6 s to 6.2 s; regression batch running (no memo-caused failures so far; historical-replay tests found and retired).
+
+**20 October, night**
+- Read memo committed (2ab797e). Regression so far: 540 passed (Integrity, Accounting, Catalog, first 151 Inventory). Still to run on an idle machine: the rest of Inventory and Mongo, then Procurement, Ordering and Fulfillment.
+- Product photos are live in the local demo (4d831d6). The real path is ClamAV 1.5.4 on loopback, the pinned decoder, the private store, then association. All 200 photos of the first demo pass. A requester reads a photo in about 0.5 s, and buyer cards now load photos only as they come into view.
+- Production bug found and fixed (9b2a872): every private-original read lease compared its tick-precision deadline with the millisecond copy Mongo stores, so on a real clock every read and pin failed with `evidence_read_lease_expired`. The tests used millisecond-aligned clocks and missed it. A new test covers it.
+- Local pilot test project builds again (6b5c8ea).
+- Found, not yet fixed (G4): invoice-based fixtures (`InvoiceData` in `InvoiceTests.cs`, and on top of it payment-evidence read, payment supplement and refund settlement) issue invoices without a recorded release. Release has been mandatory since bf7634b, so these fail during setup. They need to move onto `InvoiceReleaseTestData`.
+  - Detail: every invoice now needs an `invoiceReleaseBindings` row (approved release or migration anchor), and the legacy `InvoiceService` constructor with `FixtureAdmission` never writes one.
+  - Eight test classes use `InvoiceData`. The evidence batch on 20 October: 31 passed, 15 failed, all of the 15 on this cause.
+- G2.2, first part (a01ae0f): forty workspaces share one state when a page cannot open, and it names the real reason: sign in again, outside the account's role, or could not load. Previously a signed-in person without the role was told to sign in again. Frontend suite 1264/1264.
+- G7 scoped: orderable stock needs the full genuine chain, including a supplier invoice match with native OCR before valuation. That is multi-day work, so it waits for the owner's call.
+
+### G7. A demo where an order can really be placed (new)
+The demo has catalog, prices and photos, but no buyer addresses, spending or commercial policy, and no stock. Checkout therefore honestly answers "Pengajuan belum tersedia". Stock can only come from the genuine procurement chain, because opening stock is not a workflow. The pilot will seed it through the real services, using two internal operator identities that cannot sign in; the four demo accounts keep their current access.
+1. Branch legal-billing and delivery addresses, a spending policy and a commercial policy for the shop, each via maker/checker.
+2. Stock for a first set of products through procurement request, purchase order, receiving, inspection (with evidence photos), stock receipt, valuation, quality acceptance, stock-source setup and stock release.
+3. Then the order flow itself: acceptance, shipment preparation and dispatch by `petugas`, followed by invoice release and payment.
+4. Check: a requester submits an order in the browser, and `petugas` sees it and dispatches it.
