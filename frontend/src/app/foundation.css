@@ -75,6 +75,11 @@ button:disabled{cursor:not-allowed}
 .workspace-palette li span{font-size:13px;color:var(--muted-foreground)}
 .workspace-palette li[aria-selected="true"]{background:var(--secondary);color:var(--secondary-foreground)}
 .workspace-palette-empty{color:var(--muted-foreground)}
+/* In the narrow top bar the search is an icon button, so the open page's name keeps the room. */
+.workspace-topbar .workspace-palette-button{flex-shrink:0;width:44px;height:44px;padding:0;justify-content:center}
+.workspace-topbar .workspace-palette-button span,.workspace-topbar .workspace-palette-button kbd{display:none}
+.workspace-topbar .workspace-palette-button svg{width:18px;height:18px}
+.workspace-topbar-current{flex:1;min-width:0}
 .workspace-sidebar-foot{display:grid;gap:10px;margin-top:auto;padding-top:16px;border-top:1px solid var(--border)}
 .workspace-viewer{display:grid;gap:2px;margin:0;padding:0 12px;font-size:14px;font-weight:650;color:var(--foreground);overflow-wrap:anywhere}
 .workspace-viewer span{font-size:12px;font-weight:500;color:var(--muted-foreground)}
