@@ -33,7 +33,7 @@ public static class PilotBootstrap
             throw new InvalidOperationException("Pilot database belongs to a different private launcher state. Restore matching state; do not reset it.");
         var clock = new SystemClock();
         await new CollectionMigrations(database, clock).ApplyAsync(ct);
-        if (marker["phase"] == "complete") { await PilotCatalog.ExpandAsync(database, client, secrets, markers, PilotBoundary.Profile, ct); return; }
+        if (marker["phase"] == "complete") { await GrowGrantsAsync(database, secrets, ct); await PilotCatalog.ExpandAsync(database, client, secrets, markers, PilotBoundary.Profile, ct); return; }
         var unit = new MongoUnitOfWork(client);
         var at = marker["createdAt"].ToUniversalTime();
         if (marker["phase"] == "created")
@@ -125,6 +125,25 @@ public static class PilotBootstrap
         await PilotCatalog.ExpandAsync(database, client, secrets, markers, PilotBoundary.Profile, ct);
     }
 
+    /// <summary>Permissions added to the full demo after an installation was set up reach its existing grants once. Only the
+    /// permission list grows: the account's grant version stays, so the pilot's own seeding actors keep working.</summary>
+    private static async Task GrowGrantsAsync(IMongoDatabase database, PilotSecrets secrets, CancellationToken ct)
+    {
+        if (PilotBoundary.Profile != "full") return;
+        var grants = database.GetCollection<BsonDocument>("authorizationGrants");
+        foreach (var account in secrets.Accounts)
+        {
+            var grant = await grants.Find(new BsonDocument("_id", account.Id)).SingleOrDefaultAsync(ct);
+            if (grant is null) continue;
+            var held = grant["permissions"].AsBsonArray.Select(value => value.AsString).ToHashSet(StringComparer.Ordinal);
+            var missing = PermissionsFor(account.Id).Where(permission => !held.Contains(permission)).ToArray();
+            if (missing.Length == 0) continue;
+            await grants.UpdateOneAsync(new BsonDocument { { "_id", account.Id }, { "permissions", grant["permissions"] } },
+                Builders<BsonDocument>.Update.AddToSetEach("permissions", missing), cancellationToken: ct);
+            Console.WriteLine("Akses ditambahkan untuk " + account.Name + ": " + string.Join(", ", missing));
+        }
+    }
+
     public static string[] PermissionsFor(long accountId) => PilotBoundary.Profile == "full" ? FullPermissionsFor(accountId) : accountId < 2000
         ? [Permissions.CatalogRead, "order.request.read", "order.request.submit", Permissions.BranchPic]
         : accountId == 2001 ? [Permissions.CatalogRead, Permissions.CatalogManage] : [Permissions.CatalogRead];
@@ -137,8 +156,8 @@ public static class PilotBootstrap
         : accountId == 2001
             ? [Permissions.CatalogRead, Permissions.CatalogManage, Permissions.PricingManage, Permissions.OrderRead, Permissions.OrderAccept,
                 Permissions.InvoiceRead, Permissions.PaymentReviewRead, Permissions.ShipmentRead, Permissions.ShipmentPrepare, Permissions.ShipmentDispatch,
-                Permissions.ShipmentAssign, Permissions.StockRead, Permissions.CaseRead, Permissions.BankReceiptRead]
-            : [Permissions.CatalogRead, Permissions.PricingApprove];
+                Permissions.ShipmentAssign, Permissions.StockRead, Permissions.CaseRead, Permissions.BankReceiptRead, Permissions.CatalogPublicPropose]
+            : [Permissions.CatalogRead, Permissions.PricingApprove, Permissions.CatalogPublicApprove];
     private static BsonDocument Scope(long accountId) => accountId < 2000
         ? new BsonDocument { { "kind", "buyingBranch" }, { "organizationId", 10L }, { "branchId", accountId == 1001 ? 11L : 12L } }
         : new BsonDocument { { "kind", "fulfillmentShop" }, { "organizationId", 100L }, { "shopId", 101L }, { "channelId", 103L } };
