@@ -137,13 +137,33 @@ public sealed class SyntheticOidcProvider(PilotSecrets secrets, RSA signingKey) 
         var message = error is null ? "" : $"<p role=alert>{WebUtility.HtmlEncode(error)}</p>";
         return context.Response.WriteAsync($$$"""
             <!doctype html><html lang="id"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Masuk pilot lokal · SINTETIS</title>
-            <style>body{font:16px system-ui;background:#f2f6f7;color:#1d3640;margin:0}main{max-width:28rem;margin:4rem auto;padding:1.5rem;background:white;border:1px solid #b6c8ca;border-radius:12px}label{display:block;margin:1rem 0}input,button{display:block;box-sizing:border-box;width:100%;font:inherit;padding:.75rem;margin-top:.35rem}button{background:#087f8c;color:white;border:0;border-radius:6px}a{color:#075967}strong{color:#8b4100}@media(max-width:520px){main{margin:1rem}}</style>
-            <main><h1>Masuk pilot lokal</h1><p><strong>SINTETIS — bukan akun atau MFA Auth0 nyata.</strong></p><p>Gunakan akun dari berkas privat ACCOUNTS-PRIVATE.txt di folder pilot. Data tetap tersimpan setelah aplikasi ditutup.</p>{{{message}}}
-            <form method="post" action="/local-login"><input type="hidden" name="transaction" value="{{{id}}}"><input type="hidden" name="csrf" value="{{{csrf}}}">
+            <style>
+            *{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;grid-template-columns:minmax(300px,5fr) minmax(0,7fr);font:16px/1.6 "Segoe UI",system-ui,sans-serif;color:#0e3438;background:#f1f4ef}
+            aside{display:flex;flex-direction:column;gap:22px;padding:28px clamp(20px,4vw,56px);background:#dce4e1}
+            .brand{display:flex;align-items:center;gap:12px;color:#0e4448;font-weight:700;font-size:22px;letter-spacing:-.02em;text-decoration:none}.brand svg{width:40px;height:40px}
+            aside h2{max-width:16ch;margin:24px 0 0;font-size:clamp(26px,2.6vw,36px);line-height:1.1;letter-spacing:-.03em}aside p{max-width:38ch;margin:0;color:#35504f}
+            .note{margin-top:auto;padding:14px 16px;border-left:4px solid #b4461a;background:#fbefe8;color:#6b2a10;font-size:14px}
+            main{display:grid;place-items:center;padding:40px clamp(16px,5vw,72px)}
+            .sheet{width:min(100%,460px);background:#fff;border-radius:8px;box-shadow:0 1px 0 rgb(14 52 56/.08),0 24px 48px -30px rgb(14 52 56/.45)}
+            .bar{margin:0;padding:10px 24px;border-radius:8px 8px 0 0;background:#0e3438;color:#fff;font-size:14px;font-weight:700}
+            form{display:grid;gap:16px;padding:28px 28px 8px}h1{margin:0 0 4px;font-size:30px;line-height:1.1;letter-spacing:-.03em}
+            label{display:grid;gap:6px;font-size:14px;font-weight:650}input{width:100%;min-height:48px;padding:10px 12px;border:1.5px solid #8fa39f;border-radius:8px;font:inherit;color:#0e3438;background:#fff}
+            input:focus-visible,button:focus-visible,a:focus-visible{outline:3px solid #b4461a;outline-offset:2px}
+            button{min-height:52px;margin-top:6px;border:0;border-radius:10px;background:#0e4448;color:#fff;font:700 16px "Segoe UI",system-ui,sans-serif;cursor:pointer}button:hover{background:#0b3a3d}
+            .back{display:block;padding:12px 28px 24px;color:#0e4448;font-weight:600}.hint{margin:0;color:#48605f;font-size:14px}
+            [role=alert]{margin:0 28px;padding:12px 14px;border-left:4px solid #b4461a;background:#fcefe9;color:#7a2c12}
+            @media(max-width:900px){body{grid-template-columns:1fr}aside{order:2}.note{margin-top:0}}
+            </style>
+            <aside><a class="brand" href="{{{PilotBoundary.Origin}}}/"><svg viewBox="0 0 64 64" aria-hidden="true"><path d="M8 8h48v8H36v24h-8V16H8V8Zm0 18h8v12c0 8 6 14 16 14s16-6 16-14V26h8v12c0 13-10 22-24 22S8 51 8 38V26Z" fill="currentColor"/></svg>Unit Toko</a>
+            <h2>Layanan akun pilot lokal.</h2><p>Di produksi, langkah ini dilakukan oleh layanan akun resmi organisasi Anda dengan verifikasi dua langkah.</p>
+            <p class="note"><strong>SINTETIS</strong> — bukan akun atau MFA Auth0 nyata. Gunakan akun dari berkas privat ACCOUNTS-PRIVATE.txt di folder pilot; data tetap tersimpan setelah aplikasi ditutup.</p></aside>
+            <main><section class="sheet" aria-labelledby="judul"><p class="bar">Akun organisasi</p>{{{message}}}
+            <form method="post" action="/local-login"><h1 id="judul">Masuk ke Unit Toko</h1><p class="hint">Masukkan nama masuk, kata sandi, dan kode faktor simulasi dari berkas akun pilot.</p>
+            <input type="hidden" name="transaction" value="{{{id}}}"><input type="hidden" name="csrf" value="{{{csrf}}}">
             <label>Nama masuk<input name="username" autocomplete="username" required maxlength="40" autofocus></label>
             <label>Kata sandi lokal<input name="password" type="password" autocomplete="current-password" required maxlength="128"></label>
             <label>Kode faktor SIMULASI<input name="factor" type="password" inputmode="numeric" autocomplete="off" required minlength="6" maxlength="6"></label>
-            <button>Masuk dengan identitas sintetis</button></form><p><a href="{{{PilotBoundary.Origin}}}/identity/login">Kembali</a></p></main></html>
+            <button>Masuk</button></form><a class="back" href="{{{PilotBoundary.Origin}}}/identity/login">Kembali ke halaman masuk</a></section></main></html>
             """);
     }
 }
