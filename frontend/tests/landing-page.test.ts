@@ -54,3 +54,12 @@ test("the catalog section is an honest example table drawn from the catalog", ()
   assert.match(html, /Kertas HVS A4 70 gsm/); assert.match(html, /Rim isi 500 lembar/);
   assert.match(html, /Isi katalog mengikuti akun organisasi Anda/);
 });
+
+test("the full release offers the story as a 24-second film that plays only when asked; the pilot does not", () => {
+  const html = render(false);
+  assert.match(html, /<h2[^>]*id="judul-film"[^>]*>Satu kardus, 24 detik\.<\/h2>/);
+  assert.match(html, /<video[^>]*controls[^>]*preload="none"[^>]*poster="\/media\/satu-kardus-poster\.jpg"[^>]*aria-describedby="isi-film"/);
+  assert.match(html, /<source src="\/media\/satu-kardus\.webm" type="video\/webm"\/>/);
+  assert.doesNotMatch(html, /<video[^>]*autoplay/i, "nothing plays by itself on the page");
+  assert.doesNotMatch(render(true), /judul-film/);
+});

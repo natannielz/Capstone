@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Brand } from "../brand";
 import { PilotSiteFooter } from "../pilot-site-chrome";
+import { KemasanFilm } from "./KemasanFilm";
 import { KemasanJourney, type JourneyAct } from "./KemasanJourney";
 import styles from "./landing.module.css";
 
@@ -66,6 +67,7 @@ export function Landing({ pilot }: { pilot: boolean }) {
       </section>
 
       <div className={styles.paper}>
+        {!pilot && <KemasanFilm className={styles.film} />}
         <section className={styles.catalog} id="kebutuhan" aria-labelledby="judul-katalog">
           <div className={styles.intro}>
             <h2 id="judul-katalog">Yang biasa diajukan cabang.</h2>
