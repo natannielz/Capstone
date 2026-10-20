@@ -20,6 +20,21 @@ const FULL_ACTS: JourneyAct[] = [SUBMITTED,
     text: "PIC cabang mencatat barang yang diterima, termasuk bila ada selisih. Tagihan terbit sesuai barang yang benar-benar diterima." },
 ];
 
+/** What changes for a branch and for the shop, stated as things the system actually does. */
+const BENEFITS_FULL = [
+  { title: "Jumlah selalu per kemasan", body: "Minimum dan kelipatan tiap barang sudah tercatat, jadi permintaan tidak pernah memecah dus, rim, atau karton." },
+  { title: "Satu nomor sampai tagihan", body: "Permintaan, peninjauan, pengiriman, tanda terima, dan tagihan memakai nomor yang sama, sehingga mudah ditelusuri." },
+  { title: "Status tanpa menelepon", body: "Cabang melihat sendiri apakah permintaannya ditinjau, disiapkan, dikirim, atau diterima, beserta alasan bila ada yang ditolak." },
+  { title: "Tagihan sesuai barang diterima", body: "Tagihan terbit dari barang yang benar-benar diterima cabang, termasuk bila ada selisih saat penerimaan." },
+  { title: "Diperiksa orang yang berbeda", body: "Pengajuan, persetujuan belanja, dan penerbitan tagihan diperiksa oleh petugas yang berbeda, dan setiap keputusan tercatat." },
+  { title: "Katalog sesuai akun", body: "Setiap cabang dan akun usaha melihat barang, kemasan, dan harga yang memang dibuka untuk organisasinya." },
+] as const;
+const BENEFITS_PILOT = [
+  { title: "Jumlah selalu per kemasan", body: "Minimum dan kelipatan tiap barang sudah tercatat, jadi permintaan tidak pernah memecah dus, rim, atau karton." },
+  { title: "Status tanpa menelepon", body: "Cabang melihat sendiri apakah permintaannya sudah ditinjau, beserta alasan bila ada yang ditolak." },
+  { title: "Katalog sesuai akun", body: "Setiap cabang melihat barang dan kemasan yang memang dibuka untuk organisasinya." },
+] as const;
+
 const CATALOG = [
   { category: "Air dan minuman", item: "Air mineral 600 ml", pack: "Karton isi 24 botol", minimum: "1 karton" },
   { category: "Pantry kopi dan teh", item: "Kopi bubuk sachet", pack: "Dus isi 24 sachet", minimum: "1 dus" },
@@ -81,6 +96,11 @@ export function Landing({ pilot }: { pilot: boolean }) {
               <th scope="row"><span className={styles.category}>{row.category}</span>{row.item}</th><td>{row.pack}</td><td>{row.minimum}</td>
             </tr>)}</tbody>
           </table>
+        </section>
+
+        <section className={styles.benefits} id="manfaat" aria-labelledby="judul-manfaat">
+          <h2 id="judul-manfaat">{pilot ? "Permintaan cabang yang jelas sejak awal." : "Lebih sedikit telepon, lebih sedikit salah hitung."}</h2>
+          <ul>{(pilot ? BENEFITS_PILOT : BENEFITS_FULL).map(item => <li key={item.title}><h3>{item.title}</h3><p>{item.body}</p></li>)}</ul>
         </section>
 
         <section className={styles.access} id="akses" aria-labelledby="judul-akses">

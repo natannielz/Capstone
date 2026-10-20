@@ -57,17 +57,25 @@ export function kraft(width: number, height: number, tone: string, seed: number)
   return { color: color.element, height: bump.element, context: color.context };
 }
 
-/** Tangent-space normal map from a grey height canvas (Sobel), for MeshStandardMaterial.normalMap. */
-export function normalFromHeight(source: HTMLCanvasElement, strength: number) {
-  const { width, height } = source, input = source.getContext("2d", { willReadFrequently: true })!.getImageData(0, 0, width, height).data;
-  const out = canvas(width, height), image = out.context.createImageData(width, height), data = image.data;
-  const at = (x: number, y: number) => input[(((y + height) % height) * width + ((x + width) % width)) * 4] / 255;
-  for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
-    const dx = (at(x + 1, y - 1) + 2 * at(x + 1, y) + at(x + 1, y + 1)) - (at(x - 1, y - 1) + 2 * at(x - 1, y) + at(x - 1, y + 1));
-    const dy = (at(x - 1, y + 1) + 2 * at(x, y + 1) + at(x + 1, y + 1)) - (at(x - 1, y - 1) + 2 * at(x, y - 1) + at(x + 1, y - 1));
-    let nx = -dx * strength, ny = -dy * strength; const nz = 1, length = Math.hypot(nx, ny, nz); nx /= length; ny /= length;
-    const index = (y * width + x) * 4;
-    data[index] = (nx * 0.5 + 0.5) * 255; data[index + 1] = (ny * 0.5 + 0.5) * 255; data[index + 2] = (nz / length * 0.5 + 0.5) * 255; data[index + 3] = 255;
+/**
+ * Tangent-space normal map from a grey height canvas (Sobel), for MeshStandardMaterial.normalMap. The liner's relief is
+ * soft, so it is computed at half resolution (a quarter of the work); the strength is scaled so the slopes stay the same.
+ */
+export function normalFromHeight(source: HTMLCanvasElement, strength: number, scale = 0.5) {
+  const width = Math.max(1, Math.round(source.width * scale)), height = Math.max(1, Math.round(source.height * scale));
+  const out = canvas(width, height); out.context.drawImage(source, 0, 0, width, height);
+  const pixels = out.context.getImageData(0, 0, width, height).data, relief = new Float32Array(width * height);
+  for (let index = 0; index < relief.length; index++) relief[index] = pixels[index * 4] / 255;
+  const image = out.context.createImageData(width, height), data = image.data, k = strength * scale;
+  for (let y = 0; y < height; y++) {
+    const up = ((y - 1 + height) % height) * width, row = y * width, down = ((y + 1) % height) * width;
+    for (let x = 0; x < width; x++) {
+      const left = x === 0 ? width - 1 : x - 1, right = x === width - 1 ? 0 : x + 1;
+      const dx = (relief[up + right] + 2 * relief[row + right] + relief[down + right]) - (relief[up + left] + 2 * relief[row + left] + relief[down + left]);
+      const dy = (relief[down + left] + 2 * relief[down + x] + relief[down + right]) - (relief[up + left] + 2 * relief[up + x] + relief[up + right]);
+      const nx = -dx * k, ny = -dy * k, inverse = 1 / Math.sqrt(nx * nx + ny * ny + 1), index = (row + x) * 4;
+      data[index] = (nx * inverse * 0.5 + 0.5) * 255; data[index + 1] = (ny * inverse * 0.5 + 0.5) * 255; data[index + 2] = (inverse * 0.5 + 0.5) * 255; data[index + 3] = 255;
+    }
   }
   out.context.putImageData(image, 0, 0); return out.element;
 }

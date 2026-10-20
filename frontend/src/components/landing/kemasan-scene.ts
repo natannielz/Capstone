@@ -48,6 +48,8 @@ export async function createKemasanScene(canvas: HTMLCanvasElement, options: Kem
   // AgX keeps highlights on paper and plastic soft and the kraft's warmth intact, like a product photograph.
   renderer.outputColorSpace = SRGBColorSpace; renderer.toneMapping = AgXToneMapping; renderer.toneMappingExposure = 1.05;
   renderer.shadowMap.enabled = true; renderer.shadowMap.type = PCFSoftShadowMap;
+  // Shader error checks make every program link synchronously (the page freezes while the GPU compiles); production skips them.
+  renderer.debug.checkShaderErrors = process.env.NODE_ENV !== "production";
 
   // Studio light: a procedural room for reflections, a large warm key that casts soft shadows, a cool fill and a rim.
   const scene = new Scene(), pmrem = new PMREMGenerator(renderer), room = new RoomEnvironment();
@@ -72,6 +74,8 @@ export async function createKemasanScene(canvas: HTMLCanvasElement, options: Kem
   const morningKey = new Color("#FFE4C2"), dayKey = new Color("#FFF5EA"), officeKey = new Color("#EAF1FF");
 
   let pipeline: Pipeline = createPipeline(renderer, scene, overlay, camera, tier);
+  // Compile every material in parallel before the first frame, so the first render does not stall on shader linking.
+  try { await renderer.compileAsync(scene, camera); await renderer.compileAsync(overlay, camera); } catch { /* compiled on first use instead */ }
   const frameTimes: number[] = [];
   let clock = 0, targetProgress = 0, shownProgress = 0, yaw = 0, targetYaw = 0, aspect = 1, coffee = clampCoffee(options.coffee);
   let shadowsDirty = true;
