@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { AccessFailure } from '../src/modules/administration/workflow';
-import { acceptCurrent, cartRows } from '../src/modules/ordering/CartWorkspace';
+import { cartRows } from '../src/modules/ordering/CartWorkspace';
+import { acceptCurrent } from '../src/modules/ordering/cart-model';
 import { addToCartMessage } from '../src/modules/ordering/AddToCartPanel';
 import { CartOutcomeUnknown } from '../src/modules/ordering/cart-client';
 import type { BuyerVariant } from '../src/modules/catalog/catalog-buyer-client';
