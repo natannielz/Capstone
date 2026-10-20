@@ -19,7 +19,7 @@ function cartonCount(text: string): number {
  * The hero and the story share one pinned stage. Scrolling moves the scene through the acts: the hero copy's bottom
  * edge and each act card's centre are anchors, and an act is reached when its anchor rises to the focus line.
  */
-export function KemasanJourney({ acts, children }: { acts: readonly JourneyAct[]; children: ReactNode }) {
+export function KemasanJourney({ acts, children, closing }: { acts: readonly JourneyAct[]; children: ReactNode; closing: ReactNode }) {
   const [value, setValue] = useState(String(DEMO_MINIMUM)), [current, setCurrent] = useState(0);
   const cartons = cartonCount(value);
   const sceneRef = useRef<KemasanScene | null>(null), copyRef = useRef<HTMLDivElement>(null), actRefs = useRef<(HTMLLIElement | null)[]>([]);
@@ -66,5 +66,6 @@ export function KemasanJourney({ acts, children }: { acts: readonly JourneyAct[]
         </div>
       </li>)}
     </ol>
+    <div className={styles.storyEnd} data-story-end="">{closing}</div>
   </div>;
 }
