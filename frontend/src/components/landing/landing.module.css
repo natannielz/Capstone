@@ -125,7 +125,13 @@
 .intro p { max-width: 46ch; margin-top: 18px; color: var(--ink-muted); }
 .inlineLink { display: inline-flex; align-items: center; min-height: 44px; margin-top: 14px; color: var(--ink); font-weight: 650; text-decoration: underline; text-decoration-thickness: 1.5px; text-underline-offset: 6px; }
 .inlineLink:hover { color: var(--marker); }
-.catalog, .access { width: 100%; max-width: 1240px; margin: 0 auto; }
+.catalog, .access, .film { width: 100%; max-width: 1240px; margin: 0 auto; }
+.film { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 8fr); gap: clamp(28px, 5vw, 80px); align-items: center; }
+.film h2 { max-width: 14ch; font-size: clamp(30px, 3.4vw, 46px); font-weight: 740; line-height: 1.05; letter-spacing: -0.032em; text-wrap: balance; }
+.film p { max-width: 40ch; margin-top: 18px; color: var(--ink-muted); }
+.film video { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; border-radius: 14px; background: var(--stage); box-shadow: 0 30px 60px -36px rgb(14 52 56 / 0.55); }
+@media (max-width: 900px) { .film { grid-template-columns: minmax(0, 1fr); } }
+.stageFilm { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .catalog { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: clamp(32px, 6vw, 96px); align-items: start; }
 
 .packing { width: 100%; border-collapse: collapse; font-size: 16px; }

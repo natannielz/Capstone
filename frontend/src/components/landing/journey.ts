@@ -199,3 +199,18 @@ export function progressFromAnchors(anchors: readonly number[], focus: number): 
 export function activeAct(progress: number): number {
   return Math.max(0, Math.round(progress));
 }
+
+/** The film cut of the story: holds on each act and eased moves between them, 24 seconds in all. */
+export const FILM_SECONDS = 24;
+const FILM_KEYS: readonly (readonly [seconds: number, progress: number])[] = [
+  [0, 0], [3.2, 0], [5.6, 1], [6.4, 1], [11.2, 2], [12.4, 2], [17.2, 3], [18, 3], [21.6, 4], [24, 4],
+];
+/** Story progress at `seconds` into the film: piecewise, eased in and out between keys, clamped at both ends. */
+export function filmProgress(seconds: number): number {
+  if (seconds <= 0) return 0;
+  for (let index = 1; index < FILM_KEYS.length; index++) {
+    const [t1, p1] = FILM_KEYS[index], [t0, p0] = FILM_KEYS[index - 1];
+    if (seconds <= t1) return p0 + (p1 - p0) * smooth((seconds - t0) / (t1 - t0));
+  }
+  return FILM_KEYS[FILM_KEYS.length - 1][1];
+}

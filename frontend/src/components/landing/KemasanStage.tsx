@@ -15,11 +15,13 @@ const cssFont = (name: string, fallback: string) => getComputedStyle(document.do
  */
 export function KemasanStage({ coffee, acts, onScene }: { coffee: number; acts: number; onScene: (scene: KemasanScene | null) => void }) {
   const canvasRef = useRef<HTMLCanvasElement>(null), sceneRef = useRef<KemasanScene | null>(null), coffeeRef = useRef(coffee), onSceneRef = useRef(onScene);
-  const [ready, setReady] = useState(false);
+  const [ready, setReady] = useState(false), [loop, setLoop] = useState(false);
   useEffect(() => { onSceneRef.current = onScene; }, [onScene]);
   useEffect(() => {
-    const canvas = canvasRef.current, mode = sceneMode(readSceneEnvironment(window));
-    if (!canvas || mode === "none") return;
+    const environment = readSceneEnvironment(window), canvas = canvasRef.current, mode = sceneMode(environment);
+    // Without WebGL the full story still plays as a silent loop of the film, unless the visitor asks for less motion or data.
+    if (mode === "none") { if (acts === 4 && !environment.reducedMotion && !environment.saveData) queueMicrotask(() => setLoop(true)); return; }
+    if (!canvas) return;
     let cancelled = false, scene: KemasanScene | null = null;
     void import("./kemasan-scene").then(async ({ createKemasanScene }) => {
       if (cancelled) return;
@@ -33,6 +35,7 @@ export function KemasanStage({ coffee, acts, onScene }: { coffee: number; acts: 
   useEffect(() => { coffeeRef.current = coffee; sceneRef.current?.setCoffee(coffee); }, [coffee]);
   return <div className={styles.stage} aria-hidden="true" data-stage="kemasan" data-ready={ready || undefined}>
     <KemasanPoster className={styles.poster} />
+    {loop && <video className={styles.stageFilm} src="/media/satu-kardus.webm" poster="/media/satu-kardus-poster.jpg" autoPlay muted loop playsInline />}
     <canvas ref={canvasRef} className={styles.canvas} />
   </div>;
 }

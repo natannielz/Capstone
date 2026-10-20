@@ -63,7 +63,8 @@ function moteTexture() {
  * Everything sits well behind the subject, so the shallow focus turns it into an out-of-focus, believable room.
  */
 export function buildShopSet(kit: Kit) {
-  const m = kit.material, group = new Group(), random = seeded(17), owned: { dispose(): void }[] = [];
+  const m = kit.material, group = new Group(), stock = new Group(), random = seeded(17), owned: { dispose(): void }[] = [];
+  group.add(stock);
   const steel = new MeshStandardMaterial({ color: "#6F7C7C", metalness: 0.6, roughness: 0.45 });
   const board = new MeshStandardMaterial({ color: "#B9A27E", roughness: 0.8 });
   owned.push(steel, board);
@@ -72,10 +73,10 @@ export function buildShopSet(kit: Kit) {
   for (const [x0, x1] of [[-3.3, -0.1], [0.3, 3.5]]) {
     const width = x1 - x0, depth = 0.62, z = -5.3;
     for (const x of [x0, x1]) for (const dz of [-depth / 2, depth / 2]) {
-      const upright = shaded(new Mesh(kit.track(new BoxGeometry(0.05, 2.5, 0.05)), steel)); upright.position.set(x, 1.25, z + dz); group.add(upright);
+      const upright = shaded(new Mesh(kit.track(new BoxGeometry(0.05, 2.5, 0.05)), steel)); upright.position.set(x, 1.25, z + dz); stock.add(upright);
     }
     for (const y of [0.14, 0.86, 1.58, 2.3]) {
-      const shelf = shaded(new Mesh(kit.track(new BoxGeometry(width, 0.035, depth)), board)); shelf.position.set((x0 + x1) / 2, y, z); group.add(shelf);
+      const shelf = shaded(new Mesh(kit.track(new BoxGeometry(width, 0.035, depth)), board)); shelf.position.set((x0 + x1) / 2, y, z); stock.add(shelf);
       // Stock on each shelf: printed cartons and plain shipping boxes of catalog sizes, packed with small gaps.
       let x = x0 + 0.08;
       while (y < 2.2) {
@@ -84,14 +85,14 @@ export function buildShopSet(kit: Kit) {
         if (x + w > x1 - 0.06) break;
         const carton = shaded(new Mesh(kit.track(new BoxGeometry(w, Math.min(h, 0.62), d)), cartons[kind]));
         carton.position.set(x + w / 2, y + 0.018 + Math.min(h, 0.62) / 2, z + (random() - 0.5) * 0.08); carton.rotation.y = (random() - 0.5) * 0.08;
-        group.add(carton); x += w + 0.03 + random() * 0.05;
+        stock.add(carton); x += w + 0.03 + random() * 0.05;
       }
     }
   }
   // A few shipping boxes waiting on the floor beside the shelves.
-  for (const [x, z, w, h, d, ry] of [[4.3, -4.7, 0.7, 0.5, 0.55, 0.18], [4.5, -4.65, 0.5, 0.36, 0.42, -0.1], [5.2, -4.8, 0.62, 0.44, 0.5, 0.32]] as const) {
+  for (const [x, z, w, h, d, ry] of [[-4.3, -4.9, 0.7, 0.5, 0.55, 0.18], [-4.1, -4.85, 0.5, 0.36, 0.42, -0.1], [-5.2, -4.6, 0.62, 0.44, 0.5, 0.32]] as const) {
     const stack = shaded(new Mesh(kit.track(new BoxGeometry(w, h, d)), m.plain));
-    stack.position.set(x, h / 2 + (x === 4.5 ? 0.5 : 0), z); stack.rotation.y = ry; group.add(stack);
+    stack.position.set(x, h / 2 + (x === -4.1 ? 0.5 : 0), z); stack.rotation.y = ry; stock.add(stack);
   }
   // The window: a bright pane in a teal frame, high on the back wall to the left.
   const view = viewTexture(true);
@@ -146,6 +147,8 @@ export function buildShopSet(kit: Kit) {
     group,
     /** The set never takes part in the contact shadows under the box. */
     excluded: [group] as Object3D[],
+    /** Shelving and stock, hidden once the story has left the shop (the room's wall and window stay). */
+    stock,
     /** `light` 0..1 fades the window light (full in the shop, gone on the road); `air` 0..1 shows the shafts and dust,
      * which only read from the low hero angles; `time` in seconds moves the dust. */
     update(light: number, air: number, time: number) {

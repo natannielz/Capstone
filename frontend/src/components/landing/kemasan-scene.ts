@@ -3,7 +3,7 @@ import {
   SRGBColorSpace, Scene, Vector3, WebGLRenderer,
 } from "three";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
-import { BOX, COFFEE_MAXIMUM, COFFEE_MINIMUM, activeAct, storyFrame, storyItems } from "./journey";
+import { BOX, COFFEE_MAXIMUM, COFFEE_MINIMUM, FILM_SECONDS, activeAct, filmProgress, storyFrame, storyItems } from "./journey";
 import { createKit } from "./scene/kit";
 import { buildBox } from "./scene/box";
 import { buildItems } from "./scene/items";
@@ -39,6 +39,8 @@ async function fontsReady(fonts: Fonts) {
 export async function createKemasanScene(canvas: HTMLCanvasElement, options: KemasanSceneOptions): Promise<KemasanScene> {
   await fontsReady(options.fonts);
   const phone = window.matchMedia("(max-width: 900px)").matches;
+  // Film mode (?film): no frame loop; the film renderer asks for each frame with an exact progress and time.
+  const film = new URLSearchParams(window.location.search).has("film");
   const forced = qualityOverride(window.location.search);
   let tier = qualityTier({ phone, cores: navigator.hardwareConcurrency || 4, override: forced });
   const renderer = new WebGLRenderer({ canvas, antialias: tier === "balanced", powerPreference: "high-performance" });
@@ -113,8 +115,8 @@ export async function createKemasanScene(canvas: HTMLCanvasElement, options: Kem
     const morning = 1 - smoothstep(shownProgress, 2.0, 2.45), office = smoothstep(shownProgress, 3.0, 3.4);
     key.color.copy(dayKey).lerp(morningKey, morning).lerp(officeKey, office); key.intensity = 2.8 + 0.5 * morning - 0.2 * office;
     shop.update(morning, 1 - smoothstep(shownProgress, 0.9, 1.2), clock / 1000); pipeline.setTime(clock / 1000);
-    // Each place appears only in its own acts: the shop until the trolley has left it, the branch office once it is near.
-    shop.group.visible = shownProgress < 2.7; dressing.group.visible = shownProgress > 2.2;
+    // The shop is dropped once the camera has turned to the branch (it is behind the camera by then), so it never pops.
+    shop.stock.visible = shownProgress < 2.97;
 
     // Pointer parallax belongs to the hero; it fades out once the story starts. Narrow stages pull the camera back.
     yaw += (targetYaw - yaw) * 0.08; busy ||= Math.abs(targetYaw - yaw) > 0.0005;
@@ -122,8 +124,10 @@ export async function createKemasanScene(canvas: HTMLCanvasElement, options: Kem
     target.set(...frame.camera.target);
     // The hero frames the box left of the request card; a narrow stage has no card beside it, so centre the box.
     const recentre = camera.view?.enabled ? 0 : 1.1 * hero;
-    target.x -= recentre;
-    camera.position.copy(position.set(...frame.camera.position)).add(shift.set(-recentre, 0, 0)).sub(target).multiplyScalar(distance).applyAxisAngle(up, yaw * hero).add(target);
+    // The film has no copy beside the box: lift the hero framing so the box and its packages sit in the middle of the frame.
+    const lift = film ? 0.6 * hero : 0;
+    target.x -= recentre; target.y += lift;
+    camera.position.copy(position.set(...frame.camera.position)).add(shift.set(-recentre, lift, 0)).sub(target).multiplyScalar(distance).applyAxisAngle(up, yaw * hero).add(target);
     // While the hero rests, the camera breathes a little, like a hand-held shot; it settles as soon as the story moves.
     if (floating) { const t = clock / 1000; camera.position.x += Math.sin(t * 0.37) * 0.03 * hero; camera.position.y += Math.sin(t * 0.29 + 1.3) * 0.02 * hero; }
     camera.lookAt(target); camera.updateMatrixWorld();
@@ -165,7 +169,7 @@ export async function createKemasanScene(canvas: HTMLCanvasElement, options: Kem
     const bottle = kit.material.bottle as MeshPhysicalMaterial;
     bottle.transmission = 0; bottle.color.set("#CFE7EC"); bottle.roughness = 0.18; bottle.needsUpdate = true;
   }
-  function invalidate() { if (alive && !frameRequest && onScreen && pageVisible) frameRequest = requestAnimationFrame(frame); }
+  function invalidate() { if (!film && alive && !frameRequest && onScreen && pageVisible) frameRequest = requestAnimationFrame(frame); }
   function pause() { cancelAnimationFrame(frameRequest); frameRequest = 0; last = 0; }
 
   function resize() {
@@ -173,7 +177,7 @@ export async function createKemasanScene(canvas: HTMLCanvasElement, options: Kem
     const width = Math.max(1, host.clientWidth), height = Math.max(1, host.clientHeight);
     renderer.setSize(width, height, false); pipeline.setSize(width, height); aspect = width / height; camera.aspect = aspect;
     // On wide screens the stage runs behind the copy, so the subject is drawn right of centre, in the open space.
-    const focus = window.matchMedia("(min-width: 901px)").matches ? 0.68 : 0.5;
+    const focus = !film && window.matchMedia("(min-width: 901px)").matches ? 0.68 : 0.5;
     if (focus === 0.5) camera.clearViewOffset(); else camera.setViewOffset(width, height, -(focus - 0.5) * width, 0, width, height);
     camera.updateProjectionMatrix(); invalidate();
   }
@@ -189,6 +193,14 @@ export async function createKemasanScene(canvas: HTMLCanvasElement, options: Kem
   canvas.addEventListener("webglcontextlost", lost);
 
   resize();
+  if (film) (window as Window & { __kemasanFilmTimeline?: unknown }).__kemasanFilmTimeline = { FILM_SECONDS, progressAt: filmProgress };
+  if (film) (window as Window & { __kemasanFilm?: unknown }).__kemasanFilm = {
+    /** Renders exactly one film frame: the story at `progress`, idle motion, dust and grain at `seconds`. */
+    frame(progress: number, seconds: number) {
+      resize(); targetProgress = shownProgress = Math.max(0, Math.min(options.acts, progress)); clock = seconds * 1000;
+      update(0); pipeline.render(); return canvas;
+    },
+  };
 
   return {
     setCoffee,

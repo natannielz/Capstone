@@ -1,8 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  ACTS_FULL, ACTS_PILOT, BOX, CAMERA_KEYS, COFFEE_MAXIMUM, COFFEE_MINIMUM, ON_COUNTER, TROLLEY_PICKUP, activeAct, dropWindow, onTrolleyPose, progressFromAnchors,
-  storyFrame, storyItems,
+  ACTS_FULL, ACTS_PILOT, BOX, CAMERA_KEYS, COFFEE_MAXIMUM, COFFEE_MINIMUM, FILM_SECONDS, ON_COUNTER, TROLLEY_PICKUP, activeAct, dropWindow, filmProgress,
+  onTrolleyPose, progressFromAnchors, storyFrame, storyItems,
 } from "../src/components/landing/journey";
 
 // "Satu kardus": the landing story is a pure function of scroll progress (0 = hero, then one unit per act), so every
@@ -99,4 +99,16 @@ test("anchor positions map to story progress and the nearest act", () => {
   assert.equal(progressFromAnchors([-100, 540, 1300], 540), 1, "act 1 card on the focus line");
   assert.equal(progressFromAnchors([-1000, -500, 100], 540), 2, "past the last card");
   assert.equal(activeAct(1.4), 1); assert.equal(activeAct(1.6), 2); assert.equal(activeAct(-1), 0);
+});
+
+// The film cut is a pure function of time too, so the renderer can ask for any frame in any order.
+test("the film holds on every act and moves smoothly and only forward between them", () => {
+  assert.equal(filmProgress(-1), 0); assert.equal(filmProgress(0), 0); assert.equal(filmProgress(FILM_SECONDS), ACTS_FULL); assert.equal(filmProgress(FILM_SECONDS + 5), ACTS_FULL);
+  for (const [seconds, act] of [[2, 0], [6, 1], [11.8, 2], [17.6, 3], [23, 4]] as const) assert.equal(filmProgress(seconds), act, `holds act ${act} at ${seconds} s`);
+  let previous = 0;
+  for (let frame = 1; frame <= FILM_SECONDS * 30; frame++) {
+    const progress = filmProgress(frame / 30);
+    assert.ok(progress >= previous - 1e-12, `never rewinds at frame ${frame}`); assert.ok(progress - previous < 0.06, `no jump at frame ${frame}`);
+    previous = progress;
+  }
 });
