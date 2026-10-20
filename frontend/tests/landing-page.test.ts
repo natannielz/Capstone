@@ -38,6 +38,14 @@ test("the story follows one request; the pilot ends at the review, the full rele
   assert.match(render(true), /data-journey="2"/);
 });
 
+test("the story closes with the next step after the last act", () => {
+  const html = render(true), closing = html.slice(html.indexOf("data-story-end"));
+  assert.match(closing, /<h2[^>]*>Siap mengajukan kebutuhan cabang\?<\/h2>/);
+  assert.match(closing, /<a[^>]*href="\/identity\/login"[^>]*>Masuk ke akun<\/a>/);
+  assert.match(closing, /<a[^>]*href="\/shop"[^>]*>Lihat katalog<\/a>/);
+  assert.ok(html.indexOf("data-story-end") > html.indexOf('data-step="Ditinjau toko"'), "after the last act");
+});
+
 test("the catalog section is an honest example table", () => {
   const html = render(true);
   assert.match(html, /<table[^>]*><caption>Contoh\./, "the caption comes first and says it is an example");

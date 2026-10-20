@@ -40,7 +40,14 @@ export function Landing({ pilot }: { pilot: boolean }) {
     </header>
     <main id="konten" tabIndex={-1} className={styles.main}>
       <section id="layanan" aria-labelledby="judul-beranda">
-        <KemasanJourney acts={pilot ? PILOT_ACTS : FULL_ACTS}>
+        <KemasanJourney acts={pilot ? PILOT_ACTS : FULL_ACTS} closing={<>
+          <h2>Siap mengajukan kebutuhan cabang?</h2>
+          <p>Masuk dengan akun organisasi Anda. Katalog, permintaan, dan riwayatnya menunggu di satu tempat.</p>
+          <div className={styles.actions}>
+            <Link href="/identity/login" className={styles.primary}>Masuk ke akun</Link>
+            <Link href="/shop" className={styles.secondary}>Lihat katalog</Link>
+          </div>
+        </>}>
           <h1 id="judul-beranda">Kebutuhan cabang, dihitung per kemasan.</h1>
           <p>{pilot
             ? "Pilih barang dari katalog akun Anda, tentukan jumlah kemasan, lalu ajukan ke toko. Petugas meninjau setiap permintaan, dan Anda mengikuti hasilnya dari akun yang sama."
