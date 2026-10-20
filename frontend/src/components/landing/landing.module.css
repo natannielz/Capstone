@@ -1,4 +1,4 @@
-/* Landing page. Palette and type: docs/superpowers/plans/2026-10-20-phase-g-legacy-retirement-and-ui-overhaul.md, Task 5. */
+/* Landing page. Palette, type and the "Satu karton" story: docs/superpowers/plans/2026-10-20-phase-g-legacy-retirement-and-ui-overhaul.md, Task 5 and 5b. */
 .page {
   --dock: #0F4C52;
   --dock-deep: #0B3D42;
@@ -8,65 +8,69 @@
   --ink: #12343A;
   --ink-muted: #4A6266;
   --rule: #C9D3CD;
-  --kraft: #C69A62;
   --kraft-text: #E0BE8E;
   --marker: #C2471A;
   --gutter: clamp(16px, 4vw, 56px);
   min-height: 100dvh;
-  background: var(--label);
-  color: var(--ink);
+  background: var(--dock);
+  color: #FFFFFF;
   font: 400 17px/1.6 var(--font-body), system-ui, sans-serif;
 }
 .page :where(h1, h2, h3, p, figure, ol, dl, dd) { margin: 0; }
-.page :where(a, button, input):focus-visible { outline: 3px solid var(--marker); outline-offset: 3px; }
+.page :where(a, button, input):focus-visible { outline: 3px solid var(--kraft-text); outline-offset: 3px; }
 
 .skip { position: fixed; top: 12px; left: 12px; z-index: 50; padding: 12px 18px; border-radius: 8px; background: var(--paper); color: var(--ink); font-weight: 650; transform: translateY(-200%); }
 .skip:focus { transform: none; }
 
-/* Hero: the dock wall. The copy sits left, the pallet stage right, and the label straddles the edge into the page. */
-.hero {
-  position: relative;
-  display: grid;
-  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
-  grid-template-rows: auto minmax(0, 1fr) auto;
-  min-height: min(880px, 100svh);
-  padding: 0 var(--gutter);
-  background:
-    linear-gradient(to bottom, transparent 62%, rgb(0 0 0 / 0.12)),
-    var(--dock);
-  color: #FFFFFF;
-}
-.hero :where(a, button, input):focus-visible { outline-color: var(--kraft-text); }
-.header { grid-column: 1 / -1; display: flex; align-items: center; gap: 28px; padding: 22px 0; position: relative; z-index: 2; }
+.header { position: relative; z-index: 4; display: flex; align-items: center; gap: 28px; padding: 22px var(--gutter); }
 .nav { display: flex; gap: 4px; margin-left: auto; }
 .nav a, .headerSignIn { display: inline-flex; align-items: center; min-height: 44px; padding: 0 14px; border-radius: 8px; color: #FFFFFF; font-size: 15px; font-weight: 550; text-decoration: none; }
 .nav a:hover { background: rgb(255 255 255 / 0.08); }
 .headerSignIn { border: 1.5px solid rgb(255 255 255 / 0.55); padding: 0 18px; }
 .headerSignIn:hover { border-color: #FFFFFF; }
+.main { outline: none; }
 
-.copy { grid-column: 1; grid-row: 2; align-self: center; position: relative; z-index: 2; padding: 32px 0 168px; outline: none; }
-.copy h1 { max-width: 11ch; font-size: clamp(42px, 5.4vw, 84px); font-weight: 760; line-height: 0.98; letter-spacing: -0.042em; text-wrap: balance; }
-.copy p { max-width: 44ch; margin-top: 26px; color: var(--dock-text); font-size: 18px; line-height: 1.65; }
-.actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 28px; margin-top: 36px; }
+/* The journey: hero copy, then the story, on the left; one pinned stage on the right. */
+.journey {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  grid-template-rows: auto auto auto;
+  column-gap: clamp(24px, 4vw, 64px);
+  padding: 0 var(--gutter);
+  background: linear-gradient(to bottom, var(--dock), var(--dock) 85%, var(--dock-deep));
+}
+.copy { grid-column: 1; grid-row: 1; position: relative; z-index: 2; display: flex; flex-direction: column; justify-content: center;
+  min-height: calc(100svh - 92px); padding: 24px 0 120px; }
+.copy h1 { max-width: 11ch; font-size: clamp(42px, 5.4vw, 84px); font-weight: 760; line-height: 0.98; letter-spacing: -0.042em; text-wrap: balance;
+  animation: rise 0.9s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.copy > p:not(.scrollCue) { max-width: 44ch; margin-top: 26px; color: var(--dock-text); font-size: 18px; line-height: 1.65; animation: rise 0.9s 0.12s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 28px; margin-top: 36px; animation: rise 0.9s 0.22s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
 .primary { display: inline-flex; align-items: center; min-height: 52px; padding: 0 26px; border-radius: 10px; background: var(--label); color: var(--dock); font-weight: 700; text-decoration: none; }
 .primary:hover { background: #FFFFFF; }
-.secondary { color: #FFFFFF; font-weight: 600; text-decoration: underline; text-decoration-thickness: 1.5px; text-underline-offset: 7px; min-height: 44px; display: inline-flex; align-items: center; }
+.secondary { display: inline-flex; align-items: center; min-height: 44px; color: #FFFFFF; font-weight: 600; text-decoration: underline; text-decoration-thickness: 1.5px; text-underline-offset: 7px; }
 .secondary:hover { text-decoration-color: var(--kraft-text); }
+.scrollCue { display: flex; align-items: center; gap: 14px; margin-top: 64px; color: var(--dock-text); font-size: 14px; font-weight: 600; }
+.scrollCue span { position: relative; width: 2px; height: 44px; overflow: hidden; background: rgb(181 208 204 / 0.3); border-radius: 2px; }
+.scrollCue span::after { content: ""; position: absolute; left: 0; top: -14px; width: 2px; height: 14px; border-radius: 2px; background: var(--kraft-text); animation: cue 2.2s ease-in-out infinite; }
+@keyframes cue { 0% { transform: translateY(0); } 70%, 100% { transform: translateY(58px); } }
+@keyframes rise { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: none; } }
 
-.stage { grid-column: 2; grid-row: 2 / 4; position: relative; min-height: 540px; margin-left: -14%; margin-right: calc(var(--gutter) * -1); }
+/* The stage runs full bleed behind the copy; the scene draws its subject right of centre, and a soft shade keeps the text clear. */
+.stageColumn { grid-column: 1 / -1; grid-row: 1 / 4; position: relative; z-index: 0; margin: 0 calc(var(--gutter) * -1); }
+.stage { position: sticky; top: 0; height: 100svh; }
+.stage::after { content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(90deg, var(--dock) 0%, var(--dock) 24%, rgb(15 76 82 / 0.72) 36%, rgb(15 76 82 / 0) 54%); }
 .poster, .canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
-.poster { padding: 8% 6% 16%; transition: opacity 0.45s ease; }
+.poster { padding: 10% 4% 18% 44%; transition: opacity 0.45s ease; }
 .canvas { opacity: 0; transition: opacity 0.45s ease; }
 .stage[data-ready] .canvas { opacity: 1; }
 .stage[data-ready] .poster { opacity: 0; }
 
-/* The shipping label: white stock, ink bars, a die-cut corner radius. */
-.label {
-  grid-column: 2; grid-row: 3; justify-self: end; position: relative; z-index: 3;
-  width: min(100%, 452px); margin-bottom: -150px;
-  background: var(--paper); color: var(--ink); border-radius: 6px;
-  box-shadow: 0 1px 0 rgb(18 52 58 / 0.1), 0 22px 44px -22px rgb(4 30 34 / 0.55);
-}
+/* The shipping label rides at the hero's lower edge, over the stage, and scrolls away into the story. */
+.labelSlot { grid-column: 2; grid-row: 1; align-self: end; justify-self: end; position: relative; z-index: 3; width: min(100%, 452px); padding-bottom: 44px; }
+.label { background: var(--paper); color: var(--ink); border-radius: 6px; box-shadow: 0 1px 0 rgb(18 52 58 / 0.1), 0 22px 44px -22px rgb(4 30 34 / 0.6); }
+.label :where(a, button, input):focus-visible { outline-color: var(--marker); }
 .labelTitle { padding: 10px 18px; border-radius: 6px 6px 0 0; background: var(--ink); color: #FFFFFF; font-size: 14px; font-weight: 700; letter-spacing: 0.01em; }
 .labelFields { display: grid; grid-template-columns: 1.3fr 1.2fr 0.8fr; border-bottom: 2px solid var(--ink); }
 .labelFields > div { padding: 12px 18px 14px; }
@@ -83,26 +87,37 @@
 .totalText { margin-top: 4px; color: var(--ink-muted); font-size: 13px; font-weight: 600; }
 .labelNote { padding: 6px 18px 16px; color: var(--ink-muted); font-size: 13px; line-height: 1.5; }
 
-/* Page sections on label paper. */
-.main { display: grid; gap: clamp(72px, 9vw, 128px); max-width: 1240px; margin: 0 auto; padding: 208px var(--gutter) clamp(80px, 10vw, 136px); }
+/* The story: numbered acts that scroll past the pinned stage; the act being read is lit. */
+.storyIntro { grid-column: 1; grid-row: 2; position: relative; z-index: 2; padding: 14svh 0 4svh; }
+.storyIntro h2 { max-width: 14ch; font-size: clamp(32px, 3.6vw, 54px); font-weight: 760; line-height: 1.02; letter-spacing: -0.035em; text-wrap: balance; }
+.storyIntro p { max-width: 40ch; margin-top: 18px; color: var(--dock-text); }
+.acts { grid-column: 1; grid-row: 3; position: relative; z-index: 2; list-style: none; margin: 0; padding: 0 0 26svh; }
+/* Every act keeps full text contrast; the one being read gets a white heading, a lit number and a kraft rule. */
+.act { display: grid; grid-template-columns: 76px minmax(0, 1fr); align-content: center; min-height: 82svh; }
+.actNumber { color: rgb(224 190 142 / 0.38); font-family: var(--font-stencil), var(--font-body), sans-serif; font-size: 54px; line-height: 0.9; transition: color 0.4s ease; }
+.act[data-current] .actNumber { color: var(--kraft-text); }
+.actBody { display: grid; gap: 10px; max-width: 42ch; padding-left: 18px; box-shadow: inset 2px 0 0 rgb(181 208 204 / 0.18); transition: box-shadow 0.4s ease; }
+.act[data-current] .actBody { box-shadow: inset 3px 0 0 var(--kraft-text); }
+.actBody h3 { color: var(--dock-text); transition: color 0.4s ease; }
+.act[data-current] .actBody h3 { color: #FFFFFF; }
+.actTime { color: var(--dock-text); font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.actBody h3 { font-size: clamp(28px, 2.6vw, 38px); /* colour set above */ font-weight: 740; line-height: 1.05; letter-spacing: -0.03em; }
+.actBody p:not(.actTime):not(.actDetail) { color: var(--dock-text); font-size: 18px; line-height: 1.6; }
+.actDetail { justify-self: start; margin-top: 6px; padding: 6px 12px; border: 1.5px solid rgb(181 208 204 / 0.35); border-radius: 4px; color: var(--dock-text);
+  font-family: var(--font-stencil), var(--font-body), sans-serif; font-size: 18px; letter-spacing: 0.02em; transition: color 0.4s ease, border-color 0.4s ease; }
+.act[data-current] .actDetail { border-color: rgb(224 190 142 / 0.7); color: var(--kraft-text); }
+
+/* After the story, the page turns to label paper. */
+.paper { position: relative; display: grid; gap: clamp(72px, 9vw, 128px); padding: clamp(80px, 10vw, 136px) var(--gutter); background: var(--label); color: var(--ink); }
+/* A tear-off perforation, as on a shipping label, where the story hands over to the paper sections. */
+.paper::before { content: ""; position: absolute; top: -7px; left: 0; right: 0; height: 14px; background: radial-gradient(circle at 11px 7px, var(--dock-deep) 5.5px, transparent 6px) 0 0 / 22px 14px repeat-x; }
+.paper :where(a, button, input):focus-visible { outline-color: var(--marker); }
 .intro h2, .access h2 { max-width: 18ch; font-size: clamp(30px, 3.4vw, 46px); font-weight: 740; line-height: 1.05; letter-spacing: -0.032em; text-wrap: balance; }
 .intro p { max-width: 46ch; margin-top: 18px; color: var(--ink-muted); }
 .inlineLink { display: inline-flex; align-items: center; min-height: 44px; margin-top: 14px; color: var(--ink); font-weight: 650; text-decoration: underline; text-decoration-thickness: 1.5px; text-underline-offset: 6px; }
 .inlineLink:hover { color: var(--marker); }
-
-.trail, .catalog { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: clamp(32px, 6vw, 96px); align-items: start; }
-.record { padding: 26px clamp(18px, 3vw, 34px) 10px; border-radius: 6px; background: var(--paper); box-shadow: 0 1px 0 rgb(18 52 58 / 0.08); }
-.record figcaption { padding-bottom: 18px; border-bottom: 2px solid var(--ink); color: var(--ink-muted); font-size: 14px; }
-.record figcaption strong { color: var(--ink); font-weight: 700; }
-.record ol { list-style: none; padding: 8px 0 0; }
-.record li { position: relative; display: grid; grid-template-columns: 112px 1fr; column-gap: 28px; padding: 16px 0 18px; }
-.record li + li { border-top: 1px solid #E2E8E4; }
-.record li::before { content: ""; position: absolute; left: 122px; top: 25px; width: 10px; height: 10px; border-radius: 50%; background: var(--dock); }
-.record li:not(:last-child)::after { content: ""; position: absolute; left: 126px; top: 39px; bottom: -23px; width: 2px; background: #D3DCD7; }
-.record li[data-current]::before { background: var(--paper); box-shadow: inset 0 0 0 2.5px var(--marker); }
-.time { grid-row: 1 / 3; padding-top: 2px; font-variant-numeric: tabular-nums; color: var(--ink-muted); font-size: 14px; font-weight: 600; }
-.status { font-weight: 700; }
-.stepText { margin-top: 2px; color: var(--ink-muted); font-size: 15px; line-height: 1.55; }
+.catalog, .access { width: 100%; max-width: 1240px; margin: 0 auto; }
+.catalog { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: clamp(32px, 6vw, 96px); align-items: start; }
 
 .packing { width: 100%; border-collapse: collapse; font-size: 16px; }
 .packing caption { caption-side: bottom; padding-top: 14px; color: var(--ink-muted); font-size: 14px; text-align: left; }
@@ -124,27 +139,34 @@
   .headerSignIn { margin-left: auto; }
 }
 
+/* Phones and narrow tablets: the stage pins to the top of the screen and the acts scroll beneath it. */
 @media (max-width: 900px) {
-  .hero { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto auto auto; min-height: 0; padding-bottom: 28px; }
-  .copy { grid-row: 2; padding: 20px 0 8px; }
-  .stage { grid-column: 1; grid-row: 3; min-height: 0; height: clamp(280px, 74vw, 520px); margin: 8px calc(var(--gutter) * -1) 0; }
-  .label { grid-column: 1; grid-row: 4; justify-self: stretch; width: auto; margin: -36px 0 0; }
-  .main { padding-top: 72px; }
-  .trail, .catalog { grid-template-columns: minmax(0, 1fr); }
+  .journey { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; }
+  .copy, .stageColumn, .labelSlot, .storyIntro, .acts { grid-column: 1; grid-row: auto; }
+  .copy { min-height: 0; padding: 12px 0 28px; }
+  .scrollCue { display: none; }
+  .stageColumn { position: sticky; top: 0; z-index: 3; height: 56svh; margin: 0 calc(var(--gutter) * -1); background: var(--dock); box-shadow: 0 12px 24px -12px rgb(4 30 34 / 0.6); }
+  .storyIntro, .acts { z-index: 1; }
+  .stage { position: absolute; inset: 0; height: auto; }
+  .stage::after { display: none; }
+  .poster { padding: 6% 6% 10%; }
+  .labelSlot { justify-self: stretch; width: auto; z-index: 1; margin-top: 16px; padding-bottom: 0; }
+  .storyIntro { padding: 56px 0 8px; }
+  .act { grid-template-columns: 48px minmax(0, 1fr); min-height: 42svh; padding: 28px 0; }
+  .acts { padding-bottom: 18svh; }
+  .actNumber { font-size: 36px; }
+  .actBody p:not(.actTime):not(.actDetail) { font-size: 17px; }
+  .catalog { grid-template-columns: minmax(0, 1fr); }
 }
 
 @media (max-width: 560px) {
   .page { font-size: 16px; }
-  .copy p { font-size: 17px; }
+  .copy > p:not(.scrollCue) { font-size: 17px; }
   .labelFields { grid-template-columns: 1fr 1fr; }
   .labelFields > div:nth-child(3) { grid-column: 1 / -1; border-left: 0; border-top: 1.5px solid var(--ink); }
   .labelQuantity { flex-wrap: wrap; }
   .total { width: 100%; justify-items: start; text-align: left; }
   .totalNumber { font-size: 56px; }
-  .record li { grid-template-columns: 1fr; padding-left: 22px; }
-  .record li::before { left: 0; top: 23px; }
-  .record li:not(:last-child)::after { left: 4px; top: 37px; }
-  .time { grid-row: auto; }
   .packing { font-size: 15px; }
   .packing td:last-child { white-space: normal; }
   .doors { grid-template-columns: minmax(0, 1fr); }
@@ -152,5 +174,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .poster, .canvas { transition: none; }
+  .poster, .canvas, .actNumber, .actBody, .actBody h3, .actDetail { transition: none; }
+  .copy h1, .copy > p, .actions { animation: none; }
+  .scrollCue span::after { animation: none; }
 }

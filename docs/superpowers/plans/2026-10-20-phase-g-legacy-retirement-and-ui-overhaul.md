@@ -132,6 +132,26 @@ Text is left-aligned throughout. On phones the stage follows the text and the la
 - *Abstract 3D shapes* were never considered. The object is a corrugated carton with flaps, tape and stencilled markings.
 - *Teal and orange* was checked against the cliché list. It stays because it comes from the client's world (BNI's teal and orange, kraft board, marker pen), and orange appears only on the total and the bottle caps.
 
+#### Task 5b: "Satu karton, dari dok ke cabang" (owner request, 20 October: "much better … award-winning")
+
+**Concept.** The landing becomes one continuous story told by a single pinned 3D scene: the visitor follows one carton from the loading dock to a branch office as they scroll. Each act is a real status from the app, so the scroll teaches the workflow.
+
+| Act | Status (full / pilot) | What the scene does |
+|---|---|---|
+| 0 | Hero | Pallet on the dock; the front carton opens and its bottles rise (existing). The stepper label changes the carton count. |
+| 1 | Diajukan | The flaps close, tape reseals, and a shipping label with the request number (and the chosen count) flies onto the carton. |
+| 2 | Ditinjau toko (pilot: and its result) | A rubber stamp comes down; a marker-orange "DITERIMA" imprint stays on the label. The pilot ends here. |
+| 3 | Disiapkan dan dikirim (full) | A Unit Toko van backs up to the dock, the labelled carton arcs into it, and the van drives the road; the camera follows. |
+| 4 | Diterima dan ditagih (full) | At the branch office the carton slides to the entrance, a check appears, and an invoice sheet rises. |
+
+**World.** A miniature diorama on the dock-teal ground: painted bay marking with a stencil bay number, a road with a dashed kraft line, a low branch building with a generic "KANTOR CABANG" sign (no bank branding), and the van in Unit Toko colours. Fog fades the floor into the page colour, so the world has depth without a hard edge.
+
+**Quality.** Image-based lighting from three's RoomEnvironment (no remote files), neutral tone mapping, soft 2048 shadows on desktop (1024 on phones), glossy clear-coat bottles, corrugation bump on the kraft, and wood grain on the pallet. Everything renders on demand: frames run only while the scroll target or an animation is moving.
+
+**Layout and flow.** The hero and the acts share one pinned stage (right column on desktop, top 56% of the screen on phones). The acts scroll past on the left as numbered cards; the current act is emphasised and shows its WIB time from the example record. The shipping label stays at the hero's lower edge and scrolls away into the story. A quiet scroll cue sits under the hero CTAs. The catalog list and the role section follow on label paper.
+
+**Constraints.** The choreography is a pure function of scroll progress (`journeyFrame`), unit-tested for exact act keyframes, continuity and pilot length. Reduced motion jumps between act frames without tweening. Without WebGL the poster stays and the acts read as text. The canvas stays decorative (aria-hidden); every act is real text.
+
 ### Task 6: Login and core screens
 
 - [x] Login: a two-column layout with the brand panel and a clear sign-in card, showing which account types exist and what to expect next. Error and session states use `OutcomeState`.
