@@ -1,4 +1,6 @@
+using System.Collections.Concurrent;
 using System.Collections.Immutable;
+using System.Runtime.CompilerServices;
 using MongoDB.Bson;
 using MongoDB.Driver;
 using UnitToko.Modules.Identity.Contracts;
@@ -24,7 +26,23 @@ internal sealed class OrganizationProfileRecords(IMongoDatabase database, Purcha
         row["status"] == "active" ? AuthorizationStatus.Active : throw B.Broken(), row["version"].AsInt64);
     internal async Task<BsonDocument> ProfileAsync(IClientSessionHandle tx, long id, CancellationToken ct) =>
         await Rows("organizationProfiles").Find(tx, new BsonDocument { { "_id", id }, { "$and", new BsonArray { LifecycleSchemas.Collections()["organizationProfiles"] } } }).SingleOrDefaultAsync(ct) ?? throw B.Broken();
+    // Within one transaction attempt every read sees the same snapshot, so a successful proof of an immutable approved
+    // profile version, or of a historical source snapshot, cannot change. Repeats reuse the first success; failures are
+    // never cached, and each source capture keeps its own memo so its recorded read set stays complete.
+    private static readonly ConditionalWeakTable<object, ConcurrentDictionary<string, object>> attemptMemo = new();
+    private (object Owner, string Prefix)? Attempt(IClientSessionHandle tx) =>
+        tx.IsInTransaction && tx.WrappedCoreSession.CurrentTransaction is { } current
+            ? ((object?)sourceCapture ?? tx, current.TransactionNumber.ToString(System.Globalization.CultureInfo.InvariantCulture) + ":") : null;
     internal async Task<(BsonDocument Profile, BsonDocument History)> ApprovedProfileAsync(IClientSessionHandle tx, long id, long version, CancellationToken ct) {
+        var attempt = Attempt(tx); var key = attempt is { } scope ? scope.Prefix + "approved:" + id + ":" + version : null;
+        if (key is not null && attemptMemo.TryGetValue(attempt!.Value.Owner, out var memo) && memo.TryGetValue(key, out var hit)) {
+            var (profile, history) = ((BsonDocument, BsonDocument))hit; return (profile.DeepClone().AsBsonDocument, history.DeepClone().AsBsonDocument);
+        }
+        var result = await ApprovedProfileCoreAsync(tx, id, version, ct);
+        if (key is not null) attemptMemo.GetValue(attempt!.Value.Owner, _ => new()).TryAdd(key, (result.Profile.DeepClone().AsBsonDocument, result.History.DeepClone().AsBsonDocument));
+        return result;
+    }
+    private async Task<(BsonDocument Profile, BsonDocument History)> ApprovedProfileCoreAsync(IClientSessionHandle tx, long id, long version, CancellationToken ct) {
         var historyFilter = new BsonDocument { { "operation", "organization.approved" }, { "after.profile._id", id }, { "after.profile.version", version } };
         var histories = await Rows("authorizationHistory").Find(tx, historyFilter).Limit(2).ToListAsync(ct);
         sourceCapture?.Record("authorizationHistory", historyFilter, histories);
@@ -101,6 +119,13 @@ internal sealed class OrganizationProfileRecords(IMongoDatabase database, Purcha
         source.Add("snapshotHash", B.Hash(source)); return source;
     }
     internal async Task HistoricalAsync(IClientSessionHandle tx, BsonDocument source, CancellationToken ct) {
+        Equal(source["snapshotHash"], B.Hash(source));
+        var attempt = Attempt(tx); var key = attempt is { } scope ? scope.Prefix + "historical:" + source["snapshotHash"].ToString() : null;
+        if (key is not null && attemptMemo.TryGetValue(attempt!.Value.Owner, out var memo) && memo.ContainsKey(key)) return;
+        await HistoricalCoreAsync(tx, source, ct);
+        if (key is not null) attemptMemo.GetValue(attempt!.Value.Owner, _ => new()).TryAdd(key, true);
+    }
+    private async Task HistoricalCoreAsync(IClientSessionHandle tx, BsonDocument source, CancellationToken ct) {
         Equal(source["snapshotHash"], B.Hash(source)); var profile = source["profile"].AsBsonDocument;
         var approved = await ApprovedProfileAsync(tx, profile["id"].AsInt64, profile["version"].AsInt64, ct);
         var actual = approved.Profile; var history = approved.History;
