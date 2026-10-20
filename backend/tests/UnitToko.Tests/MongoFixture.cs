@@ -11,6 +11,8 @@ public sealed class MongoFixture : IAsyncLifetime
     public MongoClient Client { get; private set; } = null!;
     // Optional local timing diagnostics: table names and durations only, never command bodies.
     internal Action<string, double>? CommandCompleted { get; set; }
+    /// <summary>Diagnostics: also name the top-level filter fields of finds and the stage names of aggregates.</summary>
+    internal bool CommandShapes { get; set; }
 
     public async Task InitializeAsync()
     {
@@ -40,7 +42,12 @@ public sealed class MongoFixture : IAsyncLifetime
             builder.Subscribe<CommandStartedEvent>(command => {
                 if (CommandCompleted is null) return;
                 var target = command.Command.GetValue(command.CommandName, BsonNull.Value);
-                observed[command.RequestId] = command.CommandName + (target.IsString ? "/" + target.AsString : "");
+                var name = command.CommandName + (target.IsString ? "/" + target.AsString : "");
+                if (CommandShapes && command.Command.TryGetValue("filter", out var filter) && filter.IsBsonDocument)
+                    name += " {" + string.Join(",", filter.AsBsonDocument.Names) + "}";
+                if (CommandShapes && command.Command.TryGetValue("pipeline", out var pipeline) && pipeline.IsBsonArray)
+                    name += " [" + string.Join(",", pipeline.AsBsonArray.Where(stage => stage.IsBsonDocument).Select(stage => stage.AsBsonDocument.Names.FirstOrDefault())) + "]";
+                observed[command.RequestId] = name;
             });
             builder.Subscribe<CommandSucceededEvent>(command => {
                 if (observed.TryRemove(command.RequestId, out var name)) CommandCompleted?.Invoke(name, command.Duration.TotalMilliseconds);

@@ -89,7 +89,8 @@ export async function verifyInvoiceReleaseBrowser({config, maker, user, origin, 
   const source = owner.page.getByRole('region', {name: 'Penerimaan untuk persetujuan invoice', exact: true});
   for (const item of config.selection) {
     const checkbox = source.getByRole('checkbox', {name: new RegExp('^Penerimaan ' + item.receiptId + ' — ')});
-    assert.equal(await checkbox.count(), 1); await checkbox.check();
+    // The receipt list loads after the page frame; wait for it before counting.
+    await checkbox.first().waitFor(); assert.equal(await checkbox.count(), 1); await checkbox.check();
   }
   await owner.page.getByRole('button', {name: 'Periksa sumber penerbitan', exact: true}).click();
   const form = owner.page.getByRole('region', {name: 'Usulan persetujuan invoice', exact: true}); await form.waitFor();
@@ -136,7 +137,7 @@ export async function verifyInvoiceReleaseBrowser({config, maker, user, origin, 
   let finance = watch(await user(config.financeToken)); await open(finance, true);
   const candidates = finance.page.getByRole('region', {name: 'Penerimaan untuk invoice', exact: true});
   for (const item of config.selection) {
-    const select = candidates.getByRole('checkbox', {name: new RegExp('^Bukti penerimaan ' + item.receiptId + '\\b')}); assert.equal(await select.count(), 1); await select.check();
+    const select = candidates.getByRole('checkbox', {name: new RegExp('^Bukti penerimaan ' + item.receiptId + '\\b')}); await select.first().waitFor(); assert.equal(await select.count(), 1); await select.check();
   }
   await field(candidates, 'Alasan penerbitan', 'Synthetic invoice from independently approved received goods');
   await candidates.getByRole('button', {name: 'Tinjau invoice', exact: true}).click();
