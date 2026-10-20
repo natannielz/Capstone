@@ -1,10 +1,11 @@
 'use client';
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Menu } from "lucide-react";
 import { CommandPalette, PaletteButton } from "@/components/workspace-kit/command-palette";
 import { HelpLink } from "@/components/workspace-kit/shell-links";
+import { useWorkspaceFrame } from "@/components/workspace-kit/workspace-frame";
 import { Sheet, SheetContent, SheetDescription, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { NAVIGATION_HREFS, navigationClick, workspaceNavigation, type NavigationId } from "../identity/workspace-navigation";
 import { NavigationList } from "./NavigationList";
@@ -17,6 +18,10 @@ export function AdministrationNavigation({ current, actions, locked = false }: {
   const groups = workspaceNavigation(actions, NAVIGATION_HREFS[current]);
   const [open, setOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  // Inside the shared workspace frame the sidebar already exists; this page only reports a command in flight.
+  const frame = useWorkspaceFrame();
+  useEffect(() => { frame?.setLocked(locked); return () => frame?.setLocked(false); }, [frame, locked]);
+  if (frame) return null;
   const currentLabel = groups.flatMap(group => group.items).find(item => item.current)?.label ?? "Ruang kerja";
   return <>
     <aside className="workspace-sidebar" aria-label="Navigasi ruang kerja">
