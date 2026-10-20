@@ -9,7 +9,7 @@ import { isPaletteShortcut, paletteComboboxProps, paletteSearch } from "./palett
 
 /** Opens the single page-level palette; place one in the sidebar and one in the narrow-screen top bar. */
 export function PaletteButton({ onOpen, locked }: { onOpen: () => void; locked: boolean }) {
-  return <button type="button" className="workspace-palette-button" onClick={() => { if (!locked) onOpen(); }} aria-disabled={locked}>
+  return <button type="button" className="workspace-palette-button" aria-label="Cari ruang kerja" onClick={() => { if (!locked) onOpen(); }} aria-disabled={locked}>
     <Search aria-hidden="true" /><span>Cari ruang kerja</span><kbd>Ctrl K</kbd>
   </button>;
 }
