@@ -33,7 +33,7 @@ public static class PilotBootstrap
             throw new InvalidOperationException("Pilot database belongs to a different private launcher state. Restore matching state; do not reset it.");
         var clock = new SystemClock();
         await new CollectionMigrations(database, clock).ApplyAsync(ct);
-        if (marker["phase"] == "complete") return;
+        if (marker["phase"] == "complete") { await PilotCatalog.ExpandAsync(database, client, secrets, markers, PilotBoundary.Profile, ct); return; }
         var unit = new MongoUnitOfWork(client);
         var at = marker["createdAt"].ToUniversalTime();
         if (marker["phase"] == "created")
@@ -122,6 +122,7 @@ public static class PilotBootstrap
             }
         }
         await markers.UpdateOneAsync(new BsonDocument("_id", PilotBoundary.Profile), Builders<BsonDocument>.Update.Set("phase", "complete"), cancellationToken: ct);
+        await PilotCatalog.ExpandAsync(database, client, secrets, markers, PilotBoundary.Profile, ct);
     }
 
     public static string[] PermissionsFor(long accountId) => PilotBoundary.Profile == "full" ? FullPermissionsFor(accountId) : accountId < 2000
