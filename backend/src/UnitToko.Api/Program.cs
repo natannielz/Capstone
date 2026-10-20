@@ -66,6 +66,7 @@ builder.Services.AddSingleton<CatalogAuthoringService>();
 builder.Services.AddSingleton<ScanResolver>();
 builder.Services.AddSingleton<AccountContactService>();
 builder.Services.AddSingleton<CatalogPriceService>();
+builder.Services.AddSingleton<CatalogPublicShowcaseService>();
 builder.Services.AddSingleton<CatalogDefinitionQueryService>();
 builder.Services.AddSingleton(sp => {
     var options = sp.GetRequiredService<IConfiguration>().GetSection("Evidence:PrivateWindows");
@@ -570,6 +571,8 @@ app.MapStockSourceSuspensionEndpoints();
 app.MapStockSourcePolicyEndpoints();
 app.MapStockSourceReconciliationEndpoints();
 }
+// The signed-out catalog (no prices) is part of every release.
+app.MapCatalogPublicEndpoints();
 app.MapGet("/health/live", () => TypedResults.Ok(new HealthStatus("live"))).AllowAnonymous().WithName("Liveness");
 app.MapGet("/health/ready", async (HttpContext context, MongoConnection mongo,
     CollectionMigrations migrations, CancellationToken cancellationToken) =>

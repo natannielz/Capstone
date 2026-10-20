@@ -24,7 +24,9 @@ test('entitled buyer client preserves missing versus zero and exact package/pric
   assert.deepEqual(loginFields('/shop', '', ''), { returnPath: '/shop' });
   assert.ok(identityDestinations(['catalog.read']).some(item => item.href === '/shop'));
   assert.ok(!identityDestinations(['order.submit']).some(item => item.href === '/shop'));
-  for (const path of ['/shop/', '/shop?next=https://outside.co.id', '//shop', '/shop/' + sku.publicId]) {
+  // A canonical product page is a valid return (signing in from the public catalog lands on the priced product).
+  assert.equal(identityReturnPath('/shop/' + sku.publicId), '/shop/' + sku.publicId);
+  for (const path of ['/shop/', '/shop?next=https://outside.co.id', '//shop', '/shop/' + sku.publicId + '/x']) {
     assert.equal(identityReturnPath(path), '/identity/account');
     assert.throws(() => loginFields(path, '', ''));
   }

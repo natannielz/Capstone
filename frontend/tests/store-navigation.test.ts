@@ -19,6 +19,7 @@ test('signing in returns to the page the person was on, and staff enter their ba
 test('guests get the catalog and a sign-in door; cart and orders ask them to sign in first', () => {
   const links = storeLinks({kind: 'guest'}, false, '/shop');
   assert.equal(links.home, '/');
+  assert.equal(links.catalog, '/katalog');
   assert.equal(links.signIn, '/identity/login?returnPath=%2Fshop');
   assert.equal(links.cart, '/identity/login?returnPath=%2Fcart');
   assert.equal(links.orders, '/identity/login?returnPath=%2Fordering%2Forders');
@@ -28,6 +29,7 @@ test('guests get the catalog and a sign-in door; cart and orders ask them to sig
 test('signed-in buyers reach their cart and orders directly; only staff see the back-office door', () => {
   const member = storeMember('Rina', buyer);
   const links = storeLinks(member, false, '/shop');
+  assert.equal(links.catalog, '/shop');
   assert.equal(links.cart, '/cart');
   assert.equal(links.orders, '/ordering/orders');
   assert.equal(links.staffDoor, null);

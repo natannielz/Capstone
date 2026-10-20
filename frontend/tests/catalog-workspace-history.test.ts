@@ -87,6 +87,8 @@ function mountCatalog(context: ReturnType<typeof browser>, returnPath: '/shop' |
     if (name === './CatalogBuyerPhoto') return {CatalogBuyerPhoto: marker};
     if (name === '../ordering/OrderQuotePanel') return {OrderQuotePanel: marker};
     if (name === '@/lib/format') return displayFormat;
+    // Guest redirect only: a signed-in catalog never navigates through the router in these cases.
+    if (name === 'next/navigation') return {useRouter: () => ({replace() {}, push() {}})};
     throw new Error('Unexpected mounted catalog import: ' + name);
   };
   const code = ts.transpileModule(readFileSync(resolve('src/modules/catalog/BuyerCatalog.tsx'), 'utf8'), {compilerOptions: {module: ts.ModuleKind.CommonJS,

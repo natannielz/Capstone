@@ -19,6 +19,6 @@ export function isMaintainedEntryAlias(path: string): boolean {
 
 export function isPilotApiPathAllowed(path: string): boolean {
   return ["/api/v1/system/status", "/api/v1/access/current", "/api/v1/identity/session", "/api/v1/identity/csrf"].includes(path) || [
-    "/api/v1/catalog/administration", "/api/v1/catalog/variants", "/api/v1/ordering/requests", "/api/v1/operations/health",
+    "/api/v1/catalog/administration", "/api/v1/catalog/variants", "/api/v1/ordering/requests", "/api/v1/operations/health", "/api/v1/public/catalog",
   ].some(prefix => path === prefix || path.startsWith(prefix + "/"));
 }

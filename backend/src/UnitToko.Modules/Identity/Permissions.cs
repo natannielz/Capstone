@@ -9,6 +9,8 @@ public sealed record PermissionDefinition(string Name, string Description,
 public static class Permissions
 {
     public const string CatalogRead = "catalog.read", CatalogManage = "catalog.manage", PricingManage = "pricing.manage", PricingApprove = "pricing.approve";
+    // Which assortments the signed-out public catalog shows (no prices): a maker proposes, an independent checker approves.
+    public const string CatalogPublicPropose = "catalog.public.propose", CatalogPublicApprove = "catalog.public.approve";
     public const string OrderRead = "order.read", OrderSubmit = "order.submit", OrderApprove = "order.approve", OrderSubstitute = "order.substitute", OrderCancel = "order.cancel";
     public const string OrderSpendApprove = "order.spend.approve", OrderAccept = "order.accept";
     public const string BranchOrderRequestRead = "order.request.read", BranchOrderRequestSubmit = "order.request.submit", BranchOrderRequestDecide = "order.request.decide";
@@ -105,6 +107,8 @@ public static class Permissions
         Add(StockReleasePropose, Operations);
         Add(StockReleaseApprove, Operations, true);
         Add(PricingApprove, Operations, true);
+        Add(CatalogPublicPropose, Operations, true);
+        Add(CatalogPublicApprove, Operations, true);
         Add(ReceivingAccountRead, Operations); Add(ReceivingAccountDetailsRead, Operations); Add(ReceivingAccountPropose, Operations);
         Add(ReceivingAccountVerify, Operations, true); Add(ReceivingAccountApprove, Operations, true);
         Add(BankReceiptRead, Operations); Add(BankReceiptConfirm, Operations, true);

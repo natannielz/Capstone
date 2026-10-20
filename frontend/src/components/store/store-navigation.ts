@@ -19,7 +19,7 @@ export function storeLinks(viewer: StoreViewer, pilot: boolean, currentPath: str
   const cart = pilot ? '/ordering/requests' : '/cart', orders = pilot ? '/ordering/requests' : '/ordering/orders';
   const member = viewer.kind === 'member';
   return {
-    home: '/', catalog: '/shop', signIn: storeSignInHref(currentPath),
+    home: '/', catalog: member ? '/shop' : '/katalog', signIn: storeSignInHref(currentPath),
     cart: member ? cart : storeSignInHref(cart), orders: member ? orders : storeSignInHref(orders),
     account: member ? '/identity/account' : storeSignInHref('/identity/account'),
     staffDoor: viewer.kind === 'member' ? viewer.staff ? '/workspace' : null : storeSignInHref('/workspace'),
