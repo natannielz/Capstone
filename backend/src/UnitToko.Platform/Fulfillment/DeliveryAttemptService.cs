@@ -31,10 +31,10 @@ public sealed class DeliveryAttemptService
         if (new[] { shipments.SourceDatabase, receipts.SourceDatabase }.Any(source => !ReferenceEquals(source.Client, database.Client) || !source.DatabaseNamespace.Equals(database.DatabaseNamespace)))
             throw new ArgumentException("Delivery attempt and receipt owners must share one database transaction");
         this.database = database; this.clock = clock; this.ids = ids; this.shipments = shipments; this.receipts = receipts;
-        authorization = new(database, unit, clock); records = new(database);
+        authorization = new(database, unit, clock); records = new(database, clock);
     }
     private async Task StorageAsync(CancellationToken ct) { await shipments.StorageAsync(ct); await records.StorageAsync(ct); await new ShipmentReceiptRecords(database).StorageAsync(ct); }
-    private static void Courier(ActorContext actor, ShipmentDocumentSource source) { if (source.Snapshot["courierId"] != actor.UserId) throw DeliveryAttemptRecords.Invalid(); }
+    private static void Courier(ActorContext actor, ShipmentDocumentSource source) { if (source.Assignment?.CourierId != actor.UserId) throw DeliveryAttemptRecords.Invalid(); }
     private static DeliveryAttemptView View(BsonDocument row) => new(new(row["_id"].AsInt64), new(row["shipmentId"].AsInt64), row["sequence"].AsInt64,
         row["outcome"].AsString, row["reason"].AsString, ShipmentReceiptRecords.Time(row["occurredAt"]), ShipmentReceiptRecords.Time(row["recordedAt"]), row["revokedChallengeIds"].AsBsonArray.Count);
     private static long Sequence(IReadOnlyList<BsonDocument> history) => history.Count == 0 ? 0 : history[^1]["sequence"].AsInt64;
@@ -46,6 +46,7 @@ public sealed class DeliveryAttemptService
             var history = await records.HistoryAsync(tx, source, token); var received = await receipts.HasRecordedReceiptAsync(tx, source, token);
             var result = new DeliveryAttemptPreview(new(shipmentId), Sequence(history), received, ShipmentReceiptRecords.Time(source.Snapshot["dispatchedAt"]), Now,
                 history.Count == 0 ? null : ShipmentReceiptRecords.Time(history[^1]["occurredAt"]));
+            await shipments.CompleteAssignmentAsync(tx, source, token);
             await shipments.FenceAsync(actor, authority, tx, [source.Resource], token, Permissions.DeliveryAttempt); return result;
         }, ct);
     }
@@ -56,6 +57,7 @@ public sealed class DeliveryAttemptService
             var history = await records.HistoryAsync(tx, source, token); var received = await receipts.HasRecordedReceiptAsync(tx, source, token);
             var selected = history.Reverse().Where(row => beforeSequence is null || row["sequence"].AsInt64 < beforeSequence).Take(26).ToArray();
             var result = new DeliveryAttemptPage(new(shipmentId), Sequence(history), received, selected.Take(25).Select(View).ToImmutableArray(), selected.Length > 25);
+            await shipments.CompleteAssignmentAsync(tx, source, token);
             await shipments.FenceAsync(actor, authority, tx, [source.Resource], token); return result;
         }, ct);
     }
@@ -74,6 +76,8 @@ public sealed class DeliveryAttemptService
             if (received) throw new PersistenceConflictException("shipment_already_received", "Recipient acceptance is already recorded; use the after-sales workflow");
             if (Sequence(history) != expectedSequence) throw new PersistenceConflictException("delivery_attempt_changed", "Reload the current delivery attempt history");
             DeliveryAttemptPolicy.Require(expectedSequence, outcome, occurredAt, ShipmentReceiptRecords.Time(source.Snapshot["dispatchedAt"]), now, metadata.Reason);
+            if (occurredAt < (source.Assignment ?? throw ShipmentCourierRecords.Invalid()).View.EffectiveAt)
+                throw new DomainValidationException("invalid_delivery_attempt_time", "Visit time cannot precede the courier's current assignment");
             var previous = history.LastOrDefault();
             if (previous is not null && (now < ShipmentReceiptRecords.Time(previous["recordedAt"]) || occurredAt < ShipmentReceiptRecords.Time(previous["occurredAt"])))
                 throw new DomainValidationException("invalid_delivery_attempt_time", "Visit time cannot precede the last recorded visit");
@@ -84,6 +88,7 @@ public sealed class DeliveryAttemptService
                 { "revokedChallengeIds", new BsonArray(challenges.Select(value => new BsonInt64(value))) }, { "auditId", auditId }, { "requestKey", metadata.IdempotencyKey },
                 { "bodyHash", AuthorizationStore.CommandHash(body, metadata.Reason) }, { "reason", metadata.Reason }, { "correlationId", metadata.CorrelationId } };
             await records.Rows(DeliveryAttemptRecords.Attempts).InsertOneAsync(tx, row, cancellationToken: token);
+            await new ShipmentCourierRecords(database, clock).BindAsync(tx, source, "attempt", row, token);
             foreach (var challenge in challenges) await records.Rows(DeliveryAttemptRecords.Revocations).InsertOneAsync(tx, DeliveryAttemptRecords.Revocation(row, challenge), cancellationToken: token);
             await records.Rows("auditEvents").InsertOneAsync(tx, DeliveryAttemptRecords.Audit(row), cancellationToken: token);
             await records.Rows("outboxEvents").InsertOneAsync(tx, new BsonDocument { { "_id", ObjectId.GenerateNewId() }, { "schemaVersion", 1 }, { "kind", DeliveryAttemptRecords.Operation },
@@ -93,6 +98,7 @@ public sealed class DeliveryAttemptService
             var accepted = await records.HistoryAsync(tx, source, token);
             final = accepted.SingleOrDefault(row => row["actorId"] == actor.UserId && row["requestKey"] == metadata.IdempotencyKey) ?? throw DeliveryAttemptRecords.Invalid();
             if (final["bodyHash"] != AuthorizationStore.CommandHash(body, metadata.Reason)) throw DeliveryAttemptRecords.Invalid();
+            await shipments.CompleteAssignmentAsync(tx, source, token);
             await shipments.FenceAsync(actor, authority, tx, [source.Resource], token, Permissions.DeliveryAttempt);
             if (clock.UtcNow < ShipmentReceiptRecords.Time(final["recordedAt"])) throw DeliveryAttemptRecords.Invalid();
         });
@@ -108,6 +114,7 @@ public sealed class DeliveryAttemptService
             if (rows.Count != 1 || receipt is null) throw DeliveryAttemptRecords.Invalid();
             var source = await shipments.DocumentSourceAsync(actor, authority, tx, rows[0]["shipmentId"].AsInt64, Permissions.DeliveryAttempt, token); Courier(actor, source);
             var history = await records.HistoryAsync(tx, source, token); var result = View(history.Single(row => row["_id"] == rows[0]["_id"]));
+            await shipments.CompleteAssignmentAsync(tx, source, token);
             await shipments.FenceAsync(actor, authority, tx, [source.Resource], token, Permissions.DeliveryAttempt); return result;
         }, ct);
     }

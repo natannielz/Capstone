@@ -17,7 +17,10 @@ namespace UnitToko.Platform.Fulfillment;
 public sealed record ShipmentReadLine(LongId SkuId, string SkuCode, string ProductName, VariantDefinitionVersion Definition, int Packages, long BaseUnits);
 public sealed record ShipmentReadView(LongId Id, long Revision, LongId OrderId, LongId SuborderId, LongId NumberEntity, LongId NumberChannel,
     int NumberYear, long Number, DateTimeOffset DispatchedAt, string BuyerName, OrderDeliveryRequest Delivery, LongId CourierId,
-    string CourierName, ImmutableArray<ShipmentReadLine> Lines);
+    string CourierName, ImmutableArray<ShipmentReadLine> Lines, ShipmentCurrentCourier CurrentAssignment)
+{
+    internal ShipmentCourierRecords.Capture AssignmentCapture { get; init; } = null!;
+}
 
 /// <summary>Current scoped access to accepted dispatch facts, without costs, approval bodies or stock authority.
 /// Courier assignment is compiled into the query before pagination; BuyerOwned remains creator-bound.</summary>
@@ -40,7 +43,7 @@ public sealed partial class ShipmentQueryService
     internal ShipmentDispatchValueRecords.HistoricalRead? StockSourceHistory => orders.StockSourceHistory;
     internal ShipmentDispatchService.LiveValueRead? StockSourceLiveRead => orders.StockSourceLiveRead;
     internal IClock StockSourceClock => clock;
-    internal async Task StorageAsync(CancellationToken ct) { await preparations.StorageAsync(ct); await ShipmentDispatchStorage.RequireAsync(database, ct); }
+    internal async Task StorageAsync(CancellationToken ct) { await preparations.StorageAsync(ct); await ShipmentDispatchStorage.RequireAsync(database, ct); await ShipmentCourierRecords.RequireStorageAsync(database, ct); }
     private AuthorizationQuery Query(ActorContext actor, AuthorizationSnapshot snapshot, string permission = Permissions.ShipmentRead) {
         var query = ScopePolicy.Compile(actor, snapshot, permission, clock.UtcNow); AuthorizationStore.Require(query); return query;
     }
@@ -51,7 +54,9 @@ public sealed partial class ShipmentQueryService
         history ??= orders.StockSourceHistory ?? new ShipmentDispatchValueRecords.HistoricalRead(database, clock, tx);
         var sourceOrders = orders.WithDispatchHistory(tx, history);
         var row = await new ShipmentDispatchRecords(database, clock, history, sourceOrders.StockSourceLiveRead).ReadAsync(tx, id, ct);
-        if (!Query(actor, snapshot).Matches(Resource(row))) throw ShipmentDispatchRecords.Invalid();
+        var assignment = await new ShipmentCourierRecords(database, clock).ReadAsync(tx, row, ct);
+        if (!Query(actor, snapshot).Matches(CurrentResource(assignment))) throw ShipmentDispatchRecords.Invalid();
+        await assignment.CompleteAsync(tx, ct);
         await sourceOrders.RequireShipmentHistoryAsync(tx, actor, row, ct);
         var source = ShipmentPreparationBson.Source(row["source"].AsBsonDocument);
         var lines = ShipmentPreparationBson.Lines(row["lines"].AsBsonArray).Select(selected => {
@@ -61,32 +66,41 @@ public sealed partial class ShipmentQueryService
         }).ToImmutableArray();
         return new(new(id), row["revision"].AsInt64, source.OrderId, source.SuborderId, new(row["numberEntity"].AsInt64), new(row["numberChannel"].AsInt64),
             checked((int)row["numberYear"].AsInt64), row["number"].AsInt64, OrderDraftBson.Time(row["recordedAt"]), source.BuyerName,
-            source.Delivery, new(row["courierId"].AsInt64), row["courierName"].AsString, lines);
+            source.Delivery, new(row["courierId"].AsInt64), row["courierName"].AsString, lines, assignment.View) { AssignmentCapture = assignment };
     }
     public async Task<ShipmentReadView> ReadAsync(ActorContext actor, long id, CancellationToken ct = default) {
         if (id <= 0) throw ShipmentDispatchRecords.Invalid(); await StorageAsync(ct);
         return await authorization.ReadAsync(actor, async (snapshot, tx, token) => {
             var history = orders.StockSourceHistory ?? new ShipmentDispatchValueRecords.HistoricalRead(database, clock, tx);
-            var row = await Rows("shipments").Find(tx, F.Eq("_id", id) & ScopeQuery.Create(Query(actor, snapshot))).SingleOrDefaultAsync(token) ?? throw ShipmentDispatchRecords.Invalid();
+            if ((await CurrentRowsAsync(actor, snapshot, tx, Permissions.ShipmentRead, null, null, id, token)).Count != 1) throw ShipmentDispatchRecords.Invalid();
             var result = await VerifiedAsync(actor, snapshot, tx, id, token, history);
-            await FenceAsync(actor, snapshot, tx, [Resource(row)], token); return result;
+            await result.AssignmentCapture.CompleteAsync(tx, token);
+            await FenceAsync(actor, snapshot, tx, [CurrentResource(result.AssignmentCapture)], token);
+            result.AssignmentCapture.Require(tx); return result;
         }, ct);
     }
-    public async Task<(ImmutableArray<ShipmentReadView> Items, bool HasMore)> ListAsync(ActorContext actor, long? beforeId = null, CancellationToken ct = default) {
+    public Task<(ImmutableArray<ShipmentReadView> Items, bool HasMore)> ListAsync(ActorContext actor, long? beforeId = null, CancellationToken ct = default) =>
+        ListCoreAsync(actor, beforeId, null, ct);
+    public Task<(ImmutableArray<ShipmentReadView> Items, bool HasMore)> ListForOrderAsync(ActorContext actor, long orderId, long? beforeId = null, CancellationToken ct = default) {
+        if (orderId <= 0) throw ShipmentDispatchRecords.Invalid();
+        return ListCoreAsync(actor, beforeId, orderId, ct);
+    }
+    private async Task<(ImmutableArray<ShipmentReadView> Items, bool HasMore)> ListCoreAsync(ActorContext actor, long? beforeId, long? orderId, CancellationToken ct) {
         if (beforeId is <= 0) throw ShipmentDispatchRecords.Invalid(); await StorageAsync(ct);
         return await authorization.ReadAsync(actor, async (snapshot, tx, token) => {
             var history = orders.StockSourceHistory ?? new ShipmentDispatchValueRecords.HistoricalRead(database, clock, tx);
-            var filter = ScopeQuery.Create(Query(actor, snapshot)); if (beforeId.HasValue) filter &= F.Lt("_id", beforeId.Value);
-            var rows = await Rows("shipments").Find(tx, filter).Sort(new BsonDocument("_id", -1)).Limit(26).ToListAsync(token);
+            var rows = await CurrentRowsAsync(actor, snapshot, tx, Permissions.ShipmentRead, beforeId, orderId, null, token);
             var items = ImmutableArray.CreateBuilder<ShipmentReadView>();
             // Verify the extra row as well: its existence influences the disclosed paging state.
             foreach (var row in rows) items.Add(await VerifiedAsync(actor, snapshot, tx, row["_id"].AsInt64, token, history));
-            await FenceAsync(actor, snapshot, tx, rows.Select(Resource).ToArray(), token);
+            foreach (var item in items) await item.AssignmentCapture.CompleteAsync(tx, token);
+            await FenceAsync(actor, snapshot, tx, items.Select(item => CurrentResource(item.AssignmentCapture)).ToArray(), token);
+            foreach (var item in items) item.AssignmentCapture.Require(tx);
             return (items.Take(25).ToImmutableArray(), rows.Count > 25);
         }, ct);
     }
     internal async Task FenceAsync(ActorContext actor, AuthorizationSnapshot snapshot, IClientSessionHandle tx, ResourceScope[] resources, CancellationToken ct, string permission = Permissions.ShipmentRead) {
-        if (permission is not (Permissions.ShipmentRead or Permissions.ShipmentPrepare or Permissions.DeliveryAttempt or Permissions.DeliveryEvidence or Permissions.ReceiptAccept or Permissions.InvoiceRead or Permissions.InvoiceIssue or Permissions.CaseRead or Permissions.CaseRequest or Permissions.CaseManage)) throw ShipmentDispatchRecords.Invalid();
+        if (permission is not (Permissions.ShipmentRead or Permissions.ShipmentAssign or Permissions.ShipmentPrepare or Permissions.DeliveryAttempt or Permissions.DeliveryEvidence or Permissions.ReceiptAccept or Permissions.InvoiceRead or Permissions.InvoiceIssue or Permissions.CaseRead or Permissions.CaseRequest or Permissions.CaseManage)) throw ShipmentDispatchRecords.Invalid();
         var query = Query(actor, snapshot, permission);
         if (resources.Any(resource => !query.Matches(resource) || !ScopePolicy.IsResourceActive(resource, snapshot.Directory))) throw ShipmentDispatchRecords.Invalid();
         var clauses = query.Clauses.Where(clause => resources.Length == 0 || resources.Any(clause.Matches)).ToArray();

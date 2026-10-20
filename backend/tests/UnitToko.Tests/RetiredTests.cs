@@ -18,4 +18,9 @@ internal static class Pending
     /// refuses those reads fail-closed (for example missing causal coverage membership); the tests need an explicit fixture path.</summary>
     internal const string FixtureRewrite =
         "Pending rewrite: written against the procurement fixture state before 7f8541b; open test debt, not retired (docs/quality/retired-tests.md).";
+
+    /// <summary>The scenario is correct but a command inside it still re-proves procurement history in full and exceeds the
+    /// 60 s Mongo transaction bound on the two-order fixture, even sealed. Tracked by the latency workstream (next-wave plan E).</summary>
+    internal const string TransactionLatency =
+        "Pending latency: a command in this two-order scenario exceeds the 60 s transaction bound; open, not retired (docs/quality/retired-tests.md).";
 }

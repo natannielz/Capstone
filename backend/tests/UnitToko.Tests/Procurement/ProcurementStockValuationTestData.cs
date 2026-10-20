@@ -59,7 +59,7 @@ internal sealed class ProcurementStockValuationTestData(SupplierDocumentTestData
     internal static async Task<ProcurementStockValuationTestData> CreateAsync(MongoFixture fixture, bool createValuationPolicy = true, int receiptPackages = 3,
         decimal requiredAdvance = 0, bool includePayableMappings = false, bool includeCustomerMappings = false,
         bool mixedQuality = false, bool matchInvoice = true, bool activateEmptySource = false, bool useSystemClock = false, DateOnly? inspectedExpiry = null,
-        bool includeCogsMapping = false, long reviewedSafetyBufferBaseUnits = 12)
+        bool includeCogsMapping = false, long reviewedSafetyBufferBaseUnits = 12, bool includeCustomerCashMappings = false)
     {
         Assert.InRange(receiptPackages, 1, 3);
         if (mixedQuality && activateEmptySource) throw new ArgumentException("This minimal activation seam is for the clean receipt fixture", nameof(activateEmptySource));
@@ -115,7 +115,7 @@ internal sealed class ProcurementStockValuationTestData(SupplierDocumentTestData
                 data.SourceMaker.UserId, data.SourceChecker.UserId, data.BookMaker.UserId, data.BookChecker.UserId);
             if (quality is null) await data.CreateHeldReceiptAsync();
             else { data.Receipt = quality.Receipt; data.PoolId = quality.Stock.PoolId; }
-            await data.CreateBookAndPolicyAsync(createValuationPolicy, includePayableMappings, includeCustomerMappings, includeCogsMapping);
+            await data.CreateBookAndPolicyAsync(createValuationPolicy, includePayableMappings, includeCustomerMappings, includeCogsMapping, includeCustomerCashMappings);
             Assert.False(await data.Rows("journalEntries").Find(new BsonDocument()).AnyAsync());
             return data;
         }
@@ -136,7 +136,7 @@ internal sealed class ProcurementStockValuationTestData(SupplierDocumentTestData
         Receipt = await Receipts.ReceiveAsync(Maker, input, receiptPreview["binding"].AsString, Meta("valuation-held-receipt"));
     }
 
-    private async Task CreateBookAndPolicyAsync(bool createPolicy, bool includePayableMappings, bool includeCustomerMappings, bool includeCogsMapping)
+    private async Task CreateBookAndPolicyAsync(bool createPolicy, bool includePayableMappings, bool includeCustomerMappings, bool includeCogsMapping, bool includeCustomerCashMappings)
     {
         var setup = new AccountingBookSetupService(Database, Unit, new(Database), Clock);
         var input = new AccountingBookSetupInput(AccountingBookSetupTestData.Key, AccountingCalendar.BusinessDate(Clock.UtcNow).ToString("yyyy-MM", CultureInfo.InvariantCulture),
@@ -148,6 +148,13 @@ internal sealed class ProcurementStockValuationTestData(SupplierDocumentTestData
             input = input with { Mappings = [.. input.Mappings, new("invoice_ar", "A1102"), new("invoice_revenue", "R4101"),
                 new("invoice_tax", "L2101"), new("invoice_charges", "R4102")] };
         if (includeCogsMapping) input = input with { Mappings = [.. input.Mappings, new("cogs", "E5100")] };
+        // Explicit synthetic customer cash roles enter the genuine independently
+        // reviewed book proposal before any journal. Never mutate a retained chart.
+        if (includeCustomerCashMappings) {
+            if (!includeCustomerMappings) throw new ArgumentException("Customer cash requires the reviewed invoice mappings");
+            if (!includePayableMappings) input = input with { Mappings = [.. input.Mappings, new("bank_cash", "A1101"), new("unidentified_cash", "L2900")] };
+            input = input with { Mappings = [.. input.Mappings, new("refund_liability", "L2901")] };
+        }
         var preview = await setup.PreviewAsync(BookMaker, input);
         var proposal = await setup.ProposeAsync(BookMaker, input, preview["binding"].AsString, Meta("valuation-book"));
         var review = await setup.PreviewDecisionAsync(BookChecker, proposal["proposalId"].AsInt64, AccountingBookSetupDecision.Approve);

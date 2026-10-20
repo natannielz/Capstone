@@ -67,3 +67,14 @@
 ### Task 7: Close
 
 - [ ] Register rows, ledger, final review, commit, push.
+
+---
+
+## Execution notes (20 October 2026)
+
+- **Task 1, invoice release:** applied the nine shared deltas as narrow three-way merges (candidate base: main 9480cb4 and R02 draft4 for billing) and copied 27 new files. Registered as migration **119**. Compile fixes were namespace imports only. Ruling: the binding gate now treats a database as release-installed when its history reaches 119, bounded by today's `CurrentVersion`. The candidate pinned "exactly 116", which would break at the next migration. If wrong, the cost is one comparison. Ruling: the candidate rule test compared `ImmutableArray` by reference; it now compares the sequences. Ruling: the fixture orders through production admission with `reviewedSafetyBufferBaseUnits: 0`, as main's admission tests do, because the default reviewed buffer holds the single package back by design.
+- **Task 2, U05 timeline:** applied `tracked.patch` and the 21 files. U05's `InvoiceReleaseTestData` superset replaces the invoice candidate's copy (renumbered to 119). Added the three missing test `using` lines. Mounted `OrderTimelinePanel` in `OrderHistoryWorkspace`; dates use `format.ts`.
+- **Task 4, courier handover:** exact baselines gave clean three-way merges for 18 of 21 shared files. The registry, navigation and destination lines were applied by hand. Registered as migration **120**. Ruling: `ServerSession.TransactionNumber` (absent in driver 3.x) became `WrappedCoreSession.CurrentTransaction?.TransactionNumber`, as `ShipmentDispatchFiniteSource` does. Ruling: the return-path allowlist bound rose from 64 to 96 to admit `/billing/invoice-releases` and `/fulfillment/courier-assignments` on both frontend and backend.
+- **Task 3, M02:** deferred. The newest composition's README says the printed Surat Jalan table parser is incomplete and no native/browser run exists. Integrating it would ship a known-incomplete OCR path.
+- **Task 5, work-queue monitoring:** deferred. The candidate (174 files) registers adapters for R11 access campaigns that do not exist yet, and needs its own migration after 120.
+- **Task 6, R11:** design spike written for owner review in `docs/superpowers/specs/2026-10-20-r11-access-review-and-branch-moves-design.md`. It ends with five policy decisions; implementation waits for them.

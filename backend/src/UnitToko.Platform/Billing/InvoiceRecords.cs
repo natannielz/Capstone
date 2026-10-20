@@ -21,11 +21,27 @@ internal sealed class InvoiceRecords(IMongoDatabase database, ShipmentReceiptSer
     internal static bool Equal(BsonValue left, BsonValue right) => CatalogSchemas.SemanticEquals(left, right);
     internal async Task<BsonDocument> VerifyAsync(ActorContext actor, IClientSessionHandle tx, BsonDocument row, CancellationToken ct) {
         foreach (var source in InvoiceBson.Sources(row["sources"].AsBsonArray)) await receipts.RequireInvoiceHistoryAsync(actor, tx, source, ct);
-        return await VerifyPersistedAsync(database, tx, row, ct);
+        var verified = await VerifyPersistedAsync(database, tx, row, ct);
+        if (await InvoiceReleaseRecords.BindingRequiredAsync(database, tx, ct)) {
+            var history = await new InvoiceReleaseRecords(database).VerifyInvoiceBindingAsync(tx, row, ct);
+            if (history is not null) {
+                var decision = history.Events.Single(value => value["revision"] == row["terms"]["policy"]["revision"]);
+                await new InvoiceReleaseSources(database, new SystemClock(), receipts).HistoricalAsync(actor, tx, decision["source"].AsBsonDocument, ct);
+            }
+        }
+        return verified;
     }
     // Deployment-only consumers validate persisted business anchors without inventing a live actor.
     // Runtime reads still validate every receipt/shipment/commercial owner above.
     internal static async Task<BsonDocument> VerifyPersistedAsync(IMongoDatabase database, IClientSessionHandle tx, BsonDocument row, CancellationToken ct) {
+        var verified = await VerifyLegacyPersistedAsync(database, tx, row, ct);
+        if (await InvoiceReleaseRecords.BindingRequiredAsync(database, tx, ct))
+            await new InvoiceReleaseRecords(database).VerifyInvoiceBindingAsync(tx, verified, ct);
+        return verified;
+    }
+    // Only the real predecessor migrations and the116 backfill use this preserved
+    // verifier. Runtime financial readers use VerifyPersistedAsync above.
+    internal static async Task<BsonDocument> VerifyLegacyPersistedAsync(IMongoDatabase database, IClientSessionHandle tx, BsonDocument row, CancellationToken ct) {
         IMongoCollection<BsonDocument> Rows(string name) => database.GetCollection<BsonDocument>(name);
         if (!await Rows(InvoiceBson.Invoices).Find(tx, Builders<BsonDocument>.Filter.Eq("_id", row["_id"]) & OrderLineageSchemas.InvoiceValidator(InvoiceBson.Invoices)).AnyAsync(ct)) throw Invalid();
         var sources = InvoiceBson.Sources(row["sources"].AsBsonArray); var terms = InvoiceBson.Terms(row["terms"].AsBsonDocument);

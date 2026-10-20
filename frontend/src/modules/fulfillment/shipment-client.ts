@@ -1,3 +1,4 @@
+import {parseCurrentCourier, currentCourierMatchesDeparture} from './courier-assignment-client';
 import { createUnitTokoClient } from '../../api/client';
 import { AccessFailure } from '../administration/workflow';
 import { priceId } from '../catalog/catalog-price-workflow';
@@ -11,6 +12,8 @@ export function parseShipment(value: unknown) {
   const row = record(value), delivery = parseOrderDelivery(row.delivery), numberYear = priceId(row.numberYear), dispatchedAt = text(row.dispatchedAt, 64);
   if (row.revision !== '1' || !delivery || !/^[1-9][0-9]{0,3}$(?![\s\S])/.test(numberYear) || !Number.isFinite(Date.parse(dispatchedAt)) ||
     !Array.isArray(row.lines) || row.lines.length < 1 || row.lines.length > 100) return invalid();
+  const currentAssignment = parseCurrentCourier(row.currentAssignment);
+  if (!currentCourierMatchesDeparture(currentAssignment, priceId(row.courierId), text(row.courierName, 256), dispatchedAt)) return invalid();
   const lines = row.lines.map(value => {
     const line = record(value), skuId = priceId(line.skuId), definition = parseCatalogDefinition(line.definition), packages = line.packages, baseUnits = priceId(line.baseUnits);
     if (definition.skuId !== skuId || typeof packages !== 'number' || !Number.isSafeInteger(packages) || packages < 1 || packages > 1_000_000 ||
@@ -20,7 +23,7 @@ export function parseShipment(value: unknown) {
   if (new Set(lines.map(line => line.skuId)).size !== lines.length) return invalid();
   return { id: priceId(row.id), revision: '1' as const, orderId: priceId(row.orderId), suborderId: priceId(row.suborderId),
     numberEntity: priceId(row.numberEntity), numberChannel: priceId(row.numberChannel), numberYear, number: priceId(row.number), dispatchedAt,
-    buyerName: text(row.buyerName, 200), delivery, courierId: priceId(row.courierId), courierName: text(row.courierName, 256), lines };
+    buyerName: text(row.buyerName, 200), delivery, courierId: priceId(row.courierId), courierName: text(row.courierName, 256), currentAssignment, lines };
 }
 export type Shipment = ReturnType<typeof parseShipment>;
 function data<T>(result: { data?: T; error?: unknown; response: Response }): T {

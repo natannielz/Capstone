@@ -7,11 +7,11 @@ namespace UnitToko.Platform.Fulfillment;
 public sealed partial class ShipmentReceiptService
 {
     internal IMongoDatabase SourceDatabase => database;
-    private DeliveryAttemptRecords DeliveryAttempts => new(database);
+    private DeliveryAttemptRecords DeliveryAttempts => new(database, clock);
     internal async Task<bool> HasRecordedReceiptAsync(IClientSessionHandle tx, ShipmentDocumentSource source, CancellationToken ct) {
         if (!tx.IsInTransaction || !ReferenceEquals(tx.Client, database.Client)) throw ShipmentReceiptRecords.Invalid();
         var row = await records.FindReceiptAsync(tx, source.Snapshot["shipmentId"].AsInt64, ct);
-        if (row is null) return false;
+        if (row is null) return false; // FindReceiptAsync already refuses orphan acceptance effects.
         await VerifyReceiptAsync(tx, row, source, ct); return true;
     }
     internal async Task<long[]> OpenChallengesForFailedVisitAsync(IClientSessionHandle tx, ShipmentDocumentSource source, DateTimeOffset recordedAt, CancellationToken ct) {
@@ -22,6 +22,8 @@ public sealed partial class ShipmentReceiptService
         var result = new List<long>();
         foreach (var row in candidates) {
             await VerifyChallengeAsync(tx, row, source, ct);
+            if (await new ShipmentCourierRecords(database, clock).RequireBindingAsync(tx, source, "challenge", row, ct) !=
+                (source.Assignment ?? throw ShipmentCourierRecords.Invalid()).Revision) continue;
             if (ShipmentReceiptRecords.Time(row["recordedAt"]) > recordedAt) throw ShipmentReceiptRecords.Invalid();
             if (!await Rows(DeliveryAttemptRecords.Revocations).Find(tx, F.Eq("_id", row["_id"])).AnyAsync(ct)) result.Add(row["_id"].AsInt64);
         }

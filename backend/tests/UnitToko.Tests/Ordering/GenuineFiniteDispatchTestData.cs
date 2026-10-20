@@ -88,7 +88,8 @@ internal sealed class GenuineFiniteDispatchTestData(IAsyncDisposable lifetime, S
     }
 
     internal static async Task<GenuineFiniteDispatchTestData> CreateAsync(MongoFixture fixture, bool converted, bool cogs = true, bool createOrder = true,
-        long reviewedSafetyBufferBaseUnits = 12, bool useSystemClock = false, bool includeCustomerMappings = false) {
+        long reviewedSafetyBufferBaseUnits = 12, bool useSystemClock = false, bool includeCustomerMappings = false, bool includeCustomerCashMappings = false) {
+        if (converted && includeCustomerCashMappings) throw new ArgumentException("The customer cash fixture seam uses genuine unconverted packages", nameof(includeCustomerCashMappings));
         StockReleaseServiceTests.Data stock; IAsyncDisposable lifetime; long balance;
         if (converted) {
             var conversion = await PackConversionServiceTests.PreparedConversion.CreateAsync(fixture, includeCogsMapping: cogs,
@@ -96,7 +97,8 @@ internal sealed class GenuineFiniteDispatchTestData(IAsyncDisposable lifetime, S
             stock = conversion.Data; lifetime = conversion; balance = conversion.Result!["destinationBalanceId"].AsInt64;
         } else {
             stock = await StockReleaseServiceTests.Data.CreateAsync(fixture, useSystemClock: useSystemClock, includeCogsMapping: cogs,
-                reviewedSafetyBufferBaseUnits: reviewedSafetyBufferBaseUnits, includeCustomerMappings: includeCustomerMappings); lifetime = stock;
+                reviewedSafetyBufferBaseUnits: reviewedSafetyBufferBaseUnits, includeCustomerMappings: includeCustomerMappings,
+                includeCustomerCashMappings: includeCustomerCashMappings); lifetime = stock;
             var release = await stock.ProposeAsync("dispatch-source-release");
             await stock.DecideAsync(release["proposalId"].AsInt64, "dispatch-source-released");
             balance = stock.Valuation.Receipt["balanceId"].AsInt64;
