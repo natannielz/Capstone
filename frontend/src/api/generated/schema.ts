@@ -13253,6 +13253,7 @@ export interface components {
             proposalId: components["schemas"]["LongId"];
             /** Format: date-time */
             proposedAt: string;
+            proposedBy: components["schemas"]["LongId"];
             reason: string;
             revision: string;
             sku: components["schemas"]["CatalogPriceSkuDto"];

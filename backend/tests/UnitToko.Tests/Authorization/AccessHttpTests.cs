@@ -544,7 +544,8 @@ public sealed partial class AccessHttpTests(MongoFixture fixture)
         {
             var operation = path.Value?["post"];
             if (operation is null || path.Key.EndsWith("/preview", StringComparison.Ordinal) ||
-                path.Key.EndsWith("/query", StringComparison.Ordinal) || path.Key.EndsWith("/lookup", StringComparison.Ordinal)) continue;
+                path.Key.EndsWith("/query", StringComparison.Ordinal) || path.Key.EndsWith("/lookup", StringComparison.Ordinal) ||
+                path.Key.EndsWith("/preview-decision", StringComparison.Ordinal)) continue; // a decision preview returns the binding to sign and changes nothing
             var parameters = operation["parameters"]!.AsArray();
             var key = parameters.Single(item => item?["name"]?.GetValue<string>() == "Idempotency-Key")!;
             Assert.Equal("header", key["in"]!.GetValue<string>());

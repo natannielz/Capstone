@@ -99901,7 +99901,8 @@
           "proposedAt",
           "reason",
           "decision",
-          "price"
+          "price",
+          "proposedBy"
         ],
         "type": "object",
         "properties": {
@@ -99965,6 +99966,9 @@
                 "$ref": "#/components/schemas/CatalogPriceDto"
               }
             ]
+          },
+          "proposedBy": {
+            "$ref": "#/components/schemas/LongId"
           }
         },
         "additionalProperties": false

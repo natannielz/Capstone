@@ -41,7 +41,7 @@ public sealed record CatalogPriceDecisionDto(LongId Id, string Action, DateTimeO
 public sealed record CatalogPriceProposalDto(LongId ProposalId, LongId SkuId, string Revision, string Status,
     CatalogPriceSkuDto Sku, CatalogDefinitionDto Definition, CatalogPriceExpectationDto Expected,
     CatalogPriceDto? BasePrice, CatalogPriceInputDto Input, DateTimeOffset ProposedAt, string Reason,
-    CatalogPriceDecisionDto? Decision, CatalogPriceDto? Price);
+    CatalogPriceDecisionDto? Decision, CatalogPriceDto? Price, LongId ProposedBy);
 public sealed record CatalogPriceCommandDto(LongId ProposalId, LongId SkuId, string Revision, string Status,
     LongId? DecisionId, LongId? PriceId, string? PriceVersion);
 public sealed record CatalogPriceReceiptDto(string State, CatalogPriceCommandDto? Result);
