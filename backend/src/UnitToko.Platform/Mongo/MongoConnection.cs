@@ -9,6 +9,8 @@ public sealed class MongoConnection
     {
         var settings = MongoClientSettings.FromConnectionString(uri);
         settings.ServerSelectionTimeout = TimeSpan.FromSeconds(3);
+        // Repeated reads inside one transaction attempt may be reused until that transaction writes (TransactionReadMemo).
+        settings.ClusterConfigurator = TransactionReadMemo.Track;
         Client = new MongoClient(settings);
         Database = Client.GetDatabase(database);
     }

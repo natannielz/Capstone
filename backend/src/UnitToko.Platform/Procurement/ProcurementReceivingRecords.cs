@@ -1,5 +1,6 @@
 using MongoDB.Bson;
 using MongoDB.Driver;
+using UnitToko.Platform.Mongo;
 using UnitToko.Modules.Accounting;
 using UnitToko.Modules.Identity;
 using UnitToko.Modules.Identity.Contracts;
@@ -21,7 +22,8 @@ internal sealed class ProcurementReceivingRecords(IMongoDatabase database, ICloc
     private IMongoCollection<BsonDocument> Rows(string name) => database.GetCollection<BsonDocument>(name);
     internal static void Equal(BsonValue actual, BsonValue expected) { if (!actual.Equals(expected)) throw B.Broken(); }
     internal async Task<BsonDocument> RowAsync(IClientSessionHandle tx, string name, long id, CancellationToken ct) =>
-        await Rows(name).Find(tx, new BsonDocument { { "_id", id }, { "$and", new BsonArray { ProcurementReceivingSchemas.Validator(name) } } }).SingleOrDefaultAsync(ct) ?? throw B.Broken();
+        await TransactionReadMemo.RowAsync(Rows(name), tx, "receiving-schema:" + id,
+            () => new BsonDocument { { "_id", id }, { "$and", new BsonArray { ProcurementReceivingSchemas.Validator(name) } } }, ct) ?? throw B.Broken();
     internal static void NoticeFacts(ProcurementArrivalNoticeInput input, BsonDocument source, DateTimeOffset now) {
         Equal(source["order"]["_id"], input.OrderId); Equal(source["order"]["version"], input.OrderVersion); Equal(source["order"]["approvalId"], input.OrderApprovalId);
         Equal(source["order"]["location"], R.Location(input.Location));

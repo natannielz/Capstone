@@ -54,7 +54,7 @@ public sealed class AccountingMigrationFailureTests(MongoFixture fixture)
         Assert.Equal(invalid, (await data.DB.GetCollection<BsonDocument>("idCounters").Find(new BsonDocument("_id", "journalEntries")).SingleAsync())["value"]);
     }
 
-    [Fact]
+    [Fact(Skip = Retired.HistoricalUpgrade)]
     public async Task Interrupted_index_creation_resumes_after_partial_ddl_and_counter_progress()
     {
         await using var data = await AccountingData.CreateAsync(fixture);

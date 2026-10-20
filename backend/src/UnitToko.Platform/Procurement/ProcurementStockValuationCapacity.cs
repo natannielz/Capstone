@@ -80,12 +80,12 @@ internal sealed class ProcurementStockValuationCapacityReader(IMongoDatabase dat
             allocation["capitalizedAmount"] != input.CapitalizedAmount.ToString() ||
             allocation["receiptSequence"] != allocation["receiptAfter"]["version"] ||
             allocation["matchSequence"] != allocation["matchAfter"]["version"] || allocation["recordedAt"] != decision["recordedAt"]) throw B.Broken();
-        var receipt = await Rows(ProcurementStockReceiptBson.Receipts).Find(tx, new BsonDocument { { "_id", input.ReceiptId },
-            { "$and", new BsonArray { ProcurementStockReceiptSchemas.Validator(ProcurementStockReceiptBson.Receipts) } } }).SingleOrDefaultAsync(ct) ?? throw B.Broken();
-        var invoice = await Rows(SupplierDocumentBson.Submissions).Find(tx, new BsonDocument { { "_id", input.InvoiceDocumentId },
-            { "$and", new BsonArray { SupplierDocumentSchemas.Validator(SupplierDocumentBson.Submissions) } } }).SingleOrDefaultAsync(ct) ?? throw B.Broken();
-        var match = await Rows(SupplierDocumentBson.Matches).Find(tx, new BsonDocument { { "_id", input.InvoiceMatchId },
-            { "$and", new BsonArray { ProcurementQualityValuationSchemas.CurrentDocumentValidator(SupplierDocumentBson.Matches) } } }).SingleOrDefaultAsync(ct) ?? throw B.Broken();
+        var receipt = await TransactionReadMemo.RowAsync(Rows(ProcurementStockReceiptBson.Receipts), tx, "receipt-schema:" + input.ReceiptId, () => new BsonDocument { { "_id", input.ReceiptId },
+            { "$and", new BsonArray { ProcurementStockReceiptSchemas.Validator(ProcurementStockReceiptBson.Receipts) } } }, ct) ?? throw B.Broken();
+        var invoice = await TransactionReadMemo.RowAsync(Rows(SupplierDocumentBson.Submissions), tx, "supplier-document-schema:" + input.InvoiceDocumentId, () => new BsonDocument {
+            { "_id", input.InvoiceDocumentId }, { "$and", new BsonArray { SupplierDocumentSchemas.Validator(SupplierDocumentBson.Submissions) } } }, ct) ?? throw B.Broken();
+        var match = await TransactionReadMemo.RowAsync(Rows(SupplierDocumentBson.Matches), tx, "current-document-schema:" + input.InvoiceMatchId, () => new BsonDocument {
+            { "_id", input.InvoiceMatchId }, { "$and", new BsonArray { ProcurementQualityValuationSchemas.CurrentDocumentValidator(SupplierDocumentBson.Matches) } } }, ct) ?? throw B.Broken();
         var invoiceHistory = await InvoiceHistoryAsync(tx, invoice, ct);
         if (!invoiceHistory.Matches.Any(row => row["_id"] == match["_id"] && row == match)) throw B.Broken();
         if (input.MatchLineNumber <= 0 || input.MatchLineNumber > match["lines"].AsBsonArray.Count ||

@@ -1,5 +1,6 @@
 using MongoDB.Bson;
 using MongoDB.Driver;
+using UnitToko.Platform.Mongo;
 using UnitToko.Modules.Identity;
 using UnitToko.Modules.Identity.Contracts;
 using UnitToko.Modules.Inventory;
@@ -29,7 +30,11 @@ internal sealed class HeldReceiptPoolCapture(object owner, ActorContext actor, A
 public sealed partial class StockSourceSetupService
 {
     internal Task RequireHeldReceiptStorageAsync(CancellationToken ct) => OperatingPolicyStorageAsync(ct);
-    private async Task<SuspensionContext> HeldConfigurationAsync(IClientSessionHandle tx, long poolId, CancellationToken ct) {
+    // One stock decision asks for the same pool's configuration for every held receipt and lot (see RememberedProofAsync).
+    private Task<SuspensionContext> HeldConfigurationAsync(IClientSessionHandle tx, long poolId, CancellationToken ct) =>
+        RememberedProofAsync(tx, "held-configuration:" + poolId.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            reader => reader.HeldConfigurationCoreAsync(tx, poolId, ct), SuspensionContext.Copy);
+    private async Task<SuspensionContext> HeldConfigurationCoreAsync(IClientSessionHandle tx, long poolId, CancellationToken ct) {
         var current = await CurrentSourceAsync(tx, poolId, ct); var owner = InventoryGraph.Location(current["pool"]["location"].AsBsonDocument);
         var locations = new HashSet<StockLocation>();
         foreach (var table in new[] { "stockSourceAliases", "stockSourceAliasDecisions" }) {

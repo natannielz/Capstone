@@ -29,8 +29,8 @@ internal sealed partial class SupplierDocumentRecords(IMongoDatabase database, M
         return await new ProcurementInspectionRecords(database, unit, clock, catalog, orders, qualityGraph).HistoryAsync(tx, row["noticeId"].AsInt64, row["intakeId"].AsInt64, ct);
     }
     internal static void Equal(BsonValue actual, BsonValue expected) { if (!actual.Equals(expected)) throw B.Broken(); }
-    internal async Task<BsonDocument> RowAsync(IClientSessionHandle tx, string table, long id, CancellationToken ct) => await Rows(table).Find(tx,
-        new BsonDocument { { "_id", id }, { "$and", new BsonArray { ProcurementQualityValuationSchemas.CurrentDocumentValidator(table) } } }).SingleOrDefaultAsync(ct) ?? throw B.Broken();
+    internal async Task<BsonDocument> RowAsync(IClientSessionHandle tx, string table, long id, CancellationToken ct) => await TransactionReadMemo.RowAsync(Rows(table), tx,
+        "current-document-schema:" + id, () => new BsonDocument { { "_id", id }, { "$and", new BsonArray { ProcurementQualityValuationSchemas.CurrentDocumentValidator(table) } } }, ct) ?? throw B.Broken();
     internal async Task<BsonDocument> DraftAsync(IClientSessionHandle tx, long id, CancellationToken ct) {
         var row = await RowAsync(tx, B.Drafts, id, ct); var input = B.Input(row["input"]); Equal(row["input"], B.Input(input)); Equal(row["snapshotHash"], B.DraftHash(row));
         Equal(row["draftId"], id); Equal(row["location"], R.Location(input.Location));

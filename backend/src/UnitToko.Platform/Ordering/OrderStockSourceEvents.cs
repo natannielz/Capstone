@@ -1,5 +1,6 @@
 using MongoDB.Bson;
 using MongoDB.Driver;
+using UnitToko.Platform.Mongo;
 using UnitToko.Modules.Contracts;
 using UnitToko.Modules.Ordering;
 using UnitToko.Platform.Authorization;
@@ -54,12 +55,16 @@ public sealed partial class OrderSubmissionService
         }
         var rows = database.GetCollection<BsonDocument>(kind switch { "submission" => B.Orders, "decision" => Decisions,
             "shipment" => SB.Collection, _ => throw OrderStockSourceRecords.Unavailable() });
-        var source = await rows.Find(tx, new BsonDocument("_id", sourceId)).SingleOrDefaultAsync(ct) ?? throw OrderStockSourceRecords.Unavailable();
-        var validator = kind == "shipment" ? OrderLineageSchemas.DispatchValidator() : OrderLineageSchemas.OrderValidator(kind == "submission" ? B.Orders : Decisions);
-        if (!await rows.Find(tx, F.Eq("_id", sourceId) & validator).AnyAsync(ct)) throw OrderStockSourceRecords.Unavailable();
-        var order = kind == "submission" ? source : await database.GetCollection<BsonDocument>(B.Orders)
-            .Find(tx, F.Eq("_id", source["orderId"])).SingleOrDefaultAsync(ct) ?? throw OrderStockSourceRecords.Unavailable();
-        if (!await database.GetCollection<BsonDocument>(B.Orders).Find(tx, F.Eq("_id", order["_id"]) & OrderLineageSchemas.OrderValidator(B.Orders)).AnyAsync(ct) ||
+        // One decision reads the same lineage rows for every allocation it proves; each read is remembered for the transaction
+        // attempt until it writes (TransactionReadMemo), and the schema checks are built only when they actually run.
+        var source = await TransactionReadMemo.OneAsync(rows, tx, new BsonDocument("_id", sourceId), ct) ?? throw OrderStockSourceRecords.Unavailable();
+        if (!await TransactionReadMemo.AnyAsync(rows, tx, "lineage-" + kind + ":" + sourceId, () => F.Eq("_id", sourceId) &
+            (kind == "shipment" ? OrderLineageSchemas.DispatchValidator() : OrderLineageSchemas.OrderValidator(kind == "submission" ? B.Orders : Decisions)), ct))
+            throw OrderStockSourceRecords.Unavailable();
+        var orders = database.GetCollection<BsonDocument>(B.Orders);
+        var order = kind == "submission" ? source : await TransactionReadMemo.OneAsync(orders, tx, new BsonDocument("_id", source["orderId"]), ct)
+            ?? throw OrderStockSourceRecords.Unavailable();
+        if (!await TransactionReadMemo.AnyAsync(orders, tx, "lineage-order:" + order["_id"].ToJson(), () => F.Eq("_id", order["_id"]) & OrderLineageSchemas.OrderValidator(B.Orders), ct) ||
             B.SnapshotHash(order) != order["snapshotHash"].AsString ||
             order["bodyHash"] != AuthorizationStore.CommandHash(Body(OrderDraftBson.Input(order["input"].AsBsonDocument), order["review"].AsString), order["reason"].AsString))
             throw OrderStockSourceRecords.Unavailable();

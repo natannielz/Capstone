@@ -13,6 +13,8 @@ public sealed class MongoFixture : IAsyncLifetime
     internal Action<string, double>? CommandCompleted { get; set; }
     /// <summary>Diagnostics: also name the top-level filter fields of finds and the stage names of aggregates.</summary>
     internal bool CommandShapes { get; set; }
+    /// <summary>Diagnostics: every started command with its name and body (used to count exact repeats).</summary>
+    internal Action<string, BsonDocument>? CommandStarted { get; set; }
 
     public async Task InitializeAsync()
     {
@@ -39,6 +41,7 @@ public sealed class MongoFixture : IAsyncLifetime
         var settings = MongoClientSettings.FromConnectionString(uri);
         var observed = new ConcurrentDictionary<int, string>();
         settings.ClusterConfigurator = builder => {
+            UnitToko.Platform.Mongo.TransactionReadMemo.Track(builder);
             builder.Subscribe<CommandStartedEvent>(command => {
                 if (CommandCompleted is null) return;
                 var target = command.Command.GetValue(command.CommandName, BsonNull.Value);
@@ -48,6 +51,7 @@ public sealed class MongoFixture : IAsyncLifetime
                 if (CommandShapes && command.Command.TryGetValue("pipeline", out var pipeline) && pipeline.IsBsonArray)
                     name += " [" + string.Join(",", pipeline.AsBsonArray.Where(stage => stage.IsBsonDocument).Select(stage => stage.AsBsonDocument.Names.FirstOrDefault())) + "]";
                 observed[command.RequestId] = name;
+                CommandStarted?.Invoke(name, command.Command);
             });
             builder.Subscribe<CommandSucceededEvent>(command => {
                 if (observed.TryRemove(command.RequestId, out var name)) CommandCompleted?.Invoke(name, command.Duration.TotalMilliseconds);
