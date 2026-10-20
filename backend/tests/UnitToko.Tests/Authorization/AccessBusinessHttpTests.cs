@@ -20,7 +20,8 @@ public sealed partial class AccessHttpTests
         var roles = body["roles"]!.AsArray().ToDictionary(role => role!["id"]!.GetValue<string>(), role => role!);
         string[] Values(JsonNode role, string key) => role[key]!.AsArray().Select(item => item!.GetValue<string>()).ToArray();
         Assert.Equal(6, roles.Count);
-        Assert.Equal(new[] { "substitution.accept" }, Values(roles["buyer"], "suggestedPermissions"));
+        Assert.Equal(new[] { Permissions.BranchOrderRequestRead, Permissions.BranchOrderRequestSubmit, Permissions.SubstitutionAccept, Permissions.OrganizationAddressRead },
+            Values(roles["buyer"], "suggestedPermissions"));
         Assert.Contains("order.accept", Values(roles["store-head"], "suggestedPermissions"));
         Assert.Contains("substitution.propose", Values(roles["store-staff"], "suggestedPermissions"));
         foreach (var role in roles.Values)
@@ -29,9 +30,11 @@ public sealed partial class AccessHttpTests
             Assert.DoesNotContain("order.spend.approve", Values(role, "suggestedPermissions"));
             Assert.Empty(Values(role, "suggestedPermissions").Intersect(Values(role, "permissions")));
         }
-        Assert.Equal(new[] { Permissions.BankReceiptRead, Permissions.BankReceiptConfirm, Permissions.BankStatementRead, Permissions.BankStatementStage,
+        // The finance template keeps growing with new finance work (funding, supplier banks, procurement evidence); the banking set must stay suggested.
+        foreach (var permission in new[] { Permissions.BankReceiptRead, Permissions.BankReceiptConfirm, Permissions.BankStatementRead, Permissions.BankStatementStage,
             Permissions.PaymentReviewRead, Permissions.PaymentReviewCorrect, Permissions.ReceivingAccountRead, Permissions.ReceivingAccountDetailsRead,
-            Permissions.ReceivingAccountPropose, Permissions.ReceivingAccountVerify, Permissions.ReceivingAccountApprove }, Values(roles["finance"], "suggestedPermissions"));
+            Permissions.ReceivingAccountPropose, Permissions.ReceivingAccountVerify, Permissions.ReceivingAccountApprove })
+            Assert.Contains(permission, Values(roles["finance"], "suggestedPermissions"));
         Assert.Empty(Values(roles["finance"], "permissions"));
         Assert.Empty(RoleTemplates.Materialize("finance", [], []).Permissions);
         Assert.DoesNotContain(Permissions.PaymentVerify, Values(roles["finance"], "suggestedPermissions"));
