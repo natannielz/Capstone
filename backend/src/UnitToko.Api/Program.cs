@@ -164,6 +164,7 @@ builder.Services.AddSingleton<OrderCommercialPolicyService>();
 builder.Services.AddSingleton<AccountingBookSetupService>();
 builder.Services.AddSingleton<AccountingReportService>();
 builder.Services.AddSingleton<OperationalAnomalyService>();
+builder.Services.AddSingleton<OperatorHealthService>();
 // "Pekerjaan saya": one source per owner queue (each reads through its own authorised service).
 builder.Services.AddSingleton<UnitToko.Platform.Work.IWorkSource, UnitToko.Platform.Billing.PaymentReviewWorkSource>();
 builder.Services.AddSingleton<UnitToko.Platform.Work.IWorkSource, UnitToko.Platform.Ordering.OrderReviewWorkSource>();
@@ -487,6 +488,8 @@ app.MapCatalogEndpoints();
 app.MapCatalogIdentifierEndpoints();
 app.MapScanEndpoints();
 app.MapBranchOrderRequestEndpoints();
+// Operators watch the pilot too (Q10): queue, purge, schema and replication health is part of every release.
+app.MapOperatorHealthEndpoints();
 if (!pilotRelease)
 {
 app.MapAccountContactEndpoints();

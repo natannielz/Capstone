@@ -6609,6 +6609,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/operations/health/query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["QueryOperatorHealth"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ordering/addresses/query": {
         parameters: {
             query?: never;
@@ -13546,6 +13562,26 @@ export interface components {
             operation: string;
             reason: string;
         };
+        OperatorHealthQueryDto: {
+            purpose: string;
+        };
+        OperatorHealthReport: {
+            databaseWritable: boolean;
+            /** Format: date-time */
+            lastDraftPurgeAt: null | string;
+            /** Format: date-time */
+            observedAt: string;
+            ocr: components["schemas"]["QueueHealth"];
+            outbox: components["schemas"]["QueueHealth"];
+            /** Format: int64 */
+            overdueDraftPurges: number | string;
+            /** Format: double */
+            replicationLagSeconds: null | number | string;
+            /** Format: int32 */
+            schemaVersion: number | string;
+            /** Format: int32 */
+            targetSchemaVersion: number | string;
+        };
         OrderAddressesDto: {
             binding: string;
             context: components["schemas"]["OrderContextDto"];
@@ -18428,6 +18464,18 @@ export interface components {
             supplierCharges: components["schemas"]["Money"];
             tax: components["schemas"]["Money"];
             total: components["schemas"]["Money"];
+        };
+        QueueHealth: {
+            /** Format: int64 */
+            dead: number | string;
+            /** Format: int64 */
+            leased: number | string;
+            /** Format: date-time */
+            oldestWaitingAt: null | string;
+            /** Format: int64 */
+            pending: number | string;
+            /** Format: int64 */
+            retrying: number | string;
         };
         ReceiptAmountDto: {
             /** Format: int32 */
@@ -55002,6 +55050,69 @@ export interface operations {
             };
             /** @description Conflict */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    QueryOperatorHealth: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Fresh same-origin anti-forgery token from GET /api/v1/identity/csrf; the matching cookie and exact Origin are also required when identity is enabled. */
+                "X-CSRF-Token": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OperatorHealthQueryDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperatorHealthReport"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

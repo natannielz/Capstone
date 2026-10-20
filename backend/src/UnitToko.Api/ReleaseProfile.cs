@@ -3,7 +3,7 @@ namespace UnitToko.Api;
 public static class ReleaseProfile
 {
     public static readonly string[] PilotReturnPaths = ["/", "/identity/account", "/shop", "/catalog/browse",
-        "/ordering/requests", "/ordering/requests/incoming", "/administration/catalog"];
+        "/ordering/requests", "/ordering/requests/incoming", "/administration/catalog", "/operations/health"];
 
     public static bool IsPilot(IConfiguration configuration) => configuration["Release:Profile"] switch
     {
