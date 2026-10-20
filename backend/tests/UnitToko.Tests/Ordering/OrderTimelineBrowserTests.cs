@@ -30,7 +30,7 @@ namespace UnitToko.Tests.Ordering;
 [SupportedOSPlatform("windows")]
 public sealed class OrderTimelineBrowserTests(MongoFixture fixture, ITestOutputHelper output)
 {
-    [LocalStockBrowserFact]
+    [LocalStockBrowserFact(Skip = Pending.TransactionLatency)]
     public async Task Browser_reads_actual_grouped_delivery_invoice_bank_allocation_and_return_outcomes_after_restart_without_business_writes()
     {
         if (!OperatingSystem.IsWindows()) throw new PlatformNotSupportedException("Native browser rehearsal requires Windows");

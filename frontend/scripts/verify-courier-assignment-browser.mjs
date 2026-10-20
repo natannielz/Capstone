@@ -102,7 +102,7 @@ export async function verifyCourierAssignmentBrowser({config, admin, user, origi
   assert.equal(await current.page.getByRole('region', {name: 'Rincian penugasan', exact: true}).count(), 0);
   const recoveredResponse = current.page.waitForResponse(response => new URL(response.url()).pathname === api + '/operations/query');
   await (await exact(current.page, 'button', 'Periksa hasil penugasan ' + config.shipmentId)).click();
-  const recovered = await recoveredResponse; assert.equal(recovered.status(), 200); assert.deepEqual((await recovered.json()).result, saved.result);
+  const recovered = await recoveredResponse; assert.equal(recovered.status(), 200, 'recovery ' + recovered.status() + ': ' + await recovered.text()); assert.deepEqual((await recovered.json()).result, saved.result);
   await (await exact(current.page, 'region', 'Hasil penugasan')).waitFor();
   assert.equal(await current.page.evaluate(prefix => Object.keys(localStorage).filter(key => key.startsWith(prefix)).length, journalPrefix), 0);
   assert.equal(writes.length, 1); assert.ok(recoveries.some(row => row.actor === config.adminId && row.body.key === saved.key));

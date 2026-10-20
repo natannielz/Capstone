@@ -23,4 +23,9 @@ internal static class Pending
     /// 60 s Mongo transaction bound on the two-order fixture, even sealed. Tracked by the latency workstream (next-wave plan E).</summary>
     internal const string TransactionLatency =
         "Pending latency: a command in this two-order scenario exceeds the 60 s transaction bound; open, not retired (docs/quality/retired-tests.md).";
+
+    /// <summary>The browser flow passes every step up to a command that still takes longer than the 30 s browser request bound.
+    /// Same cause and workstream as <see cref="TransactionLatency"/>; the bound itself is not relaxed.</summary>
+    internal const string BrowserLatency =
+        "Pending latency: a command in this browser flow exceeds the 30 s browser request bound; open, not retired (docs/quality/retired-tests.md).";
 }

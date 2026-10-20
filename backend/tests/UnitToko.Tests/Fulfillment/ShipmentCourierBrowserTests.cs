@@ -41,6 +41,10 @@ public sealed class ShipmentCourierBrowserTests(MongoFixture fixture, ITestOutpu
         Assert.True(Path.IsPathFullyQualified(playwright ?? "") && File.Exists(playwright));
         await using var data = await ShipmentCourierTestData.CreateAsync(fixture, systemClock: true);
         await data.RefreshActorsAsync();
+        // The session endpoint reads each signed-in person's own profile; without one the page is refused (403).
+        foreach (var actor in new[] { data.Admin, data.CourierA, data.CourierB, data.Recipient, data.WrongScope })
+            if (!await data.Rows("accountProfiles").Find(new BsonDocument("_id", actor.UserId)).AnyAsync())
+                await data.Rows("accountProfiles").InsertOneAsync(Profile(actor.UserId, data.Data.Clock.UtcNow));
         var shipment = await data.Queries.ReadAsync(data.CourierA, data.ShipmentId);
         var line = Assert.Single(shipment.Lines);
         var document = await data.Documents.DownloadAsync(data.CourierA, data.ShipmentId, data.DocumentId);
@@ -141,6 +145,9 @@ public sealed class ShipmentCourierBrowserTests(MongoFixture fixture, ITestOutpu
         Assert.Equal(1L, oldBinding["assignmentRevision"].AsInt64); Assert.Equal(2L, receiptBinding["assignmentRevision"].AsInt64);
         Assert.Equal(0, await data.Rows(DeliveryAttemptRecords.Attempts).CountDocumentsAsync(new BsonDocument()));
     }
+    private static BsonDocument Profile(long userId, DateTimeOffset now) => new() { { "_id", userId }, { "schemaVersion", 1 }, { "version", 1L },
+        { "displayName", "Synthetic courier participant " + userId }, { "verifiedEmail", "courier-" + userId + "@example.invalid" },
+        { "verifiedAt", now.UtcDateTime }, { "updatedAt", now.UtcDateTime } };
     private static string Text(long value) => value.ToString(CultureInfo.InvariantCulture);
     private static string Frontend(string root) {
         var path = Environment.GetEnvironmentVariable("UNITTOKO_COURIER_BROWSER_FRONTEND") ?? Path.Combine(root, "frontend");
