@@ -14,6 +14,7 @@ import common from '../administration/access.module.css';
 import styles from '../ordering/order-draft.module.css';
 import {formatDateTime} from '@/lib/format';
 import { SessionAccessState } from "@/components/workspace-kit/session-access-state";
+import { orderNumber } from '@/lib/document-numbers';
 
 type Account = {actorId: string; actions: readonly string[]; session: IdentitySession; observedAt: number};
 const time = (value: string) => formatDateTime(value);
@@ -150,7 +151,7 @@ function AssignmentDesk({account, onDenied}: {account: Account; onDenied: (failu
       <p>Ini hasil permintaan yang tercatat. Muat penugasan untuk melihat siapa yang bertugas saat ini.</p></section>}
     <section className={common.accountSection} aria-label="Daftar penugasan" aria-busy={busy}><h2>Kiriman dalam tugas Anda</h2>
       {busy && <p role="status">Memeriksa penugasan…</p>}{!busy && page.items.length === 0 && <p>Belum ada kiriman dalam akses penugasan Anda.</p>}
-      <ul className={styles.lines}>{page.items.map(row => <li key={row.shipmentId} className={styles.line}><strong>Kiriman {number(row)}</strong><p>Pesanan {row.orderId} · bagian toko {row.suborderId}</p>
+      <ul className={styles.lines}>{page.items.map(row => <li key={row.shipmentId} className={styles.line}><strong>Kiriman {number(row)}</strong><p>Pesanan {orderNumber(row.orderId)} · bagian toko {row.suborderId}</p>
         <p>Kurir yang bertugas: {row.currentAssignment.courierName}</p><p>{row.received ? 'Penerimaan sudah tercatat.' : 'Penerimaan belum tercatat.'}</p>
         <button className={common.secondary} disabled={locked} onClick={() => void select(row.shipmentId)}>Tinjau penugasan {number(row)}</button></li>)}</ul>
       <div className={common.actions}><button className={common.secondary} disabled={locked} onClick={() => {invalidate(); setBefore(null); setReload(value => value + 1);}}>Muat penugasan terbaru</button>

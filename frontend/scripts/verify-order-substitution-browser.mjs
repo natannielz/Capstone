@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { createHash } from 'node:crypto';
+// Order numbers as the screens show them (src/lib/document-numbers.ts).
+const orderNumber = id => 'PSN-' + String(id).padStart(6, '0');
 
 export async function verifyOrderSubstitutionBrowser({ config, maker, user, restartUser, origin, directory }) {
   const path = '/ordering/substitutions', api = '/api/v1/ordering/substitutions', writes = [], recoveries = [], captures = [], errors = [], timings = [];
@@ -104,15 +106,15 @@ export async function verifyOrderSubstitutionBrowser({ config, maker, user, rest
   const afterAccept = await state(); assert.equal(afterAccept.movements, 2); assert.equal(afterAccept.decisions, 2); assert.equal(afterAccept.shipments, 1); assert.equal(afterAccept.financialHash, before.financialHash);
   assert.notEqual(afterAccept.physicalHash, before.physicalHash);
   const spender = observe(await user(config.spenderToken)); await spender.page.goto(origin.origin + '/ordering/reviews');
-  await spender.page.getByRole('button', { name: 'Tinjau pesanan ' + config.orderId, exact: true }).click(); panel = spender.page.getByRole('region', { name: 'Tinjauan keputusan', exact: true });
+  await spender.page.getByRole('button', { name: 'Tinjau pesanan ' + orderNumber(config.orderId), exact: true }).click(); panel = spender.page.getByRole('region', { name: 'Tinjauan keputusan', exact: true });
   await panel.getByLabel('Catatan peninjauan', { exact: true }).fill('Independent approval of exact buyer replacement total');
   await panel.getByRole('button', { name: 'Setujui belanja', exact: true }).click(); await panel.getByRole('button', { name: 'Konfirmasi persetujuan belanja', exact: true }).click();
   await panel.getByText('Peninjauan selesai atau tidak ada cadangan yang dapat dibatalkan.', { exact: true }).waitFor();
   staff = observe(await user(config.makerToken)); await staff.page.goto(origin.origin + '/ordering/reviews');
-  await staff.page.getByRole('button', { name: 'Tinjau pesanan ' + config.orderId + ' / ' + config.suborderId, exact: true }).click(); panel = staff.page.getByRole('region', { name: 'Tinjauan keputusan', exact: true });
+  await staff.page.getByRole('button', { name: 'Tinjau pesanan ' + orderNumber(config.orderId) + ' / ' + config.suborderId, exact: true }).click(); panel = staff.page.getByRole('region', { name: 'Tinjauan keputusan', exact: true });
   await panel.getByLabel('Catatan peninjauan', { exact: true }).fill('Store accepts the explicitly revised buyer package'); await panel.getByRole('button', { name: 'Terima pesanan toko', exact: true }).click();
   await panel.getByRole('button', { name: 'Konfirmasi penerimaan toko', exact: true }).click(); await panel.getByText('Bagian pesanan ini sudah diterima toko.', { exact: true }).waitFor();
-  await staff.page.goto(origin.origin + '/fulfillment/preparations'); await staff.page.getByRole('button', { name: 'Siapkan pesanan ' + config.orderId + ' / ' + config.suborderId, exact: true }).click();
+  await staff.page.goto(origin.origin + '/fulfillment/preparations'); await staff.page.getByRole('button', { name: 'Siapkan pesanan ' + orderNumber(config.orderId) + ' / ' + config.suborderId, exact: true }).click();
   panel = staff.page.getByRole('region', { name: 'Rencana persiapan', exact: true });
   const quantity = panel.getByLabel('Jumlah ' + config.replacementCode, { exact: false });
   // Select by the exact current replacement SKU row, never the original already dispatched line.
@@ -130,7 +132,7 @@ export async function verifyOrderSubstitutionBrowser({ config, maker, user, rest
   await panel.getByRole('button', { name: 'Tinjau keberangkatan', exact: true }).click(); await panel.getByRole('heading', { name: 'Konfirmasi barang dan kurir', exact: true }).waitFor();
   await capture(staff.page, 'replacement-dispatch-review'); await (await ready(staff.page, 'Konfirmasi keberangkatan')).click();
   await staff.page.getByRole('heading', { name: 'Keberangkatan tercatat', exact: true }).waitFor(); await capture(staff.page, 'replacement-dispatched');
-  await buyer.page.goto(origin.origin + '/ordering/orders'); await buyer.page.getByRole('button', { name: 'Lihat pesanan ' + config.orderId, exact: true }).click();
+  await buyer.page.goto(origin.origin + '/ordering/orders'); await buyer.page.getByRole('button', { name: 'Lihat rincian pesanan ' + orderNumber(config.orderId), exact: true }).click();
   await buyer.page.getByRole('link', { name: 'Lihat pengajuan dan keputusan penggantian pesanan ini', exact: true }).click();
   await buyer.page.getByText(/Disetujui pembeli/).waitFor(); await capture(buyer.page, 'order-linked-history');
   const after = await state(); assert.equal(after.shipments, 2); assert.equal(after.movements, 2); assert.equal(after.financialHash, before.financialHash);

@@ -1,4 +1,5 @@
 import * as displayFormat from '../src/lib/format';
+import * as documentNumbers from '../src/lib/document-numbers';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import * as React from 'react';
@@ -107,6 +108,7 @@ function mountDispatch() {
     if (name === '../ordering/order-line-identity') return lineIdentity;
     if (name === './dispatch-client') return {...dispatch, createDispatchGateway: () => gateway};
     if (name === '@/lib/format') return displayFormat;
+    if (name === '@/lib/document-numbers') return documentNumbers;
     if (name === '@/components/workspace-kit/session-access-state') return sessionStateKit ??= load('src/components/workspace-kit/session-access-state.tsx');
     throw new Error('Unexpected mounted dispatch import: ' + name);
   };
@@ -145,7 +147,7 @@ function mountDispatch() {
   function button(label: string) {return find(node => node.type === 'button' && text(node.props.children) === label);}
   async function click(label: string) {const control = button(label); assert.notEqual(control.props.disabled, true); (control.props.onClick as () => void)(); await settle();}
   async function fill() {
-    await settle(); await click(`Periksa keberangkatan pesanan ${source.orderId}`);
+    await settle(); await click(`Periksa keberangkatan pesanan ${documentNumbers.orderNumber(source.orderId)}`);
     for (const [label, value] of [['Jumlah lot 202', '1'], ['Catatan keberangkatan', 'Barang diperiksa']]) {
       const control = nodes(find(node => node.type === 'label' && text(node.props.children) === label).props.children).find(node => node.type === 'input')!;
       (control.props.onChange as (event: unknown) => void)({target: {value}}); await settle();

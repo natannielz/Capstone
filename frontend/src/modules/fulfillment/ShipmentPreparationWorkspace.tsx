@@ -16,6 +16,7 @@ import { createPreparationGateway, initialPreparationValues, prepareShipmentComm
 import common from '../administration/access.module.css';
 import styles from '../ordering/order-draft.module.css';
 import { SessionAccessState } from "@/components/workspace-kit/session-access-state";
+import { orderNumber } from '@/lib/document-numbers';
 
 type Account = { actorId: string; actions: readonly string[]; session: IdentitySession; observedAt: number };
 function message(error: unknown) {
@@ -125,13 +126,13 @@ function PreparationDesk({ account, onFailure }: { account: Account; onFailure: 
     {notice && <p role="status" className={common.success}>{notice}</p>}
     <section className={common.accountSection} aria-label="Pesanan siap disiapkan" aria-busy={busy}><h2>Pesanan diterima toko</h2>
       {busy && <p role="status">Memuat persiapan…</p>}{!busy && page.items.length === 0 && <p>Belum ada sisa pesanan yang dapat disiapkan dalam penugasan ini.</p>}
-      <ul className={styles.lines}>{page.items.map(item => <li className={styles.line} key={item.suborderId}><strong>{item.buyerName}</strong> · Pesanan {item.orderId}
+      <ul className={styles.lines}>{page.items.map(item => <li className={styles.line} key={item.suborderId}><strong>{item.buyerName}</strong> · Pesanan {orderNumber(item.orderId)}
         <p>{item.lines.map(line => line.productName + ' — ' + line.definition.packageLabel).join(', ')}</p>
-        <button className={common.secondary} disabled={locked} onClick={() => void select(item.suborderId)}>Siapkan pesanan {item.orderId} / {item.suborderId}</button></li>)}</ul>
+        <button className={common.secondary} disabled={locked} onClick={() => void select(item.suborderId)}>Siapkan pesanan {orderNumber(item.orderId)} / {item.suborderId}</button></li>)}</ul>
       <div className={common.actions}><button className={common.secondary} disabled={locked} onClick={() => { setBefore(null); setReload(value => value + 1); }}>Muat pesanan terbaru</button>
         {page.hasMore && <button className={common.secondary} disabled={locked} onClick={() => setBefore(page.items.at(-1)!.suborderId)}>Pesanan lebih lama</button>}</div>
     </section>
-    {selected && <section ref={panel} tabIndex={-1} className={styles.review} aria-label="Rencana persiapan"><h2>Siapkan pesanan {selected.orderId}</h2>
+    {selected && <section ref={panel} tabIndex={-1} className={styles.review} aria-label="Rencana persiapan"><h2>Siapkan pesanan {orderNumber(selected.orderId)}</h2>
       <p>{selected.buyerName}</p><p className={styles.address}>{selected.delivery.recipientName} · {selected.delivery.phone}{'\n'}{selected.delivery.address}{'\n'}{selected.delivery.city} {selected.delivery.postalCode}</p>
       {saved && <p role="status">Persiapan versi {saved.revision} tersimpan.{!saved.currentSourceMatches && ' Pesanan sudah berubah; persiapan ini perlu ditinjau ulang sebelum digunakan.'}</p>}
       {selected.canPrepare && !staged && <ScanInput key={selected.suborderId + ':' + selected.review} actorId={actorId} disabled={locked} current={current}

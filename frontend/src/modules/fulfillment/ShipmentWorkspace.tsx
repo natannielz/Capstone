@@ -17,6 +17,7 @@ import common from '../administration/access.module.css';
 import styles from '../ordering/order-draft.module.css';
 import { dateTimeFormatter } from '@/lib/format';
 import { SessionAccessState } from "@/components/workspace-kit/session-access-state";
+import { orderNumber } from '@/lib/document-numbers';
 
 type Account = { actorId: string; actions: readonly string[]; session: IdentitySession; observedAt: number };
 const time = (value: string) => dateTimeFormatter.format(new Date(value));
@@ -100,14 +101,14 @@ function ShipmentList({ account, onDenied }: { account: Account; onDenied: (fail
     {!canRead && <p>Akses saat ini memungkinkan pemeriksaan hasil catatan kunjungan Anda. Daftar kiriman memerlukan akses baca kiriman yang masih berlaku.</p>}
     {canRead && <section className={common.accountSection} aria-label="Daftar kiriman" aria-busy={busy}><h2>Barang yang diberangkatkan</h2>
       {busy && <p role="status">Memuat kiriman…</p>}{!busy && page.items.length === 0 && <p>Belum ada kiriman dalam akses Anda.</p>}
-      <ul className={styles.lines}>{page.items.map(item => <li className={styles.line} key={item.id}><strong>{item.buyerName}</strong><p>Kiriman {number(item)} · Pesanan {item.orderId}</p>
+      <ul className={styles.lines}>{page.items.map(item => <li className={styles.line} key={item.id}><strong>{item.buyerName}</strong><p>Kiriman {number(item)} · Pesanan {orderNumber(item.orderId)}</p>
         <p>{time(item.dispatchedAt)} WIB · Kurir saat keberangkatan: {item.courierName}</p><p>Kurir yang bertugas: {item.currentAssignment.courierName}</p><p>{item.lines.map(line => `${line.productName} — ${line.packages} ${line.definition.packageLabel}`).join(', ')}</p>
         <button className={common.secondary} disabled={busy || childBusy || recovering || offline} onClick={event => void open(item.id, event.currentTarget)}>Lihat kiriman {number(item)}</button></li>)}</ul>
       <div className={common.actions}><button className={common.secondary} disabled={busy || childBusy || recovering || offline} onClick={() => { setBefore(null); setRevision(value => value + 1); }}>Muat kiriman terbaru</button>
         {page.hasMore && <button className={common.secondary} disabled={busy || childBusy || recovering || offline} onClick={() => setBefore(page.items.at(-1)!.id)}>Kiriman lebih lama</button>}</div>
     </section>}
     {selected && <section ref={detail} tabIndex={-1} className={styles.review} aria-label="Rincian kiriman"><h2>Kiriman {number(selected)}</h2>
-      <p>{selected.buyerName} · Pesanan {selected.orderId}</p><p>Diberangkatkan {time(selected.dispatchedAt)} WIB · Kurir saat keberangkatan: {selected.courierName}</p><p>Kurir yang bertugas: {selected.currentAssignment.courierName} · sejak {time(selected.currentAssignment.effectiveAt)} WIB.</p>
+      <p>{selected.buyerName} · Pesanan {orderNumber(selected.orderId)}</p><p>Diberangkatkan {time(selected.dispatchedAt)} WIB · Kurir saat keberangkatan: {selected.courierName}</p><p>Kurir yang bertugas: {selected.currentAssignment.courierName} · sejak {time(selected.currentAssignment.effectiveAt)} WIB.</p>
       <h3>Tujuan</h3><p className={styles.address}>{selected.delivery.recipientName} · {selected.delivery.phone}{'\n'}{selected.delivery.address}{'\n'}{selected.delivery.city} {selected.delivery.postalCode}</p>
       {selected.delivery.instructions && <p>Petunjuk: {selected.delivery.instructions}</p>}<h3>Kemasan yang diberangkatkan</h3>
       <ul>{selected.lines.map(line => <li key={line.skuId}><strong>{line.productName}</strong> · {line.skuCode}<p>{line.packages} {line.definition.packageLabel} · isi {line.definition.baseUnitsPerPackage} {line.definition.baseUnitCode} per kemasan · total {line.baseUnits} {line.definition.baseUnitCode}</p></li>)}</ul>

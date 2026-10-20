@@ -7,6 +7,8 @@ import { createRequire } from 'node:module';
 import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import next from 'next';
+// Order numbers as the screens show them (src/lib/document-numbers.ts).
+const orderNumber = id => 'PSN-' + String(id).padStart(6, '0');
 
 const chunks = []; for await (const chunk of process.stdin) chunks.push(chunk);
 const config = JSON.parse(Buffer.concat(chunks).toString('utf8')), api = new URL(config.apiAddress), origin = new URL(config.origin);
@@ -131,7 +133,7 @@ try {
   assert.equal(await storeReview.getByRole('button', { name: 'Terima pesanan toko', exact: true }).count(), 0);
   assert.equal((await storeReview.innerText()).includes('Total belanja:'), false);
   const approver = await user(config.approverToken); await approver.page.goto(origin.origin + '/ordering/reviews');
-  await approver.page.getByRole('button', { name: 'Tinjau pesanan ' + orderId, exact: true }).click();
+  await approver.page.getByRole('button', { name: 'Tinjau pesanan ' + orderNumber(orderId), exact: true }).click();
   const branchReview = approver.page.getByRole('region', { name: 'Tinjauan keputusan', exact: true }); await branchReview.waitFor();
   assert.match(await branchReview.innerText(), /Total belanja: Rp25\.500,50/);
   assert.equal(await branchReview.evaluate(element => element === document.activeElement), true);
@@ -192,7 +194,7 @@ try {
   assert.equal(await denied.page.getByRole('region', { name: 'Rencana persiapan', exact: true }).count(), 0);
   const cancellationPage = await buyer.context.newPage(); pages.push(cancellationPage); cancellationPage.setDefaultTimeout(15000); cancellationPage.on('pageerror', error => errors.push(error.message));
   await cancellationPage.goto(origin.origin + '/ordering/reviews');
-  await cancellationPage.getByRole('button', { name: 'Tinjau pesanan ' + orderId, exact: true }).click();
+  await cancellationPage.getByRole('button', { name: 'Tinjau pesanan ' + orderNumber(orderId), exact: true }).click();
   const cancellation = cancellationPage.getByRole('region', { name: 'Tinjauan keputusan', exact: true });
   await cancellation.getByLabel('Catatan peninjauan').fill('Sisa kebutuhan fixture dibatalkan sebelum dikirim');
   await cancellation.getByRole('button', { name: 'Batalkan sisa pesanan', exact: true }).click();
@@ -217,7 +219,7 @@ try {
   await page.getByRole('button', { name: /^Ajukan (pesanan|untuk persetujuan)$/ }).click();
   await confirmed.waitFor(); await page.getByRole('heading', { name: 'Rincian pesanan tersimpan', exact: true }).waitFor();
   const rejectedOrderId = (await confirmed.getByRole('heading').innerText()).match(/[0-9]+/)[0]; assert.notEqual(rejectedOrderId, orderId);
-  await approver.page.reload(); await approver.page.getByRole('button', { name: 'Tinjau pesanan ' + rejectedOrderId, exact: true }).click();
+  await approver.page.reload(); await approver.page.getByRole('button', { name: 'Tinjau pesanan ' + orderNumber(rejectedOrderId), exact: true }).click();
   await branchReview.getByLabel('Catatan peninjauan').fill('Kebutuhan kedua fixture ditolak cabang');
   await branchReview.getByRole('button', { name: 'Tolak belanja', exact: true }).click();
   await branchReview.getByRole('button', { name: 'Konfirmasi penolakan', exact: true }).click();
@@ -229,18 +231,18 @@ try {
   await page.getByRole('link', { name: /^Pesanan saya/ }).click();
   await page.getByRole('heading', { name: 'Pesanan saya', exact: true }).waitFor();
   const history = page.getByRole('region', { name: 'Daftar pesanan saya', exact: true });
-  await history.getByRole('button', { name: 'Lihat pesanan ' + rejectedOrderId, exact: true }).waitFor();
-  assert.deepEqual(await history.getByRole('button', { name: /^Lihat pesanan / }).allTextContents(), ['Lihat pesanan ' + rejectedOrderId, 'Lihat pesanan ' + orderId]);
-  await history.getByRole('button', { name: 'Lihat pesanan ' + rejectedOrderId, exact: true }).click();
+  await history.getByRole('button', { name: 'Lihat rincian pesanan ' + orderNumber(rejectedOrderId), exact: true }).waitFor();
+  assert.deepEqual(await history.getByRole('button', { name: /^Lihat rincian pesanan / }).evaluateAll(buttons => buttons.map(button => button.getAttribute('aria-label'))), ['Lihat rincian pesanan ' + orderNumber(rejectedOrderId), 'Lihat rincian pesanan ' + orderNumber(orderId)]);
+  await history.getByRole('button', { name: 'Lihat rincian pesanan ' + orderNumber(rejectedOrderId), exact: true }).click();
   const details = page.getByRole('region', { name: 'Rincian pesanan', exact: true });
   await details.getByText('Belanja cabang ditolak', { exact: true }).waitFor();
   assert.match(await details.innerText(), /12 piece per kemasan · total 24 piece/);
   assert.equal(await details.evaluate(element => element === document.activeElement), true);
-  await history.getByRole('button', { name: 'Lihat pesanan ' + orderId, exact: true }).click();
+  await history.getByRole('button', { name: 'Lihat rincian pesanan ' + orderNumber(orderId), exact: true }).click();
   await details.getByText('Sisa pesanan dibatalkan', { exact: true }).waitFor();
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
   await page.screenshot({ path: resolve(directory, 'order-history-mobile.png'), fullPage: true });
-  await page.reload(); await history.getByRole('button', { name: 'Lihat pesanan ' + orderId, exact: true }).waitFor();
+  await page.reload(); await history.getByRole('button', { name: 'Lihat rincian pesanan ' + orderNumber(orderId), exact: true }).waitFor();
   assert.deepEqual(errors, []); console.log('REAL_ORDER_BROWSER_PASS ' + JSON.stringify({ droppedCommittedResponses: dropped, submitAttempts: writes.length,
     decisionAttempts: decisionWrites.length, recoveredApprovals: droppedDecisions, preparationAttempts: preparationWrites.length, recoveredPreparations: droppedPreparations,
     mobile: true, ownHistory: true, unauthorizedDetail: status }));

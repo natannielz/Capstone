@@ -15,6 +15,7 @@ import common from '../administration/access.module.css';
 import styles from '../billing/invoice.module.css';
 import {formatDate, formatDateTime} from '@/lib/format';
 import { SessionAccessState } from "@/components/workspace-kit/session-access-state";
+import { orderNumber } from '@/lib/document-numbers';
 
 type Account = {actorId: string; actions: readonly string[]; session: IdentitySession; observedAt: number};
 const currency = (value: string) => orderAmount('IDR', value);
@@ -69,9 +70,9 @@ function Facts({value}: {value: InvoiceReleaseFacts}) {
     <p>Hari kerja: {value.workingDays.map(day => days[day]).join(', ') || 'Tidak dicantumkan'}.</p><p>Hari libur: {value.holidays.map(date).join(', ') || 'Tidak dicantumkan'}.</p>
     <p>Dokumen pajak: {value.taxDocumentProcess}</p><p>Penomoran: {value.numberingProcedure}</p><p>Penerbitan ulang: {value.reissueProcedure}</p>
     <ul className={styles.lines}>{value.lines.map(line => <li className={styles.line} key={[line.receiptId, line.skuId, line.lineRevision].join(':')}><strong>{line.productName} — {line.packageLabel}</strong>
-      <p>{line.skuCode} · baris {line.lineRevision} · bukti penerimaan {line.receiptId} · pesanan {line.orderId}</p><p>Diterima {line.acceptedBaseUnits} satuan dasar · harga kemasan {currency(line.unitPrice)} · bersih {currency(line.net)}</p>
+      <p>{line.skuCode} · baris {line.lineRevision} · bukti penerimaan {line.receiptId} · pesanan {orderNumber(line.orderId)}</p><p>Diterima {line.acceptedBaseUnits} satuan dasar · harga kemasan {currency(line.unitPrice)} · bersih {currency(line.net)}</p>
       <p>Pajak: {line.tax === null ? 'Belum diisi' : currency(line.tax)} · biaya: {line.charges === null ? 'Belum diisi' : currency(line.charges)}</p></li>)}</ul>
-    <h3>Batas biaya pesanan</h3><ul>{value.budgets.map(item => <li key={item.orderId}>Pesanan {item.orderId}: pajak disepakati {currency(item.approvedTax)}, sudah dibukukan {currency(item.postedTax)}; biaya disepakati {currency(item.approvedCharges)}, sudah dibukukan {currency(item.postedCharges)}.</li>)}</ul>
+    <h3>Batas biaya pesanan</h3><ul>{value.budgets.map(item => <li key={item.orderId}>Pesanan {orderNumber(item.orderId)}: pajak disepakati {currency(item.approvedTax)}, sudah dibukukan {currency(item.postedTax)}; biaya disepakati {currency(item.approvedCharges)}, sudah dibukukan {currency(item.postedCharges)}.</li>)}</ul>
     {value.accounts.length > 0 && <><h3>Akun pembukuan yang diperiksa</h3><ul>{value.accounts.map(item => <li key={item.role}>{({receivable: 'Piutang', revenue: 'Pendapatan', tax: 'Pajak', charges: 'Biaya'})[item.role]}: {item.mappingKey} → akun {item.accountCode}</li>)}</ul></>}
   </>;
 }

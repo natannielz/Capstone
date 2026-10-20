@@ -17,6 +17,7 @@ import { OrderDeliveryPanel } from './OrderDeliveryPanel';
 import common from '../administration/access.module.css';
 import styles from './order-checkout.module.css';
 import { SessionAccessState } from "@/components/workspace-kit/session-access-state";
+import { orderNumber } from '@/lib/document-numbers';
 
 type Account = { actorId: string; session: IdentitySession; observedAt: number; draftId: string | null };
 function message(error: unknown, reading = false) {
@@ -193,7 +194,7 @@ function CheckoutDesk({ account, onFailure }: { account: Account; onFailure: (er
       }} />
     {recovery.error !== null && <p role="alert" className={common.alert}>{accessMessage(recovery.error)}</p>}
     {error && <p role="alert" className={common.alert}>{message(error.value, error.reading)}</p>}
-    {otherReceipt && <section className={styles.confirmed}><h2>Pesanan {otherReceipt.orderId} tercatat</h2><p>Hasil permintaan semula telah terkonfirmasi. Buka riwayat untuk melihat isinya.</p><Link href="/ordering/orders">Buka pesanan saya</Link></section>}
+    {otherReceipt && <section className={styles.confirmed}><h2>Pesanan {orderNumber(otherReceipt.orderId)} tercatat</h2><p>Hasil permintaan semula telah terkonfirmasi. Buka riwayat untuk melihat isinya.</p><Link href="/ordering/orders">Buka pesanan saya</Link></section>}
     {draft && groups.length === 0 && <OrderDeliveryPanel key={draft.id} actorId={actorId} draft={draft} locked={locked} onFailure={onFailure}
       onSaved={async () => { const saved = await drafts.read(actorId, draft.id, signal()); if (current()) setDraft(saved); }} />}
     {draft && <section className={styles.draft}><div><h2>Barang dari keranjang</h2><p className={styles.draftReference}>{draft.input.selections.length} barang{draft.input.purchaseReference ? ' · ' + draft.input.purchaseReference : ''}</p>
@@ -211,7 +212,7 @@ function CheckoutDesk({ account, onFailure }: { account: Account; onFailure: (er
           <p>{item.group.organizationName ?? `Organisasi ${item.group.organizationId}`} · {item.group.input.selections.length} jenis kemasan</p>
           {item.error && <p role="alert" className={common.alert}>{message(item.error.value, item.error.reading)}</p>}
           {item.uncertain && <p role="status">Hasil kelompok ini belum terkonfirmasi. Gunakan Periksa hasil untuk permintaan semula; pengajuan ulang ditahan.</p>}
-          {item.result && <div className={styles.confirmed}><div className={styles.confirmedHeading}><PackageCheck size={28} strokeWidth={1.5} aria-hidden="true" /><h2>Pesanan {item.result.orderId} tercatat</h2></div>
+          {item.result && <div className={styles.confirmed}><div className={styles.confirmedHeading}><PackageCheck size={28} strokeWidth={1.5} aria-hidden="true" /><h2>Pesanan {orderNumber(item.result.orderId)} tercatat</h2></div>
             <p>{item.order?.progress.cancelled ? 'Sisa pesanan dibatalkan. Cadangan barang yang belum dikirim telah dilepas.' : item.order?.progress.spendingState === 'Rejected' ? 'Belanja cabang ditolak. Cadangan pesanan telah dilepas.' : (item.order?.progress.spendingState ?? item.result.spendingState) === 'Pending' ? 'Menunggu persetujuan belanja cabang. Penerimaan oleh toko merupakan langkah terpisah.' : 'Belanja telah disetujui atau tidak memerlukan persetujuan tambahan sesuai aturan pembelian.'}</p>
             {item.order && <p>{item.order.progress.acceptedSuborders.length} dari {item.result.suborderIds.length} kelompok pemenuhan telah diterima toko.</p>}
             {item.order && item.order.progress.rejectedSuborders.length > 0 && <p>{item.order.progress.rejectedSuborders.length} kelompok ditolak toko; cadangan bagian tersebut telah dilepas.</p>}

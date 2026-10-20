@@ -16,6 +16,7 @@ import { createOrderSubstitutionGateway, replacementSelection, substitutionOpera
 import styles from '../administration/access.module.css';
 import { formatDateTime } from '@/lib/format';
 import { SessionAccessState } from "@/components/workspace-kit/session-access-state";
+import { orderNumber } from '@/lib/document-numbers';
 
 type Account = { actorId: string; actions: readonly string[]; session: IdentitySession; observedAt: number };
 type Page<T> = { items: T[]; hasMore: boolean };
@@ -163,10 +164,10 @@ function SubstitutionDesk({ account, orderId, onFailure }: { account: Account; o
     {reading && <p role="status">Memuat pesanan dan pengajuan…</p>}
     {!forBuyer && <section className={styles.accountSection}><h2>Ajukan barang pengganti</h2><p>Pilih sisa barang yang belum dikirim. Pengajuan ini belum mengubah pesanan atau cadangan barang.</p>
       {!reading && targets.items.length === 0 && <p>Belum ada pesanan dalam penugasan Anda.</p>}
-      <ul className={styles.recoveryList}>{targets.items.map(value => <li key={value.suborderId}><div><strong>{value.buyerName}</strong><p>Pesanan {value.orderId} · {value.lines.filter(line => line.remainingPackages > 0).map(line => `${line.line.familyName}: ${line.remainingPackages} ${line.line.definition.packageLabel}`).join(', ') || 'Tidak ada sisa barang'}</p></div>
-        <button className={styles.secondary} disabled={locked || !value.canPropose} onClick={() => { resetSelection(); setTarget(value); }}>Pilih pesanan {value.orderId}</button></li>)}</ul>
+      <ul className={styles.recoveryList}>{targets.items.map(value => <li key={value.suborderId}><div><strong>{value.buyerName}</strong><p>Pesanan {orderNumber(value.orderId)} · {value.lines.filter(line => line.remainingPackages > 0).map(line => `${line.line.familyName}: ${line.remainingPackages} ${line.line.definition.packageLabel}`).join(', ') || 'Tidak ada sisa barang'}</p></div>
+        <button className={styles.secondary} disabled={locked || !value.canPropose} onClick={() => { resetSelection(); setTarget(value); }}>Pilih pesanan {orderNumber(value.orderId)}</button></li>)}</ul>
       {targets.hasMore && <button className={styles.secondary} disabled={locked} onClick={() => { resetSelection(); setTargetBefore(targets.items.at(-1)!.suborderId); }}>Pesanan berikutnya</button>}
-      {target && <div className={styles.review}><h3>{target.buyerName} · Pesanan {target.orderId}</h3>
+      {target && <div className={styles.review}><h3>{target.buyerName} · Pesanan {orderNumber(target.orderId)}</h3>
         <label><span id={name('original')}>Barang asal</span><select aria-labelledby={name('original')} disabled={locked} value={originalSku} onChange={event => { clearReview(); setOriginalSku(event.target.value); setOriginalPackages(''); }}><option value="">Pilih barang yang belum dikirim</option>
           {target.lines.filter(value => value.remainingPackages > 0).map(value => <option key={substitutionLineKey(value.line)} value={substitutionLineKey(value.line)}>{label(value.line)} · {orderAmount(value.line.price.currency, value.line.price.unitPrice)} · {value.line.lineRevision === '0' ? 'pesanan awal' : `persetujuan ke-${value.line.lineRevision}`} · sisa {value.remainingPackages}</option>)}</select></label>
         <label><span id={name('original-packages')}>Jumlah kemasan asal yang diganti</span><input aria-labelledby={name('original-packages')} disabled={locked} inputMode="numeric" value={originalPackages} onChange={event => { clearReview(); setOriginalPackages(event.target.value); }} /></label>
@@ -180,9 +181,9 @@ function SubstitutionDesk({ account, orderId, onFailure }: { account: Account; o
       </div>}
     </section>}
     <section className={styles.accountSection}><h2>{forBuyer ? 'Pengajuan untuk pembeli' : 'Riwayat pengajuan'}</h2>
-      {orderId && <p>Penggantian terkait pesanan {orderId}. Rincian pesanan awal dan kiriman sebelumnya tetap tersimpan.</p>}
+      {orderId && <p>Penggantian terkait pesanan {orderNumber(orderId)}. Rincian pesanan awal dan kiriman sebelumnya tetap tersimpan.</p>}
       {!reading && history.items.length === 0 && <p>Belum ada pengajuan penggantian.</p>}
-      <ul className={styles.recoveryList}>{history.items.map(value => <li key={value.proposalId}><div><strong>{value.buyerName} · Pesanan {value.orderId}</strong>
+      <ul className={styles.recoveryList}>{history.items.map(value => <li key={value.proposalId}><div><strong>{value.buyerName} · Pesanan {orderNumber(value.orderId)}</strong>
         <p>{value.input.originalPackages} × {label(value.original)} → {value.replacement.packages} × {label(value.replacement)}</p>
         <p>Harga pengganti {orderAmount(value.replacement.price.currency, value.replacement.price.unitPrice)} per kemasan · subtotal {orderAmount(value.replacement.price.currency, value.replacement.catalogSubtotal)}</p>
         <p>{statusLabel[value.status]} · diajukan {formatDateTime(value.proposedAt)}{value.decidedAt ? ` · diputuskan ${formatDateTime(value.decidedAt)}` : ''}</p></div>
@@ -190,7 +191,7 @@ function SubstitutionDesk({ account, orderId, onFailure }: { account: Account; o
       {history.hasMore && <button className={styles.secondary} disabled={locked} onClick={() => { clearReview(); setHistoryBefore(history.items.at(-1)!.proposalId); }}>Pengajuan sebelumnya</button>}
     </section>
     {(proposalReview || decisionReview) && <section ref={panel} tabIndex={-1} className={styles.review} aria-labelledby="substitution-review-heading"><h2 id="substitution-review-heading">{proposalReview ? 'Konfirmasi pengajuan penggantian' : decisionReview!.decision === 'Accept' ? 'Konfirmasi persetujuan pembeli' : 'Konfirmasi penolakan pembeli'}</h2>
-      <p>Pesanan {proposalReview?.input.orderId ?? decisionReview!.orderId}</p>
+      <p>Pesanan {orderNumber((proposalReview?.input.orderId ?? decisionReview!.orderId))}</p>
       <p><strong>Barang asal:</strong> {proposalReview?.input.originalPackages ?? decisionReview!.originalPackages} × {label((proposalReview ?? decisionReview)!.original)} · {orderAmount((proposalReview ?? decisionReview)!.original.price.currency, (proposalReview ?? decisionReview)!.original.price.unitPrice)} per kemasan</p>
       <p><strong>Barang pengganti:</strong> {(proposalReview ?? decisionReview)!.replacement.packages} × {label((proposalReview ?? decisionReview)!.replacement)} · {orderAmount((proposalReview ?? decisionReview)!.replacement.price.currency, (proposalReview ?? decisionReview)!.replacement.price.unitPrice)} per kemasan</p>
       {proposalReview ? <p>Pembeli akan meninjau ulang ketersediaan, harga, pajak, biaya, dan total pesanan sebelum memberikan persetujuan.</p> : <>
