@@ -64,7 +64,7 @@ export function parsePriceProposal(value: unknown) {
   if (status === 'proposed' ? decision !== null || price !== null : decision === null || decision.action !== status || Date.parse(decision.decidedAt) < Date.parse(proposedAt)) return priceInvalid();
   if (status === 'approve' ? price === null || price.skuId !== skuId || price.version !== String(BigInt(base.expected.priceVersion) + BigInt(1)) || price.unitPrice !== input.unitPrice || price.currency !== input.currency || Date.parse(price.effectiveAt) !== Date.parse(decision!.decidedAt) : price !== null) return priceInvalid();
   return { proposalId, skuId, revision, status: status as 'proposed' | 'approve' | 'reject' | 'withdraw', sku: base.sku, definition: base.definition, expected: base.expected,
-    basePrice: base.currentPrice, input, proposedAt, reason: text(v.reason, 1000), decision, price };
+    basePrice: base.currentPrice, input, proposedAt, proposedBy: priceId(v.proposedBy), reason: text(v.reason, 1000), decision, price };
 }
 export type PriceProposal = ReturnType<typeof parsePriceProposal>;
 export function priceOutcome(value: unknown, action: PriceAction, skuId: string, proposalId?: string) {
@@ -93,4 +93,19 @@ export type PriceCommand = ReturnType<typeof preparePriceProposal> | ReturnType<
 export function priceAction(operation: string): PriceAction {
   const match = /^catalog\.price\.(propose|approve|reject|withdraw)$(?![\s\S])/.exec(operation);
   return match ? match[1] as PriceAction : inputInvalid();
+}
+
+/** Moves of this size or more are flagged for the reviewer to check against the contract and the reference. */
+export const LARGE_PRICE_CHANGE_PERCENT = 20;
+type PriceAmount = { currency: string; unitPrice: string };
+/** How a proposed price moves from the current one: the exact amount, a one-decimal percentage (rounded half up) and a flag on large moves. */
+export function priceChange(base: PriceAmount | null, proposed: PriceAmount): { kind: 'first' | 'currency' | 'up' | 'down' | 'same'; difference: string | null; percent: string | null; large: boolean } {
+  if (base === null) return { kind: 'first', difference: null, percent: null, large: false };
+  if (base.currency !== proposed.currency) return { kind: 'currency', difference: null, percent: null, large: true };
+  const zero = BigInt(0), from = BigInt(base.unitPrice.replace('.', '')), delta = BigInt(proposed.unitPrice.replace('.', '')) - from;
+  const size = delta < zero ? -delta : delta, digits = size.toString().padStart(3, '0');
+  const kind = delta > zero ? 'up' : delta < zero ? 'down' : 'same', difference = digits.slice(0, -2) + '.' + digits.slice(-2);
+  if (from === zero) return { kind, difference, percent: kind === 'same' ? '0,0' : null, large: kind !== 'same' };
+  const tenths = (size * BigInt(2000) + from) / (from * BigInt(2)), ten = BigInt(10);
+  return { kind, difference, percent: (tenths / ten).toString() + ',' + (tenths % ten).toString(), large: tenths >= BigInt(LARGE_PRICE_CHANGE_PERCENT * 10) };
 }

@@ -47,6 +47,6 @@ internal static class CatalogPriceResponses
             Time(row["proposedAt"]), row["reason"].AsString,
             decision is null ? null : new(new(decision["_id"].AsInt64), decision["decision"].AsString, Time(decision["decidedAt"]),
                 decision["reviewReference"].AsString, decision["reason"].AsString),
-            view["price"].IsBsonNull ? null : Price(view["price"].AsBsonDocument));
+            view["price"].IsBsonNull ? null : Price(view["price"].AsBsonDocument), new(row["proposedBy"].AsInt64));
     }
 }

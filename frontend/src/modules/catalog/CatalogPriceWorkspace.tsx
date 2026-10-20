@@ -12,7 +12,7 @@ import { IdentityFailure, identityMessage, sessionTiming, type IdentitySession }
 import { createCatalogPriceGateway } from './catalog-price-client';
 import { CatalogReadGate } from './catalog-editor-state';
 import { PriceMutationLedger, priceRecoverySku } from './catalog-price-recovery';
-import { pricePath, preparePriceProposal, preparePriceDecision, type PriceAccess, type PriceChoice, type PricePreview,
+import { pricePath, preparePriceProposal, preparePriceDecision, priceChange, type PriceAccess, type PriceChoice, type PricePreview,
   type PriceProposal, type PriceCommand, type CatalogPrice } from './catalog-price-workflow';
 import styles from '../administration/access.module.css';
 import { dateTimeFormatter, formatMoney, formatRupiah } from "@/lib/format";
@@ -38,6 +38,15 @@ const amount = (price: { currency: string; unitPrice: string } | null) => {
   return formatMoney(price.currency, price.unitPrice);
 };
 const date = (value: string) => dateTimeFormatter.format(new Date(value));
+/** Current, proposed and the move between them, so a reviewer sees the size of a change before reading the reason. */
+function PriceComparison({ base, proposed }: { base: { currency: string; unitPrice: string } | null; proposed: { currency: string; unitPrice: string } }) {
+  const change = priceChange(base, proposed);
+  const moved = change.kind === 'first' ? 'Harga pertama untuk kemasan ini' : change.kind === 'currency' ? 'Mata uang berbeda dari harga berlaku'
+    : change.kind === 'same' ? 'Tidak berubah' : (change.kind === 'up' ? 'Naik ' : 'Turun ') + formatMoney(proposed.currency, change.difference!) + (change.percent ? ' (' + (change.kind === 'up' ? '+' : '−') + change.percent + '%)' : '');
+  return <><dl className={styles.facts}><div><dt>Harga berlaku</dt><dd>{amount(base)}</dd></div><div><dt>Harga diajukan</dt><dd><strong>{amount(proposed)}</strong></dd></div>
+    <div><dt>Perubahan</dt><dd>{moved}</dd></div></dl>
+    {change.large && <p className={styles.alert}>Perubahan besar. Periksa kontrak, acuan harga dan alasan sebelum memutuskan.</p>}</>;
+}
 const status = (value: PriceProposal['status']) => ({ proposed: 'Menunggu tinjauan', approve: 'Disetujui', reject: 'Ditolak', withdraw: 'Ditarik' })[value];
 
 export function CatalogPriceWorkspace() {
@@ -188,18 +197,20 @@ function PriceDesk({ actorId, actions, session, observedAt, onRefresh, onFailure
             <label>Alasan pengajuan<textarea value={reason} maxLength={1000} onChange={event => setReason(event.target.value)} required /></label><button className={styles.primary}>Tinjau pengajuan harga</button>
           </fieldset></form>}
           <section><h3>Pengajuan harga</h3>{proposals.length === 0 ? <p>Belum ada pengajuan pada halaman ini.</p> : <ul className={styles.queueList}>{proposals.map(item => <li key={item.proposalId}><button className={selected?.proposalId === item.proposalId ? styles.selectedRow : styles.queueRow} disabled={locked || detailLoading}
-            onClick={() => { setSelected(item); setReason(''); setReference(''); }}><strong>{amount(item.input)}</strong><span>{status(item.status)} · {date(item.proposedAt)}</span></button></li>)}</ul>}
+            onClick={() => { setSelected(item); setReason(''); setReference(''); }}><strong>{amount(item.input)}</strong><span>{status(item.status)} · {date(item.proposedAt)}{(() => { const change = priceChange(item.basePrice, item.input); return change.percent && change.kind !== 'same' ? ' · ' + (change.kind === 'up' ? '+' : '−') + change.percent + '%' : ''; })()}</span></button></li>)}</ul>}
             <button className={styles.secondary} disabled={locked || detailLoading || proposals.length < 25} onClick={() => void older('proposals')}>Pengajuan lebih lama</button></section>
-          {selected && <section className={styles.review}><h3>Rincian pengajuan</h3><PackageFacts value={selected} /><p>Harga sebelumnya: {amount(selected.basePrice)}<br />Harga yang diajukan: <strong>{amount(selected.input)}</strong></p>
+          {selected && <section className={styles.review}><h3>Rincian pengajuan</h3><PackageFacts value={selected} /><PriceComparison base={selected.basePrice} proposed={selected.input} />
+            <p>Diajukan {selected.proposedBy === actorId ? 'oleh Anda' : 'oleh rekan lain'} · {date(selected.proposedAt)}</p>
             <p className={styles.preserve}>{selected.reason}</p><p>{status(selected.status)}</p>{selected.decision && <p>{selected.decision.reviewReference} · {selected.decision.reason} · {date(selected.decision.decidedAt)}</p>}
-            {selected.status === 'proposed' && <form onSubmit={event => review(event, mode === 'review' ? 'approve' : 'withdraw')}><fieldset className={styles.fields} disabled={locked || detailLoading}>
+            {selected.status === 'proposed' && mode === 'review' && selected.proposedBy === actorId && <p className={styles.help}>Anda yang mengajukan harga ini. Persetujuan atau penolakan harus dilakukan orang lain yang terverifikasi.</p>}
+            {selected.status === 'proposed' && !(mode === 'review' && selected.proposedBy === actorId) && <form onSubmit={event => review(event, mode === 'review' ? 'approve' : 'withdraw')}><fieldset className={styles.fields} disabled={locked || detailLoading}>
               <label>Acuan pemeriksaan<input value={reference} maxLength={160} onChange={event => setReference(event.target.value)} required /></label><label>Alasan keputusan<textarea value={reason} maxLength={1000} onChange={event => setReason(event.target.value)} required /></label>
               <p className={styles.help}>{mode === 'review' ? 'Persetujuan dan penolakan harus dilakukan orang terverifikasi yang berbeda dari pengaju.' : 'Hanya akun pengaju asli yang dapat menarik pengajuan ini.'}</p>
               <div className={styles.actions}><button className={styles.primary}>{mode === 'review' ? 'Tinjau persetujuan' : 'Tinjau penarikan'}</button>{mode === 'review' && <button type="button" className={styles.danger} onClick={event => review(event, 'reject')}>Tinjau penolakan</button>}</div>
             </fieldset></form>}</section>}
           {staged && fact && <div ref={reviewRef} tabIndex={-1} className={styles.preview} role="region" aria-label="Konfirmasi harga"><h3>Periksa sebelum mengirim</h3><PackageFacts value={fact} />
             <p>Tindakan: <strong>{{ propose: 'Ajukan harga', approve: 'Setujui harga', reject: 'Tolak pengajuan', withdraw: 'Tarik pengajuan' }[staged.action]}</strong></p>
-            <p>Harga sebelumnya: {amount(staged.action === 'propose' ? staged.preview.currentPrice : staged.proposal.basePrice)}<br />Harga yang diajukan: <strong>{amount(staged.action === 'propose' ? staged.body.input : staged.proposal.input)}</strong></p>
+            <PriceComparison base={staged.action === 'propose' ? staged.preview.currentPrice : staged.proposal.basePrice} proposed={staged.action === 'propose' ? staged.body.input : staged.proposal.input} />
             {staged.action !== 'propose' && <p>Acuan: {staged.body.reviewReference}</p>}<p className={styles.preserve}>Alasan: {staged.body.reason}</p>
             <div className={styles.actions}><button className={styles.primary} disabled={busy || recovering || recovery.locked} onClick={() => void confirm()}>{busy ? 'Menyimpan…' : 'Konfirmasi dan kirim'}</button>
               <button className={styles.secondary} disabled={busy || recovering || recovery.locked} onClick={() => { setStaged(null); formRef.current?.focus(); }}>Kembali ke isian</button></div></div>}
