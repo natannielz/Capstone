@@ -287,3 +287,11 @@ test('the photo reload action is offered only after a failure or when the photo 
   const {photoRefreshOffered} = await import('../src/modules/catalog/CatalogBuyerPhoto');
   assert.deepEqual(['loading', 'none', 'ready', 'error', 'hidden'].map(kind => photoRefreshOffered(kind as never)), [false, false, false, true, true]);
 });
+
+test('a card starts its private photo read only near the viewport, or at once where visibility cannot be observed', async () => {
+  const {photoReadAllowed, photoViewportMargin} = await import('../src/modules/catalog/CatalogBuyerPhoto');
+  assert.equal(photoReadAllowed(false, true), false);
+  assert.equal(photoReadAllowed(true, true), true);
+  assert.equal(photoReadAllowed(false, false), true);
+  assert.match(photoViewportMargin, /^\d+px 0px$/);
+});

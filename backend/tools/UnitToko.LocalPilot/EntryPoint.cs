@@ -33,7 +33,10 @@ internal static class EntryPoint
         await PilotBootstrap.InitializeAsync(client, state.Secrets, stop.Token);
         using var signing = state.Certificate.GetRSAPrivateKey() ?? throw new InvalidOperationException("Missing pilot signing key.");
         using var provider = new SyntheticOidcProvider(state.Secrets, signing);
-        await using var api = new PilotApiFactory(repository, state, provider);
+        await using var photos = PilotBoundary.Profile == "full"
+            ? await PilotPhotos.StartAsync(repository, directory, client.GetDatabase(PilotBoundary.DatabaseName), client, state.Secrets, stop.Token)
+            : null;
+        await using var api = new PilotApiFactory(repository, state, provider, photos?.ApiSettings);
         api.UseKestrel(options => options.Listen(IPAddress.Loopback, 0));
         api.StartServer();
         var next = await PilotRuntime.NextAsync(repository, node, directory, stop.Token);
@@ -65,8 +68,10 @@ internal static class EntryPoint
             SaveBrowserLauncher(repository, state);
             Console.WriteLine("Browser launcher: " + Path.Combine(directory, "open-browser.ps1"));
             Console.WriteLine("Ctrl+C stops API and Next. MongoDB remains loopback-only; its data, keys and accounts persist.");
+            var photoWork = photos?.RunAsync(stop.Token) ?? Task.CompletedTask;
             try { await Task.Delay(Timeout.InfiniteTimeSpan, stop.Token); } catch (OperationCanceledException) when (stop.IsCancellationRequested) { }
             await edge.StopAsync(CancellationToken.None);
+            await photoWork;
         }
         finally { if (!nextProcess.HasExited) { nextProcess.Kill(true); await nextProcess.WaitForExitAsync(); } }
         return 0;
