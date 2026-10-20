@@ -61,7 +61,8 @@ export function buildBranch(kit: Kit) {
       stamp.visible = receiptProgress >= 1 && (stampHeight < 1 || imprint === 0);
       stamp.position.set(0.37 + 0.04, surface + 0.02 + stampHeight * 0.75, 0.4 + 0.11); stamp.rotation.y = 0.3;
       invoice.visible = invoiceProgress > 0;
-      invoice.position.set(0.95, surface + 0.02 + 0.45 * invoiceProgress, -0.2); invoice.rotation.set(-0.3, -0.38, 0);
+      // The invoice rises beside the receipt and turns a little toward the closing camera, clear of the back wall.
+      invoice.position.set(0.85, surface + 0.02 + 0.45 * invoiceProgress, -0.12); invoice.rotation.set(-0.24, 0.14, 0);
       invoice.scale.setScalar(0.6 + 0.4 * invoiceProgress);
     },
   };

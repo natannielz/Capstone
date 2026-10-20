@@ -72,7 +72,7 @@ export const CAMERA_KEYS: readonly CameraKey[] = [
   { position: [3.0, 3.7, 6.2], target: [0.0, 1.05, 0] },     // Diajukan: the request lined up above the box
   { position: [2.9, 4.3, 4.4], target: [0.0, 0.5, 0] },      // Ditinjau toko: packed, closed, labelled
   { position: [COUNTER.x - 6.6, 3.5, 8.2], target: [COUNTER.x - 2.3, 0.85, 0] }, // Dikirim: trolley beside the counter
-  { position: [COUNTER.x + 1.3, 3.1, 5.4], target: [COUNTER.x - 0.4, COUNTER.height + 0.25, COUNTER.z] }, // Diterima: on the counter
+  { position: [COUNTER.x + 1.5, 3.5, 7.2], target: [COUNTER.x + 0.1, COUNTER.height + 0.3, COUNTER.z] }, // Diterima: box, stamped receipt and invoice on the counter
 ];
 
 const clamp = (value: number, low: number, high: number) => Math.min(high, Math.max(low, value));
