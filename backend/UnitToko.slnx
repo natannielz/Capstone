@@ -13,5 +13,6 @@
   <Folder Name="/tools/">
     <Project Path="tools/UnitToko.LocalPilot/UnitToko.LocalPilot.csproj" />
     <Project Path="tools/UnitToko.LocalPilot.Tests/UnitToko.LocalPilot.Tests.csproj" />
+    <Project Path="tools/UnitToko.RestoreDrill/UnitToko.RestoreDrill.csproj" />
   </Folder>
 </Solution>
