@@ -12,3 +12,10 @@ export function buyerOrderStatus(order: Pick<SubmittedOrder, 'submission' | 'pro
   if (progress.acceptedSuborders.length === parts) return { label: 'Diproses', detail: 'Toko menerima pesanan dan sedang menyiapkan barang.' };
   return { label: 'Menunggu toko', detail: 'Pesanan tercatat dan menunggu diterima toko.' };
 }
+
+/** How long a pending review has waited ("menunggu 3 jam"), flagged once it has waited a full day. */
+export function reviewWaiting(orderedAt: string, now: number): { age: string; overdue: boolean } {
+  const minutes = Math.max(0, Math.floor((now - Date.parse(orderedAt)) / 60000)), hours = Math.floor(minutes / 60);
+  const age = minutes < 1 ? 'baru saja masuk' : minutes < 60 ? `menunggu ${minutes} menit` : hours < 24 ? `menunggu ${hours} jam` : `menunggu ${Math.floor(hours / 24)} hari`;
+  return { age, overdue: hours >= 24 };
+}

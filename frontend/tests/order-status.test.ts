@@ -34,3 +34,12 @@ test('ordering again uses today\'s package and price, and names what can no long
   assert.deepEqual(result.choices.map(item => [item.choice.skuId, item.choice.packages, item.choice.priceVersion, item.rule.increment]), [['11', 4, '4', 2]]);
   assert.deepEqual(result.unavailable, ['12', '13']);
 });
+
+test('a pending review shows how long it has waited and is flagged after one day', async () => {
+  const { reviewWaiting } = await import('../src/modules/ordering/order-status');
+  const now = Date.parse('2026-10-21T10:00:00Z');
+  assert.deepEqual(reviewWaiting('2026-10-21T07:00:00Z', now), { age: 'menunggu 3 jam', overdue: false });
+  assert.deepEqual(reviewWaiting('2026-10-21T09:58:30Z', now), { age: 'menunggu 1 menit', overdue: false });
+  assert.deepEqual(reviewWaiting('2026-10-19T09:00:00Z', now), { age: 'menunggu 2 hari', overdue: true });
+  assert.equal(statusTone('Lewat 1 hari'), 'warning');
+});
