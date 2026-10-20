@@ -363,10 +363,16 @@ public sealed class BusinessPermissionTests
     public void Suggestions_do_not_change_v1_materialization_or_legacy_snapshot()
     {
         Assert.Equal(1, RoleTemplates.CurrentVersion);
-        Assert.Equal(new[] { Permissions.SubstitutionAccept, Permissions.OrganizationAddressRead }, RoleTemplates.Suggestions["buyer"].ToArray());
+        // Branch requests (pilot) and held stock release added suggestions; none of them is granted by a v1 template.
+        Assert.Equal(new[] { Permissions.BranchOrderRequestRead, Permissions.BranchOrderRequestSubmit, Permissions.SubstitutionAccept, Permissions.OrganizationAddressRead },
+            RoleTemplates.Suggestions["buyer"].ToArray());
         Assert.Equal(new[] { Permissions.OrganizationAddressRead, Permissions.SubstitutionPropose, Permissions.StockConvert, Permissions.ReservationRelease,
-            Permissions.SupplierChangePropose }, RoleTemplates.Suggestions["store-staff"].ToArray());
-        Assert.Equal(new[] { Permissions.OrderAccept, Permissions.SupplierChangeApprove, Permissions.OrganizationAddressRead, Permissions.FundingRead }, RoleTemplates.Suggestions["store-head"].ToArray());
+            Permissions.SupplierChangePropose, Permissions.StockReleasePropose }, RoleTemplates.Suggestions["store-staff"].ToArray());
+        Assert.Equal(new[] { Permissions.BranchOrderRequestRead, Permissions.BranchOrderRequestDecide, Permissions.OrderAccept, Permissions.SupplierChangeApprove,
+            Permissions.OrganizationAddressRead, Permissions.FundingRead }, RoleTemplates.Suggestions["store-head"].ToArray());
+        foreach (var role in new[] { "buyer", "store-staff", "store-head" })
+            foreach (var suggestion in RoleTemplates.Suggestions[role])
+                Assert.DoesNotContain(suggestion, RoleTemplates.Materialize(role, [], []).Permissions);
         var financeSuggestions = new[] { Permissions.OrganizationAddressRead, Permissions.BankReceiptRead, Permissions.BankReceiptConfirm,
             Permissions.BankStatementRead, Permissions.BankStatementStage,
             Permissions.PaymentReviewRead, Permissions.PaymentReviewCorrect,
@@ -374,7 +380,8 @@ public sealed class BusinessPermissionTests
             Permissions.ReceivingAccountPropose, Permissions.ReceivingAccountVerify, Permissions.ReceivingAccountApprove, Permissions.FundingRead,
             Permissions.SupplierBankRead, Permissions.SupplierBankDetailsRead, Permissions.SupplierBankPropose, Permissions.SupplierBankApprove,
             Permissions.ProcurementDisbursementRead, Permissions.ProcurementDisbursementEvidenceRead,
-            Permissions.ProcurementStockValuationRead, Permissions.ProcurementStockValuationPropose, Permissions.ProcurementStockValuationDecide };
+            Permissions.ProcurementStockValuationRead, Permissions.ProcurementStockValuationPropose, Permissions.ProcurementStockValuationDecide,
+            Permissions.StockReleaseApprove };
         Assert.Equal(financeSuggestions, RoleTemplates.Suggestions["finance"].ToArray());
         var allFinancePacks = RoleTemplates.Materialize("finance", RoleTemplates.FinancePacks.Keys, []).Permissions;
         foreach (var suggestion in financeSuggestions)
