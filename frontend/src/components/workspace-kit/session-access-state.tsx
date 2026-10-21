@@ -19,10 +19,19 @@ export function sessionAccessKind(error: unknown): SessionAccessKind {
   const failure = error instanceof Error ? error as Error & { status?: unknown; code?: unknown } : null;
   if (failure && typeof failure.status === "number" && typeof failure.code === "string") {
     if (expiredCodes.has(failure.code)) return "expired";
-    if (failure.status === 401) return "signin";
+    // Only the session read (IdentityFailure "unauthenticated") can say there never was a session. Any other 401 is an API
+    // refusing a page that believed it had one: that session ended (round 2).
+    if (failure.status === 401) return failure.name === "IdentityFailure" && failure.code === "unauthenticated" ? "signin" : "expired";
     if (failure.status === 403) return "denied";
   }
   return "unavailable";
+}
+
+// A plain "no permission" refusal says nothing more than the shared denied text.
+const genericDenialCodes = new Set(["access_denied", "scope_denied", "permission_denied", "forbidden", "not_authorized"]);
+function genericDenial(error: unknown): boolean {
+  const code = error instanceof Error ? (error as Error & { code?: unknown }).code : undefined;
+  return typeof code !== "string" || genericDenialCodes.has(code);
 }
 
 /** For a page that already had a session (work in progress): a missing session now means it ended. */
@@ -76,8 +85,9 @@ export function SessionAccessState({ error, returnPath, onRetry, kind: known, bu
         <button type="button" className={common.secondary} disabled={busy} onClick={onRetry}>Periksa ulang</button></div>
     </> : kind === "denied" ? <>
       <h2 id="workspace-access-state">Halaman ini di luar tugas akun Anda</h2>
-      <p>Akun Anda belum mendapat peran untuk halaman ini. Minta penanggung jawab akses di unit Anda menambahkan peran yang sesuai, lalu periksa ulang.</p>
-      {detail && <p role="alert">{detail}</p>}
+      {/* One body: a page's own reason replaces the generic one only when the refusal is specific (e.g. a scope that changed). */}
+      {detail && !genericDenial(error) ? <p role="alert">{detail}</p>
+        : <p>Akun Anda belum mendapat peran untuk halaman ini. Minta penanggung jawab akses di unit Anda menambahkan peran yang sesuai, lalu periksa ulang.</p>}
       <div className={common.actions}><Link className={common.primary} href="/workspace">Ke Pekerjaan saya</Link>
         <button type="button" className={common.secondary} disabled={busy} onClick={onRetry}>Periksa ulang akses</button></div>
     </> : <>

@@ -32,7 +32,7 @@ function message(error: unknown): string {
     if (error.code === 'stock_count_view_stale') return 'Sesi atau pilihan berubah. Perbarui pilihan sumber dan kemasan sebelum meninjau kembali.';
     if (['stock_count_source_changed', 'stock_source_revision_changed', 'stock_count_pool_changed'].includes(error.code)) return 'Konfigurasi sumber berubah. Muat ulang pilihan dan cocokkan kembali sumber sebelum mencatat pengamatan.';
     if (error.code === "stock_count_input_invalid") return "Isi jumlah kemasan dengan bilangan bulat 0–1.000.000 dan berikan alasan. Kolom kosong bukan jumlah nol.";
-    if (error.code === "stock_count_response_invalid") return "Data yang diterima belum sesuai. Referensi permintaan tetap disimpan. Periksa sesi dan data terbaru sebelum melanjutkan.";
+    if (error.code === "stock_count_response_invalid") return "Data yang diterima belum sesuai. Referensi permintaan tetap disimpan. Pilih Coba lagi untuk memuat data terbaru sebelum melanjutkan.";
     if (error.code === "version_conflict" || error.code === "catalog_revision_conflict") return "Data berubah sejak dipilih. Muat ulang pilihan kemasan, lalu periksa jumlah dan isinya kembali.";
   }
   return accessMessage(error);

@@ -59,7 +59,7 @@ export function CourierAssignmentWorkspace() {
   return <main className={common.page}><header className={common.header}><div><Link href="/identity/account" className={common.brand}>Unit Toko</Link>
     <h1>Penugasan kurir</h1><p>Tinjau kurir yang bertugas dan catat penyerahan tugas pengiriman.</p></div><Link href="/identity/account" className={common.secondary}>Akun saya</Link></header>
     {error !== null && account !== null && <p role="alert" className={common.alert}>{message(error)}</p>}
-    {loading ? <p role="status">Memeriksa akun…</p> : !account || expired ? <SessionAccessState error={error} returnPath="/fulfillment/courier-assignments" onRetry={() => setReload(value => value + 1)} /> :
+    {loading ? <p role="status">Memeriksa akun…</p> : !account || expired ? <SessionAccessState kind={account ? "expired" : undefined} error={error} returnPath="/fulfillment/courier-assignments" onRetry={() => setReload(value => value + 1)} /> :
       <AssignmentDesk key={account.actorId + ':' + account.observedAt} account={account} onDenied={denied} />}
   </main>;
 }

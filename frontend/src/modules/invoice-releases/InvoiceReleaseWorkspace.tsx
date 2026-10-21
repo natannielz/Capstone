@@ -56,7 +56,7 @@ export function InvoiceReleaseWorkspace() {
     <h1>Persetujuan penerbitan invoice</h1><p>Periksa penerimaan, ketentuan tagihan, dan pembukuan sebelum memberikan persetujuan penerbitan.</p></div>
     <Link href="/identity/account" className={common.secondary}>Akun saya</Link></header>
     {failure !== null && account !== null && <p role="alert" className={common.alert}>{message(failure)}</p>}
-    {busy ? <p role="status">Memeriksa akun…</p> : !account || sessionTiming(account.session, elapsed).expired ? <SessionAccessState error={failure} returnPath="/billing/invoice-releases" onRetry={() => setRefresh(value => value + 1)} />
+    {busy ? <p role="status">Memeriksa akun…</p> : !account || sessionTiming(account.session, elapsed).expired ? <SessionAccessState kind={account ? "expired" : undefined} error={failure} returnPath="/billing/invoice-releases" onRetry={() => setRefresh(value => value + 1)} />
       : <ReleaseDesk key={account.actorId + ':' + account.observedAt} account={account} onDenied={denied} />}</main>;
 }
 function Facts({value}: {value: InvoiceReleaseFacts}) {

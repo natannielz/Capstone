@@ -187,7 +187,7 @@ try{
    await page.getByRole('button',{name:'Periksa hasil',exact:true}).waitFor();
    state.receipt=mode;
    await page.getByRole('button',{name:'Periksa hasil',exact:true}).click();
-   await page.getByRole('heading',{name:mode==='actor_changed'?'Sesi Anda perlu diperbarui':'Masuk untuk melanjutkan',exact:true}).waitFor();
+   await page.getByRole('heading',{name:'Sesi Anda perlu diperbarui',exact:true}).waitFor();
    assert.equal(await page.getByText(profile.verifiedEmail,{exact:true}).count(),0,'PII must clear on receipt auth failure');
    assert.equal(await page.getByLabel('Alamat email penerima',{exact:true}).count(),0);
   }finally{await context.close();}
@@ -208,7 +208,7 @@ try{
  });
  for(const mode of ['unauthenticated','forbidden'])await run(mode+' route state',async()=>{
   const {page,context,state,open}=await setup();
-  try{state.mode=mode;await open();await page.getByRole('heading',{name:mode==='unauthenticated'?'Masuk untuk melanjutkan':'Halaman ini di luar tugas akun Anda',exact:true}).waitFor();assert.equal(await page.getByText(profile.verifiedEmail,{exact:true}).count(),0);}
+  try{state.mode=mode;await open();await page.getByRole('heading',{name:mode==='unauthenticated'?'Sesi Anda perlu diperbarui':'Halaman ini di luar tugas akun Anda',exact:true}).waitFor();assert.equal(await page.getByText(profile.verifiedEmail,{exact:true}).count(),0);}
   finally{await context.close();}
  });
  }

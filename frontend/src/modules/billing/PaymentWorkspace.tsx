@@ -65,7 +65,7 @@ export function PaymentWorkspace() {
   const denied = useCallback((failure: unknown) => { if (failure instanceof AccessFailure && (failure.status === 401 || failure.status === 403 || failure.code === 'actor_changed')) { setAccount(null); setError(failure); } }, []);
   return <main className={common.page}><header className={common.header}><div><Link href="/identity/account" className={common.brand}>Unit Toko</Link><h1>Bukti pembayaran</h1><p>Catat transfer dan simpan bukti asli untuk invoice cabang Anda.</p></div><Link href="/billing/invoices" className={common.secondary}>Lihat tagihan</Link></header>
     {error !== null && account !== null && <p role="alert" className={common.alert}>{message(error)}</p>}
-    {loading ? <p role="status">Memeriksa akun…</p> : !account || sessionTiming(account.session, elapsed).expired ? <SessionAccessState error={error} returnPath="/billing/payments" onRetry={() => setRefresh(value => value + 1)} />
+    {loading ? <p role="status">Memeriksa akun…</p> : !account || sessionTiming(account.session, elapsed).expired ? <SessionAccessState kind={account ? "expired" : undefined} error={error} returnPath="/billing/payments" onRetry={() => setRefresh(value => value + 1)} />
       : <PaymentDesk key={account.actorId + ':' + account.observedAt} account={account} now={Date.parse(account.session.serverTime) + elapsed} fresh={sessionTiming(account.session, elapsed).fresh} onDenied={denied} />}
   </main>;
 }

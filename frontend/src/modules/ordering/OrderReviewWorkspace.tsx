@@ -72,7 +72,7 @@ export function OrderReviewWorkspace() {
     <h1>Peninjauan pesanan</h1><p>Tinjau belanja, penerimaan toko, atau pembatalan sesuai penugasan Anda.</p></div>
     <nav className={common.actions}><Link href="/identity/account" className={common.secondary}>Akun saya</Link></nav></header>
     {error !== null && account !== null && <p role="alert" className={common.alert}>{message(error)}</p>}
-    {loading ? <p role="status">Memeriksa akun…</p> : !account || expired ? <SessionAccessState error={error} returnPath="/ordering/reviews" onRetry={() => setRevision(value => value + 1)} />
+    {loading ? <p role="status">Memeriksa akun…</p> : !account || expired ? <SessionAccessState kind={account ? "expired" : undefined} error={error} returnPath="/ordering/reviews" onRetry={() => setRevision(value => value + 1)} />
       : <ReviewDesk key={account.actorId + ':' + account.observedAt} account={account} elapsed={elapsed} onFailure={failed} onRefresh={() => setRevision(value => value + 1)} />}
   </main>;
 }
