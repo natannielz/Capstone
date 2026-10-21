@@ -6,7 +6,7 @@ import { draftMessage } from '../src/modules/ordering/DraftSave';
 import { AccessFailure } from '../src/modules/administration/workflow';
 import { OperationJournal, operationRecoveryCapabilities, reconcileOperationRecovery } from '../src/modules/administration/operation-journal';
 import { recoveryPage, operationLabel } from '../src/modules/administration/operation-recovery-navigation';
-import { identityDestinations, identityReturnPath } from '../src/modules/identity/identity-workflow';
+import { identityDestinations, identityReturnPath, storeDoor } from '../src/modules/identity/identity-workflow';
 const actor = '9007199254740993', id = '9007199254740999';
 const input = { context: { organizationId: '10', branchId: '11', divisionId: null }, selections: [
   { skuId: '100', definitionId: '200', definitionVersion: '1', priceId: '300', priceVersion: '1', packages: 2 } ],
@@ -36,8 +36,9 @@ test('draft recovery has a dedicated lookup-only adapter and never closes or rec
   assert.equal(recoveryPage('ordering.draft.save').href, '/ordering/drafts');
   assert.equal(operationLabel('ordering.draft.save'), 'Penyimpanan draf pesanan');
   assert.equal(identityReturnPath('/ordering/drafts'), '/ordering/drafts');
-  assert.ok(identityDestinations(['order.submit']).some(item => item.href === '/ordering/drafts'));
-  assert.ok(!identityDestinations(['catalog.read']).some(item => item.href === '/ordering/drafts'));
+  // Drafts are a storefront page: the workspace lists one store door for buyers instead of the page itself (R2).
+  assert.ok(!identityDestinations(['order.submit']).some(item => item.href === '/ordering/drafts'));
+  assert.equal(storeDoor(['catalog.read', 'order.submit'])?.label, 'Belanja untuk cabang');
   const storage = new Map<string, string>(); const journal = new OperationJournal(() => ({ get length() { return storage.size; }, key: index => [...storage.keys()][index] ?? null,
     getItem: key => storage.get(key) ?? null, setItem: (key, value) => { storage.set(key, value); }, removeItem: key => { storage.delete(key); } }));
   const entry = journal.remember(actor, 'ordering.draft.save', 'original');

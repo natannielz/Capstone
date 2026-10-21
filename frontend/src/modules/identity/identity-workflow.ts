@@ -1,6 +1,7 @@
 import type { components } from "../../api/generated/schema";
 import { RequestNotSentError } from "../../api/client";
 import { isPilotPathAllowed, isPilotRelease } from '../../lib/release-scope';
+import { isReturnQuery } from './return-query';
 
 export type IdentitySession = components["schemas"]["IdentitySessionDto"];
 
@@ -10,11 +11,32 @@ export class IdentityFailure extends Error {
   }
 }
 
-const returnPaths = ["/workspace", "/katalog", "/cart", "/operations/health", "/fulfillment/courier-assignments", "/inventory/pack-conversion-executions", "/inventory/stock-releases", "/inventory/sources/activations", "/inventory/pack-conversions", "/identity/account", "/administration/access", "/administration/delegations", "/administration/organizations", "/administration/organizations/addresses", "/administration/history", "/administration/person-reviews", "/administration/catalog", "/catalog/prices", "/catalog/public", "/catalog/browse", "/shop", "/ordering/drafts", "/ordering/checkout", "/ordering/substitutions", "/ordering/reviews", "/ordering/orders", "/ordering/spending-policies", "/ordering/commercial-policies", "/fulfillment/preparations", "/fulfillment/dispatches", "/fulfillment/shipments", "/fulfillment/receive", "/fulfillment/cases", "/billing/invoices", "/billing/payments", "/billing/payment-reviews", "/billing/receiving-accounts", "/billing/bank-statements", "/billing/bank-receipts", "/accounting/books", "/reporting/accounts", "/operations/anomalies", "/procurement/requests", "/procurement/suppliers", "/procurement/purchase-orders", "/procurement/funding", "/procurement/supplier-banks", "/procurement/disbursements", "/procurement/settlements", "/procurement/receiving", "/procurement/inspections", "/procurement/supplier-documents", "/procurement/supplier-claims", "/procurement/stock-receipts", "/procurement/stock-valuations", "/procurement/supplier-payables", "/procurement/advance-returns", "/procurement/quality-acceptances", "/inventory/counts", "/inventory/sources", "/inventory/sources/revisions", "/inventory/sources/aliases", "/inventory/sources/suspensions", "/inventory/sources/policies", "/inventory/source-reconciliations"];
+/** Where sign-in leads when no page asked for a destination: the staff home, which sends a buyer on to the store (G-020). */
+export const HOME_PATH = "/workspace";
+// Pages that are not workspace destinations but are still places to come back to after signing in.
+const pageReturnPaths = ["/", HOME_PATH, "/identity/account", "/katalog", "/shop", "/cart", "/ordering/checkout"];
+/**
+ * Every exact page a sign-in may return to: the pages above plus every navigation destination (so a new destination is
+ * returnable the day it is listed). The API keeps the same list in Auth0Options.AllowedReturnPaths;
+ * tests/return-paths-parity.test.ts fails when the two differ.
+ */
+export function identityReturnPaths(): string[] { return [...new Set([...pageReturnPaths, ...destinationHrefs()])]; }
 // A product page returns by its canonical public UUID only; the server checks the same pattern.
 const productReturnPath = (value: string) => /^\/shop\/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$(?![\s\S])/.test(value);
-const allowedReturnPath = (value: string) => (returnPaths.includes(value) || productReturnPath(value) || ['/ordering/requests', '/ordering/requests/incoming', '/inventory/replenishment', '/billing/invoice-releases'].includes(value)) && (!isPilotRelease || isPilotPathAllowed(value));
-export const identityReturnPath = (value?: string | null) => value && allowedReturnPath(value) ? value : "/identity/account";
+export { isReturnQuery };
+export function isAllowedReturnPath(value: string): boolean {
+  if (value.length > 200) return false;
+  const mark = value.indexOf("?"), path = mark < 0 ? value : value.slice(0, mark);
+  if (mark >= 0 && !isReturnQuery(value.slice(mark + 1))) return false;
+  return (identityReturnPaths().includes(path) || productReturnPath(path)) && (!isPilotRelease || isPilotPathAllowed(path));
+}
+const allowedReturnPath = isAllowedReturnPath;
+export const identityReturnPath = (value?: string | null, fallback = HOME_PATH) => value && allowedReturnPath(value) ? value : fallback;
+/** The sign-in page's destination, and whether a page asked for it (an already signed-in visitor then continues there). */
+export function loginContinuation(search: string): { returnPath: string; requested: boolean } {
+  const requested = new URLSearchParams(search).get("returnPath");
+  return requested && allowedReturnPath(requested) ? { returnPath: requested, requested: true } : { returnPath: HOME_PATH, requested: false };
+}
 const validId = (value: string) => /^[1-9][0-9]{0,18}$/.test(value) && (value.length < 19 || value <= "9223372036854775807");
 const validTime = (value: unknown): value is string => typeof value === "string" && value.length <= 40 && /^\d{4}-\d\d-\d\dT/.test(value) && Number.isFinite(Date.parse(value));
 const record = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === "object" && !Array.isArray(value);
@@ -82,19 +104,28 @@ export function canUseStockCounts(actions: readonly string[]) { return actions.i
 
 export function canUseStockSourceReconciliations(actions: readonly string[]) { return ["read", "propose", "decide"].some(action => actions.includes("stock.source.reconciliation." + action)); }
 
-function destinationEntries(actions: readonly string[]) {
-  return [
-    {href: "/administration/delegations", label: "Delegasi sementara", description: "Ikuti izin sementara dan catatan serah-terima yang melibatkan akun Anda.", visible: true},
-    { href: '/ordering/requests', label: 'Permintaan saya', description: 'Susun kebutuhan cabang dan ikuti hasil peninjauan toko.', visible: actions.some(action => ['order.request.read', 'order.request.submit'].includes(action)) },
+/**
+ * Who a destination serves (R2: buyer tasks from the storefront, staff tasks in the workspace):
+ * - `store`: a storefront page; the workspace reaches it only through the one store door;
+ * - `buyer` lists the actions with which the page is a buyer's task (shown in the storefront account menu);
+ * - `staff` lists the actions with which a shared page is back-office work. A page with neither is staff-only.
+ * A person is staff when their grants open a page as back-office work, never because a permission is missing from a buyer list.
+ */
+type Destination = { href: string; label: string; description: string; visible: boolean; store?: true; buyer?: readonly string[]; staff?: readonly string[] };
+const DELEGATIONS = "/administration/delegations";
+function destinationEntries(actions: readonly string[]): Destination[] {
+  const entries: Destination[] = [
+    { href: DELEGATIONS, label: "Delegasi sementara", description: "Ikuti izin sementara dan catatan serah-terima yang melibatkan akun Anda.", visible: false, buyer: [] },
+    { href: '/ordering/requests', label: 'Permintaan saya', description: 'Susun kebutuhan cabang dan ikuti hasil peninjauan toko.', visible: actions.some(action => ['order.request.read', 'order.request.submit'].includes(action)), store: true },
     { href: '/ordering/requests/incoming', label: 'Permintaan masuk', description: 'Periksa kemasan dan catatan permintaan, lalu berikan keputusan toko.', visible: actions.includes('order.request.decide') },
     { href: "/inventory/source-reconciliations", label: "Rekonsiliasi jumlah fisik", description: actions.includes("stock.source.reconciliation.read") ? "Bandingkan pengamatan lengkap dengan catatan sumber stok dan pemeriksaan orang berbeda." : "Periksa hasil permintaan rekonsiliasi milik Anda yang belum terkonfirmasi.", visible: canUseStockSourceReconciliations(actions) },
-    { href: "/fulfillment/cases", label: "Keluhan barang", description: "Laporkan masalah pada barang yang diterima dan ikuti pengajuannya.", visible: actions.some(action => ["case.read", "case.request"].includes(action)) },
+    { href: "/fulfillment/cases", label: "Keluhan barang", description: "Laporkan masalah pada barang yang diterima dan ikuti pengajuannya.", visible: actions.some(action => ["case.read", "case.request"].includes(action)), buyer: ["case.read", "case.request"], staff: ["case.manage"] },
     { href: "/fulfillment/preparations", label: "Persiapan kiriman", description: "Pilih kemasan dan jumlah yang akan disiapkan dari pesanan toko yang diterima.", visible: actions.includes("shipment.prepare") },
-    { href: "/fulfillment/dispatches", label: "Keberangkatan kiriman", description: "Periksa lot fisik dan kurir sebelum barang diberangkatkan.", visible: actions.includes("shipment.dispatch") && actions.includes("shipment.assign") },
-    { href: "/fulfillment/shipments", label: "Kiriman", description: "Lihat barang yang diberangkatkan dan tujuan dalam penugasan Anda.", visible: actions.some(action => ["shipment.read", "delivery.attempt"].includes(action)) },
+    { href: "/fulfillment/dispatches", label: "Keberangkatan kiriman", description: "Periksa lot fisik dan kurir sebelum barang diberangkatkan.", visible: actions.includes("shipment.dispatch") },
+    { href: "/fulfillment/shipments", label: "Kiriman", description: "Lihat barang yang diberangkatkan dan tujuan dalam penugasan Anda.", visible: actions.some(action => ["shipment.read", "delivery.attempt"].includes(action)), buyer: ["shipment.read"], staff: ["delivery.attempt"] },
     { href: "/fulfillment/courier-assignments", label: "Penugasan kurir", description: "Tinjau kurir yang bertugas dan serahkan tugas pengiriman.", visible: actions.includes("shipment.assign") },
-    { href: "/fulfillment/receive", label: "Penerimaan kiriman", description: "Pindai QR kurir atau periksa hasil konfirmasi penerimaan.", visible: actions.includes("receipt.accept") },
-    { href: "/billing/invoices", label: "Tagihan", description: "Tinjau penerimaan, terbitkan invoice dan periksa dokumen tagihan.", visible: actions.some(action => ["invoice.read", "invoice.issue"].includes(action)) },
+    { href: "/fulfillment/receive", label: "Penerimaan kiriman", description: "Pindai QR kurir atau periksa hasil konfirmasi penerimaan.", visible: actions.includes("receipt.accept"), buyer: ["receipt.accept"] },
+    { href: "/billing/invoices", label: "Tagihan", description: "Tinjau penerimaan, terbitkan invoice dan periksa dokumen tagihan.", visible: actions.some(action => ["invoice.read", "invoice.issue"].includes(action)), buyer: ["invoice.read"], staff: ["invoice.issue"] },
     { href: "/billing/invoice-releases", label: "Persetujuan penerbitan tagihan", description: "Usulkan dan periksa sumber, biaya, format, serta pembukuan sebelum invoice diterbitkan.", visible: actions.includes("invoice.read") && actions.includes("invoice.release.read") },
     { href: "/billing/bank-receipts", label: "Penerimaan bank", description: "Periksa kredit independen dan telusuri pencatatan kas.", visible: actions.includes("bank.receipt.read") },
     { href: "/billing/bank-statements", label: "Mutasi bank", description: "Periksa dan simpan sumber mutasi untuk rekonsiliasi independen.", visible: actions.includes("bank.statement.read") },
@@ -119,14 +150,14 @@ function destinationEntries(actions: readonly string[]) {
     { href: "/reporting/accounts", label: "Laporan akun dan jurnal", description: "Lihat saldo kumulatif dan unduh jurnal dari buku toko yang diizinkan.", visible: actions.includes("report.read") },
     { href: "/operations/anomalies", label: "Tinjauan operasional", description: "Periksa tanda dan catat tindak lanjut pada sumber toko yang diizinkan.", visible: actions.includes("operations.anomaly.read") },
     { href: "/billing/payment-reviews", label: "Pemeriksaan pembayaran", description: "Periksa pengajuan cabang, bukti asli dan saran pembacaan dalam cakupan akses.", visible: actions.includes("payment.review.read") && actions.includes("invoice.read") },
-    { href: "/billing/payments", label: "Bukti pembayaran", description: "Catat transfer dan simpan bukti pembayaran untuk invoice cabang.", visible: actions.includes("payment.evidence") && actions.includes("invoice.read") },
-    { href: "/ordering/drafts", label: "Draf pesanan", description: "Lanjutkan kebutuhan barang dan rencana pengiriman cabang Anda.", visible: actions.includes("order.submit") },
-    { href: "/ordering/orders", label: "Pesanan saya", description: "Lihat kemasan, tujuan, biaya dan perkembangan pesanan yang telah diajukan.", visible: actions.includes("order.read") },
-    { href: '/ordering/substitutions', label: 'Penggantian barang', description: 'Ajukan kemasan pengganti atau tinjau perubahan jumlah dan harga sebelum menyetujuinya.', visible: actions.some(action => ['substitution.propose', 'substitution.accept'].includes(action)) },
-    { href: "/ordering/reviews", label: "Peninjauan pesanan", description: "Tinjau persetujuan belanja cabang atau penerimaan toko sesuai penugasan.", visible: actions.some(action => ["order.spend.approve", "order.accept", "order.cancel"].includes(action)) },
-    { href: "/ordering/spending-policies", label: "Persetujuan belanja", description: "Ajukan dan periksa aturan persetujuan untuk cabang atau divisi.", visible: actions.some(action => ["order.spending.policy.read", "order.spending.policy.propose", "order.spending.policy.approve"].includes(action)) },
+    { href: "/billing/payments", label: "Bukti pembayaran", description: "Catat transfer dan simpan bukti pembayaran untuk invoice cabang.", visible: actions.includes("payment.evidence") && actions.includes("invoice.read"), buyer: ["payment.evidence"] },
+    { href: "/ordering/drafts", label: "Draf pesanan", description: "Lanjutkan kebutuhan barang dan rencana pengiriman cabang Anda.", visible: actions.includes("order.submit"), store: true },
+    { href: "/ordering/orders", label: "Pesanan saya", description: "Lihat kemasan, tujuan, biaya dan perkembangan pesanan yang telah diajukan.", visible: actions.includes("order.read"), store: true },
+    { href: '/ordering/substitutions', label: 'Penggantian barang', description: 'Ajukan kemasan pengganti atau tinjau perubahan jumlah dan harga sebelum menyetujuinya.', visible: actions.some(action => ['substitution.propose', 'substitution.accept'].includes(action)), buyer: ['substitution.accept'], staff: ['substitution.propose'] },
+    { href: "/ordering/reviews", label: "Peninjauan pesanan", description: "Tinjau persetujuan belanja cabang atau penerimaan toko sesuai penugasan.", visible: actions.some(action => ["order.spend.approve", "order.accept", "order.cancel"].includes(action)), buyer: ["order.spend.approve"], staff: ["order.accept"] },
+    { href: "/ordering/spending-policies", label: "Aturan persetujuan belanja", description: "Ajukan dan periksa aturan persetujuan untuk cabang atau divisi.", visible: actions.some(action => ["order.spending.policy.read", "order.spending.policy.propose", "order.spending.policy.approve"].includes(action)) },
     { href: "/ordering/commercial-policies", label: "Aturan komersial", description: "Biaya, pajak, kewajiban dan syarat tagihan per cabang dan kanal toko.", visible: actions.some(action => ["order.commercial.policy.read", "order.commercial.policy.propose", "order.commercial.policy.approve"].includes(action)) },
-    { href: "/shop", label: "Katalog kemasan", description: isPilotRelease ? "Periksa pilihan dan isi kemasan untuk kebutuhan organisasi Anda." : "Lihat isi dan harga kemasan dalam katalog akun Anda.", visible: actions.includes("catalog.read") },
+    { href: "/shop", label: "Katalog kemasan", description: isPilotRelease ? "Periksa pilihan dan isi kemasan untuk kebutuhan organisasi Anda." : "Lihat isi dan harga kemasan dalam katalog akun Anda.", visible: actions.includes("catalog.read"), store: true },
     { href: "/catalog/prices", label: "Harga kemasan", description: "Ajukan harga per kemasan dan tinjau secara independen.", visible: actions.some(action => ["pricing.manage", "pricing.approve"].includes(action)) },
     { href: "/catalog/public", label: "Katalog publik", description: "Pilih katalog yang boleh dilihat pengunjung tanpa harga, dengan persetujuan orang kedua.", visible: actions.some(action => ["catalog.public.propose", "catalog.public.approve"].includes(action)) },
     { href: "/inventory/sources/policies", label: "Kebijakan operasional stok", description: "Tetapkan pencatat stok dan prosedur pengoperasian melalui peninjauan.", visible: canUseStockSourcePolicies(actions) },
@@ -144,15 +175,46 @@ function destinationEntries(actions: readonly string[]) {
     { href: "/administration/person-reviews", label: "Keterkaitan akun", description: "Tinjau pengajuan penangguhan keterkaitan akun sesuai penugasan.", visible: canReviewPeople(actions) },
     { href: "/administration/accounts", label: "Akun dan undangan", description: "Tinjau undangan dan akun sesuai lingkup tugas.", visible: canManageAccounts(actions) },
     { href: "/administration/access", label: "Akses dan keanggotaan", description: "Ajukan atau tinjau izin sesuai cakupan tugas.", visible: actions.some(action => action.startsWith("access.") || action.startsWith("membership.")) },
-    { href: "/administration/organizations/addresses", label: "Alamat organisasi", description: "Ajukan dan periksa alamat penagihan, cabang dan gudang sesuai penugasan.", visible: canUseOrganizationAddresses(actions) },
+    { href: "/administration/organizations/addresses", label: "Alamat organisasi", description: "Ajukan dan periksa alamat penagihan, cabang dan gudang sesuai penugasan.", visible: canUseOrganizationAddresses(actions), buyer: ["organization.address.read"], staff: ["technical.configure", "organization.approve"] },
     { href: "/administration/organizations", label: "Organisasi dan unit", description: "Kelola struktur organisasi melalui persetujuan.", visible: actions.some(action => ["technical.configure", "organization.approve", "access.audit.read"].includes(action)) },
     { href: "/operations/health", label: "Kesehatan sistem", description: "Periksa antrean latar, OCR, pembersihan draf, versi skema dan replikasi basis data.", visible: actions.includes("technical.configure") },
     { href: "/administration/history", label: "Riwayat perubahan", description: "Periksa jejak pengajuan dan keputusan akses.", visible: actions.some(action => ["access.audit.read", "access.approve", "membership.approve", "access.revoke", "technical.configure", "organization.approve"].includes(action)) },
   ];
+  // Temporary delegation hands over back-office duties, so only staff see it (G-028).
+  const staff = entries.some(entry => opensAsStaffWork(entry, actions));
+  return entries.map(entry => entry.href === DELEGATIONS ? { ...entry, visible: staff } : entry);
+}
+const opensAsStaffWork = (entry: Destination, actions: readonly string[]) => entry.visible && !entry.store &&
+  (entry.staff ? entry.staff.some(action => actions.includes(action)) : !entry.buyer);
+const inRelease = (href: string) => !isPilotRelease || isPilotPathAllowed(href);
+
+/** Workspace destinations the actor's grants open. Storefront pages are not listed: the workspace reaches them through `storeDoor`. */
+export function identityDestinations(actions: readonly string[]) {
+  return destinationEntries(actions).filter(item => item.visible && !item.store && inRelease(item.href));
 }
 
-export function identityDestinations(actions: readonly string[]) {
-  return destinationEntries(actions).filter(item => item.visible && (!isPilotRelease || isPilotPathAllowed(item.href)));
+/** Staff hold a grant that opens a page as back-office work. Display only: every API authorises independently. */
+export function isStaffActor(actions: readonly string[]): boolean {
+  return destinationEntries(actions).some(entry => opensAsStaffWork(entry, actions) && inRelease(entry.href));
+}
+
+/** One home per person (G-020): staff work from /workspace, buyers from the store, anyone else from their account. */
+export function homeFor(actions: readonly string[]): string {
+  return isStaffActor(actions) ? HOME_PATH : actions.includes("catalog.read") ? "/shop" : "/identity/account";
+}
+
+/** The one door from the workspace into the storefront: buying for a branch, or only looking at the catalog. */
+export function storeDoor(actions: readonly string[]): { href: string; label: string; description: string } | null {
+  if (!actions.includes("catalog.read")) return null;
+  return actions.some(action => ["order.submit", "order.request.submit"].includes(action))
+    ? { href: "/shop", label: "Belanja untuk cabang", description: "Buka toko untuk memilih kemasan, mengisi keranjang dan mengikuti pesanan cabang Anda." }
+    : { href: "/shop", label: "Katalog kemasan", description: "Lihat isi kemasan dalam katalog akun Anda." };
+}
+
+/** A buyer's tasks outside the storefront pages (receipt, invoices, payments, complaints, shipments, spending approval), for the store account menu (G-018). */
+export function buyerTasks(actions: readonly string[]): { href: string; label: string }[] {
+  return destinationEntries(actions).filter(entry => entry.visible && entry.buyer?.some(action => actions.includes(action)) && inRelease(entry.href))
+    .map(entry => ({ href: entry.href, label: entry.label }));
 }
 
 /** Every destination path, regardless of the actor's permissions (for marking the open page in navigation). */

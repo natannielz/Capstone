@@ -1,5 +1,6 @@
 // Real local Next/Kestrel/Mongo rehearsal with synthetic approved policies and sessions. No live acceptance.
 import assert from 'node:assert/strict';
+import { openDestination } from './open-destination.mjs';
 import http from 'node:http';
 import https from 'node:https';
 import net from 'node:net';
@@ -161,8 +162,7 @@ try {
   await store.page.screenshot({ path: resolve(directory, 'store-acceptance-mobile.png'), fullPage: true });
   await page.getByRole('button', { name: 'Muat kembali pesanan', exact: true }).click();
   await confirmed.getByText('1 dari 1 kelompok pemenuhan telah diterima toko.', { exact: true }).waitFor();
-  const picker = await user(config.pickerToken); await picker.page.goto(origin.origin + '/identity/account');
-  await picker.page.getByRole('link', { name: /^Persiapan kiriman/ }).click();
+  const picker = await user(config.pickerToken); await openDestination(picker.page, origin, 'Persiapan kiriman');
   const prepareQueue = picker.page.getByRole('region', { name: 'Pesanan siap disiapkan', exact: true });
   await prepareQueue.getByRole('button', { name: new RegExp('^Siapkan pesanan ' + orderId + ' / ') }).click();
   const plan = picker.page.getByRole('region', { name: 'Rencana persiapan', exact: true }); await plan.waitFor();
@@ -227,8 +227,7 @@ try {
   await page.getByRole('button', { name: 'Muat kembali pesanan', exact: true }).click();
   await confirmed.getByText('Belanja cabang ditolak. Cadangan pesanan telah dilepas.', { exact: true }).waitFor();
   assert.equal(decisionWrites.length, 4); assert.equal(writes.length, 2); assert.equal(droppedDecisions, 2);
-  await page.goto(origin.origin + '/identity/account');
-  await page.getByRole('link', { name: /^Pesanan saya/ }).click();
+  await openDestination(page, origin, 'Pesanan saya');
   await page.getByRole('heading', { name: 'Pesanan saya', exact: true }).waitFor();
   const history = page.getByRole('region', { name: 'Daftar pesanan saya', exact: true });
   await history.getByRole('button', { name: 'Lihat rincian pesanan ' + orderNumber(rejectedOrderId), exact: true }).waitFor();

@@ -45,7 +45,8 @@ async function setup(width=1365,height=1000){
   const request=route.request(),url=new URL(request.url());
   if(url.origin!==base)return route.abort();
   const answer=(body,status=200)=>route.fulfill({status,contentType:'application/json',headers:{'Cache-Control':'no-store'},body:JSON.stringify(body)});
-  if(!url.pathname.startsWith('/api/v1'))return route.continue();
+  // The page needs a session cookie to render (the proxy sends cookie-less visits to sign-in); the API stays mocked.
+  if(!url.pathname.startsWith('/api/v1'))return route.continue({headers:{...request.headers(),cookie:'__Host-ut_session=synthetic-check'}});
   if(url.pathname==='/api/v1/identity/csrf')return answer({requestToken:'fixture-csrf'});
   if(url.pathname==='/api/v1/access/current'){
    if(state.mode==='unauthenticated')return answer({code:'unauthenticated'},401);

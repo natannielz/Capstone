@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Brand } from "../../components/brand";
 import { KemasanPoster } from "../../components/landing/KemasanPoster";
 import { createIdentityGateway } from "./identity-client";
-import { IdentityFailure, identityMessage, identityReturnPath, loginFields, type IdentitySession } from "./identity-workflow";
+import { HOME_PATH, IdentityFailure, identityMessage, loginContinuation, loginFields, type IdentitySession } from "./identity-workflow";
 import { ProtectedNavigationForm } from "./ProtectedNavigationForm";
 import styles from "./identity-login.module.css";
 import { isPilotRelease } from '../../lib/release-scope';
@@ -19,14 +19,16 @@ export function IdentityLogin() {
   const [invited, setInvited] = useState(false);
   const [invitationId, setInvitationId] = useState("");
   const [invitationSecret, setInvitationSecret] = useState("");
-  const [returnPath, setReturnPath] = useState("/identity/account");
+  const [returnPath, setReturnPath] = useState(HOME_PATH);
   const [loggedOut, setLoggedOut] = useState(false);
   useEffect(() => {
     const controller = new AbortController();
     void gateway.session(controller.signal).then(value => {
       if (!controller.signal.aborted) {
-        const params = new URL(window.location.href).searchParams;
-        setReturnPath(identityReturnPath(params.get("returnPath"))); setLoggedOut(params.get("loggedOut") === "1");
+        const continuation = loginContinuation(window.location.search);
+        setReturnPath(continuation.returnPath); setLoggedOut(new URLSearchParams(window.location.search).get("loggedOut") === "1");
+        // Someone already signed in who was sent here by a page continues to that page (G-010).
+        if (value.authenticated && continuation.requested) { window.location.replace(continuation.returnPath); return; }
         setSession(value); setError(null); setLoading(false);
       }
     }, failure => {
@@ -66,7 +68,7 @@ export function IdentityLogin() {
             <button type="button" className={styles.secondary} onClick={() => { setLoading(true); setError(null); setAttempt(value => value + 1); }}>Periksa kembali</button>
           </div>}
           {!loading && session?.authenticated && <><p>Anda sudah masuk sebagai <strong>{session.account?.displayName ?? session.account?.verifiedEmail}</strong>.</p>
-            <Link href="/identity/account" className={styles.primary}>Buka akun saya</Link>
+            <Link href={returnPath} className={styles.primary}>Lanjutkan</Link>
             <p className={styles.help}>Untuk menggunakan akun lain, keluar terlebih dahulu melalui halaman akun.</p></>}
           {!loading && session && !session.authenticated && <>
             <ol className={styles.next} aria-label="Yang terjadi setelah Anda melanjutkan">

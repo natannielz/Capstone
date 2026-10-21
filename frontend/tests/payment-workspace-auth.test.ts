@@ -1,4 +1,5 @@
 import * as proofFile from '../src/modules/billing/payment-proof-file';
+import * as returnQuery from '../src/modules/identity/return-query';
 import * as displayFormat from '../src/lib/format';
 import * as rupiahInputModule from '../src/lib/rupiah-input';
 import {test} from 'node:test';
@@ -115,6 +116,7 @@ function mountPayment(replies: {save?: () => Response; recoverDraft?: () => Resp
     if (name === './payment-proof-file') return proofFile;
     // Loaded through this harness so its useState runs on the mounted hook slots, not React's dispatcher.
     if (name === '@/components/workspace-kit/rupiah-input') return rupiahInputKit ??= load('src/components/workspace-kit/rupiah-input.tsx');
+    if (name === '@/modules/identity/return-query') return returnQuery;
     if (name === '@/components/workspace-kit/session-access-state') return sessionStateKit ??= load('src/components/workspace-kit/session-access-state.tsx');
     throw new Error('Unexpected mounted payment import: ' + name);
   };

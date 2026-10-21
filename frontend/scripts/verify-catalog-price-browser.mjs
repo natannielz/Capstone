@@ -171,7 +171,7 @@ async function verifyDrafts(buyer) {
   await stale.page.getByRole('button', { name: 'Konfirmasi simpan draf', exact: true }).click();
   await stale.page.getByRole('alert').filter({ hasText: 'Draf atau akses telah berubah' }).waitFor();
   await openDraft(stale.page); assert.equal(await stale.page.getByLabel('Jumlah kemasan 1', { exact: true }).inputValue(), '6');
-  await stale.context.close(); await buyer.page.goto(origin.origin + '/catalog/browse');
+  await stale.context.close(); await buyer.page.goto(origin.origin + '/shop');
 }
 try {
   await app.prepare(); const handle = app.getRequestHandler();
@@ -240,7 +240,7 @@ try {
   await check('buyer reads entitled current price and fresh explicit package details while staff history and unpublished details remain private', async () => {
     const buyer = await user('buyer'); await buyer.page.getByRole('heading', { name: 'Ruang harga belum dapat dibuka', exact: true }).waitFor();
     assert.equal(await buyer.page.getByRole('button', { name: /Pensil browser/ }).count(), 0);
-    await buyer.page.goto(origin.origin + '/catalog/browse');
+    await buyer.page.goto(origin.origin + '/shop');
     const open = buyer.page.getByRole('button', { name: 'Rincian BROWSER-12 Dus dua belas', exact: true }); await open.waitFor();
     assert.equal(await buyer.page.getByRole('dialog').count(), 0, 'No package is selected implicitly');
     await buyer.page.setViewportSize({ width: 360, height: 800 });

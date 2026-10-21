@@ -12,7 +12,7 @@ import { IdentityFailure, sessionTiming, type IdentitySession } from '../identit
 import { CatalogReadGate } from './catalog-editor-state';
 import { buyerCurrentCode, createBuyerCatalogGateway, type BuyerCategoryCount, type BuyerVariant } from './catalog-buyer-client';
 import { CatalogBuyerPhoto } from './CatalogBuyerPhoto';
-import { catalogHistoryUrl, readCatalogHistoryQuery, type CatalogHistoryQuery } from './catalog-history';
+import { catalogHistoryUrl, guestCatalogHref, memberCatalogPath, readCatalogHistoryQuery, type CatalogHistoryQuery } from './catalog-history';
 import shared from '../administration/access.module.css';
 import styles from './buyer-catalog.module.css';
 import { BuyBox } from './BuyBox';
@@ -70,7 +70,7 @@ function PackageReview({ item, account, isCurrent, requestOnly }: { item: BuyerV
     <p className={shared.help}>{requestOnly ? 'Pilih kemasan ini untuk menyusun permintaan kebutuhan cabang. Petugas toko akan meninjau permintaan Anda.' : 'Harga dan ketersediaan akan diperiksa kembali saat pesanan disiapkan.'}</p>
   </div>{requestOnly ? <div className={styles.quoteArea}><h3>Siapkan permintaan cabang</h3>{account.actions.includes('order.request.submit') ? <><p>Pilih cabang dan jumlah kemasan, lalu tinjau permintaan sebelum mengirim.</p><Link className={shared.primary} href={'/ordering/requests?package=' + item.publicId}>Pilih untuk permintaan</Link></> : <p>Akun Anda dapat melihat katalog. Hubungi pengelola jika Anda memerlukan akses untuk mengajukan kebutuhan cabang.</p>}</div> : item.currentPrice && <div className={styles.quoteArea}><BuyBox item={item} actorId={account.actorId} actions={account.actions} isCurrent={isCurrent} /></div>}</div>;
 }
-export function BuyerCatalog({ publicId, returnPath = '/catalog/browse', requestOnly = false }: { publicId?: string; returnPath?: '/shop' | '/catalog/browse'; requestOnly?: boolean } = {}) {
+export function BuyerCatalog({ publicId, returnPath = '/shop', requestOnly = false }: { publicId?: string; returnPath?: '/shop'; requestOnly?: boolean } = {}) {
   const [identity] = useState(() => createIdentityGateway()), [access] = useState(() => createAccessGateway());
   const [gateway] = useState(() => createBuyerCatalogGateway()), [listGate] = useState(() => new CatalogReadGate()), [detailGate] = useState(() => new CatalogReadGate());
   const [account, setAccount] = useState<Account | null>(null), [items, setItems] = useState<BuyerVariant[]>([]), [total, setTotal] = useState('0');
@@ -166,14 +166,13 @@ export function BuyerCatalog({ publicId, returnPath = '/catalog/browse', request
   const categoryName = (code: string) => categories.find(item => item.code === code)?.name ?? code;
   const everything = categories.reduce((sum, item) => sum + item.count, 0), filtered = query !== '' || category !== undefined;
   const needsSignIn = error instanceof IdentityFailure && error.status === 401;
-  // Someone who has not signed in browses the public catalog (no prices) instead of meeting a sign-in wall.
+  // Someone who has not signed in browses the public catalog (no prices) instead of meeting a sign-in wall, in every release (G-030).
   const router = useRouter();
   useEffect(() => {
-    if (!needsSignIn || requestOnly) return;
-    const search = new URLSearchParams(window.location.search), next = new URLSearchParams();
-    for (const key of ['q', 'kategori', 'urut']) { const value = search.get(key); if (value) next.set(key, value); }
-    router.replace(publicId !== undefined ? '/katalog/' + publicId : '/katalog' + (next.size ? '?' + next.toString() : ''));
-  }, [needsSignIn, requestOnly, publicId, router]);
+    if (!needsSignIn) return;
+    router.replace(guestCatalogHref(publicId, window.location.search));
+  }, [needsSignIn, publicId, router]);
+  const signInPath = memberCatalogPath(publicId);
   return <div className={styles.storefront}>
     <main id="catalog-main" tabIndex={-1} className={`${shared.page} ${styles.page}`}>
     {requestOnly ? <>
@@ -194,9 +193,9 @@ export function BuyerCatalog({ publicId, returnPath = '/catalog/browse', request
         <div className={styles.layoutToggle} role="group" aria-label="Tampilan daftar">{([['grid', 'Kisi', LayoutGrid], ['list', 'Daftar', List]] as const).map(([value, label, Icon]) =>
           <button key={value} type="button" aria-pressed={layout === value} onClick={() => setLayout(value)}><Icon size={16} aria-hidden="true" />{label}</button>)}</div>
 </div></section> : (requestOnly || error !== null) && <div className={styles.detailToolbar}><Link href={returnPath}>Kembali ke katalog</Link><button className={shared.secondary} disabled={busy} onClick={refresh}>Muat kembali kemasan</button></div>}
-    {error !== null && <div role={needsSignIn ? 'status' : 'alert'} className={styles.accessState}><div className={styles.stateIcon}><ShieldCheck size={27} strokeWidth={1.5} aria-hidden="true" /></div><div><h2>{needsSignIn ? 'Katalog khusus untuk akun Anda.' : 'Katalog belum dapat ditampilkan.'}</h2><p>{needsSignIn ? 'Masuk dengan akun yang telah disetujui untuk melihat pilihan kemasan dan mengajukan kebutuhan cabang Anda.' : message(error)}</p>{!needsSignIn && <p className={styles.stateHint}>Daftar barang akan tampil setelah layanan tersedia dan akses akun Anda terverifikasi.</p>}<Link className={styles.stateAction} href={'/identity/login?returnPath=' + encodeURIComponent(returnPath)}>Masuk atau periksa akun <ArrowRight size={17} aria-hidden="true" /></Link></div></div>}
+    {error !== null && <div role={needsSignIn ? 'status' : 'alert'} className={styles.accessState}><div className={styles.stateIcon}><ShieldCheck size={27} strokeWidth={1.5} aria-hidden="true" /></div><div><h2>{needsSignIn ? 'Katalog khusus untuk akun Anda.' : 'Katalog belum dapat ditampilkan.'}</h2><p>{needsSignIn ? 'Masuk dengan akun yang telah disetujui untuk melihat pilihan kemasan dan mengajukan kebutuhan cabang Anda.' : message(error)}</p>{!needsSignIn && <p className={styles.stateHint}>Daftar barang akan tampil setelah layanan tersedia dan akses akun Anda terverifikasi.</p>}<Link className={styles.stateAction} href={'/identity/login?returnPath=' + encodeURIComponent(signInPath)}>Masuk atau periksa akun <ArrowRight size={17} aria-hidden="true" /></Link></div></div>}
     {expired && <p role="alert" className={shared.alert}>Sesi telah berakhir. Masuk kembali untuk membuka katalog.</p>}
-    {(expired || !account && !busy && error === null) && <Link className={styles.stateAction} href={'/identity/login?returnPath=' + encodeURIComponent(returnPath)}>Masuk atau periksa akun <ArrowRight size={17} aria-hidden="true" /></Link>}
+    {(expired || !account && !busy && error === null) && <Link className={styles.stateAction} href={'/identity/login?returnPath=' + encodeURIComponent(signInPath)}>Masuk atau periksa akun <ArrowRight size={17} aria-hidden="true" /></Link>}
     {notice && <p role="status">{notice}</p>}
     {publicId !== undefined ? <section className={styles.packagePage} aria-busy={busy} aria-label="Rincian kemasan">{busy ? <p role="status">Memuat kemasan untuk akun Anda…</p> : account && !expired && selected && (requestOnly ? <PackageReview item={selected} account={account} isCurrent={current} requestOnly={requestOnly} />
       : <ProductPage item={selected} account={account} isCurrent={current} category={categoryName(selected.categoryCode)} />)}</section>
