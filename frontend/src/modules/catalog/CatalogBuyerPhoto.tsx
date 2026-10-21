@@ -9,7 +9,8 @@ import {buyerPhotoIdentity, buyerPhotoTarget, createBuyerPhotoGateway} from './b
 import styles from './buyer-catalog.module.css';
 
 type Props = {actorId: string; item: BuyerVariant; isCurrent: () => boolean};
-type State = {kind: 'loading'} | {kind: 'none'} | {kind: 'hidden'} | {kind: 'error'; message: string} | {kind: 'ready'; url: string};
+/** deferred: waiting to come near the viewport; nothing is being read, so the photo is not busy. */
+type State = {kind: 'deferred'} | {kind: 'loading'} | {kind: 'none'} | {kind: 'hidden'} | {kind: 'error'; message: string} | {kind: 'ready'; url: string};
 function failureMessage(error: unknown) {
   if (error instanceof AccessFailure || error instanceof RequestNotSentError) {
     if (error.status === 401 || error.status === 403) return 'Foto tidak tersedia untuk sesi atau akses saat ini.';
@@ -31,7 +32,7 @@ export function CatalogBuyerPhoto(props: Props) {
 }
 function PrivatePhoto({actorId, item, isCurrent}: Props) {
   const [gateway] = useState(() => createBuyerPhotoGateway()), [target] = useState(() => buyerPhotoTarget(item));
-  const [revision, setRevision] = useState(0), [state, setState] = useState<State>({kind: 'loading'});
+  const [revision, setRevision] = useState(0), [state, setState] = useState<State>({kind: 'deferred'});
   const activeUrl = useRef<string | null>(null), activeRequest = useRef<AbortController | null>(null), frame = useRef<HTMLDivElement>(null);
   const [observable] = useState(() => typeof IntersectionObserver !== 'undefined'), [near, setNear] = useState(false);
   const allowed = photoReadAllowed(near, observable);
@@ -69,14 +70,14 @@ function PrivatePhoto({actorId, item, isCurrent}: Props) {
     if (!navigator.onLine || !isCurrent()) { setState({kind: 'hidden'}); return; }
     setState({kind: 'loading'}); setRevision(value => value + 1);
   }
-  return <section className={styles.buyerPhoto} aria-label={`Foto kemasan ${item.code}`} aria-busy={state.kind === 'loading'}>
+  return <section className={styles.buyerPhoto} aria-label={`Foto kemasan ${item.code}`} aria-busy={state.kind === 'loading'} data-photo-state={state.kind}>
     <div className={styles.buyerPhotoFrame} ref={frame}>
       {state.kind === 'ready' ?
         // A verified private blob must not be sent to a public URL or image optimizer.
         // eslint-disable-next-line @next/next/no-img-element
         <img src={state.url} alt={`Foto ${item.familyName} — ${item.definition.packageLabel}`} onError={() => { if (activeUrl.current !== state.url) return; revoke(); setState({kind: 'error', message: 'Foto belum dapat ditampilkan. Muat ulang untuk memeriksa kembali.'}); }}/>
         : <div className={styles.buyerPhotoState}>{state.kind === 'error' ? <ImageOff size={36} strokeWidth={1.25} aria-hidden="true"/> : <PackageOpen size={40} strokeWidth={1.1} aria-hidden="true"/>}
-          <p role="status">{state.kind === 'loading' ? 'Memuat foto…' : state.kind === 'none' ? 'Foto belum tersedia' : state.kind === 'hidden' ? 'Foto disembunyikan. Periksa kembali sesi dan koneksi.' : state.message}</p></div>}
+          {state.kind !== 'deferred' && <p role="status">{state.kind === 'loading' ? 'Memuat foto…' : state.kind === 'none' ? 'Foto belum tersedia' : state.kind === 'hidden' ? 'Foto disembunyikan. Periksa kembali sesi dan koneksi.' : state.message}</p>}</div>}
     </div>
     {photoRefreshOffered(state.kind) && <button type="button" className={styles.buyerPhotoRefresh} aria-label={`Muat ulang foto ${item.code}`} onClick={refresh}><RefreshCw size={14} aria-hidden="true"/>Muat ulang foto</button>}
   </section>;
