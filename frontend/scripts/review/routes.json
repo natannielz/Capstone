@@ -16,6 +16,7 @@
     "pengadaan",
     "penyetuju-pengadaan",
     "admin-akses",
+    "penyetuju-akses",
     "staf-pembeli"
   ],
   "groups": [
@@ -49,6 +50,7 @@
         "pengadaan",
         "penyetuju-pengadaan",
         "admin-akses",
+        "penyetuju-akses",
         "staf-pembeli"
       ]
     },
@@ -69,6 +71,7 @@
         "pengadaan",
         "penyetuju-pengadaan",
         "admin-akses",
+        "penyetuju-akses",
         "staf-pembeli"
       ]
     },
@@ -120,14 +123,16 @@
       "path": "/administration/access",
       "group": "administration",
       "personas": [
-        "admin-akses"
+        "admin-akses",
+        "penyetuju-akses"
       ]
     },
     {
       "path": "/administration/accounts",
       "group": "administration",
       "personas": [
-        "admin-akses"
+        "admin-akses",
+        "penyetuju-akses"
       ]
     },
     {
@@ -156,6 +161,7 @@
         "pengadaan",
         "penyetuju-pengadaan",
         "admin-akses",
+        "penyetuju-akses",
         "staf-pembeli"
       ]
     },
@@ -163,14 +169,16 @@
       "path": "/administration/history",
       "group": "administration",
       "personas": [
-        "admin-akses"
+        "admin-akses",
+        "penyetuju-akses"
       ]
     },
     {
       "path": "/administration/organizations",
       "group": "administration",
       "personas": [
-        "admin-akses"
+        "admin-akses",
+        "penyetuju-akses"
       ]
     },
     {
@@ -186,14 +194,16 @@
         "pemeriksa-pembayaran",
         "pengadaan",
         "penyetuju-pengadaan",
-        "admin-akses"
+        "admin-akses",
+        "penyetuju-akses"
       ]
     },
     {
       "path": "/administration/person-reviews",
       "group": "administration",
       "personas": [
-        "admin-akses"
+        "admin-akses",
+        "penyetuju-akses"
       ]
     },
     {
@@ -259,7 +269,6 @@
       "group": "store",
       "personas": [
         "pemohon",
-        "penyetuju-cabang",
         "staf-pembeli"
       ]
     },
@@ -302,7 +311,6 @@
       "group": "store",
       "personas": [
         "pemohon",
-        "penyetuju-cabang",
         "staf-pembeli"
       ]
     },
@@ -397,6 +405,7 @@
         "pengadaan",
         "penyetuju-pengadaan",
         "admin-akses",
+        "penyetuju-akses",
         "staf-pembeli"
       ]
     },
@@ -528,6 +537,7 @@
         "pengadaan",
         "penyetuju-pengadaan",
         "admin-akses",
+        "penyetuju-akses",
         "staf-pembeli"
       ]
     },
@@ -549,6 +559,7 @@
         "pengadaan",
         "penyetuju-pengadaan",
         "admin-akses",
+        "penyetuju-akses",
         "staf-pembeli"
       ],
       "sample": {
@@ -582,7 +593,6 @@
       "group": "ordering",
       "personas": [
         "pemohon",
-        "penyetuju-cabang",
         "staf-pembeli"
       ]
     },
@@ -598,7 +608,6 @@
       "group": "ordering",
       "personas": [
         "pemohon",
-        "penyetuju-cabang",
         "staf-pembeli"
       ]
     },
@@ -914,6 +923,7 @@
         "pengadaan",
         "penyetuju-pengadaan",
         "admin-akses",
+        "penyetuju-akses",
         "staf-pembeli"
       ]
     }
