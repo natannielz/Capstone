@@ -7,5 +7,5 @@
 .search button { margin-bottom: .8rem; padding: .75rem 1rem; }
 .options { display: grid; gap: .6rem; margin-block: 1rem; }
 .options button { display: grid; gap: .3rem; text-align: left; white-space: normal; overflow-wrap: anywhere; }
-.options button[aria-pressed="true"] { outline: 3px solid #d88727; outline-offset: 2px; }
+.options button[aria-pressed="true"] { box-shadow: inset 0 0 0 2px var(--primary); background: var(--secondary); }
 @media (max-width: 640px) { .fields { grid-template-columns: 1fr; } }

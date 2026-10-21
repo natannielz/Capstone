@@ -70,8 +70,9 @@ export function WorkspaceFrame({ children }: { children: React.ReactNode }) {
       <PaletteButton locked={locked} onOpen={() => setPaletteOpen(true)} />
     </div>
     <CommandPalette groups={groups} locked={locked} open={paletteOpen} onOpenChange={setPaletteOpen} />
-    {/* The skip link lands here: past the header and every navigation link, at the start of the workspace content. */}
-    <span id="konten-utama" tabIndex={-1} className="list-table-sr">Konten utama</span>
+    {/* The skip link lands here: past the header and every navigation link, at the start of the workspace content.
+        An empty marker: text here would sit outside every landmark (axe "region", U-020); the page's <main> follows it. */}
+    <span id="konten-utama" tabIndex={-1} />
     <FrameContext.Provider value={frame}><div data-workspace-frame="">{children}</div></FrameContext.Provider>
   </>;
 }

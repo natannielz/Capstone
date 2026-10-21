@@ -7,8 +7,7 @@
 .contents span { color: #4d6570; }
 .formLegend { font-size: 18px; font-weight: 650; padding: 0 0 18px; }
 .conversion { padding: 14px 16px; background: #edf6f7; color: #24535d; font-weight: 650; margin: 0; overflow-wrap: anywhere; }
-.review { padding: 24px; border-top: 3px solid #087f8c; background: #f8fbfc; }
-.review:focus-visible { outline: 3px solid #ed7829; outline-offset: 3px; }
+.review { padding: 24px; border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--card); }
 .history { list-style: none; margin: 20px 0; padding: 0; display: grid; gap: 0; }
 .history > li { border-top: 1px solid #c5d7dc; padding: 20px 0; overflow-wrap: anywhere; }
 .history h3 { margin: 0; }

@@ -7,10 +7,10 @@
 .controls textarea { min-height: 6rem; resize: vertical; }
 .controls button { cursor: pointer; }
 .controls button:disabled { cursor: default; opacity: .6; }
-.notice { padding: 1rem; border-left: 4px solid var(--workspace-scope-marker); background: var(--workspace-surface-selected); }
+.notice { padding: 1rem; border-radius: var(--radius-control); background: var(--workspace-surface-selected); }
 .notice dd { margin-left: 0; overflow-wrap: anywhere; }
 .signals { display: grid; gap: .75rem; list-style: none; padding: 0; }
 .signals li { padding: 1rem; border: 1px solid var(--workspace-border); border-radius: 4px; overflow-wrap: anywhere; }
-.signals li[data-state="flagged"] { border-left: 4px solid var(--workspace-accent); background: var(--workspace-surface-review); }
+.signals li[data-state="flagged"] { border-color: transparent; background: var(--tone-warning); }
 .signals span { display: block; color: var(--workspace-text-muted); margin-top: .25rem; }
 @media (max-width: 600px) { .controls { align-items: stretch; flex-direction: column; } .controls label { flex-basis: auto; } }

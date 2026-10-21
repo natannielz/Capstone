@@ -1,8 +1,9 @@
 import { outcomeCopy, type OutcomeKind } from "./outcome-copy";
 
 /**
- * One rendering for workspace states. "loading" shows skeleton rows; "unknown" offers "Periksa hasil", which the caller
- * must wire to the existing recovery read with the ORIGINAL idempotency key (never a resend).
+ * One rendering for workspace states (legacy API, markup and roles unchanged: rehearsals wait on these roles and texts).
+ * "loading" shows skeleton rows; "unknown" offers "Periksa hasil", which the caller must wire to the existing recovery read
+ * with the ORIGINAL idempotency key (never a resend). The look is shared with StateView (foundation.css); new pages use StateView.
  */
 export function OutcomeState({ kind, onAction, detail, rows = 3 }: { kind: OutcomeKind; onAction?: () => void; detail?: string; rows?: number }) {
   const copy = outcomeCopy(kind);

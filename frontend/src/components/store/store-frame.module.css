@@ -1,5 +1,6 @@
 .frame { min-height: 100vh; display: flex; flex-direction: column; background: var(--background); color: var(--foreground); }
-.inner { width: min(1240px, 100%); margin: 0 auto; padding: 0 20px; }
+/* One container for header, pages and footer (ui-standard §3.1): the brand and every page start one gutter from the edge. */
+.inner { width: min(var(--content-wide), 100% - 2 * var(--gutter)); margin: 0 auto; padding: 0; }
 .visuallyHidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
 /* Thin information bar, desktop only: help and the staff door, never shopping actions. */
@@ -37,15 +38,15 @@
 .workspace { border: 1px solid var(--border); }
 .signIn { display: inline-flex; align-items: center; min-height: 44px; padding: 0 22px; border-radius: 8px; background: var(--primary); color: var(--primary-foreground);
   font-weight: 700; text-decoration: none; }
-.signIn:hover { filter: brightness(.94); }
-.pending { width: 96px; height: 40px; border-radius: 8px; background: var(--muted); }
+.signIn:hover { background: var(--primary-hover); }
+.pending { width: 96px; height: var(--control-h); border-radius: var(--radius-control); background: var(--muted); }
 
 .account { position: relative; }
 .accountButton { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; max-width: 220px; padding: 0 12px; border: 1px solid var(--border); border-radius: 8px;
   background: var(--card); color: inherit; font: inherit; font-weight: 600; cursor: pointer; }
 .accountButton span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.menu { position: absolute; right: 0; top: calc(100% + 8px); z-index: 40; display: grid; min-width: 240px; padding: 8px; border: 1px solid var(--border); border-radius: 10px;
-  background: var(--popover); box-shadow: 0 16px 40px -18px color-mix(in oklab, var(--foreground) 45%, transparent); }
+.menu { position: absolute; right: 0; top: calc(100% + 8px); z-index: 40; display: grid; min-width: 240px; padding: 8px; border: 1px solid var(--border); border-radius: var(--radius-card);
+  background: var(--popover); box-shadow: 0 16px 40px -18px var(--overlay); }
 .menu a { padding: 10px 12px; border-radius: 6px; color: inherit; text-decoration: none; }
 .menu a:hover, .menu a:focus-visible { background: var(--secondary); }
 .menuName { margin: 0; padding: 8px 12px 10px; border-bottom: 1px solid var(--border); margin-bottom: 6px; font-weight: 700; }
@@ -71,7 +72,7 @@
   .brand, .categories, .workspace, .iconLabel { display: none; }
   .mark { display: inline-flex; }
   .search { display: none; }
-  .mobileSearch { display: flex; margin: 0 16px 12px; height: 42px; }
+  .mobileSearch { display: flex; margin: 0 var(--gutter) var(--space-3); height: var(--control-h); }
   .actions { margin-left: auto; }
   .accountButton span, .accountButton svg:last-child { display: none; }
   .signIn { padding: 0 16px; }
@@ -88,4 +89,4 @@
 /* Cart count on the icon, as marketplace headers show it. */
 .cartIcon { position: relative; display: inline-flex; margin-right: 6px; }
 .badge { position: absolute; top: -7px; right: -10px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: var(--destructive);
-  color: var(--primary-foreground); font-size: 11px; font-weight: 700; line-height: 18px; text-align: center; }
+  color: var(--primary-foreground); font-size: 12px; font-weight: 700; line-height: 18px; text-align: center; }
