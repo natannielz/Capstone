@@ -130,7 +130,7 @@ function ReviewDesk({ account, elapsed, onFailure, onRefresh }: { account: Accou
       {actions.includes('order.spend.approve') && <button className={stage === 'Spending' ? common.primary : common.secondary} disabled={locked} onClick={() => { setStage('Spending'); setBefore(null); setNotice(null); }}>Belanja cabang</button>}
       {actions.includes('order.accept') && <button className={stage === 'Store' ? common.primary : common.secondary} disabled={locked} onClick={() => { setStage('Store'); setBefore(null); setNotice(null); }}>Penerimaan toko</button>}
       {actions.includes('order.cancel') && <button className={stage === 'Cancellation' ? common.primary : common.secondary} disabled={locked} onClick={() => { setStage('Cancellation'); setBefore(null); setNotice(null); }}>Pembatalan pesanan</button>}
-      <button className={common.secondary} disabled={busy || recovering} onClick={onRefresh}>Perbarui sesi dan akses</button></div>
+      <button className={common.secondary} disabled={busy || recovering} onClick={onRefresh}>Muat ulang sesi dan akses</button></div>
       {(!fresh || error instanceof AccessFailure && error.code === 'step_up_required') && <p role="alert">Verifikasi terbaru diperlukan. <Link href={factorHref}>Verifikasi dua langkah</Link></p>}
     </section>
     <OperationRecovery entries={recovery.entries} journal={recovery.journal} disabled={busy} onBusyChange={setRecovering}

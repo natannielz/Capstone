@@ -89,7 +89,7 @@ function ExecutionDesk({ loaded, onRefresh }: { loaded: Loaded; onRefresh: () =>
   useEffect(() => { if (state.review) reviewFocus.current?.focus(); }, [state.review]);
   useEffect(() => { if (state.result) resultFocus.current?.focus(); }, [state.result]);
   const locked = editor.locked, busy = state.sending || state.recovering;
-  if (state.expired || state.suspended) return <SessionAccessState error={state.error} kind={state.expired ? 'expired' : lostAccessKind(state.error)} returnPath={path} busy={busy} onRetry={() => void onRefresh()} />;
+  if (state.expired || state.suspended) return <SessionAccessState error={state.error} kind={state.expired ? 'expired' : lostAccessKind(state.error)} returnPath={path} busy={busy} onRetry={() => void onRefresh()} detail={state.error !== null ? message(state.error) : undefined} />;
   return <>
     <AdministrationNavigation current='pack-conversion-executions' actions={loaded.actions} locked={locked} />
     <section className={common.accountSection} aria-labelledby='execution-context-heading'><div className={styles.headingRow}><div><h2 id='execution-context-heading'>Gudang dan aturan disetujui</h2>

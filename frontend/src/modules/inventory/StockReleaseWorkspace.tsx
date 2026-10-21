@@ -27,7 +27,7 @@ const amount = (value: string) => formatMoney('IDR', value);
 type Loaded = { actorId: string; actions: string[]; session: IdentitySession; observedAt: number; generation: number };
 function message(error: unknown) {
   if ((error instanceof AccessFailure || error instanceof RequestNotSentError) && error.code === 'antiforgery_failed')
-    return 'Sesi atau token halaman tidak lagi berlaku. Periksa sesi terbaru atau masuk kembali; referensi permintaan semula tetap disimpan.';
+    return 'Perlindungan halaman tidak lagi berlaku. Muat ulang sesi dan akses, atau masuk kembali; referensi permintaan semula tetap disimpan.';
   if (error instanceof IdentityFailure) return identityMessage(error);
   if (error instanceof RequestNotSentError) return accessMessage(error);
   if (error instanceof AccessFailure) {
@@ -96,7 +96,7 @@ function ReleaseDesk({ loaded, refresh }: { loaded: Loaded; refresh: () => Promi
   useEffect(() => { if (!warn) return; const leave = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ''; };
     window.addEventListener('beforeunload', leave); return () => window.removeEventListener('beforeunload', leave); }, [warn]);
   const locked = editor.locked, busy = state.sending || state.recovering;
-  if (state.expired || state.suspended) return <SessionAccessState error={state.error} kind={state.expired ? 'expired' : lostAccessKind(state.error)} returnPath={path} busy={busy} onRetry={() => void refresh()} />;
+  if (state.expired || state.suspended) return <SessionAccessState error={state.error} kind={state.expired ? 'expired' : lostAccessKind(state.error)} returnPath={path} busy={busy} onRetry={() => void refresh()} detail={state.error !== null ? message(state.error) : undefined} />;
   return <>
     <AdministrationNavigation current="stock-releases" actions={loaded.actions} locked={locked} />
     <section className={common.accountSection}><div className={styles.heading}><div><h2>Gudang yang ditugaskan</h2>

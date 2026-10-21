@@ -109,7 +109,7 @@ function CountDesk({ loaded, onRefresh }: { loaded: Loaded; onRefresh: () => Pro
   useEffect(() => { if (state.review) reviewFocus.current?.focus(); }, [state.review]);
   useEffect(() => { if (state.result) resultFocus.current?.focus(); }, [state.result]);
   const locked = editor.locked;
-  if (state.expired || state.suspended) return <SessionAccessState error={state.error} kind={state.expired ? 'expired' : lostAccessKind(state.error)} returnPath={path} busy={state.sending || state.recovering} onRetry={() => void onRefresh()} />;
+  if (state.expired || state.suspended) return <SessionAccessState error={state.error} kind={state.expired ? 'expired' : lostAccessKind(state.error)} returnPath={path} busy={state.sending || state.recovering} onRetry={() => void onRefresh()} detail={state.error !== null ? message(state.error) : undefined} />;
   let conversion: string | null = null;
   if (state.selectedPackage) {
     try { conversion = stockCountQuantity(state.draft.packages, state.selectedPackage.baseUnitsPerPackage).baseUnits; } catch { /* Empty or unfinished entry has no implied quantity. */ }

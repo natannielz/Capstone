@@ -126,7 +126,7 @@ async function decisionReview(page, reason, action) {
 async function signin(page, expectedActor) {
   await page.goto(origin.origin + path);
   await page.getByRole("heading", { name: /^(Masuk untuk melanjutkan|Sesi Anda perlu diperbarui)$/ }).waitFor();
-  await page.getByRole("link", { name: /^Masuk( kembali)?$/ }).click();
+  await page.locator('section[aria-labelledby="workspace-access-state"]').getByRole("link", { name: /^Masuk( kembali)?$/ }).click();
   await page.getByRole("button", { name: "Lanjutkan ke layanan akun", exact: true }).click();
   await page.waitForURL(origin.origin + path); await page.getByLabel("Akses lokasi", { exact: true }).waitFor();
   const identity = await page.evaluate(async () => (await fetch("/api/v1/identity/session")).json());
@@ -222,10 +222,10 @@ try {
   await check("maker cannot approve their own mapping", async () => {
     await decisionReview(page, "Pemetaan pertama", "approve");
     await page.getByRole("button", { name: labels.approve, exact: true }).click();
-    await page.getByRole("heading", { name: /^(Masuk untuk melanjutkan|Sesi Anda perlu diperbarui|Halaman ini di luar tugas akun Anda|Halaman belum dapat dibuka)$/ }).waitFor();
+    // A self-approval refusal is a business answer: it stays inline with its reason and the page stays open.
     await page.getByText("Keputusan memerlukan peninjau yang berbeda", { exact: false }).waitFor();
+    assert.equal(await page.locator('section[aria-labelledby="workspace-access-state"]').count(), 0);
     assert.equal((await pending(page)).length, 0);
-    await page.getByRole("button", { name: /^(Periksa ulang|Periksa ulang akses|Coba lagi)$/ }).click();
     await page.getByLabel("Gudang dan kanal pemilik alokasi", { exact: true }).waitFor();
   });
   await check("competing proposal and maker withdrawal retain separate immutable history", async () => {

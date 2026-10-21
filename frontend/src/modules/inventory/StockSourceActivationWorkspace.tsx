@@ -99,7 +99,7 @@ function ActivationDesk({ loaded, refresh }: { loaded: Loaded; refresh: () => Pr
   useEffect(() => { if (state.review) reviewFocus.current?.focus(); }, [state.review]);
   useEffect(() => { if (state.result) resultFocus.current?.focus(); }, [state.result]);
   const busy = state.sending || state.recovering, locked = editor.locked;
-  if (state.expired || state.suspended) return <SessionAccessState error={state.error} kind={state.expired ? 'expired' : lostAccessKind(state.error)} returnPath={path} busy={busy} onRetry={() => void refresh()} />;
+  if (state.expired || state.suspended) return <SessionAccessState error={state.error} kind={state.expired ? 'expired' : lostAccessKind(state.error)} returnPath={path} busy={busy} onRetry={() => void refresh()} detail={state.error !== null ? message(state.error) : undefined} />;
   return <>
     <AdministrationNavigation current="source-activations" actions={loaded.actions} locked={locked} />
     <section className={common.accountSection}><div className={styles.heading}><div><h2>Periksa sumber yang ditugaskan</h2>

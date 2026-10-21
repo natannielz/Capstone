@@ -166,7 +166,7 @@ function PriceDesk({ actorId, actions, session, observedAt, onRefresh, onFailure
     <section className={styles.accountSection}><h2>Ruang harga sesuai penugasan</h2><p>Setiap harga berlaku untuk satu SKU dan kemasan tertentu. Pengajuan belum mengubah harga yang berlaku.</p>
       <div className={styles.actions}>{actions.includes('pricing.manage') && <button className={mode === 'prepare' ? styles.primary : styles.secondary} disabled={locked} onClick={() => { clear(); setMode('prepare'); setAfter(null); }}>Ajukan harga</button>}
         {actions.includes('pricing.approve') && <button className={mode === 'review' ? styles.primary : styles.secondary} disabled={locked} onClick={() => { clear(); setMode('review'); setAfter(null); }}>Tinjau harga</button>}
-        <button className={styles.secondary} disabled={busy || recovering} onClick={() => void onRefresh()}>Perbarui sesi dan akses</button></div>
+        <button className={styles.secondary} disabled={busy || recovering} onClick={() => void onRefresh()}>Muat ulang sesi dan akses</button></div>
       {(!timing.fresh && actions.includes('pricing.approve') || error instanceof AccessFailure && error.code === 'step_up_required') && <p className={styles.alert}>Verifikasi terbaru diperlukan. <Link href={factorHref}>Verifikasi dua langkah</Link></p>}
       {timing.expired && <SessionAccessState error={null} kind="expired" returnPath={pricePath} busy={busy || recovering} onRetry={() => void onRefresh()} />}
     </section>

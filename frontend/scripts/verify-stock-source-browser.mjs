@@ -133,7 +133,7 @@ async function decision(page, label, action) {
 async function signin(page, expectedActor) {
   await page.goto(origin.origin + "/inventory/sources");
   await page.getByRole("heading", { name: /^(Masuk untuk melanjutkan|Sesi Anda perlu diperbarui)$/ }).waitFor();
-  await page.getByRole("link", { name: /^Masuk( kembali)?$/ }).click();
+  await page.locator('section[aria-labelledby="workspace-access-state"]').getByRole("link", { name: /^Masuk( kembali)?$/ }).click();
   await page.getByRole("button", { name: "Lanjutkan ke layanan akun", exact: true }).click();
   await page.waitForURL(origin.origin + "/inventory/sources");
   await page.getByLabel("Gudang dan kanal", { exact: true }).waitFor();

@@ -95,7 +95,7 @@ async function control(action) {
 async function signin(page, who) {
   await control(who); await page.goto(origin.origin + path);
   await page.getByRole("heading", { name: /^(Masuk untuk melanjutkan|Sesi Anda perlu diperbarui)$/ }).waitFor();
-  await page.getByRole("link", { name: /^Masuk( kembali)?$/ }).click();
+  await page.locator('section[aria-labelledby="workspace-access-state"]').getByRole("link", { name: /^Masuk( kembali)?$/ }).click();
   await page.getByRole("button", { name: "Lanjutkan ke layanan akun", exact: true }).click();
   await page.waitForURL(origin.origin + path); await page.getByLabel("Referensi alokasi", { exact: true }).waitFor();
   const identity = await page.evaluate(async () => (await fetch("/api/v1/identity/session")).json());
@@ -244,9 +244,10 @@ try {
   await check("accounts linked to the same person cannot inspect a checker decision", async () => {
     await control("same-person"); await checker.getByLabel("Referensi pengajuan", { exact: true }).fill(first);
     await checker.getByRole("button", { name: "Periksa pengajuan", exact: true }).click();
-    await checker.getByRole("heading", { name: /^(Masuk untuk melanjutkan|Sesi Anda perlu diperbarui|Halaman ini di luar tugas akun Anda|Halaman belum dapat dibuka)$/ }).waitFor();
-    await control("distinct-people"); await checker.getByRole("button", { name: /^(Periksa ulang|Periksa ulang akses|Coba lagi)$/ }).click();
-    await checker.getByLabel("Referensi alokasi", { exact: true }).waitFor();
+    // The maker/checker refusal stays inline with its reason; the page does not turn into a lost-access state.
+    await checker.getByRole("alert").filter({ hasText: "orang lain yang berwenang" }).waitFor();
+    assert.equal(await checker.locator('section[aria-labelledby="workspace-access-state"]').count(), 0);
+    await control("distinct-people"); await checker.getByLabel("Referensi alokasi", { exact: true }).waitFor();
   });
   await check("a real stop rejects frozen approval while stale rejection recovers after reload", async () => {
     await decision(checker, first, "approve", "Persetujuan sebelum penghentian"); await control("stop");

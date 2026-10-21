@@ -1,4 +1,4 @@
-import { AccessFailure, MutationLedger, stableContent } from "../administration/workflow";
+import { AccessFailure, MutationLedger, stableContent, businessRefusal } from "../administration/workflow";
 import { OperationJournal, submitTrackedRequest, type OperationReference, type StockSourceRevisionRecoveryReceipt } from "../administration/operation-journal";
 import { IdentityFailure, sessionTiming, type IdentitySession } from "../identity/identity-workflow";
 import type { AccessScope } from "../organizations/access-scope";
@@ -98,7 +98,7 @@ export class StockSourceRevisionEditor {
     this.patch({ error });
     if (error instanceof AccessFailure || error instanceof IdentityFailure) {
       if (error.code === "step_up_required") this.patch({ fresh: false });
-      else if (error.status === 401 || error.status === 403 || error.code === "actor_changed" ||
+      else if (error.status === 401 || error.status === 403 && !businessRefusal(error.code) || error.code === "actor_changed" ||
         error.code === "stock_source_revision_response_invalid" || error.code === "stock_source_response_invalid") this.conceal({ suspended: true, error });
     }
   }

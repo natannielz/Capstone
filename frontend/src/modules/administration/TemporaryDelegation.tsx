@@ -155,7 +155,7 @@ function Desk({account, refreshSession}: {account: Account; refreshSession: () =
     {error !== null && <p className={styles.alert} role="alert">{message(error)}</p>}
     {notice && <p role="status">{notice}</p>}
     <p className={styles.help}>Serah-terima di halaman ini menyimpan catatan peserta. Pengambilalihan tugas pemeriksaan pembayaran tersedia pada meja pemeriksaan bagi reviewer berwenang. Jenis tugas lain belum tersedia. Tugas dan persetujuan operasional tetap mengikuti pemilik serta pemisahan tugas masing-masing.</p>
-    <div className={styles.actions}><button className={styles.secondary} type="button" disabled={busy} onClick={refreshSession}>Perbarui sesi dan akses</button>
+    <div className={styles.actions}><button className={styles.secondary} type="button" disabled={busy} onClick={refreshSession}>Muat ulang sesi dan akses</button>
       {fields && <ProtectedNavigationForm action="/auth/step-up" fields={fields} disabled={busy} label="Verifikasi dua langkah" secondary />}</div>
     {storageBlocked && <p role="alert" className={styles.alert}>Penyimpanan referensi operasi belum tersedia. Pengiriman perubahan dikunci.</p>}
     {pending.length > 0 && <section className={styles.accountSection} aria-label="Operasi delegasi belum terkonfirmasi"><h2>Periksa hasil asli</h2>

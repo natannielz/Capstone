@@ -58,8 +58,10 @@ async function signedOutStates(page) {
     await page.getByRole('status').filter({ hasText: 'Memeriksa akun dan akses…' }).waitFor();
     await page.screenshot({ path: resolve(directory, 'pilot-request-loading-mobile.png'), fullPage: true });
   } finally { releaseSession(); await Promise.all(held); await page.unroute(sessionPath, hold); }
-  await page.getByRole('heading', { name: /^(Masuk untuk melanjutkan|Sesi Anda perlu diperbarui|Halaman ini di luar tugas akun Anda|Halaman belum dapat dibuka)$/ }).waitFor();
-  await page.getByRole('link', { name: /^Masuk( kembali)?$/ }).waitFor();
+  // A stale cookie the server no longer knows: the session read says "not signed in", so the page invites a sign-in.
+  const state = page.locator('section[aria-labelledby="workspace-access-state"]');
+  await state.getByRole('heading', { name: 'Masuk untuk melanjutkan', exact: true }).waitFor();
+  await state.getByRole('link', { name: 'Masuk', exact: true }).waitFor();
   assert.equal(await page.getByRole('button', { name: 'Konfirmasi ajukan permintaan', exact: true }).count(), 0);
   await cleanViewport(page); await page.screenshot({ path: resolve(directory, 'pilot-request-unauthenticated-mobile.png'), fullPage: true });
 }

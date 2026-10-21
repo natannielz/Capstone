@@ -116,6 +116,7 @@ export function accessMessage(error: unknown): string {
   if (error.code === "commit_outcome_unknown" || error.code === "resolve_previous_attempt")
     return "Hasil perubahan belum dapat dipastikan. Coba lagi tanpa mengubah isian; permintaan yang sama akan diperiksa kembali.";
   if (error.status === 401) return "Masuk dengan akun organisasi Anda untuk melanjutkan.";
+  if (error.status === 403 && businessRefusal(error.code)) return "Keputusan ini harus diambil oleh orang lain yang berwenang, terpisah dari pengaju.";
   if (error.code === "step_up_required") return "Verifikasi dua langkah terbaru diperlukan sebelum melanjutkan. Muat ulang setelah verifikasi akun.";
   if (error.code === "payment_review_closed") return "Pengajuan ini sudah ditutup karena penolakan atau permintaan bukti pengganti. Riwayat dan dana tetap tersimpan; pengajuan ini tidak dapat diverifikasi kembali.";
   if (error.status === 403) return "Akses untuk tindakan ini tidak tersedia. Muat ulang untuk memeriksa izin terbaru.";
@@ -124,3 +125,7 @@ export function accessMessage(error: unknown): string {
   if (error.code === "request_in_progress") return "Permintaan masih diproses.";
   return "Permintaan belum dapat diterima. Periksa akun, cakupan, masa berlaku, dan alasan pengajuan.";
 }
+
+/** A maker/checker refusal ("a different person must decide") is a business answer: it stays inline with its own reason and
+ *  never hides the page as lost access. */
+export const businessRefusal = (code: string) => code.includes('independent') || code.includes('person');

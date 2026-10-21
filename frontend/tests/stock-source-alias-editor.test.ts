@@ -175,3 +175,10 @@ test("busy recovery locks its selected context and keeps an unconfirmed receipt"
   assert.equal(await data.editor.receipt(entry), null); assert.equal(data.journal.list(actorId).length, 1);
   data.editor.setRecovering(false);
 });
+
+test("a business refusal (self-approval) stays inline with its own reason and never hides the page as lost access", async () => {
+  const data = setup({ submit: async () => { throw new AccessFailure(403, "independent_person_required"); } });
+  await review(data.editor); await data.editor.submitReviewed(true);
+  assert.equal(data.editor.snapshot().suspended, false);
+  assert.equal((data.editor.snapshot().error as AccessFailure).code, "independent_person_required");
+});

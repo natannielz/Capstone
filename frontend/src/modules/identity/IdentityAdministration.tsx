@@ -1,6 +1,6 @@
 "use client";
 
-import { SessionAccessState } from '@/components/workspace-kit/session-access-state';
+import { SessionAccessState, lostAccessKind } from '@/components/workspace-kit/session-access-state';
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { components } from "../../api/generated/schema";
@@ -44,9 +44,11 @@ export function IdentityAdministration() {
     window.addEventListener("pageshow", restore);
     return () => { active = false; window.removeEventListener("pageshow", restore); };
   }, [refresh]);
+  // A session lost while the page was open is a session that ended, not a first sign-in (G-014).
+  const [lost, setLost] = useState(false);
   const onFailure = useCallback((failure: unknown) => {
     if (failure instanceof AccessFailure && (failure.status === 401 || failure.code === "actor_changed")) {
-      sequence.current++; setLoaded(null); setLoading(false); setError(failure);
+      sequence.current++; setLoaded(null); setLoading(false); setError(failure); setLost(true);
     }
   }, []);
   return <main className={styles.page}>
@@ -55,7 +57,7 @@ export function IdentityAdministration() {
     {error !== null && loaded && <p role="alert" className={styles.alert}>{accessMessage(error)}</p>}
     {loaded ? <IdentityAdministrationBody key={`${loaded.current.userId}:${revision}`} {...loaded} onFailure={onFailure} onRefresh={refresh} />
       : loading ? <section className={styles.state} aria-busy="true"><h2>Memeriksa akses</h2></section>
-      : <SessionAccessState error={error} returnPath="/administration/accounts" onRetry={() => void refresh()} detail={error !== null ? accessMessage(error) : undefined} />}
+      : <SessionAccessState error={error} kind={lost ? lostAccessKind(error) : undefined} returnPath="/administration/accounts" onRetry={() => void refresh()} detail={error !== null ? accessMessage(error) : undefined} />}
   </main>;
 }
 
