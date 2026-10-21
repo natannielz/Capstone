@@ -137,6 +137,19 @@ public sealed class InvoiceTests(MongoFixture fixture)
 }
 
 // These independent approvals and chart inputs are isolated synthetic test data, not production policy.
+/// <summary>Synthetic invoice admissions stand for invoices issued before releases existed. Inside the issuing transaction they are
+/// bound and anchored exactly as the release migration records such invoices, so every later read verifies them like real ones.</summary>
+internal static class LegacyInvoiceRelease
+{
+    internal static async Task AnchorAsync(IMongoDatabase database, IClientSessionHandle tx, BsonDocument invoice, CancellationToken ct) {
+        var binding = await InvoiceReleaseRecords.BindingAsync(database, tx, invoice, null, ct);
+        await database.GetCollection<BsonDocument>(InvoiceReleaseBson.Bindings).InsertOneAsync(tx, binding, cancellationToken: ct);
+        await database.GetCollection<BsonDocument>(InvoiceReleaseBson.Anchors).InsertOneAsync(tx, new BsonDocument { { "_id", binding["invoiceId"] }, { "schemaVersion", 1 },
+            { "migrationVersion", UnitToko.Platform.Mongo.Migrations.InvoiceReleaseMigration.Number }, { "invoiceHash", binding["invoiceHash"] },
+            { "bindingHash", binding["recordHash"] } }, cancellationToken: ct);
+    }
+}
+
 internal sealed class InvoiceData(ShipmentDispatchTestData dispatch) : IAsyncDisposable
 {
     internal ShipmentDispatchTestData Dispatch { get; } = dispatch;
@@ -173,8 +186,11 @@ internal sealed class InvoiceData(ShipmentDispatchTestData dispatch) : IAsyncDis
         } catch { await data.DisposeAsync(); throw; }
     }
     public ValueTask DisposeAsync() => Dispatch.DisposeAsync();
-    internal sealed class FixtureAdmission(InvoiceData data) : IInvoiceAdmissionReader
+    internal sealed class FixtureAdmission(InvoiceData data) : IInvoiceAdmissionReader, IInvoiceReleaseWriter
     {
+        public Task BindPostedAsync(IClientSessionHandle tx, ActorContext actor, InvoiceTerms terms, BsonDocument invoice, CancellationToken ct) =>
+            LegacyInvoiceRelease.AnchorAsync(data.Order.Database, tx, invoice, ct);
+        public void RequireCurrent(IClientSessionHandle tx, ActorContext actor, InvoiceTerms terms) { }
         public IMongoDatabase Database => data.Order.Database;
         internal Func<IClientSessionHandle, CancellationToken, Task>? BeforeComplete { get; set; }
         private async Task<BsonDocument> FenceAsync(IClientSessionHandle tx, CancellationToken ct) {

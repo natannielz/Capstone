@@ -28,4 +28,10 @@ internal static class Pending
     /// Same cause and workstream as <see cref="TransactionLatency"/>; the bound itself is not relaxed.</summary>
     internal const string BrowserLatency =
         "Pending latency: a command in this browser flow exceeds the 30 s browser request bound; open, not retired (docs/quality/retired-tests.md).";
+
+    /// <summary>The customer side attaches an order fixture to a procurement fixture that has already received physical stock into the
+    /// same warehouse. Activating that pool for orders is correctly refused (existing stock needs its own reviewed migration and valuation
+    /// handoff), so the order fixture needs its own warehouse before these scenarios can run again.</summary>
+    internal const string SharedWarehouseFixture =
+        "Pending rewrite: the order fixture reuses a warehouse the procurement fixture already stocked; open test debt, not retired (docs/quality/retired-tests.md).";
 }
