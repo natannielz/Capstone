@@ -3,7 +3,7 @@
 .skip:focus { left: 16px; }
 .heading { display: flex; justify-content: space-between; align-items: start; flex-wrap: wrap; gap: 16px; }
 .heading h2 { margin: 0; }
-.notice { border-left: 4px solid #a65517; background: #fff4e7; padding: 18px 22px; margin: 24px 0; color: #603510; }
+.notice { border-radius: var(--radius-control); background: var(--tone-warning); padding: 18px 22px; margin: 24px 0; color: var(--tone-warning-foreground); }
 .notice p { margin-bottom: 0; }
 .selection { display: grid; grid-template-columns: minmax(160px, 1fr) auto; gap: 18px; align-items: end; max-width: 680px; }
 .form { display: grid; gap: 18px; align-content: start; }
@@ -15,13 +15,12 @@
 .facts dt { color: #4d6570; }
 .facts dd { margin: 4px 0 0; font-weight: 650; overflow-wrap: anywhere; }
 .locations { padding: 0; list-style: none; display: grid; gap: 10px; }
-.locations li { display: grid; gap: 4px; padding: 12px 14px; border-left: 3px solid #087f8c; background: #edf5f5; overflow-wrap: anywhere; }
+.locations li { display: grid; gap: 4px; padding: 12px 14px; border-radius: var(--radius-control); background: var(--secondary); overflow-wrap: anywhere; }
 .locations span { font-size: 13px; color: #3e5960; }
-.review { padding: 28px; margin: 28px 0; background: white; border: 1px solid #d2b291; border-top: 4px solid #a65517; }
-.review:focus { outline: 3px solid #ed7829; outline-offset: 3px; }
+.review { padding: 28px; margin: 28px 0; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-card); }
 .review h3 { overflow-wrap: anywhere; }
 .history { margin-top: 28px; }
-.history > header { padding: 22px; background: #e7f0f1; border-top: 3px solid #087f8c; }
+.history > header { padding: 22px; background: var(--muted); }
 .historyGrid { display: grid; grid-template-columns: minmax(240px, .7fr) minmax(0, 1.3fr); gap: 24px; align-items: start; }
 .detail { padding: 24px; border: 1px solid #d7e3e7; background: white; overflow-wrap: anywhere; }
 @media (max-width: 850px) { .preview, .historyGrid { grid-template-columns: minmax(0, 1fr); } }

@@ -5,7 +5,7 @@
 .overview ol { margin: 8px 0; padding-left: 24px; }
 .warning { color: var(--workspace-text-meta); overflow-wrap: anywhere; }
 .fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
-.observation { border: 1px solid var(--workspace-border); border-left: 3px solid var(--workspace-accent); padding: 16px; min-width: 0; }
+.observation { border: 1px solid var(--workspace-border); border-radius: var(--radius-control); padding: 16px; min-width: 0; }
 .observation h4 { font-size: 16px; margin: 0 0 10px; }
 .observation p, .observation button, .lines p { overflow-wrap: anywhere; }
 .value { font-weight: 650; white-space: pre-wrap; }

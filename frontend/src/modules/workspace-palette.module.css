@@ -1,51 +1,53 @@
 /* Composed only by staff/account workspace roots and protected forms; no global theme overrides.
-   Preserve the existing palette, including distinct feedback and divider tones. */
+   UI standard §13: the legacy names stay for the pages that still read them, but every one is now an alias of a standard token
+   (globals.css), so staff, buyer and storefront pages share one primary colour, one text colour and one set of tones (U-001, U-023).
+   The former petroleum ink is the text colour; the primary fill is --primary. */
 .palette {
-  --workspace-ink: var(--petroleum, #073b45);
-  --workspace-ink-hover: #062f36;
-  --workspace-canvas: #f2f6f4;
-  --workspace-surface: #fff;
-  --workspace-surface-selected: #edf4f1;
-  --workspace-surface-hover: #f3f7f5;
-  --workspace-surface-review: #f7faf8;
-  --workspace-surface-disabled: #edf3f0;
-  --workspace-accent: #c84513;
+  --workspace-ink: var(--foreground);
+  --workspace-ink-hover: var(--primary-hover);
+  --workspace-canvas: var(--background);
+  --workspace-surface: var(--card);
+  --workspace-surface-selected: var(--secondary);
+  --workspace-surface-hover: var(--secondary);
+  --workspace-surface-review: var(--muted);
+  --workspace-surface-disabled: var(--muted);
+  --workspace-accent: var(--ring);
 
-  --workspace-text-muted: #526c70;
-  --workspace-text-meta: #526c76;
-  --workspace-text-caption: #4d6570;
-  --workspace-text-row: #45616c;
-  --workspace-text-support: #4b6667;
-  --workspace-text-placeholder: #617773;
+  --workspace-text-muted: var(--muted-foreground);
+  --workspace-text-meta: var(--muted-foreground);
+  --workspace-text-caption: var(--muted-foreground);
+  --workspace-text-row: var(--muted-foreground);
+  --workspace-text-support: var(--muted-foreground);
+  --workspace-text-placeholder: var(--muted-foreground);
 
-  --workspace-border: #cbdad5;
-  --workspace-border-interactive: #afc4be;
-  --workspace-border-input: #a3bcb4;
-  --workspace-border-divider: #d7e3e7;
-  --workspace-border-row: #d5e3dc;
-  --workspace-border-list: #e2eaee;
-  --workspace-border-history: #c5d7dc;
-  --workspace-border-support: #dae6e2;
-  --workspace-scope-marker: #799b8b;
-  --workspace-step-text: #20696a;
-  --workspace-step-border: #b8d0cc;
+  --workspace-border: var(--border);
+  --workspace-border-interactive: var(--control-border);
+  --workspace-border-input: var(--control-border);
+  --workspace-border-divider: var(--border);
+  --workspace-border-row: var(--border);
+  --workspace-border-list: var(--border);
+  --workspace-border-history: var(--border);
+  --workspace-border-support: var(--border);
+  --workspace-scope-marker: var(--primary);
+  --workspace-step-text: var(--secondary-foreground);
+  --workspace-step-border: var(--border);
 
-  --workspace-critical-text: #7d2128;
-  --workspace-critical-surface: #fff0f1;
-  --workspace-critical-border: #a6373f;
-  --workspace-critical-action: #9c2931;
-  --workspace-critical-action-border: #ddb5b8;
-  --workspace-alert-text: #7c3024;
-  --workspace-alert-surface: #fff2ef;
-  --workspace-alert-border: #b9513b;
-  --workspace-success-text: #205b44;
-  --workspace-success-surface: #edf6f0;
-  --workspace-success-border: #347c5b;
-  --workspace-success-badge-border: #c2dece;
-  --workspace-success-strong-text: #195844;
-  --workspace-success-strong-surface: #e8f5ee;
-  --workspace-success-strong-border: #26745a;
-  --workspace-caution-text: #675023;
-  --workspace-caution-surface: #faf4e6;
-  --workspace-caution-border: #e6d6af;
+  --workspace-critical-text: var(--tone-danger-foreground);
+  --workspace-critical-surface: var(--tone-danger);
+  --workspace-critical-border: var(--destructive);
+  --workspace-critical-action: var(--destructive);
+  --workspace-critical-action-border: var(--destructive);
+  --workspace-alert-text: var(--tone-danger-foreground);
+  --workspace-alert-surface: var(--tone-danger);
+  --workspace-alert-border: var(--destructive);
+  --workspace-success-text: var(--tone-success-foreground);
+  --workspace-success-surface: var(--tone-success);
+  --workspace-success-border: var(--tone-success-foreground);
+  --workspace-success-badge-border: var(--tone-success);
+  --workspace-success-strong-text: var(--tone-success-foreground);
+  --workspace-success-strong-surface: var(--tone-success);
+  --workspace-success-strong-border: var(--tone-success-foreground);
+  --workspace-caution-text: var(--tone-warning-foreground);
+  --workspace-caution-surface: var(--tone-warning);
+  --workspace-caution-border: var(--tone-warning);
 }
