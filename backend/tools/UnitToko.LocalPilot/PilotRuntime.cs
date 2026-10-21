@@ -24,11 +24,11 @@ internal sealed class PilotApiFactory(string repository, PilotState state, Synth
         builder.ConfigureHostConfiguration(config => config.AddInMemoryCollection(new Dictionary<string, string?>
         {
             ["Mongo:Uri"] = PilotBoundary.MongoUri, ["Mongo:Database"] = PilotBoundary.DatabaseName,
-            ["Release:Profile"] = PilotBoundary.Profile, ["Identity:Auth0:Enabled"] = "true", ["Identity:Auth0:Issuer"] = PilotBoundary.Issuer,
+            ["Release:Profile"] = PilotBoundary.Release, ["Identity:Auth0:Enabled"] = "true", ["Identity:Auth0:Issuer"] = PilotBoundary.Issuer,
             ["Identity:Auth0:PublicOrigin"] = PilotBoundary.Origin, ["Identity:Auth0:ClientId"] = SyntheticOidcProvider.ClientId,
             ["Identity:Auth0:ClientSecret"] = state.Secrets.ClientSecret, ["Identity:Auth0:ConnectionId"] = SyntheticOidcProvider.ConnectionId,
             ["Identity:Auth0:ConnectionName"] = SyntheticOidcProvider.ConnectionName, ["Identity:Auth0:ClaimsNamespace"] = SyntheticOidcProvider.ClaimsNamespace,
-            ["Identity:Keys:Directory"] = state.KeyDirectory, ["Identity:Keys:ApplicationName"] = PilotBoundary.Profile == "full" ? "UnitToko.SYNTHETIC.LocalPilot.Full" : "UnitToko.SYNTHETIC.LocalPilot.Release1",
+            ["Identity:Keys:Directory"] = state.KeyDirectory, ["Identity:Keys:ApplicationName"] = PilotBoundary.Profile switch { "full" => "UnitToko.SYNTHETIC.LocalPilot.Full", "review" => "UnitToko.SYNTHETIC.LocalPilot.Review", _ => "UnitToko.SYNTHETIC.LocalPilot.Release1" },
             ["Identity:Keys:CertificatePath"] = state.CertificatePath, ["Identity:Keys:CertificatePassword"] = state.Secrets.CertificatePassword,
             ["Identity:TrustedProxies:0"] = "127.0.0.1", ["Logging:LogLevel:Default"] = "Warning"
         }));
@@ -95,6 +95,15 @@ internal static class PilotRuntime
         }
     }
 
+    /// <summary>The review stack stops its own MongoDB when it stops (the data folder stays). Only the review profile calls this,
+    /// after MongoAsync verified the process on its port is the review instance.</summary>
+    public static async Task ShutdownMongoAsync(MongoClient client)
+    {
+        if (PilotBoundary.Profile != "review") throw new InvalidOperationException("Only the review stack stops its MongoDB.");
+        try { await client.GetDatabase("admin").RunCommandAsync<BsonDocument>(new BsonDocument { { "shutdown", 1 }, { "timeoutSecs", 5 } }); }
+        catch (Exception exception) when (exception is MongoException or IOException or TimeoutException) { }
+    }
+
     public static async Task<(Process Process, string Address)> NextAsync(string repository, string node, string stateDirectory, CancellationToken ct)
     {
         if (!Path.IsPathFullyQualified(node) || !File.Exists(node)) throw new InvalidOperationException("Supply the existing Node executable path.");
@@ -104,7 +113,7 @@ internal static class PilotRuntime
             RedirectStandardOutput = true, RedirectStandardError = true, WindowStyle = ProcessWindowStyle.Hidden };
         foreach (var arg in new[] { Path.Combine(repository, "frontend", "node_modules", "next", "dist", "bin", "next"), "start", "--hostname", "127.0.0.1", "--port", port.ToString(System.Globalization.CultureInfo.InvariantCulture) }) start.ArgumentList.Add(arg);
         start.Environment["NODE_ENV"] = "production"; start.Environment["NEXT_TELEMETRY_DISABLED"] = "1";
-        start.Environment["NEXT_PUBLIC_UNIT_TOKO_RELEASE"] = PilotBoundary.Profile;
+        start.Environment["NEXT_PUBLIC_UNIT_TOKO_RELEASE"] = PilotBoundary.Release;
         var process = Process.Start(start) ?? throw new InvalidOperationException("Could not start Next.js.");
         // Drain bounded process output; authentication request data is never logged by this launcher.
         process.OutputDataReceived += (_, value) => { if (value.Data is { } line) AppendLog(stateDirectory, line); };
