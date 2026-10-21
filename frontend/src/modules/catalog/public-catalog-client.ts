@@ -17,6 +17,8 @@ export type PublicCatalogQuery = { search?: string; category?: string; sort?: 'n
 export const publicCatalogPageSize = 24;
 /** The same limit as the store search box; the API accepts it too. */
 export const publicCatalogSearchLimit = 128;
+/** The most packages one guest product lists; the API applies the same bound, and a longer list is cut, never refused. */
+export const publicCatalogPackageLimit = 64;
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$(?![\s\S])/;
 const invalid = (): never => { throw new AccessFailure(502, 'public_catalog_response_invalid'); };
@@ -40,10 +42,11 @@ function parsePackage(value: unknown): PublicCatalogPackage {
     minimumOrderPackages: count(row.minimumOrderPackages, 1), orderIncrementPackages: count(row.orderIncrementPackages, 1) };
 }
 
-/** A guest product always has at least one published package; an empty one is never shown. */
+/** A guest product always has at least one published package; an empty one is never shown. A longer list than the bound keeps
+ * its first packages, so one large product can never take the whole guest page down. */
 export function parsePublicCatalogItem(value: unknown): PublicCatalogItem {
   const row = record(value);
-  const packages = Array.isArray(row.packages) && row.packages.length >= 1 && row.packages.length <= 64 ? row.packages.map(parsePackage) : invalid();
+  const packages = Array.isArray(row.packages) && row.packages.length >= 1 ? row.packages.slice(0, publicCatalogPackageLimit).map(parsePackage) : invalid();
   return { publicId: publicIdOf(row.publicId), name: text(row.name, 160), description: text(row.description, 2000, true),
     categoryCode: text(row.categoryCode, 64), categoryName: text(row.categoryName, 160), packages };
 }
@@ -80,7 +83,8 @@ export function readPublicCatalogQuery(search: string): PublicCatalogQuery {
   return result;
 }
 
-/** Anonymous reads: a plain GET without cookies, so the answer is the same for everyone and safe to cache. */
+/** Anonymous reads: a plain GET without cookies, so the answer is the same for everyone. The API marks it no-store, so a
+ * withdrawn sample disappears on the next read. */
 export function createPublicCatalogGateway(options: { fetch?: typeof globalThis.fetch; origin?: string } = {}) {
   const fetcher = options.fetch ?? globalThis.fetch;
   const url = (path: string) => new URL(path, options.origin ?? window.location.origin);

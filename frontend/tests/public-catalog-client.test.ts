@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {createPublicCatalogGateway, publicCatalogSearchLimit, publicCatalogUrl, readPublicCatalogQuery} from '../src/modules/catalog/public-catalog-client';
+import {createPublicCatalogGateway, publicCatalogPackageLimit, publicCatalogSearchLimit, publicCatalogUrl, readPublicCatalogQuery} from '../src/modules/catalog/public-catalog-client';
 
 const pack = {publicId: '00000065-0000-4000-8000-000000000101', code: 'AIR-600-K24', packageLabel: 'Karton isi 24 botol', packageKind: 'sealed', baseUnitCode: 'botol',
   baseUnitsPerPackage: 24, attributes: [{key: 'Volume', value: '600 ml'}], minimumOrderPackages: 1, orderIncrementPackages: 1};
@@ -39,6 +39,15 @@ test('a malformed public answer is refused instead of shown', async () => {
     const gateway = createPublicCatalogGateway({origin: 'https://unit-toko.test', fetch: async () => Response.json({total: '1', items: [broken], categories: []})});
     await assert.rejects(() => gateway.query({}), (error: unknown) => (error as {code?: string}).code === 'public_catalog_response_invalid');
   }
+});
+
+test('a product with more packages than the page shows keeps its first 64 instead of failing the whole page', async () => {
+  const many = {...item, packages: Array.from({length: 70}, (_, index) => ({...pack, code: 'AIR-' + index,
+    publicId: '00000065-0000-4000-8000-' + String(1000 + index).padStart(12, '0')}))};
+  const gateway = createPublicCatalogGateway({origin: 'https://unit-toko.test', fetch: async () => Response.json({total: '2', items: [many, item], categories: []})});
+  const page = await gateway.query({});
+  assert.equal(page.items.length, 2); assert.equal(page.items[0].packages.length, publicCatalogPackageLimit);
+  assert.equal(publicCatalogPackageLimit, 64); assert.equal(page.items[0].packages[63].code, 'AIR-63');
 });
 
 test('a product that is not a guest sample answers as absent, not as an error', async () => {

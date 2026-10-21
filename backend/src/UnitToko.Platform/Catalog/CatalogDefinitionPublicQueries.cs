@@ -15,6 +15,10 @@ namespace UnitToko.Platform.Catalog;
 public sealed partial class CatalogDefinitionQueryService
 {
     public const int PublicPageLimit = 48, PublicSearchLimit = 128;
+    /// <summary>The most packages one guest product lists (its first, in creation order). The guest page applies the same bound,
+    /// so one large product can never break the page.</summary>
+    public const int PublicPackageLimit = 64;
+    internal int PackageLimit { get; init; } = PublicPackageLimit;
     private const string PublicIdPattern = "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\\z";
 
     public async Task<PublicCatalogPage> QueryPublicAsync(int offset, int limit, string? search, string? category = null,
@@ -98,6 +102,7 @@ public sealed partial class CatalogDefinitionQueryService
                 { "packageLabel", "$definition.packageLabel" }, { "packageKind", "$definition.packageKind" }, { "baseUnitCode", "$definition.baseUnitCode" },
                 { "baseUnitsPerPackage", "$definition.baseUnitsPerPackage" }, { "attributes", "$definition.attributes" },
                 { "minimumOrderPackages", "$definition.minimumOrderPackages" }, { "orderIncrementPackages", "$definition.orderIncrementPackages" } }) } }));
+        pipeline.Add(new("$addFields", new BsonDocument("packages", new BsonDocument("$slice", new BsonArray { "$packages", PackageLimit }))));
         return pipeline;
     }
 

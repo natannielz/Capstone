@@ -249,6 +249,81 @@ public sealed class CatalogPublicSampleTests(MongoFixture fixture)
         Assert.True(narrowed["proposalId"].AsInt64 > 0);
     }
 
+    /// <summary>Approval is where the limit and the proposed state really bind: both are checked again under the approval counter.</summary>
+    [Fact]
+    public async Task Approval_rechecks_the_limit_and_the_proposed_products()
+    {
+        await using var setup = await CreateAsync(fixture);
+        var data = setup.Data;
+        var a = await ProductAsync(data, "ATK", "Pensil", "PENCIL-12", 501);
+        var b = await ProductAsync(data, "KOPI", "Kopi bubuk", "KOPI-12", 501);
+        var c = await ProductAsync(data, "KERTAS", "Kertas A4", "KERTAS-12", 501);
+        var d = await ProductAsync(data, "MAP", "Map plastik", "MAP-12", 501);
+        var owner = (await data.RowAsync("productFamilies", a.FamilyId))["authoringOwner"].AsBsonDocument;
+        BsonDocument Sample(long id) => new() { { "_id", id }, { "schemaVersion", 1 }, { "ownerScope", owner.DeepClone() }, { "revision", 1L },
+            { "addedAt", data.Clock.UtcNow.UtcDateTime }, { "approvedProposalId", BsonNull.Value },
+            { "migratedFrom", new BsonDocument { { "assortmentId", 501L }, { "showcaseDecisionId", 1L } } } };
+        await data.Rows("catalogPublicSamples").InsertManyAsync(Enumerable.Range(0, 199).Select(index => Sample(900000L + index)));
+        // Each proposal passes on its own at 199 samples.
+        async Task<long> Propose(Product product, string key) =>
+            (await setup.Service.ProposeAsync(setup.Maker, [product.FamilyId], [], T.Metadata(key, "Contoh barang"))) ["proposalId"].AsInt64;
+        var first = await Propose(a, "cap-a"); var second = await Propose(b, "cap-b");
+        var deactivated = await Propose(c, "cap-c"); var already = await Propose(d, "cap-d");
+        Task<BsonDocument> Approve(long id, string key) => setup.Service.DecideAsync(setup.Checker, id, CatalogPublicSampleDecision.Approve, T.Metadata(key, "Diperiksa"));
+
+        await data.Rows("productFamilies").UpdateOneAsync(new BsonDocument("_id", c.FamilyId), Builders<BsonDocument>.Update.Set("active", false));
+        Assert.Equal("catalog_public_sample_changed", (await Assert.ThrowsAsync<PersistenceConflictException>(() => Approve(deactivated, "cap-c-approve"))).Code);
+        await data.Rows("catalogPublicSamples").InsertOneAsync(Sample(d.FamilyId));
+        Assert.Equal("catalog_public_sample_changed", (await Assert.ThrowsAsync<PersistenceConflictException>(() => Approve(already, "cap-d-approve"))).Code);
+        await data.Rows("catalogPublicSamples").DeleteOneAsync(new BsonDocument("_id", d.FamilyId));
+
+        await Approve(first, "cap-a-approve");
+        Assert.Equal(200L, await data.CountAsync("catalogPublicSamples"));
+        Assert.Equal("public_sample_limit", (await Assert.ThrowsAsync<PersistenceConflictException>(() => Approve(second, "cap-b-approve"))).Code);
+        Assert.Equal(200L, await data.CountAsync("catalogPublicSamples"));
+        Assert.Equal("pending", (await data.RowAsync("catalogPublicSampleProposals", second))["state"].AsString);
+    }
+
+    [Fact]
+    public async Task Approval_requires_fresh_multi_factor_sign_in()
+    {
+        await using var setup = await CreateAsync(fixture);
+        var data = setup.Data;
+        var pencil = await ProductAsync(data, "ATK", "Pensil", "PENCIL-12", 501);
+        var id = (await setup.Service.ProposeAsync(setup.Maker, [pencil.FamilyId], [], T.Metadata("fresh-open", "Contoh barang")))["proposalId"].AsInt64;
+        // Signed in with MFA more than five minutes ago, or without MFA at all: the approval asks for a fresh factor first.
+        foreach (var (actor, key) in new[] { (setup.Checker with { AuthenticatedAt = data.Clock.UtcNow.AddMinutes(-10) }, "fresh-stale"),
+            (setup.Checker with { Assurance = FactorAssurance.SingleFactor }, "fresh-single") })
+            Assert.Equal("step_up_required", (await Assert.ThrowsAsync<AuthorizationDeniedException>(() =>
+                setup.Service.DecideAsync(actor, id, CatalogPublicSampleDecision.Approve, T.Metadata(key, "Diperiksa")))).Code);
+        Assert.Equal(0L, await data.CountAsync("catalogPublicSamples"));
+        await setup.Service.DecideAsync(setup.Checker, id, CatalogPublicSampleDecision.Approve, T.Metadata("fresh-approve", "Diperiksa"));
+        Assert.Equal(1L, await data.CountAsync("catalogPublicSamples"));
+    }
+
+    [Fact]
+    public async Task A_product_lists_a_bounded_number_of_packages()
+    {
+        await using var setup = await CreateAsync(fixture);
+        var data = setup.Data;
+        Assert.Equal(64, CatalogDefinitionQueryService.PublicPackageLimit);
+        var pencil = await ProductAsync(data, "ATK", "Pensil", "PENCIL-12", 501);
+        foreach (var (code, contents) in new[] { ("PENCIL-24", 24), ("PENCIL-48", 48) })
+        {
+            var family = await data.RowAsync("productFamilies", pencil.FamilyId);
+            var sku = await data.Service.CreateSkuAsync(data.Maker, new(new(pencil.FamilyId), family["revision"].AsInt64, code, "base-" + code.ToLowerInvariant(),
+                T.Definition(contents, "Pak " + contents)), T.Metadata("sku-" + code));
+            await PublishAsync(data, sku.Id.Value, 501);
+        }
+        await ApproveAsync(setup, [pencil.FamilyId], [], "sample-bounded");
+        Assert.Equal(3, Assert.Single((await data.BuyerService.QueryPublicAsync(0, 24, null)).Items).Packages.Length);
+        // With a lower bound the product keeps its first packages instead of failing the page.
+        var bounded = new CatalogDefinitionQueryService(data.Database, new(data.Database, new(data.Client), data.Clock), data.Clock) { PackageLimit = 2 };
+        var item = Assert.Single((await bounded.QueryPublicAsync(0, 24, null)).Items);
+        Assert.Equal(["PENCIL-12", "PENCIL-24"], item.Packages.Select(package => package.Code));
+        Assert.Equal(2, (await bounded.ReadPublicItemAsync(pencil.PublicId))!.Packages.Length);
+    }
+
     [Fact]
     public async Task Unpublished_sample_disappears_immediately()
     {
