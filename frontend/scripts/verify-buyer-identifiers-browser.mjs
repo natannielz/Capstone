@@ -63,11 +63,12 @@ export async function verifyOrderBulkBrowser({config, buyer, user, origin, direc
   }
   async function currentBuyerCatalog(page) {
     await page.goto(origin.origin + '/shop');
-    const search = page.getByRole('textbox', {name: 'Cari kode atau kemasan', exact: true});
+    // The storefront header carries the search on desktop and phone layouts; only the visible one is used.
+    const search = page.locator('form[role="search"] input[type="search"]:visible');
     for (const [code, present] of [[config.skuCode, true], [config.activeAlias, true], [config.retiredAlias, false], [config.hiddenCode, false]]) {
       await search.fill(code);
       const received = page.waitForResponse(response => new URL(response.url()).pathname === '/api/v1/catalog/variants/query' && response.request().postDataJSON()?.search === code);
-      await page.getByRole('button', {name: 'Cari', exact: true}).click(); const response = await received;
+      await page.locator('form[role="search"] button[aria-label="Cari"]:visible').click(); const response = await received;
       assert.equal(response.status(), 200); const result = await response.json();
       assert.equal(result.total, present ? '1' : '0'); assert.equal(result.items.length, present ? 1 : 0);
       if (present) {
@@ -75,7 +76,7 @@ export async function verifyOrderBulkBrowser({config, buyer, user, origin, direc
         await page.getByText('Kode utama saat ini: ' + config.skuCode, {exact: true}).waitFor();
         await page.getByText('Referensi SKU tetap pada catatan transaksi: ' + config.stableSkuCode + '. Kode ini hanya dapat dipakai mencari jika aliasnya masih aktif.', {exact: true}).waitFor();
       } else {
-        await page.getByRole('heading', {name: 'Belum ada kemasan yang sesuai.', exact: true}).waitFor();
+        await page.getByRole('heading', {name: 'Tidak ada kemasan yang cocok.', exact: true}).waitFor();
         assert.equal(await page.getByText('Kode utama saat ini: ' + config.skuCode, {exact: true}).count(), 0);
         assert.equal(JSON.stringify(result).includes(expected.selections[0].skuId), false);
       }
@@ -241,7 +242,7 @@ export async function verifyOrderBulkBrowser({config, buyer, user, origin, direc
       context: {...expected.context, branchId: config.deniedBranchId}, selections: expected.selections});
     assert.equal(wrongBranch.status, 403); assert.equal(Object.hasOwn(wrongBranch.body, 'lines'), false);
     const outsider = await user(config.deniedToken); observe(outsider.page); await outsider.page.goto(origin.origin + path);
-    await outsider.page.getByRole('heading', {name: 'Periksa sesi dan akses', exact: true}).waitFor();
+    await outsider.page.getByRole('heading', {name: 'Halaman ini di luar tugas akun Anda', exact: true}).waitFor();
     assert.equal(await outsider.page.getByRole('button', {name: 'Pesan ulang sebagai draf', exact: true}).count(), 0);
     const denied = await query(outsider.page, config.deniedId, bulkApi, {codes: [config.skuCode]});
     assert.equal(denied.status, 403); assert.equal(Array.isArray(denied.body), false); assert.equal(Object.hasOwn(denied.body, 'skuId'), false);

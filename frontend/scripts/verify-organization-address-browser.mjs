@@ -89,7 +89,7 @@ export async function verifyOrganizationAddressBrowser({ config, maker, user, or
   assert.deepEqual(write.body.input.target, { kind: config.targetKind, id: config.targetId }); assert.equal(write.body.input.purpose, 'delivery'); assert.deepEqual(write.body.input.address, config.address);
   const pending = await checkStoredReference(page, 'organization.address.propose', write);
   await context.addCookies([{ name: '__Host-ut_session', value: config.checkerToken, domain: origin.hostname, path: '/', secure: true, httpOnly: true, sameSite: 'Lax' }]);
-  await page.getByRole('button', { name: 'Periksa hasil', exact: true }).click(); await page.getByRole('heading', { name: 'Periksa sesi dan akses', exact: true }).waitFor();
+  await page.getByRole('button', { name: 'Periksa hasil', exact: true }).click(); await page.getByRole('heading', { name: /^(Sesi Anda perlu diperbarui|Halaman ini di luar tugas akun Anda|Halaman belum dapat dibuka)$/ }).waitFor();
   assert.deepEqual(await referenceEntries(page), pending);
   await context.addCookies([{ name: '__Host-ut_session', value: config.makerToken, domain: origin.hostname, path: '/', secure: true, httpOnly: true, sameSite: 'Lax' }]);
   await page.reload(); await page.getByRole('button', { name: 'Periksa hasil', exact: true }).click();

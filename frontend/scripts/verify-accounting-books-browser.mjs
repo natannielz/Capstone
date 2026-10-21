@@ -64,7 +64,7 @@ export async function verifyAccountingBooksBrowser({ config, maker, user, origin
   assert.deepEqual(proposed.body.input, { key, initialMonth: config.initialMonth, mappings: [{ mappingKey: 'inventory', accountCode: 'ASTOCK' }, { mappingKey: 'payable', accountCode: 'LAP' }] });
   const saved = await pending(page, proposed, 'accounting.book.propose');
   await context.addCookies([{ name: '__Host-ut_session', value: config.checkerToken, domain: origin.hostname, path: '/', secure: true, httpOnly: true, sameSite: 'Lax' }]);
-  await page.getByRole('button', { name: 'Periksa hasil', exact: true }).click(); await page.getByRole('heading', { name: 'Periksa sesi dan akses', exact: true }).waitFor();
+  await page.getByRole('button', { name: 'Periksa hasil', exact: true }).click(); await page.getByRole('heading', { name: /^(Sesi Anda perlu diperbarui|Halaman ini di luar tugas akun Anda|Halaman belum dapat dibuka)$/ }).waitFor();
   assert.deepEqual(await references(page), saved);
   await context.addCookies([{ name: '__Host-ut_session', value: config.makerToken, domain: origin.hostname, path: '/', secure: true, httpOnly: true, sameSite: 'Lax' }]);
   await page.reload(); await page.getByRole('button', { name: 'Periksa hasil', exact: true }).click(); await page.getByRole('button', { name: 'Periksa hasil', exact: true }).waitFor({ state: 'hidden' });

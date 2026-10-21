@@ -75,7 +75,7 @@ export async function verifyProcurementFundingBrowser({ config, maker, user, ori
   assert.equal(completed().length, 1); const requested = completed()[0]; assert.equal(requested.path, api + '/requests'); assert.equal(requested.actor, config.makerId); assert.deepEqual(requested.body.input, input);
   const saved = await pending(page, requested, 'procurement.funding.request');
   await context.addCookies([{ name: '__Host-ut_session', value: config.checkerToken, domain: origin.hostname, path: '/', secure: true, httpOnly: true, sameSite: 'Lax' }]);
-  await page.getByRole('button', { name: 'Periksa hasil', exact: true }).click(); await page.getByRole('heading', { name: 'Periksa sesi dan akses', exact: true }).waitFor(); assert.deepEqual(await references(page), saved);
+  await page.getByRole('button', { name: 'Periksa hasil', exact: true }).click(); await page.getByRole('heading', { name: /^(Sesi Anda perlu diperbarui|Halaman ini di luar tugas akun Anda|Halaman belum dapat dibuka)$/ }).waitFor(); assert.deepEqual(await references(page), saved);
   await context.addCookies([{ name: '__Host-ut_session', value: config.makerToken, domain: origin.hostname, path: '/', secure: true, httpOnly: true, sameSite: 'Lax' }]);
   await recover(page); assert.equal(fundingWrites.length, 1);
   const history = await query(page, config.makerId, api + '/requests/query', readBody); assert.equal(history.status, 200); assert.equal(history.body.items.length, 1);

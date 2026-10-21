@@ -129,10 +129,11 @@ async function verifyDrafts(buyer) {
   const pacing = Math.max(0, 61000 - (performance.now() - firstApiAt));
   if (pacing > 0) { console.log('FIXTURE pacing before the next workflow to respect the real API rate window'); await new Promise(resolve => setTimeout(resolve, pacing)); }
   await buyer.page.getByRole('button', { name: 'Rincian BROWSER-12 Dus dua belas', exact: true }).click();
-  const detail = buyer.page.getByRole('dialog'); await detail.getByLabel('Cabang pemesan').selectOption('10:11:');
-  await detail.getByLabel('Jumlah kemasan').fill('3'); await detail.getByRole('button', { name: 'Periksa subtotal', exact: true }).click();
+  const detail = buyer.page.getByRole('dialog'); await detail.getByLabel('Pesan untuk', { exact: true }).selectOption('10:11:');
+  await detail.getByLabel('Jumlah kemasan', { exact: true }).fill('3');
   let before = writes.length; dropNext = true;
-  await detail.getByRole('button', { name: 'Simpan sebagai draf', exact: true }).click(); await draftRecovery(buyer.page, before);
+  // The keranjang saves through the draft journal, so the lost answer is checked on the drafts page like any draft save.
+  await detail.getByRole('button', { name: 'Tambah ke keranjang', exact: true }).click(); await draftRecovery(buyer.page, before);
   assert.equal(await buyer.page.getByLabel('Jumlah kemasan 1', { exact: true }).inputValue(), '3');
   await buyer.page.getByLabel('Jumlah kemasan 1', { exact: true }).fill('4');
   await buyer.page.getByLabel('Referensi pembelian (opsional)', { exact: true }).fill('PO-FIXTURE');
@@ -160,7 +161,7 @@ async function verifyDrafts(buyer) {
   // Reselect the real package explicitly. The browser must not silently replace its saved price/version.
   await buyer.page.getByLabel('Cari kemasan untuk draf', { exact: true }).fill('BROWSER-12');
   await buyer.page.getByRole('button', { name: 'Cari kemasan', exact: true }).click();
-  await buyer.page.getByRole('button', { name: /Pensil browser BROWSER-12 · Dus dua belas/ }).click();
+  await buyer.page.getByRole('button', { name: /^Pensil browser\s*Kode utama: BROWSER-12 · Dus dua belas · / }).click();
   const choice = buyer.page.getByRole('region', { name: 'Periksa pilihan kemasan' }); await choice.waitFor();
   await choice.getByLabel('Jumlah kemasan pilihan').fill('6');
   await choice.getByRole('button', { name: 'Ganti pilihan kode ini', exact: true }).click();
@@ -245,19 +246,19 @@ try {
     await buyer.page.setViewportSize({ width: 360, height: 800 });
     assert.equal(await buyer.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
     await buyer.page.screenshot({ path: resolve(directory, 'buyer-catalog-mobile.png'), fullPage: true });
-    await open.click(); const detail = buyer.page.getByRole('dialog'); await detail.waitFor();
+    const writesBeforeQuote = writes.length; await open.click(); const detail = buyer.page.getByRole('dialog'); await detail.waitFor();
     assert.match(await detail.innerText(), /12 piece per kemasan/); assert.match(await detail.innerText(), /Rp0,00/);
     assert.doesNotMatch(await detail.innerText(), /Tinjauan independen fixture|Harga kemasan terisolasi/);
-    const branch = detail.getByLabel('Cabang pemesan'); await branch.waitFor();
+    const branch = detail.getByLabel('Pesan untuk', { exact: true }); await branch.waitFor();
     assert.equal(await branch.inputValue(), '', 'The buyer must select a branch explicitly');
-    await branch.selectOption('10:11:'); await detail.getByLabel('Jumlah kemasan').fill('2');
-    await detail.getByRole('button', { name: 'Periksa subtotal', exact: true }).click();
-    const subtotal = detail.getByRole('status').filter({ hasText: 'Subtotal barang' }); await subtotal.waitFor();
-    assert.match(await subtotal.innerText(), /Rp0,00/); assert.match(await subtotal.innerText(), /2 Dus dua belas · 24 piece/);
-    assert.match(await subtotal.innerText(), /Pesanan belum dikirim/);
+    await branch.selectOption('10:11:'); await detail.getByLabel('Jumlah kemasan', { exact: true }).fill('2');
+    const subtotal = detail.locator('p').filter({ hasText: /^Subtotal/ }); await subtotal.waitFor();
+    assert.match(await subtotal.innerText(), /Rp0,00/); assert.match(await detail.innerText(), /Satu Dus dua belas berisi 12 piece/);
+    assert.match(await detail.innerText(), /Stok belum dipesan sampai pesanan diajukan/);
     assert.equal(await detail.evaluate(element => element.scrollWidth <= element.clientWidth), true);
     await buyer.page.screenshot({ path: resolve(directory, 'buyer-quote-mobile.png'), fullPage: true });
-    await detail.getByLabel('Jumlah kemasan').fill('3'); assert.equal(await subtotal.count(), 0, 'An edited quantity invalidates the displayed quote');
+    await detail.getByLabel('Jumlah kemasan', { exact: true }).fill('3'); assert.match(await subtotal.innerText(), /Rp0,00/, 'The subtotal follows the edited quantity');
+    assert.equal(writes.length, writesBeforeQuote, 'Choosing a quantity saves nothing');
     await buyer.page.keyboard.press('Escape'); await detail.waitFor({ state: 'hidden' });
     assert.equal(await open.evaluate(element => element === document.activeElement), true);
     await check('buyer saves and edits a private Mongo draft, recovers two lost responses and rejects a stale competing edit', () => verifyDrafts(buyer));
@@ -274,7 +275,9 @@ try {
     const invalidQuote = buyer.page.waitForResponse(response => new URL(response.url()).pathname === '/api/v1/ordering/quote/query');
     await buyer.page.getByRole('button', { name: 'Tinjau perubahan draf', exact: true }).click();
     assert.equal((await invalidQuote).status(), 403);
-    await buyer.page.locator('main').getByRole('alert').filter({ hasText: 'Akses untuk tindakan ini tidak tersedia' }).waitFor();
+    // The package left the branch catalog; the buyer keeps the draft and is told which line to fix, not that access was lost.
+    await buyer.page.locator('main').getByRole('alert').filter({ hasText: 'Sebagian kemasan di draf ini tidak lagi tersedia untuk cabang ini.' }).waitFor();
+    assert.equal(await buyer.page.getByRole('region', { name: 'Isi draf' }).count(), 1);
     assert.equal(await buyer.page.getByRole('region', { name: 'Konfirmasi draf' }).count(), 0);
     await buyer.context.close();
   });

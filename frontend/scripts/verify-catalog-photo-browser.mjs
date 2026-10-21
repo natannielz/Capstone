@@ -5,6 +5,7 @@ import https from 'node:https';
 import net from 'node:net';
 import {createRequire} from 'node:module';
 import {mkdirSync} from 'node:fs';
+import {createHash} from 'node:crypto';
 import {resolve} from 'node:path';
 import next from 'next';
 
@@ -26,8 +27,20 @@ let browser, frontend, edge, tunnel, dropAssociation = false, dropped = 0, dropR
 const staffRoot = `/api/v1/catalog/skus/${config.skuId}`, buyerRoute = `/api/v1/catalog/variants/${config.publicId}/primary-photo/query`;
 function track(server) { server.on('connection', socket => { sockets.add(socket); socket.on('close', () => sockets.delete(socket)); }); return server; }
 async function listen(server) { await new Promise((yes, no) => { server.once('error', no); server.listen(0, '127.0.0.1', yes); }); return server.address().port; }
+// Every fixture user shares one loopback IP and the real fixed-window limiter (240 per minute). A fixed window holds only
+// requests from the last 60 s, so waiting until the trailing minute has room for a step keeps the step under the limit.
+const apiTimes = [];
+async function paceApi(budget) {
+  for (;;) {
+    const now = Date.now(); while (apiTimes.length && apiTimes[0] <= now - 60000) apiTimes.shift();
+    if (apiTimes.length + budget <= 240) return;
+    console.log('PHOTO FIXTURE pacing to respect the real API rate window');
+    await new Promise(yes => setTimeout(yes, apiTimes[0] + 60000 - now + 50));
+  }
+}
 function forward(req, res, port, isApi) {
   const path = new URL(req.url, origin).pathname;
+  if (isApi) apiTimes.push(Date.now());
   const headers = {...req.headers, host: '127.0.0.1:' + port};
   for (const name of Object.keys(headers)) if (name.startsWith('x-forwarded-') || name.startsWith('x-original-') || ['forwarded', 'connection'].includes(name)) delete headers[name];
   if (isApi) { headers['x-forwarded-for'] = req.socket.remoteAddress; headers['x-forwarded-host'] = origin.host; headers['x-forwarded-proto'] = 'https'; }
@@ -50,6 +63,7 @@ function forward(req, res, port, isApi) {
   const dropScan = rescan && dropRescan; if (dropScan) dropRescan = false;
   const upstream = http.request({hostname: '127.0.0.1', port, path: req.url, method: req.method, headers}, response => {
     observed.status = response.statusCode;
+    if (isApi && response.statusCode >= 400) console.log('PHOTO FIXTURE API ' + JSON.stringify({path, status: response.statusCode, actor: observed.actor ?? null}));
     if (buyerRead) observed.sha256 = response.headers['x-content-sha256'];
     if ((drop || dropScan) && response.statusCode === 200) {
       response.resume(); response.once('end', () => {
@@ -70,7 +84,7 @@ async function user(who, mobile = false) {
   page.on('response', response => {
     const path = new URL(response.url()).pathname, headers = response.headers();
     if (path.startsWith('/api/v1/catalog/') && headers['content-type']?.startsWith('image/'))
-      imageResponses.push({who, status: response.status(), headers});
+      imageResponses.push({who, page, status: response.status(), headers, body: response.status() === 200 ? response.body() : null});
   });
   page.on('dialog', dialog => dialog.accept()); pages.push({page, who}); return {context, page};
 }
@@ -95,14 +109,17 @@ async function openPhoto(page, recovery = false) {
 }
 async function verifiedImage(image, expected, width, height) {
   await image.waitFor({state: 'visible'});
+  // The page's security policy (connect-src 'self') rightly forbids reading a blob: URL back, so the bytes are hashed from
+  // the latest image response this page received, the one it turned into the shown blob; the image must decode to its size.
+  const latest = imageResponses.filter(row => row.page === image.page() && row.body).at(-1);
+  assert.ok(latest, 'The shown image must come from a real image response on this page');
+  assert.equal(createHash('sha256').update(await latest.body).digest('hex'), expected);
   const found = await image.evaluate(async element => {
     await element.decode();
     if (!element.currentSrc.startsWith('blob:')) throw new Error('Expected a verified private blob image');
-    const bytes = await (await fetch(element.currentSrc)).arrayBuffer();
-    const hash = [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map(value => value.toString(16).padStart(2, '0')).join('');
-    return {hash, width: element.naturalWidth, height: element.naturalHeight};
+    return {width: element.naturalWidth, height: element.naturalHeight};
   });
-  assert.deepEqual(found, {hash: expected, width, height});
+  assert.deepEqual(found, {width, height});
 }
 async function uploadAndReview(page, panel, base64, hash, width, height, sequence) {
   const before = writes.length;
@@ -181,9 +198,9 @@ try {
   await panel.getByRole('button', {name: 'Lihat foto yang tercatat', exact: true}).click();
   await verifiedImage(panel.getByRole('img', {name: `Foto asli ${config.skuCode}, ${config.packageLabel}`, exact: true}), config.firstHash, 13, 7);
   await panel.getByRole('button', {name: 'Tutup pratinjau foto', exact: true}).click();
-  await buyer.page.goto(origin.origin + '/shop'); await buyerImage(buyer.page, config.firstHash, 13, 7);
+  await paceApi(60); await buyer.page.goto(origin.origin + '/shop'); await buyerImage(buyer.page, config.firstHash, 13, 7);
   await buyer.page.screenshot({path: resolve(directory, 'buyer-first-photo-mobile.png'), fullPage: true});
-  await buyer.page.reload(); await buyerImage(buyer.page, config.firstHash, 13, 7);
+  await paceApi(60); await buyer.page.reload(); await buyerImage(buyer.page, config.firstHash, 13, 7);
   await buyer.page.getByRole('button', {name: `Rincian ${config.skuCode} ${config.packageLabel}`, exact: true}).click();
   await buyerImage(buyer.page, config.firstHash, 13, 7, 'dialog');
   await buyer.page.getByRole('button', {name: 'Tutup rincian', exact: true}).click();
@@ -194,11 +211,11 @@ try {
   assert.equal(writes.filter(row => row.path === staffRoot + '/primary-photo').length, 2);
   assert.equal(writes.filter(row => row.path === staffRoot + '/photo-evidence').length, 2);
   assert.equal(writes.filter(row => row.path.endsWith('/content')).length, 2);
-  await buyer.page.reload(); await buyerImage(buyer.page, config.secondHash, 17, 9);
+  await paceApi(60); await buyer.page.reload(); await buyerImage(buyer.page, config.secondHash, 17, 9);
   assert.equal(await buyer.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
   await buyer.page.screenshot({path: resolve(directory, 'buyer-replacement-photo-mobile.png'), fullPage: true});
-  await buyer.page.goto(origin.origin + '/shop/' + config.publicId); await buyerImage(buyer.page, config.secondHash, 17, 9, 'direct');
-  await buyer.page.reload(); await buyerImage(buyer.page, config.secondHash, 17, 9, 'direct');
+  await paceApi(30); await buyer.page.goto(origin.origin + '/shop/' + config.publicId); await buyerImage(buyer.page, config.secondHash, 17, 9, 'direct');
+  await paceApi(30); await buyer.page.reload(); await buyerImage(buyer.page, config.secondHash, 17, 9, 'direct');
   panel = await openPhoto(staff.page); await panel.getByText(/Revisi foto 2 · tersimpan/).waitFor();
   await panel.getByRole('button', {name: 'Lihat foto yang tercatat', exact: true}).click();
   await verifiedImage(panel.getByRole('img', {name: `Foto asli ${config.skuCode}, ${config.packageLabel}`, exact: true}), config.secondHash, 17, 9);
@@ -239,10 +256,10 @@ try {
   await panel.getByRole('button', {name: 'Lihat foto yang tercatat', exact: true}).click();
   await verifiedImage(panel.getByRole('img', {name: `Foto asli ${config.skuCode}, ${config.packageLabel}`, exact: true}), config.secondHash, 17, 9);
   await staff.page.screenshot({path: resolve(directory, 'staff-revalidation-passed-desktop.png'), fullPage: true});
-  await buyer.page.reload(); await buyerImage(buyer.page, config.secondHash, 17, 9, 'direct');
+  await paceApi(30); await buyer.page.reload(); await buyerImage(buyer.page, config.secondHash, 17, 9, 'direct');
   await buyer.page.screenshot({path: resolve(directory, 'buyer-revalidated-original-mobile.png'), fullPage: true});
   assert.equal(await buyer.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
-  const outsider = await user('outsider'); await outsider.page.goto(origin.origin + '/shop');
+  await paceApi(40); const outsider = await user('outsider'); await outsider.page.goto(origin.origin + '/shop');
   const denied = await protectedRead(outsider.page, config.outsiderId, staffRoot + '/primary-photo/original/query');
   assert.equal(denied.status, 403); assert.equal(denied.hash, null); assert.ok(!denied.mime?.startsWith('image/'));
   const hidden = await protectedRead(outsider.page, config.outsiderId, buyerRoute);
