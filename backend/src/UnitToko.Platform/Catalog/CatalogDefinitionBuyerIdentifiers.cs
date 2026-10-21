@@ -38,11 +38,8 @@ public sealed partial class CatalogDefinitionQueryService
         return await visibility.ReadCurrentAsync(actor, F.Eq("active", true), async (tx, filter, ct) => {
             var pipeline = VisiblePipeline(filter); AddBuyerIdentifierLookup(pipeline);
             if (!string.IsNullOrWhiteSpace(search)) {
-                var literal = new BsonRegularExpression(Regex.Escape(search.Trim()), "i");
                 // displayName contains the immutable original SKU. It must not revive a retired alias.
-                pipeline.Add(new("$match", new BsonDocument("$or", new BsonArray {
-                    new BsonDocument("buyerIdentifiers.canonicalValue", literal),
-                    new BsonDocument("family.name", literal), new BsonDocument("definition.packageLabel", literal) })));
+                pipeline.Add(new("$match", CatalogSearchWords.Match(search, "buyerIdentifiers.canonicalValue", "family.name", "definition.packageLabel")));
             }
             // Category counts cover the whole search result; the category filter narrows only the count and the page.
             var inCategory = new BsonDocument("$match", categoryCode is null ? new BsonDocument() : new BsonDocument("category.code", categoryCode));
