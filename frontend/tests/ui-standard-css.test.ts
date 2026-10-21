@@ -144,6 +144,17 @@ test("U-009: no coloured accent stripes in any module stylesheet", () => {
   }
 });
 
+// Fix round 1, item 3: the ring keeps 3:1 on the dark footers (store frame on --sidebar, landing/pilot footer on #103f47).
+test("U-010: dark surfaces get the inverse ring, at least 3:1 on --sidebar and the pilot footer", () => {
+  const inverse = tokens["ring-inverse"];
+  assert.ok(inverse, "--ring-inverse is defined in globals.css :root");
+  for (const [name, surface] of [["--sidebar", tokens.sidebar], ["pilot footer #103f47", "#103f47"]] as const)
+    assert.ok(contrastRatio(inverse, surface) >= 3, `--ring-inverse on ${name} is ${contrastRatio(inverse, surface).toFixed(2)}:1`);
+  assert.ok(contrastRatio(tokens.ring, tokens.sidebar) < 3, "the default ring would fail there, so the inverse ring is needed");
+  assert.match(foundation, /:where\(\[data-surface="dark"\],\[data-store-frame\]>footer\) :where\(a,button,input,select,textarea,summary,\[tabindex\]\):focus-visible\{outline-color:var\(--ring-inverse\)\}/);
+  assert.match(readFileSync("src/components/pilot-site-chrome.tsx", "utf8"), /<footer className=\{styles\.footer\} data-surface="dark">/);
+});
+
 const fixRulesOwned = /public-catalog|public-showcase|public-sample/;
 test("U-010: one focus ring — no module stylesheet draws its own outline", () => {
   for (const file of moduleSheets.filter(file => !fixRulesOwned.test(file)))
