@@ -1,5 +1,6 @@
 "use client";
 
+import { SessionAccessState } from '@/components/workspace-kit/session-access-state';
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import type { components } from "../../api/generated/schema";
@@ -47,11 +48,9 @@ export function OrganizationAdministration() {
   return <main className={styles.page}>
     <header className={styles.header}><div><Link href="/identity/account" className={styles.brand}>Unit Toko</Link><h1>Organisasi dan unit</h1>
       <p>Kelola nama, kode, dan status unit melalui pengajuan yang diperiksa secara independen.</p></div></header>
-    {error !== null && <p role="alert" className={styles.alert}>{organizationMessage(error)}</p>}
-    {!current ? <section className={styles.state} aria-busy={busy}><h2>{busy ? "Memeriksa sesi" : error instanceof AccessFailure && error.status === 401 ? "Sesi terverifikasi diperlukan" : "Layanan organisasi belum tersedia"}</h2>
-      <p>Pengelolaan organisasi hanya tersedia untuk akun dengan kewenangan yang berlaku.</p>
-      {!busy && error instanceof AccessFailure && error.status === 401 && <Link className={styles.primary} href="/identity/login?returnPath=%2Fadministration%2Forganizations">Masuk ke Unit Toko</Link>}
-      {!busy && <button className={styles.secondary} onClick={() => void refresh()}>Periksa sesi kembali</button>}</section>
+    {error !== null && current && <p role="alert" className={styles.alert}>{organizationMessage(error)}</p>}
+    {!current ? busy ? <section className={styles.state} aria-busy="true"><h2>Memeriksa sesi</h2></section>
+      : <SessionAccessState error={error} returnPath="/administration/organizations" onRetry={() => void refresh()} detail={error !== null ? organizationMessage(error) : undefined} />
       : <OrganizationDesk key={current.userId} current={current} revision={revision} refreshing={busy} refresh={refresh} />}
   </main>;
 }

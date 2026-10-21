@@ -1,5 +1,6 @@
 "use client";
 
+import { SessionAccessState, lostAccessKind } from '@/components/workspace-kit/session-access-state';
 import Link from "next/link";
 import {ScanInput} from './ScanInput';
 import {sameScanPackage} from './scan-client';
@@ -19,7 +20,6 @@ import styles from "./stock-count.module.css";
 import { formatDateTime, numberFormatter } from "@/lib/format";
 
 const path = "/inventory/counts";
-const loginHref = "/identity/login?returnPath=" + encodeURIComponent(path);
 type Loaded = { actorId: string; actions: string[]; session: IdentitySession; observedAt: number; generation: number };
 const countFormat = numberFormatter;
 const amount = (value: string | number) => countFormat.format(typeof value === "string" ? BigInt(value) : value);
@@ -36,9 +36,6 @@ function message(error: unknown): string {
     if (error.code === "version_conflict" || error.code === "catalog_revision_conflict") return "Data berubah sejak dipilih. Muat ulang pilihan kemasan, lalu periksa jumlah dan isinya kembali.";
   }
   return accessMessage(error);
-}
-function sessionLost(error: unknown) {
-  return (error instanceof AccessFailure || error instanceof IdentityFailure) && (error.status === 401 || error.code === "actor_changed");
 }
 export function StockCountWorkspace() {
   const [access] = useState(() => createAccessGateway());
@@ -84,15 +81,8 @@ export function StockCountWorkspace() {
       <p>Catat jumlah fisik pada gudang dan kemasan yang dipilih.</p>
     </div></header>
     {loaded ? <CountDesk key={loaded.actorId + ":" + loaded.generation} loaded={loaded} onRefresh={refresh} /> :
-      <section className={common.state} aria-busy={loading}>
-        <h2>{loading ? "Memeriksa sesi dan akses" : sessionLost(error) ? "Masuk untuk menghitung barang" : "Penghitungan belum tersedia"}</h2>
-        {error !== null && <p role="alert" className={common.alert}>{message(error)}</p>}
-        <div className={common.actions}>
-          {sessionLost(error) && <Link className={common.primary} href={loginHref}>Masuk kembali</Link>}
-          <button type="button" className={common.secondary} disabled={loading} onClick={() => void refresh()}>Periksa kembali</button>
-          <Link href="/identity/account">Kembali ke akun saya</Link>
-        </div>
-      </section>}
+      (loading ? <section className={common.state} aria-busy="true"><h2>Memeriksa sesi dan akses</h2></section>
+        : <SessionAccessState error={error} returnPath={path} onRetry={() => void refresh()} detail={error !== null ? message(error) : undefined} />)}
   </main>;
 }
 function CountDesk({ loaded, onRefresh }: { loaded: Loaded; onRefresh: () => Promise<void> }) {
@@ -119,13 +109,7 @@ function CountDesk({ loaded, onRefresh }: { loaded: Loaded; onRefresh: () => Pro
   useEffect(() => { if (state.review) reviewFocus.current?.focus(); }, [state.review]);
   useEffect(() => { if (state.result) resultFocus.current?.focus(); }, [state.result]);
   const locked = editor.locked;
-  if (state.expired || state.suspended) return <section className={common.state}>
-    <h2>Sesi dan akses perlu diperiksa kembali</h2>
-    <p>Data sebelumnya disembunyikan. Referensi permintaan yang belum terkonfirmasi tetap disimpan untuk akun pemiliknya.</p>
-    {state.error !== null && <p role="alert" className={common.alert}>{message(state.error)}</p>}
-    <button type="button" className={common.primary} disabled={state.sending || state.recovering} onClick={() => void onRefresh()}>Periksa sesi terbaru</button>
-    <Link href={loginHref}>Masuk kembali</Link>
-  </section>;
+  if (state.expired || state.suspended) return <SessionAccessState error={state.error} kind={state.expired ? 'expired' : lostAccessKind(state.error)} returnPath={path} busy={state.sending || state.recovering} onRetry={() => void onRefresh()} />;
   let conversion: string | null = null;
   if (state.selectedPackage) {
     try { conversion = stockCountQuantity(state.draft.packages, state.selectedPackage.baseUnitsPerPackage).baseUnits; } catch { /* Empty or unfinished entry has no implied quantity. */ }
@@ -134,7 +118,7 @@ function CountDesk({ loaded, onRefresh }: { loaded: Loaded; onRefresh: () => Pro
     <AdministrationNavigation current="counts" actions={loaded.actions} locked={locked} />
     <section className={common.accountSection}>
       <div className={styles.headingRow}><p>Petugas: <strong>{loaded.session.account?.displayName ?? loaded.session.account?.verifiedEmail}</strong></p>
-        <button type="button" className={common.secondary} disabled={locked} onClick={() => void onRefresh()}>Periksa sesi dan akses</button></div>
+        <button type="button" className={common.secondary} disabled={locked} onClick={() => void onRefresh()}>Muat ulang sesi dan akses</button></div>
       <div className={styles.modeChoices} role="group" aria-label="Jenis pekerjaan">
         {editor.canCount && <button type="button" aria-pressed={state.mode === "count"} className={state.mode === "count" ? common.primary : common.secondary}
           disabled={locked} onClick={() => void editor.changeMode("count")}>Catat hitungan</button>}

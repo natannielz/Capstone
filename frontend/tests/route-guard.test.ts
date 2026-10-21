@@ -69,3 +69,16 @@ test('the proxy redirects legacy pages and session-less visits before any page r
   assert.deepEqual(location('/staff/login', '__Host-ut_session=opaque'), { status: 307, cache: 'no-store', to: signIn('/workspace') });
   assert.deepEqual(location('/account/orders/41'), { status: 307, cache: 'no-store', to: '/ordering/orders?order=41' });
 });
+
+test('the guard normalises the path before deciding and fails closed on odd spellings (M9)', () => {
+  for (const [path, returnPath] of [['/%62illing/invoices', '/billing/invoices'], ['/billing%2Finvoices', '/billing/invoices'], ['/BILLING/INVOICES', '/billing/invoices'],
+    ['/Billing/Invoices/', '/billing/invoices'], ['/billing/invoices/', '/billing/invoices'], ['//billing//invoices', '/billing/invoices'], ['/workspace/', '/workspace']] as const)
+    assert.equal(signInRedirect(path, '', false), signIn(returnPath), path);
+  // A path that cannot be decoded is treated as a signed-in page: sign in first, with no return target.
+  assert.equal(signInRedirect('/%E0%A4%A', '', false), '/identity/login');
+  assert.equal(signInRedirect('/billing/%ZZ', '', false), '/identity/login');
+  // Guest pages stay open however they are spelled.
+  for (const path of ['/KATALOG', '/katalog/', '/%6Batalog', '/Shop'])
+    assert.equal(signInRedirect(path, '', false), null, path);
+  assert.equal(requiresSession('/%62illing/invoices'), true);
+});

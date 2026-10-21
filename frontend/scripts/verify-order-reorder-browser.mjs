@@ -137,7 +137,7 @@ export async function verifyOrderReorderBrowser({config, buyer, user, origin, di
       context: {...expected.context, branchId: config.deniedBranchId}, selections: expected.selections});
     assert.equal(wrongBranch.status, 403); assert.equal(Object.hasOwn(wrongBranch.body, 'lines'), false);
     const outsider = await user(config.deniedToken); observe(outsider.page); await outsider.page.goto(origin.origin + path);
-    await outsider.page.getByRole('heading', { name: /^(Sesi Anda perlu diperbarui|Halaman ini di luar tugas akun Anda|Halaman belum dapat dibuka)$/ }).waitFor();
+    await outsider.page.getByRole('heading', { name: /^(Masuk untuk melanjutkan|Sesi Anda perlu diperbarui|Halaman ini di luar tugas akun Anda|Halaman belum dapat dibuka)$/ }).waitFor();
     assert.equal(await outsider.page.getByRole('button', {name: 'Pesan ulang sebagai draf', exact: true}).count(), 0);
     const denied = await query(outsider.page, config.deniedId, api + '/orders/' + config.orderId + '/query', {purpose: 'order-preparation'});
     assert.equal(denied.status, 403); assert.equal(Object.hasOwn(denied.body, 'input'), false);

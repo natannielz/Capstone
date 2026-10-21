@@ -52,7 +52,7 @@ export async function verifyReturnFinancialApprovalBrowser({ config, finance, us
   // Change to the real maker's separate session. The cached checker cannot look up with the old actor header.
   await context.addCookies([{ name: '__Host-ut_session', value: config.makerToken, domain: origin.hostname, path: '/', secure: true, httpOnly: true, sameSite: 'Lax' }]);
   await page.getByRole('button', { name: 'Periksa hasil', exact: true }).click();
-  await page.getByRole('heading', { name: /^(Sesi Anda perlu diperbarui|Halaman ini di luar tugas akun Anda|Halaman belum dapat dibuka)$/ }).waitFor(); assert.deepEqual(await references(), pending); assert.equal(financialWrites.length, 1);
+  await page.getByRole('heading', { name: /^(Masuk untuk melanjutkan|Sesi Anda perlu diperbarui|Halaman ini di luar tugas akun Anda|Halaman belum dapat dibuka)$/ }).waitFor(); assert.deepEqual(await references(), pending); assert.equal(financialWrites.length, 1);
   await context.addCookies([{ name: '__Host-ut_session', value: config.financeToken, domain: origin.hostname, path: '/', secure: true, httpOnly: true, sameSite: 'Lax' }]);
   await page.reload(); await page.getByRole('button', { name: 'Periksa hasil', exact: true }).click();
   await page.getByRole('button', { name: 'Periksa hasil', exact: true }).waitFor({ state: 'hidden', timeout: 60000 });
@@ -70,7 +70,7 @@ export async function verifyReturnFinancialApprovalBrowser({ config, finance, us
   await page.screenshot({ path: resolve(directory, 'return-financial-approval-saved-desktop.png'), fullPage: true });
   const maker = await user(config.makerToken); await maker.page.goto(origin.origin + '/fulfillment/cases'); await maker.page.getByRole('button', { name: 'Buka keluhan ' + recordNo('KLH', config.caseId), exact: true }).click();
   assert.equal(await maker.page.getByRole('region', { name: 'Persetujuan finansial retur independen', exact: true }).count(), 0);
-  const outsider = await user(config.courierToken); await outsider.page.goto(origin.origin + '/fulfillment/cases'); await outsider.page.getByRole('heading', { name: /^(Sesi Anda perlu diperbarui|Halaman ini di luar tugas akun Anda|Halaman belum dapat dibuka)$/ }).waitFor();
+  const outsider = await user(config.courierToken); await outsider.page.goto(origin.origin + '/fulfillment/cases'); await outsider.page.getByRole('heading', { name: /^(Masuk untuk melanjutkan|Sesi Anda perlu diperbarui|Halaman ini di luar tugas akun Anda|Halaman belum dapat dibuka)$/ }).waitFor();
   assert.equal(await outsider.page.getByRole('button', { name: /^Buka keluhan/ }).count(), 0);
   console.log('REAL_RETURN_FINANCIAL_APPROVAL_BROWSER_PASS ' + JSON.stringify({ approvals: financialWrites.length, actualIndependentActor: config.financeId,
     originalAllocation: config.originalAllocationId, exactOwnerRecovery: true, lostOriginalRecovered: true, currentActorDenied: true, noResend: true, noPayout: true,

@@ -82,7 +82,7 @@ export async function verifySuppliersBrowser({ config, maker, user, origin, dire
   assert.deepEqual(proposed.body.input, { owner, supplierId: null, baseVersion: '0', policyId: config.policyId, policyRevision: config.policyRevision, details: config.details, mappings: [mapping] });
   const saved = await pending(page, proposed, 'procurement.supplier.propose');
   await context.addCookies([{ name: '__Host-ut_session', value: config.checkerToken, domain: origin.hostname, path: '/', secure: true, httpOnly: true, sameSite: 'Lax' }]);
-  await page.getByRole('button', { name: 'Periksa hasil', exact: true }).click(); await page.getByRole('heading', { name: /^(Sesi Anda perlu diperbarui|Halaman ini di luar tugas akun Anda|Halaman belum dapat dibuka)$/ }).waitFor(); assert.deepEqual(await references(page), saved);
+  await page.getByRole('button', { name: 'Periksa hasil', exact: true }).click(); await page.getByRole('heading', { name: /^(Masuk untuk melanjutkan|Sesi Anda perlu diperbarui|Halaman ini di luar tugas akun Anda|Halaman belum dapat dibuka)$/ }).waitFor(); assert.deepEqual(await references(page), saved);
   await context.addCookies([{ name: '__Host-ut_session', value: config.makerToken, domain: origin.hostname, path: '/', secure: true, httpOnly: true, sameSite: 'Lax' }]);
   await recover(page); assert.equal(supplierWrites.length, 1);
   const history = await query(page, config.makerId, api + '/proposals/query', readBody); assert.equal(history.status, 200); assert.equal(history.body.items.length, 1);
@@ -124,7 +124,7 @@ export async function verifySuppliersBrowser({ config, maker, user, origin, dire
   for (const [index, write] of [proposed, observationWrite, approved].entries()) { assert.equal(supplierRecoveries[index + 1].status, 200); assert.equal(supplierRecoveries[index + 1].body.key, write.key); }
   const wrong = await query(checker.page, config.checkerId, api + '/operations/query', { purpose: 'operation-recovery', operation: 'procurement.supplier.approve', key: proposed.key });
   assert.equal(wrong.status, 200); assert.deepEqual(wrong.body, { status: 'not_confirmed', result: null });
-  const reader = await user(config.readerToken); await reader.page.goto(origin.origin + path); await reader.page.getByRole('heading', { name: /^(Sesi Anda perlu diperbarui|Halaman ini di luar tugas akun Anda|Halaman belum dapat dibuka)$/ }).waitFor();
+  const reader = await user(config.readerToken); await reader.page.goto(origin.origin + path); await reader.page.getByRole('heading', { name: /^(Masuk untuk melanjutkan|Sesi Anda perlu diperbarui|Halaman ini di luar tugas akun Anda|Halaman belum dapat dibuka)$/ }).waitFor();
   const choices = await query(reader.page, config.readerId, api + '/choices/query', { purpose: 'supplier-selection', location }); assert.equal(choices.status, 200); assert.equal(choices.body.items.length, 1);
   const choice = choices.body.items[0]; assert.equal(choice.supplierId, proposal.supplierId); assert.equal(choice.displayName, config.details.displayName);
   const selectedMapping = choice.mappings[0].mapping;

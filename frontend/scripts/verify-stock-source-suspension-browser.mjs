@@ -93,8 +93,8 @@ async function control(action) {
 }
 async function signin(page, expectedActor) {
   await page.goto(origin.origin + path);
-  await page.getByRole("heading", { name: "Masuk untuk memeriksa sumber", exact: true }).waitFor();
-  await page.getByRole("link", { name: "Masuk kembali", exact: true }).click();
+  await page.getByRole("heading", { name: /^(Masuk untuk melanjutkan|Sesi Anda perlu diperbarui)$/ }).waitFor();
+  await page.getByRole("link", { name: /^Masuk( kembali)?$/ }).click();
   await page.getByRole("button", { name: "Lanjutkan ke layanan akun", exact: true }).click();
   await page.waitForURL(origin.origin + path); await page.getByLabel("Referensi alokasi", { exact: true }).waitFor();
   const identity = await page.evaluate(async () => (await fetch("/api/v1/identity/session")).json());
@@ -231,7 +231,7 @@ try {
   });
   await check("revoking one shared channel conceals the reader's private history", async () => {
     await control("grant"); await reader.getByRole("button", { name: "Muat ulang riwayat", exact: true }).click();
-    await reader.getByRole("heading", { name: "Sesi dan akses perlu diperiksa kembali", exact: true }).waitFor();
+    await reader.getByRole("heading", { name: /^(Masuk untuk melanjutkan|Sesi Anda perlu diperbarui|Halaman ini di luar tugas akun Anda|Halaman belum dapat dibuka)$/ }).waitFor();
     assert.equal(await reader.getByRole("heading", { name: /^Penghentian #[0-9]+$/ }).count(), 0);
     await logout(reader, readerContext);
   });
@@ -246,8 +246,8 @@ try {
   });
   await check("account suspension hides the workspace and refuses the retained session cookie", async () => {
     await control("account");
-    await page.getByRole("button", { name: "Periksa sesi dan akses", exact: true }).click();
-    await page.getByRole("heading", { name: "Masuk untuk memeriksa sumber", exact: true }).waitFor();
+    await page.getByRole("button", { name: "Muat ulang sesi dan akses", exact: true }).click();
+    await page.getByRole("heading", { name: /^(Masuk untuk melanjutkan|Sesi Anda perlu diperbarui)$/ }).waitFor();
     assert.equal(await page.getByLabel("Referensi alokasi", { exact: true }).count(), 0);
     const rejected = await page.evaluate(async () => ({
       identity: await (await fetch("/api/v1/identity/session")).json(),

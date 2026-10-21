@@ -1,5 +1,6 @@
 "use client";
 
+import { SessionAccessState, sessionAccessKind } from '@/components/workspace-kit/session-access-state';
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import type { components } from "../../api/generated/schema";
@@ -327,7 +328,7 @@ export function AccessAdministration() {
     }} />}
 
     {message && <p className={styles.success} role="status">{message}</p>}
-    {error !== null && <div className={styles.alert} role="alert"><p>{suspensionUncertain ? "Hasil penonaktifan belum dapat dipastikan. Periksa hasil melalui Pemulihan permintaan; jangan kirim ulang keputusan. Referensi permintaan akun semula tetap disimpan." : suspensionMessage(retry ? new AccessFailure(503, "commit_outcome_unknown") : error)}</p>
+    {error !== null && pageState === "ready" && <div className={styles.alert} role="alert"><p>{suspensionUncertain ? "Hasil penonaktifan belum dapat dipastikan. Periksa hasil melalui Pemulihan permintaan; jangan kirim ulang keputusan. Referensi permintaan akun semula tetap disimpan." : suspensionMessage(retry ? new AccessFailure(503, "commit_outcome_unknown") : error)}</p>
       {error instanceof AccessFailure && error.code === "step_up_required" && !locked && <Link href="/identity/account?returnPath=%2Fadministration%2Faccess">Verifikasi akun untuk melanjutkan</Link>}
       {retry && <p>Tetap di halaman ini sampai hasil permintaan yang sama terkonfirmasi.</p>}
       {error instanceof AccessFailure && error.traceId && <small>Referensi bantuan: {error.traceId}</small>}
@@ -335,12 +336,8 @@ export function AccessAdministration() {
     </div>}
 
     {pageState === "loading" && <section className={styles.state} aria-live="polite" aria-busy="true"><h2>Memeriksa akses</h2><p>Memuat keanggotaan, izin, dan pengajuan terbaru.</p></section>}
-    {pageState !== "loading" && pageState !== "ready" && <section className={styles.state}>
-      <h2>{pageState === "unauthenticated" ? "Sesi terverifikasi diperlukan" : pageState === "denied" ? "Halaman ini memerlukan izin pengelolaan akses" : "Layanan akses belum tersedia"}</h2>
-      <p>{pageState === "unauthenticated" ? "Masuk dengan akun organisasi terverifikasi untuk memeriksa akses Anda." : pageState === "denied" ? "Pengelola atau pemberi persetujuan yang ditunjuk dapat meninjau pengajuan sesuai cakupan tugasnya." : "Data belum dapat dimuat. Pengajuan dan perubahan akses tetap dinonaktifkan."}</p>
-      {pageState === "unauthenticated" && <Link className={styles.primary} href="/identity/login?returnPath=%2Fadministration%2Faccess">Masuk ke Unit Toko</Link>}
-      <button className={styles.secondary} onClick={() => void refresh()} disabled={locked}>Periksa kembali</button>
-    </section>}
+    {pageState !== "loading" && pageState !== "ready" && <SessionAccessState error={error} returnPath="/administration/access" onRetry={() => void refresh()} busy={locked}
+      kind={pageState === "denied" ? "denied" : pageState === "unauthenticated" ? (sessionAccessKind(error) === "expired" ? "expired" : "signin") : "unavailable"} />}
 
     {pageState === "ready" && current && catalog && <>
       <section className={styles.accountSection} aria-labelledby="account-heading">

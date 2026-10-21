@@ -26,7 +26,7 @@ const blank = (): SupplierBankDetails => ({ bankCode: '', accountNumber: '', hol
 const states = { pending: 'Menunggu pemeriksaan', approved: 'Disetujui', rejected: 'Ditolak' } as const;
 const when = (value: string) => dateTimeFormatter.format(new Date(value));
 function message(error: unknown) {
-  if (error instanceof IdentityFailure) return 'Masuk kembali dengan akun yang memiliki penugasan rekening pemasok.';
+  if (error instanceof IdentityFailure) return 'Masuk dengan akun organisasi Anda untuk melanjutkan.';
   if (error instanceof AccessFailure || error instanceof RequestNotSentError) {
     if (error.code === 'invalid_supplier_bank' || error.code === 'supplier_bank_invalid') return 'Isi kode bank, seluruh angka rekening, nama pemilik dan alasan secara persis, tanpa spasi tambahan atau karakter kontrol.';
     if (['supplier_bank_view_stale', 'supplier_bank_changed', 'supplier_changed'].includes(error.code)) return 'Rekening, pemasok atau kebijakan berubah. Muat data terbaru dan periksa kembali sebelum melanjutkan.';

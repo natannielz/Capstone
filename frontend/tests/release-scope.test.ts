@@ -15,3 +15,24 @@ test("legacy bookmarks may reach redirect pages without reopening legacy APIs", 
   for (const path of ["/api/auth/login", "/api/state", "/api/commands", "/api/catalog", "/account/profile", "/account/orders/1/extra", "/account/orders/%2f", "//login", "/checkout/extra"])
     assert.equal(isMaintainedEntryAlias(path), false, path);
 });
+
+test("the pilot hides catalog photo management, whose endpoints it does not serve (F-008)", async () => {
+  const { catalogPhotoManagementAvailable } = await import("../src/lib/release-scope");
+  assert.equal(catalogPhotoManagementAvailable(true), false);
+  assert.equal(catalogPhotoManagementAvailable(false), true);
+  for (const path of ["/api/v1/catalog/skus/1/primary-photo/query", "/api/v1/catalog/skus/1/photo-evidence", "/api/v1/catalog/primary-photos/operations/query", "/api/v1/catalog/photo-revalidations/operations/query"])
+    assert.equal(isPilotApiPathAllowed(path), false, path);
+});
+
+test("the catalog page offers the photo button only where photo management is served (F-008)", async () => {
+  const { readFileSync } = await import("node:fs");
+  const source = readFileSync(new URL("../src/modules/catalog/CatalogAdministration.tsx", import.meta.url), "utf8");
+  assert.match(source, /\{item\.active&&catalogPhotoManagementAvailable\(\)&&<button[^>]*onClick=\{\(\)=>void choosePhoto\(item\.id\)\}>Foto/);
+});
+
+test("pilot buyers see the approved product photo: the request-only catalog loads it like the priced one (F-012)", async () => {
+  const { readFileSync } = await import("node:fs");
+  assert.ok(isPilotApiPathAllowed("/api/v1/catalog/variants/00000065-0000-4000-8000-000000000101/primary-photo/query"));
+  const source = readFileSync(new URL("../src/modules/catalog/BuyerCatalog.tsx", import.meta.url), "utf8");
+  assert.doesNotMatch(source, /requestOnly \? <div className=\{styles\.photoPlaceholder\}>/, "no request-only placeholder in place of the photo");
+});

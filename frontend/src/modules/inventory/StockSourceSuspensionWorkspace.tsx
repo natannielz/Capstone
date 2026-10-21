@@ -1,5 +1,6 @@
 "use client";
 
+import { SessionAccessState, lostAccessKind } from '@/components/workspace-kit/session-access-state';
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { RequestNotSentError } from "../../api/client";
@@ -20,10 +21,8 @@ import styles from "./stock-source-suspension.module.css";
 import { formatDateTime, formatNumber } from "@/lib/format";
 
 const path = "/inventory/sources/suspensions";
-const loginHref = "/identity/login?returnPath=" + encodeURIComponent(path);
 const factorHref = "/identity/account?operation=stock.source.suspend&returnPath=" + encodeURIComponent(path);
 type Loaded = { actorId: string; actions: string[]; session: IdentitySession; observedAt: number; generation: number };
-const lostSession = (error: unknown) => (error instanceof AccessFailure || error instanceof IdentityFailure) && (error.status === 401 || error.code === "actor_changed");
 function message(error: unknown) {
   if (error instanceof RequestNotSentError) return accessMessage(error);
   if (error instanceof IdentityFailure) return identityMessage(error);
@@ -75,11 +74,8 @@ export function StockSourceSuspensionWorkspace() {
       <p className={styles.eyebrow}>Pengelolaan persediaan</p><h1>Penghentian sumber stok</h1>
       <p>Tinjau alokasi dan seluruh kanal yang terdampak sebelum menghentikan penggunaannya.</p></div></header>
     <div id="suspension-workspace">{loaded ? <SuspensionDesk key={loaded.actorId + ":" + loaded.generation} loaded={loaded} onRefresh={refresh} /> :
-      <section className={common.state} aria-busy={loading}><h2>{loading ? "Memeriksa sesi dan akses" : lostSession(error) ? "Masuk untuk memeriksa sumber" : "Penghentian belum tersedia"}</h2>
-        {error !== null && <p role="alert" className={common.alert}>{message(error)}</p>}
-        <div className={common.actions}>{lostSession(error) && <Link className={common.primary} href={loginHref}>Masuk kembali</Link>}
-          <button type="button" className={common.secondary} disabled={loading} onClick={() => void refresh()}>Periksa kembali</button>
-          <Link href="/identity/account">Kembali ke akun saya</Link></div></section>}</div>
+      (loading ? <section className={common.state} aria-busy="true"><h2>Memeriksa sesi dan akses</h2></section>
+        : <SessionAccessState error={error} returnPath={path} onRetry={() => void refresh()} detail={error !== null ? message(error) : undefined} />)}</div>
   </main>;
 }
 function SuspensionDesk({ loaded, onRefresh }: { loaded: Loaded; onRefresh: () => Promise<void> }) {
@@ -104,16 +100,13 @@ function SuspensionDesk({ loaded, onRefresh }: { loaded: Loaded; onRefresh: () =
   useEffect(() => { if (state.review) reviewFocus.current?.focus(); }, [state.review]);
   useEffect(() => { if (state.result) resultFocus.current?.focus(); }, [state.result]);
   const busy = state.sending || state.recovering, locked = editor.locked;
-  if (state.expired || state.suspended) return <section className={common.state}><h2>Sesi dan akses perlu diperiksa kembali</h2>
-    {state.error !== null && <p role="alert">{message(state.error)}</p>}
-    <p>Data sebelumnya disembunyikan. Referensi permintaan tetap disimpan untuk akun pemiliknya.</p>
-    <button type="button" className={common.primary} disabled={busy} onClick={() => void onRefresh()}>Periksa sesi terbaru</button><Link href={loginHref}>Masuk kembali</Link></section>;
+  if (state.expired || state.suspended) return <SessionAccessState error={state.error} kind={state.expired ? 'expired' : lostAccessKind(state.error)} returnPath={path} busy={busy} onRetry={() => void onRefresh()} />;
   return <>
     <AdministrationNavigation current="source-suspensions" actions={loaded.actions} locked={locked} />
     <section className={common.accountSection} aria-labelledby="suspension-account-heading">
       <div className={styles.heading}><div><h2 id="suspension-account-heading">Periksa sumber yang ditugaskan</h2>
         <p>Petugas: <strong>{loaded.session.account?.displayName ?? loaded.session.account?.verifiedEmail}</strong></p></div>
-        <button type="button" className={common.secondary} disabled={busy || state.review !== null} onClick={() => void onRefresh()}>Periksa sesi dan akses</button></div>
+        <button type="button" className={common.secondary} disabled={busy || state.review !== null} onClick={() => void onRefresh()}>Muat ulang sesi dan akses</button></div>
       {editor.canSuspend && <p className={common.help}>{state.fresh ? "Verifikasi dua langkah masih baru. " : "Penghentian memerlukan verifikasi dua langkah terbaru. "}
         <Link href={factorHref} aria-disabled={busy} onClick={event => { if (busy) event.preventDefault(); }}>Verifikasi untuk penghentian</Link></p>}
     </section>

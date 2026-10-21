@@ -125,8 +125,8 @@ async function decisionReview(page, reason, action) {
 }
 async function signin(page, expectedActor) {
   await page.goto(origin.origin + path);
-  await page.getByRole("heading", { name: "Masuk untuk mengelola pemetaan", exact: true }).waitFor();
-  await page.getByRole("link", { name: "Masuk kembali", exact: true }).click();
+  await page.getByRole("heading", { name: /^(Masuk untuk melanjutkan|Sesi Anda perlu diperbarui)$/ }).waitFor();
+  await page.getByRole("link", { name: /^Masuk( kembali)?$/ }).click();
   await page.getByRole("button", { name: "Lanjutkan ke layanan akun", exact: true }).click();
   await page.waitForURL(origin.origin + path); await page.getByLabel("Akses lokasi", { exact: true }).waitFor();
   const identity = await page.evaluate(async () => (await fetch("/api/v1/identity/session")).json());
@@ -222,10 +222,10 @@ try {
   await check("maker cannot approve their own mapping", async () => {
     await decisionReview(page, "Pemetaan pertama", "approve");
     await page.getByRole("button", { name: labels.approve, exact: true }).click();
-    await page.getByRole("heading", { name: "Sesi dan akses perlu diperiksa kembali", exact: true }).waitFor();
+    await page.getByRole("heading", { name: /^(Masuk untuk melanjutkan|Sesi Anda perlu diperbarui|Halaman ini di luar tugas akun Anda|Halaman belum dapat dibuka)$/ }).waitFor();
     await page.getByText("Keputusan memerlukan peninjau yang berbeda", { exact: false }).waitFor();
     assert.equal((await pending(page)).length, 0);
-    await page.getByRole("button", { name: "Periksa sesi terbaru", exact: true }).click();
+    await page.getByRole("button", { name: /^(Periksa ulang|Periksa ulang akses|Coba lagi)$/ }).click();
     await page.getByLabel("Gudang dan kanal pemilik alokasi", { exact: true }).waitFor();
   });
   await check("competing proposal and maker withdrawal retain separate immutable history", async () => {
@@ -307,7 +307,7 @@ try {
   await check("revoking the requested channel grant conceals private history and still permits sign-out", async () => {
     await choose(reviewer); await reviewer.getByRole("button", { name: /^Verifikasi perlu baru / }).waitFor();
     await control("grant"); await reviewer.getByRole("button", { name: "Muat ulang riwayat", exact: true }).click();
-    await reviewer.getByRole("heading", { name: "Sesi dan akses perlu diperiksa kembali", exact: true }).waitFor();
+    await reviewer.getByRole("heading", { name: /^(Masuk untuk melanjutkan|Sesi Anda perlu diperbarui|Halaman ini di luar tugas akun Anda|Halaman belum dapat dibuka)$/ }).waitFor();
     assert.equal(await reviewer.getByRole("heading", { name: "Alokasi browser uji", exact: true }).count(), 0);
     await logout(reviewer, reviewerContext); await logout(page, context);
   });

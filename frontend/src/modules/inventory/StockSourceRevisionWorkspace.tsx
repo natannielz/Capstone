@@ -1,5 +1,6 @@
 "use client";
 
+import { SessionAccessState, lostAccessKind } from '@/components/workspace-kit/session-access-state';
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { RequestNotSentError } from "../../api/client";
@@ -20,7 +21,6 @@ import styles from "./stock-source-revision.module.css";
 import { formatDateTime } from "@/lib/format";
 
 const path = "/inventory/sources/revisions";
-const loginHref = "/identity/login?returnPath=" + encodeURIComponent(path);
 const factorHref = "/identity/account?operation=stock.source.approve&returnPath=" + encodeURIComponent(path);
 type Loaded = { actorId: string; actions: string[]; session: IdentitySession; observedAt: number; generation: number };
 function message(error: unknown) {
@@ -39,7 +39,6 @@ function message(error: unknown) {
   }
   return "Koneksi terputus. Hasil belum dapat dipastikan. Gunakan Periksa hasil pada referensi pemulihan yang tersimpan.";
 }
-const lostSession = (error: unknown) => (error instanceof AccessFailure || error instanceof IdentityFailure) && (error.status === 401 || error.code === "actor_changed");
 export function StockSourceRevisionWorkspace() {
   const [access] = useState(() => createAccessGateway()), [identity] = useState(() => createIdentityGateway());
   const request = useRef<AbortController | null>(null), generation = useRef(0);
@@ -75,11 +74,8 @@ export function StockSourceRevisionWorkspace() {
       <p className={styles.eyebrow}>Pengelolaan persediaan</p><h1>Perubahan sumber stok</h1>
       <p>Bandingkan pengaturan, periksa tanggung jawab, dan simpan keputusan untuk alokasi yang sudah terdaftar.</p></div></header>
     <div id="revision-workspace">{loaded ? <RevisionDesk key={loaded.actorId + ":" + loaded.generation} loaded={loaded} onRefresh={refresh} /> :
-      <section className={common.state} aria-busy={loading}><h2>{loading ? "Memeriksa sesi dan akses" : lostSession(error) ? "Masuk untuk mengubah sumber stok" : "Perubahan sumber belum tersedia"}</h2>
-        {error !== null && <p role="alert" className={common.alert}>{message(error)}</p>}
-        <div className={common.actions}>{lostSession(error) && <Link className={common.primary} href={loginHref}>Masuk kembali</Link>}
-          <button type="button" className={common.secondary} disabled={loading} onClick={() => void refresh()}>Periksa kembali</button>
-          <Link href="/identity/account">Kembali ke akun saya</Link></div></section>}</div>
+      (loading ? <section className={common.state} aria-busy="true"><h2>Memeriksa sesi dan akses</h2></section>
+        : <SessionAccessState error={error} returnPath={path} onRetry={() => void refresh()} detail={error !== null ? message(error) : undefined} />)}</div>
   </main>;
 }
 function RevisionDesk({ loaded, onRefresh }: { loaded: Loaded; onRefresh: () => Promise<void> }) {
@@ -104,16 +100,13 @@ function RevisionDesk({ loaded, onRefresh }: { loaded: Loaded; onRefresh: () => 
   useEffect(() => { if (state.review) reviewFocus.current?.focus(); }, [state.review]);
   useEffect(() => { if (state.result) resultFocus.current?.focus(); }, [state.result]);
   const busy = state.sending || state.recovering, locked = editor.locked;
-  if (state.expired || state.suspended) return <section className={common.state}><h2>Sesi dan akses perlu diperiksa kembali</h2>
-    {state.error !== null && <p role="alert">{message(state.error)}</p>}
-    <p>Data sebelumnya disembunyikan. Referensi permintaan tetap disimpan untuk akun pemiliknya.</p>
-    <button type="button" className={common.primary} disabled={busy} onClick={() => void onRefresh()}>Periksa sesi terbaru</button><Link href={loginHref}>Masuk kembali</Link></section>;
+  if (state.expired || state.suspended) return <SessionAccessState error={state.error} kind={state.expired ? 'expired' : lostAccessKind(state.error)} returnPath={path} busy={busy} onRetry={() => void onRefresh()} />;
   return <>
     <AdministrationNavigation current="source-revisions" actions={loaded.actions} locked={locked} />
     <section className={common.accountSection} aria-labelledby="revision-location-title">
       <div className={styles.heading}><div><h2 id="revision-location-title">Pilih ruang kerja</h2>
         <p className={common.help}>Petugas: <strong>{loaded.session.account?.displayName ?? loaded.session.account?.verifiedEmail}</strong></p></div>
-        <button type="button" className={common.secondary} disabled={busy || state.review !== null} onClick={() => void onRefresh()}>Periksa sesi dan akses</button></div>
+        <button type="button" className={common.secondary} disabled={busy || state.review !== null} onClick={() => void onRefresh()}>Muat ulang sesi dan akses</button></div>
       <div className={styles.location}><label><span id="revision-purpose-label">Akses lokasi</span><select aria-labelledby="revision-purpose-label" disabled={editor.selectionLocked || state.loadingWarehouses} value={state.purpose}
         onChange={event => void editor.changePurpose(event.target.value as SourcePurpose)}>
         {editor.canRead && <option value="inventory-source-history">Melihat pengaturan dan riwayat</option>}

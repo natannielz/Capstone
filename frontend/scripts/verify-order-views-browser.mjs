@@ -121,7 +121,7 @@ export async function verifyOrderViewsBrowser({config, buyer, user, origin, dire
   const bad = await query(current.page, config.buyerId, api + '/orders/query', {purpose: 'order-history', filter: {context: {...config.expectedInput.context, branchId: config.deniedBranchId}, sort: 'newest'}, cursor: null});
   assert.equal(bad.status, 403); assert.equal(Object.hasOwn(bad.body, 'items'), false);
   const denied = await user(config.deniedToken); observe(denied.page); await denied.page.goto(origin.origin + path);
-  await denied.page.getByRole('heading', { name: /^(Sesi Anda perlu diperbarui|Halaman ini di luar tugas akun Anda|Halaman belum dapat dibuka)$/ }).waitFor();
+  await denied.page.getByRole('heading', { name: /^(Masuk untuk melanjutkan|Sesi Anda perlu diperbarui|Halaman ini di luar tugas akun Anda|Halaman belum dapat dibuka)$/ }).waitFor();
   const deniedList = await query(denied.page, config.deniedId, api + '/query', {purpose: 'order-history', beforeId: null}); assert.equal(deniedList.status, 403);
   assert.deepEqual(unexpected, []); assert.deepEqual(errors, []);
   console.log('REAL_ORDER_VIEWS_BROWSER_PASS ' + JSON.stringify({writes: 3, originalReplyLosses: 3, actualBrowserRestarts: 3,

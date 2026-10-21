@@ -28,8 +28,8 @@ test('each refusal says what to do next', () => {
 test('the page is listed under catalog work only for staff who hold either showcase permission', () => {
   const entry = (actions: string[]) => identityDestinations(actions).find(item => item.href === '/catalog/public');
   assert.equal(entry(['catalog.read']), undefined);
-  assert.equal(entry(['catalog.public.propose'])?.label, 'Katalog publik');
-  assert.equal(entry(['catalog.public.approve'])?.label, 'Katalog publik');
+  assert.equal(entry(['catalog.public.propose'])?.label, 'Contoh katalog untuk tamu');
+  assert.equal(entry(['catalog.public.approve'])?.label, 'Contoh katalog untuk tamu');
   const group = workspaceNavigation(['catalog.public.approve'], '/catalog/public', { pilot: false }).find(item => item.items.some(link => link.href === '/catalog/public'));
   assert.ok(group); assert.notEqual(group.id, 'current');
 });

@@ -24,7 +24,7 @@ const time = (value: string) => dateTimeFormatter.format(new Date(value));
 const number = (item: Shipment) => `${item.numberEntity}/${item.numberChannel}/${item.numberYear}/${item.number}`;
 function message(error: unknown) {
   if (error instanceof AccessFailure && error.status >= 400 && error.status < 500) return accessMessage(error);
-  if (error instanceof IdentityFailure) return 'Sesi perlu diperiksa kembali. Masuk menggunakan akun yang memiliki penugasan kiriman.';
+  if (error instanceof IdentityFailure) return 'Masuk dengan akun organisasi Anda untuk melanjutkan.';
   return 'Data kiriman belum dapat dimuat. Periksa koneksi lalu muat kembali.';
 }
 export function ShipmentWorkspace() {

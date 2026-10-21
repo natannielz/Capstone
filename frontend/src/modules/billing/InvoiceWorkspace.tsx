@@ -25,7 +25,7 @@ function message(error: unknown) {
   if (error instanceof AccessFailure && ['invoice_policy_unavailable', 'invoice_policy_expired'].includes(error.code)) return 'Aturan tagihan belum tersedia atau belum disetujui. Penanggung jawab perlu melengkapi aturan pajak, jatuh tempo, pengelompokan, penomoran dan pembukuan.';
   if (error instanceof AccessFailure && ['invoice_review_changed', 'receipt_already_invoiced', 'invoice_grouping_changed', 'invoice_commercial_allocation_exceeded'].includes(error.code)) return 'Sumber atau aturan tagihan berubah. Muat data terbaru, lalu tinjau pilihan penerimaan kembali.';
   if (error instanceof AccessFailure && error.code.startsWith('accounting_')) return 'Pembukuan belum siap untuk tanggal terbit ini. Periksa periode dan pengaturan akun bersama penanggung jawab keuangan.';
-  if (error instanceof IdentityFailure) return 'Sesi perlu diperiksa kembali. Masuk dengan akun yang memiliki akses tagihan.';
+  if (error instanceof IdentityFailure) return 'Masuk dengan akun organisasi Anda untuk melanjutkan.';
   return accessMessage(error);
 }
 export function InvoiceWorkspace() {

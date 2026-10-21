@@ -23,11 +23,14 @@ function legacyTarget(path: string): string | null {
   return null;
 }
 
+// Old links named the open record differently; today's page reads its own name (M7: /checkout?draftId=41 → ?draft=41).
+const legacyQueryNames: Record<string, Record<string, string>> = { '/ordering/checkout': { draftId: 'draft' }, '/ordering/orders': { orderId: 'order' } };
+
 /** Adds the request's query to a target that may already carry its own; the target's own parameters win. */
 function withQuery(target: string, extra: URLSearchParams): string {
   const mark = target.indexOf('?'), path = mark < 0 ? target : target.slice(0, mark);
-  const params = new URLSearchParams(mark < 0 ? '' : target.slice(mark + 1));
-  extra.forEach((value, key) => { if (!params.has(key)) params.append(key, value); });
+  const params = new URLSearchParams(mark < 0 ? '' : target.slice(mark + 1)), renames = legacyQueryNames[path] ?? {};
+  extra.forEach((value, rawKey) => { const key = renames[rawKey] ?? rawKey; if (!params.has(key)) params.append(key, value); });
   const query = params.toString();
   return query ? path + '?' + query : path;
 }
@@ -64,14 +67,30 @@ export function canonicalRedirect(pathname: string, search: URLSearchParams): st
 // for its guest hand-off), the landing page, sign-in, assets and the API are not listed and stay open.
 const signedInAreas = ['/workspace', '/identity/account', '/cart', '/ordering', '/billing', '/fulfillment', '/inventory', '/procurement',
   '/administration', '/accounting', '/reporting', '/operations', '/catalog'];
-export const requiresSession = (pathname: string) => signedInAreas.some(area => pathname === area || pathname.startsWith(area + '/'));
+/**
+ * The path as the guard compares it (M9): percent-decoded, lower case, repeated and trailing slashes removed. Null when it cannot
+ * be decoded, so an odd spelling never slips past the guard (it is treated as a signed-in page).
+ */
+export function normalisedPath(pathname: string): string | null {
+  let decoded: string;
+  try { decoded = decodeURIComponent(pathname); } catch { return null; }
+  if (/[\u0000-\u001f\u007f\\]/.test(decoded)) return null;
+  const path = ('/' + decoded.toLowerCase()).replace(/\/{2,}/g, '/').replace(/\/+$/, '');
+  return path === '' ? '/' : path;
+}
+export const requiresSession = (pathname: string) => {
+  const path = normalisedPath(pathname);
+  return path === null || signedInAreas.some(area => path === area || path.startsWith(area + '/'));
+};
 
 /**
  * For a visitor without a session cookie on a signed-in page: the sign-in page that returns to this page and query (G-012).
  * Null when the page is open to guests or a session cookie is present (the page and the API then check the session itself).
  */
-export function signInRedirect(pathname: string, search: string, hasSession: boolean): string | null {
-  if (hasSession || !requiresSession(pathname)) return null;
+export function signInRedirect(rawPathname: string, search: string, hasSession: boolean): string | null {
+  if (hasSession || !requiresSession(rawPathname)) return null;
+  const pathname = normalisedPath(rawPathname);
+  if (pathname === null) return '/identity/login';
   const target = pathname + search;
   const returnPath = isAllowedReturnPath(target) ? target : isAllowedReturnPath(pathname) ? pathname : null;
   return '/identity/login' + (returnPath ? '?returnPath=' + encodeURIComponent(returnPath) : '');

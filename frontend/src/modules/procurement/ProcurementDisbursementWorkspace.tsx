@@ -28,7 +28,7 @@ const amount = (value: string) => orderAmount('IDR', value);
 const states = { draft: 'Draf menunggu bukti', recorded_unverified: 'Tercatat, belum diverifikasi bank' } as const;
 const routes = { omi_regular: 'OMI reguler', ddo: 'DDO', smart: 'S-Mart', pasar_kering: 'Pasar Kering' } as const;
 function message(error: unknown) {
-  if (error instanceof IdentityFailure) return 'Masuk kembali dengan akun yang memiliki penugasan bukti uang muka pemasok.';
+  if (error instanceof IdentityFailure) return 'Masuk dengan akun organisasi Anda untuk melanjutkan.';
   if (error instanceof AccessFailure || error instanceof RequestNotSentError) {
     if (error.code === 'procurement_disbursement_invalid') return 'Periksa nominal positif dengan dua angka desimal, tanggal transfer dan referensi persis dari bukti asli.';
     if (error.code === 'procurement_disbursement_image_required') return 'Pilih bukti asli JPEG atau PNG, maksimal 10 MiB.';

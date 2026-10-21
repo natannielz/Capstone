@@ -76,3 +76,11 @@ test('one name per page (G-019)', () => {
   assert.equal(destinationLabel('/ordering/spending-policies'), 'Aturan persetujuan belanja');
   assert.equal(buyerTasks(penyetujuCabang).find(item => item.href === '/ordering/reviews')?.label, destinationLabel('/ordering/reviews'));
 });
+
+test('a buyer who may cancel reaches the page where cancelling happens, from the store menu and from the order (M1)', async () => {
+  assert.ok(buyerTasks(buyer).some(item => item.href === '/ordering/reviews'), 'order.cancel opens /ordering/reviews as a buyer task');
+  assert.equal(isStaffActor(buyer), false);
+  const { readFileSync } = await import('node:fs');
+  const history = readFileSync(new URL('../src/modules/ordering/OrderHistoryWorkspace.tsx', import.meta.url), 'utf8');
+  assert.match(history, /account\.actions\.includes\('order\.cancel'\) && !selected\.progress\.cancelled && <p><Link href="\/ordering\/reviews"/);
+});

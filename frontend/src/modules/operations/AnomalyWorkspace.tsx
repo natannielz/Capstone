@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { SessionAccessState } from '@/components/workspace-kit/session-access-state';
 import {useEffect, useRef, useState} from 'react';
 import {RequestNotSentError} from '../../api/client';
 import {createIdentityGateway} from '../identity/identity-client';
@@ -56,9 +57,9 @@ export function AnomalyWorkspace() {
     <header className={common.header}><div><Link className={common.brand} href="/identity/account">Unit Toko</Link><h1>Tinjauan operasional</h1>
       <p>Periksa tanda pada harga, jumlah, dan pengembalian dana. Simpan alasan tindak lanjut setelah meninjau sumber.</p></div><Link href="/identity/account">Akun saya</Link></header>
     <p>Hasil ini membantu petugas meninjau. Persetujuan pesanan, perubahan stok, serta pembayaran tetap dilakukan pada alur masing-masing.</p>
-    {error !== null && <p className={common.alert} role="alert">{message(error)}</p>}
-    {!account || sessionTiming(account.session, elapsed).expired ? <section className={common.state}><h2>Periksa sesi dan akses</h2>
-      <Link href="/identity/login?returnPath=%2Foperations%2Fanomalies">Masuk kembali</Link><button type="button" onClick={() => {setAccount(null); setAttempt(x => x + 1);}}>Perbarui sesi</button></section>
+    {error !== null && account !== null && <p className={common.alert} role="alert">{message(error)}</p>}
+    {!account && error === null ? <p role="status">Memeriksa sesi dan akses…</p> : !account || sessionTiming(account.session, elapsed).expired
+      ? <SessionAccessState error={error} kind={account ? "expired" : undefined} returnPath="/operations/anomalies" onRetry={() => {setAccount(null); setError(null); setAttempt(x => x + 1);}} detail={error !== null ? message(error) : undefined} />
       : <Desk key={account.actorId + ':' + account.observedAt} account={account} onDenied={() => {setAccount(null); setError(new AccessFailure(403, 'scope_denied'));}} />}
   </main>;
 }

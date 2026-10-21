@@ -1,5 +1,6 @@
 "use client";
 
+import { SessionAccessState } from '@/components/workspace-kit/session-access-state';
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { components } from "../../api/generated/schema";
@@ -20,7 +21,6 @@ import styles from "../administration/access.module.css";
 type Loaded = { current: components["schemas"]["CurrentAccessDto"]; session: IdentitySession; observedAt: number };
 const unavailable = (failure: unknown) => failure instanceof AccessFailure && ["person_governance_unavailable", "person_selection_unavailable"].includes(failure.code);
 const profileUnavailable = (failure: unknown) => failure instanceof AccessFailure && failure.code === "person_profile_unavailable";
-const loginHref = "/identity/login?returnPath=" + encodeURIComponent(personReviewPath);
 
 export function PersonReviewAdministration() {
   const [access] = useState(() => createAccessGateway());
@@ -58,15 +58,12 @@ export function PersonReviewAdministration() {
       reads.cancel(); setLoaded(null); setLoading(false); setError(failure);
     }
   }, [reads]);
-  const requiresLogin = (error instanceof AccessFailure || error instanceof IdentityFailure) && (error.status === 401 || error.code === "actor_changed");
   return <main className={styles.page}>
     <header className={styles.header}><div><Link className={styles.brand} href="/identity/account">Unit Toko</Link><h1>Peninjauan keterkaitan akun</h1>
       <p>Periksa pengajuan penangguhan, akun yang terdampak, dan keputusan petugas yang berwenang.</p></div></header>
     {loaded ? <PersonReviewBody key={`${loaded.current.userId}:${revision}`} {...loaded} onFailure={onFailure} onRefresh={refresh} />
-      : <section className={styles.state} aria-busy={loading}><h2>{loading ? "Memeriksa sesi dan penugasan" : profileUnavailable(error) ? "Data akun belum dapat ditinjau" : unavailable(error) ? "Peninjauan belum diaktifkan" : requiresLogin ? "Sesi terverifikasi diperlukan" : personReviewNeedsRefresh(error) ? "Data peninjauan perlu dimuat ulang" : error instanceof AccessFailure && error.status === 403 ? "Akses peninjauan belum disetujui" : "Peninjauan belum dapat dimuat"}</h2>
-        {error !== null && <p role="alert" className={styles.alert}>{personReviewMessage(error)}</p>}
-        {requiresLogin && <Link className={styles.primary} href={loginHref}>Masuk kembali</Link>}
-        <div className={styles.actions}><button type="button" className={styles.secondary} disabled={loading} onClick={() => void refresh()}>Periksa kembali</button><Link href="/identity/account">Kembali ke akun saya</Link></div></section>}
+      : loading ? <section className={styles.state} aria-busy="true"><h2>Memeriksa sesi dan penugasan</h2></section>
+      : <SessionAccessState error={error} returnPath={personReviewPath} onRetry={() => void refresh()} detail={error !== null ? personReviewMessage(error) : undefined} />}
   </main>;
 }
 
@@ -151,8 +148,7 @@ function PersonReviewBody({ current, session, observedAt, onFailure, onRefresh }
   let fields: Record<string, string> | null = null;
   try { if (factors.includes(factorOperation)) fields = stepUpFields(session, factorOperation, personReviewPath); } catch { /* A stale session cannot prepare navigation. */ }
   const retryFactorHref = "/identity/account?operation=" + encodeURIComponent(retry ? personReviewPermission(retry.action) : factorOperation) + "&returnPath=" + encodeURIComponent(personReviewPath);
-  if (timing.expired) return <section className={styles.state}><h2>Sesi perlu diperiksa kembali</h2><p>Data pribadi disembunyikan setelah batas sesi tercapai. Referensi permintaan yang belum terkonfirmasi tetap disimpan untuk akun Anda.</p>
-    <button type="button" className={styles.primary} disabled={busy} onClick={() => void onRefresh()}>Periksa sesi terbaru</button><Link href={loginHref}>Masuk kembali</Link></section>;
+  if (timing.expired) return <SessionAccessState error={null} kind="expired" returnPath={personReviewPath} busy={busy} onRetry={() => void onRefresh()} />;
   return <>
     <AdministrationNavigation current="person-reviews" actions={current.allowedActions} locked={locked} />
     <section className={styles.accountSection} aria-labelledby="person-session-title"><h2 id="person-session-title">Sesi peninjauan</h2><p className={styles.preserve}>Anda masuk sebagai <strong>{session.account?.displayName ?? session.account?.verifiedEmail}</strong>.</p>

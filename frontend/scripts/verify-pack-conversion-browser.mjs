@@ -138,8 +138,8 @@ async function signIn(account, actorId, workspace = true) {
   const page = await context.newPage(); page.setDefaultTimeout(20000);
   page.on("pageerror", error => failures.push(error.message)); page.on("dialog", dialog => dialog.accept());
   await page.goto(origin.origin + route);
-  await page.getByRole("heading", { name: "Masuk untuk menyiapkan aturan", exact: true }).waitFor();
-  await page.getByRole("link", { name: "Masuk kembali", exact: true }).click();
+  await page.getByRole("heading", { name: /^(Masuk untuk melanjutkan|Sesi Anda perlu diperbarui)$/ }).waitFor();
+  await page.getByRole("link", { name: /^Masuk( kembali)?$/ }).click();
   await page.getByRole("button", { name: "Lanjutkan ke layanan akun", exact: true }).click();
   await page.waitForURL(origin.origin + route);
   if (workspace) await page.getByLabel("Gudang dan kanal", { exact: true }).waitFor();
