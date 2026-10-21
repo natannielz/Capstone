@@ -77,8 +77,7 @@ export async function verifyRefundSettlementBrowser({ config, verifier, user, or
   const receipts = saved.getByRole('listitem'); assert.equal(await receipts.count(), config.receipts.length);
   for (const expected of config.receipts) {
     const receipt = receipts.filter({ hasText: 'Penerimaan bank ' + expected.receiptId + ':' }); assert.equal(await receipt.count(), 1);
-    // Screen rupiah (lib/format formatMoney): ",00" is dropped when the fraction is zero.
-    const format = amount => { const [whole, fraction = '00'] = amount.split('.'); return 'Rp' + whole.replace(/\B(?=(\d{3})+(?!\d))/g, '.') + (/^0*$/.test(fraction) ? '' : ',' + fraction); };
+    const format = amount => { const [whole, fraction] = amount.split('.'); return 'Rp' + whole.replace(/\B(?=(\d{3})+(?!\d))/g, '.') + ',' + fraction; };
     const text = (await receipt.innerText()).replace(/\s/g, '');
     for (const value of [format(expected.paid), format(expected.pending), format(expected.available)]) assert.ok(text.includes(value.replace(/\s/g, '')));
   }

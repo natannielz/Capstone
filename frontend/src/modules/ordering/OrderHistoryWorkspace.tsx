@@ -16,7 +16,7 @@ import { rememberCartBranch } from './cart-branch';
 import { addToCartMessage } from './AddToCartPanel';
 import { buyerOrderStatus } from './order-status';
 import { createOrderSubmitGateway, type SubmittedOrder } from './order-submit-client';
-import { orderAmount } from './order-quote-client';
+import { orderDisplayAmount } from './order-quote-client';
 import { OrderSavedViewPanel } from './OrderSavedViewPanel';
 import { createOrderViewGateway, type OrderHistoryFilter } from './order-view-client';
 import { useDraftSave } from './DraftSave';
@@ -177,10 +177,10 @@ function OrderHistoryDesk({ account, onFailure }: { account: Account; onFailure:
           <div className={styles.orderCardHead}><span><strong>{orderNumber(id)}</strong> · {date(order.submission.recordedAt)}</span><StatusBadge text={status.label} /></div>
           <ul className={styles.orderLines}>{order.quote.lines.slice(0, 2).map(line => <li key={line.definition.skuId}>
             <span className={styles.orderThumb}><PackageOpen size={22} strokeWidth={1.4} aria-hidden="true" /></span>
-            <span><strong>{line.familyName}</strong><small>{line.packages} × {line.definition.packageLabel} · {orderAmount(order.quote.currency, line.price.unitPrice)}</small></span></li>)}</ul>
+            <span><strong>{line.familyName}</strong><small>{line.packages} × {line.definition.packageLabel} · {orderDisplayAmount(order.quote.currency, line.price.unitPrice)}</small></span></li>)}</ul>
           {extra > 0 && <p className={styles.listMeta}>+{extra} barang lain</p>}
           <p className={styles.orderNext}>{status.detail}</p>
-          <div className={styles.orderCardFoot}><span>Total <strong>{orderAmount(order.quote.currency, order.total)}</strong></span>
+          <div className={styles.orderCardFoot}><span>Total <strong>{orderDisplayAmount(order.quote.currency, order.total)}</strong></span>
             <div className={common.actions}><button type="button" className={common.secondary} disabled={locked} aria-label={'Lihat rincian pesanan ' + orderNumber(id)} onClick={() => void select(id)}>Lihat rincian</button>
               {account.actions.includes('order.submit') && <button type="button" className={common.primary} disabled={locked} onClick={() => void orderAgain(order)}>Pesan lagi</button>}</div></div>
         </li>;
@@ -194,12 +194,12 @@ function OrderHistoryDesk({ account, onFailure }: { account: Account; onFailure:
       {selected.input.purchaseReference && <p>Referensi pembelian: {selected.input.purchaseReference}</p>}
       <h3>Kemasan saat pengajuan</h3><ul>{selected.quote.lines.map(line => <li key={line.definition.skuId}><strong>{line.familyName} — {line.definition.packageLabel}</strong>
         <p>{line.packages} kemasan · {line.definition.baseUnitsPerPackage} {line.definition.baseUnitCode} per kemasan · total {line.baseUnits} {line.definition.baseUnitCode}</p>
-        <p>{orderAmount(selected.quote.currency, line.price.unitPrice)} per kemasan · subtotal {orderAmount(selected.quote.currency, line.catalogSubtotal)}</p></li>)}</ul>
+        <p>{orderDisplayAmount(selected.quote.currency, line.price.unitPrice)} per kemasan · subtotal {orderDisplayAmount(selected.quote.currency, line.catalogSubtotal)}</p></li>)}</ul>
       <h3>Tujuan pengiriman</h3><p className={styles.address}>{selected.input.delivery!.recipientName} · {selected.input.delivery!.phone}{'\n'}{selected.input.delivery!.address}{'\n'}{selected.input.delivery!.city} {selected.input.delivery!.postalCode}</p>
       {selected.input.delivery!.instructions && <p>{selected.input.delivery!.instructions}</p>}
       {account.actions.some(action => ['substitution.propose', 'substitution.accept'].includes(action)) && <p><Link href={'/ordering/substitutions?order=' + selected.submission.orderId}>Lihat pengajuan dan keputusan penggantian pesanan ini</Link></p>}
-      <h3>Biaya saat pengajuan</h3><p>Subtotal barang: {orderAmount(selected.quote.currency, selected.quote.catalogSubtotal)}</p>
-      <p>Pajak: {orderAmount(selected.quote.currency, selected.tax)} · Biaya lain: {orderAmount(selected.quote.currency, selected.charges)}</p><p><strong>Total: {orderAmount(selected.quote.currency, selected.total)}</strong></p>
+      <h3>Biaya saat pengajuan</h3><p>Subtotal barang: {orderDisplayAmount(selected.quote.currency, selected.quote.catalogSubtotal)}</p>
+      <p>Pajak: {orderDisplayAmount(selected.quote.currency, selected.tax)} · Biaya lain: {orderDisplayAmount(selected.quote.currency, selected.charges)}</p><p><strong>Total: {orderDisplayAmount(selected.quote.currency, selected.total)}</strong></p>
       <p>Bagian toko: {selected.progress.acceptedSuborders.length} diterima, {selected.progress.rejectedSuborders.length} ditolak, dari {selected.submission.suborderIds.length} bagian.</p>
       {(selected.progress.cancelled || selected.progress.spendingState === 'Rejected' || selected.progress.rejectedSuborders.length > 0) && <p>Angka di atas menyimpan biaya pengajuan awal. Penolakan atau pembatalan bukan bukti pembayaran maupun pengembalian dana.</p>}
       <OrderTimelinePanel key={selected.submission.orderId} actorId={account.actorId} orderId={selected.submission.orderId}

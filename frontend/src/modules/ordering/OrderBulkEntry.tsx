@@ -5,7 +5,7 @@ import { AccessFailure } from '../administration/workflow';
 import { createBuyerBulkGateway } from '../catalog/catalog-bulk-client';
 import { buyerCurrentCode, type BuyerVariant } from '../catalog/catalog-buyer-client';
 import type { DraftInput } from './order-draft-client';
-import { orderAmount } from './order-quote-client';
+import { orderDisplayAmount } from './order-quote-client';
 import { BulkInputError, parseBulkSkuInput, prepareBulkSkuSelection, type BulkSkuRow } from './order-bulk';
 import common from '../administration/access.module.css';
 import styles from './order-draft.module.css';
@@ -63,7 +63,7 @@ export function OrderBulkEntry({ actorId, currentSelections, isCurrent, onApply,
           <p>Kode yang Anda masukkan: {row.code}. Kode utama saat ini: {buyerCurrentCode(item)}.</p>
           {item.code !== buyerCurrentCode(item) && <p>Referensi SKU tetap pada catatan transaksi: {item.code}.</p>}
           <p>{row.packages} {item.definition.packageLabel} · {item.definition.baseUnitsPerPackage} {item.definition.baseUnitCode} per kemasan</p>
-          <p>Minimum {item.definition.minimumOrderPackages}; kelipatan {item.definition.orderIncrementPackages}. Harga per kemasan: {orderAmount(item.currentPrice!.currency, item.currentPrice!.unitPrice)}.</p>
+          <p>Minimum {item.definition.minimumOrderPackages}; kelipatan {item.definition.orderIncrementPackages}. Harga per kemasan: {orderDisplayAmount(item.currentPrice!.currency, item.currentPrice!.unitPrice)}.</p>
           {review.prepared.replacements.includes(item.skuId) && <p>Jumlah SKU ini dalam draf akan diganti menjadi {row.packages} setelah Anda menerapkan daftar.</p>}
         </li>;
       })}</ul>

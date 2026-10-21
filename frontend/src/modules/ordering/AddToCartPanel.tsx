@@ -7,7 +7,7 @@ import { RequestNotSentError } from '../../api/client';
 import { AccessFailure } from '../administration/workflow';
 import type { BuyerVariant } from '../catalog/catalog-buyer-client';
 import { QuantityStepper, stepQuantity } from '@/components/workspace-kit/quantity-stepper';
-import { formatMoney } from '@/lib/format';
+import { formatDisplayMoney } from '@/lib/format';
 import { createOrderQuoteGateway, orderContextKey, orderQuantity, type OrderContextOption } from './order-quote-client';
 import { CartOutcomeUnknown } from './cart-client';
 import { useCartSave } from './CartSave';
@@ -81,7 +81,7 @@ export function AddToCartPanel({ actorId, item, isCurrent }: { actorId: string; 
       <QuantityStepper id={'cart-quantity-' + item.skuId} label="Jumlah kemasan" value={quantity} minimum={rule.minimum} increment={rule.increment} disabled={busy}
         onChange={text => { setQuantity(text); setAdded(null); setError(null); }} />
       <p className={styles.help}>{rule.minimum > 1 || rule.increment > 1 ? `Minimal ${rule.minimum}, kelipatan ${rule.increment}. ` : ''}Satu {item.definition.packageLabel} berisi {item.definition.baseUnitsPerPackage} {item.definition.baseUnitCode}.</p>
-      <p className={styles.subtotal}><span>Subtotal</span><strong>{packages === null ? '—' : formatMoney(price.currency, lineAmount(price.unitPrice, packages))}</strong></p>
+      <p className={styles.subtotal}><span>Subtotal</span><strong>{packages === null ? '—' : formatDisplayMoney(price.currency, lineAmount(price.unitPrice, packages))}</strong></p>
       <button type="button" className={styles.primary + ' ' + styles.addButton} disabled={busy || saving.locked || !branch || packages === null} onClick={() => void add()}>
         <ShoppingCart size={18} aria-hidden="true" />{busy ? 'Menambahkan…' : 'Tambah ke keranjang'}</button>
       {!branch && <p className={styles.help}>Pilih cabang lebih dulu.</p>}

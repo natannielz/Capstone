@@ -205,20 +205,20 @@ try {
     await maker.page.getByRole('button', { name: 'Muat ulang harga dan riwayat', exact: true }).click();
     await proposal(maker.page, '0.00'); await submit(maker.page);
     await checker.page.getByRole('button', { name: 'Muat ulang harga dan riwayat', exact: true }).click();
-    await decision(checker.page, 'Rp0', 'approve'); await submit(checker.page);
+    await decision(checker.page, 'Rp0,00', 'approve'); await submit(checker.page);
     await checker.page.getByText(/Versi 2 ·/).waitFor(); await checker.page.getByText(/Versi 1 ·/).waitFor();
   });
   await check('withdrawal and rejection recover without creating price versions', async () => {
     await maker.page.getByRole('button', { name: 'Muat ulang harga dan riwayat', exact: true }).click();
-    await proposal(maker.page, '13000.00'); await submit(maker.page); await decision(maker.page, 'Rp13\\.000', 'withdraw'); await submit(maker.page, true);
+    await proposal(maker.page, '13000.00'); await submit(maker.page); await decision(maker.page, 'Rp13.000,00', 'withdraw'); await submit(maker.page, true);
     await proposal(maker.page, '14000.00'); await submit(maker.page);
     await checker.page.getByRole('button', { name: 'Muat ulang harga dan riwayat', exact: true }).click();
-    await decision(checker.page, 'Rp14\\.000', 'reject'); await submit(checker.page, true);
+    await decision(checker.page, 'Rp14.000,00', 'reject'); await submit(checker.page, true);
   });
   await check('stale package review conflicts after a real authoring change', async () => {
     await proposal(maker.page, '15000.00'); await submit(maker.page);
     await checker.page.getByRole('button', { name: 'Muat ulang harga dan riwayat', exact: true }).click();
-    await decision(checker.page, 'Rp15\\.000', 'approve');
+    await decision(checker.page, 'Rp15.000,00', 'approve');
     const author = await user('author');
     const status = await author.page.evaluate(async ({ skuId, authorId }) => {
       const csrf = await (await fetch('/api/v1/identity/csrf')).json();
