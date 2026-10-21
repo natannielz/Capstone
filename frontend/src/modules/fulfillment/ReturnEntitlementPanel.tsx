@@ -11,6 +11,7 @@ import { resolutionActions, type ResolutionView } from './resolution-client';
 import { createReturnEntitlementGateway, prepareReturnEntitlement, returnEntitlementInput, type ReturnEntitlementView, type ReturnEntitlementPreview } from './return-entitlement-client';
 import styles from '../administration/access.module.css';
 import { formatDateTime } from '@/lib/format';
+import { recordNumber } from '@/lib/document-numbers';
 
 const rupiah = (amount: string) => orderAmount('IDR', amount);
 function message(failure: unknown) {
@@ -44,11 +45,11 @@ export function ReturnEntitlementPanel({ actorId, owner, resolution, fresh, lock
     try { await task(); } catch (failure) { if (active()) { setConfirm(null); setShown(null); setConsent(false); setError(failure); if (!(failure instanceof AccessFailure && failure.code === 'step_up_required')) onDenied(failure); } }
     finally { pending.current = false; onBusyChange(false); onSettled(); if (alive.current) setBusy(false); }
   }
-  return <section aria-label={'Nilai finansial retur ' + resolution.returnId}><h4>Pengajuan nilai {resolutionActions[resolution.request!.action].toLowerCase()}</h4>
+  return <section aria-label={'Nilai finansial retur ' + recordNumber('return', resolution.returnId)}><h4>Pengajuan nilai {resolutionActions[resolution.request!.action].toLowerCase()}</h4>
     <p>Nilai berasal dari invoice dan barang yang telah diperiksa. Pengajuan ini memerlukan pemeriksaan serta persetujuan Finance independen berikutnya. Pengajuan belum mengubah tagihan, saldo pembayaran, dana refund atau stok.</p>
     {!fresh && <p role="status">Verifikasi dua langkah terbaru diperlukan. <Link href="/identity/account?operation=case.manage&returnPath=%2Ffulfillment%2Fcases">Verifikasi dua langkah untuk pengajuan nilai retur</Link></p>}
     {error !== null && <p role="alert">{message(error)}</p>}{busy && <p role="status">Memeriksa nilai retur…</p>}
-    <button className={styles.secondary} disabled={disabled} onClick={() => void work(async () => { const value = await gateway.read(actorId, owner, resolution); if (active()) { setView(value); setConfirm(null); setShown(null); setConsent(false); setValues({}); } })}>Periksa nilai finansial retur {resolution.returnId}</button>
+    <button className={styles.secondary} disabled={disabled} onClick={() => void work(async () => { const value = await gateway.read(actorId, owner, resolution); if (active()) { setView(value); setConfirm(null); setShown(null); setConsent(false); setValues({}); } })}>Periksa nilai finansial retur {recordNumber('return', resolution.returnId)}</button>
     {view?.request && <section aria-label="Pengajuan nilai retur tercatat"><p role="status">Nilai retur {rupiah(view.request.credit)} tercatat untuk pemeriksaan Finance independen. Tagihan, saldo pembayaran, dana refund dan stok belum berubah.</p>
       <p>{formatDateTime(view.request.requestedAt)} · Menunggu pemeriksaan finansial</p><p>Nilai barang {rupiah(view.request.net)} · Pajak {rupiah(view.request.tax)} · Biaya {rupiah(view.request.charges)}</p></section>}
     {view && !view.request && !confirm && <form onSubmit={event => { event.preventDefault(); if (!canAct) return; void work(async () => {
@@ -65,7 +66,7 @@ export function ReturnEntitlementPanel({ actorId, owner, resolution, fresh, lock
       <label>Alasan pengajuan nilai finansial<textarea required maxLength={1000} disabled={disabled} value={reason} onChange={event => { setReason(event.target.value); setConsent(false); }} /></label>
       <button className={styles.primary} disabled={!canAct}>Tinjau nilai finansial retur</button></form>}
     {shown && confirm && <section aria-label="Konfirmasi pengajuan nilai retur"><h4 ref={heading} tabIndex={-1}>Ajukan nilai retur untuk pemeriksaan Finance</h4>
-      <p>Keluhan {owner.id} · Penerimaan {resolution.returnId} · Invoice {owner.source.number} · {resolutionActions[confirm.body.action]}</p>
+      <p>Keluhan {recordNumber('case', owner.id)} · Penerimaan {recordNumber('return', resolution.returnId)} · Invoice {owner.source.number} · {resolutionActions[confirm.body.action]}</p>
       <ul>{shown.lines.map(line => { const item = product(line.receiptId, line.skuId); return <li key={line.receiptId + ':' + line.skuId}>{item.productName}: {line.attributedBaseUnits} {item.baseUnitCode} · Nilai barang {rupiah(line.net)} · Pajak {rupiah(line.tax)} · Biaya {rupiah(line.charges)}</li>; })}</ul>
       <p>Total pengajuan: {rupiah(shown.credit)}. Pengajuan menyisihkan jumlah dan nilai invoice untuk retur ini agar tidak diajukan dua kali. Persetujuan kredit dan reservasi atau pembayaran refund belum dilakukan.</p>
       <details><summary>Prosedur yang berlaku untuk nilai retur</summary><p>Nilai barang: {shown.attributionProcedureReference}</p><p>Pajak: {shown.taxTreatmentReference}</p><p>Biaya: {shown.chargeTreatmentReference}</p><p>Nota kredit: {shown.creditNoteProcedureReference}</p></details>

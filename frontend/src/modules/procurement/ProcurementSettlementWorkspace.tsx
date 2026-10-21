@@ -18,6 +18,7 @@ import { createProcurementSettlementGateway, prepareProcurementSettlement, procu
 import styles from '../administration/access.module.css';
 import { dateTimeFormatter } from '@/lib/format';
 import { SessionAccessState } from "@/components/workspace-kit/session-access-state";
+import { recordNumber } from '@/lib/document-numbers';
 
 type Account = { actorId: string; actions: readonly string[]; session: IdentitySession; observedAt: number };
 type Review = { preview: ProcurementSettlementPreview; command: ReturnType<typeof prepareProcurementSettlement>; importName: string; importProfile: string };
@@ -45,7 +46,7 @@ function message(error: unknown) {
   return 'Koneksi terputus. Periksa hasil permintaan tersimpan sebelum melanjutkan.';
 }
 function Source({ value }: { value: ProcurementSettlementDisbursement }) {
-  return <><h3>{value.authorization.supplier.displayName}</h3><p>{value.authorization.supplier.subjectReference}</p><p>Pesanan {value.authorization.orderId} · {routes[value.authorization.route]} · Otorisasi {value.authorization.id}</p>
+  return <><h3>{value.authorization.supplier.displayName}</h3><p>{value.authorization.supplier.subjectReference}</p><p>Pesanan {recordNumber('purchaseOrder', value.authorization.orderId)} · {routes[value.authorization.route]} · Otorisasi {value.authorization.id}</p>
     <dl className={styles.facts}><div><dt>Nominal yang dicatat</dt><dd>{amount(value.amount)}</dd></div><div><dt>Tanggal transfer tercatat</dt><dd>{value.transferDate}</dd></div><div><dt>Referensi transfer tercatat</dt><dd className={styles.preserve}>{value.transferReference}</dd></div><div><dt>Rekening penerima pemasok</dt><dd>{value.beneficiary.bankCode} · {value.beneficiary.maskedAccount} · Versi {value.beneficiary.version}</dd></div><div><dt>Rekening pembayaran</dt><dd>{value.payingAccount.bankName} · {value.payingAccount.maskedAccount} · Versi {value.payingAccount.version}</dd></div><div><dt>Waktu pencatatan bukti</dt><dd>{when(value.recordedAt)}</dd></div></dl>
     <p className={styles.help}>Pencatatan bukti {value.id} tetap tersimpan sebagai catatan awal. Hasil pemeriksaan bank ditampilkan terpisah di bawah.</p></>;
 }

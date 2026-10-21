@@ -1,6 +1,7 @@
 // Actual shared HTTPS/Next/API/Mongo host. People and business inputs are explicitly synthetic.
 import assert from 'node:assert/strict';
 import { resolve } from 'node:path';
+const recordNo = (prefix, id) => prefix + '-' + String(id).padStart(6, '0');
 
 export async function verifyProcurementRequestsBrowser({ config, maker, user, origin, directory, procurementWrites, procurementRecoveries, dropNext, dropped }) {
   const { page, context } = maker, path = '/procurement/requests', api = '/api/v1/procurement/requests';
@@ -82,7 +83,7 @@ export async function verifyProcurementRequestsBrowser({ config, maker, user, or
   assert.equal(procurementWrites.length, 1); assert.equal((await references(page)).length, 0); await choose(page);
   assert.equal((await query(page, config.makerId, api + '/preview/query', { purpose: 'procurement-request-review', input: { ...submitted.body.input, supplierCost: '0.00' } })).status, 400);
   const history = await query(page, config.makerId, api + '/query', readBody); assert.equal(history.status, 200); assert.equal(history.body.items.length, 1); assert.equal(history.body.items[0].state, 'submitted');
-  const requestId = history.body.items[0].id, row = current => current.getByRole('button', { name: new RegExp('DDO.*Permintaan ' + requestId + '$') });
+  const requestId = history.body.items[0].id, row = current => current.getByRole('button', { name: new RegExp('DDO.*Permintaan ' + recordNo('PP', requestId) + '$') });
   await row(page).click(); await page.getByRole('heading', { name: 'Menunggu pemeriksaan', exact: true }).waitFor(); assert.equal(await page.getByRole('button', { name: 'Tinjau persetujuan', exact: true }).count(), 0);
   const checker = await user(config.checkerToken); await checker.page.goto(origin.origin + path); await choose(checker.page); await row(checker.page).click();
   await checker.page.getByLabel('Alasan keputusan', { exact: true }).fill('Kemasan dan kebutuhan sintetis diperiksa secara independen'); await checker.page.getByRole('button', { name: 'Tinjau persetujuan', exact: true }).click();

@@ -7,6 +7,7 @@ import {createOrderTimelineGateway, type TimelinePage, type TimelinePaymentOutco
 import common from '../administration/access.module.css';
 import styles from './order-draft.module.css';
 import {formatDate, formatDateTime} from '@/lib/format';
+import { recordNumber } from '@/lib/document-numbers';
 
 type Context = {actorId: string; orderId: string; isCurrent: () => boolean; onFailure: (error: unknown) => void};
 const date = (value: string) => formatDateTime(value);
@@ -50,8 +51,8 @@ export function OrderTimelinePanel(props: Context & {actions: readonly string[]}
         </>} />
       <TimelineSection {...props} title="Kasus, retur, dan refund" allowed={props.actions.includes('case.read')} load={gateway.cases}
         href="/fulfillment/cases" linkLabel="Buka kasus dan retur" render={row => <>
-          <strong>Kasus {row.id}</strong><p>{caseStatus[row.state]} · {date(row.requestedAt)} · Invoice {row.invoiceId}</p>
-          <TimelineDetail {...props} recordId={row.id} label={'Periksa kasus ' + row.id} load={gateway.case} render={outcome => <CaseOutcome row={outcome} />} />
+          <strong>Kasus {recordNumber('case', row.id)}</strong><p>{caseStatus[row.state]} · {date(row.requestedAt)} · Invoice {row.invoiceId}</p>
+          <TimelineDetail {...props} recordId={row.id} label={'Periksa kasus ' + recordNumber('case', row.id)} load={gateway.case} render={outcome => <CaseOutcome row={outcome} />} />
         </>} />
     </div>
   </section>;
@@ -118,7 +119,7 @@ function PaymentOutcome({row}: {row: TimelinePaymentOutcome}) {
 function CaseOutcome({row}: {row: TimelineCaseOutcome}) {
   return <div><p>{caseStatus[row.caseState]} · Data dimuat {date(row.observedAt)}</p>{row.publicExplanation && <p>{row.publicExplanation}</p>}
     {row.decisionActorAccountId && <p>Keputusan kasus dicatat oleh akun {row.decisionActorAccountId}.</p>}
-    {row.returns.length === 0 ? <p>Belum ada penerimaan retur yang dapat ditampilkan.</p> : row.returns.map(returned => <div key={returned.returnId}><h5>Retur {returned.returnId}</h5>
+    {row.returns.length === 0 ? <p>Belum ada penerimaan retur yang dapat ditampilkan.</p> : row.returns.map(returned => <div key={returned.returnId}><h5>Retur {recordNumber('return', returned.returnId)}</h5>
       <ul>{returned.events.map(event => <li key={event.kind + ':' + event.eventId}>{eventStatus[event.kind]} · {date(event.recordedAt)} · Dicatat akun {event.actorAccountId}</li>)}</ul></div>)}
     <p>Persetujuan refund dan pencatatan pembayarannya belum menyatakan penyelesaian bank. Permintaan penggantian belum menyatakan barang pengganti telah dikirim.</p>
   </div>;

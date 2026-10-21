@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import { writeFileSync } from 'node:fs';
 import { basename, resolve } from 'node:path';
+const recordNo = (prefix, id) => prefix + '-' + String(id).padStart(6, '0');
 
 export async function verifyReturnLotBrowser({ config, actor, user, origin, directory, returnLotWrites, returnLotRecoveries, dropNext, dropped }) {
   const { page, context } = actor, path = '/fulfillment/cases';
@@ -23,16 +24,17 @@ export async function verifyReturnLotBrowser({ config, actor, user, origin, dire
   }
   async function open(current) {
     await current.goto(origin.origin + path);
-    await current.getByRole('link', { name: 'Unit Toko', exact: true }).waitFor();
-    await current.getByRole('button', { name: `Buka keluhan ${config.caseId}`, exact: true }).click();
+    // The staff frame's sidebar carries the brand now; the page's own heading proves it loaded.
+    await current.getByRole('heading', { name: 'Keluhan barang', exact: true, level: 1 }).waitFor();
+    await current.getByRole('button', { name: `Buka keluhan ${recordNo('KLH', config.caseId)}`, exact: true }).click();
     const detail = current.getByRole('region', { name: 'Rincian keluhan', exact: true });
-    await detail.getByRole('heading', { name: `Keluhan ${config.caseId}`, exact: true }).waitFor();
+    await detail.getByRole('heading', { name: `Keluhan ${recordNo('KLH', config.caseId)}`, exact: true }).waitFor();
     const returns = detail.getByRole('region', { name: 'Penerimaan retur', exact: true });
     await returns.getByRole('button', { name: 'Perbarui riwayat retur', exact: true }).click();
-    const inspected = returns.getByRole('region', { name: `Pemeriksaan retur ${config.returnId}`, exact: true });
-    await inspected.getByRole('button', { name: `Lihat hasil pemeriksaan ${config.returnId}`, exact: true }).click();
+    const inspected = returns.getByRole('region', { name: `Pemeriksaan retur ${recordNo('RTR', config.returnId)}`, exact: true });
+    await inspected.getByRole('button', { name: `Lihat hasil pemeriksaan ${recordNo('RTR', config.returnId)}`, exact: true }).click();
     await inspected.getByRole('region', { name: 'Hasil pemeriksaan barang', exact: true }).waitFor();
-    return { detail, inspected, panel: inspected.getByRole('region', { name: `Pencocokan lot penerimaan ${config.returnId}`, exact: true }) };
+    return { detail, inspected, panel: inspected.getByRole('region', { name: `Pencocokan lot penerimaan ${recordNo('RTR', config.returnId)}`, exact: true }) };
   }
   async function screen(current, suffix) {
     assert.equal(await current.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
@@ -116,14 +118,14 @@ export async function verifyReturnLotBrowser({ config, actor, user, origin, dire
   const recovered = await query(page, config.actorId, '/operations/query', { purpose: 'operation-recovery', key: committed.key });
   assert.equal(recovered.status, 200); assert.equal(recovered.body.status, 'committed'); assert.deepEqual(recovered.body.result, committed.response);
   const reader = await user(config.readerToken); const read = await open(reader.page);
-  assert.equal(await read.inspected.getByRole('region', { name: `Pencocokan lot penerimaan ${config.returnId}`, exact: true }).count(), 0);
+  assert.equal(await read.inspected.getByRole('region', { name: `Pencocokan lot penerimaan ${recordNo('RTR', config.returnId)}`, exact: true }).count(), 0);
   assert.ok(!(await read.detail.innerText()).includes(observedLotLabel));
   const deniedRead = await query(reader.page, config.readerId, '/query', { purpose }, { 'If-Match': '"2"' }); assert.equal(deniedRead.status, 403);
   const deniedWrite = await query(reader.page, config.readerId, '', committed.body, { 'If-Match': '"0"', 'Idempotency-Key': `cl.${config.caseId}.${config.returnId}.00000000-0000-4000-8000-000000000001` });
   assert.equal(deniedWrite.status, 403);
   const foreign = await user(config.foreignToken); await foreign.page.goto(origin.origin + path);
   await foreign.page.getByRole('region', { name: 'Daftar keluhan', exact: true }).getByText('Belum ada pengajuan pada halaman ini.', { exact: true }).waitFor();
-  assert.equal(await foreign.page.getByRole('button', { name: `Buka keluhan ${config.caseId}`, exact: true }).count(), 0);
+  assert.equal(await foreign.page.getByRole('button', { name: `Buka keluhan ${recordNo('KLH', config.caseId)}`, exact: true }).count(), 0);
   const foreignRead = await query(foreign.page, config.foreignId, '/query', { purpose }, { 'If-Match': '"2"' }); assert.equal(foreignRead.status, 403);
   const foreignWrite = await query(foreign.page, config.foreignId, '', committed.body, { 'If-Match': '"0"', 'Idempotency-Key': `cl.${config.caseId}.${config.returnId}.00000000-0000-4000-8000-000000000002` });
   assert.equal(foreignWrite.status, 403);

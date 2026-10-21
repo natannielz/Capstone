@@ -1,12 +1,13 @@
 // Real Next/HTTPS/API/Mongo verification of a recorded private refund and actual bank debit.
 import assert from 'node:assert/strict';
 import { resolve } from 'node:path';
+const recordNo = (prefix, id) => prefix + '-' + String(id).padStart(6, '0');
 
 export async function verifyRefundSettlementBrowser({ config, verifier, user, origin, directory, settlementWrites, settlementRecoveries, originalReads, dropNext, dropped }) {
   const { page, context } = verifier;
   assert.notEqual(config.verifierId, config.recorderId); assert.notEqual(config.verifierId, config.importerId);
   async function open() {
-    await page.getByRole('button', { name: 'Buka keluhan ' + config.caseId, exact: true }).click();
+    await page.getByRole('button', { name: 'Buka keluhan ' + recordNo('KLH', config.caseId), exact: true }).click();
     const panel = page.getByRole('region', { name: 'Verifikasi debit bank refund', exact: true }); await panel.waitFor();
     assert.equal(await page.getByRole('region', { name: 'Pencatatan bukti refund', exact: true }).count(), 0);
     await panel.getByLabel('ID pencatatan refund', { exact: true }).fill(config.payoutId);
@@ -68,7 +69,7 @@ export async function verifyRefundSettlementBrowser({ config, verifier, user, or
     assert.equal(lookup.actor, config.verifierId); assert.equal(lookup.path, '/api/v1/billing/refund-payouts/' + config.payoutId + '/settlement/operations/query');
     assert.deepEqual(lookup.body, { purpose: 'operation-recovery', key: write.key });
   }
-  await page.getByRole('button', { name: 'Buka keluhan ' + config.caseId, exact: true }).click();
+  await page.getByRole('button', { name: 'Buka keluhan ' + recordNo('KLH', config.caseId), exact: true }).click();
   panel = page.getByRole('region', { name: 'Verifikasi debit bank refund', exact: true }); await panel.waitFor();
   await panel.getByLabel('ID pencatatan refund', { exact: true }).fill(config.payoutId); await panel.getByRole('button', { name: 'Buka refund untuk pemeriksaan bank', exact: true }).click();
   const saved = panel.getByRole('region', { name: 'Hasil verifikasi debit refund', exact: true }); await saved.waitFor({ timeout: 60000 });
@@ -85,7 +86,7 @@ export async function verifyRefundSettlementBrowser({ config, verifier, user, or
   await page.setViewportSize({ width: 1440, height: 1000 }); assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
   await page.screenshot({ path: resolve(directory, 'refund-settlement-saved-desktop.png'), fullPage: true });
   const recorder = await user(config.recorderToken); await recorder.page.goto(origin.origin + '/fulfillment/cases');
-  await recorder.page.getByRole('button', { name: 'Buka keluhan ' + config.caseId, exact: true }).click();
+  await recorder.page.getByRole('button', { name: 'Buka keluhan ' + recordNo('KLH', config.caseId), exact: true }).click();
   assert.equal(await recorder.page.getByRole('region', { name: 'Verifikasi debit bank refund', exact: true }).count(), 0);
   console.log('REAL_REFUND_SETTLEMENT_BROWSER_PASS ' + JSON.stringify({ writes: settlementWrites.length, amount: config.amount,
     independentVerifier: config.verifierId, recorder: config.recorderId, importer: config.importerId, actualPrivateOriginal: true, actualBankDebit: true,

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {resolve} from 'node:path';
+const recordNo = (prefix, id) => prefix + '-' + String(id).padStart(6, '0');
 // Order numbers as the screens show them (src/lib/document-numbers.ts).
 const orderNumber = id => 'PSN-' + String(id).padStart(6, '0');
 
@@ -43,8 +44,8 @@ export async function verifyOrderTimelineBrowser({config, buyer, user, origin, d
   await select(current.page, config.orderA);
   const panel = timeline(current.page);
   await panel.getByText('Invoice gabungan untuk 2 pesanan. Catatan pembayarannya berlaku pada invoice ini.', {exact: true}).waitFor();
-  assert.equal(await panel.getByRole('button', {name: 'Periksa kasus ' + config.refundCaseId, exact: true}).count(), 0);
-  await panel.getByRole('button', {name: 'Periksa kasus ' + config.creditCaseId, exact: true}).click();
+  assert.equal(await panel.getByRole('button', {name: 'Periksa kasus ' + recordNo('KLH', config.refundCaseId), exact: true}).count(), 0);
+  await panel.getByRole('button', {name: 'Periksa kasus ' + recordNo('KLH', config.creditCaseId), exact: true}).click();
   await panel.getByText(/Penyesuaian kredit disetujui/).waitFor();
   await panel.getByRole('button', {name: 'Periksa pembayaran ' + config.declarationId, exact: true}).click();
   await panel.getByText(/Penerimaan bank diverifikasi/).waitFor();
@@ -73,8 +74,8 @@ export async function verifyOrderTimelineBrowser({config, buyer, user, origin, d
   current = await restartUser(config.financeToken, state); observe(current.page);
   await current.page.goto(origin.origin + '/ordering/orders'); await select(current.page, config.orderB);
   const second = timeline(current.page);
-  assert.equal(await second.getByRole('button', {name: 'Periksa kasus ' + config.creditCaseId, exact: true}).count(), 0);
-  await second.getByRole('button', {name: 'Periksa kasus ' + config.refundCaseId, exact: true}).click();
+  assert.equal(await second.getByRole('button', {name: 'Periksa kasus ' + recordNo('KLH', config.creditCaseId), exact: true}).count(), 0);
+  await second.getByRole('button', {name: 'Periksa kasus ' + recordNo('KLH', config.refundCaseId), exact: true}).click();
   await second.getByText(/Refund disetujui/).waitFor();
   await second.getByText(/Pembayaran refund dicatat/).waitFor();
   await second.getByText(/Penyelesaian refund diverifikasi bank/).waitFor();

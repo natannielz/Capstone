@@ -10,6 +10,7 @@ import { ReturnEntitlementPanel } from './ReturnEntitlementPanel';
 import { createResolutionGateway, prepareResolution, resolutionActions, type ResolutionAction, type ResolutionView } from './resolution-client';
 import styles from '../administration/access.module.css';
 import { formatDateTime } from '@/lib/format';
+import { recordNumber } from '@/lib/document-numbers';
 
 export function CaseResolutionPanel({ actorId, owner, inspection, allowedActions, canReadInvoice = false, fresh, locked, current, journal, onSettled, onDenied, onBusyChange }: {
   actorId: string; owner: AfterSalesCase; inspection: InspectionView; allowedActions: readonly ResolutionAction[]; canReadInvoice?: boolean; fresh: boolean; locked: boolean; current: () => boolean; journal: OperationJournal;
@@ -27,7 +28,7 @@ export function CaseResolutionPanel({ actorId, owner, inspection, allowedActions
     try { await task(); } catch (failure) { if (active()) { setConfirm(null); setPreview(false); setError(failure); if (!(failure instanceof AccessFailure && failure.code === 'step_up_required')) onDenied(failure); } }
     finally { pending.current = false; onBusyChange(false); onSettled(); if (alive.current) setBusy(false); }
   }
-  return <section aria-label={'Penyelesaian retur ' + inspection.receipt.id}><h4>Ajukan penyelesaian barang</h4>
+  return <section aria-label={'Penyelesaian retur ' + recordNumber('return', inspection.receipt.id)}><h4>Ajukan penyelesaian barang</h4>
     <p>Hasil pemeriksaan menjadi dasar pengajuan. Penggantian, kredit tagihan atau pengembalian dana masih memerlukan persetujuan dan penanganan berikutnya.</p>
     {allowedActions.length > 0 && !fresh && <p role="status">Verifikasi dua langkah terbaru diperlukan. <Link href="/identity/account?operation=case.manage&returnPath=%2Ffulfillment%2Fcases">Verifikasi dua langkah untuk pengajuan penyelesaian</Link></p>}
     {error !== null && <p role="alert">{error instanceof AccessFailure && error.code === 'invalid_return_resolution' ? 'Pilih penyelesaian yang tersedia dan isi catatan pengajuan.' : accessMessage(error)}</p>}{busy && <p role="status">Memeriksa pengajuan penyelesaian…</p>}
@@ -40,11 +41,11 @@ export function CaseResolutionPanel({ actorId, owner, inspection, allowedActions
       <button className={styles.secondary} disabled={!canAct} onClick={() => void work(async () => { const value = await gateway.read(actorId, owner, inspection, action); if (active()) { setView(value); setPreview(true); setConfirm(null); setConsent(false); } })}>Periksa pilihan penyelesaian</button></>}
     {preview && view && view.revision === '0' && !confirm && <form onSubmit={event => { event.preventDefault(); if (!canAct) return;
       try { setConfirm(prepareResolution(actorId, owner, inspection, view, action, publicNote.trim(), reason.trim())); setConsent(false); setError(null); } catch (failure) { setError(failure); }
-    }}><p>{resolutionActions[action]} untuk seluruh barang pada penerimaan {inspection.receipt.id} yang telah diperiksa. Persetujuan, jumlah finansial atau pengiriman pengganti ditentukan pada tahap berikutnya.</p>
+    }}><p>{resolutionActions[action]} untuk seluruh barang pada penerimaan {recordNumber('return', inspection.receipt.id)} yang telah diperiksa. Persetujuan, jumlah finansial atau pengiriman pengganti ditentukan pada tahap berikutnya.</p>
       <label>Pengajuan penyelesaian untuk pelanggan<textarea required maxLength={1000} disabled={disabled} value={publicNote} onChange={event => setPublicNote(event.target.value)} /></label>
       <label>Catatan pengajuan penyelesaian internal<textarea required maxLength={1000} disabled={disabled} value={reason} onChange={event => setReason(event.target.value)} /></label>
       <button className={styles.primary} disabled={!canAct}>Tinjau pengajuan penyelesaian</button></form>}
-    {confirm && <section aria-label="Konfirmasi pengajuan penyelesaian"><h4 ref={heading} tabIndex={-1}>Ajukan penyelesaian untuk persetujuan</h4><p>Keluhan {owner.id} · Penerimaan {inspection.receipt.id} · Invoice {owner.source.number}</p>
+    {confirm && <section aria-label="Konfirmasi pengajuan penyelesaian"><h4 ref={heading} tabIndex={-1}>Ajukan penyelesaian untuk persetujuan</h4><p>Keluhan {recordNumber('case', owner.id)} · Penerimaan {recordNumber('return', inspection.receipt.id)} · Invoice {owner.source.number}</p>
       <p>{resolutionActions[confirm.body.action]}</p><p>Untuk pelanggan: {confirm.body.publicNote}</p><p>Catatan internal: {confirm.body.reason}</p>
       <ul>{view!.inspection.lines.map(line => { const product = owner.source.lines.find(item => item.receiptId === line.receiptId && item.skuId === line.skuId)!; return <li key={line.receiptId + ':' + line.skuId}>{product.productName}: {line.inspectedBaseUnits} {product.baseUnitCode} diperiksa. {product.packageLabel}: {product.baseUnitsPerPackage} {product.baseUnitCode} per kemasan.</li>; })}</ul>
       <label className={styles.checkbox}><input type="checkbox" checked={consent} disabled={disabled} onChange={event => setConsent(event.target.checked)} /><span>Saya telah memeriksa hasil pemeriksaan barang dan mengajukan penyelesaian ini untuk persetujuan berikutnya.</span></label>

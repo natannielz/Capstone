@@ -1,13 +1,14 @@
 // Browser proof uses the existing native Next/HTTPS/Kestrel/Mongo host and actual private evidence.
 import assert from 'node:assert/strict';
 import { resolve } from 'node:path';
+const recordNo = (prefix, id) => prefix + '-' + String(id).padStart(6, '0');
 
 export async function verifyRefundPayoutBrowser({ config, recorder, user, origin, directory, draftWrites, payoutWrites, payoutRecoveries,
   dropNext, dropped, validateEvidence }) {
   const { page, context } = recorder;
   assert.notEqual(config.recorderId, config.approverId);
   async function open() {
-    await page.getByRole('button', { name: 'Buka keluhan ' + config.caseId, exact: true }).click();
+    await page.getByRole('button', { name: 'Buka keluhan ' + recordNo('KLH', config.caseId), exact: true }).click();
     const panel = page.getByRole('region', { name: 'Pencatatan bukti refund', exact: true }); await panel.waitFor();
     assert.equal(await page.getByRole('region', { name: 'Persetujuan finansial retur independen', exact: true }).count(), 0);
     await panel.getByRole('button', { name: 'Muat retur untuk pencatatan refund', exact: true }).click();
@@ -76,7 +77,7 @@ export async function verifyRefundPayoutBrowser({ config, recorder, user, origin
   await page.setViewportSize({ width: 1440, height: 1000 }); assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
   await page.screenshot({ path: resolve(directory, 'refund-payout-saved-desktop.png'), fullPage: true });
   const approver = await user(config.approverToken); await approver.page.goto(origin.origin + '/fulfillment/cases');
-  await approver.page.getByRole('button', { name: 'Buka keluhan ' + config.caseId, exact: true }).click(); assert.equal(await approver.page.getByRole('region', { name: 'Pencatatan bukti refund', exact: true }).count(), 0);
+  await approver.page.getByRole('button', { name: 'Buka keluhan ' + recordNo('KLH', config.caseId), exact: true }).click(); assert.equal(await approver.page.getByRole('region', { name: 'Pencatatan bukti refund', exact: true }).count(), 0);
   console.log('REAL_REFUND_PAYOUT_BROWSER_PASS ' + JSON.stringify({ draftWrites: draftWrites.length, payoutWrites: payoutWrites.length, exactReservedAmount: config.reservedRefund,
     actualRecorder: config.recorderId, independentApproval: config.approverId, privateOriginalViewed: true, actualScanDecoded: true, recordedUnverified: true,
     actualOwnerRecovery: true, actorChangeDenied: true, noResend: true, noTransfer: true, noSettlement: true, explicitConsent: true, frozenReview: true, offlineUnsent: true, mobile: true, desktop: true }));

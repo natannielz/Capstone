@@ -1,6 +1,7 @@
 // Genuine approved purchase order, scoped sessions, Next/Kestrel and isolated Mongo.
 import assert from 'node:assert/strict';
 import {resolve} from 'node:path';
+const recordNo = (prefix, id) => prefix + '-' + String(id).padStart(6, '0');
 
 export async function verifyPurchaseArrivalsBrowser({config, maker, user, restartUser, origin, directory}) {
   const path = '/procurement/purchase-orders', api = '/api/v1/procurement/arrivals';
@@ -67,7 +68,7 @@ export async function verifyPurchaseArrivalsBrowser({config, maker, user, restar
     current.on('pageerror', error => errors.push(error.message)); await current.goto(origin.origin + path);
     assert.deepEqual(await pending(current, actorId), saved);
     await panel(current).getByRole('button', {name: 'Pulihkan hasil jadwal', exact: true}).click();
-    await panel(current).getByText('Hasil asli sudah ditemukan untuk pesanan ' + config.orderId + '.', {exact: true}).waitFor();
+    await panel(current).getByText('Hasil asli sudah ditemukan untuk pesanan ' + recordNo('SP', config.orderId) + '.', {exact: true}).waitFor();
     assert.equal(await pending(current, actorId), null);
     if (!restarted) {
       await panel(actor.page).getByRole('button', {name: 'Pulihkan hasil jadwal', exact: true}).waitFor({state: 'hidden'});
@@ -111,7 +112,11 @@ export async function verifyPurchaseArrivalsBrowser({config, maker, user, restar
     const approved = await recoverInNewPage(checker, config.checkerId, 'approve', 1); section = await choose(approved);
     await section.getByRole('heading', {name: 'Disetujui', exact: true}).waitFor();
     assert.ok((await section.innerText()).includes(reference));
-    const expectedText = new Intl.DateTimeFormat('id-ID', {dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Jakarta'}).format(new Date(config.expectedArrival)) + ' WIB';
+    // The app's one formatter: "24 Okt 2026 14.50 WIB" (EYD V date, dotted time, zone label; no comma).
+    const jakarta = options => Object.fromEntries(new Intl.DateTimeFormat('id-ID', {timeZone: 'Asia/Jakarta', ...options})
+      .formatToParts(new Date(config.expectedArrival)).map(part => [part.type, part.value]));
+    const day = jakarta({day: 'numeric', month: 'short', year: 'numeric'}), time = jakarta({hour: '2-digit', minute: '2-digit', hourCycle: 'h23'});
+    const expectedText = `${day.day} ${day.month.replace(/\.$/, '')} ${day.year} ${time.hour}.${time.minute} WIB`;
     await section.getByText('Waktu yang disetujui: ' + expectedText, {exact: true}).waitFor();
     assert.equal(await approved.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
     await approved.screenshot({path: resolve(directory, 'purchase-arrival-approved-mobile.png'), fullPage: true});
