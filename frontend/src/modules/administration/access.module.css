@@ -3,6 +3,9 @@
    Element defaults skip anything inside a shared primitive ([data-kit], components/workspace-kit) and keep their old specificity. */
 .page { composes: palette from "../workspace-palette.module.css"; min-height: 100vh; margin: 0 auto; padding: var(--space-8) var(--gutter) var(--space-12); max-width: calc(var(--content-default) + 2 * var(--gutter)); color: var(--foreground); background: var(--background); font-family: var(--font-body), "Segoe UI", sans-serif; font-size: 15px; line-height: 1.6; }
 .page, .page * { box-sizing: border-box; }
+/* Flow spacing (U-014, U-021): page blocks never touch; explicit margins later in this file and in page modules still apply (vertical margins collapse to the larger). */
+.page > :where(* + *) { margin-top: var(--space-4); }
+.page > :where(h1) + :where(p) { margin-top: 0; }
 .page h1:where(:not([data-kit] *)), .page h2:where(:not([data-kit] *)), .page h3:where(:not([data-kit] *)) { font-family: var(--font-body), "Segoe UI", sans-serif; color: var(--foreground); overflow-wrap: anywhere; }
 .page h1:where(:not([data-kit] *)) { margin: 0 0 var(--space-2); font-size: 28px; line-height: 34px; font-weight: 700; letter-spacing: -.02em; }
 .page h2:where(:not([data-kit] *)) { font-size: 20px; line-height: 28px; font-weight: 600; letter-spacing: -.01em; }
