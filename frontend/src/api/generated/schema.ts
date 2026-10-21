@@ -13249,11 +13249,11 @@ export interface components {
             definition: components["schemas"]["CatalogDefinitionDto"];
             expected: components["schemas"]["CatalogPriceExpectationDto"];
             input: components["schemas"]["CatalogPriceInputDto"];
+            ownProposal: boolean;
             price: null | components["schemas"]["CatalogPriceDto"];
             proposalId: components["schemas"]["LongId"];
             /** Format: date-time */
             proposedAt: string;
-            proposedBy: components["schemas"]["LongId"];
             reason: string;
             revision: string;
             sku: components["schemas"]["CatalogPriceSkuDto"];
@@ -13356,10 +13356,10 @@ export interface components {
         };
         CatalogPublicShowcasePendingDto: {
             makePublic: boolean;
+            ownProposal: boolean;
             proposalId: components["schemas"]["LongId"];
             /** Format: date-time */
             proposedAt: string;
-            proposedBy: components["schemas"]["LongId"];
             reason: string;
         };
         CatalogPublicShowcaseProposeDto: {

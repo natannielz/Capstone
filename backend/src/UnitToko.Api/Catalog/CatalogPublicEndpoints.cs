@@ -21,7 +21,8 @@ public sealed record CatalogPublicShowcaseQueryDto([property: System.Text.Json.S
 public sealed record CatalogPublicShowcaseProposeDto(bool MakePublic, string Reason);
 public sealed record CatalogPublicShowcaseDecideDto(string Reason);
 public sealed record CatalogPublicShowcaseOwnerDto(string Kind, LongId OrganizationId, LongId? ShopId, LongId? WarehouseId, LongId? ChannelId);
-public sealed record CatalogPublicShowcasePendingDto(LongId ProposalId, bool MakePublic, LongId ProposedBy, DateTimeOffset ProposedAt, string Reason);
+/// <summary>OwnProposal tells the viewer whether they proposed it; who proposed stays in the audited history.</summary>
+public sealed record CatalogPublicShowcasePendingDto(LongId ProposalId, bool MakePublic, bool OwnProposal, DateTimeOffset ProposedAt, string Reason);
 public sealed record CatalogPublicShowcaseDto(LongId AssortmentId, CatalogPublicShowcaseOwnerDto Owner, string? OwnerName, string ListedProducts, bool IsPublic, string Revision,
     CatalogPublicShowcasePendingDto? Pending);
 public sealed record CatalogPublicShowcaseListDto(CatalogPublicShowcaseDto[] Items);
@@ -59,12 +60,12 @@ public static class CatalogPublicEndpoints
         staff.MapPost("/query", async (CatalogPublicShowcaseQueryDto request, HttpContext http, [FromServices] CatalogPublicShowcaseService service, CancellationToken ct) =>
         {
             if (request.Purpose != "catalog-public-showcase") throw Invalid();
-            var items = await service.ListAsync(Actor(http), ct);
+            var actor = Actor(http); var items = await service.ListAsync(actor, ct);
             return TypedResults.Ok(new CatalogPublicShowcaseListDto([.. items.Select(item => new CatalogPublicShowcaseDto(new(item.AssortmentId),
                 new(item.Owner.Kind == UnitToko.Modules.Organizations.GrantScopeKind.FulfillmentShop ? "fulfillmentShop" : "fulfillmentWarehouse",
                     new(item.Owner.OrganizationId ?? 0), Id(item.Owner.ShopId), Id(item.Owner.WarehouseId), Id(item.Owner.ChannelId)), item.OwnerName,
                 item.ListedProducts.ToString(CultureInfo.InvariantCulture), item.IsPublic, item.Revision.ToString(CultureInfo.InvariantCulture),
-                item.Pending is null ? null : new(new(item.Pending.ProposalId), item.Pending.MakePublic, new(item.Pending.ProposedBy), item.Pending.ProposedAt, item.Pending.Reason)))]));
+                item.Pending is null ? null : new(new(item.Pending.ProposalId), item.Pending.MakePublic, item.Pending.ProposedBy == actor.UserId, item.Pending.ProposedAt, item.Pending.Reason)))]));
         }).WithName("CatalogPublicShowcaseList");
         staff.MapPost("/{assortmentId}/proposals", async (string assortmentId, CatalogPublicShowcaseProposeDto request, HttpContext http,
             [FromServices] CatalogPublicShowcaseService service, [FromHeader(Name = "Idempotency-Key")] string idempotencyKey,

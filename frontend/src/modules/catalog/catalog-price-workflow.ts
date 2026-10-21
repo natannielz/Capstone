@@ -64,7 +64,7 @@ export function parsePriceProposal(value: unknown) {
   if (status === 'proposed' ? decision !== null || price !== null : decision === null || decision.action !== status || Date.parse(decision.decidedAt) < Date.parse(proposedAt)) return priceInvalid();
   if (status === 'approve' ? price === null || price.skuId !== skuId || price.version !== String(BigInt(base.expected.priceVersion) + BigInt(1)) || price.unitPrice !== input.unitPrice || price.currency !== input.currency || Date.parse(price.effectiveAt) !== Date.parse(decision!.decidedAt) : price !== null) return priceInvalid();
   return { proposalId, skuId, revision, status: status as 'proposed' | 'approve' | 'reject' | 'withdraw', sku: base.sku, definition: base.definition, expected: base.expected,
-    basePrice: base.currentPrice, input, proposedAt, proposedBy: priceId(v.proposedBy), reason: text(v.reason, 1000), decision, price };
+    basePrice: base.currentPrice, input, proposedAt, ownProposal: typeof v.ownProposal === 'boolean' ? v.ownProposal : priceInvalid(), reason: text(v.reason, 1000), decision, price };
 }
 export type PriceProposal = ReturnType<typeof parsePriceProposal>;
 export function priceOutcome(value: unknown, action: PriceAction, skuId: string, proposalId?: string) {

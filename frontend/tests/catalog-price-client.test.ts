@@ -10,7 +10,7 @@ const preview = { sku: priceSku, definition, expected: { skuVersion: sku.version
 const proposalId = '9007199254740994';
 const proposed = { proposalId, skuId: sku.id, revision: '1', status: 'proposed', decisionId: null, priceId: null, priceVersion: null };
 const proposal = { ...proposed, sku: priceSku, definition, expected: preview.expected, basePrice: null,
-  input: { currency: 'IDR', unitPrice: '999999999999999.99' }, proposedAt: definition.effectiveAt, reason: 'Harga kemasan', decision: null, price: null, proposedBy: '41' };
+  input: { currency: 'IDR', unitPrice: '999999999999999.99' }, proposedAt: definition.effectiveAt, reason: 'Harga kemasan', decision: null, price: null, ownProposal: false };
 const approved = { ...proposed, status: 'approve', decisionId: '901', priceId: '902', priceVersion: '1' };
 const command = () => preparePriceProposal(actorId, parsePricePreview(preview), 'IDR', '999999999999999.99', 'Harga kemasan');
 function gateway(handler: (r: Request) => Promise<Response>) {

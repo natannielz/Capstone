@@ -8,14 +8,14 @@ import { workspaceNavigation } from '../src/modules/identity/workspace-navigatio
 
 const row = parsePublicShowcase({ assortmentId: '7', owner: { kind: 'fulfillmentShop', organizationId: '3', shopId: '5', warehouseId: null, channelId: null },
   listedProducts: '24', isPublic: false, revision: '2', pending: null });
-const waiting = { ...row, pending: { proposalId: '901', makePublic: true, proposedBy: '41', proposedAt: '2026-10-21T02:00:00+00:00', reason: 'Barang umum' } };
+const waiting = { ...row, pending: { proposalId: '901', makePublic: true, ownProposal: false, proposedAt: '2026-10-21T02:00:00+00:00', reason: 'Barang umum' } };
 
 test('makers propose, a different checker decides, and nobody approves their own proposal', () => {
-  assert.equal(showcaseChoice(row, '42', ['catalog.public.propose']), 'propose');
-  assert.equal(showcaseChoice(row, '42', ['catalog.public.approve']), 'none');
-  assert.equal(showcaseChoice(waiting, '42', ['catalog.public.approve']), 'decide');
-  assert.equal(showcaseChoice(waiting, '41', ['catalog.public.propose', 'catalog.public.approve']), 'own-proposal');
-  assert.equal(showcaseChoice(waiting, '42', ['catalog.public.propose']), 'waiting');
+  assert.equal(showcaseChoice(row, ['catalog.public.propose']), 'propose');
+  assert.equal(showcaseChoice(row, ['catalog.public.approve']), 'none');
+  assert.equal(showcaseChoice(waiting, ['catalog.public.approve']), 'decide');
+  assert.equal(showcaseChoice({ ...waiting, pending: { ...waiting.pending, ownProposal: true } }, ['catalog.public.propose', 'catalog.public.approve']), 'own-proposal');
+  assert.equal(showcaseChoice(waiting, ['catalog.public.propose']), 'waiting');
 });
 
 test('each refusal says what to do next', () => {

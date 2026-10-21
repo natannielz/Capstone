@@ -99902,7 +99902,7 @@
           "reason",
           "decision",
           "price",
-          "proposedBy"
+          "ownProposal"
         ],
         "type": "object",
         "properties": {
@@ -99967,8 +99967,8 @@
               }
             ]
           },
-          "proposedBy": {
-            "$ref": "#/components/schemas/LongId"
+          "ownProposal": {
+            "type": "boolean"
           }
         },
         "additionalProperties": false
@@ -100390,7 +100390,7 @@
         "required": [
           "proposalId",
           "makePublic",
-          "proposedBy",
+          "ownProposal",
           "proposedAt",
           "reason"
         ],
@@ -100402,8 +100402,8 @@
           "makePublic": {
             "type": "boolean"
           },
-          "proposedBy": {
-            "$ref": "#/components/schemas/LongId"
+          "ownProposal": {
+            "type": "boolean"
           },
           "proposedAt": {
             "type": "string",
