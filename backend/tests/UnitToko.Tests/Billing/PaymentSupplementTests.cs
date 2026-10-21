@@ -23,7 +23,7 @@ public sealed class PaymentSupplementTests(MongoFixture fixture)
     public async Task Real_image_submission_duplicate_create_restart_recovery_and_policy_expiry_preserve_one_supplement_and_primary_bank_identity()
     {
         await using var data = await PaymentEvidenceReadTests.ReadData.CreateAsync(fixture); await PaymentOcrProcessorTests.Submit(data);
-        await PaymentSupplementMigrationTests.ApplyAsync(data.Database, data.Catalog.Clock);
+        await new CollectionMigrations(data.Database, data.Catalog.Clock).ApplyAsync();
         var primary = await Primary(data); await Policy(data, maximum: 2); var source = await Financial(data.Database);
         var service = Service(data); var command = Meta("same-key");
         async Task<(BsonDocument? Result, PersistenceConflictException? Error)> Attempt() {
@@ -66,7 +66,7 @@ public sealed class PaymentSupplementTests(MongoFixture fixture)
     public async Task No_implicit_D06_approval_unsubmitted_parent_foreign_requester_stale_revision_or_wrong_image_can_create_an_owner()
     {
         await using var data = await PaymentEvidenceReadTests.ReadData.CreateAsync(fixture);
-        await PaymentSupplementMigrationTests.ApplyAsync(data.Database, data.Catalog.Clock);
+        await new CollectionMigrations(data.Database, data.Catalog.Clock).ApplyAsync();
         var service = Service(data);
         await Assert.ThrowsAnyAsync<Exception>(() => service.CreateAsync(data.Actor, new(data.DeclarationId, 1, 1, data.Reference), Meta("not-submitted")));
         await PaymentOcrProcessorTests.Submit(data); var primary = await Primary(data);
@@ -83,7 +83,7 @@ public sealed class PaymentSupplementTests(MongoFixture fixture)
     public async Task Staff_read_requires_live_scoped_grants_and_independent_people_while_requester_keeps_own_status_after_alias_discovery()
     {
         await using var data = await PaymentEvidenceReadTests.ReadData.CreateAsync(fixture); await PaymentOcrProcessorTests.Submit(data);
-        await PaymentSupplementMigrationTests.ApplyAsync(data.Database, data.Catalog.Clock); await Policy(data); var primary = await Primary(data);
+        await new CollectionMigrations(data.Database, data.Catalog.Clock).ApplyAsync(); await Policy(data); var primary = await Primary(data);
         var service = Service(data); var created = await service.CreateAsync(data.Actor, primary, Meta("review-source"));
         var reviewer = await data.Catalog.ActorAsync(94910, CatalogAuthoringTestData.Shop, Permissions.PaymentReviewRead, Permissions.InvoiceRead);
         var foreign = await data.Catalog.ActorAsync(94911, CatalogAuthoringTestData.OtherOwner, Permissions.PaymentReviewRead, Permissions.InvoiceRead);
@@ -112,7 +112,7 @@ public sealed class PaymentSupplementTests(MongoFixture fixture)
     public async Task Required_audit_failure_rolls_back_receipt_and_owner_and_concurrent_creates_obey_operator_maximum()
     {
         await using var data = await PaymentEvidenceReadTests.ReadData.CreateAsync(fixture); await PaymentOcrProcessorTests.Submit(data);
-        await PaymentSupplementMigrationTests.ApplyAsync(data.Database, data.Catalog.Clock); await Policy(data, maximum: 1);
+        await new CollectionMigrations(data.Database, data.Catalog.Clock).ApplyAsync(); await Policy(data, maximum: 1);
         var primary = await Primary(data); var source = await Financial(data.Database); var service = Service(data);
         var definition = await (await data.Database.ListCollectionsAsync(new ListCollectionsOptions { Filter = new BsonDocument("name", "auditEvents") })).SingleAsync();
         var validator = definition["options"]["validator"].AsBsonDocument;
