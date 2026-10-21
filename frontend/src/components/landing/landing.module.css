@@ -18,7 +18,6 @@
   font: 400 17px/1.6 var(--font-body), system-ui, sans-serif;
 }
 .page :where(h1, h2, h3, p, figure, ol, dl, dd) { margin: 0; }
-.page :where(a, button, input):focus-visible { outline: 3px solid var(--marker); outline-offset: 3px; }
 
 .skip { position: fixed; top: 12px; left: 12px; z-index: 50; padding: 12px 18px; border-radius: 8px; background: var(--paper); color: var(--ink); font-weight: 650; transform: translateY(-200%); }
 .skip:focus { transform: none; }
@@ -72,7 +71,6 @@
 /* The shipping label rides at the hero's lower edge, over the stage, and scrolls away into the story. */
 .labelSlot { grid-column: 2; grid-row: 1; align-self: end; justify-self: end; position: relative; z-index: 3; width: min(100%, 452px); padding-bottom: 44px; }
 .label { background: var(--paper); color: var(--ink); border-radius: 10px; box-shadow: 0 1px 0 rgb(14 52 56 / 0.08), 0 28px 50px -26px rgb(14 52 56 / 0.45); }
-.label :where(a, button, input):focus-visible { outline-color: var(--marker); }
 .labelTitle { padding: 12px 18px; border-radius: 10px 10px 0 0; background: var(--teal); color: #FFFFFF; font-size: 14px; font-weight: 700; letter-spacing: 0.01em; }
 .labelItems { list-style: none; margin: 0; padding: 4px 18px 0; }
 .labelItems li { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 0; border-bottom: 1px solid var(--rule); }
@@ -120,14 +118,13 @@
 .paper { position: relative; display: grid; gap: clamp(72px, 9vw, 128px); padding: clamp(80px, 10vw, 136px) var(--gutter); background: var(--label); color: var(--ink); }
 /* A tear-off perforation, as on a shipping label, where the story hands over to the paper sections. */
 .paper::before { content: ""; position: absolute; top: -7px; left: 0; right: 0; height: 14px; background: radial-gradient(circle at 11px 7px, var(--stage-deep) 5.5px, transparent 6px) 0 0 / 22px 14px repeat-x; }
-.paper :where(a, button, input):focus-visible { outline-color: var(--marker); }
 .intro h2, .access h2 { max-width: 18ch; font-size: clamp(30px, 3.4vw, 46px); font-weight: 740; line-height: 1.05; letter-spacing: -0.032em; text-wrap: balance; }
 .intro p { max-width: 46ch; margin-top: 18px; color: var(--ink-muted); }
 .inlineLink { display: inline-flex; align-items: center; min-height: 44px; margin-top: 14px; color: var(--ink); font-weight: 650; text-decoration: underline; text-decoration-thickness: 1.5px; text-underline-offset: 6px; }
 .inlineLink:hover { color: var(--marker); }
 .catalog, .access, .film, .benefits { width: 100%; max-width: 1240px; margin: 0 auto; }
 .benefits h2 { max-width: 20ch; font-size: clamp(30px, 3.4vw, 46px); font-weight: 740; line-height: 1.05; letter-spacing: -0.032em; text-wrap: balance; }
-.benefits ul { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; margin: 36px 0 0; padding: 0; list-style: none; border-top: 2px solid var(--ink); }
+.benefits ul { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; margin: 36px 0 0; padding: 0; list-style: none; border-top: 1px solid var(--ink); }
 .benefits li { padding: 26px clamp(16px, 2.4vw, 32px) 28px 0; border-bottom: 1px solid var(--rule); }
 .benefits li:not(:nth-child(3n + 1)) { padding-left: clamp(16px, 2.4vw, 32px); border-left: 1px solid var(--rule); }
 .benefits h3 { font-size: 19px; font-weight: 720; letter-spacing: -0.012em; }
@@ -144,14 +141,14 @@
 
 .packing { width: 100%; border-collapse: collapse; font-size: 16px; }
 .packing caption { caption-side: bottom; padding-top: 14px; color: var(--ink-muted); font-size: 14px; text-align: left; }
-.packing thead th { padding: 0 16px 12px 0; border-bottom: 2px solid var(--ink); color: var(--ink-muted); font-size: 13px; font-weight: 650; text-align: left; }
+.packing thead th { padding: 0 16px 12px 0; border-bottom: 1px solid var(--ink); color: var(--ink-muted); font-size: 13px; font-weight: 650; text-align: left; }
 .packing tbody th, .packing td { padding: 18px 16px 18px 0; border-bottom: 1px solid var(--rule); text-align: left; vertical-align: top; line-height: 1.45; }
 .packing tbody th { font-weight: 700; }
 .category { display: block; margin-bottom: 2px; color: var(--ink-muted); font-size: 13px; font-weight: 600; }
 .packing td:last-child { white-space: nowrap; font-weight: 600; }
 
 .access h2 { max-width: none; }
-.doors { display: grid; grid-template-columns: 1fr 1fr; margin-top: 36px; border-top: 2px solid var(--ink); }
+.doors { display: grid; grid-template-columns: 1fr 1fr; margin-top: 36px; border-top: 1px solid var(--ink); }
 .doors > div { padding: 28px clamp(0px, 3vw, 40px) 8px 0; }
 .doors > div + div { padding-left: clamp(20px, 3vw, 40px); border-left: 1.5px solid var(--rule); }
 .doors h3 { font-size: 22px; font-weight: 720; letter-spacing: -0.015em; }
