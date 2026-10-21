@@ -205,20 +205,20 @@ try {
     await maker.page.getByRole('button', { name: 'Muat ulang harga dan riwayat', exact: true }).click();
     await proposal(maker.page, '0.00'); await submit(maker.page);
     await checker.page.getByRole('button', { name: 'Muat ulang harga dan riwayat', exact: true }).click();
-    await decision(checker.page, 'Rp0,00', 'approve'); await submit(checker.page);
+    await decision(checker.page, 'Rp0', 'approve'); await submit(checker.page);
     await checker.page.getByText(/Versi 2 ·/).waitFor(); await checker.page.getByText(/Versi 1 ·/).waitFor();
   });
   await check('withdrawal and rejection recover without creating price versions', async () => {
     await maker.page.getByRole('button', { name: 'Muat ulang harga dan riwayat', exact: true }).click();
-    await proposal(maker.page, '13000.00'); await submit(maker.page); await decision(maker.page, 'Rp13.000,00', 'withdraw'); await submit(maker.page, true);
+    await proposal(maker.page, '13000.00'); await submit(maker.page); await decision(maker.page, 'Rp13\\.000', 'withdraw'); await submit(maker.page, true);
     await proposal(maker.page, '14000.00'); await submit(maker.page);
     await checker.page.getByRole('button', { name: 'Muat ulang harga dan riwayat', exact: true }).click();
-    await decision(checker.page, 'Rp14.000,00', 'reject'); await submit(checker.page, true);
+    await decision(checker.page, 'Rp14\\.000', 'reject'); await submit(checker.page, true);
   });
   await check('stale package review conflicts after a real authoring change', async () => {
     await proposal(maker.page, '15000.00'); await submit(maker.page);
     await checker.page.getByRole('button', { name: 'Muat ulang harga dan riwayat', exact: true }).click();
-    await decision(checker.page, 'Rp15.000,00', 'approve');
+    await decision(checker.page, 'Rp15\\.000', 'approve');
     const author = await user('author');
     const status = await author.page.evaluate(async ({ skuId, authorId }) => {
       const csrf = await (await fetch('/api/v1/identity/csrf')).json();
@@ -247,17 +247,17 @@ try {
     assert.equal(await buyer.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
     await buyer.page.screenshot({ path: resolve(directory, 'buyer-catalog-mobile.png'), fullPage: true });
     const writesBeforeQuote = writes.length; await open.click(); const detail = buyer.page.getByRole('dialog'); await detail.waitFor();
-    assert.match(await detail.innerText(), /12 piece per kemasan/); assert.match(await detail.innerText(), /Rp0,00/);
+    assert.match(await detail.innerText(), /12 piece per kemasan/); assert.match(await detail.innerText(), /Rp0(?![\d.,])/);
     assert.doesNotMatch(await detail.innerText(), /Tinjauan independen fixture|Harga kemasan terisolasi/);
     const branch = detail.getByLabel('Pesan untuk', { exact: true }); await branch.waitFor();
     assert.equal(await branch.inputValue(), '', 'The buyer must select a branch explicitly');
     await branch.selectOption('10:11:'); await detail.getByLabel('Jumlah kemasan', { exact: true }).fill('2');
     const subtotal = detail.locator('p').filter({ hasText: /^Subtotal/ }); await subtotal.waitFor();
-    assert.match(await subtotal.innerText(), /Rp0,00/); assert.match(await detail.innerText(), /Satu Dus dua belas berisi 12 piece/);
+    assert.match(await subtotal.innerText(), /Rp0(?![\d.,])/); assert.match(await detail.innerText(), /Satu Dus dua belas berisi 12 piece/);
     assert.match(await detail.innerText(), /Stok belum dipesan sampai pesanan diajukan/);
     assert.equal(await detail.evaluate(element => element.scrollWidth <= element.clientWidth), true);
     await buyer.page.screenshot({ path: resolve(directory, 'buyer-quote-mobile.png'), fullPage: true });
-    await detail.getByLabel('Jumlah kemasan', { exact: true }).fill('3'); assert.match(await subtotal.innerText(), /Rp0,00/, 'The subtotal follows the edited quantity');
+    await detail.getByLabel('Jumlah kemasan', { exact: true }).fill('3'); assert.match(await subtotal.innerText(), /Rp0(?![\d.,])/, 'The subtotal follows the edited quantity');
     assert.equal(writes.length, writesBeforeQuote, 'Choosing a quantity saves nothing');
     await buyer.page.keyboard.press('Escape'); await detail.waitFor({ state: 'hidden' });
     assert.equal(await open.evaluate(element => element === document.activeElement), true);
