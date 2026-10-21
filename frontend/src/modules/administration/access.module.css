@@ -47,7 +47,7 @@
 /* Flow spacing (U-014): blocks inside a section never touch — 16 px between blocks, 8 px from a heading to its line. */
 .accountSection > :where(* + *):where(:not([data-kit], :global(.ui-section))) { margin-top: var(--space-4); }
 .accountSection > :where(h2, h3) + :where(p) { margin-top: var(--space-2); }
-.accountSection > button { margin-top: var(--space-4); }
+.accountSection > button:where(:not([data-kit])) { margin-top: var(--space-4); }
 /* One level of boxing (U-008): a card inside a section card becomes an inset panel. */
 .accountSection :is(.accountSection, .state, .review, .preview, .queue, .detail) { border: 0; border-radius: var(--radius-control); background: var(--muted); padding: var(--space-4); margin-bottom: 0; }
 .detail :is(.review, .preview, .state) { border: 0; border-radius: var(--radius-control); background: var(--muted); padding: var(--space-4); }
