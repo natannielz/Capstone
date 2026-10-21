@@ -4,18 +4,19 @@
 .page { composes: palette from "../workspace-palette.module.css"; min-height: 100vh; margin: 0 auto; padding: var(--space-8) var(--gutter) var(--space-12); max-width: calc(var(--content-default) + 2 * var(--gutter)); color: var(--foreground); background: var(--background); font-family: var(--font-body), "Segoe UI", sans-serif; font-size: 15px; line-height: 1.6; }
 .page, .page * { box-sizing: border-box; }
 /* Flow spacing (U-014, U-021): page blocks never touch; explicit margins later in this file and in page modules still apply (vertical margins collapse to the larger). */
-.page > :where(* + *) { margin-top: var(--space-4); }
+.page > :where(* + *):where(:not([data-kit], :global(.ui-section))) { margin-top: var(--space-4); }
 .page > :where(h1) + :where(p) { margin-top: 0; }
-.page h1:where(:not([data-kit] *)), .page h2:where(:not([data-kit] *)), .page h3:where(:not([data-kit] *)) { font-family: var(--font-body), "Segoe UI", sans-serif; color: var(--foreground); overflow-wrap: anywhere; }
-.page h1:where(:not([data-kit] *)) { margin: 0 0 var(--space-2); font-size: 28px; line-height: 34px; font-weight: 700; letter-spacing: -.02em; }
-.page h2:where(:not([data-kit] *)) { font-size: 20px; line-height: 28px; font-weight: 600; letter-spacing: -.01em; }
-.page h3:where(:not([data-kit] *)) { margin-bottom: var(--space-2); font-size: 16px; line-height: 24px; font-weight: 600; }
-.page p:where(:not([data-kit] *)) { max-width: 72ch; overflow-wrap: anywhere; }
+.page h1:where(:not([data-kit], [data-kit] *)), .page h2:where(:not([data-kit], [data-kit] *)), .page h3:where(:not([data-kit], [data-kit] *)) { font-family: var(--font-body), "Segoe UI", sans-serif; color: var(--foreground); overflow-wrap: anywhere; }
+.page h1:where(:not([data-kit], [data-kit] *)) { margin: 0 0 var(--space-2); font-size: 28px; line-height: 34px; font-weight: 700; letter-spacing: -.02em; }
+.page h2:where(:not([data-kit], [data-kit] *)) { font-size: 20px; line-height: 28px; font-weight: 600; letter-spacing: -.01em; }
+.page h3:where(:not([data-kit], [data-kit] *)) { margin-bottom: var(--space-2); font-size: 16px; line-height: 24px; font-weight: 600; }
+.page p:where(:not([data-kit], [data-kit] *)) { max-width: 72ch; overflow-wrap: anywhere; }
 /* Alerts, notices and states are not paragraphs: they take the full width of their container (U-011). */
 .page p:is(.alert, .success, .empty, [role="alert"], [role="status"]) { max-width: none; }
 .page a { text-underline-offset: 4px; }
-.page button, .page input, .page select, .page textarea { font: inherit; }
-.page button:disabled { cursor: not-allowed; color: var(--muted-foreground); }
+/* Zero element specificity, so .primary/.secondary/.danger below (and page button classes) keep their 14/600 type. */
+.page :where(button, input, select, textarea):where(:not([data-kit], [data-kit] *)) { font: inherit; }
+.page button:disabled:where(:not([data-kit], [data-kit] *)) { cursor: not-allowed; color: var(--muted-foreground); }
 .header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: var(--space-6); margin-bottom: var(--space-6); }
 .header > div { max-width: 72ch; min-width: 0; }
 .header > a, .header > nav { flex-shrink: 0; }
@@ -44,7 +45,7 @@
 .state h2, .state p { margin: 0; }
 .accountSection { background: var(--card); padding: var(--space-6); border: 1px solid var(--border); border-radius: var(--radius-card); margin-bottom: var(--space-6); min-width: 0; }
 /* Flow spacing (U-014): blocks inside a section never touch — 16 px between blocks, 8 px from a heading to its line. */
-.accountSection > :where(* + *) { margin-top: var(--space-4); }
+.accountSection > :where(* + *):where(:not([data-kit], :global(.ui-section))) { margin-top: var(--space-4); }
 .accountSection > :where(h2, h3) + :where(p) { margin-top: var(--space-2); }
 .accountSection > button { margin-top: var(--space-4); }
 /* One level of boxing (U-008): a card inside a section card becomes an inset panel. */
@@ -53,10 +54,10 @@
 .lookup { display: flex; align-items: end; flex-wrap: wrap; gap: var(--space-3); margin: var(--space-4) 0 var(--space-3); }
 .lookup label { width: min(360px, 100%); }
 /* Fields (U-014): label 14/600, 8 px to a 44 px control with the 3:1 border, radius 8, in the 720 px form column. */
-.page label:where(:not([data-kit] *)) { display: grid; gap: var(--space-2); min-width: 0; font-size: 14px; font-weight: 600; line-height: 20px; overflow-wrap: anywhere; }
-.page input:not([type="checkbox"]):not([type="radio"]):where(:not([data-kit] *)), .page select:where(:not([data-kit] *)), .page textarea:where(:not([data-kit] *)) { width: 100%; min-width: 0; max-width: var(--content-narrow); height: var(--control-h); border: 1px solid var(--control-border); border-radius: var(--radius-control); background: var(--card); color: var(--foreground); padding: 0 var(--space-3); font-size: 15px; font-weight: 400; }
-.page textarea:where(:not([data-kit] *)) { height: auto; min-height: 96px; padding: var(--space-3); resize: vertical; line-height: 1.6; }
-.page :is(input, select, textarea):hover:not(:disabled):where(:not([data-kit] *)) { border-color: var(--muted-foreground); }
+.page label:where(:not([data-kit], [data-kit] *)) { display: grid; gap: var(--space-2); min-width: 0; font-size: 14px; font-weight: 600; line-height: 20px; overflow-wrap: anywhere; }
+.page input:not([type="checkbox"]):not([type="radio"]):where(:not([data-kit], [data-kit] *)), .page select:where(:not([data-kit], [data-kit] *)), .page textarea:where(:not([data-kit], [data-kit] *)) { width: 100%; min-width: 0; max-width: var(--content-narrow); height: var(--control-h); border: 1px solid var(--control-border); border-radius: var(--radius-control); background: var(--card); color: var(--foreground); padding: 0 var(--space-3); font-size: 15px; font-weight: 400; }
+.page textarea:where(:not([data-kit], [data-kit] *)) { height: auto; min-height: 96px; padding: var(--space-3); resize: vertical; line-height: 1.6; }
+.page :is(input, select, textarea):hover:not(:disabled):where(:not([data-kit], [data-kit] *)) { border-color: var(--muted-foreground); }
 .page input:disabled, .page select:disabled, .page textarea:disabled { background: var(--muted); color: var(--muted-foreground); }
 .page input::placeholder, .page textarea::placeholder { color: var(--muted-foreground); opacity: 1; }
 .page input[aria-invalid="true"], .page select[aria-invalid="true"], .page textarea[aria-invalid="true"] { border-color: var(--destructive); }
@@ -137,10 +138,10 @@
 .historyHeading { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: var(--space-2) var(--space-6); }
 .historyHeading time, .historyList small { color: var(--muted-foreground); font-size: 13px; }
 /* Raw tables take the DataTable look (U-012): muted 13/600 header, middle alignment, 12/16 cells. */
-.page table:where(:not([data-kit] *)) { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
-.page th:where(:not([data-kit] *)), .page td:where(:not([data-kit] *)) { padding: var(--space-3) var(--space-4); text-align: left; vertical-align: middle; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
-.page th:where(:not([data-kit] *)) { background: var(--muted); color: var(--muted-foreground); font-size: 13px; font-weight: 600; }
-.page caption:not(.srOnly):where(:not([data-kit] *)) { text-align: left; padding-block: var(--space-3); font-weight: 600; }
+.page table:where(:not([data-kit], [data-kit] *)) { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
+.page th:where(:not([data-kit], [data-kit] *)), .page td:where(:not([data-kit], [data-kit] *)) { padding: var(--space-3) var(--space-4); text-align: left; vertical-align: middle; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
+.page th:where(:not([data-kit], [data-kit] *)) { background: var(--muted); color: var(--muted-foreground); font-size: 13px; font-weight: 600; }
+.page caption:not(.srOnly):where(:not([data-kit], [data-kit] *)) { text-align: left; padding-block: var(--space-3); font-weight: 600; }
 .srOnly { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 @media (max-width: 1080px) { .header { gap: var(--space-4); } .header > nav { flex-shrink: 1; } }
 @media (max-width: 1023px) { .desk { grid-template-columns: minmax(0, 1fr); } .queueList { max-height: 360px; overflow: auto; } }
@@ -148,15 +149,15 @@
 /* Phone width (U-021): 16 px gutter, 16 px section padding, every action button full width, stacked. */
 @media (max-width: 639px) {
   .page { padding-top: var(--space-6); }
-  .page h1:where(:not([data-kit] *)) { font-size: 24px; line-height: 30px; }
-  .page h2:where(:not([data-kit] *)) { font-size: 18px; line-height: 26px; }
+  .page h1:where(:not([data-kit], [data-kit] *)) { font-size: 24px; line-height: 30px; }
+  .page h2:where(:not([data-kit], [data-kit] *)) { font-size: 18px; line-height: 26px; }
   .header { gap: var(--space-4); }
   .brand { font-size: 20px; }
   .accountSection, .form, .review, .state { padding: var(--space-4); }
   .lookup label { width: 100%; }
   .facts { grid-template-columns: minmax(0, 1fr); }
   .accessLists li { flex-wrap: wrap; }
-  .page th:where(:not([data-kit] *)), .page td:where(:not([data-kit] *)) { padding: var(--space-2) var(--space-3); }
+  .page th:where(:not([data-kit], [data-kit] *)), .page td:where(:not([data-kit], [data-kit] *)) { padding: var(--space-2) var(--space-3); }
   .page :is(.primary, .secondary, .danger):not(td *, .pagination *) { width: 100%; }
   .actions { flex-direction: column; align-items: stretch; }
   .pagination button { flex: 1 1 0; }

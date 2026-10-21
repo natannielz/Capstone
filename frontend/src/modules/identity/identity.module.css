@@ -2,20 +2,21 @@
    type 12–28 px, one focus ring; element defaults skip shared primitives ([data-kit]) and keep their old specificity. */
 .page { composes: palette from "../workspace-palette.module.css"; min-height: 100vh; padding: 0 var(--gutter); background: var(--background); color: var(--foreground); font-family: var(--font-body), "Segoe UI", sans-serif; font-size: 15px; line-height: 1.6; }
 .page, .page * { box-sizing: border-box; }
-.page h1:where(:not([data-kit] *)), .page h2:where(:not([data-kit] *)), .page h3:where(:not([data-kit] *)), .page p:where(:not([data-kit] *)) { margin: 0; }
-.page h1:where(:not([data-kit] *)) { font-family: var(--font-body), "Segoe UI", sans-serif; font-size: 28px; line-height: 34px; font-weight: 700; letter-spacing: -.02em; color: var(--foreground); }
-.page h2:where(:not([data-kit] *)) { font-family: var(--font-body), "Segoe UI", sans-serif; font-size: 20px; line-height: 28px; font-weight: 600; letter-spacing: -.01em; color: var(--foreground); }
-.page h3:where(:not([data-kit] *)) { font-family: var(--font-body), "Segoe UI", sans-serif; font-size: 16px; line-height: 24px; font-weight: 600; color: var(--foreground); }
+.page h1:where(:not([data-kit], [data-kit] *)), .page h2:where(:not([data-kit], [data-kit] *)), .page h3:where(:not([data-kit], [data-kit] *)), .page p:where(:not([data-kit], [data-kit] *)) { margin: 0; }
+.page h1:where(:not([data-kit], [data-kit] *)) { font-family: var(--font-body), "Segoe UI", sans-serif; font-size: 28px; line-height: 34px; font-weight: 700; letter-spacing: -.02em; color: var(--foreground); }
+.page h2:where(:not([data-kit], [data-kit] *)) { font-family: var(--font-body), "Segoe UI", sans-serif; font-size: 20px; line-height: 28px; font-weight: 600; letter-spacing: -.01em; color: var(--foreground); }
+.page h3:where(:not([data-kit], [data-kit] *)) { font-family: var(--font-body), "Segoe UI", sans-serif; font-size: 16px; line-height: 24px; font-weight: 600; color: var(--foreground); }
 .page h1, .page h2, .page h3, .page p { overflow-wrap: anywhere; }
-.page p:where(:not([data-kit] *)) { max-width: 72ch; }
+.page p:where(:not([data-kit], [data-kit] *)) { max-width: 72ch; }
 .page p:is(.alert, .success, [role="alert"], [role="status"]) { max-width: none; }
-.page button, .page input, .page select, .page textarea { font: inherit; }
+/* Zero element specificity, so .primary/.secondary below keep their 14/600 type. */
+.page :where(button, input, select, textarea):where(:not([data-kit], [data-kit] *)) { font: inherit; }
 .page a { text-underline-offset: 4px; }
-.page button:disabled { cursor: not-allowed; color: var(--muted-foreground); }
-.page label:where(:not([data-kit] *)) { display: grid; gap: var(--space-2); min-width: 0; font-size: 14px; font-weight: 600; line-height: 20px; overflow-wrap: anywhere; }
-.page input:not([type="checkbox"]):not([type="radio"]):where(:not([data-kit] *)), .page select:where(:not([data-kit] *)), .page textarea:where(:not([data-kit] *)) { width: 100%; min-width: 0; max-width: var(--content-narrow); height: var(--control-h); border: 1px solid var(--control-border); border-radius: var(--radius-control); background: var(--card); color: var(--foreground); padding: 0 var(--space-3); font-size: 15px; font-weight: 400; }
-.page textarea:where(:not([data-kit] *)) { height: auto; min-height: 96px; padding: var(--space-3); resize: vertical; }
-.page :is(input, select, textarea):hover:not(:disabled):where(:not([data-kit] *)) { border-color: var(--muted-foreground); }
+.page button:disabled:where(:not([data-kit], [data-kit] *)) { cursor: not-allowed; color: var(--muted-foreground); }
+.page label:where(:not([data-kit], [data-kit] *)) { display: grid; gap: var(--space-2); min-width: 0; font-size: 14px; font-weight: 600; line-height: 20px; overflow-wrap: anywhere; }
+.page input:not([type="checkbox"]):not([type="radio"]):where(:not([data-kit], [data-kit] *)), .page select:where(:not([data-kit], [data-kit] *)), .page textarea:where(:not([data-kit], [data-kit] *)) { width: 100%; min-width: 0; max-width: var(--content-narrow); height: var(--control-h); border: 1px solid var(--control-border); border-radius: var(--radius-control); background: var(--card); color: var(--foreground); padding: 0 var(--space-3); font-size: 15px; font-weight: 400; }
+.page textarea:where(:not([data-kit], [data-kit] *)) { height: auto; min-height: 96px; padding: var(--space-3); resize: vertical; }
+.page :is(input, select, textarea):hover:not(:disabled):where(:not([data-kit], [data-kit] *)) { border-color: var(--muted-foreground); }
 .page input:disabled, .page select:disabled, .page textarea:disabled { background: var(--muted); color: var(--muted-foreground); }
 .page input::placeholder, .page textarea::placeholder { color: var(--muted-foreground); opacity: 1; }
 .page input[aria-invalid="true"], .page select[aria-invalid="true"], .page textarea[aria-invalid="true"] { border-color: var(--destructive); }
@@ -122,8 +123,8 @@
 @media (max-width: 720px) { .directoryHeader, .directorySearch { flex-direction: column; align-items: stretch; gap: var(--space-3); } .directorySearch button { align-self: start; } .workspaceSections { gap: var(--space-2); } .workspaceSections a { font-size: 13px; padding-inline: var(--space-3); } }
 /* Phone width (U-021): 16 px gutter, every action button full width. */
 @media (max-width: 639px) {
-  .page h1:where(:not([data-kit] *)), .accountHeader h1 { font-size: 24px; line-height: 30px; }
-  .page h2:where(:not([data-kit] *)) { font-size: 18px; line-height: 26px; }
+  .page h1:where(:not([data-kit], [data-kit] *)), .accountHeader h1 { font-size: 24px; line-height: 30px; }
+  .page h2:where(:not([data-kit], [data-kit] *)) { font-size: 18px; line-height: 26px; }
   .card { padding: var(--space-4); }
   .page :is(.primary, .secondary) { width: 100%; }
   .directorySearch button { align-self: stretch; }
