@@ -5,38 +5,41 @@ using MongoDB.Driver;
 using UnitToko.Modules.Catalog;
 using UnitToko.Modules.Contracts;
 using UnitToko.Platform.Authorization;
+using S = UnitToko.Platform.Mongo.Migrations.CatalogPublicSampleSchemas;
 
 namespace UnitToko.Platform.Catalog;
 
-/// <summary>The signed-out catalog: products listed in assortments approved as public. It shows what a product is and how it is
-/// packed, nothing commercial: prices, stock, owners and buyer identifiers are never read into it. No account, session or lease
-/// takes part, so anonymous traffic causes no writes.</summary>
+/// <summary>The signed-out catalog: the sample products staff approved for guests, one entry per product with the packages it
+/// publishes now. It shows what a product is and how it is packed, nothing commercial: prices, stock, owners and buyer identifiers
+/// are never read into it. No account, session or lease takes part, so anonymous traffic causes no writes.</summary>
 public sealed partial class CatalogDefinitionQueryService
 {
-    public const int PublicPageLimit = 48;
+    public const int PublicPageLimit = 48, PublicSearchLimit = 128;
+    /// <summary>The most packages one guest product lists (its first, in creation order). The guest page applies the same bound,
+    /// so one large product can never break the page.</summary>
+    public const int PublicPackageLimit = 64;
+    internal int PackageLimit { get; init; } = PublicPackageLimit;
+    private const string PublicIdPattern = "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\\z";
 
     public async Task<PublicCatalogPage> QueryPublicAsync(int offset, int limit, string? search, string? category = null,
         PublicCatalogSort sort = PublicCatalogSort.Added, CancellationToken cancellationToken = default)
     {
-        if (offset is < 0 or > 5000 || limit is < 1 or > PublicPageLimit || search is { Length: > 64 } || !Enum.IsDefined(sort))
+        if (offset is < 0 or > 5000 || limit is < 1 or > PublicPageLimit || search is { Length: > PublicSearchLimit } || !Enum.IsDefined(sort))
             throw new DomainValidationException("public_catalog_query_invalid", "Use a bounded public catalog search");
         var categoryCode = string.IsNullOrWhiteSpace(category) ? null : CatalogPolicy.NormalizeSkuCode(category);
         var filter = await PublicFilterAsync(F.Empty, cancellationToken);
         if (filter is null) return new(0, [], []);
-        var pipeline = PublicPipeline(filter);
-        if (!string.IsNullOrWhiteSpace(search)) {
-            pipeline.Add(new("$match", CatalogSearchWords.Match(search, "primaryCode", "family.name", "definition.packageLabel")));
-        }
-        var inCategory = new BsonDocument("$match", categoryCode is null ? new BsonDocument() : new BsonDocument("category.code", categoryCode));
-        var order = sort == PublicCatalogSort.Name ? new BsonDocument { { "sortName", 1 }, { "sortLabel", 1 }, { "_id", 1 } } : new BsonDocument("_id", -1);
+        var pipeline = PublicProductPipeline(filter);
+        if (!string.IsNullOrWhiteSpace(search)) pipeline.Add(new("$match", CatalogSearchWords.Match(search, "name", "packages.code", "packages.packageLabel")));
+        var inCategory = new BsonDocument("$match", categoryCode is null ? new BsonDocument() : new BsonDocument("categoryCode", categoryCode));
+        var order = sort == PublicCatalogSort.Name ? new BsonDocument { { "sortName", 1 }, { "_id", 1 } } : new BsonDocument("_id", -1);
         pipeline.Add(new("$facet", new BsonDocument {
             { "count", new BsonArray { inCategory, new BsonDocument("$count", "total") } },
             { "page", new BsonArray { inCategory,
-                new BsonDocument("$addFields", new BsonDocument { { "sortName", new BsonDocument("$toLower", "$family.name") },
-                    { "sortLabel", new BsonDocument("$toLower", "$definition.packageLabel") } }),
+                new BsonDocument("$addFields", new BsonDocument("sortName", new BsonDocument("$toLower", "$name"))),
                 new BsonDocument("$sort", order), new BsonDocument("$skip", offset), new BsonDocument("$limit", limit) } },
             { "categories", new BsonArray {
-                new BsonDocument("$group", new BsonDocument { { "_id", "$category.code" }, { "name", new BsonDocument("$first", "$category.name") },
+                new BsonDocument("$group", new BsonDocument { { "_id", "$categoryCode" }, { "name", new BsonDocument("$first", "$categoryName") },
                     { "count", new BsonDocument("$sum", 1) } }),
                 new BsonDocument("$sort", new BsonDocument("_id", 1)), new BsonDocument("$limit", 200) } } }));
         var page = await repository.Rows("skus").Aggregate<BsonDocument>(pipeline, cancellationToken: cancellationToken).SingleAsync(cancellationToken);
@@ -46,35 +49,39 @@ public sealed partial class CatalogDefinitionQueryService
         return new(total, items, [.. categories]);
     }
 
+    /// <summary>A product by its own public id or by one of its packages' public ids, so shared package links keep working.
+    /// Unknown, unpublished and non-sample ids all answer null alike.</summary>
     public async Task<PublicCatalogItem?> ReadPublicItemAsync(string publicId, CancellationToken cancellationToken = default)
     {
-        if (publicId is null || !Regex.IsMatch(publicId, "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\\z", RegexOptions.CultureInvariant))
+        if (publicId is null || !Regex.IsMatch(publicId, PublicIdPattern, RegexOptions.CultureInvariant))
             throw new DomainValidationException("invalid_public_id", "A canonical UUID version 4 is required");
-        var filter = await PublicFilterAsync(F.Eq("publicId", publicId), cancellationToken);
+        var families = await repository.Rows("productFamilies").Find(F.Eq("publicId", publicId)).Project(new BsonDocument("_id", 1)).Limit(2).ToListAsync(cancellationToken);
+        var packages = await repository.Rows("skus").Find(F.Eq("publicId", publicId)).Project(new BsonDocument("familyId", 1)).Limit(2).ToListAsync(cancellationToken);
+        if (families.Count + packages.Count > 1) throw CatalogRepository.Invalid("ambiguous_catalog_identifier");
+        var familyId = families.Count == 1 ? families[0]["_id"] : packages.Count == 1 ? packages[0]["familyId"] : null;
+        if (familyId is null || !familyId.IsInt64) return null;
+        var filter = await PublicFilterAsync(F.Eq("familyId", familyId), cancellationToken);
         if (filter is null) return null;
-        var pipeline = PublicPipeline(filter); pipeline.Add(new("$limit", 2));
+        var pipeline = PublicProductPipeline(filter); pipeline.Add(new("$limit", 2));
         var rows = await repository.Rows("skus").Aggregate<BsonDocument>(pipeline, cancellationToken: cancellationToken).ToListAsync(cancellationToken);
         return rows.Count switch { 0 => null, 1 => PublicItem(rows[0]), _ => throw CatalogRepository.Invalid("ambiguous_catalog_identifier") };
     }
 
-    /// <summary>Active products listed in an active assortment whose public head is approved and true. Null when none is public.</summary>
+    /// <summary>Active packages of sample products, published now in an active assortment. Null when guests can see nothing.</summary>
     private async Task<FilterDefinition<BsonDocument>?> PublicFilterAsync(FilterDefinition<BsonDocument> selector, CancellationToken ct)
     {
-        await CatalogPublicShowcaseBson.RequireStorageAsync(database, ct);
-        var heads = await repository.Rows(CatalogPublicShowcaseBson.Heads).Find(F.Eq("isPublic", true)).Limit(201).ToListAsync(ct);
-        if (heads.Count > 200) throw CatalogPublicShowcaseBson.Invalid("public_catalog_limit");
-        if (heads.Count == 0) return null;
-        var assortments = await repository.Rows("catalogAssortments").Find(F.In("_id", heads.Select(head => head["_id"])) & F.Eq("status", "active")).ToListAsync(ct);
-        if (assortments.Count == 0) return null;
-        var clauses = assortments.Select(CatalogRepository.Assortment).Select(row => {
-            var owner = CatalogRepository.Owner(row["ownerScope"].AsBsonDocument);
-            return F.And(F.Eq("organizationId", owner.OrganizationId!.Value), F.ElemMatch<BsonDocument>("catalogListings",
-                F.And(F.Eq("assortmentId", row["_id"]), UnitToko.Platform.Authorization.CatalogVisibilityQuery.Owner("ownerScope", owner))));
-        });
-        return F.And(F.Eq("active", true), F.Or(clauses), selector);
+        await CatalogPublicSampleBson.RequireStorageAsync(database, ct);
+        var samples = await repository.Rows(S.Samples).Find(F.Empty).Limit(S.Limit + 1).ToListAsync(ct);
+        if (samples.Count > S.Limit) throw CatalogPublicSampleBson.Invalid("public_catalog_limit");
+        if (samples.Count == 0) return null;
+        var published = await CatalogPublicSampleBson.PublishedAsync(database, null,
+            samples.Select(row => CatalogRepository.Owner(row["ownerScope"].AsBsonDocument).OrganizationId!.Value), ct);
+        if (published is null) return null;
+        return F.And(published, F.In("familyId", samples.Select(row => row["_id"])), selector);
     }
 
-    private List<BsonDocument> PublicPipeline(FilterDefinition<BsonDocument> filter)
+    /// <summary>One row per product: its display facts and its published packages in creation order.</summary>
+    private List<BsonDocument> PublicProductPipeline(FilterDefinition<BsonDocument> filter)
     {
         var pipeline = VisiblePipeline(filter); AddBuyerIdentifierLookup(pipeline);
         pipeline.Add(new("$addFields", new BsonDocument("primaryCode", new BsonDocument("$let", new BsonDocument {
@@ -82,20 +89,29 @@ public sealed partial class CatalogDefinitionQueryService
                 { "cond", new BsonDocument("$eq", new BsonArray { "$$item.isPrimary", true }) } })) },
             { "in", new BsonDocument("$ifNull", new BsonArray { new BsonDocument("$arrayElemAt", new BsonArray { "$$primary.canonicalValue", 0 }), "$sku" }) } }))));
         // Only display facts leave the database; the price and owner fields are never projected.
-        pipeline.Add(new("$project", new BsonDocument { { "_id", 1 }, { "publicId", 1 }, { "primaryCode", 1 },
-            { "family.name", 1 }, { "family.description", 1 }, { "category.code", 1 }, { "category.name", 1 },
+        pipeline.Add(new("$project", new BsonDocument { { "_id", 1 }, { "familyId", 1 }, { "publicId", 1 }, { "primaryCode", 1 },
+            { "family.publicId", 1 }, { "family.name", 1 }, { "family.description", 1 }, { "category.code", 1 }, { "category.name", 1 },
             { "definition.packageLabel", 1 }, { "definition.packageKind", 1 }, { "definition.baseUnitCode", 1 }, { "definition.baseUnitsPerPackage", 1 },
             { "definition.attributes", 1 }, { "definition.minimumOrderPackages", 1 }, { "definition.orderIncrementPackages", 1 } }));
+        pipeline.Add(new("$sort", new BsonDocument("_id", 1)));
+        pipeline.Add(new("$group", new BsonDocument {
+            { "_id", "$familyId" }, { "publicId", new BsonDocument("$first", "$family.publicId") }, { "name", new BsonDocument("$first", "$family.name") },
+            { "description", new BsonDocument("$first", "$family.description") }, { "categoryCode", new BsonDocument("$first", "$category.code") },
+            { "categoryName", new BsonDocument("$first", "$category.name") },
+            { "packages", new BsonDocument("$push", new BsonDocument { { "publicId", "$publicId" }, { "code", "$primaryCode" },
+                { "packageLabel", "$definition.packageLabel" }, { "packageKind", "$definition.packageKind" }, { "baseUnitCode", "$definition.baseUnitCode" },
+                { "baseUnitsPerPackage", "$definition.baseUnitsPerPackage" }, { "attributes", "$definition.attributes" },
+                { "minimumOrderPackages", "$definition.minimumOrderPackages" }, { "orderIncrementPackages", "$definition.orderIncrementPackages" } }) } }));
+        pipeline.Add(new("$addFields", new BsonDocument("packages", new BsonDocument("$slice", new BsonArray { "$packages", PackageLimit }))));
         return pipeline;
     }
 
-    private static PublicCatalogItem PublicItem(BsonDocument row)
-    {
-        var definition = row["definition"].AsBsonDocument;
-        return new(row["publicId"].AsString, row["primaryCode"].AsString, row["family"]["name"].AsString, row["family"]["description"].AsString,
-            row["category"]["code"].AsString, row["category"]["name"].AsString, definition["packageLabel"].AsString, definition["packageKind"].AsString,
-            definition["baseUnitCode"].AsString, definition["baseUnitsPerPackage"].AsInt32,
-            [.. definition["attributes"].AsBsonArray.Select(pair => new PublicCatalogAttribute(pair["key"].AsString, pair["value"].AsString))],
-            definition["minimumOrderPackages"].AsInt32, definition["orderIncrementPackages"].AsInt32);
-    }
+    private static PublicCatalogItem PublicItem(BsonDocument row) => new(row["publicId"].AsString, row["name"].AsString, row["description"].AsString,
+        row["categoryCode"].AsString, row["categoryName"].AsString, [.. row["packages"].AsBsonArray.Select(value => {
+            var package = value.AsBsonDocument;
+            return new PublicCatalogPackage(package["publicId"].AsString, package["code"].AsString, package["packageLabel"].AsString, package["packageKind"].AsString,
+                package["baseUnitCode"].AsString, package["baseUnitsPerPackage"].AsInt32,
+                [.. package["attributes"].AsBsonArray.Select(pair => new PublicCatalogAttribute(pair["key"].AsString, pair["value"].AsString))],
+                package["minimumOrderPackages"].AsInt32, package["orderIncrementPackages"].AsInt32);
+        })]);
 }
