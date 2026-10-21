@@ -2,16 +2,21 @@ import { RequestNotSentError } from '../../api/client';
 import { AccessFailure } from '../administration/workflow';
 import { normalizeCatalogCategory } from './catalog-history';
 
-/** A product as anyone may see it before signing in. There is no price, stock or internal identity in it. */
-export type PublicCatalogItem = {
-  publicId: string; code: string; name: string; description: string; categoryCode: string; categoryName: string;
-  packageLabel: string; packageKind: string; baseUnitCode: string; baseUnitsPerPackage: number;
+/** One package of a guest product, as published now. There is no price, stock or internal identity in it. */
+export type PublicCatalogPackage = {
+  publicId: string; code: string; packageLabel: string; packageKind: string; baseUnitCode: string; baseUnitsPerPackage: number;
   attributes: { key: string; value: string }[]; minimumOrderPackages: number; orderIncrementPackages: number;
+};
+/** A sample product as anyone may see it before signing in, with every package it publishes now. */
+export type PublicCatalogItem = {
+  publicId: string; name: string; description: string; categoryCode: string; categoryName: string; packages: PublicCatalogPackage[];
 };
 export type PublicCatalogCategory = { code: string; name: string; count: number };
 export type PublicCatalogPage = { total: number; items: PublicCatalogItem[]; categories: PublicCatalogCategory[] };
 export type PublicCatalogQuery = { search?: string; category?: string; sort?: 'name'; offset?: number };
 export const publicCatalogPageSize = 24;
+/** The same limit as the store search box; the API accepts it too. */
+export const publicCatalogSearchLimit = 128;
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$(?![\s\S])/;
 const invalid = (): never => { throw new AccessFailure(502, 'public_catalog_response_invalid'); };
@@ -23,16 +28,24 @@ const count = (value: unknown, minimum: number) => {
   return Number.isSafeInteger(number) && number >= minimum ? number : invalid();
 };
 
-export function parsePublicCatalogItem(value: unknown): PublicCatalogItem {
+const publicIdOf = (value: unknown) => typeof value === 'string' && uuid.test(value) ? value : invalid();
+
+function parsePackage(value: unknown): PublicCatalogPackage {
   const row = record(value);
-  const publicId = typeof row.publicId === 'string' && uuid.test(row.publicId) ? row.publicId : invalid();
   const attributes = Array.isArray(row.attributes) && row.attributes.length <= 32 ? row.attributes.map(entry => {
     const pair = record(entry); return { key: text(pair.key, 80), value: text(pair.value, 160) };
   }) : invalid();
-  return { publicId, code: text(row.code, 64), name: text(row.name, 160), description: text(row.description, 2000, true),
-    categoryCode: text(row.categoryCode, 64), categoryName: text(row.categoryName, 160), packageLabel: text(row.packageLabel, 160),
+  return { publicId: publicIdOf(row.publicId), code: text(row.code, 64), packageLabel: text(row.packageLabel, 160),
     packageKind: text(row.packageKind, 32), baseUnitCode: text(row.baseUnitCode, 32), baseUnitsPerPackage: count(row.baseUnitsPerPackage, 1), attributes,
     minimumOrderPackages: count(row.minimumOrderPackages, 1), orderIncrementPackages: count(row.orderIncrementPackages, 1) };
+}
+
+/** A guest product always has at least one published package; an empty one is never shown. */
+export function parsePublicCatalogItem(value: unknown): PublicCatalogItem {
+  const row = record(value);
+  const packages = Array.isArray(row.packages) && row.packages.length >= 1 && row.packages.length <= 64 ? row.packages.map(parsePackage) : invalid();
+  return { publicId: publicIdOf(row.publicId), name: text(row.name, 160), description: text(row.description, 2000, true),
+    categoryCode: text(row.categoryCode, 64), categoryName: text(row.categoryName, 160), packages };
 }
 
 export function parsePublicCatalogPage(value: unknown): PublicCatalogPage {
@@ -60,7 +73,7 @@ export function publicCatalogUrl(query: PublicCatalogQuery): string {
 
 export function readPublicCatalogQuery(search: string): PublicCatalogQuery {
   const parameters = new URLSearchParams(search), result: PublicCatalogQuery = {};
-  const term = parameters.get('q')?.trim().slice(0, 64); if (term) result.search = term;
+  const term = parameters.get('q')?.trim().slice(0, publicCatalogSearchLimit); if (term) result.search = term;
   const category = parameters.get('kategori'); if (category && normalizeCatalogCategory(category) === category) result.category = category;
   if (parameters.get('urut') === 'nama') result.sort = 'name';
   const page = Number(parameters.get('halaman')); if (Number.isSafeInteger(page) && page > 1 && page <= 200) result.offset = (page - 1) * publicCatalogPageSize;
@@ -77,7 +90,7 @@ export function createPublicCatalogGateway(options: { fetch?: typeof globalThis.
   return {
     async query(query: PublicCatalogQuery, signal?: AbortSignal, limit = publicCatalogPageSize): Promise<PublicCatalogPage> {
       const target = url('/api/v1/public/catalog'); const search = query.search?.trim();
-      if (search) target.searchParams.set('q', search.slice(0, 64));
+      if (search) target.searchParams.set('q', search.slice(0, publicCatalogSearchLimit));
       if (query.category) target.searchParams.set('kategori', query.category);
       if (query.sort === 'name') target.searchParams.set('urut', 'nama');
       target.searchParams.set('offset', String(query.offset ?? 0)); target.searchParams.set('limit', String(limit));
