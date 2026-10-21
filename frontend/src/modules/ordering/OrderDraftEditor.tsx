@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { AccessFailure } from '../administration/workflow';
 import { buyerCurrentCode, createBuyerCatalogGateway, type BuyerVariant } from '../catalog/catalog-buyer-client';
 import { CatalogReadGate } from '../catalog/catalog-editor-state';
-import { prepareDraftCommand, type DraftCommand, type OrderDraft } from './order-draft-client';
+import { draftAccessLost, prepareDraftCommand, type DraftCommand, type OrderDraft } from './order-draft-client';
 import { createOrderQuoteGateway, orderAmount, orderContextKey, orderQuantity, type OrderAddresses, type OrderQuote } from './order-quote-client';
 import { draftMessage } from './DraftSave';
 import { reorderDraftReason } from './order-reorder';
@@ -35,7 +35,7 @@ export function OrderDraftEditor({ actorId, draft, initialQuote, initialIssue, l
   useEffect(() => { alive.current = true; return () => { alive.current = false; gate.cancel(); }; }, [gate, actorId, contextKey]);
   useEffect(() => { if (review) reviewRef.current?.focus(); }, [review]);
   const disabled = locked || busy || review !== null || bulkOpen, current = () => alive.current && isCurrent();
-  const failed = (failure: unknown) => { setApprovedAddresses(null); setError(failure); if (failure instanceof AccessFailure && ([401, 403].includes(failure.status) || failure.code === 'actor_changed')) onFailure(failure); };
+  const failed = (failure: unknown) => { setApprovedAddresses(null); setError(failure); if (draftAccessLost(failure)) onFailure(failure); };
   const shownAddresses = approvedAddresses?.actorId === actorId && orderContextKey(approvedAddresses.view.context) === contextKey && isCurrent() ? approvedAddresses.view : null;
   async function readAddresses() {
     if (disabled || pending.current || !current()) return;

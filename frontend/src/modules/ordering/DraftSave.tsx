@@ -15,6 +15,7 @@ export function draftMessage(error: unknown, reading = false) {
     if (error.code === 'order_selection_changed') return 'Harga atau kemasan berubah. Pilih kembali kemasan dan periksa subtotal terbaru sebelum menyimpan.';
     if (error.code === 'invalid_order_draft') return 'Periksa jumlah, referensi, dan alamat. Nama, telepon, alamat, serta kota wajib diisi jika alamat pengiriman digunakan.';
     if (error.code === 'order_package_quantity_invalid') return 'Jumlah kemasan harus memenuhi minimum dan kelipatan yang tertera.';
+    if (error.code === 'order_package_unavailable') return 'Sebagian kemasan di draf ini tidak lagi tersedia untuk cabang ini. Hapus baris tersebut atau pilih kembali kemasan dari katalog, lalu tinjau lagi.';
     if (error.status === 409) return 'Draf atau akses telah berubah. Buka kembali draf dan tinjau perubahan terbaru.';
     if (error.status < 500 && error.status !== 0) return accessMessage(error);
   }

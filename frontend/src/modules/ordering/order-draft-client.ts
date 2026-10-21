@@ -63,6 +63,13 @@ export function discardConflictMessage(code: string): string | null {
   if (code === 'order_draft_not_discarded') return 'Draf ini sudah aktif kembali.';
   return null;
 }
+/** Lost access hides every draft. A package taken out of the branch's catalog is refused the same way (403, so other
+ *  catalogs stay undisclosed), but it is a problem with one line: the draft stays open and says which step to take. */
+export function draftAccessLost(failure: unknown): boolean {
+  if (!(failure instanceof AccessFailure)) return false;
+  if (failure.status === 403) return failure.code !== 'order_package_unavailable';
+  return failure.status === 401 || failure.code === 'actor_changed';
+}
 export function prepareDraftCommand(actorId: string, draftId: string | null, expectedRevision: string, input: DraftInput, reason: string) {
   try {
     if (draftId === null ? expectedRevision !== '0' : priceId(expectedRevision) === '9223372036854775807') throw new AccessFailure(400, 'invalid_order_draft_revision');

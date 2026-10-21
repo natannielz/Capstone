@@ -1,7 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createUnitTokoClient } from '../src/api/client';
-import { createOrderDraftGateway, parseDraftInput, prepareDraftCommand } from '../src/modules/ordering/order-draft-client';
+import { createOrderDraftGateway, draftAccessLost, parseDraftInput, prepareDraftCommand } from '../src/modules/ordering/order-draft-client';
+import { draftMessage } from '../src/modules/ordering/DraftSave';
+import { AccessFailure } from '../src/modules/administration/workflow';
 import { OperationJournal, operationRecoveryCapabilities, reconcileOperationRecovery } from '../src/modules/administration/operation-journal';
 import { recoveryPage, operationLabel } from '../src/modules/administration/operation-recovery-navigation';
 import { identityDestinations, identityReturnPath } from '../src/modules/identity/identity-workflow';
@@ -49,4 +51,15 @@ test('draft recovery has a dedicated lookup-only adapter and never closes or rec
   const receipt = await gateway(async request => { assert.ok(request.url.endsWith('/operations/query')); assert.deepEqual(await request.json(), { purpose: 'operation-recovery', key: 'original' }); return Response.json({ status: 'committed', result }); }).recover(actor, 'original');
   assert.deepEqual(await reconcileOperationRecovery(entry, journal, legacy, { 'ordering.draft': { lookup: async () => receipt } }), { state: 'committed', result: { id, version: '1' } });
   assert.equal(journal.list(actor).length, 0);
+});
+
+test('a package taken out of the branch catalog keeps the draft open; only lost access closes it', () => {
+  assert.equal(draftAccessLost(new AccessFailure(403, 'order_package_unavailable')), false);
+  assert.match(draftMessage(new AccessFailure(403, 'order_package_unavailable')), /^Sebagian kemasan di draf ini tidak lagi tersedia untuk cabang ini\./);
+  assert.equal(draftAccessLost(new AccessFailure(403, 'forbidden')), true);
+  assert.equal(draftAccessLost(new AccessFailure(403, 'order_scope_unavailable')), true);
+  assert.equal(draftAccessLost(new AccessFailure(401, 'unauthenticated')), true);
+  assert.equal(draftAccessLost(new AccessFailure(409, 'actor_changed')), true);
+  assert.equal(draftAccessLost(new AccessFailure(409, 'order_draft_changed')), false);
+  assert.equal(draftAccessLost(new Error('offline')), false);
 });
