@@ -32,6 +32,10 @@ const finance = [
   "src/modules/procurement/ProcurementDisbursementWorkspace.tsx", "src/modules/procurement/ProcurementReceivingWorkspace.tsx", "src/modules/procurement/ProcurementSettlementWorkspace.tsx",
   "src/modules/procurement/procurement-supplier-payable-forms.tsx", "src/modules/procurement/procurement-advance-return-forms.tsx", "src/modules/procurement/procurement-stock-valuation-forms.tsx",
   "src/modules/procurement/ProcurementFundingWorkspace.tsx", "src/modules/procurement/PurchaseOrderWorkspace.tsx",
+  // Other staff money screens keep exact amounts too (fix round 2).
+  "src/modules/catalog/CatalogPriceWorkspace.tsx", "src/modules/inventory/StockReleaseWorkspace.tsx", "src/modules/ordering/OrderReviewWorkspace.tsx",
+  "src/modules/ordering/OrderSpendingPolicyWorkspace.tsx", "src/modules/ordering/OrderCommercialPolicyWorkspace.tsx",
+  "src/modules/procurement/SupplierClaimWorkspace.tsx", "src/modules/procurement/SupplierDocumentWorkspace.tsx",
 ];
 const buyer = [
   "src/modules/catalog/BuyerCatalog.tsx", "src/modules/ordering/AddToCartPanel.tsx", "src/modules/ordering/CartWorkspace.tsx",
@@ -44,4 +48,12 @@ test("finance screens use the exact formatter; buyer storefront and ordering scr
     assert.match(source, /formatDisplayMoney|orderDisplayAmount/, `${file} shows buyer amounts`);
     assert.doesNotMatch(source, /\bformatMoney\(|\borderAmount\(/, `${file} must not show exact finance amounts`);
   }
+});
+
+// Orchestrator ruling (fix round 2): the substitution workspace serves both sides; the buyer's decision view is a buyer screen.
+test("substitutions: the buyer decision view uses the display path, the staff proposal view stays exact", () => {
+  const source = readFileSync("src/modules/ordering/OrderSubstitutionWorkspace.tsx", "utf8");
+  assert.match(source, /const amount = forBuyer \? orderDisplayAmount : orderAmount;/);
+  assert.doesNotMatch(source, /\borderAmount\(|\borderDisplayAmount\(/, "every amount on the desk goes through the forBuyer switch");
+  assert.ok((source.match(/\bamount\(/g) ?? []).length >= 10, "all substitution amounts use the switch");
 });
