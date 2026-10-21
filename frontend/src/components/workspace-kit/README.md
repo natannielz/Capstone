@@ -13,7 +13,12 @@ variant, add it here.
   keeps its own look inside a legacy page. Leaf primitives (Button, Pagination, PageHeader, Field, Tabs, StateView) carry
   `data-kit` on their root; `Section` carries it only on its header, so legacy content inside the section body still gets
   the page defaults, and the legacy flow spacing skips `.ui-section`. Don't add `data-kit` to your own markup.
-  `tests/ui-kit-cascade-browser.test.ts` measures this in Edge; extend it when you add a primitive.
+  `tests/ui-kit-cascade-browser.test.ts` measures this in a real browser (primitives as direct children of a legacy `.page`
+  and of an `.accountSection`); extend it when you add a primitive. It finds Playwright via `PLAYWRIGHT_PACKAGE` /
+  `UNIT_TOKO_PLAYWRIGHT_PACKAGE`, then `tests/browser/node_modules/playwright`, then the local Codex runtime, and launches
+  `UNIT_TOKO_BROWSER_CHANNEL` (default `msedge` on Windows, bundled Chromium elsewhere). It **skips** when Playwright or a
+  launchable browser is missing (e.g. CI without `npm install` in `tests/browser`); set `UNITTOKO_REQUIRE_BROWSER_TESTS=1`
+  to make that a failure.
 - Money: buyer-facing storefront and ordering screens use `formatDisplayMoney` / `orderDisplayAmount` ("Rp1.250.000",
   "Rp12.000,25"); staff finance, accounting and every other staff screen use `formatMoney` / `orderAmount` /
   `formatMoneyText` (fixed decimals, "Rp1.250.000,00"). `tests/money-scope.test.ts` pins which files use which.
