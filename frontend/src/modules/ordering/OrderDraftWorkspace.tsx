@@ -7,7 +7,7 @@ import { IdentityFailure, sessionTiming, type IdentitySession } from '../identit
 import { createAccessGateway } from '../administration/access-client';
 import { AccessFailure } from '../administration/workflow';
 import { CatalogReadGate } from '../catalog/catalog-editor-state';
-import { createOrderDraftGateway, discardConflictMessage, type DiscardedDraft, type OrderDraft } from './order-draft-client';
+import { createOrderDraftGateway, discardConflictMessage, draftAccessLost, type DiscardedDraft, type OrderDraft } from './order-draft-client';
 import { DiscardReview, DiscardedDraftList, discardedNotice, draftLabel } from './DraftDiscard';
 import { createOrderQuoteGateway, orderContextKey, type OrderContextOption, type OrderQuote } from './order-quote-client';
 import { draftMessage, useDraftSave } from './DraftSave';
@@ -48,7 +48,7 @@ export function OrderDraftWorkspace() {
   }, [account]);
   const expired = account !== null && sessionTiming(account.session, elapsed).expired;
   const failed = useCallback((failure: unknown) => {
-    if (failure instanceof AccessFailure && ([401, 403].includes(failure.status) || failure.code === 'actor_changed')) { setAccount(null); setError(failure); }
+    if (draftAccessLost(failure)) { setAccount(null); setError(failure); }
   }, []);
   return <main className={common.page}><header className={common.header}><div><Link className={common.brand} href="/identity/account">Unit Toko</Link>
     <h1>Draf pesanan</h1><p>Susun kebutuhan cabang dan lanjutkan kapan saja. Draf hanya terlihat oleh akun pembuatnya.</p></div>
