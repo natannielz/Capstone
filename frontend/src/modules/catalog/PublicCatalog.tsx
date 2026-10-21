@@ -6,12 +6,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ChevronRight, LogIn, PackageOpen, SearchX } from 'lucide-react';
 import { createAccessGateway } from '../administration/access-client';
 import { createIdentityGateway } from '../identity/identity-client';
-import { storeSignInHref } from '@/components/store/store-navigation';
 import { formatNumber } from '@/lib/format';
 import { whatsappLink } from '@/lib/whatsapp';
 import { createPublicCatalogGateway, publicCatalogPageSize, publicCatalogUrl, readPublicCatalogQuery,
   type PublicCatalogCategory, type PublicCatalogItem, type PublicCatalogQuery } from './public-catalog-client';
-import { GuestProductCard, GuestSampleBanner, GuestSampleEmpty, GuestUnavailable, MemberCatalogNote, memberRedirect, packLine, signedInEquivalent } from './PublicCatalogParts';
+import { GuestProductCard, GuestSampleBanner, GuestSampleEmpty, GuestUnavailable, MemberCatalogNote, guestSignInHref, memberRedirect, packLine, signedInEquivalent } from './PublicCatalogParts';
 import styles from './public-catalog.module.css';
 
 type Visitor = 'guest' | 'member' | 'no-catalog';
@@ -41,7 +40,9 @@ export function PublicCatalog() {
   const [total, setTotal] = useState(0), [state, setState] = useState<'loading' | 'ready' | 'more' | 'error'>('loading');
   const request = useRef<AbortController | null>(null);
   const visitor = useVisitor();
-  useMemberRedirect(visitor, signedInEquivalent(null));
+  // The signed-in equivalent keeps the search, category and order; it is known once the address has been read.
+  const target = signedInEquivalent(null, undefined, query ?? undefined);
+  useMemberRedirect(visitor, query ? target : null);
   useEffect(() => {
     const read = () => setQuery(readPublicCatalogQuery(window.location.search));
     void Promise.resolve().then(read); window.addEventListener('popstate', read);
@@ -72,7 +73,7 @@ export function PublicCatalog() {
       {current.search || categoryName ? <><Link href="/katalog" onClick={event => { event.preventDefault(); navigate({}); }}>Katalog</Link><ChevronRight size={14} aria-hidden="true" /><span>{title}</span></> : <span>Katalog</span>}</nav>
     <header className={styles.heading}>
       <div><h1>{title}</h1><p aria-live="polite">{state === 'loading' ? 'Memuat produk…' : `${formatNumber(total)} produk`}</p></div>
-      {visitor === 'no-catalog' ? <MemberCatalogNote /> : <GuestSampleBanner />}
+      {visitor === 'no-catalog' ? <MemberCatalogNote /> : <GuestSampleBanner target={target} />}
     </header>
     <div className={styles.toolbar}>
       <div className={styles.chips} role="group" aria-label="Kategori">
@@ -89,7 +90,7 @@ export function PublicCatalog() {
       : state !== 'loading' && items.length === 0 ? current.search || current.category
         ? <section className={styles.state}><SearchX size={34} aria-hidden="true" /><h2>Barang tidak ditemukan</h2><p>Coba kata lain, periksa ejaan, atau lihat semua kategori.</p>
           <button type="button" className={styles.primary} onClick={() => navigate({})}>Lihat semua produk</button></section>
-        : <GuestSampleEmpty />
+        : <GuestSampleEmpty target={target} />
       : <ul className={styles.grid} aria-busy={state === 'loading'}>
         {state === 'loading' ? Array.from({ length: 10 }, (_, index) => <li key={index} className={styles.skeleton} aria-hidden="true"><span /><span /><span /></li>)
           : items.map(item => <GuestProductCard key={item.publicId} item={item} />)}
@@ -118,8 +119,8 @@ export function PublicProduct({ publicId }: { publicId: string }) {
   if (state === 'loading') return <main className={styles.page}><p role="status">Memuat produk…</p></main>;
   if (state === 'error') return <main className={styles.page}><section className={styles.state}><h2>Produk belum dapat dimuat</h2><p>Periksa koneksi, lalu coba lagi.</p>
     <button type="button" className={styles.primary} onClick={() => { setState('loading'); setAttempt(value => value + 1); }}>Coba lagi</button></section></main>;
-  if (state === 'absent' || !item) return <main className={styles.page}><GuestUnavailable /></main>;
-  const signIn = storeSignInHref(signedInEquivalent(item, publicId));
+  if (state === 'absent' || !item) return <main className={styles.page}><GuestUnavailable publicId={publicId} /></main>;
+  const signIn = guestSignInHref(signedInEquivalent(item, publicId));
   return <main className={styles.page}>
     <nav className={styles.breadcrumb} aria-label="Jejak halaman"><Link href="/">Beranda</Link><ChevronRight size={14} aria-hidden="true" />
       <Link href="/katalog">Katalog</Link><ChevronRight size={14} aria-hidden="true" />
