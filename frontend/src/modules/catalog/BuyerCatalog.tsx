@@ -15,7 +15,7 @@ import { CatalogBuyerPhoto } from './CatalogBuyerPhoto';
 import { catalogHistoryUrl, readCatalogHistoryQuery, type CatalogHistoryQuery } from './catalog-history';
 import shared from '../administration/access.module.css';
 import styles from './buyer-catalog.module.css';
-import { AddToCartPanel } from '../ordering/AddToCartPanel';
+import { BuyBox } from './BuyBox';
 import { formatMoney, formatNumber } from "@/lib/format";
 
 const price = (value: BuyerVariant['currentPrice']) => {
@@ -47,7 +47,7 @@ function ProductPage({ item, account, isCurrent, category }: { item: BuyerVarian
       <p className={styles.productVariant}>{item.definition.packageLabel} · isi {formatNumber(item.definition.baseUnitsPerPackage)} {item.definition.baseUnitCode}</p>
       <BuyerCodeLabel item={item} />
       <p className={styles.productPrice}>{price(item.currentPrice)}<span> per {item.definition.packageLabel}</span></p>
-      <AddToCartPanel key={account.actorId + ':' + item.skuId + ':' + item.definition.id + ':' + (item.currentPrice?.id ?? 'none')} actorId={account.actorId} item={item} isCurrent={isCurrent} />
+      <BuyBox item={item} actorId={account.actorId} actions={account.actions} isCurrent={isCurrent} />
     </div>
     <section className={styles.productSpecs} aria-labelledby="spesifikasi-produk"><h2 id="spesifikasi-produk">Spesifikasi</h2>
       <dl className={shared.facts}><div><dt>Kemasan</dt><dd>{item.definition.packageLabel}, {{ sealed: 'tersegel', loose: 'satuan lepas', other: 'kemasan lain' }[item.definition.packageKind]}</dd></div>
@@ -68,8 +68,7 @@ function PackageReview({ item, account, isCurrent, requestOnly }: { item: BuyerV
       <div><dt>{requestOnly ? 'Minimum permintaan' : 'Minimum pembelian'}</dt><dd>{item.definition.minimumOrderPackages} kemasan</dd></div><div><dt>Kelipatan jumlah</dt><dd>{item.definition.orderIncrementPackages} kemasan</dd></div>
       {item.definition.attributes.map(attribute => <div key={attribute.key}><dt>{attribute.key}</dt><dd>{attribute.value}</dd></div>)}</dl>
     <p className={shared.help}>{requestOnly ? 'Pilih kemasan ini untuk menyusun permintaan kebutuhan cabang. Petugas toko akan meninjau permintaan Anda.' : 'Harga dan ketersediaan akan diperiksa kembali saat pesanan disiapkan.'}</p>
-  </div>{requestOnly ? <div className={styles.quoteArea}><h3>Siapkan permintaan cabang</h3>{account.actions.includes('order.request.submit') ? <><p>Pilih cabang dan jumlah kemasan, lalu tinjau permintaan sebelum mengirim.</p><Link className={shared.primary} href={'/ordering/requests?package=' + item.publicId}>Pilih untuk permintaan</Link></> : <p>Akun Anda dapat melihat katalog. Hubungi pengelola jika Anda memerlukan akses untuk mengajukan kebutuhan cabang.</p>}</div> : item.currentPrice && <div className={styles.quoteArea}><AddToCartPanel key={account.actorId + ':' + item.skuId + ':' + item.definition.id + ':' + item.currentPrice.id}
-    actorId={account.actorId} item={item} isCurrent={isCurrent} /></div>}</div>;
+  </div>{requestOnly ? <div className={styles.quoteArea}><h3>Siapkan permintaan cabang</h3>{account.actions.includes('order.request.submit') ? <><p>Pilih cabang dan jumlah kemasan, lalu tinjau permintaan sebelum mengirim.</p><Link className={shared.primary} href={'/ordering/requests?package=' + item.publicId}>Pilih untuk permintaan</Link></> : <p>Akun Anda dapat melihat katalog. Hubungi pengelola jika Anda memerlukan akses untuk mengajukan kebutuhan cabang.</p>}</div> : item.currentPrice && <div className={styles.quoteArea}><BuyBox item={item} actorId={account.actorId} actions={account.actions} isCurrent={isCurrent} /></div>}</div>;
 }
 export function BuyerCatalog({ publicId, returnPath = '/catalog/browse', requestOnly = false }: { publicId?: string; returnPath?: '/shop' | '/catalog/browse'; requestOnly?: boolean } = {}) {
   const [identity] = useState(() => createIdentityGateway()), [access] = useState(() => createAccessGateway());
