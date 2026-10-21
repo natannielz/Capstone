@@ -135,7 +135,6 @@ async function user(who) {
 async function ready(path) {const deadline = performance.now() + 180000; while (!existsSync(path)) {assert.ok(performance.now() < deadline, 'Bounded native processing did not finish'); await delay(250);}}
 async function open(page, review = false) {
   await page.goto(new URL(review ? '/billing/payment-reviews' : '/billing/payments', origin).href);
-  await page.getByRole('link', {name: 'Unit Toko', exact: true}).first().waitFor();
   await page.getByRole('button', {name: `${review ? 'Periksa pengajuan' : 'Buka pembayaran'} ${config.declarationId}`, exact: true}).click();
   await page.getByRole('region', {name: review ? 'Rincian pengajuan pembayaran' : 'Draf pembayaran', exact: true}).waitFor();
   await page.getByRole('region', {name: 'Lampiran PDF tambahan', exact: true}).waitFor();
