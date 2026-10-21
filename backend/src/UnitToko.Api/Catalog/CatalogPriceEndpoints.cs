@@ -26,7 +26,8 @@ public static class CatalogPriceEndpoints
             [FromServices] CatalogPriceService service, CancellationToken ct) => {
             Purpose(request.Purpose);
             var rows = await service.ListProposalsAsync(Actor(http), LongId.Parse(id).Value, Access(request.Access), request.BeforeId?.Value, request.Limit, ct);
-            return TypedResults.Ok(new CatalogPriceProposalsDto([.. rows.Select(CatalogPriceResponses.Proposal)]));
+            var viewer = Actor(http).UserId;
+            return TypedResults.Ok(new CatalogPriceProposalsDto([.. rows.Select(row => CatalogPriceResponses.Proposal(row, viewer))]));
         }).WithName("ListCatalogPriceProposals");
         group.MapPost("/skus/{id}/preview/query", async (string id, CatalogPriceReadDto request, HttpContext http,
             [FromServices] CatalogPriceService service, CancellationToken ct) => {
@@ -53,7 +54,7 @@ public static class CatalogPriceEndpoints
             Purpose(request.Purpose);
             var row = await service.ReadProposalAsync(Actor(http), LongId.Parse(id).Value, LongId.Parse(proposalId).Value, Access(request.Access), ct);
             http.Response.Headers.ETag = AccessRequestMetadata.VersionTag(row["proposal"]["revision"].AsInt64);
-            return TypedResults.Ok(CatalogPriceResponses.Proposal(row));
+            return TypedResults.Ok(CatalogPriceResponses.Proposal(row, Actor(http).UserId));
         }).WithName("CatalogPriceProposal");
         group.MapPost("/skus/{id}/proposals", async (string id, CatalogPriceProposeDto request, HttpContext http,
             [FromServices] CatalogPriceService service, [FromHeader(Name = "Idempotency-Key")] string idempotencyKey,

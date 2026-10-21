@@ -3,7 +3,7 @@ import { AccessFailure } from '../administration/workflow';
 
 export type PublicShowcase = {
   assortmentId: string; ownerLabel: string; listedProducts: number; isPublic: boolean; revision: string;
-  pending: { proposalId: string; makePublic: boolean; proposedBy: string; proposedAt: string; reason: string } | null;
+  pending: { proposalId: string; makePublic: boolean; ownProposal: boolean; proposedAt: string; reason: string } | null;
 };
 
 const invalid = (): never => { throw new AccessFailure(502, 'catalog_public_response_invalid'); };
@@ -32,7 +32,7 @@ export function parsePublicShowcase(value: unknown): PublicShowcase {
       : text(row.ownerName, 410),
     revision: version(row.revision),
     pending: pending && { proposalId: id(pending.proposalId), makePublic: typeof pending.makePublic === 'boolean' ? pending.makePublic : invalid(),
-      proposedBy: id(pending.proposedBy), proposedAt: text(pending.proposedAt, 40), reason: text(pending.reason, 1000) } };
+      ownProposal: typeof pending.ownProposal === 'boolean' ? pending.ownProposal : invalid(), proposedAt: text(pending.proposedAt, 40), reason: text(pending.reason, 1000) } };
 }
 
 const key = (value: string) => /^[A-Za-z0-9_.:-]{1,128}$(?![\s\S])/.test(value) ? value : invalid();

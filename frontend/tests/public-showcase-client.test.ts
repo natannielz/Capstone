@@ -6,7 +6,7 @@ import { createPublicShowcaseGateway, parsePublicShowcase } from '../src/modules
 const actorId = '42';
 const row = { assortmentId: '7', owner: { kind: 'fulfillmentShop', organizationId: '3', shopId: '5', warehouseId: null, channelId: null },
   listedProducts: '24', isPublic: false, revision: '2', pending: null, ownerName: 'Toko Melati' };
-const pending = { ...row, pending: { proposalId: '901', makePublic: true, proposedBy: '41', proposedAt: '2026-10-21T02:00:00+00:00', reason: 'Barang umum untuk pengunjung' } };
+const pending = { ...row, pending: { proposalId: '901', makePublic: true, ownProposal: false, proposedAt: '2026-10-21T02:00:00+00:00', reason: 'Barang umum untuk pengunjung' } };
 function gateway(handler: (request: Request) => Promise<Response>) {
   return createPublicShowcaseGateway(createUnitTokoClient({ baseUrl: 'https://unit-toko.test', fetch: async input => {
     assert.ok(input instanceof Request);
@@ -23,7 +23,7 @@ test('staff see each assortment with whether guests may browse it and any change
     return Response.json({ items: [row, pending] });
   }).list(actorId);
   assert.equal(items[0].ownerLabel, 'Toko Melati'); assert.equal(parsePublicShowcase({ ...row, ownerName: null }).ownerLabel, 'Toko 5 (nama belum tersedia)'); assert.equal(items[0].listedProducts, 24); assert.equal(items[0].isPublic, false); assert.equal(items[0].pending, null);
-  assert.equal(items[1].pending?.makePublic, true); assert.equal(items[1].pending?.proposedBy, '41');
+  assert.equal(items[1].pending?.makePublic, true); assert.equal(items[1].pending?.ownProposal, false);
 });
 
 test('a proposal is fenced to the revision staff saw and a decision to the single proposal revision', async () => {

@@ -30,7 +30,8 @@ internal static class CatalogPriceResponses
         row.TryGetValue("decisionId", out var decision) && !decision.IsBsonNull ? new LongId(decision.AsInt64) : null,
         row.TryGetValue("priceId", out var price) && !price.IsBsonNull ? new LongId(price.AsInt64) : null,
         row.TryGetValue("priceVersion", out var version) && !version.IsBsonNull ? Number(version) : null);
-    internal static CatalogPriceProposalDto Proposal(BsonDocument view)
+    /// <summary>OwnProposal tells the viewer whether they proposed it; who proposed stays private to the price history.</summary>
+    internal static CatalogPriceProposalDto Proposal(BsonDocument view, long viewerId)
     {
         var row = view["proposal"].AsBsonDocument; var sku = row["skuSnapshot"].AsBsonDocument;
         var definition = row["definition"].AsBsonDocument;
@@ -47,6 +48,6 @@ internal static class CatalogPriceResponses
             Time(row["proposedAt"]), row["reason"].AsString,
             decision is null ? null : new(new(decision["_id"].AsInt64), decision["decision"].AsString, Time(decision["decidedAt"]),
                 decision["reviewReference"].AsString, decision["reason"].AsString),
-            view["price"].IsBsonNull ? null : Price(view["price"].AsBsonDocument), new(row["proposedBy"].AsInt64));
+            view["price"].IsBsonNull ? null : Price(view["price"].AsBsonDocument), row["proposedBy"].AsInt64 == viewerId);
     }
 }

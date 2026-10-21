@@ -30,9 +30,9 @@ export function showcaseMessage(error: unknown): string {
 }
 
 /** What the person in front of this row can do now; the server still decides. */
-export function showcaseChoice(row: PublicShowcase, actorId: string, actions: readonly string[]): 'propose' | 'decide' | 'own-proposal' | 'waiting' | 'none' {
+export function showcaseChoice(row: PublicShowcase, actions: readonly string[]): 'propose' | 'decide' | 'own-proposal' | 'waiting' | 'none' {
   if (row.pending) {
-    if (row.pending.proposedBy === actorId) return 'own-proposal';
+    if (row.pending.ownProposal) return 'own-proposal';
     return actions.includes('catalog.public.approve') ? 'decide' : 'waiting';
   }
   return actions.includes('catalog.public.propose') ? 'propose' : 'none';
@@ -113,7 +113,7 @@ function ShowcaseDesk({ actorId, actions, session, observedAt, onLost }: Loaded 
     {error !== null && <p role="alert" className={styles.alert}>{showcaseMessage(error)}{stepUp && <> <Link href={factorHref}>Verifikasi dua langkah</Link></>}</p>}
     <ul className={styles.queueList}>
       {rows.map(row => {
-        const choice = showcaseChoice(row, actorId, actions), editing = open?.assortmentId === row.assortmentId;
+        const choice = showcaseChoice(row, actions), editing = open?.assortmentId === row.assortmentId;
         return <li key={row.assortmentId} className={styles.queueRow}>
           <div><strong>{row.ownerLabel}</strong> <StatusBadge text={row.isPublic ? 'Terbuka untuk umum' : 'Hanya akun cabang'} />
             <p>{formatNumber(row.listedProducts)} produk di katalog ini</p>

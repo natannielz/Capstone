@@ -54,8 +54,9 @@ public sealed partial class CatalogAuthoringHttpTests
         var proposals = await Ok(await checker.Price(path + "/proposals/query", new { purpose = "catalog-pricing", access = "review", limit = 25 }));
         Assert.Equal(proposal, Assert.Single(proposals.GetProperty("items").EnumerateArray()).GetProperty("proposalId").GetString());
         Assert.Equal("12000.25", detail.GetProperty("input").GetProperty("unitPrice").GetString());
-        // The checker sees who proposed, so the page can say "oleh Anda" and keep a proposer from approving their own price.
-        Assert.Equal(ManagerId.ToString(System.Globalization.CultureInfo.InvariantCulture), detail.GetProperty("proposedBy").GetString());
+        // The page learns only whether the viewer proposed it ("oleh Anda"); who proposed stays private, as asserted below.
+        Assert.False(detail.GetProperty("ownProposal").GetBoolean());
+        Assert.True((await Ok(await maker.Price(detailPath, PriceRead()))).GetProperty("ownProposal").GetBoolean());
         Assert.Equal("Dus", detail.GetProperty("definition").GetProperty("packageLabel").GetString());
         await data.Base.AddGrantAsync(new(ManagerId, "https://approved.example/", "subject-" + ManagerId, 1, data.Base.Clock.UtcNow, FactorAssurance.MultiFactor),
             45011, Owner, [Permissions.PricingApprove]);
