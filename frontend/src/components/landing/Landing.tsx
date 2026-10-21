@@ -53,7 +53,7 @@ export function Landing({ pilot }: { pilot: boolean }) {
     <header className={styles.header}>
       <Brand context="Kebutuhan kerja & harian" />
       <nav aria-label="Navigasi utama" className={styles.nav}>
-        <Link href="/shop">Katalog toko</Link>
+        <Link href="/katalog">Katalog toko</Link>
         <Link href="/ordering/requests">Permintaan saya</Link>
         <a href="#layanan">Cara mengajukan</a>
       </nav>
@@ -66,7 +66,7 @@ export function Landing({ pilot }: { pilot: boolean }) {
           <p>Masuk dengan akun organisasi Anda. Katalog, permintaan, dan riwayatnya menunggu di satu tempat.</p>
           <div className={styles.actions}>
             <Link href="/identity/login" className={styles.primary}>Masuk ke akun</Link>
-            <Link href="/shop" className={styles.secondary}>Lihat katalog</Link>
+            <Link href="/katalog" className={styles.secondary}>Lihat katalog</Link>
           </div>
         </>}>
           <h1 id="judul-beranda">Kebutuhan cabang, dihitung per kemasan.</h1>
@@ -75,7 +75,7 @@ export function Landing({ pilot }: { pilot: boolean }) {
             : "Pilih barang dari katalog akun Anda, tentukan jumlah kemasan, lalu ajukan ke toko. Petugas meninjau, menyiapkan, dan mengirim pesanan; Anda mengikuti statusnya sampai tagihan terbit."}</p>
           <div className={styles.actions}>
             <Link href="/identity/login" className={styles.primary}>Masuk ke akun</Link>
-            <Link href="/shop" className={styles.secondary}>Lihat katalog</Link>
+            <Link href="/katalog" className={styles.secondary}>Lihat katalog</Link>
           </div>
           <p className={styles.scrollCue}><span aria-hidden="true" />Gulir untuk mengikuti satu permintaan</p>
         </KemasanJourney>
@@ -87,7 +87,7 @@ export function Landing({ pilot }: { pilot: boolean }) {
           <div className={styles.intro}>
             <h2 id="judul-katalog">Yang biasa diajukan cabang.</h2>
             <p>Setiap barang tercatat dengan isi kemasan, minimum, dan kelipatannya, jadi jumlah yang Anda ajukan selalu bisa disiapkan utuh.</p>
-            <Link href="/shop" className={styles.inlineLink}>Buka katalog</Link>
+            <Link href="/katalog" className={styles.inlineLink}>Buka katalog</Link>
           </div>
           <table className={styles.packing}>
             <caption>Contoh dari katalog toko. Isi katalog mengikuti akun organisasi Anda.</caption>
@@ -114,7 +114,7 @@ export function Landing({ pilot }: { pilot: boolean }) {
             <div>
               <h3>Petugas toko</h3>
               <p>Tinjau permintaan yang ditujukan ke toko Anda dan perbarui katalog sesuai penugasan.</p>
-              <Link href="/identity/account" className={styles.inlineLink}>Buka ruang kerja</Link>
+              <Link href="/workspace" className={styles.inlineLink}>Buka ruang kerja</Link>
             </div>
           </div>
           <p className={styles.accessNote}>Untuk cabang BNI dan akun usaha yang telah disetujui. Pilihan kerja mengikuti keanggotaan dan penugasan akun Anda.</p>

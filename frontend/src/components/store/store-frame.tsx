@@ -12,7 +12,7 @@ import { ProtectedNavigationForm } from '@/modules/identity/ProtectedNavigationF
 import { isPilotRelease } from '@/lib/release-scope';
 import { createCartGateway } from '@/modules/ordering/cart-client';
 import { CART_CHANGED_EVENT, rememberedCartContext } from '@/modules/ordering/cart-branch';
-import { storeLinks, storeMember, type StoreViewer } from './store-navigation';
+import { catalogTabCurrent, storeLinks, storeMember, type StoreLinks, type StoreViewer } from './store-navigation';
 import styles from './store-frame.module.css';
 
 /** Pages where the buyer is deciding or paying: the tab bar steps aside for the page's own action bar. */
@@ -99,16 +99,16 @@ export function StoreFrame({ children }: { children: React.ReactNode }) {
         {viewer.kind !== 'loading' && <Link className={styles.iconLink} href={links.cart} aria-label={cartName}>
           <span className={styles.cartIcon}><ShoppingCart size={21} aria-hidden="true" />{badge}</span><span className={styles.iconLabel}>{isPilotRelease ? 'Permintaan' : 'Keranjang'}</span></Link>}
         {viewer.kind === 'guest' && <Link className={styles.signIn} href={links.signIn}>Masuk</Link>}
-        {member && session && <AccountMenu name={member.name} approver={member.approver} staff={member.staff} orders={links.orders} actorId={session.userId} />}
+        {member && session && <AccountMenu name={member.name} tasks={member.tasks} staff={member.staff} orders={links.orders} actorId={session.userId} />}
         {viewer.kind === 'loading' && <span className={styles.pending} aria-hidden="true" />}
       </div>
     </div>
     {searchForm(styles.mobileSearch)}
     </header>
     <div id="konten-utama" tabIndex={-1} className={styles.content}>{children}</div>
-    <StoreFooter staffDoor={links.staffDoor ?? '/workspace'} member={member !== null} />
+    <StoreFooter links={links} member={member !== null} />
     {!focusedPath(pathname) && <nav className={styles.tabs} aria-label="Navigasi toko">
-      <Link href={links.catalog} aria-current={pathname.startsWith('/shop') ? 'page' : undefined}><LayoutGrid size={20} aria-hidden="true" />Katalog</Link>
+      <Link href={links.catalog} aria-current={catalogTabCurrent(pathname) ? 'page' : undefined}><LayoutGrid size={20} aria-hidden="true" />Katalog</Link>
       <Link href={links.cart} aria-label={cartName} aria-current={pathname === '/cart' ? 'page' : undefined}><span className={styles.cartIcon}><ShoppingCart size={20} aria-hidden="true" />{badge}</span>{isPilotRelease ? 'Permintaan' : 'Keranjang'}</Link>
       <Link href={links.orders} aria-current={pathname.startsWith('/ordering/orders') ? 'page' : undefined}><ClipboardList size={20} aria-hidden="true" />Pesanan</Link>
       <Link href={links.account} aria-current={pathname === '/identity/account' ? 'page' : undefined}><UserRound size={20} aria-hidden="true" />{member ? 'Akun' : 'Masuk'}</Link>
@@ -116,7 +116,7 @@ export function StoreFrame({ children }: { children: React.ReactNode }) {
   </div>;
 }
 
-function AccountMenu({ name, approver, staff, orders, actorId }: { name: string; approver: boolean; staff: boolean; orders: string; actorId: string }) {
+function AccountMenu({ name, tasks, staff, orders, actorId }: { name: string; tasks: { href: string; label: string }[]; staff: boolean; orders: string; actorId: string }) {
   const [open, setOpen] = useState(false), root = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
@@ -131,8 +131,9 @@ function AccountMenu({ name, approver, staff, orders, actorId }: { name: string;
     {open && <div id="menu-akun" className={styles.menu}>
       <p className={styles.menuName}>{name}</p>
       <Link href={orders} onClick={() => setOpen(false)}>Pesanan saya</Link>
-      <Link href="/ordering/requests" onClick={() => setOpen(false)}>Permintaan saya</Link>
-      {approver && <Link href="/ordering/reviews" onClick={() => setOpen(false)}>Persetujuan belanja</Link>}
+      {orders !== '/ordering/requests' && <Link href="/ordering/requests" onClick={() => setOpen(false)}>Permintaan saya</Link>}
+      {/* The buyer's own tasks outside the storefront pages, each only when the grants open it (G-018); they keep the page's one name (G-019). */}
+      {tasks.map(task => <Link key={task.href} href={task.href} onClick={() => setOpen(false)}>{task.label}</Link>)}
       <Link href="/identity/account" onClick={() => setOpen(false)}>Akun saya</Link>
       {staff && <Link href="/workspace" onClick={() => setOpen(false)}>Ruang kerja petugas</Link>}
       <div className={styles.menuSignOut}><ProtectedNavigationForm action="/auth/logout" fields={{ expectedActorId: actorId }} label="Keluar" secondary /></div>
@@ -140,12 +141,13 @@ function AccountMenu({ name, approver, staff, orders, actorId }: { name: string;
   </div>;
 }
 
-function StoreFooter({ staffDoor, member }: { staffDoor: string; member: boolean }) {
+/** The footer follows the viewer like the header (G-021): the catalog they can open, sign-in that returns here, the staff door only for staff and guests. */
+function StoreFooter({ links, member }: { links: StoreLinks; member: boolean }) {
   return <footer className={styles.footer}><div className={`${styles.inner} ${styles.footerGrid}`}>
     <div><Brand inverse context="Toko kebutuhan cabang" /><p>Kebutuhan kantor, pantry dan kegiatan untuk cabang BNI, dipesan dan dilacak dari satu akun.</p></div>
-    <nav aria-label="Belanja"><h2>Belanja</h2><Link href="/shop">Katalog</Link><Link href="/#layanan">Cara pemesanan cabang</Link></nav>
-    <nav aria-label="Akun"><h2>Akun</h2>{member ? <><Link href="/ordering/orders">Pesanan saya</Link><Link href="/identity/account">Akun saya</Link></> :
-      <><Link href="/identity/login">Masuk</Link><Link href="/#akses">Belum punya akses?</Link></>}</nav>
-    <nav aria-label="Koperasi"><h2>Unit Toko</h2><Link href="/">Beranda</Link><Link href={staffDoor}>Ruang kerja petugas</Link></nav>
+    <nav aria-label="Belanja"><h2>Belanja</h2><Link href={links.catalog}>Katalog</Link><Link href="/#layanan">Cara pemesanan cabang</Link></nav>
+    <nav aria-label="Akun"><h2>Akun</h2>{member ? <><Link href={links.orders}>{links.orders === '/ordering/requests' ? 'Permintaan saya' : 'Pesanan saya'}</Link><Link href="/identity/account">Akun saya</Link></> :
+      <><Link href={links.signIn}>Masuk</Link><Link href="/#akses">Belum punya akses?</Link></>}</nav>
+    <nav aria-label="Koperasi"><h2>Unit Toko</h2><Link href="/">Beranda</Link>{links.staffDoor && <Link href={links.staffDoor}>Ruang kerja petugas</Link>}</nav>
   </div></footer>;
 }

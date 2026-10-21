@@ -30,6 +30,7 @@ import { EmptyState } from '@/components/workspace-kit/empty-state';
 import { OrderTimelinePanel } from './OrderTimelinePanel';
 import { SessionAccessState } from "@/components/workspace-kit/session-access-state";
 import { orderNumber } from '@/lib/document-numbers';
+import { requestedOrderId } from './order-links';
 
 type Account = { actorId: string; actions: readonly string[]; session: IdentitySession; observedAt: number };
 function status(order: SubmittedOrder) {
@@ -90,7 +91,7 @@ function OrderHistoryDesk({ account, onFailure }: { account: Account; onFailure:
   const [busy, setBusy] = useState(false), [error, setError] = useState<unknown>(null), detail = useRef<HTMLElement>(null), alive = useRef(false), pending = useRef(false);
   const [repeat, setRepeat] = useState<ReturnType<typeof prepareReorderDraft> | null>(null), [saved, setSaved] = useState<DraftResult | null>(null), [notice, setNotice] = useState('');
   const [cart] = useState(() => createCartGateway()), [catalog] = useState(() => createBuyerCatalogGateway()), router = useRouter(), [cartError, setCartError] = useState<unknown>(null);
-  const repeatRegion = useRef<HTMLDivElement>(null), repeatReadEpoch = useRef(0);
+  const repeatRegion = useRef<HTMLDivElement>(null), repeatReadEpoch = useRef(0), requested = useRef<string | null | undefined>(undefined);
   const current = () => alive.current && !sessionTiming(account.session, performance.now() - account.observedAt).expired;
   const save = useDraftSave(account.actorId, current, result => { repeatReadEpoch.current++; setRepeat(null); setSaved(result); setNotice(''); }, onFailure, busy);
   const locked = busy || save.locked || repeat !== null || filterLocked;
@@ -113,10 +114,16 @@ function OrderHistoryDesk({ account, onFailure }: { account: Account; onFailure:
     let active = true; const controller = new AbortController();
     void Promise.resolve().then(async () => {
       if (!active) return; setBusy(true); setError(null); setSelected(null); setPage({ items: [], hasMore: false });
-      try { const result = await views.orders(account.actorId, filter, cursor, controller.signal); if (active) {setPage(result); setNextCursor(result.nextCursor);} }
+      try {
+        const result = await views.orders(account.actorId, filter, cursor, controller.signal); if (active) {setPage(result); setNextCursor(result.nextCursor);}
+        // An address naming one order (/ordering/orders?order=41, where old /account/orders/41 links lead) opens it with the first list (G-009).
+        if (requested.current === undefined) requested.current = requestedOrderId(window.location.search);
+        const wanted = requested.current; requested.current = null;
+        if (active && wanted) { const order = await gateway.read(account.actorId, wanted); if (active) setSelected(order); }
+      }
       catch (failure) { if (active) { setError(failure); onFailure(failure); } } finally { if (active) setBusy(false); }
     }); return () => { active = false; controller.abort(); };
-  }, [views, account.actorId, filter, cursor, reload, onFailure]);
+  }, [views, gateway, account.actorId, filter, cursor, reload, onFailure]);
   useEffect(() => { if (selected && repeat === null) detail.current?.focus(); }, [selected, repeat]);
   async function select(id: string) {
     const current = () => alive.current && !sessionTiming(account.session, performance.now() - account.observedAt).expired;

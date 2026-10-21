@@ -11,8 +11,19 @@ test("the landing page states the package rule and offers sign-in and the catalo
   const html = render(true);
   assert.match(html, /<h1[^>]*>Kebutuhan cabang, dihitung per kemasan\.<\/h1>/);
   assert.match(html, /<a[^>]*href="\/identity\/login"[^>]*>Masuk ke akun<\/a>/);
-  assert.match(html, /<a[^>]*href="\/shop"[^>]*>Lihat katalog<\/a>/);
+  assert.match(html, /<a[^>]*href="\/katalog"[^>]*>Lihat katalog<\/a>/);
   assert.doesNotMatch(html, /→|home13-|home-topline/, "no arrow-suffixed buttons and no legacy landing classes");
+});
+
+test("guest links open the guest catalog directly, and each door opens its own home (G-020, G-022)", () => {
+  for (const pilot of [true, false]) {
+    const html = render(pilot), hrefs = [...html.matchAll(/<a[^>]*href="([^"]+)"/g)].map(match => match[1]);
+    assert.equal(hrefs.includes("/shop"), false, "no catalog link takes the guest through a redirect hop");
+    assert.match(html, /<a[^>]*href="\/workspace"[^>]*>Buka ruang kerja<\/a>/);
+    assert.match(html, /<a[^>]*href="\/workspace"[^>]*>Ruang kerja petugas<\/a>/);
+    assert.match(html, /<a[^>]*href="\/ordering\/requests"[^>]*>Lihat permintaan saya<\/a>/);
+    assert.match(html, /<a[^>]*href="\/katalog"[^>]*>Katalog toko<\/a>/);
+  }
 });
 
 test("the 3D stage is decorative and the request card carries the same information as text", () => {
@@ -43,7 +54,7 @@ test("the story closes with the next step after the last act", () => {
   const html = render(true), closing = html.slice(html.indexOf("data-story-end"));
   assert.match(closing, /<h2[^>]*>Siap mengajukan kebutuhan cabang\?<\/h2>/);
   assert.match(closing, /<a[^>]*href="\/identity\/login"[^>]*>Masuk ke akun<\/a>/);
-  assert.match(closing, /<a[^>]*href="\/shop"[^>]*>Lihat katalog<\/a>/);
+  assert.match(closing, /<a[^>]*href="\/katalog"[^>]*>Lihat katalog<\/a>/);
   assert.ok(html.indexOf("data-story-end") > html.indexOf('data-step="Ditinjau toko"'), "after the last act");
 });
 

@@ -18,7 +18,7 @@ test("session parsing preserves exact user identifiers and rejects malformed aut
 test("native form fields restrict redirects and require paired explicit invitation credentials", () => {
   assert.deepEqual(loginFields("/identity/account", "", ""), { returnPath: "/identity/account" });
   assert.deepEqual(loginFields("/administration/access", "9007199254740993", "a".repeat(64)), { returnPath: "/administration/access", invitationId: "9007199254740993", invitationSecret: "a".repeat(64) });
-  for (const returnPath of ["//example.test", "/%2fexample.test", "/identity/account?token=secret", "/auth/callback", "/legacy-login"]) assert.throws(() => loginFields(returnPath, "", ""));
+  for (const returnPath of ["//example.test", "/%2fexample.test", "/identity/account?token=https://outside.test", "/identity/account?token=a%2Fb", "/auth/callback", "/legacy-login"]) assert.throws(() => loginFields(returnPath, "", ""));
   assert.throws(() => loginFields("/identity/account", "12", ""));
   assert.throws(() => loginFields("/identity/account", "", "", true), "invitation mode must never silently become ordinary login");
   assert.throws(() => loginFields("/identity/account", "9223372036854775808", "a".repeat(64)));
@@ -30,7 +30,7 @@ test("step-up binds the displayed actor and only offers actual server-permitted 
   assert.throws(() => stepUpFields(parsed, "payment.verify", "/identity/account"));
   assert.throws(() => stepUpFields({ ...parsed, account: null }, "access.approve", "/identity/account"));
   assert.equal(identityDestinations(["access.approve"]).some(item => item.href === "/administration/access"), true);
-  assert.deepEqual(identityDestinations(["order.submit"]).map(item => item.href), ["/administration/delegations", "/ordering/drafts"]);
+  assert.deepEqual(identityDestinations(["order.submit"]).map(item => item.href), [], "buying is reached through the store door, not listed in the workspace (R2)");
   assert.deepEqual(identityDestinations(["report.read"]).map(item => item.href), ["/administration/delegations", "/reporting/accounts"]);
   assert.equal(identityDestinations(["accounting.book.read"]).some(item => item.href === "/reporting/accounts"), false);
   assert.deepEqual(loginFields("/reporting/accounts", "", ""), { returnPath: "/reporting/accounts" });
@@ -60,7 +60,8 @@ test("identity failures distinguish unavailable service from missing approval an
 });
 
 test("personal delegation discovery does not expose administrative write workflows", () => {
-  assert.deepEqual(identityDestinations([]).map(item => item.href), ["/administration/delegations"]);
+  assert.deepEqual(identityDestinations([]).map(item => item.href), [], "delegation is listed for staff only (G-028)");
+  assert.ok(identityDestinations(["report.read"]).some(item => item.href === "/administration/delegations"));
   assert.deepEqual(loginFields("/administration/delegations", "", ""), { returnPath: "/administration/delegations" });
 });
 
@@ -75,5 +76,5 @@ test("signing in from a public product returns to that product's priced page, an
   const { identityReturnPath } = await import("../src/modules/identity/identity-workflow");
   assert.equal(identityReturnPath("/shop/00000065-0000-4000-8000-000000000101"), "/shop/00000065-0000-4000-8000-000000000101");
   for (const forged of ["/shop/00000065-0000-4000-8000-000000000101/x", "/shop/../identity/account", "/shop/ABCDEF65-0000-4000-8000-000000000101", "/shop/1"])
-    assert.equal(identityReturnPath(forged), "/identity/account");
+    assert.equal(identityReturnPath(forged), "/workspace");
 });

@@ -6,7 +6,9 @@ import { createAccessGateway } from "../administration/access-client";
 import { AccessFailure } from "../administration/workflow";
 import { permissionLabel } from "../administration/permission-labels";
 import { createIdentityGateway } from "./identity-client";
-import { IdentityFailure, identityMessage, identityReturnPath, sessionTiming, stepUpFields, type IdentitySession } from "./identity-workflow";
+import { useRouter } from "next/navigation";
+import { HOME_PATH, IdentityFailure, homeFor, identityMessage, identityReturnPath, isStaffActor, sessionTiming, stepUpFields, storeDoor, type IdentitySession } from "./identity-workflow";
+import { sessionLoginHref, useReturnTarget } from "../../components/workspace-kit/session-access-state";
 import { ProtectedNavigationForm } from "./ProtectedNavigationForm";
 import { WorkspaceDirectory } from "./WorkspaceDirectory";
 import { WorkSummary } from "./WorkSummary";
@@ -19,9 +21,15 @@ import { dateTimeFormatter } from "@/lib/format";
 const displayTime = (value: string | null) => value ? dateTimeFormatter.format(new Date(value)) : "—";
 const availableStepUp = (session: IdentitySession) => session.stepUpOperations.filter(operation => !isPilotRelease || ['catalog.manage', 'order.request.submit', 'order.request.decide', 'order.request.read'].includes(operation));
 
-/** The account page, or with variant "workspace" the staff home: waiting work and workspaces first, account settings one link away. */
+/**
+ * One home per person (G-020). With variant "workspace" this is the staff home (/workspace): waiting work, the workspaces and
+ * the door to the store; a buyer without back-office work is sent on to the store. Without it this is "Akun saya": profile,
+ * verification, contact and sign-out only, for everyone, with the way back to that person's home.
+ */
 export function IdentityAccount({ variant = "account" }: { variant?: "account" | "workspace" } = {}) {
   const home = variant === "workspace";
+  const router = useRouter();
+  const signInTarget = useReturnTarget(home ? HOME_PATH : "/identity/account");
   const [gateway] = useState(() => createIdentityGateway());
   const [access] = useState(() => createAccessGateway());
   const [session, setSession] = useState<IdentitySession | null>(null);
@@ -42,7 +50,7 @@ export function IdentityAccount({ variant = "account" }: { variant?: "account" |
         if (controller.signal.aborted) return;
         setSession(result); setObservedAt(performance.now()); setElapsed(0); setError(null);
         const params = new URL(window.location.href).searchParams;
-        setReturnPath(identityReturnPath(params.get("returnPath")));
+        setReturnPath(identityReturnPath(params.get("returnPath"), "/identity/account"));
         const visibleOperations = availableStepUp(result);
         setOperation(visibleOperations.includes(params.get("operation") ?? "") ? params.get("operation")! : visibleOperations[0] ?? "");
         if (result.authenticated && result.account) {
@@ -82,28 +90,40 @@ export function IdentityAccount({ variant = "account" }: { variant?: "account" |
   let verificationFields: Record<string, string> | null = null;
   if (session && operation) { try { verificationFields = stepUpFields(session, operation, returnPath); } catch { /* Permission list may change on refresh. */ } }
   const reload = () => { setLoading(true); setSession(null); setActions([]); setError(null); setAttempt(value => value + 1); };
+  // A buyer without back-office work has the store as home, not this workspace (G-020).
+  const elsewhere = home && !loading && session?.account && !timing.expired && navigationError === null && !isStaffActor(actions) ? homeFor(actions) : null;
+  useEffect(() => { if (elsewhere && elsewhere !== HOME_PATH) router.replace(elsewhere); }, [elsewhere, router]);
+  const door = storeDoor(actions), personalHome = homeFor(actions);
 
   return <main className={styles.page}>
     <a className={styles.skip} href="#account-content">Langsung ke akun</a>
-    <header className={styles.masthead}><div className={styles.mastheadInner}><Brand href="/identity/account" context="Layanan organisasi" /></div></header>
+    <header className={styles.masthead}><div className={styles.mastheadInner}><Brand href="/" context="Layanan organisasi" /></div></header>
     <div className={styles.accountHeader}><div>{home ? <><h1>Pekerjaan saya</h1><p>{session?.account?.displayName ? "Halo, " + session.account.displayName + ". " : ""}Pekerjaan yang menunggu Anda dan ruang kerja sesuai penugasan.</p></>
-      : <><h1>Akses kerja Anda</h1><p>Periksa sesi dan lanjutkan ke tugas yang telah disetujui.</p></>}</div>
+      : <><h1>Akun saya</h1><p>Profil, verifikasi dua langkah, kontak dan keluar dari Unit Toko.</p></>}</div>
       <button type="button" className={styles.secondary} disabled={loading} onClick={reload}>Periksa sesi</button></div>
     <div id="account-content">
       {loading && <section className={styles.card} aria-busy="true"><p role="status">Memeriksa akun dan izin terbaru…</p></section>}
       {error !== null && <section className={styles.card}><h2>Akun belum dapat dimuat</h2><p role="alert">{identityMessage(error)}</p>
         {error instanceof IdentityFailure && error.traceId && <p className={styles.help}>Referensi bantuan: {error.traceId}</p>}
-        {error instanceof IdentityFailure && error.status === 401 && <Link href="/identity/login" className={styles.primary}>Masuk kembali</Link>}
+        {error instanceof IdentityFailure && error.status === 401 && <Link href={sessionLoginHref(signInTarget)} className={styles.primary}>Masuk kembali</Link>}
         <button type="button" className={styles.secondary} onClick={reload}>Coba lagi</button></section>}
       {!loading && session && (!session.authenticated || timing.expired) && <section className={styles.card}>
         <h2>{session.authenticated ? "Sesi perlu diperiksa kembali" : "Masuk untuk melanjutkan"}</h2>
         <p>{session.authenticated ? "Batas waktu sesi yang ditampilkan telah tercapai. Periksa sesi untuk memastikan status terbaru, atau masuk kembali jika sesi telah berakhir." : "Sesi terverifikasi belum tersedia atau telah berakhir. Masuk kembali menggunakan akun organisasi Anda."}</p>
-        <Link href="/identity/login" className={styles.primary}>Ke halaman masuk</Link>
+        <Link href={sessionLoginHref(signInTarget)} className={styles.primary}>Ke halaman masuk</Link>
       </section>}
       {!loading && session?.account && !timing.expired && <>
-        {!isPilotRelease && navigationError === null && <WorkSummary key={"work:" + session.account.userId} actorId={session.account.userId} actions={actions} heading={home ? "Menunggu tindakan Anda" : undefined} />}
-        <WorkspaceDirectory actions={actions} accessState={navigationError} />
-        {home ? <p className={styles.help}>Profil, verifikasi dua langkah untuk persetujuan, kontak dan keluar ada di <Link href="/identity/account#profile-heading">Akun saya</Link>.</p> : <>
+        {home && elsewhere && <p role="status" className={styles.help}>Membuka toko untuk akun Anda…</p>}
+        {home && !elsewhere && <>
+          {!isPilotRelease && navigationError === null && <WorkSummary key={"work:" + session.account.userId} actorId={session.account.userId} actions={actions} heading="Menunggu tindakan Anda" />}
+          {door && navigationError === null && <section className={styles.card} aria-labelledby="store-door-heading"><h2 id="store-door-heading">{door.label}</h2><p>{door.description}</p>
+            <Link href={door.href} className={styles.primary}>{door.label}</Link></section>}
+          <WorkspaceDirectory actions={actions} accessState={navigationError} />
+          <p className={styles.help}>Profil, verifikasi dua langkah untuk persetujuan, kontak dan keluar ada di <Link href="/identity/account#profile-heading">Akun saya</Link>.</p>
+        </>}
+        {!home && <>
+        {navigationError === null && <p className={styles.help}>{personalHome === HOME_PATH ? <Link href={HOME_PATH}>Kembali ke Pekerjaan saya</Link>
+          : personalHome === "/shop" ? <Link href="/shop">Kembali ke toko</Link> : <Link href="/">Kembali ke beranda</Link>}</p>}
         <div className={styles.accountGrid}>
           <section className={styles.card} aria-labelledby="profile-heading"><span className={styles.status}>Akun terverifikasi</span>
             <h2 id="profile-heading" tabIndex={-1}>{session.account.displayName ?? "Akun organisasi"}</h2>

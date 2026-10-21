@@ -204,7 +204,7 @@ try {
   });
   await check('explicit real lot courier and fresh dispatch loses one committed result then recovers original key without repeat', async () => {
     await renew(dispatcher); await dispatcher.page.goto(origin.origin + '/fulfillment/dispatches');
-    await dispatcher.page.getByRole('button', { name: 'Periksa keberangkatan pesanan ' + orderId, exact: true }).click();
+    await dispatcher.page.getByRole('button', { name: 'Periksa keberangkatan pesanan ' + orderNumber(orderId), exact: true }).click();
     const panel = dispatcher.page.getByRole('region', { name: 'Pemeriksaan keberangkatan', exact: true });
     const quantity = panel.getByLabel('Jumlah lot ' + config.lotId, { exact: true }), courier = panel.getByLabel('Kurir', { exact: true });
     assert.equal(await quantity.inputValue(), ''); assert.equal(await courier.inputValue(), '');

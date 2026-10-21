@@ -20,8 +20,8 @@ test("person review sign-in and step-up return only to the exact permitted page"
     serverTime: "2026-09-28T01:01:00Z", stepUpOperations: ["person.review.approve"] });
   assert.deepEqual(stepUpFields(session, "person.review.approve", path), { expectedActorId: "9007199254740993", operation: "person.review.approve", returnPath: path });
   assert.throws(() => stepUpFields(session, "person.review.propose", path));
-  for (const unsafe of [path + "?id=123", path + "/other", "//example.test" + path]) {
-    assert.equal(identityReturnPath(unsafe), "/identity/account");
+  for (const unsafe of [path + "?next=//example.test", path + "/other", "//example.test" + path]) {
+    assert.equal(identityReturnPath(unsafe), "/workspace");
     assert.throws(() => loginFields(unsafe, "", ""));
   }
 });
