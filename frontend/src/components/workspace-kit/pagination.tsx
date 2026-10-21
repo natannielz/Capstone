@@ -11,7 +11,7 @@ export function Pagination({ label, start, end, total, hasPrevious, hasNext, onP
 }) {
   if (!hasPrevious && !hasNext) return null;
   const size = compact ? "icon-compact" : "icon";
-  return <nav aria-label={label} className="list-table-pagination">
+  return <nav aria-label={label} className="list-table-pagination" data-kit="">
     <span>{start}–{end}{total !== undefined ? ` dari ${total}` : ""}</span>
     <Button size={size} aria-label="Sebelumnya" disabled={disabled || !hasPrevious} onClick={onPrevious}><ChevronLeft aria-hidden="true" /></Button>
     <Button size={size} aria-label="Berikutnya" disabled={disabled || !hasNext} onClick={onNext}><ChevronRight aria-hidden="true" /></Button>

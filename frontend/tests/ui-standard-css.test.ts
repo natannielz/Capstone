@@ -14,7 +14,7 @@ const identity = read("src/modules/identity/identity.module.css");
 const shared: Record<string, string> = { "foundation.css": foundation, "workspace-palette.module.css": palette, "access.module.css": access, "identity.module.css": identity };
 const tokens = readTokens(readFileSync("src/app/globals.css", "utf8"));
 /** Legacy element defaults skip shared primitives ([data-kit]) without raising their specificity. */
-const G = ":where(:not([data-kit] *))";
+const G = ":where(:not([data-kit], [data-kit] *))";
 
 /** Every `property: value` declaration in a stylesheet (media blocks included). */
 function declarations(css: string, property: RegExp): Array<{ property: string; value: string }> {
@@ -188,7 +188,7 @@ test("U-013: every badge look is the one 24 px, radius-6, 12/600 Badge", () => {
 test("U-014: shared fields are 44 px with the 3:1 border, radius 8, label gap 8 and the 720 px column", () => {
   for (const [name, css] of [["access", access], ["identity", identity]] as const) {
     const field = /\.page input:not\(\[type="?checkbox"?\]\)[^{]*\{([^}]*)\}/.exec(css)?.[1] ?? "";
-    assert.match(css, /\.page input:not\(\[type="checkbox"\]\):not\(\[type="radio"\]\):where\(:not\(\[data-kit\] \*\)\)/, `${name} fields skip shared primitives`);
+    assert.match(css, /\.page input:not\(\[type="checkbox"\]\):not\(\[type="radio"\]\):where\(:not\(\[data-kit\], \[data-kit\] \*\)\)/, `${name} fields skip shared primitives`);
     assert.match(field, /height:\s*var\(--control-h\)/, `${name} field height`);
     assert.match(field, /border:\s*1px solid var\(--control-border\)/, `${name} field border`);
     assert.match(field, /border-radius:\s*var\(--radius-control\)/, `${name} field radius`);
@@ -198,8 +198,9 @@ test("U-014: shared fields are 44 px with the 3:1 border, radius 8, label gap 8 
   }
   assert.match(rule(access, ".form"), /gap:\s*var\(--space-4\)/);
   // Blocks never touch: a paragraph, a button and the next card get 16 px between them (U-014, glued controls).
-  assert.match(rule(access, ".page > :where(* + *)"), /margin-top:\s*var\(--space-4\)/);
-  assert.match(rule(access, ".accountSection > :where(* + *)"), /margin-top:\s*var\(--space-4\)/);
+  // Primitives (data-kit roots, Sections) keep their own spacing; the computed check is tests/ui-kit-cascade-browser.test.ts.
+  assert.match(rule(access, ".page > :where(* + *):where(:not([data-kit], :global(.ui-section)))"), /margin-top:\s*var\(--space-4\)/);
+  assert.match(rule(access, ".accountSection > :where(* + *):where(:not([data-kit], :global(.ui-section)))"), /margin-top:\s*var\(--space-4\)/);
 });
 
 test("U-015/U-016: one left edge and one canvas in both frames", () => {

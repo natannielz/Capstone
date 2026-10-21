@@ -19,7 +19,8 @@ export function buttonClassName({ variant = "secondary", size = "default", class
  */
 export function Button({ variant = "secondary", size = "default", busy = false, className, type = "button", disabled, children, ...props }:
   ComponentProps<"button"> & { variant?: ButtonVariant; size?: ButtonSize; busy?: boolean }) {
-  return <button type={type} className={buttonClassName({ variant, size, className })} {...props} aria-busy={busy || undefined} disabled={disabled || busy}>
+  // data-kit: legacy page element defaults (font: inherit, disabled colour, flow spacing) skip the button itself.
+  return <button type={type} className={buttonClassName({ variant, size, className })} data-kit="" {...props} aria-busy={busy || undefined} disabled={disabled || busy}>
     {busy && <span className="ui-spinner" aria-hidden="true" />}{children}
   </button>;
 }
