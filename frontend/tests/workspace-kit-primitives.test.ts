@@ -106,7 +106,7 @@ test("DataTable shows exactly one state: an error replaces the rows and the empt
 
 test("Pagination says the range and hides itself when everything fits", () => {
   const html = renderToStaticMarkup(h(Pagination, { label: "Halaman pesanan", start: 1, end: 25, total: 120, hasPrevious: false, hasNext: true, onPrevious() {}, onNext() {} }));
-  assert.match(html, /<nav aria-label="Halaman pesanan" class="list-table-pagination"><span>1–25 dari 120<\/span>/);
+  assert.match(html, /<nav aria-label="Halaman pesanan" class="list-table-pagination" data-kit=""><span>1–25 dari 120<\/span>/);
   assert.match(html, /aria-label="Sebelumnya"[^>]*disabled=""/); assert.match(html, /aria-label="Berikutnya"/);
   assert.equal(renderToStaticMarkup(h(Pagination, { label: "Halaman", start: 1, end: 3, hasPrevious: false, hasNext: false, onPrevious() {}, onNext() {} })), "");
 });
@@ -127,7 +127,7 @@ test("Tabs: page links mark the current page; in-page views stay buttons with ar
   assert.match(views, /<button type="button" class="ui-tab" aria-pressed="true">Riwayat permintaan<\/button>/);
 });
 
-test("StateView renders one state with its role; denied is neutral; OutcomeState renders through it", () => {
+test("StateView renders one state with its role; denied is neutral", () => {
   const error = renderToStaticMarkup(h(StateView, { kind: "error", title: "Tagihan belum dapat dimuat", message: "Isian Anda tetap tersimpan.", detail: "Kode: mock-503", action: h(Button, {}, "Coba lagi") }));
   assert.match(error, /^<div class="state-view" data-kind="error" role="alert" data-kit="">/); assert.match(error, /Kode: mock-503/);
   const denied = renderToStaticMarkup(h(StateView, { kind: "denied", title: "Halaman ini di luar tugas akun Anda", message: "Hubungi pengelola organisasi." }));
@@ -136,9 +136,20 @@ test("StateView renders one state with its role; denied is neutral; OutcomeState
   assert.match(empty, /<h3 class="state-view-title">Belum ada invoice<\/h3>/); assert.doesNotMatch(empty, /role=/);
   const loading = renderToStaticMarkup(h(StateView, { kind: "loading", title: "Memuat tagihan", rows: 2 }));
   assert.match(loading, /role="status" aria-busy="true"/); assert.equal(count(loading, /outcome-skeleton/g), 2); assert.match(loading, /list-table-sr">Memuat tagihan/);
-  const outcome = renderToStaticMarkup(h(OutcomeState, { kind: "error", onAction() {} }));
-  assert.match(outcome, /class="state-view" data-kind="error" role="alert"/); assert.match(outcome, /Terjadi kendala sistem/); assert.match(outcome, />Coba lagi<\/button>/);
-  assert.match(renderToStaticMarkup(h(OutcomeState, { kind: "conflict" })), /data-kind="unknown"/);
+});
+
+// Behaviour and accessible names unchanged for existing consumers: rehearsals wait on these roles (fix round 1, item 4).
+test("OutcomeState keeps its legacy roles and markup: status for denied/empty/offline, alert for errors, no headings", () => {
+  for (const kind of ["denied", "empty-first", "empty-filtered", "offline"] as const) {
+    const html = renderToStaticMarkup(h(OutcomeState, { kind }));
+    assert.match(html, new RegExp(`^<div class="outcome-state" data-kind="${kind}" role="status"><strong>`), kind);
+    assert.doesNotMatch(html, /<h[1-6]/, kind);
+  }
+  for (const kind of ["error", "unknown", "conflict"] as const)
+    assert.match(renderToStaticMarkup(h(OutcomeState, { kind })), new RegExp(`^<div class="outcome-state" data-kind="${kind}" role="alert"><strong>`), kind);
+  assert.equal(renderToStaticMarkup(h(OutcomeState, { kind: "loading", rows: 1 })),
+    '<div class="outcome-state outcome-loading" role="status" aria-busy="true" aria-label="Memuat data"><span class="outcome-skeleton"></span></div>');
+  assert.match(renderToStaticMarkup(h(OutcomeState, { kind: "error", onAction() {} })), /<button type="button" class="outcome-action">Coba lagi<\/button>/);
 });
 
 test("Facts renders one description list", () => {
