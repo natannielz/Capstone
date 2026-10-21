@@ -39,7 +39,7 @@ export async function verifyProcurementFundingBrowser({ config, maker, user, ori
     const text = await region.innerText();
     for (const value of [config.organizationName, config.shopName, config.warehouseName, config.channelName, config.supplierName, config.supplierSubject,
       config.skuCode, config.familyName, config.packageLabel, config.specification, '12 piece per kemasan', '6 kemasan', '72 piece', '000001', '000012', 'SYNTHETIC-QUOTE-0001',
-      'Rp10.000', 'Rp60.000', 'Rp3.300', 'Rp700', 'Rp64.000', 'Rp20.000', 'Explicit synthetic deposit; balance on receipt', config.neededBy,
+      'Rp10.000,00', 'Rp60.000,00', 'Rp3.300,00', 'Rp700,00', 'Rp64.000,00', 'Rp20.000,00', 'Explicit synthetic deposit; balance on receipt', config.neededBy,
       'SYNTHETIC-LOCAL-ADVANCE-PROCEDURE', 'SYNTHETIC-LOCAL-POLICY-APPROVAL', 'SYNTHETIC-LOCAL-FINANCE-OWNER', 'Otorisasi yang belum dicairkan tetap mengurangi sisa batas.',
       'Transfer, ketersediaan kas, penerimaan barang dan jurnal pembayaran belum dicatat']) assert.ok(text.includes(value), value);
   }
@@ -88,7 +88,7 @@ export async function verifyProcurementFundingBrowser({ config, maker, user, ori
   await checker.page.getByLabel('Alasan keputusan', { exact: true }).fill('Pemeriksaan sintetis independen atas uang muka pesanan, kebijakan dan sisa batas');
   await checker.page.getByRole('button', { name: 'Tinjau persetujuan uang muka', exact: true }).click();
   const decision = checker.page.getByRole('region', { name: 'Rincian keputusan uang muka', exact: true }); await reviewReady(decision, 'Pastikan keputusan uang muka', 'Otorisasi nominal yang diminta'); await facts(decision);
-  const capacity = decision.getByRole('region', { name: 'Batas otorisasi terkini', exact: true }); assert.match(await capacity.innerText(), /Rp20\.000(?![\d.,])/); assert.match(await capacity.innerText(), /Rp0(?![\d.,])/);
+  const capacity = decision.getByRole('region', { name: 'Batas otorisasi terkini', exact: true }); assert.ok((await capacity.innerText()).includes('Rp20.000,00')); assert.ok((await capacity.innerText()).includes('Rp0,00'));
   const preview = await query(checker.page, config.checkerId, requestPath + '/decision-preview/query', { purpose: 'funding-review', decision: 'approve' }); assert.equal(preview.status, 200);
   const probeKey = 'browser-funding-missing-precondition';
   assert.equal((await query(checker.page, config.checkerId, requestPath + '/decisions', { decision: 'approve', binding: preview.body.binding, reason: 'Synthetic missing precondition probe' }, { headers: { 'Idempotency-Key': probeKey } })).status, 400);
@@ -107,7 +107,7 @@ export async function verifyProcurementFundingBrowser({ config, maker, user, ori
   await page.getByRole('button', { name: 'Ajukan uang muka', exact: true }).click(); await page.getByRole('heading', { name: 'Ajukan otorisasi uang muka', exact: true }).waitFor();
   await page.getByLabel('Pesanan pembelian yang disetujui', { exact: true }).selectOption(config.orderId);
   const live = page.getByRole('region', { name: 'Pesanan pilihan', exact: true });
-  assert.equal(await live.locator('dl div').filter({ has: page.getByText('Sisa yang dapat diotorisasi', { exact: true }) }).getByRole('definition').innerText(), 'Rp10.000');
+  assert.equal(await live.locator('dl div').filter({ has: page.getByText('Sisa yang dapat diotorisasi', { exact: true }) }).getByRole('definition').innerText(), 'Rp10.000,00');
   const outsider = await user(config.outsiderToken); await outsider.page.goto(origin.origin + '/__funding_scope_probe');
   const foreign = await query(outsider.page, config.outsiderId, requestPath + '/query', { purpose: 'funding-review' }); assert.equal(foreign.status, 403); assert.equal(foreign.body.code, 'scope_denied');
   for (const field of ['input', 'source', 'order', 'policy', 'capacity']) assert.equal(Object.hasOwn(foreign.body, field), false);

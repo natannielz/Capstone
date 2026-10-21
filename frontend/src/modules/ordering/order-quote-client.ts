@@ -5,7 +5,7 @@ import { parsePrice, priceId } from '../catalog/catalog-price-workflow';
 import { z } from 'zod';
 import { paymentAllocationSchemas } from '../billing/payment-allocation-client';
 import { parseOrganizationAddressCurrent, type OrganizationAddressTarget } from '../organizations/organization-address-client';
-import { formatMoney } from "@/lib/format";
+import { formatDisplayMoney, formatMoney } from "@/lib/format";
 
 const invalid = (): never => { throw new AccessFailure(502, 'order_quote_response_invalid'); };
 function record(value: unknown): Record<string, unknown> { return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : invalid(); }
@@ -69,7 +69,10 @@ export function parseOrderQuote(value: unknown, context: OrderContext, selected:
   return { context: actualContext, calculatedAt, currency, catalogSubtotal, lines };
 }
 export type OrderQuote = ReturnType<typeof parseOrderQuote>;
+/** Exact order amount ("Rp1.250.000,00") for staff, finance and accounting screens. */
 export function orderAmount(currency: string, value: string) { return formatMoney(currency, money(value)); }
+/** Buyer-facing order amount ("Rp1.250.000", "Rp12.000,25") for the storefront, checkout and the buyer's orders and drafts. */
+export function orderDisplayAmount(currency: string, value: string) { return formatDisplayMoney(currency, money(value)); }
 function data<T>(result: { data?: T; error?: unknown; response: Response }): T {
   if (!result.response.ok || result.data === undefined) {
     const error = result.error && typeof result.error === 'object' ? result.error as Record<string, unknown> : {};

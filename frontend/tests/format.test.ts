@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { dateFormatter, dateTimeFormatter, formatDate, formatDateTime, formatMoney, formatMoneyText, formatMonth, formatDecimal, formatNumber, formatPercent, formatRupiah, formatTime, jakartaDateKey, numberFormatter } from "../src/lib/format";
+import { dateFormatter, dateTimeFormatter, formatDate, formatDateTime, formatDisplayMoney, formatMoney, formatMoneyText, formatMonth, formatDecimal, formatNumber, formatPercent, formatRupiah, formatTime, jakartaDateKey, numberFormatter } from "../src/lib/format";
 
 // EYD V: "Rp1.250.000" (no space after Rp), dot thousands, comma decimals; times "14.30 WIB".
 test("formatRupiah writes EYD V rupiah without a space and with explicit fraction digits", () => {
@@ -19,21 +19,24 @@ test("formatRupiah accepts decimal strings exactly", () => {
   assert.throws(() => formatRupiah("12a"), /angka/);
 });
 
-test("formatMoney renders server decimal strings: IDR as EYD V rupiah, other currencies by code", () => {
+test("formatMoney renders exact server decimal strings: IDR as EYD V rupiah, other currencies by code", () => {
   assert.equal(formatMoney("IDR", "12000.25"), "Rp12.000,25");
-  // U-017: rupiah drops ",00" only when the fraction is zero (after rounding); a real fraction keeps two decimals.
-  assert.equal(formatMoney("IDR", "0.00"), "Rp0");
-  assert.equal(formatMoney("IDR", "1250000.00"), "Rp1.250.000");
-  assert.equal(formatMoney("IDR", "561120"), "Rp561.120");
-  assert.equal(formatMoney("IDR", "12000.004"), "Rp12.000");
-  assert.equal(formatMoney("IDR", "12000.5"), "Rp12.000,50");
-  assert.equal(formatMoney("IDR", "-25000.00"), "-Rp25.000");
+  assert.equal(formatMoney("IDR", "0.00"), "Rp0,00");
+  assert.equal(formatMoney("IDR", "1250000.00"), "Rp1.250.000,00", "staff finance screens keep fixed decimals");
   assert.equal(formatMoney("IDR", "-999999999999999.99"), "-Rp999.999.999.999.999,99");
   assert.equal(formatMoney("IDR", "1250000.40", 0), "Rp1.250.000", "explicit whole rupiah still rounds");
   assert.equal(formatMoney("USD", "1500.5"), "USD 1.500,50");
-  assert.equal(formatMoney("USD", "1500.00"), "USD 1.500,00", "other currencies keep their decimals");
-  // Formal documents (invoice and receipt renderers) keep formatRupiah's fixed decimals.
-  assert.equal(formatRupiah("1250000.00", { decimals: 2 }), "Rp1.250.000,00");
+});
+
+test("formatDisplayMoney (buyer screens, U-017) drops ,00 only when the fraction is zero after rounding", () => {
+  assert.equal(formatDisplayMoney("IDR", "0.00"), "Rp0");
+  assert.equal(formatDisplayMoney("IDR", "1250000.00"), "Rp1.250.000");
+  assert.equal(formatDisplayMoney("IDR", "561120"), "Rp561.120");
+  assert.equal(formatDisplayMoney("IDR", "12000.004"), "Rp12.000");
+  assert.equal(formatDisplayMoney("IDR", "12000.25"), "Rp12.000,25");
+  assert.equal(formatDisplayMoney("IDR", "12000.5"), "Rp12.000,50");
+  assert.equal(formatDisplayMoney("IDR", "-25000.00"), "-Rp25.000");
+  assert.equal(formatDisplayMoney("USD", "1500.00"), "USD 1.500,00", "other currencies keep their decimals");
 });
 
 test("numbers and percentages use Indonesian separators", () => {
@@ -66,9 +69,8 @@ test("formatted output never contains no-break spaces that break EYD V or copy/p
 });
 
 test("formatMoneyText formats valid amounts and shows text still being typed as entered, never throwing", () => {
-  assert.equal(formatMoneyText("7000.00"), "Rp7.000");
-  assert.equal(formatMoneyText("1250000"), "Rp1.250.000");
-  assert.equal(formatMoneyText("1250000.5"), "Rp1.250.000,50");
+  assert.equal(formatMoneyText("7000.00"), "Rp7.000,00");
+  assert.equal(formatMoneyText("1250000"), "Rp1.250.000,00");
   assert.equal(formatMoneyText(" 12. "), "Rp12.");
   assert.equal(formatMoneyText(""), "Rp—");
 });

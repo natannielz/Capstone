@@ -37,27 +37,32 @@ export function formatRupiah(value: Decimal, opts: { decimals?: 0 | 2 } = {}): s
   return `${negative ? "-" : ""}Rp${grouped(whole)}${fractionDigits ? "," + fraction : ""}`;
 }
 
-/** On-screen rupiah: two decimals only when there is a fraction ("Rp12.000,25"), whole amounts without ",00" ("Rp1.250.000"). */
-function displayRupiah(value: Decimal): string {
+/*
+ * Two money paths (orchestrator ruling, website-ready Task 3.5):
+ * - exact — formatMoney / formatMoneyText: fixed decimals ("Rp1.250.000,00"). Staff finance and accounting screens (invoices,
+ *   payments, bank receipts and statements, refunds and returns, accounting reports, procurement postings and payables) and
+ *   every other staff screen show amounts exactly as recorded.
+ * - display — formatDisplayMoney: buyer-facing storefront and ordering screens (catalogue, product, cart, checkout, the buyer's
+ *   orders, requests and drafts) drop ",00" on whole rupiah ("Rp1.250.000") and keep real fractions ("Rp12.000,25").
+ */
+
+/** Exact amounts with a currency code: IDR via formatRupiah ("Rp12.000,25", "Rp1.250.000,00"); anything else "CODE 1.500,50". */
+export function formatMoney(currency: string, value: Decimal, decimals: 0 | 2 = 2): string {
+  return currency === "IDR" ? formatRupiah(value, { decimals }) : `${currency} ${formatNumber(value, decimals)}`;
+}
+
+/** Buyer-facing amounts: IDR whole amounts without ",00" ("Rp1.250.000"), fractions with two decimals ("Rp12.000,25"); other currencies as formatMoney. */
+export function formatDisplayMoney(currency: string, value: Decimal): string {
+  if (currency !== "IDR") return formatMoney(currency, value);
   const text = formatRupiah(value, { decimals: 2 });
   return text.endsWith(",00") ? text.slice(0, -3) : text;
 }
 
-/**
- * Server amounts with a currency code for screens: IDR is "Rp1.250.000", or "Rp12.000,25" when the fraction is not zero
- * (decimals 0 rounds to whole rupiah); anything else is "CODE 1.500,50". Formal documents (invoice and receipt renderers)
- * keep fixed decimals with formatRupiah(value, { decimals: 2 }).
- */
-export function formatMoney(currency: string, value: Decimal, decimals: 0 | 2 = 2): string {
-  if (currency === "IDR") return decimals === 2 ? displayRupiah(value) : formatRupiah(value, { decimals });
-  return `${currency} ${formatNumber(value, decimals)}`;
-}
-
-/** Rupiah for amounts that may still be typed text (review panels echo form input): valid decimals format as formatMoney, anything else shows as entered. */
+/** Exact rupiah for amounts that may still be typed text (staff review panels echo form input): valid decimals format, anything else shows as entered. */
 export function formatMoneyText(value: string): string {
   const text = value.trim();
   if (!text) return "Rp—";
-  try { return displayRupiah(text); } catch { return `Rp${text}`; }
+  try { return formatRupiah(text, { decimals: 2 }); } catch { return `Rp${text}`; }
 }
 
 /** "1,5" — up to maxFractionDigits decimals, trailing zeros dropped (durations, measured quantities). */

@@ -10,7 +10,7 @@ import { IdentityFailure } from '../identity/identity-workflow';
 import { createBuyerCatalogGateway, type BuyerVariant } from '../catalog/catalog-buyer-client';
 import { SessionAccessState } from '@/components/workspace-kit/session-access-state';
 import { QuantityStepper } from '@/components/workspace-kit/quantity-stepper';
-import { formatMoney, formatNumber } from '@/lib/format';
+import { formatDisplayMoney, formatNumber } from '@/lib/format';
 import { createOrderQuoteGateway, orderContextKey, orderQuantity, type OrderContextOption, type OrderSelection } from './order-quote-client';
 import type { OrderDraft } from './order-draft-client';
 import { useCartSave } from './CartSave';
@@ -147,8 +147,8 @@ function CartDesk({ actorId, onLost }: { actorId: string; onLost: (failure: unkn
             <div className={styles.lineInfo}>
               {variant ? <Link href={'/shop/' + variant.publicId} className={styles.lineName}>{variant.familyName}</Link> : <span className={styles.lineName}>Barang tidak tersedia</span>}
               {definition && <span className={styles.linePack}>{definition.packageLabel} · isi {formatNumber(definition.baseUnitsPerPackage)} {definition.baseUnitCode} · {variant!.code}</span>}
-              {price && <span className={styles.unitPrice}>{formatMoney(price.currency, price.unitPrice)} <small>per kemasan</small></span>}
-              {row.state === 'price-changed' && <p className={styles.notice}>Harga berubah menjadi {formatMoney(price!.currency, price!.unitPrice)}.
+              {price && <span className={styles.unitPrice}>{formatDisplayMoney(price.currency, price.unitPrice)} <small>per kemasan</small></span>}
+              {row.state === 'price-changed' && <p className={styles.notice}>Harga berubah menjadi {formatDisplayMoney(price!.currency, price!.unitPrice)}.
                 <button type="button" className={styles.secondary} disabled={saving || tracked.locked} onClick={() => void change(current => current.map(line => line.skuId === row.saved.skuId ? acceptCurrent(line, variant!) : line), cartReasons.refresh)}>Pakai harga terbaru</button></p>}
               {row.state === 'package-changed' && <p className={styles.notice}>Kemasan diperbarui menjadi {definition!.packageLabel}.
                 <button type="button" className={styles.secondary} disabled={saving || tracked.locked} onClick={() => void change(current => current.map(line => line.skuId === row.saved.skuId ? acceptCurrent(line, variant!) : line), cartReasons.refresh)}>Pakai kemasan terbaru</button></p>}
@@ -158,7 +158,7 @@ function CartDesk({ actorId, onLost }: { actorId: string; onLost: (failure: unkn
               {definition && row.state === 'ready' && <QuantityStepper id={'cart-line-' + row.saved.skuId} label="Jumlah" value={text} disabled={saving || tracked.locked}
                 minimum={definition.minimumOrderPackages} increment={definition.orderIncrementPackages} onChange={value => typeQuantity(row, value)} />}
               {definition && !typedValid(row) && <p className={styles.notice}>Minimal {definition.minimumOrderPackages}, kelipatan {definition.orderIncrementPackages}.</p>}
-              {price && row.state === 'ready' && <strong className={styles.lineTotal}>{formatMoney(price.currency, lineAmount(price.unitPrice, row.saved.packages))}</strong>}
+              {price && row.state === 'ready' && <strong className={styles.lineTotal}>{formatDisplayMoney(price.currency, lineAmount(price.unitPrice, row.saved.packages))}</strong>}
               <button type="button" className={styles.remove} disabled={saving || tracked.locked} aria-label={'Hapus ' + (variant?.familyName ?? 'barang') + ' dari keranjang'}
                 onClick={() => void change(current => removeFromCart(current, row.saved.skuId), cartReasons.remove)}><Trash2 size={18} aria-hidden="true" />Hapus</button>
             </div>
@@ -167,7 +167,7 @@ function CartDesk({ actorId, onLost }: { actorId: string; onLost: (failure: unkn
           <p className={styles.help}><Link href="/shop">Tambah barang lain</Link> · <Link href="/ordering/drafts">Draf tersimpan</Link></p></section>
         <aside className={styles.summary} aria-label="Ringkasan belanja">
           <h2>Ringkasan belanja</h2>
-          <p className={styles.summaryRow}><span>{rows.length} barang</span><strong>{formatMoney(currency, total)}</strong></p>
+          <p className={styles.summaryRow}><span>{rows.length} barang</span><strong>{formatDisplayMoney(currency, total)}</strong></p>
           <p className={styles.help + " " + styles.summaryNote}>Ongkos kirim, pajak dan syarat pembayaran dihitung di langkah berikutnya. Pesanan yang memerlukan persetujuan belanja akan dikirim ke penyetuju cabang.</p>
           {blocked && <p className={styles.notice}>Periksa barang yang ditandai sebelum melanjutkan.</p>}
           {draft && !blocked && !saving && !tracked.locked && !editing
