@@ -49,7 +49,7 @@ a.lineName:hover { text-decoration: underline; }
 .added p { display: flex; align-items: center; gap: 8px; font-weight: 600; }
 
 @media (max-width: 860px) {
-  .page { padding: 12px 16px 24px; }
+  .page { padding: 12px 0 24px; }
   .layout { grid-template-columns: 1fr; gap: 16px; }
   .line { grid-template-columns: 56px minmax(0, 1fr); }
   .thumb { width: 56px; height: 56px; }
