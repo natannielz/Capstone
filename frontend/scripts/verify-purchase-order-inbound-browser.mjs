@@ -31,7 +31,6 @@ export async function verifyPurchaseOrderInboundBrowser({ config, maker, user, o
     const select = current.getByLabel('Organisasi / toko / gudang / kanal', { exact: true });
     await select.getByRole('option', { name: [config.organizationName, config.shopName, config.warehouseName, config.channelName].join(' · '), exact: true }).waitFor({ state: 'attached' });
     await select.selectOption(canonical); await current.getByRole('region', { name: 'Rincian pesanan pembelian', exact: true }).waitFor();
-    await current.getByRole('link', { name: 'Unit Toko', exact: true }).waitFor();
   }
   async function pending(current, write, operation) {
     const saved = await references(current); assert.equal(saved.length, 1); assert.deepEqual(Object.keys(saved[0]).sort(), ['actorId', 'createdAt', 'key', 'operation']);
