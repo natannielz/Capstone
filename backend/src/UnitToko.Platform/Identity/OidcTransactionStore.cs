@@ -73,8 +73,9 @@ public sealed class OidcTransactionStore(IMongoDatabase database, IClock clock)
     {
         if (!Enum.IsDefined(request.Purpose) || !Uri.TryCreate(request.Issuer, UriKind.Absolute, out var issuer) || issuer.Scheme != "https" ||
             request.Issuer.Length > 500 || string.IsNullOrWhiteSpace(request.ClientId) || request.ClientId.Length > 200 ||
-            request.ReturnPath.Length is < 1 or > 200 || !request.ReturnPath.StartsWith('/') || request.ReturnPath.Contains("//", StringComparison.Ordinal) ||
-            request.ReturnPath.Any(character => char.IsControl(character) || char.IsWhiteSpace(character) || character is '\\' or '%' or '?' or '#' or ':') || request.ReturnPath.Split('/').Any(segment => segment is "." or ".."))
+            request.ReturnPath.Length is < 1 or > ReturnDestination.MaximumLength || !ReturnDestination.TrySplit(request.ReturnPath, out var returnPath, out _) ||
+            !returnPath.StartsWith('/') || returnPath.Contains("//", StringComparison.Ordinal) ||
+            returnPath.Any(character => char.IsControl(character) || char.IsWhiteSpace(character) || character is '\\' or '%' or '?' or '#' or ':') || returnPath.Split('/').Any(segment => segment is "." or ".."))
             throw new DomainValidationException("invalid_oidc_transaction", "A reviewed issuer, client and return path are required");
         if (request.Purpose == OidcTransactionPurpose.StepUp)
         {
