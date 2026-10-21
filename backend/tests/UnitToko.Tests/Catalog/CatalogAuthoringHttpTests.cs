@@ -206,7 +206,7 @@ public sealed partial class CatalogAuthoringHttpTests(MongoFixture fixture)
         var page = await Ok(await buyer.Variant("/query", new { offset = 0, limit = 25 }));
         Assert.Equal("1", page.GetProperty("total").GetString());
         var item = Assert.Single(page.GetProperty("items").EnumerateArray());
-        Assert.Equal(new[] { "categoryCode", "code", "currentPrice", "definition", "description", "familyId", "familyName", "familyPublicId", "publicId", "skuId" },
+        Assert.Equal(new[] { "buyerIdentity", "categoryCode", "code", "currentPrice", "definition", "description", "familyId", "familyName", "familyPublicId", "publicId", "skuId" },
             item.EnumerateObject().Select(property => property.Name).Order(StringComparer.Ordinal));
         Assert.Equal(JsonValueKind.Null, item.GetProperty("currentPrice").ValueKind);
         Assert.Equal(12, item.GetProperty("definition").GetProperty("baseUnitsPerPackage").GetInt32());

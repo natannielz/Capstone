@@ -200,6 +200,17 @@ Same reason as `Retired.HistoricalUpgrade`: these reset the migration version an
 | `AccountingBookSetupMigrationTests.Existing_valid_core_books_survive_migration_without_being_claimed_as_new_reviewed_setup` | Assert.InRange() Failure: same restore chain (expects 72-73, finds 120) | Retired: `HistoricalUpgrade` |
 | `AccountingBookSetupMigrationTests.Unsafe_partial_or_orphan_command_effect_refuses_before_any_setup_DDL` (7 cases) | Assert.InRange() Failure: same restore chain (expects 72-73, finds 120) | Retired: `HistoricalUpgrade` |
 
+### Catalog photo migration replays found in the catalog regression batch (retired, 21 October 2026)
+
+Same reason as `Retired.HistoricalUpgrade`: these rewind a migrated fixture to schema 79 to replay the photo migration. The restore chain stops at schema 89 (it expects exactly 89 applied migrations) and the fixture is now at 121, so the rewind refuses before the test starts. No deployable database holds schema 79.
+
+| Test | Root cause (run log) | Outcome |
+| --- | --- | --- |
+| `CatalogPhotoMigrationTests.Photo_read_upgrade_retains_stronger_operator_guard_exactly` | Assert.Equal() Failure in the restore chain (expects 89 applied migrations, finds 121) | Retired: `HistoricalUpgrade` |
+| `CatalogPhotoMigrationTests.Empty_interrupted_photo_candidate_resumes_exact_collections_indexes_and_history` | Same restore chain (expects 89, finds 121) | Retired: `HistoricalUpgrade` |
+| `CatalogPhotoMigrationTests.Populated_photo_owner_cannot_be_relabelled_as_a_predecessor_or_silently_recreated` | Same restore chain (expects 89, finds 121) | Retired: `HistoricalUpgrade` |
+| `CatalogPhotoMigrationTests.Unsafe_photo_candidate_definition_or_predecessor_refuses_before_any_DDL` | Same restore chain (expects 89, finds 121) | Retired: `HistoricalUpgrade` |
+
 ## Open test debt (pending rewrite, not retired)
 
 These tests guard behaviour that still applies to deployable states, so they are **not** retired. They are skipped with `Pending.FixtureRewrite` so the suite reports them honestly while they are rewritten.
@@ -216,6 +227,15 @@ Root cause: commit 7f8541b (7 October) changed the shared procurement fixtures t
 | `AfterSalesStockSourceTests.Independent_parallel_verifications_have_one_immutable_result_and_one_genuine_source_append` | Assert.False() Failure | Open: pending rewrite |
 | `ProcurementStockSourceTests.Actual_completed_held_receipt_advances_genuine_producer_once_and_partial_reader_never_claims_inbound_completeness` | PersistenceConflictException: Procurement causal source membership is missing or cannot be authenticated | Open: pending rewrite |
 | `ProcurementStockSourceCoverageTests.Real_unbound_PO_and_private_inspection_cannot_authorize_a_new_held_stock_leg` | Assert.False() Failure (a purchase-order inbound selection already exists) | Open: pending rewrite |
+
+### Bank receipt purpose: shared warehouse between fixtures (pending, 21 October 2026)
+
+Skipped with `Pending.SharedWarehouseFixture`. Once the invoice fixtures recorded their release binding, these scenarios reached a deeper fixture conflict: the customer side attaches an order fixture to the procurement advance-return fixture, which has already received physical stock into the same warehouse. Activating that pool for orders is correctly refused, because existing stock needs its own reviewed migration and valuation handoff. The guarantee still applies; the order fixture needs its own warehouse.
+
+| Test | Root cause (run log) | Outcome |
+| --- | --- | --- |
+| `BankReceiptPurposeTests.Real_customer_verification_and_supplier_return_compete_for_the_same_whole_confirmed_credit` | PersistenceConflictException: Existing physical stock requires its own reviewed migration and valuation handoff (`OrderSubmissionTestData.ConfigureIsolatedOperationalPoolAsync`) | Open: pending rewrite |
+| `BankReceiptPurposeTests.Genuine_supplier_return_leaves_bank_history_readable_but_removes_credit_from_customer_picker` | Same | Open: pending rewrite |
 
 ### D3 integrations: populated predecessor replays (retired, 20 October 2026)
 

@@ -127,8 +127,11 @@ public sealed class OrderSubstitutionInvoiceTests(MongoFixture fixture)
         Assert.Equal(originalOrder, orderAfter);
     }
 
-    private sealed class SyntheticInvoicePolicy(GenuineFiniteDispatchTestData data, ActorContext finance) : IInvoiceAdmissionReader
+    private sealed class SyntheticInvoicePolicy(GenuineFiniteDispatchTestData data, ActorContext finance) : IInvoiceAdmissionReader, IInvoiceReleaseWriter
     {
+        public Task BindPostedAsync(IClientSessionHandle tx, ActorContext actor, InvoiceTerms terms, BsonDocument invoice, CancellationToken ct) =>
+            LegacyInvoiceRelease.AnchorAsync(data.Database, tx, invoice, ct);
+        public void RequireCurrent(IClientSessionHandle tx, ActorContext actor, InvoiceTerms terms) { }
         private readonly ConcurrentDictionary<IClientSessionHandle, (long Transaction, BsonDocument Row)> captured = new();
         public IMongoDatabase Database => data.Database;
         private IMongoCollection<BsonDocument> Rows => data.Rows("fixtureR02InvoiceApproval");

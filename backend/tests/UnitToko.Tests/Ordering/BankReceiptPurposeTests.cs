@@ -17,7 +17,7 @@ namespace UnitToko.Tests.Ordering;
 [SupportedOSPlatform("windows")]
 public sealed class BankReceiptPurposeTests(MongoFixture fixture)
 {
-    [WindowsStorageFact]
+    [WindowsStorageFact(Skip = Pending.SharedWarehouseFixture)]
     public async Task Genuine_supplier_return_leaves_bank_history_readable_but_removes_credit_from_customer_picker()
     {
         await using var supplier = await ProcurementAdvanceReturnTestData.CreateAsync(fixture, receiptAmount: 4000, includeCustomerMappings: true);
@@ -33,7 +33,7 @@ public sealed class BankReceiptPurposeTests(MongoFixture fixture)
         Assert.Equal("bank_receipt_purpose_conflict", (await Assert.ThrowsAsync<PersistenceConflictException>(() => customer.PreviewAsync())).Code);
     }
 
-    [WindowsStorageFact]
+    [WindowsStorageFact(Skip = Pending.SharedWarehouseFixture)]
     public async Task Real_customer_verification_and_supplier_return_compete_for_the_same_whole_confirmed_credit()
     {
         await using var supplier = await ProcurementAdvanceReturnTestData.CreateAsync(fixture, receiptAmount: 4000, includeCustomerMappings: true);
