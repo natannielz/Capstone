@@ -1,7 +1,8 @@
 // Actual production Next/HTTPS/API/Mongo; approved source and Finance facts are explicitly local synthetic inputs.
 import assert from 'node:assert/strict';
 import { resolve } from 'node:path';
-const rupiah = amount => { const [whole, fraction = '00'] = String(amount).split('.'); return 'Rp' + whole.replace(/\B(?=(\d{3})+(?!\d))/g, '.') + ',' + fraction.padEnd(2, '0').slice(0, 2); };
+// Screen rupiah (lib/format formatMoneyText): ",00" is dropped when the fraction is zero.
+const rupiah = amount => { const [whole, fraction = '00'] = String(amount).split('.'); const cents = fraction.padEnd(2, '0').slice(0, 2); return 'Rp' + whole.replace(/\B(?=(\d{3})+(?!\d))/g, '.') + (cents === '00' ? '' : ',' + cents); };
 
 export async function verifyProcurementSupplierPayableBrowser({ config, maker, user, origin, directory, payableWrites, payableRecoveries, dropNext, dropped }) {
   const started = performance.now(); let previous = started;
@@ -74,8 +75,8 @@ export async function verifyProcurementSupplierPayableBrowser({ config, maker, u
     for (const label of ['Pemasok', 'Referensi pesanan pembelian', 'Invoice pemasok', 'Persetujuan kebijakan', 'Penanggung jawab', 'Akun akrual penerimaan', 'Akun utang pemasok', 'Akun uang muka pemasok']) {
       const term = region.getByText(label, { exact: true }); assert.equal(await term.evaluate(node => node.tagName), 'DT'); assert.ok((await term.locator('..').locator(':scope > dd').innerText()).trim().length > 0);
     }
-    if (kind === 'recognize') { await value(region, 'Kemasan pada alokasi', '1'); await value(region, 'Nilai neto / pajak / biaya', 'Rp10.000,00 / Rp1.000,00 / Rp250,00'); }
-    else { await value(region, 'Utang diakui', 'Rp11.250,00'); await value(region, 'Sisa utang', 'Rp11.250,00'); await value(region, 'Uang muka terverifikasi', 'Rp6.000,00'); await value(region, 'Sisa uang muka', 'Rp6.000,00'); }
+    if (kind === 'recognize') { await value(region, 'Kemasan pada alokasi', '1'); await value(region, 'Nilai neto / pajak / biaya', 'Rp10.000 / Rp1.000 / Rp250'); }
+    else { await value(region, 'Utang diakui', 'Rp11.250'); await value(region, 'Sisa utang', 'Rp11.250'); await value(region, 'Uang muka terverifikasi', 'Rp6.000'); await value(region, 'Sisa uang muka', 'Rp6.000'); }
     assert.equal(await current.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
     assert.equal(await region.evaluate(element => { for (let node = element; node; node = node.parentElement) { const style = getComputedStyle(node); if (['auto', 'scroll', 'hidden'].includes(style.overflowY) && node.scrollHeight > node.clientHeight + 1 && node !== document.documentElement) return false; } return true; }), true);
   }
@@ -170,11 +171,11 @@ export async function verifyProcurementSupplierPayableBrowser({ config, maker, u
   const saved = await open(reader.page, application.proposal.id, 'Disetujui dan dibukukan'); await facts(reader.page, saved, 'apply_advance', config.applicationAmount);
   const live = reader.page.getByRole('region', { name: 'Sisa terkini dari sumber', exact: true });
   await live.getByRole('status').filter({ hasText: /^Masih ada utang tercatat$/ }).waitFor({ timeout: 60000 });
-  await value(live, 'Sisa utang', 'Rp7.250,00'); await value(live, 'Sisa uang muka', 'Rp2.000,00');
+  await value(live, 'Sisa utang', 'Rp7.250'); await value(live, 'Sisa uang muka', 'Rp2.000');
   for (const name of ['Akui utang dari penilaian', 'Terapkan uang muka terverifikasi', 'Tinjau persetujuan', 'Tinjau penolakan']) assert.equal(await reader.page.getByRole('button', { name, exact: true }).count(), 0);
   await reader.page.getByRole('button', { name: 'Lihat utang dan sisa', exact: true }).click(); await reader.page.getByRole('heading', { name: 'Utang dan sisa tercatat', exact: true }).waitFor({ timeout: 60000 });
   await combo(reader.page, 'Utang pemasok yang diakui').selectOption(recognized.payableId); const balance = reader.page.getByRole('region', { name: 'Utang yang dipilih', exact: true });
-  await value(balance, 'Utang diakui', 'Rp11.250,00'); await value(balance, 'Uang muka diterapkan ke utang', 'Rp4.000,00'); await value(balance, 'Sisa utang', 'Rp7.250,00');
+  await value(balance, 'Utang diakui', 'Rp11.250'); await value(balance, 'Uang muka diterapkan ke utang', 'Rp4.000'); await value(balance, 'Sisa utang', 'Rp7.250');
   assert.equal(await reader.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true); await reader.page.screenshot({ path: resolve(directory, 'procurement-supplier-payable-outstanding-mobile.png'), fullPage: true });
   const currentAdvance = await query(reader.page, config.readerId, api + '/verified-advances/' + config.settlementId + '/query', { purpose });
   assert.equal(currentAdvance.status, 200); assert.equal(currentAdvance.body.capacity.totalAmount, '6000.00'); assert.equal(currentAdvance.body.capacity.appliedAmount, '4000.00'); assert.equal(currentAdvance.body.capacity.remainingAmount, '2000.00');

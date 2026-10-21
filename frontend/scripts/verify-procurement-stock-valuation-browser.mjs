@@ -2,7 +2,8 @@
 import assert from 'node:assert/strict';
 import { resolve } from 'node:path';
 import { renewValuationActor } from './verify-valuation-step-up.mjs';
-const rupiah = amount => { const [whole, fraction = '00'] = String(amount).split('.'); return 'Rp' + whole.replace(/\B(?=(\d{3})+(?!\d))/g, '.') + ',' + fraction.padEnd(2, '0').slice(0, 2); };
+// Screen rupiah (lib/format formatMoneyText): ",00" is dropped when the fraction is zero.
+const rupiah = amount => { const [whole, fraction = '00'] = String(amount).split('.'); const cents = fraction.padEnd(2, '0').slice(0, 2); return 'Rp' + whole.replace(/\B(?=(\d{3})+(?!\d))/g, '.') + (cents === '00' ? '' : ',' + cents); };
 
 export async function verifyProcurementStockValuationBrowser({ config, maker, user, origin, directory, valuationWrites, valuationRecoveries, dropNext, dropped }) {
   const startedAt = performance.now(); let previousStepAt = startedAt;

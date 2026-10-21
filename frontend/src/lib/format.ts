@@ -37,16 +37,27 @@ export function formatRupiah(value: Decimal, opts: { decimals?: 0 | 2 } = {}): s
   return `${negative ? "-" : ""}Rp${grouped(whole)}${fractionDigits ? "," + fraction : ""}`;
 }
 
-/** Server amounts with a currency code: IDR uses formatRupiah; anything else is "CODE 1.500,50". */
-export function formatMoney(currency: string, value: Decimal, decimals: 0 | 2 = 2): string {
-  return currency === "IDR" ? formatRupiah(value, { decimals }) : `${currency} ${formatNumber(value, decimals)}`;
+/** On-screen rupiah: two decimals only when there is a fraction ("Rp12.000,25"), whole amounts without ",00" ("Rp1.250.000"). */
+function displayRupiah(value: Decimal): string {
+  const text = formatRupiah(value, { decimals: 2 });
+  return text.endsWith(",00") ? text.slice(0, -3) : text;
 }
 
-/** Rupiah for amounts that may still be typed text (review panels echo form input): valid decimals format, anything else shows as entered. */
+/**
+ * Server amounts with a currency code for screens: IDR is "Rp1.250.000", or "Rp12.000,25" when the fraction is not zero
+ * (decimals 0 rounds to whole rupiah); anything else is "CODE 1.500,50". Formal documents (invoice and receipt renderers)
+ * keep fixed decimals with formatRupiah(value, { decimals: 2 }).
+ */
+export function formatMoney(currency: string, value: Decimal, decimals: 0 | 2 = 2): string {
+  if (currency === "IDR") return decimals === 2 ? displayRupiah(value) : formatRupiah(value, { decimals });
+  return `${currency} ${formatNumber(value, decimals)}`;
+}
+
+/** Rupiah for amounts that may still be typed text (review panels echo form input): valid decimals format as formatMoney, anything else shows as entered. */
 export function formatMoneyText(value: string): string {
   const text = value.trim();
   if (!text) return "Rp—";
-  try { return formatRupiah(text, { decimals: 2 }); } catch { return `Rp${text}`; }
+  try { return displayRupiah(text); } catch { return `Rp${text}`; }
 }
 
 /** "1,5" — up to maxFractionDigits decimals, trailing zeros dropped (durations, measured quantities). */
