@@ -1,0 +1,921 @@
+{
+  "about": "Every page route (frontend/src/app/**/page.tsx) with the personas expected to reach it. Seeded by ENV (Task 0.4) from each persona's live allowedActions (GET /api/v1/access/current on the review stack) evaluated with destinationEntries (identity-workflow.ts), plus store-navigation.ts rules for storefront pages. GAP (Task 1.1) owns corrections. \"sample\" tells capture.mjs how to pick a record for a dynamic route.",
+  "generatedAt": "2026-10-21",
+  "personas": [
+    "tamu",
+    "pemohon",
+    "penyetuju-cabang",
+    "peninjau-toko",
+    "petugas-katalog",
+    "peninjau-katalog",
+    "petugas-gudang",
+    "petugas-kirim",
+    "kurir",
+    "keuangan-tagihan",
+    "pemeriksa-pembayaran",
+    "pengadaan",
+    "penyetuju-pengadaan",
+    "admin-akses",
+    "staf-pembeli"
+  ],
+  "groups": [
+    "store",
+    "billing",
+    "administration",
+    "catalog",
+    "fulfillment",
+    "identity",
+    "inventory",
+    "operations",
+    "ordering",
+    "procurement"
+  ],
+  "routes": [
+    {
+      "path": "/",
+      "group": "store",
+      "personas": [
+        "tamu",
+        "pemohon",
+        "penyetuju-cabang",
+        "peninjau-toko",
+        "petugas-katalog",
+        "peninjau-katalog",
+        "petugas-gudang",
+        "petugas-kirim",
+        "kurir",
+        "keuangan-tagihan",
+        "pemeriksa-pembayaran",
+        "pengadaan",
+        "penyetuju-pengadaan",
+        "admin-akses",
+        "staf-pembeli"
+      ]
+    },
+    {
+      "path": "/account",
+      "group": "store",
+      "personas": [
+        "pemohon",
+        "penyetuju-cabang",
+        "peninjau-toko",
+        "petugas-katalog",
+        "peninjau-katalog",
+        "petugas-gudang",
+        "petugas-kirim",
+        "kurir",
+        "keuangan-tagihan",
+        "pemeriksa-pembayaran",
+        "pengadaan",
+        "penyetuju-pengadaan",
+        "admin-akses",
+        "staf-pembeli"
+      ]
+    },
+    {
+      "path": "/account/orders",
+      "group": "store",
+      "personas": [
+        "pemohon",
+        "penyetuju-cabang",
+        "peninjau-toko",
+        "petugas-katalog",
+        "peninjau-katalog",
+        "petugas-gudang",
+        "petugas-kirim",
+        "keuangan-tagihan",
+        "pengadaan",
+        "penyetuju-pengadaan",
+        "staf-pembeli"
+      ]
+    },
+    {
+      "path": "/account/orders/[id]",
+      "group": "store",
+      "personas": [
+        "pemohon",
+        "penyetuju-cabang",
+        "peninjau-toko",
+        "petugas-katalog",
+        "peninjau-katalog",
+        "petugas-gudang",
+        "petugas-kirim",
+        "keuangan-tagihan",
+        "pengadaan",
+        "penyetuju-pengadaan",
+        "staf-pembeli"
+      ],
+      "sample": {
+        "path": "/account/orders/1"
+      }
+    },
+    {
+      "path": "/accounting/books",
+      "group": "billing",
+      "personas": [
+        "pemeriksa-pembayaran"
+      ]
+    },
+    {
+      "path": "/administration/access",
+      "group": "administration",
+      "personas": [
+        "admin-akses"
+      ]
+    },
+    {
+      "path": "/administration/accounts",
+      "group": "administration",
+      "personas": [
+        "admin-akses"
+      ]
+    },
+    {
+      "path": "/administration/catalog",
+      "group": "administration",
+      "personas": [
+        "peninjau-toko",
+        "petugas-katalog",
+        "penyetuju-pengadaan"
+      ]
+    },
+    {
+      "path": "/administration/delegations",
+      "group": "administration",
+      "personas": [
+        "pemohon",
+        "penyetuju-cabang",
+        "peninjau-toko",
+        "petugas-katalog",
+        "peninjau-katalog",
+        "petugas-gudang",
+        "petugas-kirim",
+        "kurir",
+        "keuangan-tagihan",
+        "pemeriksa-pembayaran",
+        "pengadaan",
+        "penyetuju-pengadaan",
+        "admin-akses",
+        "staf-pembeli"
+      ]
+    },
+    {
+      "path": "/administration/history",
+      "group": "administration",
+      "personas": [
+        "admin-akses"
+      ]
+    },
+    {
+      "path": "/administration/organizations",
+      "group": "administration",
+      "personas": [
+        "admin-akses"
+      ]
+    },
+    {
+      "path": "/administration/organizations/addresses",
+      "group": "administration",
+      "personas": [
+        "pemohon",
+        "penyetuju-cabang",
+        "peninjau-toko",
+        "petugas-gudang",
+        "petugas-kirim",
+        "keuangan-tagihan",
+        "pemeriksa-pembayaran",
+        "pengadaan",
+        "penyetuju-pengadaan",
+        "admin-akses"
+      ]
+    },
+    {
+      "path": "/administration/person-reviews",
+      "group": "administration",
+      "personas": [
+        "admin-akses"
+      ]
+    },
+    {
+      "path": "/billing/bank-receipts",
+      "group": "billing",
+      "personas": [
+        "pemeriksa-pembayaran"
+      ]
+    },
+    {
+      "path": "/billing/bank-statements",
+      "group": "billing",
+      "personas": [
+        "pemeriksa-pembayaran"
+      ]
+    },
+    {
+      "path": "/billing/invoice-releases",
+      "group": "billing",
+      "personas": [
+        "keuangan-tagihan",
+        "pemeriksa-pembayaran"
+      ]
+    },
+    {
+      "path": "/billing/invoices",
+      "group": "billing",
+      "personas": [
+        "pemohon",
+        "penyetuju-cabang",
+        "keuangan-tagihan",
+        "pemeriksa-pembayaran",
+        "staf-pembeli"
+      ]
+    },
+    {
+      "path": "/billing/payment-reviews",
+      "group": "billing",
+      "personas": [
+        "keuangan-tagihan",
+        "pemeriksa-pembayaran"
+      ]
+    },
+    {
+      "path": "/billing/payments",
+      "group": "billing",
+      "personas": [
+        "pemohon",
+        "penyetuju-cabang",
+        "staf-pembeli"
+      ]
+    },
+    {
+      "path": "/billing/receiving-accounts",
+      "group": "billing",
+      "personas": [
+        "keuangan-tagihan",
+        "pemeriksa-pembayaran"
+      ]
+    },
+    {
+      "path": "/cart",
+      "group": "store",
+      "personas": [
+        "pemohon",
+        "penyetuju-cabang",
+        "staf-pembeli"
+      ]
+    },
+    {
+      "path": "/catalog/browse",
+      "group": "store",
+      "personas": [
+        "pemohon",
+        "penyetuju-cabang",
+        "peninjau-toko",
+        "petugas-katalog",
+        "peninjau-katalog",
+        "petugas-gudang",
+        "petugas-kirim",
+        "pengadaan",
+        "penyetuju-pengadaan",
+        "staf-pembeli"
+      ]
+    },
+    {
+      "path": "/catalog/prices",
+      "group": "catalog",
+      "personas": [
+        "peninjau-toko",
+        "petugas-katalog",
+        "peninjau-katalog",
+        "penyetuju-pengadaan"
+      ]
+    },
+    {
+      "path": "/catalog/public",
+      "group": "catalog",
+      "personas": [
+        "petugas-katalog",
+        "peninjau-katalog"
+      ]
+    },
+    {
+      "path": "/checkout",
+      "group": "store",
+      "personas": [
+        "pemohon",
+        "penyetuju-cabang",
+        "staf-pembeli"
+      ]
+    },
+    {
+      "path": "/customer/login",
+      "group": "store",
+      "personas": [
+        "tamu"
+      ]
+    },
+    {
+      "path": "/fulfillment/cases",
+      "group": "fulfillment",
+      "personas": [
+        "pemohon",
+        "penyetuju-cabang",
+        "peninjau-toko",
+        "petugas-katalog",
+        "keuangan-tagihan",
+        "penyetuju-pengadaan",
+        "staf-pembeli"
+      ]
+    },
+    {
+      "path": "/fulfillment/courier-assignments",
+      "group": "fulfillment",
+      "personas": [
+        "peninjau-toko",
+        "petugas-katalog",
+        "petugas-kirim",
+        "penyetuju-pengadaan"
+      ]
+    },
+    {
+      "path": "/fulfillment/dispatches",
+      "group": "fulfillment",
+      "personas": [
+        "petugas-kirim"
+      ]
+    },
+    {
+      "path": "/fulfillment/preparations",
+      "group": "fulfillment",
+      "personas": [
+        "peninjau-katalog",
+        "petugas-gudang",
+        "petugas-kirim",
+        "pengadaan",
+        "staf-pembeli"
+      ]
+    },
+    {
+      "path": "/fulfillment/receive",
+      "group": "fulfillment",
+      "personas": [
+        "pemohon",
+        "penyetuju-cabang",
+        "staf-pembeli"
+      ]
+    },
+    {
+      "path": "/fulfillment/shipments",
+      "group": "fulfillment",
+      "personas": [
+        "pemohon",
+        "penyetuju-cabang",
+        "peninjau-toko",
+        "petugas-katalog",
+        "peninjau-katalog",
+        "petugas-gudang",
+        "petugas-kirim",
+        "kurir",
+        "pengadaan",
+        "penyetuju-pengadaan",
+        "staf-pembeli"
+      ]
+    },
+    {
+      "path": "/identity/account",
+      "group": "identity",
+      "personas": [
+        "pemohon",
+        "penyetuju-cabang",
+        "peninjau-toko",
+        "petugas-katalog",
+        "peninjau-katalog",
+        "petugas-gudang",
+        "petugas-kirim",
+        "kurir",
+        "keuangan-tagihan",
+        "pemeriksa-pembayaran",
+        "pengadaan",
+        "penyetuju-pengadaan",
+        "admin-akses",
+        "staf-pembeli"
+      ]
+    },
+    {
+      "path": "/identity/login",
+      "group": "store",
+      "personas": [
+        "tamu"
+      ]
+    },
+    {
+      "path": "/inventory/counts",
+      "group": "inventory",
+      "personas": [
+        "peninjau-toko",
+        "petugas-katalog",
+        "peninjau-katalog",
+        "petugas-gudang",
+        "petugas-kirim",
+        "keuangan-tagihan",
+        "pemeriksa-pembayaran",
+        "pengadaan",
+        "penyetuju-pengadaan",
+        "staf-pembeli"
+      ]
+    },
+    {
+      "path": "/inventory/pack-conversion-executions",
+      "group": "inventory",
+      "personas": [
+        "petugas-gudang"
+      ]
+    },
+    {
+      "path": "/inventory/pack-conversions",
+      "group": "inventory",
+      "personas": [
+        "petugas-gudang"
+      ]
+    },
+    {
+      "path": "/inventory/replenishment",
+      "group": "inventory",
+      "personas": [
+        "peninjau-toko",
+        "petugas-katalog",
+        "peninjau-katalog",
+        "petugas-gudang",
+        "petugas-kirim",
+        "keuangan-tagihan",
+        "pemeriksa-pembayaran",
+        "pengadaan",
+        "penyetuju-pengadaan",
+        "staf-pembeli"
+      ]
+    },
+    {
+      "path": "/inventory/source-reconciliations",
+      "group": "inventory",
+      "personas": [
+        "petugas-gudang"
+      ]
+    },
+    {
+      "path": "/inventory/sources",
+      "group": "inventory",
+      "personas": [
+        "petugas-gudang"
+      ]
+    },
+    {
+      "path": "/inventory/sources/activations",
+      "group": "inventory",
+      "personas": [
+        "petugas-gudang"
+      ]
+    },
+    {
+      "path": "/inventory/sources/aliases",
+      "group": "inventory",
+      "personas": [
+        "petugas-gudang"
+      ]
+    },
+    {
+      "path": "/inventory/sources/policies",
+      "group": "inventory",
+      "personas": [
+        "petugas-gudang"
+      ]
+    },
+    {
+      "path": "/inventory/sources/revisions",
+      "group": "inventory",
+      "personas": [
+        "petugas-gudang"
+      ]
+    },
+    {
+      "path": "/inventory/sources/suspensions",
+      "group": "inventory",
+      "personas": [
+        "petugas-gudang"
+      ]
+    },
+    {
+      "path": "/inventory/stock-releases",
+      "group": "inventory",
+      "personas": [
+        "petugas-gudang",
+        "pemeriksa-pembayaran"
+      ]
+    },
+    {
+      "path": "/katalog",
+      "group": "store",
+      "personas": [
+        "tamu",
+        "pemohon",
+        "penyetuju-cabang",
+        "peninjau-toko",
+        "petugas-katalog",
+        "peninjau-katalog",
+        "petugas-gudang",
+        "petugas-kirim",
+        "kurir",
+        "keuangan-tagihan",
+        "pemeriksa-pembayaran",
+        "pengadaan",
+        "penyetuju-pengadaan",
+        "admin-akses",
+        "staf-pembeli"
+      ]
+    },
+    {
+      "path": "/katalog/[publicId]",
+      "group": "store",
+      "personas": [
+        "tamu",
+        "pemohon",
+        "penyetuju-cabang",
+        "peninjau-toko",
+        "petugas-katalog",
+        "peninjau-katalog",
+        "petugas-gudang",
+        "petugas-kirim",
+        "kurir",
+        "keuangan-tagihan",
+        "pemeriksa-pembayaran",
+        "pengadaan",
+        "penyetuju-pengadaan",
+        "admin-akses",
+        "staf-pembeli"
+      ],
+      "sample": {
+        "from": "/katalog",
+        "link": "^/katalog/[A-Za-z0-9_-]+$"
+      }
+    },
+    {
+      "path": "/login",
+      "group": "store",
+      "personas": [
+        "tamu"
+      ]
+    },
+    {
+      "path": "/operations/anomalies",
+      "group": "operations",
+      "personas": [
+        "peninjau-toko"
+      ]
+    },
+    {
+      "path": "/operations/health",
+      "group": "operations",
+      "personas": [
+        "admin-akses"
+      ]
+    },
+    {
+      "path": "/ordering/checkout",
+      "group": "ordering",
+      "personas": [
+        "pemohon",
+        "penyetuju-cabang",
+        "staf-pembeli"
+      ]
+    },
+    {
+      "path": "/ordering/commercial-policies",
+      "group": "ordering",
+      "personas": [
+        "peninjau-toko"
+      ]
+    },
+    {
+      "path": "/ordering/drafts",
+      "group": "ordering",
+      "personas": [
+        "pemohon",
+        "penyetuju-cabang",
+        "staf-pembeli"
+      ]
+    },
+    {
+      "path": "/ordering/orders",
+      "group": "ordering",
+      "personas": [
+        "pemohon",
+        "penyetuju-cabang",
+        "peninjau-toko",
+        "petugas-katalog",
+        "peninjau-katalog",
+        "petugas-gudang",
+        "petugas-kirim",
+        "keuangan-tagihan",
+        "pengadaan",
+        "penyetuju-pengadaan",
+        "staf-pembeli"
+      ]
+    },
+    {
+      "path": "/ordering/requests",
+      "group": "ordering",
+      "personas": [
+        "pemohon",
+        "penyetuju-cabang",
+        "peninjau-toko"
+      ]
+    },
+    {
+      "path": "/ordering/requests/incoming",
+      "group": "ordering",
+      "personas": [
+        "peninjau-toko"
+      ]
+    },
+    {
+      "path": "/ordering/reviews",
+      "group": "ordering",
+      "personas": [
+        "pemohon",
+        "penyetuju-cabang",
+        "peninjau-toko",
+        "staf-pembeli"
+      ]
+    },
+    {
+      "path": "/ordering/spending-policies",
+      "group": "ordering",
+      "personas": [
+        "penyetuju-cabang"
+      ]
+    },
+    {
+      "path": "/ordering/substitutions",
+      "group": "ordering",
+      "personas": [
+        "pemohon",
+        "petugas-gudang"
+      ]
+    },
+    {
+      "path": "/procurement/advance-returns",
+      "group": "procurement",
+      "personas": [
+        "pengadaan",
+        "penyetuju-pengadaan"
+      ]
+    },
+    {
+      "path": "/procurement/disbursements",
+      "group": "procurement",
+      "personas": [
+        "keuangan-tagihan",
+        "pemeriksa-pembayaran"
+      ]
+    },
+    {
+      "path": "/procurement/funding",
+      "group": "procurement",
+      "personas": [
+        "peninjau-toko",
+        "petugas-katalog",
+        "pemeriksa-pembayaran",
+        "pengadaan",
+        "penyetuju-pengadaan"
+      ]
+    },
+    {
+      "path": "/procurement/inspections",
+      "group": "procurement",
+      "personas": [
+        "peninjau-toko",
+        "petugas-katalog",
+        "peninjau-katalog",
+        "petugas-gudang",
+        "petugas-kirim",
+        "keuangan-tagihan",
+        "pemeriksa-pembayaran",
+        "pengadaan",
+        "penyetuju-pengadaan",
+        "staf-pembeli"
+      ]
+    },
+    {
+      "path": "/procurement/purchase-orders",
+      "group": "procurement",
+      "personas": [
+        "peninjau-toko",
+        "petugas-katalog",
+        "peninjau-katalog",
+        "petugas-gudang",
+        "petugas-kirim",
+        "keuangan-tagihan",
+        "pemeriksa-pembayaran",
+        "pengadaan",
+        "penyetuju-pengadaan",
+        "staf-pembeli"
+      ]
+    },
+    {
+      "path": "/procurement/quality-acceptances",
+      "group": "procurement",
+      "personas": [
+        "petugas-gudang",
+        "pengadaan",
+        "penyetuju-pengadaan"
+      ]
+    },
+    {
+      "path": "/procurement/receiving",
+      "group": "procurement",
+      "personas": [
+        "peninjau-toko",
+        "petugas-katalog",
+        "peninjau-katalog",
+        "petugas-gudang",
+        "petugas-kirim",
+        "keuangan-tagihan",
+        "pemeriksa-pembayaran",
+        "pengadaan",
+        "penyetuju-pengadaan",
+        "staf-pembeli"
+      ]
+    },
+    {
+      "path": "/procurement/requests",
+      "group": "procurement",
+      "personas": [
+        "peninjau-toko",
+        "petugas-katalog",
+        "peninjau-katalog",
+        "petugas-gudang",
+        "petugas-kirim",
+        "keuangan-tagihan",
+        "pemeriksa-pembayaran",
+        "pengadaan",
+        "penyetuju-pengadaan",
+        "staf-pembeli"
+      ]
+    },
+    {
+      "path": "/procurement/settlements",
+      "group": "procurement",
+      "personas": [
+        "pemeriksa-pembayaran"
+      ]
+    },
+    {
+      "path": "/procurement/stock-receipts",
+      "group": "procurement",
+      "personas": [
+        "peninjau-toko",
+        "petugas-katalog",
+        "peninjau-katalog",
+        "petugas-gudang",
+        "petugas-kirim",
+        "keuangan-tagihan",
+        "pemeriksa-pembayaran",
+        "pengadaan",
+        "penyetuju-pengadaan",
+        "staf-pembeli"
+      ]
+    },
+    {
+      "path": "/procurement/stock-valuations",
+      "group": "procurement",
+      "personas": [
+        "keuangan-tagihan",
+        "pemeriksa-pembayaran"
+      ]
+    },
+    {
+      "path": "/procurement/supplier-banks",
+      "group": "procurement",
+      "personas": [
+        "pengadaan",
+        "penyetuju-pengadaan"
+      ]
+    },
+    {
+      "path": "/procurement/supplier-claims",
+      "group": "procurement",
+      "personas": [
+        "peninjau-toko",
+        "petugas-katalog",
+        "peninjau-katalog",
+        "petugas-gudang",
+        "petugas-kirim",
+        "keuangan-tagihan",
+        "pemeriksa-pembayaran",
+        "pengadaan",
+        "penyetuju-pengadaan",
+        "staf-pembeli"
+      ]
+    },
+    {
+      "path": "/procurement/supplier-documents",
+      "group": "procurement",
+      "personas": [
+        "peninjau-toko",
+        "petugas-katalog",
+        "peninjau-katalog",
+        "petugas-gudang",
+        "petugas-kirim",
+        "keuangan-tagihan",
+        "pemeriksa-pembayaran",
+        "pengadaan",
+        "penyetuju-pengadaan",
+        "staf-pembeli"
+      ]
+    },
+    {
+      "path": "/procurement/supplier-payables",
+      "group": "procurement",
+      "personas": [
+        "pengadaan",
+        "penyetuju-pengadaan"
+      ]
+    },
+    {
+      "path": "/procurement/suppliers",
+      "group": "procurement",
+      "personas": [
+        "pengadaan",
+        "penyetuju-pengadaan"
+      ]
+    },
+    {
+      "path": "/reporting/accounts",
+      "group": "billing",
+      "personas": [
+        "pemeriksa-pembayaran"
+      ]
+    },
+    {
+      "path": "/shop",
+      "group": "store",
+      "personas": [
+        "pemohon",
+        "penyetuju-cabang",
+        "peninjau-toko",
+        "petugas-katalog",
+        "peninjau-katalog",
+        "petugas-gudang",
+        "petugas-kirim",
+        "pengadaan",
+        "penyetuju-pengadaan",
+        "staf-pembeli"
+      ]
+    },
+    {
+      "path": "/shop/[product]",
+      "group": "store",
+      "personas": [
+        "pemohon",
+        "penyetuju-cabang",
+        "peninjau-toko",
+        "petugas-katalog",
+        "peninjau-katalog",
+        "petugas-gudang",
+        "petugas-kirim",
+        "pengadaan",
+        "penyetuju-pengadaan",
+        "staf-pembeli"
+      ],
+      "sample": {
+        "from": "/shop",
+        "link": "^/shop/[A-Za-z0-9_-]+$"
+      }
+    },
+    {
+      "path": "/staff/login",
+      "group": "store",
+      "personas": [
+        "tamu"
+      ]
+    },
+    {
+      "path": "/workspace",
+      "group": "identity",
+      "personas": [
+        "pemohon",
+        "penyetuju-cabang",
+        "peninjau-toko",
+        "petugas-katalog",
+        "peninjau-katalog",
+        "petugas-gudang",
+        "petugas-kirim",
+        "kurir",
+        "keuangan-tagihan",
+        "pemeriksa-pembayaran",
+        "pengadaan",
+        "penyetuju-pengadaan",
+        "admin-akses",
+        "staf-pembeli"
+      ]
+    }
+  ]
+}

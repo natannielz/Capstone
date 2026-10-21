@@ -15,7 +15,7 @@ public sealed class SyntheticOidcProvider(PilotSecrets secrets, RSA signingKey) 
     public const string ClientId = "unit-toko-synthetic-local-pilot";
     public const string ConnectionId = "con_synthetic_local_pilot";
     public const string ConnectionName = "SYNTHETIC-local-only";
-    public const string ClaimsNamespace = PilotBoundary.Origin + "/claims/";
+    public static string ClaimsNamespace => PilotBoundary.Origin + "/claims/";
     private const string Cookie = "__Host-ut_pilot_login";
     private sealed record Challenge(string State, string Nonce, string ChallengeBinding, string Pkce, string Csrf, DateTimeOffset ExpiresAt);
     private sealed record Code(Challenge Challenge, PilotAccount Account, DateTimeOffset AuthenticatedAt, DateTimeOffset ExpiresAt);

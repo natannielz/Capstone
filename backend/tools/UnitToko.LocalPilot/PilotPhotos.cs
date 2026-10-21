@@ -33,7 +33,7 @@ namespace UnitToko.LocalPilot;
 [SupportedOSPlatform("windows")]
 internal sealed class PilotPhotos : IAsyncDisposable
 {
-    private const int ClamdPort = 3310;
+    private static int ClamdPort => PilotBoundary.ClamdPort;
     private const long MaximumBytes = 2 * 1024 * 1024, HeldReservations = 5000;
     private const string ValidationConsumer = "local-pilot.catalog-photos";
     private const string RescanConsumer = "local-pilot.catalog-photo-rescan";
@@ -77,9 +77,9 @@ internal sealed class PilotPhotos : IAsyncDisposable
 
     /// <summary>Null when ClamAV is not installed under .tools/clamav: the demo then runs without product photos.</summary>
     public static async Task<PilotPhotos?> StartAsync(string repository, string stateDirectory, IMongoDatabase database, MongoClient client,
-        PilotSecrets secrets, CancellationToken ct)
+        PilotSecrets secrets, string? signatureSource, CancellationToken ct)
     {
-        var clamav = Directory.Exists(Path.Combine(repository, ".tools", "clamav"))
+        var clamav =Directory.Exists(Path.Combine(repository, ".tools", "clamav"))
             ? Directory.GetDirectories(Path.Combine(repository, ".tools", "clamav"), "clamav-*.win.x64").Where(path => File.Exists(Path.Combine(path, "clamd.exe")))
                 .OrderByDescending(path => path, StringComparer.Ordinal).FirstOrDefault()
             : null;
@@ -90,7 +90,13 @@ internal sealed class PilotPhotos : IAsyncDisposable
         var signatures = Path.Combine(home, "clamav-db");
         PilotBoundary.ProtectDirectory(signatures);
         WriteClamavConfiguration(home, signatures);
-        await RefreshSignaturesAsync(clamav, home, signatures, ct);
+        if (PilotBoundary.Profile == "review")
+        {
+            // The review stack never downloads: it starts from a copy of signatures already on this machine, or runs without photos.
+            if (!CopySignatures(signatureSource, signatures))
+            { Console.WriteLine("Foto produk: tanda tangan ClamAV belum disalin (-ClamavSignatures <folder>); katalog berjalan tanpa foto."); return null; }
+        }
+        else await RefreshSignaturesAsync(clamav, home, signatures, ct);
         var daemon = await StartDaemonAsync(clamav, home, engine, ct);
         try
         {
@@ -146,7 +152,7 @@ internal sealed class PilotPhotos : IAsyncDisposable
             var signaturesChecked = clock.UtcNow;
             while (!ct.IsCancellationRequested)
             {
-                if (clock.UtcNow - signaturesChecked > SignatureRefreshAge)
+                if (PilotBoundary.Profile != "review" && clock.UtcNow - signaturesChecked > SignatureRefreshAge)
                 {
                     await RefreshSignaturesAsync(clamav, Path.Combine(directory, "photos"), Path.Combine(directory, "photos", "clamav-db"), ct);
                     signaturesChecked = clock.UtcNow;
@@ -439,6 +445,27 @@ internal sealed class PilotPhotos : IAsyncDisposable
         File.WriteAllLines(Path.Combine(home, "clamd.conf"), [
             "TCPSocket " + ClamdPort, "TCPAddr 127.0.0.1", "DatabaseDirectory " + signatures, "LogFile " + Path.Combine(home, "clamd.log"),
             "LogTime yes", "StreamMaxLength 10M", "MaxThreads 2", "MaxQueue 20", "Foreground yes"]);
+    }
+
+    /// <summary>The review stack's signatures: a read-only copy of ClamAV database files (main, daily, bytecode) from a folder on this
+    /// machine, copied when newer. True when the review stack then holds main and daily signatures.</summary>
+    private static bool CopySignatures(string? source, string signatures)
+    {
+        if (source is not null)
+        {
+            if (!Path.IsPathFullyQualified(source) || !Directory.Exists(source)) throw new InvalidOperationException("The ClamAV signature folder does not exist.");
+            foreach (var file in Directory.GetFiles(source).Where(path => Path.GetFileNameWithoutExtension(path) is "main" or "daily" or "bytecode" &&
+                Path.GetExtension(path) is ".cvd" or ".cld"))
+            {
+                var target = Path.Combine(signatures, Path.GetFileName(file));
+                if (File.Exists(target) && File.GetLastWriteTimeUtc(target) >= File.GetLastWriteTimeUtc(file)) continue;
+                File.Copy(file, target + ".new", overwrite: true);
+                File.SetLastWriteTimeUtc(target + ".new", File.GetLastWriteTimeUtc(file));
+                File.Move(target + ".new", target, overwrite: true);
+            }
+        }
+        bool Has(string name) => File.Exists(Path.Combine(signatures, name + ".cvd")) || File.Exists(Path.Combine(signatures, name + ".cld"));
+        return Has("main") && Has("daily");
     }
 
     /// <summary>ClamAV's own updater, when the daily signatures are older than twenty hours. A failed update keeps the existing
