@@ -32,6 +32,24 @@ public sealed class PilotSamplesTests
         Assert.Empty(PilotSamples.Missing([1, 2], new HashSet<long> { 1, 2 }, new HashSet<long>()));
     }
 
+    [Fact]
+    public async Task A_sample_conflict_is_logged_and_skipped_and_anything_else_still_fails()
+    {
+        var console = new StringWriter(); var previous = Console.Out; Console.SetOut(console);
+        try
+        {
+            foreach (var code in new[] { "public_sample_limit", "catalog_public_sample_pending", "catalog_public_sample_unchanged", "catalog_public_sample_changed",
+                "catalog_public_sample_decided" })
+                Assert.False(await PilotSamples.SkipOnConflictAsync(() => throw new PersistenceConflictException(code, "synthetic"), "uji"));
+            Assert.True(await PilotSamples.SkipOnConflictAsync(() => Task.CompletedTask, "uji"));
+            await Assert.ThrowsAsync<PersistenceConflictException>(() => PilotSamples.SkipOnConflictAsync(() => throw new PersistenceConflictException("other_conflict", "x"), "uji"));
+            await Assert.ThrowsAsync<InvalidOperationException>(() => PilotSamples.SkipOnConflictAsync(() => throw new InvalidOperationException("x"), "uji"));
+        }
+        finally { Console.SetOut(previous); }
+        Assert.Contains("catalog_public_sample_changed", console.ToString());
+        Assert.Contains("Sampel tamu", console.ToString());
+    }
+
     [MongoPilotFact]
     public async Task Review_bootstrap_seeds_twelve_guest_samples_through_the_maker_checker_service_once()
     {
@@ -82,6 +100,51 @@ public sealed class PilotSamplesTests
             var readded = Rows("catalogPublicSampleProposals").Last();
             Assert.Equal(new[] { families[0] }, readded["adds"].AsBsonArray.Select(value => value.AsInt64));
             Assert.Equal((2001L, 2002L, "approved"), (readded["proposedBy"].AsInt64, readded["decision"]["decidedBy"].AsInt64, readded["state"].AsString));
+            async Task RemoveAsync(long family, string key)
+            {
+                var proposal = await service.ProposeAsync(Actor(2001), [], [family], new("test.remove." + key, "Uji: hapus satu contoh", "local-pilot-tests"));
+                await service.DecideAsync(Actor(2002), proposal["proposalId"].AsInt64, CatalogPublicSampleDecision.Approve, new("test.remove.ok." + key, "Uji: disetujui", "local-pilot-tests"));
+            }
+            int Proposals() => Rows("catalogPublicSampleProposals").Length;
+
+            // The same product removed a second time comes back again: every seeding attempt is its own command, never a replay.
+            await RemoveAsync(families[0], "second");
+            await PilotBootstrap.InitializeDatabaseAsync(client, database, secrets, CancellationToken.None);
+            Assert.Equal(families.Order(), Rows("catalogPublicSamples").Select(row => row["_id"].AsInt64).Order());
+            Assert.Equal(new[] { families[0] }, Rows("catalogPublicSampleProposals").Last()["adds"].AsBsonArray.Select(value => value.AsInt64));
+
+            // A person's own pending proposal (made as petugas in the review screens) is theirs to finish: seeding neither approves it
+            // nor proposes the same product again.
+            await RemoveAsync(families[1], "person");
+            var person = await service.ProposeAsync(Actor(2001), [families[1]], [], new("review-ui.person-proposal", "Diajukan dari layar ulasan", "review-ui"));
+            var before = Proposals();
+            await PilotBootstrap.InitializeDatabaseAsync(client, database, secrets, CancellationToken.None);
+            Assert.Equal("pending", Rows("catalogPublicSampleProposals").Single(row => row["_id"] == person["proposalId"])["state"].AsString);
+            Assert.Equal(before, Proposals());
+            Assert.Equal(11, Rows("catalogPublicSamples").Length);
+            await service.DecideAsync(Actor(2002), person["proposalId"].AsInt64, CatalogPublicSampleDecision.Approve, new("review-ui.person-approve", "Diperiksa", "review-ui"));
+
+            // The pilot's own proposal left pending by an interrupted start is approved by peninjau, without a second proposal.
+            await RemoveAsync(families[3], "interrupted");
+            var interrupted = await service.ProposeAsync(Actor(2001), [families[3]], [], new("local-pilot.samples-v1.propose.interrupted-test", "SYNTHETIC: terputus", "local-pilot-samples"));
+            before = Proposals();
+            await PilotBootstrap.InitializeDatabaseAsync(client, database, secrets, CancellationToken.None);
+            var resumed = Rows("catalogPublicSampleProposals").Single(row => row["_id"] == interrupted["proposalId"]);
+            Assert.Equal(("approved", 2002L), (resumed["state"].AsString, resumed["decision"]["decidedBy"].AsInt64));
+            Assert.Equal(before, Proposals());
+            Assert.Equal(12, Rows("catalogPublicSamples").Length);
+
+            // Seeding never pushes past the sample limit, and never fails the start for it: it says so and skips.
+            await RemoveAsync(families[2], "cap");
+            before = Proposals();
+            var console = new StringWriter(); var previous = Console.Out; Console.SetOut(console);
+            try { await PilotSamples.SeedAsync(database, client, secrets, CancellationToken.None, limit: 11); }
+            finally { Console.SetOut(previous); }
+            Assert.Contains("batas 11", console.ToString());
+            Assert.Equal(before, Proposals());
+            Assert.Equal(11, Rows("catalogPublicSamples").Length);
+            await PilotBootstrap.InitializeDatabaseAsync(client, database, secrets, CancellationToken.None);
+            Assert.Equal(families.Order(), Rows("catalogPublicSamples").Select(row => row["_id"].AsInt64).Order());
 
             // Guests see exactly these twelve, and no price anywhere in the answer.
             await using var api = new PublicApi(uri, name);
