@@ -126,6 +126,7 @@ export function accessMessage(error: unknown): string {
   return "Permintaan belum dapat diterima. Periksa akun, cakupan, masa berlaku, dan alasan pengajuan.";
 }
 
-/** A maker/checker refusal ("a different person must decide") is a business answer: it stays inline with its own reason and
+/** A maker/checker refusal (the API's explicit independence codes) is a business answer: it stays inline with its own reason and
  *  never hides the page as lost access. */
-export const businessRefusal = (code: string) => code.includes('independent') || code.includes('person');
+const independenceCodes = new Set(['independent_person_required', 'independent_actor_required', 'independent_recipient_required']);
+export const businessRefusal = (code: string) => independenceCodes.has(code);

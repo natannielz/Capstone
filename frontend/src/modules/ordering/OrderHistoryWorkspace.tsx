@@ -78,7 +78,7 @@ export function OrderHistoryWorkspace() {
   return <main className={common.page}><header className={common.header}><div>
     <h1>Pesanan saya</h1><p>Status setiap pesanan, rinciannya, dan pesan lagi dengan sekali tekan.</p></div></header>
     {error !== null && account !== null && <p role="alert" className={common.alert}>{message(error)}</p>}
-    {loading ? <p role="status">Memeriksa akun…</p> : !account || expired ? <SessionAccessState error={error} returnPath="/ordering/orders" onRetry={() => setRevision(value => value + 1)} />
+    {loading ? <p role="status">Memeriksa akun…</p> : !account || expired ? <SessionAccessState kind={account ? "expired" : undefined} error={error} returnPath="/ordering/orders" onRetry={() => setRevision(value => value + 1)} />
       : <OrderHistoryDesk key={account.actorId + ':' + account.observedAt} account={account} onFailure={failed} />}
   </main>;
 }

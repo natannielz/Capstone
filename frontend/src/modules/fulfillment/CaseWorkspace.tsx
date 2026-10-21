@@ -58,7 +58,7 @@ export function CaseWorkspace() {
   return <main className={common.page}><header className={common.header}><div><Link href="/identity/account" className={common.brand}>Unit Toko</Link><h1>Keluhan barang</h1>
     <p>Laporkan masalah pada barang yang diterima. Penanggung jawab akan memeriksa pengajuan sebelum menentukan penyelesaiannya.</p></div><Link href="/identity/account" className={common.secondary}>Akun saya</Link></header>
     {error !== null && account !== null && <p role="alert" className={common.alert}>{message(error)}</p>}
-    {loading ? <p role="status">Memeriksa akun…</p> : !account || sessionTiming(account.session, elapsed).expired ? <SessionAccessState error={error} returnPath="/fulfillment/cases" onRetry={() => setRevision(value => value + 1)} />
+    {loading ? <p role="status">Memeriksa akun…</p> : !account || sessionTiming(account.session, elapsed).expired ? <SessionAccessState kind={account ? "expired" : undefined} error={error} returnPath="/fulfillment/cases" onRetry={() => setRevision(value => value + 1)} />
       : <CaseDesk key={account.actorId + ':' + account.observedAt} account={account} fresh={sessionTiming(account.session, elapsed).fresh} onDenied={denied} />}
   </main>;
 }

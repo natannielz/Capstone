@@ -31,7 +31,7 @@ function message(error: unknown): string {
     if (error.code === 'pack_execution_selection_required') return 'Pilih gudang, aturan disetujui, dan lot sumber yang tersedia dari daftar.';
     if (error.code === 'pack_execution_input_invalid') return 'Isi jumlah langkah bilangan bulat sesuai batas lot (maksimal 1.000.000) dan alasan hingga 1.000 karakter.';
     if (error.code === 'pack_execution_preview_required') return 'Minta pratinjau terbaru sebelum meninjau pelaksanaan.';
-    if (error.code === 'pack_execution_response_invalid') return 'Respons tidak sesuai dengan aturan, lot, atau jumlah yang dipilih. Periksa kembali sesi dan pilihan terbaru.';
+    if (error.code === 'pack_execution_response_invalid') return 'Respons tidak sesuai dengan aturan, lot, atau jumlah yang dipilih. Pilih Coba lagi untuk memuat aturan dan lot terbaru.';
     if (error.code === 'pack_execution_view_stale' || error.code === 'recovery_request_stale') return 'Sesi atau pilihan berubah. Periksa kembali; referensi semula tetap disimpan.';
     if (['pack_conversion_changed', 'pack_conversion_rule_changed', 'stock_balance_revision_conflict', 'lot_value_revision_conflict', 'insufficient_available_stock', 'stock_conversion_definition_mismatch'].includes(error.code))
       return 'Aturan, ketersediaan, atau nilai lot telah berubah. Muat sumber terbaru dan minta pratinjau ulang.';

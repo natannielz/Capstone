@@ -34,7 +34,7 @@ function message(error: unknown) {
     if (error.code === 'stock_release_input_invalid' || error.code === 'invalid_stock_release') return 'Pilih barang dari daftar, isi jumlah kemasan yang dapat dilepas dan tulis alasan.';
     if (error.code === 'step_up_required') return 'Periksa verifikasi dua langkah terbaru sebelum meninjau atau memeriksa hasil keputusan.';
     if (error.code.includes('person') || error.code.includes('independent')) return 'Peninjau harus orang yang berbeda dari pengaju, dengan penugasan yang masih berlaku.';
-    if (error.code === 'stock_release_response_invalid') return 'Data pelepasan belum dapat dibaca dengan aman. Periksa kembali sesi dan layanan.';
+    if (error.code === 'stock_release_response_invalid') return 'Data pelepasan belum dapat dibaca dengan aman. Pilih Coba lagi untuk memuat data terbaru.';
     if (error.code === 'commit_outcome_unknown') return 'Hasil pengiriman belum dapat dipastikan. Periksa permintaan semula sebelum mengirim perubahan baru.';
     if (error.status === 409) return 'Stok, nilai atau persetujuan sudah berubah. Muat ulang pilihan dan lakukan pemeriksaan terbaru.';
     if (error.status >= 500 || error.status === 0) return 'Layanan belum dapat diperiksa. Referensi permintaan tersimpan tetap dapat digunakan setelah koneksi pulih.';

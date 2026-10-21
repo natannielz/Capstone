@@ -12,7 +12,6 @@ import {SessionAccessState, sessionAccessKind, sessionLoginHref} from '../src/co
 
 test('someone without a session is asked to sign in; only a session that ended is called expired (G-013)', () => {
   assert.equal(sessionAccessKind(null), 'signin');
-  assert.equal(sessionAccessKind(new AccessFailure(401, 'unauthenticated')), 'signin');
   assert.equal(sessionAccessKind(new IdentityFailure(401, 'unauthenticated')), 'signin');
   assert.equal(sessionAccessKind(new IdentityFailure(401, 'session_expired')), 'expired');
   assert.equal(sessionAccessKind(new AccessFailure(409, 'session_expired')), 'expired');
@@ -89,5 +88,49 @@ test('pages that lose their session mid-work say it ended, and inventory editors
   for (const name of readdirSync(new URL('../src/modules/inventory/', import.meta.url)).filter(file => /Workspace\.tsx$/.test(file))) {
     const midWork = read('inventory/' + name).match(/return <SessionAccessState error=\{state\.error\}[^\n]*/g) ?? [];
     for (const line of midWork) assert.match(line, /detail=\{state\.error !== null \? message\(state\.error\) : undefined\}/, name);
+  }
+});
+
+test('an API refusing a page that had a session reads as a session that ended; only the session read can say "never signed in" (round 2)', () => {
+  assert.equal(sessionAccessKind(new AccessFailure(401, 'unauthenticated')), 'expired', 'an API answered 401 to a page that believed it had a session');
+  assert.equal(sessionAccessKind(new RequestNotSentError(401, 'unauthenticated')), 'expired');
+  assert.equal(sessionAccessKind(new IdentityFailure(401, 'unauthenticated')), 'signin', 'the session read found no session');
+  assert.equal(sessionAccessKind(null), 'signin');
+});
+
+test('every page whose session timer can expire tells the shared state so, instead of passing a bare error (round 2)', () => {
+  const root = fileURLToPath(new URL('../src/modules', import.meta.url)), offenders: string[] = [];
+  const walk = (directory: string) => {
+    for (const name of readdirSync(directory)) {
+      const path = join(directory, name);
+      if (statSync(path).isDirectory()) { walk(path); continue; }
+      if (!name.endsWith('.tsx')) continue;
+      const source = readFileSync(path, 'utf8');
+      for (const match of source.matchAll(/([^\n]{0,160})<SessionAccessState ([^\n]*)/g)) {
+        const [, before, props] = match;
+        const timed = /expired\b[^?]*\?\s*(\(\s*)?$|\.expired\)?\s*\?\s*$|expired\s*\?\s*$/.test(before.trimEnd()) || /if \((state\.)?expired|timing\.expired\)?\s*return/.test(before);
+        if (timed && !/kind=\{?[^}]*expired/.test(props)) offenders.push(path.slice(root.length) + ': ' + (before.trim().slice(-60)));
+      }
+    }
+  };
+  walk(root);
+  assert.deepEqual(offenders, []);
+});
+
+test('each state shows one body: a page reason replaces the generic text only when it is more specific, never stacks (round 2)', () => {
+  const base = {returnPath: '/inventory/sources', onRetry: () => {}};
+  const paragraphs = (html: string) => [...html.matchAll(/<p[ >]/g)].length;
+  const generic = render({...base, error: new AccessFailure(403, 'access_denied'), detail: 'Akses untuk tindakan ini tidak tersedia. Muat ulang untuk memeriksa izin terbaru.'});
+  assert.equal(paragraphs(generic), 1); assert.match(generic, /belum mendapat peran untuk halaman ini/);
+  const specific = render({...base, error: new AccessFailure(403, 'stock_source_scope_changed'), detail: 'Cakupan gudang berubah.'});
+  assert.equal(paragraphs(specific), 1); assert.match(specific, /Cakupan gudang berubah\./); assert.doesNotMatch(specific, /belum mendapat peran/);
+  for (const kind of ['signin', 'expired', 'unavailable'] as const)
+    assert.equal(paragraphs(render({...base, error: null, kind, detail: kind === 'unavailable' ? 'Data tidak sesuai.' : undefined})), 1, kind);
+});
+
+test('no page reason points at a control that does not exist ("Periksa sesi")', () => {
+  for (const file of ['inventory/StockCountWorkspace.tsx', 'inventory/PackConversionExecutionWorkspace.tsx', 'inventory/StockReleaseWorkspace.tsx', 'inventory/StockSourceWorkspace.tsx']) {
+    const source = readFileSync(new URL('../src/modules/' + file, import.meta.url), 'utf8');
+    assert.doesNotMatch(source, /Periksa (kembali )?sesi/, file);
   }
 });

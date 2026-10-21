@@ -29,7 +29,7 @@ function message(error: unknown) {
   if (error instanceof AccessFailure) {
     if (error.code === "stock_source_input_invalid") return "Periksa semua isian. Pilih cara pencatatan dan pengendalian, isi batas usia dengan detik bulat positif, serta cadangan dengan satuan dasar bulat mulai dari 0.";
     if (error.code === "stock_source_selection_required") return "Pilih gudang dan kanal dari daftar, lalu pilih pengajuan yang akan diperiksa.";
-    if (error.code === "stock_source_response_invalid") return "Data belum dapat dipastikan. Periksa sesi dan data terbaru; referensi permintaan tetap disimpan.";
+    if (error.code === "stock_source_response_invalid") return "Data belum dapat dipastikan. Pilih Coba lagi untuk memuat data terbaru; referensi permintaan tetap disimpan.";
     if (error.code === "stock_source_profile_unavailable") return "Nama atau struktur gudang belum siap. Minta pengelola memeriksa data organisasi, lalu muat ulang pilihan.";
     if (error.code === "stock_source_already_decided" || error.code === "stock_source_revision_changed") return "Pengajuan telah berubah atau sudah diputuskan. Muat ulang daftar sebelum melanjutkan.";
     if (error.code === "stock_source_proposer_required") return "Hanya pengaju semula yang dapat menarik pengajuan ini.";

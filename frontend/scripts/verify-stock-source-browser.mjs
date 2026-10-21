@@ -214,10 +214,11 @@ try {
     await page.getByRole("heading", { name: "Permintaan tersimpan", exact: true }).waitFor();
     assert.equal((await pending(page)).length, 0);
     await decision(page, "Sumber web uji", "approve");
-    await page.getByRole("heading", { name: /^(Masuk untuk melanjutkan|Sesi Anda perlu diperbarui|Halaman ini di luar tugas akun Anda|Halaman belum dapat dibuka)$/ }).waitFor();
+    // A self-approval refusal (403 independent_actor_required) is a business answer: inline reason, page stays open.
+    await page.getByText("Keputusan memerlukan peninjau yang berbeda", { exact: false }).waitFor();
+    assert.equal(await page.locator('section[aria-labelledby="workspace-access-state"]').count(), 0);
     assert.equal((await pending(page)).length, 0);
     assert.ok(protectedResponses.some(value => /\/approve$/.test(value.path) && value.status === 403));
-    await page.getByRole("button", { name: /^(Periksa ulang|Periksa ulang akses|Coba lagi)$/ }).click();
     await page.getByLabel("Gudang dan kanal", { exact: true }).waitFor();
   });
   await check("lost committed external proposal keeps one key and recovers after reload", async () => {
