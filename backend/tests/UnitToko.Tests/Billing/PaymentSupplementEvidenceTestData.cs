@@ -47,8 +47,8 @@ internal sealed class PaymentSupplementEvidenceTestData : IAsyncDisposable
                 await result.Data.Service.SubmitAsync(result.Data.Actor, result.Data.DeclarationId, 1,
                     result.Data.Reservation.ReservationId, result.Data.Reference, EvidenceAdmissionTestData.Meta("ocr-submission"));
             }
-            await PaymentSupplementMigrationTests.ApplyAsync(result.Data.Database, result.Data.Catalog.Clock);
-            await PaymentSupplementCorrectionTestData.ApplyAsync(result.Data.Database, result.Data.Catalog.Clock);
+            // The deployment chain installs the supplement owners (M87, M88) with everything after them. Rewinding to replay
+            // them here only worked while they were the newest migrations.
             await new CollectionMigrations(result.Data.Database, result.Data.Catalog.Clock).ApplyAsync();
             var submission = await result.Data.Rows("paymentSubmissions").Find(new BsonDocument("declarationId", result.Data.DeclarationId)).SingleAsync();
             result.Primary = new(result.Data.DeclarationId, submission["declarationRevision"].AsInt64, submission["_id"].AsInt64, result.Data.Reference);
