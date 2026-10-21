@@ -17,6 +17,7 @@ import { packageMatchExplanation, type PackageMatching } from './package-matchin
 import { ReplenishmentSuggestion } from './ReplenishmentSuggestion';
 import { dateTimeFormatter } from '@/lib/format';
 import { SessionAccessState } from "@/components/workspace-kit/session-access-state";
+import { recordNumber } from '@/lib/document-numbers';
 
 type Account = { actorId: string; actions: readonly string[]; session: IdentitySession; observedAt: number };
 type DraftLine = { choice: ProcurementPackage; quantity: string; specification: string };
@@ -197,7 +198,7 @@ function RequestDesk({ account, fresh, onDenied }: { account: Account; fresh: bo
       {canPrepare && <button className={styles.primary} disabled={commandLocked || reviewLocked} onClick={() => { clearReview(); setEditing(true); }}>Buat permintaan</button>}
       <ul className={styles.queueList}>{page.items.map(item => <li key={item.id}><button className={request?.id === item.id ? styles.selectedRow : styles.queueRow} disabled={locked || reviewLocked}
         onClick={() => void work(async (valid, signal) => { clearReview(); const next = await gateway.request(account.actorId, item.id, signal); if (valid()) setRequest(next); })}>
-        <strong>{routes[item.input.route]} · {item.input.businessDate}</strong><span>{states[item.state]}</span><small>{when(item.submittedAt)} · Permintaan {item.id}</small></button></li>)}</ul>
+        <strong>{routes[item.input.route]} · {item.input.businessDate}</strong><span>{states[item.state]}</span><small>{when(item.submittedAt)} · Permintaan {recordNumber('purchaseRequest', item.id)}</small></button></li>)}</ul>
       {page.items.length === 0 && <p className={styles.empty}>Belum ada permintaan pengadaan.</p>}
       <nav className={styles.pagination} aria-label="Halaman permintaan"><button className={styles.secondary} disabled={locked || reviewLocked} onClick={() => void work((valid, signal) => select(selected, valid, signal))}>Terbaru</button>
         <button className={styles.secondary} disabled={locked || reviewLocked || page.nextRequestId === null} onClick={() => void work(async (valid, signal) => { const next = await gateway.list(account.actorId, selected.location, page.nextRequestId, signal); if (valid()) { clearReview(); setPage(next); } })}>Berikutnya</button></nav></section>
@@ -234,7 +235,7 @@ function RequestDesk({ account, fresh, onDenied }: { account: Account; fresh: bo
             <div className={styles.actions}><button type="button" className={styles.primary} disabled={commandLocked || !fresh || !confirmed} onClick={() => void submit()}>Kirim permintaan</button>
               <button type="button" className={styles.secondary} disabled={commandLocked} onClick={() => { setSubmissionReview(null); setConfirmed(false); }}>Ubah rincian</button></div></section>}
         </form>}
-        {request && <div className={styles.form}><h2>{states[request.state]}</h2><RequestDetails value={request} /><p className={styles.help}>Permintaan {request.id} · {when(request.submittedAt)}</p>
+        {request && <div className={styles.form}><h2>{states[request.state]}</h2><RequestDetails value={request} /><p className={styles.help}>Permintaan {recordNumber('purchaseRequest', request.id)} · {when(request.submittedAt)}</p>
           {request.decision && <p className={styles.preserve}>Keputusan {when(request.decision.decidedAt)}: {request.decision.reason}</p>}
           {request.state === 'submitted' && canDecide && <><p className={styles.help}>Pemeriksa harus berbeda dari pengaju dan menggunakan verifikasi kedua yang masih baru.</p><label>Alasan keputusan<textarea required rows={3} maxLength={1000} disabled={commandLocked || decisionReview !== null} value={decisionReason} onChange={event => setDecisionReason(event.target.value)} /></label>
             {!decisionReview && <div className={styles.actions}><button className={styles.primary} disabled={commandLocked || !fresh || !decisionReason.trim()} onClick={() => void previewDecision('approve')}>Tinjau persetujuan</button><button className={styles.secondary} disabled={commandLocked || !fresh || !decisionReason.trim()} onClick={() => void previewDecision('reject')}>Tinjau penolakan</button></div>}</>}

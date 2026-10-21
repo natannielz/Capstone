@@ -7,6 +7,7 @@ import {arrivalUtc, createPurchaseArrivalGateway, type PurchaseArrivalPending, t
 import {arrivalJournalPrefix, PurchaseArrivalJournal} from './purchase-arrival-journal';
 import styles from '../administration/access.module.css';
 import { dateTimeFormatter } from '@/lib/format';
+import { recordNumber } from '@/lib/document-numbers';
 
 type Line = {skuId: string; definitionId: string; skuCode: string; familyName: string; packageLabel: string};
 type Props = {actorId: string; order: {id: string; lines: readonly Line[]} | null; canPrepare: boolean; canApprove: boolean;
@@ -95,14 +96,14 @@ export function PurchaseArrivalPanel({actorId, order, canPrepare, canApprove, fr
   }
   async function recover() {if (!pending || locked) return; const saved = pending;
     await work(async context => {const found = await gateway.recover(saved, context); if (!context.isCurrent()) return;
-      if (found.status === 'confirmed') {clearReference(saved); setReview(null); setConfirmed(false); setNotice('Hasil asli sudah ditemukan untuk pesanan ' + saved.orderId + '.');
+      if (found.status === 'confirmed') {clearReference(saved); setReview(null); setConfirmed(false); setNotice('Hasil asli sudah ditemukan untuk pesanan ' + recordNumber('purchaseOrder', saved.orderId) + '.');
         if (order?.id === saved.orderId && skuId === saved.skuId) setValue(await gateway.read(saved.orderId, saved.skuId, context));}
       else setNotice('Hasil belum terkonfirmasi. Referensi tetap tersimpan; periksa kembali tanpa mengirim ulang.');});
   }
   return <section className={styles.form} aria-label="Jadwal kedatangan pemasok"><h2>Jadwal kedatangan pemasok</h2>
     <p>Catat waktu dari konfirmasi pemasok untuk kemasan pada pesanan yang sudah disetujui. Pemeriksa independen meninjau setiap perubahan. Jadwal tidak menambah stok atau mencatat pembayaran.</p>
     {error !== null && <p role="alert" className={styles.alert}>{message(error)}</p>}{notice && <p role="status">{notice}</p>}{busy && <p role="status">Memeriksa jadwal kedatangan…</p>}
-    {pending && <section className={styles.review}><p>Referensi hasil tersimpan untuk pesanan {pending.orderId}. Pulihkan sebelum membuat perubahan lain.</p><button type="button" className={styles.secondary} disabled={locked} onClick={() => void recover()}>Pulihkan hasil jadwal</button></section>}
+    {pending && <section className={styles.review}><p>Referensi hasil tersimpan untuk pesanan {recordNumber('purchaseOrder', pending.orderId)}. Pulihkan sebelum membuat perubahan lain.</p><button type="button" className={styles.secondary} disabled={locked} onClick={() => void recover()}>Pulihkan hasil jadwal</button></section>}
     {storageBlocked && <p role="alert">Referensi lokal tidak dapat dibaca. Hubungi operator; perubahan baru ditahan agar hasil yang belum diketahui tidak terulang.</p>}
     {!order ? <p>Pilih pesanan pembelian yang disetujui untuk melihat jadwal per barang.</p> : <><label>Barang dan kemasan untuk jadwal<select value={skuId} disabled={commandLocked || review !== null} onChange={event => {setSkuId(event.target.value); clearForm();}}><option value="">Pilih barang</option>{order.lines.map(line => <option key={line.skuId} value={line.skuId}>{line.familyName} · {line.skuCode} · {line.packageLabel}</option>)}</select></label>
       <button type="button" className={styles.secondary} disabled={commandLocked || !skuId || review !== null} onClick={() => void load()}>Muat jadwal kedatangan</button></>}

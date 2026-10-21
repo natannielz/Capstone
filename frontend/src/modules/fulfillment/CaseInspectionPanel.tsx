@@ -11,6 +11,7 @@ import type { ResolutionAction } from './resolution-client';
 import { createInspectionGateway, prepareInspection, inspectionIdentities, inspectionConditions, type InspectionLine, type InspectionView } from './inspection-client';
 import styles from '../administration/access.module.css';
 import { formatDateTime } from '@/lib/format';
+import { recordNumber } from '@/lib/document-numbers';
 
 export function CaseInspectionPanel({ actorId, owner, returnId, canInspect, resolutionOptions, canReadInvoice = false, fresh, locked, current, freshCurrent, journal, onSettled, onDenied, onBusyChange }: {
   actorId: string; owner: AfterSalesCase; returnId: string; canInspect: boolean; resolutionOptions: readonly ResolutionAction[]; canReadInvoice?: boolean; fresh: boolean; locked: boolean; current: () => boolean; freshCurrent: () => boolean; journal: OperationJournal;
@@ -31,12 +32,12 @@ export function CaseInspectionPanel({ actorId, owner, returnId, canInspect, reso
     try { await task(); } catch (failure) { if (active()) { setConfirm(null); setPreview(false); setError(failure); if (!(failure instanceof AccessFailure && failure.code === 'step_up_required')) onDenied(failure); } }
     finally { pending.current = false; onBusyChange(false); onSettled(); if (alive.current) setBusy(false); }
   }
-  return <section aria-label={'Pemeriksaan retur ' + returnId}><h4>Pemeriksaan penerimaan {returnId}</h4>
+  return <section aria-label={'Pemeriksaan retur ' + recordNumber('return', returnId)}><h4>Pemeriksaan penerimaan {recordNumber('return', returnId)}</h4>
     <p>Pemeriksa membandingkan barang yang tiba dengan produk pada invoice dan mencatat kondisi fisiknya. Barang tetap dalam karantina setelah pemeriksaan.</p>
     {canInspect && !fresh && <p role="status">Verifikasi dua langkah terbaru diperlukan. <Link href="/identity/account?operation=case.manage&returnPath=%2Ffulfillment%2Fcases">Verifikasi dua langkah untuk pemeriksaan retur</Link></p>}
     {error !== null && <p role="alert">{error instanceof AccessFailure && error.code === 'invalid_return_inspection' ? 'Periksa seluruh barang pada penerimaan ini, pilih identitas dan kondisi, lalu isi catatan.' : accessMessage(error)}</p>}{busy && <p role="status">Memeriksa hasil pemeriksaan retur…</p>}
-    <button className={styles.secondary} disabled={disabled} onClick={() => void work(async () => { const value = await gateway.read(actorId, owner, returnId); if (active()) { setView(value); setPreview(false); setConfirm(null); } })}>Lihat hasil pemeriksaan {returnId}</button>
-    {canInspect && <button className={styles.secondary} disabled={!canAct} onClick={() => void work(async () => { const value = await gateway.read(actorId, owner, returnId, true); if (active()) { setView(value); setPreview(true); setConfirm(null); setConsent(false); } })}>Periksa barang retur {returnId}</button>}
+    <button className={styles.secondary} disabled={disabled} onClick={() => void work(async () => { const value = await gateway.read(actorId, owner, returnId); if (active()) { setView(value); setPreview(false); setConfirm(null); } })}>Lihat hasil pemeriksaan {recordNumber('return', returnId)}</button>
+    {canInspect && <button className={styles.secondary} disabled={!canAct} onClick={() => void work(async () => { const value = await gateway.read(actorId, owner, returnId, true); if (active()) { setView(value); setPreview(true); setConfirm(null); setConsent(false); } })}>Periksa barang retur {recordNumber('return', returnId)}</button>}
     {view && !view.inspection && <p>Belum ada hasil pemeriksaan barang untuk penerimaan ini.</p>}
     {view?.inspection && <section aria-label="Hasil pemeriksaan barang"><p>{formatDateTime(view.inspection.inspectedAt)} · Telah diperiksa, tetap karantina</p><p>{view.inspection.publicNote}</p>
       <ul>{view.inspection.lines.map(line => { const item = product(line.receiptId, line.skuId); return <li key={line.receiptId + ':' + line.skuId}>{item.productName}: {line.inspectedBaseUnits} {item.baseUnitCode} · {inspectionIdentities[line.identity]} · {inspectionConditions[line.condition]}</li>; })}</ul></section>}
@@ -55,7 +56,7 @@ export function CaseInspectionPanel({ actorId, owner, returnId, canInspect, reso
         <label>Label lot yang terlihat — {item.productName} (opsional)<input maxLength={160} value={value.observedLotLabel} onChange={event => change(key, { observedLotLabel: event.target.value })} /></label><p>Observasi ini bersifat internal. Label yang terbaca belum membuktikan lot, kedaluwarsa atau biaya stok asal.</p></fieldset>; })}
       <label>Hasil pemeriksaan untuk pelanggan<textarea required maxLength={1000} disabled={disabled} value={publicNote} onChange={event => setPublicNote(event.target.value)} /></label>
       <label>Catatan pemeriksaan internal<textarea required maxLength={1000} disabled={disabled} value={reason} onChange={event => setReason(event.target.value)} /></label><button className={styles.primary} disabled={!canAct}>Tinjau hasil pemeriksaan</button></form>}
-    {confirm && <section aria-label="Konfirmasi pemeriksaan retur"><h4 ref={heading} tabIndex={-1}>Catat hasil pemeriksaan barang</h4><p>Keluhan {owner.id} · Penerimaan {returnId} · Invoice {owner.source.number}</p>
+    {confirm && <section aria-label="Konfirmasi pemeriksaan retur"><h4 ref={heading} tabIndex={-1}>Catat hasil pemeriksaan barang</h4><p>Keluhan {recordNumber('case', owner.id)} · Penerimaan {recordNumber('return', returnId)} · Invoice {owner.source.number}</p>
       <p>Untuk pelanggan: {confirm.body.publicNote}</p><p>Catatan internal: {confirm.body.reason}</p><ul>{confirm.body.lines.map(line => { const item = product(line.receiptId, line.skuId); return <li key={line.receiptId + ':' + line.skuId}>{item.productName}: {line.inspectedBaseUnits} {item.baseUnitCode} · {inspectionIdentities[line.identity]} · {inspectionConditions[line.condition]}<p>Observasi internal: {line.observedIdentity} · Label lot: {line.observedLotLabel ?? 'Tidak terbaca/tidak ada'}</p></li>; })}</ul>
       <label className={styles.checkbox}><input type="checkbox" checked={consent} disabled={disabled} onChange={event => setConsent(event.target.checked)} /><span>Saya telah memeriksa seluruh barang pada penerimaan ini dan mencatat identitas serta kondisi fisiknya. Barang tetap dalam karantina.</span></label>
       <button className={styles.primary} disabled={!canAct || !consent} onClick={() => void work(async () => { if (journal.list(actorId).length) throw new AccessFailure(400, 'resolve_previous_attempt');

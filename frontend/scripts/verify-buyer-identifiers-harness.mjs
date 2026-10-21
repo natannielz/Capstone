@@ -502,13 +502,13 @@ try {
     const caseReferences = await buyer.page.evaluate(() => Object.keys(localStorage).filter(key => key.startsWith('unit-toko:pending:v1:')).map(key => JSON.parse(localStorage[key])));
     assert.equal(caseReferences.length, 1); assert.equal(caseReferences[0].operation, 'fulfillment.case.request'); assert.deepEqual(Object.keys(caseReferences[0]).sort(), ['actorId', 'createdAt', 'key', 'operation']);
     assert.match(caseReferences[0].key, /^ca\.[1-9][0-9]*\./); assert.ok(!JSON.stringify(caseReferences).includes('rusak'));
-    await buyer.page.reload(); await buyer.page.getByRole('button', { name: 'Periksa hasil', exact: true }).click(); await buyer.page.getByText(/^Pengajuan keluhan \d+ tercatat/).waitFor();
+    await buyer.page.reload(); await buyer.page.getByRole('button', { name: 'Periksa hasil', exact: true }).click(); await buyer.page.getByText(/^Pengajuan keluhan KLH-\d+ tercatat/).waitFor();
     assert.equal(caseWrites.length, 1); assert.equal(caseWrites[0].actor, config.buyerId); assert.equal(dropped, 2); assert.equal(await buyer.page.getByRole('button', { name: /Selesaikan dan tutup/ }).count(), 0);
-    await buyer.page.getByRole('button', { name: /^Buka keluhan \d+$/ }).click(); await buyer.page.getByRole('region', { name: 'Rincian keluhan', exact: true }).getByText('Satu barang rusak saat dibuka', { exact: true }).waitFor();
+    await buyer.page.getByRole('button', { name: /^Buka keluhan KLH-\d+$/ }).click(); await buyer.page.getByRole('region', { name: 'Rincian keluhan', exact: true }).getByText('Satu barang rusak saat dibuka', { exact: true }).waitFor();
     assert.equal(await buyer.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true); await buyer.page.screenshot({ path: resolve(directory, 'case-buyer-mobile.png'), fullPage: true });
     if (config.caseDecision) {
       assert.equal(await buyer.page.getByRole('button', { name: 'Periksa kewenangan keputusan', exact: true }).count(), 0);
-      await page.goto(origin.origin + '/fulfillment/cases'); await page.getByRole('button', { name: /^Buka keluhan \d+$/ }).click();
+      await page.goto(origin.origin + '/fulfillment/cases'); await page.getByRole('button', { name: /^Buka keluhan KLH-\d+$/ }).click();
       const decisionPanel = page.getByRole('region', { name: 'Pemeriksaan keluhan', exact: true });
       await decisionPanel.getByRole('button', { name: 'Periksa kewenangan keputusan', exact: true }).click();
       await decisionPanel.getByLabel(/^Jumlah retur/).fill('1'); await decisionPanel.getByLabel('Penjelasan keputusan untuk pelanggan', { exact: true }).fill('Kembalikan satu barang untuk pemeriksaan kondisi');
@@ -527,14 +527,14 @@ try {
       assert.deepEqual(Object.keys(pending[0]).sort(), ['actorId', 'createdAt', 'key', 'operation']); assert.ok(!JSON.stringify(pending).includes('privat'));
       await page.reload(); await page.getByRole('button', { name: 'Periksa hasil', exact: true }).click(); await page.getByRole('button', { name: 'Periksa hasil', exact: true }).waitFor({ state: 'hidden' });
       assert.equal(decisionWrites.length, 1); assert.equal(decisionWrites[0].actor, config.financeId); assert.equal(dropped, 3); assert.equal(await page.getByRole('button', { name: /Selesaikan dan tutup/ }).count(), 0);
-      await buyer.page.reload(); await buyer.page.getByRole('button', { name: /^Buka keluhan \d+$/ }).click();
+      await buyer.page.reload(); await buyer.page.getByRole('button', { name: /^Buka keluhan KLH-\d+$/ }).click();
       const explanation = buyer.page.getByRole('region', { name: 'Keputusan keluhan', exact: true }); await explanation.getByText('Kembalikan satu barang untuk pemeriksaan kondisi', { exact: true }).waitFor();
       assert.ok(!(await buyer.page.locator('main').innerText()).includes('Pertimbangan pemeriksa privat')); assert.equal(await buyer.page.getByRole('button', { name: 'Periksa kewenangan keputusan', exact: true }).count(), 0);
       assert.equal(await buyer.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true); await buyer.page.screenshot({ path: resolve(directory, 'case-decision-buyer-mobile.png'), fullPage: true });
       console.log('REAL_CASE_DECISION_BROWSER_PASS ' + JSON.stringify({ decisions: decisionWrites.length, independentReviewer: true, lostDecisionRecovered: true, privateNoteHidden: true, originalReportPreserved: true, offlineUnsent: true, mobile: true }));
       if (config.caseReturn) {
         assert.equal(await buyer.page.getByRole('button', { name: 'Periksa penerimaan retur', exact: true }).count(), 0);
-        await page.getByRole('button', { name: /^Buka keluhan \d+$/ }).click(); const intake = page.getByRole('region', { name: 'Penerimaan retur', exact: true });
+        await page.getByRole('button', { name: /^Buka keluhan KLH-\d+$/ }).click(); const intake = page.getByRole('region', { name: 'Penerimaan retur', exact: true });
         await intake.getByRole('button', { name: 'Periksa penerimaan retur', exact: true }).click(); await intake.getByLabel(/^Jumlah tiba/).fill('1'); await intake.getByLabel(/^Kondisi terlihat/).selectOption('opened');
         await intake.getByLabel('Catatan penerimaan untuk pelanggan', { exact: true }).fill('Satu barang diterima dalam karantina'); await intake.getByLabel('Catatan petugas retur internal', { exact: true }).fill('Pertimbangan retur privat');
         await intake.getByRole('button', { name: 'Tinjau penerimaan retur', exact: true }).click(); const returnReview = intake.getByRole('region', { name: 'Konfirmasi penerimaan retur', exact: true }); await returnReview.waitFor();
@@ -548,15 +548,15 @@ try {
         assert.equal(pendingReturn.length, 1); assert.equal(pendingReturn[0].operation, 'fulfillment.case.return_receive'); assert.match(pendingReturn[0].key, /^cr\.[1-9][0-9]*\./); assert.deepEqual(Object.keys(pendingReturn[0]).sort(), ['actorId', 'createdAt', 'key', 'operation']); assert.ok(!JSON.stringify(pendingReturn).includes('privat'));
         await page.reload(); await page.getByRole('button', { name: 'Periksa hasil', exact: true }).click(); await page.getByRole('button', { name: 'Periksa hasil', exact: true }).waitFor({ state: 'hidden' });
         assert.equal(returnWrites.length, 1); assert.equal(returnWrites[0].actor, config.financeId); assert.equal(dropped, 4); assert.equal(await page.getByRole('button', { name: /Selesaikan dan tutup/ }).count(), 0);
-        await buyer.page.reload(); await buyer.page.getByRole('button', { name: /^Buka keluhan \d+$/ }).click(); const buyerReturns = buyer.page.getByRole('region', { name: 'Penerimaan retur', exact: true });
+        await buyer.page.reload(); await buyer.page.getByRole('button', { name: /^Buka keluhan KLH-\d+$/ }).click(); const buyerReturns = buyer.page.getByRole('region', { name: 'Penerimaan retur', exact: true });
         await buyerReturns.getByRole('button', { name: 'Perbarui riwayat retur', exact: true }).click(); await buyerReturns.getByText('Satu barang diterima dalam karantina', { exact: true }).waitFor();
         await buyerReturns.getByText(/1 dari 1 .*telah diterima dalam karantina/).waitFor(); assert.ok(!(await buyer.page.locator('main').innerText()).includes('Pertimbangan retur privat')); assert.equal(await buyerReturns.getByRole('button', { name: 'Periksa penerimaan retur', exact: true }).count(), 0);
         assert.equal(await buyer.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true); await buyer.page.screenshot({ path: resolve(directory, 'return-intake-buyer-mobile.png'), fullPage: true });
         console.log('REAL_RETURN_QUARANTINE_BROWSER_PASS ' + JSON.stringify({ receipts: returnWrites.length, lostIntakeRecovered: true, privateNoteHidden: true, baseUnits: 1, condition: 'opened', offlineUnsent: true, mobile: true }));
         assert.equal(await buyerReturns.getByRole('button', { name: /^Periksa barang retur/ }).count(), 0);
-        await page.getByRole('button', { name: /^Buka keluhan \d+$/ }).click(); const staffReturns = page.getByRole('region', { name: 'Penerimaan retur', exact: true });
+        await page.getByRole('button', { name: /^Buka keluhan KLH-\d+$/ }).click(); const staffReturns = page.getByRole('region', { name: 'Penerimaan retur', exact: true });
         await staffReturns.getByRole('button', { name: 'Perbarui riwayat retur', exact: true }).click(); await staffReturns.getByRole('button', { name: /^Periksa barang retur/ }).click();
-        const inspectionPanel = staffReturns.getByRole('region', { name: /^Pemeriksaan retur \d+$/ });
+        const inspectionPanel = staffReturns.getByRole('region', { name: /^Pemeriksaan retur RTR-\d+$/ });
         await inspectionPanel.getByLabel(/^Identitas barang/).selectOption('matched'); await inspectionPanel.getByLabel(/^Kondisi hasil pemeriksaan/).selectOption('opened');
         await inspectionPanel.getByLabel(/^Identitas atau label yang diperiksa/).fill('Label produk terperiksa privat'); await inspectionPanel.getByLabel(/^Label lot yang terlihat/).fill('LOT-PRIVAT');
         await inspectionPanel.getByLabel('Hasil pemeriksaan untuk pelanggan', { exact: true }).fill('Produk telah diperiksa, kemasan terbuka'); await inspectionPanel.getByLabel('Catatan pemeriksaan internal', { exact: true }).fill('Penilaian pemeriksaan privat');
@@ -571,14 +571,14 @@ try {
         assert.equal(pendingInspection.length, 1); assert.equal(pendingInspection[0].operation, 'fulfillment.case.return_inspect'); assert.match(pendingInspection[0].key, /^ci\.[1-9][0-9]*\.[1-9][0-9]*\./); assert.deepEqual(Object.keys(pendingInspection[0]).sort(), ['actorId', 'createdAt', 'key', 'operation']); assert.ok(!JSON.stringify(pendingInspection).includes('privat'));
         await page.reload(); await page.getByRole('button', { name: 'Periksa hasil', exact: true }).click(); await page.getByRole('button', { name: 'Periksa hasil', exact: true }).waitFor({ state: 'hidden' });
         assert.equal(inspectionWrites.length, 1); assert.equal(inspectionWrites[0].actor, config.financeId); assert.equal(dropped, 5); assert.equal(await page.getByRole('button', { name: /Selesaikan dan tutup/ }).count(), 0);
-        await buyer.page.reload(); await buyer.page.getByRole('button', { name: /^Buka keluhan \d+$/ }).click(); const inspectedReturns = buyer.page.getByRole('region', { name: 'Penerimaan retur', exact: true });
+        await buyer.page.reload(); await buyer.page.getByRole('button', { name: /^Buka keluhan KLH-\d+$/ }).click(); const inspectedReturns = buyer.page.getByRole('region', { name: 'Penerimaan retur', exact: true });
         await inspectedReturns.getByRole('button', { name: 'Perbarui riwayat retur', exact: true }).click(); await inspectedReturns.getByRole('button', { name: /^Lihat hasil pemeriksaan/ }).click(); await inspectedReturns.getByText('Produk telah diperiksa, kemasan terbuka', { exact: true }).waitFor();
         const publicInspection = await buyer.page.locator('main').innerText(); for (const secret of ['Penilaian pemeriksaan privat', 'Label produk terperiksa privat', 'LOT-PRIVAT']) assert.ok(!publicInspection.includes(secret)); assert.equal(await inspectedReturns.getByRole('button', { name: /^Periksa barang retur/ }).count(), 0);
         assert.equal(await buyer.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true); await buyer.page.screenshot({ path: resolve(directory, 'return-inspection-buyer-mobile.png'), fullPage: true });
         console.log('REAL_RETURN_INSPECTION_BROWSER_PASS ' + JSON.stringify({ inspections: inspectionWrites.length, lostInspectionRecovered: true, privateObservationsHidden: true, baseUnits: 1, identity: 'matched', condition: 'opened', staysQuarantined: true, offlineUnsent: true, mobile: true }));
-        await page.getByRole('button', { name: /^Buka keluhan \d+$/ }).click(); const resolutionReturns = page.getByRole('region', { name: 'Penerimaan retur', exact: true });
+        await page.getByRole('button', { name: /^Buka keluhan KLH-\d+$/ }).click(); const resolutionReturns = page.getByRole('region', { name: 'Penerimaan retur', exact: true });
         await resolutionReturns.getByRole('button', { name: 'Perbarui riwayat retur', exact: true }).click(); await resolutionReturns.getByRole('button', { name: /^Lihat hasil pemeriksaan/ }).click();
-        const resolutionPanel = resolutionReturns.getByRole('region', { name: /^Penyelesaian retur \d+$/ });
+        const resolutionPanel = resolutionReturns.getByRole('region', { name: /^Penyelesaian retur RTR-\d+$/ });
         await resolutionPanel.getByRole('combobox', { name: /^Pilihan penyelesaian/ }).waitFor();
         assert.deepEqual(await resolutionPanel.getByRole('combobox', { name: /^Pilihan penyelesaian/ }).locator('option').evaluateAll(options => options.map(option => option.value)), config.financialRequest ? ['replacement', 'credit'] : ['replacement']);
         if (config.financialRequest) await resolutionPanel.getByRole('combobox', { name: /^Pilihan penyelesaian/ }).selectOption('credit');
@@ -597,7 +597,7 @@ try {
         assert.equal(pendingResolution.length, 1); assert.equal(pendingResolution[0].operation, 'fulfillment.case.resolution_request'); assert.match(pendingResolution[0].key, /^cq\.[1-9][0-9]*\.[1-9][0-9]*\./); assert.deepEqual(Object.keys(pendingResolution[0]).sort(), ['actorId', 'createdAt', 'key', 'operation']); assert.ok(!JSON.stringify(pendingResolution).includes('privat'));
         await page.reload(); await page.getByRole('button', { name: 'Periksa hasil', exact: true }).click(); await page.getByRole('button', { name: 'Periksa hasil', exact: true }).waitFor({ state: 'hidden' });
         assert.equal(resolutionWrites.length, 1); assert.equal(resolutionWrites[0].actor, config.financeId); assert.equal(dropped, 6); assert.equal(await page.getByRole('button', { name: /Selesaikan dan tutup/ }).count(), 0);
-        await buyer.page.reload(); await buyer.page.getByRole('button', { name: /^Buka keluhan \d+$/ }).click(); const resolvedReturns = buyer.page.getByRole('region', { name: 'Penerimaan retur', exact: true });
+        await buyer.page.reload(); await buyer.page.getByRole('button', { name: /^Buka keluhan KLH-\d+$/ }).click(); const resolvedReturns = buyer.page.getByRole('region', { name: 'Penerimaan retur', exact: true });
         await resolvedReturns.getByRole('button', { name: 'Perbarui riwayat retur', exact: true }).click(); await resolvedReturns.getByRole('button', { name: /^Lihat hasil pemeriksaan/ }).click(); await resolvedReturns.getByRole('button', { name: /^Lihat pengajuan penyelesaian/ }).click();
         await resolvedReturns.getByText(resolutionNote, { exact: true }).waitFor(); await resolvedReturns.getByText(/Menunggu persetujuan penyelesaian/).waitFor();
         const publicResolution = await buyer.page.locator('main').innerText(); for (const secret of ['Pertimbangan penyelesaian privat', 'Label produk terperiksa privat', 'LOT-PRIVAT']) assert.ok(!publicResolution.includes(secret)); assert.equal(await resolvedReturns.getByRole('button', { name: 'Periksa pilihan penyelesaian', exact: true }).count(), 0);
@@ -605,13 +605,13 @@ try {
         console.log('REAL_RETURN_RESOLUTION_BROWSER_PASS ' + JSON.stringify({ requests: resolutionWrites.length, lostResolutionRecovered: true, privateNoteHidden: true, baseUnits: 1, action: config.financialRequest ? 'credit' : 'replacement', state: 'resolution_requested', noApprovalOrFinancialPosting: true, offlineUnsent: true, mobile: true }));
         if (config.financialRequest) {
           async function openFinancial() {
-            await page.getByRole('button', { name: /^Buka keluhan \d+$/ }).click();
+            await page.getByRole('button', { name: /^Buka keluhan KLH-\d+$/ }).click();
             const returns = page.getByRole('region', { name: 'Penerimaan retur', exact: true });
             await returns.getByRole('button', { name: 'Perbarui riwayat retur', exact: true }).click();
             await returns.getByRole('button', { name: /^Lihat hasil pemeriksaan/ }).click();
             await returns.getByRole('button', { name: /^Lihat pengajuan penyelesaian/ }).click();
-            const panel = returns.getByRole('region', { name: /^Nilai finansial retur \d+$/ }); await panel.waitFor();
-            await panel.getByRole('button', { name: /^Periksa nilai finansial retur \d+$/ }).click(); return panel;
+            const panel = returns.getByRole('region', { name: /^Nilai finansial retur RTR-\d+$/ }); await panel.waitFor();
+            await panel.getByRole('button', { name: /^Periksa nilai finansial retur RTR-\d+$/ }).click(); return panel;
           }
           const financial = await openFinancial();
           assert.equal(await financial.getByLabel(/^Pajak yang diajukan/).inputValue(), '0.00'); assert.equal(await financial.getByLabel(/^Biaya yang diajukan/).inputValue(), '0.00');

@@ -1,12 +1,13 @@
 // UI proof against the existing native Next/HTTPS/Kestrel/Mongo host. Responses are never mocked.
 import assert from 'node:assert/strict';
 import { resolve } from 'node:path';
+const recordNo = (prefix, id) => prefix + '-' + String(id).padStart(6, '0');
 
 export async function verifyReturnFinancialApprovalBrowser({ config, finance, user, origin, directory, financialWrites, financialRecoveries, dropNext, dropped }) {
   const { page, context } = finance;
   assert.equal(config.action, 'refund'); assert.notEqual(config.financeId, config.makerId);
   async function open() {
-    await page.getByRole('button', { name: 'Buka keluhan ' + config.caseId, exact: true }).click();
+    await page.getByRole('button', { name: 'Buka keluhan ' + recordNo('KLH', config.caseId), exact: true }).click();
     const panel = page.getByRole('region', { name: 'Persetujuan finansial retur independen', exact: true }); await panel.waitFor();
     // The Finance checker has no case.manage, credit.request, refund.request or stock maker grants.
     assert.equal(await page.getByRole('button', { name: 'Tinjau pengajuan penyelesaian', exact: true }).count(), 0);
@@ -14,7 +15,7 @@ export async function verifyReturnFinancialApprovalBrowser({ config, finance, us
     await panel.getByRole('combobox', { name: /^Penerimaan barang retur/ }).selectOption(config.returnId);
     await panel.getByRole('combobox', { name: /^Penyelesaian yang diajukan/ }).selectOption(config.action);
     await panel.getByRole('button', { name: 'Buka pengajuan finansial', exact: true }).click();
-    const review = panel.getByRole('region', { name: 'Pemeriksaan finansial penerimaan ' + config.returnId, exact: true }); await review.waitFor();
+    const review = panel.getByRole('region', { name: 'Pemeriksaan finansial penerimaan ' + recordNo('RTR', config.returnId), exact: true }); await review.waitFor();
     await review.getByRole('button', { name: 'Periksa pengajuan dan saldo terbaru', exact: true }).click();
     await review.getByText(/Pengajuan tetap:/).waitFor({ timeout: 60000 }); return review;
   }
@@ -67,7 +68,7 @@ export async function verifyReturnFinancialApprovalBrowser({ config, finance, us
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true); await page.screenshot({ path: resolve(directory, 'return-financial-approval-saved-mobile.png'), fullPage: true });
   await page.setViewportSize({ width: 1440, height: 1000 }); assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
   await page.screenshot({ path: resolve(directory, 'return-financial-approval-saved-desktop.png'), fullPage: true });
-  const maker = await user(config.makerToken); await maker.page.goto(origin.origin + '/fulfillment/cases'); await maker.page.getByRole('button', { name: 'Buka keluhan ' + config.caseId, exact: true }).click();
+  const maker = await user(config.makerToken); await maker.page.goto(origin.origin + '/fulfillment/cases'); await maker.page.getByRole('button', { name: 'Buka keluhan ' + recordNo('KLH', config.caseId), exact: true }).click();
   assert.equal(await maker.page.getByRole('region', { name: 'Persetujuan finansial retur independen', exact: true }).count(), 0);
   const outsider = await user(config.courierToken); await outsider.page.goto(origin.origin + '/fulfillment/cases'); await outsider.page.getByRole('heading', { name: /^(Sesi Anda perlu diperbarui|Halaman ini di luar tugas akun Anda|Halaman belum dapat dibuka)$/ }).waitFor();
   assert.equal(await outsider.page.getByRole('button', { name: /^Buka keluhan/ }).count(), 0);

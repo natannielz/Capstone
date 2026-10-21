@@ -11,6 +11,7 @@ import { canRecordRefundPayout, createRefundPayoutGateway, prepareRefundPayoutDr
   type ApprovedRefundView, type RefundPayoutPreview, type RefundPayoutView } from './refund-payout-client';
 import styles from '../administration/access.module.css';
 import { formatDateTime } from '@/lib/format';
+import { recordNumber } from '@/lib/document-numbers';
 
 type Props = { actorId: string; owner: AfterSalesCase; actions: readonly string[]; fresh: boolean; locked: boolean; current: () => boolean; freshCurrent: () => boolean;
   journal: OperationJournal; onSettled: () => void; onDenied: (failure: unknown) => void; onBusyChange: (busy: boolean) => void };
@@ -143,7 +144,7 @@ function PayoutDesk({ actorId, owner, approved, fresh, locked, current, freshCur
       <img src={original.url} alt="Bukti transfer refund asli untuk diperiksa" style={{ maxWidth: '100%', height: 'auto' }} />
       <button className={styles.secondary} onClick={closeOriginal}>Tutup gambar bukti refund</button></section>}
     {shown && (draftCommand || recordCommand) && <section aria-label="Konfirmasi pencatatan refund"><h4 ref={heading} tabIndex={-1}>{draftCommand ? 'Simpan draf bukti refund' : 'Catat bukti refund untuk verifikasi'}</h4>
-      <p>Invoice {owner.source.number} · Retur {shown.view.returnId} · Nilai {rupiah(shown.view.amount)}</p>
+      <p>Invoice {owner.source.number} · Retur {recordNumber('return', shown.view.returnId)} · Nilai {rupiah(shown.view.amount)}</p>
       <p>Penerima terverifikasi: {shown.view.beneficiaryName} · Bank {shown.view.beneficiaryBankCode} · Rekening berakhir {shown.view.beneficiaryAccountSuffix}</p>
       <p>Rekening pembayaran: bank {shown.view.payingBankCode} · Berakhir {shown.view.payingAccountSuffix}</p>
       <p>Tanggal {shown.view.input.transferDate} · Referensi {shown.view.input.transferReference}</p>

@@ -11,6 +11,7 @@ import { canApproveReturnFinancial, createReturnFinancialApprovalGateway, prepar
   type ReturnFinancialAction, type ReturnFinancialApprovalView, type ReturnFinancialApprovalPreview } from './return-financial-approval-client';
 import styles from '../administration/access.module.css';
 import { formatDateTime } from '@/lib/format';
+import { recordNumber } from '@/lib/document-numbers';
 
 const rupiah = (value: string) => orderAmount('IDR', value);
 const money = (value: bigint) => (value / BigInt(100)).toString() + '.' + (value % BigInt(100)).toString().padStart(2, '0');
@@ -90,7 +91,7 @@ function FinancialReview({ actorId, owner, returnId, action, fresh, locked, curr
     return { source, input };
   }
   const selectedTotal = selected.every(item => paymentAllocationSchemas.positive.safeParse(item.amount).success) ? money(selected.reduce((sum, item) => sum + cents(item.amount), BigInt(0))) : null;
-  return <section aria-label={'Pemeriksaan finansial penerimaan ' + returnId}><h4>{action === 'credit' ? 'Nota kredit' : 'Nota kredit dan reservasi refund'} · Retur {returnId}</h4>
+  return <section aria-label={'Pemeriksaan finansial penerimaan ' + recordNumber('return', returnId)}><h4>{action === 'credit' ? 'Nota kredit' : 'Nota kredit dan reservasi refund'} · Retur {recordNumber('return', returnId)}</h4>
     {!fresh && <p role="status">Verifikasi dua langkah terbaru diperlukan untuk persetujuan. <Link href={'/identity/account?operation=' + action + '.approve&returnPath=%2Ffulfillment%2Fcases'}>Verifikasi dua langkah untuk persetujuan Finance</Link></p>}
     {error !== null && <p role="alert">{message(error)}</p>}{busy && <p role="status">Memeriksa sumber dan saldo finansial…</p>}
     <button className={styles.secondary} disabled={disabled} onClick={() => void work(() => read())}>Periksa pengajuan dan saldo terbaru</button>
@@ -116,7 +117,7 @@ function FinancialReview({ actorId, owner, returnId, action, fresh, locked, curr
           <button className={styles.primary} disabled={!canAct || action === 'refund' && !selected.length}>Tinjau persetujuan finansial</button></form>}
     </>}
     {shown && confirm && <section aria-label="Konfirmasi persetujuan Finance"><h4 ref={heading} tabIndex={-1}>Setujui nota kredit{action === 'refund' && ' dan reservasi refund'}</h4>
-      <p>Keluhan {owner.id} · Retur {returnId} · Invoice {owner.source.number} · Kredit {rupiah(shown.credit)} · Refund tersisih {rupiah(shown.reservedRefund)} · Sisa invoice {rupiah(shown.remainingInvoice)}</p>
+      <p>Keluhan {recordNumber('case', owner.id)} · Retur {recordNumber('return', returnId)} · Invoice {owner.source.number} · Kredit {rupiah(shown.credit)} · Refund tersisih {rupiah(shown.reservedRefund)} · Sisa invoice {rupiah(shown.remainingInvoice)}</p>
       <ul>{shown.releases.map(line => <li key={line.originalAllocationId}>Alokasi pembayaran asli {line.originalAllocationId}: {rupiah(line.amount)}</li>)}</ul>
       {shown.receipts.map(receipt => <p key={receipt.receiptId}>Penerimaan bank {receipt.receiptId}: {rupiah(receipt.released)} dipindahkan langsung dari alokasi ke reservasi refund · Total reservasi {rupiah(receipt.reservedForRefund)} · Dana tersedia tetap {rupiah(receipt.available)}</p>)}
       <details><summary>Prosedur Finance yang berlaku</summary><p>Nota kredit: {shown.creditNoteProcedureReference}</p><p>Pajak: {shown.taxTreatmentReference}</p><p>Biaya: {shown.chargeTreatmentReference}</p><p>Reservasi refund: {shown.refundReservationProcedureReference}</p></details>

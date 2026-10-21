@@ -6,6 +6,7 @@ import { AccessFailure, MutationLedger, accessMessage } from '../administration/
 import { submitTrackedRequest, type OperationJournal } from '../administration/operation-journal';
 import { createCaseGateway, prepareCaseDecision, type AfterSalesCase, type CaseDecision, type CaseDecisionResult } from './case-client';
 import styles from '../administration/access.module.css';
+import { recordNumber } from '@/lib/document-numbers';
 
 export function CaseDecisionPanel({ actorId, owner, fresh, locked, current, journal, onSaved, onSettled, onDenied, onBusyChange }: {
   actorId: string; owner: AfterSalesCase; fresh: boolean; locked: boolean; current: () => boolean; journal: OperationJournal;
@@ -42,7 +43,7 @@ export function CaseDecisionPanel({ actorId, owner, fresh, locked, current, jour
       <label>Catatan pemeriksa internal<textarea required maxLength={1000} disabled={disabled} value={reason} onChange={event => setReason(event.target.value)} /></label>
       <button className={styles.primary} disabled={!canAct}>Tinjau keputusan keluhan</button></form>}
     {confirm && <section aria-label="Konfirmasi keputusan keluhan"><h4 ref={heading} tabIndex={-1}>{confirm.body.action === 'reject' ? 'Tolak pengajuan' : 'Izinkan pengembalian barang'}</h4>
-      <p>Keluhan {owner.id} · Invoice {owner.source.number}</p><p>Untuk pelanggan: {confirm.body.publicExplanation}</p><p>Catatan internal: {confirm.body.reason}</p>
+      <p>Keluhan {recordNumber('case', owner.id)} · Invoice {owner.source.number}</p><p>Untuk pelanggan: {confirm.body.publicExplanation}</p><p>Catatan internal: {confirm.body.reason}</p>
       <ul>{confirm.body.lines.map(line => { const item = owner.source.lines.find(item => item.receiptId === line.receiptId && item.skuId === line.skuId)!; return <li key={line.receiptId + ':' + line.skuId}>{item.productName}: {line.reportedBaseUnits} {item.baseUnitCode} untuk pemeriksaan. Bukti {line.receiptId}.</li>; })}</ul>
       <label className={styles.checkbox}><input type="checkbox" checked={consent} disabled={disabled} onChange={event => setConsent(event.target.checked)} /><span>Saya telah memeriksa pengajuan, jumlah barang dan penjelasan keputusan.</span></label>
       <button className={styles.primary} disabled={!canAct || !consent} onClick={() => void work(async () => {

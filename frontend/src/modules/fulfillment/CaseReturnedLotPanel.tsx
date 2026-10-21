@@ -8,6 +8,7 @@ import type { AfterSalesCase } from './case-client';
 import type { InspectionView } from './inspection-client';
 import { createReturnLotGateway, prepareReturnLot, returnLotOperation, type ReturnLotCommand, type ReturnLotView } from './return-lot-client';
 import styles from '../administration/access.module.css';
+import { recordNumber } from '@/lib/document-numbers';
 
 function message(failure: unknown) {
   if (failure instanceof AccessFailure && failure.code === 'invalid_return_lot_verification') return 'Pilih lot pengiriman asli dan jumlah kemasan utuh yang sudah dicocokkan secara fisik. Isi label yang terlihat dan catatan petugas.';
@@ -36,7 +37,7 @@ export function CaseReturnedLotPanel({ actorId, owner, inspection, fresh, locked
     try { await task(); } catch (failure) { if (active()) { setReview(null); setConsent(false); setError(failure); if (!(failure instanceof AccessFailure && failure.code === 'step_up_required')) onDenied(failure); } }
     finally { pending.current = false; onBusyChange(false); onSettled(); if (alive.current) setBusy(false); }
   }
-  return <section className={styles.state} aria-label={'Pencocokan lot penerimaan ' + inspection.receipt.id}>
+  return <section className={styles.state} aria-label={'Pencocokan lot penerimaan ' + recordNumber('return', inspection.receipt.id)}>
     <h4>Pencocokan lot oleh petugas</h4>
     <p>Cocokkan label fisik dan kemasan utuh dengan satu lot pengiriman asli. Pernyataan manual ini tercatat dengan akun petugas dan hasil pemeriksaan sebelumnya. Barang tetap dalam karantina.</p>
     <p>Pencocokan ini tidak menetapkan gudang tujuan retur, melepas stok, menyetujui pembayaran, atau menyelesaikan pengembalian.</p>
@@ -75,7 +76,7 @@ export function CaseReturnedLotPanel({ actorId, owner, inspection, fresh, locked
         <label>Catatan petugas internal<textarea required maxLength={1000} value={reason} onChange={event => setReason(event.target.value)} /></label>
       </fieldset><div className={styles.actions}><button className={styles.primary} disabled={disabled || !fresh || !choice}>Tinjau pencocokan lot</button></div></form>}
     {review && <section className={styles.review} aria-label="Konfirmasi pencocokan lot"><h4 ref={heading} tabIndex={-1}>Catat pernyataan pencocokan manual</h4>
-      <p>Keluhan {owner.id} · Penerimaan {inspection.receipt.id}</p>
+      <p>Keluhan {recordNumber('case', owner.id)} · Penerimaan {recordNumber('return', inspection.receipt.id)}</p>
       {review.body.lines.map(item => <p key={item.receiptId + ':' + item.skuId}>{product(item.receiptId, item.skuId).productName}: lot asli {item.originalLotId}, {item.verifiedBaseUnits} {product(item.receiptId, item.skuId).baseUnitCode} dalam kemasan utuh.</p>)}
       <p>Label yang dicocokkan: {review.body.observedLotLabel}</p><p>Catatan internal: {review.body.reason}</p>
       <label className={styles.checkbox}><input type="checkbox" checked={consent} disabled={disabled || !fresh} onChange={event => setConsent(event.target.checked)} />
