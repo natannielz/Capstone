@@ -12,6 +12,14 @@ Draft head, immutable version, audit, original command receipt and private-ID-on
 
 Migration 21 installs the draft collections; the writer remains closed until the whole migration history is current. The conditional checkout below recomputes and persists package, price, party, address and commercial-policy snapshots with source-separated suborders and stock reservations. Production activation remains M1 work. Pending business policies and production source acceptance stay gated.
 
+## Keranjang (cart)
+
+The product page has one "Tambah ke keranjang" control: the branch, a quantity stepper that starts at the lowest amount the package allows, and a subtotal. The keranjang is not a new record. It is the buyer's most recently changed saved draft for that branch, so every draft rule above still applies (creator and branch scope, revision fence, price and package check at save). A changed price or package is shown on `/cart` for the buyer to accept; it is never swapped in silently.
+
+The buyer always names the branch. The browser never chooses one, not even the only branch allowed; the last explicit choice is remembered on that device as a branch reference only. Cart saves use the same tracked draft journal and `ordering.draft.save` operation as the drafts page: a save whose answer was lost stays listed, even after a reload, until "Periksa hasil" looks up the original receipt, and no further cart change is sent until then. A cart changed in another tab is read again and the same change is applied once more at the newer revision. Emptying the cart discards the draft (restorable for 30 days).
+
+Checkout asks for delivery on the page itself and can copy the branch address the organisation approved; recipient and phone stay the buyer's to write. "Pesan lagi" on an order puts its packages into the branch cart at today's package and price and names any that can no longer be ordered.
+
 ## Conditional checkout
 
 `/ordering/checkout?draft=<id>` reloads an owned saved draft, obtains the current reviewed commercial terms and explicitly submits one order. The typed client checks exact selections and decimal totals. An unknown submission keeps only the original actor/operation/key/time reference and uses the dedicated lookup-only `ordering.order` recovery adapter. No order contents, addresses or prices are persisted in browser storage.

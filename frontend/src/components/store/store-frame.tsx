@@ -10,9 +10,8 @@ import { createAccessGateway } from '@/modules/administration/access-client';
 import { createIdentityGateway } from '@/modules/identity/identity-client';
 import { ProtectedNavigationForm } from '@/modules/identity/ProtectedNavigationForm';
 import { isPilotRelease } from '@/lib/release-scope';
-import { createOrderQuoteGateway } from '@/modules/ordering/order-quote-client';
 import { createCartGateway } from '@/modules/ordering/cart-client';
-import { CART_CHANGED_EVENT, cartBranch } from '@/modules/ordering/cart-branch';
+import { CART_CHANGED_EVENT, rememberedCartContext } from '@/modules/ordering/cart-branch';
 import { storeLinks, storeMember, type StoreViewer } from './store-navigation';
 import styles from './store-frame.module.css';
 
@@ -48,13 +47,13 @@ export function StoreFrame({ children }: { children: React.ReactNode }) {
   const [cartLines, setCartLines] = useState<number | null>(null);
   const orders = viewer.kind === 'member' && viewer.orders;
   useEffect(() => {
-    // The count is a convenience: one quiet read when the frame opens, then whatever the page announces after a save.
+    // The count is a convenience: one read of the branch the buyer already chose (none before a first choice), then whatever the page announces.
     if (!session || !orders || isPilotRelease) return;
     let alive = true;
     void (async () => {
       try {
-        const branch = cartBranch(session.userId, await createOrderQuoteGateway().contexts(session.userId)); if (!branch || !alive) return;
-        const cart = await createCartGateway().read(session.userId, branch.context);
+        const context = rememberedCartContext(session.userId); if (!context) return;
+        const cart = await createCartGateway().read(session.userId, context);
         if (alive) setCartLines(cart?.input.selections.length ?? 0);
       } catch { /* leave the icon without a count */ }
     })();
@@ -67,6 +66,12 @@ export function StoreFrame({ children }: { children: React.ReactNode }) {
   const links = storeLinks(viewer, isPilotRelease, pathname);
   const help = whatsappLink(process.env.NEXT_PUBLIC_UNIT_TOKO_HELP_WHATSAPP, 'Halo, saya perlu bantuan memesan di Unit Toko.');
   const member = viewer.kind === 'member' ? viewer : null;
+  // The search box shows the catalog's current query, as marketplace search does, after links, back, forward and reload.
+  useEffect(() => {
+    const read = () => { if (window.location.pathname === links.catalog) setQuery((new URLSearchParams(window.location.search).get('q') ?? '').slice(0, 128)); };
+    void Promise.resolve().then(read); window.addEventListener('popstate', read);
+    return () => window.removeEventListener('popstate', read);
+  }, [pathname, links.catalog]);
   function submit(event: React.FormEvent) {
     event.preventDefault();
     const term = query.trim().slice(0, 128), target = links.catalog + (term ? '?q=' + encodeURIComponent(term) : '');

@@ -4,13 +4,22 @@ type Store = Pick<Storage, 'getItem' | 'setItem'>;
 const browserStore = (): Store | undefined => { try { return globalThis.localStorage; } catch { return undefined; } };
 const key = (actorId: string) => 'unit-toko.cart-branch.' + actorId;
 
-/** The branch the cart belongs to: the only one the buyer may order for, or the one they last chose on this device.
- *  Only the branch reference is remembered, never cart contents. Null means the buyer has to choose. */
+/** The branch the cart belongs to: the one the buyer last chose on this device, if they may still order for it. The browser
+ *  never picks a branch by itself, not even the only one allowed. Only the branch reference is remembered, never cart contents. */
 export function cartBranch(actorId: string, options: readonly OrderContextOption[], store: Store | undefined = browserStore()): OrderContextOption | null {
-  if (options.length === 1) return options[0];
   let remembered: string | null = null;
   try { remembered = store?.getItem(key(actorId)) ?? null; } catch { remembered = null; }
   return options.find(option => orderContextKey(option.context) === remembered) ?? null;
+}
+
+/** The branch the buyer last chose on this device, read without asking the server for the branch list (the header's cart count).
+ *  Null before a first choice or when the stored reference is not a well-formed branch. The server still checks access on every read. */
+export function rememberedCartContext(actorId: string, store: Store | undefined = browserStore()): OrderContext | null {
+  let value: string | null = null;
+  try { value = store?.getItem(key(actorId)) ?? null; } catch { value = null; }
+  const parts = value?.split(':') ?? [], id = /^[1-9][0-9]{0,18}$/;
+  if (parts.length !== 3 || !id.test(parts[0]) || !id.test(parts[1]) || parts[2] !== '' && !id.test(parts[2])) return null;
+  return { organizationId: parts[0], branchId: parts[1], divisionId: parts[2] === '' ? null : parts[2] };
 }
 
 export function rememberCartBranch(actorId: string, context: OrderContext, store: Store | undefined = browserStore()) {

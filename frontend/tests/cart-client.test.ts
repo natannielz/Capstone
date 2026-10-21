@@ -81,3 +81,12 @@ test('delivery details are saved into the same draft at its current revision, ke
   assert.equal(sent[1].expectedRevision, '4'); assert.deepEqual(sent[1].input.delivery, delivery); assert.equal(sent[1].input.purchaseReference, 'PO-8');
   assert.deepEqual(sent[1].input.selections, saved('41', '4').input.selections);
 });
+
+test('with a tracked submitter the cart leaves recovery to the journal: one send, no silent replay', async () => {
+  const sent: DraftCommand[] = [];
+  const lost = new TypeError('fetch failed');
+  const gateway = createCartGateway({ drafts: { list: async () => ({ items: [saved('41', '3')], hasMore: false }) } as never,
+    submit: async (command: DraftCommand) => { sent.push(command); throw lost; } });
+  await assert.rejects(() => gateway.apply('7', context, current => addToCart(current, line('11', 1), rule), 'add'), (error: unknown) => error === lost);
+  assert.equal(sent.length, 1); assert.equal(sent[0].expectedRevision, '3');
+});
