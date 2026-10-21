@@ -48,6 +48,10 @@ async function signedOutStates(page) {
     const operation = paused.then(() => route.continue()); held.add(operation);
     return operation.finally(() => held.delete(operation));
   };
+  // A visitor without any session cookie never sees the page shell: the proxy sends them to sign-in with the page as return target (G-012).
+  await page.goto(origin + '/ordering/requests'); await page.waitForURL(url => url.pathname === '/identity/login' && url.searchParams.get('returnPath') === '/ordering/requests');
+  // An expired session (a stale cookie the server no longer knows) still meets the page's own sign-in state.
+  await page.context().addCookies([{ name: '__Host-ut_session', value: 'expiredSyntheticSessionToken0000000000000000', domain: new URL(origin).hostname, path: '/', secure: true, httpOnly: true, sameSite: 'Lax' }]);
   await page.route(sessionPath, hold);
   try {
     await page.goto(origin + '/ordering/requests', { waitUntil: 'domcontentloaded' });
@@ -77,14 +81,14 @@ async function user(id, mobile = false) {
   });
   try {
   if (id === '1001' && config.stage === 'beforeRestart') await signedOutStates(page);
-  await page.goto(origin + '/identity/login'); await page.getByRole('button', { name: 'Lanjutkan ke layanan akun', exact: true }).click();
+  await page.goto(origin + '/identity/login?returnPath=%2Fidentity%2Faccount'); await page.getByRole('button', { name: 'Lanjutkan ke layanan akun', exact: true }).click();
   await page.waitForURL(url => url.origin === provider);
   await page.getByLabel('Nama masuk', { exact: true }).fill(account.Username);
   await page.getByLabel('Kata sandi lokal', { exact: true }).fill(account.Password);
   await page.getByLabel('Kode faktor SIMULASI', { exact: true }).fill(account.FactorCode);
   await page.getByRole('button', { name: 'Masuk', exact: true }).click();
   await page.waitForURL(url => url.origin === origin && url.pathname === '/identity/account');
-  await page.getByRole('heading', { name: 'Akses kerja Anda', exact: true }).waitFor();
+  await page.getByRole('heading', { name: 'Akun saya', exact: true }).waitFor();
   const session = await page.evaluate(async () => { const response = await fetch('/api/v1/identity/session', { cache: 'no-store' }); return { status: response.status, value: await response.json() }; });
   assert.equal(session.status, 200); assert.equal(session.value.authenticated, true); assert.equal(session.value.account.userId, id); assert.ok(session.value.factorCompletedAt);
   const access = await page.evaluate(async () => { const response = await fetch('/api/v1/access/current', { cache: 'no-store' }); const value = await response.json(); return { status: response.status, actorId: value.userId, actions: value.allowedActions }; });

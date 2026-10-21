@@ -1,5 +1,6 @@
 // Actual production Next + Kestrel + isolated Mongo. All accounts and approvals are synthetic.
 import assert from 'node:assert/strict';
+import { openDestination } from './open-destination.mjs';
 import http from 'node:http';
 import https from 'node:https';
 import net from 'node:net';
@@ -50,7 +51,7 @@ try {
   }); const proxyPort = await listen(tunnel);
   browser = await chromium.launch({ ...(channel === 'msedge' ? { channel: 'msedge' } : {}), headless: true, proxy: { server: 'http://127.0.0.1:' + proxyPort } });
 
-  async function desk(token) { const actor = await user(token); await actor.page.goto(origin.origin + '/identity/account'); await actor.page.getByRole('link', { name: /^Rekening penerimaan\b/ }).click(); await actor.page.getByRole('heading', { name: 'Rekening penerimaan', exact: true }).waitFor(); return actor; }
+  async function desk(token) { const actor = await user(token); await openDestination(actor.page, origin, 'Rekening penerimaan'); await actor.page.getByRole('heading', { name: 'Rekening penerimaan', exact: true }).waitFor(); return actor; }
   const maker = await desk(config.makerToken), page = maker.page;
   await page.getByRole('button', { name: 'Ajukan rekening baru', exact: true }).click();
   const form = page.getByRole('region', { name: 'Usulan rekening baru', exact: true });

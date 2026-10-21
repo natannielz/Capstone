@@ -41,7 +41,7 @@ type Query = {search: string; offset: number; signal: AbortSignal; finish?: (res
 type Effect = {dependencies?: readonly unknown[]; cleanup?: () => void};
 const changed = (before?: readonly unknown[], next?: readonly unknown[]) => !before || !next || before.length !== next.length || next.some((value, index) => !Object.is(value, before[index]));
 
-function mountCatalog(context: ReturnType<typeof browser>, returnPath: '/shop' | '/catalog/browse', deferFirst = false) {
+function mountCatalog(context: ReturnType<typeof browser>, returnPath: '/shop', deferFirst = false) {
   const queries: Query[] = [];
   const reply = (query: Query, label = `${query.search || 'Catalog fixture'} / ${query.offset}`) => Response.json({total: '80', items: [{familyId: family.id,
     familyPublicId: family.publicId, familyName: label, description: family.description, categoryCode: family.categoryCode,
@@ -115,7 +115,7 @@ function mountCatalog(context: ReturnType<typeof browser>, returnPath: '/shop' |
 }
 
 test('actual buyer catalog canonicalizes its URL and restores query/page through popstate Back, Forward and remount', async t => {
-  for (const path of ['/shop', '/catalog/browse'] as const) {
+  for (const path of ['/shop'] as const) {
     const context = browser([path + '?q=%20Cafe%CC%81%20%26%20PENA%20&page=2&tracking=ignored#catalog-list']);
     let mounted = mountCatalog(context, path); t.after(() => mounted.unmount()); await mounted.settle();
     assert.equal(context.href, path + '?q=Caf%C3%A9+%26+PENA&page=2#catalog-list');

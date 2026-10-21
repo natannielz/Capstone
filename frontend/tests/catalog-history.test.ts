@@ -1,6 +1,21 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { catalogHistoryUrl, normalizeCatalogHistorySearch, readCatalogHistoryQuery, type CatalogHistoryQuery } from '../src/modules/catalog/catalog-history';
+import { catalogHistoryUrl, guestCatalogHref, memberCatalogPath, normalizeCatalogHistorySearch, readCatalogHistoryQuery, type CatalogHistoryQuery } from '../src/modules/catalog/catalog-history';
+
+test('a visitor without a session on the member catalog goes to the guest catalog in every release, keeping only the public list query (G-030)', () => {
+  assert.equal(guestCatalogHref(undefined, ''), '/katalog');
+  assert.equal(guestCatalogHref(undefined, '?q=kopi&kategori=PANTRY&urut=nama&token=private'), '/katalog?q=kopi&kategori=PANTRY&urut=nama');
+  assert.equal(guestCatalogHref('00000065-0000-4000-8000-000000000101', '?q=kopi'), '/katalog/00000065-0000-4000-8000-000000000101');
+});
+
+test('signing in from the member catalog returns to the open product, never only to the list (G-030)', () => {
+  assert.equal(memberCatalogPath(), '/shop');
+  assert.equal(memberCatalogPath('00000065-0000-4000-8000-000000000101'), '/shop/00000065-0000-4000-8000-000000000101');
+});
+
+test('the legacy /catalog/browse route is never produced as a catalog address (G-023)', () => {
+  assert.throws(() => catalogHistoryUrl('/catalog/browse' as '/shop', { search: '', offset: 0 }), TypeError);
+});
 
 test('catalog history keeps a bounded normalized search and rejects malformed Unicode and controls', () => {
   assert.equal(normalizeCatalogHistorySearch('  Cafe\u0301 pena  '), 'Café pena');
@@ -28,7 +43,7 @@ test('catalog history rejects ambiguous fields and noncanonical pages without cl
 test('catalog history canonicalizes only public list queries, exact list paths and known bounded anchors', () => {
   assert.equal(catalogHistoryUrl('/shop', { search: '', offset: 0 }), '/shop');
   const query = readCatalogHistoryQuery('?page=3&q=%20Cafe%CC%81%20%26%20pena%20&actorId=17&token=private');
-  assert.equal(catalogHistoryUrl('/catalog/browse', query, '#catalog%2Dlist'), '/catalog/browse?q=Caf%C3%A9+%26+pena&page=3#catalog-list');
+  assert.equal(catalogHistoryUrl('/shop', query, '#catalog%2Dlist'), '/shop?q=Caf%C3%A9+%26+pena&page=3#catalog-list');
   assert.equal(catalogHistoryUrl('/shop', query, 'catalog-main'), '/shop?q=Caf%C3%A9+%26+pena&page=3#catalog-main');
   for (const hash of ['#item-private', '#session=private', '#catalog-list?token=private', '#catalog-main\n', '#%broken', '#'.repeat(129)]) {
     assert.equal(catalogHistoryUrl('/shop', { search: '', offset: 0 }, hash), '/shop');
@@ -107,6 +122,6 @@ test('catalog history keeps one category chip and the name order in the URL and 
     assert.deepEqual(readCatalogHistoryQuery(raw), { search: '', offset: 0 }, raw);
   }
   const query = { search: 'Teh', offset: 50, category: 'SNACK-RAPAT', sort: 'name' as const };
-  const url = new URL(catalogHistoryUrl('/catalog/browse', query), 'https://unit-toko.test');
+  const url = new URL(catalogHistoryUrl('/shop', query), 'https://unit-toko.test');
   assert.deepEqual(readCatalogHistoryQuery(url.search), query);
 });

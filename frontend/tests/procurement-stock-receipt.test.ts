@@ -66,5 +66,5 @@ test('receipt discovery requires both reading grants and exact fresh write retur
   for (const actions of [[], ['stock.read'], ['procurement.read'], ['stock.receive']]) assert.equal(identityDestinations(actions).some(item => item.href === path), false);
   assert.equal(identityDestinations(['procurement.read', 'stock.read']).some(item => item.href === path), true);
   const session = parseIdentitySession({ ...sourceSession, stepUpOperations: ['stock.receive'] }); assert.deepEqual(stepUpFields(session, 'stock.receive', path), { expectedActorId: session.account!.userId, operation: 'stock.receive', returnPath: path });
-  assert.equal(recoveryPage(stockReceiptOperation).href, path); assert.equal(operationLabel(stockReceiptOperation), 'Penerimaan stok ditahan'); assert.throws(() => loginFields(path + '?other=1', '', ''));
+  assert.equal(recoveryPage(stockReceiptOperation).href, path); assert.equal(operationLabel(stockReceiptOperation), 'Penerimaan stok ditahan'); assert.throws(() => loginFields(path + '?other=https://outside.test', '', '')); assert.throws(() => loginFields(path + '/other', '', ''));
 });

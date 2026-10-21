@@ -1,12 +1,14 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {storeMember, storeLinks, storeSignInHref} from '../src/components/store/store-navigation';
+import {catalogTabCurrent, storeMember, storeLinks, storeSignInHref} from '../src/components/store/store-navigation';
 
 const buyer = ['catalog.read', 'order.request.read', 'order.request.submit', 'branch.pic', 'order.submit', 'order.read', 'invoice.read'];
 
 test('buyers, approvers and staff are told apart by their permissions, never by their name', () => {
-  assert.deepEqual(storeMember('Rina', buyer), {kind: 'member', name: 'Rina', staff: false, approver: false, orders: true});
-  assert.deepEqual(storeMember('Andi', [...buyer, 'order.spend.approve']), {kind: 'member', name: 'Andi', staff: false, approver: true, orders: true});
+  assert.deepEqual(storeMember('Rina', buyer), {kind: 'member', name: 'Rina', staff: false, approver: false, orders: true, tasks: [{href: '/billing/invoices', label: 'Tagihan'}]});
+  const andi = storeMember('Andi', [...buyer, 'order.spend.approve']);
+  assert.deepEqual({staff: andi.staff, approver: andi.approver, orders: andi.orders}, {staff: false, approver: true, orders: true});
+  assert.ok(andi.tasks.some(task => task.href === '/ordering/reviews'));
   assert.equal(storeMember('Petugas', ['catalog.read', 'catalog.manage']).staff, true);
   assert.equal(storeMember('Petugas', ['catalog.read', 'catalog.manage']).orders, false);
   assert.equal(storeMember('Peninjau', ['catalog.read', 'pricing.approve']).staff, true);
@@ -41,4 +43,17 @@ test('the bounded first release keeps buyers on branch requests instead of price
   const links = storeLinks(storeMember('Rina', buyer), true, '/shop');
   assert.equal(links.cart, '/ordering/requests');
   assert.equal(links.orders, '/ordering/requests');
+});
+
+test('the Katalog tab is current on the member catalog and on the guest catalog (G-025)', () => {
+  for (const path of ['/shop', '/shop/00000065-0000-4000-8000-000000000101', '/katalog', '/katalog/00000065-0000-4000-8000-000000000101']) assert.equal(catalogTabCurrent(path), true, path);
+  for (const path of ['/cart', '/shopping', '/katalogus', '/ordering/orders', '/']) assert.equal(catalogTabCurrent(path), false, path);
+});
+
+test('the footer follows the viewer: sign-in returns to the page, and buyers get no staff door (G-021)', () => {
+  const guest = storeLinks({kind: 'guest'}, false, '/katalog');
+  assert.equal(guest.signIn, '/identity/login?returnPath=%2Fkatalog');
+  assert.equal(guest.catalog, '/katalog');
+  assert.equal(storeLinks(storeMember('Rina', buyer), true, '/shop').orders, '/ordering/requests');
+  assert.equal(storeLinks(storeMember('Rina', buyer), false, '/shop').staffDoor, null);
 });

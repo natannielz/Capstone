@@ -55,7 +55,7 @@ export function OrderSpendingPolicyWorkspace() {
     window.addEventListener('pageshow', restored); return () => { window.clearInterval(timer); window.removeEventListener('pageshow', restored); }; }, [account]);
   const denied = useCallback((failure: unknown) => { if (failure instanceof AccessFailure && (failure.status === 401 || failure.code === 'actor_changed' || failure.code === 'session_expired')) { setAccount(null); setError(failure); } }, []);
   return <main className={styles.page}><header className={styles.header}><div><Link href="/identity/account" className={styles.brand}>Unit Toko</Link>
-    <h1>Persetujuan belanja</h1><p>Tentukan kapan pesanan cabang atau divisi perlu diperiksa sebelum diproses.</p></div><Link className={styles.secondary} href="/identity/account">Akun saya</Link></header>
+    <h1>Aturan persetujuan belanja</h1><p>Tentukan kapan pesanan cabang atau divisi perlu diperiksa sebelum diproses.</p></div><Link className={styles.secondary} href="/identity/account">Akun saya</Link></header>
     {error !== null && account !== null && <p role="alert" className={styles.alert}>{message(error)}</p>}
     {loading ? <p role="status">Memeriksa akun dan akses…</p> : !account || sessionTiming(account.session, elapsed).expired ? <SessionAccessState error={error} returnPath={path} onRetry={() => setRevision(value => value + 1)} />
       : <PolicyDesk key={account.actorId + ':' + account.observedAt} account={account} elapsed={elapsed} fresh={sessionTiming(account.session, elapsed).fresh} onDenied={denied} />}

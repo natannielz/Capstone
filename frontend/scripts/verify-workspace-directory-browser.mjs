@@ -14,7 +14,7 @@ export async function verifyWorkspaceDirectoryBrowser({ page, origin, directory,
     ]);
     assert.equal(sessionResponse.status(), 200); assert.equal(accessResponse.status(), 200);
     const [session, current] = await Promise.all([sessionResponse.json(), accessResponse.json()]); assert.equal(session.authenticated, true); assert.equal(session.account.userId, actorId); assert.equal(current.userId, actorId);
-    assert.equal(new URL(page.url()).pathname, '/identity/account'); assert.equal(new URL(page.url()).hash, '#workspace-heading');
+    assert.equal(new URL(page.url()).pathname, '/workspace', 'staff work from /workspace; /identity/account holds account settings only');
     await page.getByRole('heading', { name: 'Ruang kerja tersedia', exact: true }).waitFor({ timeout: remaining() });
     const navigation = page.getByRole('navigation', { name: 'Ruang kerja akun', exact: true }); await navigation.waitFor({ timeout: remaining() });
     const visible = await navigation.getByRole('link').evaluateAll(elements => elements.map(element => element.getAttribute('href'))); assert.deepEqual([...visible].sort(), [...expectedLinks].sort()); assert.equal(new Set(visible).size, visible.length);
@@ -33,6 +33,7 @@ export async function verifyWorkspaceDirectoryBrowser({ page, origin, directory,
 }
 
 export async function verifyWorkspaceDirectoryWithoutSession({ page, origin }) {
-  await page.goto(origin.origin + '/workspace'); await page.getByRole('heading', { name: 'Masuk untuk melanjutkan', exact: true }).waitFor({ timeout: 60000 });
+  // Without a session cookie the proxy sends the visitor to sign-in, returning to /workspace afterwards (G-012).
+  await page.goto(origin.origin + '/workspace'); await page.waitForURL(url => url.pathname === '/identity/login' && url.searchParams.get('returnPath') === '/workspace', { timeout: 60000 });
   assert.equal(await page.getByRole('navigation', { name: 'Ruang kerja akun', exact: true }).count(), 0); assert.equal(await page.getByRole('searchbox', { name: 'Cari tugas', exact: true }).count(), 0);
 }

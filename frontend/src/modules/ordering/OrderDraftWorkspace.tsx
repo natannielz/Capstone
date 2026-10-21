@@ -52,7 +52,7 @@ export function OrderDraftWorkspace() {
   }, []);
   return <main className={common.page}><header className={common.header}><div><Link className={common.brand} href="/identity/account">Unit Toko</Link>
     <h1>Draf pesanan</h1><p>Susun kebutuhan cabang dan lanjutkan kapan saja. Draf hanya terlihat oleh akun pembuatnya.</p></div>
-    <nav className={common.actions}><Link className={common.secondary} href="/catalog/browse">Katalog kemasan</Link><Link className={common.secondary} href="/identity/account">Akun saya</Link></nav></header>
+    <nav className={common.actions}><Link className={common.secondary} href="/shop">Katalog kemasan</Link><Link className={common.secondary} href="/identity/account">Akun saya</Link></nav></header>
     {error !== null && account !== null && <p role="alert" className={common.alert}>{(error instanceof AccessFailure && discardConflictMessage(error.code)) || draftMessage(error, true)}</p>}
     {loading ? <p role="status">Memeriksa akun dan cabang…</p> : !account || expired ? <SessionAccessState error={error} returnPath="/ordering/drafts" onRetry={() => setRevision(value => value + 1)} />
       : <DraftDesk key={account.actorId + ':' + account.observedAt} account={account} onFailure={failed} />}

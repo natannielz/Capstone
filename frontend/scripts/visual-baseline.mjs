@@ -16,7 +16,7 @@ const full = process.env.NEXT_PUBLIC_UNIT_TOKO_RELEASE === "full";
 if (!existsSync(resolve(full ? ".next-full" : ".next", "BUILD_ID"))) throw new Error("Build the frontend first");
 
 const port = 3017, origin = `http://127.0.0.1:${port}`;
-const routes = ["/", "/shop", "/catalog/browse", "/identity/login"];
+const routes = ["/", "/katalog", "/shop", "/identity/login"];
 const widths = [360, 768, 1440];
 const directory = resolve("..", "tmp", "visual", label);
 mkdirSync(directory, { recursive: true });

@@ -42,7 +42,8 @@ export function ShipmentDispatchWorkspace() {
         if (!session.authenticated || !session.account) throw new IdentityFailure(401, 'unauthenticated');
         const current = await access.current(); if (!active) return;
         if (current.userId !== session.account.userId) throw new AccessFailure(409, 'actor_changed');
-        if (!['shipment.dispatch', 'shipment.assign'].every(action => current.allowedActions.includes(action))) throw new AccessFailure(403, 'scope_denied');
+        // The server admits dispatch with shipment.dispatch alone; the page asks for no more (G-031).
+        if (!current.allowedActions.includes('shipment.dispatch')) throw new AccessFailure(403, 'scope_denied');
         if (sessionTiming(session, performance.now() - observedAt).expired) throw new IdentityFailure(401, 'session_expired');
         setAccount({ actorId: current.userId, actions: current.allowedActions, session, observedAt }); setElapsed(performance.now() - observedAt);
       } catch (failure) { if (active) setError(failure); } finally { if (active) setLoading(false); }

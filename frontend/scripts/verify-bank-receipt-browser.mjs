@@ -1,5 +1,6 @@
 // Actual production Next + Kestrel + isolated Mongo. All accounts and approvals are synthetic.
 import assert from 'node:assert/strict';
+import { openDestination } from './open-destination.mjs';
 import http from 'node:http';
 import https from 'node:https';
 import net from 'node:net';
@@ -50,7 +51,7 @@ try {
   }); const proxyPort = await listen(tunnel);
   browser = await chromium.launch({ ...(channel === 'msedge' ? { channel: 'msedge' } : {}), headless: true, proxy: { server: 'http://127.0.0.1:' + proxyPort } });
 
-  async function desk(token) { const actor = await user(token); await actor.page.goto(origin.origin + '/identity/account'); await actor.page.getByRole('link', { name: /^Penerimaan bank\b/ }).click(); await actor.page.getByRole('heading', { name: 'Penerimaan bank', exact: true }).waitFor(); return actor; }
+  async function desk(token) { const actor = await user(token); await openDestination(actor.page, origin, 'Penerimaan bank'); await actor.page.getByRole('heading', { name: 'Penerimaan bank', exact: true }).waitFor(); return actor; }
   const importer=await desk(config.importerToken); await importer.page.getByRole('button',{name:'Tinjau sumber '+config.importId,exact:true}).click();
   assert.equal(await importer.page.getByRole('button',{name:'Periksa kredit baris 2',exact:true}).isDisabled(),true);
   const reviewer = await desk(config.makerToken), page=reviewer.page;

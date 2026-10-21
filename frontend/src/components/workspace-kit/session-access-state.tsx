@@ -1,5 +1,9 @@
+"use client";
+
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import common from "@/modules/administration/access.module.css";
+import { isReturnQuery } from "@/modules/identity/return-query";
 
 export type SessionAccessKind = "signin" | "denied" | "unavailable";
 
@@ -20,14 +24,35 @@ export function sessionAccessKind(error: unknown): SessionAccessKind {
 
 export function sessionLoginHref(returnPath: string) { return "/identity/login?returnPath=" + encodeURIComponent(returnPath); }
 
+/**
+ * Where signing in again returns: the page itself with the record it has open (`?draft=7`, `?order=41`), so work continues
+ * where it stopped (G-011). Only the page's own address counts, and only a query the API accepts as a return destination.
+ */
+export function returnTarget(pagePath: string, location: { pathname: string; search: string }): string {
+  const query = location.search.startsWith("?") ? location.search.slice(1) : location.search;
+  return location.pathname === pagePath && query && isReturnQuery(query) ? pagePath + "?" + query : pagePath;
+}
+
+/** The current page's return target, read after mount (the address bar is not known while rendering on the server). */
+export function useReturnTarget(pagePath: string): string {
+  const [target, setTarget] = useState(pagePath);
+  useEffect(() => {
+    const read = () => { if (window.location) setTarget(returnTarget(pagePath, window.location)); };
+    read(); window.addEventListener("popstate", read);
+    return () => window.removeEventListener("popstate", read);
+  }, [pagePath]);
+  return target;
+}
+
 /** The one state every workspace shows when it cannot open for this person. */
 export function SessionAccessState({ error, returnPath, onRetry }: { error: unknown; returnPath: string; onRetry: () => void }) {
   const kind = sessionAccessKind(error);
+  const target = useReturnTarget(returnPath);
   return <section className={common.state} aria-labelledby="workspace-access-state">
     {kind === "signin" ? <>
       <h2 id="workspace-access-state">Sesi Anda perlu diperbarui</h2>
       <p>Masuk kembali untuk melanjutkan. Pekerjaan yang sudah tersimpan tetap aman.</p>
-      <div className={common.actions}><Link className={common.primary} href={sessionLoginHref(returnPath)}>Masuk kembali</Link>
+      <div className={common.actions}><Link className={common.primary} href={sessionLoginHref(target)}>Masuk kembali</Link>
         <button type="button" className={common.secondary} onClick={onRetry}>Periksa ulang</button></div>
     </> : kind === "denied" ? <>
       <h2 id="workspace-access-state">Halaman ini di luar tugas akun Anda</h2>

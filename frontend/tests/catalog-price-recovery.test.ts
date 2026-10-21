@@ -16,7 +16,7 @@ const actor = '9007199254740993', sku = '9007199254740995';
 const legacy = { lookup: async () => { throw new Error('Legacy must not own price receipts'); }, close: async () => { throw new Error('No close'); } };
 test('price-only navigation and exact safe return path expose the assigned workspace', () => {
   assert.equal(identityReturnPath('/catalog/prices'), '/catalog/prices');
-  assert.equal(identityReturnPath('/catalog/prices/../identity/account'), '/identity/account');
+  assert.equal(identityReturnPath('/catalog/prices/../identity/account'), '/workspace');
   assert.ok(identityDestinations(['pricing.approve']).some(item => item.href === '/catalog/prices'));
   assert.ok(!identityDestinations(['catalog.manage']).some(item => item.href === '/catalog/prices'));
   assert.equal(recoveryPage('catalog.price.approve').href, '/catalog/prices');

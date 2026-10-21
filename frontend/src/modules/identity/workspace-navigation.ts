@@ -1,5 +1,5 @@
 import { isPilotPathAllowed, isPilotRelease } from '../../lib/release-scope';
-import { destinationHrefs, destinationLabel } from './identity-workflow';
+import { destinationHrefs, destinationLabel, isStaffActor, storeDoor } from './identity-workflow';
 import { workspaceDirectory } from './workspace-directory';
 
 /** Former AdministrationNavigation `current` ids → their workspace path (kept so the 33 call sites stay unchanged). */
@@ -52,6 +52,7 @@ export type NavigationGroup = { id: string; label: string; items: NavigationItem
 
 const HOME: Omit<NavigationItem, 'current' | 'available'> = { href: '/workspace', label: 'Pekerjaan saya', description: 'Ruang kerja dan tugas yang tersedia untuk akun Anda.' };
 const ACCOUNT: Omit<NavigationItem, 'current' | 'available'> = { href: '/identity/account#profile-heading', label: 'Akun saya', description: 'Sesi, verifikasi dan kontak akun Anda.' };
+const STORE_HOME: Omit<NavigationItem, 'current' | 'available'> = { href: '/shop', label: 'Kembali ke toko', description: 'Katalog, keranjang dan pesanan cabang Anda.' };
 
 /**
  * Presentation only: groups the live permission discovery (identityDestinations) into the directory areas.
@@ -61,7 +62,10 @@ export function workspaceNavigation(actions: readonly string[], current: string 
   const pilot = options.pilot ?? isPilotRelease;
   const allowed = (href: string) => !pilot || isPilotPathAllowed(href.split('#')[0]);
   const item = (entry: Omit<NavigationItem, 'current' | 'available'>, available: boolean): NavigationItem => ({ ...entry, current: entry.href === current, available });
-  const groups: NavigationGroup[] = [{ id: 'home', label: 'Beranda', items: [item(HOME, true)] }];
+  // A buyer opening one of their tasks here (invoices, payments, receipt) has no back office: their way home is the store (G-018).
+  const buyerOnly = actions.length > 0 && !isStaffActor(actions), door = storeDoor(actions);
+  const groups: NavigationGroup[] = [{ id: 'home', label: 'Beranda', items: [item(buyerOnly && door ? STORE_HOME : HOME, true)] }];
+  if (!buyerOnly && door && allowed(door.href)) groups.push({ id: 'store', label: 'Toko', items: [item(door, true)] });
   for (const area of workspaceDirectory(actions)) {
     const items = area.items.filter(entry => allowed(entry.href)).map(entry => item({ href: entry.href, label: entry.label, description: entry.description }, true));
     if (items.length) groups.push({ id: area.id, label: area.label, items });

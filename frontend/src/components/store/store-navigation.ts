@@ -1,21 +1,21 @@
-/** Who is looking at the storefront. Display only: every API authorises independently. */
-export type StoreViewer = { kind: 'loading' } | { kind: 'guest' } | { kind: 'member'; name: string; staff: boolean; approver: boolean; orders: boolean };
+import { buyerTasks, isStaffActor } from '../../modules/identity/identity-workflow';
 
-// Everything a branch buyer or branch approver may hold. Any other permission belongs to the cooperative's back office.
-const buyerActions = new Set(['catalog.read', 'order.request.read', 'order.request.submit', 'branch.pic', 'order.submit', 'order.read',
-  'order.spend.approve', 'invoice.read', 'payment.evidence', 'shipment.read', 'case.read', 'case.request']);
+/** Who is looking at the storefront. Display only: every API authorises independently. */
+export type StoreViewer = { kind: 'loading' } | { kind: 'guest' } | { kind: 'member'; name: string; staff: boolean; approver: boolean; orders: boolean; tasks: { href: string; label: string }[] };
 
 export type StoreMember = Extract<StoreViewer, { kind: 'member' }>;
+/** Staff are told apart by the back-office pages their grants open (G-017, F-002), never by a permission missing from a buyer list.
+ *  `tasks` are the buyer's own pages outside the storefront (receipt, invoices, payments, complaints, approval) for the account menu. */
 export function storeMember(name: string, actions: readonly string[]): StoreMember {
-  return { kind: 'member', name, staff: actions.some(action => !buyerActions.has(action)), approver: actions.includes('order.spend.approve'),
-    orders: actions.includes('order.submit') };
+  return { kind: 'member', name, staff: isStaffActor(actions), approver: actions.includes('order.spend.approve'),
+    orders: actions.includes('order.submit'), tasks: buyerTasks(actions) };
 }
 
 export function storeSignInHref(returnPath: string) { return '/identity/login?returnPath=' + encodeURIComponent(returnPath); }
 
 export type StoreLinks = { home: string; catalog: string; signIn: string; cart: string; orders: string; account: string; staffDoor: string | null };
 
-/** Where the storefront's header and tabs lead. A guest's cart, orders and account go through sign-in and come back. */
+/** Where the storefront's header, tabs and footer lead. A guest's cart, orders and account go through sign-in and come back. */
 export function storeLinks(viewer: StoreViewer, pilot: boolean, currentPath: string): StoreLinks {
   const cart = pilot ? '/ordering/requests' : '/cart', orders = pilot ? '/ordering/requests' : '/ordering/orders';
   const member = viewer.kind === 'member';
@@ -26,3 +26,6 @@ export function storeLinks(viewer: StoreViewer, pilot: boolean, currentPath: str
     staffDoor: viewer.kind === 'member' ? viewer.staff ? '/workspace' : null : storeSignInHref('/workspace'),
   };
 }
+
+/** The storefront tab "Katalog" is current on the member catalog and on the guest catalog alike (G-025). */
+export const catalogTabCurrent = (path: string) => /^\/(shop|katalog)(\/|$)/.test(path);

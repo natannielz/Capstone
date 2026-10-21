@@ -40,7 +40,8 @@ async function setup(width = 1365, height = 1000) {
   await page.route('**/*', async route => {
     const request = route.request(), url = new URL(request.url());
     if (url.origin !== new URL(base).origin) return route.abort();
-    if (!url.pathname.startsWith('/api/v1')) return route.continue();
+    // The page itself needs a session cookie to render (the proxy sends cookie-less visits to sign-in); the API stays mocked.
+    if (!url.pathname.startsWith('/api/v1')) return route.continue({headers: {...request.headers(), cookie: '__Host-ut_session=synthetic-check'}});
     const answer = (body, status = 200) => route.fulfill({status, contentType: 'application/json', body: JSON.stringify(body), headers: {'Cache-Control': 'no-store'}});
     if (url.pathname === '/api/v1/identity/csrf') return answer({requestToken: 'fixture-csrf'});
     if (url.pathname === '/api/v1/access/current') return answer({...current, userId: state.actor});
