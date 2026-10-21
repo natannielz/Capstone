@@ -15,6 +15,10 @@
     <!-- The first demo's 200 products (names, descriptions, units, prices, groups, photo paths), SYNTHETIC. -->
     <EmbeddedResource Include="demo-products.json" LogicalName="demo-products.json" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- The bootstrap on a disposable test database (PilotBootstrap.InitializeDatabaseAsync) and the demo catalog. -->
+    <InternalsVisibleTo Include="UnitToko.LocalPilot.Tests" />
+  </ItemGroup>
 
   <!-- The pilot installs a private, pinned copy of this decoder build on first use (see PilotPhotos). -->
   <Target Name="CopyImageDecoder" AfterTargets="Build">

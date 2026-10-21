@@ -181,4 +181,11 @@ Maker/checker pairs: `petugas-katalog` proposes prices and the guest catalog, an
 
 FIX-RULES owns template changes. Until then, the drops keep each checker persona from also proposing.
 
-The review profile also makes assortment 501 public through the real showcase maker/checker service (2001 proposes, 2002 approves), so `tamu` sees a catalog without prices. The approved sample products (Task 3.1) are the next step in `PilotBootstrap.SeedAfterCatalogAsync`.
+**Guest samples.** The full and review profiles seed 12 approved guest sample products in `PilotBootstrap.SeedAfterCatalogAsync` (`PilotSamples.cs`), so `tamu` sees a catalog without prices on `/katalog`. The 12 are the first three demo products of each group; each has a published package and a demo photo.
+- **How:** only through `CatalogPublicSampleService`. `petugas` (2001, `catalog.public.propose`) proposes, and `peninjau` (2002, `catalog.public.approve`, fresh factor) approves.
+- **On every start:**
+  - Samples that are already approved are left alone, including those an earlier assortment showcase brought in through migration 122.
+  - A chosen product that is missing is added through a new proposal.
+  - A proposal of ours left pending by an interrupted start is approved.
+  - Nothing is added beyond the 200-product limit.
+- Release1 has no guest samples.
