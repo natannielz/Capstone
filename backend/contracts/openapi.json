@@ -93282,12 +93282,12 @@
         ]
       }
     },
-    "/api/v1/catalog/public-showcase/query": {
+    "/api/v1/catalog/public-samples/query": {
       "post": {
         "tags": [
           "UnitToko.Api"
         ],
-        "operationId": "CatalogPublicShowcaseList",
+        "operationId": "CatalogPublicSampleList",
         "parameters": [
           {
             "name": "X-Expected-Actor-Id",
@@ -93315,7 +93315,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/CatalogPublicShowcaseQueryDto"
+                "$ref": "#/components/schemas/CatalogPublicSampleQueryDto"
               }
             }
           },
@@ -93377,7 +93377,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CatalogPublicShowcaseListDto"
+                  "$ref": "#/components/schemas/CatalogPublicSampleListDto"
                 }
               }
             }
@@ -93390,21 +93390,13 @@
         ]
       }
     },
-    "/api/v1/catalog/public-showcase/{assortmentId}/proposals": {
+    "/api/v1/catalog/public-samples/proposals": {
       "post": {
         "tags": [
           "UnitToko.Api"
         ],
-        "operationId": "ProposeCatalogPublicShowcase",
+        "operationId": "ProposeCatalogPublicSamples",
         "parameters": [
-          {
-            "name": "assortmentId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
           {
             "name": "Idempotency-Key",
             "in": "header",
@@ -93418,17 +93410,6 @@
             }
           },
           {
-            "name": "If-Match",
-            "in": "header",
-            "description": "One quoted nonnegative Int64 resource version from the latest response; never a JavaScript number.",
-            "required": true,
-            "schema": {
-              "maxLength": 21,
-              "minLength": 3,
-              "type": "string"
-            }
-          },
-          {
             "name": "X-Expected-Actor-Id",
             "in": "header",
             "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
@@ -93454,7 +93435,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/CatalogPublicShowcaseProposeDto"
+                "$ref": "#/components/schemas/CatalogPublicSampleProposeDto"
               }
             }
           },
@@ -93516,7 +93497,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CatalogPublicShowcaseCommandDto"
+                  "$ref": "#/components/schemas/CatalogPublicSampleCommandDto"
                 }
               }
             }
@@ -93529,12 +93510,12 @@
         ]
       }
     },
-    "/api/v1/catalog/public-showcase/proposals/{proposalId}/approve": {
+    "/api/v1/catalog/public-samples/proposals/{proposalId}/approve": {
       "post": {
         "tags": [
           "UnitToko.Api"
         ],
-        "operationId": "ApproveCatalogPublicShowcase",
+        "operationId": "ApproveCatalogPublicSamples",
         "parameters": [
           {
             "name": "proposalId",
@@ -93557,17 +93538,6 @@
             }
           },
           {
-            "name": "If-Match",
-            "in": "header",
-            "description": "One quoted nonnegative Int64 resource version from the latest response; never a JavaScript number.",
-            "required": true,
-            "schema": {
-              "maxLength": 21,
-              "minLength": 3,
-              "type": "string"
-            }
-          },
-          {
             "name": "X-Expected-Actor-Id",
             "in": "header",
             "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
@@ -93593,7 +93563,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/CatalogPublicShowcaseDecideDto"
+                "$ref": "#/components/schemas/CatalogPublicSampleDecideDto"
               }
             }
           },
@@ -93655,7 +93625,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CatalogPublicShowcaseCommandDto"
+                  "$ref": "#/components/schemas/CatalogPublicSampleCommandDto"
                 }
               }
             }
@@ -93668,12 +93638,12 @@
         ]
       }
     },
-    "/api/v1/catalog/public-showcase/proposals/{proposalId}/reject": {
+    "/api/v1/catalog/public-samples/proposals/{proposalId}/reject": {
       "post": {
         "tags": [
           "UnitToko.Api"
         ],
-        "operationId": "RejectCatalogPublicShowcase",
+        "operationId": "RejectCatalogPublicSamples",
         "parameters": [
           {
             "name": "proposalId",
@@ -93696,17 +93666,6 @@
             }
           },
           {
-            "name": "If-Match",
-            "in": "header",
-            "description": "One quoted nonnegative Int64 resource version from the latest response; never a JavaScript number.",
-            "required": true,
-            "schema": {
-              "maxLength": 21,
-              "minLength": 3,
-              "type": "string"
-            }
-          },
-          {
             "name": "X-Expected-Actor-Id",
             "in": "header",
             "description": "The account reference that reviewed this request. Compared with the verified session; never used to authenticate.",
@@ -93732,7 +93691,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/CatalogPublicShowcaseDecideDto"
+                "$ref": "#/components/schemas/CatalogPublicSampleDecideDto"
               }
             }
           },
@@ -93794,7 +93753,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CatalogPublicShowcaseCommandDto"
+                  "$ref": "#/components/schemas/CatalogPublicSampleCommandDto"
                 }
               }
             }
@@ -100223,48 +100182,39 @@
         },
         "additionalProperties": false
       },
-      "CatalogPublicShowcaseCommandDto": {
+      "CatalogPublicSampleChangeDto": {
+        "required": [
+          "familyId",
+          "familyName"
+        ],
+        "type": "object",
+        "properties": {
+          "familyId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "familyName": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "CatalogPublicSampleCommandDto": {
         "required": [
           "proposalId",
-          "decisionId",
-          "assortmentId",
-          "status",
-          "headRevision"
+          "state"
         ],
         "type": "object",
         "properties": {
           "proposalId": {
             "$ref": "#/components/schemas/LongId"
           },
-          "decisionId": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/LongId"
-              }
-            ]
-          },
-          "assortmentId": {
-            "$ref": "#/components/schemas/LongId"
-          },
-          "status": {
-            "type": [
-              "null",
-              "string"
-            ]
-          },
-          "headRevision": {
-            "type": [
-              "null",
-              "string"
-            ]
+          "state": {
+            "type": "string"
           }
         },
         "additionalProperties": false
       },
-      "CatalogPublicShowcaseDecideDto": {
+      "CatalogPublicSampleDecideDto": {
         "required": [
           "reason"
         ],
@@ -100276,38 +100226,31 @@
         },
         "additionalProperties": false
       },
-      "CatalogPublicShowcaseDto": {
+      "CatalogPublicSampleItemDto": {
         "required": [
-          "assortmentId",
-          "owner",
-          "ownerName",
-          "listedProducts",
-          "isPublic",
-          "revision",
+          "familyId",
+          "familyName",
+          "ownerLabel",
+          "packages",
+          "isSample",
           "pending"
         ],
         "type": "object",
         "properties": {
-          "assortmentId": {
+          "familyId": {
             "$ref": "#/components/schemas/LongId"
           },
-          "owner": {
-            "$ref": "#/components/schemas/CatalogPublicShowcaseOwnerDto"
-          },
-          "ownerName": {
-            "type": [
-              "null",
-              "string"
-            ]
-          },
-          "listedProducts": {
+          "familyName": {
             "type": "string"
           },
-          "isPublic": {
+          "ownerLabel": {
+            "type": "string"
+          },
+          "packages": {
+            "type": "string"
+          },
+          "isSample": {
             "type": "boolean"
-          },
-          "revision": {
-            "type": "string"
           },
           "pending": {
             "oneOf": [
@@ -100315,115 +100258,123 @@
                 "type": "null"
               },
               {
-                "$ref": "#/components/schemas/CatalogPublicShowcasePendingDto"
+                "$ref": "#/components/schemas/CatalogPublicSamplePendingDto"
               }
             ]
           }
         },
         "additionalProperties": false
       },
-      "CatalogPublicShowcaseListDto": {
+      "CatalogPublicSampleListDto": {
         "required": [
-          "items"
+          "items",
+          "total",
+          "proposals",
+          "sampleCount",
+          "sampleLimit"
         ],
         "type": "object",
         "properties": {
           "items": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/CatalogPublicShowcaseDto"
+              "$ref": "#/components/schemas/CatalogPublicSampleItemDto"
             }
-          }
-        },
-        "additionalProperties": false
-      },
-      "CatalogPublicShowcaseOwnerDto": {
-        "required": [
-          "kind",
-          "organizationId",
-          "shopId",
-          "warehouseId",
-          "channelId"
-        ],
-        "type": "object",
-        "properties": {
-          "kind": {
+          },
+          "total": {
             "type": "string"
           },
-          "organizationId": {
-            "$ref": "#/components/schemas/LongId"
+          "proposals": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CatalogPublicSampleProposalDto"
+            }
           },
-          "shopId": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/LongId"
-              }
-            ]
+          "sampleCount": {
+            "type": "string"
           },
-          "warehouseId": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/LongId"
-              }
-            ]
-          },
-          "channelId": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/LongId"
-              }
-            ]
+          "sampleLimit": {
+            "type": "string"
           }
         },
         "additionalProperties": false
       },
-      "CatalogPublicShowcasePendingDto": {
+      "CatalogPublicSamplePendingDto": {
         "required": [
           "proposalId",
-          "makePublic",
-          "ownProposal",
-          "proposedAt",
-          "reason"
+          "adding",
+          "ownProposal"
         ],
         "type": "object",
         "properties": {
           "proposalId": {
             "$ref": "#/components/schemas/LongId"
           },
-          "makePublic": {
+          "adding": {
             "type": "boolean"
           },
           "ownProposal": {
             "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "CatalogPublicSampleProposalDto": {
+        "required": [
+          "proposalId",
+          "ownProposal",
+          "ownerLabel",
+          "reason",
+          "proposedAt",
+          "adds",
+          "removes"
+        ],
+        "type": "object",
+        "properties": {
+          "proposalId": {
+            "$ref": "#/components/schemas/LongId"
+          },
+          "ownProposal": {
+            "type": "boolean"
+          },
+          "ownerLabel": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
           },
           "proposedAt": {
             "type": "string",
             "format": "date-time"
           },
-          "reason": {
-            "type": "string"
+          "adds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CatalogPublicSampleChangeDto"
+            }
+          },
+          "removes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CatalogPublicSampleChangeDto"
+            }
           }
         },
         "additionalProperties": false
       },
-      "CatalogPublicShowcaseProposeDto": {
+      "CatalogPublicSampleProposeDto": {
         "required": [
-          "makePublic",
+          "adds",
+          "removes",
           "reason"
         ],
         "type": "object",
         "properties": {
-          "makePublic": {
-            "type": "boolean"
+          "adds": {
+            "type": "array"
+          },
+          "removes": {
+            "type": "array"
           },
           "reason": {
             "type": "string"
@@ -100431,14 +100382,41 @@
         },
         "additionalProperties": false
       },
-      "CatalogPublicShowcaseQueryDto": {
+      "CatalogPublicSampleQueryDto": {
         "required": [
-          "purpose"
+          "purpose",
+          "search",
+          "offset",
+          "limit"
         ],
         "type": "object",
         "properties": {
           "purpose": {
             "type": "string"
+          },
+          "search": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "offset": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "limit": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
           }
         },
         "additionalProperties": false
@@ -124687,11 +124665,42 @@
       "PublicCatalogItemDto": {
         "required": [
           "publicId",
-          "code",
           "name",
           "description",
           "categoryCode",
           "categoryName",
+          "packages"
+        ],
+        "type": "object",
+        "properties": {
+          "publicId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "categoryCode": {
+            "type": "string"
+          },
+          "categoryName": {
+            "type": "string"
+          },
+          "packages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PublicCatalogPackageDto"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "PublicCatalogPackageDto": {
+        "required": [
+          "publicId",
+          "code",
           "packageLabel",
           "packageKind",
           "baseUnitCode",
@@ -124706,18 +124715,6 @@
             "type": "string"
           },
           "code": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          },
-          "description": {
-            "type": "string"
-          },
-          "categoryCode": {
-            "type": "string"
-          },
-          "categoryName": {
             "type": "string"
           },
           "packageLabel": {
