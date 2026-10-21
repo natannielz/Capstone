@@ -17,6 +17,8 @@ button:disabled{cursor:not-allowed}
 :where(a,button,input,select,textarea,summary):focus-visible{outline:3px solid var(--ring);outline-offset:3px}
 :where([tabindex]):focus-visible{outline:3px solid var(--ring);outline-offset:3px}
 :where(td,th) :where(a,button,input,select):focus-visible{outline-offset:2px}
+/* Dark surfaces (store footer on --sidebar, landing/pilot footer): the same ring in its light form keeps 3:1. */
+:where([data-surface="dark"],[data-store-frame]>footer) :where(a,button,input,select,textarea,summary,[tabindex]):focus-visible{outline-color:var(--ring-inverse)}
 @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*::before,*::after{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
 }
 
