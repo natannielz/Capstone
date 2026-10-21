@@ -1,6 +1,6 @@
 import { RequestNotSentError } from '../../api/client';
 import { AccessFailure } from '../administration/workflow';
-import { createOrderDraftGateway, prepareDraftCommand, type DraftCommand, type OrderDraft } from './order-draft-client';
+import { createOrderDraftGateway, prepareDraftCommand, type DraftCommand, type DraftResult, type OrderDraft } from './order-draft-client';
 import { pickCart } from './cart-model';
 import type { OrderContext, OrderSelection } from './order-quote-client';
 import type { OrderDelivery } from './order-delivery';
@@ -15,7 +15,9 @@ type Drafts = Pick<ReturnType<typeof createOrderDraftGateway>, 'list' | 'read' |
 const unknownOutcome = (error: unknown) => !(error instanceof RequestNotSentError) &&
   (!(error instanceof AccessFailure) || error.status === 0 || error.status >= 500);
 
-export function createCartGateway({ drafts = createOrderDraftGateway(), newKey = () => crypto.randomUUID() }: { drafts?: Drafts; newKey?: () => string } = {}) {
+/** With `submit`, saves go through the caller's tracked journal: an unconfirmed save survives a reload and is checked, never replayed silently. */
+export function createCartGateway({ drafts = createOrderDraftGateway(), newKey = () => crypto.randomUUID(), submit }: {
+  drafts?: Drafts; newKey?: () => string; submit?: (command: DraftCommand) => Promise<DraftResult> } = {}) {
   async function read(actorId: string, context: OrderContext, signal?: AbortSignal): Promise<OrderDraft | null> {
     return pickCart((await drafts.list(actorId, context, null, signal)).items);
   }
@@ -28,6 +30,7 @@ export function createCartGateway({ drafts = createOrderDraftGateway(), newKey =
       catch (second) { throw unknownOutcome(second) ? new CartOutcomeUnknown(command, key) : second; }
     }
   }
+  const save = (command: DraftCommand) => submit ? submit(command) : send(command, newKey());
   return {
     read,
     /** Reads the cart, applies the buyer's change to what is saved now and saves it at that revision. If another tab changed
@@ -42,7 +45,7 @@ export function createCartGateway({ drafts = createOrderDraftGateway(), newKey =
           }
           const command = prepareDraftCommand(actorId, cart?.id ?? null, cart?.revision ?? '0', { context, selections: next,
             delivery: cart?.input.delivery ?? null, purchaseReference: cart?.input.purchaseReference ?? null }, reason);
-          const result = await send(command, newKey());
+          const result = await save(command);
           return { draftId: result.draftId, revision: result.revision };
         } catch (failure) {
           if (attempt === 0 && failure instanceof AccessFailure && failure.status === 409 && failure.code !== 'order_selection_changed') continue;
@@ -56,7 +59,7 @@ export function createCartGateway({ drafts = createOrderDraftGateway(), newKey =
         const draft = await drafts.read(actorId, draftId);
         try {
           const command = prepareDraftCommand(actorId, draft.id, draft.revision, { ...draft.input, delivery, purchaseReference }, 'Lengkapi pengiriman untuk pengajuan');
-          const result = await send(command, newKey());
+          const result = await save(command);
           return { draftId: result.draftId, revision: result.revision };
         } catch (failure) {
           if (attempt === 0 && failure instanceof AccessFailure && failure.status === 409 && failure.code !== 'order_selection_changed') continue;
