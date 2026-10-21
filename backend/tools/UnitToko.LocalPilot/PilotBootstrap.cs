@@ -18,7 +18,12 @@ public static class PilotBootstrap
     public static async Task InitializeAsync(MongoClient client, PilotSecrets secrets, CancellationToken ct)
     {
         PilotBoundary.RequireDatabase(PilotBoundary.MongoUri, PilotBoundary.DatabaseName);
-        var database = client.GetDatabase(PilotBoundary.DatabaseName);
+        await InitializeDatabaseAsync(client, client.GetDatabase(PilotBoundary.DatabaseName), secrets, ct);
+    }
+
+    /// <summary>The bootstrap on a database the caller has already verified: the pilot's own (above), or a test's disposable one.</summary>
+    internal static async Task InitializeDatabaseAsync(MongoClient client, IMongoDatabase database, PilotSecrets secrets, CancellationToken ct)
+    {
         var names = await (await database.ListCollectionNamesAsync(cancellationToken: ct)).ToListAsync(ct);
         var markers = database.GetCollection<BsonDocument>(Marker);
         var marker = names.Contains(Marker) ? await markers.Find(new BsonDocument("_id", PilotBoundary.Profile)).SingleOrDefaultAsync(ct) : null;
@@ -122,32 +127,17 @@ public static class PilotBootstrap
     }
 
     /// <summary>
-    /// Everything seeded after the catalog, on every start, each step idempotent:
-    /// 1. the review personas (full and review profiles; release1 keeps its four accounts);
-    /// 2. the review profile's public showcase of assortment 501 (proposed by 2001, approved by 2002) so guests see a catalog.
-    /// The approved sample products (Task 3.1) join here as the next step, through their real services, guarded by their own
-    /// marker field in <c>localPilotMetadata</c> like <c>catalogExpansion</c>.
+    /// Everything seeded after the catalog, on every start, each step idempotent (full and review profiles; release1 keeps its
+    /// four accounts and has no guest samples):
+    /// 1. the review personas, reconciled to their definitions;
+    /// 2. the 12 guest sample products (<see cref="PilotSamples"/>), through the real maker/checker sample service.
     /// </summary>
     private static async Task SeedAfterCatalogAsync(IMongoDatabase database, MongoClient client, PilotSecrets secrets, IMongoCollection<BsonDocument> markers, CancellationToken ct)
     {
+        _ = markers;
         if (!PilotBoundary.IsFullRelease) return;
         await PilotPersonas.SeedAsync(database, client, secrets, ct);
-        if (PilotBoundary.Profile == "review") await ShowcaseAsync(database, client, secrets, markers, ct);
-    }
-
-    /// <summary>The review stack's guest catalog: assortment 501 public (no prices) through the real maker/checker showcase service.</summary>
-    private static async Task ShowcaseAsync(IMongoDatabase database, MongoClient client, PilotSecrets secrets, IMongoCollection<BsonDocument> markers, CancellationToken ct)
-    {
-        var marker = await markers.Find(new BsonDocument("_id", PilotBoundary.Profile)).SingleAsync(ct);
-        if (marker.GetValue("publicShowcase", 0).ToInt32() >= 1) return;
-        var clock = new SystemClock();
-        var service = new CatalogPublicShowcaseService(database, new MongoUnitOfWork(client), new(database), clock);
-        var maker = new ActorContext(2001, PilotBoundary.Issuer, secrets.Accounts.Single(x => x.Id == 2001).Subject, 1, clock.UtcNow, FactorAssurance.MultiFactor);
-        var checker = new ActorContext(2002, PilotBoundary.Issuer, secrets.Accounts.Single(x => x.Id == 2002).Subject, 1, clock.UtcNow, FactorAssurance.MultiFactor);
-        static AuthorizationCommandMetadata Meta(string key) => new("local-pilot.showcase-v1." + key, "SYNTHETIC review catalog shown to guests without prices", "local-pilot-showcase");
-        var proposal = await service.ProposeAsync(maker, 501, 0, true, Meta("propose"), ct);
-        await service.DecideAsync(checker, proposal["proposalId"].AsInt64, 1, CatalogPublicShowcaseDecision.Approve, Meta("approve"), ct);
-        await markers.UpdateOneAsync(new BsonDocument("_id", PilotBoundary.Profile), Builders<BsonDocument>.Update.Set("publicShowcase", 1), cancellationToken: ct);
+        await PilotSamples.SeedAsync(database, client, secrets, ct);
     }
 
     /// <summary>Synthetic person evidence for one account, so the real independent-person rules can tell the pilot's people apart.
