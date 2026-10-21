@@ -10,7 +10,33 @@ namespace UnitToko.LocalPilot.Tests;
 public sealed class PilotSessionsTests
 {
     private static readonly string[] Personas = ["tamu", "pemohon", "penyetuju-cabang", "peninjau-toko", "petugas-katalog", "peninjau-katalog",
-        "petugas-gudang", "petugas-kirim", "kurir", "keuangan-tagihan", "pemeriksa-pembayaran", "pengadaan", "penyetuju-pengadaan", "admin-akses", "staf-pembeli"];
+        "petugas-gudang", "petugas-kirim", "kurir", "keuangan-tagihan", "pemeriksa-pembayaran", "pengadaan", "penyetuju-pengadaan", "admin-akses", "penyetuju-akses",
+        "staf-pembeli"];
+
+    /// <summary>Every maker/checker pair in Permissions.cs: the proposing side, then the deciding side. No persona may hold both.</summary>
+    private static readonly (string Maker, string Checker)[] MakerChecker = [
+        (Permissions.OrderSubmit, Permissions.OrderSpendApprove), (Permissions.OrderSubmit, Permissions.OrderApprove),
+        (Permissions.BranchOrderRequestSubmit, Permissions.BranchOrderRequestDecide), (Permissions.SubstitutionPropose, Permissions.SubstitutionAccept),
+        (Permissions.OrderSpendingPolicyPropose, Permissions.OrderSpendingPolicyApprove), (Permissions.OrderCommercialPolicyPropose, Permissions.OrderCommercialPolicyApprove),
+        (Permissions.PricingManage, Permissions.PricingApprove), (Permissions.CatalogPublicPropose, Permissions.CatalogPublicApprove),
+        (Permissions.ProcurementPrepare, Permissions.ProcurementApprove), (Permissions.SupplierChangePropose, Permissions.SupplierChangeApprove),
+        (Permissions.SupplierBankPropose, Permissions.SupplierBankApprove), (Permissions.SupplierClaim, Permissions.SupplierClaimApprove),
+        (Permissions.FundingRequest, Permissions.FundingApprove), (Permissions.ExpenseRequest, Permissions.ExpenseApprove),
+        (Permissions.ProcurementPayablePropose, Permissions.ProcurementPayableDecide), (Permissions.ProcurementAdvanceReturnPropose, Permissions.ProcurementAdvanceReturnDecide),
+        (Permissions.ProcurementQualityAcceptancePropose, Permissions.ProcurementQualityAcceptanceDecide),
+        (Permissions.ProcurementStockValuationPropose, Permissions.ProcurementStockValuationDecide),
+        (Permissions.StockAdjustPropose, Permissions.StockAdjustApprove), (Permissions.StockReleasePropose, Permissions.StockReleaseApprove),
+        (Permissions.StockSourcePropose, Permissions.StockSourceApprove), (Permissions.StockSourcePolicyPropose, Permissions.StockSourcePolicyApprove),
+        (Permissions.StockSourceReconciliationPropose, Permissions.StockSourceReconciliationDecide),
+        (Permissions.InvoiceReleasePropose, Permissions.InvoiceReleaseApprove), (Permissions.PaymentRecord, Permissions.PaymentVerify),
+        (Permissions.PaymentAllocate, Permissions.PaymentVerify), (Permissions.DisbursementRecord, Permissions.DisbursementVerify),
+        (Permissions.CreditRequest, Permissions.CreditApprove), (Permissions.RefundRequest, Permissions.RefundApprove),
+        (Permissions.ReceivingAccountPropose, Permissions.ReceivingAccountVerify), (Permissions.ReceivingAccountPropose, Permissions.ReceivingAccountApprove),
+        (Permissions.PeriodSubmit, Permissions.PeriodApprove), (Permissions.PeriodReopenRequest, Permissions.PeriodReopenApprove),
+        (Permissions.AccountingBookPropose, Permissions.AccountingBookApprove), (Permissions.AccessPropose, Permissions.AccessApprove),
+        (Permissions.MembershipPropose, Permissions.MembershipApprove), (Permissions.PersonReviewPropose, Permissions.PersonReviewApprove),
+        (Permissions.TechnicalConfigure, Permissions.OrganizationApprove),
+    ];
 
     [Fact]
     public async Task Review_profile_refuses_non_loopback_and_mints_one_session_per_persona()
@@ -38,7 +64,13 @@ public sealed class PilotSessionsTests
         foreach (var persona in PilotPersonas.All.Where(persona => persona.SignedIn))
         {
             foreach (var grant in persona.Grants)
-                Assert.Equal(RoleTemplates.Materialize(grant.TemplateId, grant.FinancePacks, grant.Additions).Permissions.ToArray(), grant.Permissions.ToArray());
+            {
+                // A persona is an explicit grant set: its template, packs and additions, minus template permissions it must not hold.
+                var template = RoleTemplates.Materialize(grant.TemplateId, grant.FinancePacks, grant.Additions).Permissions;
+                Assert.All(grant.Removed, permission => Assert.Contains(permission, RoleTemplates.Templates[grant.TemplateId].Permissions));
+                Assert.Empty(grant.Removed.Intersect(grant.Additions));
+                Assert.Equal(template.Except(grant.Removed).ToArray(), grant.Permissions.ToArray());
+            }
             var (memberships, grants) = PilotPersonas.Records(persona, Enumerable.Range(1, 4).Select(i => 9000L + i).ToArray(),
                 Enumerable.Range(1, 4).Select(i => 9100L + i).ToArray(), now.AddMinutes(-1));
             var snapshot = new AuthorizationSnapshot(persona.AccountId, 1, AuthorizationStatus.Active, [.. grants], [.. memberships], PilotPersonas.Directory);
@@ -67,19 +99,27 @@ public sealed class PilotSessionsTests
         Assert.Contains(Permissions.ProcurementInspect, Held("petugas-gudang"));
         Assert.Contains(Permissions.ProcurementSupplierDocumentRecord, Held("pengadaan"));
         Assert.Contains(Permissions.ProcurementQualityAcceptanceDecide, Held("penyetuju-pengadaan"));
-        // Maker/checker stays split across people: no persona holds both sides of a reviewed change.
-        foreach (var (maker, checker) in new[] { (Permissions.PricingManage, Permissions.PricingApprove), (Permissions.CatalogPublicPropose, Permissions.CatalogPublicApprove),
-            (Permissions.ProcurementPrepare, Permissions.ProcurementApprove), (Permissions.SupplierChangePropose, Permissions.SupplierChangeApprove),
-            (Permissions.SupplierBankPropose, Permissions.SupplierBankApprove), (Permissions.InvoiceReleasePropose, Permissions.InvoiceReleaseApprove),
-            (Permissions.ReceivingAccountPropose, Permissions.ReceivingAccountApprove), (Permissions.PaymentRecord, Permissions.PaymentVerify),
-            (Permissions.DisbursementRecord, Permissions.DisbursementVerify), (Permissions.ProcurementStockValuationPropose, Permissions.ProcurementStockValuationDecide),
-            (Permissions.StockReleasePropose, Permissions.StockReleaseApprove), (Permissions.StockAdjustPropose, Permissions.StockAdjustApprove),
-            (Permissions.FundingRequest, Permissions.FundingApprove), (Permissions.ProcurementPayablePropose, Permissions.ProcurementPayableDecide),
-            (Permissions.ProcurementAdvanceReturnPropose, Permissions.ProcurementAdvanceReturnDecide),
-            (Permissions.ProcurementQualityAcceptancePropose, Permissions.ProcurementQualityAcceptanceDecide), (Permissions.AccessPropose, Permissions.AccessApprove),
-            (Permissions.MembershipPropose, Permissions.MembershipApprove), (Permissions.CreditRequest, Permissions.CreditApprove), (Permissions.RefundRequest, Permissions.RefundApprove) })
+        // Maker/checker stays split across people: no persona holds both sides of any reviewed change. No exceptions.
+        foreach (var (maker, checker) in MakerChecker)
+        {
+            Assert.NotNull(Permissions.Find(maker)); Assert.NotNull(Permissions.Find(checker));
             Assert.All(PilotPersonas.All, persona => Assert.False(Held(persona.Name).Contains(maker) && Held(persona.Name).Contains(checker),
                 persona.Name + " holds both " + maker + " and " + checker));
+        }
+        Assert.DoesNotContain(Permissions.OrderSubmit, Held("penyetuju-cabang"));
+        Assert.DoesNotContain(Permissions.SupplierClaim, Held("penyetuju-pengadaan"));
+        // The access checker approves what admin-akses proposes and cannot propose itself.
+        Assert.Contains(Permissions.AccessApprove, Held("penyetuju-akses"));
+        Assert.Contains(Permissions.MembershipApprove, Held("penyetuju-akses"));
+        Assert.DoesNotContain(Permissions.AccessPropose, Held("penyetuju-akses"));
+        Assert.DoesNotContain(Permissions.MembershipPropose, Held("penyetuju-akses"));
+        // kurir is on the shop's courier roster: a courier-assignment membership and grant for any warehouse of shop 101, with the
+        // shipment.read and delivery.attempt the dispatch courier picker requires (ShipmentCourierEligibility).
+        var kurir = Assert.Single(PilotPersonas.All.Single(persona => persona.Name == "kurir").Grants);
+        Assert.Equal(new GrantScope(GrantScopeKind.CourierAssignment, 100, ShopId: 101, ChannelId: 103), kurir.Scope);
+        Assert.Contains(Permissions.ShipmentRead, kurir.Permissions); Assert.Contains(Permissions.DeliveryAttempt, kurir.Permissions);
+        var (kurirMemberships, _) = PilotPersonas.Records(PilotPersonas.All.Single(persona => persona.Name == "kurir"), [9001], [9101], now);
+        Assert.Equal(kurir.Scope, Assert.Single(kurirMemberships).Scope);
         Assert.Contains(Permissions.DeliveryAttempt, Held("kurir"));
         Assert.Contains(Permissions.InvoiceIssue, Held("keuangan-tagihan"));
         Assert.Contains(Permissions.PaymentReviewRead, Held("pemeriksa-pembayaran"));
@@ -101,14 +141,22 @@ public sealed class PilotSessionsTests
                 issued.Add((persona.Name, token));
                 return Task.FromResult(new MintedSession(token, now.AddHours(8)));
             }
-            Task Revoke(string token, CancellationToken _) { revoked.Add(token); return Task.CompletedTask; }
-            Assert.Throws<InvalidOperationException>(() => PilotSessions.Create(root, [new IPEndPoint(IPAddress.Any, 8443)], Issue, Revoke));
-            Assert.Throws<InvalidOperationException>(() => PilotSessions.Create(root, [new IPEndPoint(IPAddress.Parse("192.168.1.20"), 8443)], Issue, Revoke));
+            var failRevoke = "";
+            Task Revoke(string token, CancellationToken _)
+            {
+                if (token == failRevoke) throw new TimeoutException("synthetic revoke failure");
+                revoked.Add(token); return Task.CompletedTask;
+            }
+            // personas.json reports the grants as stored in the database, not the code's intent.
+            Task<IReadOnlyList<PersonaGrantView>> Describe(PilotPersona persona, CancellationToken _) => Task.FromResult<IReadOnlyList<PersonaGrantView>>(
+                [new PersonaGrantView(persona.Grants[0].TemplateId, "stored-scope-" + persona.Name, ["stored.only." + persona.Name])]);
+            Assert.Throws<InvalidOperationException>(() => PilotSessions.Create(root, [new IPEndPoint(IPAddress.Any, 8443)], Issue, Revoke, Describe));
+            Assert.Throws<InvalidOperationException>(() => PilotSessions.Create(root, [new IPEndPoint(IPAddress.Parse("192.168.1.20"), 8443)], Issue, Revoke, Describe));
             Assert.Empty(Directory.GetFileSystemEntries(root));
             Assert.Throws<ArgumentException>(() => PilotSessions.FilePath(root, "../outside"));
             Assert.Throws<ArgumentException>(() => PilotSessions.FilePath(root, "C:\\outside"));
 
-            var sessions = PilotSessions.Create(root, review, Issue, Revoke);
+            var sessions = PilotSessions.Create(root, review, Issue, Revoke, Describe);
             var console = new StringWriter(); var previous = Console.Out; var previousError = Console.Error;
             Console.SetOut(console); Console.SetError(console);
             try { await sessions.MintAllAsync(CancellationToken.None); }
@@ -138,18 +186,29 @@ public sealed class PilotSessionsTests
             var index = File.ReadAllText(Path.Combine(directory, "personas.json"));
             Assert.All(issued, item => Assert.DoesNotContain(item.Token, index));
             using (var parsed = JsonDocument.Parse(index))
-                Assert.Equal(Personas, parsed.RootElement.GetProperty("personas").EnumerateArray().Select(item => item.GetProperty("name").GetString()));
+            {
+                var listed = parsed.RootElement.GetProperty("personas").EnumerateArray().ToArray();
+                Assert.Equal(Personas, listed.Select(item => item.GetProperty("name").GetString()));
+                var pemohon = listed.Single(item => item.GetProperty("name").GetString() == "pemohon");
+                var stored = Assert.Single(pemohon.GetProperty("grants").EnumerateArray());
+                Assert.Equal("stored-scope-pemohon", stored.GetProperty("scope").GetString());
+                Assert.Equal(new[] { "stored.only.pemohon" }, stored.GetProperty("permissions").EnumerateArray().Select(item => item.GetString()!).ToArray());
+                Assert.Empty(listed.Single(item => item.GetProperty("name").GetString() == "tamu").GetProperty("grants").EnumerateArray());
+            }
 
             // A refresh replaces each file in place: still one file and one new session per persona.
+            var signedIn = Personas.Length - 1;
             await sessions.MintAllAsync(CancellationToken.None);
-            Assert.Equal(28, issued.Count);
-            Assert.Equal(15, Directory.GetFiles(root, "*", SearchOption.AllDirectories).Length);
+            Assert.Equal(2 * signedIn, issued.Count);
+            Assert.Equal(signedIn + 1, Directory.GetFiles(root, "*", SearchOption.AllDirectories).Length);
             using (var latest = JsonDocument.Parse(File.ReadAllText(Path.Combine(directory, "pemohon.json"))))
                 Assert.Equal(issued.Last(item => item.Persona == "pemohon").Token, latest.RootElement.GetProperty("cookies")[0].GetProperty("value").GetString());
 
-            // Stopping revokes every minted session and removes the files.
-            await sessions.StopAsync(CancellationToken.None);
-            Assert.Equal(issued.Select(item => item.Token).Order(StringComparer.Ordinal), revoked.Order(StringComparer.Ordinal));
+            // Stopping removes the files and revokes every minted session; one failed revocation neither stops the rest nor hides the count.
+            failRevoke = issued[3].Token;
+            var stopped = await sessions.StopAsync(CancellationToken.None);
+            Assert.Equal((2 * signedIn - 1, 1), (stopped.Revoked, stopped.Failed));
+            Assert.Equal(issued.Select(item => item.Token).Where(token => token != failRevoke).Order(StringComparer.Ordinal), revoked.Order(StringComparer.Ordinal));
             Assert.Empty(Directory.GetFiles(root, "*", SearchOption.AllDirectories));
         }
         finally

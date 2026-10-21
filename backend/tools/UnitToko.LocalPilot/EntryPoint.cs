@@ -47,7 +47,30 @@ internal static class EntryPoint
         Console.CancelKeyPress += (_, e) => { e.Cancel = true; stop.Cancel(); };
         // start-local-pilot.ps1 -Stop asks a running instance to stop the same way Ctrl+C does.
         var stopWatch = WatchStopFileAsync(stopFile, stop);
-        var client = await PilotRuntime.MongoAsync(mongo, directory, stop.Token);
+        try
+        {
+            var client = await PilotRuntime.MongoAsync(mongo, directory, stop.Token);
+            try { return await ServeAsync(repository, node, signatures, directory, state, stop, client); }
+            finally
+            {
+                // The review stack stops its own MongoDB however serving ended (MongoAsync verified the process on its port).
+                if (review)
+                    try { await PilotRuntime.ShutdownMongoAsync(client); }
+                    catch (Exception exception) { Console.WriteLine("MongoDB ulasan belum berhenti (" + exception.GetType().Name + ")."); }
+            }
+        }
+        finally
+        {
+            if (!stop.IsCancellationRequested) stop.Cancel();
+            await stopWatch;
+        }
+    }
+
+    [SupportedOSPlatform("windows")]
+    private static async Task<int> ServeAsync(string repository, string node, string? signatures, string directory, PilotState state,
+        CancellationTokenSource stop, MongoClient client)
+    {
+        var review = PilotBoundary.Profile == "review";
         var database = client.GetDatabase(PilotBoundary.DatabaseName);
         await PilotBootstrap.InitializeAsync(client, state.Secrets, stop.Token);
         using var signing = state.Certificate.GetRSAPrivateKey() ?? throw new InvalidOperationException("Missing pilot signing key.");
@@ -120,18 +143,21 @@ internal static class EntryPoint
             try { await Task.Delay(Timeout.InfiniteTimeSpan, stop.Token); } catch (OperationCanceledException) when (stop.IsCancellationRequested) { }
             await edge.StopAsync(CancellationToken.None);
             await refresh;
-            if (sessions is not null)
-                try { await sessions.StopAsync(CancellationToken.None); }
-                catch (Exception exception) { Console.WriteLine("Sesi persona belum semuanya dicabut (" + exception.GetType().Name + ")."); }
             await photoWork;
         }
         finally
         {
-            if (!nextProcess.HasExited) { nextProcess.Kill(true); await nextProcess.WaitForExitAsync(); }
             if (!stop.IsCancellationRequested) stop.Cancel();
-            await stopWatch;
+            // However serving ended, minted sessions are revoked and their files removed while the API still runs.
+            if (sessions is not null)
+                try
+                {
+                    var (revoked, failed) = await sessions.StopAsync(CancellationToken.None);
+                    Console.WriteLine("Sesi persona dicabut: " + revoked + (failed > 0 ? ", gagal dicabut: " + failed + " (berakhir sendiri setelah 30 menit tanpa pemakaian)" : "") + ".");
+                }
+                catch (Exception exception) { Console.WriteLine("Berkas sesi persona belum terhapus (" + exception.GetType().Name + ")."); }
+            if (!nextProcess.HasExited) { nextProcess.Kill(true); await nextProcess.WaitForExitAsync(); }
         }
-        if (review) await PilotRuntime.ShutdownMongoAsync(client);
         return 0;
     }
 
@@ -155,7 +181,7 @@ internal static class EntryPoint
             return new(issued.OpaqueToken, issued.Session.AbsoluteExpiresAt);
         }
         Task Revoke(string token, CancellationToken ct) => store.RevokeAsync(token, "SYNTHETIC review persona session rotated or stack stopped", ct);
-        return PilotSessions.Create(repository, PilotBoundary.Edge, Issue, Revoke);
+        return PilotSessions.Create(repository, PilotBoundary.Edge, Issue, Revoke, (persona, ct) => PilotPersonas.DescribeAsync(database, persona, ct));
     }
 
     private static async Task RefreshAsync(PilotSessions sessions, CancellationToken ct)

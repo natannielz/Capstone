@@ -7,6 +7,9 @@ namespace UnitToko.LocalPilot;
 /// <summary>An opaque session the API issued for one persona, and when it ends at the latest.</summary>
 public sealed record MintedSession(string Token, DateTimeOffset ExpiresAt);
 
+/// <summary>One active grant of a persona as stored in the database (template, stored scope, permissions), for <c>personas.json</c>.</summary>
+public sealed record PersonaGrantView(string Template, object Scope, IReadOnlyList<string> Permissions);
+
 /// <summary>
 /// Signed-in review personas without passwords: the review stack asks the API's own session store for one session per persona
 /// (the way the browser rehearsal fixtures do) and writes each as a Playwright storage state to
@@ -25,12 +28,14 @@ public sealed partial class PilotSessions
     private readonly string directory;
     private readonly Func<PilotPersona, CancellationToken, Task<MintedSession>> issue;
     private readonly Func<string, CancellationToken, Task> revoke;
+    private readonly Func<PilotPersona, CancellationToken, Task<IReadOnlyList<PersonaGrantView>>> describe;
     private readonly List<(string Token, DateTimeOffset MintedAt)> live = [];
     private readonly SemaphoreSlim gate = new(1, 1);
 
-    private PilotSessions(string directory, Func<PilotPersona, CancellationToken, Task<MintedSession>> issue, Func<string, CancellationToken, Task> revoke)
+    private PilotSessions(string directory, Func<PilotPersona, CancellationToken, Task<MintedSession>> issue, Func<string, CancellationToken, Task> revoke,
+        Func<PilotPersona, CancellationToken, Task<IReadOnlyList<PersonaGrantView>>> describe)
     {
-        this.directory = directory; this.issue = issue; this.revoke = revoke;
+        this.directory = directory; this.issue = issue; this.revoke = revoke; this.describe = describe;
     }
 
     [GeneratedRegex("^[a-z][a-z-]{1,39}$")] private static partial Regex PersonaName();
@@ -55,7 +60,8 @@ public sealed partial class PilotSessions
     }
 
     public static PilotSessions Create(string repository, IReadOnlyList<IPEndPoint> binds,
-        Func<PilotPersona, CancellationToken, Task<MintedSession>> issue, Func<string, CancellationToken, Task> revoke)
+        Func<PilotPersona, CancellationToken, Task<MintedSession>> issue, Func<string, CancellationToken, Task> revoke,
+        Func<PilotPersona, CancellationToken, Task<IReadOnlyList<PersonaGrantView>>> describe)
     {
         RequireLoopback(binds);
         var root = Path.GetFullPath(repository);
@@ -63,7 +69,7 @@ public sealed partial class PilotSessions
         for (var item = new DirectoryInfo(folder); item is not null && item.FullName.Length >= root.TrimEnd(Path.DirectorySeparatorChar).Length; item = item.Parent)
             if (item.Exists && (item.Attributes & FileAttributes.ReparsePoint) != 0)
                 throw new InvalidOperationException("Session files cannot be written through a junction or symbolic link.");
-        return new(folder, issue, revoke);
+        return new(folder, issue, revoke, describe);
     }
 
     /// <summary>One new session per signed-in persona, each file replaced whole; then sessions older than <see cref="RevokeAfter"/> are revoked.</summary>
@@ -84,7 +90,9 @@ public sealed partial class PilotSessions
                     origins = Array.Empty<object>(),
                 }, Indented));
             }
-            Replace(Path.Combine(directory, IndexName), Index());
+            var stored = new Dictionary<string, IReadOnlyList<PersonaGrantView>>(StringComparer.Ordinal);
+            foreach (var persona in PilotPersonas.SignedIn) stored[persona.Name] = await describe(persona, ct);
+            Replace(Path.Combine(directory, IndexName), Index(stored));
             var now = DateTimeOffset.UtcNow;
             foreach (var old in live.Where(item => now - item.MintedAt > RevokeAfter).ToArray())
             {
@@ -95,21 +103,29 @@ public sealed partial class PilotSessions
         finally { gate.Release(); }
     }
 
-    /// <summary>Revokes every session this stack minted and removes the session files.</summary>
-    public async Task StopAsync(CancellationToken ct)
+    /// <summary>Removes the session files first, then revokes every session this stack minted. Each revocation stands alone: one
+    /// failure is counted and the rest still run.</summary>
+    public async Task<(int Revoked, int Failed)> StopAsync(CancellationToken ct)
     {
         await gate.WaitAsync(ct);
         try
         {
             foreach (var persona in PilotPersonas.SignedIn) File.Delete(Path.Combine(directory, persona.Name + ".json"));
             File.Delete(Path.Combine(directory, IndexName));
-            foreach (var item in live.ToArray()) { await revoke(item.Token, ct); live.Remove(item); }
+            int revoked = 0, failed = 0;
+            foreach (var item in live.ToArray())
+            {
+                try { await revoke(item.Token, ct); revoked++; }
+                catch (Exception exception) when (exception is not OperationCanceledException) { failed++; }
+                live.Remove(item);
+            }
+            return (revoked, failed);
         }
         finally { gate.Release(); }
     }
 
-    /// <summary>Who each persona is, for the harness and the reviewers. No token, password or factor code.</summary>
-    private static string Index() => JsonSerializer.Serialize(new
+    /// <summary>Who each persona is, with the grants as stored, for the harness and the reviewers. No token, password or factor code.</summary>
+    private static string Index(IReadOnlyDictionary<string, IReadOnlyList<PersonaGrantView>> stored) => JsonSerializer.Serialize(new
     {
         origin = PilotBoundary.BrowserOriginFor("review"),
         refreshedAt = DateTimeOffset.UtcNow.ToString("O"),
@@ -118,12 +134,8 @@ public sealed partial class PilotSessions
         {
             name = persona.Name, label = persona.Label, userId = persona.SignedIn ? persona.AccountId.ToString(System.Globalization.CultureInfo.InvariantCulture) : null,
             session = persona.SignedIn ? persona.Name + ".json" : null,
-            grants = persona.Grants.Select(grant => new
-            {
-                template = grant.TemplateId, financePacks = grant.FinancePacks,
-                scope = new { kind = grant.Scope.Kind.ToString(), grant.Scope.OrganizationId, grant.Scope.BranchId, grant.Scope.ShopId, grant.Scope.WarehouseId, grant.Scope.ChannelId },
-                permissions = grant.Permissions,
-            }),
+            grants = (stored.TryGetValue(persona.Name, out var grants) ? grants : Array.Empty<PersonaGrantView>()).Select(grant => new
+                { template = grant.Template, scope = grant.Scope, permissions = grant.Permissions }),
         }),
     }, Indented);
 

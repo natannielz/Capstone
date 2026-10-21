@@ -7,10 +7,11 @@ using UnitToko.Platform.Mongo;
 
 namespace UnitToko.LocalPilot;
 
-/// <summary>One grant of a persona: an existing role template, its finance packs and named additions, in one pilot scope.</summary>
-public sealed record PersonaGrant(string TemplateId, string[] FinancePacks, string[] Additions, GrantScope Scope)
+/// <summary>One grant of a persona: an existing role template, its finance packs and named additions, in one pilot scope, minus the
+/// template permissions this persona must not hold (<see cref="Removed"/>, e.g. the proposing side of a pair it approves).</summary>
+public sealed record PersonaGrant(string TemplateId, string[] FinancePacks, string[] Additions, GrantScope Scope, string[] Removed)
 {
-    public ImmutableArray<string> Permissions => RoleTemplates.Materialize(TemplateId, FinancePacks, Additions).Permissions;
+    public ImmutableArray<string> Permissions => [.. RoleTemplates.Materialize(TemplateId, FinancePacks, Additions).Permissions.Except(Removed, StringComparer.Ordinal)];
 }
 
 /// <summary>A review persona. <c>tamu</c> is the signed-out visitor: no account, no grant, no session.</summary>
@@ -19,10 +20,18 @@ public sealed record PilotPersona(string Name, long AccountId, string Label, Per
     public bool SignedIn => Grants.Length > 0;
 }
 
+/// <summary>What the stack reconciles on start: stored grants rewritten to the definition, definition grants not stored yet,
+/// stored grants and memberships the definition no longer has, and the identity's grant version afterwards.</summary>
+public sealed record GrantReconciliation(BsonDocument[] Corrected, PersonaGrant[] Missing, long[] RevokedGrants, long[] RevokedMemberships, long GrantVersion)
+{
+    public bool Changed => Corrected.Length + Missing.Length + RevokedGrants.Length + RevokedMemberships.Length > 0;
+}
+
 /// <summary>
 /// The people who use Unit Toko, as SYNTHETIC accounts of the pilot's own organisation (10, branches 11 and 12), shop (101),
-/// warehouse (102) and channel (103). Every grant is <see cref="RoleTemplates.Materialize"/> of an existing template, so the
-/// access screens show them as ordinary template grants. They join the full and review profiles; release1 keeps its four accounts.
+/// warehouse (102) and channel (103). Each persona is an explicit grant set built from an existing role template
+/// (<see cref="RoleTemplates.Materialize"/>), its additions and the template permissions it drops, so no persona holds both sides
+/// of a maker/checker pair. They join the full and review profiles; release1 keeps its four accounts.
 /// </summary>
 public static class PilotPersonas
 {
@@ -30,17 +39,19 @@ public static class PilotPersonas
     private static readonly GrantScope Branch12 = new(GrantScopeKind.BuyingBranch, 10, BranchId: 12);
     private static readonly GrantScope Shop = new(GrantScopeKind.FulfillmentShop, 100, ShopId: 101, ChannelId: 103);
     private static readonly GrantScope Warehouse = new(GrantScopeKind.FulfillmentWarehouse, 100, ShopId: 101, WarehouseId: 102, ChannelId: 103);
-    private static readonly GrantScope Courier = new(GrantScopeKind.CourierAssignment, 100, ShopId: 101, WarehouseId: 102, ChannelId: 103);
+    // The shop's courier roster: any warehouse of shop 101, as the dispatch courier picker lists it (ShipmentCourierEligibility).
+    private static readonly GrantScope Courier = new(GrantScopeKind.CourierAssignment, 100, ShopId: 101, ChannelId: 103);
     private static readonly GrantScope System = new(GrantScopeKind.System);
-    private static PersonaGrant Grant(string template, GrantScope scope, params string[] additions) => new(template, [], additions, scope);
-    private static PersonaGrant Finance(string[] packs, GrantScope scope, params string[] additions) => new("finance", packs, additions, scope);
+    private static PersonaGrant Grant(string template, GrantScope scope, params string[] additions) => new(template, [], additions, scope, []);
+    private static PersonaGrant Finance(string[] packs, GrantScope scope, params string[] additions) => new("finance", packs, additions, scope, []);
 
     public static readonly PilotPersona[] All = [
         new("tamu", 0, "Tamu (tanpa sesi)", []),
         new("pemohon", 3001, "Pemohon cabang A · SINTETIS", [Grant("buyer", Branch11, Permissions.BranchPic, Permissions.BranchOrderRequestRead,
             Permissions.BranchOrderRequestSubmit, Permissions.SubstitutionAccept, Permissions.OrganizationAddressRead)]),
+        // The spending checker approves branch orders and does not place them: the buyer template's order.submit is dropped.
         new("penyetuju-cabang", 3002, "Penyetuju belanja cabang A · SINTETIS", [Grant("buyer", Branch11, Permissions.BranchPic, Permissions.OrderSpendApprove,
-            Permissions.OrderSpendingPolicyRead, Permissions.BranchOrderRequestRead, Permissions.OrganizationAddressRead)]),
+            Permissions.OrderSpendingPolicyRead, Permissions.BranchOrderRequestRead, Permissions.OrganizationAddressRead) with { Removed = [Permissions.OrderSubmit] }]),
         new("peninjau-toko", 3003, "Peninjau penerimaan toko · SINTETIS", [Grant("store-head", Shop, Permissions.OrderAccept, Permissions.BranchOrderRequestRead,
             Permissions.BranchOrderRequestDecide, Permissions.OrderCommercialPolicyRead, Permissions.AnomalyRead, Permissions.OrganizationAddressRead)]),
         // Catalog maker/checker: petugas-katalog proposes prices and the guest catalog; peninjau-katalog (no pricing.manage) approves them.
@@ -73,13 +84,18 @@ public static class PilotPersonas
             Permissions.SupplierClaim, Permissions.FundingRead, Permissions.ProcurementInspectionEvidenceRead, Permissions.ProcurementQualityAcceptanceRead,
             Permissions.ProcurementPayableRead, Permissions.ProcurementPayablePropose, Permissions.ProcurementAdvanceReturnRead, Permissions.ProcurementAdvanceReturnPropose,
             Permissions.OrganizationAddressRead)]),
+        // The procurement checker decides supplier claims and does not raise them: the store-head template's supplier.claim is dropped.
         new("penyetuju-pengadaan", 3012, "Penyetuju pengadaan · SINTETIS", [Grant("store-head", Shop, Permissions.SupplierChangeApprove,
             Permissions.ProcurementQualityAcceptanceRead, Permissions.ProcurementQualityAcceptanceDecide, Permissions.ProcurementSupplierDocumentEvidenceRead,
             Permissions.ProcurementInspectionEvidenceRead, Permissions.SupplierBankRead, Permissions.SupplierBankApprove, Permissions.SupplierClaimApprove,
             Permissions.FundingRead, Permissions.ProcurementPayableRead, Permissions.ProcurementPayableDecide, Permissions.ProcurementAdvanceReturnRead,
-            Permissions.ProcurementAdvanceReturnDecide, Permissions.OrganizationAddressRead)]),
-        // Access maker only: approvals belong to a second admin, so no access.approve / membership.approve here.
+            Permissions.ProcurementAdvanceReturnDecide, Permissions.OrganizationAddressRead) with { Removed = [Permissions.SupplierClaim] }]),
+        // Access maker: proposes invitations, memberships, access and organisation changes; penyetuju-akses approves them.
         new("admin-akses", 3013, "Admin akses · SINTETIS", [Grant("system-admin", System, Permissions.PersonReviewRead)]),
+        // Access checker: the system-admin template without its proposing permissions, plus the approvals.
+        new("penyetuju-akses", 3015, "Penyetuju akses · SINTETIS", [Grant("system-admin", System, Permissions.AccessApprove, Permissions.AccessRevoke,
+            Permissions.MembershipApprove, Permissions.OrganizationApprove, Permissions.PersonReviewRead) with { Removed = [Permissions.AccessPropose,
+            Permissions.MembershipPropose, Permissions.InviteManage, Permissions.RecoveryInitiate, Permissions.TechnicalConfigure] }]),
         new("staf-pembeli", 3014, "Staf toko yang juga memesan (cabang B) · SINTETIS", [Grant("store-staff", Shop), Grant("buyer", Branch12, Permissions.BranchPic)]),
     ];
 
@@ -104,61 +120,149 @@ public static class PilotPersonas
         var memberships = scopes.Select((scope, index) => new Membership(membershipIds[index], persona.AccountId, scope, AuthorizationStatus.Active, 2002, at)).ToArray();
         var grants = persona.Grants.Select((grant, index) => new PermissionGrant(grantIds[index], persona.AccountId,
             memberships[Array.IndexOf(scopes, grant.Scope)].Id, grant.TemplateId, RoleTemplates.CurrentVersion, grant.Permissions, grant.Scope,
-            AuthorizationStatus.Active, 2001, 2002, "SYNTHETIC review persona " + persona.Name + "; template grant, not a real assignment", at,
-            DelegablePermissions: [])).ToArray();
+            AuthorizationStatus.Active, 2001, 2002, Reason(persona), at, DelegablePermissions: [])).ToArray();
         return (memberships, grants);
     }
+    private static string Reason(PilotPersona persona) => "SYNTHETIC review persona " + persona.Name + "; template grant, not a real assignment";
 
-    /// <summary>Adds each persona once (identity, profile, memberships, template grants, catalog entitlement for buying scopes and
-    /// the synthetic person evidence the independent-person rules read). Ids come from the platform's counters.</summary>
+    /// <summary>Compares a persona's stored grants and memberships with its definition. A stored active grant matches a definition
+    /// grant with the same template and scope; a match with other permissions is rewritten (its version moves), an unmatched
+    /// stored grant or membership is revoked, an unmatched definition grant is added. Any change moves the identity's grant version,
+    /// so sessions and snapshots taken against the old grants stop authorizing.</summary>
+    public static GrantReconciliation Reconcile(PilotPersona persona, BsonDocument identity, IReadOnlyList<BsonDocument> grants, IReadOnlyList<BsonDocument> memberships)
+    {
+        var active = grants.Where(row => row["userId"].AsInt64 == persona.AccountId && row["status"] == "active").ToList();
+        var corrected = new List<BsonDocument>(); var missing = new List<PersonaGrant>();
+        foreach (var wanted in persona.Grants)
+        {
+            var scope = ScopeDocument(wanted.Scope);
+            var stored = active.FirstOrDefault(row => row["templateId"] == wanted.TemplateId && row["scope"].AsBsonDocument.Equals(scope));
+            if (stored is null) { missing.Add(wanted); continue; }
+            active.Remove(stored);
+            var held = stored["permissions"].AsBsonArray.Select(value => value.AsString).Order(StringComparer.Ordinal);
+            if (held.SequenceEqual(wanted.Permissions.Order(StringComparer.Ordinal))) continue;
+            var update = stored.DeepClone().AsBsonDocument;
+            update["permissions"] = new BsonArray(wanted.Permissions);
+            update["version"] = stored["version"].ToInt64() + 1;
+            corrected.Add(update);
+        }
+        var scopes = persona.Grants.Select(grant => ScopeDocument(grant.Scope)).ToArray();
+        var revokedMemberships = memberships.Where(row => row["userId"].AsInt64 == persona.AccountId && row["status"] == "active" &&
+            !scopes.Any(scope => scope.Equals(row["scope"].AsBsonDocument))).Select(row => row["_id"].AsInt64).ToArray();
+        var plan = new GrantReconciliation([.. corrected], [.. missing], [.. active.Select(row => row["_id"].AsInt64)], revokedMemberships, identity["grantVersion"].ToInt64());
+        return plan.Changed ? plan with { GrantVersion = plan.GrantVersion + 1 } : plan;
+    }
+
+    /// <summary>On every start: adds each persona not stored yet (identity, profile, memberships, grants, catalog entitlement for
+    /// buying scopes and the synthetic person evidence the independent-person rules read) and reconciles every stored persona to its
+    /// definition. Ids come from the platform's counters.</summary>
     public static async Task SeedAsync(IMongoDatabase database, MongoClient client, PilotSecrets secrets, CancellationToken ct)
     {
         var identities = database.GetCollection<BsonDocument>("identities");
+        var grantRows = database.GetCollection<BsonDocument>("authorizationGrants");
+        var membershipRows = database.GetCollection<BsonDocument>("memberships");
         var ids = new IdAllocator(database);
         var unit = new MongoUnitOfWork(client);
-        var added = new List<string>();
+        var added = new List<string>(); var reconciled = new List<string>();
         foreach (var persona in SignedIn)
         {
-            if (await identities.Find(new BsonDocument("_id", persona.AccountId)).AnyAsync(ct)) continue;
             var account = secrets.Accounts.SingleOrDefault(item => item.Id == persona.AccountId)
                 ?? throw new InvalidOperationException("Pilot account manifest is missing persona " + persona.Name + ".");
-            var scopes = persona.Grants.Select(grant => grant.Scope).Distinct().ToArray();
-            var membershipIds = new List<long>(); foreach (var _ in scopes) membershipIds.Add((await ids.NextAsync("memberships", ct)).Value);
-            var grantIds = new List<long>(); foreach (var _ in persona.Grants) grantIds.Add((await ids.NextAsync("authorizationGrants", ct)).Value);
-            var buying = persona.Grants.Where(grant => grant.Scope.Kind == GrantScopeKind.BuyingBranch).ToArray();
-            var entitlementIds = new List<long>(); foreach (var _ in buying) entitlementIds.Add((await ids.NextAsync("catalogEntitlements", ct)).Value);
             var at = DateTime.UtcNow.AddMinutes(-1);
-            var (memberships, grants) = Records(persona, membershipIds, grantIds, new DateTimeOffset(at, TimeSpan.Zero));
+            var identity = await identities.Find(new BsonDocument("_id", persona.AccountId)).SingleOrDefaultAsync(ct);
+            if (identity is null)
+            {
+                var plan = await PlanInsertAsync(ids, persona, persona.Grants, [], ct);
+                await unit.ExecuteAsync(async (tx, token) =>
+                {
+                    var rows = database.GetCollection<BsonDocument>("identities");
+                    await rows.InsertOneAsync(tx, new BsonDocument { { "_id", account.Id }, { "schemaVersion", 1 }, { "issuer", PilotBoundary.Issuer },
+                        { "subject", account.Subject }, { "status", "active" }, { "grantVersion", 1L }, { "securityVersion", 1L }, { "fence", 0L } }, cancellationToken: token);
+                    await database.GetCollection<BsonDocument>("accountProfiles").InsertOneAsync(tx, new BsonDocument { { "_id", account.Id }, { "schemaVersion", 1 },
+                        { "displayName", account.Name }, { "verifiedEmail", account.Email }, { "verifiedAt", at }, { "updatedAt", at }, { "version", 1L } }, cancellationToken: token);
+                    await InsertAsync(database, tx, persona, plan, at, token);
+                    await PilotBootstrap.InsertSyntheticPersonAsync(database, tx, account, at, token);
+                    return true;
+                }, ct);
+                added.Add(persona.Name);
+                continue;
+            }
+            var reconciliation = Reconcile(persona, identity, await grantRows.Find(new BsonDocument("userId", persona.AccountId)).ToListAsync(ct),
+                await membershipRows.Find(new BsonDocument("userId", persona.AccountId)).ToListAsync(ct));
+            if (!reconciliation.Changed) continue;
+            var reuse = (await membershipRows.Find(new BsonDocument { { "userId", persona.AccountId }, { "status", "active" } }).ToListAsync(ct))
+                .Where(row => !reconciliation.RevokedMemberships.Contains(row["_id"].AsInt64)).ToArray();
+            var inserts = await PlanInsertAsync(ids, persona, reconciliation.Missing, reuse, ct);
             await unit.ExecuteAsync(async (tx, token) =>
             {
-                async Task Insert(string name, params BsonDocument[] rows) => await database.GetCollection<BsonDocument>(name).InsertManyAsync(tx, rows, cancellationToken: token);
-                await Insert("identities", new BsonDocument { { "_id", account.Id }, { "schemaVersion", 1 }, { "issuer", PilotBoundary.Issuer },
-                    { "subject", account.Subject }, { "status", "active" }, { "grantVersion", 1L }, { "securityVersion", 1L }, { "fence", 0L } });
-                await Insert("accountProfiles", new BsonDocument { { "_id", account.Id }, { "schemaVersion", 1 }, { "displayName", account.Name },
-                    { "verifiedEmail", account.Email }, { "verifiedAt", at }, { "updatedAt", at }, { "version", 1L } });
-                await Insert("memberships", memberships.Select(membership => new BsonDocument { { "_id", membership.Id }, { "schemaVersion", 1 },
-                    { "userId", membership.UserId }, { "scope", ScopeDocument(membership.Scope) }, { "status", "active" }, { "approvedBy", membership.ApprovedBy },
-                    { "effectiveAt", at }, { "version", 1L } }).ToArray());
-                await Insert("authorizationGrants", grants.Select(grant => new BsonDocument { { "_id", grant.Id }, { "schemaVersion", 1 }, { "userId", grant.UserId },
-                    { "membershipId", grant.MembershipId }, { "templateId", grant.TemplateId }, { "templateVersion", grant.TemplateVersion },
-                    { "permissions", new BsonArray(grant.Permissions) }, { "scope", ScopeDocument(grant.Scope) }, { "status", "active" },
-                    { "requestedBy", grant.RequestedBy }, { "approvedBy", grant.ApprovedBy }, { "reason", grant.Reason }, { "effectiveAt", at },
-                    { "version", 1L }, { "delegablePermissions", new BsonArray() } }).ToArray());
-                if (buying.Length > 0)
-                    await Insert("catalogEntitlements", buying.Select((grant, index) => new BsonDocument { { "_id", entitlementIds[index] }, { "schemaVersion", 1 },
-                        { "userId", account.Id }, { "membershipId", memberships[Array.IndexOf(scopes, grant.Scope)].Id }, { "assortmentId", 501L },
-                        { "audienceScope", ScopeDocument(grant.Scope) }, { "status", "active" }, { "effectiveAt", at }, { "expiresAt", BsonNull.Value },
-                        { "revokedAt", BsonNull.Value }, { "version", 1L }, { "requestedBy", 2001L }, { "approvedBy", 2002L }, { "approvalId", 100000 + entitlementIds[index] },
-                        { "approvalVersion", 1L }, { "approvedAt", at }, { "fence", 0L } }).ToArray());
-                await PilotBootstrap.InsertSyntheticPersonAsync(database, tx, account, at, token);
+                foreach (var row in reconciliation.Corrected)
+                    if ((await grantRows.ReplaceOneAsync(tx, new BsonDocument { { "_id", row["_id"] }, { "status", "active" }, { "version", row["version"].ToInt64() - 1 } }, row,
+                        cancellationToken: token)).ModifiedCount != 1) throw new InvalidOperationException("Persona grant changed during reconciliation; start again.");
+                var revoke = Builders<BsonDocument>.Update.Set("status", "revoked").Set("revokedAt", at).Inc("version", 1L);
+                foreach (var id in reconciliation.RevokedGrants)
+                    await grantRows.UpdateOneAsync(tx, new BsonDocument { { "_id", id }, { "status", "active" } }, revoke, cancellationToken: token);
+                foreach (var id in reconciliation.RevokedMemberships)
+                    await membershipRows.UpdateOneAsync(tx, new BsonDocument { { "_id", id }, { "status", "active" } }, revoke, cancellationToken: token);
+                await InsertAsync(database, tx, persona, inserts, at, token);
+                if ((await identities.UpdateOneAsync(tx, new BsonDocument { { "_id", persona.AccountId }, { "grantVersion", identity["grantVersion"] } },
+                    Builders<BsonDocument>.Update.Set("grantVersion", reconciliation.GrantVersion), cancellationToken: token)).ModifiedCount != 1)
+                    throw new InvalidOperationException("Persona identity changed during reconciliation; start again.");
                 return true;
             }, ct);
-            added.Add(persona.Name);
+            reconciled.Add(persona.Name);
         }
         if (added.Count > 0) Console.WriteLine("Persona ditambahkan (" + PilotBoundary.Profile + "): " + string.Join(", ", added));
+        if (reconciled.Count > 0) Console.WriteLine("Akses persona diselaraskan (" + PilotBoundary.Profile + "): " + string.Join(", ", reconciled));
     }
 
-    private static BsonDocument ScopeDocument(GrantScope scope)
+    /// <summary>The stored grants as the access screens see them, for the harness index (<c>personas.json</c>).</summary>
+    public static async Task<IReadOnlyList<PersonaGrantView>> DescribeAsync(IMongoDatabase database, PilotPersona persona, CancellationToken ct) =>
+        (await database.GetCollection<BsonDocument>("authorizationGrants").Find(new BsonDocument { { "userId", persona.AccountId }, { "status", "active" } })
+            .Sort(new BsonDocument("_id", 1)).ToListAsync(ct))
+        .Select(row => new PersonaGrantView(row["templateId"].AsString, row["scope"].AsBsonDocument.ToDictionary(),
+            row["permissions"].AsBsonArray.Select(value => value.AsString).Order(StringComparer.Ordinal).ToArray())).ToArray();
+
+    private sealed record InsertPlan((PersonaGrant Grant, long GrantId, long MembershipId, bool NewMembership, long? EntitlementId)[] Rows);
+    private static async Task<InsertPlan> PlanInsertAsync(IdAllocator ids, PilotPersona persona, IReadOnlyList<PersonaGrant> grants, IReadOnlyList<BsonDocument> memberships,
+        CancellationToken ct)
+    {
+        var known = new Dictionary<BsonDocument, long>(); foreach (var row in memberships) known.TryAdd(row["scope"].AsBsonDocument, row["_id"].AsInt64);
+        var rows = new List<(PersonaGrant, long, long, bool, long?)>();
+        foreach (var grant in grants)
+        {
+            var scope = ScopeDocument(grant.Scope);
+            var fresh = !known.TryGetValue(scope, out var membership);
+            if (fresh) { membership = (await ids.NextAsync("memberships", ct)).Value; known[scope] = membership; }
+            var grantId = (await ids.NextAsync("authorizationGrants", ct)).Value;
+            long? entitlement = grant.Scope.Kind == GrantScopeKind.BuyingBranch ? (await ids.NextAsync("catalogEntitlements", ct)).Value : null;
+            rows.Add((grant, grantId, membership, fresh, entitlement));
+        }
+        return new([.. rows]);
+    }
+
+    private static async Task InsertAsync(IMongoDatabase database, IClientSessionHandle tx, PilotPersona persona, InsertPlan plan, DateTime at, CancellationToken token)
+    {
+        foreach (var (grant, grantId, membership, fresh, entitlement) in plan.Rows)
+        {
+            var scope = ScopeDocument(grant.Scope);
+            if (fresh)
+                await database.GetCollection<BsonDocument>("memberships").InsertOneAsync(tx, new BsonDocument { { "_id", membership }, { "schemaVersion", 1 },
+                    { "userId", persona.AccountId }, { "scope", scope }, { "status", "active" }, { "approvedBy", 2002L }, { "effectiveAt", at }, { "version", 1L } },
+                    cancellationToken: token);
+            await database.GetCollection<BsonDocument>("authorizationGrants").InsertOneAsync(tx, new BsonDocument { { "_id", grantId }, { "schemaVersion", 1 },
+                { "userId", persona.AccountId }, { "membershipId", membership }, { "templateId", grant.TemplateId }, { "templateVersion", RoleTemplates.CurrentVersion },
+                { "permissions", new BsonArray(grant.Permissions) }, { "scope", scope }, { "status", "active" }, { "requestedBy", 2001L }, { "approvedBy", 2002L },
+                { "reason", Reason(persona) }, { "effectiveAt", at }, { "version", 1L }, { "delegablePermissions", new BsonArray() } }, cancellationToken: token);
+            if (entitlement is { } id)
+                await database.GetCollection<BsonDocument>("catalogEntitlements").InsertOneAsync(tx, new BsonDocument { { "_id", id }, { "schemaVersion", 1 },
+                    { "userId", persona.AccountId }, { "membershipId", membership }, { "assortmentId", 501L }, { "audienceScope", scope }, { "status", "active" },
+                    { "effectiveAt", at }, { "expiresAt", BsonNull.Value }, { "revokedAt", BsonNull.Value }, { "version", 1L }, { "requestedBy", 2001L },
+                    { "approvedBy", 2002L }, { "approvalId", 100000 + id }, { "approvalVersion", 1L }, { "approvedAt", at }, { "fence", 0L } }, cancellationToken: token);
+        }
+    }
+
+    /// <summary>A grant or membership scope as the platform stores it (kind in camel case, only the ids it has).</summary>
+    public static BsonDocument ScopeDocument(GrantScope scope)
     {
         var value = new BsonDocument("kind", char.ToLowerInvariant(scope.Kind.ToString()[0]) + scope.Kind.ToString()[1..]);
         void Optional(string key, long? id) { if (id is { } present) value.Add(key, present); }
