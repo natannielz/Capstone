@@ -54,7 +54,9 @@ test('each state has exactly one heading, one body and one primary action (G-014
 // Wordings retired by G-014: every page now shows the shared state instead of its own.
 const retired = ['Sesi terverifikasi diperlukan', 'Masuk untuk mengelola', 'Masuk untuk menghitung', 'Masuk untuk memeriksa', 'Masuk untuk membuka kemasan',
   'Masuk untuk menyiapkan', 'Masuk untuk mengubah', 'Masuk sebagai penerima', 'Masuk kembali dengan akun', 'Sesi dan akses perlu diperiksa kembali',
-  'Sesi perlu diperiksa kembali', 'Periksa sesi dan akses', 'Sesi atau akses belum tersedia', 'Sesi Anda telah berakhir', 'Sesi belum tersedia', 'Sesi telah berakhir'];
+  'Sesi perlu diperiksa kembali', 'Periksa sesi dan akses', 'Sesi atau akses belum tersedia', 'Sesi Anda telah berakhir', 'Sesi belum tersedia', 'Sesi telah berakhir',
+  // Round 1: per-page messages and the one name of the refresh action ("Muat ulang sesi dan akses").
+  'Sesi terverifikasi belum', 'Sesi akun berubah', 'Periksa kembali sesi akun', 'Periksa sesi terbaru', 'Perbarui sesi', '>Periksa sesi<', 'Sesi dan akses perlu'];
 
 test('no page keeps its own wording for signed out, expired or missing access (G-013, G-014)', () => {
   const root = fileURLToPath(new URL('../src', import.meta.url)), offenders: string[] = [];
@@ -67,4 +69,25 @@ test('no page keeps its own wording for signed out, expired or missing access (G
   };
   walk(root);
   assert.deepEqual(offenders, []);
+});
+
+test('a page-specific reason replaces the generic hint: data that failed its check is not called a connection problem', () => {
+  const base = {returnPath: '/inventory/sources/aliases', onRetry: () => {}};
+  const invalid = render({...base, error: new AccessFailure(502, 'stock_source_alias_response_invalid'), detail: 'Data pemetaan tidak sesuai. Muat ulang sebelum melanjutkan.'});
+  assert.equal(heading(invalid), 'Halaman belum dapat dibuka');
+  assert.match(invalid, /Data pemetaan tidak sesuai\./);
+  assert.doesNotMatch(invalid, /Periksa koneksi/);
+  const scope = render({...base, error: new AccessFailure(403, 'stock_source_scope_changed'), kind: 'denied', detail: 'Cakupan gudang berubah.'});
+  assert.match(scope, /Cakupan gudang berubah\./);
+  assert.doesNotMatch(render({...base, error: null, kind: 'expired', detail: 'Rincian'}), /Rincian/, 'signing in needs no further reason');
+});
+
+test('pages that lose their session mid-work say it ended, and inventory editors pass their own reason (round 1)', () => {
+  const read = (file: string) => readFileSync(new URL('../src/modules/' + file, import.meta.url), 'utf8');
+  for (const file of ['fulfillment/ReceiptWorkspace.tsx', 'catalog/CatalogAdministration.tsx', 'identity/IdentityAdministration.tsx'])
+    assert.match(read(file), /lostAccessKind\(error\)/, file);
+  for (const name of readdirSync(new URL('../src/modules/inventory/', import.meta.url)).filter(file => /Workspace\.tsx$/.test(file))) {
+    const midWork = read('inventory/' + name).match(/return <SessionAccessState error=\{state\.error\}[^\n]*/g) ?? [];
+    for (const line of midWork) assert.match(line, /detail=\{state\.error !== null \? message\(state\.error\) : undefined\}/, name);
+  }
 });

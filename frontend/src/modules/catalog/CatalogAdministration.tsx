@@ -1,5 +1,5 @@
 'use client';
-import { SessionAccessState } from '@/components/workspace-kit/session-access-state';
+import { SessionAccessState, lostAccessKind } from '@/components/workspace-kit/session-access-state';
 import Link from 'next/link';
 import {useCallback,useEffect,useRef,useState} from 'react';
 import type {components} from '../../api/generated/schema';
@@ -34,9 +34,11 @@ export function CatalogAdministration(){
  const [loaded,setLoaded]=useState<Loaded|null>(null),[error,setError]=useState<unknown>(null),[loading,setLoading]=useState(true),[revision,setRevision]=useState(0);
  const refresh=useCallback(async()=>{const request=gate.begin('session','');setLoaded(null);setLoading(true);setError(null);try{const session=await identity.session(request.signal),observedAt=performance.now();if(!request.current())return;if(!session.authenticated||!session.account)throw new IdentityFailure(401,'unauthenticated');const current=await access.current();if(!request.current())return;if(current.userId!==session.account.userId)throw new AccessFailure(409,'actor_changed');if(!current.allowedActions.includes('catalog.manage'))throw new AccessFailure(403,'permission_denied');setLoaded({current,session,observedAt});setRevision(value=>value+1);}catch(failure){if(request.current())setError(failure);}finally{if(request.current())setLoading(false);}},[access,identity,gate]);
  useEffect(()=>{let active=true;void Promise.resolve().then(()=>{if(active)void refresh();});const restored=(event:PageTransitionEvent)=>{if(event.persisted)window.location.reload();};window.addEventListener('pageshow',restored);return()=>{active=false;gate.cancel();window.removeEventListener('pageshow',restored);};},[gate,refresh]);
- const invalidate=useCallback((failure:unknown)=>{if(sessionLost(failure)){gate.cancel();setLoaded(null);setLoading(false);setError(failure);}},[gate]);
+ // A session lost while the page was open is a session that ended, not a first sign-in (G-014).
+ const [lost,setLost]=useState(false);
+ const invalidate=useCallback((failure:unknown)=>{if(sessionLost(failure)){gate.cancel();setLoaded(null);setLoading(false);setError(failure);setLost(true);}},[gate]);
  return <main className={common.page}><header className={common.header}><div><Link className={common.brand} href="/identity/account">Unit Toko</Link><h1>Kelola katalog</h1><p>Catat produk dan isi setiap kemasan, lalu terbitkan varian pada cakupan yang disetujui.</p></div></header>
- {loaded?<CatalogWorkspace key={loaded.current.userId+':'+revision} {...loaded} onFailure={invalidate} onRefresh={refresh}/>:(loading?<section className={common.state} aria-busy="true"><h2>Memeriksa sesi dan akses</h2></section>:<SessionAccessState error={error} returnPath={catalogPath} onRetry={()=>void refresh()} detail={error!==null?failedMessage(error):undefined}/>)}</main>;
+ {loaded?<CatalogWorkspace key={loaded.current.userId+':'+revision} {...loaded} onFailure={invalidate} onRefresh={refresh}/>:(loading?<section className={common.state} aria-busy="true"><h2>Memeriksa sesi dan akses</h2></section>:<SessionAccessState error={error} kind={lost?lostAccessKind(error):undefined} returnPath={catalogPath} onRetry={()=>void refresh()} detail={error!==null?failedMessage(error):undefined}/>)}</main>;
 }
 type Editor={kind:'category';value:CatalogCategory|null}|{kind:'family';value:CatalogFamily|null}|{kind:'sku';value:CatalogSku|null;mode:'create'|'revise'|'replace'}|{kind:'retire'|'publish';value:CatalogSku};
 const emptyPage=<T,>():CatalogPage<T>=>({total:'0',items:[]});

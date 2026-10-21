@@ -56,7 +56,8 @@ export function useReturnTarget(pagePath: string): string {
 /**
  * The one state every page shows when it cannot open for this person, before loading or after its session or access changed
  * mid-work. `kind` names a state the page already knows (an editor that saw its session end, or access withdrawn); `busy`
- * keeps the retry from interrupting a command in flight; `detail` adds the page's own reason when the page is unavailable.
+ * keeps the retry from interrupting a command in flight; `detail` is the page's own reason, shown for a denied or unavailable page
+ * (signing in needs no further reason).
  */
 export function SessionAccessState({ error, returnPath, onRetry, kind: known, busy = false, detail }:
   { error: unknown; returnPath: string; onRetry: () => void; kind?: SessionAccessKind; busy?: boolean; detail?: string }) {
@@ -76,12 +77,13 @@ export function SessionAccessState({ error, returnPath, onRetry, kind: known, bu
     </> : kind === "denied" ? <>
       <h2 id="workspace-access-state">Halaman ini di luar tugas akun Anda</h2>
       <p>Akun Anda belum mendapat peran untuk halaman ini. Minta penanggung jawab akses di unit Anda menambahkan peran yang sesuai, lalu periksa ulang.</p>
+      {detail && <p role="alert">{detail}</p>}
       <div className={common.actions}><Link className={common.primary} href="/workspace">Ke Pekerjaan saya</Link>
         <button type="button" className={common.secondary} disabled={busy} onClick={onRetry}>Periksa ulang akses</button></div>
     </> : <>
       <h2 id="workspace-access-state">Halaman belum dapat dibuka</h2>
-      <p>Pemeriksaan akun belum selesai. Periksa koneksi, lalu coba lagi.</p>
-      {detail && <p role="alert">{detail}</p>}
+      {/* The page's own reason (e.g. data that failed its integrity check) replaces the generic connection hint. */}
+      {detail ? <p role="alert">{detail}</p> : <p>Pemeriksaan akun belum selesai. Periksa koneksi, lalu coba lagi.</p>}
       <div className={common.actions}><button type="button" className={common.primary} disabled={busy} onClick={onRetry}>Coba lagi</button></div>
     </>}
   </section>;

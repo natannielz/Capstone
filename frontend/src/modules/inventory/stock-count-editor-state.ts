@@ -1,4 +1,4 @@
-import { AccessFailure, MutationLedger } from "../administration/workflow";
+import { AccessFailure, MutationLedger, businessRefusal } from "../administration/workflow";
 import { OperationJournal, submitTrackedRequest, type OperationReference } from "../administration/operation-journal";
 import { IdentityFailure, sessionTiming, type IdentitySession } from "../identity/identity-workflow";
 import type { AccessScope } from "../organizations/access-scope";
@@ -104,7 +104,7 @@ export class StockCountEditor {
     this.patch({ error });
     if (error instanceof AccessFailure || error instanceof IdentityFailure) {
       if (error.status === 401 || error.code === "actor_changed") this.conceal({ suspended: true, error });
-      else if (error.status === 403 && error.code !== 'step_up_required' || error.code === "stock_count_response_invalid") this.conceal({ suspended: true, error });
+      else if (error.status === 403 && error.code !== 'step_up_required' && !businessRefusal(error.code) || error.code === "stock_count_response_invalid") this.conceal({ suspended: true, error });
     }
   }
   private mayEdit() { return this.guard() && !this.locked; }
@@ -151,7 +151,7 @@ export class StockCountEditor {
         // No trustworthy source choice is available. Existing explicit unbound observations
         // remain legitimate; permission/identity denial still conceals the account's data.
         if ((error instanceof AccessFailure || error instanceof IdentityFailure) &&
-            (error.status === 401 || error.code === 'actor_changed' || error.status === 403 && error.code !== 'step_up_required')) this.failed(error);
+            (error.status === 401 || error.code === 'actor_changed' || error.status === 403 && error.code !== 'step_up_required' && !businessRefusal(error.code))) this.failed(error);
         else this.patch({ error, selectedSource: null, sourceMode: null });
       }
     }

@@ -1,4 +1,4 @@
-import { AccessFailure, MutationLedger } from '../administration/workflow';
+import { AccessFailure, MutationLedger, businessRefusal } from '../administration/workflow';
 import { RequestNotSentError } from '../../api/client';
 import { OperationJournal, submitTrackedRequest, type OperationReference } from '../administration/operation-journal';
 import { IdentityFailure, parseIdentitySession, sessionTiming, type IdentitySession } from '../identity/identity-workflow';
@@ -70,7 +70,7 @@ export class StockReleaseEditor {
     if (!this.active) return; this.patch({ error });
     if ((error instanceof AccessFailure || error instanceof IdentityFailure || error instanceof RequestNotSentError) &&
       (error.code === 'antiforgery_failed' || error.status === 401 || error.code === 'actor_changed' ||
-      error.code === 'stock_release_response_invalid' || error.status === 403 && error.code !== 'step_up_required' && !error.code.includes('independent') && !error.code.includes('person')))
+      error.code === 'stock_release_response_invalid' || error.status === 403 && error.code !== 'step_up_required' && !businessRefusal(error.code)))
       this.conceal({ suspended: true, error });
   }
   async start() { this.active = true; this.refreshReferences(); this.checkSession(); if (this.mayEdit()) await this.loadWarehouses(); }

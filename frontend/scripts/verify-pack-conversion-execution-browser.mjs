@@ -90,7 +90,7 @@ async function signIn(account, actorId) {
   const page = await context.newPage(); page.setDefaultTimeout(20000); page.on('pageerror', error => failures.push(error.message)); page.on('dialog', dialog => dialog.accept());
   page.on('response', response => { const url = new URL(response.url()); if (url.origin === origin.origin && url.pathname.startsWith(path)) console.log('PACK_BROWSER_RESPONSE ' + JSON.stringify({ account, path: url.pathname, status: response.status() })); });
   await page.goto(origin.origin + route); await page.getByRole('heading', { name: /^(Masuk untuk melanjutkan|Sesi Anda perlu diperbarui)$/ }).waitFor();
-  await page.getByRole('link', { name: /^Masuk( kembali)?$/ }).click(); await page.getByRole('button', { name: 'Lanjutkan ke layanan akun', exact: true }).click();
+  await page.locator('section[aria-labelledby="workspace-access-state"]').getByRole('link', { name: /^Masuk( kembali)?$/ }).click(); await page.getByRole('button', { name: 'Lanjutkan ke layanan akun', exact: true }).click();
   await page.waitForURL(origin.origin + route); await page.getByLabel('Gudang dan kanal', { exact: true }).waitFor();
   for (const name of ['__Host-ut_session', '__Host-ut_csrf']) {
     const cookie = (await context.cookies(origin.origin)).find(value => value.name === name); assert.ok(cookie); assert.equal(cookie.secure, true); assert.equal(cookie.httpOnly, true);

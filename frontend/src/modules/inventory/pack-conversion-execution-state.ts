@@ -1,4 +1,4 @@
-import { AccessFailure, MutationLedger } from '../administration/workflow';
+import { AccessFailure, MutationLedger, businessRefusal } from '../administration/workflow';
 import { OperationJournal, submitTrackedRequest, type OperationReference } from '../administration/operation-journal';
 import { IdentityFailure, parseIdentitySession, sessionTiming, type IdentitySession } from '../identity/identity-workflow';
 import { stockLocationKey, type StockWarehouse } from './stock-count-workflow';
@@ -66,7 +66,7 @@ export class PackExecutionEditor {
   private failed(error: unknown) {
     if (!this.active) return; this.patch({ error });
     if ((error instanceof AccessFailure || error instanceof IdentityFailure) &&
-      (error.status === 401 || error.status === 403 || error.code === 'actor_changed' || error.code === 'pack_execution_response_invalid')) this.conceal({ suspended: true, error });
+      (error.status === 401 || error.status === 403 && !businessRefusal(error.code) || error.code === 'actor_changed' || error.code === 'pack_execution_response_invalid')) this.conceal({ suspended: true, error });
   }
   async start() { if (this.active) return; this.active = true; this.refreshReferences(); if (this.guard()) await this.loadWarehouses(); }
   async loadWarehouses() {

@@ -99,7 +99,7 @@ export function IdentityAccount({ variant = "account" }: { variant?: "account" |
     <header className={styles.masthead}><div className={styles.mastheadInner}><Brand href="/" context="Layanan organisasi" /></div></header>
     <div className={styles.accountHeader}><div>{home ? <><h1>Pekerjaan saya</h1><p>{session?.account?.displayName ? "Halo, " + session.account.displayName + ". " : ""}Pekerjaan yang menunggu Anda dan ruang kerja sesuai penugasan.</p></>
       : <><h1>Akun saya</h1><p>Profil, verifikasi dua langkah, kontak dan keluar dari Unit Toko.</p></>}</div>
-      <button type="button" className={styles.secondary} disabled={loading} onClick={reload}>Periksa sesi</button></div>
+      <button type="button" className={styles.secondary} disabled={loading} onClick={reload}>Muat ulang sesi dan akses</button></div>
     <div id="account-content">
       {loading && <section className={styles.card} aria-busy="true"><p role="status">Memeriksa akun dan izin terbaru…</p></section>}
       {error !== null && <SessionAccessState error={error} returnPath={home ? HOME_PATH : "/identity/account"} onRetry={reload}

@@ -1,4 +1,4 @@
-import { AccessFailure, MutationLedger, stableContent } from "../administration/workflow";
+import { AccessFailure, MutationLedger, stableContent, businessRefusal } from "../administration/workflow";
 import { OperationJournal, submitTrackedRequest, type OperationReference, type StockSourceSuspensionRecoveryReceipt } from "../administration/operation-journal";
 import { IdentityFailure, sessionTiming, type IdentitySession } from "../identity/identity-workflow";
 import type { StockSourceSuspensionGateway } from "./stock-source-suspension-client";
@@ -77,7 +77,7 @@ export class StockSourceSuspensionEditor {
     this.patch({ error });
     if (error instanceof AccessFailure || error instanceof IdentityFailure) {
       if (error.code === "step_up_required") this.patch({ fresh: false, preview: null, review: null });
-      else if (error.status === 401 || error.status === 403 || error.code === "actor_changed" || error.code.endsWith("_response_invalid"))
+      else if (error.status === 401 || error.status === 403 && !businessRefusal(error.code) || error.code === "actor_changed" || error.code.endsWith("_response_invalid"))
         this.conceal({ suspended: true, error });
     }
   }

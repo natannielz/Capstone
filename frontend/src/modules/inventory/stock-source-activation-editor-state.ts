@@ -1,5 +1,5 @@
 import type { components } from '../../api/generated/schema';
-import { AccessFailure, MutationLedger, stableContent } from '../administration/workflow';
+import { AccessFailure, MutationLedger, stableContent, businessRefusal } from '../administration/workflow';
 import { OperationJournal, submitTrackedRequest, type OperationReference } from '../administration/operation-journal';
 import { IdentityFailure, parseIdentitySession, sessionTiming, type IdentitySession } from '../identity/identity-workflow';
 import { sourceActor } from './stock-source-workflow';
@@ -91,7 +91,7 @@ export class StockSourceActivationEditor {
     if (!this.active) return; this.patch({ error });
     if (error instanceof AccessFailure || error instanceof IdentityFailure) {
       if (error.code === 'step_up_required') this.patch({ fresh: false, actionPreview: null, review: null });
-      else if (error.status === 401 || error.status === 403 || error.code === 'actor_changed' || error.code.endsWith('_response_invalid')) this.conceal({ suspended: true, error });
+      else if (error.status === 401 || error.status === 403 && !businessRefusal(error.code) || error.code === 'actor_changed' || error.code.endsWith('_response_invalid')) this.conceal({ suspended: true, error });
     }
   }
   private requireOperation(operation: string) {
