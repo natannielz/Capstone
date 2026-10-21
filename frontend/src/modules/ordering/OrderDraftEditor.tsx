@@ -6,7 +6,7 @@ import { AccessFailure } from '../administration/workflow';
 import { buyerCurrentCode, createBuyerCatalogGateway, type BuyerVariant } from '../catalog/catalog-buyer-client';
 import { CatalogReadGate } from '../catalog/catalog-editor-state';
 import { draftAccessLost, prepareDraftCommand, type DraftCommand, type OrderDraft } from './order-draft-client';
-import { createOrderQuoteGateway, orderAmount, orderContextKey, orderQuantity, type OrderAddresses, type OrderQuote } from './order-quote-client';
+import { createOrderQuoteGateway, orderDisplayAmount, orderContextKey, orderQuantity, type OrderAddresses, type OrderQuote } from './order-quote-client';
 import { draftMessage } from './DraftSave';
 import { reorderDraftReason } from './order-reorder';
 import { OrderBulkEntry } from './OrderBulkEntry';
@@ -153,8 +153,8 @@ export function OrderDraftEditor({ actorId, draft, initialQuote, initialIssue, l
     </form>
     {review && <div className={styles.review} ref={reviewRef} role="region" aria-label="Konfirmasi draf" tabIndex={-1}><h3>Periksa sebelum menyimpan</h3>
       {draft.id === null && <p>Draf baru dari pesanan {reorderSourceId ? orderNumber(reorderSourceId) : "sebelumnya"}. Kemasan dan harga pada tinjauan ini diperiksa kembali untuk cabang pemesan. Pesanan sebelumnya tetap utuh.</p>}
-      <ul>{review.quote.lines.map(line => <li key={line.definition.skuId}>{line.familyName} — {line.packages} {line.definition.packageLabel} · {line.baseUnits} {line.definition.baseUnitCode} · {orderAmount(review.quote.currency, line.catalogSubtotal)}</li>)}</ul>
-      <p><strong>Subtotal barang {orderAmount(review.quote.currency, review.quote.catalogSubtotal)}</strong></p><p>Referensi: {review.command.input.purchaseReference ?? 'Belum diisi'}</p>
+      <ul>{review.quote.lines.map(line => <li key={line.definition.skuId}>{line.familyName} — {line.packages} {line.definition.packageLabel} · {line.baseUnits} {line.definition.baseUnitCode} · {orderDisplayAmount(review.quote.currency, line.catalogSubtotal)}</li>)}</ul>
+      <p><strong>Subtotal barang {orderDisplayAmount(review.quote.currency, review.quote.catalogSubtotal)}</strong></p><p>Referensi: {review.command.input.purchaseReference ?? 'Belum diisi'}</p>
       {review.command.input.delivery && <p className={styles.address}>{review.command.input.delivery.recipientName} · {review.command.input.delivery.phone}{'\n'}{review.command.input.delivery.address}{'\n'}{review.command.input.delivery.city} {review.command.input.delivery.postalCode}</p>}
       <p className={common.help}>Draf belum menjadi pesanan. Harga dan ketersediaan diperiksa lagi saat pengajuan.</p><div className={common.actions}>
         <button className={common.primary} disabled={locked || busy} onClick={() => void onSubmit(review.command)}>Konfirmasi simpan draf</button>
@@ -169,7 +169,7 @@ export function OrderDraftEditor({ actorId, draft, initialQuote, initialIssue, l
       {searchPage && results.length === 0 && <p>Tidak ada kemasan yang sesuai dengan pencarian ini.</p>}
       {selected && <div className={styles.selection} role="region" aria-label="Periksa pilihan kemasan"><h3>{selected.familyName} — {selected.definition.packageLabel}</h3><p>Kode utama: {buyerCurrentCode(selected)} · {selected.definition.baseUnitsPerPackage} {selected.definition.baseUnitCode} per kemasan</p>
         {selected.code !== buyerCurrentCode(selected) && <p>Referensi SKU tetap pada catatan transaksi: {selected.code}.</p>}
-        <p>{selected.currentPrice ? orderAmount(selected.currentPrice.currency, selected.currentPrice.unitPrice) + ' per kemasan' : 'Harga belum tersedia'}</p>
+        <p>{selected.currentPrice ? orderDisplayAmount(selected.currentPrice.currency, selected.currentPrice.unitPrice) + ' per kemasan' : 'Harga belum tersedia'}</p>
         <p>Minimum {selected.definition.minimumOrderPackages}; kelipatan {selected.definition.orderIncrementPackages}.</p>
         <label>Jumlah kemasan pilihan<input inputMode="numeric" value={packageQuantity} maxLength={7} disabled={disabled} onChange={event => setPackageQuantity(event.target.value)} /></label>
         <div className={common.actions}><button className={common.primary} disabled={disabled || !selected.currentPrice || !packageQuantity} onClick={includePackage}>

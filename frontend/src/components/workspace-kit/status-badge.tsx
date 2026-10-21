@@ -1,9 +1,6 @@
-import { statusTone } from "@/lib/status/dictionary";
+import { Badge } from "./badge";
 
-/**
- * Status label with its tone (colour never depends on the label text itself; unknown labels stay neutral).
- * A plain span: utility colour classes would sit in a later cascade layer and hide the tone.
- */
+/** Status label with its tone from the status dictionary (unknown labels stay neutral). Kept for existing callers; renders <Badge>. */
 export function StatusBadge({ text }: { text: string }) {
-  return <span data-tone={statusTone(text)} className="status-badge">{text}</span>;
+  return <Badge status={text} />;
 }

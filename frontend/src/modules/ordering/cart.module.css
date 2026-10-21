@@ -1,4 +1,4 @@
-.page { width: min(1240px, 100%); margin: 0 auto; padding: 18px 20px 40px; }
+.page { width: min(var(--content-wide), 100% - 2 * var(--gutter)); margin: 0 auto; padding: var(--space-6) 0 var(--space-12); }
 .title { margin: 0 0 6px; font-size: clamp(24px, 3vw, 32px); line-height: 1.15; letter-spacing: -.02em; }
 .branch { display: grid; gap: 6px; max-width: 420px; margin: 8px 0 16px; font-size: 14px; font-weight: 600; }
 .branch select { min-height: 44px; padding: 0 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--card); color: var(--foreground); font: inherit; }
@@ -49,7 +49,7 @@ a.lineName:hover { text-decoration: underline; }
 .added p { display: flex; align-items: center; gap: 8px; font-weight: 600; }
 
 @media (max-width: 860px) {
-  .page { padding: 12px 16px 24px; }
+  .page { padding: 12px 0 24px; }
   .layout { grid-template-columns: 1fr; gap: 16px; }
   .line { grid-template-columns: 56px minmax(0, 1fr); }
   .thumb { width: 56px; height: 56px; }
@@ -71,7 +71,7 @@ a.lineName:hover { text-decoration: underline; }
 .secondary:hover:not(:disabled) { border-color: var(--primary); }
 .secondary:disabled { opacity: .6; cursor: progress; }
 .notice .secondary { min-height: 36px; padding: 0 12px; font-size: 14px; }
-.alert { margin: 0 0 16px; padding: 12px 16px; border-left: 4px solid var(--tone-danger-foreground); border-radius: 8px; background: var(--tone-danger); color: var(--tone-danger-foreground); }
+.alert { margin: 0 0 16px; padding: 16px 24px; border-radius: var(--radius-card); background: var(--tone-danger); color: var(--tone-danger-foreground); }
 .alert .secondary { margin-left: 8px; }
 .help { margin: 0; color: var(--muted-foreground); font-size: 13px; line-height: 1.5; }
 .help a { color: var(--primary); font-weight: 600; }

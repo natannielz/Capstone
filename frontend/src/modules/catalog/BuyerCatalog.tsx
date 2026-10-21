@@ -16,11 +16,11 @@ import { catalogHistoryUrl, guestCatalogHref, memberCatalogPath, readCatalogHist
 import shared from '../administration/access.module.css';
 import styles from './buyer-catalog.module.css';
 import { BuyBox } from './BuyBox';
-import { formatMoney, formatNumber } from "@/lib/format";
+import { formatDisplayMoney, formatNumber } from "@/lib/format";
 
 const price = (value: BuyerVariant['currentPrice']) => {
   if (value === null) return 'Harga belum tersedia';
-  return formatMoney(value.currency, value.unitPrice);
+  return formatDisplayMoney(value.currency, value.unitPrice);
 };
 function message(error: unknown) {
   if (error instanceof AccessFailure || error instanceof IdentityFailure) {

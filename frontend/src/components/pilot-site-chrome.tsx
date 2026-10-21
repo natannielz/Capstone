@@ -25,7 +25,7 @@ const footerGroups = [
 ];
 
 export function PilotSiteFooter() {
-  return <footer className={styles.footer}><div className={styles.footerInner}>
+  return <footer className={styles.footer} data-surface="dark"><div className={styles.footerInner}>
     <div className={styles.footerMain}>
       <div className={styles.identity}><Brand inverse context="Kebutuhan kerja & harian" className={styles.footerBrand} /><p>Dari kebutuhan harian<br />hingga kegiatan bersama.</p><Link className={styles.explore} href="/katalog">Temukan kebutuhan Anda<ArrowUpRight size={17} aria-hidden="true" /></Link></div>
       <div className={styles.footerNavigation}>{footerGroups.map(group => <nav key={group.title} aria-label={group.title + ' di footer'}><h2>{group.title}</h2><ul>{group.links.map(link => <li key={link.href}><Link href={link.href}>{link.label}</Link></li>)}</ul></nav>)}</div>

@@ -12,6 +12,5 @@
 .table th, .table td { text-align: left; vertical-align: top; padding: .8rem; border-bottom: 1px solid #dce6df; max-width: 22rem; overflow-wrap: anywhere; }
 .table th { background: #eaf2ec; }
 .table small { display: block; color: #52655c; margin-top: .4rem; }
-.tableScroll:focus-visible { outline: 2px solid #187548; outline-offset: 3px; }
 .scrollHint { display: none; }
 @media (max-width: 600px) { .preview { padding: .65rem; } .actions > button { width: 100%; } .scrollHint { display: block; font-size: .85rem; color: #52655c; } }

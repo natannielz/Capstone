@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { PackageOpen, ReceiptText, Truck } from 'lucide-react';
 import type { CheckoutReview, SubmittedOrder } from './order-submit-client';
-import { orderAmount } from './order-quote-client';
+import { orderDisplayAmount } from './order-quote-client';
 import styles from './order-checkout.module.css';
 
 // Only a server-validated quote or immutable submitted order reaches this presentation.
@@ -16,8 +16,8 @@ export function OrderCheckoutDetails({ value, reviewing, children }: { value: Ch
           <div className={styles.lineCopy}><h4>{line.familyName}</h4><p className={styles.sku}>{line.skuCode}</p>
             <p className={styles.packages}>{line.packages} {line.definition.packageLabel} · {line.baseUnits} {line.definition.baseUnitCode}</p>
             <p className={styles.lineNote}>Isi per {line.definition.packageLabel}: {line.definition.baseUnitsPerPackage} {line.definition.baseUnitCode}</p>
-            <p className={styles.lineNote}>{orderAmount(value.quote.currency, line.price.unitPrice)} / {line.definition.packageLabel}</p>
-          </div><strong className={styles.lineTotal}>{orderAmount(value.quote.currency, line.catalogSubtotal)}</strong>
+            <p className={styles.lineNote}>{orderDisplayAmount(value.quote.currency, line.price.unitPrice)} / {line.definition.packageLabel}</p>
+          </div><strong className={styles.lineTotal}>{orderDisplayAmount(value.quote.currency, line.catalogSubtotal)}</strong>
         </li>)}</ul>
       </section>
       <section className={styles.panel} aria-label="Tujuan pengiriman"><h3><Truck size={20} aria-hidden="true" />Tujuan pengiriman</h3>
@@ -26,8 +26,8 @@ export function OrderCheckoutDetails({ value, reviewing, children }: { value: Ch
         {value.input.purchaseReference && <p className={styles.purchaseReference}>Referensi kebutuhan: <strong>{value.input.purchaseReference}</strong></p>}
       </section>
     </div><aside className={styles.summary} aria-label="Ringkasan biaya"><h3><ReceiptText size={20} aria-hidden="true" />Ringkasan biaya</h3>
-      <dl className={styles.amounts}><div><dt>Subtotal barang</dt><dd>{orderAmount(value.quote.currency, value.quote.catalogSubtotal)}</dd></div><div><dt>Pajak</dt><dd>{orderAmount(value.quote.currency, value.tax)}</dd></div><div><dt>Biaya lain</dt><dd>{orderAmount(value.quote.currency, value.charges)}</dd></div></dl>
-      <p className={styles.total}><strong>Total pesanan: {orderAmount(value.quote.currency, value.total)}</strong></p>
+      <dl className={styles.amounts}><div><dt>Subtotal barang</dt><dd>{orderDisplayAmount(value.quote.currency, value.quote.catalogSubtotal)}</dd></div><div><dt>Pajak</dt><dd>{orderDisplayAmount(value.quote.currency, value.tax)}</dd></div><div><dt>Biaya lain</dt><dd>{orderDisplayAmount(value.quote.currency, value.charges)}</dd></div></dl>
+      <p className={styles.total}><strong>Total pesanan: {orderDisplayAmount(value.quote.currency, value.total)}</strong></p>
       <div className={styles.nextStep}>{reviewing ? children : <p>Nilai ini mengikuti rincian saat pesanan diajukan. Status persetujuan dan pemenuhan ditampilkan terpisah.</p>}</div>
     </aside></div>
   </>;
