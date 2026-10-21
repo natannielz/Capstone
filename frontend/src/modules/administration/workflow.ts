@@ -104,16 +104,18 @@ export async function submitLogicalRequest<T>(ledger: MutationLedger, operation:
 
 export function accessMessage(error: unknown): string {
   if (error instanceof RequestNotSentError) return "Permintaan belum dikirim. Perlindungan sesi belum dapat disiapkan. Periksa koneksi, lalu coba kembali.";
+  // A missing session is a sign-in matter, never a network failure (G-015).
+  if (error instanceof Error && (error as { status?: unknown }).status === 401) return "Masuk dengan akun organisasi Anda untuk melanjutkan.";
   if (!(error instanceof AccessFailure)) return "Koneksi terputus. Hasil belum dapat dipastikan. Coba lagi dengan permintaan yang sama.";
   if (error.code === "recovery_storage_unavailable")
     return "Penyimpanan referensi pemulihan di perangkat tidak tersedia. Perubahan baru belum dikirim. Aktifkan penyimpanan situs; jangan hapus referensi permintaan yang belum terkonfirmasi.";
   if (error.code === "actor_changed")
-    return "Akun yang sedang masuk telah berubah. Masuk kembali dengan akun pemilik permintaan untuk memeriksa hasilnya.";
+    return "Akun yang sedang masuk telah berubah. Masuk kembali sebagai pemilik permintaan untuk memeriksa hasilnya.";
   if (error.code === "recovery_cleanup_failed")
     return "Hasil server sudah terkonfirmasi, tetapi referensi pada perangkat belum dapat dibersihkan. Periksa hasil sekali lagi setelah penyimpanan situs tersedia; jangan kirim perubahan yang sama sebagai permintaan baru.";
   if (error.code === "commit_outcome_unknown" || error.code === "resolve_previous_attempt")
     return "Hasil perubahan belum dapat dipastikan. Coba lagi tanpa mengubah isian; permintaan yang sama akan diperiksa kembali.";
-  if (error.status === 401) return "Sesi terverifikasi belum tersedia atau telah berakhir. Masuk kembali dengan akun organisasi Anda.";
+  if (error.status === 401) return "Masuk dengan akun organisasi Anda untuk melanjutkan.";
   if (error.code === "step_up_required") return "Verifikasi dua langkah terbaru diperlukan sebelum melanjutkan. Muat ulang setelah verifikasi akun.";
   if (error.code === "payment_review_closed") return "Pengajuan ini sudah ditutup karena penolakan atau permintaan bukti pengganti. Riwayat dan dana tetap tersimpan; pengajuan ini tidak dapat diverifikasi kembali.";
   if (error.status === 403) return "Akses untuk tindakan ini tidak tersedia. Muat ulang untuk memeriksa izin terbaru.";

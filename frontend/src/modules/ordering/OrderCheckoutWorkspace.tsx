@@ -18,6 +18,7 @@ import common from '../administration/access.module.css';
 import styles from './order-checkout.module.css';
 import { SessionAccessState } from "@/components/workspace-kit/session-access-state";
 import { orderNumber } from '@/lib/document-numbers';
+import { requestedDraftId } from './order-links';
 
 type Account = { actorId: string; session: IdentitySession; observedAt: number; draftId: string | null };
 function message(error: unknown, reading = false) {
@@ -45,7 +46,7 @@ export function OrderCheckoutWorkspace() {
         if (current.userId !== session.account.userId) throw new AccessFailure(409, 'actor_changed');
         if (!current.allowedActions.includes('order.submit')) throw new AccessFailure(403, 'scope_denied');
         if (sessionTiming(session, performance.now() - observedAt).expired) throw new IdentityFailure(401, 'session_expired');
-        const supplied = new URLSearchParams(window.location.search).get('draft');
+        const supplied = requestedDraftId(window.location.search);
         setAccount({ actorId: current.userId, session, observedAt, draftId: supplied === null ? null : priceId(supplied) }); setElapsed(performance.now() - observedAt);
       } catch (failure) { if (active) setError(failure); } finally { if (active) setLoading(false); }
     });

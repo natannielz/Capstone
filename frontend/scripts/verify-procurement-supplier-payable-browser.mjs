@@ -140,7 +140,7 @@ export async function verifyProcurementSupplierPayableBrowser({ config, maker, u
     const write = completed().at(-1); assert.equal(write.path, api + '/proposals/' + saved.proposal.id + '/decisions'); assert.equal(write.actor, config.checkerId); assert.equal(write.body.decision, 'approve'); assert.equal(write.version, '"1"');
     if (first) {
       const original = await pending(current); await checker.context.addCookies([{ name: '__Host-ut_session', value: config.readerToken, domain: origin.hostname, path: '/', secure: true, httpOnly: true, sameSite: 'Lax' }]);
-      await current.getByRole('button', { name: 'Periksa hasil', exact: true }).click(); await current.getByRole('heading', { name: /^(Sesi Anda perlu diperbarui|Halaman ini di luar tugas akun Anda|Halaman belum dapat dibuka)$/ }).waitFor({ timeout: 60000 }); assert.deepEqual(await pending(current), original);
+      await current.getByRole('button', { name: 'Periksa hasil', exact: true }).click(); await current.getByRole('heading', { name: /^(Masuk untuk melanjutkan|Sesi Anda perlu diperbarui|Halaman ini di luar tugas akun Anda|Halaman belum dapat dibuka)$/ }).waitFor({ timeout: 60000 }); assert.deepEqual(await pending(current), original);
       await checker.context.addCookies([{ name: '__Host-ut_session', value: config.checkerToken, domain: origin.hostname, path: '/', secure: true, httpOnly: true, sameSite: 'Lax' }]);
     }
     await recover(current, write); const rows = await history(current, config.checkerId), result = rows.find(row => row.proposal.id === saved.proposal.id);

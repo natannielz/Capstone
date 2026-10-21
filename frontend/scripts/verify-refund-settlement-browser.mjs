@@ -59,7 +59,7 @@ export async function verifyRefundSettlementBrowser({ config, verifier, user, or
   for (const privateValue of [config.evidence.sha256, config.beneficiaryReference, config.transferReference, write.body.binding]) assert.ok(!JSON.stringify(pending).includes(privateValue));
   assert.equal(await page.getByRole('button', { name: /Selesaikan dan tutup/ }).count(), 0);
   await context.addCookies([{ name: '__Host-ut_session', value: config.recorderToken, domain: origin.hostname, path: '/', secure: true, httpOnly: true, sameSite: 'Lax' }]);
-  await page.getByRole('button', { name: 'Periksa hasil', exact: true }).click(); await page.getByRole('heading', { name: /^(Sesi Anda perlu diperbarui|Halaman ini di luar tugas akun Anda|Halaman belum dapat dibuka)$/ }).waitFor(); assert.deepEqual(await references(), pending);
+  await page.getByRole('button', { name: 'Periksa hasil', exact: true }).click(); await page.getByRole('heading', { name: /^(Masuk untuk melanjutkan|Sesi Anda perlu diperbarui|Halaman ini di luar tugas akun Anda|Halaman belum dapat dibuka)$/ }).waitFor(); assert.deepEqual(await references(), pending);
   await context.addCookies([{ name: '__Host-ut_session', value: config.verifierToken, domain: origin.hostname, path: '/', secure: true, httpOnly: true, sameSite: 'Lax' }]);
   await page.reload(); await page.getByRole('button', { name: 'Periksa hasil', exact: true }).click();
   await page.getByRole('button', { name: 'Periksa hasil', exact: true }).waitFor({ state: 'hidden', timeout: 60000 });

@@ -15,7 +15,7 @@ const emptyFields = {name: '', phone: '', position: '', address: ''};
 function message(error: unknown): string {
   if (error instanceof AccessFailure || error instanceof RequestNotSentError) {
     if (error.status === 401 || error.code === 'actor_changed') return 'Sesi akun berubah. Masuk kembali sebagai pemilik kontak sebelum melanjutkan.';
-    if (error.status === 403) return 'Akses kontak pribadi belum tersedia untuk akun ini. Periksa sesi dan akses terbaru.';
+    if (error.status === 403) return 'Akses kontak pribadi belum tersedia untuk akun ini. Muat ulang untuk memeriksa akses terbaru.';
     if (error.code === 'invalid_account_contact') return 'Isi nama dan alasan perubahan. Nama dan jabatan paling banyak 160 karakter, telepon 40, alamat dan alasan 1.000. Hindari karakter kendali.';
     if (error.code === 'recovery_storage_unavailable') return 'Referensi pemulihan tidak dapat disimpan di perangkat. Perubahan belum dikirim; periksa penyimpanan peramban.';
     if (error.code === 'account_contact_response_invalid') return 'Jawaban server tidak sesuai. Muat ulang kontak dan periksa hasil permintaan sebelumnya sebelum membuat perubahan baru.';

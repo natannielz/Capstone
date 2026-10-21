@@ -132,8 +132,8 @@ async function decision(page, label, action) {
 }
 async function signin(page, expectedActor) {
   await page.goto(origin.origin + "/inventory/sources");
-  await page.getByRole("heading", { name: "Masuk untuk mengelola sumber stok", exact: true }).waitFor();
-  await page.getByRole("link", { name: "Masuk kembali", exact: true }).click();
+  await page.getByRole("heading", { name: /^(Masuk untuk melanjutkan|Sesi Anda perlu diperbarui)$/ }).waitFor();
+  await page.getByRole("link", { name: /^Masuk( kembali)?$/ }).click();
   await page.getByRole("button", { name: "Lanjutkan ke layanan akun", exact: true }).click();
   await page.waitForURL(origin.origin + "/inventory/sources");
   await page.getByLabel("Gudang dan kanal", { exact: true }).waitFor();
@@ -214,10 +214,10 @@ try {
     await page.getByRole("heading", { name: "Permintaan tersimpan", exact: true }).waitFor();
     assert.equal((await pending(page)).length, 0);
     await decision(page, "Sumber web uji", "approve");
-    await page.getByRole("heading", { name: "Sesi dan akses perlu diperiksa kembali", exact: true }).waitFor();
+    await page.getByRole("heading", { name: /^(Masuk untuk melanjutkan|Sesi Anda perlu diperbarui|Halaman ini di luar tugas akun Anda|Halaman belum dapat dibuka)$/ }).waitFor();
     assert.equal((await pending(page)).length, 0);
     assert.ok(protectedResponses.some(value => /\/approve$/.test(value.path) && value.status === 403));
-    await page.getByRole("button", { name: "Periksa sesi terbaru", exact: true }).click();
+    await page.getByRole("button", { name: /^(Periksa ulang|Periksa ulang akses|Coba lagi)$/ }).click();
     await page.getByLabel("Gudang dan kanal", { exact: true }).waitFor();
   });
   await check("lost committed external proposal keeps one key and recovers after reload", async () => {

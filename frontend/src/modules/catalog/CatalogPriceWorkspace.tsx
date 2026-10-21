@@ -1,5 +1,6 @@
 'use client';
 
+import { SessionAccessState } from '@/components/workspace-kit/session-access-state';
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { createAccessGateway } from '../administration/access-client';
@@ -18,7 +19,6 @@ import styles from '../administration/access.module.css';
 import { dateTimeFormatter, formatMoney, formatRupiah } from "@/lib/format";
 import { rupiahAmount } from "@/lib/rupiah-input";
 
-const loginHref = '/identity/login?returnPath=' + encodeURIComponent(pricePath);
 const factorHref = '/identity/account?operation=pricing.approve&returnPath=' + encodeURIComponent(pricePath);
 type Loaded = { actorId: string; actions: string[]; session: IdentitySession; observedAt: number; generation: number };
 const lost = (error: unknown) => (error instanceof AccessFailure || error instanceof IdentityFailure) && (error.status === 401 || error.code === 'actor_changed');
@@ -73,9 +73,8 @@ export function CatalogPriceWorkspace() {
   const failedSession = useCallback((failure: unknown) => { if (lost(failure)) { gate.cancel(); setLoaded(null); setError(failure); setLoading(false); } }, [gate]);
   return <main className={styles.page}><header className={styles.header}><div><Link href="/identity/account" className={styles.brand}>Unit Toko</Link><h1>Harga kemasan</h1><p>Harga yang jelas untuk setiap kemasan, dengan peninjauan oleh orang yang berbeda.</p></div></header>
     {loaded ? <PriceDesk key={loaded.actorId + ':' + loaded.generation} {...loaded} onRefresh={refresh} onFailure={failedSession} /> :
-      <section className={styles.state} aria-busy={loading}><h2>{loading ? 'Memeriksa sesi dan akses' : 'Ruang harga belum dapat dibuka'}</h2>
-        {error !== null && <p role="alert">{message(error)}</p>}{lost(error) && <Link href={loginHref}>Masuk kembali</Link>}
-        <button className={styles.secondary} disabled={loading} onClick={() => void refresh()}>Periksa kembali</button></section>}
+      (loading ? <section className={styles.state} aria-busy="true"><h2>Memeriksa sesi dan akses</h2></section>
+        : <SessionAccessState error={error} returnPath={pricePath} onRetry={() => void refresh()} detail={error !== null ? message(error) : undefined} />)}
   </main>;
 }
 
@@ -169,7 +168,7 @@ function PriceDesk({ actorId, actions, session, observedAt, onRefresh, onFailure
         {actions.includes('pricing.approve') && <button className={mode === 'review' ? styles.primary : styles.secondary} disabled={locked} onClick={() => { clear(); setMode('review'); setAfter(null); }}>Tinjau harga</button>}
         <button className={styles.secondary} disabled={busy || recovering} onClick={() => void onRefresh()}>Perbarui sesi dan akses</button></div>
       {(!timing.fresh && actions.includes('pricing.approve') || error instanceof AccessFailure && error.code === 'step_up_required') && <p className={styles.alert}>Verifikasi terbaru diperlukan. <Link href={factorHref}>Verifikasi dua langkah</Link></p>}
-      {timing.expired && <p role="alert">Sesi telah berakhir. <Link href={loginHref}>Masuk kembali</Link></p>}
+      {timing.expired && <SessionAccessState error={null} kind="expired" returnPath={pricePath} busy={busy || recovering} onRetry={() => void onRefresh()} />}
     </section>
     {error !== null && <p className={styles.alert} role="alert">{message(error)}</p>}{notice && <p className={styles.success} role="status">{notice}</p>}
     {recovery.error !== null && <p className={styles.alert} role="alert">{accessMessage(recovery.error)}</p>}

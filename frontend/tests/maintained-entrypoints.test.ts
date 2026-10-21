@@ -76,15 +76,15 @@ for (const profile of ["pilot", "full"] as const) {
       for (const [raw, expected] of [
         ["/account", "/identity/account"], ["/workspace?view=admin", "/workspace?view=admin"], ["/workspace", "/workspace"],
         ["/shop?category=pantry", "/shop?category=pantry"],
-        ["/account/orders/41?orderId=41#details", pilot ? "/ordering/requests?orderId=41" : "/ordering/orders?order=41&orderId=41"],
+        ["/account/orders/41?orderId=41#details", pilot ? "/ordering/requests?orderId=41" : "/ordering/orders?order=41"],
         ["/cart", pilot ? requests : "/cart"],
-        ["/checkout?draftId=41", pilot ? "/ordering/requests?draftId=41" : "/ordering/checkout?draftId=41"],
+        ["/checkout?draftId=41", pilot ? "/ordering/requests?draftId=41" : "/ordering/checkout?draft=41"],
         ["/ordering/requests", "/ordering/requests"],
       ]) {
         assert.equal(await destination(login, raw), signIn(expected), raw);
       }
       if (!pilot) {
-        assert.equal(await destination(login, "/ordering/orders?orderId=41"), signIn("/ordering/orders?orderId=41"));
+        assert.equal(await destination(login, "/ordering/orders?orderId=41"), signIn("/ordering/orders?order=41"), "old query names map to today's (M7)");
         assert.equal(await destination(login, "/shop/00000065-0000-4000-8000-000000000101"), signIn("/shop/00000065-0000-4000-8000-000000000101"));
       }
       // Without a usable destination the person still reaches sign-in; the staff door then leads to the staff home.

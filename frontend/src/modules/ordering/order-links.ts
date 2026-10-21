@@ -8,3 +8,6 @@ export function requestedOrderId(search: string): string | null {
   const value = new URLSearchParams(search).get('order');
   return orderId(value) ? value : null;
 }
+
+/** The draft an address asks the checkout to reopen (`?draft=7`), or null. */
+export function requestedDraftId(search: string): string | null { return new URLSearchParams(search).get('draft'); }

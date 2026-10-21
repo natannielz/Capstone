@@ -173,9 +173,9 @@ try {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.evaluate(async () => { await document.fonts.ready; await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))); });
   await page.screenshot({ path: resolve(directory, 'payment-buyer-desktop.png'), fullPage: true });
-  const outsider = await user(config.outsiderToken); await outsider.page.goto(origin.origin + '/billing/payments'); await outsider.page.getByRole('heading', { name: /^(Sesi Anda perlu diperbarui|Halaman ini di luar tugas akun Anda|Halaman belum dapat dibuka)$/ }).waitFor();
+  const outsider = await user(config.outsiderToken); await outsider.page.goto(origin.origin + '/billing/payments'); await outsider.page.getByRole('heading', { name: /^(Masuk untuk melanjutkan|Sesi Anda perlu diperbarui|Halaman ini di luar tugas akun Anda|Halaman belum dapat dibuka)$/ }).waitFor();
   assert.equal(await outsider.page.getByRole('button', { name: /^Buka draf/ }).count(), 0);
-  await outsider.page.goto(origin.origin + '/billing/payment-reviews'); await outsider.page.getByRole('heading', { name: /^(Sesi Anda perlu diperbarui|Halaman ini di luar tugas akun Anda|Halaman belum dapat dibuka)$/ }).waitFor();
+  await outsider.page.goto(origin.origin + '/billing/payment-reviews'); await outsider.page.getByRole('heading', { name: /^(Masuk untuk melanjutkan|Sesi Anda perlu diperbarui|Halaman ini di luar tugas akun Anda|Halaman belum dapat dibuka)$/ }).waitFor();
   const reviewer = await user(config.reviewerToken), reviewPage = reviewer.page;
   await reviewPage.goto(origin.origin + '/billing/payment-reviews');
   await reviewPage.getByRole('button', { name: /^Periksa pengajuan [1-9]/ }).first().click();

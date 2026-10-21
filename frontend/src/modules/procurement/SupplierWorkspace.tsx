@@ -33,7 +33,7 @@ const fields = [ ['subjectReference', 'Referensi identitas pemasok', 128], ['leg
   ['registrationNamespace', 'Jenis registrasi (opsional)', 64], ['registrationValue', 'Nomor registrasi (opsional)', 128], ['address', 'Alamat pemasok', 500], ['contactName', 'Nama kontak', 160], ['contactValue', 'Detail kontak', 256] ] as const;
 const when = (value: string) => dateTimeFormatter.format(new Date(value));
 function message(error: unknown) {
-  if (error instanceof IdentityFailure) return 'Masuk kembali dengan akun yang memiliki penugasan pengajuan atau pemeriksaan pemasok.';
+  if (error instanceof IdentityFailure) return 'Masuk dengan akun organisasi Anda untuk melanjutkan.';
   if (error instanceof AccessFailure || error instanceof RequestNotSentError) {
     if (error.code === 'invalid_supplier_change') return 'Periksa identitas, pasangan registrasi, kontak, kode sumber dan waktu berlaku. Isi persis tanpa spasi tambahan atau baris baru.';
     if (error.code === 'supplier_view_stale' || error.code === 'supplier_changed') return 'Usulan, kebijakan, versi pemasok atau katalog berubah. Muat data terbaru dan periksa kembali.';

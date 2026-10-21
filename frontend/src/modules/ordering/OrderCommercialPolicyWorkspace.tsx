@@ -24,7 +24,7 @@ const path = '/ordering/commercial-policies', readPermission = 'order.commercial
 const when = (value: string) => dateTimeFormatter.format(new Date(value));
 const status = { pending: 'Menunggu pemeriksaan', approved: 'Disetujui', rejected: 'Ditolak' } as const;
 function message(error: unknown) {
-  if (error instanceof IdentityFailure) return 'Sesi belum tersedia. Masuk kembali untuk memeriksa aturan komersial.';
+  if (error instanceof IdentityFailure) return 'Masuk dengan akun organisasi Anda untuk melanjutkan.';
   if (error instanceof AccessFailure || error instanceof RequestNotSentError) {
     if (error.code === 'commercial_policy_invalid' || error.code === 'order_commercial_policy_invalid') return 'Periksa penerapan kewajiban, biaya, tarif dan dasar pajak, syarat tagihan, masa berlaku serta alasan. Pembebasan pajak memerlukan rujukan resmi.';
     if (error.code === 'order_commercial_policy_changed' || error.code === 'commercial_policy_view_stale') return 'Unit atau aturan berubah. Muat data terbaru, lalu periksa ulang pengajuan.';

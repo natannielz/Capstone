@@ -94,8 +94,8 @@ async function control(action) {
 }
 async function signin(page, who) {
   await control(who); await page.goto(origin.origin + path);
-  await page.getByRole("heading", { name: "Masuk untuk memeriksa kebijakan", exact: true }).waitFor();
-  await page.getByRole("link", { name: "Masuk kembali", exact: true }).click();
+  await page.getByRole("heading", { name: /^(Masuk untuk melanjutkan|Sesi Anda perlu diperbarui)$/ }).waitFor();
+  await page.getByRole("link", { name: /^Masuk( kembali)?$/ }).click();
   await page.getByRole("button", { name: "Lanjutkan ke layanan akun", exact: true }).click();
   await page.waitForURL(origin.origin + path); await page.getByLabel("Referensi alokasi", { exact: true }).waitFor();
   const identity = await page.evaluate(async () => (await fetch("/api/v1/identity/session")).json());
@@ -244,8 +244,8 @@ try {
   await check("accounts linked to the same person cannot inspect a checker decision", async () => {
     await control("same-person"); await checker.getByLabel("Referensi pengajuan", { exact: true }).fill(first);
     await checker.getByRole("button", { name: "Periksa pengajuan", exact: true }).click();
-    await checker.getByRole("heading", { name: "Sesi dan akses perlu diperiksa kembali", exact: true }).waitFor();
-    await control("distinct-people"); await checker.getByRole("button", { name: "Periksa sesi terbaru", exact: true }).click();
+    await checker.getByRole("heading", { name: /^(Masuk untuk melanjutkan|Sesi Anda perlu diperbarui|Halaman ini di luar tugas akun Anda|Halaman belum dapat dibuka)$/ }).waitFor();
+    await control("distinct-people"); await checker.getByRole("button", { name: /^(Periksa ulang|Periksa ulang akses|Coba lagi)$/ }).click();
     await checker.getByLabel("Referensi alokasi", { exact: true }).waitFor();
   });
   await check("a real stop rejects frozen approval while stale rejection recovers after reload", async () => {
@@ -285,7 +285,7 @@ try {
   });
   await check("revoking one shared-channel grant conceals private history", async () => {
     await control("grant"); await reader.getByRole("button", { name: "Muat ulang riwayat", exact: true }).click();
-    await reader.getByRole("heading", { name: "Sesi dan akses perlu diperiksa kembali", exact: true }).waitFor();
+    await reader.getByRole("heading", { name: /^(Masuk untuk melanjutkan|Sesi Anda perlu diperbarui|Halaman ini di luar tugas akun Anda|Halaman belum dapat dibuka)$/ }).waitFor();
     assert.equal(await reader.getByRole("heading", { name: "Riwayat kebijakan", exact: true }).count(), 0);
   });
   await check("server MFA expiry refuses a reviewed decision without a new event", async () => {
@@ -296,8 +296,8 @@ try {
     assert.ok(protectedResponses.some(value => value.path.endsWith("/reject") && value.status === 403));
   });
   await check("account suspension conceals the maker workspace", async () => {
-    await control("account"); await page.getByRole("button", { name: "Periksa sesi dan akses", exact: true }).click();
-    await page.getByRole("heading", { name: "Masuk untuk memeriksa kebijakan", exact: true }).waitFor();
+    await control("account"); await page.getByRole("button", { name: "Muat ulang sesi dan akses", exact: true }).click();
+    await page.getByRole("heading", { name: /^(Masuk untuk melanjutkan|Sesi Anda perlu diperbarui)$/ }).waitFor();
     assert.equal(await page.getByLabel("Referensi alokasi", { exact: true }).count(), 0);
   });
   assert.deepEqual(failures, []);

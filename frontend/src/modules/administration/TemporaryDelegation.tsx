@@ -1,5 +1,6 @@
 'use client';
 
+import { SessionAccessState } from '@/components/workspace-kit/session-access-state';
 import Link from 'next/link';
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {RequestNotSentError} from '../../api/client';
@@ -30,7 +31,7 @@ function message(error: unknown) {
     if (error.code === 'independent_person_required' || error.code === 'independent_actor_required') return 'Pemberi, penerima, dan penyetuju harus merupakan orang yang berbeda.';
     if (error.code === 'delegation_source_changed' || error.code === 'delegation_changed') return 'Akses sumber atau catatan delegasi berubah. Perbarui sebelum meninjau lagi.';
     if (error.code === 'step_up_required') return 'Lakukan verifikasi dua langkah, lalu perbarui sesi sebelum meninjau lagi.';
-    if ([401, 403].includes(error.status)) return 'Sesi atau akses belum tersedia. Periksa akun serta cakupan delegasi.';
+    if ([401, 403].includes(error.status)) return 'Akses delegasi belum tersedia untuk akun ini. Periksa cakupan delegasi Anda.';
     if (error instanceof RequestNotSentError) return 'Periksa penerima, izin, masa berlaku, dan alasan. Permintaan belum dikirim.';
   }
   return 'Hasil belum dapat dipastikan. Periksa hasil asli yang tersimpan sebelum mengirim perubahan lain.';
@@ -55,9 +56,9 @@ export function TemporaryDelegation() {
   return <main className={styles.page}>
     <header className={styles.header}><div><Link className={styles.brand} href="/identity/account">Unit Toko</Link><h1>Delegasi sementara</h1>
       <p>Pilih izin dari akses Anda yang masih berlaku. Delegasi memerlukan persetujuan orang lain dan selalu memiliki waktu berakhir.</p></div><Link href="/identity/account">Akun saya</Link></header>
-    {error !== null && <p role="alert" className={styles.alert}>{message(error)}</p>}
-    {!account || sessionTiming(account.session, elapsed).expired ? <section className={styles.state}><h2>Periksa sesi akun</h2>
-      <Link href={'/identity/login?returnPath=' + encodeURIComponent(path)}>Masuk kembali</Link><button type="button" onClick={() => {setAccount(null); setRefresh(v => v + 1);}}>Perbarui sesi</button></section>
+    {error !== null && account && <p role="alert" className={styles.alert}>{message(error)}</p>}
+    {!account && error === null ? <p role="status">Memeriksa sesi dan akses…</p> : !account || sessionTiming(account.session, elapsed).expired
+      ? <SessionAccessState error={error} kind={account ? "expired" : undefined} returnPath={path} onRetry={() => {setAccount(null); setError(null); setRefresh(v => v + 1);}} detail={error !== null ? message(error) : undefined} />
       : <Desk key={account.actorId + ':' + account.observed} account={account} refreshSession={() => {setAccount(null); setRefresh(v => v + 1);}} />}
   </main>;
 }

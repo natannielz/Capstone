@@ -1,5 +1,6 @@
 "use client";
 
+import { SessionAccessState, lostAccessKind } from '@/components/workspace-kit/session-access-state';
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { RequestNotSentError } from '../../api/client';
@@ -19,13 +20,11 @@ import styles from './stock-source-policy.module.css';
 import { formatDateTime, formatMoney } from "@/lib/format";
 
 const path = '/inventory/stock-releases';
-const login = '/identity/login?returnPath=' + encodeURIComponent(path);
 const factor = '/identity/account?operation=stock.release.approve&returnPath=' + encodeURIComponent(path);
 const status = { proposed: 'Menunggu peninjauan', approved: 'Pelepasan disetujui', rejected: 'Ditolak' };
 const time = (value: string) => formatDateTime(value);
 const amount = (value: string) => formatMoney('IDR', value);
 type Loaded = { actorId: string; actions: string[]; session: IdentitySession; observedAt: number; generation: number };
-const lostSession = (error: unknown) => (error instanceof AccessFailure || error instanceof IdentityFailure) && (error.status === 401 || error.code === 'actor_changed');
 function message(error: unknown) {
   if ((error instanceof AccessFailure || error instanceof RequestNotSentError) && error.code === 'antiforgery_failed')
     return 'Sesi atau token halaman tidak lagi berlaku. Periksa sesi terbaru atau masuk kembali; referensi permintaan semula tetap disimpan.';
@@ -75,10 +74,8 @@ export function StockReleaseWorkspace() {
     <header className={common.header}><div><Link className={common.brand} href="/identity/account">Unit Toko</Link>
       <p className={styles.eyebrow}>Pengelolaan persediaan</p><h1>Pelepasan stok ditahan</h1><p>Periksa kemasan, lot dan jumlah barang yang mutu serta nilainya sudah disetujui.</p></div></header>
     <div id="release-workspace">{loaded ? <ReleaseDesk key={loaded.actorId + ':' + loaded.generation} loaded={loaded} refresh={refresh} /> :
-      <section className={common.state} aria-busy={loading}><h2>{loading ? 'Memeriksa sesi dan akses' : lostSession(error) ? 'Masuk untuk memeriksa pelepasan' : 'Pelepasan belum tersedia'}</h2>
-        {error !== null && <p role="alert" className={common.alert}>{message(error)}</p>}
-        <div className={common.actions}>{lostSession(error) && <Link className={common.primary} href={login}>Masuk kembali</Link>}
-          <button className={common.secondary} type="button" disabled={loading} onClick={() => void refresh()}>Periksa kembali</button><Link href="/identity/account">Kembali ke akun saya</Link></div></section>}</div>
+      (loading ? <section className={common.state} aria-busy="true"><h2>Memeriksa sesi dan akses</h2></section>
+        : <SessionAccessState error={error} returnPath={path} onRetry={() => void refresh()} detail={error !== null ? message(error) : undefined} />)}</div>
   </main>;
 }
 function ReleaseDesk({ loaded, refresh }: { loaded: Loaded; refresh: () => Promise<void> }) {
@@ -99,14 +96,12 @@ function ReleaseDesk({ loaded, refresh }: { loaded: Loaded; refresh: () => Promi
   useEffect(() => { if (!warn) return; const leave = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ''; };
     window.addEventListener('beforeunload', leave); return () => window.removeEventListener('beforeunload', leave); }, [warn]);
   const locked = editor.locked, busy = state.sending || state.recovering;
-  if (state.expired || state.suspended) return <section className={common.state}><h2>Sesi dan akses perlu diperiksa kembali</h2>
-    {state.error !== null && <p role="alert">{message(state.error)}</p>}<p>Referensi permintaan disimpan untuk akun semula.</p>
-    <button className={common.primary} type="button" disabled={busy} onClick={() => void refresh()}>Periksa sesi terbaru</button><Link href={login}>Masuk kembali</Link></section>;
+  if (state.expired || state.suspended) return <SessionAccessState error={state.error} kind={state.expired ? 'expired' : lostAccessKind(state.error)} returnPath={path} busy={busy} onRetry={() => void refresh()} />;
   return <>
     <AdministrationNavigation current="stock-releases" actions={loaded.actions} locked={locked} />
     <section className={common.accountSection}><div className={styles.heading}><div><h2>Gudang yang ditugaskan</h2>
       <p>Petugas: <strong>{loaded.session.account?.displayName ?? loaded.session.account?.verifiedEmail}</strong></p></div>
-      <button className={common.secondary} type="button" disabled={busy || state.review !== null} onClick={() => void refresh()}>Periksa sesi dan akses</button></div>
+      <button className={common.secondary} type="button" disabled={busy || state.review !== null} onClick={() => void refresh()}>Muat ulang sesi dan akses</button></div>
       {editor.canApprove && <p className={common.help}>{state.fresh ? 'Verifikasi dua langkah masih baru. ' : 'Peninjauan memerlukan verifikasi dua langkah terbaru. '}
         <Link href={factor} aria-disabled={busy} onClick={event => { if (busy) event.preventDefault(); }}>Verifikasi untuk peninjauan</Link></p>}
     </section>

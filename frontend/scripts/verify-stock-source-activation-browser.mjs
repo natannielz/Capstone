@@ -103,8 +103,8 @@ async function query(page, actorId, suffix, body, options = {}) {
 async function signIn(account, actorId, workspace = true) {
   await control(account); const context = await browser.newContext({ ignoreHTTPSErrors: true, viewport: { width: 1280, height: 960 }, locale: 'id-ID', timezoneId: 'Asia/Jakarta' });
   const page = await context.newPage(); page.setDefaultTimeout(20000); page.on('pageerror', error => failures.push(error.message)); page.on('dialog', dialog => dialog.accept());
-  await page.goto(origin.origin + route); await page.getByRole('heading', { name: 'Masuk untuk memeriksa aktivasi', exact: true }).waitFor();
-  await page.getByRole('link', { name: 'Masuk kembali', exact: true }).click(); await page.getByRole('button', { name: 'Lanjutkan ke layanan akun', exact: true }).click();
+  await page.goto(origin.origin + route); await page.getByRole('heading', { name: /^(Masuk untuk melanjutkan|Sesi Anda perlu diperbarui)$/ }).waitFor();
+  await page.getByRole('link', { name: /^Masuk( kembali)?$/ }).click(); await page.getByRole('button', { name: 'Lanjutkan ke layanan akun', exact: true }).click();
   await page.waitForURL(origin.origin + route); if (workspace) await page.getByLabel('Referensi sumber stok', { exact: true }).waitFor();
   const cookies = await context.cookies(origin.origin);
   for (const name of ['__Host-ut_session', '__Host-ut_csrf']) {

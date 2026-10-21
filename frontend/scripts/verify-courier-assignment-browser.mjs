@@ -119,7 +119,7 @@ export async function verifyCourierAssignmentBrowser({config, admin, user, origi
   await current.context.addCookies([{name: '__Host-ut_session', value: config.wrongScopeToken, domain: origin.hostname, path: '/', secure: true, httpOnly: true, sameSite: 'Lax'}]);
   const staleActor = current.page.waitForResponse(response => new URL(response.url()).pathname === api + '/' + config.shipmentId + '/query');
   await (await exact(current.page, 'button', 'Muat ulang penugasan')).click(); assert.equal((await staleActor).status(), 409);
-  await current.page.getByRole('heading', { name: /^(Sesi Anda perlu diperbarui|Halaman ini di luar tugas akun Anda|Halaman belum dapat dibuka)$/ }).waitFor();
+  await current.page.getByRole('heading', { name: /^(Masuk untuk melanjutkan|Sesi Anda perlu diperbarui|Halaman ini di luar tugas akun Anda|Halaman belum dapat dibuka)$/ }).waitFor();
   assert.equal(await current.page.getByRole('region', {name: 'Rincian penugasan', exact: true}).count(), 0);
   await current.context.addCookies([{name: '__Host-ut_session', value: config.adminToken, domain: origin.hostname, path: '/', secure: true, httpOnly: true, sameSite: 'Lax'}]);
 

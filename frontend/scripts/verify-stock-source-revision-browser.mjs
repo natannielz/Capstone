@@ -125,8 +125,8 @@ async function decisionReview(page, sourceName, reason, action) {
 }
 async function signin(page, expectedActor) {
   await page.goto(origin.origin + "/inventory/sources/revisions");
-  await page.getByRole("heading", { name: "Masuk untuk mengubah sumber stok", exact: true }).waitFor();
-  await page.getByRole("link", { name: "Masuk kembali", exact: true }).click();
+  await page.getByRole("heading", { name: /^(Masuk untuk melanjutkan|Sesi Anda perlu diperbarui)$/ }).waitFor();
+  await page.getByRole("link", { name: /^Masuk( kembali)?$/ }).click();
   await page.getByRole("button", { name: "Lanjutkan ke layanan akun", exact: true }).click();
   await page.waitForURL(origin.origin + "/inventory/sources/revisions");
   await page.getByLabel("Gudang dan kanal", { exact: true }).waitFor();
@@ -285,7 +285,7 @@ try {
     await reviewer.getByRole("button", { name: /^Verifikasi perlu baru / }).waitFor();
     await control("grant");
     await reviewer.getByRole("button", { name: "Muat ulang riwayat", exact: true }).click();
-    await reviewer.getByRole("heading", { name: "Sesi dan akses perlu diperiksa kembali", exact: true }).waitFor();
+    await reviewer.getByRole("heading", { name: /^(Masuk untuk melanjutkan|Sesi Anda perlu diperbarui|Halaman ini di luar tugas akun Anda|Halaman belum dapat dibuka)$/ }).waitFor();
     assert.equal(await reviewer.getByRole("heading", { name: "Alokasi versi tiga", exact: true }).count(), 0);
     await logout(reviewer, reviewerContext); await logout(page, context);
   });

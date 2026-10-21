@@ -1,5 +1,6 @@
 "use client";
 
+import { SessionAccessState, lostAccessKind } from '@/components/workspace-kit/session-access-state';
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createAccessGateway } from "../administration/access-client";
@@ -17,7 +18,6 @@ import styles from "./stock-source.module.css";
 import { formatDateTime, numberFormatter } from "@/lib/format";
 
 const path = "/inventory/sources";
-const loginHref = "/identity/login?returnPath=" + encodeURIComponent(path);
 const factorHref = "/identity/account?operation=stock.source.approve&returnPath=" + encodeURIComponent(path);
 type Loaded = { actorId: string; actions: string[]; session: IdentitySession; observedAt: number; generation: number };
 const statusLabel = { proposed: "Menunggu peninjauan", approved: "Disetujui · belum aktif", rejected: "Ditolak", withdrawn: "Ditarik" };
@@ -38,7 +38,6 @@ function message(error: unknown) {
   }
   return accessMessage(error);
 }
-function sessionLost(error: unknown) { return (error instanceof AccessFailure || error instanceof IdentityFailure) && (error.status === 401 || error.code === "actor_changed"); }
 export function StockSourceWorkspace() {
   const [access] = useState(() => createAccessGateway()), [identity] = useState(() => createIdentityGateway());
   const request = useRef<AbortController | null>(null), generation = useRef(0);
@@ -74,11 +73,8 @@ export function StockSourceWorkspace() {
       <p className={styles.eyebrow}>Pengelolaan persediaan</p><h1>Sumber stok</h1>
       <p>Tentukan asal pencatatan dan tanggung jawab persediaan untuk setiap gudang dan kanal.</p></div></header>
     <div id="source-workspace">{loaded ? <SourceDesk key={loaded.actorId + ":" + loaded.generation} loaded={loaded} onRefresh={refresh} /> :
-      <section className={common.state} aria-busy={loading}><h2>{loading ? "Memeriksa sesi dan akses" : sessionLost(error) ? "Masuk untuk mengelola sumber stok" : "Pengaturan belum tersedia"}</h2>
-        {error !== null && <p role="alert" className={common.alert}>{message(error)}</p>}
-        <div className={common.actions}>{sessionLost(error) && <Link className={common.primary} href={loginHref}>Masuk kembali</Link>}
-          <button type="button" className={common.secondary} disabled={loading} onClick={() => void refresh()}>Periksa kembali</button>
-          <Link href="/identity/account">Kembali ke akun saya</Link></div></section>}</div>
+      (loading ? <section className={common.state} aria-busy="true"><h2>Memeriksa sesi dan akses</h2></section>
+        : <SessionAccessState error={error} returnPath={path} onRetry={() => void refresh()} detail={error !== null ? message(error) : undefined} />)}</div>
   </main>;
 }
 function SourceDesk({ loaded, onRefresh }: { loaded: Loaded; onRefresh: () => Promise<void> }) {
@@ -102,17 +98,13 @@ function SourceDesk({ loaded, onRefresh }: { loaded: Loaded; onRefresh: () => Pr
   useEffect(() => { if (state.review) reviewFocus.current?.focus(); }, [state.review]);
   useEffect(() => { if (state.result) resultFocus.current?.focus(); }, [state.result]);
   const busy = state.sending || state.recovering, locked = editor.locked;
-  if (state.expired || state.suspended) return <section className={common.state}><h2>Sesi dan akses perlu diperiksa kembali</h2>
-    <p>Data sebelumnya disembunyikan. Referensi permintaan tetap disimpan untuk akun pemiliknya.</p>
-    {state.error !== null && <p role="alert" className={common.alert}>{message(state.error)}</p>}
-    <button type="button" className={common.primary} disabled={busy} onClick={() => void onRefresh()}>Periksa sesi terbaru</button>
-    <Link href={loginHref}>Masuk kembali</Link></section>;
+  if (state.expired || state.suspended) return <SessionAccessState error={state.error} kind={state.expired ? 'expired' : lostAccessKind(state.error)} returnPath={path} busy={busy} onRetry={() => void onRefresh()} />;
   return <>
     <AdministrationNavigation current="sources" actions={loaded.actions} locked={locked} />
     <section className={common.accountSection} aria-labelledby="source-location-title">
       <div className={styles.headingRow}><div><h2 id="source-location-title">Ruang kerja gudang</h2>
         <p className={common.help}>Petugas: <strong>{loaded.session.account?.displayName ?? loaded.session.account?.verifiedEmail}</strong></p></div>
-        <button type="button" className={common.secondary} disabled={busy} onClick={() => void onRefresh()}>Periksa sesi dan akses</button></div>
+        <button type="button" className={common.secondary} disabled={busy} onClick={() => void onRefresh()}>Muat ulang sesi dan akses</button></div>
       <div className={styles.modeChoices} role="group" aria-label="Jenis pekerjaan">
         {editor.canPropose && <button type="button" aria-pressed={state.mode === "propose"} className={state.mode === "propose" ? common.primary : common.secondary}
           disabled={editor.selectionLocked} onClick={() => void editor.changeMode("propose")}>Pengajuan baru</button>}

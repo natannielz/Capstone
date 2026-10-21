@@ -1,5 +1,6 @@
 'use client';
 
+import { SessionAccessState, lostAccessKind } from '@/components/workspace-kit/session-access-state';
 import Link from 'next/link';
 import { RequestNotSentError } from '../../api/client';
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
@@ -18,7 +19,7 @@ import common from '../administration/access.module.css';
 import styles from './stock-count.module.css';
 import { formatDateTime, numberFormatter } from '@/lib/format';
 
-const path = '/inventory/pack-conversions', loginHref = '/identity/login?returnPath=' + encodeURIComponent(path);
+const path = '/inventory/pack-conversions';
 type Loaded = { actorId: string; actions: string[]; session: IdentitySession; observedAt: number; generation: number };
 const format = numberFormatter, amount = (value: number | string) => format.format(typeof value === 'string' ? BigInt(value) : value);
 const statusLabel = { pending: 'Menunggu peninjauan', approved: 'Disetujui sebagai aturan', rejected: 'Ditolak' };
@@ -40,7 +41,6 @@ function message(error: unknown) {
   if (!(error instanceof IdentityFailure) && !(error instanceof AccessFailure)) return 'Koneksi terputus. Periksa hasil melalui referensi semula sebelum melanjutkan.';
   return accessMessage(error);
 }
-const lostSession = (error: unknown) => error instanceof IdentityFailure && error.status === 401 || error instanceof AccessFailure && (error.status === 401 || error.code === 'actor_changed');
 export function PackConversionRuleWorkspace() {
   const [access] = useState(() => createAccessGateway()), [identity] = useState(() => createIdentityGateway());
   const request = useRef<AbortController | null>(null), generation = useRef(0);
@@ -70,10 +70,8 @@ export function PackConversionRuleWorkspace() {
   return <main className={common.page}><header className={common.header}><div><Link className={common.brand} href='/identity/account'>Unit Toko</Link>
     <h1>Aturan konversi kemasan</h1><p>Siapkan dan tinjau aturan membuka kemasan tertutup menjadi satuan/lepas.</p></div></header>
     {loaded ? <RuleDesk key={loaded.actorId + ':' + loaded.generation} loaded={loaded} onRefresh={refresh} /> :
-      <section className={common.state} aria-busy={loading}><h2>{loading ? 'Memeriksa sesi dan akses' : lostSession(error) ? 'Masuk untuk menyiapkan aturan' : 'Aturan konversi belum tersedia'}</h2>
-        {error !== null && <p role='alert' className={common.alert}>{message(error)}</p>}
-        <div className={common.actions}>{lostSession(error) && <Link className={common.primary} href={loginHref}>Masuk kembali</Link>}
-          <button type='button' className={common.secondary} disabled={loading} onClick={() => void refresh()}>Periksa kembali</button><Link href='/identity/account'>Kembali ke akun saya</Link></div></section>}
+      (loading ? <section className={common.state} aria-busy="true"><h2>Memeriksa sesi dan akses</h2></section>
+        : <SessionAccessState error={error} returnPath={path} onRetry={() => void refresh()} detail={error !== null ? message(error) : undefined} />)}
   </main>;
 }
 function RuleDesk({ loaded, onRefresh }: { loaded: Loaded; onRefresh: () => Promise<void> }) {
@@ -92,14 +90,12 @@ function RuleDesk({ loaded, onRefresh }: { loaded: Loaded; onRefresh: () => Prom
   useEffect(() => { if (state.review) reviewFocus.current?.focus(); }, [state.review]);
   useEffect(() => { if (state.result) resultFocus.current?.focus(); }, [state.result]);
   const locked = editor.locked, busy = state.sending || state.recovering;
-  if (state.expired || state.suspended) return <section className={common.state}><h2>Sesi dan akses perlu diperiksa kembali</h2>
-    <p>Data sebelumnya disembunyikan. Referensi permintaan tetap disimpan untuk akun pemiliknya.</p>
-    {state.error !== null && <p role='alert'>{message(state.error)}</p>}<button type='button' className={common.primary} disabled={busy} onClick={() => void onRefresh()}>Periksa sesi terbaru</button><Link href={loginHref}>Masuk kembali</Link></section>;
+  if (state.expired || state.suspended) return <SessionAccessState error={state.error} kind={state.expired ? 'expired' : lostAccessKind(state.error)} returnPath={path} busy={busy} onRetry={() => void onRefresh()} />;
   return <>
     <AdministrationNavigation current='pack-conversion-rules' actions={loaded.actions} locked={locked} />
     <section className={common.accountSection} aria-labelledby='pack-context-heading'><div className={styles.headingRow}><div><h2 id='pack-context-heading'>Ruang kerja aturan</h2>
       <p className={common.help}>Petugas: <strong>{loaded.session.account?.displayName ?? loaded.session.account?.verifiedEmail}</strong></p></div>
-      <button type='button' className={common.secondary} disabled={busy || state.review !== null} onClick={() => void onRefresh()}>Periksa sesi dan akses</button></div>
+      <button type='button' className={common.secondary} disabled={busy || state.review !== null} onClick={() => void onRefresh()}>Muat ulang sesi dan akses</button></div>
       <div className={styles.modeChoices}>{([['prepare', 'Siapkan aturan'], ['proposals', 'Pengajuan dan peninjauan'], ['rules', 'Aturan disetujui']] as const).map(([mode, label]) =>
         <button key={mode} type='button' className={state.mode === mode ? common.primary : common.secondary} aria-pressed={state.mode === mode}
           disabled={locked} onClick={() => void editor.changeMode(mode)}>{label}</button>)}</div>

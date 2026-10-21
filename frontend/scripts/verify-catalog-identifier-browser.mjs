@@ -243,8 +243,8 @@ try {
   page.on("dialog", dialog => dialog.accept());
   await check("real sign-in callback delivers the protected browser session", async () => {
     await page.goto(origin.origin + "/inventory/counts");
-    await page.getByRole("heading", { name: "Masuk untuk menghitung barang", exact: true }).waitFor();
-    await page.getByRole("link", { name: "Masuk kembali", exact: true }).click();
+    await page.getByRole("heading", { name: /^(Masuk untuk melanjutkan|Sesi Anda perlu diperbarui)$/ }).waitFor();
+    await page.getByRole("link", { name: /^Masuk( kembali)?$/ }).click();
     await page.getByRole("button", { name: "Lanjutkan ke layanan akun", exact: true }).click();
     await page.waitForURL(origin.origin + "/inventory/counts");
     await page.getByLabel("Gudang dan kanal", { exact: true }).waitFor();
