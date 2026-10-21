@@ -18,19 +18,21 @@ import { Pagination } from "../src/components/workspace-kit/pagination";
 // unlayered, so they outrank every layer) are loaded the way Next loads them, and shared primitives placed inside a legacy
 // `.page` must still render with their own values. A source regex cannot see an unlayered rule winning; computed styles can.
 const playwrightPath = "C:/Users/User/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright/package.json";
-function loadPlaywright(): { chromium: { launch(options: object): Promise<any> } } | null {
+type BrowserPage = { setContent(html: string): Promise<void>; evaluate<T, A>(fn: (arg: A) => T, arg?: A): Promise<T> };
+type Browser = { newPage(options: object): Promise<BrowserPage>; close(): Promise<void> };
+function loadPlaywright(): { chromium: { launch(options: object): Promise<Browser> } } | null {
   try { return createRequire(playwrightPath)("playwright"); } catch { return null; }
 }
 
 async function stylesheets() {
   const app = await postcss([tailwind({ base: "src/components/workspace-kit" })]).process(readFileSync("src/app/globals.css", "utf8"), { from: "src/app/globals.css" });
-  const module = (file: string) => {
+  const cssModule = (file: string) => {
     const result = transform({ filename: file, code: readFileSync(file), cssModules: true });
     const names: Record<string, string> = {};
     for (const [key, value] of Object.entries(result.exports ?? {})) names[key] = value.name;
     return { css: result.code.toString(), names };
   };
-  return { app: app.css, access: module("src/modules/administration/access.module.css"), identity: module("src/modules/identity/identity.module.css") };
+  return { app: app.css, access: cssModule("src/modules/administration/access.module.css"), identity: cssModule("src/modules/identity/identity.module.css") };
 }
 
 function primitives(prefix: string): string {

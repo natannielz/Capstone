@@ -9,9 +9,14 @@ variant, add it here.
 
 - Pages that still compose `common.page` (`modules/administration/access.module.css`) or `identity.module.css` get
   element defaults (`.page h1`, `.page p`, `.page label`, `.page input`, `.page th`). Those defaults skip anything inside an
-  element marked `data-kit` (`:where(:not([data-kit] *))`), so a primitive keeps its own look inside a legacy page.
-  Leaf primitives carry `data-kit` on their root; `Section` carries it only on its header, so legacy content inside the
-  section body still gets the page defaults. Don't add `data-kit` to your own markup.
+  element marked `data-kit`, and the marked element itself (`:where(:not([data-kit], [data-kit] *))`), so a primitive
+  keeps its own look inside a legacy page. Leaf primitives (Button, Pagination, PageHeader, Field, Tabs, StateView) carry
+  `data-kit` on their root; `Section` carries it only on its header, so legacy content inside the section body still gets
+  the page defaults, and the legacy flow spacing skips `.ui-section`. Don't add `data-kit` to your own markup.
+  `tests/ui-kit-cascade-browser.test.ts` measures this in Edge; extend it when you add a primitive.
+- Money: buyer-facing storefront and ordering screens use `formatDisplayMoney` / `orderDisplayAmount` ("Rp1.250.000",
+  "Rp12.000,25"); staff finance, accounting and every other staff screen use `formatMoney` / `orderAmount` /
+  `formatMoneyText` (fixed decimals, "Rp1.250.000,00"). `tests/money-scope.test.ts` pins which files use which.
 - One level of boxing: a bordered card never sits inside another (`Section` → `DataList` rows, or an inset panel).
 - Max one primary button per region. Refresh is the header's (or section header's) secondary action.
 - Keep visible copy and accessible names unchanged when you swap a page onto a primitive: browser rehearsals find
@@ -30,8 +35,8 @@ variant, add it here.
 | `DataTable` (`data-table.tsx`, = `ListTable`) | Dense comparable records. Props as `ListTable` (`columns` with `align`/`width`, `rows`, `getKey`, `caption`, `density`, `onOpen`/`openLabel`, `selectedKey`, `disabled`) plus `loading`, `error: { message, detail?, onRetry? }`, `empty: { title, message?, action? }`, `pagination`. | Without `empty`, an empty table still renders (old behaviour). Rows become labelled cards below 640 px. |
 | `Pagination` (`data-table.tsx`) | "1–25 dari 120" + previous/next icon buttons (`aria-label` "Sebelumnya"/"Berikutnya"). Renders nothing when there is no previous and no next page. | Used by `DataTable`/`DataList`; use it directly only for custom lists. |
 | `Badge` (`badge.tsx`) | Status: `status="Lunas"` (tone from `lib/status/dictionary.ts`) or `tone` + `label`. | `StatusBadge` (existing callers) renders through it. Add new labels to the dictionary, not to CSS. |
-| `Tabs` (`tabs.tsx`) | `items` with `href` → page tabs (`<nav>`, `aria-current="page"`); items with `value` → in-page views (buttons with `aria-pressed`, `onSelect`). Props: `label`, `items`, `current`. | View tabs stay buttons so rehearsals that click "Riwayat permintaan" by role button keep working. Links to other areas are not tabs. |
-| `StateView`, `regionState` (`state-view.tsx`) | `kind`: `loading` · `empty` · `error` · `unknown` · `denied` · `success` · `offline`, with `title`, `message`, `detail` (trace code), `action`, `secondaryAction`, `rows` (skeleton). `regionState({ loading, error, empty, denied })` picks the one state to show. | `OutcomeState` (fixed copy) renders through it; `EmptyState` keeps its markup with the same look. Error/unknown are `role="alert"`, denied is neutral (h2), empty is an h3 inside its section. |
+| `Tabs` (`tabs.tsx`) | `items` with `href` → page tabs (`<nav>`, `aria-current="page"`); items with `value` → in-page views (a `role="group"` of buttons with `aria-pressed`, `onSelect`; not the ARIA tablist pattern). Props: `label`, `items`, `current`. | View tabs stay buttons so rehearsals that click "Riwayat permintaan" by role button keep working. Links to other areas are not tabs. |
+| `StateView`, `regionState` (`state-view.tsx`) | `kind`: `loading` · `empty` · `error` · `unknown` · `denied` · `success` · `offline`, with `title`, `message`, `detail` (trace code), `action`, `secondaryAction`, `rows` (skeleton). `regionState({ loading, error, empty, denied })` picks the one state to show. | New semantics for pages that adopt it: error/unknown are `role="alert"`, denied is neutral (h2), empty is an h3 inside its section. `OutcomeState` and `EmptyState` keep their legacy markup and roles (denied/empty/offline `role="status"`, `<strong>` title) for existing consumers and share the look. |
 | `Facts` (`facts.tsx`) | Description list: `items: { term, value, key? }[]`, `columns` 2 (default, one below 640 px) or 1. | Replaces `common.facts`, `.review-panel dl` and request `.meta`. |
 
 Existing kit pieces (`ReviewPanel`, `RupiahInput`, `QuantityStepper`, `CommandPalette`, `WorkspaceFrame`) already use the same tokens.
