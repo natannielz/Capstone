@@ -111,7 +111,7 @@ public sealed class Auth0ClaimsTests
     [InlineData("/administration/access?next=https://outside.co.id")]
     [InlineData("/auth/logout")]
     [InlineData("/inventory/counts/")]
-    [InlineData("/inventory/counts?warehouse=1")]
+    [InlineData("/inventory/counts?warehouse=1&next=https://outside.co.id")]
     [InlineData("/inventory/counts#other")]
     [InlineData("//inventory/counts")]
     [InlineData("/inventory/%63ounts")]
@@ -157,8 +157,10 @@ public sealed class Auth0ClaimsTests
     public void Price_return_path_is_explicitly_allowlisted() =>
         Assert.Equal("/catalog/prices", ReturnPathPolicy.Require("/catalog/prices", Settings()));
     [Fact]
-    public void Buyer_catalog_return_path_is_explicitly_allowlisted() =>
-        Assert.Equal("/catalog/browse", ReturnPathPolicy.Require("/catalog/browse", Settings()));
+    public void Buyer_catalog_return_path_is_the_canonical_shop_never_the_legacy_browse_route() {
+        Assert.Equal("/shop", ReturnPathPolicy.Require("/shop", Settings()));
+        Assert.Throws<DomainValidationException>(() => ReturnPathPolicy.Require("/catalog/browse", Settings()));
+    }
     [Theory]
     [InlineData("/shop")]
     [InlineData("/administration/organizations/addresses")]

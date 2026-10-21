@@ -1,4 +1,5 @@
 import * as displayFormat from '../src/lib/format';
+import * as returnQuery from '../src/modules/identity/return-query';
 import * as documentNumbers from '../src/lib/document-numbers';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
@@ -76,7 +77,7 @@ function mountDispatch() {
     addEventListener(kind: string, listener: EventListenerOrEventListenerObject) {if (!listeners.has(kind)) listeners.set(kind, new Set()); listeners.get(kind)!.add(listener); events.addEventListener(kind, listener);},
     removeEventListener(kind: string, listener: EventListenerOrEventListenerObject) {listeners.get(kind)?.delete(listener); events.removeEventListener(kind, listener);},
     setInterval(callback: () => void) {intervals.set(++timer, callback); return timer;}, clearInterval(id: number) {intervals.delete(id);}};
-  const access = {current: async () => ({userId: actorId, allowedActions: ['shipment.dispatch', 'shipment.assign']}),
+  const access = {current: async () => ({userId: actorId, allowedActions: ['shipment.dispatch']}), // store-staff dispatches without shipment.assign (G-031)
     receipt() {return assert.fail('Dispatch lookup must use its owning gateway');}, resolve() {return assert.fail('Dispatch may not close an in-flight reference');}};
   const frames = new Map<string, Frame>(); let active!: Frame, position = 0, dirty = true, tree: unknown;
   let effects: {frame: Frame; index: number; effect: () => void | (() => void); dependencies?: readonly unknown[]}[] = [];
@@ -109,6 +110,7 @@ function mountDispatch() {
     if (name === './dispatch-client') return {...dispatch, createDispatchGateway: () => gateway};
     if (name === '@/lib/format') return displayFormat;
     if (name === '@/lib/document-numbers') return documentNumbers;
+    if (name === '@/modules/identity/return-query') return returnQuery;
     if (name === '@/components/workspace-kit/session-access-state') return sessionStateKit ??= load('src/components/workspace-kit/session-access-state.tsx');
     throw new Error('Unexpected mounted dispatch import: ' + name);
   };

@@ -37,7 +37,9 @@ test("the current page stays listed, marked unavailable, when its permission was
 
 test("pilot release hides non-pilot destinations even when an action grants them", () => {
   const hrefs = workspaceNavigation(everything, null, { pilot: true }).flatMap(group => group.items.map(item => item.href));
-  assert.ok(hrefs.includes("/ordering/requests"));
+  assert.ok(hrefs.includes("/ordering/requests/incoming"));
+  assert.ok(hrefs.includes("/shop"), "the store door stays: branch requests are made from the storefront");
+  assert.equal(hrefs.includes("/ordering/requests"), false, "the buyer's own requests live in the storefront (R2)");
   assert.equal(hrefs.includes("/billing/payment-reviews"), false);
   assert.equal(hrefs.includes("/procurement/suppliers"), false);
 });

@@ -25,8 +25,20 @@ export function readCatalogHistoryQuery(rawSearch: string): CatalogHistoryQuery 
   return query;
 }
 
-export function catalogHistoryUrl(path: '/shop' | '/catalog/browse', query: CatalogHistoryQuery, hash = ''): string {
-  if (path !== '/shop' && path !== '/catalog/browse') throw new TypeError('catalog_history_path_invalid');
+/** The member catalog page a sign-in returns to: the open product when there is one (G-030). */
+export function memberCatalogPath(publicId?: string): '/shop' | `/shop/${string}` { return publicId === undefined ? '/shop' : `/shop/${publicId}`; }
+
+/** Where a visitor without a session goes from the member catalog: the guest catalog, with only the public list query, in every release (G-030). */
+export function guestCatalogHref(publicId: string | undefined, rawSearch: string): string {
+  if (publicId !== undefined) return '/katalog/' + publicId;
+  const search = new URLSearchParams(rawSearch), next = new URLSearchParams();
+  for (const key of ['q', 'kategori', 'urut']) { const value = search.get(key); if (value) next.set(key, value); }
+  return '/katalog' + (next.size ? '?' + next.toString() : '');
+}
+
+/** The one member catalog list address (the old /catalog/browse route only redirects here and is never produced, G-023). */
+export function catalogHistoryUrl(path: '/shop', query: CatalogHistoryQuery, hash = ''): string {
+  if (path !== '/shop') throw new TypeError('catalog_history_path_invalid');
   const parameters = new URLSearchParams(), search = normalizeCatalogHistorySearch(query.search);
   const offset = Number.isSafeInteger(query.offset) && query.offset >= 0 && query.offset <= 10000 && query.offset % 25 === 0 ? query.offset : 0;
   const category = normalizeCatalogCategory(query.category);

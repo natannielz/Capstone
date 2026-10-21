@@ -12,8 +12,8 @@ test("count and read permissions independently show the actual staff route", () 
 test("stock sign-in returns are exact and reject altered paths", () => {
   assert.equal(identityReturnPath("/inventory/counts"), "/inventory/counts");
   assert.deepEqual(loginFields("/inventory/counts", "", ""), { returnPath: "/inventory/counts" });
-  for (const path of ["/inventory/counts/", "/inventory/counts?warehouse=1", "/inventory/counts#other", "//inventory/counts", "/inventory/%63ounts"]) {
-    assert.equal(identityReturnPath(path), "/identity/account");
+  for (const path of ["/inventory/counts/", "/inventory/counts?warehouse=a%201", "/inventory/counts#other", "//inventory/counts", "/inventory/%63ounts"]) {
+    assert.equal(identityReturnPath(path), "/workspace");
     assert.throws(() => loginFields(path, "", ""), /invalid_return_path/);
   }
 });

@@ -1,5 +1,6 @@
 // Real Next/Kestrel/Mongo local rehearsal; identities and operational approvals are synthetic.
 import assert from 'node:assert/strict';
+import { openDestination } from './open-destination.mjs';
 import http from 'node:http';
 import https from 'node:https';
 import net from 'node:net';
@@ -117,8 +118,7 @@ try {
   let acceptedFileHash;
   for (const [label, token] of [['courier', config.courierToken], ['buyer', config.buyerToken]]) {
     const reader = await user(token), readPage = reader.page;
-    await readPage.goto(origin.origin + '/identity/account');
-    await readPage.getByRole('link', { name: /^Kiriman Lihat barang/ }).click();
+    await openDestination(readPage, origin, 'Kiriman');
     const open = readPage.getByRole('button', { name: 'Lihat kiriman 100/103/2026/1', exact: true }); await open.click();
     const detail = readPage.getByRole('region', { name: 'Rincian kiriman', exact: true }); await detail.waitFor();
     assert.match(await detail.innerText(), /1 Dus · isi 12 piece per kemasan · total 12 piece/);

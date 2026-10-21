@@ -1,5 +1,6 @@
 // Actual production Next + Kestrel + isolated Mongo. All accounts and approvals are synthetic.
 import assert from 'node:assert/strict';
+import { openDestination } from './open-destination.mjs';
 import http from 'node:http';
 import https from 'node:https';
 import net from 'node:net';
@@ -51,7 +52,7 @@ try {
   }); const proxyPort = await listen(tunnel);
   browser = await chromium.launch({ ...(channel === 'msedge' ? { channel: 'msedge' } : {}), headless: true, proxy: { server: 'http://127.0.0.1:' + proxyPort } });
   const buyer = await user(config.buyerToken), page = buyer.page;
-  await page.goto(origin.origin + '/identity/account'); await page.getByRole('link', { name: /^Bukti pembayaran\b/ }).click();
+  await openDestination(page, origin, 'Bukti pembayaran');
   const form = page.getByRole('region', { name: 'Draf pembayaran', exact: true });
   await form.getByRole('checkbox').check(); await form.getByLabel('Jumlah transfer (IDR)', { exact: true }).fill('4000.01');
   await form.getByLabel('Tanggal transfer', { exact: true }).fill(config.transferDate); await form.getByLabel('Nama pengirim', { exact: true }).fill('Pembayar fixture');

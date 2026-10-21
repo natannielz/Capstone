@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createUnitTokoClient } from '../src/api/client';
 import { createBuyerCatalogGateway, parseBuyerVariant } from '../src/modules/catalog/catalog-buyer-client';
 import { actorId, family, sku, definition } from './catalog-fixtures';
-import { identityDestinations, identityReturnPath, loginFields } from '../src/modules/identity/identity-workflow';
+import { identityReturnPath, loginFields, storeDoor } from '../src/modules/identity/identity-workflow';
 const item = { familyId: family.id, familyPublicId: family.publicId, familyName: family.name, description: family.description,
   categoryCode: family.categoryCode, skuId: sku.id, publicId: sku.publicId, code: sku.code, definition,
   buyerIdentity: { skuId: sku.id, skuRevision: '1', definitionId: definition.id, definitionVersion: definition.version,
@@ -19,15 +19,15 @@ function gateway(handler: (request: Request) => Promise<Response>) {
   } }));
 }
 test('entitled buyer client preserves missing versus zero and exact package/price identity without staff fields', () => {
-  assert.equal(identityReturnPath('/catalog/browse'), '/catalog/browse');
+  assert.equal(identityReturnPath('/catalog/browse'), '/workspace', 'the legacy route only redirects (G-023)');
   assert.equal(identityReturnPath('/shop'), '/shop');
   assert.deepEqual(loginFields('/shop', '', ''), { returnPath: '/shop' });
-  assert.ok(identityDestinations(['catalog.read']).some(item => item.href === '/shop'));
-  assert.ok(!identityDestinations(['order.submit']).some(item => item.href === '/shop'));
+  assert.equal(storeDoor(['catalog.read'])?.href, '/shop');
+  assert.equal(storeDoor(['order.submit']), null);
   // A canonical product page is a valid return (signing in from the public catalog lands on the priced product).
   assert.equal(identityReturnPath('/shop/' + sku.publicId), '/shop/' + sku.publicId);
   for (const path of ['/shop/', '/shop?next=https://outside.co.id', '//shop', '/shop/' + sku.publicId + '/x']) {
-    assert.equal(identityReturnPath(path), '/identity/account');
+    assert.equal(identityReturnPath(path), '/workspace');
     assert.throws(() => loginFields(path, '', ''));
   }
   assert.equal(parseBuyerVariant({ ...item, currentPrice: null }).currentPrice, null);

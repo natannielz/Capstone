@@ -61,31 +61,36 @@ async function destination(page: Page, next?: string | string[], id = "41", rend
 }
 
 for (const profile of ["pilot", "full"] as const) {
-  test(`${profile}: old entrypoints open maintained screens without selecting legacy records`, async () => {
+  test(`${profile}: old entrypoints open the canonical page and keep the destination and query (D2, G-008, G-009)`, async () => {
     const routes = await loadRoutes(profile);
-    const requests = profile === "pilot" ? "/ordering/requests" : "/ordering/orders";
+    const pilot = profile === "pilot", requests = pilot ? "/ordering/requests" : "/ordering/orders";
+    const signIn = (returnPath: string) => `/identity/login?returnPath=${encodeURIComponent(returnPath)}`;
     assert.equal(await destination(routes.account), "/identity/account");
-    assert.equal(await destination(routes.orders, "/account/orders?orderId=41"), requests);
-    for (const id of ["41", "9223372036854775807", "order_old", "not-a-current-order"]) {
-      assert.equal(await destination(routes.order, undefined, id), requests);
-    }
-    assert.equal(await destination(routes.cart, undefined, "41", true), profile === "pilot" ? requests : "rendered");
-    assert.equal(await destination(routes.checkout), profile === "pilot" ? requests : "/ordering/checkout");
+    assert.equal(await destination(routes.orders), requests);
+    for (const id of ["41", "9223372036854775807"]) assert.equal(await destination(routes.order, undefined, id), pilot ? requests : "/ordering/orders?order=" + id);
+    for (const id of ["order_old", "not-a-current-order", "9223372036854775808"]) assert.equal(await destination(routes.order, undefined, id), requests);
+    assert.equal(await destination(routes.cart, undefined, "41", true), pilot ? requests : "rendered");
+    assert.equal(await destination(routes.checkout), pilot ? requests : "/ordering/checkout");
 
-    for (const login of [routes.login, routes.customerLogin, routes.staffLogin]) {
+    for (const [name, login] of [["login", routes.login], ["customer", routes.customerLogin], ["staff", routes.staffLogin]] as const) {
       for (const [raw, expected] of [
-        ["/account", "/identity/account"], ["/workspace?view=admin", "/identity/account"],
-        ["/shop?category=pantry", "/shop"], ["/shop/legacy-product?sku=OLD", "/shop"],
-        ["/account/orders/41?orderId=41#details", requests],
-        ["/cart", profile === "pilot" ? requests : "/cart"],
-        ["/checkout?draftId=41", profile === "pilot" ? requests : "/ordering/checkout"],
+        ["/account", "/identity/account"], ["/workspace?view=admin", "/workspace?view=admin"], ["/workspace", "/workspace"],
+        ["/shop?category=pantry", "/shop?category=pantry"],
+        ["/account/orders/41?orderId=41#details", pilot ? "/ordering/requests?orderId=41" : "/ordering/orders?order=41&orderId=41"],
+        ["/cart", pilot ? requests : "/cart"],
+        ["/checkout?draftId=41", pilot ? "/ordering/requests?draftId=41" : "/ordering/checkout?draftId=41"],
         ["/ordering/requests", "/ordering/requests"],
-        ["/ordering/orders?orderId=41", profile === "pilot" ? "/identity/account" : "/ordering/orders"],
       ]) {
-        assert.equal(await destination(login, raw), `/identity/login?returnPath=${encodeURIComponent(expected)}`, raw);
+        assert.equal(await destination(login, raw), signIn(expected), raw);
       }
-      for (const raw of [undefined, ["/shop", "/checkout"], "https://example.com", "//example.com", "/\\example.com", "/shop\n", "/api/state", "/auth/login", "/customer/login", "/staff/login", "/login", "/shop/%2f%2fevil.com", "/shop/../api/state", "/%2e%2e/checkout", "/" + "a".repeat(2048)]) {
-        assert.equal(await destination(login, raw), "/identity/login?returnPath=%2Fidentity%2Faccount", String(raw));
+      if (!pilot) {
+        assert.equal(await destination(login, "/ordering/orders?orderId=41"), signIn("/ordering/orders?orderId=41"));
+        assert.equal(await destination(login, "/shop/00000065-0000-4000-8000-000000000101"), signIn("/shop/00000065-0000-4000-8000-000000000101"));
+      }
+      // Without a usable destination the person still reaches sign-in; the staff door then leads to the staff home.
+      const fallback = name === "staff" ? signIn("/workspace") : "/identity/login";
+      for (const raw of [undefined, ["/shop", "/checkout"], "https://example.com", "//example.com", "/\\example.com", "/shop\n", "/api/state", "/auth/login", "/customer/login", "/staff/login", "/login", "/shop/%2f%2fevil.com", "/shop/../api/state", "/%2e%2e/checkout", "/shop/legacy-product?sku=OLD", "/" + "a".repeat(2048)]) {
+        assert.equal(await destination(login, raw), fallback, String(raw));
       }
     }
   });

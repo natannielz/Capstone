@@ -1,5 +1,6 @@
 // Actual production Next + Kestrel + isolated Mongo. All accounts and approvals are synthetic.
 import assert from 'node:assert/strict';
+import { openDestination } from './open-destination.mjs';
 import http from 'node:http';
 import https from 'node:https';
 import net from 'node:net';
@@ -459,7 +460,7 @@ try {
     assert.equal(writes.length + caseWrites.length + decisionWrites.length + returnWrites.length + inspectionWrites.length + resolutionWrites.length + entitlementWrites.length, 0);
     assert.deepEqual(errors, []);
   } else {
-  await page.goto(origin.origin + '/identity/account'); await page.getByRole('link', { name: /^Tagihan\b/ }).click();
+  await openDestination(page, origin, 'Tagihan');
   const candidates = page.getByRole('region', { name: 'Penerimaan untuk invoice', exact: true });
   await candidates.getByRole('checkbox').check(); await candidates.getByLabel('Alasan penerbitan', { exact: true }).fill('Bukti penerimaan cabang diperiksa');
   await candidates.getByRole('button', { name: 'Tinjau invoice', exact: true }).click();
