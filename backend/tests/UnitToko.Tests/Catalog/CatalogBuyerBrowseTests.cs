@@ -65,6 +65,19 @@ public sealed class CatalogBuyerBrowseTests(MongoFixture fixture)
     }
 
     [Fact]
+    public async Task Each_search_word_must_appear_somewhere_in_any_order_as_shoppers_type_it()
+    {
+        await using var data = await Ready(); var catalog = data.Catalog;
+        var pantry = await catalog.Service.SaveCategoryAsync(data.Maker, new(Shop, null, 0, "PANTRY", "Pantry"), Metadata("category-pantry"));
+        await Sku(data, pantry.Id, "Air mineral 600 ml", "AIR-600", 501);
+        await Sku(data, pantry.Id, "Teh celup melati", "TEA-25", 501);
+
+        foreach (var typed in new[] { "air 600", "600 AIR", "  mineral   air ", "air-600" })
+            Assert.Equal(["Air mineral 600 ml"], (await catalog.BuyerService.QueryBuyerAsync(catalog.Buyer, 0, 25, typed)).Items.Select(item => item.Variant.Family.Name));
+        Assert.Empty((await catalog.BuyerService.QueryBuyerAsync(catalog.Buyer, 0, 25, "air melati")).Items);
+    }
+
+    [Fact]
     public async Task An_invalid_category_filter_is_refused()
     {
         await using var data = await Ready();

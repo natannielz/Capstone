@@ -25,9 +25,7 @@ public sealed partial class CatalogDefinitionQueryService
         if (filter is null) return new(0, [], []);
         var pipeline = PublicPipeline(filter);
         if (!string.IsNullOrWhiteSpace(search)) {
-            var literal = new BsonRegularExpression(Regex.Escape(search.Trim()), "i");
-            pipeline.Add(new("$match", new BsonDocument("$or", new BsonArray {
-                new BsonDocument("primaryCode", literal), new BsonDocument("family.name", literal), new BsonDocument("definition.packageLabel", literal) })));
+            pipeline.Add(new("$match", CatalogSearchWords.Match(search, "primaryCode", "family.name", "definition.packageLabel")));
         }
         var inCategory = new BsonDocument("$match", categoryCode is null ? new BsonDocument() : new BsonDocument("category.code", categoryCode));
         var order = sort == PublicCatalogSort.Name ? new BsonDocument { { "sortName", 1 }, { "sortLabel", 1 }, { "_id", 1 } } : new BsonDocument("_id", -1);
