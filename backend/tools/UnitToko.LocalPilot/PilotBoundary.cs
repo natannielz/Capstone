@@ -1,3 +1,4 @@
+using System.Net;
 using System.Runtime.Versioning;
 using System.Security.AccessControl;
 using System.Security.Principal;
@@ -7,24 +8,44 @@ namespace UnitToko.LocalPilot;
 
 public static class PilotBoundary
 {
-    /// <summary>"release1" (the persistent pilot) or "full" (a separate demo of every maintained workspace). Set once at startup.</summary>
+    /// <summary>"release1" (the persistent pilot), "full" (a separate demo of every maintained workspace) or "review" (the
+    /// loopback-only review stack: full release, its own database, personas signed in through minted sessions). Set once at startup.</summary>
     public static string Profile { get; private set; } = "release1";
     public static void UseProfile(string profile)
     {
-        if (profile is not ("release1" or "full")) throw new InvalidOperationException("Profile must be release1 or full.");
+        if (profile is not ("release1" or "full" or "review")) throw new InvalidOperationException("Profile must be release1, full or review.");
         Profile = profile;
     }
+    /// <summary>Full and review both run the full release (every maintained workspace, prices, photos, personas).</summary>
+    public static bool IsFullRelease => Profile != "release1";
+    /// <summary>The application release the API and Next serve (Release:Profile, NEXT_PUBLIC_UNIT_TOKO_RELEASE).</summary>
+    public static string Release => IsFullRelease ? "full" : "release1";
     public static string DatabaseName => "unittoko_local_pilot_" + Profile;
     public const string ReplicaSet = "unitTokoPilot";
-    public static int MongoPort => Profile == "full" ? 27030 : 27029;
+    public static int MongoPort => Profile switch { "full" => 27030, "review" => 27031, _ => 27029 };
     public static string MongoUri => $"mongodb://127.0.0.1:{MongoPort}/?replicaSet={ReplicaSet}";
     /// <summary>The production frontend build each profile serves (next.config.ts picks .next-full for the full release).</summary>
-    public static string NextBuildFolder => Profile == "full" ? ".next-full" : ".next";
-    // Reserved private home.arpa names are resolved only inside the dedicated browser profile.
-    public const string PortalHost = "portal.unit-toko-pilot.home.arpa";
-    public const string ProviderHost = "login.unit-toko-pilot.home.arpa";
-    public const string Origin = "https://" + PortalHost;
-    public const string Issuer = "https://" + ProviderHost + "/";
+    public static string NextBuildFolder => IsFullRelease ? ".next-full" : ".next";
+    /// <summary>Each photo-scanning profile runs its own loopback ClamAV daemon, so the review stack never talks to the full pilot's.</summary>
+    public static int ClamdPort => Profile == "review" ? 3311 : 3310;
+    // Reserved private home.arpa names are resolved only inside the dedicated browser profile. The review profile uses its own
+    // names only as the API's internal canonical origin; review browsers open https://localhost:8443 and the edge translates.
+    public static string PortalHost => PortalHostFor(Profile);
+    public static string ProviderHost => ProviderHostFor(Profile);
+    public static string Origin => OriginFor(Profile);
+    public static string Issuer => IssuerFor(Profile);
+    public static string PortalHostFor(string profile) => profile == "review" ? "portal.unit-toko-review.home.arpa" : "portal.unit-toko-pilot.home.arpa";
+    public static string ProviderHostFor(string profile) => profile == "review" ? "login.unit-toko-review.home.arpa" : "login.unit-toko-pilot.home.arpa";
+    public static string OriginFor(string profile) => "https://" + PortalHostFor(profile);
+    public static string IssuerFor(string profile) => "https://" + ProviderHostFor(profile) + "/";
+    /// <summary>Where the edge listens. Every profile binds loopback only; review uses 8443 on both loopback families.</summary>
+    public static IReadOnlyList<IPEndPoint> EdgeFor(string profile) => profile == "review"
+        ? [new IPEndPoint(IPAddress.Loopback, 8443), new IPEndPoint(IPAddress.IPv6Loopback, 8443)]
+        : [new IPEndPoint(IPAddress.Loopback, 443)];
+    /// <summary>The origin a browser opens. Review browsers use localhost; the edge translates it to the API's canonical origin.</summary>
+    public static string BrowserOriginFor(string profile) => profile == "review" ? "https://localhost:8443" : OriginFor(profile);
+    public static IReadOnlyList<IPEndPoint> Edge => EdgeFor(Profile);
+    public static string BrowserOrigin => BrowserOriginFor(Profile);
 
     public static void RequireDatabase(string uri, string database)
     {

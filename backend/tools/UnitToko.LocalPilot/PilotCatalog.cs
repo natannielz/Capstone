@@ -117,7 +117,7 @@ public static class PilotCatalog
                 await service.SetPublicationsAsync(actor, new(sku.Id, sku.Version, [new(501)], [new(new(501), assortment["version"].ToInt64())]),
                     Meta("publish-" + item.Code), ct);
             }
-            if (profile == "full")
+            if (profile != "release1")
             {
                 var preview = await prices.PreviewAsync(actor, sku.Id.Value, CatalogPriceAccess.Prepare, ct);
                 if (preview.Current is null)
@@ -175,7 +175,7 @@ public static class PilotCatalog
                 var assortment = await assortments.Find(new BsonDocument("_id", 501L)).SingleAsync(ct);
                 await service.SetPublicationsAsync(actor, new(sku.Id, sku.Version, [new(501)], [new(new(501), assortment["version"].ToInt64())]), Meta("publish-" + item.Sku), ct);
             }
-            if (profile != "full") continue;
+            if (profile == "release1") continue;
             var preview = await prices.PreviewAsync(actor, sku.Id.Value, CatalogPriceAccess.Prepare, ct);
             if (preview.Current is not null) continue;
             var proposal = await prices.ProposeAsync(actor, sku.Id.Value, preview.Expected,
