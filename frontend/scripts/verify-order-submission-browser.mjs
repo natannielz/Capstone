@@ -120,7 +120,7 @@ try {
   await captureCheckout(page, 'submitted');
   const orderId = (await confirmed.getByRole('heading').innerText()).match(/[0-9]+/)[0];
   const denied = await user(config.deniedToken); await denied.page.goto(origin.origin + '/ordering/checkout?draft=' + config.draftId);
-  await denied.page.getByRole('heading', { name: 'Periksa sesi dan akses', exact: true }).waitFor();
+  await denied.page.getByRole('heading', { name: /^(Sesi Anda perlu diperbarui|Halaman ini di luar tugas akun Anda|Halaman belum dapat dibuka)$/ }).waitFor();
   assert.equal(await denied.page.getByRole('region', { name: 'Rincian pesanan', exact: true }).count(), 0);
   const status = await denied.page.evaluate(async ({ orderId, actorId }) => {
     const csrf = await (await fetch('/api/v1/identity/csrf')).json();
@@ -190,7 +190,7 @@ try {
   await plan.getByText('Persiapan versi 2 tersimpan.', { exact: true }).waitFor(); assert.equal(preparationWrites.length, 2);
   assert.equal(await picker.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
   await picker.page.screenshot({ path: resolve(directory, 'shipment-preparation-mobile.png'), fullPage: true });
-  await denied.page.goto(origin.origin + '/fulfillment/preparations'); await denied.page.getByRole('heading', { name: 'Periksa sesi dan akses', exact: true }).waitFor();
+  await denied.page.goto(origin.origin + '/fulfillment/preparations'); await denied.page.getByRole('heading', { name: /^(Sesi Anda perlu diperbarui|Halaman ini di luar tugas akun Anda|Halaman belum dapat dibuka)$/ }).waitFor();
   assert.equal(await denied.page.getByRole('region', { name: 'Rencana persiapan', exact: true }).count(), 0);
   const cancellationPage = await buyer.context.newPage(); pages.push(cancellationPage); cancellationPage.setDefaultTimeout(15000); cancellationPage.on('pageerror', error => errors.push(error.message));
   await cancellationPage.goto(origin.origin + '/ordering/reviews');

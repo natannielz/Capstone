@@ -11,6 +11,7 @@ import next from 'next';
 
 const chunks = []; for await (const chunk of process.stdin) chunks.push(chunk);
 const config = JSON.parse(Buffer.concat(chunks).toString('utf8')), api = new URL(config.apiAddress), origin = new URL(config.origin);
+const orderNumber = id => 'PSN-' + String(id).padStart(6, '0');
 assert.equal(process.versions.node.split('.')[0], '24'); assert.equal(api.protocol, 'http:'); assert.equal(api.hostname, '127.0.0.1'); assert.ok(Number(api.port) > 0);
 assert.equal(origin.href, 'https://portal.unit-toko.co.id/');
 const load = createRequire(config.playwrightPackage), metadata = load(config.playwrightPackage); assert.equal(metadata.name, 'playwright'); assert.equal(metadata.version, '1.62.1');
@@ -63,7 +64,7 @@ try {
   browser = await chromium.launch({ ...(channel === 'msedge' ? { channel: 'msedge' } : {}), headless: true, proxy: { server: 'http://127.0.0.1:' + proxyPort } });
   const staff = await user(config.dispatcherToken), page = staff.page;
   await page.goto(origin.origin + '/fulfillment/dispatches');
-  await page.getByRole('button', { name: 'Periksa keberangkatan pesanan ' + config.orderId, exact: true }).click();
+  await page.getByRole('button', { name: 'Periksa keberangkatan pesanan ' + orderNumber(config.orderId), exact: true }).click();
   const review = page.getByRole('region', { name: 'Pemeriksaan keberangkatan', exact: true }); await review.waitFor();
   assert.match(await review.innerText(), /1 Dus · total 12 piece/); assert.equal(await review.evaluate(element => element === document.activeElement), true);
   assert.equal(await review.getByLabel('Jumlah lot 202', { exact: true }).inputValue(), ''); assert.equal(await review.getByLabel('Kurir', { exact: true }).inputValue(), '');
@@ -92,7 +93,7 @@ try {
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
   await page.screenshot({ path: resolve(directory, 'dispatch-recovered-mobile.png'), fullPage: true });
   const denied = await user(config.deniedToken); await denied.page.goto(origin.origin + '/fulfillment/dispatches');
-  await denied.page.getByRole('heading', { name: 'Periksa sesi dan akses', exact: true }).waitFor();
+  await denied.page.getByRole('heading', { name: /^(Sesi Anda perlu diperbarui|Halaman ini di luar tugas akun Anda|Halaman belum dapat dibuka)$/ }).waitFor();
   const status = await denied.page.evaluate(async ({ suborderId, actorId }) => {
     const csrf = await (await fetch('/api/v1/identity/csrf')).json();
     return (await fetch('/api/v1/fulfillment/dispatches/' + suborderId + '/query', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf.requestToken, 'X-Expected-Actor-Id': actorId }, body: JSON.stringify({ purpose: 'shipment-dispatch' }) })).status;

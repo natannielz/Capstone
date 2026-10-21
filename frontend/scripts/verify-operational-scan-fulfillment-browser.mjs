@@ -9,6 +9,8 @@ import {resolve} from 'node:path';
 import {createHash} from 'node:crypto';
 import {EventEmitter, once} from 'node:events';
 import next from 'next';
+// Order numbers as the screens show them (src/lib/document-numbers.ts).
+const orderNumber = id => 'PSN-' + String(id).padStart(6, '0');
 
 const chunks = []; for await (const chunk of process.stdin) chunks.push(chunk);
 const config = JSON.parse(Buffer.concat(chunks).toString('utf8')), api = new URL(config.apiAddress), origin = new URL(config.origin);
@@ -116,7 +118,7 @@ try {
   const context = await browser.newContext({ignoreHTTPSErrors:true,viewport:{width:1280,height:900},locale:'id-ID',timezoneId:'Asia/Jakarta'});
   await renew(context); const page = await context.newPage(); page.setDefaultTimeout(30000); page.on('pageerror',error => errors.push(error.message));
   await page.goto(origin.origin+'/fulfillment/preparations');
-  await page.getByRole('button',{name:'Siapkan pesanan '+config.orderId+' / '+config.suborderId,exact:true}).click();
+  await page.getByRole('button',{name:'Siapkan pesanan '+orderNumber(config.orderId)+' / '+config.suborderId,exact:true}).click();
   let panel = page.getByRole('region',{name:'Rencana persiapan',exact:true});
   assert.equal(await panel.getByRole('checkbox').isChecked(),false);
   await scan(page,'picking','UNKNOWN-SCAN-CODE','unknown'); assert.equal(writes.length,0); assert.equal(await panel.getByRole('checkbox').isChecked(),false);
@@ -129,10 +131,10 @@ try {
   await page.reload(); await page.getByRole('button',{name:'Periksa hasil',exact:true}).click();
   await page.getByText('Persiapan ditemukan dan tercatat. Kiriman belum diberangkatkan.',{exact:true}).waitFor();
   assert.equal(writes.length,1); assert.ok(recoveries.some(record => record.status === 200 && record.body.key === preparation.key));
-  await page.reload(); await page.getByRole('button',{name:'Siapkan pesanan '+config.orderId+' / '+config.suborderId,exact:true}).click();
+  await page.reload(); await page.getByRole('button',{name:'Siapkan pesanan '+orderNumber(config.orderId)+' / '+config.suborderId,exact:true}).click();
   await page.getByText('Persiapan versi 1 tersimpan.',{exact:true}).waitFor(); await capture(page,'picking-reloaded');
   await renew(context); await page.goto(origin.origin+'/fulfillment/dispatches');
-  await page.getByRole('button',{name:'Periksa keberangkatan pesanan '+config.orderId,exact:true}).click();
+  await page.getByRole('button',{name:'Periksa keberangkatan pesanan '+orderNumber(config.orderId),exact:true}).click();
   panel = page.getByRole('region',{name:'Pemeriksaan keberangkatan',exact:true});
   const quantity = panel.getByLabel('Jumlah lot '+config.lotId,{exact:true}), courier = panel.getByLabel('Kurir',{exact:true});
   assert.equal(await quantity.inputValue(),''); assert.equal(await courier.inputValue(),'');

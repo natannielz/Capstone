@@ -37,7 +37,7 @@ export async function verifyOrderSubstitutionBrowser({ config, maker, user, rest
   }
   async function chooseProposal(person) {
     await person.page.goto(origin.origin + path);
-    await (await ready(person.page, 'Pilih pesanan ' + config.orderId)).click();
+    await (await ready(person.page, 'Pilih pesanan ' + orderNumber(config.orderId))).click();
     await person.page.getByLabel('Barang asal', { exact: true }).selectOption(config.originalSkuId + ':0');
     await person.page.getByLabel('Jumlah kemasan asal yang diganti', { exact: true }).fill('4');
     await person.page.getByLabel('Cari nama barang pengganti', { exact: true }).fill(config.replacementCode);
@@ -125,7 +125,7 @@ export async function verifyOrderSubstitutionBrowser({ config, maker, user, rest
   // A real dispatcher completes MFA again before dispatching; the setup session is older than the dispatch fresh-factor age.
   const stepUp = await fetch(config.apiAddress + '/__fixture/fresh-session?actor=staff', { method: 'POST', headers: { 'X-Fixture-Control': config.controlKey } });
   assert.equal(stepUp.status, 200); await staff.context.close(); staff = observe(await user((await stepUp.json()).token));
-  await staff.page.goto(origin.origin + '/fulfillment/dispatches'); await staff.page.getByRole('button', { name: 'Periksa keberangkatan pesanan ' + config.orderId, exact: true }).click();
+  await staff.page.goto(origin.origin + '/fulfillment/dispatches'); await staff.page.getByRole('button', { name: 'Periksa keberangkatan pesanan ' + orderNumber(config.orderId), exact: true }).click();
   panel = staff.page.getByRole('region', { name: 'Pemeriksaan keberangkatan', exact: true });
   await panel.getByLabel('Jumlah lot ' + config.replacementLotId, { exact: true }).fill('1'); await panel.getByLabel('Kurir', { exact: true }).selectOption(config.actorIds.courier);
   await panel.getByLabel('Catatan keberangkatan', { exact: true }).fill('Actual agreed replacement leaves after independent approval');

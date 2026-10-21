@@ -84,7 +84,7 @@ export async function verifyOperationalAnomaliesBrowser({config, maker, user, re
   await page.screenshot({path: resolve(directory, 'operational-anomalies-mobile.png'), fullPage: true});
   const denied = await user(config.deniedToken); await denied.page.goto(path);
   await denied.page.getByRole('alert').filter({hasText: 'Sesi atau izin tinjauan belum tersedia. Periksa akun dan cakupan toko.'}).waitFor();
-  await denied.page.getByRole('heading', {name: 'Periksa sesi dan akses', exact: true}).waitFor(); assert.equal(await denied.page.getByLabel('Sumber yang diizinkan').count(), 0);
+  await denied.page.getByRole('heading', { name: /^(Sesi Anda perlu diperbarui|Halaman ini di luar tugas akun Anda|Halaman belum dapat dibuka)$/ }).waitFor(); assert.equal(await denied.page.getByLabel('Sumber yang diizinkan').count(), 0);
   assert.equal(commands.filter(command => command.path.endsWith('/evaluate')).length, 3); assert.equal(commands.filter(command => command.path.endsWith('/policy')).length, 1);
   assert.equal(commands.filter(command => command.path.endsWith('/disposition')).length, 1); assert.equal(new Set(commands.map(command => command.key)).size, 5); assert.deepEqual(failures, []);
   console.log('REAL_OPERATIONAL_ANOMALIES_BROWSER_PASS ' + JSON.stringify({actualBrowserRestarts: 3, originalReplyLosses: 4, simultaneousTabs: true, referenceOnly: true, exactKeyRecovery: true}));

@@ -84,7 +84,7 @@ export async function verifyProcurementDisbursementBrowser({ config, maker, user
   dropNext(); await draftReview.getByRole('button', { name: 'Simpan draf bukti uang muka', exact: true }).click(); await page.getByRole('button', { name: 'Periksa hasil', exact: true }).waitFor();
   assert.equal(completed().length, 1); const draftWrite = completed()[0]; assert.deepEqual(draftWrite.body.input, input); const saved = await pending(page, draftWrite, 'procurement.disbursement.draft');
   await context.addCookies([{ name: '__Host-ut_session', value: config.evidenceReaderToken, domain: origin.hostname, path: '/', secure: true, httpOnly: true, sameSite: 'Lax' }]);
-  await page.getByRole('button', { name: 'Periksa hasil', exact: true }).click(); await page.getByRole('heading', { name: 'Periksa sesi dan akses', exact: true }).waitFor(); assert.deepEqual(await references(page), saved);
+  await page.getByRole('button', { name: 'Periksa hasil', exact: true }).click(); await page.getByRole('heading', { name: /^(Sesi Anda perlu diperbarui|Halaman ini di luar tugas akun Anda|Halaman belum dapat dibuka)$/ }).waitFor(); assert.deepEqual(await references(page), saved);
   await context.addCookies([{ name: '__Host-ut_session', value: config.makerToken, domain: origin.hostname, path: '/', secure: true, httpOnly: true, sameSite: 'Lax' }]);
   await recover(draftWrite); assert.equal(completed().length, 1);
   const list = await query(page, config.makerId, api + '/drafts/query', readBody); assert.equal(list.status, 200); assert.equal(list.body.items.length, 1);

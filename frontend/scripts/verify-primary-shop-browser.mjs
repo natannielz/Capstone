@@ -72,6 +72,8 @@ export async function verifyPrimaryShopBrowser({ config, user, origin, directory
       const kind = photo => {
         if (!photo) return 'not_rendered';
         if (photo.getAttribute('aria-busy') === 'true') return 'loading';
+        // A card far below the fold has not asked for its photo yet: neither busy nor failed.
+        if (photo.getAttribute('data-photo-state') === 'deferred') return 'deferred';
         const text = photo.querySelector('[role="status"]')?.textContent?.trim() ?? '';
         if (text === 'Foto belum tersedia') return 'none';
         if (text.startsWith('Foto disembunyikan.')) return 'hidden';
@@ -79,7 +81,7 @@ export async function verifyPrimaryShopBrowser({ config, user, origin, directory
       };
       const anchor = publicId ? [...document.querySelectorAll('a[href]')].find(link => new URL(link.href).pathname === '/shop/' + publicId) : null;
       const target = anchor?.closest('li')?.querySelector('section[aria-label^="Foto kemasan "]');
-      const counts = { loading: 0, none: 0, hidden: 0, ready: 0, error: 0 };
+      const counts = { deferred: 0, loading: 0, none: 0, hidden: 0, ready: 0, error: 0 };
       for (const photo of photos) counts[kind(photo)]++;
       return { pathname: location.pathname, online: navigator.onLine, visibility: document.visibilityState, nativeEdge: /Edg\//.test(navigator.userAgent),
         total: photos.length, counts, targetPhase: kind(target) };
@@ -159,8 +161,10 @@ export async function verifyPrimaryShopBrowser({ config, user, origin, directory
     if (primaryPhotoPath.test(path)) photoResponses.push(retainSnapshot(response, false));
   };
   page.on('response', observeReads);
-  await page.getByRole('heading', { name: 'Katalog kemasan', exact: true }).waitFor();
-  const search = page.getByLabel('Cari kode atau kemasan', { exact: true });
+  await page.getByRole('heading', { name: 'Katalog', exact: true }).waitFor();
+  // The storefront header carries the search, shown on desktop and phone layouts; only the visible one is used.
+  const search = page.locator('form[role="search"] input[type="search"]:visible');
+  const searchButton = page.locator('form[role="search"] button[aria-label="Cari"]:visible');
   const catalog = page.getByRole('region', { name: 'Kemasan yang tersedia', exact: true });
   await catalog.locator('[aria-label="Rincian PRIMARY-12 Dus dua belas"]').waitFor();
   function historyOnly(value) {
@@ -239,11 +243,11 @@ export async function verifyPrimaryShopBrowser({ config, user, origin, directory
       ['PRIMARY-12', ...Array.from({ length: 24 }, (_, index) => 'PRIMARY-NAV-' + String(index + 1).padStart(2, '0'))];
     assert.equal(result.total, String(total)); assert.deepEqual(result.items.map(item => item.code), codes);
     await page.locator('section[aria-label="Kemasan yang tersedia"][aria-busy="false"]').waitFor();
-    await page.getByRole('heading', { name: 'Katalog kemasan', exact: true }).waitFor();
+    await page.getByRole('heading', { name: submitted ? 'Hasil untuk “' + submitted + '”' : 'Katalog', exact: true }).waitFor();
     const pagination = catalog.getByRole('navigation', { name: 'Halaman katalog', exact: true });
     await pagination.getByText('Halaman ' + (offset / 25 + 1), { exact: true }).waitFor();
     assert.equal(await search.inputValue(), submitted); assert.equal(await search.isDisabled(), false);
-    assert.equal(await page.getByRole('button', { name: 'Cari', exact: true }).isDisabled(), false);
+    assert.equal(await searchButton.isDisabled(), false);
     assert.equal(await pagination.getByRole('button', { name: 'Sebelumnya', exact: true }).isDisabled(), offset === 0);
     assert.equal(await pagination.getByRole('button', { name: 'Berikutnya', exact: true }).isDisabled(), offset + result.items.length >= total);
     assert.deepEqual(await catalog.getByRole('button', { name: /^Rincian / }).evaluateAll(elements => elements.map(element => element.getAttribute('aria-label'))),
@@ -258,8 +262,8 @@ export async function verifyPrimaryShopBrowser({ config, user, origin, directory
   }
   const navigationStart = requests.length;
   try {
-    await navigate('search_exact', async () => { await search.fill('PRIMARY-12'); await page.getByRole('button', { name: 'Cari', exact: true }).click(); }, 'PRIMARY-12');
-    await navigate('search_all', async () => { await search.fill('PRIMARY'); await page.getByRole('button', { name: 'Cari', exact: true }).click(); }, 'PRIMARY');
+    await navigate('search_exact', async () => { await search.fill('PRIMARY-12'); await searchButton.click(); }, 'PRIMARY-12');
+    await navigate('search_all', async () => { await search.fill('PRIMARY'); await searchButton.click(); }, 'PRIMARY');
     await navigate('next_page', () => page.getByRole('button', { name: 'Berikutnya', exact: true }).click(), 'PRIMARY', 25);
     for (const [size, viewport] of [['desktop', { width: 1280, height: 960 }], ['mobile', { width: 390, height: 844 }]]) {
       await page.setViewportSize(viewport); assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
@@ -272,18 +276,21 @@ export async function verifyPrimaryShopBrowser({ config, user, origin, directory
     actionStage = 'before_home'; await drainReads(); await paceWorkflow('home_link_catalog', 128);
     actionGeneration++; actionStage = 'home'; transitionActive = true;
     await page.goto(origin.origin + '/'); transitionActive = false; actionStage = 'after_home';
-    const homeLink = page.getByRole('link', { name: 'Belanja pelanggan', exact: true }); await homeLink.waitFor();
+    // The header links fold away on narrow screens; the hero's own catalog link is there at every width.
+    const homeLink = page.getByRole('main').getByRole('link', { name: 'Lihat katalog', exact: true }).locator('visible=true').first(); await homeLink.waitFor();
     assert.equal(await homeLink.getAttribute('href'), '/shop');
     await navigate('home_link_catalog', () => homeLink.click(), '');
     actionStage = 'before_back_home'; await drainReads(); actionGeneration++; actionStage = 'back_home'; transitionActive = true;
     await page.goBack(); await page.waitForURL(origin.origin + '/'); transitionActive = false; actionStage = 'after_back_home';
-    await page.getByRole('heading', { name: /Pilihan baik/ }).waitFor();
-    assert.equal(page.url(), origin.origin + '/'); assert.equal(await page.getByRole('heading', { name: 'Katalog kemasan', exact: true }).count(), 0);
+    await page.getByRole('heading', { name: 'Kebutuhan cabang, dihitung per kemasan.', exact: true }).waitFor();
+    assert.equal(page.url(), origin.origin + '/'); assert.equal(await page.getByRole('heading', { name: 'Katalog', exact: true }).count(), 0);
     historyOnly(await page.evaluate(() => history.state)); assert.equal(writes.length, 0);
     await navigate('forward_catalog', () => page.goForward(), '');
     for (const request of requests.slice(navigationStart).filter(request => request.method === 'POST' && request.path.startsWith('/api/v1/')))
-      assert.ok(request.path === '/api/v1/catalog/variants/query' || primaryPhotoPath.test(request.path),
-        'Catalog navigation permits only exact variant and UUID primary-photo read queries: ' + request.path);
+      // The storefront header also reads the branch list and the branch cart once per page load, for the cart count.
+      assert.ok(request.path === '/api/v1/catalog/variants/query' || primaryPhotoPath.test(request.path) ||
+        request.path === '/api/v1/ordering/contexts/query' || request.path === '/api/v1/ordering/drafts/query',
+        'Catalog navigation permits only variant, UUID primary-photo and cart-count read queries: ' + request.path);
     await drainReads();
     assert.ok(photoResponses.length > 0, 'The real catalog also performs scoped private-photo reads');
     assert.equal(writes.length, 0, 'Scoped photo reads cannot create a draft or order');
@@ -302,39 +309,37 @@ export async function verifyPrimaryShopBrowser({ config, user, origin, directory
   await page.screenshot({ path: resolve(directory, 'primary-shop-mobile.png'), fullPage: true });
   await open.click(); const dialog = page.getByRole('dialog', { name: 'Pensil utama — Dus dua belas', exact: true }); await dialog.waitFor();
   assert.match(await dialog.innerText(), /12 piece per kemasan/); assert.match(await dialog.innerText(), /Rp12\.000,25/);
-  assert.equal(await dialog.getByLabel('Cabang pemesan', { exact: true }).inputValue(), '');
-  assert.equal(await dialog.getByLabel('Jumlah kemasan', { exact: true }).inputValue(), '');
+  // The buyer names the branch; the browser never picks it, not even the only one allowed.
+  assert.equal(await dialog.getByLabel('Pesan untuk', { exact: true }).inputValue(), '');
+  assert.match(await dialog.getByLabel('Jumlah kemasan', { exact: true }).inputValue(), /^[1-9][0-9]*$/, 'The stepper starts at the lowest amount the package allows');
   assert.equal(writes.length, 0); await dialog.getByRole('button', { name: 'Tutup rincian', exact: true }).click();
   await dialog.waitFor({ state: 'hidden' }); assert.equal(await open.evaluate(element => element === document.activeElement), true);
   await open.click(); await dialog.waitFor(); await page.keyboard.press('Escape'); await dialog.waitFor({ state: 'hidden' });
   assert.equal(await open.evaluate(element => element === document.activeElement), true); assert.equal(writes.length, 0, 'Dismissal saves nothing');
   await link.click(); await page.waitForURL(origin.origin + '/shop/' + config.publicId);
-  await page.getByRole('heading', { name: 'Rincian kemasan', exact: true }).waitFor();
   const details = page.getByRole('region', { name: 'Rincian kemasan', exact: true }); await details.waitFor();
-  await details.getByRole('heading', { name: 'Pensil utama — Dus dua belas', exact: true }).waitFor();
-  assert.equal(await page.getByRole('dialog').count(), 0); assert.match(await details.innerText(), /Pensil utama — Dus dua belas/);
-  assert.match(await details.innerText(), /12 piece per kemasan/); assert.match(await details.innerText(), /Rp12\.000,25/);
+  await details.getByRole('heading', { level: 1, name: 'Pensil utama', exact: true }).waitFor();
+  assert.equal(await page.getByRole('dialog').count(), 0); assert.match(await details.innerText(), /Dus dua belas · isi 12 piece/);
+  assert.match(await details.innerText(), /Rp12\.000,25/);
   assert.equal(await details.getByRole('img').count(), 0, 'There are no invented product images in the empty-media fixture');
-  const branch = details.getByLabel('Cabang pemesan', { exact: true }), quantity = details.getByLabel('Jumlah kemasan', { exact: true });
-  await branch.waitFor(); assert.equal(await branch.inputValue(), ''); assert.equal(await quantity.inputValue(), '');
+  const branch = details.getByLabel('Pesan untuk', { exact: true }), quantity = details.getByLabel('Jumlah kemasan', { exact: true });
+  const add = details.getByRole('button', { name: 'Tambah ke keranjang', exact: true }), subtotal = details.locator('p').filter({ hasText: /^Subtotal/ });
+  await quantity.waitFor();
+  assert.equal(await branch.inputValue(), ''); assert.equal(await add.isDisabled(), true, 'Nothing can be added before the buyer names the branch');
   await branch.selectOption('10:11:');
   for (const invalid of ['3', '5']) {
-    const previews = requests.filter(request => request.path === '/api/v1/ordering/quote/query').length;
-    await quantity.fill(invalid); await details.getByRole('button', { name: 'Periksa subtotal', exact: true }).click();
-    await details.getByRole('alert').filter({ hasText: 'Isi jumlah kemasan sesuai minimum dan kelipatan pemesanan.' }).waitFor();
-    assert.equal(await details.getByRole('button', { name: 'Simpan sebagai draf', exact: true }).count(), 0);
-    assert.equal(requests.filter(request => request.path === '/api/v1/ordering/quote/query').length, previews, 'Invalid minimum/increment never reaches the API');
+    await quantity.fill(invalid);
+    assert.equal(await add.isDisabled(), true, 'An amount outside the minimum and increment cannot be added');
+    assert.match(await subtotal.innerText(), /—/);
+    assert.equal(writes.length, 0, 'Invalid minimum/increment never reaches the API');
   }
-  await quantity.fill('6'); await details.getByRole('button', { name: 'Periksa subtotal', exact: true }).click();
-  const subtotal = details.getByRole('status').filter({ hasText: 'Subtotal barang' }); await subtotal.waitFor();
-  assert.match(await subtotal.innerText(), /Rp72\.001,50/); assert.match(await subtotal.innerText(), /6 Dus dua belas · 72 piece/);
-  assert.match(await subtotal.innerText(), /Pesanan belum dikirim dan stok belum dipesan/);
+  await quantity.fill('6'); assert.match(await subtotal.innerText(), /Rp72\.001,50/);
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
   await page.screenshot({ path: resolve(directory, 'primary-package-subtotal-mobile.png'), fullPage: true });
   await page.setViewportSize({ width: 1280, height: 960 });
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
   await page.screenshot({ path: resolve(directory, 'primary-package-subtotal-desktop.png'), fullPage: true });
-  loseNext(); await details.getByRole('button', { name: 'Simpan sebagai draf', exact: true }).click();
+  loseNext(); await add.click();
   await details.getByRole('button', { name: 'Periksa hasil', exact: true }).waitFor();
   assert.equal(dropped(), 1); assert.equal(writes.length, 1);
   const attempt = await page.evaluate(() => Object.keys(localStorage).filter(key => key.startsWith('unit-toko:pending:v1:')).map(key => JSON.parse(localStorage[key])));
@@ -345,13 +350,22 @@ export async function verifyPrimaryShopBrowser({ config, user, origin, directory
   assert.equal(selection[0].priceId, config.priceId); assert.equal(selection[0].packages, 6);
   await page.reload(); await page.getByRole('button', { name: 'Periksa hasil', exact: true }).waitFor();
   assert.equal(await page.getByRole('button', { name: 'Selesaikan dan tutup', exact: true }).count(), 0);
+  assert.equal(await page.getByRole('button', { name: 'Tambah ke keranjang', exact: true }).isDisabled(), true, 'No further cart change until the lost answer is checked');
   await page.getByRole('button', { name: 'Periksa hasil', exact: true }).click();
-  await page.getByRole('status').filter({ hasText: 'Draf tersimpan.' }).waitFor();
+  await page.getByRole('status').filter({ hasText: 'Barang sudah masuk keranjang.' }).waitFor();
   assert.equal(writes.length, 1, 'A lost completed reply is recovered by lookup, without a replacement draft');
   const recoveries = requests.filter(request => request.path === '/api/v1/ordering/drafts/operations/query');
   assert.equal(recoveries.length, 1); assert.deepEqual(recoveries[0].body, { purpose: 'operation-recovery', key: attempt[0].key });
   assert.equal(await page.evaluate(() => Object.keys(localStorage).filter(key => key.startsWith('unit-toko:pending:v1:')).length), 0);
-  await page.getByRole('link', { name: 'Buka draf pesanan', exact: true }).click();
+  // The keranjang shows the one saved line; reading it saves nothing.
+  await page.getByRole('link', { name: 'Lihat keranjang', exact: true }).click(); await page.waitForURL(origin.origin + '/cart');
+  const cartLines = page.getByRole('region', { name: 'Barang di keranjang', exact: true });
+  await cartLines.getByRole('link', { name: 'Pensil utama', exact: true }).waitFor();
+  assert.equal(await cartLines.getByLabel('Jumlah', { exact: true }).inputValue(), '6');
+  assert.match(await page.getByRole('complementary', { name: 'Ringkasan belanja', exact: true }).innerText(), /Rp72\.001,50/);
+  assert.equal(writes.length, 1, 'Opening the keranjang cannot save a draft');
+  await page.screenshot({ path: resolve(directory, 'primary-cart-desktop.png'), fullPage: true });
+  await page.goto(origin.origin + '/ordering/drafts');
   await page.getByLabel('Cabang pemesan', { exact: true }).selectOption('10:11:');
   const savedDraft = page.getByRole('region', { name: 'Daftar draf', exact: true }).getByRole('button', { name: /Draf [0-9]+/ });
   await savedDraft.waitFor(); assert.equal(await savedDraft.count(), 1);

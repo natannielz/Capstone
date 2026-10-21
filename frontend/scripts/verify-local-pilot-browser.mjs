@@ -54,7 +54,7 @@ async function signedOutStates(page) {
     await page.getByRole('status').filter({ hasText: 'Memeriksa akun dan akses…' }).waitFor();
     await page.screenshot({ path: resolve(directory, 'pilot-request-loading-mobile.png'), fullPage: true });
   } finally { releaseSession(); await Promise.all(held); await page.unroute(sessionPath, hold); }
-  await page.getByRole('heading', { name: 'Periksa sesi dan akses', exact: true }).waitFor();
+  await page.getByRole('heading', { name: /^(Sesi Anda perlu diperbarui|Halaman ini di luar tugas akun Anda|Halaman belum dapat dibuka)$/ }).waitFor();
   await page.getByRole('link', { name: 'Masuk kembali', exact: true }).waitFor();
   assert.equal(await page.getByRole('button', { name: 'Konfirmasi ajukan permintaan', exact: true }).count(), 0);
   await cleanViewport(page); await page.screenshot({ path: resolve(directory, 'pilot-request-unauthenticated-mobile.png'), fullPage: true });
