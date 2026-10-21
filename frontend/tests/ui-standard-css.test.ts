@@ -197,6 +197,9 @@ test("U-014: shared fields are 44 px with the 3:1 border, radius 8, label gap 8 
     assert.match(css, /\.page textarea:where\([^{]*\{[^}]*min-height:\s*96px/, `${name} textarea`);
   }
   assert.match(rule(access, ".form"), /gap:\s*var\(--space-4\)/);
+  // Blocks never touch: a paragraph, a button and the next card get 16 px between them (U-014, glued controls).
+  assert.match(rule(access, ".page > :where(* + *)"), /margin-top:\s*var\(--space-4\)/);
+  assert.match(rule(access, ".accountSection > :where(* + *)"), /margin-top:\s*var\(--space-4\)/);
 });
 
 test("U-015/U-016: one left edge and one canvas in both frames", () => {
