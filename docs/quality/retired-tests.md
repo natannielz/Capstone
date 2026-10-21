@@ -211,6 +211,17 @@ Same reason as `Retired.HistoricalUpgrade`: these rewind a migrated fixture to s
 | `CatalogPhotoMigrationTests.Populated_photo_owner_cannot_be_relabelled_as_a_predecessor_or_silently_recreated` | Same restore chain (expects 89, finds 121) | Retired: `HistoricalUpgrade` |
 | `CatalogPhotoMigrationTests.Unsafe_photo_candidate_definition_or_predecessor_refuses_before_any_DDL` | Same restore chain (expects 89, finds 121) | Retired: `HistoricalUpgrade` |
 
+### Assortment showcase replaced by guest sample products (retired, 21 October 2026)
+
+Reason `Retired.AssortmentShowcase`. Cause: Task 3.1 of the website-ready program. Staff could only make whole assortments public, so the pilot showed guests no products, and approving its one assortment would have exposed all 200. The owner wants guests to see a few chosen products as examples (decision D1: the unit is the product, meaning the catalog family). The assortment-level `CatalogPublicShowcaseService` and its staff endpoints under `/api/v1/catalog/public-showcase` were removed. Migration 122 turned every assortment approved public (and still active) into sample rows for the active products it published at that moment, so nothing a guest could see disappeared silently and nothing new appeared. The version 121 collections remain as decision history, and nothing writes to them any more. The guarantee these tests covered (maker/checker, no self-approval, nothing public before approval) still holds. It now applies to sample products and is tested there.
+
+| Test | Root cause | Outcome |
+| --- | --- | --- |
+| `CatalogPublicTests.Nothing_is_public_until_an_independent_checker_approves_and_making_it_private_hides_it_again` | The showcase service and endpoints it drives no longer exist | Retired: `AssortmentShowcase`. Replaced by `CatalogPublicSampleTests.Guest_sees_only_approved_samples_without_prices`, `Unpublished_sample_disappears_immediately` and `Migration_122_converts_public_assortments_to_samples_of_their_published_products` |
+| `CatalogPublicTests.The_proposer_cannot_approve_their_own_proposal_and_a_rejection_changes_nothing` | Same | Retired: `AssortmentShowcase`. Replaced by `CatalogPublicSampleTests.Proposer_cannot_approve_own_proposal` (service and HTTP 403 `self_approval`) |
+
+The frontend unit tests `tests/public-showcase-client.test.ts` and `tests/public-showcase-workspace.test.ts` were removed together with the modules they tested. `tests/public-sample-client.test.ts` and `tests/public-sample-workspace.test.ts` replace them. The navigation assertion moved to the new workspace test unchanged.
+
 ## Open test debt (pending rewrite, not retired)
 
 These tests guard behaviour that still applies to deployable states, so they are **not** retired. They are skipped with `Pending.FixtureRewrite` so the suite reports them honestly while they are rewritten.

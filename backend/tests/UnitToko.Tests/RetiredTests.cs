@@ -8,6 +8,12 @@ internal static class Retired
     /// that intermediate schema: the first real deployment migrates an empty database to the current version.</summary>
     internal const string HistoricalUpgrade =
         "Retired: historical upgrade path from an intermediate schema no deployable database holds (docs/quality/retired-tests.md).";
+
+    /// <summary>The scenario drives the assortment-level public showcase (staff made whole assortments public). Task 3.1 replaced it
+    /// with chosen sample products: its service and endpoints are gone, and migration 122 converted every approved-public assortment
+    /// into samples of the products it published. CatalogPublicSampleTests covers maker/checker, self-approval and guest visibility now.</summary>
+    internal const string AssortmentShowcase =
+        "Retired: the assortment-level public showcase was replaced by guest sample products (docs/quality/retired-tests.md).";
 }
 
 /// <summary>Open test debt, not a retirement: the guarantee still applies to deployable states and the test must be rewritten.</summary>
