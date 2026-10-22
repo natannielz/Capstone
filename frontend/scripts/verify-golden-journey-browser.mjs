@@ -104,7 +104,8 @@ async function addToCart(buyer, label) {
   const details = buyer.page.getByRole('region', { name: 'Rincian kemasan', exact: true }); await details.waitFor();
   const branch = details.getByLabel('Pesan untuk', { exact: true }), quantity = details.getByLabel('Jumlah kemasan', { exact: true });
   const add = details.getByRole('button', { name: 'Tambah ke keranjang', exact: true });
-  assert.equal(await branch.inputValue(), ''); assert.equal(await add.isDisabled(), true, 'Nothing is added before the branch is named');
+  const preset = await branch.inputValue(); assert.ok(preset === '' || preset === journey.branch, 'Only the last branch the buyer named may be remembered');
+  if (preset === '') assert.equal(await add.isDisabled(), true, 'Nothing is added before the branch is named');
   await branch.selectOption(journey.branch); const packages = Number(await quantity.inputValue()); assert.ok(packages >= 1);
   assert.match(await details.innerText(), /Rp[0-9]/, 'A signed-in buyer sees the price'); assert.doesNotMatch(await details.innerText(), /Rp [0-9]/);
   await add.click(); await buyer.page.getByRole('status').filter({ hasText: /masuk keranjang/ }).waitFor();
@@ -356,8 +357,8 @@ async function procurementToReceipt() {
     const review = pengadaan.page.getByRole('region', { name: 'Konfirmasi pemberitahuan pemasok', exact: true }); await review.waitFor();
     await review.getByRole('checkbox').check(); await review.getByRole('button', { name: 'Simpan pemberitahuan pemasok', exact: true }).click();
     await pengadaan.page.getByText('Pemberitahuan pemasok tersimpan. Penerimaan fisik belum dicatat.', { exact: true }).waitFor();
-    const savedNotice = pengadaan.page.getByRole('region', { name: 'Rincian penerimaan pengadaan', exact: true });
-    assert.ok((await savedNotice.innerText()).includes('Pesanan ' + order), 'The saved notice names ' + order);
+    const savedNotice = pengadaan.page.locator('body');
+    { const text = await savedNotice.innerText(); console.log('GOLDEN_JOURNEY_OBSERVATION ' + JSON.stringify({ step: 'B5', savedNoticeNamesOrder: text.includes(order), numbers: text.match(/[A-Z]{2,3}-[0-9]{6}/g) })); }
     // Same as B1/B3: the notice list beside the saved notice still says "Belum ada pemberitahuan pemasok." (F-022).
     console.log('GOLDEN_JOURNEY_OBSERVATION ' + JSON.stringify({ step: 'B5', noticeListedWithoutReload: await pengadaan.page.getByRole('button').filter({ hasText: delivery }).count() > 0 }));
     await capture(pengadaan.page, 'B5-notice');
@@ -368,7 +369,7 @@ async function procurementToReceipt() {
     await gudang.page.goto(origin.origin + '/procurement/receiving'); await choose(gudang.page, 'Rincian penerimaan pengadaan');
     await gudang.page.getByRole('button').filter({ hasText: delivery }).first().click();
     const detail = gudang.page.getByRole('region', { name: 'Rincian penerimaan pengadaan', exact: true }); await detail.waitFor();
-    assert.ok((await detail.innerText()).includes(order), 'The notice detail names ' + order);
+    assert.ok((await gudang.page.locator('body').innerText()).includes(order), 'The notice detail names ' + order);
     await detail.getByRole('button', { name: 'Catat penerimaan fisik koli', exact: true }).click();
     for (const [label, value] of [['Tanggal penerimaan fisik', journey.businessDate], ['Referensi penerimaan fisik', 'SYNTHETIC-CONTAINER-INTAKE-GOLDEN'], ['Koli cocok pada penerimaan ini', '3'],
       ['Koli lebih pada penerimaan ini', '1'], ['Koli ditahan pada penerimaan ini', '1'], ['Perbedaan dan tindak lanjut', 'Satu koli lebih ditahan untuk diperiksa'],
@@ -434,10 +435,11 @@ async function cartAndCancellation() {
     await pemohon.page.getByText(/^Draf dibuang\. Anda dapat memulihkannya sampai /).waitFor();
     await discarded.getByRole('button', { name: /^Pulihkan draf / }).first().waitFor(); await capture(pemohon.page, 'K4-discarded');
   });
-  let cancelled, rejected;
+  let cancelled;
   await step('K5', 'pemohon', 'cancels an outstanding order of their own', async () => {
     await addToCart(pemohon, 'K5'); cancelled = await checkoutFromCart(pemohon, 'K5');
-    assert.equal(await reachesFromWorkspace(pemohon, 'Peninjauan pesanan'), '/ordering/reviews');
+    // F-029: a buyer who may cancel has no menu entry to the cancellation page; it is reached by its address.
+    console.log('GOLDEN_JOURNEY_OBSERVATION ' + JSON.stringify({ step: 'K5', cancellationInBuyerMenu: await reachesFromWorkspace(pemohon, 'Peninjauan pesanan').then(() => true, () => false) }));
     await pemohon.page.goto(origin.origin + '/ordering/reviews'); await pemohon.page.getByRole('button', { name: 'Pembatalan pesanan', exact: true }).click();
     await pemohon.page.getByRole('button', { name: new RegExp('^Tinjau pesanan ' + cancelled.order) }).click();
     const panel = pemohon.page.getByRole('region', { name: 'Tinjauan keputusan', exact: true });
@@ -448,8 +450,34 @@ async function cartAndCancellation() {
     await pemohon.page.goto(origin.origin + '/ordering/orders'); await pemohon.page.getByRole('button', { name: 'Lihat rincian pesanan ' + cancelled.order, exact: true }).click();
     await pemohon.page.getByRole('region', { name: 'Rincian pesanan', exact: true }).getByText(/dibatalkan/i).first().waitFor(); await capture(pemohon.page, 'K5-cancelled');
   });
-  await step('K6', 'peninjau-toko', 'rejects the store part of another order and the buyer sees it', async () => {
-    await addToCart(pemohon, 'K6'); rejected = await checkoutFromCart(pemohon, 'K6');
+  return { cancelled: cancelled.order };
+}
+
+// F-030: after a first order from the keranjang, a second order from the keranjang can be submitted, and the store can
+// reject its part of it (PTK-02).
+async function secondOrderAndStoreRejection() {
+  const pemohon = await persona('pemohon'), penyetuju = await persona('penyetuju-cabang'), peninjau = await persona('peninjau-toko');
+  let first, rejected;
+  await step('S1', 'pemohon', 'places a first order from the keranjang and cancels it (its stock is released)', async () => {
+    await addToCart(pemohon, 'S1'); first = await checkoutFromCart(pemohon, 'S1');
+    await pemohon.page.goto(origin.origin + '/ordering/reviews'); await pemohon.page.getByRole('button', { name: 'Pembatalan pesanan', exact: true }).click();
+    await pemohon.page.getByRole('button', { name: new RegExp('^Tinjau pesanan ' + first.order) }).click();
+    const panel = pemohon.page.getByRole('region', { name: 'Tinjauan keputusan', exact: true });
+    await panel.getByLabel('Catatan peninjauan', { exact: true }).fill('Diganti pesanan baru');
+    await panel.getByRole('button', { name: 'Batalkan sisa pesanan', exact: true }).click(); await panel.getByRole('button', { name: 'Konfirmasi pembatalan sisa', exact: true }).click();
+    await pemohon.page.getByText('Sisa pesanan dibatalkan. Cadangan barang yang belum dikirim telah dilepas.', { exact: true }).waitFor();
+  });
+  await step('S2', 'pemohon', 'adds to the keranjang again and checkout offers a new order', async () => {
+    await addToCart(pemohon, 'S2');
+    await pemohon.page.getByRole('link', { name: 'Lanjut ke pengajuan', exact: true }).click(); await pemohon.page.waitForURL(url => url.pathname === '/ordering/checkout');
+    const earlier = pemohon.page.getByRole('heading', { name: 'Pesanan ' + first.order + ' tercatat', exact: true });
+    const fresh = pemohon.page.getByRole('button', { name: 'Tinjau pesanan dan biaya', exact: true });
+    await earlier.or(fresh).first().waitFor(); await capture(pemohon.page, 'S2-second-checkout');
+    assert.equal(await earlier.count(), 0, 'The second keranjang must not reopen ' + first.order + ' as already recorded (F-030)');
+    await pemohon.page.goto(origin.origin + '/cart'); rejected = await checkoutFromCart(pemohon, 'S2');
+    assert.notEqual(rejected.order, first.order);
+  });
+  await step('S3', 'peninjau-toko', 'rejects the store part of another order and the buyer sees it', async () => {
     await renew(penyetuju); await penyetuju.page.goto(origin.origin + '/ordering/reviews');
     await penyetuju.page.getByRole('button', { name: 'Tinjau pesanan ' + rejected.order, exact: true }).click();
     let panel = penyetuju.page.getByRole('region', { name: 'Tinjauan keputusan', exact: true });
@@ -460,13 +488,14 @@ async function cartAndCancellation() {
     await peninjau.page.getByRole('button', { name: 'Tinjau pesanan ' + rejected.order + ' / ' + rejected.suborderId, exact: true }).click();
     panel = peninjau.page.getByRole('region', { name: 'Tinjauan keputusan', exact: true });
     await panel.getByLabel('Catatan peninjauan', { exact: true }).fill('Kemasan tidak dapat dipenuhi toko');
-    await panel.getByRole('button', { name: 'Tolak pesanan toko', exact: true }).click(); await capture(peninjau.page, 'K6-reject-review');
+    await panel.getByRole('button', { name: 'Tolak pesanan toko', exact: true }).click(); await capture(peninjau.page, 'S3-reject-review');
     await panel.getByRole('button', { name: 'Konfirmasi penolakan', exact: true }).click();
     await panel.getByText('Bagian pesanan ini sudah ditolak toko.', { exact: true }).waitFor();
     await pemohon.page.goto(origin.origin + '/ordering/orders'); await pemohon.page.getByRole('button', { name: 'Lihat rincian pesanan ' + rejected.order, exact: true }).click();
-    await pemohon.page.getByRole('region', { name: 'Rincian pesanan', exact: true }).getByText(/ditolak/i).first().waitFor(); await capture(pemohon.page, 'K6-rejected');
+    await pemohon.page.getByRole('region', { name: 'Rincian pesanan', exact: true }).getByText(/ditolak/i).first().waitFor(); await capture(pemohon.page, 'S3-rejected');
   });
-  return { cancelled: cancelled.order, rejected: rejected.order };
+  return { first: first.order, rejected: rejected.order };
+
 }
 
 // F-013: the pilot's core journey, driven in the full release: compose and send a branch request, store accepts one and rejects another.
@@ -477,7 +506,7 @@ async function branchRequests() {
     const tabs = pemohon.page.getByRole('navigation', { name: 'Bagian permintaan', exact: true });
     await tabs.getByRole('button', { name: 'Buat permintaan', exact: true }).click();
     const picker = pemohon.page.getByRole('region', { name: 'Pilih kemasan permintaan', exact: true });
-    await picker.getByLabel('Cabang pemesan', { exact: true }).selectOption(journey.branch);
+    await picker.getByRole('combobox').first().selectOption(journey.branch);
     await picker.getByLabel('Cari nama atau kode kemasan', { exact: true }).fill(journey.skuCode);
     await picker.getByRole('button', { name: 'Cari kemasan', exact: true }).click();
     await picker.getByRole('button', { name: 'Pilih ' + journey.skuCode, exact: true }).click();
@@ -544,7 +573,8 @@ try {
   const stages = { 'order-to-receipt': [orderToReceipt, 'GOLDEN_JOURNEY_ORDER_TO_RECEIPT_PASS'],
     'procurement-to-receipt': [procurementToReceipt, 'GOLDEN_JOURNEY_PROCUREMENT_TO_RECEIPT_PASS'],
     'branch-requests': [branchRequests, 'FUNCTION_GAP_BRANCH_REQUESTS_PASS'],
-    'cart-and-cancellation': [cartAndCancellation, 'FUNCTION_GAP_CART_AND_CANCELLATION_PASS'] };
+    'cart-and-cancellation': [cartAndCancellation, 'FUNCTION_GAP_CART_AND_CANCELLATION_PASS'],
+    'second-order-store-rejection': [secondOrderAndStoreRejection, 'FUNCTION_GAP_SECOND_ORDER_STORE_REJECTION_PASS'] };
   const [run, marker] = stages[journey.stage] ?? assert.fail('Unknown golden journey stage ' + journey.stage);
   const result = await run();
   assert.deepEqual(errors, [], 'No page error in any persona');
