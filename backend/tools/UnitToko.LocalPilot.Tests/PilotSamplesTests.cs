@@ -8,6 +8,7 @@ using MongoDB.Bson;
 using MongoDB.Driver;
 using UnitToko.Modules.Catalog;
 using UnitToko.Modules.Identity.Contracts;
+using UnitToko.Platform.Authorization;
 using UnitToko.Platform;
 using UnitToko.Platform.Catalog;
 using UnitToko.Platform.Mongo;
@@ -30,6 +31,16 @@ public sealed class PilotSamplesTests
         Assert.All(chosen, sku => Assert.False(string.IsNullOrWhiteSpace(products[sku].Image)));
         Assert.Equal(new long[] { 3, 5 }, PilotSamples.Missing([1, 2, 3, 4, 5], new HashSet<long> { 1, 4 }, new HashSet<long> { 2 }));
         Assert.Empty(PilotSamples.Missing([1, 2], new HashSet<long> { 1, 2 }, new HashSet<long>()));
+    }
+
+    [Fact]
+    public void Only_an_owner_outside_petugas_scope_is_skipped_while_a_missing_propose_grant_fails_the_start()
+    {
+        // scope_denied: the service's refusal for a catalog owner outside petugas's scope; that owner's staff decide.
+        Assert.True(PilotSamples.IsOutsideOwnerScope(new AuthorizationDeniedException("scope_denied")));
+        // permission_denied (and anything else): petugas holds no usable catalog.public.propose at all; the start must fail.
+        Assert.False(PilotSamples.IsOutsideOwnerScope(new AuthorizationDeniedException("permission_denied")));
+        Assert.False(PilotSamples.IsOutsideOwnerScope(new AuthorizationDeniedException("step_up_required")));
     }
 
     [Fact]
