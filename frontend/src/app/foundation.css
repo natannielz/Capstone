@@ -261,6 +261,9 @@ button:disabled{cursor:not-allowed}
 /* Page body under PageHeader: regions, states and notices 24 px apart, whatever mix of primitives and legacy blocks they are. */
 .ui-stack{display:grid;gap:var(--space-6);min-width:0}
 .ui-stack>.ui-section+.ui-section{margin-top:0}
+/* A lone button in a grid region (section body, stack) keeps its own width on desktop; on phones it spans the row (§11.5). */
+.ui-section-body>.ui-button,.ui-section>.ui-button,.ui-stack>.ui-button{justify-self:start}
+@media (max-width:639px){.ui-section-body>.ui-button,.ui-section>.ui-button,.ui-stack>.ui-button{justify-self:stretch}}
 
 .ui-toolbar{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:var(--space-3)}
 .ui-toolbar-main,.ui-toolbar-side{display:flex;flex-wrap:wrap;align-items:flex-end;gap:var(--space-3);min-width:0}

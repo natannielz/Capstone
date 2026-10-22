@@ -189,7 +189,7 @@ function PriceDesk({ actorId, actions, session, observedAt, onRefresh, onFailure
     <OperationRecovery entries={recovery.entries} journal={recovery.journal} disabled={busy || timing.expired} onBusyChange={setRecovering} onFailure={failed}
       recoveryAdapters={{ 'catalog.price': { lookup: entry => gateway.receipt(entry, priceRecoverySku(entry.key)) } }}
       onResolved={() => { recovery.refresh(); ledger.resetAfterReconciliation(); clear(); setNotice('Hasil permintaan dipastikan. Pilih kembali kemasan untuk melihat riwayat terbaru.'); setRefresh(value => value + 1); }} />
-    {!forbidden && <div className={styles.desk}>
+    {!forbidden && <div className={styles.desk + " " + editor.desk}>
       <section className="ui-section" aria-busy={loading}><h2>Pilih kemasan</h2>
         <form className={styles.lookup} onSubmit={event => { event.preventDefault(); if (locked) return; clear(); setAfter(null); setQuery(search.trim()); setRefresh(value => value + 1); }}>
           <label>Cari produk atau kode SKU<input value={search} maxLength={128} disabled={locked} onChange={event => setSearch(event.target.value)} /></label><Button type="submit" variant="secondary" disabled={locked || loading}>Cari</Button></form>

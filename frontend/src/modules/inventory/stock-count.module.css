@@ -1,5 +1,7 @@
 /* Stock count desk on the UI standard (U-032): tokens only, on-scale spacing, no clamp() title sizes, weights 400/600/700. */
 .desk { display: grid; grid-template-columns: minmax(280px, .85fr) minmax(0, 1.3fr); align-items: start; gap: var(--space-6); }
+/* Columns of a desk sit side by side: the Section-after-Section flow margin does not apply here. */
+.desk > :global(.ui-section) { margin-top: 0; }
 .observationHead { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-4); flex-wrap: wrap; }
 .code { color: var(--muted-foreground); overflow-wrap: anywhere; margin: var(--space-1) 0 var(--space-3); }
 .contents { display: flex; flex-direction: column; gap: var(--space-1); padding: var(--space-4) 0; border-block: 1px solid var(--border); margin: var(--space-4) 0; }
