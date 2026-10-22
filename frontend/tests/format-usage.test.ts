@@ -29,3 +29,14 @@ test("no amount is printed with a raw IDR prefix", () => {
       .map(({ path, index }) => `${path}:${index + 1}`));
   assert.deepEqual(offenders, []);
 });
+
+// F-023: business dates arrive as ISO "2026-10-22"; procurement and inventory pages show them as "22 Okt 2026" via formatDate.
+test("procurement and inventory pages print no raw ISO calendar date", () => {
+  const raw = /(?<![=(])\{[A-Za-z_.?]+\.[a-zA-Z]*(?:Date|On)(?:\s*\?\?[^}]*)?\}|\+ ?[A-Za-z_.?]+\.[a-zA-Z]*(?:Date|On)\b|\$\{[A-Za-z_.?]+\.[a-zA-Z]*(?:Date|On)\}/;
+  const offenders = ["src/modules/procurement", "src/modules/inventory"].flatMap(sources)
+    .filter(path => path.endsWith(".tsx"))
+    .flatMap(path => readFileSync(path, "utf8").split("\n").map((line, index) => ({ path, line, index }))
+      .filter(({ line }) => raw.test(line))
+      .map(({ path, index }) => `${path}:${index + 1}`));
+  assert.deepEqual(offenders, []);
+});

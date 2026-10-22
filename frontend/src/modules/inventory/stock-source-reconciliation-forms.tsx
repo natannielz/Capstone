@@ -1,5 +1,6 @@
 import type { SourceReconciliationBaseline, SourceReconciliationObservation } from './stock-source-reconciliation-client';
 import styles from '../administration/access.module.css';
+import { formatDate } from '@/lib/format';
 import { formatDateTime, numberFormatter } from "@/lib/format";
 
 export const reconciliationWhen = (value: string) => formatDateTime(value, { seconds: true });
@@ -10,7 +11,7 @@ export const reconciliationNotice = 'Rekonsiliasi hanya mencatat perbandingan ju
 export function ReconciliationBalanceFacts({ source }: { source: SourceReconciliationBaseline }) {
   return <section aria-label="Dasar jumlah lengkap"><h3>Dasar jumlah lengkap</h3><p>{source.balances.length} lot pada pembacaan ini. Jumlah fisik baru belum dicatat.</p>
     <ul className={styles.historyList}>{source.balances.map(row => <li key={row.balanceId}><strong>{row.skuCode} · {row.packageLabel} · Lot {row.lotReference}</strong><dl className={styles.facts}>
-      <div><dt>Jumlah tercatat (kemasan)</dt><dd>{count(row.onHand)}</dd></div><div><dt>Ditahan</dt><dd>{count(row.held)}</dd></div><div><dt>Dipesan</dt><dd>{count(row.reserved)}</dd></div><div><dt>Terpisah sebagai kedaluwarsa</dt><dd>{count(row.expired)}</dd></div><div><dt>Isi per kemasan</dt><dd>{count(row.baseUnitsPerPackage)} {row.baseUnitCode}</dd></div><div><dt>Kedaluwarsa yang dicatat</dt><dd>{row.expiresOn ?? 'Belum diketahui'}</dd></div>
+      <div><dt>Jumlah tercatat (kemasan)</dt><dd>{count(row.onHand)}</dd></div><div><dt>Ditahan</dt><dd>{count(row.held)}</dd></div><div><dt>Dipesan</dt><dd>{count(row.reserved)}</dd></div><div><dt>Terpisah sebagai kedaluwarsa</dt><dd>{count(row.expired)}</dd></div><div><dt>Isi per kemasan</dt><dd>{count(row.baseUnitsPerPackage)} {row.baseUnitCode}</dd></div><div><dt>Kedaluwarsa yang dicatat</dt><dd>{row.expiresOn ? formatDate(row.expiresOn) : 'Belum diketahui'}</dd></div>
     </dl></li>)}</ul>
   </section>;
 }
@@ -51,7 +52,7 @@ export function ReconciliationObservations({ source, observed, title }: { source
             <div><dt>Jumlah tercatat (kemasan)</dt><dd>{count(row.onHand)}</dd></div>
             <div><dt>Jumlah fisik (kemasan)</dt><dd>{found ? count(found.packages) : 'Belum diisi'}</dd></div>
             <div><dt>Selisih fisik terhadap catatan</dt><dd>{difference === null ? 'Belum dapat dibandingkan' : difference === BigInt(0) ? 'Sesuai · 0' : `${difference > BigInt(0) ? '+' : ''}${difference.toString()} kemasan · perlu tindak lanjut`}</dd></div>
-            <div><dt>Kedaluwarsa yang dicatat</dt><dd>{row.expiresOn ?? 'Belum diketahui; kelayakan belum ditentukan'}</dd></div>
+            <div><dt>Kedaluwarsa yang dicatat</dt><dd>{row.expiresOn ? formatDate(row.expiresOn) : 'Belum diketahui; kelayakan belum ditentukan'}</dd></div>
           </dl>
         </li>;
       })}</ul>}
@@ -81,7 +82,7 @@ export function ReconciliationObservationFields({ source, checker, observedAt, s
         <div><dt>Ditahan</dt><dd>{count(row.held)}</dd></div>
         <div><dt>Dipesan</dt><dd>{count(row.reserved)}</dd></div>
         <div><dt>Terpisah sebagai kedaluwarsa</dt><dd>{count(row.expired)}</dd></div>
-        <div><dt>Kedaluwarsa yang dicatat</dt><dd>{row.expiresOn ?? 'Belum diketahui'}</dd></div>
+        <div><dt>Kedaluwarsa yang dicatat</dt><dd>{row.expiresOn ? formatDate(row.expiresOn) : 'Belum diketahui'}</dd></div>
         <div><dt>Definisi kemasan / versi</dt><dd>{row.definitionId} / {row.definitionVersion}</dd></div>
         <div><dt>Penerimaan / lot</dt><dd>{row.receiptId} / {row.lotId}</dd></div>
       </dl></details>

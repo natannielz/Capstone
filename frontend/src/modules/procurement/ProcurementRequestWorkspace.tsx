@@ -15,9 +15,10 @@ import { createProcurementGateway, procurementLocationKey, procurementQuantity, 
 import styles from '../administration/access.module.css';
 import { packageMatchExplanation, type PackageMatching } from './package-matching';
 import { ReplenishmentSuggestion } from './ReplenishmentSuggestion';
-import { dateTimeFormatter } from '@/lib/format';
+import { dateTimeFormatter, formatDate } from '@/lib/format';
 import { SessionAccessState } from "@/components/workspace-kit/session-access-state";
 import { recordNumber } from '@/lib/document-numbers';
+import { keptTarget } from './procurement-desk';
 
 type Account = { actorId: string; actions: readonly string[]; session: IdentitySession; observedAt: number };
 type DraftLine = { choice: ProcurementPackage; quantity: string; specification: string };
@@ -67,7 +68,7 @@ export function ProcurementRequestWorkspace() {
 }
 function RequestDetails({ value }: { value: Pick<ProcurementPreview, 'input' | 'source' | 'lines'> }) {
   return <><dl className={styles.facts}>{(['organization', 'shop', 'warehouse', 'channel'] as const).map((field, index) => <div key={field}><dt>{['Organisasi', 'Toko', 'Gudang', 'Kanal'][index]}</dt><dd>{value.source[field].code} · {value.source[field].name}</dd></div>)}
-    <div><dt>Jalur pengadaan</dt><dd>{routes[value.input.route]}</dd></div><div><dt>Jenis kebutuhan</dt><dd>{kinds[value.input.kind]}</dd></div><div><dt>Tanggal kebutuhan</dt><dd>{value.input.businessDate}</dd></div>
+    <div><dt>Jalur pengadaan</dt><dd>{routes[value.input.route]}</dd></div><div><dt>Jenis kebutuhan</dt><dd>{kinds[value.input.kind]}</dd></div><div><dt>Tanggal kebutuhan</dt><dd>{formatDate(value.input.businessDate)}</dd></div>
     {value.input.externalReference && <div><dt>Referensi</dt><dd className={styles.preserve}>{value.input.externalReference}</dd></div>}</dl>
     <h4>Barang dan kemasan</h4>{value.lines.map(line => <section className={styles.review} key={line.skuId}><h4>{line.familyName} — {line.packageLabel}</h4><p>{line.skuCode} · {line.baseUnitsPerPackage} {line.baseUnitCode} per kemasan</p>
       <p>{line.packages} kemasan · Total {(BigInt(line.packages) * BigInt(line.baseUnitsPerPackage)).toString()} {line.baseUnitCode}</p>{line.specification && <p className={styles.preserve}>Spesifikasi: {line.specification}</p>}</section>)}
@@ -88,6 +89,8 @@ function RequestDesk({ account, fresh, onDenied }: { account: Account; fresh: bo
   const [decisionReview, setDecisionReview] = useState<{ preview: ProcurementDecisionPreview; command: ReturnType<typeof prepareProcurementDecision> } | null>(null);
   const [busy, setBusy] = useState(false), [recovering, setRecovering] = useState(false), [offline, setOffline] = useState(false), [error, setError] = useState<unknown>(null), [notice, setNotice] = useState(''), [revision, setRevision] = useState(0);
   const alive = useRef(false), pending = useRef(false), heading = useRef<HTMLHeadingElement>(null);
+  // The location chosen before "Muat data terbaru", restored once the targets are read again (F-022).
+  const keep = useRef<string | null>(null);
   const current = useCallback(() => alive.current && navigator.onLine && !sessionTiming(account.session, performance.now() - account.observedAt).expired, [account]);
   const canRead = account.actions.includes(readPermission), canPrepare = account.actions.includes(preparePermission), canDecide = account.actions.includes(approvePermission);
   const locked = busy || recovering || offline, commandLocked = locked || recovery.locked, reviewLocked = submissionReview !== null || decisionReview !== null;
@@ -99,7 +102,9 @@ function RequestDesk({ account, fresh, onDenied }: { account: Account; fresh: bo
     return () => { alive.current = false; gate.cancel(); window.removeEventListener('online', connection); window.removeEventListener('offline', connection); }; }, [gate]);
   useEffect(() => { const read = gate.begin(account.actorId, 'procurement-targets'); void Promise.resolve().then(async () => {
     if (!read.current() || !current()) return; setBusy(true); setTargets([]); clearSelection(); setError(null);
-    try { if (canRead) { const result = await gateway.targets(account.actorId, read.signal); if (read.current() && current()) setTargets(result.items); } }
+    try { if (canRead) { const result = await gateway.targets(account.actorId, read.signal); if (read.current() && current()) { setTargets(result.items);
+      const kept = keptTarget(result.items, keep.current, item => procurementLocationKey(item.location)); keep.current = null;
+      if (kept) { const list = await gateway.list(account.actorId, kept.location, null, read.signal); if (read.current() && current()) { setSelected(kept); setPage(list); } } } } }
     catch (failure) { if (read.current() && current()) { setError(failure); onDenied(failure); } }
     finally { if (read.current()) setBusy(false); }
   }); return () => gate.cancel(); }, [gateway, gate, account.actorId, revision, current, onDenied, canRead, clearSelection]);
@@ -143,6 +148,7 @@ function RequestDesk({ account, fresh, onDenied }: { account: Account; fresh: bo
         requestKey => gateway.submit(command, requestKey, () => valid() && sessionTiming(account.session, performance.now() - account.observedAt).fresh));
       if (!valid()) return; clearReview(); setNotice('Permintaan tersimpan dan menunggu pemeriksaan independen.');
       const next = await gateway.request(account.actorId, saved.requestId, signal); if (valid()) setRequest(next);
+      const list = await gateway.list(account.actorId, command.location, null, signal); if (valid()) setPage(list); // listed without a reload (F-022)
     });
   }
   async function previewDecision(value: ProcurementDecision) {
@@ -158,6 +164,7 @@ function RequestDesk({ account, fresh, onDenied }: { account: Account; fresh: bo
         requestKey => gateway.decide(command, requestKey, () => valid() && sessionTiming(account.session, performance.now() - account.observedAt).fresh));
       if (!valid()) return; clearReview(); setNotice(command.decision === 'approve' ? 'Permintaan disetujui untuk tindak lanjut pengadaan.' : 'Penolakan permintaan tersimpan.');
       const next = await gateway.request(account.actorId, saved.requestId, signal); if (valid()) setRequest(next);
+      if (selected) { const list = await gateway.list(account.actorId, selected.location, null, signal); if (valid()) setPage(list); }
     });
   }
   function reconcile() { ledger.current?.resetAfterReconciliation(); clearSelection(); recovery.refresh(); setRevision(value => value + 1); }
@@ -190,7 +197,7 @@ function RequestDesk({ account, fresh, onDenied }: { account: Account; fresh: bo
         const choice = targets.find(item => procurementLocationKey(item.location) === event.target.value); if (choice) void work((valid, signal) => select(choice, valid, signal));
       }}><option value="">Pilih lokasi yang ditugaskan</option>{targets.map(item => <option key={procurementLocationKey(item.location)} value={procurementLocationKey(item.location)}>{item.organization.name} · {item.shop.name} · {item.warehouse.name} · {item.channel.name}</option>)}</select></label>
       {!canRead && <p className={styles.alert}>Penugasan untuk membaca pengadaan belum tersedia. Hubungi pengelola akses.</p>}
-      <button className={styles.secondary} disabled={locked || reviewLocked} onClick={() => { clearSelection(); setRevision(value => value + 1); }}>Muat data terbaru</button>
+      <button className={styles.secondary} disabled={locked || reviewLocked} onClick={() => { keep.current = selected ? procurementLocationKey(selected.location) : null; clearSelection(); setRevision(value => value + 1); }}>Muat data terbaru</button>
       {!busy && canRead && targets.length === 0 && <p>Belum ada lokasi dengan profil yang disetujui dalam penugasan Anda.</p>}
     </section>
     {busy && <p role="status">Memeriksa permintaan pengadaan…</p>}
@@ -198,7 +205,7 @@ function RequestDesk({ account, fresh, onDenied }: { account: Account; fresh: bo
       {canPrepare && <button className={styles.primary} disabled={commandLocked || reviewLocked} onClick={() => { clearReview(); setEditing(true); }}>Buat permintaan</button>}
       <ul className={styles.queueList}>{page.items.map(item => <li key={item.id}><button className={request?.id === item.id ? styles.selectedRow : styles.queueRow} disabled={locked || reviewLocked}
         onClick={() => void work(async (valid, signal) => { clearReview(); const next = await gateway.request(account.actorId, item.id, signal); if (valid()) setRequest(next); })}>
-        <strong>{routes[item.input.route]} · {item.input.businessDate}</strong><span>{states[item.state]}</span><small>{when(item.submittedAt)} · Permintaan {recordNumber('purchaseRequest', item.id)}</small></button></li>)}</ul>
+        <strong>{routes[item.input.route]} · {formatDate(item.input.businessDate)}</strong><span>{states[item.state]}</span><small>{when(item.submittedAt)} · Permintaan {recordNumber('purchaseRequest', item.id)}</small></button></li>)}</ul>
       {page.items.length === 0 && <p className={styles.empty}>Belum ada permintaan pengadaan.</p>}
       <nav className={styles.pagination} aria-label="Halaman permintaan"><button className={styles.secondary} disabled={locked || reviewLocked} onClick={() => void work((valid, signal) => select(selected, valid, signal))}>Terbaru</button>
         <button className={styles.secondary} disabled={locked || reviewLocked || page.nextRequestId === null} onClick={() => void work(async (valid, signal) => { const next = await gateway.list(account.actorId, selected.location, page.nextRequestId, signal); if (valid()) { clearReview(); setPage(next); } })}>Berikutnya</button></nav></section>
