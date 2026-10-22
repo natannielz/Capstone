@@ -146,6 +146,48 @@ public sealed class PilotSamplesTests
             await PilotBootstrap.InitializeDatabaseAsync(client, database, secrets, CancellationToken.None);
             Assert.Equal(families.Order(), Rows("catalogPublicSamples").Select(row => row["_id"].AsInt64).Order());
 
+            // A staff-chosen extra product inside the cap is left alone.
+            var extra = database.GetCollection<BsonDocument>("skus").Find(new BsonDocument { { "sku", "DEMO-004" }, { "active", true } }).Single()["familyId"].AsInt64;
+            var staff = await service.ProposeAsync(Actor(2001), [extra], [], new("review-ui.staff-extra", "Pilihan staf", "review-ui"));
+            await service.DecideAsync(Actor(2002), staff["proposalId"].AsInt64, CatalogPublicSampleDecision.Approve, new("review-ui.staff-extra-ok", "Diperiksa", "review-ui"));
+            before = Proposals();
+            await PilotBootstrap.InitializeDatabaseAsync(client, database, secrets, CancellationToken.None);
+            Assert.Equal(13, Rows("catalogPublicSamples").Length);
+            Assert.Equal(before, Proposals());
+
+            // Over-cap fixture: what the version 122 conversion of a public assortment wrote (every published product a sample). Only this
+            // fixture writes the collection directly; the pilot narrows it back through the service.
+            var published = database.GetCollection<BsonDocument>("skus").Distinct<long>("familyId",
+                new BsonDocument { { "active", true }, { "catalogListings.assortmentId", 501L } }).ToList();
+            var present = Rows("catalogPublicSamples").Select(row => row["_id"].AsInt64).ToHashSet();
+            var converted = database.GetCollection<BsonDocument>("productFamilies").Find(new BsonDocument("active", true)).ToList()
+                .Where(row => published.Contains(row["_id"].AsInt64) && !present.Contains(row["_id"].AsInt64))
+                .Select(row => new BsonDocument { { "_id", row["_id"] }, { "schemaVersion", 1 }, { "ownerScope", row["authoringOwner"] }, { "revision", 1L },
+                    { "addedAt", DateTime.UtcNow.AddMinutes(-1) }, { "approvedProposalId", BsonNull.Value },
+                    { "migratedFrom", new BsonDocument { { "assortmentId", 501L }, { "showcaseDecisionId", 1L } } } }).ToList();
+            await database.GetCollection<BsonDocument>("catalogPublicSamples").InsertManyAsync(converted);
+            var overCap = Rows("catalogPublicSamples").Length;
+            Assert.True(overCap > 200, "fixture must exceed the cap, has " + overCap);
+            before = Proposals();
+            await PilotBootstrap.InitializeDatabaseAsync(client, database, secrets, CancellationToken.None);
+            // Narrowed to exactly the chosen twelve, through removal proposals by petugas (at most 200 products each) approved by peninjau.
+            Assert.Equal(families.Order(), Rows("catalogPublicSamples").Select(row => row["_id"].AsInt64).Order());
+            var narrowing = Rows("catalogPublicSampleProposals").Skip(before).ToArray();
+            Assert.Equal((overCap - 12 + 199) / 200, narrowing.Length);
+            Assert.All(narrowing, row =>
+            {
+                Assert.Equal(("approved", 2001L, 2002L), (row["state"].AsString, row["proposedBy"].AsInt64, row["decision"]["decidedBy"].AsInt64));
+                Assert.Empty(row["adds"].AsBsonArray);
+                Assert.InRange(row["removes"].AsBsonArray.Count, 1, 200);
+                Assert.DoesNotContain(row["removes"].AsBsonArray, id => families.Contains(id.AsInt64));
+                Assert.StartsWith(PilotSamples.ProposeKeyPrefix, row["requestKey"].AsString);
+            });
+            Assert.Equal(overCap - 12, narrowing.Sum(row => row["removes"].AsBsonArray.Count));
+            // Back inside the cap, a restart changes nothing.
+            before = Proposals();
+            await PilotBootstrap.InitializeDatabaseAsync(client, database, secrets, CancellationToken.None);
+            Assert.Equal(before, Proposals());
+
             // Guests see exactly these twelve, and no price anywhere in the answer.
             await using var api = new PublicApi(uri, name);
             using var guest = api.CreateClient();

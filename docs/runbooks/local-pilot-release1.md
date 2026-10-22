@@ -188,4 +188,6 @@ FIX-RULES owns template changes. Until then, the drops keep each checker persona
   - A chosen product that is missing is added through a new proposal.
   - A proposal of ours left pending by an interrupted start is approved.
   - Nothing is added beyond the 200-product limit.
+  - Over the limit, guests get `public_catalog_limit`. This happened when migration 122 converted a public assortment. In that case the set is narrowed to the 12 chosen products: `petugas` proposes removing all other samples (at most 200 per proposal, one catalog owner each) and `peninjau` approves. A set inside the limit is never touched.
+  - Conflicts with a changed sample state are logged and skipped, so they never stop the start.
 - Release1 has no guest samples.
