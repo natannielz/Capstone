@@ -129,7 +129,7 @@ public static class PilotSamples
                     if (!await SkipOnConflictAsync(async () => removal = (await service.ProposeAsync(Actor(Maker), [], [.. batch],
                         Meta("propose." + Guid.NewGuid().ToString("N"), reason), ct))["proposalId"].AsInt64, "usulan penghapusan " + batch.Length + " sampel")) return false;
                 }
-                catch (AuthorizationDeniedException denied) when (denied.Code is "scope_denied" or "permission_denied")
+                catch (AuthorizationDeniedException denied) when (IsOutsideOwnerScope(denied))
                 {
                     // A catalog owner outside petugas's scope is not the pilot's to narrow; its owner's staff decide.
                     outside += batch.Length;
@@ -152,6 +152,10 @@ public static class PilotSamples
             return true;
         }
     }
+
+    /// <summary>The service's refusal for a catalog owner outside petugas's scope: that owner's batch is skipped and noted. Any other denial (permission_denied:
+    /// petugas holds no usable catalog.public.propose at all) fails the start like every other non-conflict error.</summary>
+    public static bool IsOutsideOwnerScope(AuthorizationDeniedException denied) => denied.Code == "scope_denied";
 
     private const int ChangeLimit = 200;
 
