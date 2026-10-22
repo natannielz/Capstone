@@ -427,7 +427,7 @@ public sealed partial class AccessHttpTests(MongoFixture fixture)
         var response = await client.GetAsync("/api/v1/access/catalog");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var body = await Body(response);
-        Assert.Equal(6, body["roles"]!.AsArray().Count);
+        Assert.Equal(15, body["roles"]!.AsArray().Count);
         Assert.Equal(4, body["financePacks"]!.AsArray().Count);
         Assert.Empty(body["roles"]!.AsArray().Single(role => role!["id"]!.GetValue<string>() == "finance")!["permissions"]!.AsArray());
         Assert.DoesNotContain(body["financePacks"]!.AsArray(), pack => pack!["permissions"]!.AsArray()

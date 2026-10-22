@@ -22,14 +22,34 @@ public static class RoleTemplates
         ["courier"] = New("courier", Permissions.ShipmentRead, Permissions.DeliveryAttempt, Permissions.DeliveryEvidence, Permissions.DeliveryReturn, Permissions.ExpenseRequest),
         ["finance"] = New("finance"),
         ["system-admin"] = New("system-admin", Permissions.InviteManage, Permissions.MembershipPropose, Permissions.AccessPropose,
-            Permissions.RecoveryInitiate, Permissions.TechnicalConfigure, Permissions.AccessAuditRead)
+            Permissions.RecoveryInitiate, Permissions.TechnicalConfigure, Permissions.AccessAuditRead),
+        // Job templates (F-006). Each grants the routine work of one job; the decision authority that the explicit-grant rules keep out
+        // of templates (fresh-MFA approvals, governance proposals, explicit reads) is offered as its suggestions. No template, with
+        // its suggestions, holds both sides of a maker/checker pair. The six templates above keep their v1 contents unchanged.
+        // branch.pic is what lets a grant act for the whole branch, so the branch job carries it.
+        ["branch-approver"] = New("branch-approver", Permissions.BranchPic, Permissions.CatalogRead, Permissions.OrderRead, Permissions.ShipmentRead, Permissions.InvoiceRead,
+            Permissions.CaseRead, Permissions.BranchOrderRequestRead),
+        ["catalog-officer"] = New("catalog-officer", Permissions.CatalogRead, Permissions.CatalogManage, Permissions.PricingManage, Permissions.OrderRead,
+            Permissions.StockRead),
+        ["catalog-reviewer"] = New("catalog-reviewer", Permissions.CatalogRead, Permissions.OrderRead),
+        ["dispatcher"] = New("dispatcher", Permissions.CatalogRead, Permissions.OrderRead, Permissions.StockRead, Permissions.ShipmentRead,
+            Permissions.ShipmentPrepare, Permissions.ShipmentDispatch, Permissions.ShipmentAssign),
+        ["finance-maker"] = New("finance-maker", Permissions.OrderRead, Permissions.InvoiceRead, Permissions.CaseRead, Permissions.InvoiceReleaseRead,
+            Permissions.PaymentReviewRead),
+        ["finance-checker"] = New("finance-checker", Permissions.OrderRead, Permissions.InvoiceRead, Permissions.CaseRead, Permissions.InvoiceReleaseRead,
+            Permissions.PaymentReviewRead),
+        ["procurement-officer"] = New("procurement-officer", Permissions.CatalogRead, Permissions.OrderRead, Permissions.StockRead, Permissions.ProcurementRead),
+        ["procurement-approver"] = New("procurement-approver", Permissions.CatalogRead, Permissions.OrderRead, Permissions.StockRead, Permissions.ProcurementRead),
+        ["warehouse-receiver"] = New("warehouse-receiver", Permissions.CatalogRead, Permissions.OrderRead, Permissions.StockRead, Permissions.StockCount,
+            Permissions.ProcurementRead)
     }.ToImmutableDictionary(StringComparer.Ordinal);
 
     public static ImmutableDictionary<string, ImmutableArray<string>> FinancePacks { get; } = new Dictionary<string, ImmutableArray<string>>(StringComparer.Ordinal)
     {
         ["reporting"] = [Permissions.SourceReconcile, Permissions.ReportPrepare, Permissions.PeriodSubmit, Permissions.PeriodReopenRequest],
-        ["billing"] = [Permissions.InvoiceRead, Permissions.InvoiceIssue, Permissions.PaymentRecord, Permissions.PaymentAllocate,
-            Permissions.CreditRequest, Permissions.RefundRequest, Permissions.DisbursementRecord],
+        // F-007: only permissions a billing page can use. Payment recording has no page or command; credit and refund requests are
+        // made from a case, which store heads run (offered with the store-head template).
+        ["billing"] = [Permissions.InvoiceRead, Permissions.InvoiceIssue, Permissions.PaymentAllocate, Permissions.DisbursementRecord],
         ["approval"] = [Permissions.CreditApprove, Permissions.RefundApprove, Permissions.FundingApprove, Permissions.ExpenseApprove,
             Permissions.PeriodApprove, Permissions.PeriodReopenApprove],
         ["accounting"] = [Permissions.ReconciliationVerify, Permissions.JournalPost, Permissions.JournalReverse, Permissions.PeriodClose, Permissions.DisbursementVerify]
@@ -42,15 +62,43 @@ public static class RoleTemplates
             ["buyer"] = [Permissions.BranchOrderRequestRead, Permissions.BranchOrderRequestSubmit, Permissions.SubstitutionAccept, Permissions.OrganizationAddressRead],
             ["store-staff"] = [Permissions.OrganizationAddressRead, Permissions.SubstitutionPropose, Permissions.StockConvert,
                 Permissions.ReservationRelease, Permissions.SupplierChangePropose, Permissions.StockReleasePropose],
-            ["store-head"] = [Permissions.BranchOrderRequestRead, Permissions.BranchOrderRequestDecide, Permissions.OrderAccept, Permissions.SupplierChangeApprove, Permissions.OrganizationAddressRead, Permissions.FundingRead],
+            ["store-head"] = [Permissions.BranchOrderRequestRead, Permissions.BranchOrderRequestDecide, Permissions.OrderAccept, Permissions.SupplierChangeApprove, Permissions.OrganizationAddressRead, Permissions.FundingRead,
+                Permissions.CreditRequest, Permissions.RefundRequest],
             ["courier"] = [],
+            // The generic finance template offers the proposing side only; the deciding side is offered by finance-checker.
             ["finance"] = [Permissions.OrganizationAddressRead, Permissions.BankReceiptRead, Permissions.BankReceiptConfirm, Permissions.BankStatementRead, Permissions.BankStatementStage, Permissions.PaymentReviewRead, Permissions.PaymentReviewCorrect, Permissions.ReceivingAccountRead, Permissions.ReceivingAccountDetailsRead,
-                Permissions.ReceivingAccountPropose, Permissions.ReceivingAccountVerify, Permissions.ReceivingAccountApprove, Permissions.FundingRead,
-                Permissions.SupplierBankRead, Permissions.SupplierBankDetailsRead, Permissions.SupplierBankPropose, Permissions.SupplierBankApprove,
+                Permissions.ReceivingAccountPropose, Permissions.FundingRead,
+                Permissions.SupplierBankRead, Permissions.SupplierBankDetailsRead, Permissions.SupplierBankPropose,
                 Permissions.ProcurementDisbursementRead, Permissions.ProcurementDisbursementEvidenceRead,
-                Permissions.ProcurementStockValuationRead, Permissions.ProcurementStockValuationPropose, Permissions.ProcurementStockValuationDecide,
+                Permissions.ProcurementStockValuationRead, Permissions.ProcurementStockValuationPropose,
                 Permissions.StockReleaseApprove],
-            ["system-admin"] = []
+            ["system-admin"] = [],
+            ["branch-approver"] = [Permissions.OrderSpendApprove, Permissions.OrderSpendingPolicyRead, Permissions.OrganizationAddressRead],
+            ["catalog-officer"] = [Permissions.CatalogPublicPropose, Permissions.OrganizationAddressRead],
+            ["catalog-reviewer"] = [Permissions.PricingApprove, Permissions.CatalogPublicApprove],
+            ["dispatcher"] = [Permissions.OrganizationAddressRead, Permissions.StockReleasePropose, Permissions.ReservationRelease, Permissions.SubstitutionPropose],
+            ["finance-maker"] = [Permissions.InvoiceReleasePropose, Permissions.InvoiceIssue, Permissions.PaymentAllocate, Permissions.DisbursementRecord,
+                Permissions.ProcurementDisbursementRead, Permissions.ProcurementDisbursementEvidenceRead, Permissions.ReceivingAccountRead,
+                Permissions.ReceivingAccountDetailsRead, Permissions.ReceivingAccountPropose, Permissions.BankReceiptRead, Permissions.BankStatementRead, Permissions.BankStatementStage,
+                Permissions.ProcurementStockValuationRead, Permissions.ProcurementStockValuationPropose, Permissions.OrganizationAddressRead],
+            ["finance-checker"] = [Permissions.InvoiceReleaseApprove, Permissions.PaymentVerify, Permissions.PaymentReviewCorrect, Permissions.DisbursementVerify,
+                Permissions.ProcurementDisbursementRead, Permissions.ProcurementDisbursementEvidenceRead, Permissions.ReceivingAccountRead,
+                Permissions.ReceivingAccountDetailsRead, Permissions.ReceivingAccountVerify, Permissions.ReceivingAccountApprove, Permissions.BankReceiptRead,
+                Permissions.BankReceiptConfirm, Permissions.BankStatementRead,
+                Permissions.SupplierBankRead, Permissions.SupplierBankApprove, Permissions.ProcurementStockValuationRead, Permissions.ProcurementStockValuationDecide,
+                Permissions.StockReleaseApprove, Permissions.FundingRead, Permissions.FundingApprove, Permissions.OrganizationAddressRead],
+            ["procurement-officer"] = [Permissions.ProcurementPrepare, Permissions.SupplierChangePropose, Permissions.ProcurementSupplierDocumentRecord,
+                Permissions.ProcurementSupplierDocumentMatch, Permissions.ProcurementSupplierDocumentEvidenceRead, Permissions.SupplierClaim,
+                Permissions.ProcurementQualityAcceptanceRead, Permissions.ProcurementQualityAcceptancePropose, Permissions.ProcurementPayableRead,
+                Permissions.ProcurementPayablePropose, Permissions.ProcurementAdvanceReturnRead, Permissions.ProcurementAdvanceReturnPropose,
+                Permissions.FundingRead, Permissions.FundingRequest, Permissions.SupplierBankRead, Permissions.SupplierBankPropose, Permissions.OrganizationAddressRead],
+            ["procurement-approver"] = [Permissions.ProcurementApprove, Permissions.SupplierChangeApprove, Permissions.SupplierClaimApprove,
+                Permissions.ProcurementSupplierDocumentEvidenceRead, Permissions.ProcurementInspectionEvidenceRead, Permissions.ProcurementQualityAcceptanceRead,
+                Permissions.ProcurementQualityAcceptanceDecide, Permissions.ProcurementPayableRead, Permissions.ProcurementPayableDecide,
+                Permissions.ProcurementAdvanceReturnRead, Permissions.ProcurementAdvanceReturnDecide, Permissions.FundingRead, Permissions.SupplierBankRead,
+                Permissions.OrganizationAddressRead],
+            ["warehouse-receiver"] = [Permissions.StockReceive, Permissions.ProcurementContainerReceive, Permissions.ProcurementInspect,
+                Permissions.ProcurementInspectionEvidenceRead, Permissions.StockConvert, Permissions.OrganizationAddressRead]
         }.ToImmutableDictionary(StringComparer.Ordinal);
 
     public static RoleTemplateSnapshot Materialize(string templateId, IEnumerable<string> financePacks, IEnumerable<string> additionalPermissions)

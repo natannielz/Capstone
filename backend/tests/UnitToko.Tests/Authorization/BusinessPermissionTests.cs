@@ -369,7 +369,7 @@ public sealed class BusinessPermissionTests
         Assert.Equal(new[] { Permissions.OrganizationAddressRead, Permissions.SubstitutionPropose, Permissions.StockConvert, Permissions.ReservationRelease,
             Permissions.SupplierChangePropose, Permissions.StockReleasePropose }, RoleTemplates.Suggestions["store-staff"].ToArray());
         Assert.Equal(new[] { Permissions.BranchOrderRequestRead, Permissions.BranchOrderRequestDecide, Permissions.OrderAccept, Permissions.SupplierChangeApprove,
-            Permissions.OrganizationAddressRead, Permissions.FundingRead }, RoleTemplates.Suggestions["store-head"].ToArray());
+            Permissions.OrganizationAddressRead, Permissions.FundingRead, Permissions.CreditRequest, Permissions.RefundRequest }, RoleTemplates.Suggestions["store-head"].ToArray());
         foreach (var role in new[] { "buyer", "store-staff", "store-head" })
             foreach (var suggestion in RoleTemplates.Suggestions[role])
                 Assert.DoesNotContain(suggestion, RoleTemplates.Materialize(role, [], []).Permissions);
@@ -377,10 +377,10 @@ public sealed class BusinessPermissionTests
             Permissions.BankStatementRead, Permissions.BankStatementStage,
             Permissions.PaymentReviewRead, Permissions.PaymentReviewCorrect,
             Permissions.ReceivingAccountRead, Permissions.ReceivingAccountDetailsRead,
-            Permissions.ReceivingAccountPropose, Permissions.ReceivingAccountVerify, Permissions.ReceivingAccountApprove, Permissions.FundingRead,
-            Permissions.SupplierBankRead, Permissions.SupplierBankDetailsRead, Permissions.SupplierBankPropose, Permissions.SupplierBankApprove,
+            Permissions.ReceivingAccountPropose, Permissions.FundingRead,
+            Permissions.SupplierBankRead, Permissions.SupplierBankDetailsRead, Permissions.SupplierBankPropose,
             Permissions.ProcurementDisbursementRead, Permissions.ProcurementDisbursementEvidenceRead,
-            Permissions.ProcurementStockValuationRead, Permissions.ProcurementStockValuationPropose, Permissions.ProcurementStockValuationDecide,
+            Permissions.ProcurementStockValuationRead, Permissions.ProcurementStockValuationPropose,
             Permissions.StockReleaseApprove };
         Assert.Equal(financeSuggestions, RoleTemplates.Suggestions["finance"].ToArray());
         var allFinancePacks = RoleTemplates.Materialize("finance", RoleTemplates.FinancePacks.Keys, []).Permissions;
