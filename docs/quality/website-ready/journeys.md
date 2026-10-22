@@ -453,6 +453,14 @@ Script accounting: 80 files. Each R-ID is one file, except R07, R13, R19 and R23
 
 ---
 
+## Phase B status (22 Okt 2026)
+
+- Golden journey written as `frontend/scripts/verify-golden-journey-browser.mjs` with drivers in `backend/tests/UnitToko.Tests/Journeys/` (R77–R82, section 3). A1 order to receipt (R77) **passes** with one persona per step; A2 (R78) is skipped pending F-004; B (R79) runs B1–B6 (see the phase B report for the final result).
+- New rehearsals: R80 keranjang/draft/cancellation **passes**; R81 branch requests **passes**; R82 second keranjang order + store rejection is **red** on F-030.
+- Exploratory pass on the review stack: evidence in `tmp/website-ready/screens/func-b/`; findings F-021–F-032 in `findings-func.md` (phase B rows).
+- Rows changed in this phase carry a phase-B note in their Run column. Counts in 2.6 are the phase A baseline.
+
+---
 ## 5. Golden journey design
 
 Deliverables (phase B, after ENV Task 0.3 merges): `frontend/scripts/verify-golden-journey-browser.mjs` and `backend/tests/UnitToko.Tests/Journeys/GoldenJourneyBrowserTests.cs`.
