@@ -27,7 +27,7 @@ const kinds = { stock_need: 'Kebutuhan stok', incoming_notice: 'Pemberitahuan ba
 const states = { submitted: 'Menunggu pemeriksaan', approved: 'Disetujui', rejected: 'Ditolak' } as const;
 const when = (value: string) => dateTimeFormatter.format(new Date(value));
 function message(error: unknown) {
-  if (error instanceof IdentityFailure) return 'Masuk dengan akun organisasi Anda untuk melanjutkan.';
+  if (error instanceof IdentityFailure) return 'Sesi Anda perlu diperbarui. Masuk kembali untuk melanjutkan.';
   if (error instanceof AccessFailure || error instanceof RequestNotSentError) {
     if (error.code === 'procurement_invalid' || error.code === 'invalid_procurement_request') return 'Pilih lokasi, jalur dan tanggal, lalu periksa kemasan, jumlah, referensi yang diperlukan dan alasan.';
     if (error.code === 'procurement_view_stale' || error.code === 'procurement_request_changed') return 'Sumber lokasi, barang atau permintaan berubah. Muat data terbaru dan periksa kembali rincian.';

@@ -5,7 +5,7 @@ import {catalogTabCurrent, storeMember, storeLinks, storeSignInHref} from '../sr
 const buyer = ['catalog.read', 'order.request.read', 'order.request.submit', 'branch.pic', 'order.submit', 'order.read', 'invoice.read'];
 
 test('buyers, approvers and staff are told apart by their permissions, never by their name', () => {
-  assert.deepEqual(storeMember('Rina', buyer), {kind: 'member', name: 'Rina', staff: false, approver: false, orders: true, tasks: [{href: '/billing/invoices', label: 'Tagihan'}]});
+  assert.deepEqual(storeMember('Rina', buyer), {kind: 'member', name: 'Rina', staff: false, approver: false, orders: true, requests: true, tasks: [{href: '/billing/invoices', label: 'Tagihan'}]});
   const andi = storeMember('Andi', [...buyer, 'order.spend.approve']);
   assert.deepEqual({staff: andi.staff, approver: andi.approver, orders: andi.orders}, {staff: false, approver: true, orders: true});
   assert.ok(andi.tasks.some(task => task.href === '/ordering/reviews'));
@@ -62,4 +62,19 @@ test('store staff who never place orders get no "Pesanan saya" entry that could 
   const storeStaff = ['catalog.read', 'order.read', 'stock.read', 'shipment.prepare', 'shipment.dispatch', 'procurement.read'];
   assert.equal(storeLinks(storeMember('Petugas', storeStaff), false, '/shop').orders, null);
   assert.equal(storeLinks(storeMember('Sari', [...storeStaff, 'order.submit']), false, '/shop').orders, '/ordering/orders');
+});
+
+test('cart and orders are offered only to members who can order; staff without ordering rights see neither (G-033)', () => {
+  for (const staff of [['shipment.read', 'delivery.attempt'], ['invite.manage', 'technical.configure'], ['invoice.read', 'invoice.issue'], ['payment.review.read', 'invoice.read']]) {
+    const links = storeLinks(storeMember('Petugas', staff), false, '/shop');
+    assert.equal(links.cart, null, staff.join());
+    assert.equal(links.orders, null, staff.join());
+  }
+  const buyer = storeLinks(storeMember('Rina', ['catalog.read', 'order.read', 'order.submit']), false, '/shop');
+  assert.equal(buyer.cart, '/cart'); assert.equal(buyer.orders, '/ordering/orders');
+  // First release: the cart is the branch request, offered to members who may request.
+  assert.equal(storeLinks(storeMember('Rina', ['catalog.read', 'order.request.submit']), true, '/shop').cart, '/ordering/requests');
+  assert.equal(storeLinks(storeMember('Petugas', ['catalog.manage']), true, '/shop').cart, null);
+  // Guests still meet the sign-in door for both.
+  assert.match(storeLinks({kind: 'guest'}, false, '/shop').cart!, /^\/identity\/login/);
 });

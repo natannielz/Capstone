@@ -42,14 +42,14 @@ export function requestStateLabel(value: BranchRequestResult['state']) {
 }
 export function requestMessage(error: unknown, writing = false) {
   if (error instanceof RequestNotSentError) return 'Permintaan belum dikirim. Periksa koneksi, lalu kirim lagi.';
-  if (error instanceof IdentityFailure && error.status === 401) return 'Masuk dengan akun organisasi Anda untuk melanjutkan.';
+  if (error instanceof IdentityFailure && error.status === 401) return 'Sesi Anda perlu diperbarui. Masuk kembali untuk melanjutkan.';
   if (error instanceof AccessFailure) {
     if (error.code === 'actor_changed') return 'Akun di peramban berubah. Muat ulang halaman sebelum melanjutkan.';
     if (error.code === 'branch_request_quantity_invalid') return 'Isi jumlah sesuai minimum dan kelipatan kemasan.';
     if (error.code === 'branch_request_multiple_fulfillment_owners') return 'Pilih kemasan dari satu toko tujuan untuk setiap permintaan.';
     if (error.code === 'branch_request_package_unavailable') return 'Salah satu kemasan tidak lagi tersedia untuk cabang ini. Periksa kembali pilihan Anda.';
     if (error.code === 'invalid_branch_order_request') return 'Periksa cabang, pilihan kemasan, jumlah, dan catatan Anda.';
-    if (error.status === 401) return 'Masuk dengan akun organisasi Anda untuk melanjutkan.';
+    if (error.status === 401) return 'Sesi Anda perlu diperbarui. Masuk kembali untuk melanjutkan.';
     if (error.status === 403) return 'Permintaan atau tindakan ini tidak tersedia dalam penugasan akun Anda.';
     if (error.status === 409) return 'Data berubah. Muat kembali dan tinjau informasi terbaru.';
   }

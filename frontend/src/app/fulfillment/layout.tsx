@@ -1,4 +1,4 @@
-import { WorkspaceFrame } from "@/components/workspace-kit/workspace-frame";
+import { TaskFrame } from "@/components/store/task-frame";
 
-/** Every page in this area sits in the shared workspace frame (sidebar, menu, workspace search and help). */
-export default function Layout({ children }: { children: React.ReactNode }) { return <WorkspaceFrame>{children}</WorkspaceFrame>; }
+/** Pages here sit in the workspace frame; a buyer's own task pages open in the storefront for non-staff buyers (G-037). */
+export default function Layout({ children }: { children: React.ReactNode }) { return <TaskFrame>{children}</TaskFrame>; }

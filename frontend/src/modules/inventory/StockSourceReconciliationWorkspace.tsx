@@ -61,7 +61,7 @@ export function StockSourceReconciliationWorkspace() {
   const denied = useCallback((failure: unknown) => { if (failure instanceof AccessFailure && (failure.status === 401 || ['actor_changed', 'session_expired'].includes(failure.code))) { setAccount(null); setError(failure); } }, []);
   return <main className={styles.page}>
     <header className={styles.header}><div><Link className={styles.brand} href="/identity/account">Unit Toko</Link><h1>Rekonsiliasi jumlah fisik</h1><p>Bandingkan pengamatan seluruh lot dengan catatan sumber dan pemeriksaan orang berbeda.</p></div><Link className={styles.secondary} href="/identity/account">Akun saya</Link></header>
-    {error !== null && <p className={styles.alert} role="alert">{message(error)}</p>}
+    {error !== null && account !== null && <p className={styles.alert} role="alert">{message(error)}</p>}
     {loading ? <p role="status">Memeriksa akun dan akses…</p> : !account || sessionTiming(account.session, elapsed).expired ? <SessionAccessState kind={account ? "expired" : undefined} error={error} returnPath={path} onRetry={() => setRevision(value => value + 1)} /> :
       <ReconciliationDesk key={account.actorId + ':' + account.observedAt} account={account} fresh={sessionTiming(account.session, elapsed).fresh} now={Date.parse(account.session.serverTime) + Math.max(0, elapsed)} onDenied={denied} />}
   </main>;
