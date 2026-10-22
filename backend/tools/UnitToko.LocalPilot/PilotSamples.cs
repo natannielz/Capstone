@@ -79,6 +79,11 @@ public static class PilotSamples
                 Meta("approve." + proposal["_id"].AsInt64, ApproveReason), ct), "persetujuan usulan tertunda " + proposal["_id"].AsInt64);
         }
 
+        // Over the cap (e.g. the version 122 conversion of a public assortment made every published product a sample), guests get
+        // nothing at all: narrow the set to the chosen products through removal proposals. A set inside the cap, whatever staff chose,
+        // is never touched.
+        if (!await NarrowAsync()) return;
+
         var samples = await SamplesAsync();
         var waiting = (await proposals.Find(new BsonDocument("state", "pending")).ToListAsync(ct)).SelectMany(row => row["families"].AsBsonArray.Select(id => id.AsInt64)).ToHashSet();
         var missing = Missing(chosen, samples, waiting);
@@ -92,7 +97,41 @@ public static class PilotSamples
         if (!await SkipOnConflictAsync(() => service.DecideAsync(Actor(Checker), proposalId, CatalogPublicSampleDecision.Approve, Meta("approve." + proposalId, ApproveReason), ct),
             "persetujuan usulan " + proposalId)) return;
         Console.WriteLine("Sampel tamu: " + missing.Length + " produk contoh ditambahkan (diajukan petugas, disetujui peninjau).");
+
+        // True when the set is inside the cap (now or after narrowing); false when a conflict skipped a step.
+        async Task<bool> NarrowAsync()
+        {
+            var held = await sampleRows.Find(FilterDefinition<BsonDocument>.Empty).Project(new BsonDocument { { "_id", 1 }, { "ownerScope", 1 } }).ToListAsync(ct);
+            if (held.Count <= limit) return true;
+            // Our own narrowing proposal left pending by an interrupted start is approved first; a person's pending proposals keep their products.
+            foreach (var mine in (await proposals.Find(new BsonDocument("state", "pending")).ToListAsync(ct)).Where(row => row["proposedBy"].AsInt64 == Maker &&
+                row["requestKey"].AsString.StartsWith(ProposeKeyPrefix, StringComparison.Ordinal) && row["adds"].AsBsonArray.Count == 0 &&
+                row["removes"].AsBsonArray.All(value => !chosen.Contains(value.AsInt64))))
+                if (!await SkipOnConflictAsync(() => service.DecideAsync(Actor(Checker), mine["_id"].AsInt64, CatalogPublicSampleDecision.Approve,
+                    Meta("approve." + mine["_id"].AsInt64, NarrowReason), ct), "persetujuan usulan tertunda " + mine["_id"].AsInt64)) return false;
+            held = await sampleRows.Find(FilterDefinition<BsonDocument>.Empty).Project(new BsonDocument { { "_id", 1 }, { "ownerScope", 1 } }).ToListAsync(ct);
+            if (held.Count <= limit) return true;
+            var blocked = (await proposals.Find(new BsonDocument("state", "pending")).ToListAsync(ct)).SelectMany(row => row["families"].AsBsonArray.Select(value => value.AsInt64)).ToHashSet();
+            var removable = held.Where(row => !chosen.Contains(row["_id"].AsInt64) && !blocked.Contains(row["_id"].AsInt64)).ToArray();
+            var narrowed = 0;
+            // One proposal per catalog owner and at most ChangeLimit products, as the service requires.
+            foreach (var batch in removable.GroupBy(row => row["ownerScope"].AsBsonDocument).SelectMany(owner => owner.Select(row => row["_id"].AsInt64).Order().Chunk(ChangeLimit)))
+            {
+                long removal = 0;
+                if (!await SkipOnConflictAsync(async () => removal = (await service.ProposeAsync(Actor(Maker), [], [.. batch],
+                    Meta("propose." + Guid.NewGuid().ToString("N"), NarrowReason), ct))["proposalId"].AsInt64, "usulan penghapusan " + batch.Length + " sampel")) return false;
+                if (!await SkipOnConflictAsync(() => service.DecideAsync(Actor(Checker), removal, CatalogPublicSampleDecision.Approve, Meta("approve." + removal, NarrowReason), ct),
+                    "persetujuan usulan " + removal)) return false;
+                narrowed += batch.Length;
+            }
+            Console.WriteLine("Sampel tamu: " + held.Count + " sampel melebihi batas " + limit + "; " + narrowed + " produk di luar contoh pilihan dihapus dari sampel " +
+                "(diajukan petugas, disetujui peninjau).");
+            return true;
+        }
     }
+
+    private const int ChangeLimit = 200;
+    private const string NarrowReason = "SYNTHETIC: sampel tamu melebihi batas 200 sehingga katalog tamu tidak dapat dibuka; dipersempit ke contoh pilihan";
 
     /// <summary>The chosen products that are neither samples already nor waiting in a proposal, in choice order.</summary>
     public static long[] Missing(IEnumerable<long> chosen, IReadOnlySet<long> samples, IReadOnlySet<long> waiting) =>
