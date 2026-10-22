@@ -27,7 +27,7 @@ const when = (value: string) => dateTimeFormatter.format(new Date(value));
 const counts = [['declaredPackages', 'Kemasan menurut dokumen'], ['receivedPackages', 'Kemasan diterima'], ['damagedPackages', 'Kemasan rusak'], ['expiredPackages', 'Kemasan kedaluwarsa'], ['openedPackages', 'Kemasan terbuka']] as const;
 function integer(value: string) { if (!/^(?:0|[1-9][0-9]{0,6})$(?![\s\S])/.test(value) || Number(value) > 1_000_000) throw new RequestNotSentError(400, 'invalid_procurement_inspection'); return Number(value); }
 function message(error: unknown) {
-  if (error instanceof IdentityFailure) return 'Masuk dengan akun organisasi Anda untuk melanjutkan.';
+  if (error instanceof IdentityFailure) return 'Sesi Anda perlu diperbarui. Masuk kembali untuk melanjutkan.';
   if (error instanceof AccessFailure || error instanceof RequestNotSentError) {
     if (error.code === 'invalid_procurement_inspection') return 'Periksa tanggal, jumlah koli dan seluruh pengamatan kemasan. Isi selisih atau kondisi bermasalah dengan keterangan; jumlah rusak, kedaluwarsa dan terbuka dapat saling tumpang tindih.';
     if (error.code === 'procurement_inspection_video_required') return 'Pilih video asli MP4 atau WebM sesuai batas ukuran yang diizinkan untuk draf ini.';

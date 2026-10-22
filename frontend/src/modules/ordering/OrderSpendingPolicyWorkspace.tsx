@@ -23,7 +23,7 @@ const path = '/ordering/spending-policies', readPermission = 'order.spending.pol
 const when = (value: string) => dateTimeFormatter.format(new Date(value));
 const status = { pending: 'Menunggu pemeriksaan', approved: 'Disetujui', rejected: 'Ditolak' } as const;
 function message(error: unknown) {
-  if (error instanceof IdentityFailure) return 'Masuk dengan akun organisasi Anda untuk melanjutkan.';
+  if (error instanceof IdentityFailure) return 'Sesi Anda perlu diperbarui. Masuk kembali untuk melanjutkan.';
   if (error instanceof AccessFailure || error instanceof RequestNotSentError) {
     if (error.code === 'spending_policy_invalid' || error.code === 'order_spending_policy_invalid') return 'Pilih aturan, isi ambang jika diperlukan, tentukan masa berlaku dan sertakan alasan.';
     if (error.code === 'order_spending_policy_changed' || error.code === 'spending_policy_view_stale') return 'Unit atau aturan berubah. Muat data terbaru, lalu periksa ulang pengajuan.';

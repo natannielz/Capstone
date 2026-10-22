@@ -29,7 +29,7 @@ const amount = (value: string) => orderAmount('IDR', value);
 const routes = { omi_regular: 'OMI reguler', ddo: 'DDO', smart: 'S-Mart', pasar_kering: 'Pasar Kering' } as const;
 const issues = { missing_identity: 'Identitas transaksi belum tersedia', duplicate_identity: 'Identitas transaksi berulang', already_claimed: 'Sudah digunakan untuk pencatatan lain', amount_mismatch: 'Nominal berbeda', date_mismatch: 'Tanggal di luar rentang transfer' } as const;
 function message(error: unknown) {
-  if (error instanceof IdentityFailure) return 'Masuk dengan akun organisasi Anda untuk melanjutkan.';
+  if (error instanceof IdentityFailure) return 'Sesi Anda perlu diperbarui. Masuk kembali untuk melanjutkan.';
   if (error instanceof AccessFailure || error instanceof RequestNotSentError) {
     if (error.code === 'procurement_settlement_invalid') return 'Pilih kebijakan, impor dan baris debit. Isi rincian penerima serta referensi pemeriksaan persis dari sumber bank yang Anda periksa.';
     if (error.code === 'independent_person_required') return 'Pemeriksa harus berbeda dari pencatat bukti uang muka dan pengimpor mutasi bank.';

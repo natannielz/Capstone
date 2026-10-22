@@ -22,10 +22,10 @@ function todayInJakarta(): string {
   return jakartaDateKey(new Date());
 }
 function message(error: unknown): string {
-  if (error instanceof IdentityFailure) return 'Masuk dengan akun organisasi Anda untuk melanjutkan.';
+  if (error instanceof IdentityFailure) return 'Sesi Anda perlu diperbarui. Masuk kembali untuk melanjutkan.';
   if (error instanceof AccessFailure || error instanceof RequestNotSentError) {
     if (error.code === 'actor_changed' || error.code === 'session_expired') return 'Sesi Anda perlu diperbarui. Masuk kembali untuk melanjutkan.';
-    if (error.status === 401) return 'Masuk dengan akun organisasi Anda untuk melanjutkan.';
+    if (error.status === 401) return 'Sesi Anda perlu diperbarui. Masuk kembali untuk melanjutkan.';
     if (error.status === 403) return 'Akun ini belum memiliki akses laporan untuk toko yang dipilih. Laporan organisasi lain tidak ditampilkan.';
     if (error.code === 'invalid_accounting_report_date') return 'Pilih tanggal kalender yang sah. Tanggal akhir mencakup seluruh tanggal bisnis tersebut di Asia/Jakarta.';
     if (error.code === 'accounting_report_too_large') return 'Pilihan kumulatif melebihi batas laporan: 500 jurnal, 10.000 baris, atau 2.000 akun. Pilih tanggal akhir lebih awal atau hubungi penanggung jawab untuk pelaporan jumlah besar. Data tidak dipotong diam-diam.';

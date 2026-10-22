@@ -8,7 +8,8 @@ import { describeScope, validReference } from "../organizations/access-scope";
 import { createAccessGateway } from "./access-client";
 import { AdministrationNavigation } from "./AdministrationNavigation";
 import { OperationRecovery, useOperationRecovery } from "./OperationRecovery";
-import { accessMessage } from "./workflow";
+import { AccessFailure, accessMessage } from "./workflow";
+import { canReadAccessHistory } from "../identity/identity-workflow";
 import styles from "./access.module.css";
 import { formatDateTime } from "@/lib/format";
 
@@ -25,7 +26,8 @@ export function AccessHistory() {
   const recovery = useOperationRecovery(current?.userId);
   useEffect(() => {
     let active = true;
-    void gateway.current().then(actor => { if (active) setCurrent(actor); }, failure => { if (active) setError(failure); })
+    // The page decides before rendering the purpose form: without a history grant it is the standard denial (G-040).
+    void gateway.current().then(actor => { if (!active) return; if (canReadAccessHistory(actor.allowedActions)) setCurrent(actor); else setError(new AccessFailure(403, 'scope_denied')); }, failure => { if (active) setError(failure); })
       .finally(() => { if (active) setBusy(false); });
     return () => { active = false; };
   }, [gateway]);
