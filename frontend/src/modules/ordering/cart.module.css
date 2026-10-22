@@ -1,5 +1,5 @@
 /* /cart and the product page's buy box, on the storefront container and the shared primitives (U-026). Tokens only. */
-.page { width: min(var(--content-wide), 100% - 2 * var(--gutter)); margin: 0 auto; padding: var(--space-6) 0 var(--space-12); }
+.page { width: min(var(--content-wide), 100% - 2 * var(--gutter)); margin: 0 auto; padding: var(--space-8) 0 var(--space-12); }
 .branch { max-width: 420px; margin: 0 0 var(--space-6); }
 .buyBox .branch { max-width: none; margin: 0; }
 
@@ -35,8 +35,8 @@ a.lineName:hover { text-decoration: underline; text-underline-offset: 4px; }
 .alert { margin: 0; padding: var(--space-4) var(--space-6); border-radius: var(--radius-card); background: var(--tone-danger); color: var(--tone-danger-foreground); }
 .actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 
-/* Product page: the buy box is an inset panel beside the facts, never a card inside a card (U-025). */
-.buyBox { display: grid; gap: var(--space-3); padding: var(--space-4); border-radius: var(--radius-card); background: var(--muted); }
+/* Product page: the buy box is a surface without a border beside the facts, never a card inside a card (U-025). */
+.buyBox { display: grid; gap: var(--space-3); padding: var(--space-6); border-radius: var(--radius-card); background: var(--card); }
 .buyBox p { margin: 0; }
 .subtotal { display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-3); padding-top: var(--space-3); border-top: 1px solid var(--border); }
 .subtotal span { color: var(--muted-foreground); }
@@ -57,6 +57,6 @@ a.lineName:hover { text-decoration: underline; text-underline-offset: 4px; }
   .summary h2, .summaryNote, .saved { display: none; }
 }
 @media (max-width: 639px) {
-  .page { padding-top: var(--space-4); }
+  .page { padding-top: var(--space-6); }
   .branch { max-width: none; }
 }

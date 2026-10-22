@@ -1,6 +1,6 @@
 /* One storefront catalogue for guests (/katalog) and signed-in buyers (/shop): the same container, breadcrumb, toolbar, chips,
    grid, card, pager and product layout (ui-standard §3.3, U-024, U-025, U-031). Signing in only adds prices and buying. */
-.page { width: min(var(--content-wide), 100% - 2 * var(--gutter)); min-height: 60vh; margin-inline: auto; padding: var(--space-6) 0 var(--space-12); color: var(--foreground); }
+.page { width: min(var(--content-wide), 100% - 2 * var(--gutter)); min-height: 60vh; margin-inline: auto; padding: var(--space-8) 0 var(--space-12); color: var(--foreground); }
 /* /catalog/browse shows the same catalogue inside the staff workspace frame, on its left edge. */
 :global([data-workspace-frame]) .page { width: auto; max-width: calc(var(--content-wide) + 2 * var(--gutter)); margin: 0; padding: var(--space-8) var(--gutter) var(--space-12); }
 
@@ -23,12 +23,11 @@
 .searchTerm { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin: 0; font-size: 15px; }
 /* Sort and view never shrink below their own labels ("Terbaru ditambahkan" is never clipped). */
 .sort { flex: none; }
-.view { display: inline-flex; flex: none; height: var(--control-h); border: 1px solid var(--control-border); border-radius: var(--radius-control); overflow: hidden; }
-.view button { display: inline-flex; align-items: center; gap: var(--space-2); padding: 0 var(--space-4); border: 0; background: var(--card); color: var(--foreground);
-  font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
-.view button + button { border-left: 1px solid var(--control-border); }
+.view { display: inline-flex; flex: none; gap: var(--space-1); }
+.view button { display: inline-flex; align-items: center; gap: var(--space-2); height: var(--control-h); padding: 0 var(--space-4); border: 1px solid var(--control-border);
+  border-radius: var(--radius-control); background: var(--card); color: var(--foreground); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
 .view button:hover { background: var(--muted); }
-.view button[aria-pressed="true"] { background: var(--secondary); color: var(--secondary-foreground); }
+.view button[aria-pressed="true"] { border-color: var(--secondary); background: var(--secondary); color: var(--secondary-foreground); }
 .view svg { width: 16px; height: 16px; }
 
 /* Five across at 1280, two on a phone, for guests and buyers alike. */
@@ -66,8 +65,8 @@
 .productWide { grid-column: 1 / -1; max-width: 72ch; }
 .productWide h2 { margin: 0 0 var(--space-2); }
 .productWide p { margin: 0; white-space: pre-line; }
-/* The buy box (price gate for guests, order controls for buyers): an inset panel, never a card inside a card. */
-.buyPanel { display: grid; gap: var(--space-3); margin: var(--space-2) 0; padding: var(--space-4); border-radius: var(--radius-card); background: var(--muted); }
+/* The buy box (price gate for guests, order controls for buyers): a surface without a border on the canvas, never a card inside a card. */
+.buyPanel { display: grid; gap: var(--space-3); margin: var(--space-2) 0; padding: var(--space-6); border-radius: var(--radius-card); background: var(--card); }
 .buyPanel p { margin: 0; }
 .help { margin: 0; font-size: 13px; line-height: 20px; color: var(--muted-foreground); }
 .help a { color: var(--primary); font-weight: 600; }
@@ -76,7 +75,7 @@
   .product { grid-template-columns: minmax(0, 1fr); gap: var(--space-4); }
 }
 @media (max-width: 639px) {
-  .page { padding-top: var(--space-4); }
+  .page { padding-top: var(--space-6); }
   .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
   .cardBody { padding: var(--space-3); }
   .cardActions { padding: 0 var(--space-3) var(--space-3); }
