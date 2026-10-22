@@ -188,6 +188,25 @@ public sealed class PilotSamplesTests
             await PilotBootstrap.InitializeDatabaseAsync(client, database, secrets, CancellationToken.None);
             Assert.Equal(before, Proposals());
 
+            // An interrupted narrowing converges: over the cap again, the pilot's first removal batch was approved and its second left
+            // pending when the start stopped. The set is now under the cap, yet the next start finishes the pilot's own narrowing (approving
+            // the pending batch) instead of keeping the leftovers as if staff had chosen them.
+            await database.GetCollection<BsonDocument>("catalogPublicSamples").InsertManyAsync(converted.Select(row => row.DeepClone().AsBsonDocument));
+            Assert.True(Rows("catalogPublicSamples").Length > 200);
+            var leftovers = converted.Select(row => row["_id"].AsInt64).Order().ToArray();
+            var first = await service.ProposeAsync(Actor(2001), [], [.. leftovers.Take(200)], new(PilotSamples.ProposeKeyPrefix + "interrupted-batch-1", "SYNTHETIC: dipersempit", "local-pilot-samples"));
+            await service.DecideAsync(Actor(2002), first["proposalId"].AsInt64, CatalogPublicSampleDecision.Approve, new("local-pilot.samples-v1.approve.interrupted-batch-1", "SYNTHETIC: diperiksa", "local-pilot-samples"));
+            var second = await service.ProposeAsync(Actor(2001), [], [.. leftovers.Skip(200)], new(PilotSamples.ProposeKeyPrefix + "interrupted-batch-2", "SYNTHETIC: dipersempit", "local-pilot-samples"));
+            Assert.InRange(Rows("catalogPublicSamples").Length, 13, 200);
+            before = Proposals();
+            await PilotBootstrap.InitializeDatabaseAsync(client, database, secrets, CancellationToken.None);
+            Assert.Equal(families.Order(), Rows("catalogPublicSamples").Select(row => row["_id"].AsInt64).Order());
+            var finished = Rows("catalogPublicSampleProposals").Single(row => row["_id"] == second["proposalId"]);
+            Assert.Equal(("approved", 2002L), (finished["state"].AsString, finished["decision"]["decidedBy"].AsInt64));
+            Assert.Equal(before, Proposals());
+            Assert.DoesNotContain(Rows("catalogPublicSampleProposals"), row => row["removes"].AsBsonArray.Any(id => families.Contains(id.AsInt64)) &&
+                row["requestKey"].AsString.StartsWith(PilotSamples.ProposeKeyPrefix, StringComparison.Ordinal));
+
             // Guests see exactly these twelve, and no price anywhere in the answer.
             await using var api = new PublicApi(uri, name);
             using var guest = api.CreateClient();
