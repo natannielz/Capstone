@@ -152,16 +152,89 @@ test("U-034: a placeholder owner name (\"… (nama belum tersedia)\") is never t
   has(html, /class="status-badge"[^>]*>Menunggu tinjauan</, "status through Badge");
 });
 
-test("U-035: an allowed recipient without a QR link sees the standard state with its next step, not a bare sentence", () => {
+test("U-035: an allowed recipient without a QR link sees the standard state with an accurate next step", () => {
   const code = source("fulfillment/ReceiptWorkspace.tsx");
   has(code, /<StateView kind="empty" title="Pindai QR dari kurir"/, "receive: empty state with the next step");
   has(code, />Periksa kiriman</, "receive: the real control stays");
+  // "Periksa hasil di atas" only when OperationRecovery actually shows a Periksa hasil (there are recovery entries).
+  has(code, /recovery\.entries\.length > 0 \? 'Jika konfirmasi sebelumnya terputus, gunakan Periksa hasil di atas\.' : '[^']+'/, "receive: the next step names only what is on screen");
+});
+
+/** Each region (a Section, or a native .ui-section) of a page module, as source text. */
+function regions(code: string): Array<{ line: number; text: string }> {
+  const found: Array<{ line: number; text: string }> = [];
+  for (const open of code.matchAll(/<Section\b|<(section|form|div) className=\{?"ui-section/g)) {
+    const tag = open[0].startsWith("<Section") ? "Section" : open[1];
+    const pattern = new RegExp(`<${tag}\\b|</${tag}>`, "g"); pattern.lastIndex = open.index!;
+    let depth = 0, end = code.length, step: RegExpExecArray | null;
+    while ((step = pattern.exec(code))) { if (step[0].startsWith("</")) { if (--depth === 0) { end = step.index; break; } } else depth++; }
+    found.push({ line: code.slice(0, open.index).split("\n").length, text: code.slice(open.index, end) });
+  }
+  return found;
+}
+/** Regions whose unconditional primaries sit in mutually exclusive branches (only one of them renders at a time). */
+const exclusivePrimaries: Record<string, string> = {
+  "catalog/CatalogAdministration.tsx": "'Kategori baru' (category mode) | 'Varian baru' (family view)",
+  "fulfillment/CourierAssignmentWorkspace.tsx": "'Konfirmasi penugasan kurir' (preview) | 'Tinjau penyerahan tugas' (form)",
+  "fulfillment/ReceiptWorkspace.tsx": "'Periksa kiriman' (no review) | 'Konfirmasi penerimaan' (command) | 'Tinjau jumlah' (form)",
+};
+test("U-004 (§8): at most one primary button per region; row actions are never primary", () => {
+  for (const file of Object.values(pages)) {
+    const code = source(file);
+    for (const action of code.matchAll(/renderActions=\{/g)) {
+      const body = code.slice(action.index, code.indexOf("} />", action.index) + 1 || action.index + 800);
+      lacks(body, /variant="primary"|\? 'primary'/, `${file}: a row action is primary`);
+    }
+    for (const region of regions(code)) {
+      const primaries = (region.text.match(/variant="primary"/g) ?? []).length;
+      if (primaries > 1) assert.ok(file in exclusivePrimaries, `${file}:${region.line}: ${primaries} primary buttons in one region`);
+    }
+  }
+  // A proposal row offers Setujui/Tolak as secondary actions; the primary belongs to the open decision form.
+  const proposal = { proposalId: "901", ownProposal: false, ownerLabel: "Toko Melati", reason: "Contoh", proposedAt: "2026-10-21T02:00:00+00:00", adds: [{ familyId: "7", familyName: "Pensil 2B" }], removes: [] };
+  const html = renderToStaticMarkup(h(sample.ProposalReview, { proposal, canDecide: true, busy: false, onDecide: () => undefined }));
+  lacks(html, /ui-button--primary/, "guest-sample proposal row: no primary until a decision form is open");
+});
+
+test("U-011: a failed list read shows its error inside its own region (never a blank region body)", () => {
+  for (const file of ["fulfillment/ShipmentWorkspace.tsx", "ordering/OrderReviewWorkspace.tsx", "fulfillment/ShipmentPreparationWorkspace.tsx",
+    "fulfillment/ShipmentDispatchWorkspace.tsx", "fulfillment/CourierAssignmentWorkspace.tsx"])
+    has(source(file), /<DataList\b[^]*?\berror=\{error !== null && page\.items\.length === 0 \? \{/, `${file}: DataList carries the read error`);
+});
+
+test("WCAG 2.5.3 / §6.3: a whole-row button's name contains its visible title; one-tab switches are not rendered", () => {
+  const review = source("ordering/OrderReviewWorkspace.tsx");
+  has(review, /renderTitle=\{item => <>Pesanan \{orderNumber\(item\.orderId\)\}/, "reviews: the visible title is 'Pesanan PSN-…', inside the name 'Tinjau pesanan PSN-…'");
+  for (const file of ["inventory/StockSourceWorkspace.tsx", "inventory/StockCountWorkspace.tsx", "ordering/OrderReviewWorkspace.tsx", "catalog/CatalogPriceWorkspace.tsx"])
+    has(source(file), /\.length > 1 && <Tabs\b/, `${file}: Tabs only with two or more views`);
+});
+
+test("§9: warnings keep their old role (status or none); only errors are alerts", () => {
+  for (const file of ["inventory/ReplenishmentWorkspace.tsx", "inventory/StockSourcePolicyWorkspace.tsx", "catalog/CatalogPriceWorkspace.tsx",
+    "inventory/StockSourceAliasWorkspace.tsx", "inventory/StockSourceRevisionWorkspace.tsx", "inventory/StockSourceReconciliationWorkspace.tsx"])
+    lacks(source(file), /<StateView kind="unknown"/, `${file}: a warning rendered as an alert`);
+  has(source("inventory/StockSourcePolicyWorkspace.tsx"), /<div role="status" className="ui-notice" data-tone="warning">Dasar pengajuan telah berubah/, "policy: the stale-base notice stays role=status");
+  has(read("src/app/foundation.css"), /\.ui-notice\{[^}]*background:var\(--tone-neutral\)/, "foundation: one notice look");
+});
+
+test("§8: the button that started a row command shows it is busy; substitutions show one loading state", () => {
+  for (const file of ["fulfillment/ShipmentWorkspace.tsx", "fulfillment/ShipmentPreparationWorkspace.tsx", "fulfillment/ShipmentDispatchWorkspace.tsx",
+    "fulfillment/CourierAssignmentWorkspace.tsx", "fulfillment/CaseWorkspace.tsx"])
+    has(source(file), /renderActions=\{[^]*?busy=\{opening === /, `${file}: the row button that opened the record is busy`);
+  lacks(source("ordering/OrderSubstitutionWorkspace.tsx"), /\{reading && <StateView kind="loading"/, "substitutions: no page skeleton on top of the list skeletons");
+});
+
+test("README documents DataList openLabel and the Section/Tabs props", () => {
+  const readme = read("src/components/workspace-kit/README.md");
+  has(readme, /`openLabel`/, "README: openLabel");
+  has(readme, /`label` \(keeps an existing region name/, "README: Section label");
+  has(readme, /`disabled` \(view tabs: blocks switching while the page is busy\)/, "README: Tabs disabled");
 });
 
 test("U-032/U-023/U-006/U-009/U-010: these pages' stylesheets use tokens only — no hex, no off-scale px, no stripes, no outline", () => {
   for (const file of sheets) {
+    assert.ok(existsSync(file), `${file} exists`);
     const sheet = css(file);
-    if (!sheet) continue;
     lacks(sheet, /#[0-9a-f]{3,8}\b/i, `${file}: hex colour`);
     lacks(sheet, /(?<![\w-])(white|black)(?![\w-])/, `${file}: named colour`);
     lacks(sheet, /\boutline\s*:/, `${file}: outline`);
@@ -179,5 +252,14 @@ test("U-032: inventory pages share the standard badge and state; no square page 
   for (const file of ["src/modules/inventory/stock-source.module.css", "src/modules/inventory/stock-source-alias.module.css",
     "src/modules/inventory/stock-source-policy.module.css", "src/modules/inventory/stock-source-revision.module.css", "src/modules/inventory/stock-source-suspension.module.css"])
     lacks(css(file), /\.badge\b/, `${file}: page badge`);
-  for (const file of Object.values(pages).filter(file => file.startsWith("inventory/"))) has(source(file), /<Badge\b|<StateView\b|<DataList\b/, `${file}: standard badge, state or list`);
+  // Record statuses render through Badge (the status dictionary picks the tone), not a page class or a bare paragraph.
+  for (const [file, status] of [["inventory/StockSourceWorkspace.tsx", "statusLabel"], ["inventory/StockSourceAliasWorkspace.tsx", "aliasStatus"],
+    ["inventory/StockSourcePolicyWorkspace.tsx", "policyStatus"], ["inventory/StockSourceRevisionWorkspace.tsx", "revisionStatus"], ["inventory/StockReleaseWorkspace.tsx", "status"]])
+    has(source(file), new RegExp(`<Badge status=\\{${status}\\[`), `${file}: status through Badge`);
+  // Every inventory page shows its read and command errors through the one StateView error, never a legacy alert paragraph.
+  for (const file of Object.values(pages).filter(file => file.startsWith("inventory/"))) {
+    const code = source(file);
+    has(code, /<StateView kind="error" title=\{message\(/, `${file}: errors through StateView`);
+    lacks(code, /className=\{(common|styles)\.alert\}/, `${file}: legacy alert`);
+  }
 });

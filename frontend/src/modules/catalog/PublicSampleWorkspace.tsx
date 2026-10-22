@@ -123,7 +123,7 @@ export function ProposalReview({ proposal, canDecide, busy, onDecide }: { propos
         </div>
       </form>}</>}
     renderActions={() => canDecide ? <>
-      <Button variant="primary" disabled={busy || blocked !== null} aria-describedby={blocked ? 'own-' + proposal.proposalId : undefined}
+      <Button variant="secondary" disabled={busy || blocked !== null} aria-describedby={blocked ? 'own-' + proposal.proposalId : undefined}
         onClick={() => { setOpen('approve'); setReason(''); }}>Setujui</Button>
       <Button variant="secondary" disabled={busy || blocked !== null} onClick={() => { setOpen('reject'); setReason(''); }}>Tolak</Button></> : null} />;
 }

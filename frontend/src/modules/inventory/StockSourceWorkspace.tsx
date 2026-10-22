@@ -105,14 +105,15 @@ function SourceDesk({ loaded, onRefresh }: { loaded: Loaded; onRefresh: () => Pr
   useEffect(() => { if (state.result) resultFocus.current?.focus(); }, [state.result]);
   const busy = state.sending || state.recovering, locked = editor.locked;
   if (state.expired || state.suspended) return <SessionAccessState error={state.error} kind={state.expired ? 'expired' : lostAccessKind(state.error)} returnPath={path} busy={busy} onRetry={() => void onRefresh()} detail={state.error !== null ? message(state.error) : undefined} />;
+  // View tabs only when there is a choice: a single view needs no switch (§8.1).
+  const views = [...editor.canPropose ? [{ label: "Pengajuan baru", value: "propose" }] : [], ...editor.canApprove ? [{ label: "Tinjau pengajuan", value: "review" }] : [], ...editor.canRead ? [{ label: "Riwayat pengajuan", value: "history" }] : []];
   return <>
     <AdministrationNavigation current="sources" actions={loaded.actions} locked={locked} />
     <Section title="Ruang kerja gudang" id="source-location-title"
       description={<>Petugas: <strong>{loaded.session.account?.displayName ?? loaded.session.account?.verifiedEmail}</strong></>}
       actions={<Button variant="secondary" disabled={busy} onClick={() => void onRefresh()}>Muat ulang sesi dan akses</Button>}>
-      <Tabs label="Jenis pekerjaan" current={state.mode} disabled={editor.selectionLocked} onSelect={mode => void editor.changeMode(mode as typeof state.mode)}
-        items={[...editor.canPropose ? [{ label: "Pengajuan baru", value: "propose" }] : [], ...editor.canApprove ? [{ label: "Tinjau pengajuan", value: "review" }] : [],
-          ...editor.canRead ? [{ label: "Riwayat pengajuan", value: "history" }] : []]} />
+      {views.length > 1 && <Tabs label="Jenis pekerjaan" current={state.mode} disabled={editor.selectionLocked} onSelect={mode => void editor.changeMode(mode as typeof state.mode)}
+        items={views} />}
       <label><span id="source-warehouse-label">Gudang dan kanal</span><select aria-labelledby="source-warehouse-label" value={state.warehouse ? sourceLocationKey(state.warehouse.location) : ""} disabled={editor.selectionLocked || state.loadingWarehouses}
         onChange={event => void editor.chooseWarehouse(state.warehouses.find(item => sourceLocationKey(item.location) === event.target.value)?.location ?? null)}>
         <option value="">{state.loadingWarehouses ? "Memuat gudang…" : "Pilih gudang dan kanal"}</option>

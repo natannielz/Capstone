@@ -86,6 +86,8 @@ function DispatchDesk({ account, onFailure }: { account: Account; onFailure: (er
     }); return () => { active = false; controller.abort(); };
   }, [gateway, actorId, before, reload, onFailure, current]);
   useEffect(() => { if (prepared || review) panel.current?.focus(); }, [prepared, review]);
+  // The row button that started a read shows it is busy until the record arrives (§8).
+  const [opening, setOpening] = useState<string | null>(null);
   async function select(suborderId: string) {
     if (!current() || locked || pending.current) return; pending.current = true; setBusy(true); setError(null); setResult(null); setPrepared(null); setReview(null); setCommand(null);
     try {
@@ -129,17 +131,17 @@ function DispatchDesk({ account, onFailure }: { account: Account; onFailure: (er
         recovery.refresh(); ledger.resetAfterReconciliation(); if (current() && recovered.current) { setResult(recovered.current); recovered.current = null; setReload(value => value + 1); }
       }} />
     {dispatchPending && <p role="status">Permintaan keberangkatan sedang diproses. Referensi bantuan telah disimpan. Tunggu hasil sebelum memeriksa atau mengirim permintaan lain.</p>}
-    {error !== null && <StateView kind="error" title={message(error)} />}{recovery.error !== null && <StateView kind="error" title={accessMessage(recovery.error)} />}
+    {error !== null && page.items.length > 0 && <StateView kind="error" title={message(error)} />}{recovery.error !== null && <StateView kind="error" title={accessMessage(recovery.error)} />}
     {result && <section className={common.success} role="status"><h2>Keberangkatan tercatat</h2><p>Kiriman {result.shipmentId} · nomor {result.numberEntity}/{result.numberChannel}/{result.numberYear}/{result.number}</p>
       <p>Stok dan sisa pesanan sudah diperbarui. Penerimaan barang oleh cabang belum dicatat.</p></section>}
     <Section title="Persiapan tersimpan" label="Persiapan untuk diberangkatkan" busy={busy}
       actions={<Button variant="secondary" disabled={locked} onClick={() => { setBefore(null); setReload(value => value + 1); }}>Muat persiapan terbaru</Button>}>
-      <DataList label="Persiapan untuk diberangkatkan" items={page.items} getKey={item => item.preparationId} loading={busy && !dispatchPending}
+      <DataList label="Persiapan untuk diberangkatkan" items={page.items} error={error !== null && page.items.length === 0 ? { title: message(error), message: null, onRetry: () => { setBefore(null); setReload(value => value + 1); } } : undefined} getKey={item => item.preparationId} loading={busy && !dispatchPending}
         empty={error === null ? { title: "Belum ada persiapan dalam penugasan ini." } : undefined}
         renderTitle={item => item.source.buyerName}
         renderMeta={item => <>Pesanan {orderNumber(item.source.orderId)} · {item.lines.map(line => { const product = item.source.lines.find(product => sameOrderLine(product, line))!; return `${product.productName} — ${line.packages} ${product.definition.packageLabel}`; }).join(', ')}</>}
         renderContent={item => item.canDispatch ? null : <p>{item.source.canPrepare ? 'Sisa pesanan berubah. Perbarui persiapan untuk pengiriman berikutnya.' : 'Pesanan ini tidak memiliki sisa yang dapat diberangkatkan.'}</p>}
-        renderActions={item => item.canDispatch ? <Button variant="secondary" disabled={locked} onClick={() => void select(item.source.suborderId)}>Periksa keberangkatan pesanan {orderNumber(item.source.orderId)}</Button> : null} />
+        renderActions={item => item.canDispatch ? <Button variant="secondary" disabled={locked} busy={opening === item.source.suborderId} onClick={() => { setOpening(item.source.suborderId); void select(item.source.suborderId).finally(() => setOpening(null)); }}>Periksa keberangkatan pesanan {orderNumber(item.source.orderId)}</Button> : null} />
       {page.hasMore && <div className="ui-actions"><Button variant="secondary" disabled={locked} onClick={() => setBefore(page.items.at(-1)!.preparationId)}>Persiapan lebih lama</Button></div>}
     </Section>
     {prepared && <section ref={panel} tabIndex={-1} className={"ui-section " + local.detail} aria-label="Pemeriksaan keberangkatan"><h2>Keberangkatan pesanan {orderNumber(prepared.source.orderId)}</h2>

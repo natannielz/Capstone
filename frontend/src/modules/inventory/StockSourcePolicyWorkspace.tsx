@@ -158,7 +158,7 @@ function PolicyDesk({ loaded, onRefresh }: { loaded: Loaded; onRefresh: () => Pr
       </form>
       {state.loadingAction && <p role="status">Memeriksa pengajuan dan kewenangan…</p>}
       {state.actionPreview && <div className={styles.preview}><section>
-        {!state.actionPreview.bindingCurrent && <StateView kind="unknown" title="Dasar pengajuan telah berubah. Pengajuan ini dapat ditolak atau ditarik; persetujuan memerlukan dasar yang masih sesuai." />}
+        {!state.actionPreview.bindingCurrent && <div role="status" className="ui-notice" data-tone="warning">Dasar pengajuan telah berubah. Pengajuan ini dapat ditolak atau ditarik; persetujuan memerlukan dasar yang masih sesuai.</div>}
         <PolicyProposalFacts proposal={state.actionPreview.proposal} />
       </section><form className={styles.form} onSubmit={event => { event.preventDefault(); editor.reviewDecision(); }}>
         <label>Acuan peninjauan<input required maxLength={160} value={state.reviewReference} disabled={locked}

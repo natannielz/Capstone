@@ -145,7 +145,7 @@ function ReleaseDesk({ loaded, refresh }: { loaded: Loaded; refresh: () => Promi
         { term: "Nilai penilaian terpilih", value: <>{amount(state.choice.capitalizedValue)} · nilai pelepasan dihitung dari sisa yang tercatat</> }]} />
         <form className={styles.form} onSubmit={event => { event.preventDefault(); void editor.previewProposal(); }}>
           <label>Jumlah kemasan yang dilepas<input required inputMode="numeric" pattern="[1-9][0-9]{0,6}" maxLength={7} value={state.packages} disabled={locked || state.loadingPreview}
-            onChange={event => editor.changePackages(event.target.value)} /></label><Button type="submit" variant="primary" disabled={locked || state.loadingPreview}>{state.loadingPreview ? 'Memeriksa jumlah…' : 'Periksa stok sebelum dan sesudah'}</Button></form></>}
+            onChange={event => editor.changePackages(event.target.value)} /></label><Button type="submit" variant={state.preview ? 'secondary' : 'primary'} disabled={locked || state.loadingPreview}>{state.loadingPreview ? 'Memeriksa jumlah…' : 'Periksa stok sebelum dan sesudah'}</Button></form></>}
       {state.preview && <><StockFacts value={state.preview} /><form className={styles.form} onSubmit={event => { event.preventDefault(); editor.reviewProposal(); }}>
         <label>Alasan pengajuan<textarea required rows={3} maxLength={1000} value={state.reason} disabled={locked} onChange={event => editor.changeReason(event.target.value)} /></label>
         <Button type="submit" variant="primary" disabled={locked}>Tinjau pengajuan</Button></form></>}
@@ -165,7 +165,7 @@ function ReleaseDesk({ loaded, refresh }: { loaded: Loaded; refresh: () => Promi
         {state.detail.decision && <><p>Alasan peninjau: {state.detail.decision.reason}</p><p>{time(state.detail.decision.decidedAt)}</p>
           {state.detail.decision.transferredValue !== null && <p>Nilai yang dilepas: {amount(state.detail.decision.transferredValue)}.</p>}</>}
         {state.detail.status === 'proposed' && editor.canApprove && <div className={common.actions}>
-          <Button variant="primary" disabled={locked || !state.fresh || state.loadingPreview} onClick={() => void editor.previewDecision('approve')}>Periksa pelepasan untuk disetujui</Button>
+          <Button variant={state.decision ? 'secondary' : 'primary'} disabled={locked || !state.fresh || state.loadingPreview} onClick={() => void editor.previewDecision('approve')}>Periksa pelepasan untuk disetujui</Button>
           <Button variant="secondary" disabled={locked || !state.fresh || state.loadingPreview} onClick={() => void editor.previewDecision('reject')}>Periksa penolakan</Button></div>}
       </section>}
       {state.decision && <section className={styles.detail}><h3>{state.decision.action === 'approve' ? 'Pemeriksaan stok terkini oleh peninjau' : 'Tinjau penolakan pengajuan'}</h3>

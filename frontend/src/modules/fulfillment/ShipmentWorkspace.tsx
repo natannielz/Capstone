@@ -89,6 +89,8 @@ function ShipmentList({ account, onDenied }: { account: Account; onDenied: (fail
     }); return () => { active = false; controller.abort(); };
   }, [gateway, account.actorId, before, revision, current, onDenied, canRead]);
   useEffect(() => { if (selected) detail.current?.focus(); }, [selected]);
+  // The row button that started a read shows it is busy until the record arrives (§8).
+  const [opening, setOpening] = useState<string | null>(null);
   async function open(id: string, button: HTMLButtonElement) {
     if (!current() || busy || childBusy || recovering || pending.current || offline || !canRead) return; pending.current = true; opener.current = button; setBusy(true); setSelected(null); setDocumentLoadedFor(null); setMode('receipt'); setError(null);
     try { const item = await gateway.read(account.actorId, id); if (current()) setSelected(item); }
@@ -101,16 +103,16 @@ function ShipmentList({ account, onDenied }: { account: Account; onDenied: (fail
     {recovery.error !== null && <StateView kind="error" title={accessMessage(recovery.error)} />}
     {recoveredAttempt && <p role="status">Upaya pengiriman tersimpan untuk kiriman {recoveredAttempt.shipmentId}: {deliveryOutcomes[recoveredAttempt.outcome]} · {visitTime(recoveredAttempt.occurredAt)} WIB.</p>}
     {offline && <StateView kind="offline" title="Koneksi terputus. Data yang tampil adalah hasil terakhir; muat kembali setelah tersambung." />}
-    {error !== null && <StateView kind="error" title={message(error)} />}
+    {error !== null && (page.items.length > 0 || !canRead) && <StateView kind="error" title={message(error)} />}
     {!canRead && <p>Akses saat ini memungkinkan pemeriksaan hasil catatan kunjungan Anda. Daftar kiriman memerlukan akses baca kiriman yang masih berlaku.</p>}
     {canRead && <Section title="Barang yang diberangkatkan" label="Daftar kiriman" busy={busy}
       actions={<Button variant="secondary" disabled={busy || childBusy || recovering || offline} onClick={() => { setBefore(null); setRevision(value => value + 1); }}>Muat kiriman terbaru</Button>}>
-      <DataList label="Daftar kiriman" items={page.items} getKey={item => item.id} loading={busy}
+      <DataList label="Daftar kiriman" items={page.items} error={error !== null && page.items.length === 0 ? { title: message(error), message: null, onRetry: () => { setBefore(null); setRevision(value => value + 1); } } : undefined} getKey={item => item.id} loading={busy}
         empty={error === null ? { title: "Belum ada kiriman dalam akses Anda." } : undefined}
         renderTitle={item => item.buyerName} renderMeta={item => <>Kiriman {number(item)} · Pesanan {orderNumber(item.orderId)}</>}
         renderContent={item => <><p>{time(item.dispatchedAt)} WIB · Kurir saat keberangkatan: {item.courierName}</p><p>Kurir yang bertugas: {item.currentAssignment.courierName}</p>
           <p>{item.lines.map(line => `${line.productName} — ${line.packages} ${line.definition.packageLabel}`).join(', ')}</p></>}
-        renderActions={item => <Button variant="secondary" disabled={busy || childBusy || recovering || offline} onClick={event => void open(item.id, event.currentTarget)}>Lihat kiriman {number(item)}</Button>} />
+        renderActions={item => <Button variant="secondary" disabled={busy || childBusy || recovering || offline} busy={opening === item.id} onClick={event => { setOpening(item.id); void open(item.id, event.currentTarget).finally(() => setOpening(null)); }}>Lihat kiriman {number(item)}</Button>} />
       {page.hasMore && <div className="ui-actions"><Button variant="secondary" disabled={busy || childBusy || recovering || offline} onClick={() => setBefore(page.items.at(-1)!.id)}>Kiriman lebih lama</Button></div>}
     </Section>}
     {selected && <section ref={detail} tabIndex={-1} className={"ui-section " + local.detail} aria-label="Rincian kiriman"><h2>Kiriman {number(selected)}</h2>
