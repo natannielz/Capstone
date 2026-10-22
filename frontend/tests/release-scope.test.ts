@@ -27,7 +27,8 @@ test("the pilot hides catalog photo management, whose endpoints it does not serv
 test("the catalog page offers the photo button only where photo management is served (F-008)", async () => {
   const { readFileSync } = await import("node:fs");
   const source = readFileSync(new URL("../src/modules/catalog/CatalogAdministration.tsx", import.meta.url), "utf8");
-  assert.match(source, /\{item\.active&&catalogPhotoManagementAvailable\(\)&&<button[^>]*onClick=\{\(\)=>void choosePhoto\(item\.id\)\}>Foto/);
+  // The row buttons render through the workspace-kit Button since UI-PAGES-B; the condition is what this test pins.
+  assert.match(source, /\{item\.active&&catalogPhotoManagementAvailable\(\)&&<(?:button|Button)\b[^>]*onClick=\{\(\)=>void choosePhoto\(item\.id\)\}>Foto/);
 });
 
 test("pilot buyers see the approved product photo: the request-only catalog loads it like the priced one (F-012)", async () => {

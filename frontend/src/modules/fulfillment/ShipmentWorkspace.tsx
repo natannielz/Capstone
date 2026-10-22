@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createIdentityGateway } from '../identity/identity-client';
 import { IdentityFailure, sessionTiming, type IdentitySession } from '../identity/identity-workflow';
@@ -14,10 +13,16 @@ import { DeliveryAttemptPanel, visitTime } from './DeliveryAttemptPanel';
 import { createDeliveryAttemptGateway, deliveryOutcomes, type DeliveryAttempt } from './delivery-attempt-client';
 import { OperationRecovery, useOperationRecovery } from '../administration/OperationRecovery';
 import common from '../administration/access.module.css';
-import styles from '../ordering/order-draft.module.css';
+import local from './fulfillment.module.css';
 import { dateTimeFormatter } from '@/lib/format';
 import { SessionAccessState } from "@/components/workspace-kit/session-access-state";
 import { orderNumber } from '@/lib/document-numbers';
+import { Button } from '@/components/workspace-kit/button';
+import { PageHeader } from '@/components/workspace-kit/page-header';
+import { Section } from '@/components/workspace-kit/section';
+import { StateView } from '@/components/workspace-kit/state-view';
+import { DataList } from '@/components/workspace-kit/data-list';
+import { Tabs } from '@/components/workspace-kit/tabs';
 
 type Account = { actorId: string; actions: readonly string[]; session: IdentitySession; observedAt: number };
 const time = (value: string) => dateTimeFormatter.format(new Date(value));
@@ -54,11 +59,10 @@ export function ShipmentWorkspace() {
     if (failure instanceof AccessFailure && (failure.status === 401 || failure.status === 403 || failure.code === 'actor_changed')) { setAccount(null); setError(failure); }
   }, []);
   const expired = account !== null && sessionTiming(account.session, elapsed).expired;
-  return <main className={common.page}><header className={common.header}><div><Link href="/identity/account" className={common.brand}>Unit Toko</Link>
-    <h1>Kiriman</h1><p>Periksa kemasan yang diberangkatkan, tujuan dan kurir dalam akses Anda.</p></div><Link href="/identity/account" className={common.secondary}>Akun saya</Link></header>
-    {error !== null && account !== null && <p role="alert" className={common.alert}>{message(error)}</p>}
-    {loading ? <p role="status">Memeriksa akun…</p> : !account || expired ? <SessionAccessState kind={account ? "expired" : undefined} error={error} returnPath="/fulfillment/shipments" onRetry={() => setRevision(value => value + 1)} />
-      : <ShipmentList key={account.actorId + ':' + account.observedAt} account={account} onDenied={denied} />}
+  return <main className={common.page}><PageHeader title="Kiriman" description="Periksa kemasan yang diberangkatkan, tujuan dan kurir dalam akses Anda." />
+    <div className="ui-stack">{error !== null && account !== null && <StateView kind="error" title={message(error)} />}
+    {loading ? <StateView kind="loading" title="Memeriksa akun…" /> : !account || expired ? <SessionAccessState kind={account ? "expired" : undefined} error={error} returnPath="/fulfillment/shipments" onRetry={() => setRevision(value => value + 1)} />
+      : <ShipmentList key={account.actorId + ':' + account.observedAt} account={account} onDenied={denied} />}</div>
   </main>;
 }
 function ShipmentList({ account, onDenied }: { account: Account; onDenied: (failure: unknown) => void }) {
@@ -94,31 +98,33 @@ function ShipmentList({ account, onDenied }: { account: Account; onDenied: (fail
     <OperationRecovery entries={recovery.entries.filter(entry => entry.operation === 'fulfillment.delivery-attempt.record')} journal={recovery.journal} disabled={busy || childBusy || offline} onBusyChange={setRecovering}
       recoveryAdapters={{ 'fulfillment.delivery-attempt': { lookup: async entry => { const result = await attempts.recover(entry.actorId, entry.key); if (!current()) throw new AccessFailure(409, 'recovery_request_stale'); recovered.current = result?.result ?? null; return result; } } }}
       onFailure={failure => { setError(failure); onDenied(failure); }} onResolved={() => { recovery.refresh(); if (current()) { setRecoveredAttempt(recovered.current); setSelected(null); setDocumentLoadedFor(null); setRevision(value => value + 1); } recovered.current = null; }} />
-    {recovery.error !== null && <p role="alert">{accessMessage(recovery.error)}</p>}
+    {recovery.error !== null && <StateView kind="error" title={accessMessage(recovery.error)} />}
     {recoveredAttempt && <p role="status">Upaya pengiriman tersimpan untuk kiriman {recoveredAttempt.shipmentId}: {deliveryOutcomes[recoveredAttempt.outcome]} · {visitTime(recoveredAttempt.occurredAt)} WIB.</p>}
-    {offline && <p role="status" className={common.alert}>Koneksi terputus. Data yang tampil adalah hasil terakhir; muat kembali setelah tersambung.</p>}
-    {error !== null && <p role="alert" className={common.alert}>{message(error)}</p>}
+    {offline && <StateView kind="offline" title="Koneksi terputus. Data yang tampil adalah hasil terakhir; muat kembali setelah tersambung." />}
+    {error !== null && <StateView kind="error" title={message(error)} />}
     {!canRead && <p>Akses saat ini memungkinkan pemeriksaan hasil catatan kunjungan Anda. Daftar kiriman memerlukan akses baca kiriman yang masih berlaku.</p>}
-    {canRead && <section className={common.accountSection} aria-label="Daftar kiriman" aria-busy={busy}><h2>Barang yang diberangkatkan</h2>
-      {busy && <p role="status">Memuat kiriman…</p>}{!busy && page.items.length === 0 && <p>Belum ada kiriman dalam akses Anda.</p>}
-      <ul className={styles.lines}>{page.items.map(item => <li className={styles.line} key={item.id}><strong>{item.buyerName}</strong><p>Kiriman {number(item)} · Pesanan {orderNumber(item.orderId)}</p>
-        <p>{time(item.dispatchedAt)} WIB · Kurir saat keberangkatan: {item.courierName}</p><p>Kurir yang bertugas: {item.currentAssignment.courierName}</p><p>{item.lines.map(line => `${line.productName} — ${line.packages} ${line.definition.packageLabel}`).join(', ')}</p>
-        <button className={common.secondary} disabled={busy || childBusy || recovering || offline} onClick={event => void open(item.id, event.currentTarget)}>Lihat kiriman {number(item)}</button></li>)}</ul>
-      <div className={common.actions}><button className={common.secondary} disabled={busy || childBusy || recovering || offline} onClick={() => { setBefore(null); setRevision(value => value + 1); }}>Muat kiriman terbaru</button>
-        {page.hasMore && <button className={common.secondary} disabled={busy || childBusy || recovering || offline} onClick={() => setBefore(page.items.at(-1)!.id)}>Kiriman lebih lama</button>}</div>
-    </section>}
-    {selected && <section ref={detail} tabIndex={-1} className={styles.review} aria-label="Rincian kiriman"><h2>Kiriman {number(selected)}</h2>
+    {canRead && <Section title="Barang yang diberangkatkan" label="Daftar kiriman" busy={busy}
+      actions={<Button variant="secondary" disabled={busy || childBusy || recovering || offline} onClick={() => { setBefore(null); setRevision(value => value + 1); }}>Muat kiriman terbaru</Button>}>
+      <DataList label="Daftar kiriman" items={page.items} getKey={item => item.id} loading={busy}
+        empty={error === null ? { title: "Belum ada kiriman dalam akses Anda." } : undefined}
+        renderTitle={item => item.buyerName} renderMeta={item => <>Kiriman {number(item)} · Pesanan {orderNumber(item.orderId)}</>}
+        renderContent={item => <><p>{time(item.dispatchedAt)} WIB · Kurir saat keberangkatan: {item.courierName}</p><p>Kurir yang bertugas: {item.currentAssignment.courierName}</p>
+          <p>{item.lines.map(line => `${line.productName} — ${line.packages} ${line.definition.packageLabel}`).join(', ')}</p></>}
+        renderActions={item => <Button variant="secondary" disabled={busy || childBusy || recovering || offline} onClick={event => void open(item.id, event.currentTarget)}>Lihat kiriman {number(item)}</Button>} />
+      {page.hasMore && <div className="ui-actions"><Button variant="secondary" disabled={busy || childBusy || recovering || offline} onClick={() => setBefore(page.items.at(-1)!.id)}>Kiriman lebih lama</Button></div>}
+    </Section>}
+    {selected && <section ref={detail} tabIndex={-1} className={"ui-section " + local.detail} aria-label="Rincian kiriman"><h2>Kiriman {number(selected)}</h2>
       <p>{selected.buyerName} · Pesanan {orderNumber(selected.orderId)}</p><p>Diberangkatkan {time(selected.dispatchedAt)} WIB · Kurir saat keberangkatan: {selected.courierName}</p><p>Kurir yang bertugas: {selected.currentAssignment.courierName} · sejak {time(selected.currentAssignment.effectiveAt)} WIB.</p>
-      <h3>Tujuan</h3><p className={styles.address}>{selected.delivery.recipientName} · {selected.delivery.phone}{'\n'}{selected.delivery.address}{'\n'}{selected.delivery.city} {selected.delivery.postalCode}</p>
+      <h3>Tujuan</h3><p className={local.address}>{selected.delivery.recipientName} · {selected.delivery.phone}{'\n'}{selected.delivery.address}{'\n'}{selected.delivery.city} {selected.delivery.postalCode}</p>
       {selected.delivery.instructions && <p>Petunjuk: {selected.delivery.instructions}</p>}<h3>Kemasan yang diberangkatkan</h3>
-      <ul>{selected.lines.map(line => <li key={line.skuId}><strong>{line.productName}</strong> · {line.skuCode}<p>{line.packages} {line.definition.packageLabel} · isi {line.definition.baseUnitsPerPackage} {line.definition.baseUnitCode} per kemasan · total {line.baseUnits} {line.definition.baseUnitCode}</p></li>)}</ul>
-      <div className={common.actions}><button className={common.secondary} aria-pressed={mode === 'receipt'} disabled={busy || childBusy || recovering} onClick={() => { if (mode !== 'receipt') { setDocumentLoadedFor(null); setMode('receipt'); } }}>Penerimaan dan dokumen</button>
-        <button className={common.secondary} aria-pressed={mode === 'attempt'} disabled={busy || childBusy || recovering} onClick={() => { if (mode !== 'attempt') { setDocumentLoadedFor(null); setMode('attempt'); } }}>Upaya pengiriman</button></div>
+      <ul className={local.packages}>{selected.lines.map(line => <li key={line.skuId}><strong>{line.productName}</strong> · {line.skuCode}<p>{line.packages} {line.definition.packageLabel} · isi {line.definition.baseUnitsPerPackage} {line.definition.baseUnitCode} per kemasan · total {line.baseUnits} {line.definition.baseUnitCode}</p></li>)}</ul>
+      <Tabs label="Bagian kiriman" current={mode} disabled={busy || childBusy || recovering} items={[{ label: "Penerimaan dan dokumen", value: "receipt" }, { label: "Upaya pengiriman", value: "attempt" }]}
+        onSelect={value => { const next = value === 'attempt' ? 'attempt' : 'receipt'; if (mode !== next) { setDocumentLoadedFor(null); setMode(next); } }} />
       {mode === 'attempt' ? <DeliveryAttemptPanel key={'attempt:' + selected.id + ':' + selected.currentAssignment.revision} actorId={account.actorId} shipmentId={selected.id} canRecord={account.actions.includes('delivery.attempt') && selected.currentAssignment.courierId === account.actorId} current={current} onDenied={onDenied} recovery={recovery} onBusyChange={setChildBusy} /> : <>
         <ShipmentDocumentPanel key={selected.id} actorId={account.actorId} shipment={selected} canIssue={account.actions.includes('shipment.prepare')} current={current} onDenied={onDenied} onLoaded={documentLoaded} />
         {documentLoadedFor === selected.id && <ShipmentReceiptPanel key={'receipt:' + selected.id + ':' + selected.currentAssignment.revision} actorId={account.actorId} shipmentId={selected.id} canIssueProof={account.actions.includes('shipment.prepare')} canChallenge={account.actions.includes('delivery.evidence') && selected.currentAssignment.courierId === account.actorId} current={current} onDenied={onDenied} />}
       </>}
-      <button className={common.secondary} disabled={busy || childBusy || recovering} onClick={() => { setSelected(null); opener.current?.focus(); }}>Tutup rincian</button>
+      <div className="ui-actions"><Button variant="secondary" disabled={busy || childBusy || recovering} onClick={() => { setSelected(null); opener.current?.focus(); }}>Tutup rincian</Button></div>
     </section>}
   </>;
 }

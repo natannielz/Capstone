@@ -16,6 +16,14 @@ import { sourceActor, sourceLocationKey, sourceAgeSeconds, type SourceCommand, t
 import common from "../administration/access.module.css";
 import styles from "./stock-source.module.css";
 import { formatDateTime, numberFormatter } from "@/lib/format";
+import { Button } from '@/components/workspace-kit/button';
+import { PageHeader } from "@/components/workspace-kit/page-header";
+import { Section } from "@/components/workspace-kit/section";
+import { StateView } from "@/components/workspace-kit/state-view";
+import { DataList } from "@/components/workspace-kit/data-list";
+import { Badge } from "@/components/workspace-kit/badge";
+import { Tabs } from "@/components/workspace-kit/tabs";
+import { Facts } from "@/components/workspace-kit/facts";
 
 const path = "/inventory/sources";
 const factorHref = "/identity/account?operation=stock.source.approve&returnPath=" + encodeURIComponent(path);
@@ -69,11 +77,9 @@ export function StockSourceWorkspace() {
   }, [refresh]);
   return <main className={common.page}>
     <a className={styles.skip} href="#source-workspace">Langsung ke pengaturan sumber</a>
-    <header className={common.header}><div><Link className={common.brand} href="/identity/account">Unit Toko</Link>
-      <p className={styles.eyebrow}>Pengelolaan persediaan</p><h1>Sumber stok</h1>
-      <p>Tentukan asal pencatatan dan tanggung jawab persediaan untuk setiap gudang dan kanal.</p></div></header>
-    <div id="source-workspace">{loaded ? <SourceDesk key={loaded.actorId + ":" + loaded.generation} loaded={loaded} onRefresh={refresh} /> :
-      (loading ? <section className={common.state} aria-busy="true"><h2>Memeriksa sesi dan akses</h2></section>
+    <PageHeader title="Sumber stok" description="Tentukan asal pencatatan dan tanggung jawab persediaan untuk setiap gudang dan kanal." />
+    <div id="source-workspace" className="ui-stack">{loaded ? <SourceDesk key={loaded.actorId + ":" + loaded.generation} loaded={loaded} onRefresh={refresh} /> :
+      (loading ? <StateView kind="loading" title="Memeriksa sesi dan akses" />
         : <SessionAccessState error={error} returnPath={path} onRetry={() => void refresh()} detail={error !== null ? message(error) : undefined} />)}</div>
   </main>;
 }
@@ -101,18 +107,12 @@ function SourceDesk({ loaded, onRefresh }: { loaded: Loaded; onRefresh: () => Pr
   if (state.expired || state.suspended) return <SessionAccessState error={state.error} kind={state.expired ? 'expired' : lostAccessKind(state.error)} returnPath={path} busy={busy} onRetry={() => void onRefresh()} detail={state.error !== null ? message(state.error) : undefined} />;
   return <>
     <AdministrationNavigation current="sources" actions={loaded.actions} locked={locked} />
-    <section className={common.accountSection} aria-labelledby="source-location-title">
-      <div className={styles.headingRow}><div><h2 id="source-location-title">Ruang kerja gudang</h2>
-        <p className={common.help}>Petugas: <strong>{loaded.session.account?.displayName ?? loaded.session.account?.verifiedEmail}</strong></p></div>
-        <button type="button" className={common.secondary} disabled={busy} onClick={() => void onRefresh()}>Muat ulang sesi dan akses</button></div>
-      <div className={styles.modeChoices} role="group" aria-label="Jenis pekerjaan">
-        {editor.canPropose && <button type="button" aria-pressed={state.mode === "propose"} className={state.mode === "propose" ? common.primary : common.secondary}
-          disabled={editor.selectionLocked} onClick={() => void editor.changeMode("propose")}>Pengajuan baru</button>}
-        {editor.canApprove && <button type="button" aria-pressed={state.mode === "review"} className={state.mode === "review" ? common.primary : common.secondary}
-          disabled={editor.selectionLocked} onClick={() => void editor.changeMode("review")}>Tinjau pengajuan</button>}
-        {editor.canRead && <button type="button" aria-pressed={state.mode === "history"} className={state.mode === "history" ? common.primary : common.secondary}
-          disabled={editor.selectionLocked} onClick={() => void editor.changeMode("history")}>Riwayat pengajuan</button>}
-      </div>
+    <Section title="Ruang kerja gudang" id="source-location-title"
+      description={<>Petugas: <strong>{loaded.session.account?.displayName ?? loaded.session.account?.verifiedEmail}</strong></>}
+      actions={<Button variant="secondary" disabled={busy} onClick={() => void onRefresh()}>Muat ulang sesi dan akses</Button>}>
+      <Tabs label="Jenis pekerjaan" current={state.mode} disabled={editor.selectionLocked} onSelect={mode => void editor.changeMode(mode as typeof state.mode)}
+        items={[...editor.canPropose ? [{ label: "Pengajuan baru", value: "propose" }] : [], ...editor.canApprove ? [{ label: "Tinjau pengajuan", value: "review" }] : [],
+          ...editor.canRead ? [{ label: "Riwayat pengajuan", value: "history" }] : []]} />
       <label><span id="source-warehouse-label">Gudang dan kanal</span><select aria-labelledby="source-warehouse-label" value={state.warehouse ? sourceLocationKey(state.warehouse.location) : ""} disabled={editor.selectionLocked || state.loadingWarehouses}
         onChange={event => void editor.chooseWarehouse(state.warehouses.find(item => sourceLocationKey(item.location) === event.target.value)?.location ?? null)}>
         <option value="">{state.loadingWarehouses ? "Memuat gudang…" : "Pilih gudang dan kanal"}</option>
@@ -120,48 +120,48 @@ function SourceDesk({ loaded, onRefresh }: { loaded: Loaded; onRefresh: () => Pr
           {item.organizationName} / {item.shopName} / {item.warehouseName} / {item.channelName}</option>)}</select></label>
       {state.warehouse && <p className={common.scopeSummary}>{state.warehouse.organizationName} / {state.warehouse.shopName}<br /><strong>{state.warehouse.warehouseName}</strong> / {state.warehouse.channelName}</p>}
       {!state.loadingWarehouses && state.warehouses.length === 0 && <p className={common.help}>Belum ada pilihan gudang untuk tugas ini. Periksa penugasan dan status verifikasi akun.</p>}
-      <button type="button" className={common.secondary} disabled={editor.selectionLocked || state.loadingWarehouses} onClick={() => void editor.loadWarehouses()}>Muat ulang gudang</button>
+      <Button variant="secondary" disabled={editor.selectionLocked || state.loadingWarehouses} onClick={() => void editor.loadWarehouses()}>Muat ulang gudang</Button>
       {editor.canApprove && <div className={styles.verification}><p>{state.fresh ? "Verifikasi dua langkah masih baru." : "Peninjauan memerlukan verifikasi dua langkah terbaru."}</p>
         <Link href={factorHref} aria-disabled={busy} onClick={event => { if (busy) event.preventDefault(); }}>Verifikasi untuk peninjauan</Link>
         <p className={common.help}>Setelah kembali, pilih dan periksa pengajuan lagi. Referensi permintaan yang belum selesai tetap disimpan.</p></div>}
-    </section>
+    </Section>
     <aside className={styles.notice}><strong>Persetujuan menyimpan pengaturan dalam keadaan belum aktif.</strong>
       <p>Saldo, jumlah tersedia, dan pemesanan barang belum berubah. Aktivasi memerlukan tahap kesiapan persediaan berikutnya.</p></aside>
     {state.sending && <p role="status">Menyimpan permintaan… Tunggu hasil sebelum melanjutkan.</p>}
-    {state.error !== null && <div role="alert" className={common.alert}><p>{message(state.error)}</p>
-      {state.attempt && <><p>Isian asli masih tersimpan pada tab ini. Pemeriksaan ulang memakai referensi permintaan yang sama.</p>
-        <button type="button" className={common.secondary} disabled={busy} onClick={() => void editor.retry()}>Periksa ulang permintaan yang sama</button></>}</div>}
-    {state.recoveryError !== null && <p role="alert" className={common.alert}>{message(state.recoveryError)}</p>}
+    {state.error !== null && <StateView kind="error" title={message(state.error)}
+      message={state.attempt ? "Isian asli masih tersimpan pada tab ini. Pemeriksaan ulang memakai referensi permintaan yang sama." : undefined}
+      action={state.attempt ? <Button variant="secondary" disabled={busy} onClick={() => void editor.retry()}>Periksa ulang permintaan yang sama</Button> : undefined} />}
+    {state.recoveryError !== null && <StateView kind="error" title={message(state.recoveryError)} />}
     {state.references.some(entry => entry.operation.startsWith("stock.source.")) && <p className={common.help}>Untuk memulihkan permintaan sumber stok, pilih jenis pekerjaan serta gudang dan kanal yang digunakan semula.</p>}
     <OperationRecovery entries={state.references} journal={editor.journal} disabled={state.sending || !state.warehouse}
       recoveryAdapters={{ "stock.source": { lookup: editor.receipt } }} onResolved={editor.reconciled} onFailure={editor.recoveryFailed} onBusyChange={editor.setRecovering} />
     {state.result && <div ref={resultFocus} tabIndex={-1} className={common.success} role="status"><h2>Permintaan tersimpan</h2>
       <p>{statusLabel[state.result.status]}. Referensi pengajuan {state.result.proposalId}.</p>
       {state.result.physicalPoolId && <p>Referensi alokasi {state.result.physicalPoolId}. Pengaturan belum aktif.</p>}</div>}
-    {!state.warehouse ? <section className={common.state}><h2>Pilih gudang untuk mulai</h2><p>Pilihan mengikuti penugasan akun Anda.</p></section> :
-      state.mode === "propose" ? <div className={styles.desk}><section className={common.detail}>
-        <div className={common.form}><h2>Pengaturan sumber baru</h2><SourceForm draft={state.draft} disabled={locked} onChange={(field, value) => editor.changeDraft(field, value)} onReview={() => editor.reviewProposal()} /></div>
-      </section><aside className={styles.guide}><span className={styles.eyebrow}>Sebelum mengajukan</span><h2>Satu alokasi, tanggung jawab yang jelas</h2>
+    {!state.warehouse ? <StateView kind="empty" title="Pilih gudang untuk mulai" message="Pilihan mengikuti penugasan akun Anda." /> :
+      state.mode === "propose" ? <div className={styles.desk}><Section title="Pengaturan sumber baru">
+        <SourceForm draft={state.draft} disabled={locked} onChange={(field, value) => editor.changeDraft(field, value)} onReview={() => editor.reviewProposal()} />
+      </Section><aside className={styles.guide}><h2>Satu alokasi, tanggung jawab yang jelas</h2>
         <ol><li>Pastikan alokasi fisik yang sama belum diajukan dengan kode lain.</li><li>Gunakan batas usia data dan cadangan yang telah disepakati pengelola.</li>
           <li>Cantumkan penanggung jawab selisih serta acuan serah terima.</li></ol><p>Peninjau yang berbeda akan memeriksa pengajuan sebelum pengaturan disetujui.</p></aside></div> :
-      !editor.canRead ? <section className={common.state}><h2>Akses riwayat diperlukan</h2><p>Izin peninjauan tidak otomatis memberi akses membaca pengajuan. Minta penugasan membaca pada gudang yang sesuai.</p></section> :
-      <div className={styles.desk}><section className={common.queue} aria-busy={state.loadingHistory}>
-        <div className={common.queueHeader}><h2>Daftar pengajuan</h2><p className={common.help}>{amount(state.history.total)} pengajuan pada gudang ini.</p>
-          <button type="button" className={common.secondary} disabled={editor.selectionLocked || state.loadingHistory} onClick={() => void editor.loadHistory()}>Muat ulang pengajuan</button></div>
-        {state.loadingHistory ? <p role="status" className={common.empty}>Memuat pengajuan…</p> : <><ul className={common.queueList}>
-          {state.history.items.map(item => <li key={item.id}><button type="button" className={state.selected?.id === item.id ? common.selectedRow : common.queueRow}
-            aria-pressed={state.selected?.id === item.id} disabled={locked} onClick={() => void editor.chooseProposal(item.id)}>
-            <strong>{item.label}</strong><span>{item.physicalKey}</span><span>{statusLabel[item.status]}</span></button></li>)}</ul>
-          {!state.history.items.length && <p className={common.empty}>Belum ada pengajuan pada halaman ini.</p>}
-          <div className={common.pagination}><button type="button" className={common.secondary} disabled={editor.selectionLocked || state.historyOffset === 0} onClick={() => void editor.loadHistory(state.historyOffset - 25)}>Sebelumnya</button>
-            <span>Halaman {Math.floor(state.historyOffset / 25) + 1}</span><button type="button" className={common.secondary} disabled={editor.selectionLocked || state.historyOffset >= 10000 || BigInt(state.historyOffset + 25) >= BigInt(state.history.total)} onClick={() => void editor.loadHistory(state.historyOffset + 25)}>Berikutnya</button></div></>}
-      </section><section className={common.detail} aria-busy={state.loadingDetail}><div className={common.form}>
-        {state.loadingDetail ? <p role="status">Memeriksa pengajuan terbaru…</p> : state.selected ? <><h2>{state.selected.label}</h2><p className={styles.badge}>{statusLabel[state.selected.status]}</p>
+      !editor.canRead ? <StateView kind="denied" title="Akses riwayat diperlukan" message="Izin peninjauan tidak otomatis memberi akses membaca pengajuan. Minta penugasan membaca pada gudang yang sesuai." /> :
+      <div className={styles.desk}><Section title="Daftar pengajuan" busy={state.loadingHistory} description={<>{amount(state.history.total)} pengajuan pada gudang ini.</>}
+        actions={<Button variant="secondary" disabled={editor.selectionLocked || state.loadingHistory} onClick={() => void editor.loadHistory()}>Muat ulang pengajuan</Button>}>
+        <DataList label="Daftar pengajuan" items={state.loadingHistory ? [] : state.history.items} getKey={item => item.id} loading={state.loadingHistory}
+          empty={state.error === null ? { title: "Belum ada pengajuan pada halaman ini." } : undefined}
+          renderTitle={item => item.label} renderMeta={item => item.physicalKey} renderBadge={item => <Badge status={statusLabel[item.status]} />}
+          onSelect={item => void editor.chooseProposal(item.id)} selectedKey={state.selected?.id ?? null} disabled={locked}
+          openLabel={item => item.label + " " + item.physicalKey + " " + statusLabel[item.status]}
+          pagination={{ start: state.historyOffset + 1, end: state.historyOffset + state.history.items.length, total: Number(state.history.total), disabled: editor.selectionLocked,
+            hasPrevious: state.historyOffset > 0, hasNext: !(state.historyOffset >= 10000 || BigInt(state.historyOffset + 25) >= BigInt(state.history.total)),
+            onPrevious: () => void editor.loadHistory(state.historyOffset - 25), onNext: () => void editor.loadHistory(state.historyOffset + 25) }} />
+      </Section><section className="ui-section" aria-busy={state.loadingDetail}>
+        {state.loadingDetail ? <StateView kind="loading" title="Memeriksa pengajuan terbaru…" /> : state.selected ? <><h2>{state.selected.label}</h2><Badge status={statusLabel[state.selected.status]} />
           <SourceFacts value={state.selected} /><p className={common.help}>Diajukan {formatDateTime(state.selected.proposedAt)}. Referensi {state.selected.id}.</p>
           {state.selected.decision && <section><h3>Keputusan tercatat</h3><p>{state.selected.decision.reviewReference}</p><p className={common.preserve}>{state.selected.decision.reason}</p></section>}
           {state.selected.status === "proposed" && (editor.canPropose || editor.canApprove) && <DecisionForm key={state.selected.id + ":" + state.mode} disabled={locked} canPropose={editor.canPropose} canApprove={editor.canApprove}
             onReview={(decision, reference, reason) => editor.reviewDecision(decision, reference, reason)} />}</> : <><h2>Pilih pengajuan</h2><p>Pengaturan terbaru akan dimuat sebelum Anda memeriksa atau mengambil keputusan.</p></>}
-      </div></section></div>}
+      </section></div>}
     {state.review && state.warehouse && <div ref={reviewFocus} tabIndex={-1} className={styles.review}>
       <SourceReview command={state.review} warehouse={state.warehouse.warehouseName + " / " + state.warehouse.channelName} busy={busy}
         onConfirm={() => void editor.submitReviewed(true)} onCancel={() => editor.cancelReview()} /></div>}
@@ -186,7 +186,7 @@ function SourceForm({ draft, disabled, onChange, onReview }: { draft: SourceDraf
     <label>Penanggung jawab selisih<input required maxLength={160} value={draft.discrepancyOwnerReference} onChange={event => onChange("discrepancyOwnerReference", event.target.value)} /></label>
     <label>Acuan serah terima<input required maxLength={160} value={draft.handoffReference} onChange={event => onChange("handoffReference", event.target.value)} /></label>
     <label>Alasan pengajuan<textarea required rows={3} maxLength={1000} value={draft.reason} onChange={event => onChange("reason", event.target.value)} /></label>
-    <button className={common.primary}>Tinjau pengaturan</button>
+    <Button type="submit" variant="primary">Tinjau pengaturan</Button>
   </fieldset></form>;
 }
 function SourceFacts({ value }: { value: SourceCommand["body"] | SourceDetail }) {
@@ -195,7 +195,7 @@ function SourceFacts({ value }: { value: SourceCommand["body"] | SourceDetail })
     ["Pengendalian", controlLabel[value.control]], ["Batas usia data", sourceAgeSeconds(value.maximumAgeMilliseconds) + " detik"],
     ["Cadangan pengaman", amount(value.safetyBufferBaseUnits) + " satuan dasar"], ["Penanggung jawab selisih", value.discrepancyOwnerReference], ["Acuan serah terima", value.handoffReference]];
   if (value.externalNamespace) pairs.push(["Sumber sistem lain", value.externalNamespace], ["Protokol penahanan", value.reservationProtocolReference!]);
-  return <><dl className={common.facts}>{pairs.map(([label, text]) => <div key={label}><dt>{label}</dt><dd>{text}</dd></div>)}</dl>
+  return <><Facts items={pairs.map(([term, value]) => ({ term, value }))} />
     <div><h3>Alasan pengajuan</h3><p className={common.preserve}>{value.reason}</p></div></>;
 }
 function DecisionForm({ disabled, canPropose, canApprove, onReview }: { disabled: boolean; canPropose: boolean; canApprove: boolean; onReview: (decision: SourceDecision, reference: string, reason: string) => void }) {
@@ -206,18 +206,18 @@ function DecisionForm({ disabled, canPropose, canApprove, onReview }: { disabled
     <p className={common.help}>Persetujuan dan penolakan memerlukan peninjau yang berbeda dari pengaju. Penarikan hanya dapat dilakukan oleh pengaju semula.</p>
     <label>Acuan peninjauan<input required maxLength={160} value={reference} onChange={event => setReference(event.target.value)} /></label>
     <label>Alasan keputusan<textarea required rows={3} maxLength={1000} value={reason} onChange={event => setReason(event.target.value)} /></label>
-    <button className={common.primary}>Tinjau keputusan</button></fieldset></form>;
+    <Button type="submit" variant="primary">Tinjau keputusan</Button></fieldset></form>;
 }
 function SourceReview({ command, warehouse, busy, onConfirm, onCancel }: { command: SourceCommand; warehouse: string; busy: boolean; onConfirm: () => void; onCancel: () => void }) {
   const [confirmed, setConfirmed] = useState(false);
   const labels = { "stock.source.propose": "Kirim pengajuan", "stock.source.approve": "Setujui pengaturan", "stock.source.reject": "Tolak pengajuan", "stock.source.withdraw": "Tarik pengajuan" };
   return <form onSubmit={event => { event.preventDefault(); if (confirmed) onConfirm(); }}>
-    <span className={styles.eyebrow}>Periksa sebelum menyimpan</span><h2>{labels[command.operation]}</h2><p className={common.scopeSummary}>{warehouse}</p>
+    <h2>{labels[command.operation]}</h2><p className={common.help}>Periksa sebelum menyimpan</p><p className={common.scopeSummary}>{warehouse}</p>
     <SourceFacts value={"proposal" in command ? command.proposal : command.body} />
     {"proposal" in command && <><p>Referensi pengajuan {command.proposalId}, versi {command.expectedVersion}.</p><h3>Acuan peninjauan</h3><p>{command.body.reviewReference}</p><h3>Alasan keputusan</h3><p className={common.preserve}>{command.body.reason}</p></>}
     <label className={common.checkbox}><input type="checkbox" required checked={confirmed} disabled={busy} onChange={event => setConfirmed(event.target.checked)} />
       <span>Saya telah memeriksa gudang, kanal, seluruh pengaturan, dan alasan. Persetujuan menyimpan pengaturan yang belum aktif.</span></label>
-    <div className={common.actions}><button className={common.primary} disabled={busy || !confirmed}>{labels[command.operation]}</button>
-      <button type="button" className={common.secondary} disabled={busy} onClick={onCancel}>Kembali ke isian</button></div>
+    <div className={common.actions}><Button type="submit" variant="primary" disabled={busy || !confirmed}>{labels[command.operation]}</Button>
+      <Button variant="secondary" disabled={busy} onClick={onCancel}>Kembali ke isian</Button></div>
   </form>;
 }

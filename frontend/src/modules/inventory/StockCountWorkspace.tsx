@@ -1,7 +1,6 @@
 "use client";
 
 import { SessionAccessState, lostAccessKind } from '@/components/workspace-kit/session-access-state';
-import Link from "next/link";
 import {ScanInput} from './ScanInput';
 import {sameScanPackage} from './scan-client';
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
@@ -18,6 +17,14 @@ import { stockCountActor, stockCountQuantity, stockLocationKey, type StockCountC
 import common from "../administration/access.module.css";
 import styles from "./stock-count.module.css";
 import { formatDateTime, numberFormatter } from "@/lib/format";
+import { Button } from '@/components/workspace-kit/button';
+import { Pagination } from '@/components/workspace-kit/pagination';
+import { PageHeader } from '@/components/workspace-kit/page-header';
+import { Section } from '@/components/workspace-kit/section';
+import { StateView } from '@/components/workspace-kit/state-view';
+import { DataList } from '@/components/workspace-kit/data-list';
+import { Tabs } from '@/components/workspace-kit/tabs';
+import { Facts } from '@/components/workspace-kit/facts';
 
 const path = "/inventory/counts";
 type Loaded = { actorId: string; actions: string[]; session: IdentitySession; observedAt: number; generation: number };
@@ -75,14 +82,10 @@ export function StockCountWorkspace() {
     return () => { active = false; request.current?.abort(); window.removeEventListener("pageshow", restored); };
   }, [refresh]);
   return <main className={common.page}>
-    <header className={common.header}><div>
-      <Link className={common.brand} href="/identity/account">Unit Toko</Link>
-      <h1>Hitung barang</h1>
-      <p>Catat jumlah fisik pada gudang dan kemasan yang dipilih.</p>
-    </div></header>
-    {loaded ? <CountDesk key={loaded.actorId + ":" + loaded.generation} loaded={loaded} onRefresh={refresh} /> :
-      (loading ? <section className={common.state} aria-busy="true"><h2>Memeriksa sesi dan akses</h2></section>
-        : <SessionAccessState error={error} returnPath={path} onRetry={() => void refresh()} detail={error !== null ? message(error) : undefined} />)}
+    <PageHeader title="Hitung barang" description="Catat jumlah fisik pada gudang dan kemasan yang dipilih." />
+    <div className="ui-stack">{loaded ? <CountDesk key={loaded.actorId + ":" + loaded.generation} loaded={loaded} onRefresh={refresh} /> :
+      (loading ? <StateView kind="loading" title="Memeriksa sesi dan akses" />
+        : <SessionAccessState error={error} returnPath={path} onRetry={() => void refresh()} detail={error !== null ? message(error) : undefined} />)}</div>
   </main>;
 }
 function CountDesk({ loaded, onRefresh }: { loaded: Loaded; onRefresh: () => Promise<void> }) {
@@ -116,15 +119,10 @@ function CountDesk({ loaded, onRefresh }: { loaded: Loaded; onRefresh: () => Pro
   }
   return <>
     <AdministrationNavigation current="counts" actions={loaded.actions} locked={locked} />
-    <section className={common.accountSection}>
-      <div className={styles.headingRow}><p>Petugas: <strong>{loaded.session.account?.displayName ?? loaded.session.account?.verifiedEmail}</strong></p>
-        <button type="button" className={common.secondary} disabled={locked} onClick={() => void onRefresh()}>Muat ulang sesi dan akses</button></div>
-      <div className={styles.modeChoices} role="group" aria-label="Jenis pekerjaan">
-        {editor.canCount && <button type="button" aria-pressed={state.mode === "count"} className={state.mode === "count" ? common.primary : common.secondary}
-          disabled={locked} onClick={() => void editor.changeMode("count")}>Catat hitungan</button>}
-        {editor.canRead && <button type="button" aria-pressed={state.mode === "history"} className={state.mode === "history" ? common.primary : common.secondary}
-          disabled={locked} onClick={() => void editor.changeMode("history")}>Riwayat pengamatan</button>}
-      </div>
+    <Section title="Ruang kerja gudang" description={<>Petugas: <strong>{loaded.session.account?.displayName ?? loaded.session.account?.verifiedEmail}</strong></>}
+      actions={<Button variant="secondary" disabled={locked} onClick={() => void onRefresh()}>Muat ulang sesi dan akses</Button>}>
+      <Tabs label="Jenis pekerjaan" current={state.mode} disabled={locked} onSelect={mode => void editor.changeMode(mode as typeof state.mode)}
+        items={[...editor.canCount ? [{ label: "Catat hitungan", value: "count" }] : [], ...editor.canRead ? [{ label: "Riwayat pengamatan", value: "history" }] : []]} />
       <label><span id="stock-warehouse-label">Gudang dan kanal</span>
         <select aria-labelledby="stock-warehouse-label" value={state.warehouse ? stockLocationKey(state.warehouse.location) : ""} disabled={locked || state.loadingWarehouses}
           onChange={event => {setScanSelection(null); setScanBlocked(false); void editor.chooseWarehouse(state.warehouses.find(item => stockLocationKey(item.location) === event.target.value)?.location ?? null);}}>
@@ -147,24 +145,23 @@ function CountDesk({ loaded, onRefresh }: { loaded: Loaded; onRefresh: () => Pro
             {state.sources.items.map(source => <option key={source.pool.poolId} value={source.pool.poolId}>{source.pool.label} — {source.pool.physicalKey}</option>)}
           </select>
         </label>
-        <div className={common.actions}><button type="button" className={common.secondary} disabled={locked || state.loadingSources}
-          onClick={() => void editor.loadSources()}>Muat ulang pilihan sumber</button></div>
+        <div className={common.actions}><Button variant="secondary" disabled={locked || state.loadingSources}
+          onClick={() => void editor.loadSources()}>Muat ulang pilihan sumber</Button></div>
         {state.loadingSources && <p role="status">Memeriksa sumber yang diizinkan pada gudang dan kanal ini…</p>}
         {!state.loadingSources && state.sources.items.length === 0 && <p className={common.help}>Belum ada sumber yang dapat dipilih pada halaman ini. Periksa penugasan atau konfigurasi bersama pengelola. Pengamatan tanpa kaitan harus dipilih secara sengaja.</p>}
         {state.selectedSource && <p className={common.scopeSummary}>Sumber dipilih oleh petugas: <strong>{state.selectedSource.pool.label}</strong> — {state.selectedSource.pool.physicalKey}.
           {' '}Revisi sumber saat ditinjau: {state.selectedSource.pool.poolRevision}. Pilihan mengikuti konfigurasi saat dimuat; penanda aktif bukan bukti ketersediaan atau persetujuan pelepasan stok.</p>}
         {state.sourceMode === 'unbound' && <p className={common.help}>Tanpa kaitan sumber. Gudang dan label lot tidak akan digunakan untuk menebak pool stok.</p>}
-        <Paging offset={state.sourceOffset} total={state.sources.total} disabled={locked || state.loadingSources} onPage={offset => void editor.loadSources(offset)} />
+        <Paging label="Halaman sumber" offset={state.sourceOffset} count={state.sources.items.length} total={state.sources.total} disabled={locked || state.loadingSources} onPage={offset => void editor.loadSources(offset)} />
       </section>}
-    </section>
+    </Section>
     {state.sending && <p role="status" className={common.help}>Menyimpan pengamatan… Tunggu hasil sebelum melanjutkan.</p>}
-    {state.error !== null && <div role="alert" className={common.alert}><p>{message(state.error)}</p>
-      {state.attempt && <><p>Isian asli masih tersimpan pada tab ini. Periksa hasil atau kirim ulang permintaan yang sama.</p>
-        <button type="button" className={common.secondary} disabled={state.sending || state.recovering} onClick={() => void editor.retry()}>Periksa ulang permintaan yang sama</button></>}
-      {state.error instanceof AccessFailure && state.error.status === 409 && !state.attempt && state.mode === "count" &&
-        <button type="button" className={common.secondary} disabled={locked || state.loadingPackages} onClick={() => void editor.loadPackages()}>Muat ulang pilihan kemasan</button>}
-    </div>}
-    {state.recoveryError !== null && <p role="alert" className={common.alert}>{message(state.recoveryError)}</p>}
+    {state.error !== null && <StateView kind="error" title={message(state.error)}
+      message={state.attempt ? "Isian asli masih tersimpan pada tab ini. Periksa hasil atau kirim ulang permintaan yang sama." : undefined}
+      action={state.attempt ? <Button variant="secondary" disabled={state.sending || state.recovering} onClick={() => void editor.retry()}>Periksa ulang permintaan yang sama</Button>
+        : state.error instanceof AccessFailure && state.error.status === 409 && state.mode === "count"
+          ? <Button variant="secondary" disabled={locked || state.loadingPackages} onClick={() => void editor.loadPackages()}>Muat ulang pilihan kemasan</Button> : undefined} />}
+    {state.recoveryError !== null && <StateView kind="error" title={message(state.recoveryError)} />}
     <OperationRecovery entries={state.references} journal={editor.journal} disabled={state.sending}
       onResolved={editor.reconciled} onFailure={editor.recoveryFailed} onBusyChange={editor.setRecovering}
       recoveryAdapters={{ "inventory.stock-count": { lookup: editor.receipt } }} />
@@ -173,17 +170,17 @@ function CountDesk({ loaded, onRefresh }: { loaded: Loaded; onRefresh: () => Pro
       <p>Referensi pengamatan {state.result.id}. Pilih kemasan kembali untuk membuat pengamatan baru.</p>
       <CountSourceBinding item={state.result} />
     </div>}
-    {!state.warehouse ? <section className={common.state}><h2>Pilih gudang untuk mulai</h2><p>Pilihan mengikuti penugasan akun Anda. Barang akan dimuat setelah gudang dipilih.</p></section> :
-      state.mode === "history" ? <section className={common.accountSection} aria-busy={state.loadingHistory}>
-        <div className={styles.headingRow}><h2>Riwayat pengamatan</h2><button type="button" className={common.secondary} disabled={state.loadingHistory || state.recovering} onClick={() => void editor.loadHistory()}>Muat ulang riwayat</button></div>
-        <p className={common.help}>{amount(state.history.total)} pengamatan. Setiap baris menyimpan kemasan yang digunakan saat penghitungan.</p>
-        {state.loadingHistory ? <p role="status">Memuat riwayat…</p> : <><ul className={styles.history}>{state.history.items.map(item => <Observation key={item.id} item={item} />)}</ul>
-          {!state.history.items.length && <p>Belum ada pengamatan pada halaman ini.</p>}
-          <Paging offset={state.historyOffset} total={state.history.total} disabled={state.recovering} onPage={offset => void editor.loadHistory(offset)} />
+    {!state.warehouse ? <StateView kind="empty" title="Pilih gudang untuk mulai" message="Pilihan mengikuti penugasan akun Anda. Barang akan dimuat setelah gudang dipilih." /> :
+      state.mode === "history" ? <Section title="Riwayat pengamatan" busy={state.loadingHistory}
+        description={<>{amount(state.history.total)} pengamatan. Setiap baris menyimpan kemasan yang digunakan saat penghitungan.</>}
+        actions={<Button variant="secondary" disabled={state.loadingHistory || state.recovering} onClick={() => void editor.loadHistory()}>Muat ulang riwayat</Button>}>
+        {state.loadingHistory ? <StateView kind="loading" title="Memuat riwayat…" /> : !state.history.items.length ? (state.error === null ? <StateView kind="empty" title="Belum ada pengamatan pada halaman ini." /> : null) : <>
+          <ul className={styles.history}>{state.history.items.map(item => <Observation key={item.id} item={item} />)}</ul>
+          <Paging label="Halaman riwayat" offset={state.historyOffset} count={state.history.items.length} total={state.history.total} disabled={state.recovering} onPage={offset => void editor.loadHistory(offset)} />
         </>}
-      </section> :
+      </Section> :
       <div className={styles.desk}>
-        <section className={common.queue} aria-busy={state.loadingPackages}>
+        <section className="ui-section" aria-busy={state.loadingPackages}>
           {state.warehouse && <ScanInput key={stockLocationKey(state.warehouse.location) + ':' + (state.selectedSource?.pool.poolId ?? state.sourceMode)}
             actorId={loaded.actorId} disabled={locked || state.loadingPackages} current={() => !editor.snapshot().expired && !editor.snapshot().suspended && !sessionTiming(loaded.session, performance.now() - loaded.observedAt).expired}
             context={{purpose: 'stocktake', location: state.warehouse.location, documentId: null, documentRevision: null, auxiliaryId: null, auxiliaryRevision: null, sourceReview: null}}
@@ -193,27 +190,21 @@ function CountDesk({ loaded, onRefresh }: { loaded: Loaded; onRefresh: () => Pro
               if (!choice || candidate.targetReference !== choice.skuId || !sameScanPackage(candidate, choice)) throw new AccessFailure(409, 'operational_scan_context_changed');
               editor.choosePackage(choice.skuId); setScanSelection(candidate.selection); setScanBlocked(false);
             }} />}
-          <div className={common.queueHeader}><h2>Pilih kemasan barang</h2>
-            <form className={common.lookup} onSubmit={event => { event.preventDefault(); void editor.loadPackages(); }}>
-              <label>Cari kode atau kemasan<input value={state.search} maxLength={128} disabled={locked}
-                onChange={event => editor.changeSearch(event.target.value)} /></label>
-              <button className={common.secondary} disabled={locked || state.loadingPackages}>Cari</button>
-            </form>
-            <p className={common.help}>{amount(state.packages.total)} kemasan pada hasil ini.</p>
-          </div>
-          {state.loadingPackages ? <p role="status" className={common.empty}>Memuat pilihan kemasan…</p> : <>
-            <ul className={common.queueList}>{state.packages.items.map(item => <li key={item.skuId}>
-              <button type="button" className={state.selectedPackage?.skuId === item.skuId ? common.selectedRow : common.queueRow}
-                aria-pressed={state.selectedPackage?.skuId === item.skuId} disabled={locked} onClick={() => {setScanSelection(null); editor.choosePackage(item.skuId);}}>
-                <strong>{item.familyName}</strong><span>{item.skuCode}</span>
-                <span>{item.packageLabel}: {amount(item.baseUnitsPerPackage)} {item.baseUnitCode} per kemasan</span>
-              </button>
-            </li>)}</ul>
-            {!state.packages.items.length && <p className={common.empty}>Belum ada kemasan pada hasil ini. Coba pencarian lain atau periksa katalog bersama pengelola.</p>}
-            <Paging offset={state.packageOffset} total={state.packages.total} disabled={locked} onPage={offset => void editor.loadPackages(offset)} />
-          </>}
+          <h2>Pilih kemasan barang</h2>
+          <form className={common.lookup} onSubmit={event => { event.preventDefault(); void editor.loadPackages(); }}>
+            <label>Cari kode atau kemasan<input value={state.search} maxLength={128} disabled={locked}
+              onChange={event => editor.changeSearch(event.target.value)} /></label>
+            <Button type="submit" variant="secondary" disabled={locked || state.loadingPackages}>Cari</Button>
+          </form>
+          <p className={common.help}>{amount(state.packages.total)} kemasan pada hasil ini.</p>
+          <DataList label="Pilih kemasan barang" items={state.loadingPackages ? [] : state.packages.items} getKey={item => item.skuId} loading={state.loadingPackages}
+            empty={state.error === null ? { title: "Belum ada kemasan pada hasil ini. Coba pencarian lain atau periksa katalog bersama pengelola." } : undefined}
+            renderTitle={item => item.familyName} renderMeta={item => <>{item.skuCode} · {item.packageLabel}: {amount(item.baseUnitsPerPackage)} {item.baseUnitCode} per kemasan</>}
+            onSelect={item => { setScanSelection(null); editor.choosePackage(item.skuId); }} selectedKey={state.selectedPackage?.skuId ?? null} disabled={locked}
+            openLabel={item => item.familyName + " " + item.skuCode + " " + item.packageLabel + ": " + amount(item.baseUnitsPerPackage) + " " + item.baseUnitCode + " per kemasan"}
+            pagination={paging("Halaman kemasan", state.packageOffset, state.packages.items.length, state.packages.total, locked, offset => void editor.loadPackages(offset))} />
         </section>
-        <section className={common.detail}>
+        <section className="ui-section">
           {state.selectedPackage ? <div className={common.form}>
             <PackageDetails choice={state.selectedPackage} />
             <form onSubmit={event => { event.preventDefault(); if (!scanBlocked) editor.reviewCount(scanSelection ? [scanSelection] : undefined); }}>
@@ -232,7 +223,7 @@ function CountDesk({ loaded, onRefresh }: { loaded: Loaded; onRefresh: () => Pro
                 <label>Alasan penghitungan
                   <input required maxLength={1000} value={state.draft.reason} onChange={event => editor.changeDraft("reason", event.target.value)} />
                 </label>
-                <button className={common.primary} disabled={scanBlocked}>Tinjau hitungan</button>
+                <Button type="submit" variant="primary" disabled={scanBlocked}>Tinjau hitungan</Button>
               </fieldset>
             </form>
           </div> : <div className={common.form}><h2>Pilih kemasan dari daftar</h2><p>Periksa isi setiap kemasan sebelum memasukkan jumlah fisiknya.</p></div>}
@@ -258,24 +249,21 @@ function CountReview({ command, warehouse, busy, onConfirm, onCancel }: {
   const units = stockCountQuantity(String(command.body.packages), command.choice.baseUnitsPerPackage).baseUnits;
   return <form onSubmit={event => { event.preventDefault(); if (confirmed && !busy) onConfirm(); }} className={common.fields}>
     <h2>Periksa sebelum menyimpan</h2>
-    <dl className={common.facts}>
-      <div><dt>Gudang / kanal</dt><dd>{warehouse}</dd></div><div><dt>Barang</dt><dd>{command.choice.familyName} ({command.choice.skuCode})</dd></div>
-      <div><dt>Sumber dipilih oleh petugas</dt><dd>{command.source ? command.source.pool.label + ' — ' + command.source.pool.physicalKey : 'Tanpa kaitan sumber'}</dd></div>
-      {command.source && <div><dt>Revisi sumber saat ditinjau</dt><dd>{command.source.pool.poolRevision}</dd></div>}
-      <div><dt>Kemasan</dt><dd>{command.choice.packageLabel}, {amount(command.choice.baseUnitsPerPackage)} {command.choice.baseUnitCode} per kemasan</dd></div>
-      <div><dt>Jumlah ditemukan</dt><dd>{amount(command.body.packages)} kemasan = {amount(units)} {command.choice.baseUnitCode}</dd></div>
-      <div><dt>Label lot belum diverifikasi</dt><dd>{command.body.observedLotLabel ?? "Tidak dicatat"}</dd></div>
-      <div><dt>Alasan</dt><dd>{command.body.reason}</dd></div>
-    </dl>
+    <Facts items={[{ term: "Gudang / kanal", value: warehouse }, { term: "Barang", value: <>{command.choice.familyName} ({command.choice.skuCode})</> },
+      { term: "Sumber dipilih oleh petugas", value: command.source ? command.source.pool.label + ' — ' + command.source.pool.physicalKey : 'Tanpa kaitan sumber' },
+      ...command.source ? [{ term: "Revisi sumber saat ditinjau", value: command.source.pool.poolRevision }] : [],
+      { term: "Kemasan", value: <>{command.choice.packageLabel}, {amount(command.choice.baseUnitsPerPackage)} {command.choice.baseUnitCode} per kemasan</> },
+      { term: "Jumlah ditemukan", value: <>{amount(command.body.packages)} kemasan = {amount(units)} {command.choice.baseUnitCode}</> },
+      { term: "Label lot belum diverifikasi", value: command.body.observedLotLabel ?? "Tidak dicatat" }, { term: "Alasan", value: command.body.reason }]} />
     <p className={common.help}>Pengamatan tersimpan tidak dapat diubah. Catatan ini belum menetapkan saldo atau ketersediaan barang.</p>
     <label className={common.checkbox}><input type="checkbox" checked={confirmed} disabled={busy} onChange={event => setConfirmed(event.target.checked)} />
       Saya sudah memeriksa gudang, pilihan kaitan sumber, kemasan dan jumlah yang ditemukan.</label>
-    <div className={common.actions}><button className={common.primary} disabled={busy || !confirmed}>Simpan pengamatan</button>
-      <button type="button" className={common.secondary} disabled={busy} onClick={onCancel}>Kembali ke isian</button></div>
+    <div className={common.actions}><Button type="submit" variant="primary" disabled={busy || !confirmed}>Simpan pengamatan</Button>
+      <Button variant="secondary" disabled={busy} onClick={onCancel}>Kembali ke isian</Button></div>
   </form>;
 }
 function Observation({ item }: { item: StockObservation }) {
-  return <li><div className={styles.headingRow}><h3>{item.skuCode}</h3>
+  return <li><div className={styles.observationHead}><h3>{item.skuCode}</h3>
     <time dateTime={item.recordedAt}>{formatDateTime(item.recordedAt)}</time></div>
     <p><strong>{amount(item.packages)} {item.packageLabel} = {amount(item.baseUnits)} {item.baseUnitCode}</strong></p>
     <p className={common.help}>{amount(item.baseUnitsPerPackage)} {item.baseUnitCode} per kemasan. {kind[item.packageKind]}.</p>
@@ -289,10 +277,11 @@ function CountSourceBinding({ item }: { item: StockObservation }) {
     {' '}Penanda konfigurasi saat dicatat: {item.poolBinding.active ? 'aktif' : 'tidak aktif'}. Kaitan tersimpan tidak menetapkan saldo, nilai, ketersediaan, pelepasan atau penyelesaian stok.</p>
     : <p>Pengamatan lama/tanpa kaitan sumber. Lokasi dan label lot belum membuktikan kaitan ke pool atau lot stok.</p>;
 }
-function Paging({ offset, total, disabled, onPage }: { offset: number; total: string; disabled: boolean; onPage: (offset: number) => void }) {
-  return <div className={common.pagination}>
-    <button type="button" className={common.secondary} disabled={disabled || offset === 0} onClick={() => onPage(offset - 25)}>Sebelumnya</button>
-    <span>Halaman {Math.floor(offset / 25) + 1}</span>
-    <button type="button" className={common.secondary} disabled={disabled || offset >= 10000 || BigInt(offset + 25) >= BigInt(total)} onClick={() => onPage(offset + 25)}>Berikutnya</button>
-  </div>;
+/** The shared pager settings (hidden when one page holds everything), 25 rows per page as the API serves them. */
+function paging(label: string, offset: number, count: number, total: string, disabled: boolean, onPage: (offset: number) => void) {
+  return { label, start: offset + 1, end: offset + count, total: Number(total), disabled, hasPrevious: offset > 0,
+    hasNext: !(offset >= 10000 || BigInt(offset + 25) >= BigInt(total)), onPrevious: () => onPage(offset - 25), onNext: () => onPage(offset + 25) };
+}
+function Paging({ label, offset, count, total, disabled, onPage }: { label: string; offset: number; count: number; total: string; disabled: boolean; onPage: (offset: number) => void }) {
+  return <Pagination {...paging(label, offset, count, total, disabled, onPage)} />;
 }

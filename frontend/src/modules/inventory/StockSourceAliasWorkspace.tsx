@@ -22,6 +22,12 @@ import type { StockWarehouse } from "./stock-count-workflow";
 import common from "../administration/access.module.css";
 import styles from "./stock-source-alias.module.css";
 import { formatDateTime } from "@/lib/format";
+import { Button } from '@/components/workspace-kit/button';
+import { PageHeader } from '@/components/workspace-kit/page-header';
+import { Section } from '@/components/workspace-kit/section';
+import { StateView } from '@/components/workspace-kit/state-view';
+import { DataList } from '@/components/workspace-kit/data-list';
+import { Badge } from '@/components/workspace-kit/badge';
 
 const path = "/inventory/sources/aliases";
 const factorHref = "/identity/account?operation=stock.source.approve&returnPath=" + encodeURIComponent(path);
@@ -73,11 +79,9 @@ export function StockSourceAliasWorkspace() {
   }, [refresh]);
   return <main className={common.page}>
     <a className={styles.skip} href="#alias-workspace">Langsung ke pemetaan kanal</a>
-    <header className={common.header}><div><Link className={common.brand} href="/identity/account">Unit Toko</Link>
-      <p className={styles.eyebrow}>Pengelolaan persediaan</p><h1>Pemetaan kanal</h1>
-      <p>Kelola penggunaan satu alokasi fisik oleh kanal lain, dengan pengajuan dan peninjauan terpisah.</p></div></header>
-    <div id="alias-workspace">{loaded ? <AliasDesk key={loaded.actorId + ":" + loaded.generation} loaded={loaded} onRefresh={refresh} /> :
-      (loading ? <section className={common.state} aria-busy="true"><h2>Memeriksa sesi dan akses</h2></section>
+    <PageHeader title="Pemetaan kanal" description="Kelola penggunaan satu alokasi fisik oleh kanal lain, dengan pengajuan dan peninjauan terpisah." />
+    <div id="alias-workspace" className="ui-stack">{loaded ? <AliasDesk key={loaded.actorId + ":" + loaded.generation} loaded={loaded} onRefresh={refresh} /> :
+      (loading ? <StateView kind="loading" title="Memeriksa sesi dan akses" />
         : <SessionAccessState error={error} returnPath={path} onRetry={() => void refresh()} detail={error !== null ? message(error) : undefined} />)}</div>
   </main>;
 }
@@ -108,30 +112,27 @@ function AliasDesk({ loaded, onRefresh }: { loaded: Loaded; onRefresh: () => Pro
   if (state.expired || state.suspended) return <SessionAccessState error={state.error} kind={state.expired ? 'expired' : lostAccessKind(state.error)} returnPath={path} busy={busy} onRetry={() => void onRefresh()} detail={state.error !== null ? message(state.error) : undefined} />;
   return <>
     <AdministrationNavigation current="source-aliases" actions={loaded.actions} locked={locked} />
-    <section className={common.accountSection} aria-labelledby="alias-location-title">
-      <div className={styles.heading}><div><h2 id="alias-location-title">Pilih ruang kerja</h2>
-        <p className={common.help}>Petugas: <strong>{loaded.session.account?.displayName ?? loaded.session.account?.verifiedEmail}</strong></p></div>
-        <button type="button" className={common.secondary} disabled={busy || state.review !== null} onClick={() => void onRefresh()}>Muat ulang sesi dan akses</button></div>
+    <Section title="Pilih ruang kerja" id="alias-location-title" description={<>Petugas: <strong>{loaded.session.account?.displayName ?? loaded.session.account?.verifiedEmail}</strong></>}
+      actions={<Button variant="secondary" disabled={busy || state.review !== null} onClick={() => void onRefresh()}>Muat ulang sesi dan akses</Button>}>
       <div className={styles.location}>
         <label><span id="alias-purpose-label">Akses lokasi</span><select aria-labelledby="alias-purpose-label" disabled={editor.selectionLocked || state.loadingWarehouses} value={state.purpose}
           onChange={event => void editor.changePurpose(event.target.value as SourcePurpose)}>
           {editor.canRead && <option value="inventory-source-history">Melihat pengaturan dan riwayat</option>}
           {editor.canPropose && <option value="inventory-source-propose">Mengajukan atau memulihkan pengajuan</option>}
           {editor.canApprove && <option value="inventory-source-review">Meninjau atau memulihkan keputusan</option>}</select></label>
-        <button type="button" className={common.secondary} disabled={editor.selectionLocked || state.loadingWarehouses} onClick={() => void editor.loadWarehouses()}>Muat ulang lokasi</button>
+        <Button variant="secondary" disabled={editor.selectionLocked || state.loadingWarehouses} onClick={() => void editor.loadWarehouses()}>Muat ulang lokasi</Button>
       </div>
       {state.loadingWarehouses && <p role="status">Memuat lokasi yang ditugaskan…</p>}
       {!state.loadingWarehouses && !state.warehouses.length && <p className={common.help}>Belum ada lokasi untuk tugas ini. Periksa penugasan dan verifikasi akun.</p>}
       {editor.canApprove && <p className={common.help}>{state.fresh ? "Verifikasi dua langkah masih baru. " : "Peninjauan memerlukan verifikasi dua langkah terbaru. "}
         <Link href={factorHref} aria-disabled={busy} onClick={event => { if (busy) event.preventDefault(); }}>Verifikasi untuk peninjauan</Link></p>}
-    </section>
+    </Section>
     <aside className={styles.notice}><strong>Satu alokasi fisik, tanpa saldo ganda.</strong>
       <p>Pemetaan mengatur hubungan antar kanal. Jumlah barang tetap. Pengoperasian sumber memerlukan pemeriksaan kesiapan dan serah terima tersendiri.</p></aside>
     {state.sending && <p role="status">Menyimpan permintaan… Tunggu hasil sebelum melanjutkan.</p>}
-    {state.error !== null && <p role="alert" className={common.alert}>{message(state.error)}</p>}
-    {state.recoveryError !== null && <p role="alert" className={common.alert}>{message(state.recoveryError)}</p>}
-    {state.references.length > 0 && <section className={common.accountSection} aria-labelledby="alias-recovery-context">
-      <h2 id="alias-recovery-context">Pilih konteks permintaan semula</h2>
+    {state.error !== null && <StateView kind="error" title={message(state.error)} />}
+    {state.recoveryError !== null && <StateView kind="error" title={message(state.recoveryError)} />}
+    {state.references.length > 0 && <Section title="Pilih konteks permintaan semula" id="alias-recovery-context">
       <p>Masukkan referensi alokasi dan kanal tujuan yang dipakai saat mengirim. Pilihan ini hanya untuk memeriksa hasil; perubahan baru tetap ditahan.</p>
       <div className={styles.formPair}>
         <label><span id="alias-recovery-pool-label">Referensi alokasi semula</span><input aria-labelledby="alias-recovery-pool-label"
@@ -144,7 +145,7 @@ function AliasDesk({ loaded, onRefresh }: { loaded: Loaded; onRefresh: () => Pro
             value={sourceLocationKey(item.location)}>{warehouseLabel(item)}</option>)}</select></label>
       </div>
       {!editor.canRead && <p className={common.help}>Izin membaca pengaturan tidak diperlukan untuk memeriksa permintaan Anda sendiri. Gunakan referensi alokasi semula.</p>}
-    </section>}
+    </Section>}
     <OperationRecovery entries={state.references} journal={editor.journal}
       disabled={state.sending || state.review !== null || !state.recoveryWarehouse || !/^[1-9][0-9]{0,18}$/.test(state.recoveryPoolId)}
       recoveryAdapters={{ "stock.source.alias": { lookup: editor.receipt } }} onResolved={editor.reconciled} onFailure={editor.recoveryFailed} onBusyChange={editor.setRecovering} />
@@ -156,9 +157,9 @@ function AliasDesk({ loaded, onRefresh }: { loaded: Loaded; onRefresh: () => Pro
       <AliasReview command={state.review} current={state.current} ownerLabel={warehouseLabel(state.warehouse)} requestedLabel={warehouseLabel(state.requested)}
         busy={busy} onSubmit={confirmed => void editor.submitReviewed(confirmed)} onCancel={() => editor.cancelReview()} />
     </div>}
-    {!editor.canRead ? <section className={common.state}><h2>Akses pengaturan diperlukan</h2>
-      <p>Izin mengajukan atau meninjau tidak otomatis memberi akses membaca pengaturan. Pemulihan permintaan milik Anda tetap tersedia.</p></section> :
-      <><section className={common.accountSection}><h2>Alokasi dan kanal</h2>
+    {!editor.canRead ? <StateView kind="denied" title="Akses pengaturan diperlukan"
+      message="Izin mengajukan atau meninjau tidak otomatis memberi akses membaca pengaturan. Pemulihan permintaan milik Anda tetap tersedia." /> :
+      <><Section title="Alokasi dan kanal">
         <div className={styles.formPair}>
           <label><span id="alias-owner-label">Gudang dan kanal pemilik alokasi</span><select aria-labelledby="alias-owner-label"
             value={state.warehouse ? sourceLocationKey(state.warehouse.location) : ""} disabled={locked || state.loadingWarehouses}
@@ -172,59 +173,54 @@ function AliasDesk({ loaded, onRefresh }: { loaded: Loaded; onRefresh: () => Pro
               value={sourceLocationKey(item.location)}>{warehouseLabel(item)}</option>)}</select></label>
         </div>
         {state.warehouse && !editor.requestedChoices.length && <p className={common.help}>Belum ada kanal lain yang dapat dipilih pada gudang ini untuk tugas Anda.</p>}
-      </section>
+      </Section>
       <div className={styles.desk}>
-        <section className={common.queue} aria-busy={state.loadingSources}><div className={common.queueHeader}><h2>Alokasi terdaftar</h2>
-          <p className={common.help}>{aliasAmount(state.sources.total)} alokasi pada gudang dan kanal pemilik.</p>
-          <button type="button" className={common.secondary} disabled={locked || state.loadingSources || !state.warehouse} onClick={() => void editor.loadSources()}>Muat ulang alokasi</button></div>
-          {state.loadingSources ? <p role="status" className={common.empty}>Memuat alokasi…</p> : <>
-            <ul className={common.queueList}>{state.sources.items.map(item => <li key={item.physicalPoolId}><button type="button"
-              className={state.poolId === item.physicalPoolId ? common.selectedRow : common.queueRow} disabled={locked} aria-pressed={state.poolId === item.physicalPoolId}
-              onClick={() => editor.chooseSource(item.physicalPoolId)}><strong>{item.settings.label}</strong><span>{item.settings.physicalKey}</span>
-              <span>Versi {item.poolVersion} · {item.poolState === "inactive" ? "Belum aktif" : "Aktif"}</span></button></li>)}</ul>
-            {!state.sources.items.length && <p className={common.empty}>{state.references.length ? "Periksa hasil permintaan sebelum memuat alokasi." : "Pilih pemilik alokasi atau muat ulang daftar."}</p>}
-            <Pager name="alokasi" offset={state.sourceOffset} total={state.sources.total} disabled={locked || !state.warehouse} onPage={offset => void editor.loadSources(offset)} /></>}
-        </section>
-        <section className={styles.details} aria-busy={state.loadingCurrent}>{state.loadingCurrent ? <p role="status">Memeriksa pemetaan saat ini…</p> : state.current ? <>
+        <Section title="Alokasi terdaftar" busy={state.loadingSources} description={<>{aliasAmount(state.sources.total)} alokasi pada gudang dan kanal pemilik.</>}
+          actions={<Button variant="secondary" disabled={locked || state.loadingSources || !state.warehouse} onClick={() => void editor.loadSources()}>Muat ulang alokasi</Button>}>
+          <DataList label="Alokasi terdaftar" items={state.loadingSources ? [] : state.sources.items} getKey={item => item.physicalPoolId} loading={state.loadingSources}
+            empty={state.error === null ? { title: state.references.length ? "Periksa hasil permintaan sebelum memuat alokasi." : "Pilih pemilik alokasi atau muat ulang daftar." } : undefined}
+            renderTitle={item => item.settings.label} renderMeta={item => <>{item.settings.physicalKey} · Versi {item.poolVersion}</>}
+            renderBadge={item => <Badge status={item.poolState === "inactive" ? "Belum aktif" : "Aktif"} />}
+            onSelect={item => editor.chooseSource(item.physicalPoolId)} selectedKey={state.poolId} disabled={locked}
+            openLabel={item => item.settings.label + " " + item.settings.physicalKey + " Versi " + item.poolVersion + " · " + (item.poolState === "inactive" ? "Belum aktif" : "Aktif")}
+            pagination={pager("alokasi", state.sourceOffset, state.sources.items.length, state.sources.total, locked || !state.warehouse, offset => void editor.loadSources(offset))} />
+        </Section>
+        <section className="ui-section" aria-busy={state.loadingCurrent}>{state.loadingCurrent ? <StateView kind="loading" title="Memeriksa pemetaan saat ini…" /> : state.current ? <>
           <h2>{state.current.source.settings.label}</h2><p><strong>{bindingLabel[state.current.bindingState]}</strong></p>
           <p>Pemilik: {warehouseLabel(state.warehouse)}<br />Tujuan: {warehouseLabel(state.requested)}</p>
           <p className={common.help}>Alokasi {state.current.source.physicalPoolId}; pengaturan sumber versi {state.current.source.poolVersion}.
             Pemetaan {state.current.mapping?.appliedAliasVersion ? "versi " + state.current.mapping.appliedAliasVersion : "belum ada"}.</p>
-          {state.current.bindingState === "stale" && <p className={common.alert}>Pengaturan sumber telah berubah. Pemetaan memerlukan pengajuan dan peninjauan ulang.</p>}
+          {state.current.bindingState === "stale" && <StateView kind="unknown" title="Pengaturan sumber telah berubah. Pemetaan memerlukan pengajuan dan peninjauan ulang." />}
           <details><summary>Lihat pengaturan sumber saat ini</summary><RevisionFacts settings={state.current.source.settings} /></details>
           {editor.canPropose && <section className={styles.section}><AliasDraftForm enabled={state.enabled} reason={state.reason} disabled={locked}
             onChange={(enabled, reason) => editor.changeDraft(enabled, reason)} onReview={() => editor.reviewProposal()} /></section>}
         </> : <><h2>Pilih alokasi dan kanal tujuan</h2><p>Periksa hubungan kanal sebelum mengajukan atau meninjau pemetaan.</p></>}</section>
       </div>
-      {state.current && <section className={styles.history} aria-busy={state.loadingHistory}><header className={styles.heading}><div>
-        <h2>Riwayat pemetaan kanal</h2><p>{aliasAmount(state.history.total)} pengajuan pada alokasi dan kanal tujuan ini.</p></div>
-        <button type="button" className={common.secondary} disabled={locked || state.loadingHistory} onClick={() => void editor.loadHistory()}>Muat ulang riwayat</button></header>
-        <div className={styles.desk}><section className={common.queue}>
-          {state.loadingHistory ? <p role="status" className={common.empty}>Memuat riwayat…</p> : <>
-            <ul className={common.queueList}>{state.history.items.map(item => <li key={item.id}><button type="button" disabled={locked}
-              className={state.selected?.id === item.id ? common.selectedRow : common.queueRow} aria-pressed={state.selected?.id === item.id}
-              onClick={() => void editor.chooseProposal(item.id)}><strong>{item.reason}</strong><span>#{item.id} · pengaturan versi {item.poolVersion}</span>
-              <span>{aliasStatus[item.status]}</span></button></li>)}</ul>
-            {!state.history.items.length && <p className={common.empty}>Belum ada pengajuan pemetaan pada halaman ini.</p>}
-            <Pager name="riwayat" offset={state.historyOffset} total={state.history.total} disabled={locked} onPage={offset => void editor.loadHistory(offset)} /></>}
-        </section>
-        <section className={styles.details} aria-busy={state.loadingDetail}>{state.loadingDetail ? <p role="status">Memeriksa pengajuan terbaru…</p> : state.selected ? <>
+      {state.current && <Section title="Riwayat pemetaan kanal" busy={state.loadingHistory} description={<>{aliasAmount(state.history.total)} pengajuan pada alokasi dan kanal tujuan ini.</>}
+        actions={<Button variant="secondary" disabled={locked || state.loadingHistory} onClick={() => void editor.loadHistory()}>Muat ulang riwayat</Button>}>
+        <div className={styles.desk}><div>
+          <DataList label="Riwayat pemetaan kanal" items={state.loadingHistory ? [] : state.history.items} getKey={item => item.id} loading={state.loadingHistory}
+            empty={state.error === null ? { title: "Belum ada pengajuan pemetaan pada halaman ini." } : undefined}
+            renderTitle={item => item.reason} renderMeta={item => <>#{item.id} · pengaturan versi {item.poolVersion}</>} renderBadge={item => <Badge status={aliasStatus[item.status]} />}
+            onSelect={item => void editor.chooseProposal(item.id)} selectedKey={state.selected?.id ?? null} disabled={locked}
+            openLabel={item => item.reason + " #" + item.id + " · pengaturan versi " + item.poolVersion + " " + aliasStatus[item.status]}
+            pagination={pager("riwayat", state.historyOffset, state.history.items.length, state.history.total, locked, offset => void editor.loadHistory(offset))} />
+        </div>
+        <section className={styles.details} aria-busy={state.loadingDetail}>{state.loadingDetail ? <StateView kind="loading" title="Memeriksa pengajuan terbaru…" /> : state.selected ? <>
           <h2>Pengajuan #{state.selected.id}</h2><AliasFacts proposal={state.selected} />
-          {state.selected.status === "proposed" && editor.staleBase && <p role="status" className={common.alert}>Dasar pengajuan telah berubah. Pengajuan ini belum dapat disetujui; periksa pemetaan dan pengaturan terbaru.</p>}
-          {state.selected.status === "proposed" && state.current.source.poolState === "active" && <p className={common.alert}>Alokasi masih aktif. Pemetaan belum dapat disetujui.</p>}
+          {state.selected.status === "proposed" && editor.staleBase && <StateView kind="unknown" title="Dasar pengajuan telah berubah. Pengajuan ini belum dapat disetujui; periksa pemetaan dan pengaturan terbaru." />}
+          {state.selected.status === "proposed" && state.current.source.poolState === "active" && <StateView kind="unknown" title="Alokasi masih aktif. Pemetaan belum dapat disetujui." />}
           {state.selected.decision && <section className={styles.section}><h3>Keputusan tercatat</h3><p>{state.selected.decision.reviewReference}</p>
             <p className={common.preserve}>{state.selected.decision.reason}</p><p>{formatDateTime(state.selected.decision.decidedAt)}.</p></section>}
           <section className={styles.section}><AliasDecisionForm key={state.selected.id + ":" + state.current.source.poolVersion + ":" + state.current.mapping?.appliedAliasVersion}
             proposal={state.selected} disabled={locked} fresh={state.fresh} approvable={!editor.staleBase && state.current.source.poolState === "inactive"}
             canPropose={editor.canPropose} canApprove={editor.canApprove} onReview={(action, reference, reason) => editor.reviewDecision(action, reference, reason)} /></section>
         </> : <><h2>Pilih pengajuan</h2><p>Periksa perubahan dan dasar pemetaan sebelum mengambil keputusan.</p></>}</section></div>
-      </section>}</>}
+      </Section>}</>}
   </>;
 }
-function Pager({ name, offset, total, disabled, onPage }: { name: string; offset: number; total: string; disabled: boolean; onPage: (offset: number) => void }) {
-  return <div className={common.pagination} aria-label={"Halaman " + name}>
-    <button type="button" className={common.secondary} aria-label={"Halaman " + name + " sebelumnya"} disabled={disabled || offset === 0} onClick={() => onPage(offset - 25)}>Sebelumnya</button>
-    <span>{Math.floor(offset / 25) + 1}</span><button type="button" className={common.secondary} aria-label={"Halaman " + name + " berikutnya"}
-      disabled={disabled || offset >= 10000 || BigInt(offset + 25) >= BigInt(total)} onClick={() => onPage(offset + 25)}>Berikutnya</button>
-  </div>;
+/** The shared pager (hidden when one page holds everything), 25 rows per page as the API serves them. */
+function pager(name: string, offset: number, count: number, total: string, disabled: boolean, onPage: (offset: number) => void) {
+  return { label: "Halaman " + name, start: offset + 1, end: offset + count, total: Number(total), disabled, hasPrevious: offset > 0,
+    hasNext: !(offset >= 10000 || BigInt(offset + 25) >= BigInt(total)), onPrevious: () => onPage(offset - 25), onNext: () => onPage(offset + 25) };
 }
