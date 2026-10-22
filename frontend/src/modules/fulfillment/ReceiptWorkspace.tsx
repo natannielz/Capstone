@@ -115,6 +115,8 @@ function ReceiptForm({ account, link, onDenied }: { account: Account; link: Rece
     setEntries(previous => { const next: [string, string] = [...previous[sku][group]]; next[position] = value; return { ...previous, [sku]: { ...previous[sku], [group]: next } }; });
   }
   return <section className="ui-section" aria-label="Konfirmasi penerimaan" aria-busy={busy}>
+    {/* The region's heading for the outline (axe heading-order): its states and forms sit under it. */}
+    <h2 className={common.srOnly}>Konfirmasi penerimaan</h2>
     <OperationRecovery entries={recovery.entries.filter(entry => entry.operation !== 'fulfillment.receipt-proof.issue' || !receipt && !recoveredProof)} journal={recovery.journal} disabled={busy || offline} onBusyChange={setRecovering}
       recoveryAdapters={{ 'fulfillment.receipt-proof': { lookup: async entry => { const result = await proofs.recover(entry.actorId, entry.key); if (current() && result) setRecoveredProof(result.result); return result; } },
         'fulfillment.receipt': { lookup: async entry => { const result = await gateway.recover(entry.actorId, entry.key, entry.operation === 'fulfillment.receipt.challenge.issue'); if (current() && result && 'recordedAt' in result.result) setReceipt(result.result); return result; } } }}
