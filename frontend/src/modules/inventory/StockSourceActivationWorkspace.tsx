@@ -8,7 +8,7 @@ import { createAccessGateway } from '../administration/access-client';
 import { AdministrationNavigation } from '../administration/AdministrationNavigation';
 import { OperationRecovery } from '../administration/OperationRecovery';
 import { OperationJournal } from '../administration/operation-journal';
-import { AccessFailure, accessMessage } from '../administration/workflow';
+import { AccessFailure, accessMessage, businessRefusal } from '../administration/workflow';
 import { createIdentityGateway } from '../identity/identity-client';
 import { IdentityFailure, identityMessage, sessionTiming, type IdentitySession } from '../identity/identity-workflow';
 import { sourceActor } from './stock-source-workflow';
@@ -38,7 +38,7 @@ function message(error: unknown) {
     if (error.code === 'stock_source_obligations_open' || error.code === 'stock_source_obligations_incomplete' || error.code.includes('coverage_unavailable'))
       return 'Kewajiban atau riwayat sumber belum dapat dinyatakan selesai. Selesaikan catatan yang masih terbuka sebelum melakukan pemeriksaan baru.';
     if (error.code === 'step_up_required') return 'Peninjauan dan pemeriksaan hasil keputusan memerlukan verifikasi dua langkah terbaru.';
-    if (error.code.includes('person') || error.code.includes('independen')) return 'Peninjauan harus dilakukan oleh orang yang berbeda dari pengaju, dengan akses yang masih berlaku.';
+    if (businessRefusal(error.code)) return 'Peninjauan harus dilakukan oleh orang yang berbeda dari pengaju, dengan akses yang masih berlaku.';
     if (error.status === 409) return 'Pengaturan, kewajiban, atau waktu serah terima sudah berubah. Muat ulang dan periksa fakta terbaru.';
     if (error.code === 'commit_outcome_unknown') return 'Hasil pengiriman belum dapat dipastikan. Periksa hasil permintaan semula sebelum mengirim permintaan baru.';
     if (error.status >= 500 || error.status === 0) return 'Layanan belum dapat diperiksa. Muat ulang setelah koneksi tersedia. Jika ada referensi permintaan tersimpan, periksa hasilnya terlebih dahulu.';

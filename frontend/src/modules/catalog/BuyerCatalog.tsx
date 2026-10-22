@@ -24,7 +24,7 @@ const price = (value: BuyerVariant['currentPrice']) => {
 };
 function message(error: unknown) {
   if (error instanceof AccessFailure || error instanceof IdentityFailure) {
-    if (error.code === 'actor_changed') return 'Akun di peramban berubah. Periksa sesi sebelum melanjutkan.';
+    if (error.code === 'actor_changed') return 'Akun di peramban berubah. Muat ulang halaman sebelum melanjutkan.';
     if (error.status === 401) return 'Masuk dengan akun organisasi Anda untuk membuka katalog.';
     if (error.status === 403) return 'Katalog ini belum tersedia untuk akun Anda. Hubungi pengelola akun.';
     if (error.status === 409) return 'Data berubah saat dimuat. Muat kembali untuk melihat informasi terbaru.';

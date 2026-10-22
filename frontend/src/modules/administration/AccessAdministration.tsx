@@ -1,6 +1,6 @@
 "use client";
 
-import { SessionAccessState, sessionAccessKind } from '@/components/workspace-kit/session-access-state';
+import { SessionAccessState } from '@/components/workspace-kit/session-access-state';
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import type { components } from "../../api/generated/schema";
@@ -337,7 +337,7 @@ export function AccessAdministration() {
 
     {pageState === "loading" && <section className={styles.state} aria-live="polite" aria-busy="true"><h2>Memeriksa akses</h2><p>Memuat keanggotaan, izin, dan pengajuan terbaru.</p></section>}
     {pageState !== "loading" && pageState !== "ready" && <SessionAccessState error={error} returnPath="/administration/access" onRetry={() => void refresh()} busy={locked}
-      kind={pageState === "denied" ? "denied" : pageState === "unauthenticated" ? (sessionAccessKind(error) === "expired" ? "expired" : "signin") : "unavailable"} />}
+      kind={pageState === "denied" ? "denied" : pageState === "unauthenticated" ? "expired" : "unavailable"} />}
 
     {pageState === "ready" && current && catalog && <>
       <section className={styles.accountSection} aria-labelledby="account-heading">

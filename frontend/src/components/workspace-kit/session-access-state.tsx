@@ -7,21 +7,20 @@ import { isReturnQuery } from "@/modules/identity/return-query";
 
 export type SessionAccessKind = "signin" | "expired" | "denied" | "unavailable";
 
-// A session this page knew has ended or changed hands. "unauthenticated" alone only says there is no session now: a first-time
-// visitor and someone whose session lapsed look the same, so that case is worded as an invitation to sign in (G-013).
-const expiredCodes = new Set(["session_expired", "actor_changed", "reauthentication_required"]);
+// One rule for every protected page (round 3, Option A): the request guard (src/proxy.ts) sends visitors without a session cookie
+// to /identity/login, so a page that learns "no session" (the session read, access/current or any API answering 401, on load or
+// mid-work) is talking to someone who held a session: it ended. The sign-in state appears only where a page asks for it with
+// kind="signin"; no protected page does, and guest pages never render this component.
+const expiredCodes = new Set(["session_expired", "actor_changed", "reauthentication_required", "unauthenticated"]);
 
-/** Why a page cannot open: no session (sign in), a session that ended (sign in again), the account's role does not include the
- *  page, or the check itself could not finish. Each asks for a different action, so each has its own words, everywhere (G-014). */
+/** Why a page cannot open: a session that ended (sign in again), the account's role does not include the page, or the check itself
+ *  could not finish. Each asks for a different action, so each has its own words, everywhere (G-014). */
 export function sessionAccessKind(error: unknown): SessionAccessKind {
-  if (error === null || error === undefined) return "signin";
+  if (error === null || error === undefined) return "expired";
   // AccessFailure, IdentityFailure and RequestNotSentError all carry the HTTP status and the server's code.
   const failure = error instanceof Error ? error as Error & { status?: unknown; code?: unknown } : null;
   if (failure && typeof failure.status === "number" && typeof failure.code === "string") {
-    if (expiredCodes.has(failure.code)) return "expired";
-    // Only the session read (IdentityFailure "unauthenticated") can say there never was a session. Any other 401 is an API
-    // refusing a page that believed it had one: that session ended (round 2).
-    if (failure.status === 401) return failure.name === "IdentityFailure" && failure.code === "unauthenticated" ? "signin" : "expired";
+    if (failure.status === 401 || expiredCodes.has(failure.code)) return "expired";
     if (failure.status === 403) return "denied";
   }
   return "unavailable";

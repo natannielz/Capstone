@@ -105,7 +105,7 @@ export function IdentityAccount({ variant = "account" }: { variant?: "account" |
       {error !== null && <SessionAccessState error={error} returnPath={home ? HOME_PATH : "/identity/account"} onRetry={reload}
         detail={identityMessage(error) + (error instanceof IdentityFailure && error.traceId ? " Referensi bantuan: " + error.traceId : "")} />}
       {!loading && session && (!session.authenticated || timing.expired) &&
-        <SessionAccessState error={null} kind={session.authenticated ? "expired" : "signin"} returnPath={home ? HOME_PATH : "/identity/account"} onRetry={reload} />}
+        <SessionAccessState error={null} kind="expired" returnPath={home ? HOME_PATH : "/identity/account"} onRetry={reload} />}
       {!loading && session?.account && !timing.expired && <>
         {home && elsewhere && <p role="status" className={styles.help}>Membuka toko untuk akun Anda…</p>}
         {home && !elsewhere && <>

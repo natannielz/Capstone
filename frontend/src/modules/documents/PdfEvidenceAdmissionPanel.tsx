@@ -70,7 +70,7 @@ export function PdfEvidenceAdmissionPanel(props: PdfEvidenceAdmissionPanelProps)
   return <section className={common.accountSection} aria-label="Bukti PDF asli"><h3>Bukti PDF asli</h3>
     <p>Unggah PDF asli paling besar 10 MiB, sampai 10 halaman. Dokumen terenkripsi, formulir, lampiran dan JavaScript tidak didukung. Pemeriksaan seluruh PDF dapat menolak dokumen; hasil sebagian tidak dipakai.</p>
     {error !== null && <p className={common.alert} role="alert">{describeError(error)}</p>}{notice && <p role="status">{notice}</p>}
-    {recoveryUnavailable && <p role="alert">Rujukan pemulihan belum dapat disimpan. Periksa sesi atau penyimpanan browser sebelum mengunggah.</p>}
+    {recoveryUnavailable && <p role="alert">Rujukan pemulihan belum dapat disimpan. Aktifkan penyimpanan situs di browser sebelum mengunggah.</p>}
     <label>PDF asli<input ref={fileInput} type="file" accept="application/pdf,.pdf" disabled={commandLocked || uncertainUpload}
       onChange={event => {setFile(event.target.files?.[0] ?? null); setDownloaded(null); setReviewed(null);}}/></label>
     <div className={common.actions}><button className={common.secondary} type="button" disabled={locked} onClick={() => void work(() => load())}>Muat status PDF</button>

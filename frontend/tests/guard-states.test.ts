@@ -24,3 +24,9 @@ test('the receipt page and the access page show one shared state, without a stac
   assert.match(access, /<SessionAccessState /);
   assert.match(access, /\{error !== null && pageState === "ready" && <div className=\{styles\.alert\}/, 'no error with trace id above the signed-out state');
 });
+
+test('a session that changed hands is an actor change, not "no session" (round 3)', () => {
+  const delegation = source('administration/TemporaryDelegation.tsx');
+  assert.match(delegation, /session\.account\.userId !== current\.userId\) throw new AccessFailure\(409, 'actor_changed'\)/);
+  assert.doesNotMatch(delegation, /userId !== current\.userId\) throw new IdentityFailure\(401/);
+});

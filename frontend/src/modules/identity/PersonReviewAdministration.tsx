@@ -164,7 +164,7 @@ function PersonReviewBody({ current, session, observedAt, onFailure, onRefresh }
     {message && <p role="status" className={styles.success}>{message}</p>}
     {error !== null && <div role="alert" className={styles.alert}><p>{personReviewMessage(error)}</p>{retry && <><p>Hasil belum pasti. Isian dan referensi pengajuan yang sama tetap tersimpan hanya di tab ini.</p>
       <button type="button" className={styles.secondary} disabled={busy || recoveryBusy} onClick={() => void run(retry).catch(() => undefined)}>Periksa ulang permintaan yang sama</button>
-      <p><Link href={retryFactorHref} target="_blank" rel="noopener noreferrer">Periksa sesi atau verifikasi dua langkah di tab baru</Link>. Setelah selesai, kembali ke tab ini untuk memeriksa hasil. Jangan membuat pengajuan pengganti.</p></>}</div>}
+      <p><Link href={retryFactorHref} target="_blank" rel="noopener noreferrer">Buka Akun saya untuk verifikasi dua langkah di tab baru</Link>. Setelah selesai, kembali ke tab ini untuk memeriksa hasil. Jangan membuat pengajuan pengganti.</p></>}</div>}
     {recovery.error !== null && <p role="alert" className={styles.alert}>{personReviewMessage(recovery.error)}</p>}
     <OperationRecovery key={current.userId} entries={recovery.entries} journal={recovery.journal} disabled={busy} onResolved={resolved} onFailure={failedRead} onBusyChange={setRecoveryBusy}
       recoveryAdapters={{ "person.review": {

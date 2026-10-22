@@ -28,3 +28,13 @@ test('the shared message names the maker/checker rule instead of a missing permi
   for (const code of ['person_authority_changed', 'person_authority_unavailable', 'person_evidence_invalid'])
     assert.doesNotMatch(accessMessage(new AccessFailure(403, code)), /orang lain/, code);
 });
+
+test('no page guesses a maker/checker refusal from a substring; person_authority_changed is not "a different reviewer" (round 3)', () => {
+  const offenders: string[] = [];
+  const walk = (dir: URL) => { for (const name of readdirSync(dir, { withFileTypes: true })) {
+    if (name.isDirectory()) walk(new URL(name.name + '/', dir));
+    else if (/\.tsx?$/.test(name.name) && /code\.includes\(['"](person|independen)/.test(readFileSync(new URL(name.name, dir), 'utf8'))) offenders.push(name.name);
+  } };
+  walk(new URL('../src/modules/', import.meta.url));
+  assert.deepEqual(offenders, []);
+});
