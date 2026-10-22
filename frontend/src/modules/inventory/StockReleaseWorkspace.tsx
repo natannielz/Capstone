@@ -17,6 +17,7 @@ import { StockReleaseEditor } from './stock-release-editor-state';
 import { releaseChoiceKey, releaseLocationKey, type ReleasePreview, type ReleaseReview, type ReleaseCommand } from './stock-release-workflow';
 import common from '../administration/access.module.css';
 import styles from './stock-source-policy.module.css';
+import { formatDate } from '@/lib/format';
 import { formatDateTime, formatMoney } from "@/lib/format";
 
 const path = '/inventory/stock-releases';
@@ -135,7 +136,7 @@ function ReleaseDesk({ loaded, refresh }: { loaded: Loaded; refresh: () => Promi
       {state.loadingSources && <p role="status">Memeriksa barang, mutu dan penilaian…</p>}{!state.loadingSources && state.sources.length === 0 && <p>Belum ada barang yang dapat dilepas. Selesaikan pemeriksaan mutu, penilaian dan pengaturan sumber yang diperlukan.</p>}
       {state.unavailableCount !== '0' && <p className={common.help}>{state.unavailableCount} catatan belum dapat dinyatakan memenuhi pemeriksaan pelepasan.</p>}
       {state.choice && <><dl className={styles.facts}><div><dt>Kemasan</dt><dd>{state.choice.packagingLabel}</dd></div><div><dt>Lot</dt><dd>{state.choice.lotReference}</dd></div>
-        <div><dt>Kedaluwarsa</dt><dd>{state.choice.expiresOn ?? 'Tidak memiliki tanggal kedaluwarsa menurut catatan yang disetujui'}</dd></div>
+        <div><dt>Kedaluwarsa</dt><dd>{state.choice.expiresOn ? formatDate(state.choice.expiresOn) : 'Tidak memiliki tanggal kedaluwarsa menurut catatan yang disetujui'}</dd></div>
         <div><dt>Dapat dilepas pada pemeriksaan ini</dt><dd>{state.choice.releaseablePackages} kemasan</dd></div>
         <div><dt>Nilai penilaian terpilih</dt><dd>{amount(state.choice.capitalizedValue)} · nilai pelepasan dihitung dari sisa yang tercatat</dd></div></dl>
         <form className={styles.form} onSubmit={event => { event.preventDefault(); void editor.previewProposal(); }}>

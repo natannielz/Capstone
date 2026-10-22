@@ -2,7 +2,7 @@
 
 import type { SupplierPayableCapacity, SupplierPayablePolicy, SupplierPayablePreview } from './procurement-supplier-payable-client';
 import styles from '../administration/access.module.css';
-import { dateTimeFormatter, formatMoneyText } from '@/lib/format';
+import { dateTimeFormatter, formatMoneyText, formatDate } from '@/lib/format';
 
 export const payableKinds = { recognize: 'Pengakuan utang', apply_advance: 'Penerapan uang muka' };
 export const payableStates = { proposed: 'Menunggu pemeriksaan independen', approved: 'Disetujui dan dibukukan', rejected: 'Ditolak tanpa pembukuan' };
@@ -20,7 +20,7 @@ export function PayablePolicyFacts({ value }: { value: SupplierPayablePolicy }) 
 export function PayableFacts({ value, historical = false, rejected = false }: { value: Pick<SupplierPayablePreview, 'input' | 'source' | 'capacity' | 'policy' | 'accounting' | 'amount'>; historical?: boolean; rejected?: boolean }) {
   const { source, input, policy, accounting } = value;
   return <div aria-label="Fakta pembukuan yang ditinjau"><dl className={styles.facts}>
-    <div><dt>Tindakan</dt><dd>{payableKinds[input.kind]}</dd></div><div><dt>Pemasok</dt><dd>{source.supplierName}</dd></div><div><dt>Referensi pesanan pembelian</dt><dd className={styles.preserve}>{source.commercialReference}</dd></div><div><dt>Invoice pemasok</dt><dd className={styles.preserve}>{source.invoiceDocumentReference}</dd></div><div><dt>Nilai pembukuan</dt><dd>{formatMoneyText(value.amount)}</dd></div><div><dt>Tanggal pembukuan</dt><dd>{input.postingDate}</dd></div><div><dt>Alasan pengajuan</dt><dd className={styles.preserve}>{input.reason}</dd></div>
+    <div><dt>Tindakan</dt><dd>{payableKinds[input.kind]}</dd></div><div><dt>Pemasok</dt><dd>{source.supplierName}</dd></div><div><dt>Referensi pesanan pembelian</dt><dd className={styles.preserve}>{source.commercialReference}</dd></div><div><dt>Invoice pemasok</dt><dd className={styles.preserve}>{source.invoiceDocumentReference}</dd></div><div><dt>Nilai pembukuan</dt><dd>{formatMoneyText(value.amount)}</dd></div><div><dt>Tanggal pembukuan</dt><dd>{formatDate(input.postingDate)}</dd></div><div><dt>Alasan pengajuan</dt><dd className={styles.preserve}>{input.reason}</dd></div>
   </dl><PayableCapacityFacts value={value.capacity} historical={historical} />
     <p>{rejected ? 'Penolakan tidak mencatat jurnal atau menerapkan uang muka. Sumber dan sisa nilai tetap memerlukan tindak lanjut.' : source.kind === 'recognize' ? `Debit akrual penerimaan dan kredit utang pemasok sebesar ${formatMoneyText(value.amount)}. Utang tetap terutang sampai ada penerapan atau penyelesaian yang sah.` : `Debit utang pemasok dan kredit uang muka sebesar ${formatMoneyText(value.amount)}. Hanya bagian ini yang diterapkan; sisa utang dan uang muka tetap dicatat.`}</p>
     <details><summary>Sumber dan kebijakan pembukuan</summary><PayablePolicyFacts value={policy} /><dl className={styles.facts}>
