@@ -125,6 +125,12 @@ button:disabled{cursor:not-allowed}
 .state-view[data-kind="empty"]{gap:var(--space-1);padding:var(--space-6) 0;border-radius:0;background:transparent}
 .state-view[data-kind="empty"] .state-view-icon{width:24px;height:24px;color:var(--muted-foreground)}
 .state-view[data-kind="empty"] .state-view-title{font-size:16px}
+/* Storefront full-page state (empty cart, nothing found): a centred block, 48 px block padding, 40 px icon, the next action centred. */
+.state-view[data-align="center"]{justify-items:center;gap:var(--space-2);padding:var(--space-12) var(--space-4);text-align:center}
+.state-view[data-align="center"] .state-view-head{flex-direction:column;gap:var(--space-3)}
+.state-view[data-align="center"] .state-view-icon{width:40px;height:40px;color:var(--muted-foreground)}
+.state-view[data-align="center"] .state-view-title{font-size:20px;line-height:28px}
+.state-view[data-align="center"] .ui-actions{justify-content:center}
 .outcome-action{justify-self:start;height:var(--control-h);padding:0 var(--space-4);border-radius:var(--radius-control);border:1px solid var(--control-border);background:var(--card);color:var(--foreground);font-size:14px;font-weight:600;white-space:nowrap}
 .outcome-action:hover{background:var(--secondary)}
 .outcome-loading,.state-view[data-kind="loading"]{gap:var(--space-3);padding:var(--space-4) 0;background:transparent}
@@ -297,4 +303,5 @@ button:disabled{cursor:not-allowed}
 .ui-tab{display:inline-flex;align-items:center;height:var(--control-h);padding:0;border:0;border-bottom:2px solid transparent;margin-bottom:-1px;background:transparent;color:var(--muted-foreground);font-family:inherit;font-size:15px;font-weight:600;white-space:nowrap;text-decoration:none;cursor:pointer}
 .ui-tab:hover{color:var(--foreground)}
 .ui-tab[aria-current="page"],.ui-tab[aria-pressed="true"]{border-bottom-color:var(--primary);color:var(--foreground)}
+.ui-tab:disabled{cursor:not-allowed}
 }

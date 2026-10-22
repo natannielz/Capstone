@@ -1,85 +1,61 @@
-/* Sign-in page: the landing page's light studio panel and a shipping-label sheet, in the landing's palette. */
-.page {
-  --dock: #0E4448;
-  --stage: #DCE4E1;
-  --stage-text: #35504F;
-  --label: #F1F4EF;
-  --paper: #FFFFFF;
-  --ink: #12343A;
-  --ink-muted: #4A6266;
-  --rule: #D6DED9;
-  --kraft-text: #E0BE8E;
-  --marker: #C2471A;
-  display: grid;
-  grid-template-columns: minmax(320px, 5fr) minmax(0, 7fr);
-  grid-template-rows: auto minmax(0, 1fr);
-  grid-template-areas: "top form" "context form";
-  min-height: 100dvh;
-  background: var(--label);
-  color: var(--ink);
-  font: 400 16px/1.6 var(--font-body), system-ui, sans-serif;
-}
+/* Sign-in (U-030): the shared tokens, Button and Field, a 720 px sheet beside the account-type panel. No private palette. */
+.page { display: grid; grid-template-columns: minmax(320px, 5fr) minmax(0, 7fr); grid-template-rows: auto minmax(0, 1fr); grid-template-areas: "top form" "context form";
+  min-height: 100dvh; background: var(--background); color: var(--foreground); font-family: var(--font-body), system-ui, sans-serif; font-size: 15px; line-height: 24px; }
 .page :where(h1, h2, p, dl, dd, ol) { margin: 0; }
-.page button, .page input { font: inherit; }
-.page button:disabled { opacity: 0.6; cursor: not-allowed; }
-.skip { position: fixed; top: 12px; left: 12px; z-index: 100; padding: 12px 18px; background: var(--paper); color: var(--ink); border-radius: 8px; font-weight: 650; transform: translateY(-200%); }
+.skip { position: fixed; top: var(--space-3); left: var(--space-3); z-index: 100; padding: var(--space-3) var(--space-4); border-radius: var(--radius-control); background: var(--card);
+  color: var(--foreground); font-weight: 600; transform: translateY(-200%); }
 .skip:focus { transform: none; }
 
-/* Studio panel: brand on top, the account types, then the packed box at the foot (the landing's stage colour). */
-.top, .context { background: var(--stage); color: var(--ink); padding-inline: clamp(20px, 4vw, 56px); }
-.top { grid-area: top; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-block: 24px; }
-.home { display: inline-flex; align-items: center; min-height: 44px; padding: 0 14px; border: 1.5px solid rgb(14 52 56 / 0.4); border-radius: 8px; color: var(--ink); font-size: 15px; font-weight: 600; text-decoration: none; background: rgb(255 255 255 / 0.5); }
-.home:hover { border-color: var(--ink); background: var(--paper); }
-.context { grid-area: context; display: flex; flex-direction: column; gap: 28px; padding-block: 24px 0; overflow: hidden; box-shadow: 0 -2px 0 var(--stage); }
-.statement { max-width: 18ch; font-size: clamp(28px, 2.9vw, 40px); font-weight: 740; line-height: 1.08; letter-spacing: -0.03em; text-wrap: balance; }
-.audiences { display: grid; gap: 0; border-top: 1.5px solid rgb(14 52 56 / 0.3); }
-.audiences > div { padding: 14px 0; border-bottom: 1px solid rgb(14 52 56 / 0.14); }
+/* The account-type panel: brand and home on top, who the accounts are for, then the packed box at the foot. */
+.top, .context { padding-inline: var(--space-12); background: var(--secondary); color: var(--foreground); }
+.top { grid-area: top; display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); padding-block: var(--space-6); }
+.context { grid-area: context; display: flex; flex-direction: column; gap: var(--space-6); padding-block: var(--space-6) 0; overflow: hidden; }
+.statement { max-width: 18ch; font-size: 24px; line-height: 32px; font-weight: 700; letter-spacing: -.02em; text-wrap: balance; }
+.audiences { display: grid; border-top: 1px solid var(--control-border); }
+.audiences > div { padding: var(--space-3) 0; border-bottom: 1px solid var(--border); }
 .audiences dt { font-weight: 700; }
-.audiences dd { margin-top: 2px; color: var(--stage-text); font-size: 15px; }
-.accessNote { color: var(--stage-text); font-size: 14px; }
+.audiences dd { margin-top: var(--space-1); font-size: 14px; line-height: 20px; color: var(--muted-foreground); }
+.accessNote { font-size: 14px; color: var(--muted-foreground); }
 /* The box takes whatever height is left and is drawn whole, never cropped at the panel's foot. */
-.drawing { flex: 1 1 0; min-height: 180px; display: grid; place-items: end center; padding-bottom: 32px; }
+.drawing { flex: 1 1 0; display: grid; place-items: end center; min-height: 180px; padding-bottom: var(--space-8); }
 .drawing svg { display: block; width: 100%; height: 100%; max-height: 300px; }
 
-/* The sheet: white label stock with an ink bar. */
-.formSide { grid-area: form; display: grid; align-content: center; justify-items: center; padding: 48px clamp(16px, 5vw, 72px); outline: none; }
-.sheet { width: min(100%, 480px); background: var(--paper); border-radius: 6px; box-shadow: 0 1px 0 rgb(18 52 58 / 0.08), 0 24px 48px -30px rgb(18 52 58 / 0.4); }
-.sheetBar { padding: 10px 24px; border-radius: 6px 6px 0 0; background: var(--ink); color: #FFFFFF; font-size: 14px; font-weight: 700; }
-.sheetBody { display: grid; gap: 22px; padding: clamp(24px, 3vw, 36px) clamp(20px, 3vw, 36px) 28px; }
-.sheetBody h1 { font-size: clamp(30px, 3vw, 38px); font-weight: 760; line-height: 1.05; letter-spacing: -0.035em; }
-.next { display: grid; gap: 0; padding: 0; list-style: none; counter-reset: next; border-top: 1px solid var(--ink); }
-.next li { counter-increment: next; display: grid; grid-template-columns: 32px 1fr; padding: 12px 0; border-bottom: 1px solid var(--rule); color: var(--ink); font-size: 15px; line-height: 1.5; }
-.next li::before { content: counter(next); color: var(--marker); font-family: var(--font-stencil), var(--font-body), sans-serif; font-size: 20px; line-height: 1.1; }
-.help { color: var(--ink-muted); font-size: 14px; line-height: 1.6; }
-.checkbox { display: flex; align-items: flex-start; gap: 12px; min-height: 44px; color: var(--ink); font-size: 15px; }
-.checkbox input { width: 20px; height: 20px; margin: 2px 0 0; flex-shrink: 0; accent-color: var(--dock); }
-.invitationFields { display: grid; gap: 16px; padding-top: 18px; border-top: 1px solid var(--rule); }
-.invitationFields label { display: grid; gap: 8px; font-size: 14px; font-weight: 650; }
-.invitationFields input { width: 100%; min-width: 0; min-height: 48px; padding: 10px 12px; border: 1.5px solid #8FA39F; border-radius: 8px; background: var(--paper); color: var(--ink); }
-.primary, .secondary, .action button[type="submit"] { display: inline-flex; align-items: center; justify-content: center; min-height: 52px; padding: 12px 22px; border: 1.5px solid var(--dock); border-radius: 10px; font: 700 16px/1.4 var(--font-body), sans-serif; text-align: center; text-decoration: none; cursor: pointer; }
-.primary, .action button[type="submit"] { width: 100%; background: var(--dock); color: #FFFFFF; }
-.primary:hover, .action button[type="submit"]:hover:not(:disabled) { background: #0B3D42; }
-.secondary { background: var(--paper); color: var(--dock); }
-.secondary:hover:not(:disabled) { background: var(--label); }
+/* The sheet: one card on the canvas, the standard header and controls inside. */
+.formSide { grid-area: form; display: grid; align-content: center; justify-items: center; padding: var(--space-12) var(--space-8); outline: none; }
+.sheet { width: min(100%, var(--content-narrow)); border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--card); }
+.sheetBar { padding: var(--space-6) var(--space-8) 0; font-size: 13px; line-height: 20px; font-weight: 600; color: var(--muted-foreground); }
+.sheetBody { display: grid; gap: var(--space-6); padding: var(--space-2) var(--space-8) var(--space-8); }
+.sheetBody > header { margin: 0; }
+.next { display: grid; padding: 0; border-top: 1px solid var(--border); list-style: none; counter-reset: next; }
+.next li { display: grid; grid-template-columns: 32px 1fr; padding: var(--space-3) 0; border-bottom: 1px solid var(--border); counter-increment: next; }
+.next li::before { content: counter(next); color: var(--primary); font-weight: 700; }
+.help { font-size: 14px; line-height: 20px; color: var(--muted-foreground); }
+.checkbox { display: flex; align-items: flex-start; gap: var(--space-3); min-height: var(--control-h); font-size: 15px; }
+.checkbox input { flex-shrink: 0; width: 20px; height: 20px; margin: var(--space-1) 0 0; accent-color: var(--primary); }
+.invitationFields { display: grid; gap: var(--space-4); padding-top: var(--space-4); border-top: 1px solid var(--border); }
 .action form { margin: 0; }
-.action button[type="submit"] { text-wrap: balance; }
-.support { display: grid; gap: 6px; padding: 20px clamp(20px, 3vw, 36px) 26px; border-top: 1px solid var(--rule); }
-.support h2 { font-size: 15px; font-weight: 700; }
-.support p { color: var(--ink-muted); font-size: 14px; line-height: 1.6; }
-.alert, .success { display: grid; gap: 12px; padding: 14px 16px; border-radius: var(--radius-card); background: #FCEFE9; color: #7A2C12; overflow-wrap: anywhere; font-size: 15px; }
+.action button, .wide { width: 100%; }
+.support { display: grid; gap: var(--space-2); padding: var(--space-6) var(--space-8); border-top: 1px solid var(--border); }
+.support h2 { font-size: 15px; line-height: 24px; font-weight: 700; }
+.support p { font-size: 14px; line-height: 20px; color: var(--muted-foreground); }
+.alert, .success { display: grid; gap: var(--space-3); padding: var(--space-4) var(--space-6); border-radius: var(--radius-card); overflow-wrap: anywhere; }
+.alert { background: var(--tone-danger); color: var(--tone-danger-foreground); }
 .alert small { font-size: 13px; }
-.success { border-color: var(--dock); background: #E8F1EF; color: var(--ink); }
-.loading { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: 6px; background: var(--label); color: var(--ink-muted); font-size: 15px; }
-.loading > span { width: 8px; height: 8px; flex-shrink: 0; border-radius: 50%; background: var(--dock); animation: pulse 1.2s ease-in-out infinite; }
-@keyframes pulse { 50% { opacity: 0.3; } }
+.success { background: var(--tone-success); color: var(--tone-success-foreground); }
+.loading { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-4); border-radius: var(--radius-control); background: var(--muted); color: var(--muted-foreground); }
+.loading > span { flex-shrink: 0; width: 8px; height: 8px; border-radius: 50%; background: var(--primary); animation: pulse 1.2s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .3; } }
 
 @media (max-width: 900px) {
   .page { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto auto; grid-template-areas: "top" "form" "context"; }
-  .formSide { padding: 28px 16px 40px; align-content: start; }
-  .context { padding-block: 36px 0; }
-  .drawing { flex: none; height: 240px; width: min(100%, 420px); margin-inline: auto; }
+  .top, .context { padding-inline: var(--gutter); }
+  .formSide { align-content: start; padding: var(--space-6) var(--gutter) var(--space-12); }
+  .context { padding-block: var(--space-8) 0; }
+  .drawing { flex: none; width: min(100%, 420px); height: 240px; margin-inline: auto; }
 }
-
-@media (prefers-reduced-motion: reduce) {
-  .loading > span { animation: none; }
+@media (max-width: 639px) {
+  .sheetBar { padding: var(--space-4) var(--space-4) 0; }
+  .sheetBody { padding: var(--space-2) var(--space-4) var(--space-6); }
+  .support { padding: var(--space-4); }
 }
+@media (prefers-reduced-motion: reduce) { .loading > span { animation: none; } }

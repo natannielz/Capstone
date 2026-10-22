@@ -13,6 +13,8 @@ import { CartOutcomeUnknown } from './cart-client';
 import { useCartSave } from './CartSave';
 import { addToCart, cartReasons, lineAmount } from './cart-model';
 import { announceCart, branchLabel, cartBranch, rememberCartBranch } from './cart-branch';
+import { Button, buttonClassName } from '@/components/workspace-kit/button';
+import { Field } from '@/components/workspace-kit/field';
 import styles from './cart.module.css';
 
 export function addToCartMessage(error: unknown): string {
@@ -72,26 +74,26 @@ export function AddToCartPanel({ actorId, item, isCurrent }: { actorId: string; 
   return <section className={styles.buyBox} aria-label="Pemesanan" aria-busy={busy || options === null}>
     {options === null ? <p role="status">Memeriksa cabang…</p> : options.length === 0 ? <p>Akun ini belum dapat memesan untuk cabang mana pun. Hubungi pengelola akses di unit Anda.</p> : <>
       {/* The buyer names the branch; the browser never picks it, not even the only one allowed. */}
-      <div className={styles.branch}><label htmlFor={branchId}>Pesan untuk</label>
-        <select id={branchId} value={branch ? orderContextKey(branch.context) : ''} disabled={busy}
+      <div className={styles.branch}><Field id={branchId} label="Pesan untuk">
+        <select value={branch ? orderContextKey(branch.context) : ''} disabled={busy}
           onChange={event => { setBranch(options.find(option => orderContextKey(option.context) === event.target.value) ?? null); setAdded(null); setError(null); }}>
           <option value="">Pilih cabang</option>
           {options.map(option => <option key={orderContextKey(option.context)} value={orderContextKey(option.context)}>{branchLabel(option)}</option>)}
-        </select></div>
+        </select></Field></div>
       <QuantityStepper id={'cart-quantity-' + item.skuId} label="Jumlah kemasan" value={quantity} minimum={rule.minimum} increment={rule.increment} disabled={busy}
         onChange={text => { setQuantity(text); setAdded(null); setError(null); }} />
       <p className={styles.help}>{rule.minimum > 1 || rule.increment > 1 ? `Minimal ${rule.minimum}, kelipatan ${rule.increment}. ` : ''}Satu {item.definition.packageLabel} berisi {item.definition.baseUnitsPerPackage} {item.definition.baseUnitCode}.</p>
       <p className={styles.subtotal}><span>Subtotal</span><strong>{packages === null ? '—' : formatDisplayMoney(price.currency, lineAmount(price.unitPrice, packages))}</strong></p>
-      <button type="button" className={styles.primary + ' ' + styles.addButton} disabled={busy || saving.locked || !branch || packages === null} onClick={() => void add()}>
-        <ShoppingCart size={18} aria-hidden="true" />{busy ? 'Menambahkan…' : 'Tambah ke keranjang'}</button>
+      <Button variant="primary" className={styles.addButton} disabled={busy || saving.locked || !branch || packages === null} onClick={() => void add()}>
+        <ShoppingCart aria-hidden="true" />{busy ? 'Menambahkan…' : 'Tambah ke keranjang'}</Button>
       {!branch && <p className={styles.help}>Pilih cabang lebih dulu.</p>}
     </>}
     {saving.recoveryView}
     {confirmed && <div role="status" className={styles.added}><p><Check size={18} aria-hidden="true" />Barang sudah masuk keranjang.</p>
-      <div className={styles.actions}><Link className={styles.primary} href="/cart">Lihat keranjang</Link></div></div>}
+      <div className={styles.actions}><Link className={buttonClassName({ variant: 'secondary' })} href="/cart">Lihat keranjang</Link></div></div>}
     {error !== null && <p role="alert" className={styles.alert}>{addToCartMessage(error)}{error instanceof AccessFailure && error.code === 'order_selection_changed' && <> <Link href="/cart">Buka keranjang</Link></>}</p>}
     {added !== null && <div role="status" className={styles.added}><p><Check size={18} aria-hidden="true" />{added} {item.definition.packageLabel} masuk keranjang.</p>
-      <div className={styles.actions}><Link className={styles.primary} href="/cart">Lihat keranjang</Link><Link className={styles.secondary} href="/shop">Lanjut belanja</Link></div></div>}
+      <div className={styles.actions}><Link className={buttonClassName({ variant: 'secondary' })} href="/cart">Lihat keranjang</Link><Link className={buttonClassName({ variant: 'tertiary' })} href="/shop">Lanjut belanja</Link></div></div>}
     <p className={styles.help}>Harga mengikuti kontrak cabang dan diperiksa lagi saat pengajuan. Stok belum dipesan sampai pesanan diajukan.</p>
   </section>;
 }
