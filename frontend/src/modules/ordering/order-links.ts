@@ -18,3 +18,8 @@ export function requestedOrderNotice(error: unknown): string | null {
   const status = error instanceof Error ? (error as Error & { status?: unknown }).status : undefined;
   return status === 400 || status === 403 || status === 404 ? 'Pesanan tidak ditemukan atau di luar akses Anda.' : null;
 }
+
+/** True when the address names an order in a form no order can have (the buyer gets the "not found" notice, G-045). */
+export function requestedOrderMalformed(search: string): boolean {
+  return new URLSearchParams(search).has('order') && requestedOrderId(search) === null;
+}

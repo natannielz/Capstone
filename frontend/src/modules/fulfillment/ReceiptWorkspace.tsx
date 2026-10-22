@@ -8,8 +8,8 @@ import { IdentityFailure, sessionTiming, type IdentitySession } from '../identit
 import { createAccessGateway } from '../administration/access-client';
 import { AccessFailure, MutationLedger, accessMessage } from '../administration/workflow';
 import { OperationRecovery, useOperationRecovery } from '../administration/OperationRecovery';
-import { submitTrackedRequest } from '../administration/operation-journal';
-import { createReceiptGateway, parseReceiptLink, prepareReceipt, type Receipt, type ReceiptReview, type ReceiptDeclaration } from './receipt-client';
+import { OperationJournal, submitTrackedRequest } from '../administration/operation-journal';
+import { createReceiptGateway, parseReceiptLink, prepareReceipt, receiptPageAccess, type Receipt, type ReceiptReview, type ReceiptDeclaration } from './receipt-client';
 import { ReceiptSummary } from './ShipmentReceiptPanel';
 import { ReceiptProofPanel } from './ReceiptProofPanel';
 import { createReceiptProofGateway, type ReceiptProof } from './receipt-proof-client';
@@ -47,9 +47,12 @@ export function ReceiptWorkspace() {
       if (!session.authenticated || !session.account) throw new IdentityFailure(401, 'unauthenticated');
       const current = await access.current(); if (!active) return;
       if (current.userId !== session.account.userId) throw new AccessFailure(409, 'actor_changed');
-      // Only a recipient (receipt.accept) uses this page; anyone else gets the standard denial (G-038).
-      if (!current.allowedActions.includes('receipt.accept')) throw new AccessFailure(403, 'scope_denied');
-      const canReceive = true;
+      // A recipient gets the full page; a preparer with an unconfirmed receipt proof only its recovery; anyone else the standard denial (G-038).
+      let pending: string[] = [];
+      try { pending = new OperationJournal(() => window.localStorage).list(current.userId).map(entry => entry.operation); } catch { /* No readable journal: no recovery to offer. */ }
+      const pageAccess = receiptPageAccess(current.allowedActions, pending);
+      if (pageAccess === 'denied') throw new AccessFailure(403, 'scope_denied');
+      const canReceive = pageAccess === 'recipient';
       if (sessionTiming(session, performance.now() - observedAt).expired) throw new IdentityFailure(401, 'session_expired');
       setAccount({ actorId: current.userId, session, observedAt, canReceive }); setElapsed(performance.now() - observedAt);
     } catch (failure) { if (active) setError(failure); } finally { if (active) setLoading(false); }

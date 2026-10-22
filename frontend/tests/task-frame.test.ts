@@ -24,3 +24,9 @@ test('the area layouts route through the one task frame instead of forking the p
     assert.match(readFileSync(new URL('../src/app/' + layout, import.meta.url), 'utf8'), /<TaskFrame>/, layout);
   assert.match(readFileSync(new URL('../src/components/store/ordering-frame.tsx', import.meta.url), 'utf8'), /<TaskFrame>/);
 });
+
+
+test('when the viewer cannot be read the page keeps the workspace frame, which shows its own lost-session or unavailable state (round 1)', () => {
+  assert.equal(taskFrame('/billing/invoices', 'unknown'), 'workspace');
+  assert.equal(taskFrame('/billing/invoices', []), 'store', 'no session: the shared ended-session state, in the store frame');
+});

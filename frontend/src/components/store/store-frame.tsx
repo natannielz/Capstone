@@ -12,6 +12,7 @@ import { ProtectedNavigationForm } from '@/modules/identity/ProtectedNavigationF
 import { isPilotRelease } from '@/lib/release-scope';
 import { createCartGateway } from '@/modules/ordering/cart-client';
 import { CART_CHANGED_EVENT, rememberedCartContext } from '@/modules/ordering/cart-branch';
+import { StoreFrameContext } from './store-frame-context';
 import { catalogTabCurrent, storeLinks, storeMember, type StoreLinks, type StoreViewer } from './store-navigation';
 import styles from './store-frame.module.css';
 
@@ -84,7 +85,7 @@ export function StoreFrame({ children }: { children: React.ReactNode }) {
     <input id={className + '-q'} type="search" value={query} maxLength={128} placeholder="Cari barang, merek, atau kode" onChange={event => setQuery(event.target.value)} />
     <button type="submit" aria-label="Cari"><Search size={18} aria-hidden="true" /></button>
   </form>;
-  return <div className={styles.frame} data-store-frame="">
+  return <StoreFrameContext.Provider value={true}><div className={styles.frame} data-store-frame="">
     <div className={styles.utility}><div className={styles.inner}>
       <nav aria-label="Informasi"><Link href="/#layanan">Cara pemesanan cabang</Link>{help && <a href={help} target="_blank" rel="noopener noreferrer">Bantuan · WhatsApp</a>}</nav>
       {links.staffDoor && viewer.kind !== 'loading' && <Link className={styles.staffDoor} href={links.staffDoor}>Ruang kerja petugas</Link>}
@@ -113,7 +114,7 @@ export function StoreFrame({ children }: { children: React.ReactNode }) {
       {links.orders && <Link href={links.orders} aria-current={pathname.startsWith('/ordering/orders') ? 'page' : undefined}><ClipboardList size={20} aria-hidden="true" />Pesanan</Link>}
       <Link href={links.account} aria-current={pathname === '/identity/account' ? 'page' : undefined}><UserRound size={20} aria-hidden="true" />{member ? 'Akun' : 'Masuk'}</Link>
     </nav>}
-  </div>;
+  </div></StoreFrameContext.Provider>;
 }
 
 function AccountMenu({ name, tasks, staff, orders, requests, actorId }: { name: string; tasks: { href: string; label: string }[]; staff: boolean; orders: string | null; requests: boolean; actorId: string }) {

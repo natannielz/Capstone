@@ -81,3 +81,13 @@ export function createReceiptGateway(client: ReturnType<typeof createUnitTokoCli
     },
   };
 }
+
+
+/**
+ * Who may use /fulfillment/receive (G-038): a recipient (receipt.accept) gets the full page. A preparer (shipment.prepare) who
+ * issued a receipt proof whose result is still unconfirmed gets the recovery-only mode to check it. Everyone else is denied.
+ */
+export function receiptPageAccess(actions: readonly string[], pendingOperations: readonly string[]): 'recipient' | 'recovery' | 'denied' {
+  if (actions.includes('receipt.accept')) return 'recipient';
+  return actions.includes('shipment.prepare') && pendingOperations.includes('fulfillment.receipt-proof.issue') ? 'recovery' : 'denied';
+}

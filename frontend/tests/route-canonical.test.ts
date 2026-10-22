@@ -92,3 +92,11 @@ test('the order to open (?order=) is not a list filter: the filter panel accepts
   assert.throws(() => parseOrderHistoryShare('?order=41&order=42'), 'a repeated order is not a valid link');
   assert.throws(() => parseOrderHistoryShare('?tracking=1'));
 });
+
+test('a malformed ?order= gets the same notice as an unknown order (G-045 round 1)', async () => {
+  const { requestedOrderMalformed } = await import('../src/modules/ordering/order-links');
+  for (const search of ['?order=abc', '?order=0', '?order=', '?order=9223372036854775808']) assert.equal(requestedOrderMalformed(search), true, search);
+  for (const search of ['', '?order=41', '?sort=newest']) assert.equal(requestedOrderMalformed(search), false, search);
+  const { readFileSync } = await import('node:fs');
+  assert.match(readFileSync(new URL('../src/modules/ordering/OrderHistoryWorkspace.tsx', import.meta.url), 'utf8'), /requestedOrderMalformed\(/);
+});

@@ -99,3 +99,16 @@ test('the branch spending approver is a buyer-side role: home is the store, appr
   assert.equal(isStaffActor([...approver, 'order.spending.policy.approve']), true, 'proposing or approving spending rules is back-office work');
   assert.equal(isStaffActor(stafPembeli), true);
 });
+
+
+test('the seeded penyetuju-cabang (runbook local-pilot-release1.md:162) is buyer-side with home /shop (G-043 round 1)', () => {
+  // buyer template without order.submit, plus branch.pic, order.spend.approve, order.spending.policy.read, order.request.read, organization.address.read.
+  const seeded = ['catalog.read', 'order.read', 'order.substitute', 'order.cancel', 'shipment.read', 'receipt.accept', 'invoice.read', 'case.read', 'case.request',
+    'payment.evidence', 'branch.pic', 'order.spend.approve', 'order.spending.policy.read', 'order.request.read', 'organization.address.read'];
+  assert.equal(isStaffActor(seeded), false);
+  assert.equal(homeFor(seeded), '/shop');
+  const tasks = buyerTasks(seeded).map(item => item.href);
+  for (const href of ['/ordering/reviews', '/ordering/spending-policies', '/billing/invoices', '/fulfillment/receive']) assert.ok(tasks.includes(href), href);
+  const links = storeLinks(storeMember('Penyetuju', seeded), false, '/shop');
+  assert.equal(links.staffDoor, null); assert.equal(links.cart, null, 'no order.submit: no cart'); assert.equal(links.orders, null);
+});
