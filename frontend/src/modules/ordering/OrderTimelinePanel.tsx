@@ -18,7 +18,7 @@ const eventStatus = {received: 'Retur diterima', inspected: 'Retur diperiksa', c
   replacement_requested: 'Penggantian barang diminta', entitlement_requested: 'Hak pengembalian diajukan', credit_approved: 'Penyesuaian kredit disetujui', refund_approved: 'Refund disetujui',
   payout_recorded: 'Pembayaran refund dicatat', refund_settled: 'Penyelesaian refund diverifikasi bank'};
 function failureMessage(error: unknown) {
-  if (error instanceof AccessFailure && [401, 403].includes(error.status)) return 'Akses bagian riwayat ini tidak tersedia. Periksa sesi dan akses akun.';
+  if (error instanceof AccessFailure && [401, 403].includes(error.status)) return 'Akses bagian riwayat ini tidak tersedia. Muat ulang untuk memeriksa akses terbaru.';
   if (error instanceof AccessFailure && error.status === 409) return 'Catatan berubah atau belum dapat diverifikasi. Muat ulang sebelum melanjutkan.';
   return 'Riwayat belum dapat dimuat. Periksa koneksi, lalu coba kembali.';
 }

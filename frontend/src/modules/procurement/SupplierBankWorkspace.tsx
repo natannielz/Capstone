@@ -26,7 +26,7 @@ const blank = (): SupplierBankDetails => ({ bankCode: '', accountNumber: '', hol
 const states = { pending: 'Menunggu pemeriksaan', approved: 'Disetujui', rejected: 'Ditolak' } as const;
 const when = (value: string) => dateTimeFormatter.format(new Date(value));
 function message(error: unknown) {
-  if (error instanceof IdentityFailure) return 'Masuk kembali dengan akun yang memiliki penugasan rekening pemasok.';
+  if (error instanceof IdentityFailure) return 'Masuk dengan akun organisasi Anda untuk melanjutkan.';
   if (error instanceof AccessFailure || error instanceof RequestNotSentError) {
     if (error.code === 'invalid_supplier_bank' || error.code === 'supplier_bank_invalid') return 'Isi kode bank, seluruh angka rekening, nama pemilik dan alasan secara persis, tanpa spasi tambahan atau karakter kontrol.';
     if (['supplier_bank_view_stale', 'supplier_bank_changed', 'supplier_changed'].includes(error.code)) return 'Rekening, pemasok atau kebijakan berubah. Muat data terbaru dan periksa kembali sebelum melanjutkan.';
@@ -62,7 +62,7 @@ export function SupplierBankWorkspace() {
   useEffect(() => { const timer = window.setInterval(() => { if (account) setElapsed(performance.now() - account.observedAt); }, 1000); const restored = (event: PageTransitionEvent) => { if (event.persisted) { setAccount(null); setRevision(value => value + 1); } }; window.addEventListener('pageshow', restored); return () => { window.clearInterval(timer); window.removeEventListener('pageshow', restored); }; }, [account]);
   const denied = useCallback((failure: unknown) => { if (failure instanceof AccessFailure && failure.code !== 'step_up_required' && ([401, 403].includes(failure.status) || failure.code === 'actor_changed' || failure.code === 'session_expired')) { setAccount(null); setError(failure); } }, []);
   return <main className={styles.page}><header className={styles.header}><div><Link className={styles.brand} href="/identity/account">Unit Toko</Link><h1>Rekening pemasok</h1><p>Ajukan rekening dan periksa melalui kanal bank yang disetujui. Persetujuan rekening tidak mencatat atau menjalankan pembayaran.</p></div><Link className={styles.secondary} href="/identity/account">Akun saya</Link></header>
-    {error !== null && account !== null && <p role="alert" className={styles.alert}>{message(error)}</p>}{loading ? <p role="status">Memeriksa akun dan akses…</p> : !account || sessionTiming(account.session, elapsed).expired ? <SessionAccessState error={error} returnPath={path} onRetry={() => setRevision(value => value + 1)} />
+    {error !== null && account !== null && <p role="alert" className={styles.alert}>{message(error)}</p>}{loading ? <p role="status">Memeriksa akun dan akses…</p> : !account || sessionTiming(account.session, elapsed).expired ? <SessionAccessState kind={account ? "expired" : undefined} error={error} returnPath={path} onRetry={() => setRevision(value => value + 1)} />
       : <SupplierBankDesk key={account.actorId + ':' + account.observedAt} account={account} elapsed={elapsed} fresh={sessionTiming(account.session, elapsed).fresh} onDenied={denied} />}</main>;
 }
 function SupplierBankDesk({ account, elapsed, fresh, onDenied }: { account: Account; elapsed: number; fresh: boolean; onDenied: (failure: unknown) => void }) {

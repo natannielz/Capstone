@@ -1,5 +1,6 @@
 'use client';
 
+import { SessionAccessState } from '@/components/workspace-kit/session-access-state';
 import Link from 'next/link';
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {RequestNotSentError} from '../../api/client';
@@ -30,7 +31,7 @@ function message(error: unknown) {
     if (error.code === 'independent_person_required' || error.code === 'independent_actor_required') return 'Pemberi, penerima, dan penyetuju harus merupakan orang yang berbeda.';
     if (error.code === 'delegation_source_changed' || error.code === 'delegation_changed') return 'Akses sumber atau catatan delegasi berubah. Perbarui sebelum meninjau lagi.';
     if (error.code === 'step_up_required') return 'Lakukan verifikasi dua langkah, lalu perbarui sesi sebelum meninjau lagi.';
-    if ([401, 403].includes(error.status)) return 'Sesi atau akses belum tersedia. Periksa akun serta cakupan delegasi.';
+    if ([401, 403].includes(error.status)) return 'Akses delegasi belum tersedia untuk akun ini. Periksa cakupan delegasi Anda.';
     if (error instanceof RequestNotSentError) return 'Periksa penerima, izin, masa berlaku, dan alasan. Permintaan belum dikirim.';
   }
   return 'Hasil belum dapat dipastikan. Periksa hasil asli yang tersimpan sebelum mengirim perubahan lain.';
@@ -42,7 +43,8 @@ export function TemporaryDelegation() {
     let active = true; const controller = new AbortController();
     void (async () => {try {
       const session = await identity.session(controller.signal), current = await access.current();
-      if (!session.authenticated || !session.account || session.account.userId !== current.userId) throw new IdentityFailure(401, 'unauthenticated');
+      if (!session.authenticated || !session.account) throw new IdentityFailure(401, 'unauthenticated');
+      if (session.account.userId !== current.userId) throw new AccessFailure(409, 'actor_changed');
       if (active) {setAccount({actorId: current.userId, actions: current.allowedActions, session, observed: performance.now()}); setElapsed(0); setError(null);}
     } catch (failure) {if (active) {setAccount(null); setError(failure);}}})();
     return () => {active = false; controller.abort();};
@@ -55,9 +57,9 @@ export function TemporaryDelegation() {
   return <main className={styles.page}>
     <header className={styles.header}><div><Link className={styles.brand} href="/identity/account">Unit Toko</Link><h1>Delegasi sementara</h1>
       <p>Pilih izin dari akses Anda yang masih berlaku. Delegasi memerlukan persetujuan orang lain dan selalu memiliki waktu berakhir.</p></div><Link href="/identity/account">Akun saya</Link></header>
-    {error !== null && <p role="alert" className={styles.alert}>{message(error)}</p>}
-    {!account || sessionTiming(account.session, elapsed).expired ? <section className={styles.state}><h2>Periksa sesi akun</h2>
-      <Link href={'/identity/login?returnPath=' + encodeURIComponent(path)}>Masuk kembali</Link><button type="button" onClick={() => {setAccount(null); setRefresh(v => v + 1);}}>Perbarui sesi</button></section>
+    {error !== null && account && <p role="alert" className={styles.alert}>{message(error)}</p>}
+    {!account && error === null ? <p role="status">Memeriksa sesi dan akses…</p> : !account || sessionTiming(account.session, elapsed).expired
+      ? <SessionAccessState error={error} kind={account ? "expired" : undefined} returnPath={path} onRetry={() => {setAccount(null); setError(null); setRefresh(v => v + 1);}} detail={error !== null ? message(error) : undefined} />
       : <Desk key={account.actorId + ':' + account.observed} account={account} refreshSession={() => {setAccount(null); setRefresh(v => v + 1);}} />}
   </main>;
 }
@@ -154,7 +156,7 @@ function Desk({account, refreshSession}: {account: Account; refreshSession: () =
     {error !== null && <p className={styles.alert} role="alert">{message(error)}</p>}
     {notice && <p role="status">{notice}</p>}
     <p className={styles.help}>Serah-terima di halaman ini menyimpan catatan peserta. Pengambilalihan tugas pemeriksaan pembayaran tersedia pada meja pemeriksaan bagi reviewer berwenang. Jenis tugas lain belum tersedia. Tugas dan persetujuan operasional tetap mengikuti pemilik serta pemisahan tugas masing-masing.</p>
-    <div className={styles.actions}><button className={styles.secondary} type="button" disabled={busy} onClick={refreshSession}>Perbarui sesi dan akses</button>
+    <div className={styles.actions}><button className={styles.secondary} type="button" disabled={busy} onClick={refreshSession}>Muat ulang sesi dan akses</button>
       {fields && <ProtectedNavigationForm action="/auth/step-up" fields={fields} disabled={busy} label="Verifikasi dua langkah" secondary />}</div>
     {storageBlocked && <p role="alert" className={styles.alert}>Penyimpanan referensi operasi belum tersedia. Pengiriman perubahan dikunci.</p>}
     {pending.length > 0 && <section className={styles.accountSection} aria-label="Operasi delegasi belum terkonfirmasi"><h2>Periksa hasil asli</h2>

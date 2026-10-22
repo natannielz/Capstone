@@ -94,7 +94,7 @@ try {
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
   await page.screenshot({ path: resolve(directory, 'dispatch-recovered-mobile.png'), fullPage: true });
   const denied = await user(config.deniedToken); await denied.page.goto(origin.origin + '/fulfillment/dispatches');
-  await denied.page.getByRole('heading', { name: /^(Sesi Anda perlu diperbarui|Halaman ini di luar tugas akun Anda|Halaman belum dapat dibuka)$/ }).waitFor();
+  await denied.page.getByRole('heading', { name: /^(Masuk untuk melanjutkan|Sesi Anda perlu diperbarui|Halaman ini di luar tugas akun Anda|Halaman belum dapat dibuka)$/ }).waitFor();
   const status = await denied.page.evaluate(async ({ suborderId, actorId }) => {
     const csrf = await (await fetch('/api/v1/identity/csrf')).json();
     return (await fetch('/api/v1/fulfillment/dispatches/' + suborderId + '/query', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf.requestToken, 'X-Expected-Actor-Id': actorId }, body: JSON.stringify({ purpose: 'shipment-dispatch' }) })).status;

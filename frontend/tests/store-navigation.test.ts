@@ -42,7 +42,7 @@ test('signed-in buyers reach their cart and orders directly; only staff see the 
 test('the bounded first release keeps buyers on branch requests instead of priced orders', () => {
   const links = storeLinks(storeMember('Rina', buyer), true, '/shop');
   assert.equal(links.cart, '/ordering/requests');
-  assert.equal(links.orders, '/ordering/requests');
+  assert.equal(links.orders, null, 'the first release has no priced orders; branch requests are the cart (M2: no "Pesanan saya" label on /ordering/requests)');
 });
 
 test('the Katalog tab is current on the member catalog and on the guest catalog (G-025)', () => {
@@ -54,6 +54,12 @@ test('the footer follows the viewer: sign-in returns to the page, and buyers get
   const guest = storeLinks({kind: 'guest'}, false, '/katalog');
   assert.equal(guest.signIn, '/identity/login?returnPath=%2Fkatalog');
   assert.equal(guest.catalog, '/katalog');
-  assert.equal(storeLinks(storeMember('Rina', buyer), true, '/shop').orders, '/ordering/requests');
+  assert.equal(storeLinks(storeMember('Rina', buyer), true, '/shop').orders, null);
   assert.equal(storeLinks(storeMember('Rina', buyer), false, '/shop').staffDoor, null);
+});
+
+test('store staff who never place orders get no "Pesanan saya" entry that could only ever be empty (F-010)', () => {
+  const storeStaff = ['catalog.read', 'order.read', 'stock.read', 'shipment.prepare', 'shipment.dispatch', 'procurement.read'];
+  assert.equal(storeLinks(storeMember('Petugas', storeStaff), false, '/shop').orders, null);
+  assert.equal(storeLinks(storeMember('Sari', [...storeStaff, 'order.submit']), false, '/shop').orders, '/ordering/orders');
 });

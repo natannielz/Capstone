@@ -24,7 +24,7 @@ const blank = (): PostalAddress => ({ line1: '', line2: null, city: '', region: 
 const when = (value: string) => dateTimeFormatter.format(new Date(value));
 const status = { pending: 'Menunggu pemeriksaan', approved: 'Disetujui', rejected: 'Ditolak' } as const;
 function message(error: unknown) {
-  if (error instanceof IdentityFailure) return 'Sesi belum tersedia. Masuk kembali untuk memeriksa alamat organisasi.';
+  if (error instanceof IdentityFailure) return 'Masuk dengan akun organisasi Anda untuk melanjutkan.';
   if (error instanceof AccessFailure) {
     if (error.code === 'organization_address_response_invalid' || error.code === 'organization_address_integrity_unavailable') return 'Riwayat alamat belum dapat dipastikan lengkap. Perubahan ditahan; hubungi penanggung jawab.';
     if (error.code === 'organization_address_changed' || error.code === 'organization_address_view_stale') return 'Data organisasi atau alamat berubah. Muat data terbaru dan periksa ulang rincian.';
@@ -56,7 +56,7 @@ export function OrganizationAddressWorkspace() {
   return <main className={styles.page}><header className={styles.header}><div><Link href="/identity/account" className={styles.brand}>Unit Toko</Link>
     <h1>Alamat organisasi</h1><p>Ajukan dan periksa alamat penagihan legal, pengiriman cabang dan keberangkatan gudang sesuai penugasan.</p></div></header>
     {error !== null && account !== null && <p role="alert" className={styles.alert}>{message(error)}</p>}
-    {loading ? <p role="status">Memeriksa akun dan akses…</p> : !account || sessionTiming(account.session, elapsed).expired ? <SessionAccessState error={error} returnPath={path} onRetry={() => setRevision(value => value + 1)} />
+    {loading ? <p role="status">Memeriksa akun dan akses…</p> : !account || sessionTiming(account.session, elapsed).expired ? <SessionAccessState kind={account ? "expired" : undefined} error={error} returnPath={path} onRetry={() => setRevision(value => value + 1)} />
       : <AddressDesk key={account.actorId + ':' + account.observedAt} account={account} fresh={sessionTiming(account.session, elapsed).fresh} onDenied={denied} />}
   </main>;
 }

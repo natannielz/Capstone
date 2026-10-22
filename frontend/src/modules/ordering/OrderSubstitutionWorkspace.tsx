@@ -61,7 +61,7 @@ export function OrderSubstitutionWorkspace({ orderId = null }: { orderId?: strin
     <h1>Penggantian barang pesanan</h1><p>Petugas mengajukan pilihan pengganti. Pembeli memeriksa kemasan, jumlah, dan harga sebelum menyetujuinya.</p></div>
     <Link href="/ordering/orders" className={styles.secondary}>Riwayat pesanan</Link></header>
     {error !== null && account !== null && <p role="alert" className={styles.alert}>{message(error)}</p>}
-    {loading ? <p role="status">Memeriksa akun…</p> : !account || sessionTiming(account.session, elapsed).expired ? <SessionAccessState error={error} returnPath="/ordering/substitutions" onRetry={() => setRevision(value => value + 1)} />
+    {loading ? <p role="status">Memeriksa akun…</p> : !account || sessionTiming(account.session, elapsed).expired ? <SessionAccessState kind={account ? "expired" : undefined} error={error} returnPath="/ordering/substitutions" onRetry={() => setRevision(value => value + 1)} />
       : <SubstitutionDesk key={account.actorId + ':' + account.observedAt} account={account} orderId={orderId} onFailure={failed} />}
   </main>;
 }

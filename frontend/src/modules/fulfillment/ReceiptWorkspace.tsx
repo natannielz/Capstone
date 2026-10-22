@@ -1,5 +1,6 @@
 'use client';
 
+import { SessionAccessState, lostAccessKind } from '@/components/workspace-kit/session-access-state';
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createIdentityGateway } from '../identity/identity-client';
@@ -53,14 +54,16 @@ export function ReceiptWorkspace() {
     } catch (failure) { if (active) setError(failure); } finally { if (active) setLoading(false); }
   }); return () => { active = false; controller.abort(); }; }, [identity, access, revision]);
   useEffect(() => { const timer = window.setInterval(() => { if (account) setElapsed(performance.now() - account.observedAt); }, 1000); return () => window.clearInterval(timer); }, [account]);
-  const denied = useCallback((failure: unknown) => { if (failure instanceof AccessFailure && failure.status === 401) { setAccount(null); setLink(null); setError(failure); } }, []);
+  // A session lost while the recipient was confirming is a session that ended, not a first sign-in (G-014).
+  const [lost, setLost] = useState(false);
+  const denied = useCallback((failure: unknown) => { if (failure instanceof AccessFailure && failure.status === 401) { setAccount(null); setLink(null); setError(failure); setLost(true); } }, []);
   const expired = account && sessionTiming(account.session, elapsed).expired;
   return <main className={common.page}><header className={common.header}><div><Link href="/identity/account" className={common.brand}>Unit Toko</Link><h1>Penerimaan kiriman</h1>
     <p>Periksa barang bersama kurir. Konfirmasi hanya dengan akun penerima yang dituju.</p></div><Link href="/identity/account" className={common.secondary}>Akun saya</Link></header>
-    {error !== null && <p role="alert" className={common.alert}>{message(error)}</p>}
-    {loading ? <p role="status">Memeriksa akun penerima…</p> : !account || expired ? <section className={common.state}><h2>Masuk sebagai penerima</h2>
-      <p>Masuk dengan akun penerima sendiri, lalu pindai kembali QR. Tautan tidak disimpan selama proses masuk.</p><Link href="/identity/login?returnPath=%2Ffulfillment%2Freceive">Masuk sebagai penerima</Link>
-      <button className={common.secondary} onClick={() => { setError(null); setRevision(value => value + 1); }}>Perbarui sesi dan akses</button></section>
+    {error !== null && account && !expired && <p role="alert" className={common.alert}>{message(error)}</p>}
+    {loading ? <p role="status">Memeriksa akun penerima…</p> : !account || expired ? <>
+      <SessionAccessState error={error} kind={expired ? "expired" : lost ? lostAccessKind(error) : undefined} returnPath="/fulfillment/receive" onRetry={() => { setError(null); setRevision(value => value + 1); }} detail={error !== null ? message(error) : undefined} />
+      <p>Gunakan akun penerima sendiri. Setelah masuk, pindai kembali QR dari kurir; tautan QR tidak disimpan selama proses masuk.</p></>
       : <ReceiptForm key={account.actorId + ':' + account.observedAt} account={account} link={link} onDenied={denied} />}
   </main>;
 }

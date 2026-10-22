@@ -22,3 +22,10 @@ export function isPilotApiPathAllowed(path: string): boolean {
     "/api/v1/catalog/administration", "/api/v1/catalog/variants", "/api/v1/ordering/requests", "/api/v1/operations/health", "/api/v1/public/catalog",
   ].some(prefix => path === prefix || path.startsWith(prefix + "/"));
 }
+
+// Catalog photo management calls these endpoints; it is offered only when the release serves all of them (F-008).
+const catalogPhotoEndpoints = ["/api/v1/catalog/skus/1/primary-photo/query", "/api/v1/catalog/skus/1/photo-evidence",
+  "/api/v1/catalog/primary-photos/operations/query", "/api/v1/catalog/photo-revalidations/operations/query"];
+export function catalogPhotoManagementAvailable(pilot = isPilotRelease): boolean {
+  return !pilot || catalogPhotoEndpoints.every(isPilotApiPathAllowed);
+}

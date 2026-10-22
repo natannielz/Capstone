@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { SessionAccessState } from '@/components/workspace-kit/session-access-state';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createIdentityGateway } from '../identity/identity-client';
 import { IdentityFailure } from '../identity/identity-workflow';
@@ -15,7 +16,7 @@ import styles from './health.module.css';
 const REFRESH_MS = 60_000;
 
 function message(error: unknown) {
-  if (error instanceof IdentityFailure) return 'Periksa kembali sesi akun Anda.';
+  if (error instanceof IdentityFailure) return 'Masuk dengan akun organisasi Anda untuk melanjutkan.';
   if (error instanceof AccessFailure && (error.status === 401 || error.status === 403)) return 'Halaman ini memerlukan izin pengaturan sistem.';
   return 'Laporan kesehatan belum dapat dibaca. Periksa ulang dalam beberapa saat; bila tetap gagal, periksa layanan API dan basis data.';
 }
@@ -67,10 +68,8 @@ export function HealthWorkspace() {
         <p>Antrean latar, OCR dokumen, pembersihan draf, versi skema dan replikasi basis data. Hanya jumlah dan umur; tidak ada data pelanggan.</p></div>
       <Link href="/identity/account">Akun saya</Link>
     </header>
-    {error !== null && <p className={common.alert} role="alert">{message(error)}</p>}
-    {denied ? <section className={common.state}><h2>Periksa sesi dan akses</h2>
-        <Link href="/identity/login?returnPath=%2Foperations%2Fhealth">Masuk kembali</Link>
-        <button type="button" onClick={() => { setError(null); setBusy(true); setAttempt(value => value + 1); }}>Perbarui sesi</button></section>
+    {error !== null && !denied && <p className={common.alert} role="alert">{message(error)}</p>}
+    {denied ? <SessionAccessState error={error} returnPath="/operations/health" onRetry={() => { setError(null); setBusy(true); setAttempt(value => value + 1); }} />
       : <>
         {report === null ? <p className={styles.notice} aria-live="polite">{busy ? 'Membaca laporan kesehatan…' : 'Laporan belum tersedia.'}</p> : <HealthReportView report={report} />}
         <div className={styles.actions}>

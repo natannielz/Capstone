@@ -24,7 +24,7 @@ const path = '/ordering/commercial-policies', readPermission = 'order.commercial
 const when = (value: string) => dateTimeFormatter.format(new Date(value));
 const status = { pending: 'Menunggu pemeriksaan', approved: 'Disetujui', rejected: 'Ditolak' } as const;
 function message(error: unknown) {
-  if (error instanceof IdentityFailure) return 'Sesi belum tersedia. Masuk kembali untuk memeriksa aturan komersial.';
+  if (error instanceof IdentityFailure) return 'Masuk dengan akun organisasi Anda untuk melanjutkan.';
   if (error instanceof AccessFailure || error instanceof RequestNotSentError) {
     if (error.code === 'commercial_policy_invalid' || error.code === 'order_commercial_policy_invalid') return 'Periksa penerapan kewajiban, biaya, tarif dan dasar pajak, syarat tagihan, masa berlaku serta alasan. Pembebasan pajak memerlukan rujukan resmi.';
     if (error.code === 'order_commercial_policy_changed' || error.code === 'commercial_policy_view_stale') return 'Unit atau aturan berubah. Muat data terbaru, lalu periksa ulang pengajuan.';
@@ -58,7 +58,7 @@ export function OrderCommercialPolicyWorkspace() {
   return <main className={styles.page}><header className={styles.header}><div><Link href="/identity/account" className={styles.brand}>Unit Toko</Link>
     <h1>Aturan komersial</h1><p>Pengaturan biaya, pajak, kewajiban dan syarat tagihan untuk cabang dan kanal toko yang disetujui.</p></div><Link className={styles.secondary} href="/identity/account">Akun saya</Link></header>
     {error !== null && account !== null && <p role="alert" className={styles.alert}>{message(error)}</p>}
-    {loading ? <p role="status">Memeriksa akun dan akses…</p> : !account || sessionTiming(account.session, elapsed).expired ? <SessionAccessState error={error} returnPath={path} onRetry={() => setRevision(value => value + 1)} />
+    {loading ? <p role="status">Memeriksa akun dan akses…</p> : !account || sessionTiming(account.session, elapsed).expired ? <SessionAccessState kind={account ? "expired" : undefined} error={error} returnPath={path} onRetry={() => setRevision(value => value + 1)} />
       : <PolicyDesk key={account.actorId + ':' + account.observedAt} account={account} elapsed={elapsed} fresh={sessionTiming(account.session, elapsed).fresh} onDenied={denied} />}
   </main>;
 }

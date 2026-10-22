@@ -80,7 +80,7 @@ export async function verifySupplierBankBrowser({ config, maker, user, origin, d
   assert.equal(completed().length, 1); const proposed = completed()[0]; assert.equal(proposed.path, api + '/proposals'); assert.equal(proposed.actor, config.makerId); assert.deepEqual(proposed.body.input, expectedInput);
   const saved = await pending(page, proposed, 'procurement.supplierbank.propose');
   await context.addCookies([{ name: '__Host-ut_session', value: config.checkerToken, domain: origin.hostname, path: '/', secure: true, httpOnly: true, sameSite: 'Lax' }]);
-  await page.getByRole('button', { name: 'Periksa hasil', exact: true }).click(); await page.getByRole('heading', { name: /^(Sesi Anda perlu diperbarui|Halaman ini di luar tugas akun Anda|Halaman belum dapat dibuka)$/ }).waitFor(); assert.deepEqual(await references(page), saved);
+  await page.getByRole('button', { name: 'Periksa hasil', exact: true }).click(); await page.getByRole('heading', { name: /^(Masuk untuk melanjutkan|Sesi Anda perlu diperbarui|Halaman ini di luar tugas akun Anda|Halaman belum dapat dibuka)$/ }).waitFor(); assert.deepEqual(await references(page), saved);
   await context.addCookies([{ name: '__Host-ut_session', value: config.makerToken, domain: origin.hostname, path: '/', secure: true, httpOnly: true, sameSite: 'Lax' }]);
   await recover(page); assert.equal(supplierBankWrites.length, 1);
   const history = await query(page, config.makerId, api + '/proposals/query', readBody); assert.equal(history.status, 200); assert.equal(history.body.items.length, 1);

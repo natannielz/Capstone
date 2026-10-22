@@ -13,15 +13,20 @@ export function storeMember(name: string, actions: readonly string[]): StoreMemb
 
 export function storeSignInHref(returnPath: string) { return '/identity/login?returnPath=' + encodeURIComponent(returnPath); }
 
-export type StoreLinks = { home: string; catalog: string; signIn: string; cart: string; orders: string; account: string; staffDoor: string | null };
+export type StoreLinks = { home: string; catalog: string; signIn: string; cart: string; orders: string | null; account: string; staffDoor: string | null };
 
-/** Where the storefront's header, tabs and footer lead. A guest's cart, orders and account go through sign-in and come back. */
+/**
+ * Where the storefront's header, tabs and footer lead. A guest's cart, orders and account go through sign-in and come back.
+ * "Pesanan saya" (/ordering/orders) is offered only where it can show something: not in the first release, whose branch requests
+ * are the cart (M2), and not to an account that never places orders (F-010).
+ */
 export function storeLinks(viewer: StoreViewer, pilot: boolean, currentPath: string): StoreLinks {
-  const cart = pilot ? '/ordering/requests' : '/cart', orders = pilot ? '/ordering/requests' : '/ordering/orders';
+  const cart = pilot ? '/ordering/requests' : '/cart';
   const member = viewer.kind === 'member';
   return {
     home: '/', catalog: member ? '/shop' : '/katalog', signIn: storeSignInHref(currentPath),
-    cart: member ? cart : storeSignInHref(cart), orders: member ? orders : storeSignInHref(orders),
+    cart: member ? cart : storeSignInHref(cart),
+    orders: pilot ? null : viewer.kind === 'member' ? viewer.orders ? '/ordering/orders' : null : storeSignInHref('/ordering/orders'),
     account: member ? '/identity/account' : storeSignInHref('/identity/account'),
     staffDoor: viewer.kind === 'member' ? viewer.staff ? '/workspace' : null : storeSignInHref('/workspace'),
   };

@@ -1,5 +1,6 @@
 "use client";
 
+import { SessionAccessState, lostAccessKind } from '@/components/workspace-kit/session-access-state';
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { RequestNotSentError } from '../../api/client';
@@ -7,7 +8,7 @@ import { createAccessGateway } from '../administration/access-client';
 import { AdministrationNavigation } from '../administration/AdministrationNavigation';
 import { OperationRecovery } from '../administration/OperationRecovery';
 import { OperationJournal } from '../administration/operation-journal';
-import { AccessFailure, accessMessage } from '../administration/workflow';
+import { AccessFailure, accessMessage, businessRefusal } from '../administration/workflow';
 import { createIdentityGateway } from '../identity/identity-client';
 import { IdentityFailure, identityMessage, sessionTiming, type IdentitySession } from '../identity/identity-workflow';
 import { sourceActor } from './stock-source-workflow';
@@ -20,14 +21,12 @@ import styles from './stock-source-policy.module.css';
 import { formatDateTime } from '@/lib/format';
 
 const path = '/inventory/sources/activations';
-const loginHref = '/identity/login?returnPath=' + encodeURIComponent(path);
 const factorHref = '/identity/account?operation=stock.source.approve&returnPath=' + encodeURIComponent(path);
 const status = { proposed: 'Menunggu peninjauan', activated: 'Aktivasi disetujui', rejected: 'Ditolak' };
 const domainNames: Record<string, string> = { Orders: 'Pesanan', Reservations: 'Alokasi pesanan', Fulfillment: 'Pengiriman', Procurement: 'Pengadaan',
   AfterSales: 'Purnajual', SourceReconciliation: 'Rekonsiliasi sumber', InventoryOperations: 'Pemeriksaan persediaan' };
 const time = (value: string) => formatDateTime(value);
 type Loaded = { actorId: string; actions: string[]; session: IdentitySession; observedAt: number; generation: number };
-const lostSession = (error: unknown) => (error instanceof AccessFailure || error instanceof IdentityFailure) && (error.status === 401 || error.code === 'actor_changed');
 function message(error: unknown) {
   if (error instanceof IdentityFailure) return identityMessage(error);
   if (error instanceof RequestNotSentError) return accessMessage(error);
@@ -39,7 +38,7 @@ function message(error: unknown) {
     if (error.code === 'stock_source_obligations_open' || error.code === 'stock_source_obligations_incomplete' || error.code.includes('coverage_unavailable'))
       return 'Kewajiban atau riwayat sumber belum dapat dinyatakan selesai. Selesaikan catatan yang masih terbuka sebelum melakukan pemeriksaan baru.';
     if (error.code === 'step_up_required') return 'Peninjauan dan pemeriksaan hasil keputusan memerlukan verifikasi dua langkah terbaru.';
-    if (error.code.includes('person') || error.code.includes('independen')) return 'Peninjauan harus dilakukan oleh orang yang berbeda dari pengaju, dengan akses yang masih berlaku.';
+    if (businessRefusal(error.code)) return 'Peninjauan harus dilakukan oleh orang yang berbeda dari pengaju, dengan akses yang masih berlaku.';
     if (error.status === 409) return 'Pengaturan, kewajiban, atau waktu serah terima sudah berubah. Muat ulang dan periksa fakta terbaru.';
     if (error.code === 'commit_outcome_unknown') return 'Hasil pengiriman belum dapat dipastikan. Periksa hasil permintaan semula sebelum mengirim permintaan baru.';
     if (error.status >= 500 || error.status === 0) return 'Layanan belum dapat diperiksa. Muat ulang setelah koneksi tersedia. Jika ada referensi permintaan tersimpan, periksa hasilnya terlebih dahulu.';
@@ -80,11 +79,8 @@ export function StockSourceActivationWorkspace() {
       <p className={styles.eyebrow}>Pengelolaan persediaan</p><h1>Aktivasi sumber stok</h1>
       <p>Periksa serah terima sumber kosong dan ajukan peninjauan oleh petugas yang berbeda.</p></div></header>
     <div id="activation-workspace">{loaded ? <ActivationDesk key={loaded.actorId + ':' + loaded.generation} loaded={loaded} refresh={refresh} /> :
-      <section className={common.state} aria-busy={loading}><h2>{loading ? 'Memeriksa sesi dan akses' : lostSession(error) ? 'Masuk untuk memeriksa aktivasi' : 'Aktivasi belum tersedia'}</h2>
-        {error !== null && <p role="alert" className={common.alert}>{message(error)}</p>}
-        <div className={common.actions}>{lostSession(error) && <Link className={common.primary} href={loginHref}>Masuk kembali</Link>}
-          <button className={common.secondary} type="button" disabled={loading} onClick={() => void refresh()}>Periksa kembali</button>
-          <Link href="/identity/account">Kembali ke akun saya</Link></div></section>}</div>
+      (loading ? <section className={common.state} aria-busy="true"><h2>Memeriksa sesi dan akses</h2></section>
+        : <SessionAccessState error={error} returnPath={path} onRetry={() => void refresh()} detail={error !== null ? message(error) : undefined} />)}</div>
   </main>;
 }
 function ActivationDesk({ loaded, refresh }: { loaded: Loaded; refresh: () => Promise<void> }) {
@@ -103,14 +99,12 @@ function ActivationDesk({ loaded, refresh }: { loaded: Loaded; refresh: () => Pr
   useEffect(() => { if (state.review) reviewFocus.current?.focus(); }, [state.review]);
   useEffect(() => { if (state.result) resultFocus.current?.focus(); }, [state.result]);
   const busy = state.sending || state.recovering, locked = editor.locked;
-  if (state.expired || state.suspended) return <section className={common.state}><h2>Sesi dan akses perlu diperiksa kembali</h2>
-    {state.error !== null && <p role="alert">{message(state.error)}</p>}<p>Data sebelumnya disembunyikan. Referensi permintaan tetap disimpan untuk pemiliknya.</p>
-    <button className={common.primary} type="button" disabled={busy} onClick={() => void refresh()}>Periksa sesi terbaru</button><Link href={loginHref}>Masuk kembali</Link></section>;
+  if (state.expired || state.suspended) return <SessionAccessState error={state.error} kind={state.expired ? 'expired' : lostAccessKind(state.error)} returnPath={path} busy={busy} onRetry={() => void refresh()} detail={state.error !== null ? message(state.error) : undefined} />;
   return <>
     <AdministrationNavigation current="source-activations" actions={loaded.actions} locked={locked} />
     <section className={common.accountSection}><div className={styles.heading}><div><h2>Periksa sumber yang ditugaskan</h2>
       <p>Petugas: <strong>{loaded.session.account?.displayName ?? loaded.session.account?.verifiedEmail}</strong></p></div>
-      <button className={common.secondary} type="button" disabled={busy || state.review !== null} onClick={() => void refresh()}>Periksa sesi dan akses</button></div>
+      <button className={common.secondary} type="button" disabled={busy || state.review !== null} onClick={() => void refresh()}>Muat ulang sesi dan akses</button></div>
       {editor.canApprove && <p className={common.help}>{state.fresh ? 'Verifikasi dua langkah masih baru. ' : 'Peninjauan memerlukan verifikasi dua langkah terbaru. '}
         <Link href={factorHref} aria-disabled={busy} onClick={event => { if (busy) event.preventDefault(); }}>Verifikasi untuk peninjauan</Link></p>}
     </section>

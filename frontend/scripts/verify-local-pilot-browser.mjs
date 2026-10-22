@@ -58,8 +58,10 @@ async function signedOutStates(page) {
     await page.getByRole('status').filter({ hasText: 'Memeriksa akun dan akses…' }).waitFor();
     await page.screenshot({ path: resolve(directory, 'pilot-request-loading-mobile.png'), fullPage: true });
   } finally { releaseSession(); await Promise.all(held); await page.unroute(sessionPath, hold); }
-  await page.getByRole('heading', { name: /^(Sesi Anda perlu diperbarui|Halaman ini di luar tugas akun Anda|Halaman belum dapat dibuka)$/ }).waitFor();
-  await page.getByRole('link', { name: 'Masuk kembali', exact: true }).waitFor();
+  // A stale cookie the server no longer knows: behind the request guard this is a session that ended (round 3).
+  const state = page.locator('section[aria-labelledby="workspace-access-state"]');
+  await state.getByRole('heading', { name: 'Sesi Anda perlu diperbarui', exact: true }).waitFor();
+  await state.getByRole('link', { name: 'Masuk kembali', exact: true }).waitFor();
   assert.equal(await page.getByRole('button', { name: 'Konfirmasi ajukan permintaan', exact: true }).count(), 0);
   await cleanViewport(page); await page.screenshot({ path: resolve(directory, 'pilot-request-unauthenticated-mobile.png'), fullPage: true });
 }
@@ -189,7 +191,8 @@ try {
   if (config.stage === 'beforeRestart') {
     await requester.page.goto(origin + '/shop');
     await requester.page.getByRole('button', { name: /Rincian SYN-PENCIL-12/u }).waitFor();
-    assert.equal(await requester.page.getByText('Foto belum tersedia', { exact: true }).count(), 3); await cleanViewport(requester.page);
+    // Request-only catalog cards load the approved photo like the priced catalog (F-012); wait until no card is still loading.
+    await requester.page.waitForFunction(() => !document.body.innerText.includes('Memuat foto…')); await cleanViewport(requester.page);
     await requester.page.screenshot({ path: resolve(directory, 'pilot-catalog-mobile.png'), fullPage: true });
     await requester.page.getByRole('button', { name: /Rincian SYN-PENCIL-12/u }).click();
     await requester.page.getByRole('dialog').getByRole('link', { name: 'Pilih untuk permintaan', exact: true }).click();

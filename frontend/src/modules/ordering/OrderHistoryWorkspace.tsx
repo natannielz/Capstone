@@ -78,7 +78,7 @@ export function OrderHistoryWorkspace() {
   return <main className={common.page}><header className={common.header}><div>
     <h1>Pesanan saya</h1><p>Status setiap pesanan, rinciannya, dan pesan lagi dengan sekali tekan.</p></div></header>
     {error !== null && account !== null && <p role="alert" className={common.alert}>{message(error)}</p>}
-    {loading ? <p role="status">Memeriksa akun…</p> : !account || expired ? <SessionAccessState error={error} returnPath="/ordering/orders" onRetry={() => setRevision(value => value + 1)} />
+    {loading ? <p role="status">Memeriksa akun…</p> : !account || expired ? <SessionAccessState kind={account ? "expired" : undefined} error={error} returnPath="/ordering/orders" onRetry={() => setRevision(value => value + 1)} />
       : <OrderHistoryDesk key={account.actorId + ':' + account.observedAt} account={account} onFailure={failed} />}
   </main>;
 }
@@ -177,7 +177,7 @@ function OrderHistoryDesk({ account, onFailure }: { account: Account; onFailure:
     </div>}
     {error !== null && <p role="alert" className={common.alert}>{message(error)}</p>}
     <section className={common.accountSection} aria-label="Daftar pesanan saya" aria-busy={busy}><h2>Pesanan yang diajukan</h2>
-      {busy && <p role="status">Memuat pesanan…</p>}{!busy && page.items.length === 0 && <EmptyState kind="first-use" title="Belum ada pesanan pada halaman ini." body="Pesanan yang diajukan dari draf akan muncul di sini, lengkap dengan statusnya." />}
+      {busy && <p role="status">Memuat pesanan…</p>}{!busy && page.items.length === 0 && <EmptyState kind="first-use" title="Belum ada pesanan pada halaman ini." body={account.actions.includes('order.submit') ? "Pesanan yang diajukan dari draf akan muncul di sini, lengkap dengan statusnya." : "Halaman ini hanya menampilkan pesanan yang diajukan dari akun Anda sendiri. Akun Anda tidak mengajukan pesanan cabang; pesanan untuk toko ditinjau di Pekerjaan saya."} />}
       {page.items.length > 0 && <ul className={styles.orderCards}>{page.items.map(order => {
         const id = order.submission.orderId, status = buyerOrderStatus(order), extra = order.quote.lines.length - 2;
         return <li key={id} className={styles.orderCard}>
@@ -204,6 +204,7 @@ function OrderHistoryDesk({ account, onFailure }: { account: Account; onFailure:
         <p>{orderDisplayAmount(selected.quote.currency, line.price.unitPrice)} per kemasan · subtotal {orderDisplayAmount(selected.quote.currency, line.catalogSubtotal)}</p></li>)}</ul>
       <h3>Tujuan pengiriman</h3><p className={styles.address}>{selected.input.delivery!.recipientName} · {selected.input.delivery!.phone}{'\n'}{selected.input.delivery!.address}{'\n'}{selected.input.delivery!.city} {selected.input.delivery!.postalCode}</p>
       {selected.input.delivery!.instructions && <p>{selected.input.delivery!.instructions}</p>}
+      {account.actions.includes('order.cancel') && !selected.progress.cancelled && <p><Link href="/ordering/reviews">Batalkan sisa pesanan ini di Peninjauan pesanan</Link></p>}
       {account.actions.some(action => ['substitution.propose', 'substitution.accept'].includes(action)) && <p><Link href={'/ordering/substitutions?order=' + selected.submission.orderId}>Lihat pengajuan dan keputusan penggantian pesanan ini</Link></p>}
       <h3>Biaya saat pengajuan</h3><p>Subtotal barang: {orderDisplayAmount(selected.quote.currency, selected.quote.catalogSubtotal)}</p>
       <p>Pajak: {orderDisplayAmount(selected.quote.currency, selected.tax)} · Biaya lain: {orderDisplayAmount(selected.quote.currency, selected.charges)}</p><p><strong>Total: {orderDisplayAmount(selected.quote.currency, selected.total)}</strong></p>

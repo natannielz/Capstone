@@ -59,7 +59,7 @@ export function ShipmentDispatchWorkspace() {
   return <main className={common.page}><header className={common.header}><div><Link href="/identity/account" className={common.brand}>Unit Toko</Link>
     <h1>Keberangkatan kiriman</h1><p>Periksa kemasan yang disiapkan, pilih lot fisik dan kurir, lalu catat barang yang diberangkatkan.</p></div><Link href="/identity/account" className={common.secondary}>Akun saya</Link></header>
     {error !== null && account !== null && <p role="alert" className={common.alert}>{message(error)}</p>}
-    {loading ? <p role="status">Memeriksa akun…</p> : !account || expired ? <SessionAccessState error={error} returnPath="/fulfillment/dispatches" onRetry={() => setRevision(value => value + 1)} />
+    {loading ? <p role="status">Memeriksa akun…</p> : !account || expired ? <SessionAccessState kind={account ? "expired" : undefined} error={error} returnPath="/fulfillment/dispatches" onRetry={() => setRevision(value => value + 1)} />
       : <DispatchDesk key={account.actorId + ':' + account.observedAt} account={account} onFailure={failed} />}
   </main>;
 }

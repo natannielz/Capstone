@@ -51,10 +51,10 @@ export function AnomalyPolicyPanel({actorId, session, observedAt, source, evalua
         if (failure instanceof AccessFailure && failure.code === 'idempotency_key_reused') {
           setDraft(null); setReenter(false); setNotice('Isi berbeda dari permintaan asli. Periksa catatan dengan referensi yang tersimpan sebelum melanjutkan.');
         } else if (!retainAnomalyPolicyReference(failure, reference !== null)) {
-          clear(original); setNotice('Permintaan ditolak tanpa perubahan kebijakan. Periksa sesi, izin, dan revisi terbaru sebelum menyusun ulang.'); await onSaved();
+          clear(original); setNotice('Permintaan ditolak tanpa perubahan kebijakan. Muat ulang halaman untuk memeriksa izin dan revisi terbaru sebelum menyusun ulang.'); await onSaved();
         } else if (failure instanceof AccessFailure && [400, 401, 403, 409].includes(failure.status)) {
           setDraft(null); setReenter(false); setNotice('Percobaan ulang ditolak. Hasil permintaan asli belum dapat dipastikan; referensi pemulihannya tetap tersimpan.');
-        } else setNotice(failure instanceof RequestNotSentError ? 'Permintaan belum dikirim. Periksa sesi dan penyimpanan peramban; gunakan permintaan yang sama saat mencoba kembali.' :
+        } else setNotice(failure instanceof RequestNotSentError ? 'Permintaan belum dikirim. Periksa koneksi dan penyimpanan peramban; gunakan permintaan yang sama saat mencoba kembali.' :
           'Hasil penyimpanan belum dapat dipastikan. Periksa catatan dengan referensi asli sebelum membuat permintaan lain.');
       }
     } finally {if (alive.current) onBusy(false);}
@@ -66,7 +66,7 @@ export function AnomalyPolicyPanel({actorId, session, observedAt, source, evalua
       if (!context().isCurrent()) return;
       if (result.status === 'confirmed') {clear(reference); setNotice(`Versi ${result.policyVersion} terkonfirmasi tersimpan dari permintaan asli.`); await onSaved();}
       else {setReenter(true); setDraft(null); setNotice('Permintaan belum terkonfirmasi. Periksa kembali, atau masukkan ulang isi permintaan semula; referensi aslinya tetap digunakan.');}
-    } catch {if (context().isCurrent()) setNotice('Catatan belum dapat diperiksa. Periksa kembali sesi dan izin konfigurasi.');}
+    } catch {if (context().isCurrent()) setNotice('Catatan belum dapat diperiksa. Muat ulang halaman, lalu periksa izin konfigurasi Anda.');}
     finally {if (alive.current) onBusy(false);}
   }
   const editable = !disabled && (!reference || reenter) && (evaluation?.current || reference !== null);

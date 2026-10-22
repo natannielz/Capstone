@@ -646,11 +646,11 @@ try {
         }
       }
     }
-    const caseOutsider = await user(config.courierToken); await caseOutsider.page.goto(origin.origin + '/fulfillment/cases'); await caseOutsider.page.getByRole('heading', { name: /^(Sesi Anda perlu diperbarui|Halaman ini di luar tugas akun Anda|Halaman belum dapat dibuka)$/ }).waitFor();
+    const caseOutsider = await user(config.courierToken); await caseOutsider.page.goto(origin.origin + '/fulfillment/cases'); await caseOutsider.page.getByRole('heading', { name: /^(Masuk untuk melanjutkan|Sesi Anda perlu diperbarui|Halaman ini di luar tugas akun Anda|Halaman belum dapat dibuka)$/ }).waitFor();
     assert.equal(await caseOutsider.page.getByRole('button', { name: /^Buka keluhan/ }).count(), 0);
     console.log('REAL_CASE_BROWSER_PASS ' + JSON.stringify({ requests: caseWrites.length, lostResponseRecovered: true, originalSaleLinked: true, requester: true, outsiderDenied: true, privateMetadataOnly: true, offlineUnsent: true, mobile: true }));
   }
-  const outsider = await user(config.courierToken); await outsider.page.goto(origin.origin + '/billing/invoices'); await outsider.page.getByRole('heading', { name: /^(Sesi Anda perlu diperbarui|Halaman ini di luar tugas akun Anda|Halaman belum dapat dibuka)$/ }).waitFor();
+  const outsider = await user(config.courierToken); await outsider.page.goto(origin.origin + '/billing/invoices'); await outsider.page.getByRole('heading', { name: /^(Masuk untuk melanjutkan|Sesi Anda perlu diperbarui|Halaman ini di luar tugas akun Anda|Halaman belum dapat dibuka)$/ }).waitFor();
   assert.equal(await outsider.page.getByRole('button', { name: /^Buka invoice/ }).count(), 0);
   assert.deepEqual(errors, []); console.log('REAL_INVOICE_BROWSER_PASS ' + JSON.stringify({ issued: writes.length, lostResponseRecovered: dropped, acceptedBaseUnits: 6, buyerDownload: true, outsiderDenied: true, offlineUnsent: true, mobile: true }));
   }

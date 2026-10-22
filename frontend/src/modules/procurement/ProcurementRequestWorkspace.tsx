@@ -27,7 +27,7 @@ const kinds = { stock_need: 'Kebutuhan stok', incoming_notice: 'Pemberitahuan ba
 const states = { submitted: 'Menunggu pemeriksaan', approved: 'Disetujui', rejected: 'Ditolak' } as const;
 const when = (value: string) => dateTimeFormatter.format(new Date(value));
 function message(error: unknown) {
-  if (error instanceof IdentityFailure) return 'Sesi belum tersedia. Masuk kembali untuk memeriksa permintaan pengadaan.';
+  if (error instanceof IdentityFailure) return 'Masuk dengan akun organisasi Anda untuk melanjutkan.';
   if (error instanceof AccessFailure || error instanceof RequestNotSentError) {
     if (error.code === 'procurement_invalid' || error.code === 'invalid_procurement_request') return 'Pilih lokasi, jalur dan tanggal, lalu periksa kemasan, jumlah, referensi yang diperlukan dan alasan.';
     if (error.code === 'procurement_view_stale' || error.code === 'procurement_request_changed') return 'Sumber lokasi, barang atau permintaan berubah. Muat data terbaru dan periksa kembali rincian.';
@@ -61,7 +61,7 @@ export function ProcurementRequestWorkspace() {
   return <main className={styles.page}><header className={styles.header}><div><Link className={styles.brand} href="/identity/account">Unit Toko</Link><h1>Permintaan pengadaan</h1>
     <p>Catat kebutuhan barang atau pemberitahuan barang masuk, lalu ajukan untuk pemeriksaan independen.</p></div><Link className={styles.secondary} href="/identity/account">Akun saya</Link></header>
     {error !== null && account !== null && <p role="alert" className={styles.alert}>{message(error)}</p>}
-    {loading ? <p role="status">Memeriksa akun dan akses…</p> : !account || sessionTiming(account.session, elapsed).expired ? <SessionAccessState error={error} returnPath={path} onRetry={() => setRevision(value => value + 1)} />
+    {loading ? <p role="status">Memeriksa akun dan akses…</p> : !account || sessionTiming(account.session, elapsed).expired ? <SessionAccessState kind={account ? "expired" : undefined} error={error} returnPath={path} onRetry={() => setRevision(value => value + 1)} />
       : <RequestDesk key={account.actorId + ':' + account.observedAt} account={account} fresh={sessionTiming(account.session, elapsed).fresh} onDenied={denied} />}
   </main>;
 }

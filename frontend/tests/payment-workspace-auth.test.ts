@@ -165,7 +165,7 @@ function assertSignedOut(harness: ReturnType<typeof mountPayment>) {
   const controls = nodes(harness.tree);
   assert.equal(controls.some(node => node.props['aria-label'] === 'Draf pembayaran' || node.type === 'form'), false);
   assert.doesNotMatch(text(harness.tree), /Private payer fixture|INV-PRIVATE-FIXTURE|Private buyer fixture|PRIVATE-BANK-REF/);
-  assert.equal(harness.find(node => node.type === 'a' && text(node.props.children) === 'Masuk kembali').props.href,
+  assert.equal(harness.find(node => node.type === 'a' && ['Masuk', 'Masuk kembali'].includes(text(node.props.children))).props.href,
     '/identity/login?returnPath=%2Fbilling%2Fpayments');
 }
 
@@ -237,6 +237,6 @@ test('mounted payment allows correction after a definitive 400 but preserves the
   assert.ok(nodes(harness.tree).some(node => node.props.value === draft.input.payerName));
   assert.ok(nodes(harness.tree).some(node => node.props.value === draft.input.bankReference));
   assert.ok(nodes(harness.tree).some(node => node.props.role === 'alert'));
-  assert.equal(nodes(harness.tree).some(node => node.type === 'a' && text(node.props.children) === 'Masuk kembali'), false);
+  assert.equal(nodes(harness.tree).some(node => node.type === 'a' && ['Masuk', 'Masuk kembali'].includes(text(node.props.children))), false);
   assert.doesNotMatch(text(harness.tree), /Draf tersimpan\./);
 });

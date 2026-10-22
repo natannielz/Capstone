@@ -24,7 +24,7 @@ const time = (value: string) => dateTimeFormatter.format(new Date(value));
 const number = (item: Shipment) => `${item.numberEntity}/${item.numberChannel}/${item.numberYear}/${item.number}`;
 function message(error: unknown) {
   if (error instanceof AccessFailure && error.status >= 400 && error.status < 500) return accessMessage(error);
-  if (error instanceof IdentityFailure) return 'Sesi perlu diperiksa kembali. Masuk menggunakan akun yang memiliki penugasan kiriman.';
+  if (error instanceof IdentityFailure) return 'Masuk dengan akun organisasi Anda untuk melanjutkan.';
   return 'Data kiriman belum dapat dimuat. Periksa koneksi lalu muat kembali.';
 }
 export function ShipmentWorkspace() {
@@ -57,7 +57,7 @@ export function ShipmentWorkspace() {
   return <main className={common.page}><header className={common.header}><div><Link href="/identity/account" className={common.brand}>Unit Toko</Link>
     <h1>Kiriman</h1><p>Periksa kemasan yang diberangkatkan, tujuan dan kurir dalam akses Anda.</p></div><Link href="/identity/account" className={common.secondary}>Akun saya</Link></header>
     {error !== null && account !== null && <p role="alert" className={common.alert}>{message(error)}</p>}
-    {loading ? <p role="status">Memeriksa akun…</p> : !account || expired ? <SessionAccessState error={error} returnPath="/fulfillment/shipments" onRetry={() => setRevision(value => value + 1)} />
+    {loading ? <p role="status">Memeriksa akun…</p> : !account || expired ? <SessionAccessState kind={account ? "expired" : undefined} error={error} returnPath="/fulfillment/shipments" onRetry={() => setRevision(value => value + 1)} />
       : <ShipmentList key={account.actorId + ':' + account.observedAt} account={account} onDenied={denied} />}
   </main>;
 }
