@@ -11,8 +11,8 @@ import {RequestNotSentError} from '../src/api/client';
 import {SessionAccessState, sessionAccessKind, sessionLoginHref} from '../src/components/workspace-kit/session-access-state';
 
 test('someone without a session is asked to sign in; only a session that ended is called expired (G-013)', () => {
-  assert.equal(sessionAccessKind(null), 'signin');
-  assert.equal(sessionAccessKind(new IdentityFailure(401, 'unauthenticated')), 'signin');
+  assert.equal(sessionAccessKind(null), 'expired', 'behind the request guard a protected page that learns "no session" talks to someone who held one (round 3)');
+  assert.equal(sessionAccessKind(new IdentityFailure(401, 'unauthenticated')), 'expired');
   assert.equal(sessionAccessKind(new IdentityFailure(401, 'session_expired')), 'expired');
   assert.equal(sessionAccessKind(new AccessFailure(409, 'session_expired')), 'expired');
   assert.equal(sessionAccessKind(new AccessFailure(409, 'actor_changed')), 'expired');
@@ -33,7 +33,7 @@ const links = (html: string) => [...html.matchAll(/<a[^>]*href="([^"]+)"[^>]*>([
 
 test('each state has exactly one heading, one body and one primary action (G-014)', () => {
   const base = {returnPath: '/inventory/sources', onRetry: () => {}};
-  const signin = render({...base, error: new IdentityFailure(401, 'unauthenticated')});
+  const signin = render({...base, error: null, kind: 'signin'});
   assert.equal(heading(signin), 'Masuk untuk melanjutkan');
   assert.deepEqual(links(signin), [['Masuk', '/identity/login?returnPath=%2Finventory%2Fsources']]);
   assert.doesNotMatch(signin, /berakhir|diperbarui|kembali/i, 'a first-time visitor is not told a session expired');
@@ -55,7 +55,9 @@ const retired = ['Sesi terverifikasi diperlukan', 'Masuk untuk mengelola', 'Masu
   'Masuk untuk menyiapkan', 'Masuk untuk mengubah', 'Masuk sebagai penerima', 'Masuk kembali dengan akun', 'Sesi dan akses perlu diperiksa kembali',
   'Sesi perlu diperiksa kembali', 'Periksa sesi dan akses', 'Sesi atau akses belum tersedia', 'Sesi Anda telah berakhir', 'Sesi belum tersedia', 'Sesi telah berakhir',
   // Round 1: per-page messages and the one name of the refresh action ("Muat ulang sesi dan akses").
-  'Sesi terverifikasi belum', 'Sesi akun berubah', 'Periksa kembali sesi akun', 'Periksa sesi terbaru', 'Perbarui sesi', '>Periksa sesi<', 'Sesi dan akses perlu'];
+  'Sesi terverifikasi belum', 'Sesi akun berubah', 'Periksa kembali sesi akun', 'Periksa sesi terbaru', 'Perbarui sesi', '>Periksa sesi<', 'Sesi dan akses perlu',
+  // Round 3: no notice points at a "Periksa sesi" control that no screen has.
+  'Periksa sesi', 'Periksa kembali sesi'];
 
 test('no page keeps its own wording for signed out, expired or missing access (G-013, G-014)', () => {
   const root = fileURLToPath(new URL('../src', import.meta.url)), offenders: string[] = [];
@@ -94,8 +96,8 @@ test('pages that lose their session mid-work say it ended, and inventory editors
 test('an API refusing a page that had a session reads as a session that ended; only the session read can say "never signed in" (round 2)', () => {
   assert.equal(sessionAccessKind(new AccessFailure(401, 'unauthenticated')), 'expired', 'an API answered 401 to a page that believed it had a session');
   assert.equal(sessionAccessKind(new RequestNotSentError(401, 'unauthenticated')), 'expired');
-  assert.equal(sessionAccessKind(new IdentityFailure(401, 'unauthenticated')), 'signin', 'the session read found no session');
-  assert.equal(sessionAccessKind(null), 'signin');
+  assert.equal(sessionAccessKind(new IdentityFailure(401, 'unauthenticated')), 'expired', 'a stale cookie found by the session read');
+  assert.equal(sessionAccessKind(null), 'expired', 'behind the request guard a protected page that learns "no session" talks to someone who held one (round 3)');
 });
 
 test('every page whose session timer can expire tells the shared state so, instead of passing a bare error (round 2)', () => {
@@ -133,4 +135,21 @@ test('no page reason points at a control that does not exist ("Periksa sesi")', 
     const source = readFileSync(new URL('../src/modules/' + file, import.meta.url), 'utf8');
     assert.doesNotMatch(source, /Periksa (kembali )?sesi/, file);
   }
+});
+
+test('a stale cookie classifies the same whether the session read or access/current noticed it (round 3)', () => {
+  const fromSessionRead = sessionAccessKind(new IdentityFailure(401, 'unauthenticated'));
+  const fromAccessCurrent = sessionAccessKind(new AccessFailure(401, 'unauthenticated'));
+  const fromApiMidWork = sessionAccessKind(new RequestNotSentError(401, 'unauthenticated'));
+  assert.equal(fromSessionRead, 'expired'); assert.equal(fromAccessCurrent, fromSessionRead); assert.equal(fromApiMidWork, fromSessionRead);
+  assert.equal(heading(render({returnPath: '/administration/accounts', onRetry: () => {}, error: new IdentityFailure(401, 'unauthenticated')})), 'Sesi Anda perlu diperbarui');
+  assert.equal(heading(render({returnPath: '/administration/accounts', onRetry: () => {}, error: new AccessFailure(401, 'unauthenticated')})), 'Sesi Anda perlu diperbarui');
+});
+
+test('the sign-in state is only ever requested explicitly; no page asks for it (round 3)', () => {
+  const root = fileURLToPath(new URL('../src/modules', import.meta.url)), offenders: string[] = [];
+  const walk = (directory: string) => { for (const name of readdirSync(directory)) { const path = join(directory, name);
+    if (statSync(path).isDirectory()) walk(path); else if (name.endsWith('.tsx') && /<SessionAccessState[^\n]*"signin"/.test(readFileSync(path, 'utf8'))) offenders.push(path.slice(root.length)); } };
+  walk(root);
+  assert.deepEqual(offenders, []);
 });

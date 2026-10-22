@@ -196,13 +196,13 @@ try {
   assert.equal((await get(target.page, '/api/v1/access/current', config.targetId)).status, 401);
   assert.equal((await post(target.page, '/api/v1/ordering/requests/query', config.targetId, {purpose: 'branch-request-history', view: 'mine'})).status, 401);
   // Suspension revokes the session: /api/v1/identity/session answers authenticated:false (no current session), so the account
-  // page shows the shared sign-in state. Should the browser have dropped the cookie too, the proxy sends it to sign-in instead.
+  // page shows the ended-session state (round 3). Should the browser have dropped the cookie too, the proxy sends it to sign-in instead.
   await target.page.reload();
   await target.page.waitForFunction(() => location.pathname === '/identity/login' || document.querySelector('section[aria-labelledby="workspace-access-state"]') !== null);
   if (new URL(target.page.url()).pathname === '/identity/login') assert.equal(new URL(target.page.url()).searchParams.get('returnPath'), '/identity/account');
   else {
     const signedOut = target.page.locator('section[aria-labelledby="workspace-access-state"]');
-    await signedOut.getByRole('heading', {name: 'Masuk untuk melanjutkan', exact: true}).waitFor(); await signedOut.getByRole('link', {name: 'Masuk', exact: true}).waitFor();
+    await signedOut.getByRole('heading', {name: 'Sesi Anda perlu diperbarui', exact: true}).waitFor(); await signedOut.getByRole('link', {name: 'Masuk kembali', exact: true}).waitFor();
   }
   const freshTarget = await user('target'); await freshTarget.page.goto(new URL('/identity/account', origin).href);
   assert.equal((await get(freshTarget.page, '/api/v1/access/current', config.targetId)).status, 401);

@@ -77,7 +77,7 @@ function PrivatePhoto({actorId, item, isCurrent}: Props) {
         // eslint-disable-next-line @next/next/no-img-element
         <img src={state.url} alt={`Foto ${item.familyName} — ${item.definition.packageLabel}`} onError={() => { if (activeUrl.current !== state.url) return; revoke(); setState({kind: 'error', message: 'Foto belum dapat ditampilkan. Muat ulang untuk memeriksa kembali.'}); }}/>
         : <div className={styles.buyerPhotoState}>{state.kind === 'error' ? <ImageOff size={36} strokeWidth={1.25} aria-hidden="true"/> : <PackageOpen size={40} strokeWidth={1.1} aria-hidden="true"/>}
-          {state.kind !== 'deferred' && <p role="status">{state.kind === 'loading' ? 'Memuat foto…' : state.kind === 'none' ? 'Foto belum tersedia' : state.kind === 'hidden' ? 'Foto disembunyikan. Periksa kembali sesi dan koneksi.' : state.message}</p>}</div>}
+          {state.kind !== 'deferred' && <p role="status">{state.kind === 'loading' ? 'Memuat foto…' : state.kind === 'none' ? 'Foto belum tersedia' : state.kind === 'hidden' ? 'Foto disembunyikan. Pilih muat ulang foto, atau periksa koneksi.' : state.message}</p>}</div>}
     </div>
     {photoRefreshOffered(state.kind) && <button type="button" className={styles.buyerPhotoRefresh} aria-label={`Muat ulang foto ${item.code}`} onClick={refresh}><RefreshCw size={14} aria-hidden="true"/>Muat ulang foto</button>}
   </section>;

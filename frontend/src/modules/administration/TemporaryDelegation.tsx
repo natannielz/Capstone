@@ -43,7 +43,8 @@ export function TemporaryDelegation() {
     let active = true; const controller = new AbortController();
     void (async () => {try {
       const session = await identity.session(controller.signal), current = await access.current();
-      if (!session.authenticated || !session.account || session.account.userId !== current.userId) throw new IdentityFailure(401, 'unauthenticated');
+      if (!session.authenticated || !session.account) throw new IdentityFailure(401, 'unauthenticated');
+      if (session.account.userId !== current.userId) throw new AccessFailure(409, 'actor_changed');
       if (active) {setAccount({actorId: current.userId, actions: current.allowedActions, session, observed: performance.now()}); setElapsed(0); setError(null);}
     } catch (failure) {if (active) {setAccount(null); setError(failure);}}})();
     return () => {active = false; controller.abort();};
