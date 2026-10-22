@@ -358,7 +358,7 @@ async function procurementToReceipt() {
     await review.getByRole('checkbox').check(); await review.getByRole('button', { name: 'Simpan pemberitahuan pemasok', exact: true }).click();
     await pengadaan.page.getByText('Pemberitahuan pemasok tersimpan. Penerimaan fisik belum dicatat.', { exact: true }).waitFor();
     const savedNotice = pengadaan.page.locator('body');
-    { const text = await savedNotice.innerText(); console.log('GOLDEN_JOURNEY_OBSERVATION ' + JSON.stringify({ step: 'B5', savedNoticeNamesOrder: text.includes(order), numbers: text.match(/[A-Z]{2,3}-[0-9]{6}/g) })); }
+    await savedNotice.getByText(order, { exact: false }).first().waitFor();
     // Same as B1/B3: the notice list beside the saved notice still says "Belum ada pemberitahuan pemasok." (F-022).
     console.log('GOLDEN_JOURNEY_OBSERVATION ' + JSON.stringify({ step: 'B5', noticeListedWithoutReload: await pengadaan.page.getByRole('button').filter({ hasText: delivery }).count() > 0 }));
     await capture(pengadaan.page, 'B5-notice');
@@ -369,7 +369,7 @@ async function procurementToReceipt() {
     await gudang.page.goto(origin.origin + '/procurement/receiving'); await choose(gudang.page, 'Rincian penerimaan pengadaan');
     await gudang.page.getByRole('button').filter({ hasText: delivery }).first().click();
     const detail = gudang.page.getByRole('region', { name: 'Rincian penerimaan pengadaan', exact: true }); await detail.waitFor();
-    assert.ok((await gudang.page.locator('body').innerText()).includes(order), 'The notice detail names ' + order);
+    await gudang.page.getByText(order, { exact: false }).first().waitFor();
     await detail.getByRole('button', { name: 'Catat penerimaan fisik koli', exact: true }).click();
     for (const [label, value] of [['Tanggal penerimaan fisik', journey.businessDate], ['Referensi penerimaan fisik', 'SYNTHETIC-CONTAINER-INTAKE-GOLDEN'], ['Koli cocok pada penerimaan ini', '3'],
       ['Koli lebih pada penerimaan ini', '1'], ['Koli ditahan pada penerimaan ini', '1'], ['Perbedaan dan tindak lanjut', 'Satu koli lebih ditahan untuk diperiksa'],
@@ -471,10 +471,14 @@ async function secondOrderAndStoreRejection() {
     await addToCart(pemohon, 'S2');
     await pemohon.page.getByRole('link', { name: 'Lanjut ke pengajuan', exact: true }).click(); await pemohon.page.waitForURL(url => url.pathname === '/ordering/checkout');
     const earlier = pemohon.page.getByRole('heading', { name: 'Pesanan ' + first.order + ' tercatat', exact: true });
-    const fresh = pemohon.page.getByRole('button', { name: 'Tinjau pesanan dan biaya', exact: true });
-    await earlier.or(fresh).first().waitFor(); await capture(pemohon.page, 'S2-second-checkout');
+    const review = pemohon.page.getByRole('heading', { name: 'Periksa sebelum mengajukan', exact: true });
+    await pemohon.page.getByRole('button', { name: 'Tinjau pesanan dan biaya', exact: true }).click();
+    await earlier.or(review).first().waitFor(); await capture(pemohon.page, 'S2-second-checkout');
     assert.equal(await earlier.count(), 0, 'The second keranjang must not reopen ' + first.order + ' as already recorded (F-030)');
-    await pemohon.page.goto(origin.origin + '/cart'); rejected = await checkoutFromCart(pemohon, 'S2');
+    await pemohon.page.getByRole('button', { name: /^Ajukan (pesanan|untuk persetujuan)$/ }).click();
+    await pemohon.page.getByRole('heading', { name: /^Pesanan PSN-[0-9]{6} tercatat$/ }).waitFor();
+    const submit = committed('/api/v1/ordering/orders'); rejected = { orderId: submit.at(-1).response.orderId, suborderId: submit.at(-1).response.suborderIds[0] };
+    rejected.order = recordNumber('order', rejected.orderId);
     assert.notEqual(rejected.order, first.order);
   });
   await step('S3', 'peninjau-toko', 'rejects the store part of another order and the buyer sees it', async () => {
