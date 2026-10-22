@@ -1,6 +1,8 @@
 /* Stock source desk on the UI standard (U-032): tokens only, spacing on the 4/8/12/16/24/32/48 scale, no eyebrow, no stripes,
    no page badge (status uses the shared Badge), the one focus ring from foundation.css. */
 .desk { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, .9fr); align-items: start; gap: var(--space-6); }
+/* Columns of a desk sit side by side: the Section-after-Section flow margin does not apply here. */
+.desk > :global(.ui-section) { margin-top: 0; }
 .notice { border-radius: var(--radius-control); background: var(--secondary); color: var(--secondary-foreground); padding: var(--space-4) var(--space-6); }
 .notice p { margin: var(--space-2) 0 0; }
 .guide { padding: var(--space-6); border-radius: var(--radius-card); background: var(--muted); }

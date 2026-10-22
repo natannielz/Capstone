@@ -30,6 +30,8 @@
 .contents strong { font-size: 28px; line-height: 1; font-variant-numeric: tabular-nums; }
 .contents span { display: block; font-size: 14px; color: var(--muted-foreground); margin-top: var(--space-2); }
 .reviewFocus { margin-bottom: var(--space-6); }
+/* Columns of a desk sit side by side: the Section-after-Section flow margin does not apply here. */
+.desk > :global(.ui-section) { margin-top: 0; }
 /* A review or confirmation inside a section card: an inset panel, never a second bordered card (U-008). */
 .inset { display: grid; gap: var(--space-3); padding: var(--space-4); border-radius: var(--radius-control); background: var(--muted); min-width: 0; overflow-wrap: anywhere; }
 .inset h3, .inset p { margin: 0; }
