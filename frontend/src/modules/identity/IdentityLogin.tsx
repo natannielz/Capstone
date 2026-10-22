@@ -60,6 +60,8 @@ export function IdentityLogin() {
       <Link className={buttonClassName({ variant: "secondary" })} href="/">Beranda</Link>
     </header>
     <main className={styles.formSide} id="identity-content" tabIndex={-1}>
+      {/* The site-wide skip link ("Lewati ke konten utama") lands on the form too, so no page content sits outside a valid skip target. */}
+      <div id="konten-utama" tabIndex={-1} className={styles.target}>
       <section className={styles.sheet} aria-label="Masuk ke Unit Toko" aria-busy={loading}>
         <p className={styles.sheetBar}>Akun organisasi</p>
         <div className={styles.sheetBody}>
@@ -94,7 +96,7 @@ export function IdentityLogin() {
           <noscript><p className={styles.alert}>Aktifkan JavaScript untuk menyiapkan perlindungan formulir masuk.</p></noscript>
         </div>
         <div className={styles.support}><h2>Perlu bantuan masuk?</h2><p>Hubungi pengelola cabang atau organisasi untuk memeriksa akses dan undangan, atau ikuti proses pemulihan akun resmi. Jangan bagikan kata sandi atau kode verifikasi Anda.</p></div>
-      </section>
+      </section></div>
     </main>
     <aside className={styles.context} aria-labelledby="login-context">
       <p id="login-context" className={styles.statement}>Satu akun organisasi untuk katalog, permintaan cabang, dan tugas toko.</p>

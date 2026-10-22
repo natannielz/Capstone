@@ -95,11 +95,14 @@ export function IdentityAccount({ variant = "account" }: { variant?: "account" |
   const elsewhere = home && !loading && session?.account && !timing.expired && navigationError === null && !isStaffActor(actions) ? homeFor(actions) : null;
   useEffect(() => { if (elsewhere && elsewhere !== HOME_PATH) router.replace(elsewhere); }, [elsewhere, router]);
   const door = storeDoor(actions), personalHome = homeFor(actions);
+  // "Akun saya": the way back to the person's home is the header's back link (ui-standard §4), shown in the same state as before.
+  const backLink = !home && !loading && session?.account && !timing.expired && navigationError === null ? personalHome === HOME_PATH ? <Link href={HOME_PATH}>Kembali ke Pekerjaan saya</Link>
+    : personalHome === "/shop" ? <Link href="/shop">Kembali ke toko</Link> : <Link href="/">Kembali ke beranda</Link> : undefined;
 
   return <main className={styles.page}>
     <a className={styles.skip} href="#account-content">Langsung ke akun</a>
     <header className={styles.masthead}><div className={styles.mastheadInner}><Brand href="/" context="Layanan organisasi" /></div></header>
-    <div className={styles.pageHeader}><PageHeader title={home ? "Pekerjaan saya" : "Akun saya"}
+    <div className={styles.pageHeader}><PageHeader breadcrumb={backLink} title={home ? "Pekerjaan saya" : "Akun saya"}
       description={home ? (session?.account?.displayName ? "Halo, " + session.account.displayName + ". " : "") + "Pekerjaan yang menunggu Anda dan ruang kerja sesuai penugasan."
         : "Profil, verifikasi dua langkah, kontak dan keluar dari Unit Toko."}
       secondaryAction={<Button disabled={loading} onClick={reload}>Muat ulang sesi dan akses</Button>} /></div>
@@ -119,8 +122,6 @@ export function IdentityAccount({ variant = "account" }: { variant?: "account" |
           <p className={styles.help}>Profil, verifikasi dua langkah untuk persetujuan, kontak dan keluar ada di <Link href="/identity/account#profile-heading">Akun saya</Link>.</p>
         </>}
         {!home && <>
-        {navigationError === null && <p className={styles.help}>{personalHome === HOME_PATH ? <Link href={HOME_PATH}>Kembali ke Pekerjaan saya</Link>
-          : personalHome === "/shop" ? <Link href="/shop">Kembali ke toko</Link> : <Link href="/">Kembali ke beranda</Link>}</p>}
         <div className={styles.accountGrid}>
           <section className={styles.card} aria-labelledby="profile-heading"><span className={styles.status}>Akun terverifikasi</span>
             <h2 id="profile-heading" tabIndex={-1}>{session.account.displayName ?? "Akun organisasi"}</h2>

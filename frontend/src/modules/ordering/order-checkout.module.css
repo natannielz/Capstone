@@ -1,7 +1,7 @@
 /* Checkout (U-028): the storefront container, the standard page header, a 720 px form column with the summary beside it
    (ui-standard §3.1: content-default, form 1fr, summary 360 px). Tokens and the spacing scale only. */
 .page { min-height: 65vh; }
-:global([data-store-frame]) .page { width: min(var(--content-wide), 100% - 2 * var(--gutter)); max-width: none; margin-inline: auto; padding: var(--space-6) 0 var(--space-12); background: var(--background); }
+:global([data-store-frame]) .page { width: min(var(--content-wide), 100% - 2 * var(--gutter)); max-width: none; margin-inline: auto; padding: var(--space-8) 0 var(--space-12); background: var(--background); }
 .back { display: inline-flex; align-items: center; gap: var(--space-2); min-height: var(--control-h); color: var(--muted-foreground); font-size: 13px; }
 .progress { max-width: var(--content-default); margin: 0 0 var(--space-6); padding: var(--space-2) 0; border-block: 1px solid var(--border); }
 .progress ol { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
@@ -87,7 +87,7 @@
   .delivery { grid-template-columns: minmax(0, 1fr); gap: var(--space-4); }
 }
 @media (max-width: 639px) {
-  :global([data-store-frame]) .page { padding-top: var(--space-4); }
+  :global([data-store-frame]) .page { padding-top: var(--space-6); }
   .progress li > a svg, .progress li > span svg { display: none; }
   .progress li > a, .progress li > span { padding: 0 var(--space-2); }
   .draft, .panel, .summary, .shipping, .confirmed { padding: var(--space-4); }

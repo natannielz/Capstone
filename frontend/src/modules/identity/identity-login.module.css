@@ -59,3 +59,4 @@
   .support { padding: var(--space-4); }
 }
 @media (prefers-reduced-motion: reduce) { .loading > span { animation: none; } }
+.target { display: grid; justify-items: center; width: 100%; outline: none; }

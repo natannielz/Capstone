@@ -69,7 +69,9 @@
   .search { display: none; }
   .mobileSearch { display: flex; margin: 0 var(--gutter) var(--space-3); }
   .actions { margin-left: auto; }
-  .accountButton span, .accountButton svg:last-child { display: none; }
+  .accountButton svg:last-child { display: none; }
+  /* The name stays the button's accessible name on phones; only its text is hidden. */
+  .accountButton span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .footerGrid { grid-template-columns: 1fr 1fr; }
   .footerGrid > div:first-child { grid-column: 1 / -1; }
   .footer { margin-bottom: calc(56px + env(safe-area-inset-bottom)); }
@@ -81,6 +83,6 @@
 }
 
 /* Cart count on the icon, as marketplace headers show it. */
-.cartIcon { position: relative; display: inline-flex; }
-.badge { position: absolute; top: -8px; right: -12px; min-width: 18px; height: 18px; padding: 0 var(--space-1); border-radius: var(--radius-pill); background: var(--destructive);
+.cartIcon { position: relative; display: inline-flex; margin-right: var(--space-1); }
+.badge { position: absolute; top: -8px; right: -10px; min-width: 18px; height: 18px; padding: 0 var(--space-1); border-radius: var(--radius-pill); background: var(--destructive);
   color: var(--primary-foreground); font-size: 12px; font-weight: 700; line-height: 18px; text-align: center; }

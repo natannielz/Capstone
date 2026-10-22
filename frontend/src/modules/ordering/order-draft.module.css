@@ -43,4 +43,4 @@
 .detail:focus { outline: none; }
 .detail h2, .detail h3, .detail p { margin: 0; }
 .detail ul { display: grid; gap: var(--space-3); margin: 0; padding-left: var(--space-6); }
-@media (max-width: 639px) { .detail { padding: var(--space-4); } }
+@media (max-width: 639px) { .detail { padding: var(--space-4); } .filterPanel > summary { width: 100%; } }
