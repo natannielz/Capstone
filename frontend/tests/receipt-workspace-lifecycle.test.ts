@@ -11,6 +11,7 @@ import * as identity from '../src/modules/identity/identity-workflow';
 import * as workflow from '../src/modules/administration/workflow';
 import * as operations from '../src/modules/administration/operation-journal';
 import * as navigation from '../src/modules/administration/operation-recovery-navigation';
+import * as returnQuery from '../src/modules/identity/return-query';
 
 const actor = '17', token = 'a'.repeat(64), at = '2026-10-08T02:00:00Z';
 const review: receipts.ReceiptReview = {challengeId: '21', shipmentId: '22', documentId: '23', documentVersion: '1', documentHash: 'b'.repeat(64),
@@ -80,6 +81,7 @@ function mountReceipt(confirmMode: 'lost' | '401' = 'lost') {
       if (!previous || changed(previous.dependencies, dependencies)) active.slots[index] = {value: callback, dependencies}; return (active.slots[index] as {value: unknown}).value;},
     useEffect(effect: () => void | (() => void), dependencies?: readonly unknown[]) {pending.push({frame: active, index: position++, effect, dependencies});}};
   const runtimeRequire = createRequire(resolve('package.json')), ts = runtimeRequire('typescript') as typeof import('typescript'), marker = () => null;
+  let sessionStateKit: Record<string, unknown> | undefined;
   const imports = (name: string): unknown => {
     if (name === 'react') return react;
     if (name === 'react/jsx-runtime') return runtimeRequire(name);
@@ -97,6 +99,9 @@ function mountReceipt(confirmMode: 'lost' | '401' = 'lost') {
     if (name === './ReceiptProofPanel') return {ReceiptProofPanel: marker};
     if (name === './receipt-proof-client') return {createReceiptProofGateway: () => ({})};
     if (name === '@/lib/format') return displayFormat;
+    if (name === '@/modules/identity/return-query') return returnQuery;
+    if (name === '@/modules/administration/access.module.css') return {__esModule: true, default: new Proxy({}, {get: (_target, key) => String(key)})};
+    if (name === '@/components/workspace-kit/session-access-state') return sessionStateKit ??= load('src/components/workspace-kit/session-access-state.tsx');
     throw new Error('Unexpected mounted receipt import: ' + name);
   };
   function load(file: string) {
@@ -150,7 +155,8 @@ function mountReceipt(confirmMode: 'lost' | '401' = 'lost') {
 function assertSignedOut(harness: ReturnType<typeof mountReceipt>) {
   assert.equal(nodes(harness.tree).some(node => node.props['aria-label'] === 'Konfirmasi penerimaan' || node.type === 'form'), false);
   assert.doesNotMatch(text(harness.tree), /Private|SKU-PRIVATE/);
-  const href = harness.find(node => node.type === 'a' && text(node.props.children) === 'Masuk sebagai penerima').props.href;
+  // The shared signed-out state (G-014): one heading and one sign-in link back to this page, never carrying the QR token.
+  const href = harness.find(node => node.type === 'a' && ['Masuk', 'Masuk kembali'].includes(text(node.props.children))).props.href;
   assert.equal(href, '/identity/login?returnPath=%2Ffulfillment%2Freceive'); assert.equal(String(href).includes(token), false);
 }
 
@@ -190,7 +196,7 @@ test('mounted recipient clears private content on confirmation or recovery 401 a
     assert.equal(harness.button('Konfirmasi penerimaan').props.disabled, true);
     await harness.click('Periksa hasil'); assertSignedOut(harness); assert.deepEqual(journal.list(actor), [original]);
     staleConfirm(); await harness.settle(); assert.equal(harness.writes.length, 1);
-    harness.recoveryReply('malformed'); await harness.click('Perbarui sesi dan akses'); await harness.click('Periksa hasil');
+    harness.recoveryReply('malformed'); await harness.click('Periksa ulang'); await harness.click('Periksa hasil');
     assert.deepEqual(journal.list(actor), [original]); assert.equal(harness.writes.length, 1);
     assert.equal(nodes(harness.tree).some(node => node.type === 'form' || node.type === 'button' && text(node.props.children) === 'Periksa kiriman'), false);
     harness.recoveryReply('unconfirmed'); await harness.click('Periksa hasil');

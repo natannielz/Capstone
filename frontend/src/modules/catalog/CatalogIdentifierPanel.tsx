@@ -26,7 +26,7 @@ export function useCatalogIdentifierRecovery(actorId: string) {
 }
 export type CatalogIdentifierRecovery = ReturnType<typeof useCatalogIdentifierRecovery>;
 function message(error: unknown) {
-  if (error instanceof RequestNotSentError) return 'Permintaan belum dikirim. Periksa sesi, isian, dan penyimpanan browser sebelum melanjutkan.';
+  if (error instanceof RequestNotSentError) return 'Permintaan belum dikirim. Periksa isian dan penyimpanan browser, lalu kirim lagi.';
   if (error instanceof AccessFailure && error.status === 403) return 'Izin pada cakupan ini perlu diperiksa kembali. Referensi hasil yang belum pasti tetap disimpan.';
   if (error instanceof AccessFailure && error.status === 409) return 'Versi atau isi sumber berubah. Muat data terbaru; hasil permintaan asli yang belum pasti tetap perlu diperiksa.';
   return 'Hasil belum dapat dipastikan. Gunakan referensi asli pada bagian pemulihan kode; jangan membuat permintaan pengganti.';

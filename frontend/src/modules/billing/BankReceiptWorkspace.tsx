@@ -67,7 +67,7 @@ export function BankReceiptWorkspace() {
   const denied = useCallback((failure: unknown) => { if (failure instanceof AccessFailure && failure.code !== 'step_up_required' && (failure.status === 401 || failure.status === 403 || failure.code === 'actor_changed')) { setAccount(null); setError(failure); } }, []);
   return <main className={common.page}><header className={common.header}><div><Link href="/identity/account" className={common.brand}>Unit Toko</Link><h1>Penerimaan bank</h1><p>Periksa dana masuk secara independen dan telusuri pencatatan kasnya.</p></div></header>
     {error !== null && account !== null && <p role="alert" className={common.alert}>{message(error)}</p>}
-    {loading ? <p role="status">Memeriksa akun…</p> : !account || sessionTiming(account.session, elapsed).expired ? <SessionAccessState error={error} returnPath="/billing/bank-receipts" onRetry={() => setRefresh(value => value + 1)} />
+    {loading ? <p role="status">Memeriksa akun…</p> : !account || sessionTiming(account.session, elapsed).expired ? <SessionAccessState kind={account ? "expired" : undefined} error={error} returnPath="/billing/bank-receipts" onRetry={() => setRefresh(value => value + 1)} />
       : <ReceiptDesk key={account.actorId + ':' + account.observedAt} account={account} fresh={sessionTiming(account.session, elapsed).fresh} onDenied={denied} />}
   </main>;
 }

@@ -23,7 +23,7 @@ const path = '/ordering/spending-policies', readPermission = 'order.spending.pol
 const when = (value: string) => dateTimeFormatter.format(new Date(value));
 const status = { pending: 'Menunggu pemeriksaan', approved: 'Disetujui', rejected: 'Ditolak' } as const;
 function message(error: unknown) {
-  if (error instanceof IdentityFailure) return 'Sesi belum tersedia. Masuk kembali untuk memeriksa aturan belanja.';
+  if (error instanceof IdentityFailure) return 'Masuk dengan akun organisasi Anda untuk melanjutkan.';
   if (error instanceof AccessFailure || error instanceof RequestNotSentError) {
     if (error.code === 'spending_policy_invalid' || error.code === 'order_spending_policy_invalid') return 'Pilih aturan, isi ambang jika diperlukan, tentukan masa berlaku dan sertakan alasan.';
     if (error.code === 'order_spending_policy_changed' || error.code === 'spending_policy_view_stale') return 'Unit atau aturan berubah. Muat data terbaru, lalu periksa ulang pengajuan.';
@@ -57,7 +57,7 @@ export function OrderSpendingPolicyWorkspace() {
   return <main className={styles.page}><header className={styles.header}><div><Link href="/identity/account" className={styles.brand}>Unit Toko</Link>
     <h1>Aturan persetujuan belanja</h1><p>Tentukan kapan pesanan cabang atau divisi perlu diperiksa sebelum diproses.</p></div><Link className={styles.secondary} href="/identity/account">Akun saya</Link></header>
     {error !== null && account !== null && <p role="alert" className={styles.alert}>{message(error)}</p>}
-    {loading ? <p role="status">Memeriksa akun dan akses…</p> : !account || sessionTiming(account.session, elapsed).expired ? <SessionAccessState error={error} returnPath={path} onRetry={() => setRevision(value => value + 1)} />
+    {loading ? <p role="status">Memeriksa akun dan akses…</p> : !account || sessionTiming(account.session, elapsed).expired ? <SessionAccessState kind={account ? "expired" : undefined} error={error} returnPath={path} onRetry={() => setRevision(value => value + 1)} />
       : <PolicyDesk key={account.actorId + ':' + account.observedAt} account={account} elapsed={elapsed} fresh={sessionTiming(account.session, elapsed).fresh} onDenied={denied} />}
   </main>;
 }

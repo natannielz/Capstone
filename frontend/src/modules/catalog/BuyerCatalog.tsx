@@ -24,8 +24,8 @@ const price = (value: BuyerVariant['currentPrice']) => {
 };
 function message(error: unknown) {
   if (error instanceof AccessFailure || error instanceof IdentityFailure) {
-    if (error.code === 'actor_changed') return 'Akun di peramban berubah. Periksa sesi sebelum melanjutkan.';
-    if (error.status === 401) return 'Sesi telah berakhir. Masuk kembali untuk membuka katalog.';
+    if (error.code === 'actor_changed') return 'Akun di peramban berubah. Muat ulang halaman sebelum melanjutkan.';
+    if (error.status === 401) return 'Masuk dengan akun organisasi Anda untuk membuka katalog.';
     if (error.status === 403) return 'Katalog ini belum tersedia untuk akun Anda. Hubungi pengelola akun.';
     if (error.status === 409) return 'Data berubah saat dimuat. Muat kembali untuk melihat informasi terbaru.';
     if (error.status >= 500) return 'Layanan katalog belum tersedia. Coba lagi nanti atau hubungi pengelola organisasi Anda.';
@@ -59,7 +59,7 @@ function ProductPage({ item, account, isCurrent, category }: { item: BuyerVarian
 }
 function PackageReview({ item, account, isCurrent, requestOnly }: { item: BuyerVariant; account: Account; isCurrent: () => boolean; requestOnly: boolean }) {
   return <div className={styles.packageLayout}><div className={styles.packageFacts}>
-    {requestOnly ? <div className={styles.photoPlaceholder}><PackageOpen size={42} strokeWidth={1} aria-hidden="true" /><p>Foto belum tersedia</p></div> : <CatalogBuyerPhoto actorId={account.actorId} item={item} isCurrent={isCurrent}/>}
+    <CatalogBuyerPhoto actorId={account.actorId} item={item} isCurrent={isCurrent}/>
     <span className={styles.category}>{item.categoryCode}</span><h2 id="buyer-package-title" className={styles.packageTitle}>{item.familyName} — {item.definition.packageLabel}</h2>
     <BuyerCodeLabel item={item} />{item.description && <p className={styles.description}>{item.description}</p>}
     <p className={styles.contents}>{formatNumber(item.definition.baseUnitsPerPackage)} <span>{item.definition.baseUnitCode} per kemasan</span></p>
@@ -194,7 +194,7 @@ export function BuyerCatalog({ publicId, returnPath = '/shop', requestOnly = fal
           <button key={value} type="button" aria-pressed={layout === value} onClick={() => setLayout(value)}><Icon size={16} aria-hidden="true" />{label}</button>)}</div>
 </div></section> : (requestOnly || error !== null) && <div className={styles.detailToolbar}><Link href={returnPath}>Kembali ke katalog</Link><button className={shared.secondary} disabled={busy} onClick={refresh}>Muat kembali kemasan</button></div>}
     {error !== null && <div role={needsSignIn ? 'status' : 'alert'} className={styles.accessState}><div className={styles.stateIcon}><ShieldCheck size={27} strokeWidth={1.5} aria-hidden="true" /></div><div><h2>{needsSignIn ? 'Katalog khusus untuk akun Anda.' : 'Katalog belum dapat ditampilkan.'}</h2><p>{needsSignIn ? 'Masuk dengan akun yang telah disetujui untuk melihat pilihan kemasan dan mengajukan kebutuhan cabang Anda.' : message(error)}</p>{!needsSignIn && <p className={styles.stateHint}>Daftar barang akan tampil setelah layanan tersedia dan akses akun Anda terverifikasi.</p>}<Link className={styles.stateAction} href={'/identity/login?returnPath=' + encodeURIComponent(signInPath)}>Masuk atau periksa akun <ArrowRight size={17} aria-hidden="true" /></Link></div></div>}
-    {expired && <p role="alert" className={shared.alert}>Sesi telah berakhir. Masuk kembali untuk membuka katalog.</p>}
+    {expired && <p role="alert" className={shared.alert}>Sesi Anda perlu diperbarui. Masuk kembali untuk membuka katalog.</p>}
     {(expired || !account && !busy && error === null) && <Link className={styles.stateAction} href={'/identity/login?returnPath=' + encodeURIComponent(signInPath)}>Masuk atau periksa akun <ArrowRight size={17} aria-hidden="true" /></Link>}
     {notice && <p role="status">{notice}</p>}
     {publicId !== undefined ? <section className={styles.packagePage} aria-busy={busy} aria-label="Rincian kemasan">{busy ? <p role="status">Memuat kemasan untuk akun Anda…</p> : account && !expired && selected && (requestOnly ? <PackageReview item={selected} account={account} isCurrent={current} requestOnly={requestOnly} />
@@ -210,7 +210,7 @@ export function BuyerCatalog({ publicId, returnPath = '/shop', requestOnly = fal
         <button type="button" className={shared.secondary} disabled={detailBusy !== null} onClick={() => navigateCatalog({ search: '', offset: 0 }, true)}>Hapus pencarian dan filter</button></>
         : <><h3>Belum ada kemasan di katalog Anda.</h3><p>Kemasan akan tampil setelah toko menerbitkannya untuk akun Anda.</p></>}</div>
         : <ul className={layout === 'list' ? `${styles.grid} ${styles.list}` : styles.grid}>{items.map(item => <li className={styles.card} key={item.skuId}>
-        {requestOnly ? <div className={styles.photoPlaceholder}><PackageOpen size={48} strokeWidth={1} aria-hidden="true" /><p>Foto belum tersedia</p></div> : <CatalogBuyerPhoto actorId={account.actorId} item={item} isCurrent={current}/>}
+        <CatalogBuyerPhoto actorId={account.actorId} item={item} isCurrent={current}/>
         <span className={styles.category}>{categoryName(item.categoryCode)}</span><h2>{item.familyName}</h2><BuyerCodeLabel item={item} /><h3>{item.definition.packageLabel}</h3>
         <p className={styles.contents}>{formatNumber(item.definition.baseUnitsPerPackage)} <span>{item.definition.baseUnitCode} per kemasan</span></p>
         {!requestOnly && <p className={styles.price}>{price(item.currentPrice)}<span> per {item.definition.packageLabel}</span></p>}

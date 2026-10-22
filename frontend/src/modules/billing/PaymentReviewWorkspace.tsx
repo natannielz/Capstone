@@ -42,7 +42,7 @@ const date = (value: string) => dateFormatter.format(new Date(value));
 function message(error: unknown) {
   if (error instanceof AccessFailure && (error.code.startsWith('evidence_') || error.code === 'payment_response_invalid')) return 'Bukti tidak dapat dibuka dengan aman. Muat pengajuan terbaru atau hubungi penanggung jawab pemeriksaan bukti.';
   if (error instanceof AccessFailure && error.code === 'payment_draft_changed') return 'Pengajuan berubah. Muat kembali pengajuan sebelum melanjutkan pemeriksaan.';
-  if (error instanceof IdentityFailure) return 'Masuk kembali dengan akun yang memiliki akses pemeriksaan pembayaran.';
+  if (error instanceof IdentityFailure) return 'Masuk dengan akun organisasi Anda untuk melanjutkan.';
   return accessMessage(error);
 }
 export function PaymentReviewWorkspace() {
@@ -66,7 +66,7 @@ export function PaymentReviewWorkspace() {
   const denied = useCallback((failure: unknown) => { if (failure instanceof AccessFailure && (failure.status === 401 || failure.status === 403 || failure.code === 'actor_changed')) { setAccount(null); setError(failure); } }, []);
   return <main className={common.page}><header className={common.header}><div><Link href="/identity/account" className={common.brand}>Unit Toko</Link><h1>Pemeriksaan pembayaran</h1><p>Bandingkan pengajuan cabang, tagihan, bukti asli dan saran pembacaan.</p></div><Link href="/billing/invoices" className={common.secondary}>Lihat tagihan</Link></header>
     {error !== null && account !== null && <p role="alert" className={common.alert}>{message(error)}</p>}
-    {loading ? <p role="status">Memeriksa akun…</p> : !account || sessionTiming(account.session, elapsed).expired ? <SessionAccessState error={error} returnPath="/billing/payment-reviews" onRetry={() => setRefresh(value => value + 1)} />
+    {loading ? <p role="status">Memeriksa akun…</p> : !account || sessionTiming(account.session, elapsed).expired ? <SessionAccessState kind={account ? "expired" : undefined} error={error} returnPath="/billing/payment-reviews" onRetry={() => setRefresh(value => value + 1)} />
       : <ReviewDesk key={account.actorId + ':' + account.observedAt} account={account} fresh={sessionTiming(account.session, elapsed).fresh} onDenied={denied} />}
   </main>;
 }

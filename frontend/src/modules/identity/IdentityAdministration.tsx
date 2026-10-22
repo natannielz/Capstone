@@ -1,5 +1,6 @@
 "use client";
 
+import { SessionAccessState, lostAccessKind } from '@/components/workspace-kit/session-access-state';
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { components } from "../../api/generated/schema";
@@ -43,18 +44,20 @@ export function IdentityAdministration() {
     window.addEventListener("pageshow", restore);
     return () => { active = false; window.removeEventListener("pageshow", restore); };
   }, [refresh]);
+  // A session lost while the page was open is a session that ended, not a first sign-in (G-014).
+  const [lost, setLost] = useState(false);
   const onFailure = useCallback((failure: unknown) => {
     if (failure instanceof AccessFailure && (failure.status === 401 || failure.code === "actor_changed")) {
-      sequence.current++; setLoaded(null); setLoading(false); setError(failure);
+      sequence.current++; setLoaded(null); setLoading(false); setError(failure); setLost(true);
     }
   }, []);
   return <main className={styles.page}>
     <header className={styles.header}><div><Link className={styles.brand} href="/identity/account">Unit Toko</Link><h1>Akun dan undangan</h1>
       <p>Kelola akun terverifikasi, tinjau undangan, dan catat kebutuhan pemulihan sesuai lingkup tugas.</p></div></header>
-    {error !== null && <p role="alert" className={styles.alert}>{accessMessage(error)}</p>}
+    {error !== null && loaded && <p role="alert" className={styles.alert}>{accessMessage(error)}</p>}
     {loaded ? <IdentityAdministrationBody key={`${loaded.current.userId}:${revision}`} {...loaded} onFailure={onFailure} onRefresh={refresh} />
-      : <section className={styles.state} aria-busy={loading}><h2>{loading ? "Memeriksa akses" : error instanceof AccessFailure && error.status === 401 ? "Sesi terverifikasi diperlukan" : "Pengelolaan akun belum tersedia"}</h2>
-        <Link href="/identity/login" className={styles.primary}>Masuk dengan akun organisasi</Link><button className={styles.secondary} disabled={loading} onClick={() => void refresh()}>Periksa kembali</button></section>}
+      : loading ? <section className={styles.state} aria-busy="true"><h2>Memeriksa akses</h2></section>
+      : <SessionAccessState error={error} kind={lost ? lostAccessKind(error) : undefined} returnPath="/administration/accounts" onRetry={() => void refresh()} detail={error !== null ? accessMessage(error) : undefined} />}
   </main>;
 }
 

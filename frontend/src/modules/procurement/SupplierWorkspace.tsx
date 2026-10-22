@@ -33,7 +33,7 @@ const fields = [ ['subjectReference', 'Referensi identitas pemasok', 128], ['leg
   ['registrationNamespace', 'Jenis registrasi (opsional)', 64], ['registrationValue', 'Nomor registrasi (opsional)', 128], ['address', 'Alamat pemasok', 500], ['contactName', 'Nama kontak', 160], ['contactValue', 'Detail kontak', 256] ] as const;
 const when = (value: string) => dateTimeFormatter.format(new Date(value));
 function message(error: unknown) {
-  if (error instanceof IdentityFailure) return 'Masuk kembali dengan akun yang memiliki penugasan pengajuan atau pemeriksaan pemasok.';
+  if (error instanceof IdentityFailure) return 'Masuk dengan akun organisasi Anda untuk melanjutkan.';
   if (error instanceof AccessFailure || error instanceof RequestNotSentError) {
     if (error.code === 'invalid_supplier_change') return 'Periksa identitas, pasangan registrasi, kontak, kode sumber dan waktu berlaku. Isi persis tanpa spasi tambahan atau baris baru.';
     if (error.code === 'supplier_view_stale' || error.code === 'supplier_changed') return 'Usulan, kebijakan, versi pemasok atau katalog berubah. Muat data terbaru dan periksa kembali.';
@@ -77,7 +77,7 @@ export function SupplierWorkspace() {
     window.addEventListener('pageshow', restored); return () => { window.clearInterval(timer); window.removeEventListener('pageshow', restored); }; }, [account]);
   const denied = useCallback((failure: unknown) => { if (failure instanceof AccessFailure && (failure.status === 401 || failure.code === 'actor_changed' || failure.code === 'session_expired')) { setAccount(null); setError(failure); } }, []);
   return <main className={styles.page}><header className={styles.header}><div><Link className={styles.brand} href="/identity/account">Unit Toko</Link><h1>Pemasok dan kode sumber</h1><p>Ajukan identitas dan pemetaan barang. Pemeriksa menggunakan kanal verifikasi yang telah disetujui.</p></div><Link className={styles.secondary} href="/identity/account">Akun saya</Link></header>
-    {error !== null && account !== null && <p role="alert" className={styles.alert}>{message(error)}</p>}{loading ? <p role="status">Memeriksa akun dan akses…</p> : !account || sessionTiming(account.session, elapsed).expired ? <SessionAccessState error={error} returnPath={path} onRetry={() => setRevision(value => value + 1)} />
+    {error !== null && account !== null && <p role="alert" className={styles.alert}>{message(error)}</p>}{loading ? <p role="status">Memeriksa akun dan akses…</p> : !account || sessionTiming(account.session, elapsed).expired ? <SessionAccessState kind={account ? "expired" : undefined} error={error} returnPath={path} onRetry={() => setRevision(value => value + 1)} />
       : <SupplierDesk key={account.actorId + ':' + account.observedAt} account={account} elapsed={elapsed} fresh={sessionTiming(account.session, elapsed).fresh} onDenied={denied} />}</main>;
 }
 function SupplierDesk({ account, elapsed, fresh, onDenied }: { account: Account; elapsed: number; fresh: boolean; onDenied: (failure: unknown) => void }) {

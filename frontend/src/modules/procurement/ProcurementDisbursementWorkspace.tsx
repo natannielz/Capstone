@@ -28,7 +28,7 @@ const amount = (value: string) => orderAmount('IDR', value);
 const states = { draft: 'Draf menunggu bukti', recorded_unverified: 'Tercatat, belum diverifikasi bank' } as const;
 const routes = { omi_regular: 'OMI reguler', ddo: 'DDO', smart: 'S-Mart', pasar_kering: 'Pasar Kering' } as const;
 function message(error: unknown) {
-  if (error instanceof IdentityFailure) return 'Masuk kembali dengan akun yang memiliki penugasan bukti uang muka pemasok.';
+  if (error instanceof IdentityFailure) return 'Masuk dengan akun organisasi Anda untuk melanjutkan.';
   if (error instanceof AccessFailure || error instanceof RequestNotSentError) {
     if (error.code === 'procurement_disbursement_invalid') return 'Periksa nominal positif dengan dua angka desimal, tanggal transfer dan referensi persis dari bukti asli.';
     if (error.code === 'procurement_disbursement_image_required') return 'Pilih bukti asli JPEG atau PNG, maksimal 10 MiB.';
@@ -57,7 +57,7 @@ export function ProcurementDisbursementWorkspace() {
   useEffect(() => { const timer = window.setInterval(() => { if (account) setElapsed(performance.now() - account.observedAt); }, 1000); const restored = (event: PageTransitionEvent) => { if (event.persisted) { setAccount(null); setRevision(value => value + 1); } }; window.addEventListener('pageshow', restored); return () => { window.clearInterval(timer); window.removeEventListener('pageshow', restored); }; }, [account]);
   const denied = useCallback((failure: unknown) => { if (failure instanceof AccessFailure && failure.code !== 'step_up_required' && ([401, 403].includes(failure.status) || failure.code === 'actor_changed' || failure.code === 'session_expired')) { setAccount(null); setError(failure); } }, []);
   return <main className={styles.page}><header className={styles.header}><div><Link className={styles.brand} href="/identity/account">Unit Toko</Link><h1>Bukti uang muka pemasok</h1><p>Catat rincian dan bukti asli transfer untuk pemeriksaan bank independen. Halaman ini tidak menjalankan transfer.</p></div><Link className={styles.secondary} href="/identity/account">Akun saya</Link></header>{error !== null && account !== null && <p role="alert" className={styles.alert}>{message(error)}</p>}
-    {loading ? <p role="status">Memeriksa akun dan akses…</p> : !account || sessionTiming(account.session, elapsed).expired ? <SessionAccessState error={error} returnPath={path} onRetry={() => setRevision(value => value + 1)} /> : <DisbursementDesk key={account.actorId + ':' + account.observedAt} account={account} elapsed={elapsed} fresh={sessionTiming(account.session, elapsed).fresh} onDenied={denied} />}</main>;
+    {loading ? <p role="status">Memeriksa akun dan akses…</p> : !account || sessionTiming(account.session, elapsed).expired ? <SessionAccessState kind={account ? "expired" : undefined} error={error} returnPath={path} onRetry={() => setRevision(value => value + 1)} /> : <DisbursementDesk key={account.actorId + ':' + account.observedAt} account={account} elapsed={elapsed} fresh={sessionTiming(account.session, elapsed).fresh} onDenied={denied} />}</main>;
 }
 function DisbursementDesk({ account, elapsed, fresh, onDenied }: { account: Account; elapsed: number; fresh: boolean; onDenied: (failure: unknown) => void }) {
   const [gateway] = useState(createDisbursementGateway), [gate] = useState(() => new CatalogReadGate()), recovery = useOperationRecovery(account.actorId);

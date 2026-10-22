@@ -65,7 +65,7 @@ export async function verifyRefundPayoutBrowser({ config, recorder, user, origin
   assert.deepEqual(Object.keys(pending[0]).sort(), ['actorId', 'createdAt', 'key', 'operation']); assert.ok(!JSON.stringify(pending).includes(config.transferReference));
   assert.ok(!JSON.stringify(pending).includes(write.body.reference.sha256)); assert.ok(!JSON.stringify(pending).includes('privat')); assert.equal(await page.getByRole('button', { name: /Selesaikan dan tutup/ }).count(), 0);
   await context.addCookies([{ name: '__Host-ut_session', value: config.approverToken, domain: origin.hostname, path: '/', secure: true, httpOnly: true, sameSite: 'Lax' }]);
-  await page.getByRole('button', { name: 'Periksa hasil', exact: true }).click(); await page.getByRole('heading', { name: /^(Sesi Anda perlu diperbarui|Halaman ini di luar tugas akun Anda|Halaman belum dapat dibuka)$/ }).waitFor(); assert.deepEqual(await references(), pending);
+  await page.getByRole('button', { name: 'Periksa hasil', exact: true }).click(); await page.getByRole('heading', { name: /^(Masuk untuk melanjutkan|Sesi Anda perlu diperbarui|Halaman ini di luar tugas akun Anda|Halaman belum dapat dibuka)$/ }).waitFor(); assert.deepEqual(await references(), pending);
   await context.addCookies([{ name: '__Host-ut_session', value: config.recorderToken, domain: origin.hostname, path: '/', secure: true, httpOnly: true, sameSite: 'Lax' }]);
   await page.reload(); await page.getByRole('button', { name: 'Periksa hasil', exact: true }).click(); await page.getByRole('button', { name: 'Periksa hasil', exact: true }).waitFor({ state: 'hidden', timeout: 60000 });
   assert.equal(payoutWrites.length, 1); assert.equal(dropped(), 1); assert.equal((await references()).length, 0);

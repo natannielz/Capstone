@@ -8,7 +8,7 @@ import { permissionLabel } from "../administration/permission-labels";
 import { createIdentityGateway } from "./identity-client";
 import { useRouter } from "next/navigation";
 import { HOME_PATH, IdentityFailure, homeFor, identityMessage, identityReturnPath, isStaffActor, sessionTiming, stepUpFields, storeDoor, type IdentitySession } from "./identity-workflow";
-import { sessionLoginHref, useReturnTarget } from "../../components/workspace-kit/session-access-state";
+import { SessionAccessState } from "../../components/workspace-kit/session-access-state";
 import { ProtectedNavigationForm } from "./ProtectedNavigationForm";
 import { WorkspaceDirectory } from "./WorkspaceDirectory";
 import { WorkSummary } from "./WorkSummary";
@@ -29,7 +29,6 @@ const availableStepUp = (session: IdentitySession) => session.stepUpOperations.f
 export function IdentityAccount({ variant = "account" }: { variant?: "account" | "workspace" } = {}) {
   const home = variant === "workspace";
   const router = useRouter();
-  const signInTarget = useReturnTarget(home ? HOME_PATH : "/identity/account");
   const [gateway] = useState(() => createIdentityGateway());
   const [access] = useState(() => createAccessGateway());
   const [session, setSession] = useState<IdentitySession | null>(null);
@@ -100,18 +99,13 @@ export function IdentityAccount({ variant = "account" }: { variant?: "account" |
     <header className={styles.masthead}><div className={styles.mastheadInner}><Brand href="/" context="Layanan organisasi" /></div></header>
     <div className={styles.accountHeader}><div>{home ? <><h1>Pekerjaan saya</h1><p>{session?.account?.displayName ? "Halo, " + session.account.displayName + ". " : ""}Pekerjaan yang menunggu Anda dan ruang kerja sesuai penugasan.</p></>
       : <><h1>Akun saya</h1><p>Profil, verifikasi dua langkah, kontak dan keluar dari Unit Toko.</p></>}</div>
-      <button type="button" className={styles.secondary} disabled={loading} onClick={reload}>Periksa sesi</button></div>
+      <button type="button" className={styles.secondary} disabled={loading} onClick={reload}>Muat ulang sesi dan akses</button></div>
     <div id="account-content">
       {loading && <section className={styles.card} aria-busy="true"><p role="status">Memeriksa akun dan izin terbaru…</p></section>}
-      {error !== null && <section className={styles.card}><h2>Akun belum dapat dimuat</h2><p role="alert">{identityMessage(error)}</p>
-        {error instanceof IdentityFailure && error.traceId && <p className={styles.help}>Referensi bantuan: {error.traceId}</p>}
-        {error instanceof IdentityFailure && error.status === 401 && <Link href={sessionLoginHref(signInTarget)} className={styles.primary}>Masuk kembali</Link>}
-        <button type="button" className={styles.secondary} onClick={reload}>Coba lagi</button></section>}
-      {!loading && session && (!session.authenticated || timing.expired) && <section className={styles.card}>
-        <h2>{session.authenticated ? "Sesi perlu diperiksa kembali" : "Masuk untuk melanjutkan"}</h2>
-        <p>{session.authenticated ? "Batas waktu sesi yang ditampilkan telah tercapai. Periksa sesi untuk memastikan status terbaru, atau masuk kembali jika sesi telah berakhir." : "Sesi terverifikasi belum tersedia atau telah berakhir. Masuk kembali menggunakan akun organisasi Anda."}</p>
-        <Link href={sessionLoginHref(signInTarget)} className={styles.primary}>Ke halaman masuk</Link>
-      </section>}
+      {error !== null && <SessionAccessState error={error} returnPath={home ? HOME_PATH : "/identity/account"} onRetry={reload}
+        detail={identityMessage(error) + (error instanceof IdentityFailure && error.traceId ? " Referensi bantuan: " + error.traceId : "")} />}
+      {!loading && session && (!session.authenticated || timing.expired) &&
+        <SessionAccessState error={null} kind="expired" returnPath={home ? HOME_PATH : "/identity/account"} onRetry={reload} />}
       {!loading && session?.account && !timing.expired && <>
         {home && elsewhere && <p role="status" className={styles.help}>Membuka toko untuk akun Anda…</p>}
         {home && !elsewhere && <>

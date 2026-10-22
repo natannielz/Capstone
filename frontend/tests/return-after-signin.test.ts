@@ -51,3 +51,21 @@ test('without a destination, sign-in leads home; an already signed-in visitor co
   assert.deepEqual(loginContinuation('?returnPath=' + encodeURIComponent('/ordering/checkout?draft=7')), { returnPath: '/ordering/checkout?draft=7', requested: true });
   assert.deepEqual(loginContinuation('?returnPath=https%3A%2F%2Fevil.test'), { returnPath: '/workspace', requested: false });
 });
+
+test('an old checkout link survives sign-in and the checkout reopens the same draft (M7)', async () => {
+  const { canonicalRedirect } = await import('../src/modules/identity/route-canonical');
+  const { requestedDraftId, requestedOrderId } = await import('../src/modules/ordering/order-links');
+  // 1. The proxy maps the legacy page and its old query name; 2. a visitor without a session is sent to sign-in;
+  // 3. the sign-in form returns there; 4. the checkout reads the draft from that address.
+  const canonical = canonicalRedirect('/checkout', new URLSearchParams('draftId=41'))!;
+  assert.equal(canonical, '/ordering/checkout?draft=41');
+  const url = new URL(canonical, 'https://unit-toko.test');
+  const back = afterSignIn(signInRedirect(url.pathname, url.search, false)!);
+  assert.equal(back, '/ordering/checkout?draft=41');
+  assert.equal(requestedDraftId(new URL(back, 'https://unit-toko.test').search), '41');
+  // The same for an old order link through an old sign-in door.
+  const door = canonicalRedirect('/login', new URLSearchParams('next=/account/orders?orderId=41'))!;
+  const order = afterSignIn(door);
+  assert.equal(order, '/ordering/orders?order=41');
+  assert.equal(requestedOrderId(new URL(order, 'https://unit-toko.test').search), '41');
+});

@@ -55,7 +55,7 @@ export function ShipmentPreparationWorkspace() {
   return <main className={common.page}><header className={common.header}><div><Link href="/identity/account" className={common.brand}>Unit Toko</Link>
     <h1>Persiapan kiriman</h1><p>Siapkan jumlah kemasan dari pesanan toko yang sudah diterima. Persiapan dapat mencakup sebagian pesanan.</p></div><Link href="/identity/account" className={common.secondary}>Akun saya</Link></header>
     {error !== null && account !== null && <p role="alert" className={common.alert}>{message(error)}</p>}
-    {loading ? <p role="status">Memeriksa akun…</p> : !account || expired ? <SessionAccessState error={error} returnPath="/fulfillment/preparations" onRetry={() => setRevision(value => value + 1)} />
+    {loading ? <p role="status">Memeriksa akun…</p> : !account || expired ? <SessionAccessState kind={account ? "expired" : undefined} error={error} returnPath="/fulfillment/preparations" onRetry={() => setRevision(value => value + 1)} />
       : <PreparationDesk key={account.actorId + ':' + account.observedAt} account={account} onFailure={failed} />}
   </main>;
 }

@@ -49,7 +49,7 @@ export function BranchRequestWorkspace({ incoming = false }: { incoming?: boolea
   const expired = account !== null && sessionTiming(account.session, elapsed).expired;
   return <main className={common.page}><header className={common.header}><div className={styles.intro}><Link className={common.brand} href="/identity/account">Unit Toko</Link><h1>{incoming ? 'Permintaan masuk' : 'Permintaan kebutuhan cabang'}</h1><p>{incoming ? 'Periksa kebutuhan cabang dan berikan hasil peninjauan sesuai penugasan toko Anda.' : 'Susun pilihan kemasan, ajukan ke toko, dan ikuti hasil peninjauannya.'}</p></div><nav className={common.actions} aria-label="Navigasi permintaan"><Link className={common.secondary} href="/shop">Katalog kemasan</Link><Link className={common.secondary} href="/identity/account">Akun saya</Link></nav></header>
     {error !== null && account !== null && <p role="alert" className={common.alert}>{requestMessage(error)}</p>}
-    {loading ? <p role="status">Memeriksa akun dan akses…</p> : !account || expired ? <SessionAccessState error={error} returnPath={path} onRetry={() => setRevision(value => value + 1)} />
+    {loading ? <p role="status">Memeriksa akun dan akses…</p> : !account || expired ? <SessionAccessState kind={account ? "expired" : undefined} error={error} returnPath={path} onRetry={() => setRevision(value => value + 1)} />
       : <RequestDesk key={account.actorId + ':' + account.observedAt + ':' + incoming} account={account} incoming={incoming} onFailure={failed} />}
   </main>;
 }

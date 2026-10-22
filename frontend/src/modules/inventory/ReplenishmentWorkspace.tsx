@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { SessionAccessState } from '@/components/workspace-kit/session-access-state';
 import {useCallback, useEffect, useRef, useState, type FormEvent} from 'react';
 import {RequestNotSentError} from '../../api/client';
 import {createAccessGateway} from '../administration/access-client';
@@ -31,7 +32,7 @@ const warnings: Record<string, string> = {
 const supplyStates: Record<string, string> = {eligible: 'Dihitung dalam masa tunggu', after_horizon: 'Setelah masa tunggu', overdue: 'Terlambat',
   unverified: 'Belum disetujui', expected_arrival_missing: 'Tanggal belum diketahui', lead_time_missing: 'Waktu tunggu belum diisi'};
 function message(error: unknown) {
-  if (error instanceof IdentityFailure) return 'Sesi belum tersedia. Masuk kembali untuk memeriksa stok.';
+  if (error instanceof IdentityFailure) return 'Masuk dengan akun yang ditugaskan untuk memeriksa stok.';
   if (error instanceof AccessFailure || error instanceof RequestNotSentError) {
     if (error.code === 'invalid_replenishment_review') return 'Pilih gudang, sumber dan kemasan. Isi aturan pembelian serta referensi; angka yang belum diketahui boleh dikosongkan.';
     if (['replenishment_source_changed', 'catalog_revision_conflict', 'stock_source_revision_changed', 'replenishment_view_stale'].includes(error.code)) return 'Data atau sesi berubah. Muat pilihan terbaru dan hitung ulang.';
@@ -59,8 +60,7 @@ export function ReplenishmentWorkspace() {
   return <main className={common.page}><header className={common.header}><div><Link className={common.brand} href="/identity/account">Unit Toko</Link>
     <h1>Kebutuhan pembelian</h1><p>Tinjau stok, pesanan dan pasokan masuk untuk memperkirakan kebutuhan selama waktu tunggu.</p></div><Link href="/identity/account">Akun saya</Link></header>
     {loading ? <p role="status">Memeriksa sesi dan akses…</p> : account ? <Desk key={account.actorId + ':' + account.observedAt} account={account} refresh={() => setGeneration(value => value + 1)} /> :
-      <section className={common.state}><h2>Pemeriksaan belum tersedia</h2>{error !== null && <p role="alert">{message(error)}</p>}
-        <Link href={'/identity/login?returnPath=' + encodeURIComponent(path)}>Masuk kembali</Link><button type="button" onClick={() => setGeneration(value => value + 1)}>Periksa sesi</button></section>}
+      <SessionAccessState error={error} returnPath={path} onRetry={() => setGeneration(value => value + 1)} detail={error !== null ? message(error) : undefined} />}
   </main>;
 }
 
@@ -153,7 +153,7 @@ function Desk({account, refresh}: {account: Account; refresh: () => void}) {
     if (result) {clearPending(entry.key); remember(result); setNotice('Hasil yang sudah tersimpan berhasil ditemukan.');}
     else setNotice('Permintaan belum ditemukan sebagai hasil tersimpan. Referensinya tetap disimpan; periksa kembali sebelum memulai pemeriksaan lain.');
   });}
-  if (expired) return <section className={common.state}><h2>Periksa sesi dan akses kembali</h2><p>Data sebelumnya disembunyikan. Referensi pemeriksaan tetap tersimpan untuk akun pemiliknya.</p><button type="button" onClick={refresh}>Perbarui sesi</button></section>;
+  if (expired) return <SessionAccessState error={null} kind="expired" returnPath={path} onRetry={refresh} />;
   const locked = busy || offline || storageBlocked || pending !== null;
   return <>
     {error !== null && <p className={common.alert} role="alert">{message(error)}</p>}{notice && <p role="status">{notice}</p>}{offline && <p role="status">Koneksi terputus. Pilihan dan pengiriman dinonaktifkan.</p>}

@@ -23,7 +23,7 @@ const at = (value: string) => dateTimeFormatter.format(new Date(value));
 const rupiah = (value: string) => orderAmount('IDR', value);
 const issues: Record<string, string> = { identity_missing: 'Identitas transfer belum tersedia; perlu rekonsiliasi manual.', identity_repeated: 'Identitas transfer muncul lebih dari sekali; periksa kemungkinan baris berulang.', reference_repeated: 'Referensi digunakan lagi; periksa setiap transfer secara terpisah.', payer_unknown: 'Pengirim belum diketahui.', column_count: 'Jumlah kolom tidak sesuai format bank.', invalid_text: 'Teks berisi karakter atau spasi yang tidak didukung.', invalid_date: 'Tanggal tidak valid atau berada di masa depan.', invalid_direction: 'Penanda masuk/keluar tidak sesuai format.', invalid_amount: 'Nominal harus positif dengan paling banyak dua angka desimal.', account_mismatch: 'Nomor rekening berbeda dari rekening yang dipilih.', currency_mismatch: 'Mata uang berbeda dari rekening yang dipilih.', total_out_of_range: 'Total melebihi batas nominal yang didukung.' };
 function message(error: unknown) {
-  if (error instanceof IdentityFailure) return 'Masuk kembali dengan akun yang memiliki akses mutasi bank.';
+  if (error instanceof IdentityFailure) return 'Masuk dengan akun organisasi Anda untuk melanjutkan.';
   if (error instanceof AccessFailure) {
     if (error.code === 'bank_statement_changed') return 'Format atau rekening berubah atau tidak lagi berlaku. Pilih data terbaru dan periksa ulang berkas.';
     if (error.code === 'bank_statement_header_mismatch') return 'Judul atau urutan kolom tidak sesuai format yang disetujui. Periksa pilihan format dan ekspor bank.';
@@ -55,7 +55,7 @@ export function BankStatementWorkspace() {
   const denied = useCallback((failure: unknown) => { if (failure instanceof AccessFailure && failure.code !== 'step_up_required' && (failure.status === 401 || failure.status === 403 || failure.code === 'actor_changed')) { setAccount(null); setError(failure); } }, []);
   return <main className={common.page}><header className={common.header}><div><Link href="/identity/account" className={common.brand}>Unit Toko</Link><h1>Mutasi bank</h1><p>Siapkan sumber bank privat untuk pemeriksaan dan rekonsiliasi independen.</p></div></header>
     {error !== null && account !== null && <p role="alert" className={common.alert}>{message(error)}</p>}
-    {loading ? <p role="status">Memeriksa akun…</p> : !account || sessionTiming(account.session, elapsed).expired ? <SessionAccessState error={error} returnPath="/billing/bank-statements" onRetry={() => setRefresh(value => value + 1)} />
+    {loading ? <p role="status">Memeriksa akun…</p> : !account || sessionTiming(account.session, elapsed).expired ? <SessionAccessState kind={account ? "expired" : undefined} error={error} returnPath="/billing/bank-statements" onRetry={() => setRefresh(value => value + 1)} />
       : <StatementDesk key={account.actorId + ':' + account.observedAt} account={account} fresh={sessionTiming(account.session, elapsed).fresh} onDenied={denied} />}
   </main>;
 }

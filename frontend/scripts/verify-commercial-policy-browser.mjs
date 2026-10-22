@@ -179,7 +179,7 @@ try {
     const state = await control('state'); assert.deepEqual([state.proposals, state.decisions, state.versions], [1, 0, 0]); assert.equal(state.businessSha256, before.businessSha256);
     await capture(maker.page, 'uncertain');
     await maker.context.addCookies([{ name: '__Host-ut_session', value: config.tokens.checker, domain: origin.hostname, path: '/', secure: true, httpOnly: true, sameSite: 'Lax' }]);
-    await maker.page.getByRole('button', { name: 'Periksa hasil', exact: true }).click(); await maker.page.getByRole('heading', { name: /^(Sesi Anda perlu diperbarui|Halaman ini di luar tugas akun Anda|Halaman belum dapat dibuka)$/ }).waitFor(); assert.deepEqual(await references(maker.page), saved);
+    await maker.page.getByRole('button', { name: 'Periksa hasil', exact: true }).click(); await maker.page.getByRole('heading', { name: /^(Masuk untuk melanjutkan|Sesi Anda perlu diperbarui|Halaman ini di luar tugas akun Anda|Halaman belum dapat dibuka)$/ }).waitFor(); assert.deepEqual(await references(maker.page), saved);
     await renew(maker); await maker.page.reload(); const ready = maker.page.waitForResponse(response => response.url() === origin.origin + base + '/operations/query', { timeout: 90000 });
     await maker.page.getByRole('button', { name: 'Periksa hasil', exact: true }).click(); const response = await ready; assert.equal(response.status(), 200);
     assert.deepEqual(JSON.parse(response.request().postData()), { purpose: 'operation-recovery', operation: 'ordering.commercial.policy.propose', key: first.record.key });

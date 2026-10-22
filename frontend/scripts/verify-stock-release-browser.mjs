@@ -113,8 +113,8 @@ async function signIn(account, actorId) {
     if (url.origin === origin.origin && (url.pathname.startsWith("/api/v1/") || url.pathname.startsWith("/auth/")))
       console.log("RELEASE_BROWSER_RESPONSE " + JSON.stringify({ account, path: url.pathname, status: response.status() }));
   });
-  await page.goto(origin.origin + route); await page.getByRole("heading", { name: "Masuk untuk memeriksa pelepasan", exact: true }).waitFor();
-  await page.getByRole("link", { name: "Masuk kembali", exact: true }).click(); await page.getByRole("button", { name: "Lanjutkan ke layanan akun", exact: true }).click();
+  await page.goto(origin.origin + route); await page.getByRole("heading", { name: /^(Masuk untuk melanjutkan|Sesi Anda perlu diperbarui)$/ }).waitFor();
+  await page.locator('section[aria-labelledby="workspace-access-state"]').getByRole("link", { name: /^Masuk( kembali)?$/ }).click(); await page.getByRole("button", { name: "Lanjutkan ke layanan akun", exact: true }).click();
   await page.waitForURL(origin.origin + route);
   try { await page.getByLabel("Gudang dan kanal", { exact: true }).waitFor(); }
   catch (error) {

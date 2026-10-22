@@ -25,7 +25,7 @@ function message(error: unknown) {
   if (error instanceof AccessFailure && ['invoice_policy_unavailable', 'invoice_policy_expired'].includes(error.code)) return 'Aturan tagihan belum tersedia atau belum disetujui. Penanggung jawab perlu melengkapi aturan pajak, jatuh tempo, pengelompokan, penomoran dan pembukuan.';
   if (error instanceof AccessFailure && ['invoice_review_changed', 'receipt_already_invoiced', 'invoice_grouping_changed', 'invoice_commercial_allocation_exceeded'].includes(error.code)) return 'Sumber atau aturan tagihan berubah. Muat data terbaru, lalu tinjau pilihan penerimaan kembali.';
   if (error instanceof AccessFailure && error.code.startsWith('accounting_')) return 'Pembukuan belum siap untuk tanggal terbit ini. Periksa periode dan pengaturan akun bersama penanggung jawab keuangan.';
-  if (error instanceof IdentityFailure) return 'Sesi perlu diperiksa kembali. Masuk dengan akun yang memiliki akses tagihan.';
+  if (error instanceof IdentityFailure) return 'Masuk dengan akun organisasi Anda untuk melanjutkan.';
   return accessMessage(error);
 }
 export function InvoiceWorkspace() {
@@ -49,7 +49,7 @@ export function InvoiceWorkspace() {
   const denied = useCallback((failure: unknown) => { if (failure instanceof AccessFailure && (failure.status === 401 || failure.status === 403 || failure.code === 'actor_changed')) { setAccount(null); setError(failure); } }, []);
   return <main className={common.page}><header className={common.header}><div><Link href="/identity/account" className={common.brand}>Unit Toko</Link><h1>Tagihan</h1><p>Terbitkan dan periksa invoice berdasarkan barang yang telah diterima.</p></div><Link href="/identity/account" className={common.secondary}>Akun saya</Link></header>
     {error !== null && account !== null && <p role="alert" className={common.alert}>{message(error)}</p>}
-    {loading ? <p role="status">Memeriksa akun…</p> : !account || sessionTiming(account.session, elapsed).expired ? <SessionAccessState error={error} returnPath="/billing/invoices" onRetry={() => setRevision(value => value + 1)} />
+    {loading ? <p role="status">Memeriksa akun…</p> : !account || sessionTiming(account.session, elapsed).expired ? <SessionAccessState kind={account ? "expired" : undefined} error={error} returnPath="/billing/invoices" onRetry={() => setRevision(value => value + 1)} />
       : <InvoiceDesk key={account.actorId + ':' + account.observedAt} account={account} onDenied={denied} />}
   </main>;
 }

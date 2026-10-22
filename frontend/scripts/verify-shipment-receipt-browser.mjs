@@ -83,7 +83,7 @@ try {
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
   await page.screenshot({ path: resolve(directory, 'courier-receipt-qr-mobile.png'), fullPage: true });
   const denied = await courier.context.newPage(); pages.push(denied); await denied.goto(href);
-  await denied.getByRole('heading', { name: 'Masuk sebagai penerima', exact: true }).waitFor();
+  await denied.getByRole('heading', { name: /^(Masuk untuk melanjutkan|Sesi Anda perlu diperbarui|Halaman ini di luar tugas akun Anda|Halaman belum dapat dibuka)$/ }).waitFor();
   assert.equal(new URL(denied.url()).hash, '');
   const oldHref = href;
   await page.getByRole('button', { name: 'Upaya pengiriman', exact: true }).click();

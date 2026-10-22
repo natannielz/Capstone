@@ -72,7 +72,7 @@ export function OrderReviewWorkspace() {
     <h1>Peninjauan pesanan</h1><p>Tinjau belanja, penerimaan toko, atau pembatalan sesuai penugasan Anda.</p></div>
     <nav className={common.actions}><Link href="/identity/account" className={common.secondary}>Akun saya</Link></nav></header>
     {error !== null && account !== null && <p role="alert" className={common.alert}>{message(error)}</p>}
-    {loading ? <p role="status">Memeriksa akun…</p> : !account || expired ? <SessionAccessState error={error} returnPath="/ordering/reviews" onRetry={() => setRevision(value => value + 1)} />
+    {loading ? <p role="status">Memeriksa akun…</p> : !account || expired ? <SessionAccessState kind={account ? "expired" : undefined} error={error} returnPath="/ordering/reviews" onRetry={() => setRevision(value => value + 1)} />
       : <ReviewDesk key={account.actorId + ':' + account.observedAt} account={account} elapsed={elapsed} onFailure={failed} onRefresh={() => setRevision(value => value + 1)} />}
   </main>;
 }
@@ -130,7 +130,7 @@ function ReviewDesk({ account, elapsed, onFailure, onRefresh }: { account: Accou
       {actions.includes('order.spend.approve') && <button className={stage === 'Spending' ? common.primary : common.secondary} disabled={locked} onClick={() => { setStage('Spending'); setBefore(null); setNotice(null); }}>Belanja cabang</button>}
       {actions.includes('order.accept') && <button className={stage === 'Store' ? common.primary : common.secondary} disabled={locked} onClick={() => { setStage('Store'); setBefore(null); setNotice(null); }}>Penerimaan toko</button>}
       {actions.includes('order.cancel') && <button className={stage === 'Cancellation' ? common.primary : common.secondary} disabled={locked} onClick={() => { setStage('Cancellation'); setBefore(null); setNotice(null); }}>Pembatalan pesanan</button>}
-      <button className={common.secondary} disabled={busy || recovering} onClick={onRefresh}>Perbarui sesi dan akses</button></div>
+      <button className={common.secondary} disabled={busy || recovering} onClick={onRefresh}>Muat ulang sesi dan akses</button></div>
       {(!fresh || error instanceof AccessFailure && error.code === 'step_up_required') && <p role="alert">Verifikasi terbaru diperlukan. <Link href={factorHref}>Verifikasi dua langkah</Link></p>}
     </section>
     <OperationRecovery entries={recovery.entries} journal={recovery.journal} disabled={busy} onBusyChange={setRecovering}

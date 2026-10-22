@@ -1,4 +1,4 @@
-import { AccessFailure, MutationLedger, stableContent } from '../administration/workflow';
+import { AccessFailure, MutationLedger, stableContent, businessRefusal } from '../administration/workflow';
 import { OperationJournal, submitTrackedRequest, type OperationReference } from '../administration/operation-journal';
 import { IdentityFailure, parseIdentitySession, sessionTiming, type IdentitySession } from '../identity/identity-workflow';
 import type { AccessScope } from '../organizations/access-scope';
@@ -79,7 +79,7 @@ export class PackConversionEditor {
   private failed(error: unknown) {
     if (!this.active) return; this.patch({ error });
     if (error instanceof AccessFailure || error instanceof IdentityFailure) {
-      if (error.status === 401 || error.code === 'actor_changed' || error.status === 403 && error.code !== 'independent_person_required' ||
+      if (error.status === 401 || error.code === 'actor_changed' || error.status === 403 && !businessRefusal(error.code) ||
         error.code === 'pack_conversion_response_invalid') this.conceal({ suspended: true, error });
     }
   }
