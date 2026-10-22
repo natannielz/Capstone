@@ -1,4 +1,6 @@
-# Route × role rules matrix (Task 1.1, phase A)
+# Route × role rules matrix (Task 1.1, phases A and B)
+
+Phase B persona results are in the section "Observed (phase B)" at the end of this file.
 
 Author: GAP agent, 21 Okt 2026. Source: code on `main` (dc94c4b7 plus working tree) and signed-out probes of the running pilot
 (`portal.unit-toko-pilot.home.arpa`). Findings referenced as `G-###` live in `findings-gap.md`.
@@ -242,3 +244,72 @@ Each check below needs a signed-in persona and could not be done signed-out.
     - Unpublish, hide or remove propagates immediately despite `max-age=60` (G-003).
 12. **Dead-end sweep with navigation**: from every page, a way back (brand, sidebar or tabs) and forward (primary action) for each persona. Signed-out, every page had a way back.
 13. **Release-1 build** (`isPilotRelease`), if it is still shipped: the guest `/shop` sign-in wall, and footer and menu links to proxied-404 pages (G-030).
+
+## Observed (phase B, 21–22 Okt 2026)
+
+Source: the loopback review stack `https://localhost:8443` at `main` 103bf357, which includes the FIX-FLOW merge of G-007 to G-031. Guest sample products and the UI system are not merged.
+- Every route × 16 personas (`tamu` plus 15 synthetic sessions) at 1280 px: 1,296 page visits, paced at 170 API requests a minute or fewer.
+- Logs: `tmp/website-ready/logs/gap-b-matrix.log` (one line per visit) and `gap-b-matrix.json` (final path, redirects, headings, notices, frame, API 4xx/5xx, sidebar and store links).
+- Targeted checks: `gap-b-checks.txt`.
+- The probe scripts are `gap-b-matrix.mjs` and `gap-b-checks.mjs` beside the logs.
+
+**Caveat.** The review MongoDB (`127.0.0.1:27031`) stopped at about 01.06 WIB, after the matrix finished: its log ends without a shutdown message, and the port refuses connections. The matrix has no 5xx. The checks that need the API afterwards could not be completed: `access/current`, the store account menu, `work/summary`, the showcase query, and the problem codes behind the 409s. Rerun `gap-b-checks.mjs` once the review stack is restarted.
+
+### Observed result per route (signed-in personas; `tamu` noted where relevant)
+
+Legend:
+- **ok**: every persona that should reach the page sees content, and every other persona sees a denial state.
+- **409**: the page opens, but its first read (`…/targets/query` or similar) answers 409. The page shows "Data atau izin telah berubah…", or "Riwayat … belum dapat dipastikan lengkap", for every persona that should reach it (G-034).
+
+| Route | tamu | Expected personas | Others | Gaps |
+|---|---|---|---|---|
+| `/` | content (catalog links now go to `/katalog`) | content | content | — |
+| `/account`, `/account/orders`, `/checkout`, `/catalog/browse` | 307 to the canonical page, then sign-in with `returnPath` | 307 to the canonical page | same | K2 fixed |
+| `/account/orders/[id]` | → `/identity/login?returnPath=/ordering/orders?order=1` | → `/ordering/orders?order=1`, notice "Filter belum dapat dimuat…" for an unknown id | same | G-009 fixed; G-045 |
+| `/login`, `/customer/login`, `/staff/login` | → `/identity/login` (`/staff/login` adds `returnPath=/workspace`) | signed in: `/staff/login` → own home (`/shop` for pemohon, `/workspace` for staff) | — | G-008 fixed |
+| `/identity/login` | sign-in page | signed in: "Lanjutkan" → `/workspace` for everyone, buyers included (one extra hop to `/shop`) | — | G-010 fixed; G-044 |
+| `/workspace` | → sign-in `returnPath=/workspace` | staff: home with sidebar. pemohon: → `/shop` | — | G-020 fixed |
+| `/identity/account` | → sign-in | content | content | — |
+| `/katalog`, `/katalog/[id]` | **251 products** (the whole public assortment); no price, no photo | signed in → `/shop` | 12 non-buyer personas: `/shop`, then 403 "Katalog ini belum tersedia untuk akun Anda" | G-001 open; G-029 confirmed; G-032 |
+| `/shop`, `/shop/[product]` | → `/katalog` | pemohon, penyetuju-cabang, staf-pembeli: priced catalog | 7 staff personas whose sidebar lists "Katalog kemasan" (`/shop`) get 403 | G-032 |
+| `/cart`, `/ordering/checkout`, `/ordering/drafts`, `/ordering/orders` | → sign-in keeping the query | content (pemohon, staf-pembeli) | SAS denial; offered anyway in the store header to staff without `order.submit` | G-033 |
+| `/ordering/requests`, `/ordering/requests/incoming`, `/ordering/reviews`, `/ordering/substitutions` | → sign-in | ok | ok | — |
+| `/ordering/spending-policies`, `/ordering/commercial-policies` | → sign-in | **409** | ok | G-034 |
+| `/billing/invoices`, `/billing/payments`, `/fulfillment/receive`, `/fulfillment/cases`, `/fulfillment/shipments` | → sign-in | content, but buyers open them in the workspace frame | `/fulfillment/receive`: store-staff (no `receipt.accept`) get the scan screen without a denial | G-018 partly fixed; G-037; G-038 |
+| `/billing/invoice-releases`, `/billing/payment-reviews`, `/billing/receiving-accounts` | → sign-in | ok | ok | nav/API suspicion refuted |
+| `/billing/bank-receipts`, `/billing/bank-statements` | → sign-in | **pemeriksa-pembayaran denied** (API 403 on `bank-statements/imports/query`, `bank-receipts/query`) although it holds `bank.receipt.read` and `bank.statement.read`, and the sidebar lists both | ok | G-035 |
+| `/accounting/books`, `/reporting/accounts` | → sign-in | books: **409**; reports: ok | ok | G-034 |
+| `/fulfillment/preparations`, `/fulfillment/courier-assignments` | → sign-in | ok | ok | — |
+| `/fulfillment/dispatches` | → sign-in | petugas-kirim ok; now also open to every store-staff holder of `shipment.dispatch` | — | G-031 fixed |
+| `/inventory/*` (11 routes) | → sign-in | ok | denial in INV wording ("… belum tersedia / Akses untuk tindakan ini tidak tersedia. Muat ulang…") | G-014 open |
+| `/procurement/*` (16 routes) | → sign-in | **409** on 15 of the 16 routes for every expected persona (all except `/procurement/quality-acceptances`) | SAS denial; 10 routes also stack a second alert | G-034, G-042 |
+| `/administration/access`, `/administration/organizations` | → sign-in | ok | ADM denial plus a trace id | G-014, G-016 |
+| `/administration/accounts` | → sign-in | **admin-akses and penyetuju-akses: 400** on `directory/query` and `invitations/query` ("Permintaan belum dapat diterima") | ADM denial | G-036 |
+| `/administration/person-reviews` | → sign-in | **403**: "Peninjauan identitas petugas belum diaktifkan" | ADM denial | G-039 |
+| `/administration/history` | → sign-in | ok | **every persona sees the purpose form** and no denial | G-040 |
+| `/administration/organizations/addresses` | → sign-in | **409** "Riwayat alamat belum dapat dipastikan lengkap" for all 11 expected personas | ok | G-034 |
+| `/administration/delegations` | → sign-in | content | — (now listed only for staff) | G-028 fixed |
+| `/administration/catalog`, `/catalog/prices`, `/catalog/public` | → sign-in | ok (the showcase is still per assortment) | `/catalog/prices` tells a buyer "Pemeriksa harus orang terverifikasi yang berbeda dari pengaju" | G-002 open; G-041 |
+| `/operations/health`, `/operations/anomalies` | → sign-in | ok | denials word it as "Periksa sesi dan akses", although the session is fine | G-014 |
+
+### Persona checks 1–13 (from phase A)
+
+1. **G-017: pemohon is not staff.** Confirmed fixed: no staff door, `/workspace` → `/shop` (`gap-b-matrix.log:160`). penyetuju-cabang is classified as staff because of `order.spending.policy.read`, and gets the staff door plus `/workspace` (`gap-b-matrix.log:240`) (G-043).
+2. **Buyer tasks.** `/billing/invoices`, `/billing/payments`, `/fulfillment/receive`, `/fulfillment/cases` and `/fulfillment/shipments` open for pemohon (`gap-b-matrix.log:97`), but inside the workspace frame (G-037). The account menu shows them per `buyerTasks` (code: `store-frame.tsx:136`); the click-through was not re-run (API down).
+3. **Approval label.** "Peninjauan pesanan" (`/ordering/reviews`) and "Aturan persetujuan belanja" (`/ordering/spending-policies`) are now distinct (G-019 fixed in code; the sidebar shows both for penyetuju-cabang).
+4. **staf-pembeli.** One home `/workspace`, with the staff door plus "Katalog kemasan". Priced `/shop` works. Buyer tasks are in the sidebar.
+5. **Sidebar vs API.** Suspicions refuted: `invoice-releases`, `organizations`, `payment-reviews`.
+   - Confirmed mismatches: `/shop` for 7 staff (G-032), and `bank-receipts`/`bank-statements` for pemeriksa-pembayaran (G-035).
+   - Inconclusive because of the systemic 409 (G-034): `commercial-policies`, the procurement pages, `stock-valuations`.
+   - `dispatches`: fixed.
+6. **Wrong-role wording.** 33 routes use the SAS denial "Halaman ini di luar tugas akun Anda". 10 of those add a second alert, "Akses untuk tindakan ini tidak tersedia. Muat ulang…" (G-042). About 20 routes keep their own wording (`gap-b-matrix.json`). G-014 stays open.
+7. **Expiry (simulated with an invalid session cookie).**
+   - The return paths now keep `?draft`, `?order` and `?package`. `/workspace` and `/identity/account` links carry `returnPath`. The guest proxy keeps the query (`gap-b-checks.txt:115-133`). G-010, G-011 and G-012 are fixed.
+   - The `/inventory/replenishment` return path is accepted by both lists (G-007 fixed in code; `/auth/callback` was not exercised).
+   - `/fulfillment/receive` still shows "Koneksi terputus…" on expiry, but the API was degraded at that moment, so this is not re-verified (G-015).
+8. **Catalog showcase.** The page lists whole assortments, as before (G-002). The `ownProposal` and proposer-id check is pending (API down).
+9. **Staff without `catalog.read`.** `/katalog` → `/shop`, then 403, for kurir, keuangan-tagihan, pemeriksa-pembayaran, admin-akses and penyetuju-akses (`gap-b-matrix.log:682`). G-029 confirmed.
+10. **`work/summary`.** Pending (API down).
+11. **Guest rule.** The review stack shows guests all 251 products from the approved assortment (`gap-b-matrix.log:47`). Still the K1 behaviour (G-001 open; Task 3.1 not merged). No price, no photo, and the product page carries no price.
+12. **Dead ends.** Every signed-in page rendered inside a frame with a way back (sidebar or store header). None was frameless.
+13. **Release-1 build.** Not deployed on the review stack. Not re-checked (G-030).
