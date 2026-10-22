@@ -52,9 +52,9 @@ public sealed class PolicyTests
     }
 
     [Fact]
-    public void Six_templates_and_four_finance_packs_have_no_wildcard_or_automatic_verifier()
+    public void Fifteen_templates_and_four_finance_packs_have_no_wildcard_or_automatic_verifier()
     {
-        Assert.Equal(6, RoleTemplates.Templates.Count);
+        Assert.Equal(15, RoleTemplates.Templates.Count);
         Assert.Equal(4, RoleTemplates.FinancePacks.Count);
         Assert.Empty(RoleTemplates.Templates["finance"].Permissions);
         Assert.Empty(RoleTemplates.Materialize("finance", [], []).Permissions);
@@ -82,7 +82,7 @@ public sealed class PolicyTests
     {
         foreach (var template in RoleTemplates.Templates.Values)
         {
-            var scope = template.Id switch { "buyer" => Buyer, "courier" => Courier, "system-admin" => SystemScope, _ => Shop };
+            var scope = template.Id switch { "buyer" => Buyer, "branch-approver" => Branch, "courier" => Courier, "system-admin" => SystemScope, _ => Shop };
             var snapshot = Snapshot(template.Id, scope);
             var resource = template.Id == "system-admin" ? new ResourceScope(IsAdministrative: true) : Order;
             foreach (var permission in template.Permissions) Assert.True(ScopePolicy.Compile(Actor, snapshot, permission, Now).Matches(resource), $"{template.Id}: {permission}");

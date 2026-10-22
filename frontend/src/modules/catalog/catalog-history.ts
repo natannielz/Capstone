@@ -36,6 +36,12 @@ export function guestCatalogHref(publicId: string | undefined, rawSearch: string
   return '/katalog' + (next.size ? '?' + next.toString() : '');
 }
 
+/** A signed-in account without catalog.read is not a buyer: instead of a refusal on /shop it sees the sample catalog, where a note
+ * explains that its account does not include the organisation catalog (the reverse of G-029's rule). Null for catalog readers. */
+export function nonBuyerCatalogHref(allowedActions: readonly string[], publicId: string | undefined, rawSearch: string): string | null {
+  return allowedActions.includes('catalog.read') ? null : guestCatalogHref(publicId, rawSearch);
+}
+
 /** The one member catalog list address (the old /catalog/browse route only redirects here and is never produced, G-023). */
 export function catalogHistoryUrl(path: '/shop', query: CatalogHistoryQuery, hash = ''): string {
   if (path !== '/shop') throw new TypeError('catalog_history_path_invalid');
