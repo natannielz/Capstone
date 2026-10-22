@@ -35,9 +35,9 @@ public sealed class FunctionGapBrowserTests(MongoFixture fixture, ITestOutputHel
 {
     /// <summary>F-018 and F-017: the keranjang quantity changes and is saved; a store price change is shown and accepted only
     /// explicitly; removing the last line empties the keranjang; a draft is restored and discarded again; pemohon cancels an
-    /// outstanding order; peninjau-toko rejects its part of another. Stock is only reserved and released, never moved.</summary>
+    /// outstanding order. Stock is only reserved and released, never moved.</summary>
     [LocalStockBrowserFact]
-    public async Task Cart_changes_draft_discard_buyer_cancellation_and_store_rejection_work_in_the_browser() {
+    public async Task Cart_changes_draft_discard_and_buyer_cancellation_work_in_the_browser() {
         ActorContext? maker = null, checker = null;
         await G.OrderWorldAsync(fixture, output, "cart-and-cancellation", "FUNCTION_GAP_CART_AND_CANCELLATION_PASS", async (data, action) => {
             if (action != "change-price") return null;
@@ -53,12 +53,24 @@ public sealed class FunctionGapBrowserTests(MongoFixture fixture, ITestOutputHel
             return new { display = "Rp25.000,00" };
         }, async (data, actors, lines) => {
             var orders = await data.Rows("orders").Find(new BsonDocument()).Sort(new BsonDocument("_id", 1)).ToListAsync();
-            Assert.Equal(2, orders.Count); Assert.All(orders, order => Assert.Equal(actors["pemohon"].UserId, order["createdBy"].AsInt64));
+            Assert.Single(orders); Assert.All(orders, order => Assert.Equal(actors["pemohon"].UserId, order["createdBy"].AsInt64));
             Assert.Equal(0L, await data.Rows("shipments").CountDocumentsAsync(new BsonDocument()));
             var balance = await data.Rows("stockBalances").Find(new BsonDocument("_id", data.BalanceId)).SingleAsync();
             Assert.Equal(0L, UnitToko.Platform.Inventory.InventoryBson.ReadBalance(balance).Balance.Reserved);
         });
     }
+
+    /// <summary>F-030 and F-017 (store part): after a first order from the keranjang (cancelled, so its stock returns), the next
+    /// keranjang checks out as a new order, and peninjau-toko rejects its part of it. RED today: the second checkout reopens the
+    /// first order as already recorded (checkout request key = actor + draft + group).</summary>
+    [LocalStockBrowserFact]
+    public async Task Second_order_from_the_keranjang_is_new_and_the_store_can_reject_its_part() =>
+        await G.OrderWorldAsync(fixture, output, "second-order-store-rejection", "FUNCTION_GAP_SECOND_ORDER_STORE_REJECTION_PASS", null, async (data, actors, lines) => {
+            var orders = await data.Rows("orders").Find(new BsonDocument()).Sort(new BsonDocument("_id", 1)).ToListAsync();
+            Assert.Equal(2, orders.Count);
+            var balance = await data.Rows("stockBalances").Find(new BsonDocument("_id", data.BalanceId)).SingleAsync();
+            Assert.Equal(0L, UnitToko.Platform.Inventory.InventoryBson.ReadBalance(balance).Balance.Reserved);
+        });
 
     /// <summary>F-013: pemohon composes and sends a branch request (PT-); peninjau-toko accepts it; a second one is rejected and
     /// the buyer reads the reason. Full release, not the home.arpa pilot.</summary>
