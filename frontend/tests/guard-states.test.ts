@@ -51,8 +51,7 @@ test('a refused page shows one denial: no page-level error alert stacked above t
 
 test('pages decide access before showing their tools: receipt needs receipt.accept, history needs a history grant (G-038, G-040)', () => {
   const receipt = source('fulfillment/ReceiptWorkspace.tsx');
-  assert.match(receipt, /if \(!current\.allowedActions\.includes\('receipt\.accept'\)\) throw new AccessFailure\(403, 'scope_denied'\)/);
-  assert.doesNotMatch(receipt, /!current\.allowedActions\.includes\('shipment\.prepare'\)/, 'a preparer without receipt.accept is not a recipient');
+  assert.match(receipt, /if \(pageAccess === 'denied'\) throw new AccessFailure\(403, 'scope_denied'\)/, 'everyone else gets the standard denial');
   const history = source('administration/AccessHistory.tsx');
   assert.match(history, /canReadAccessHistory\(actor\.allowedActions\)/, 'the page decides before rendering the purpose form');
 });
@@ -81,4 +80,16 @@ test('every inline 401 text in a protected page follows the lost-session rule (f
     if (statSync(path).isDirectory()) walk(path); else if (/\.tsx?$/.test(name) && readFileSync(path, 'utf8').includes('Masuk dengan akun organisasi Anda untuk melanjutkan')) offenders.push(path.slice(root.length)); } };
   walk(root);
   assert.deepEqual(offenders, []);
+});
+
+test('a preparer reaches the receipt page only to recover a pending receipt proof; a recipient gets the full page (G-038 round 1)', async () => {
+  const { receiptPageAccess } = await import('../src/modules/fulfillment/receipt-client');
+  assert.equal(receiptPageAccess(['receipt.accept'], []), 'recipient');
+  assert.equal(receiptPageAccess(['receipt.accept', 'shipment.prepare'], ['fulfillment.receipt-proof.issue']), 'recipient');
+  assert.equal(receiptPageAccess(['shipment.prepare'], ['fulfillment.receipt-proof.issue']), 'recovery');
+  assert.equal(receiptPageAccess(['shipment.prepare'], []), 'denied');
+  assert.equal(receiptPageAccess(['shipment.prepare'], ['fulfillment.receipt.confirm']), 'denied', 'only a pending proof issue admits recovery');
+  assert.equal(receiptPageAccess(['catalog.read'], ['fulfillment.receipt-proof.issue']), 'denied');
+  const receipt = source('fulfillment/ReceiptWorkspace.tsx');
+  assert.match(receipt, /receiptPageAccess\(current\.allowedActions, /);
 });

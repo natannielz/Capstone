@@ -11,7 +11,7 @@ import { taskFrame } from './task-frame-rule';
 /** The frame for pages that are a buyer task for some people and back-office work for others (G-037). Display only. */
 export function TaskFrame({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() ?? '/';
-  const [actions, setActions] = useState<readonly string[] | null>(null);
+  const [actions, setActions] = useState<readonly string[] | null | 'unknown'>(null);
   const decides = taskFrame(pathname, null) === 'pending';
   useEffect(() => {
     if (!decides) return;
@@ -22,7 +22,7 @@ export function TaskFrame({ children }: { children: React.ReactNode }) {
         if (!session.authenticated || !session.account) { if (alive) setActions([]); return; }
         const scope = await createAccessGateway().current();
         if (alive) setActions(scope.allowedActions);
-      } catch { if (alive) setActions([]); }
+      } catch { if (alive) setActions('unknown'); }
     })();
     return () => { alive = false; };
   }, [decides]);

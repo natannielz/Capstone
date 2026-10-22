@@ -26,8 +26,9 @@ export function storeLinks(viewer: StoreViewer, pilot: boolean, currentPath: str
   const member = viewer.kind === 'member';
   return {
     home: '/', catalog: member ? '/shop' : '/katalog', signIn: storeSignInHref(currentPath),
-    cart: viewer.kind === 'member' ? (pilot ? viewer.requests : viewer.orders) ? cart : null : storeSignInHref(cart),
-    orders: pilot ? null : viewer.kind === 'member' ? viewer.orders ? '/ordering/orders' : null : storeSignInHref('/ordering/orders'),
+    // While the viewer is still loading nothing is offered, so a member who cannot order never briefly gets a sign-in link.
+    cart: viewer.kind === 'loading' ? null : viewer.kind === 'member' ? (pilot ? viewer.requests : viewer.orders) ? cart : null : storeSignInHref(cart),
+    orders: pilot || viewer.kind === 'loading' ? null : viewer.kind === 'member' ? viewer.orders ? '/ordering/orders' : null : storeSignInHref('/ordering/orders'),
     account: member ? '/identity/account' : storeSignInHref('/identity/account'),
     staffDoor: viewer.kind === 'member' ? viewer.staff ? '/workspace' : null : storeSignInHref('/workspace'),
   };

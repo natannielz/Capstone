@@ -30,7 +30,7 @@ import { EmptyState } from '@/components/workspace-kit/empty-state';
 import { OrderTimelinePanel } from './OrderTimelinePanel';
 import { SessionAccessState } from "@/components/workspace-kit/session-access-state";
 import { orderNumber } from '@/lib/document-numbers';
-import { requestedOrderId, requestedOrderNotice } from './order-links';
+import { requestedOrderId, requestedOrderMalformed, requestedOrderNotice } from './order-links';
 
 type Account = { actorId: string; actions: readonly string[]; session: IdentitySession; observedAt: number };
 function status(order: SubmittedOrder) {
@@ -117,7 +117,10 @@ function OrderHistoryDesk({ account, onFailure }: { account: Account; onFailure:
       try {
         const result = await views.orders(account.actorId, filter, cursor, controller.signal); if (active) {setPage(result); setNextCursor(result.nextCursor);}
         // An address naming one order (/ordering/orders?order=41, where old /account/orders/41 links lead) opens it with the first list (G-009).
-        if (requested.current === undefined) requested.current = requestedOrderId(window.location.search);
+        if (requested.current === undefined) {
+          requested.current = requestedOrderId(window.location.search);
+          if (requestedOrderMalformed(window.location.search) && active) setNotice('Pesanan tidak ditemukan atau di luar akses Anda.');
+        }
         const wanted = requested.current; requested.current = null;
         if (active && wanted) {
           try { const order = await gateway.read(account.actorId, wanted); if (active) setSelected(order); }

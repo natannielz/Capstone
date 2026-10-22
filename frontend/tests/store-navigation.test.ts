@@ -78,3 +78,9 @@ test('cart and orders are offered only to members who can order; staff without o
   // Guests still meet the sign-in door for both.
   assert.match(storeLinks({kind: 'guest'}, false, '/shop').cart!, /^\/identity\/login/);
 });
+
+
+test('while the viewer is still loading, the tab bar links neither cart nor orders (round 1)', () => {
+  const links = storeLinks({kind: 'loading'}, false, '/shop');
+  assert.equal(links.cart, null); assert.equal(links.orders, null);
+});
