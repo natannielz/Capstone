@@ -103,6 +103,8 @@ function AssignmentDesk({account, onDenied}: {account: Account; onDenied: (failu
   }, [gateway, account.actorId, before, reload, current, onDenied]);
   useEffect(() => {if (preview) reviewHeading.current?.focus();}, [preview]);
   const locked = busy || offline || storageError || refs.length > 0;
+  // The row button that started a read shows it is busy until the record arrives (§8).
+  const [opening, setOpening] = useState<string | null>(null);
   async function select(shipmentId: string) {
     if (!current() || locked || pending.current) return; pending.current = true; setBusy(true); setError(null); setNotice(''); setResult(null); invalidate();
     const ctx = context();
@@ -146,7 +148,7 @@ function AssignmentDesk({account, onDenied}: {account: Account; onDenied: (failu
     } catch (failure) {if (current()) {setError(failure); onDenied(failure);}} finally {pending.current = false; if (alive.current) {setBusy(false); refreshRefs();}}
   }
   return <><AdministrationNavigation current="courier-assignments" actions={account.actions} locked={locked} />
-    {error !== null && <StateView kind="error" title={message(error)} />}
+    {error !== null && page.items.length > 0 && <StateView kind="error" title={message(error)} />}
     {storageError && <StateView kind="error" title="Referensi pemulihan belum dapat dibaca. Perubahan baru menunggu penyimpanan perangkat tersedia. Jangan hapus referensi yang belum terkonfirmasi." />}
     {offline && <StateView kind="offline" title="Koneksi terputus. Muat kembali penugasan setelah tersambung." />}{notice && <p role="status">{notice}</p>}
     {refs.length > 0 && <Section title="Periksa permintaan yang sudah dikirim" label="Pemulihan penugasan" description="Referensi ini tetap tersedia setelah tab atau browser dibuka kembali.">
@@ -156,11 +158,11 @@ function AssignmentDesk({account, onDenied}: {account: Account; onDenied: (failu
       <p>Ini hasil permintaan yang tercatat. Muat penugasan untuk melihat siapa yang bertugas saat ini.</p></Section>}
     <Section title="Kiriman dalam tugas Anda" label="Daftar penugasan" busy={busy}
       actions={<Button variant="secondary" disabled={locked} onClick={() => {invalidate(); setBefore(null); setReload(value => value + 1);}}>Muat penugasan terbaru</Button>}>
-      <DataList label="Daftar penugasan" items={page.items} getKey={row => row.shipmentId} loading={busy}
+      <DataList label="Daftar penugasan" items={page.items} error={error !== null && page.items.length === 0 ? { title: message(error), message: null, onRetry: () => { invalidate(); setBefore(null); setReload(value => value + 1); } } : undefined} getKey={row => row.shipmentId} loading={busy}
         empty={error === null ? { title: "Belum ada kiriman dalam akses penugasan Anda." } : undefined}
         renderTitle={row => <>Kiriman {number(row)}</>} renderBadge={row => <Badge tone={row.received ? "success" : "neutral"} label={row.received ? 'Penerimaan sudah tercatat.' : 'Penerimaan belum tercatat.'} />}
         renderMeta={row => <>Pesanan {orderNumber(row.orderId)} · bagian toko {row.suborderId} · Kurir yang bertugas: {row.currentAssignment.courierName}</>}
-        renderActions={row => <Button variant="secondary" disabled={locked} onClick={() => void select(row.shipmentId)}>Tinjau penugasan {number(row)}</Button>} />
+        renderActions={row => <Button variant="secondary" disabled={locked} busy={opening === row.shipmentId} onClick={() => { setOpening(row.shipmentId); void select(row.shipmentId).finally(() => setOpening(null)); }}>Tinjau penugasan {number(row)}</Button>} />
       {page.hasMore && <div className="ui-actions"><Button variant="secondary" disabled={locked} onClick={() => {invalidate(); setBefore(page.items.at(-1)!.shipmentId);}}>Penugasan lebih lama</Button></div>}
     </Section>
     {task && <section className={"ui-section " + local.detail} aria-label="Rincian penugasan"><h2>Penugasan kiriman {number(task)}</h2>

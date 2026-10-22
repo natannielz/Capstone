@@ -93,6 +93,8 @@ function CaseDesk({ account, fresh, onDenied }: { account: Account; fresh: boole
     catch (failure) { if (active && current()) { setError(failure); onDenied(failure); } } finally { if (active) setBusy(false); }
   }); return () => { active = false; controller.abort(); }; }, [gateway, account.actorId, before, refresh, canRead, current, onDenied]);
   useEffect(() => { if (review || selected) heading.current?.focus(); }, [review, selected]);
+  // The row button that started a read shows it is busy until the record arrives (§8).
+  const [opening, setOpening] = useState<string | null>(null);
   async function perform(work: () => Promise<void>) {
     if (!current() || busy || recovering || offline || editing || pending.current) return; pending.current = true; setBusy(true); setError(null);
     try { await work(); } catch (failure) { if (current()) { setReview(null); setError(failure); onDenied(failure); } }
@@ -189,7 +191,7 @@ function CaseDesk({ account, fresh, onDenied }: { account: Account; fresh: boole
         empty={error === null ? { title: "Belum ada pengajuan pada halaman ini." } : undefined}
         renderTitle={item => <>Keluhan {recordNumber('case', item.id)}</>} renderBadge={item => <Badge status={states[item.state]} />}
         renderMeta={item => <>{item.source.buyerName} · {item.source.number}</>}
-        renderActions={item => <Button variant="secondary" disabled={busy || recovering || offline || editing || !!review} onClick={() => void perform(async () => { const value = await gateway.read(account.actorId, item.id, item.revision); if (current()) setSelected(value); })}>Buka keluhan {recordNumber('case', item.id)}</Button>} />
+        renderActions={item => <Button variant="secondary" disabled={busy || recovering || offline || editing || !!review} busy={opening === item.id} onClick={() => { setOpening(item.id); void perform(async () => { const value = await gateway.read(account.actorId, item.id, item.revision); if (current()) setSelected(value); }).finally(() => setOpening(null)); }}>Buka keluhan {recordNumber('case', item.id)}</Button>} />
       {page.hasMore && <div className="ui-actions"><Button variant="secondary" disabled={busy || recovering || offline || editing || !!review} onClick={() => setBefore(page.items.at(-1)!.id)}>Keluhan lebih lama</Button></div>}</Section>}
   </>;
 }

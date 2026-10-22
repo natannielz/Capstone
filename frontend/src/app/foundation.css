@@ -264,6 +264,11 @@ button:disabled{cursor:not-allowed}
 /* A lone button in a grid region (section body, stack) keeps its own width on desktop; on phones it spans the row (§11.5). */
 .ui-section-body>.ui-button,.ui-section>.ui-button,.ui-stack>.ui-button{justify-self:start}
 @media (max-width:639px){.ui-section-body>.ui-button,.ui-section>.ui-button,.ui-stack>.ui-button{justify-self:stretch}}
+/* An inline notice (§9): the state panel's geometry without its role, for warnings that are not errors (a stale base, a large
+   change). Pages give it role="status" only where the notice announces a change; errors stay StateView (role="alert"). */
+.ui-notice{display:grid;gap:var(--space-2);max-width:none;margin:0;padding:var(--space-4) var(--space-6);border-radius:var(--radius-card);background:var(--tone-neutral);color:var(--foreground);font-size:15px;line-height:24px;font-weight:600;overflow-wrap:anywhere}
+.ui-notice[data-tone="warning"]{background:var(--tone-warning);color:var(--tone-warning-foreground)}
+.ui-notice p{margin:0}
 
 .ui-toolbar{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:var(--space-3)}
 .ui-toolbar-main,.ui-toolbar-side{display:flex;flex-wrap:wrap;align-items:flex-end;gap:var(--space-3);min-width:0}

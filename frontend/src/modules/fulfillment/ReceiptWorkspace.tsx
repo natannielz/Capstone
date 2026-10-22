@@ -128,7 +128,8 @@ function ReceiptForm({ account, link, onDenied }: { account: Account; link: Rece
       asRecipient={receipt ? true : recoveredProof!.issuedAsRecipient} canIssue={!!receipt} current={current} onDenied={failed} /></> : !review ? (!account.canReceive ? <p>Gunakan Periksa hasil untuk memulihkan bukti penerimaan yang telah Anda terbitkan.</p>
       : link ? <><p>Buka rincian kiriman sebelum menghitung barang.</p>
         <div className="ui-actions"><Button variant="primary" disabled={busy || offline || recovery.locked} onClick={() => void load()}>Periksa kiriman</Button></div></>
-      : <StateView kind="empty" title="Pindai QR dari kurir" message="Jika konfirmasi sebelumnya terputus, gunakan Periksa hasil di atas." />)
+      : <StateView kind="empty" title="Pindai QR dari kurir"
+        message={recovery.entries.length > 0 ? 'Jika konfirmasi sebelumnya terputus, gunakan Periksa hasil di atas.' : 'Arahkan kamera ponsel ke QR yang ditunjukkan kurir; halaman ini terbuka kembali dengan rincian kiriman.'} />)
       : command ? <div className={local.inset}><h2 ref={heading} tabIndex={-1}>Tinjau jumlah penerimaan</h2><p>{review.recipientName} · Kiriman {review.shipmentId} · Surat Jalan versi {review.documentVersion}</p>
         <ul>{command.body.lines.map(line => { const source = review.lines.find(item => item.skuId === line.skuId)!; return <li key={line.skuId}><strong>{source.productName}</strong>
           {groups.map(group => <p key={group}>{labels[group]}: {line[group].packages} {source.packageLabel} + {line[group].looseUnits} {source.baseUnitCode}</p>)}{line.exceptionReason && <p>{line.exceptionReason}</p>}</li>; })}</ul>
