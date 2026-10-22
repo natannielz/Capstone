@@ -1,21 +1,20 @@
-.desk { display: grid; grid-template-columns: minmax(280px, .85fr) minmax(0, 1.3fr); align-items: start; gap: 24px; }
-.headingRow { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
-.modeChoices { display: flex; flex-wrap: wrap; gap: 10px; margin: 16px 0 22px; }
-.code { color: #4d6570; overflow-wrap: anywhere; margin: 4px 0 14px; }
-.contents { display: flex; flex-direction: column; gap: 4px; padding: 18px 0; border-block: 1px solid #c5d7dc; margin: 16px 0; }
-.contents strong { font-size: clamp(24px, 3vw, 32px); color: #1d3640; line-height: 1.25; overflow-wrap: anywhere; }
-.contents span { color: #4d6570; }
-.formLegend { font-size: 18px; font-weight: 650; padding: 0 0 18px; }
-.conversion { padding: 14px 16px; background: #edf6f7; color: #24535d; font-weight: 650; margin: 0; overflow-wrap: anywhere; }
-.review { padding: 24px; border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--card); }
-.history { list-style: none; margin: 20px 0; padding: 0; display: grid; gap: 0; }
-.history > li { border-top: 1px solid #c5d7dc; padding: 20px 0; overflow-wrap: anywhere; }
+/* Stock count desk on the UI standard (U-032): tokens only, on-scale spacing, no clamp() title sizes, weights 400/600/700. */
+.desk { display: grid; grid-template-columns: minmax(280px, .85fr) minmax(0, 1.3fr); align-items: start; gap: var(--space-6); }
+.observationHead { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-4); flex-wrap: wrap; }
+.code { color: var(--muted-foreground); overflow-wrap: anywhere; margin: var(--space-1) 0 var(--space-3); }
+.contents { display: flex; flex-direction: column; gap: var(--space-1); padding: var(--space-4) 0; border-block: 1px solid var(--border); margin: var(--space-4) 0; }
+.contents strong { font-size: 24px; line-height: 32px; color: var(--foreground); overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.contents span { color: var(--muted-foreground); }
+.formLegend { font-size: 18px; font-weight: 600; padding: 0 0 var(--space-4); }
+.conversion { padding: var(--space-3) var(--space-4); border-radius: var(--radius-control); background: var(--secondary); color: var(--secondary-foreground); font-weight: 600; margin: 0; overflow-wrap: anywhere; }
+.review { padding: var(--space-6); border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--card); }
+.history { list-style: none; margin: var(--space-6) 0; padding: 0; display: grid; gap: 0; }
+.history > li { border-top: 1px solid var(--border); padding: var(--space-4) 0; overflow-wrap: anywhere; }
 .history h3 { margin: 0; }
-.history p { margin: 8px 0; }
-.history time, .history summary { color: #4d6570; font-size: 14px; }
-.history summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; }
+.history p { margin: var(--space-2) 0; }
+.history time, .history summary { color: var(--muted-foreground); font-size: 14px; }
+.history summary { cursor: pointer; min-height: var(--control-h); display: flex; align-items: center; }
 @media (max-width: 820px) {
   .desk { grid-template-columns: minmax(0, 1fr); }
-  .headingRow { align-items: flex-start; }
-  .review { padding: 20px; }
+  .review { padding: var(--space-4); }
 }

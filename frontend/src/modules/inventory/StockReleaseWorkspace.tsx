@@ -18,6 +18,13 @@ import { releaseChoiceKey, releaseLocationKey, type ReleasePreview, type Release
 import common from '../administration/access.module.css';
 import styles from './stock-source-policy.module.css';
 import { formatDateTime, formatMoney } from "@/lib/format";
+import { Button } from '@/components/workspace-kit/button';
+import { PageHeader } from '@/components/workspace-kit/page-header';
+import { Section } from '@/components/workspace-kit/section';
+import { StateView } from '@/components/workspace-kit/state-view';
+import { DataList } from '@/components/workspace-kit/data-list';
+import { Badge } from '@/components/workspace-kit/badge';
+import { Facts } from '@/components/workspace-kit/facts';
 
 const path = '/inventory/stock-releases';
 const factor = '/identity/account?operation=stock.release.approve&returnPath=' + encodeURIComponent(path);
@@ -71,10 +78,9 @@ export function StockReleaseWorkspace() {
   }, [refresh]);
   return <main className={common.page}>
     <a className={styles.skip} href="#release-workspace">Langsung ke pelepasan stok</a>
-    <header className={common.header}><div><Link className={common.brand} href="/identity/account">Unit Toko</Link>
-      <p className={styles.eyebrow}>Pengelolaan persediaan</p><h1>Pelepasan stok ditahan</h1><p>Periksa kemasan, lot dan jumlah barang yang mutu serta nilainya sudah disetujui.</p></div></header>
-    <div id="release-workspace">{loaded ? <ReleaseDesk key={loaded.actorId + ':' + loaded.generation} loaded={loaded} refresh={refresh} /> :
-      (loading ? <section className={common.state} aria-busy="true"><h2>Memeriksa sesi dan akses</h2></section>
+    <PageHeader title="Pelepasan stok ditahan" description="Periksa kemasan, lot dan jumlah barang yang mutu serta nilainya sudah disetujui." />
+    <div id="release-workspace" className="ui-stack">{loaded ? <ReleaseDesk key={loaded.actorId + ':' + loaded.generation} loaded={loaded} refresh={refresh} /> :
+      (loading ? <StateView kind="loading" title="Memeriksa sesi dan akses" />
         : <SessionAccessState error={error} returnPath={path} onRetry={() => void refresh()} detail={error !== null ? message(error) : undefined} />)}</div>
   </main>;
 }
@@ -99,17 +105,16 @@ function ReleaseDesk({ loaded, refresh }: { loaded: Loaded; refresh: () => Promi
   if (state.expired || state.suspended) return <SessionAccessState error={state.error} kind={state.expired ? 'expired' : lostAccessKind(state.error)} returnPath={path} busy={busy} onRetry={() => void refresh()} detail={state.error !== null ? message(state.error) : undefined} />;
   return <>
     <AdministrationNavigation current="stock-releases" actions={loaded.actions} locked={locked} />
-    <section className={common.accountSection}><div className={styles.heading}><div><h2>Gudang yang ditugaskan</h2>
-      <p>Petugas: <strong>{loaded.session.account?.displayName ?? loaded.session.account?.verifiedEmail}</strong></p></div>
-      <button className={common.secondary} type="button" disabled={busy || state.review !== null} onClick={() => void refresh()}>Muat ulang sesi dan akses</button></div>
+    <Section title="Gudang yang ditugaskan" description={<>Petugas: <strong>{loaded.session.account?.displayName ?? loaded.session.account?.verifiedEmail}</strong></>}
+      actions={<Button variant="secondary" disabled={busy || state.review !== null} onClick={() => void refresh()}>Muat ulang sesi dan akses</Button>}>
       {editor.canApprove && <p className={common.help}>{state.fresh ? 'Verifikasi dua langkah masih baru. ' : 'Peninjauan memerlukan verifikasi dua langkah terbaru. '}
         <Link href={factor} aria-disabled={busy} onClick={event => { if (busy) event.preventDefault(); }}>Verifikasi untuk peninjauan</Link></p>}
-    </section>
+    </Section>
     <aside className={styles.notice}><strong>Pelepasan mengikuti mutu dan penilaian yang sudah disetujui.</strong>
       <p>Pengajuan memerlukan peninjauan oleh orang yang berbeda. Persetujuan memindahkan jumlah terpilih dari stok ditahan ke stok tersedia beserta nilai yang tercatat.</p></aside>
     {state.sending && <p role="status">Menyimpan permintaan… Tunggu hasil sebelum melanjutkan.</p>}
-    {state.error !== null && <p role="alert" className={common.alert}>{message(state.error)}</p>}
-    {state.recoveryError !== null && <p role="alert" className={common.alert}>{message(state.recoveryError)}</p>}
+    {state.error !== null && <StateView kind="error" title={message(state.error)} />}
+    {state.recoveryError !== null && <StateView kind="error" title={message(state.recoveryError)} />}
     <OperationRecovery entries={state.references} journal={editor.journal} disabled={state.sending || state.review !== null}
       recoveryAdapters={{ 'inventory.stock-release': { lookup: editor.receipt } }} onResolved={editor.reconciled}
       onFailure={editor.recoveryFailed} onBusyChange={editor.setRecovering} />
@@ -118,68 +123,69 @@ function ReleaseDesk({ loaded, refresh }: { loaded: Loaded; refresh: () => Promi
     {state.result && <div ref={resultFocus} tabIndex={-1} role="status" className={common.success}><h2>Hasil pelepasan tercatat</h2>
       <p>{status[state.result.status]} · pengajuan #{state.result.proposalId}</p>
       {state.result.transferredValue !== null && <p>Nilai yang dilepas: {amount(state.result.transferredValue)}.</p>}
-      <button className={common.secondary} type="button" disabled={locked || state.loadingSources || state.loadingHistory} onClick={() => void editor.refreshWarehouse()}>Periksa stok dan riwayat terbaru</button></div>}
-    <section className={common.accountSection} aria-busy={state.loadingWarehouses}><h2>Pilih lokasi pelepasan</h2>
+      <Button variant="secondary" type="button" disabled={locked || state.loadingSources || state.loadingHistory} onClick={() => void editor.refreshWarehouse()}>Periksa stok dan riwayat terbaru</Button></div>}
+    <Section title="Pilih lokasi pelepasan" busy={state.loadingWarehouses}>
       <label><span id="release-warehouse-label">Gudang dan kanal</span><select aria-labelledby="release-warehouse-label" required value={state.warehouse ? releaseLocationKey(state.warehouse.location) : ''} disabled={locked || state.loadingWarehouses}
         onChange={event => { const choice = state.warehouses.find(item => releaseLocationKey(item.location) === event.target.value); void editor.chooseWarehouse(choice?.location ?? null); }}>
         <option value="">Pilih gudang yang ditugaskan</option>{state.warehouses.map(item => <option key={releaseLocationKey(item.location)} value={releaseLocationKey(item.location)}>
           {item.organizationName} / {item.shopName} / {item.warehouseName} / {item.channelName}</option>)}</select></label>
       {state.loadingWarehouses && <p role="status">Memuat gudang…</p>}{!state.loadingWarehouses && state.warehouses.length === 0 && !state.references.length && <p>Belum ada gudang yang dapat digunakan untuk pelepasan dalam penugasan ini.</p>}
-      <button className={common.secondary} type="button" disabled={locked || state.loadingWarehouses} onClick={() => void editor.loadWarehouses()}>Muat ulang gudang</button>
-    </section>
-    {state.warehouse && editor.canPropose && <section className={common.accountSection} aria-busy={state.loadingSources}><h2>Ajukan barang yang akan dilepas</h2>
-      <p>Pilih penerimaan, kemasan dan lot yang tercatat. Daftar ini menampilkan paling banyak 25 pilihan yang memenuhi pemeriksaan saat ini.</p>
+      <Button variant="secondary" disabled={locked || state.loadingWarehouses} onClick={() => void editor.loadWarehouses()}>Muat ulang gudang</Button>
+    </Section>
+    {state.warehouse && editor.canPropose && <Section title="Ajukan barang yang akan dilepas" busy={state.loadingSources}
+      description="Pilih penerimaan, kemasan dan lot yang tercatat. Daftar ini menampilkan paling banyak 25 pilihan yang memenuhi pemeriksaan saat ini.">
       <label><span id="release-source-label">Barang dan lot</span><select aria-labelledby="release-source-label" required disabled={locked || state.loadingSources} value={state.choice ? releaseChoiceKey(state.choice) : ''} onChange={event => editor.chooseSource(event.target.value)}>
         <option value="">Pilih barang yang sudah diperiksa</option>{state.sources.map(item => <option key={releaseChoiceKey(item)} value={releaseChoiceKey(item)}>
           {item.productName} / {item.packagingLabel} / Lot {item.lotReference} / {item.receiptReference}</option>)}</select></label>
       {state.loadingSources && <p role="status">Memeriksa barang, mutu dan penilaian…</p>}{!state.loadingSources && state.sources.length === 0 && <p>Belum ada barang yang dapat dilepas. Selesaikan pemeriksaan mutu, penilaian dan pengaturan sumber yang diperlukan.</p>}
       {state.unavailableCount !== '0' && <p className={common.help}>{state.unavailableCount} catatan belum dapat dinyatakan memenuhi pemeriksaan pelepasan.</p>}
-      {state.choice && <><dl className={styles.facts}><div><dt>Kemasan</dt><dd>{state.choice.packagingLabel}</dd></div><div><dt>Lot</dt><dd>{state.choice.lotReference}</dd></div>
-        <div><dt>Kedaluwarsa</dt><dd>{state.choice.expiresOn ?? 'Tidak memiliki tanggal kedaluwarsa menurut catatan yang disetujui'}</dd></div>
-        <div><dt>Dapat dilepas pada pemeriksaan ini</dt><dd>{state.choice.releaseablePackages} kemasan</dd></div>
-        <div><dt>Nilai penilaian terpilih</dt><dd>{amount(state.choice.capitalizedValue)} · nilai pelepasan dihitung dari sisa yang tercatat</dd></div></dl>
+      {state.choice && <><Facts items={[{ term: "Kemasan", value: state.choice.packagingLabel }, { term: "Lot", value: state.choice.lotReference },
+        { term: "Kedaluwarsa", value: state.choice.expiresOn ?? 'Tidak memiliki tanggal kedaluwarsa menurut catatan yang disetujui' },
+        { term: "Dapat dilepas pada pemeriksaan ini", value: <>{state.choice.releaseablePackages} kemasan</> },
+        { term: "Nilai penilaian terpilih", value: <>{amount(state.choice.capitalizedValue)} · nilai pelepasan dihitung dari sisa yang tercatat</> }]} />
         <form className={styles.form} onSubmit={event => { event.preventDefault(); void editor.previewProposal(); }}>
           <label>Jumlah kemasan yang dilepas<input required inputMode="numeric" pattern="[1-9][0-9]{0,6}" maxLength={7} value={state.packages} disabled={locked || state.loadingPreview}
-            onChange={event => editor.changePackages(event.target.value)} /></label><button className={common.primary} disabled={locked || state.loadingPreview}>{state.loadingPreview ? 'Memeriksa jumlah…' : 'Periksa stok sebelum dan sesudah'}</button></form></>}
+            onChange={event => editor.changePackages(event.target.value)} /></label><Button type="submit" variant="primary" disabled={locked || state.loadingPreview}>{state.loadingPreview ? 'Memeriksa jumlah…' : 'Periksa stok sebelum dan sesudah'}</Button></form></>}
       {state.preview && <><StockFacts value={state.preview} /><form className={styles.form} onSubmit={event => { event.preventDefault(); editor.reviewProposal(); }}>
         <label>Alasan pengajuan<textarea required rows={3} maxLength={1000} value={state.reason} disabled={locked} onChange={event => editor.changeReason(event.target.value)} /></label>
-        <button className={common.primary} disabled={locked}>Tinjau pengajuan</button></form></>}
-      <button className={common.secondary} type="button" disabled={locked || state.loadingSources} onClick={() => void editor.loadSources()}>Periksa pilihan terbaru</button>
-    </section>}
-    {state.warehouse && <section className={common.accountSection} aria-busy={state.loadingHistory || state.loadingDetail}><h2>Riwayat pengajuan pelepasan</h2>
-      <button className={common.secondary} type="button" disabled={locked || state.loadingHistory} onClick={() => void editor.loadHistory()}>Muat ulang riwayat</button>
-      {state.loadingHistory && <p role="status">Memuat pengajuan…</p>}{!state.loadingHistory && state.history.items.length === 0 && <p>Belum ada pengajuan pada halaman ini.</p>}
-      <ul className={styles.locations}>{state.history.items.map(item => <li key={item.proposalId}><strong>{item.productName} · {item.packagingLabel}</strong>
-        <span>Lot {item.lotReference} · {item.packages} kemasan · {status[item.status]}</span><span>{time(item.recordedAt)}</span>
-        <button className={common.secondary} type="button" disabled={locked || state.loadingDetail} onClick={() => void editor.loadDetail(item.proposalId)}>Periksa pengajuan #{item.proposalId}</button></li>)}</ul>
-      <div className={common.actions}>{state.historyCursor && <button className={common.secondary} disabled={locked || state.loadingHistory} onClick={() => void editor.loadHistory()}>Pengajuan terbaru</button>}
-        {state.history.nextAfter && <button className={common.secondary} disabled={locked || state.loadingHistory} onClick={() => void editor.loadHistory(state.history.nextAfter)}>Pengajuan sebelumnya</button>}</div>
-      {state.loadingDetail && <p role="status">Memeriksa rincian…</p>}{state.detail && <section className={styles.detail}><h3>Pengajuan #{state.detail.proposal.id}</h3>
+        <Button type="submit" variant="primary" disabled={locked}>Tinjau pengajuan</Button></form></>}
+      <Button variant="secondary" disabled={locked || state.loadingSources} onClick={() => void editor.loadSources()}>Periksa pilihan terbaru</Button>
+    </Section>}
+    {state.warehouse && <Section title="Riwayat pengajuan pelepasan" busy={state.loadingHistory || state.loadingDetail}
+      actions={<Button variant="secondary" disabled={locked || state.loadingHistory} onClick={() => void editor.loadHistory()}>Muat ulang riwayat</Button>}>
+      <DataList label="Riwayat pengajuan pelepasan" items={state.loadingHistory ? [] : state.history.items} getKey={item => item.proposalId} loading={state.loadingHistory}
+        empty={state.error === null ? { title: "Belum ada pengajuan pada halaman ini." } : undefined}
+        renderTitle={item => <>{item.productName} · {item.packagingLabel}</>} renderBadge={item => <Badge status={status[item.status]} />}
+        renderMeta={item => <>Lot {item.lotReference} · {item.packages} kemasan · {time(item.recordedAt)}</>}
+        renderActions={item => <Button variant="secondary" disabled={locked || state.loadingDetail} onClick={() => void editor.loadDetail(item.proposalId)}>Periksa pengajuan #{item.proposalId}</Button>} />
+      <div className={common.actions}>{state.historyCursor && <Button variant="secondary" disabled={locked || state.loadingHistory} onClick={() => void editor.loadHistory()}>Pengajuan terbaru</Button>}
+        {state.history.nextAfter && <Button variant="secondary" disabled={locked || state.loadingHistory} onClick={() => void editor.loadHistory(state.history.nextAfter)}>Pengajuan sebelumnya</Button>}</div>
+      {state.loadingDetail && <StateView kind="loading" title="Memeriksa rincian…" />}{state.detail && <section className={styles.detail}><h3>Pengajuan #{state.detail.proposal.id}</h3>
         <p>{status[state.detail.status]} · {state.detail.proposal.input.packages} kemasan</p><p>Alasan pengaju: {state.detail.proposal.reason}</p><p>{time(state.detail.proposal.proposedAt)}</p>
         {state.detail.decision && <><p>Alasan peninjau: {state.detail.decision.reason}</p><p>{time(state.detail.decision.decidedAt)}</p>
           {state.detail.decision.transferredValue !== null && <p>Nilai yang dilepas: {amount(state.detail.decision.transferredValue)}.</p>}</>}
         {state.detail.status === 'proposed' && editor.canApprove && <div className={common.actions}>
-          <button className={common.primary} disabled={locked || !state.fresh || state.loadingPreview} onClick={() => void editor.previewDecision('approve')}>Periksa pelepasan untuk disetujui</button>
-          <button className={common.secondary} disabled={locked || !state.fresh || state.loadingPreview} onClick={() => void editor.previewDecision('reject')}>Periksa penolakan</button></div>}
+          <Button variant="primary" disabled={locked || !state.fresh || state.loadingPreview} onClick={() => void editor.previewDecision('approve')}>Periksa pelepasan untuk disetujui</Button>
+          <Button variant="secondary" disabled={locked || !state.fresh || state.loadingPreview} onClick={() => void editor.previewDecision('reject')}>Periksa penolakan</Button></div>}
       </section>}
       {state.decision && <section className={styles.detail}><h3>{state.decision.action === 'approve' ? 'Pemeriksaan stok terkini oleh peninjau' : 'Tinjau penolakan pengajuan'}</h3>
         <StockFacts value={state.decision} /><form className={styles.form} onSubmit={event => { event.preventDefault(); editor.reviewDecision(); }}>
           <label>Alasan keputusan<textarea required rows={3} maxLength={1000} value={state.decisionReason} disabled={locked} onChange={event => editor.changeDecisionReason(event.target.value)} /></label>
-          <button className={common.primary} disabled={locked || !state.fresh}>Tinjau keputusan</button></form></section>}
-    </section>}
+          <Button type="submit" variant="primary" disabled={locked || !state.fresh}>Tinjau keputusan</Button></form></section>}
+    </Section>}
     {state.review && <div ref={reviewFocus} tabIndex={-1} className={styles.review}><h2>Konfirmasi {('proposalId' in state.review) ? 'keputusan' : 'pengajuan'} pelepasan</h2>
       <p>{'proposalId' in state.review ? state.review.action === 'approve' ? 'Setujui pelepasan jumlah terpilih.' : 'Tolak pengajuan dengan alasan tercatat.' : 'Kirim pengajuan untuk peninjauan independen.'}</p>
       <StockFacts value={state.review.preview} /><p>Alasan: <strong>{state.review.body.reason}</strong></p>
       <label className={common.checkbox}><input type="checkbox" checked={confirmed} disabled={busy} onChange={event => setConfirmation({ command: state.review, checked: event.target.checked })} />
         <span>Saya telah memeriksa kemasan, lot, jumlah dan alasan pada ringkasan ini serta memahami tindakan yang dipilih.</span></label>
-      <div className={common.actions}><button className={common.primary} disabled={busy || !confirmed} onClick={() => void editor.confirm(confirmed)}>Konfirmasi dan simpan</button>
-        <button className={common.secondary} disabled={busy} onClick={() => editor.cancelReview()}>Kembali</button></div></div>}
+      <div className={common.actions}><Button variant="primary" disabled={busy || !confirmed} onClick={() => void editor.confirm(confirmed)}>Konfirmasi dan simpan</Button>
+        <Button variant="secondary" disabled={busy} onClick={() => editor.cancelReview()}>Kembali</Button></div></div>}
   </>;
 }
 function StockFacts({ value }: { value: ReleasePreview | ReleaseReview }) {
-  return <div className={styles.preview}><dl className={styles.facts}><div><dt>Jumlah yang dipilih</dt><dd>{'input' in value ? value.input.packages : value.proposal.input.packages} kemasan</dd></div>
-    <div><dt>Stok ditahan sebelum → sesudah</dt><dd>{value.stockBefore.heldPackages} → {value.stockAfter.heldPackages}</dd></div>
-    <div><dt>Stok tersedia sebelum → sesudah</dt><dd>{value.stockBefore.availablePackages} → {value.stockAfter.availablePackages}</dd></div></dl>
+  return <div className={styles.preview}><Facts columns={1} items={[{ term: "Jumlah yang dipilih", value: <>{'input' in value ? value.input.packages : value.proposal.input.packages} kemasan</> },
+    { term: "Stok ditahan sebelum → sesudah", value: <>{value.stockBefore.heldPackages} → {value.stockAfter.heldPackages}</> },
+    { term: "Stok tersedia sebelum → sesudah", value: <>{value.stockBefore.availablePackages} → {value.stockAfter.availablePackages}</> }]} />
     <div><p>Mutu yang disetujui: {value.selection.acceptedPackages} kemasan.</p><p>Jumlah dalam penilaian terpilih: {value.selection.valuedPackages} kemasan.</p>
       <p>Nilai penilaian terpilih: {amount(value.selection.capitalizedValue)}.</p><p className={common.help}>Pemeriksaan: {time(value.observedAt)}. Nilai pelepasan pasti ditampilkan setelah keputusan tercatat.</p></div></div>;
 }

@@ -1,12 +1,36 @@
-.legend {font-size:18px;font-weight:700;margin-bottom:16px;}
-.twoFields {display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px;}
-.packageFacts {display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:16px;background:var(--secondary);border-radius:var(--radius-control);padding:20px;}
-.packageFacts p {grid-column:1/-1;margin:0;font-size:14px;color:#365a65;}
-.attributeFields {border:1px solid #d7e3e7;padding:18px;min-width:0;display:grid;gap:14px;}
-.attributeFields legend {font-weight:650;padding:0 6px;}
-.attributeFields>button {justify-self:start;}
-.attributeRow {display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto;align-items:end;gap:12px;}
-.notice {border-radius:var(--radius-control);background:var(--tone-warning);padding:16px;color:var(--tone-warning-foreground);}
-@media(max-width:760px){.twoFields,.packageFacts,.attributeRow {grid-template-columns:1fr;}.attributeRow {padding-bottom:16px;border-bottom:1px solid #d7e3e7;}.attributeRow>button {justify-self:start;}.packageFacts {padding:16px;}}
+/* Catalogue editor and administration on the UI standard (U-034): tokens only, on-scale spacing, weights 400/600/700, no eyebrow,
+   one level of boxing (variants are divided rows, the attribute group an inset panel). */
+.legend { font-size: 18px; font-weight: 700; margin-bottom: var(--space-4); }
+.twoFields { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-4); }
+.packageFacts { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: var(--space-4); background: var(--secondary); border-radius: var(--radius-control); padding: var(--space-6); }
+.packageFacts p { grid-column: 1 / -1; margin: 0; font-size: 14px; color: var(--muted-foreground); }
+.attributeFields { border: 0; border-radius: var(--radius-control); background: var(--muted); padding: var(--space-4); min-width: 0; display: grid; gap: var(--space-3); }
+.attributeFields legend { font-weight: 600; padding: 0; }
+.attributeFields > button { justify-self: start; }
+.attributeRow { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; align-items: end; gap: var(--space-3); }
+.notice { border-radius: var(--radius-control); background: var(--tone-warning); padding: var(--space-4); color: var(--tone-warning-foreground); }
+@media (max-width: 760px) {
+  .twoFields, .packageFacts, .attributeRow { grid-template-columns: 1fr; }
+  .attributeRow { padding-bottom: var(--space-4); border-bottom: 1px solid var(--border); }
+  .attributeRow > button { justify-self: start; }
+  .packageFacts { padding: var(--space-4); }
+}
 
-.sectionHeading {display:flex;align-items:start;justify-content:space-between;gap:16px;flex-wrap:wrap;}.sectionHeading h2,.sectionHeading h3 {margin-top:0;}.sectionHeading>button {flex-shrink:0;}.sectionHeading>div {min-width:0;}.eyebrow {font-size:13px;color:#526c76;font-weight:700;letter-spacing:.05em;margin:0 0 7px;}.categoryList,.variantList {list-style:none;margin:0;padding:0;display:grid;gap:18px;}.categoryList li {display:flex;justify-content:space-between;align-items:center;gap:14px;border-top:1px solid #d7e3e7;padding-top:18px;}.categoryList span {display:block;font-size:14px;color:#526c76;}.variantList>li {border:1px solid var(--border);border-radius:var(--radius-card);padding:20px;overflow-wrap:anywhere;}.contents {font-size:18px;margin:18px 0 10px;}.contents strong {font-size:30px;line-height:1;}.contents span {display:block;font-size:14px;color:#526c76;margin-top:7px;}.reviewFocus {margin-bottom:26px;}@media(max-width:760px){.categoryList li {align-items:start;flex-direction:column;}.variantList>li {padding:16px;}}
+.sectionHeading { display: flex; align-items: start; justify-content: space-between; gap: var(--space-4); flex-wrap: wrap; }
+.sectionHeading h2, .sectionHeading h3 { margin-top: 0; }
+.sectionHeading > button { flex-shrink: 0; }
+.sectionHeading > div { min-width: 0; }
+.categoryList, .variantList { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; }
+.categoryList li { display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); border-top: 1px solid var(--border); padding: var(--space-4) 0; }
+.categoryList li:first-child { border-top: 0; padding-top: 0; }
+.categoryList span { display: block; font-size: 14px; color: var(--muted-foreground); }
+.variantList > li { border-top: 1px solid var(--border); padding: var(--space-6) 0; overflow-wrap: anywhere; }
+.variantList > li:first-child { border-top: 0; padding-top: 0; }
+.contents { font-size: 18px; margin: var(--space-4) 0 var(--space-2); }
+.contents strong { font-size: 28px; line-height: 1; font-variant-numeric: tabular-nums; }
+.contents span { display: block; font-size: 14px; color: var(--muted-foreground); margin-top: var(--space-2); }
+.reviewFocus { margin-bottom: var(--space-6); }
+/* A review or confirmation inside a section card: an inset panel, never a second bordered card (U-008). */
+.inset { display: grid; gap: var(--space-3); padding: var(--space-4); border-radius: var(--radius-control); background: var(--muted); min-width: 0; overflow-wrap: anywhere; }
+.inset h3, .inset p { margin: 0; }
+@media (max-width: 760px) { .categoryList li { align-items: start; flex-direction: column; } }

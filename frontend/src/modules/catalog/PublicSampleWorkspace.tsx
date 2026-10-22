@@ -7,11 +7,16 @@ import { AccessFailure, accessMessage } from '../administration/workflow';
 import { createIdentityGateway } from '../identity/identity-client';
 import { IdentityFailure, sessionTiming, type IdentitySession } from '../identity/identity-workflow';
 import { SessionAccessState } from '@/components/workspace-kit/session-access-state';
-import { StatusBadge } from '@/components/workspace-kit/status-badge';
-import { EmptyState } from '@/components/workspace-kit/empty-state';
+import { Toolbar } from '@/components/workspace-kit/toolbar';
 import { dateTimeFormatter, formatNumber } from '@/lib/format';
 import { createPublicSampleGateway, publicSamplePageSize, type PublicSampleItem, type PublicSamplePage, type PublicSampleProposal } from './public-sample-client';
 import styles from '../administration/access.module.css';
+import { Button, buttonClassName } from '@/components/workspace-kit/button';
+import { PageHeader } from '@/components/workspace-kit/page-header';
+import { Section } from '@/components/workspace-kit/section';
+import { StateView } from '@/components/workspace-kit/state-view';
+import { DataList } from '@/components/workspace-kit/data-list';
+import { Badge } from '@/components/workspace-kit/badge';
 
 export const publicSamplePath = '/catalog/public';
 export const publicSampleTitle = 'Contoh katalog untuk tamu';
@@ -65,19 +70,29 @@ export function sampleMessage(error: unknown): string {
 
 export function SampleRow({ item, staged, canPropose, onToggle }: { item: PublicSampleItem; staged: boolean | undefined; canPropose: boolean;
   onToggle: (item: PublicSampleItem, show: boolean) => void }) {
-  const shown = staged ?? item.isSample;
-  return <li className={styles.queueRow}>
-    <div><strong>{item.familyName}</strong> <StatusBadge text={item.isSample ? 'Tampil untuk tamu' : 'Hanya akun cabang'} />
-      <p>{item.ownerLabel} · {formatNumber(item.packages)} kemasan terbit{item.isSample && item.packages === 0 ? '; tamu belum melihatnya' : ''}</p>
-      {item.pending && <p><StatusBadge text="Menunggu tinjauan" /> Diajukan {item.pending.adding ? 'tampil untuk tamu' : 'tidak tampil lagi'}.</p>}
-      {staged !== undefined && <p>Perubahan dipilih: {staged ? 'tampil untuk tamu' : 'tidak tampil lagi'}.</p>}
-    </div>
-    <div className={styles.actions}>
-      <button type="button" role="switch" aria-checked={shown} className={styles.secondary} disabled={!canPropose || item.pending !== null}
+  return <DataList label="Barang katalog" items={[item]} getKey={value => value.familyId} {...sampleRows(() => staged, canPropose, onToggle)} />;
+}
+
+/** One product row (DataList, ui-standard §6.3): name and guest state as the title line, owner and packages as meta, the switch on the right. */
+export function sampleRows(stagedFor: (item: PublicSampleItem) => boolean | undefined, canPropose: boolean, onToggle: (item: PublicSampleItem, show: boolean) => void) {
+  return {
+    renderTitle: (item: PublicSampleItem) => item.familyName,
+    renderBadge: (item: PublicSampleItem) => <Badge status={item.isSample ? 'Tampil untuk tamu' : 'Hanya akun cabang'} />,
+    renderMeta: (item: PublicSampleItem) => <>{item.ownerLabel} · {formatNumber(item.packages)} kemasan terbit{item.isSample && item.packages === 0 ? '; tamu belum melihatnya' : ''}</>,
+    renderContent: (item: PublicSampleItem) => { const staged = stagedFor(item); return item.pending || staged !== undefined ? <>
+      {item.pending && <p><Badge status="Menunggu tinjauan" /> Diajukan {item.pending.adding ? 'tampil untuk tamu' : 'tidak tampil lagi'}.</p>}
+      {staged !== undefined && <p>Perubahan dipilih: {staged ? 'tampil untuk tamu' : 'tidak tampil lagi'}.</p>}</> : null; },
+    renderActions: (item: PublicSampleItem) => { const shown = stagedFor(item) ?? item.isSample;
+      return <Button role="switch" aria-checked={shown} variant="secondary" disabled={!canPropose || item.pending !== null}
         aria-label={'Tampilkan untuk tamu: ' + item.familyName} onClick={() => onToggle(item, !shown)}>
-        <span aria-hidden="true">{shown ? '☑' : '☐'}</span> Tampilkan untuk tamu</button>
-    </div>
-  </li>;
+        <span aria-hidden="true">{shown ? '☑' : '☐'}</span> Tampilkan untuk tamu</Button>; },
+  };
+}
+
+/** A proposal's row title. The server falls back to "Toko 5 (nama belum tersedia)" for an unnamed catalog owner; that placeholder is
+ *  never a title (U-034): the row is then named for what it is, and the owner stays visible in the meta line. */
+export function sampleOwnerTitle(ownerLabel: string): string {
+  return /\(nama belum tersedia\)\s*$/.test(ownerLabel) ? 'Pengajuan contoh katalog' : 'Pengajuan ' + ownerLabel;
 }
 
 export function ProposalReview({ proposal, canDecide, busy, onDecide }: { proposal: PublicSampleProposal; canDecide: boolean; busy: boolean;
@@ -85,9 +100,11 @@ export function ProposalReview({ proposal, canDecide, busy, onDecide }: { propos
   const [open, setOpen] = useState<'approve' | 'reject' | null>(null), [reason, setReason] = useState('');
   const blocked = approveBlock(proposal);
   function submit(event: FormEvent) { event.preventDefault(); if (open && reason.trim()) onDecide(proposal, open === 'approve', reason.trim()); }
-  return <li className={styles.queueRow}>
-    <div><strong>Pengajuan {proposal.ownerLabel}</strong> <StatusBadge text="Menunggu tinjauan" />
-      <p>Diajukan {dateTimeFormatter.format(new Date(proposal.proposedAt))}. Alasan: {proposal.reason}</p>
+  const placeholder = sampleOwnerTitle(proposal.ownerLabel) === 'Pengajuan contoh katalog';
+  return <DataList label="Pengajuan contoh katalog" items={[proposal]} getKey={value => value.proposalId}
+    renderTitle={value => sampleOwnerTitle(value.ownerLabel)} renderBadge={() => <Badge status="Menunggu tinjauan" />}
+    renderMeta={value => <>{placeholder ? 'Pemilik katalog: ' + value.ownerLabel + ' · ' : ''}Diajukan {dateTimeFormatter.format(new Date(value.proposedAt))}. Alasan: {value.reason}</>}
+    renderContent={() => <>
       <table className={styles.preview}>
         <thead><tr><th scope="col">Barang</th><th scope="col">Sekarang</th><th scope="col">Sesudah disetujui</th></tr></thead>
         <tbody>
@@ -95,23 +112,20 @@ export function ProposalReview({ proposal, canDecide, busy, onDecide }: { propos
           {proposal.removes.map(change => <tr key={'remove-' + change.familyId}><td>{change.familyName}</td><td>Tampil untuk tamu</td><td>Tidak tampil lagi</td></tr>)}
         </tbody>
       </table>
-    </div>
-    {canDecide && <div className={styles.actions}>
-      <button type="button" className={styles.primary} disabled={busy || blocked !== null} aria-describedby={blocked ? 'own-' + proposal.proposalId : undefined}
-        onClick={() => { setOpen('approve'); setReason(''); }}>Setujui</button>
-      <button type="button" className={styles.secondary} disabled={busy || blocked !== null} onClick={() => { setOpen('reject'); setReason(''); }}>Tolak</button>
-      {blocked && <p id={'own-' + proposal.proposalId}>{blocked}</p>}
-    </div>}
-    {!canDecide && proposal.ownProposal && <p>{ownProposalNote}. Menunggu persetujuan orang lain.</p>}
-    {open && <form className={styles.form} onSubmit={submit}>
-      <label>Alasan<textarea required maxLength={1000} value={reason} onChange={event => setReason(event.target.value)}
-        placeholder={open === 'approve' ? 'Contoh: barang umum, aman dilihat tamu' : 'Contoh: masih ada barang khusus kontrak'} /></label>
-      <div className={styles.actions}>
-        <button type="submit" className={styles.primary} disabled={busy || !reason.trim()}>{busy ? 'Mengirim…' : open === 'approve' ? 'Setujui perubahan' : 'Tolak pengajuan'}</button>
-        <button type="button" className={styles.secondary} disabled={busy} onClick={() => setOpen(null)}>Batal</button>
-      </div>
-    </form>}
-  </li>;
+      {blocked && canDecide && <p id={'own-' + proposal.proposalId}>{blocked}</p>}
+      {!canDecide && proposal.ownProposal && <p>{ownProposalNote}. Menunggu persetujuan orang lain.</p>}
+      {open && <form className={styles.form} onSubmit={submit}>
+        <label>Alasan<textarea required maxLength={1000} value={reason} onChange={event => setReason(event.target.value)}
+          placeholder={open === 'approve' ? 'Contoh: barang umum, aman dilihat tamu' : 'Contoh: masih ada barang khusus kontrak'} /></label>
+        <div className="ui-actions">
+          <Button type="submit" variant="primary" disabled={busy || !reason.trim()}>{busy ? 'Mengirim…' : open === 'approve' ? 'Setujui perubahan' : 'Tolak pengajuan'}</Button>
+          <Button variant="secondary" disabled={busy} onClick={() => setOpen(null)}>Batal</Button>
+        </div>
+      </form>}</>}
+    renderActions={() => canDecide ? <>
+      <Button variant="primary" disabled={busy || blocked !== null} aria-describedby={blocked ? 'own-' + proposal.proposalId : undefined}
+        onClick={() => { setOpen('approve'); setReason(''); }}>Setujui</Button>
+      <Button variant="secondary" disabled={busy || blocked !== null} onClick={() => { setOpen('reject'); setReason(''); }}>Tolak</Button></> : null} />;
 }
 
 export function PublicSampleWorkspace() {
@@ -136,12 +150,11 @@ export function PublicSampleWorkspace() {
     if (failure instanceof AccessFailure && (failure.status === 401 || failure.code === 'actor_changed')) { setLoaded(null); setError(failure); }
   }, []);
   return <main className={styles.page}>
-    <header className={styles.header}><div><h1>{publicSampleTitle}</h1>
-      <p>Pilih barang yang boleh dilihat tamu sebagai contoh. Harga tidak pernah tampil; setiap perubahan disetujui orang kedua.</p></div>
-      <Link href="/katalog" className={styles.secondary} target="_blank" rel="noopener">Lihat katalog tamu</Link></header>
-    {loading ? <p role="status">Memeriksa akun…</p>
+    <PageHeader title={publicSampleTitle} description="Pilih barang yang boleh dilihat tamu sebagai contoh. Harga tidak pernah tampil; setiap perubahan disetujui orang kedua."
+      secondaryAction={<Link href="/katalog" className={buttonClassName({ variant: 'secondary' })} target="_blank" rel="noopener">Lihat katalog tamu</Link>} />
+    <div className="ui-stack">{loading ? <StateView kind="loading" title="Memeriksa akun…" />
       : loaded ? <SampleDesk key={loaded.actorId + ':' + loaded.observedAt} {...loaded} onLost={lost} />
-        : <SessionAccessState error={error} returnPath={publicSamplePath} onRetry={() => setAttempt(value => value + 1)} />}
+        : <SessionAccessState error={error} returnPath={publicSamplePath} onRetry={() => setAttempt(value => value + 1)} />}</div>
   </main>;
 }
 
@@ -180,40 +193,32 @@ function SampleDesk({ actorId, actions, session, observedAt, onLost }: Loaded & 
   const mixed = mixedOwners(stagedItems), over = page ? wouldExceed(page.sampleCount, staged, page.sampleLimit) : false;
   const target = [...change.adds.map(id => '+' + id), ...change.removes.map(id => '-' + id)].sort().join(',');
   const stepUp = error instanceof AccessFailure && error.code === 'step_up_required';
-  return <section aria-labelledby="sample-heading">
-    <h2 id="sample-heading" className={styles.srOnly}>Daftar barang</h2>
+  return <>
     {notice && <p role="status" className={styles.success}>{notice}</p>}
-    {error !== null && <p role="alert" className={styles.alert}>{sampleMessage(error)}{stepUp && <> <Link href={factorHref}>Verifikasi dua langkah</Link></>}</p>}
-    {page && page.proposals.length > 0 && <section aria-labelledby="sample-review">
-      <h3 id="sample-review">Menunggu tinjauan</h3>
-      <ul className={styles.queueList}>{page.proposals.map(proposal => <ProposalReview key={proposal.proposalId} proposal={proposal} canDecide={canDecide} busy={busy}
+    {error !== null && <StateView kind="error" title={sampleMessage(error)} action={stepUp ? <Link className={buttonClassName({ variant: 'secondary' })} href={factorHref}>Verifikasi dua langkah</Link> : undefined} />}
+    {page && page.proposals.length > 0 && <Section title="Menunggu tinjauan" id="sample-review"><div className="ui-stack">
+      {page.proposals.map(proposal => <ProposalReview key={proposal.proposalId} proposal={proposal} canDecide={canDecide} busy={busy}
         onDecide={(item, approve, why) => void send(approve ? 'approve' : 'reject', item.proposalId,
           key => gateway.decide(actorId, item.proposalId, approve, why, key),
-          approve ? 'Disetujui. Tamu melihat perubahan ini pada kunjungan berikutnya.' : 'Pengajuan ditolak. Contoh katalog tidak berubah.')} />)}</ul>
-    </section>}
-    <form className={styles.lookup} role="search" onSubmit={event => { event.preventDefault(); setOffset(0); setTerm(search.trim()); }}>
-      <label>Cari barang<input type="search" maxLength={64} value={search} onChange={event => setSearch(event.target.value)} placeholder="Nama barang" /></label>
-      <button type="submit" className={styles.secondary}>Cari</button>
-    </form>
-    {page && <p>{formatNumber(page.sampleCount)} dari {formatNumber(page.sampleLimit)} contoh dipakai.</p>}
-    {state === 'loading' && !page ? <p role="status">Memuat barang…</p>
-      : state === 'error' && !page ? <section className={styles.state}><h2>Daftar barang belum dapat dimuat</h2>
-        <div className={styles.actions}><button type="button" className={styles.primary} onClick={() => setReload(value => value + 1)}>Coba lagi</button></div></section>
-      : page && page.items.length === 0 ? <EmptyState kind={term ? 'no-results' : 'first-use'} title={term ? 'Barang tidak ditemukan' : 'Belum ada barang'}
-        body={term ? 'Coba kata lain.' : 'Contoh dipilih dari barang katalog yang sudah dibuat di Katalog dan persediaan.'} />
-      : page && <>
-        <ul className={styles.queueList} aria-busy={state === 'loading'}>
-          {page.items.map(item => <SampleRow key={item.familyId} item={item} staged={staged.get(item.familyId)?.show} canPropose={canPropose}
-            onToggle={(row, show) => setStaged(current => stageToggle(current, row, show))} />)}
-        </ul>
-        {page.total > publicSamplePageSize && <div className={styles.pagination}>
-          <p>{formatNumber(offset + 1)}–{formatNumber(offset + page.items.length)} dari {formatNumber(page.total)} barang</p>
-          <button type="button" className={styles.secondary} disabled={state === 'loading' || offset === 0}
-            onClick={() => setOffset(value => Math.max(0, value - publicSamplePageSize))}>Sebelumnya</button>
-          <button type="button" className={styles.secondary} disabled={state === 'loading' || offset + page.items.length >= page.total}
-            onClick={() => setOffset(value => value + publicSamplePageSize)}>Berikutnya</button></div>}
-      </>}
-    {canPropose && staged.size > 0 && <form className={styles.form} aria-label="Pengajuan contoh katalog" onSubmit={event => {
+          approve ? 'Disetujui. Tamu melihat perubahan ini pada kunjungan berikutnya.' : 'Pengajuan ditolak. Contoh katalog tidak berubah.')} />)}
+    </div></Section>}
+    <Section title="Daftar barang" id="sample-heading" busy={state === 'loading'}>
+      <Toolbar label="Cari barang contoh" resultText={page ? <>{formatNumber(page.sampleCount)} dari {formatNumber(page.sampleLimit)} contoh dipakai.</> : undefined}
+        search={<form className={styles.lookup} role="search" onSubmit={event => { event.preventDefault(); setOffset(0); setTerm(search.trim()); }}>
+          <label>Cari barang<input type="search" maxLength={64} value={search} onChange={event => setSearch(event.target.value)} placeholder="Nama barang" /></label>
+          <Button type="submit" variant="secondary">Cari</Button>
+        </form>} />
+      {state === 'loading' && !page ? <StateView kind="loading" title="Memuat barang…" />
+        : state === 'error' && !page ? <StateView kind="error" title="Daftar barang belum dapat dimuat" action={<Button onClick={() => setReload(value => value + 1)}>Coba lagi</Button>} />
+        : page && page.items.length === 0 ? <StateView kind="empty" title={term ? 'Barang tidak ditemukan' : 'Belum ada barang'}
+          message={term ? 'Coba kata lain.' : 'Contoh dipilih dari barang katalog yang sudah dibuat di Katalog dan persediaan.'} />
+        : page && <DataList label="Daftar barang" items={page.items} getKey={item => item.familyId}
+          {...sampleRows(item => staged.get(item.familyId)?.show, canPropose, (row, show) => setStaged(current => stageToggle(current, row, show)))}
+          pagination={{ label: 'Halaman barang', start: offset + 1, end: offset + page.items.length, total: page.total, disabled: state === 'loading',
+            hasPrevious: page.total > publicSamplePageSize && offset > 0, hasNext: page.total > publicSamplePageSize && offset + page.items.length < page.total,
+            onPrevious: () => setOffset(value => Math.max(0, value - publicSamplePageSize)), onNext: () => setOffset(value => value + publicSamplePageSize) }} />}
+    </Section>
+    {canPropose && staged.size > 0 && <form className="ui-section" aria-label="Pengajuan contoh katalog" onSubmit={event => {
       event.preventDefault();
       void send('propose', target, key => gateway.propose(actorId, change, reason.trim(), key), 'Pengajuan terkirim. Orang kedua perlu menyetujuinya sebelum tamu melihat perubahan.');
     }}>
@@ -222,9 +227,9 @@ function SampleDesk({ actorId, actions, session, observedAt, onLost }: Loaded & 
       {over && <p role="alert">{sampleMessage(new AccessFailure(409, 'public_sample_limit'))}</p>}
       <label>Alasan<textarea required maxLength={1000} value={reason} onChange={event => setReason(event.target.value)} placeholder="Contoh: barang umum yang aman dilihat tamu" /></label>
       <div className={styles.actions}>
-        <button type="submit" className={styles.primary} disabled={busy || mixed || over || !reason.trim()}>{busy ? 'Mengirim…' : command?.kind === 'propose' && command.target === target ? 'Kirim lagi' : 'Kirim pengajuan'}</button>
-        <button type="button" className={styles.secondary} disabled={busy} onClick={() => { setStaged(new Map()); setCommand(null); }}>Batalkan pilihan</button>
+        <Button type="submit" variant="primary" disabled={busy || mixed || over || !reason.trim()}>{busy ? 'Mengirim…' : command?.kind === 'propose' && command.target === target ? 'Kirim lagi' : 'Kirim pengajuan'}</Button>
+        <Button variant="secondary" disabled={busy} onClick={() => { setStaged(new Map()); setCommand(null); }}>Batalkan pilihan</Button>
       </div>
     </form>}
-  </section>;
+  </>;
 }

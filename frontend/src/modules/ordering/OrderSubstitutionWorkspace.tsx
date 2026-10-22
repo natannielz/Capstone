@@ -17,6 +17,14 @@ import styles from '../administration/access.module.css';
 import { formatDateTime } from '@/lib/format';
 import { SessionAccessState } from "@/components/workspace-kit/session-access-state";
 import { orderNumber } from '@/lib/document-numbers';
+import { Toolbar } from '@/components/workspace-kit/toolbar';
+import { Button, buttonClassName } from '@/components/workspace-kit/button';
+import { PageHeader } from '@/components/workspace-kit/page-header';
+import { StateView } from '@/components/workspace-kit/state-view';
+import { Section } from '@/components/workspace-kit/section';
+import { DataList } from '@/components/workspace-kit/data-list';
+import { Badge } from '@/components/workspace-kit/badge';
+import { Tabs } from '@/components/workspace-kit/tabs';
 
 type Account = { actorId: string; actions: readonly string[]; session: IdentitySession; observedAt: number };
 type Page<T> = { items: T[]; hasMore: boolean };
@@ -57,12 +65,11 @@ export function OrderSubstitutionWorkspace({ orderId = null }: { orderId?: strin
   const failed = useCallback((failure: unknown) => {
     if (failure instanceof AccessFailure && (failure.status === 401 || failure.status === 403 || failure.code === 'actor_changed')) { setAccount(null); setError(failure); }
   }, []);
-  return <main className={styles.page}><header className={styles.header}><div><Link href="/identity/account" className={styles.brand}>Unit Toko</Link>
-    <h1>Penggantian barang pesanan</h1><p>Petugas mengajukan pilihan pengganti. Pembeli memeriksa kemasan, jumlah, dan harga sebelum menyetujuinya.</p></div>
-    <Link href="/ordering/orders" className={styles.secondary}>Riwayat pesanan</Link></header>
-    {error !== null && account !== null && <p role="alert" className={styles.alert}>{message(error)}</p>}
-    {loading ? <p role="status">Memeriksa akun…</p> : !account || sessionTiming(account.session, elapsed).expired ? <SessionAccessState kind={account ? "expired" : undefined} error={error} returnPath="/ordering/substitutions" onRetry={() => setRevision(value => value + 1)} />
-      : <SubstitutionDesk key={account.actorId + ':' + account.observedAt} account={account} orderId={orderId} onFailure={failed} />}
+  return <main className={styles.page}><PageHeader title="Penggantian barang pesanan" description="Petugas mengajukan pilihan pengganti. Pembeli memeriksa kemasan, jumlah, dan harga sebelum menyetujuinya." secondaryAction={<Link href="/ordering/orders" className={buttonClassName({ variant: 'secondary' })}>Riwayat pesanan</Link>} />
+    <div className="ui-stack">
+    {error !== null && account !== null && <StateView kind="error" title={message(error)} />}
+    {loading ? <StateView kind="loading" title="Memeriksa akun…" /> : !account || sessionTiming(account.session, elapsed).expired ? <SessionAccessState kind={account ? "expired" : undefined} error={error} returnPath="/ordering/substitutions" onRetry={() => setRevision(value => value + 1)} />
+      : <SubstitutionDesk key={account.actorId + ':' + account.observedAt} account={account} orderId={orderId} onFailure={failed} />}</div>
   </main>;
 }
 
@@ -152,47 +159,51 @@ function SubstitutionDesk({ account, orderId, onFailure }: { account: Account; o
   }
   return <>
     <AdministrationNavigation current="substitutions" actions={actions} locked={locked} />
-    <div className={styles.actions}>
-      {actions.includes('substitution.accept') && actions.includes('substitution.propose') && <><button className={styles.secondary} disabled={locked || forBuyer} onClick={() => { resetSelection(); setHistoryBefore(null); setTargetBefore(null); setForBuyer(true); }}>Keputusan pembeli</button>
-        <button className={styles.secondary} disabled={locked || !forBuyer} onClick={() => { resetSelection(); setHistoryBefore(null); setTargetBefore(null); setForBuyer(false); }}>Pengajuan petugas</button></>}
-      <button className={styles.secondary} disabled={locked} onClick={() => { resetSelection(); setHistoryBefore(null); setTargetBefore(null); setReload(value => value + 1); }}>Muat ulang penggantian</button>
-    </div>
+    <Toolbar label="Tampilan penggantian"
+      filters={actions.includes('substitution.accept') && actions.includes('substitution.propose') ? <Tabs label="Bagian penggantian" current={forBuyer ? 'buyer' : 'staff'} disabled={locked}
+        items={[{ label: 'Keputusan pembeli', value: 'buyer' }, { label: 'Pengajuan petugas', value: 'staff' }]}
+        onSelect={value => { const buyer = value === 'buyer'; if (buyer === forBuyer) return; resetSelection(); setHistoryBefore(null); setTargetBefore(null); setForBuyer(buyer); }} /> : undefined}
+      actions={<Button variant="secondary" disabled={locked} onClick={() => { resetSelection(); setHistoryBefore(null); setTargetBefore(null); setReload(value => value + 1); }}>Muat ulang penggantian</Button>} />
     {notice && <p role="status" className={styles.help}>{notice}</p>}
-    {error !== null && <p role="alert" className={styles.alert}>{message(error)}</p>}
-    {recovery.error !== null && <p role="alert" className={styles.alert}>{accessMessage(recovery.error)}</p>}
+    {error !== null && <StateView kind="error" title={message(error)} />}
+    {recovery.error !== null && <StateView kind="error" title={accessMessage(recovery.error)} />}
     <OperationRecovery entries={recovery.entries} journal={recovery.journal} disabled={busy || reading || expired} onBusyChange={setRecovering} onFailure={onFailure}
       recoveryAdapters={{ 'ordering.substitution': { lookup: async entry => { const result = await gateway.recover(entry.actorId, substitutionOperation(entry.operation), entry.key, current); recovered.current = result?.result ?? null; return result; } } }}
       onResolved={() => { recovery.refresh(); ledger.resetAfterReconciliation(); setError(null); if (current() && recovered.current) saved(recovered.current); recovered.current = null; }} />
-    {reading && <p role="status">Memuat pesanan dan pengajuan…</p>}
-    {!forBuyer && <section className={styles.accountSection}><h2>Ajukan barang pengganti</h2><p>Pilih sisa barang yang belum dikirim. Pengajuan ini belum mengubah pesanan atau cadangan barang.</p>
-      {!reading && targets.items.length === 0 && <p>Belum ada pesanan dalam penugasan Anda.</p>}
-      <ul className={styles.recoveryList}>{targets.items.map(value => <li key={value.suborderId}><div><strong>{value.buyerName}</strong><p>Pesanan {orderNumber(value.orderId)} · {value.lines.filter(line => line.remainingPackages > 0).map(line => `${line.line.familyName}: ${line.remainingPackages} ${line.line.definition.packageLabel}`).join(', ') || 'Tidak ada sisa barang'}</p></div>
-        <button className={styles.secondary} disabled={locked || !value.canPropose} onClick={() => { resetSelection(); setTarget(value); }}>Pilih pesanan {orderNumber(value.orderId)}</button></li>)}</ul>
-      {targets.hasMore && <button className={styles.secondary} disabled={locked} onClick={() => { resetSelection(); setTargetBefore(targets.items.at(-1)!.suborderId); }}>Pesanan berikutnya</button>}
+    {reading && <StateView kind="loading" title="Memuat pesanan dan pengajuan…" rows={2} />}
+    {!forBuyer && <Section title="Ajukan barang pengganti" description="Pilih sisa barang yang belum dikirim. Pengajuan ini belum mengubah pesanan atau cadangan barang.">
+      <DataList label="Pesanan untuk penggantian" items={targets.items} getKey={value => value.suborderId} loading={reading}
+        empty={error === null ? { title: 'Belum ada pesanan dalam penugasan Anda.' } : undefined}
+        renderTitle={value => value.buyerName}
+        renderMeta={value => <>Pesanan {orderNumber(value.orderId)} · {value.lines.filter(line => line.remainingPackages > 0).map(line => `${line.line.familyName}: ${line.remainingPackages} ${line.line.definition.packageLabel}`).join(', ') || 'Tidak ada sisa barang'}</>}
+        renderActions={value => <Button variant="secondary" disabled={locked || !value.canPropose} onClick={() => { resetSelection(); setTarget(value); }}>Pilih pesanan {orderNumber(value.orderId)}</Button>} />
+      {targets.hasMore && <div className="ui-actions"><Button variant="secondary" disabled={locked} onClick={() => { resetSelection(); setTargetBefore(targets.items.at(-1)!.suborderId); }}>Pesanan berikutnya</Button></div>}
       {target && <div className={styles.review}><h3>{target.buyerName} · Pesanan {orderNumber(target.orderId)}</h3>
         <label><span id={name('original')}>Barang asal</span><select aria-labelledby={name('original')} disabled={locked} value={originalSku} onChange={event => { clearReview(); setOriginalSku(event.target.value); setOriginalPackages(''); }}><option value="">Pilih barang yang belum dikirim</option>
           {target.lines.filter(value => value.remainingPackages > 0).map(value => <option key={substitutionLineKey(value.line)} value={substitutionLineKey(value.line)}>{label(value.line)} · {amount(value.line.price.currency, value.line.price.unitPrice)} · {value.line.lineRevision === '0' ? 'pesanan awal' : `persetujuan ke-${value.line.lineRevision}`} · sisa {value.remainingPackages}</option>)}</select></label>
         <label><span id={name('original-packages')}>Jumlah kemasan asal yang diganti</span><input aria-labelledby={name('original-packages')} disabled={locked} inputMode="numeric" value={originalPackages} onChange={event => { clearReview(); setOriginalPackages(event.target.value); }} /></label>
         <form onSubmit={event => { event.preventDefault(); void findPackages(); }}><label><span id={name('search')}>Cari nama barang pengganti</span><input aria-labelledby={name('search')} disabled={locked} value={search} maxLength={100} onChange={event => { clearReview(); setSearch(event.target.value); }} /></label>
-          <button className={styles.secondary} disabled={locked}>Cari kemasan pengganti</button></form>
-        <ul className={styles.recoveryList}>{packages.items.map(value => <li key={value.definition.skuId}><div><strong>{label(value)}</strong><p>{amount(value.price.currency, value.price.unitPrice)} per kemasan · minimum {value.definition.minimumOrderPackages}, kelipatan {value.definition.orderIncrementPackages}</p></div>
-          <button className={styles.secondary} disabled={locked} onClick={() => { clearReview(); setReplacement(value); setReplacementPackages(String(value.definition.minimumOrderPackages)); }}>Pilih {value.definition.packageLabel}</button></li>)}</ul>
-        {packages.hasMore && <button className={styles.secondary} disabled={locked} onClick={() => void findPackages(packages.items.at(-1)!.definition.skuId)}>Kemasan berikutnya</button>}
+          <Button type="submit" variant="secondary" disabled={locked}>Cari kemasan pengganti</Button></form>
+        <DataList label="Kemasan pengganti" items={packages.items} getKey={value => value.definition.skuId}
+          renderTitle={value => label(value)} renderMeta={value => <>{amount(value.price.currency, value.price.unitPrice)} per kemasan · minimum {value.definition.minimumOrderPackages}, kelipatan {value.definition.orderIncrementPackages}</>}
+          renderActions={value => <Button variant="secondary" disabled={locked} onClick={() => { clearReview(); setReplacement(value); setReplacementPackages(String(value.definition.minimumOrderPackages)); }}>Pilih {value.definition.packageLabel}</Button>} />
+        {packages.hasMore && <div className="ui-actions"><Button variant="secondary" disabled={locked} onClick={() => void findPackages(packages.items.at(-1)!.definition.skuId)}>Kemasan berikutnya</Button></div>}
         {replacement && <><p><strong>Pengganti: {label(replacement)}</strong></p><label><span id={name('replacement-packages')}>Jumlah kemasan pengganti</span><input aria-labelledby={name('replacement-packages')} disabled={locked} inputMode="numeric" value={replacementPackages} onChange={event => { clearReview(); setReplacementPackages(event.target.value); }} /></label>
-          <button className={styles.primary} disabled={locked || !originalSku || !originalPackages || !replacementPackages} onClick={() => void previewProposal()}>Tinjau pengajuan penggantian</button></>}
+          <Button variant="primary" disabled={locked || !originalSku || !originalPackages || !replacementPackages} onClick={() => void previewProposal()}>Tinjau pengajuan penggantian</Button></>}
       </div>}
-    </section>}
-    <section className={styles.accountSection}><h2>{forBuyer ? 'Pengajuan untuk pembeli' : 'Riwayat pengajuan'}</h2>
-      {orderId && <p>Penggantian terkait pesanan {orderNumber(orderId)}. Rincian pesanan awal dan kiriman sebelumnya tetap tersimpan.</p>}
-      {!reading && history.items.length === 0 && <p>Belum ada pengajuan penggantian.</p>}
-      <ul className={styles.recoveryList}>{history.items.map(value => <li key={value.proposalId}><div><strong>{value.buyerName} · Pesanan {orderNumber(value.orderId)}</strong>
-        <p>{value.input.originalPackages} × {label(value.original)} → {value.replacement.packages} × {label(value.replacement)}</p>
-        <p>Harga pengganti {amount(value.replacement.price.currency, value.replacement.price.unitPrice)} per kemasan · subtotal {amount(value.replacement.price.currency, value.replacement.catalogSubtotal)}</p>
-        <p>{statusLabel[value.status]} · diajukan {formatDateTime(value.proposedAt)}{value.decidedAt ? ` · diputuskan ${formatDateTime(value.decidedAt)}` : ''}</p></div>
-        {forBuyer && value.status === 'pending' && <div className={styles.actions}><button className={styles.primary} disabled={locked} onClick={() => void reviewDecision(value, 'Accept')}>Tinjau persetujuan</button><button className={styles.secondary} disabled={locked} onClick={() => void reviewDecision(value, 'Decline')}>Tinjau penolakan</button></div>}</li>)}</ul>
-      {history.hasMore && <button className={styles.secondary} disabled={locked} onClick={() => { clearReview(); setHistoryBefore(history.items.at(-1)!.proposalId); }}>Pengajuan sebelumnya</button>}
-    </section>
-    {(proposalReview || decisionReview) && <section ref={panel} tabIndex={-1} className={styles.review} aria-labelledby="substitution-review-heading"><h2 id="substitution-review-heading">{proposalReview ? 'Konfirmasi pengajuan penggantian' : decisionReview!.decision === 'Accept' ? 'Konfirmasi persetujuan pembeli' : 'Konfirmasi penolakan pembeli'}</h2>
+    </Section>}
+    <Section title={forBuyer ? 'Pengajuan untuk pembeli' : 'Riwayat pengajuan'} id="substitution-history"
+      description={orderId ? <>Penggantian terkait pesanan {orderNumber(orderId)}. Rincian pesanan awal dan kiriman sebelumnya tetap tersimpan.</> : undefined}>
+      <DataList label={forBuyer ? 'Pengajuan untuk pembeli' : 'Riwayat pengajuan'} items={history.items} getKey={value => value.proposalId} loading={reading}
+        empty={error === null ? { title: 'Belum ada pengajuan penggantian.' } : undefined}
+        renderTitle={value => <>{value.buyerName} · Pesanan {orderNumber(value.orderId)}</>} renderBadge={value => <Badge status={statusLabel[value.status]} />}
+        renderMeta={value => <>diajukan {formatDateTime(value.proposedAt)}{value.decidedAt ? ` · diputuskan ${formatDateTime(value.decidedAt)}` : ''}</>}
+        renderContent={value => <><p>{value.input.originalPackages} × {label(value.original)} → {value.replacement.packages} × {label(value.replacement)}</p>
+          <p>Harga pengganti {amount(value.replacement.price.currency, value.replacement.price.unitPrice)} per kemasan · subtotal {amount(value.replacement.price.currency, value.replacement.catalogSubtotal)}</p></>}
+        renderActions={value => forBuyer && value.status === 'pending' ? <><Button variant="primary" disabled={locked} onClick={() => void reviewDecision(value, 'Accept')}>Tinjau persetujuan</Button><Button variant="secondary" disabled={locked} onClick={() => void reviewDecision(value, 'Decline')}>Tinjau penolakan</Button></> : null} />
+      {history.hasMore && <div className="ui-actions"><Button variant="secondary" disabled={locked} onClick={() => { clearReview(); setHistoryBefore(history.items.at(-1)!.proposalId); }}>Pengajuan sebelumnya</Button></div>}
+    </Section>
+    {(proposalReview || decisionReview) && <section ref={panel} tabIndex={-1} className="ui-section" aria-labelledby="substitution-review-heading"><h2 id="substitution-review-heading">{proposalReview ? 'Konfirmasi pengajuan penggantian' : decisionReview!.decision === 'Accept' ? 'Konfirmasi persetujuan pembeli' : 'Konfirmasi penolakan pembeli'}</h2>
       <p>Pesanan {orderNumber((proposalReview?.input.orderId ?? decisionReview!.orderId))}</p>
       <p><strong>Barang asal:</strong> {proposalReview?.input.originalPackages ?? decisionReview!.originalPackages} × {label((proposalReview ?? decisionReview)!.original)} · {amount((proposalReview ?? decisionReview)!.original.price.currency, (proposalReview ?? decisionReview)!.original.price.unitPrice)} per kemasan</p>
       <p><strong>Barang pengganti:</strong> {(proposalReview ?? decisionReview)!.replacement.packages} × {label((proposalReview ?? decisionReview)!.replacement)} · {amount((proposalReview ?? decisionReview)!.replacement.price.currency, (proposalReview ?? decisionReview)!.replacement.price.unitPrice)} per kemasan</p>
@@ -205,8 +216,8 @@ function SubstitutionDesk({ account, orderId, onFailure }: { account: Account; o
       </>}
       <form onSubmit={event => { event.preventDefault(); void submit(); }}><label><span id={name('reason')}>Alasan</span><textarea aria-labelledby={name('reason')} disabled={locked} value={reason} maxLength={1000} required onChange={event => setReason(event.target.value)} /></label>
         <label className={styles.checkbox}><input type="checkbox" disabled={locked} checked={confirmed} onChange={event => setConfirmed(event.target.checked)} /><span>{proposalReview ? 'Saya telah memeriksa barang, kemasan, jumlah, dan harga pengganti untuk diajukan kepada pembeli.' : decisionReview!.decision === 'Accept' ? 'Saya menyetujui barang, kemasan, jumlah, harga, pajak, biaya, dan total pesanan yang ditampilkan.' : 'Saya menolak penggantian ini dan mempertahankan rincian pesanan saat ini.'}</span></label>
-        <div className={styles.actions}><button className={styles.primary} disabled={locked || !confirmed || !reason.trim()}>{proposalReview ? 'Kirim pengajuan ke pembeli' : decisionReview!.decision === 'Accept' ? 'Setujui penggantian barang' : 'Tolak penggantian barang'}</button>
-          <button type="button" className={styles.secondary} disabled={locked} onClick={clearReview}>Kembali</button></div></form>
+        <div className={styles.actions}><Button type="submit" variant="primary" disabled={locked || !confirmed || !reason.trim()}>{proposalReview ? 'Kirim pengajuan ke pembeli' : decisionReview!.decision === 'Accept' ? 'Setujui penggantian barang' : 'Tolak penggantian barang'}</Button>
+          <Button variant="secondary" disabled={locked} onClick={clearReview}>Kembali</Button></div></form>
     </section>}
   </>;
 }

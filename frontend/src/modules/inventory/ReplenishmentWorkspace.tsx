@@ -14,6 +14,12 @@ import {createReplenishmentGateway, isReplenishmentRecoveryKey, parseReplenishme
 import common from '../administration/access.module.css';
 import styles from './replenishment.module.css';
 import { dateTimeFormatter, numberFormatter } from '@/lib/format';
+import { Button, buttonClassName } from '@/components/workspace-kit/button';
+import { PageHeader } from '@/components/workspace-kit/page-header';
+import { Section } from '@/components/workspace-kit/section';
+import { StateView } from '@/components/workspace-kit/state-view';
+import { Facts } from '@/components/workspace-kit/facts';
+import { Pagination } from '@/components/workspace-kit/pagination';
 
 const path = '/inventory/replenishment';
 type Account = {actorId: string; actions: readonly string[]; session: IdentitySession; observedAt: number};
@@ -57,10 +63,9 @@ export function ReplenishmentWorkspace() {
   }); const restored = (event: PageTransitionEvent) => {if (event.persisted) setGeneration(value => value + 1);};
     window.addEventListener('pageshow', restored); return () => {active = false; controller.abort(); window.removeEventListener('pageshow', restored);};
   }, [identity, access, generation]);
-  return <main className={common.page}><header className={common.header}><div><Link className={common.brand} href="/identity/account">Unit Toko</Link>
-    <h1>Kebutuhan pembelian</h1><p>Tinjau stok, pesanan dan pasokan masuk untuk memperkirakan kebutuhan selama waktu tunggu.</p></div><Link href="/identity/account">Akun saya</Link></header>
-    {loading ? <p role="status">Memeriksa sesi dan akses…</p> : account ? <Desk key={account.actorId + ':' + account.observedAt} account={account} refresh={() => setGeneration(value => value + 1)} /> :
-      <SessionAccessState error={error} returnPath={path} onRetry={() => setGeneration(value => value + 1)} detail={error !== null ? message(error) : undefined} />}
+  return <main className={common.page}><PageHeader title="Kebutuhan pembelian" description="Tinjau stok, pesanan dan pasokan masuk untuk memperkirakan kebutuhan selama waktu tunggu." />
+    <div className="ui-stack">{loading ? <StateView kind="loading" title="Memeriksa sesi dan akses…" /> : account ? <Desk key={account.actorId + ':' + account.observedAt} account={account} refresh={() => setGeneration(value => value + 1)} /> :
+      <SessionAccessState error={error} returnPath={path} onRetry={() => setGeneration(value => value + 1)} detail={error !== null ? message(error) : undefined} />}</div>
   </main>;
 }
 
@@ -156,62 +161,62 @@ function Desk({account, refresh}: {account: Account; refresh: () => void}) {
   if (expired) return <SessionAccessState error={null} kind="expired" returnPath={path} onRetry={refresh} />;
   const locked = busy || offline || storageBlocked || pending !== null;
   return <>
-    {error !== null && <p className={common.alert} role="alert">{message(error)}</p>}{notice && <p role="status">{notice}</p>}{offline && <p role="status">Koneksi terputus. Pilihan dan pengiriman dinonaktifkan.</p>}
+    {error !== null && <StateView kind="error" title={message(error)} />}{notice && <p role="status">{notice}</p>}{offline && <p role="status">Koneksi terputus. Pilihan dan pengiriman dinonaktifkan.</p>}
     {storageBlocked && <section className={common.review}><h2>Referensi pemeriksaan belum dapat dibaca</h2><p>Penyimpanan browser belum dapat dipastikan. Pengiriman dikunci agar referensi hasil sebelumnya tetap terlindungi.</p>
-      <button type="button" disabled={busy} onClick={() => {try {syncPending(); setError(null);} catch (failure) {setError(failure);}}}>Periksa referensi browser</button></section>}
+      <Button disabled={busy} onClick={() => {try {syncPending(); setError(null);} catch (failure) {setError(failure);}}}>Periksa referensi browser</Button></section>}
     {pending && <section className={common.review}><h2>Periksa hasil yang belum terkonfirmasi</h2><p>Referensi pemeriksaan disimpan tanpa isi formulir. Jangan mengirim pemeriksaan yang sama lagi.</p>
-      <button type="button" className={common.primary} disabled={busy || offline || storageBlocked} onClick={() => void recover()}>Periksa hasil tersimpan</button></section>}
-    <section className={common.state} aria-busy={busy}><h2>Pilih gudang dan barang</h2>
+      <Button variant="primary" disabled={busy || offline || storageBlocked} onClick={() => void recover()}>Periksa hasil tersimpan</Button></section>}
+    <Section title="Pilih gudang dan barang" busy={busy}>
       <label className={styles.field}>Gudang<select aria-label="Gudang" disabled={locked} value={place ? stockLocationKey(place.location) : ''}
         onChange={event => {const selected = warehouses.find(item => stockLocationKey(item.location) === event.target.value); if (selected) void selectPlace(selected);}}>
         <option value="">Pilih gudang</option>{warehouses.map(item => <option key={stockLocationKey(item.location)} value={stockLocationKey(item.location)}>{item.organizationName} · {item.shopName} · {item.warehouseName} · {item.channelName}</option>)}</select></label>
       {place && <><label className={styles.field}>Sumber stok<select aria-label="Sumber stok" disabled={locked} value={source?.id ?? ''} onChange={event => {setSource(sources.find(item => item.id === event.target.value) ?? null); setValue(null);}}>
         <option value="">Pilih sumber fisik</option>{sources.map(item => <option key={item.id} value={item.id}>{item.label} · {item.physicalKey}{item.active ? '' : ' · Tidak aktif'}</option>)}</select></label>
         {sources.length === 0 && <p>Belum ada sumber stok yang dapat ditampilkan untuk gudang ini.</p>}
-        <form className={styles.search} onSubmit={event => {event.preventDefault(); void find();}}><label className={styles.field}>Cari barang<input aria-label="Cari barang" value={search} maxLength={128} disabled={locked} onChange={event => setSearch(event.target.value)} /></label><button disabled={locked} type="submit">Cari kemasan</button></form>
-        <div className={styles.options}>{packages.map(item => <button key={item.skuId} className={common.secondary} type="button" disabled={locked} aria-pressed={choice?.skuId === item.skuId}
-          onClick={() => {setChoice(item); setValue(null);}}><strong>{item.familyName} — {item.packageLabel}</strong><span>{item.skuCode} · {item.baseUnitsPerPackage} {item.baseUnitCode} per kemasan</span></button>)}</div>
-        {(offset > 0 || hasMore) && <div className={common.actions}><button disabled={locked || offset === 0} onClick={() => void find(Math.max(0, offset - 25))}>Sebelumnya</button><button disabled={locked || !hasMore} onClick={() => void find(offset + 25)}>Berikutnya</button></div>}
+        <form className={styles.search} onSubmit={event => {event.preventDefault(); void find();}}><label className={styles.field}>Cari barang<input aria-label="Cari barang" value={search} maxLength={128} disabled={locked} onChange={event => setSearch(event.target.value)} /></label><Button disabled={locked} type="submit">Cari kemasan</Button></form>
+        <div className={styles.options}>{packages.map(item => <Button key={item.skuId} variant="secondary" type="button" disabled={locked} aria-pressed={choice?.skuId === item.skuId}
+          onClick={() => {setChoice(item); setValue(null);}}><strong>{item.familyName} — {item.packageLabel}</strong><span>{item.skuCode} · {item.baseUnitsPerPackage} {item.baseUnitCode} per kemasan</span></Button>)}</div>
+        <Pagination label="Halaman kemasan" start={offset + 1} end={offset + packages.length} hasPrevious={offset > 0} hasNext={hasMore} disabled={locked}
+          onPrevious={() => void find(Math.max(0, offset - 25))} onNext={() => void find(offset + 25)} />
       </>}
-    </section>
-    {place && <section className={common.state} aria-label="Riwayat pemeriksaan kebutuhan"><h2>Riwayat pemeriksaan kebutuhan</h2>
-      <p>Hasil terdahulu untuk gudang ini. Setiap hasil merekam kondisi dan dasar angka saat diperiksa.</p>
-      <button type="button" disabled={locked} onClick={() => void loadHistory()}>Muat riwayat terbaru</button>
-      {history !== null && history.length === 0 && <p>Belum ada hasil pada halaman ini.</p>}
-      {history && <ul>{history.map(item => <li key={item.id}><button type="button" className={common.secondary} disabled={locked}
+    </Section>
+    {place && <Section title="Riwayat pemeriksaan kebutuhan" label="Riwayat pemeriksaan kebutuhan"
+      description="Hasil terdahulu untuk gudang ini. Setiap hasil merekam kondisi dan dasar angka saat diperiksa."
+      actions={<Button disabled={locked} onClick={() => void loadHistory()}>Muat riwayat terbaru</Button>}>
+      {history !== null && history.length === 0 && <StateView kind="empty" title="Belum ada hasil pada halaman ini." />}
+      {history && <ul>{history.map(item => <li key={item.id}><Button variant="secondary" disabled={locked}
         onClick={() => void work(async ctx => {const saved = await gateway.read(item.id, ctx); if (ctx.isCurrent()) {
           if (!saved) throw new AccessFailure(409, 'replenishment_view_stale'); remember(saved);
-        }})}>{item.skuCode} · {item.packageLabel} · {when(item.observedAt)} · Saran: {amount(item.suggestedPurchasePackages)}{item.suggestedPurchasePackages !== null ? ' kemasan' : ''}</button></li>)}</ul>}
-      {historyBefore !== null && <button type="button" disabled={locked} onClick={() => void loadHistory(historyBefore)}>Riwayat lebih lama</button>}
-    </section>}
-    {choice && source && place && <form className={common.state} onSubmit={submit}><h2>Dasar perhitungan</h2><p><strong>{choice.skuCode} · {choice.packageLabel}</strong> — seluruh jumlah di bawah memakai kemasan ini, berisi {choice.baseUnitsPerPackage} {choice.baseUnitCode}.</p>
+        }})}>{item.skuCode} · {item.packageLabel} · {when(item.observedAt)} · Saran: {amount(item.suggestedPurchasePackages)}{item.suggestedPurchasePackages !== null ? ' kemasan' : ''}</Button></li>)}</ul>}
+      {historyBefore !== null && <div className="ui-actions"><Button disabled={locked} onClick={() => void loadHistory(historyBefore)}>Riwayat lebih lama</Button></div>}
+    </Section>}
+    {choice && source && place && <form className="ui-section" onSubmit={submit}><h2>Dasar perhitungan</h2><p><strong>{choice.skuCode} · {choice.packageLabel}</strong> — seluruh jumlah di bawah memakai kemasan ini, berisi {choice.baseUnitsPerPackage} {choice.baseUnitCode}.</p>
       <p>Kosongkan angka yang belum diketahui. Batas peringatan masih dapat diperiksa bila pemakaian belum tersedia. Tidak ada pembelian yang dibuat otomatis.</p>
       <div className={styles.fields}>{([['dailyDemandPerDay', 'Pemakaian rata-rata per hari (kemasan)'], ['leadTimeDays', 'Waktu tunggu (hari)'], ['safetyStockPackages', 'Stok pengaman (kemasan)'], ['reorderPointPackages', 'Batas peringatan (kemasan)'], ['purchaseMinimumPackages', 'Minimum pembelian (kemasan)'], ['purchaseIncrementPackages', 'Kelipatan pembelian (kemasan)']] as const).map(([key, label]) =>
         <label className={styles.field} key={key}>{label}<input aria-label={label} inputMode={key === 'dailyDemandPerDay' ? 'decimal' : 'numeric'} value={inputs[key]} disabled={locked} required={key.startsWith('purchase')}
           onChange={event => {setInputs({...inputs, [key]: event.target.value}); setValue(null);}} /></label>)}</div>
       <label className={styles.field}>Referensi dasar angka<input aria-label="Referensi dasar angka" value={inputReference} disabled={locked} required maxLength={500} placeholder="Contoh: kebijakan kebutuhan yang telah ditinjau atau catatan pemakaian" onChange={event => setInputReference(event.target.value)} /></label>
       <label className={styles.field}>Alasan pemeriksaan<textarea aria-label="Alasan pemeriksaan" value={reason} disabled={locked} required maxLength={1000} onChange={event => setReason(event.target.value)} /></label>
-      <button className={common.primary} disabled={locked} type="submit">Hitung dan simpan hasil</button>
+      <Button variant="primary" disabled={locked} type="submit">Hitung dan simpan hasil</Button>
     </form>}
     {value && <section className={common.review} data-testid="replenishment-result"><h2 ref={heading} tabIndex={-1}>Hasil pemeriksaan tersimpan</h2>
       <p>{value.skuCode} · {value.packageLabel} · {value.baseUnitsPerPackage} {value.baseUnitCode} per kemasan</p><p>Diamati {when(value.observedAt)}. Hasil ini merekam keadaan saat pemeriksaan; hitung ulang sebelum mengambil keputusan berdasarkan perubahan terbaru.</p>
-      <h3>Dasar angka saat pemeriksaan</h3><dl className={common.facts} data-testid="replenishment-recorded-inputs">
-        {([['Pemakaian rata-rata per hari', value.inputs.dailyDemandPerDay, 'kemasan per hari'],
+      <h3>Dasar angka saat pemeriksaan</h3><div data-testid="replenishment-recorded-inputs"><Facts items={
+        ([['Pemakaian rata-rata per hari', value.inputs.dailyDemandPerDay, 'kemasan per hari'],
           ['Waktu tunggu', value.inputs.leadTimeDays === null ? null : String(value.inputs.leadTimeDays), 'hari'],
           ['Stok pengaman', value.inputs.safetyStockPackages, 'kemasan'], ['Batas peringatan', value.inputs.reorderPointPackages, 'kemasan'],
           ['Minimum pembelian', value.inputs.purchaseMinimumPackages, 'kemasan'], ['Kelipatan pembelian', value.inputs.purchaseIncrementPackages, 'kemasan']] as [string, string | null, string][])
-          .map(([label, number, unit]) => <div key={label}><dt>{label}</dt><dd>{number === null ? 'Belum diketahui' : number + ' ' + unit}</dd></div>)}
-      </dl>
-      {value.thresholdAlert !== null && <p className={value.thresholdAlert ? common.alert : undefined}>{value.thresholdAlert ? 'Stok berada pada atau di bawah batas peringatan.' : 'Stok berada di atas batas peringatan.'}</p>}
-      <dl className={common.facts}>{([['Stok layak sebelum reservasi', value.usableBeforeReservations], ['Direservasi untuk pesanan', value.reservedPackages], ['Komitmen tambahan di luar reservasi', value.additionalUnreservedCommitments],
+          .map(([label, number, unit]) => ({ term: label, value: number === null ? 'Belum diketahui' : number + ' ' + unit }))} /></div>
+      {value.thresholdAlert !== null && (value.thresholdAlert ? <StateView kind="unknown" title="Stok berada pada atau di bawah batas peringatan." /> : <p>Stok berada di atas batas peringatan.</p>)}
+      <Facts items={([['Stok layak sebelum reservasi', value.usableBeforeReservations], ['Direservasi untuk pesanan', value.reservedPackages], ['Komitmen tambahan di luar reservasi', value.additionalUnreservedCommitments],
         ['Tersedia setelah komitmen', value.availableAfterCommitments], ['Pasokan terverifikasi dalam masa tunggu', value.eligibleSupplyPackages], ['Posisi stok', value.inventoryPosition], ['Kebutuhan selama masa tunggu dan stok pengaman', value.requiredStockPackages],
-        ['Saran jumlah pembelian', value.suggestedPurchasePackages]] as [string, string | null][]).map(([label, number]) => <div key={label}><dt>{label}</dt><dd>{amount(number)}{number !== null ? ' kemasan' : ''}</dd></div>)}</dl>
+        ['Saran jumlah pembelian', value.suggestedPurchasePackages]] as [string, string | null][]).map(([label, number]) => ({ term: label, value: <>{amount(number)}{number !== null ? ' kemasan' : ''}</> }))} />
       <p>Perhitungan: pemakaian per hari × hari tunggu dibulatkan ke atas, ditambah stok pengaman, lalu dikurangi posisi stok. Kekurangan mengikuti minimum dan kelipatan pembelian yang Anda isi.</p>
       <p>Dasar angka: {value.inputReference}</p><p>Aturan: {value.ruleVersion}</p>
       {value.warnings.length > 0 && <div role="status"><h3>Data yang perlu diperiksa</h3><ul>{value.warnings.map(code => <li key={code}>{warnings[code] ?? 'Ada informasi sumber yang perlu diperiksa sebelum jumlah pembelian dapat dipastikan.'}</li>)}</ul></div>}
       {value.supplies.length > 0 && <><h3>Pasokan masuk</h3><ul>{value.supplies.map(item => <li key={item.reference}>{item.reference} · {amount(item.packages)} kemasan · {item.expectedAt ? when(item.expectedAt) : 'Tanggal belum diketahui'} · {supplyStates[item.state]}</li>)}</ul></>}
       {account.actions.includes('procurement.prepare') && value.suggestedPurchasePackages !== null && BigInt(value.suggestedPurchasePackages) > BigInt(0) && BigInt(value.suggestedPurchasePackages) <= BigInt(1000000) &&
-        <Link className={common.primary} href={'/procurement/requests?replenishment=' + value.id}>Tinjau sebagai permintaan pengadaan</Link>}
+        <Link className={buttonClassName({ variant: 'primary' })} href={'/procurement/requests?replenishment=' + value.id}>Tinjau sebagai permintaan pengadaan</Link>}
       <p>Petugas tetap memilih jalur pengadaan, memeriksa jumlah dan mengajukan permintaan untuk persetujuan.</p>
     </section>}
   </>;

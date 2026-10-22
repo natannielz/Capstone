@@ -19,7 +19,8 @@ const source = (file: string) => readFileSync(new URL('../src/modules/' + file, 
 test('the receipt page and the access page show one shared state, without a stacked error (G-015, G-016)', () => {
   const receipt = source('fulfillment/ReceiptWorkspace.tsx');
   assert.match(receipt, /<SessionAccessState /);
-  assert.match(receipt, /\{error !== null && account && !expired && <p role="alert"/, 'the error alert only shows inside the signed-in page');
+  // The alert is the shared StateView error (role="alert") since UI-PAGES-B; the condition is what this test pins.
+  assert.match(receipt, /\{error !== null && account && !expired && <StateView kind="error"/, 'the error alert only shows inside the signed-in page');
   const access = source('administration/AccessAdministration.tsx');
   assert.match(access, /<SessionAccessState /);
   assert.match(access, /\{error !== null && pageState === "ready" && <div className=\{styles\.alert\}/, 'no error with trace id above the signed-out state');
