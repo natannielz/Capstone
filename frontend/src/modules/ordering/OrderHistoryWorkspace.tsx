@@ -7,7 +7,13 @@ import { IdentityFailure, sessionTiming, type IdentitySession } from '../identit
 import { createAccessGateway } from '../administration/access-client';
 import { AccessFailure, accessMessage } from '../administration/workflow';
 import { useRouter } from 'next/navigation';
-import { PackageOpen } from 'lucide-react';
+import { PackageOpen, SlidersHorizontal } from 'lucide-react';
+import { Button, buttonClassName } from '@/components/workspace-kit/button';
+import { DataList } from '@/components/workspace-kit/data-list';
+import { PageHeader } from '@/components/workspace-kit/page-header';
+import { Section } from '@/components/workspace-kit/section';
+import { StateView } from '@/components/workspace-kit/state-view';
+import { Toolbar } from '@/components/workspace-kit/toolbar';
 import { StatusBadge } from '@/components/workspace-kit/status-badge';
 import { createBuyerCatalogGateway } from '../catalog/catalog-buyer-client';
 import { createCartGateway } from './cart-client';
@@ -26,7 +32,6 @@ import { prepareReorderDraft } from './order-reorder';
 import common from '../administration/access.module.css';
 import styles from './order-draft.module.css';
 import { dateTimeFormatter } from '@/lib/format';
-import { EmptyState } from '@/components/workspace-kit/empty-state';
 import { OrderTimelinePanel } from './OrderTimelinePanel';
 import { SessionAccessState } from "@/components/workspace-kit/session-access-state";
 import { orderNumber } from '@/lib/document-numbers';
@@ -75,10 +80,9 @@ export function OrderHistoryWorkspace() {
     if (failure instanceof AccessFailure && ([401, 403].includes(failure.status) || failure.code === 'actor_changed')) { setAccount(null); setError(failure); }
   }, []);
   const expired = account !== null && sessionTiming(account.session, elapsed).expired;
-  return <main className={common.page}><header className={common.header}><div>
-    <h1>Pesanan saya</h1><p>Status setiap pesanan, rinciannya, dan pesan lagi dengan sekali tekan.</p></div></header>
-    {error !== null && account !== null && <p role="alert" className={common.alert}>{message(error)}</p>}
-    {loading ? <p role="status">Memeriksa akun…</p> : !account || expired ? <SessionAccessState kind={account ? "expired" : undefined} error={error} returnPath="/ordering/orders" onRetry={() => setRevision(value => value + 1)} />
+  return <main className={common.page}><PageHeader title="Pesanan saya" description="Status setiap pesanan, rinciannya, dan pesan lagi dengan sekali tekan." />
+    {error !== null && account !== null && <StateView kind="error" title={message(error)} />}
+    {loading ? <StateView kind="loading" title="Memeriksa akun…" /> : !account || expired ? <SessionAccessState kind={account ? "expired" : undefined} error={error} returnPath="/ordering/orders" onRetry={() => setRevision(value => value + 1)} />
       : <OrderHistoryDesk key={account.actorId + ':' + account.observedAt} account={account} onFailure={failed} />}
   </main>;
 }
@@ -156,47 +160,47 @@ function OrderHistoryDesk({ account, onFailure }: { account: Account; onFailure:
     } catch (failure) { if (current()) { setCartError(failure); onFailure(failure); } }
     finally { pending.current = false; if (alive.current) setBusy(false); }
   }
+  const canOrder = account.actions.includes('order.submit');
   return <>
     {save.recoveryView}
-    <details className={styles.filters}><summary>Filter dan urutan</summary>
-      <OrderSavedViewPanel actorId={account.actorId} active={filter} locked={busy || save.locked || repeat !== null} isCurrent={current}
-        onApply={applyFilter} onLock={setFilterLocked} onFailure={onFailure} /></details>
-    {cartError !== null && <p role="alert" className={common.alert}>{addToCartMessage(cartError)}</p>}
+    {cartError !== null && <StateView kind="error" title={addToCartMessage(cartError)} />}
     {notice && <p role="status" className={common.help}>{notice}</p>}
-    {saved && <section className={styles.review} aria-label="Draf baru tersimpan"><h2>Draf {saved.draftId} tersimpan</h2>
+    {saved && <section className={styles.saved} aria-label="Draf baru tersimpan"><h2>Draf {saved.draftId} tersimpan</h2>
       <p role="status">Pesanan baru belum diajukan. Harga, ketersediaan, dan tujuan tetap diperiksa pada pengajuan.</p>
-      <div className={common.actions}><Link className={common.secondary} href={'/ordering/checkout?draft=' + encodeURIComponent(saved.draftId)}>Tinjau pengajuan draf</Link>
-        <Link className={common.secondary} href="/ordering/drafts">Daftar draf saya</Link></div>
+      <div className="ui-actions"><Link className={buttonClassName({ variant: 'secondary' })} href={'/ordering/checkout?draft=' + encodeURIComponent(saved.draftId)}>Tinjau pengajuan draf</Link>
+        <Link className={buttonClassName({ variant: 'secondary' })} href="/ordering/drafts">Daftar draf saya</Link></div>
     </section>}
-    {repeat && <div ref={repeatRegion} tabIndex={-1} role="region" aria-label="Pemesanan ulang">
+    {repeat && <div ref={repeatRegion} tabIndex={-1} role="region" aria-label="Pemesanan ulang" className={styles.repeat}>
       <p>Pilihan dari pesanan {orderNumber(repeat.sourceOrderId)} menjadi awal draf baru untuk cabang yang sama. Jumlah dan rencana pengiriman masih perlu Anda periksa. Referensi pembelian lama tidak disalin.</p>
       <p>Kemasan yang sudah berubah, harga yang tidak berlaku, atau akses cabang yang dicabut harus diperiksa kembali; sistem tidak menggantinya otomatis.</p>
       <OrderDraftEditor key={repeat.sourceOrderId} actorId={account.actorId} draft={repeat.draft} initialQuote={repeat.historicalQuote} initialIssue={null}
         reorderSourceId={repeat.sourceOrderId} locked={busy || save.locked} isCurrent={current} onSubmit={save.submit} onFailure={onFailure} />
-      <button className={common.secondary} disabled={busy || save.locked} onClick={() => setRepeat(null)}>Batalkan draf pemesanan ulang</button>
+      <Button disabled={busy || save.locked} onClick={() => setRepeat(null)}>Batalkan draf pemesanan ulang</Button>
     </div>}
-    {error !== null && <p role="alert" className={common.alert}>{message(error)}</p>}
-    <section className={common.accountSection} aria-label="Daftar pesanan saya" aria-busy={busy}><h2>Pesanan yang diajukan</h2>
-      {busy && <p role="status">Memuat pesanan…</p>}{!busy && page.items.length === 0 && <EmptyState kind="first-use" title="Belum ada pesanan pada halaman ini." body={account.actions.includes('order.submit') ? "Pesanan yang diajukan dari draf akan muncul di sini, lengkap dengan statusnya." : "Halaman ini hanya menampilkan pesanan yang diajukan dari akun Anda sendiri. Akun Anda tidak mengajukan pesanan cabang; pesanan untuk toko ditinjau di Pekerjaan saya."} />}
-      {page.items.length > 0 && <ul className={styles.orderCards}>{page.items.map(order => {
-        const id = order.submission.orderId, status = buyerOrderStatus(order), extra = order.quote.lines.length - 2;
-        return <li key={id} className={styles.orderCard}>
-          <div className={styles.orderCardHead}><span><strong>{orderNumber(id)}</strong> · {date(order.submission.recordedAt)}</span><StatusBadge text={status.label} /></div>
+    {error !== null && <StateView kind="error" title={message(error)} />}
+    <Section title="Pesanan yang diajukan" label="Daftar pesanan saya" busy={busy}
+      actions={<><Button disabled={locked} onClick={() => { setCursor(null); setReload(value => value + 1); }}>{filter?.sort === 'oldest' ? 'Muat pesanan pertama' : 'Muat pesanan terbaru'}</Button>
+        {canOrder && !locked && <Link href="/ordering/drafts" className={buttonClassName({ variant: 'tertiary' })}>Draf pesanan</Link>}</>}>
+      <Toolbar label="Filter pesanan" filters={<details className={styles.filterPanel}><summary className={buttonClassName({ variant: 'secondary' })}><SlidersHorizontal aria-hidden="true" />Filter dan urutan</summary>
+        <OrderSavedViewPanel actorId={account.actorId} active={filter} locked={busy || save.locked || repeat !== null} isCurrent={current}
+          onApply={applyFilter} onLock={setFilterLocked} onFailure={onFailure} /></details>} />
+      <DataList label="Pesanan saya" items={page.items} getKey={order => order.submission.orderId} loading={busy}
+        empty={error !== null ? undefined : { title: 'Belum ada pesanan pada halaman ini.', message: canOrder ? 'Pesanan yang diajukan dari draf akan muncul di sini, lengkap dengan statusnya.' : 'Halaman ini hanya menampilkan pesanan yang diajukan dari akun Anda sendiri. Akun Anda tidak mengajukan pesanan cabang; pesanan untuk toko ditinjau di Pekerjaan saya.' }}
+        renderTitle={order => orderNumber(order.submission.orderId)} renderMeta={order => date(order.submission.recordedAt)}
+        renderBadge={order => <StatusBadge text={buyerOrderStatus(order).label} />}
+        renderContent={order => { const extra = order.quote.lines.length - 2; return <>
           <ul className={styles.orderLines}>{order.quote.lines.slice(0, 2).map(line => <li key={line.definition.skuId}>
             <span className={styles.orderThumb}><PackageOpen size={22} strokeWidth={1.4} aria-hidden="true" /></span>
             <span><strong>{line.familyName}</strong><small>{line.packages} × {line.definition.packageLabel} · {orderDisplayAmount(order.quote.currency, line.price.unitPrice)}</small></span></li>)}</ul>
           {extra > 0 && <p className={styles.listMeta}>+{extra} barang lain</p>}
-          <p className={styles.orderNext}>{status.detail}</p>
-          <div className={styles.orderCardFoot}><span>Total <strong>{orderDisplayAmount(order.quote.currency, order.total)}</strong></span>
-            <div className={common.actions}><button type="button" className={common.secondary} disabled={locked} aria-label={'Lihat rincian pesanan ' + orderNumber(id)} onClick={() => void select(id)}>Lihat rincian</button>
-              {account.actions.includes('order.submit') && <button type="button" className={common.primary} disabled={locked} onClick={() => void orderAgain(order)}>Pesan lagi</button>}</div></div>
-        </li>;
-      })}</ul>}
-      <div className={common.actions}><button className={common.secondary} disabled={locked} onClick={() => { setCursor(null); setReload(value => value + 1); }}>{filter?.sort === 'oldest' ? 'Muat pesanan pertama' : 'Muat pesanan terbaru'}</button>
-        {page.hasMore && <button className={common.secondary} disabled={locked} onClick={() => setCursor(nextCursor)}>{filter?.sort === 'oldest' ? 'Pesanan lebih baru' : 'Pesanan lebih lama'}</button>}
-        {account.actions.includes('order.submit') && !locked && <Link href="/ordering/drafts" className={common.secondary}>Draf pesanan</Link>}</div>
-    </section>
-    {selected && <section ref={detail} tabIndex={-1} className={styles.review} aria-label="Rincian pesanan"><h2>Pesanan {orderNumber(selected.submission.orderId)}</h2>
+          <p className={styles.orderNext}>{buyerOrderStatus(order).detail}</p>
+          <p className={styles.orderTotal}>Total <strong>{orderDisplayAmount(order.quote.currency, order.total)}</strong></p></>; }}
+        renderActions={order => { const id = order.submission.orderId; return <>
+          <Button disabled={locked} aria-label={'Lihat rincian pesanan ' + orderNumber(id)} onClick={() => void select(id)}>Lihat rincian</Button>
+          {canOrder && <Button disabled={locked} onClick={() => void orderAgain(order)}>Pesan lagi</Button>}</>; }} />
+      {page.hasMore && <div className="ui-actions"><Button disabled={locked} onClick={() => setCursor(nextCursor)}>{filter?.sort === 'oldest' ? 'Pesanan lebih baru' : 'Pesanan lebih lama'}</Button></div>}
+    </Section>
+    {selected && <section ref={detail} tabIndex={-1} className={styles.detail} aria-label="Rincian pesanan"><h2>Pesanan {orderNumber(selected.submission.orderId)}</h2>
       <p>{selected.buyerName} · {date(selected.submission.recordedAt)}</p><p role="status"><StatusBadge text={buyerOrderStatus(selected).label} /> <span>{status(selected)}</span></p>
       {selected.input.purchaseReference && <p>Referensi pembelian: {selected.input.purchaseReference}</p>}
       <h3>Kemasan saat pengajuan</h3><ul>{selected.quote.lines.map(line => <li key={line.definition.skuId}><strong>{line.familyName} — {line.definition.packageLabel}</strong>
@@ -212,9 +216,9 @@ function OrderHistoryDesk({ account, onFailure }: { account: Account; onFailure:
       {(selected.progress.cancelled || selected.progress.spendingState === 'Rejected' || selected.progress.rejectedSuborders.length > 0) && <p>Angka di atas menyimpan biaya pengajuan awal. Penolakan atau pembatalan bukan bukti pembayaran maupun pengembalian dana.</p>}
       <OrderTimelinePanel key={selected.submission.orderId} actorId={account.actorId} orderId={selected.submission.orderId}
         actions={account.actions} isCurrent={current} onFailure={onFailure} />
-      <div className={common.actions}><button className={common.secondary} disabled={locked} onClick={() => void select(selected.submission.orderId)}>Perbarui perkembangan</button>
-        {account.actions.includes('order.submit') && <><button className={common.primary} disabled={locked} onClick={() => void orderAgain(selected)}>Pesan lagi</button>
-          <button className={common.secondary} disabled={locked} onClick={() => void beginRepeat(selected.submission.orderId)}>Pesan ulang sebagai draf</button></>}
+      <div className="ui-actions"><Button disabled={locked} onClick={() => void select(selected.submission.orderId)}>Perbarui perkembangan</Button>
+        {canOrder && <><Button variant="primary" disabled={locked} onClick={() => void orderAgain(selected)}>Pesan lagi</Button>
+          <Button disabled={locked} onClick={() => void beginRepeat(selected.submission.orderId)}>Pesan ulang sebagai draf</Button></>}
       </div>
     </section>}
   </>;

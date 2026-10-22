@@ -74,12 +74,9 @@
 .support p { font-size: 14px; color: var(--muted-foreground); }
 .support h2 { font-size: 18px; }
 .footer { max-width: var(--content-default); margin: var(--space-12) 0 0; padding: var(--space-6) 0; border-top: 1px solid var(--border); color: var(--muted-foreground); font-size: 13px; }
-/* Page header: same title size and left edge as every staff page (U-003, U-015). */
-.accountHeader { max-width: var(--content-default); margin: var(--space-8) 0 var(--space-6); display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-6); }
-.accountHeader > div { min-width: 0; }
-.accountHeader > button { flex-shrink: 0; }
-.accountHeader h1 { font-size: 28px; }
-.accountHeader p { color: var(--muted-foreground); margin-top: var(--space-2); }
+/* Page header (PageHeader inside): the content column's width and the page's top padding (U-003, U-015). */
+.pageHeader { max-width: var(--content-default); padding-top: var(--space-8); }
+@media (max-width: 639px) { .pageHeader { padding-top: var(--space-6); } }
 .page > div[id=account-content] { max-width: var(--content-default); margin: 0; }
 .accountGrid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: var(--space-6); align-items: start; }
 /* Badge (U-013). */

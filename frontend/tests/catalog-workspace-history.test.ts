@@ -14,10 +14,14 @@ import * as identity from '../src/modules/identity/identity-workflow';
 import * as workflow from '../src/modules/administration/workflow';
 
 type Node = {type: unknown; props: Record<string, unknown>};
+// The page composes shared primitives that take content through named slots (PageHeader title, Toolbar filters/sort/view/
+// resultText, StateView action): the shallow tree is walked through every element-valued prop, children first.
+const slots = (node: Node): unknown[] => [node.props.children, ...Object.entries(node.props).filter(([key, value]) => key !== 'children' &&
+  (Array.isArray(value) || value !== null && typeof value === 'object' && 'props' in (value as object) || key === 'title' || key === 'message')).map(([, value]) => value)];
 const nodes = (value: unknown): Node[] => Array.isArray(value) ? value.flatMap(nodes) : value && typeof value === 'object' && 'props' in value
-  ? [value as Node, ...nodes((value as Node).props.children)] : [];
+  ? [value as Node, ...slots(value as Node).flatMap(nodes)] : [];
 const text = (value: unknown): string => Array.isArray(value) ? value.map(text).join('') : value && typeof value === 'object' && 'props' in value
-  ? text((value as Node).props.children) : typeof value === 'string' || typeof value === 'number' ? String(value) : '';
+  ? slots(value as Node).map(text).join('') : typeof value === 'string' || typeof value === 'number' ? String(value) : '';
 const session = identity.parseIdentitySession({authenticated: true, account: {userId: actorId, displayName: 'Catalog buyer fixture', verifiedEmail: 'buyer@example.invalid'},
   serverTime: '2026-10-08T02:00:00Z', factorCompletedAt: '2026-10-08T02:00:00Z', freshFactorUntil: '2026-10-08T02:05:00Z',
   idleExpiresAt: '2026-10-08T02:30:00Z', absoluteExpiresAt: '2026-10-08T10:00:00Z', stepUpOperations: []});
@@ -74,7 +78,12 @@ function mountCatalog(context: ReturnType<typeof browser>, returnPath: '/shop', 
     if (name === 'react') return react; if (name === 'react/jsx-runtime') return runtimeRequire(name);
     if (name === 'next/link') return {__esModule: true, default: 'a'};
     if (name.endsWith('.module.css')) return {__esModule: true, default: new Proxy({}, {get: (_target, key) => String(key)})};
-    if (name === 'lucide-react') return {ArrowRight: marker, ArrowUpRight: marker, ClipboardList: marker, PackageOpen: marker, Search: marker, ShieldCheck: marker};
+    if (name === 'lucide-react') return {ArrowRight: marker, ArrowUpRight: marker, ChevronRight: marker, ClipboardList: marker, LayoutGrid: marker, List: marker, PackageOpen: marker, Search: marker, ShieldCheck: marker};
+    // Shared primitives as plain tags, so the shallow tree keeps their content (Button stays a "button" with its label and onClick).
+    if (name === '@/components/workspace-kit/button') return {Button: 'button', buttonClassName: () => 'ui-button'};
+    const primitive = {'@/components/workspace-kit/facts': ['Facts', 'dl'], '@/components/workspace-kit/field': ['Field', 'div'], '@/components/workspace-kit/page-header': ['PageHeader', 'header'],
+      '@/components/workspace-kit/state-view': ['StateView', 'div'], '@/components/workspace-kit/toolbar': ['Toolbar', 'div']}[name];
+    if (primitive) return {[primitive[0]]: primitive[1]};
     if (name === '../../components/art') return {Art: marker};
     if (name === '../../components/pilot-site-chrome') return {PilotSiteHeader: marker, PilotSiteFooter: marker};
     if (name === '../identity/identity-client') return {createIdentityGateway: () => ({session: async () => session})};

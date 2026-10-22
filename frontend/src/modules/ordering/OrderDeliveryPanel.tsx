@@ -8,6 +8,9 @@ import { CartOutcomeUnknown, createCartGateway } from './cart-client';
 import type { OrderDraft } from './order-draft-client';
 import { checkDelivery, deliveryFields, deliveryFromApproved, type DeliveryField, type DeliveryFields } from './order-delivery';
 import { addToCartMessage } from './AddToCartPanel';
+import { Button } from '@/components/workspace-kit/button';
+import { Field } from '@/components/workspace-kit/field';
+import { StateView } from '@/components/workspace-kit/state-view';
 import common from '../administration/access.module.css';
 import styles from './order-checkout.module.css';
 
@@ -54,30 +57,28 @@ export function OrderDeliveryPanel({ actorId, draft, locked, onSaved, onFailure 
       <p className={styles.shippingAddress}>{delivery.address}{'\n'}{delivery.city}{delivery.postalCode ? ' ' + delivery.postalCode : ''}</p>
       {delivery.instructions && <p className={common.help}>Catatan: {delivery.instructions}</p>}
       {draft.input.purchaseReference && <p className={common.help}>Referensi pembelian: {draft.input.purchaseReference}</p>}</div>
-    <button type="button" className={common.secondary} disabled={locked} onClick={() => { setFields(deliveryFields(delivery, draft.input.purchaseReference)); setEditing(true); }}>Ubah pengiriman</button>
+    <Button disabled={locked} onClick={() => { setFields(deliveryFields(delivery, draft.input.purchaseReference)); setEditing(true); }}>Ubah pengiriman</Button>
   </section>;
   return <section className={styles.shipping} aria-labelledby={id + '-heading'}>
     <form className={styles.shippingForm} onSubmit={event => void save(event)} noValidate>
       <h2 id={id + '-heading'}><MapPin size={18} aria-hidden="true" />Pengiriman</h2>
       <p className={common.help}>Tulis siapa yang menerima barang di cabang. Alamat dapat diisi dari alamat cabang yang sudah disetujui organisasi.</p>
-      <button type="button" className={common.secondary} disabled={busy || locked} onClick={() => void fillFromBranch()}>Isi dari alamat cabang</button>
+      <div className="ui-actions"><Button disabled={busy || locked} onClick={() => void fillFromBranch()}>Isi dari alamat cabang</Button></div>
       {notice && <p role="status" className={common.help}>{notice}</p>}
       <div className={styles.shippingFields}>{labels.map(([field, label, kind, autoComplete], index) => {
-        const describedBy = errors[field] ? id + '-' + field + '-error' : undefined;
-        const props = { id: id + '-' + field, value: fields[field], disabled: busy || locked, autoComplete, 'aria-invalid': errors[field] ? true : undefined, 'aria-describedby': describedBy,
+        const props = { value: fields[field], disabled: busy || locked, autoComplete,
           onChange: (event: { target: { value: string } }) => setFields(current => ({ ...current, [field]: event.target.value })) };
-        return <div key={field} className={kind === 'area' ? styles.wide : undefined}>
-          <label htmlFor={id + '-' + field}>{label}</label>
+        // Field ties the label, the id and the error (id + "-error", aria-describedby, aria-invalid) to the control.
+        return <div key={field} className={kind === 'area' ? styles.wide : undefined}><Field id={id + '-' + field} label={label} error={errors[field]}>
           {kind === 'area' ? <textarea rows={field === 'address' ? 3 : 2} maxLength={1000} {...props} />
             : <input ref={index === 0 ? first : undefined} type={kind} inputMode={field === 'postalCode' ? 'numeric' : undefined} maxLength={field === 'phone' ? 32 : field === 'postalCode' ? 5 : 160} {...props} />}
-          {errors[field] && <p id={describedBy} className={styles.fieldError}>{errors[field]}</p>}
-        </div>;
+        </Field></div>;
       })}</div>
-      {error !== null && <p role="alert" className={common.alert}>{error instanceof AccessFailure && error.code === 'branch_address_missing'
-        ? 'Cabang ini belum punya alamat yang disetujui. Isi alamat secara manual.' : addToCartMessage(error)}</p>}
-      <div className={common.actions}>
-        <button type="submit" className={common.primary} disabled={busy || locked}>{busy ? 'Menyimpan…' : unknown ? 'Coba lagi' : 'Simpan pengiriman'}</button>
-        {delivery && <button type="button" className={common.secondary} disabled={busy} onClick={() => { setEditing(false); setErrors({}); setError(null); }}>Batal</button>}
+      {error !== null && <StateView kind="error" title={error instanceof AccessFailure && error.code === 'branch_address_missing'
+        ? 'Cabang ini belum punya alamat yang disetujui. Isi alamat secara manual.' : addToCartMessage(error)} />}
+      <div className="ui-actions">
+        <Button type="submit" variant="primary" disabled={busy || locked}>{busy ? 'Menyimpan…' : unknown ? 'Coba lagi' : 'Simpan pengiriman'}</Button>
+        {delivery && <Button disabled={busy} onClick={() => { setEditing(false); setErrors({}); setError(null); }}>Batal</Button>}
       </div>
     </form>
   </section>;

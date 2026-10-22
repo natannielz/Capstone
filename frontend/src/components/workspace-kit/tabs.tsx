@@ -10,12 +10,14 @@ type ViewTab = { label: string; value: string };
  *   with `aria-pressed` on the current one, and call `onSelect`.
  * Links to other areas ("Permintaan masuk") are not tabs; put them in the page header as a secondary action.
  */
-export function Tabs({ label, items, current, onSelect }: { label: string; items: LinkTab[] | ViewTab[]; current: string; onSelect?: (value: string) => void }) {
+export function Tabs({ label, items, current, onSelect, disabled = false }: { label: string; items: LinkTab[] | ViewTab[]; current: string; onSelect?: (value: string) => void;
+  /** View tabs only: blocks switching while the page is busy (the buttons are disabled). */
+  disabled?: boolean }) {
   if (items.every((item): item is LinkTab => "href" in item))
     return <nav aria-label={label} className="ui-tabs" data-kit="">
       {items.map(item => <Link key={item.href} className="ui-tab" aria-current={item.href === current ? "page" : undefined} href={item.href}>{item.label}</Link>)}
     </nav>;
   return <div role="group" aria-label={label} className="ui-tabs" data-kit="">
-    {(items as ViewTab[]).map(item => <button key={item.value} type="button" className="ui-tab" aria-pressed={item.value === current} onClick={() => onSelect?.(item.value)}>{item.label}</button>)}
+    {(items as ViewTab[]).map(item => <button key={item.value} type="button" className="ui-tab" aria-pressed={item.value === current} disabled={disabled || undefined} onClick={() => onSelect?.(item.value)}>{item.label}</button>)}
   </div>;
 }

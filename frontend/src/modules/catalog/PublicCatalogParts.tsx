@@ -3,6 +3,9 @@ import { PackageOpen } from 'lucide-react';
 import { storeSignInHref } from '@/components/store/store-navigation';
 import { formatNumber } from '@/lib/format';
 import type { PublicCatalogItem, PublicCatalogPackage, PublicCatalogQuery } from './public-catalog-client';
+import { buttonClassName } from '@/components/workspace-kit/button';
+import { StateView } from '@/components/workspace-kit/state-view';
+import catalog from './storefront-catalog.module.css';
 import styles from './public-catalog.module.css';
 
 /** Where a signed-in visitor continues: the organisation catalog with the same search, category and order (never the page
@@ -47,29 +50,29 @@ export function MemberCatalogNote() {
 }
 
 export function GuestSampleEmpty({ target }: { target: string }) {
-  return <section className={styles.state}><PackageOpen size={34} aria-hidden="true" />
-    <h2>Contoh katalog belum dipilih</h2><p>Akun cabang tetap dapat melihat seluruh katalog dan harganya setelah masuk.</p>
-    <Link className={styles.primary} href={guestSignInHref(target)}>Masuk</Link></section>;
+  return <StateView kind="empty" align="center" icon={PackageOpen} title="Contoh katalog belum dipilih" message="Akun cabang tetap dapat melihat seluruh katalog dan harganya setelah masuk."
+    action={<Link className={buttonClassName({ variant: 'primary' })} href={guestSignInHref(target)}>Masuk</Link>} />;
 }
 
 /** The same answer for an unknown id and for a product that is not a guest sample. Only the id already in the address is used
  * (for the sign-in return), so the page never hints that the product exists. */
 export function GuestUnavailable({ publicId }: { publicId: string }) {
-  return <section className={styles.state}><PackageOpen size={34} aria-hidden="true" />
-    <h2>Barang ini tidak tersedia untuk tamu.</h2><p>Lihat contoh barang lainnya, atau masuk dengan akun cabang Anda.</p>
-    <div className={styles.actions}><Link className={styles.primary} href="/katalog">Lihat contoh katalog</Link>
-      <Link className={styles.secondary} href={guestSignInHref(signedInEquivalent(null, publicId))}>Masuk</Link></div></section>;
+  return <StateView kind="empty" align="center" icon={PackageOpen} title="Barang ini tidak tersedia untuk tamu." message="Lihat contoh barang lainnya, atau masuk dengan akun cabang Anda."
+    action={<Link className={buttonClassName({ variant: 'primary' })} href="/katalog">Lihat contoh katalog</Link>}
+    secondaryAction={<Link className={buttonClassName({ variant: 'secondary' })} href={guestSignInHref(signedInEquivalent(null, publicId))}>Masuk</Link>} />;
 }
 
 export function GuestProductCard({ item }: { item: PublicCatalogItem }) {
   const single = item.packages.length === 1 ? item.packages[0] : null;
-  return <li className={styles.card}>
+  return <li className={catalog.card}>
     <Link href={'/katalog/' + item.publicId} className={styles.cardLink}>
-      <span className={styles.media}><PackageOpen size={40} strokeWidth={1.2} aria-hidden="true" /></span>
-      <span className={styles.category}>{item.categoryName}</span>
-      <span className={styles.name}>{item.name}</span>
-      <span className={styles.pack}>{single ? packLine(single) : `${formatNumber(item.packages.length)} kemasan`}</span>
-      {single && single.minimumOrderPackages > 1 && <span className={styles.minimum}>Min. {single.minimumOrderPackages} kemasan</span>}
+      <span className={catalog.media}><PackageOpen size={40} strokeWidth={1.2} aria-hidden="true" /></span>
+      <span className={catalog.cardBody}>
+        <span className={catalog.category}>{item.categoryName}</span>
+        <span className={catalog.name}>{item.name}</span>
+        <span className={catalog.meta}>{single ? packLine(single) : `${formatNumber(item.packages.length)} kemasan`}</span>
+        {single && single.minimumOrderPackages > 1 && <span className={styles.minimum}>Min. {single.minimumOrderPackages} kemasan</span>}
+      </span>
     </Link>
     <Link className={styles.priceGate} href={guestSignInHref(signedInEquivalent(item))}>Masuk untuk lihat harga</Link>
   </li>;

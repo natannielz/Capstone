@@ -14,6 +14,8 @@ import { WorkspaceDirectory } from "./WorkspaceDirectory";
 import { WorkSummary } from "./WorkSummary";
 import { Brand } from "../../components/brand";
 import { AccountContactPanel } from "./AccountContactPanel";
+import { Button, buttonClassName } from "@/components/workspace-kit/button";
+import { PageHeader } from "@/components/workspace-kit/page-header";
 import styles from "./identity.module.css";
 import { isPilotRelease } from '../../lib/release-scope';
 import { dateTimeFormatter } from "@/lib/format";
@@ -97,9 +99,10 @@ export function IdentityAccount({ variant = "account" }: { variant?: "account" |
   return <main className={styles.page}>
     <a className={styles.skip} href="#account-content">Langsung ke akun</a>
     <header className={styles.masthead}><div className={styles.mastheadInner}><Brand href="/" context="Layanan organisasi" /></div></header>
-    <div className={styles.accountHeader}><div>{home ? <><h1>Pekerjaan saya</h1><p>{session?.account?.displayName ? "Halo, " + session.account.displayName + ". " : ""}Pekerjaan yang menunggu Anda dan ruang kerja sesuai penugasan.</p></>
-      : <><h1>Akun saya</h1><p>Profil, verifikasi dua langkah, kontak dan keluar dari Unit Toko.</p></>}</div>
-      <button type="button" className={styles.secondary} disabled={loading} onClick={reload}>Muat ulang sesi dan akses</button></div>
+    <div className={styles.pageHeader}><PageHeader title={home ? "Pekerjaan saya" : "Akun saya"}
+      description={home ? (session?.account?.displayName ? "Halo, " + session.account.displayName + ". " : "") + "Pekerjaan yang menunggu Anda dan ruang kerja sesuai penugasan."
+        : "Profil, verifikasi dua langkah, kontak dan keluar dari Unit Toko."}
+      secondaryAction={<Button disabled={loading} onClick={reload}>Muat ulang sesi dan akses</Button>} /></div>
     <div id="account-content">
       {loading && <section className={styles.card} aria-busy="true"><p role="status">Memeriksa akun dan izin terbaru…</p></section>}
       {error !== null && <SessionAccessState error={error} returnPath={home ? HOME_PATH : "/identity/account"} onRetry={reload}
@@ -111,7 +114,7 @@ export function IdentityAccount({ variant = "account" }: { variant?: "account" |
         {home && !elsewhere && <>
           {!isPilotRelease && navigationError === null && <WorkSummary key={"work:" + session.account.userId} actorId={session.account.userId} actions={actions} heading="Menunggu tindakan Anda" />}
           {door && navigationError === null && <section className={styles.card} aria-labelledby="store-door-heading"><h2 id="store-door-heading">{door.label}</h2><p>{door.description}</p>
-            <Link href={door.href} className={styles.primary}>{door.label}</Link></section>}
+            <Link href={door.href} className={buttonClassName({ variant: "primary" })}>{door.label}</Link></section>}
           <WorkspaceDirectory actions={actions} accessState={navigationError} />
           <p className={styles.help}>Profil, verifikasi dua langkah untuk persetujuan, kontak dan keluar ada di <Link href="/identity/account#profile-heading">Akun saya</Link>.</p>
         </>}
