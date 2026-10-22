@@ -30,7 +30,7 @@ import { EmptyState } from '@/components/workspace-kit/empty-state';
 import { OrderTimelinePanel } from './OrderTimelinePanel';
 import { SessionAccessState } from "@/components/workspace-kit/session-access-state";
 import { orderNumber } from '@/lib/document-numbers';
-import { requestedOrderId } from './order-links';
+import { requestedOrderId, requestedOrderNotice } from './order-links';
 
 type Account = { actorId: string; actions: readonly string[]; session: IdentitySession; observedAt: number };
 function status(order: SubmittedOrder) {
@@ -119,7 +119,10 @@ function OrderHistoryDesk({ account, onFailure }: { account: Account; onFailure:
         // An address naming one order (/ordering/orders?order=41, where old /account/orders/41 links lead) opens it with the first list (G-009).
         if (requested.current === undefined) requested.current = requestedOrderId(window.location.search);
         const wanted = requested.current; requested.current = null;
-        if (active && wanted) { const order = await gateway.read(account.actorId, wanted); if (active) setSelected(order); }
+        if (active && wanted) {
+          try { const order = await gateway.read(account.actorId, wanted); if (active) setSelected(order); }
+          catch (failure) { const notice = requestedOrderNotice(failure); if (notice === null) throw failure; if (active) setNotice(notice); }
+        }
       }
       catch (failure) { if (active) { setError(failure); onFailure(failure); } } finally { if (active) setBusy(false); }
     }); return () => { active = false; controller.abort(); };

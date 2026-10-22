@@ -47,8 +47,9 @@ export function ReceiptWorkspace() {
       if (!session.authenticated || !session.account) throw new IdentityFailure(401, 'unauthenticated');
       const current = await access.current(); if (!active) return;
       if (current.userId !== session.account.userId) throw new AccessFailure(409, 'actor_changed');
-      const canReceive = current.allowedActions.includes('receipt.accept');
-      if (!canReceive && !current.allowedActions.includes('shipment.prepare')) throw new AccessFailure(403, 'scope_denied');
+      // Only a recipient (receipt.accept) uses this page; anyone else gets the standard denial (G-038).
+      if (!current.allowedActions.includes('receipt.accept')) throw new AccessFailure(403, 'scope_denied');
+      const canReceive = true;
       if (sessionTiming(session, performance.now() - observedAt).expired) throw new IdentityFailure(401, 'session_expired');
       setAccount({ actorId: current.userId, session, observedAt, canReceive }); setElapsed(performance.now() - observedAt);
     } catch (failure) { if (active) setError(failure); } finally { if (active) setLoading(false); }

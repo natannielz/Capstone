@@ -65,7 +65,7 @@ test('no page keeps its own wording for signed out, expired or missing access (G
     for (const name of readdirSync(directory)) {
       const path = join(directory, name);
       if (statSync(path).isDirectory()) walk(path);
-      else if (/\.(tsx?)$/.test(name)) { const source = readFileSync(path, 'utf8'); for (const text of retired) if (source.includes(text)) offenders.push(path.slice(root.length) + ': ' + text); }
+      else if (/\.(tsx?)$/.test(name)) { const source = readFileSync(path, 'utf8').toLowerCase(); for (const text of retired) if (source.includes(text.toLowerCase())) offenders.push(path.slice(root.length) + ': ' + text); }
     }
   };
   walk(root);
@@ -149,7 +149,7 @@ test('a stale cookie classifies the same whether the session read or access/curr
 test('the sign-in state is only ever requested explicitly; no page asks for it (round 3)', () => {
   const root = fileURLToPath(new URL('../src/modules', import.meta.url)), offenders: string[] = [];
   const walk = (directory: string) => { for (const name of readdirSync(directory)) { const path = join(directory, name);
-    if (statSync(path).isDirectory()) walk(path); else if (name.endsWith('.tsx') && /<SessionAccessState[^\n]*"signin"/.test(readFileSync(path, 'utf8'))) offenders.push(path.slice(root.length)); } };
+    if (statSync(path).isDirectory()) walk(path); else if (name.endsWith('.tsx') && /<SessionAccessState[^\n]*["']signin["']/.test(readFileSync(path, 'utf8'))) offenders.push(path.slice(root.length)); } };
   walk(root);
   assert.deepEqual(offenders, []);
 });

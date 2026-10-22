@@ -11,3 +11,10 @@ export function requestedOrderId(search: string): string | null {
 
 /** The draft an address asks the checkout to reopen (`?draft=7`), or null. */
 export function requestedDraftId(search: string): string | null { return new URLSearchParams(search).get('draft'); }
+
+/** What to tell a buyer whose address named an order they cannot open (unknown, foreign, malformed); null for session or
+ *  service problems, which keep their own handling (G-045). */
+export function requestedOrderNotice(error: unknown): string | null {
+  const status = error instanceof Error ? (error as Error & { status?: unknown }).status : undefined;
+  return status === 400 || status === 403 || status === 404 ? 'Pesanan tidak ditemukan atau di luar akses Anda.' : null;
+}

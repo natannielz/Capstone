@@ -84,3 +84,18 @@ test('a buyer who may cancel reaches the page where cancelling happens, from the
   const history = readFileSync(new URL('../src/modules/ordering/OrderHistoryWorkspace.tsx', import.meta.url), 'utf8');
   assert.match(history, /account\.actions\.includes\('order\.cancel'\) && !selected\.progress\.cancelled && <p><Link href="\/ordering\/reviews"/);
 });
+
+test('the branch spending approver is a buyer-side role: home is the store, approvals reachable from it (G-043)', () => {
+  const approver = [...penyetujuCabang, 'order.spending.policy.read'];
+  assert.equal(isStaffActor(approver), false);
+  assert.equal(homeFor(approver), '/shop');
+  const tasks = buyerTasks(approver).map(item => item.href);
+  assert.ok(tasks.includes('/ordering/reviews')); assert.ok(tasks.includes('/ordering/spending-policies'));
+  assert.equal(storeLinks(storeMember('Andi', approver), false, '/shop').staffDoor, null);
+  // Staff with real back-office grants stay staff.
+  const storeHead = ['catalog.read', 'catalog.manage', 'pricing.manage', 'order.read', 'stock.read', 'shipment.read', 'shipment.assign', 'case.read', 'case.manage', 'procurement.read'];
+  const peninjauToko = [...storeHead, 'order.accept', 'order.request.read', 'order.request.decide'];
+  assert.equal(isStaffActor(peninjauToko), true); assert.equal(homeFor(peninjauToko), '/workspace');
+  assert.equal(isStaffActor([...approver, 'order.spending.policy.approve']), true, 'proposing or approving spending rules is back-office work');
+  assert.equal(isStaffActor(stafPembeli), true);
+});

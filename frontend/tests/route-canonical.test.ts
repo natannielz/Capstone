@@ -73,3 +73,22 @@ test('no page links a legacy address; links go straight to the canonical page (G
   walk(root);
   assert.deepEqual(offenders, []);
 });
+
+test('an unknown or foreign order from an old link says so, not that the filter failed (G-045)', async () => {
+  const { requestedOrderNotice } = await import('../src/modules/ordering/order-links');
+  const { AccessFailure } = await import('../src/modules/administration/workflow');
+  for (const failure of [new AccessFailure(404, 'order_not_found'), new AccessFailure(403, 'scope_denied'), new AccessFailure(400, 'invalid_order')])
+    assert.equal(requestedOrderNotice(failure), 'Pesanan tidak ditemukan atau di luar akses Anda.');
+  for (const failure of [new AccessFailure(401, 'unauthenticated'), new AccessFailure(503, 'service_unavailable'), new TypeError('Failed to fetch')])
+    assert.equal(requestedOrderNotice(failure), null, 'session and service problems keep their own handling');
+  const { readFileSync } = await import('node:fs');
+  assert.match(readFileSync(new URL('../src/modules/ordering/OrderHistoryWorkspace.tsx', import.meta.url), 'utf8'), /requestedOrderNotice\(/);
+});
+
+test('the order to open (?order=) is not a list filter: the filter panel accepts it and the list loads (G-045, G-009)', async () => {
+  const { parseOrderHistoryShare, defaultOrderHistoryFilter } = await import('../src/modules/ordering/order-view-client');
+  assert.deepEqual(parseOrderHistoryShare('?order=41'), defaultOrderHistoryFilter);
+  assert.deepEqual(parseOrderHistoryShare('?order=9223372036854775807'), defaultOrderHistoryFilter);
+  assert.throws(() => parseOrderHistoryShare('?order=41&order=42'), 'a repeated order is not a valid link');
+  assert.throws(() => parseOrderHistoryShare('?tracking=1'));
+});
