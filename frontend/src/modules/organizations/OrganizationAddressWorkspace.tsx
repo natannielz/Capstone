@@ -24,7 +24,7 @@ const blank = (): PostalAddress => ({ line1: '', line2: null, city: '', region: 
 const when = (value: string) => dateTimeFormatter.format(new Date(value));
 const status = { pending: 'Menunggu pemeriksaan', approved: 'Disetujui', rejected: 'Ditolak' } as const;
 function message(error: unknown) {
-  if (error instanceof IdentityFailure) return 'Masuk dengan akun organisasi Anda untuk melanjutkan.';
+  if (error instanceof IdentityFailure) return 'Sesi Anda perlu diperbarui. Masuk kembali untuk melanjutkan.';
   if (error instanceof AccessFailure) {
     if (error.code === 'organization_address_response_invalid' || error.code === 'organization_address_integrity_unavailable') return 'Riwayat alamat belum dapat dipastikan lengkap. Perubahan ditahan; hubungi penanggung jawab.';
     if (error.code === 'organization_address_changed' || error.code === 'organization_address_view_stale') return 'Data organisasi atau alamat berubah. Muat data terbaru dan periksa ulang rincian.';

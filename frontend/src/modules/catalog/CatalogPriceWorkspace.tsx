@@ -7,7 +7,7 @@ import { createAccessGateway } from '../administration/access-client';
 import { AdministrationNavigation } from '../administration/AdministrationNavigation';
 import { OperationRecovery, useOperationRecovery } from '../administration/OperationRecovery';
 import { submitTrackedRequest } from '../administration/operation-journal';
-import { AccessFailure, accessMessage } from '../administration/workflow';
+import { AccessFailure, accessMessage, businessRefusal } from '../administration/workflow';
 import { createIdentityGateway } from '../identity/identity-client';
 import { IdentityFailure, identityMessage, sessionTiming, type IdentitySession } from '../identity/identity-workflow';
 import { createCatalogPriceGateway } from './catalog-price-client';
@@ -28,7 +28,7 @@ function message(error: unknown): string {
     if (error.code === 'catalog_price_input_invalid') return 'Lengkapi mata uang, harga per kemasan dan alasan. Tulis harga seperti 12.000 atau 12000,50 (paling banyak dua angka di belakang koma).';
     if (error.code === 'step_up_required') return 'Verifikasi dua langkah terbaru diperlukan untuk meninjau harga dan memeriksa hasil keputusan.';
     if (error.status === 409) return 'Harga atau kemasan telah berubah. Muat ulang dan tinjau kembali sebelum mengirim.';
-    if (error.status === 403) return 'Tindakan tidak diizinkan. Pemeriksa harus orang terverifikasi yang berbeda dari pengaju dan memiliki penugasan yang masih berlaku.';
+    if (error.status === 403 && businessRefusal(error.code)) return 'Tindakan tidak diizinkan. Pemeriksa harus orang terverifikasi yang berbeda dari pengaju dan memiliki penugasan yang masih berlaku.';
     return accessMessage(error);
   }
   return 'Hasil belum dapat dipastikan. Periksa referensi permintaan yang tersimpan sebelum mengirim lagi.';

@@ -26,7 +26,7 @@ const routes = { omi_regular: 'OMI reguler', ddo: 'DDO', smart: 'S-Mart', pasar_
 const conditions = { intact: 'Utuh', opened: 'Terbuka', damaged: 'Rusak', mixed: 'Kondisi campuran', unverified: 'Belum dapat dipastikan' } as const;
 const when = (value: string) => dateTimeFormatter.format(new Date(value));
 function message(error: unknown) {
-  if (error instanceof IdentityFailure) return 'Masuk dengan akun organisasi Anda untuk melanjutkan.';
+  if (error instanceof IdentityFailure) return 'Sesi Anda perlu diperbarui. Masuk kembali untuk melanjutkan.';
   if (error instanceof AccessFailure || error instanceof RequestNotSentError) {
     if (error.code === 'procurement_receiving_invalid') return 'Isi tanggal, referensi dan jumlah koli secara lengkap. Koli lebih harus ditahan; kondisi terbuka, rusak atau belum pasti mengharuskan seluruh koli ditahan beserta catatan perbedaan.';
     if (error.code === 'procurement_receiving_response_invalid' || error.code.includes('integrity_unavailable')) return 'Rincian penerimaan belum dapat dipastikan lengkap. Hubungi penanggung jawab sebelum melanjutkan.';
