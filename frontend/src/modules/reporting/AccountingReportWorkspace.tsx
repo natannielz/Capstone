@@ -177,7 +177,7 @@ function ReportDesk({account, onDenied, header}: {account: Account; onDenied: (e
     {!report && busy !== 'read' && <section className="ui-section" aria-label="Hasil laporan"><StateView kind="empty" title="Laporan belum ditampilkan"
       message="Pilih satu buku dan tanggal akhir, lalu tampilkan laporan. Saldo tidak berasal dari halaman pesanan, tagihan, atau stok saat ini." /></section>}
     {report && <>
-      <section className="ui-section" data-variant="plain" aria-labelledby="report-result-heading"><div className="ui-stack">
+      <section className="ui-section" aria-labelledby="report-result-heading"><div className="ui-stack">
         <div className="ui-form"><h2 id="report-result-heading" tabIndex={-1} ref={reportHeading}>Neraca saldo kumulatif</h2><Scope book={report.book} />
           <p>Dari awal buku sampai tanggal bisnis {report.endDate}, termasuk tanggal tersebut. Zona waktu: Asia/Jakarta.</p>
           <p className={common.scopeSummary}>Laporan dari jurnal tersimpan. Laporan ini bukan penutupan buku yang disetujui, dan tidak menerbitkan transaksi atau mengubah saldo.</p>
@@ -188,6 +188,8 @@ function ReportDesk({account, onDenied, header}: {account: Account; onDenied: (e
           <Button variant="secondary" type="button" disabled={busy !== null || !online || expired} onClick={() => void download()}>Unduh CSV lengkap</Button>
           <p className={common.help}>CSV memuat seluruh akun dan jurnal dari laporan tersimpan yang sama. Tampilan jurnal dibagi per halaman; unduhan tidak mengikuti halaman yang sedang terbuka. Batas: 500 jurnal, 10.000 baris, 2.000 akun dan 8 MiB CSV.</p>
         </div>
+      </div></section>
+      <section className="ui-section" data-variant="plain" aria-label="Saldo akun"><div className="ui-stack">
         <DataTable caption={`Saldo ${report.accounts.length} akun pada buku yang dipilih`} rows={report.accounts} getKey={row => row.accountId}
           empty={{title: 'Belum ada akun tercatat pada bagan yang terkait dengan laporan ini.'}}
           columns={[
@@ -215,9 +217,9 @@ function ReportDesk({account, onDenied, header}: {account: Account; onDenied: (e
                 </div>
               </details></li>)}
             </ol>
-            <nav className="ui-actions" aria-label="Halaman jurnal"><Button variant="secondary" type="button" disabled={page === 0 || busy !== null}
+            {report.journals.length > pageSize && <nav className="ui-actions" aria-label="Halaman jurnal"><Button variant="secondary" type="button" disabled={page === 0 || busy !== null}
               onClick={() => setPage(value => value - 1)}>Jurnal sebelumnya</Button><span>Halaman {page + 1} dari {Math.ceil(report.journals.length / pageSize)}</span>
-              <Button variant="secondary" type="button" disabled={(page + 1) * pageSize >= report.journals.length || busy !== null} onClick={() => setPage(value => value + 1)}>Jurnal berikutnya</Button></nav>
+              <Button variant="secondary" type="button" disabled={(page + 1) * pageSize >= report.journals.length || busy !== null} onClick={() => setPage(value => value + 1)}>Jurnal berikutnya</Button></nav>}
           </>}
       </Section>
     </>}
