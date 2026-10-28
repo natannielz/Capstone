@@ -77,6 +77,8 @@
 .facts dd { margin: 0; font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
 .facts > div:first-child { grid-column: 1 / -1; }
 .card h2 { scroll-margin-top: 24px; }
+.card > :global(.ui-button) { justify-self: start; }
+@media (max-width: 639px) { .card > :global(.ui-button) { justify-self: stretch; } }
 .workspace { margin: var(--space-8) 0 var(--space-12); display: grid; gap: var(--space-6); }
 .skip { position: absolute; top: -80px; left: 20px; display: inline-flex; align-items: center; min-height: var(--control-h); padding: 0 var(--space-4); border-radius: var(--radius-control); background: var(--card); color: var(--foreground); z-index: 20; }
 .skip:focus { top: 10px; }
