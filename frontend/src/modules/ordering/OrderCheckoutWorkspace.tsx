@@ -81,7 +81,7 @@ type DeskGroup = { group: CheckoutGroup; requestKey: string; review: CheckoutRev
 function CheckoutDesk({ account, onFailure }: { account: Account; onFailure: (error: unknown) => void }) {
   const { actorId } = account, [drafts] = useState(() => createOrderDraftGateway()), [gateway] = useState(() => createOrderSubmitGateway()), [ledger] = useState(() => new MutationLedger());
   const recovery = useOperationRecovery(actorId), [draft, setDraft] = useState<OrderDraft | null>(null), [groups, setGroups] = useState<DeskGroup[]>([]);
-  const [otherReceipt, setOtherReceipt] = useState<OrderSubmitResult | null>(null), [busy, setBusy] = useState(false), [recovering, setRecovering] = useState(false);
+  const [otherReceipt, setOtherReceipt] = useState<OrderSubmitResult | null>(null), [busy, setBusy] = useState(false), [acting, setActing] = useState<string | null>(null), [recovering, setRecovering] = useState(false);
   const [error, setError] = useState<{ value: unknown; reading: boolean } | null>(null), [focused, setFocused] = useState(0);
   const alive = useRef(false), pending = useRef(false), controller = useRef<AbortController | null>(null), reviewPanel = useRef<HTMLDivElement>(null);
   const recovered = useRef<{ key: string; result: OrderSubmitResult } | null>(null);
@@ -125,7 +125,7 @@ function CheckoutDesk({ account, onFailure }: { account: Account; onFailure: (er
   }
   async function prepare(item?: DeskGroup) {
     if (!current() || locked || pending.current || !draft || item?.result || item?.uncertain) return;
-    pending.current = true; setBusy(true); setError(null);
+    pending.current = true; setBusy(true); setActing(item ? 'prepare:' + item.group.groupKey : 'prepare'); setError(null);
     if (item) update(item.group.groupKey, { review: null, error: null });
     try {
       const saved = await drafts.read(actorId, draft.id, signal()); if (!current()) return; setDraft(saved);
@@ -151,12 +151,12 @@ function CheckoutDesk({ account, onFailure }: { account: Account; onFailure: (er
         }
       }
     } catch (failure) { if (current()) { if (item) update(item.group.groupKey, { error: { value: failure, reading: true } }); else setError({ value: failure, reading: true }); onFailure(failure); } }
-    finally { pending.current = false; if (alive.current) setBusy(false); }
+    finally { pending.current = false; if (alive.current) { setBusy(false); setActing(null); } }
   }
   async function submit(item: DeskGroup) {
     if (!current() || locked || pending.current || !draft || !item.review || item.result || item.uncertain) return;
     const review = item.review, logical = `${orderSubmitOperation}:${item.group.groupKey}`;
-    pending.current = true; setBusy(true); setError(null); update(item.group.groupKey, { error: null });
+    pending.current = true; setBusy(true); setActing('submit:' + item.group.groupKey); setError(null); update(item.group.groupKey, { error: null });
     try {
       if (recovery.journal.list(actorId).length > 0) throw new AccessFailure(400, 'resolve_previous_attempt');
       const saved = await drafts.read(actorId, draft.id, signal()); if (!current()) return;
@@ -169,14 +169,14 @@ function CheckoutDesk({ account, onFailure }: { account: Account; onFailure: (er
         key => gateway.submit(actorId, review, key, current), item.requestKey);
       await readConfirmed(item.group.groupKey, result);
     } catch (failure) { if (current()) { update(item.group.groupKey, { review: null, uncertain: ledger.isUncertain(logical), error: { value: failure, reading: false } }); onFailure(failure); } }
-    finally { pending.current = false; if (alive.current) { setBusy(false); recovery.refresh(); } }
+    finally { pending.current = false; if (alive.current) { setBusy(false); setActing(null); recovery.refresh(); } }
   }
   const completed = groups.filter(item => item.result !== null).length, uncertain = groups.filter(item => item.uncertain).length;
   const allComplete = groups.length > 0 && completed === groups.length;
   const draftSummary = draft && <section className={styles.draft} aria-labelledby="checkout-draft-heading"><h2 id="checkout-draft-heading">Barang dari keranjang</h2><p className={styles.draftReference}>{draft.input.selections.length} barang{draft.input.purchaseReference ? ' · ' + draft.input.purchaseReference : ''}</p>
     <p className={common.help}>Harga, stok dan aturan belanja diperiksa ulang saat Anda meninjau. <Link href="/cart">Ubah isi keranjang</Link></p>
     {!draft.input.delivery && <p className={styles.missingDelivery}>Simpan pengiriman di atas untuk melanjutkan.</p>}
-    {groups.length === 0 && <div className={styles.draftAction}><Button variant="primary" disabled={locked || !draft.input.delivery} onClick={() => void prepare()}>{busy ? 'Memeriksa…' : 'Tinjau pesanan dan biaya'}</Button><p>Setiap kanal toko diperiksa dan diajukan secara terpisah.</p></div>}</section>;
+    {groups.length === 0 && <div className={styles.draftAction}><Button variant="primary" disabled={locked || !draft.input.delivery} busy={acting === 'prepare'} onClick={() => void prepare()}>{busy ? 'Memeriksa…' : 'Tinjau pesanan dan biaya'}</Button><p>Setiap kanal toko diperiksa dan diajukan secara terpisah.</p></div>}</section>;
   return <>
     <nav className={styles.progress} aria-label="Tahapan pengajuan pesanan"><ol>
       <li><Link href="/cart"><ShoppingBag size={18} aria-hidden="true" /><span>Keranjang</span></Link></li>
@@ -224,11 +224,11 @@ function CheckoutDesk({ account, onFailure }: { account: Account; onFailure: (er
             {item.order && item.order.progress.rejectedSuborders.length > 0 && <p>{item.order.progress.rejectedSuborders.length} kelompok ditolak toko; cadangan bagian tersebut telah dilepas.</p>}
             <p>{item.result.suborderIds.length} kelompok pemenuhan tersimpan.{item.order && !item.order.progress.cancelled && item.order.progress.spendingState !== 'Rejected' && item.order.progress.rejectedSuborders.length === 0 ? ' Stok pesanan telah dicadangkan.' : ''}</p>
             <Button disabled={busy || recovering} onClick={() => { setBusy(true); void readConfirmed(item.group.groupKey, item.result!).finally(() => { if (alive.current) setBusy(false); }); }}>Muat kembali pesanan</Button></div>}
-          {!item.result && !item.review && !item.uncertain && <Button variant="primary" disabled={locked} onClick={() => void prepare(item)}>Tinjau pesanan dan biaya</Button>}
+          {!item.result && !item.review && !item.uncertain && <Button variant="primary" disabled={locked} busy={acting === 'prepare:' + item.group.groupKey} onClick={() => void prepare(item)}>Tinjau pesanan dan biaya</Button>}
           {shown && <OrderCheckoutDetails value={shown} reviewing={item.review !== null}>
             {item.review && <><p>{item.review.spendingState === 'Pending' ? 'Pesanan memerlukan persetujuan belanja cabang sebelum diterima toko.' : 'Aturan pembelian yang berlaku tidak memerlukan persetujuan belanja tambahan.'}</p>
               <p className={common.help}>Stok kelompok ini diperiksa dan dicadangkan saat pengajuannya berhasil. Kelompok lain memerlukan konfirmasi terpisah.</p>
-              <div className={styles.submitActions}><Button variant="primary" disabled={locked} onClick={() => void submit(item)}>{item.review.spendingState === 'Pending' ? 'Ajukan untuk persetujuan' : 'Ajukan pesanan'}</Button>
+              <div className={styles.submitActions}><Button variant="primary" disabled={locked} busy={acting === 'submit:' + item.group.groupKey} onClick={() => void submit(item)}>{item.review.spendingState === 'Pending' ? 'Ajukan untuk persetujuan' : 'Ajukan pesanan'}</Button>
                 <Button disabled={locked} onClick={() => update(item.group.groupKey, { review: null })}>Batal pengajuan</Button></div></>}
           </OrderCheckoutDetails>}
         </section>;

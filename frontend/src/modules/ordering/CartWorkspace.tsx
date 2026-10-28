@@ -118,7 +118,7 @@ function CartDesk({ actorId, onLost }: { actorId: string; onLost: (failure: unkn
     }, 700));
   }
   if (options === null) return <StateView kind="loading" title="Memeriksa cabang…" />;
-  if (options.length === 0) return <StateView kind="empty" align="center" title="Belum ada cabang untuk dipesan" message="Akun ini belum dapat memesan untuk cabang mana pun. Hubungi pengelola akses di unit Anda." />;
+  if (options.length === 0) return error !== null ? <StateView kind="error" title={addToCartMessage(error)} /> : <StateView kind="empty" align="center" title="Belum ada cabang untuk dipesan" message="Akun ini belum dapat memesan untuk cabang mana pun. Hubungi pengelola akses di unit Anda." />;
   const ready = rows.filter(row => row.state === 'ready' && row.current?.currentPrice);
   const currency = ready[0]?.current?.currentPrice?.currency ?? 'IDR';
   const total = cartAmount(ready.map(row => lineAmount(row.current!.currentPrice!.unitPrice, row.saved.packages)));
@@ -129,6 +129,7 @@ function CartDesk({ actorId, onLost }: { actorId: string; onLost: (failure: unkn
   };
   const blocked = rows.some(row => row.state !== 'ready' || !typedValid(row));
   const editing = rows.some(row => typed[row.saved.skuId] !== undefined && typedValid(row) && Number(typed[row.saved.skuId].trim()) !== row.saved.packages);
+  const failed = error !== null && rows.length === 0;
   return <>
     <div className={styles.branch}><Field id={branchId} label="Keranjang untuk">
       <select value={contextKey ?? ''} disabled={saving || tracked.locked} onChange={event => {
@@ -137,8 +138,9 @@ function CartDesk({ actorId, onLost }: { actorId: string; onLost: (failure: unkn
       }}><option value="">Pilih cabang</option>{options.map(option => <option key={orderContextKey(option.context)} value={orderContextKey(option.context)}>{branchLabel(option)}</option>)}</select></Field></div>
     {skipped > 0 && <p role="status" className={styles.notice}>{skipped} barang dari pesanan sebelumnya tidak lagi tersedia untuk cabang Anda dan tidak dimasukkan.</p>}
     {tracked.recoveryView}
-    {error !== null && <StateView kind="error" title={addToCartMessage(error)} />}
-    {!branch ? <StateView kind="empty" align="center" icon={ShoppingCart} title="Pilih cabang untuk melihat keranjangnya."
+    {error !== null && !failed && <StateView kind="error" title={addToCartMessage(error)} />}
+    {failed ? <StateView kind="error" title={addToCartMessage(error)} />
+      : !branch ? <StateView kind="empty" align="center" icon={ShoppingCart} title="Pilih cabang untuk melihat keranjangnya."
         action={<Link className={buttonClassName({ variant: 'secondary' })} href="/shop">Mulai belanja</Link>} />
       : state === 'loading' && !draft ? <StateView kind="loading" title="Memuat keranjang…" />
       : state === 'error' && !draft ? <StateView kind="error" title="Keranjang belum dapat dimuat" message="Periksa koneksi, lalu coba lagi."

@@ -233,7 +233,7 @@ export function BuyerCatalog({ publicId, returnPath = '/shop', requestOnly = fal
               {!requestOnly && <p className={catalog.price}>{price(item.currentPrice)}<span> per {item.definition.packageLabel}</span></p>}
               <p className={catalog.help}>Minimum {item.definition.minimumOrderPackages}; kelipatan {item.definition.orderIncrementPackages} kemasan</p>
             </div>
-            <div className={`${catalog.cardActions} ${styles.cardActions}`}><Button className="ui-button--wrap" aria-label={'Rincian ' + buyerCurrentCode(item) + ' ' + item.definition.packageLabel} disabled={detailBusy !== null} onClick={event => void details(item, event.currentTarget)}>{detailBusy === item.skuId ? 'Memuat…' : 'Periksa kemasan'}</Button>
+            <div className={`${catalog.cardActions} ${styles.cardActions}`}><Button className="ui-button--wrap" busy={detailBusy === item.skuId} aria-label={'Rincian ' + buyerCurrentCode(item) + ' ' + item.definition.packageLabel} disabled={detailBusy !== null} onClick={event => void details(item, event.currentTarget)}>{detailBusy === item.skuId ? 'Memuat…' : 'Periksa kemasan'}</Button>
               <Link className={buttonClassName({ variant: 'tertiary', className: 'ui-button--wrap' })} href={'/shop/' + item.publicId} aria-label={'Halaman ' + buyerCurrentCode(item) + ' ' + item.definition.packageLabel}>Buka halaman kemasan</Link></div>
           </li>)}</ul>}
           {items.length > 0 && <nav className={catalog.pagination} aria-label="Halaman katalog"><Button disabled={offset === 0 || detailBusy !== null} onClick={() => navigateCatalog(at({ offset: Math.max(0, offset - 25) }))}>Sebelumnya</Button>

@@ -219,3 +219,26 @@ test("U-025: a category shows by name — the server's name, else the code in se
   assert.equal(buyerCategoryLabel("AIR-MINUMAN"), "Air minuman");
   assert.equal(buyerCategoryLabel("ALAT_TULIS"), "Alat tulis");
 });
+
+// Review round (the rules UI-PAGES-B's review enforced): no single-tab Tabs, an error never sits above an empty card, and the
+// busy state shows on the button that was pressed.
+test("review: Tabs only when there is more than one view", () => {
+  has(source("ordering/BranchRequestWorkspace.tsx"), /views\.length > 1 &&[^\n]*<Tabs\b/, "one view needs no tabs");
+});
+
+test("review: the cart shows a failed read as the error, not as an empty cart or an empty branch list", () => {
+  const code = source("ordering/CartWorkspace.tsx");
+  has(code, /options\.length === 0\) return error !== null \? <StateView kind="error"/, "a failed branch read is an error state");
+  has(code, /const failed = error !== null && rows\.length === 0/, "a failed change on an empty cart shows the error alone");
+});
+
+test("review: the pressed button carries the busy state", () => {
+  has(source("ordering/AddToCartPanel.tsx"), /<Button variant="primary"[^>]*busy=\{busy\}/);
+  has(source("ordering/OrderDeliveryPanel.tsx"), /<Button type="submit" variant="primary"[^>]*busy=\{busy\}/);
+  has(source("catalog/BuyerCatalog.tsx"), /busy=\{detailBusy === item\.skuId\}/);
+  const checkout = source("ordering/OrderCheckoutWorkspace.tsx");
+  has(checkout, /busy=\{acting === 'prepare'\}/); has(checkout, /busy=\{acting === 'prepare:' \+ item\.group\.groupKey\}/); has(checkout, /busy=\{acting === 'submit:' \+ item\.group\.groupKey\}/);
+  const orders = source("ordering/OrderHistoryWorkspace.tsx");
+  has(orders, /busy=\{acting === 'again:' \+ id\}/); has(orders, /busy=\{acting === 'open:' \+ id\}/);
+  has(source("ordering/BranchRequestWorkspace.tsx"), /busy=\{acting === 'open:' \+ item\.id\}/);
+});

@@ -84,7 +84,7 @@ export function AddToCartPanel({ actorId, item, isCurrent }: { actorId: string; 
         onChange={text => { setQuantity(text); setAdded(null); setError(null); }} />
       <p className={styles.help}>{rule.minimum > 1 || rule.increment > 1 ? `Minimal ${rule.minimum}, kelipatan ${rule.increment}. ` : ''}Satu {item.definition.packageLabel} berisi {item.definition.baseUnitsPerPackage} {item.definition.baseUnitCode}.</p>
       <p className={styles.subtotal}><span>Subtotal</span><strong>{packages === null ? '—' : formatDisplayMoney(price.currency, lineAmount(price.unitPrice, packages))}</strong></p>
-      <Button variant="primary" className={styles.addButton} disabled={busy || saving.locked || !branch || packages === null} onClick={() => void add()}>
+      <Button variant="primary" className={styles.addButton} busy={busy} disabled={busy || saving.locked || !branch || packages === null} onClick={() => void add()}>
         <ShoppingCart aria-hidden="true" />{busy ? 'Menambahkan…' : 'Tambah ke keranjang'}</Button>
       {!branch && <p className={styles.help}>Pilih cabang lebih dulu.</p>}
     </>}
