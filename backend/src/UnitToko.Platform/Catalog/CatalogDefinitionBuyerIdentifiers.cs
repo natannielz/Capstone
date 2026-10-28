@@ -75,8 +75,16 @@ public sealed partial class CatalogDefinitionQueryService
         if (publicId is null || !Regex.IsMatch(publicId, "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\\z", RegexOptions.CultureInvariant))
             throw new DomainValidationException("invalid_public_id", "A canonical UUID version 4 is required");
         await CatalogIdentifierRecords.RequireStorageAsync(database, cancellationToken);
-        return await visibility.ReadCurrentAsync<CatalogBuyerVariant?>(actor, F.Eq("publicId", publicId) & F.Eq("active", true), async (tx, filter, ct) => {
-            var pipeline = VisiblePipeline(filter); pipeline.Add(new("$limit", 2));
+        // A product (catalog family) id, as guest links carry it, opens that product's first package this member may see. Only the
+        // family id is looked up here; whether any package is visible is decided inside the entitlement read below, so a product the
+        // member cannot see answers exactly like an unknown id (I2).
+        var family = await repository.Rows("productFamilies").Find(F.Eq("publicId", publicId)).Project(new BsonDocument("_id", 1)).Limit(2).ToListAsync(cancellationToken);
+        if (family.Count > 1) throw CatalogRepository.Invalid("ambiguous_catalog_identifier");
+        var selector = family.Count == 1 ? F.Eq("familyId", family[0]["_id"]) : F.Eq("publicId", publicId);
+        return await visibility.ReadCurrentAsync<CatalogBuyerVariant?>(actor, selector & F.Eq("active", true), async (tx, filter, ct) => {
+            var pipeline = VisiblePipeline(filter);
+            if (family.Count == 1) pipeline.Add(new("$sort", new BsonDocument("_id", 1)));
+            pipeline.Add(new("$limit", family.Count == 1 ? 1 : 2));
             var selected = await repository.Rows("skus").Aggregate<BsonDocument>(tx, pipeline).ToListAsync(ct);
             if (selected.Count > 1) throw CatalogRepository.Invalid("ambiguous_catalog_identifier");
             if (selected.Count == 0) return null;

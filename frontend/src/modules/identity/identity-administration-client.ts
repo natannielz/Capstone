@@ -24,12 +24,12 @@ export function createIdentityAdministrationGateway(client: Client = createUnitT
     async profiles(actorId: string, term = "", offset = 0) {
       const params = { header: { "X-Expected-Actor-Id": actorId } };
       return term.trim()
-        ? value(await client.POST("/api/v1/identity/administration/directory/search", { body: { purpose: "account-directory", term: term.trim(), offset, limit: 25 }, params }))
-        : value(await client.POST("/api/v1/identity/administration/directory/query", { body: { purpose: "account-directory", offset, limit: 25 }, params }));
+        ? value(await client.POST("/api/v1/identity/administration/directory/search", { body: { purpose: "access-review", term: term.trim(), offset, limit: 25 }, params }))
+        : value(await client.POST("/api/v1/identity/administration/directory/query", { body: { purpose: "access-review", offset, limit: 25 }, params }));
     },
     async invitations(actorId: string, offset = 0) {
       return value(await client.POST("/api/v1/identity/administration/invitations/query", {
-        body: { purpose: "invitation-review", offset, limit: 25 }, params: { header: { "X-Expected-Actor-Id": actorId } },
+        body: { purpose: "access-review", offset, limit: 25 }, params: { header: { "X-Expected-Actor-Id": actorId } },
       }));
     },
     async propose(body: Schemas["IdentityInvitationProposalDto"], key: string, actorId: string) {

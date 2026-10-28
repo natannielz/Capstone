@@ -29,7 +29,7 @@ public sealed partial class BankReceiptService
     }
     private DateTimeOffset Now => DateTimeOffset.FromUnixTimeMilliseconds(clock.UtcNow.ToUnixTimeMilliseconds());
     private sealed record Context(ActorContext Actor, AuthorizationSnapshot Authority, IClientSessionHandle Tx, bool Confirm, BsonDocument? Scope = null);
-    private static string[] Required(bool confirm) => confirm ? [Permissions.BankReceiptConfirm,Permissions.BankReceiptRead,Permissions.BankStatementRead,Permissions.ReceivingAccountRead,Permissions.ReceivingAccountDetailsRead]
+    internal static string[] Required(bool confirm) => confirm ? [Permissions.BankReceiptConfirm,Permissions.BankReceiptRead,Permissions.BankStatementRead,Permissions.ReceivingAccountRead,Permissions.ReceivingAccountDetailsRead]
         : [Permissions.BankReceiptRead,Permissions.BankStatementRead,Permissions.ReceivingAccountRead,Permissions.ReceivingAccountDetailsRead];
     private AuthorizationQuery[] Require(Context context) => Required(context.Confirm).Select(permission => {
         var query=ScopePolicy.Compile(context.Actor,context.Authority,permission,clock.UtcNow); AuthorizationStore.Require(query);
