@@ -29,7 +29,7 @@ test("guest links open the guest catalog directly, and each door opens its own h
 test("the 3D stage is decorative and the request card carries the same information as text", () => {
   const html = render(true);
   assert.match(html, /<div[^>]*aria-hidden="true"[^>]*data-stage="kemasan"/, "stage is hidden from assistive technology");
-  assert.match(html, /<h2[^>]*id="isi-kardus"[^>]*>Isi kardus permintaan PT-00000142<\/h2>/);
+  assert.match(html, /<h2[^>]*id="isi-kardus"[^>]*>Isi kardus permintaan PB-000142<\/h2>/);
   assert.match(html, /<label for="contoh-jumlah">Jumlah dus<\/label>/);
   assert.match(html, /aria-live="polite"[^>]*>5 kemasan dalam 1 kardus, termasuk 24 sachet kopi</);
   for (const item of ["Kopi bubuk sachet", "Kertas HVS A4 70 gsm", "Teh celup melati", "Pulpen hitam", "Penyanitasi tangan 500 ml"]) assert.match(html, new RegExp(item));

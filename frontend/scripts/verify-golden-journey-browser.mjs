@@ -11,7 +11,7 @@ import { resolve } from 'node:path';
 import next from 'next';
 
 // Typed record numbers exactly as src/lib/document-numbers.ts writes them.
-const prefixes = { order: 'PSN', case: 'KLH', return: 'RTR', purchaseRequest: 'PP', purchaseOrder: 'SP' };
+const prefixes = { order: 'PSN', case: 'KLH', return: 'RTR', purchaseRequest: 'PP', purchaseOrder: 'SP', branchRequest: 'PB' };
 const recordNumber = (kind, id) => prefixes[kind] + '-' + String(id).padStart(6, '0');
 const documentNumber = value => [value.numberEntity, value.numberChannel, value.numberYear, value.number].join('/');
 
@@ -114,9 +114,8 @@ async function addToCart(buyer, label) {
   const summary = await buyer.page.getByRole('complementary', { name: 'Ringkasan belanja', exact: true }).innerText();
   assert.match(summary, /Rp[0-9]{1,3}(\.[0-9]{3})*/); await capture(buyer.page, label + '-keranjang'); return packages;
 }
-async function checkoutFromCart(buyer, label) {
-  const before = committed('/api/v1/ordering/orders').length;
-  await buyer.page.getByRole('link', { name: 'Lanjut ke pengajuan', exact: true }).click(); await buyer.page.waitForURL(url => url.pathname === '/ordering/checkout');
+// A keranjang's delivery belongs to its own draft (F-030): a fresh keranjang asks for it again, an earlier one already has it.
+async function giveDelivery(buyer) {
   const change = buyer.page.getByRole('button', { name: 'Ubah pengiriman', exact: true }), fill = buyer.page.getByRole('button', { name: 'Isi dari alamat cabang', exact: true });
   await change.or(fill).first().waitFor();
   if (await fill.count()) {
@@ -125,6 +124,11 @@ async function checkoutFromCart(buyer, label) {
     await buyer.page.getByLabel('Telepon penerima', { exact: true }).fill('+628123456789');
     await buyer.page.getByRole('button', { name: 'Simpan pengiriman', exact: true }).click(); await change.waitFor();
   }
+}
+async function checkoutFromCart(buyer, label) {
+  const before = committed('/api/v1/ordering/orders').length;
+  await buyer.page.getByRole('link', { name: 'Lanjut ke pengajuan', exact: true }).click(); await buyer.page.waitForURL(url => url.pathname === '/ordering/checkout');
+  await giveDelivery(buyer);
   await buyer.page.getByRole('button', { name: 'Tinjau pesanan dan biaya', exact: true }).click();
   await buyer.page.getByRole('heading', { name: 'Periksa sebelum mengajukan', exact: true }).waitFor(); await capture(buyer.page, label + '-checkout-review');
   await buyer.page.getByRole('button', { name: /^Ajukan (pesanan|untuk persetujuan)$/ }).click();
@@ -470,6 +474,7 @@ async function secondOrderAndStoreRejection() {
   await step('S2', 'pemohon', 'adds to the keranjang again and checkout offers a new order', async () => {
     await addToCart(pemohon, 'S2');
     await pemohon.page.getByRole('link', { name: 'Lanjut ke pengajuan', exact: true }).click(); await pemohon.page.waitForURL(url => url.pathname === '/ordering/checkout');
+    await giveDelivery(pemohon);
     const earlier = pemohon.page.getByRole('heading', { name: 'Pesanan ' + first.order + ' tercatat', exact: true });
     const review = pemohon.page.getByRole('heading', { name: 'Periksa sebelum mengajukan', exact: true });
     await pemohon.page.getByRole('button', { name: 'Tinjau pesanan dan biaya', exact: true }).click();
@@ -523,9 +528,9 @@ async function branchRequests() {
     assert.ok(noPrice(await pemohon.page.locator('main').innerText()), 'A branch request shows no price');
     await confirm.getByRole('button', { name: 'Konfirmasi ajukan permintaan', exact: true }).click();
     const result = pemohon.page.getByRole('region', { name: 'Hasil permintaan', exact: true });
-    const heading = result.getByRole('heading', { name: /^PT-[0-9]{8} tercatat$/ }); await heading.waitFor();
+    const heading = result.getByRole('heading', { name: /^PB-[0-9]{6,} tercatat$/ }); await heading.waitFor();
     await result.getByText('Menunggu peninjauan', { exact: true }).waitFor();
-    return /PT-[0-9]{8}/.exec(await heading.innerText())[0];
+    return /PB-[0-9]{6,}/.exec(await heading.innerText())[0];
   }
   async function decide(number, accept) {
     await peninjau.page.goto(origin.origin + '/ordering/requests/incoming');

@@ -50,7 +50,7 @@ public sealed class FunctionGapBrowserTests(MongoFixture fixture, ITestOutputHel
             var proposed = await prices.ProposeAsync(maker, data.SkuId, preview.Expected, new("IDR", UnitToko.Modules.Accounting.Money.Parse("25000.00")), GenuineFiniteDispatchTestData.Meta("cart-price-change"));
             await prices.DecideAsync(checker, proposed["proposalId"].AsInt64, 1, UnitToko.Modules.Catalog.CatalogPriceDecision.Approve,
                 "Synthetic independent price change", GenuineFiniteDispatchTestData.Meta("cart-price-change-approved"));
-            return new { display = "Rp25.000,00" };
+            return new { display = "Rp25.000" };
         }, async (data, actors, lines) => {
             var orders = await data.Rows("orders").Find(new BsonDocument()).Sort(new BsonDocument("_id", 1)).ToListAsync();
             Assert.Single(orders); Assert.All(orders, order => Assert.Equal(actors["pemohon"].UserId, order["createdBy"].AsInt64));

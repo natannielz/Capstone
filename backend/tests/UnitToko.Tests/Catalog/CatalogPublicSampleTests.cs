@@ -401,9 +401,9 @@ public sealed class CatalogPublicSampleTests(MongoFixture fixture)
             new BsonDocument { { "_id", 502L }, { "schemaVersion", 1 }, { "isPublic", false }, { "revision", 2L }, { "decisionId", 72L }, { "updatedAt", at }, { "fence", 1L } }]);
         Assert.Equal(0L, await data.CountAsync("catalogPublicSamples"));
 
-        // Re-run exactly the last step, as a deployment upgrading a version 121 database does.
-        Assert.Equal(1, (await data.Rows("schemaMigrations").DeleteOneAsync(new BsonDocument("_id", CollectionMigrations.CurrentVersion))).DeletedCount);
-        Assert.Equal(122, CollectionMigrations.CurrentVersion);
+        // Re-run step 122 and every later step, as a deployment upgrading a version 121 database does.
+        Assert.True(CollectionMigrations.CurrentVersion >= 122);
+        Assert.Equal(CollectionMigrations.CurrentVersion - 121, (await data.Rows("schemaMigrations").DeleteManyAsync(new BsonDocument("_id", new BsonDocument("$gte", 122)))).DeletedCount);
         var migrations = new CollectionMigrations(data.Database, data.Clock);
         await migrations.ApplyAsync();
         Assert.True(await migrations.IsCurrentAsync());

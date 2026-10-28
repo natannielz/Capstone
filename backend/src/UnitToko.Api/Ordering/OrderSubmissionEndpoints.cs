@@ -16,7 +16,9 @@ namespace UnitToko.Api.Ordering;
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record OrderCheckoutDto([property: JsonRequired] string Purpose, [property: JsonRequired] OrderDraftInputDto Input);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed record OrderSubmitDto([property: JsonRequired] OrderDraftInputDto Input, [property: JsonRequired] string Review, [property: JsonRequired] string Reason);
+/// <summary>`DraftId` (F-030): the saved draft this checkout came from; the server closes it so it is never the keranjang again.</summary>
+public sealed record OrderSubmitDto([property: JsonRequired] OrderDraftInputDto Input, [property: JsonRequired] string Review, [property: JsonRequired] string Reason,
+    LongId? DraftId = null);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record OwnOrderListDto([property: JsonRequired] string Purpose, OrderContextDto? Context = null, LongId? BeforeId = null, int Limit = 25);
 public sealed record OrderCheckoutReviewDto(OrderDraftInputDto Input, string Review, DateTimeOffset CalculatedAt, string Currency, Money CatalogSubtotal,
@@ -45,7 +47,7 @@ public static class OrderSubmissionEndpoints
             [FromHeader(Name = "Idempotency-Key")] string key, [FromHeader(Name = "If-Match")] string expected, CancellationToken ct) => {
             if (request.Input is null || AccessRequestMetadata.ExpectedVersion(http.Request) != 0) throw Invalid();
             var result = await Selection(() => service.SubmitAsync(http.Features.Get<ResolvedActor>()!.Actor, request.Input.Domain(), request.Review,
-                new(AccessRequestMetadata.IdempotencyKey(http.Request), request.Reason, http.TraceIdentifier), ct));
+                new(AccessRequestMetadata.IdempotencyKey(http.Request), request.Reason, http.TraceIdentifier), request.DraftId?.Value, ct));
             http.Response.Headers.ETag = "\"1\""; return TypedResults.Ok(Result(result));
         }).WithName("SubmitBranchOrder");
         group.MapPost("/operations/query", async (OrderDraftRecoveryDto request, HttpContext http, [FromServices] OrderSubmissionService service, CancellationToken ct) => {
