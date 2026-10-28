@@ -69,7 +69,7 @@ export function OrderCheckoutWorkspace() {
     <PageHeader breadcrumb={<Link href="/cart" className={styles.back}><ArrowLeft size={16} aria-hidden="true" />Kembali ke keranjang</Link>} title="Pengajuan pesanan"
       description="Isi pengiriman, tinjau biaya, lalu ajukan. Pesanan yang memerlukan persetujuan belanja dikirim ke penyetuju cabang."
       secondaryAction={!loading && account && !expired ? <Link className={buttonClassName({ variant: 'tertiary' })} href="/ordering/orders">Pesanan saya<ArrowRight aria-hidden="true" /></Link> : undefined} />
-    {error !== null && <StateView kind="error" title={message(error, true)} />}
+    {error !== null && account !== null && <StateView kind="error" title={message(error, true)} />}
     {loading ? <StateView kind="loading" title="Memeriksa akun…" /> : !account || expired ? <SessionAccessState kind={account ? "expired" : undefined} error={error} returnPath="/ordering/checkout" onRetry={() => setRevision(value => value + 1)} />
       : <CheckoutDesk key={account.actorId + ':' + account.observedAt} account={account} onFailure={failed} />}
   </main>;

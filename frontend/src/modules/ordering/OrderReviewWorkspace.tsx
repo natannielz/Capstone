@@ -16,7 +16,13 @@ import styles from './order-draft.module.css';
 import { SessionAccessState } from "@/components/workspace-kit/session-access-state";
 import { orderNumber } from '@/lib/document-numbers';
 import { reviewWaiting } from './order-status';
-import { StatusBadge } from '@/components/workspace-kit/status-badge';
+import { Button } from '@/components/workspace-kit/button';
+import { PageHeader } from '@/components/workspace-kit/page-header';
+import { StateView } from '@/components/workspace-kit/state-view';
+import { Section } from '@/components/workspace-kit/section';
+import { DataList } from '@/components/workspace-kit/data-list';
+import { Badge } from '@/components/workspace-kit/badge';
+import { Tabs } from '@/components/workspace-kit/tabs';
 
 type Account = { actorId: string; actions: readonly string[]; session: IdentitySession; observedAt: number };
 const factorHref = '/identity/account?operation=order.spend.approve&returnPath=%2Fordering%2Freviews';
@@ -68,12 +74,11 @@ export function OrderReviewWorkspace() {
     }
   }, []);
   const expired = account !== null && sessionTiming(account.session, elapsed).expired;
-  return <main className={common.page}><header className={common.header}><div><Link href="/identity/account" className={common.brand}>Unit Toko</Link>
-    <h1>Peninjauan pesanan</h1><p>Tinjau belanja, penerimaan toko, atau pembatalan sesuai penugasan Anda.</p></div>
-    <nav className={common.actions}><Link href="/identity/account" className={common.secondary}>Akun saya</Link></nav></header>
-    {error !== null && account !== null && <p role="alert" className={common.alert}>{message(error)}</p>}
-    {loading ? <p role="status">Memeriksa akun…</p> : !account || expired ? <SessionAccessState kind={account ? "expired" : undefined} error={error} returnPath="/ordering/reviews" onRetry={() => setRevision(value => value + 1)} />
-      : <ReviewDesk key={account.actorId + ':' + account.observedAt} account={account} elapsed={elapsed} onFailure={failed} onRefresh={() => setRevision(value => value + 1)} />}
+  return <main className={common.page}><PageHeader title="Peninjauan pesanan" description="Tinjau belanja, penerimaan toko, atau pembatalan sesuai penugasan Anda." />
+    <div className="ui-stack">
+    {error !== null && account !== null && <StateView kind="error" title={message(error)} />}
+    {loading ? <StateView kind="loading" title="Memeriksa akun…" /> : !account || expired ? <SessionAccessState kind={account ? "expired" : undefined} error={error} returnPath="/ordering/reviews" onRetry={() => setRevision(value => value + 1)} />
+      : <ReviewDesk key={account.actorId + ':' + account.observedAt} account={account} elapsed={elapsed} onFailure={failed} onRefresh={() => setRevision(value => value + 1)} />}</div>
   </main>;
 }
 function ReviewDesk({ account, elapsed, onFailure, onRefresh }: { account: Account; elapsed: number; onFailure: (error: unknown) => void; onRefresh: () => void }) {
@@ -124,32 +129,34 @@ function ReviewDesk({ account, elapsed, onFailure, onRefresh }: { account: Accou
     } catch (failure) { if (current()) { setStaged(false); setSelected(null); setError(failure); onFailure(failure); } }
     finally { pending.current = false; if (alive.current) { setBusy(false); recovery.refresh(); } }
   }
+  // View tabs only when there is a choice: a single view needs no switch (§8.1).
+  const views = [...actions.includes('order.spend.approve') ? [{ label: 'Belanja cabang', value: 'Spending' }] : [], ...actions.includes('order.accept') ? [{ label: 'Penerimaan toko', value: 'Store' }] : [], ...actions.includes('order.cancel') ? [{ label: 'Pembatalan pesanan', value: 'Cancellation' }] : []];
   return <>
     <AdministrationNavigation current="order-reviews" actions={actions} locked={locked} />
-    <section className={common.accountSection}><h2>Keputusan sesuai penugasan</h2><div className={common.actions}>
-      {actions.includes('order.spend.approve') && <button className={stage === 'Spending' ? common.primary : common.secondary} disabled={locked} onClick={() => { setStage('Spending'); setBefore(null); setNotice(null); }}>Belanja cabang</button>}
-      {actions.includes('order.accept') && <button className={stage === 'Store' ? common.primary : common.secondary} disabled={locked} onClick={() => { setStage('Store'); setBefore(null); setNotice(null); }}>Penerimaan toko</button>}
-      {actions.includes('order.cancel') && <button className={stage === 'Cancellation' ? common.primary : common.secondary} disabled={locked} onClick={() => { setStage('Cancellation'); setBefore(null); setNotice(null); }}>Pembatalan pesanan</button>}
-      <button className={common.secondary} disabled={busy || recovering} onClick={onRefresh}>Muat ulang sesi dan akses</button></div>
+    <Section title="Keputusan sesuai penugasan" actions={<Button variant="secondary" disabled={busy || recovering} onClick={onRefresh}>Muat ulang sesi dan akses</Button>}>
+      {views.length > 1 && <Tabs label="Keputusan sesuai penugasan" current={stage} disabled={locked} onSelect={value => { setStage(value as ReviewStage); setBefore(null); setNotice(null); }}
+        items={views} />}
       {(!fresh || error instanceof AccessFailure && error.code === 'step_up_required') && <p role="alert">Verifikasi terbaru diperlukan. <Link href={factorHref}>Verifikasi dua langkah</Link></p>}
-    </section>
+    </Section>
     <OperationRecovery entries={recovery.entries} journal={recovery.journal} disabled={busy} onBusyChange={setRecovering}
       recoveryAdapters={{ 'ordering.decision': { lookup: async entry => { const selected = orderDecisionSelection(entry.operation); const result = await gateway.recover(entry.actorId, selected.stage, entry.key, undefined, selected.action); recovered.current = result?.result ?? null; return result; } } }}
       onFailure={failure => { setError(failure); onFailure(failure); }} onResolved={() => {
         recovery.refresh(); ledger.resetAfterReconciliation(); setError(null); const result = recovered.current; recovered.current = null;
         if (result && current()) { setNotice(decisionNotice(result, true)); void select(result); }
       }} />
-    {error !== null && <p role="alert" className={common.alert}>{message(error)}</p>}{recovery.error !== null && <p role="alert" className={common.alert}>{accessMessage(recovery.error)}</p>}
+    {error !== null && page.items.length > 0 && <StateView kind="error" title={message(error)} />}{recovery.error !== null && <StateView kind="error" title={accessMessage(recovery.error)} />}
     {notice && <p role="status" className={common.success}>{notice}</p>}
-    <section className={common.accountSection} aria-label="Pesanan sesuai akses" aria-busy={busy}><h2>{stage === 'Store' ? 'Bagian pesanan toko' : stage === 'Spending' ? 'Pesanan cabang' : 'Pesanan untuk ditinjau pembatalannya'}</h2>
-      {!busy && page.items.length === 0 && <p>Belum ada pesanan yang dapat ditinjau dalam penugasan ini.</p>}
-      <ul className={styles.lines}>{page.items.map(item => <li key={item.suborderId ?? item.orderId}><strong>{item.buyerName}</strong> · Pesanan {orderNumber(item.orderId)} · {item.quote.lines.length} kemasan
-        <p>{statusText(item)} · {reviewWaiting(item.orderedAt, now).age}{reviewWaiting(item.orderedAt, now).overdue && <> <StatusBadge text="Lewat 1 hari" /></>}</p>
-        <button className={common.secondary} disabled={locked || !fresh} onClick={() => void select(item)}>Tinjau pesanan {orderNumber(item.orderId)}{item.suborderId ? ' / ' + item.suborderId : ''}</button></li>)}</ul>
-      <div className={common.actions}><button className={common.secondary} disabled={locked} onClick={() => { setBefore(null); setReload(value => value + 1); }}>Muat pesanan terbaru</button>
-        {page.hasMore && <button className={common.secondary} disabled={locked} onClick={() => { const last = page.items.at(-1); if (last) setBefore(last.suborderId ?? last.orderId); }}>Pesanan lebih lama</button>}</div>
-    </section>
-    {selected && <section ref={reviewPanel} tabIndex={-1} className={styles.review} aria-label="Tinjauan keputusan"><h2>{selected.stage === 'Spending' ? 'Tinjau belanja cabang' : selected.stage === 'Store' ? 'Tinjau penerimaan toko' : 'Tinjau pembatalan sisa pesanan'}</h2>
+    <Section title={stage === 'Store' ? 'Bagian pesanan toko' : stage === 'Spending' ? 'Pesanan cabang' : 'Pesanan untuk ditinjau pembatalannya'} id="order-review-list" label="Pesanan sesuai akses" busy={busy}
+      actions={<Button variant="secondary" disabled={locked} onClick={() => { setBefore(null); setReload(value => value + 1); }}>Muat pesanan terbaru</Button>}>
+      <DataList label="Pesanan sesuai akses" items={page.items} error={error !== null && page.items.length === 0 ? { title: message(error), message: null, onRetry: () => { setBefore(null); setReload(value => value + 1); } } : undefined} getKey={item => item.suborderId ?? item.orderId} loading={busy}
+        empty={error === null ? { title: 'Belum ada pesanan yang dapat ditinjau dalam penugasan ini.' } : undefined}
+        renderTitle={item => <>Pesanan {orderNumber(item.orderId)}{item.suborderId ? ' / ' + item.suborderId : ''}</>} renderBadge={item => <Badge status={statusText(item)} />}
+        renderMeta={item => <>{item.buyerName} · {item.quote.lines.length} kemasan · {reviewWaiting(item.orderedAt, now).age}{reviewWaiting(item.orderedAt, now).overdue && <> <Badge status="Lewat 1 hari" /></>}</>}
+        onSelect={item => void select(item)} disabled={locked || !fresh} selectedKey={selected ? selected.suborderId ?? selected.orderId : null}
+        openLabel={item => 'Tinjau pesanan ' + orderNumber(item.orderId) + (item.suborderId ? ' / ' + item.suborderId : '')} />
+      {page.hasMore && <div className="ui-actions"><Button variant="secondary" disabled={locked} onClick={() => { const last = page.items.at(-1); if (last) setBefore(last.suborderId ?? last.orderId); }}>Pesanan lebih lama</Button></div>}
+    </Section>
+    {selected && <section ref={reviewPanel} tabIndex={-1} className="ui-section" aria-label="Tinjauan keputusan"><h2>{selected.stage === 'Spending' ? 'Tinjau belanja cabang' : selected.stage === 'Store' ? 'Tinjau penerimaan toko' : 'Tinjau pembatalan sisa pesanan'}</h2>
       <p>{selected.buyerName} · Pesanan {orderNumber(selected.orderId)} · versi keputusan {selected.revision}</p>
       <ul>{selected.quote.lines.map(line => <li key={`${line.definition.skuId}:${line.lineRevision}`}>{line.familyName} — {line.packages} {line.definition.packageLabel} · {line.baseUnits} {line.definition.baseUnitCode} · {orderAmount(selected.quote.currency, line.catalogSubtotal)} · {line.lineRevision === '0' ? 'rincian awal' : `persetujuan ${line.lineRevision}`}</li>)}</ul>
       <p className={styles.address}>{selected.input.delivery!.recipientName} · {selected.input.delivery!.phone}{'\n'}{selected.input.delivery!.address}{'\n'}{selected.input.delivery!.city} {selected.input.delivery!.postalCode}</p>
@@ -159,12 +166,12 @@ function ReviewDesk({ account, elapsed, onFailure, onRefresh }: { account: Accou
       {!selected.canDecide ? <p role="status">{selected.cancelled ? 'Sisa pesanan sudah dibatalkan.' : selected.spendingState === 'Rejected' ? 'Belanja cabang sudah ditolak.' : selected.storeState === 'rejected' ? 'Bagian pesanan ini sudah ditolak toko.' : selected.storeState === 'accepted' ? 'Bagian pesanan ini sudah diterima toko.' : selected.spendingState === 'Pending' ? 'Menunggu persetujuan belanja cabang.' : 'Peninjauan selesai atau tidak ada cadangan yang dapat dibatalkan.'}</p> : <>
         <label>Catatan peninjauan<input value={reason} maxLength={1000} disabled={locked || staged} onChange={event => setReason(event.target.value)} /></label>
         {staged ? <><p>{action === 'Reject' ? 'Penolakan akan melepas cadangan bagian pesanan yang ditinjau. Pastikan alasan sudah benar.' : action === 'CancelRemainder' ? 'Sisa pesanan akan dibatalkan dan cadangannya dilepas. Tindakan ini tidak menghapus riwayat atau mengirim pengembalian dana.' : 'Pastikan kemasan, tujuan dan biaya sudah ditinjau.'}</p>
-          <div className={common.actions}><button className={common.primary} disabled={locked || !fresh} onClick={() => void confirm()}>{action === 'Reject' ? 'Konfirmasi penolakan' : action === 'CancelRemainder' ? 'Konfirmasi pembatalan sisa' : selected.stage === 'Spending' ? 'Konfirmasi persetujuan belanja' : 'Konfirmasi penerimaan toko'}</button>
-            <button className={common.secondary} disabled={locked} onClick={() => setStaged(false)}>Batal keputusan</button></div></> : <div className={common.actions}>
-          <button className={common.primary} disabled={locked || !fresh || reason.trim().length === 0}
-            onClick={() => { setAction(selected.stage === 'Cancellation' ? 'CancelRemainder' : 'Approve'); setStaged(true); }}>{selected.stage === 'Spending' ? 'Setujui belanja' : selected.stage === 'Store' ? 'Terima pesanan toko' : 'Batalkan sisa pesanan'}</button>
-          {selected.stage !== 'Cancellation' && <button className={common.secondary} disabled={locked || !fresh || reason.trim().length === 0}
-            onClick={() => { setAction('Reject'); setStaged(true); }}>{selected.stage === 'Spending' ? 'Tolak belanja' : 'Tolak pesanan toko'}</button>}
+          <div className={common.actions}><Button variant="primary" disabled={locked || !fresh} onClick={() => void confirm()}>{action === 'Reject' ? 'Konfirmasi penolakan' : action === 'CancelRemainder' ? 'Konfirmasi pembatalan sisa' : selected.stage === 'Spending' ? 'Konfirmasi persetujuan belanja' : 'Konfirmasi penerimaan toko'}</Button>
+            <Button variant="secondary" disabled={locked} onClick={() => setStaged(false)}>Batal keputusan</Button></div></> : <div className={common.actions}>
+          <Button variant="primary" disabled={locked || !fresh || reason.trim().length === 0}
+            onClick={() => { setAction(selected.stage === 'Cancellation' ? 'CancelRemainder' : 'Approve'); setStaged(true); }}>{selected.stage === 'Spending' ? 'Setujui belanja' : selected.stage === 'Store' ? 'Terima pesanan toko' : 'Batalkan sisa pesanan'}</Button>
+          {selected.stage !== 'Cancellation' && <Button variant="secondary" disabled={locked || !fresh || reason.trim().length === 0}
+            onClick={() => { setAction('Reject'); setStaged(true); }}>{selected.stage === 'Spending' ? 'Tolak belanja' : 'Tolak pesanan toko'}</Button>}
         </div>}
       </>}
     </section>}

@@ -29,7 +29,7 @@ export function proxy(request: NextRequest) {
   const canonical = canonicalRedirect(path, request.nextUrl.searchParams);
   if (canonical) return redirect(request, canonical);
   // Guests never see the shell of a signed-in page (G-012). Only the cookie's presence is read, never its content:
-  // with a cookie the page renders and the API decides; an expired cookie still meets the page's own sign-in state.
+  // with a cookie the page renders and the API decides; an expired cookie meets the page's shared ended-session state ("Sesi Anda perlu diperbarui").
   const signIn = signInRedirect(path, request.nextUrl.search, request.cookies.has(SESSION_COOKIE));
   if (signIn) return redirect(request, signIn);
   return NextResponse.next();

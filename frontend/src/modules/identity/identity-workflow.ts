@@ -100,6 +100,8 @@ export function canUseStockSourcePolicies(actions: readonly string[]) { return a
 
 export function canUseStockSourceSuspensions(actions: readonly string[]) { return actions.includes("stock.source.read") || actions.includes("stock.source.suspend"); }
 
+export function canReadAccessHistory(actions: readonly string[]) { return actions.some(action => ["access.audit.read", "access.approve", "membership.approve", "access.revoke", "technical.configure", "organization.approve"].includes(action)); }
+
 export function canUseStockCounts(actions: readonly string[]) { return actions.includes("stock.count") || actions.includes("stock.read"); }
 
 export function canUseStockSourceReconciliations(actions: readonly string[]) { return ["read", "propose", "decide"].some(action => actions.includes("stock.source.reconciliation." + action)); }
@@ -155,7 +157,7 @@ function destinationEntries(actions: readonly string[]): Destination[] {
     { href: "/ordering/orders", label: "Pesanan saya", description: "Lihat kemasan, tujuan, biaya dan perkembangan pesanan yang telah diajukan.", visible: actions.includes("order.read"), store: true },
     { href: '/ordering/substitutions', label: 'Penggantian barang', description: 'Ajukan kemasan pengganti atau tinjau perubahan jumlah dan harga sebelum menyetujuinya.', visible: actions.some(action => ['substitution.propose', 'substitution.accept'].includes(action)), buyer: ['substitution.accept'], staff: ['substitution.propose'] },
     { href: "/ordering/reviews", label: "Peninjauan pesanan", description: "Tinjau persetujuan belanja cabang atau penerimaan toko sesuai penugasan.", visible: actions.some(action => ["order.spend.approve", "order.accept", "order.cancel"].includes(action)), buyer: ["order.spend.approve", "order.cancel"], staff: ["order.accept"] },
-    { href: "/ordering/spending-policies", label: "Aturan persetujuan belanja", description: "Ajukan dan periksa aturan persetujuan untuk cabang atau divisi.", visible: actions.some(action => ["order.spending.policy.read", "order.spending.policy.propose", "order.spending.policy.approve"].includes(action)) },
+    { href: "/ordering/spending-policies", label: "Aturan persetujuan belanja", description: "Ajukan dan periksa aturan persetujuan untuk cabang atau divisi.", visible: actions.some(action => ["order.spending.policy.read", "order.spending.policy.propose", "order.spending.policy.approve"].includes(action)), buyer: ["order.spending.policy.read"], staff: ["order.spending.policy.propose", "order.spending.policy.approve"] },
     { href: "/ordering/commercial-policies", label: "Aturan komersial", description: "Biaya, pajak, kewajiban dan syarat tagihan per cabang dan kanal toko.", visible: actions.some(action => ["order.commercial.policy.read", "order.commercial.policy.propose", "order.commercial.policy.approve"].includes(action)) },
     { href: "/shop", label: "Katalog kemasan", description: isPilotRelease ? "Periksa pilihan dan isi kemasan untuk kebutuhan organisasi Anda." : "Lihat isi dan harga kemasan dalam katalog akun Anda.", visible: actions.includes("catalog.read"), store: true },
     { href: "/catalog/prices", label: "Harga kemasan", description: "Ajukan harga per kemasan dan tinjau secara independen.", visible: actions.some(action => ["pricing.manage", "pricing.approve"].includes(action)) },
@@ -178,7 +180,7 @@ function destinationEntries(actions: readonly string[]): Destination[] {
     { href: "/administration/organizations/addresses", label: "Alamat organisasi", description: "Ajukan dan periksa alamat penagihan, cabang dan gudang sesuai penugasan.", visible: canUseOrganizationAddresses(actions), buyer: ["organization.address.read"], staff: ["technical.configure", "organization.approve"] },
     { href: "/administration/organizations", label: "Organisasi dan unit", description: "Kelola struktur organisasi melalui persetujuan.", visible: actions.some(action => ["technical.configure", "organization.approve", "access.audit.read"].includes(action)) },
     { href: "/operations/health", label: "Kesehatan sistem", description: "Periksa antrean latar, OCR, pembersihan draf, versi skema dan replikasi basis data.", visible: actions.includes("technical.configure") },
-    { href: "/administration/history", label: "Riwayat perubahan", description: "Periksa jejak pengajuan dan keputusan akses.", visible: actions.some(action => ["access.audit.read", "access.approve", "membership.approve", "access.revoke", "technical.configure", "organization.approve"].includes(action)) },
+    { href: "/administration/history", label: "Riwayat perubahan", description: "Periksa jejak pengajuan dan keputusan akses.", visible: canReadAccessHistory(actions) },
   ];
   // Temporary delegation hands over back-office duties, so only staff see it (G-028).
   const staff = entries.some(entry => opensAsStaffWork(entry, actions));
@@ -232,9 +234,20 @@ export function identityMessage(error: unknown): string {
   if (!(error instanceof IdentityFailure)) return "Koneksi belum tersedia. Periksa koneksi, lalu coba lagi. Tidak ada perubahan akun yang dikirim.";
   if (error.code === "invalid_invitation") return "Masukkan nomor dan kode undangan lengkap dari pengelola. Gunakan alamat email yang menerima undangan.";
   if (error.code === "actor_changed") return "Akun di peramban telah berubah. Muat ulang sebelum melanjutkan.";
-  if (error.status === 401) return error.code === "session_expired" ? "Sesi Anda perlu diperbarui. Masuk kembali untuk melanjutkan." : "Masuk dengan akun organisasi Anda untuk melanjutkan.";
+  if (error.status === 401) return "Sesi Anda perlu diperbarui. Masuk kembali untuk melanjutkan.";
   if (error.status === 403) return "Akun atau tindakan ini belum memiliki akses yang disetujui. Hubungi pengelola organisasi Anda.";
   if (error.status === 429) return "Terlalu banyak percobaan. Tunggu sebentar sebelum mencoba kembali.";
   if (error.status >= 500) return "Layanan akun belum tersedia. Coba lagi nanti atau hubungi pengelola organisasi Anda.";
   return "Permintaan belum dapat dilanjutkan. Periksa isian dan status akun Anda.";
+}
+
+/** Pages that are a buyer's own task for some grant (invoices, payments, receipt, complaints, shipments, approvals, substitutions…). */
+export function buyerTaskHrefs(): string[] {
+  return destinationEntries([]).filter(entry => !entry.store && (entry.buyer?.length ?? 0) > 0).map(entry => entry.href);
+}
+
+/** Where "Lanjutkan" on the sign-in page leads someone already signed in: the page that asked, else their own home (G-044). */
+export function signedInContinuation(search: string, actions: readonly string[]): string {
+  const continuation = loginContinuation(search);
+  return continuation.requested ? continuation.returnPath : homeFor(actions);
 }

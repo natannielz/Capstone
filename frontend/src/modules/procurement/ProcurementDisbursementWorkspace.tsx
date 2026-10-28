@@ -16,7 +16,7 @@ import { procurementLocationKey, type ProcurementTarget } from './procurement-re
 import { createDisbursementGateway, disbursementInput, disbursementToday, disbursementPolicyCurrent, disbursementEvidenceReady, prepareDisbursement, prepareDisbursementRecord,
   type DisbursementChoice, type DisbursementChoices, type DisbursementOptions, type DisbursementPreview, type DisbursementDraft, type DisbursementRecordPreview, type DisbursementCapacity, type DisbursementPolicy } from './procurement-disbursement-client';
 import styles from '../administration/access.module.css';
-import { dateTimeFormatter } from '@/lib/format';
+import { dateTimeFormatter, formatDate } from '@/lib/format';
 import { SessionAccessState } from "@/components/workspace-kit/session-access-state";
 import { recordNumber } from '@/lib/document-numbers';
 
@@ -28,7 +28,7 @@ const amount = (value: string) => orderAmount('IDR', value);
 const states = { draft: 'Draf menunggu bukti', recorded_unverified: 'Tercatat, belum diverifikasi bank' } as const;
 const routes = { omi_regular: 'OMI reguler', ddo: 'DDO', smart: 'S-Mart', pasar_kering: 'Pasar Kering' } as const;
 function message(error: unknown) {
-  if (error instanceof IdentityFailure) return 'Masuk dengan akun organisasi Anda untuk melanjutkan.';
+  if (error instanceof IdentityFailure) return 'Sesi Anda perlu diperbarui. Masuk kembali untuk melanjutkan.';
   if (error instanceof AccessFailure || error instanceof RequestNotSentError) {
     if (error.code === 'procurement_disbursement_invalid') return 'Periksa nominal positif dengan dua angka desimal, tanggal transfer dan referensi persis dari bukti asli.';
     if (error.code === 'procurement_disbursement_image_required') return 'Pilih bukti asli JPEG atau PNG, maksimal 10 MiB.';
@@ -45,8 +45,8 @@ function message(error: unknown) {
 }
 function Capacity({ value }: { value: DisbursementCapacity }) { return <dl className={styles.facts}><div><dt>Otorisasi uang muka</dt><dd>{amount(value.authorizedAmount)}</dd></div><div><dt>Sudah dicatat</dt><dd>{amount(value.recordedAmount)}</dd></div><div><dt>Sisa untuk pencatatan</dt><dd>{amount(value.remainingAmount)}</dd></div></dl>; }
 function Policy({ value }: { value: DisbursementPolicy }) { return <section className={styles.state} aria-label="Kebijakan pencatatan uang muka"><h3>Kebijakan pencatatan uang muka</h3><p>Prosedur pencatatan: {value.payoutRecordingProcedureReference}</p><p>Prosedur penerima: {value.beneficiaryVerificationProcedureReference}</p><p>Penanggung jawab: {value.operatingOwnerReference}</p><p>Dasar persetujuan: {value.approvalReference}</p><p>Berlaku {when(value.approvedAt)} hingga {when(value.expiresAt)}.</p><p>{value.allowPartialRecordings ? 'Pencatatan sebagian diizinkan hingga sisa otorisasi.' : 'Pencatatan harus sebesar seluruh otorisasi dan belum pernah dicatat sebelumnya.'}</p></section>; }
-function Authorization({ value }: { value: DisbursementChoice['authorization'] }) { return <><h3>{value.supplier.displayName}</h3><p>{value.supplier.subjectReference}</p><p>Pesanan {recordNumber('purchaseOrder', value.orderId)} · {routes[value.route]} · Otorisasi {value.id}</p><p>Disetujui {when(value.approvedAt)} · Dibutuhkan {value.neededBy}.</p></>; }
-function Facts({ value }: { value: Pick<DisbursementPreview, 'input' | 'authorization' | 'beneficiary' | 'payingAccount' | 'policy'> }) { return <><Authorization value={value.authorization} /><dl className={styles.facts}><div><dt>Rekening penerima pemasok</dt><dd>{value.beneficiary.bankCode} · {value.beneficiary.maskedAccount} · Versi {value.beneficiary.version}</dd></div><div><dt>Rekening pembayaran</dt><dd>{value.payingAccount.bankName} · {value.payingAccount.maskedAccount} · Versi {value.payingAccount.version}</dd></div><div><dt>Nominal yang dicatat</dt><dd>{amount(value.input.amount)}</dd></div><div><dt>Tanggal transfer</dt><dd>{value.input.transferDate}</dd></div><div><dt>Referensi transfer</dt><dd className={styles.preserve}>{value.input.transferReference}</dd></div></dl><Policy value={value.policy} /></>; }
+function Authorization({ value }: { value: DisbursementChoice['authorization'] }) { return <><h3>{value.supplier.displayName}</h3><p>{value.supplier.subjectReference}</p><p>Pesanan {recordNumber('purchaseOrder', value.orderId)} · {routes[value.route]} · Otorisasi {value.id}</p><p>Disetujui {when(value.approvedAt)} · Dibutuhkan {formatDate(value.neededBy)}.</p></>; }
+function Facts({ value }: { value: Pick<DisbursementPreview, 'input' | 'authorization' | 'beneficiary' | 'payingAccount' | 'policy'> }) { return <><Authorization value={value.authorization} /><dl className={styles.facts}><div><dt>Rekening penerima pemasok</dt><dd>{value.beneficiary.bankCode} · {value.beneficiary.maskedAccount} · Versi {value.beneficiary.version}</dd></div><div><dt>Rekening pembayaran</dt><dd>{value.payingAccount.bankName} · {value.payingAccount.maskedAccount} · Versi {value.payingAccount.version}</dd></div><div><dt>Nominal yang dicatat</dt><dd>{amount(value.input.amount)}</dd></div><div><dt>Tanggal transfer</dt><dd>{formatDate(value.input.transferDate)}</dd></div><div><dt>Referensi transfer</dt><dd className={styles.preserve}>{value.input.transferReference}</dd></div></dl><Policy value={value.policy} /></>; }
 export function ProcurementDisbursementWorkspace() {
   const [identity] = useState(createIdentityGateway), [access] = useState(createAccessGateway);
   const [account, setAccount] = useState<Account | null>(null), [error, setError] = useState<unknown>(null), [loading, setLoading] = useState(true), [revision, setRevision] = useState(0), [elapsed, setElapsed] = useState(0);
