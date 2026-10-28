@@ -10,6 +10,7 @@ import type { PaymentDraft, PaymentOcrView } from './payment-client';
 import styles from '../administration/access.module.css';
 import invoice from './invoice.module.css';
 import { dateTimeFormatter } from '@/lib/format';
+import { Button } from '@/components/workspace-kit/button';
 
 const labels = paymentCorrectionLabels;
 const formats: Record<string, string> = { amount: 'Contoh: 2000.01', currency: 'IDR atau kosong jika tidak diketahui', transfer_date: 'YYYY-MM-DD', transfer_time: 'HH:mm:ss; zona waktu tetap perlu diperiksa' };
@@ -56,7 +57,7 @@ export function PaymentCorrectionPanel({ actorId, owner, ocr, allowed, fresh, lo
     <p>Bandingkan bukti asli dengan hasil pembacaan. Kolom kosong berarti belum diketahui. Rekening pada gambar belum menjadi rekening penerimaan yang disetujui.</p>
     {allowed && (!fresh || error instanceof AccessFailure && error.code === 'step_up_required') && <p className={styles.alert}>Verifikasi terbaru diperlukan. <Link href="/identity/account?operation=payment.review.correct&returnPath=%2Fbilling%2Fpayment-reviews">Verifikasi dua langkah</Link></p>}
     {!ocr?.result && <p>Muat hasil OCR sebelum memeriksa koreksi. Untuk gangguan yang tercatat, petugas berwenang dapat mengikuti prosedur pengecualian di bagian pemeriksaan manual.</p>}
-    <button className={styles.secondary} disabled={disabled || !ocr?.result} onClick={() => void work(load)}>Muat pemeriksaan terbaru</button>
+    <Button variant="secondary" disabled={disabled || !ocr?.result} onClick={() => void work(load)}>Muat pemeriksaan terbaru</Button>
     {error !== null && <p role="alert" className={styles.alert}>{correctionMessage(error)}</p>}
     {notice && <p role="status">{notice}</p>}{busy && <p role="status">Memproses pemeriksaan…</p>}
     {view && <form onSubmit={event => { event.preventDefault(); if (canSave && active() && reason.trim()) {
@@ -77,24 +78,24 @@ export function PaymentCorrectionPanel({ actorId, owner, ocr, allowed, fresh, lo
           {observation.flags.length > 0 && <p>Perlu perhatian: {observation.flags.map(flag => ({unknown: 'belum diketahui', ambiguous: 'lebih dari satu kemungkinan', low_confidence: 'keyakinan pembacaan rendah',
             unparsed: 'belum dapat dibaca', masked: 'sebagian disamarkan', timezone_unverified: 'zona waktu belum dipastikan'}[flag] ?? 'perlu pemeriksaan manusia')).join(', ')}.</p>}
           <ObservationDetails reference={observation.reference}/>
-          {allowed && onRemoveObservation && <button type="button" className={styles.secondary} disabled={disabled || confirm !== null || !fresh} onClick={() => {
+          {allowed && onRemoveObservation && <Button variant="secondary" type="button" disabled={disabled || confirm !== null || !fresh} onClick={() => {
             if (active()) onRemoveObservation(item.field);
-          }}>Hapus rujukan PDF: {labels[item.field]}</button>}
+          }}>Hapus rujukan PDF: {labels[item.field]}</Button>}
         </aside>)}
       </div>)}</div>
       {allowed && <><label htmlFor="correction-reason">Alasan koreksi</label><textarea id="correction-reason" value={reason} required maxLength={1000} disabled={disabled || confirm !== null || !fresh} onChange={event => setReason(event.target.value)} />
-        {!confirm && <button className={styles.primary} disabled={!canSave || !reason.trim()}>Periksa koreksi</button>}
+        {!confirm && <Button variant="primary" type="submit" disabled={!canSave || !reason.trim()}>Periksa koreksi</Button>}
         {confirm && <section className={styles.state} aria-label="Konfirmasi koreksi"><h4 ref={heading} tabIndex={-1}>Periksa perubahan sebelum menyimpan</h4>
           <ul>{values.filter((item, index) => item.value !== view.fields[index].value).map(item => <li key={item.field}>{labels[item.field]}: {view.fields.find(row => row.field === item.field)?.value ?? 'Belum diketahui'} → {item.value ?? 'Belum diketahui'}</li>)}</ul>
           {confirm.command.body.supplementaryObservations && <><h4>Rujukan PDF yang ikut disimpan</h4><ObservationList observations={confirm.command.body.supplementaryObservations}/>
             <p>PDF asli pada halaman yang dipilih telah diperiksa. Rujukan ini melengkapi pemeriksaan foto utama; nilai PDF tidak menetapkan nilai koreksi.</p></>}
           <p>Alasan: {confirm.command.body.reason}</p><p>Nama akun pemeriksa, waktu, nilai sebelum dan sesudah akan disimpan. Dana tetap menunggu konfirmasi bank independen.</p>
-          <button type="button" className={styles.primary} disabled={!canSave} onClick={() => void work(async () => {
+          <Button variant="primary" type="button" disabled={!canSave} onClick={() => void work(async () => {
             if (journal.list(actorId).length) throw new AccessFailure(400, 'resolve_previous_attempt');
             const command = confirm.command;
             await submitTrackedRequest(ledger, journal, actorId, 'billing.payment.review.correct', 'billing.payment.review.correct', command, key => gateway.save(command, key, active));
             await load(); if (active()) {onObservationsSaved?.(); setNotice('Koreksi tersimpan. Pembayaran tetap menunggu verifikasi.');}
-          })}>Simpan koreksi</button><button type="button" className={styles.secondary} disabled={disabled} onClick={() => setConfirm(null)}>Kembali ke isian</button>
+          })}>Simpan koreksi</Button><Button variant="secondary" type="button" disabled={disabled} onClick={() => setConfirm(null)}>Kembali ke isian</Button>
         </section>}</>}
       <h4>Riwayat pemeriksaan</h4>{view.recent.length === 0 ? <p>Belum ada koreksi petugas.</p> : <><p>Menampilkan {view.recent.length} versi terbaru; seluruh versi tetap tersimpan.</p><ul>{view.recent.map(row => <li key={row.id}>
         <strong>Versi {row.revision} · Akun {row.actorId}</strong><p>{dateTimeFormatter.format(new Date(row.recordedAt))} · {row.reason}</p>

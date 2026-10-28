@@ -8,6 +8,7 @@ import {createPaymentHandoverGateway, paymentHandoverMessage, preparePaymentHand
 import {PaymentHandoverJournal, paymentHandoverPrefix, parsePaymentHandoverReference, type PaymentHandoverReference} from './payment-handover-journal';
 import type {PaymentDraft} from './payment-client';
 import styles from '../administration/access.module.css';
+import { Button } from '@/components/workspace-kit/button';
 
 const states = {active: 'Delegasi masih dalam masa berlaku', expired: 'Delegasi telah berakhir; penanggung jawab perlu diperiksa',
   revoked: 'Delegasi telah dicabut; penanggung jawab perlu diperiksa', not_yet_effective: 'Delegasi belum berlaku'};
@@ -69,15 +70,15 @@ export function PaymentHandoverPanel({actorId, owner, allowed, fresh, locked, cu
     {notice && <p role="status">{notice}</p>}{busy && <p role="status">Memeriksa serah-terima…</p>}
     {pending.length > 0 && <section aria-label="Pemulihan serah-terima"><h3>Hasil serah-terima belum dipastikan</h3><p>Periksa hasil memakai kunci asli. Jangan mengirim pengambilalihan baru sebelum hasilnya jelas.</p>
       {pending.map(ref => <div key={ref.key}><p>Pengajuan {ref.declarationId} · Delegasi {ref.delegationId} · Versi tugas {ref.reviewRevision}</p>
-        <button className={styles.primary} disabled={disabled || !fresh} onClick={() => void run(async () => {
+        <Button variant="primary" disabled={disabled || !fresh} onClick={() => void run(async () => {
           const result = await gateway.recover(ref, {actorId, isCurrent: active});
           if (!result) {setNotice('Hasil belum terkonfirmasi. Referensi asli tetap disimpan; periksa lagi setelah akses atau layanan pulih.'); return;}
           journal.confirmed(ref); clear(); setNotice('Serah-terima asli ditemukan; tidak ada pengambilalihan kedua.'); onSettled();
-        })}>Periksa hasil serah-terima {ref.declarationId}</button></div>)}
+        })}>Periksa hasil serah-terima {ref.declarationId}</Button></div>)}
     </section>}
     {allowed && !fresh && <p><Link href="/identity/account?operation=payment.review.manage&returnPath=%2Fbilling%2Fpayment-reviews">Verifikasi dua langkah untuk serah-terima</Link></p>}
     {!owner ? <p>Pilih pengajuan untuk memeriksa kaitan delegasi dan penanggung jawabnya.</p> : <>
-      <button className={styles.secondary} disabled={disabled || pending.length > 0} onClick={() => void run(() => load())}>Muat pilihan serah-terima</button>
+      <Button variant="secondary" disabled={disabled || pending.length > 0} onClick={() => void run(() => load())}>Muat pilihan serah-terima</Button>
       {page && <><p>Penanggung jawab saat dimuat: {page.assigneeId ? 'Akun ' + page.assigneeId : 'Belum ditetapkan'} · Versi tugas {page.reviewRevision}</p>
         {!page.open ? <p>Tidak ada tugas aktif yang dapat dialihkan pada pengajuan ini.</p> : page.items.length === 0 ? <p>Belum ada delegasi terkait untuk halaman ini. Koordinasikan pengganti dengan penanggung jawab operasional.</p> : <form onSubmit={event => {
           event.preventDefault(); if (disabled || pending.length || !allowed || !fresh) return;
@@ -86,14 +87,14 @@ export function PaymentHandoverPanel({actorId, owner, allowed, fresh, locked, cu
           <option value="">Pilih delegasi yang terkait</option>{page.items.map(item => <option key={item.delegationId} value={item.delegationId}>Delegasi {item.delegationId} · {states[item.state]}</option>)}</select>
           {selected && <p>{states[page.items.find(item => item.delegationId === selected)!.state]}. Tindakan berikutnya: reviewer yang memiliki akses aktif meninjau lalu mengambil tanggung jawab secara eksplisit.</p>}
           <label htmlFor="handover-reason">Alasan serah-terima pemeriksaan</label><textarea id="handover-reason" value={reason} required maxLength={1000} disabled={disabled || !!review || pending.length > 0} onChange={event => setReason(event.target.value)} />
-          {!page.canClaim || !allowed ? <p>Akun ini belum dapat mengambil tugas tersebut. Kewenangan dan independensi reviewer harus masih berlaku.</p> : !review ? <button className={styles.primary} disabled={disabled || !fresh || pending.length > 0}>Tinjau serah-terima</button> : <section className={styles.state} aria-label="Konfirmasi serah-terima pemeriksaan">
+          {!page.canClaim || !allowed ? <p>Akun ini belum dapat mengambil tugas tersebut. Kewenangan dan independensi reviewer harus masih berlaku.</p> : !review ? <Button variant="primary" type="submit" disabled={disabled || !fresh || pending.length > 0}>Tinjau serah-terima</Button> : <section className={styles.state} aria-label="Konfirmasi serah-terima pemeriksaan">
             <h3 ref={heading} tabIndex={-1}>Ambil tanggung jawab pemeriksaan</h3><p>Pengajuan {review.declarationId} · Versi tugas {review.reviewRevision} · Delegasi {review.handover.delegationId} versi {review.handover.delegationRevision}</p>
             <p>Dari akun {review.handover.originalAssigneeId} kepada akun Anda. Alasan: {review.body.reason}</p><p>Dana, invoice dan hasil verifikasi pembayaran tidak berubah.</p>
-            <button type="button" className={styles.primary} disabled={disabled || !fresh || pending.length > 0} onClick={() => void run(() => claim(review))}>Konfirmasi ambil pemeriksaan</button>
-            <button type="button" className={styles.secondary} disabled={disabled} onClick={() => setReview(null)}>Batalkan serah-terima</button>
+            <Button variant="primary" type="button" disabled={disabled || !fresh || pending.length > 0} onClick={() => void run(() => claim(review))}>Konfirmasi ambil pemeriksaan</Button>
+            <Button variant="secondary" type="button" disabled={disabled} onClick={() => setReview(null)}>Batalkan serah-terima</Button>
           </section>}
         </form>}
-        {page.nextId && <button className={styles.secondary} disabled={disabled || !!review || pending.length > 0} onClick={() => void run(() => load(page.nextId))}>Delegasi lebih lama</button>}
+        {page.nextId && <Button variant="secondary" disabled={disabled || !!review || pending.length > 0} onClick={() => void run(() => load(page.nextId))}>Delegasi lebih lama</Button>}
       </>}
     </>}
   </section>;
