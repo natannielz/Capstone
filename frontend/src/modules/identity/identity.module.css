@@ -24,18 +24,6 @@
 .masthead { margin-inline: calc(-1 * var(--gutter)); padding: var(--space-4) var(--gutter); background: var(--muted); color: var(--foreground); border-bottom: 1px solid var(--border); }
 .mastheadInner { max-width: var(--content-wide); margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: var(--space-3) var(--space-6); }
 
-/* Waiting work, oldest first: one link per queue, the count set large so the page answers "how much is waiting?". */
-.queue { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: var(--space-3); margin: 0; padding: 0; list-style: none; }
-.queue > li { display: grid; }
-.queueItem { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: var(--space-4); min-height: 76px; padding: var(--space-4) var(--space-6); border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--card); color: var(--foreground); text-decoration: none; }
-.queueItem:hover { border-color: color-mix(in oklab, var(--primary) 45%, var(--border)); }
-.queueItem[data-unavailable] { background: var(--muted); }
-.queueCount { min-width: 2ch; font-size: 28px; font-weight: 700; line-height: 32px; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
-.queueText { display: grid; gap: 2px; min-width: 0; }
-.queueArea { color: var(--muted-foreground); font-size: 13px; font-weight: 600; }
-.queueLabel { font-size: 16px; font-weight: 600; line-height: 24px; text-decoration: underline; text-decoration-color: transparent; text-underline-offset: 4px; }
-.queueItem:hover .queueLabel { text-decoration-color: currentColor; }
-.queueAge { color: var(--muted-foreground); font-size: 13px; }
 .brand { display: inline-flex; align-items: center; min-height: var(--control-h); font: 400 24px/1.2 var(--font-display), var(--font-body), sans-serif; letter-spacing: -.035em; color: var(--foreground); text-decoration: none; }
 /* The brand mark (a T held inside a U, as BrandMark draws it) before every workspace wordmark; a data: mask is allowed by img-src. */
 .brand::before { content: ""; flex-shrink: 0; width: 1.25em; height: 1.25em; margin-right: 0.42em; background: currentColor; -webkit-mask: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%3E%3Cpath%20d%3D%22M8%208h48v8H36v24h-8V16H8V8Zm0%2018h8v12c0%208%206%2014%2016%2014s16-6%2016-14V26h8v12c0%2013-10%2022-24%2022S8%2051%208%2038V26Z%22%2F%3E%3C%2Fsvg%3E") center / contain no-repeat; mask: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%3E%3Cpath%20d%3D%22M8%208h48v8H36v24h-8V16H8V8Zm0%2018h8v12c0%208%206%2014%2016%2014s16-6%2016-14V26h8v12c0%2013-10%2022-24%2022S8%2051%208%2038V26Z%22%2F%3E%3C%2Fsvg%3E") center / contain no-repeat; }
@@ -74,12 +62,9 @@
 .support p { font-size: 14px; color: var(--muted-foreground); }
 .support h2 { font-size: 18px; }
 .footer { max-width: var(--content-default); margin: var(--space-12) 0 0; padding: var(--space-6) 0; border-top: 1px solid var(--border); color: var(--muted-foreground); font-size: 13px; }
-/* Page header: same title size and left edge as every staff page (U-003, U-015). */
-.accountHeader { max-width: var(--content-default); margin: var(--space-8) 0 var(--space-6); display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-6); }
-.accountHeader > div { min-width: 0; }
-.accountHeader > button { flex-shrink: 0; }
-.accountHeader h1 { font-size: 28px; }
-.accountHeader p { color: var(--muted-foreground); margin-top: var(--space-2); }
+/* Page header (PageHeader inside): the content column's width and the page's top padding (U-003, U-015). */
+.pageHeader { max-width: var(--content-default); padding-top: var(--space-8); }
+@media (max-width: 639px) { .pageHeader { padding-top: var(--space-6); } }
 .page > div[id=account-content] { max-width: var(--content-default); margin: 0; }
 .accountGrid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: var(--space-6); align-items: start; }
 /* Badge (U-013). */
@@ -91,44 +76,21 @@
 .facts dt { font-size: 13px; line-height: 20px; color: var(--muted-foreground); }
 .facts dd { margin: 0; font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
 .facts > div:first-child { grid-column: 1 / -1; }
+.card h2 { scroll-margin-top: 24px; }
 .workspace { margin: var(--space-8) 0 var(--space-12); display: grid; gap: var(--space-6); }
-.directoryHeader { display: flex; align-items: start; justify-content: space-between; gap: var(--space-6); }
-.directoryHeader > div { display: grid; gap: var(--space-2); min-width: 0; }
-.accountLink { color: var(--primary); font-size: 14px; font-weight: 600; min-height: var(--control-h); display: inline-flex; align-items: center; flex-shrink: 0; }
-.directorySearch { display: flex; align-items: end; gap: var(--space-3); max-width: var(--content-narrow); }
-.directorySearch label { flex: 1; min-width: 0; }
-.directorySearch button { flex-shrink: 0; }
-.workspaceSections { display: flex; flex-wrap: wrap; gap: var(--space-2); padding-block: var(--space-3); border-block: 1px solid var(--border); }
-.workspaceSections a { display: inline-flex; align-items: center; min-height: var(--control-h); max-width: 100%; padding: var(--space-2) var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--card); color: var(--foreground); font-size: 14px; font-weight: 600; text-decoration: none; overflow-wrap: anywhere; }
-.workspaceSections a:hover { background: var(--secondary); }
-.workspaceSections a[aria-current] { border-color: var(--primary); background: var(--primary); color: var(--primary-foreground); }
-.directoryGroups { display: grid; gap: var(--space-8); }
-.directoryGroup { display: grid; gap: var(--space-4); }
-.directoryGroup header { display: grid; gap: var(--space-1); }
-.directoryGroup h3, .directoryHeader h2, .card h2 { scroll-margin-top: 24px; }
-.destinationTitle { margin: 0; font-family: var(--font-body), sans-serif; font-size: 16px; line-height: 24px; font-weight: 600; display: flex; justify-content: space-between; gap: var(--space-4); overflow-wrap: anywhere; }
-.emptyDirectory { padding: var(--space-6); border: 1px dashed var(--control-border); border-radius: var(--radius-card); background: var(--card); }
-.destinationGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-4); }
-.destination { border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--card); padding: var(--space-6); color: var(--foreground); text-decoration: none; display: grid; align-content: start; gap: var(--space-3); min-width: 0; }
-.destination h3 { display: flex; justify-content: space-between; gap: var(--space-4); }
-.destination h3 > svg, .destinationTitle > svg { flex-shrink: 0; color: var(--primary); }
-.destination p { color: var(--muted-foreground); font-size: 14px; }
-.destination:hover { border-color: color-mix(in oklab, var(--primary) 45%, var(--border)); }
 .skip { position: absolute; top: -80px; left: 20px; padding: var(--space-3) var(--space-4); background: var(--card); color: var(--foreground); z-index: 20; }
 .skip:focus { top: 10px; }
 .srOnly { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
-@media (max-width: 1080px) { .destinationGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 960px) { .loginGrid { gap: var(--space-8); grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .accountGrid { grid-template-columns: minmax(0, 1fr); } .directoryHeader { flex-wrap: wrap; gap: var(--space-3); } }
-@media (max-width: 720px) { .queueItem { gap: var(--space-3); padding: var(--space-3) var(--space-4); } .queueCount { font-size: 24px; } .brand { font-size: 20px; } .kicker { font-size: 12px; } .loginGrid { margin: var(--space-8) 0 var(--space-12); grid-template-columns: minmax(0, 1fr); gap: var(--space-8); } .introduction > p { margin: var(--space-4) 0 var(--space-6); font-size: 16px; } .steps { gap: var(--space-4); } .accountHeader { margin-top: var(--space-6); flex-wrap: wrap; gap: var(--space-4); } .facts { grid-template-columns: minmax(0, 1fr); } .card { padding: var(--space-6); } .destinationGrid { grid-template-columns: minmax(0, 1fr); } .destination { padding: var(--space-4); } }
-@media (max-width: 720px) { .directoryHeader, .directorySearch { flex-direction: column; align-items: stretch; gap: var(--space-3); } .directorySearch button { align-self: start; } .workspaceSections { gap: var(--space-2); } .workspaceSections a { font-size: 13px; padding-inline: var(--space-3); } }
+@media (max-width: 960px) { .loginGrid { gap: var(--space-8); grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .accountGrid { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 720px) { .brand { font-size: 20px; } .kicker { font-size: 12px; } .loginGrid { margin: var(--space-8) 0 var(--space-12); grid-template-columns: minmax(0, 1fr); gap: var(--space-8); } .introduction > p { margin: var(--space-4) 0 var(--space-6); font-size: 16px; } .steps { gap: var(--space-4); } .accountHeader { margin-top: var(--space-6); flex-wrap: wrap; gap: var(--space-4); } .facts { grid-template-columns: minmax(0, 1fr); } .card { padding: var(--space-6); } }
 /* Phone width (U-021): 16 px gutter, every action button full width. */
 @media (max-width: 639px) {
   .page h1:where(:not([data-kit], [data-kit] *)), .accountHeader h1 { font-size: 24px; line-height: 30px; }
   .page h2:where(:not([data-kit], [data-kit] *)) { font-size: 18px; line-height: 26px; }
   .card { padding: var(--space-4); }
   .page :is(.primary, .secondary) { width: 100%; }
-  .directorySearch button { align-self: stretch; }
-  .workspaceSections a { flex: 1 1 130px; justify-content: center; text-align: center; }
+ 
+ 
 }
 @media (prefers-reduced-motion: reduce) { .page *, .page *::before, .page *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
 /* Inside the shared workspace frame the sidebar replaces the account hub's masthead. */
