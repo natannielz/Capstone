@@ -10,6 +10,7 @@ import { QuantityStepper, stepQuantity } from '@/components/workspace-kit/quanti
 import { formatDisplayMoney } from '@/lib/format';
 import { createOrderQuoteGateway, orderContextKey, orderQuantity, type OrderContextOption } from './order-quote-client';
 import { CartOutcomeUnknown } from './cart-client';
+import { orderDraftSubmittedMessage } from './order-draft-client';
 import { useCartSave } from './CartSave';
 import { addToCart, cartReasons, lineAmount } from './cart-model';
 import { announceCart, branchLabel, cartBranch, rememberCartBranch } from './cart-branch';
@@ -20,6 +21,7 @@ export function addToCartMessage(error: unknown): string {
   if (error instanceof RequestNotSentError) return 'Belum terkirim. Periksa koneksi, lalu tekan Tambah ke keranjang lagi.';
   if (error instanceof AccessFailure) {
     if (error.code === 'resolve_previous_attempt') return 'Penyimpanan keranjang sebelumnya belum pasti. Tekan Periksa hasil di atas sebelum mengubah keranjang lagi.';
+    if (error.code === 'order_draft_submitted') return orderDraftSubmittedMessage;
     if (error.code === 'cart_full') return 'Keranjang sudah berisi 100 barang. Ajukan atau kurangi isi keranjang lebih dulu.';
     if (error.code === 'order_package_quantity_invalid') return 'Jumlah belum sesuai minimum dan kelipatan kemasan.';
     if (error.code === 'order_selection_changed') return 'Harga barang lain di keranjang berubah. Buka keranjang untuk menyetujui harga terbaru, lalu tambahkan lagi.';

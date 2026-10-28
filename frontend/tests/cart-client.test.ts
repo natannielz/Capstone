@@ -90,3 +90,14 @@ test('with a tracked submitter the cart leaves recovery to the journal: one send
   await assert.rejects(() => gateway.apply('7', context, current => addToCart(current, line('11', 1), rule), 'add'), (error: unknown) => error === lost);
   assert.equal(sent.length, 1); assert.equal(sent[0].expectedRevision, '3');
 });
+
+test('F-030: when the saved keranjang became an order while the page was open, the next add starts a fresh draft', async () => {
+  // The page still holds draft 41, but the server has closed it (its order is placed): the save is refused, the list is read
+  // again without it, and the same change is applied to a new draft instead of resurrecting the one that became an order.
+  const closed = fake([[saved('41', '3')], []], [() => new AccessFailure(409, 'order_draft_submitted'), ok('52', '1')]);
+  const result = await closed.gateway.apply('7', context, current => addToCart(current, line('11', 2), rule), 'add');
+  assert.equal(result.draftId, '52'); assert.equal(closed.sent.length, 2);
+  assert.equal(closed.sent[0].command.draftId, '41'); assert.equal(closed.sent[1].command.draftId, null); assert.equal(closed.sent[1].command.expectedRevision, '0');
+  assert.deepEqual(closed.sent[1].command.input.selections.map(item => [item.skuId, item.packages]), [['11', 2]]);
+  assert.notEqual(closed.sent[0].key, closed.sent[1].key);
+});

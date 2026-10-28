@@ -1,12 +1,12 @@
 import type { BranchRequest, BranchRequestPreview } from './branch-request-client';
-import { requestStateLabel } from './branch-request-state';
+import { branchRequestNumber, requestStateLabel } from './branch-request-state';
 import styles from './branch-request.module.css';
 import { dateTimeFormatter, formatNumber } from '@/lib/format';
 
 export const requestDate = (value: string) => dateTimeFormatter.format(new Date(value));
 export function BranchRequestFacts({ value }: { value: BranchRequest | BranchRequestPreview }) {
   return <>
-    {'number' in value && <div className={styles.row}><h2>{value.number}</h2><span className={`${styles.badge} ${value.state === 'accepted' ? styles.accepted : value.state === 'rejected' ? styles.rejected : ''}`}>{requestStateLabel(value.state)}</span></div>}
+    {'number' in value && <div className={styles.row}><h2>{branchRequestNumber(value.id)}</h2><span className={`${styles.badge} ${value.state === 'accepted' ? styles.accepted : value.state === 'rejected' ? styles.rejected : ''}`}>{requestStateLabel(value.state)}</span></div>}
     <dl className={styles.meta}><div><dt>Cabang pemesan</dt><dd>{value.labels.buyingOrganization} · {value.labels.branch}{value.labels.division && ' · ' + value.labels.division}</dd></div>
       <div><dt>Toko tujuan</dt><dd>{value.labels.shop} · {value.labels.channel}</dd></div>
       {'recordedAt' in value && <div><dt>Diajukan pada</dt><dd>{requestDate(value.recordedAt)}</dd></div>}

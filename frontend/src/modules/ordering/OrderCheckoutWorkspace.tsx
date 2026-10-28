@@ -10,7 +10,7 @@ import { AccessFailure, MutationLedger, accessMessage, stableContent } from '../
 import { OperationRecovery, useOperationRecovery } from '../administration/OperationRecovery';
 import { submitTrackedRequest } from '../administration/operation-journal';
 import { priceId } from '../catalog/catalog-price-workflow';
-import { createOrderDraftGateway, type OrderDraft } from './order-draft-client';
+import { createOrderDraftGateway, orderDraftSubmittedMessage, type OrderDraft } from './order-draft-client';
 import { createOrderSubmitGateway, orderSubmitOperation, readCheckoutGroupAttempt, type CheckoutGroup, type CheckoutReview, type OrderSubmitResult, type SubmittedOrder } from './order-submit-client';
 import { OrderCheckoutDetails } from './order-checkout-details';
 import { OrderDeliveryPanel } from './OrderDeliveryPanel';
@@ -26,6 +26,7 @@ function message(error: unknown, reading = false) {
     if (error.code === 'order_admission_unavailable' || error.code === 'order_storage_unavailable') return 'Pengajuan belum tersedia. Aturan pembelian, tujuan pengiriman, atau sumber stok belum disetujui. Draf Anda tetap tersimpan.';
     if (error.code === 'order_credit_unavailable') return 'Batas pembelian cabang tidak mencukupi. Hubungi penanggung jawab cabang untuk peninjauan.';
     if (error.code === 'insufficient_available_stock') return 'Stok yang dapat dipesan tidak mencukupi. Periksa kembali jumlah atau kemasan.';
+    if (error.code === 'order_draft_submitted') return orderDraftSubmittedMessage;
     if (error.status === 409 || error.code === 'order_selection_changed') return 'Harga, kemasan, atau syarat pesanan berubah. Periksa kembali draf dan tinjau ulang sebelum mengajukan.';
     if (error.status > 0 && error.status < 500) return accessMessage(error);
   }
@@ -100,7 +101,7 @@ function CheckoutDesk({ account, onFailure }: { account: Account; onFailure: (er
   const signal = () => controller.current?.signal;
   const update = (groupKey: string, changes: Partial<DeskGroup>) => setGroups(items => items.map(item => item.group.groupKey === groupKey ? { ...item, ...changes } : item));
   async function attempt(saved: OrderDraft, group: CheckoutGroup) {
-    const checked = await readCheckoutGroupAttempt(actorId, saved.id, group.groupKey, recovery.journal, key => gateway.recover(actorId, key, signal()));
+    const checked = await readCheckoutGroupAttempt(actorId, saved.id, saved.revision, group.groupKey, recovery.journal, key => gateway.recover(actorId, key, signal()));
     if (!current()) throw new AccessFailure(409, 'order_view_stale');
     if (checked.result) {
       const entry = recovery.journal.list(actorId).find(entry => entry.operation === orderSubmitOperation && entry.key === checked.requestKey);
@@ -130,7 +131,7 @@ function CheckoutDesk({ account, onFailure }: { account: Account; onFailure: (er
         const actual = await freshGroup(saved, item), checked = await attempt(saved, actual);
         if (checked.result) await readConfirmed(actual.groupKey, checked.result);
         else if (checked.uncertain) update(actual.groupKey, { uncertain: true });
-        else { const review = await gateway.preview(actorId, actual.input, signal()); if (current()) { update(actual.groupKey, { group: actual, review }); setFocused(value => value + 1); } }
+        else { const review = await gateway.preview(actorId, actual.input, signal()); if (current()) { update(actual.groupKey, { group: actual, requestKey: checked.requestKey, review }); setFocused(value => value + 1); } }
       } else {
         const discovery = await gateway.groups(actorId, saved.input, signal()), rows: DeskGroup[] = [];
         for (const group of discovery.items) {
@@ -158,12 +159,13 @@ function CheckoutDesk({ account, onFailure }: { account: Account; onFailure: (er
       if (recovery.journal.list(actorId).length > 0) throw new AccessFailure(400, 'resolve_previous_attempt');
       const saved = await drafts.read(actorId, draft.id, signal()); if (!current()) return;
       const actual = await freshGroup(saved, item), checked = await attempt(saved, actual);
-      if (checked.requestKey !== item.requestKey) throw new AccessFailure(400, 'invalid_original_request_key');
+      // The saved keranjang changed since this review (another tab, a later save): a new checkout, so review it again.
+      if (checked.requestKey !== item.requestKey) throw new AccessFailure(409, 'order_selection_changed');
       if (checked.result) { await readConfirmed(actual.groupKey, checked.result); return; }
       if (checked.uncertain || recovery.journal.list(actorId).length > 0) throw new AccessFailure(400, 'resolve_previous_attempt');
       if (!current()) return;
-      const result = await submitTrackedRequest(ledger, recovery.journal, actorId, logical, orderSubmitOperation, { actorId, input: review.input, review: review.review },
-        key => gateway.submit(actorId, review, key, current), item.requestKey);
+      const result = await submitTrackedRequest(ledger, recovery.journal, actorId, logical, orderSubmitOperation, { actorId, draftId: saved.id, input: review.input, review: review.review },
+        key => gateway.submit(actorId, review, key, current, saved.id), item.requestKey);
       await readConfirmed(item.group.groupKey, result);
     } catch (failure) { if (current()) { update(item.group.groupKey, { review: null, uncertain: ledger.isUncertain(logical), error: { value: failure, reading: false } }); onFailure(failure); } }
     finally { pending.current = false; if (alive.current) { setBusy(false); recovery.refresh(); } }

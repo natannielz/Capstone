@@ -50,12 +50,15 @@ test('a substituted order keeps parsing after its renewed spending and store rev
   assert.throws(() => parseSubmittedOrder(accepted('2')));
 });
 test('order transport sends only accepted references and never retries a lost submission or sends from a stale view', async () => {
-  let calls = 0; const checked = parseCheckoutReview(review, input);
+  let calls = 0, sentDraft: unknown; const checked = parseCheckoutReview(review, input);
   const client = gateway(async request => { calls++; assert.equal(request.headers.get('Idempotency-Key'), 'original'); assert.equal(request.headers.get('If-Match'), '"0"');
     const body = await request.json() as Record<string, unknown>; assert.deepEqual(body.input, input); assert.equal(body.review, review.review); assert.equal('total' in body, false);
-    throw new Error('Lost response'); });
-  await assert.rejects(() => client.submit(actorId, checked, 'original', () => false)); assert.equal(calls, 0);
-  await assert.rejects(() => client.submit(actorId, checked, 'original', () => true)); assert.equal(calls, 1);
+    sentDraft = body.draftId; throw new Error('Lost response'); });
+  await assert.rejects(() => client.submit(actorId, checked, 'original', () => false, '7')); assert.equal(calls, 0);
+  await assert.rejects(() => client.submit(actorId, checked, 'original', () => true, '7')); assert.equal(calls, 1);
+  // F-030: the server learns which saved draft became the order, so that draft is never the keranjang again.
+  assert.equal(sentDraft, '7');
+  await assert.rejects(() => client.submit(actorId, checked, 'original', () => true, 'draft-7')); assert.equal(calls, 1);
   await assert.rejects(() => gateway(async () => Response.json({ ...review, buyerName: 'Cabang fixture', submission: result })).read(actorId, '7'));
 });
 test('order recovery is lookup-only, preserves unknown outcomes and rejects an incomplete receipt', async () => {
@@ -107,26 +110,44 @@ test('reviewed channel discovery preserves exact package subsets, buyer and deli
 });
 test('saved draft channel keys separate actors and groups; partial commit and lost reply are recovered without resubmission', async () => {
   const { value } = groupedFixture(), a = value.items[0].groupKey, b = value.items[1].groupKey;
-  const firstKey = await checkoutGroupRequestKey(actorId, '7', a), secondKey = await checkoutGroupRequestKey(actorId, '7', b);
-  assert.equal(firstKey, await checkoutGroupRequestKey(actorId, '7', a)); assert.notEqual(firstKey, secondKey);
-  assert.notEqual(firstKey, await checkoutGroupRequestKey('17', '7', a)); assert.notEqual(firstKey, await checkoutGroupRequestKey(actorId, '8', a));
+  const firstKey = await checkoutGroupRequestKey(actorId, '7', '1', a), secondKey = await checkoutGroupRequestKey(actorId, '7', '1', b);
+  assert.equal(firstKey, await checkoutGroupRequestKey(actorId, '7', '1', a)); assert.notEqual(firstKey, secondKey);
+  assert.notEqual(firstKey, await checkoutGroupRequestKey('17', '7', '1', a)); assert.notEqual(firstKey, await checkoutGroupRequestKey(actorId, '8', '1', a));
   assert.match(firstKey, new RegExp(`^ordering\\.order\\.submit:${actorId}:[a-f0-9]{64}$`));
   const storage = new Map<string, string>(), journal = new OperationJournal(() => ({ get length() { return storage.size; }, key: index => [...storage.keys()][index] ?? null,
     getItem: key => storage.get(key) ?? null, setItem: (key, value) => { storage.set(key, value); }, removeItem: key => { storage.delete(key); } }));
   const ledger = new MutationLedger(() => { throw new Error('A group must retain its original key'); }), receipts = new Map<string, typeof result>(); let writes = 0;
-  assert.equal((await readCheckoutGroupAttempt(actorId, '7', a, journal, async key => receipts.has(key) ? { state: 'committed', result: receipts.get(key)! } : null)).result, null);
+  assert.equal((await readCheckoutGroupAttempt(actorId, '7', '1', a, journal, async key => receipts.has(key) ? { state: 'committed', result: receipts.get(key)! } : null)).result, null);
   await submitTrackedRequest(ledger, journal, actorId, a, orderSubmitOperation, input, async key => { writes++; receipts.set(key, result); return result; }, firstKey);
   await assert.rejects(() => submitTrackedRequest(ledger, journal, actorId, b, orderSubmitOperation, input, async key => {
     writes++; receipts.set(key, { ...result, orderId: '9007199254741011' }); throw new AccessFailure(503, 'commit_outcome_unknown');
   }, secondKey));
   const lookup = async (key: string) => receipts.has(key) ? { state: 'committed' as const, result: receipts.get(key)! } : null;
-  const committedA = await readCheckoutGroupAttempt(actorId, '7', a, new OperationJournal(() => ({ get length() { return storage.size; }, key: index => [...storage.keys()][index] ?? null,
+  const committedA = await readCheckoutGroupAttempt(actorId, '7', '1', a, new OperationJournal(() => ({ get length() { return storage.size; }, key: index => [...storage.keys()][index] ?? null,
     getItem: key => storage.get(key) ?? null, setItem: (key, value) => { storage.set(key, value); }, removeItem: key => { storage.delete(key); } })), lookup);
-  const committedB = await readCheckoutGroupAttempt(actorId, '7', b, journal, lookup);
+  const committedB = await readCheckoutGroupAttempt(actorId, '7', '1', b, journal, lookup);
   assert.equal(committedA.result?.orderId, result.orderId); assert.equal(committedB.result?.orderId, '9007199254741011'); assert.equal(writes, 2);
   await assert.rejects(() => submitTrackedRequest(ledger, journal, actorId, a, orderSubmitOperation, input, async () => { writes++; return result; }, firstKey), { code: 'original_request_complete' });
   await assert.rejects(() => submitTrackedRequest(ledger, journal, actorId, b, orderSubmitOperation, input, async () => { writes++; return result; }, secondKey), { code: 'resolve_previous_attempt' });
-  const unknown = await readCheckoutGroupAttempt(actorId, '7', b, journal, async () => null);
+  const unknown = await readCheckoutGroupAttempt(actorId, '7', '1', b, journal, async () => null);
   assert.equal(unknown.uncertain, true); assert.equal(unknown.result, null); assert.equal(journal.list(actorId)[0].key, secondKey); assert.equal(writes, 2);
-  await assert.rejects(() => readCheckoutGroupAttempt(actorId, '7', b, journal, async () => { throw new Error('Lookup failed'); })); assert.equal(writes, 2);
+  await assert.rejects(() => readCheckoutGroupAttempt(actorId, '7', '1', b, journal, async () => { throw new Error('Lookup failed'); })); assert.equal(writes, 2);
+});
+test('F-030: a checkout key belongs to one saved draft revision, so a new keranjang never replays an earlier order', async () => {
+  const { value } = groupedFixture(), a = value.items[0].groupKey;
+  const first = await checkoutGroupRequestKey(actorId, '7', '2', a);
+  // The same checkout (same draft at the same saved revision) keeps its key: a lost answer is checked, never resubmitted.
+  assert.equal(first, await checkoutGroupRequestKey(actorId, '7', '2', a));
+  // A keranjang changed since, or a fresh draft, is a new checkout with its own key.
+  assert.notEqual(first, await checkoutGroupRequestKey(actorId, '7', '3', a));
+  assert.notEqual(first, await checkoutGroupRequestKey(actorId, '8', '1', a));
+  assert.match(first, new RegExp(`^ordering\.order\.submit:${actorId}:[a-f0-9]{64}$`));
+  await assert.rejects(() => checkoutGroupRequestKey(actorId, '7', '0', a)); await assert.rejects(() => checkoutGroupRequestKey(actorId, '7', 'x', a));
+  const storage = new Map<string, string>(), journal = new OperationJournal(() => ({ get length() { return storage.size; }, key: index => [...storage.keys()][index] ?? null,
+    getItem: key => storage.get(key) ?? null, setItem: (key, value) => { storage.set(key, value); }, removeItem: key => { storage.delete(key); } }));
+  const receipts = new Map([[first, result]]);
+  const lookup = async (key: string) => receipts.has(key) ? { state: 'committed' as const, result: receipts.get(key)! } : null;
+  assert.equal((await readCheckoutGroupAttempt(actorId, '7', '2', a, journal, lookup)).result?.orderId, result.orderId);
+  assert.equal((await readCheckoutGroupAttempt(actorId, '8', '1', a, journal, lookup)).result, null);
+  assert.equal((await readCheckoutGroupAttempt(actorId, '7', '3', a, journal, lookup)).result, null);
 });

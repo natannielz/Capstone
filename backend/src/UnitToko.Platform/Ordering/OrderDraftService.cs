@@ -48,6 +48,7 @@ public sealed partial class OrderDraftService
         foreach (var name in OrderDraftSchemas.Collections)
             await InventoryRepository.RequireStorageAsync(database, name, OrderDraftSchemas.Validator(name), OrderDraftSchemas.Key(name), ct);
         await OrderDraftDiscardSchemas.RequireStorageAsync(database, ct);
+        await OrderDraftSubmissionSchemas.RequireStorageAsync(database, ct);
     }
     public async Task<BsonDocument> SaveAsync(ActorContext actor, long? draftId, long expectedRevision, OrderDraftInput input,
         AuthorizationCommandMetadata metadata, CancellationToken ct = default)
@@ -71,6 +72,8 @@ public sealed partial class OrderDraftService
                 if (B.Context(previous["context"].AsBsonDocument) != input.Context) throw B.Invalid("order_draft_branch_locked");
                 // A discarded draft is hidden; editing it would silently resurrect it. Restore first.
                 if (await DiscardRowAsync(tx, previous, token) is not null) throw Discarded();
+                // F-030: a draft that has become an order is closed; editing it would turn it back into a keranjang.
+                if (await SubmittedAsync(database, tx, draftId.Value, token)) throw Submitted();
             }
             var resource = input.Context.Resource(actor.UserId);
             return new(ScopePolicy.Authorize(actor, snapshot, Permissions.OrderSubmit, resource, clock.UtcNow),
@@ -128,11 +131,15 @@ public sealed partial class OrderDraftService
             var filter = F.Eq("createdBy", actor.UserId) & F.Eq("context.organizationId", context.OrganizationId.Value) &
                 F.Eq("context.branchId", context.BranchId.Value) & F.Eq<BsonValue>("context.divisionId", context.DivisionId is { } division ? new BsonInt64(division.Value) : BsonNull.Value);
             if (beforeId.HasValue) filter &= F.Lt("_id", beforeId.Value);
-            // Discarded drafts are hidden here and listed by ListDiscardedAsync; excluded before the page limit so pages stay full.
+            // Discarded drafts are hidden here and listed by ListDiscardedAsync; drafts whose packages have all become orders (F-030)
+            // are never listed again, so the keranjang moves on to a fresh draft. Both are excluded before the page limit so pages stay full.
             var rows = await Rows(B.Heads).Aggregate(tx).Match(filter).Sort(new BsonDocument("_id", -1))
                 .AppendStage<BsonDocument>(new BsonDocument("$lookup", new BsonDocument { { "from", OrderDraftDiscardSchemas.Collection },
                     { "localField", "_id" }, { "foreignField", "_id" }, { "as", "discard" } }))
-                .Match(F.Size("discard", 0)).Limit(limit + 1).ToListAsync(token);
+                .Match(F.Size("discard", 0))
+                .AppendStage<BsonDocument>(new BsonDocument("$lookup", new BsonDocument { { "from", OrderDraftSubmissionSchemas.Collection },
+                    { "localField", "_id" }, { "foreignField", "draftId" }, { "as", "submitted" } }))
+                .Match(F.Ne("submitted.closesDraft", true)).Limit(limit + 1).ToListAsync(token);
             var result = ImmutableArray.CreateBuilder<OrderDraftView>();
             foreach (var candidate in rows.Take(limit)) {
                 var head = await HeadAsync(actor, snapshot, tx, candidate["_id"].AsInt64, token);
