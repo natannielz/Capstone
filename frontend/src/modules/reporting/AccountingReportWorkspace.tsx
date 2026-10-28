@@ -1,7 +1,6 @@
 'use client';
 
-import Link from 'next/link';
-import {useCallback, useEffect, useRef, useState} from 'react';
+import {useCallback, useEffect, useRef, useState, type ReactNode} from 'react';
 import {RequestNotSentError} from '../../api/client';
 import {createIdentityGateway} from '../identity/identity-client';
 import {IdentityFailure, sessionTiming, type IdentitySession} from '../identity/identity-workflow';
@@ -14,6 +13,13 @@ import common from '../administration/access.module.css';
 import styles from './reporting.module.css';
 import { dateTimeFormatter, jakartaDateKey } from "@/lib/format";
 import { SessionAccessState } from "@/components/workspace-kit/session-access-state";
+import { Button } from '@/components/workspace-kit/button';
+import { PageHeader } from '@/components/workspace-kit/page-header';
+import { Section } from '@/components/workspace-kit/section';
+import { StateView } from '@/components/workspace-kit/state-view';
+import { Field } from '@/components/workspace-kit/field';
+import { Facts } from '@/components/workspace-kit/facts';
+import { DataTable } from '@/components/workspace-kit/data-table';
 
 type Account = {actorId: string; session: IdentitySession; observedAt: number};
 const path = '/reporting/accounts', pageSize = 20;
@@ -65,27 +71,25 @@ export function AccountingReportWorkspace() {
     if ((failure instanceof AccessFailure || failure instanceof RequestNotSentError) &&
       (failure.status === 401 || failure.status === 403 || failure.code === 'actor_changed')) {setAccount(null); setError(failure);}
   }, []);
+  // The desk owns the book refresh, so it renders the header with it; the access states render it without.
+  const header = (action?: ReactNode) => <PageHeader title="Laporan akun dan jurnal" secondaryAction={action}
+    description="Baca saldo kumulatif dari jurnal yang telah tersimpan pada buku operasional. Pilih organisasi, toko, kanal, mata uang, dan tanggal akhir yang jelas." />;
   return <main className={common.page} id="accounting-report-workspace">
-    <a className={styles.skip} href="#accounting-report-content">Langsung ke laporan</a>
-    <header className={common.header}><div><Link className={common.brand} href="/identity/account">Unit Toko</Link><h1>Laporan akun dan jurnal</h1>
-      <p>Baca saldo kumulatif dari jurnal yang telah tersimpan pada buku operasional. Pilih organisasi, toko, kanal, mata uang, dan tanggal akhir yang jelas.</p></div>
-      <Link className={common.secondary} href="/identity/account">Akun saya</Link></header>
-    {error !== null && account !== null && <p role="alert" className={common.alert}>{message(error)}</p>}
-    <div id="accounting-report-content">
-      {loading ? <p role="status">Memeriksa sesi dan izin laporan…</p> : !account || sessionTiming(account.session, elapsed).expired
-        ? <SessionAccessState error={error} returnPath={path} onRetry={() => setAttempt(value => value + 1)} />
-        : <ReportDesk key={account.actorId + ':' + account.observedAt} account={account} onDenied={denied} />}
-    </div>
+    {account !== null && !loading && !sessionTiming(account.session, elapsed).expired
+      ? <ReportDesk key={account.actorId + ':' + account.observedAt} account={account} onDenied={denied} header={header} />
+      : <>{header()}<div className="ui-stack" id="accounting-report-content">
+        {error !== null && account !== null && <StateView kind="error" title={message(error)} />}
+        {loading ? <StateView kind="loading" title="Memeriksa sesi dan izin laporan…" /> : <SessionAccessState error={error} returnPath={path} onRetry={() => setAttempt(value => value + 1)} />}
+      </div></>}
   </main>;
 }
 
 function Scope({book}: {book: AccountingReportBook}) {
-  return <dl className={common.facts}><div><dt>Organisasi</dt><dd>{book.organization.code} · {book.organization.name}</dd></div>
-    <div><dt>Toko</dt><dd>{book.shop.code} · {book.shop.name}</dd></div><div><dt>Kanal</dt><dd>{book.channel.code} · {book.channel.name}</dd></div>
-    <div><dt>Mata uang</dt><dd>{book.key.currency}</dd></div><div><dt>Buku operasional</dt><dd>{book.id}</dd></div></dl>;
+  return <Facts items={[{term: 'Organisasi', value: <>{book.organization.code} · {book.organization.name}</>}, {term: 'Toko', value: <>{book.shop.code} · {book.shop.name}</>},
+    {term: 'Kanal', value: <>{book.channel.code} · {book.channel.name}</>}, {term: 'Mata uang', value: book.key.currency}, {term: 'Buku operasional', value: book.id}]} />;
 }
 
-function ReportDesk({account, onDenied}: {account: Account; onDenied: (error: unknown) => void}) {
+function ReportDesk({account, onDenied, header}: {account: Account; onDenied: (error: unknown) => void; header: (action?: ReactNode) => ReactNode}) {
   const [gateway] = useState(createAccountingReportGateway), [gate] = useState(() => new CatalogReadGate());
   const [books, setBooks] = useState<AccountingReportBook[]>([]), [selectedId, setSelectedId] = useState(''), [endDate, setEndDate] = useState(todayInJakarta);
   const [report, setReport] = useState<AccountingReportSnapshot | null>(null), [page, setPage] = useState(0);
@@ -145,65 +149,78 @@ function ReportDesk({account, onDenied}: {account: Account; onDenied: (error: un
     } finally {if (alive.current && request.current()) setBusy(null);}
   }
   const expired = report !== null && now >= Date.parse(report.expiresAt), journals = report?.journals.slice(page * pageSize, (page + 1) * pageSize) ?? [];
-  return <div className={styles.desk}>
-    <section className={common.accountSection} aria-labelledby="report-selection-heading">
-      <h2 id="report-selection-heading">Pilih cakupan laporan</h2>
-      <p className={common.help}>Buku yang ditampilkan mengikuti izin laporan pada toko Anda. Pilihan tanggal bersifat inklusif menurut kalender Asia/Jakarta, sejak awal buku hingga tanggal tersebut.</p>
-      {busy === 'books' && <p role="status">Memuat buku dalam cakupan laporan…</p>}
-      {!online && <p role="status" className={common.alert}>Perangkat sedang luring. Sambungkan kembali sebelum menampilkan laporan atau mengunduh CSV.</p>}
-      <form className={styles.selection} onSubmit={event => {event.preventDefault(); void read();}}>
-        <label htmlFor="accounting-report-book">Buku organisasi, toko, kanal, dan mata uang<select id="accounting-report-book" required value={selectedId}
+  const currency = report?.book.key.currency ?? 'IDR';
+  return <>
+    {header(<Button variant="secondary" type="button" disabled={busy !== null || !online} onClick={() => void loadBooks()}>Muat ulang daftar buku</Button>)}
+    <div className="ui-stack" id="accounting-report-content">
+    <Section title="Pilih cakupan laporan" id="report-selection-heading" busy={busy === 'books'}
+      description="Buku yang ditampilkan mengikuti izin laporan pada toko Anda. Pilihan tanggal bersifat inklusif menurut kalender Asia/Jakarta, sejak awal buku hingga tanggal tersebut.">
+      {busy === 'books' && <StateView kind="loading" title="Memuat buku dalam cakupan laporan…" rows={1} />}
+      {!online && <StateView kind="offline" title="Perangkat sedang luring. Sambungkan kembali sebelum menampilkan laporan atau mengunduh CSV." />}
+      <form className="ui-form" onSubmit={event => {event.preventDefault(); void read();}}>
+        <Field id="accounting-report-book" label="Buku organisasi, toko, kanal, dan mata uang"><select required value={selectedId}
           disabled={busy === 'books' || !online || books.length === 0} onChange={event => {resetSelection(); setSelectedId(event.target.value);}}>
           <option value="">Pilih satu buku operasional</option>
           {books.map(book => <option key={book.id} value={book.id}>{book.organization.name} · {book.shop.name} · {book.channel.name} · {book.key.currency}</option>)}
-        </select></label>
-        <label htmlFor="accounting-report-end-date">Tanggal akhir inklusif (Asia/Jakarta)<input type="date" id="accounting-report-end-date" required value={endDate}
-          disabled={!online || busy === 'books'} onChange={event => {resetSelection(); setEndDate(event.target.value);}} /></label>
-        <button type="submit" className={common.primary} disabled={busy !== null || !selected || !online}>Tampilkan laporan</button>
+        </select></Field>
+        <Field id="accounting-report-end-date" label="Tanggal akhir inklusif (Asia/Jakarta)" width="date"><input type="date" required value={endDate}
+          disabled={!online || busy === 'books'} onChange={event => {resetSelection(); setEndDate(event.target.value);}} /></Field>
+        <Button variant="primary" type="submit" disabled={busy !== null || !selected || !online}>Tampilkan laporan</Button>
       </form>
       {selected && <Scope book={selected} />}
-      {busy !== 'books' && books.length === 0 && error === null && <p role="status">Belum ada buku terkonfigurasi dalam cakupan laporan Anda. Hubungi penanggung jawab untuk memeriksa konfigurasi dan akses.</p>}
-      <button type="button" className={common.secondary} disabled={busy !== null || !online} onClick={() => void loadBooks()}>Muat ulang daftar buku</button>
-    </section>
-    {error !== null && <p className={common.alert} role="alert">{message(error)}</p>}
-    {notice && <p className={common.success} role="status">{notice}</p>}
-    {busy === 'read' && <section className={common.state} aria-busy="true"><p role="status">Membaca seluruh jurnal tersimpan dan saldo akun untuk pilihan ini…</p></section>}
-    {busy === 'export' && <p role="status">Memeriksa laporan tersimpan dan menyiapkan CSV seluruh baris…</p>}
-    {!report && busy !== 'read' && <section className={common.state}><h2>Laporan belum ditampilkan</h2><p>Pilih satu buku dan tanggal akhir, lalu tampilkan laporan. Saldo tidak berasal dari halaman pesanan, tagihan, atau stok saat ini.</p></section>}
-    {report && <section className={common.detail} aria-labelledby="report-result-heading">
-      <div className={common.form}><h2 id="report-result-heading" tabIndex={-1} ref={reportHeading}>Neraca saldo kumulatif</h2><Scope book={report.book} />
-        <p>Dari awal buku sampai tanggal bisnis {report.endDate}, termasuk tanggal tersebut. Zona waktu: Asia/Jakarta.</p>
-        <p className={common.scopeSummary}>Laporan dari jurnal tersimpan. Laporan ini bukan penutupan buku yang disetujui, dan tidak menerbitkan transaksi atau mengubah saldo.</p>
-        <dl className={common.facts}><div><dt>Dibaca pada</dt><dd>{when(report.capturedAt)}</dd></div><div><dt>Batas unduhan</dt><dd>{when(report.expiresAt)}</dd></div>
-          <div><dt>Total debit</dt><dd>{formatAccountingReportMoney(report.debit, report.book.key.currency)}</dd></div>
-          <div><dt>Total kredit</dt><dd>{formatAccountingReportMoney(report.credit, report.book.key.currency)}</dd></div><div><dt>Referensi laporan</dt><dd>{report.readId}</dd></div></dl>
-        {expired && <p role="status" className={common.alert}>Masa berlaku unduhan laporan telah berakhir. Tampilkan laporan baru untuk memperoleh CSV terbaru.</p>}
-        <button type="button" className={common.secondary} disabled={busy !== null || !online || expired} onClick={() => void download()}>Unduh CSV lengkap</button>
-        <p className={common.help}>CSV memuat seluruh akun dan jurnal dari laporan tersimpan yang sama. Tampilan jurnal dibagi per halaman; unduhan tidak mengikuti halaman yang sedang terbuka. Batas: 500 jurnal, 10.000 baris, 2.000 akun dan 8 MiB CSV.</p>
-        <div className={styles.tableScroll} tabIndex={0} role="region" aria-label="Neraca saldo akun, dapat digeser mendatar">
-          <table><caption>Saldo {report.accounts.length} akun pada buku yang dipilih</caption><thead><tr><th scope="col">Kode akun pada bagan terkait</th><th scope="col">Debit</th><th scope="col">Kredit</th><th scope="col">Saldo debit dikurangi kredit</th></tr></thead>
-            <tbody>{report.accounts.map(row => <tr key={row.accountId}><th scope="row">{row.accountCodes.join(' / ')}<span className={styles.accountId}>Akun {row.accountId}</span></th>
-              <td>{formatAccountingReportMoney(row.debit, report.book.key.currency)}</td><td>{formatAccountingReportMoney(row.credit, report.book.key.currency)}</td><td>{formatAccountingReportMoney(row.balance, report.book.key.currency)}</td></tr>)}</tbody></table>
+      {busy !== 'books' && books.length === 0 && error === null && <StateView kind="empty" title="Belum ada buku terkonfigurasi dalam cakupan laporan Anda. Hubungi penanggung jawab untuk memeriksa konfigurasi dan akses." />}
+    </Section>
+    {error !== null && <StateView kind="error" title={message(error)} />}
+    {notice && <StateView kind="success" title={notice} />}
+    {busy === 'read' && <StateView kind="loading" title="Membaca seluruh jurnal tersimpan dan saldo akun untuk pilihan ini…" />}
+    {busy === 'export' && <StateView kind="loading" title="Memeriksa laporan tersimpan dan menyiapkan CSV seluruh baris…" rows={1} />}
+    {!report && busy !== 'read' && <section className="ui-section" aria-label="Hasil laporan"><StateView kind="empty" title="Laporan belum ditampilkan"
+      message="Pilih satu buku dan tanggal akhir, lalu tampilkan laporan. Saldo tidak berasal dari halaman pesanan, tagihan, atau stok saat ini." /></section>}
+    {report && <>
+      <section className="ui-section" aria-labelledby="report-result-heading"><div className="ui-stack">
+        <div className="ui-form"><h2 id="report-result-heading" tabIndex={-1} ref={reportHeading}>Neraca saldo kumulatif</h2><Scope book={report.book} />
+          <p>Dari awal buku sampai tanggal bisnis {report.endDate}, termasuk tanggal tersebut. Zona waktu: Asia/Jakarta.</p>
+          <p className={common.scopeSummary}>Laporan dari jurnal tersimpan. Laporan ini bukan penutupan buku yang disetujui, dan tidak menerbitkan transaksi atau mengubah saldo.</p>
+          <Facts items={[{term: 'Dibaca pada', value: when(report.capturedAt)}, {term: 'Batas unduhan', value: when(report.expiresAt)},
+            {term: 'Total debit', value: formatAccountingReportMoney(report.debit, currency)}, {term: 'Total kredit', value: formatAccountingReportMoney(report.credit, currency)},
+            {term: 'Referensi laporan', value: report.readId}]} />
+          {expired && <p role="status" className={common.help}>Masa berlaku unduhan laporan telah berakhir. Tampilkan laporan baru untuk memperoleh CSV terbaru.</p>}
+          <Button variant="secondary" type="button" disabled={busy !== null || !online || expired} onClick={() => void download()}>Unduh CSV lengkap</Button>
+          <p className={common.help}>CSV memuat seluruh akun dan jurnal dari laporan tersimpan yang sama. Tampilan jurnal dibagi per halaman; unduhan tidak mengikuti halaman yang sedang terbuka. Batas: 500 jurnal, 10.000 baris, 2.000 akun dan 8 MiB CSV.</p>
         </div>
-        {report.accounts.length === 0 && <p>Belum ada akun tercatat pada bagan yang terkait dengan laporan ini.</p>}
-      </div>
-      <div className={common.form}><h2>Jurnal tersimpan</h2>
-        {report.journals.length === 0 ? <p role="status">Belum ada jurnal yang dibukukan sampai tanggal akhir pilihan ini. Akun pada bagan terkait tetap ditampilkan dengan saldo yang tercatat.</p>
-          : <><p className={common.help}>Menampilkan jurnal {page * pageSize + 1}–{Math.min((page + 1) * pageSize, report.journals.length)} dari {report.journals.length}. Jumlah saldo mencakup seluruh laporan.</p>
+        <DataTable caption={`Saldo ${report.accounts.length} akun pada buku yang dipilih`} rows={report.accounts} getKey={row => row.accountId}
+          empty={{title: 'Belum ada akun tercatat pada bagan yang terkait dengan laporan ini.'}}
+          columns={[
+            {key: 'code', header: 'Kode akun pada bagan terkait', render: row => <>{row.accountCodes.join(' / ')}<span className={styles.accountId}>Akun {row.accountId}</span></>},
+            {key: 'debit', header: 'Debit', align: 'end', render: row => formatAccountingReportMoney(row.debit, currency)},
+            {key: 'credit', header: 'Kredit', align: 'end', render: row => formatAccountingReportMoney(row.credit, currency)},
+            {key: 'balance', header: 'Saldo debit dikurangi kredit', align: 'end', render: row => formatAccountingReportMoney(row.balance, currency)},
+          ]} />
+      </div></section>
+      <Section title="Jurnal tersimpan" id="report-journals-heading">
+        {report.journals.length === 0 ? <StateView kind="empty" title="Belum ada jurnal yang dibukukan sampai tanggal akhir pilihan ini. Akun pada bagan terkait tetap ditampilkan dengan saldo yang tercatat." />
+          : <>
+            <p className={common.help}>Menampilkan jurnal {page * pageSize + 1}–{Math.min((page + 1) * pageSize, report.journals.length)} dari {report.journals.length}. Jumlah saldo mencakup seluruh laporan.</p>
             <ol className={styles.journals} start={page * pageSize + 1} aria-label="Rincian jurnal laporan">
               {journals.map(row => <li key={row.id}><details><summary>Jurnal {row.id} · {row.businessDate} · {row.description}</summary>
-                <dl className={common.facts}><div><dt>Sumber</dt><dd>{row.source.namespace} · {row.source.documentId}</dd></div><div><dt>Peristiwa dan kejadian</dt><dd>{row.source.eventKind} · {row.source.occurrence}</dd></div>
-                  <div><dt>Bagan tersimpan</dt><dd>{row.chartId}, versi {row.chartVersion}</dd></div><div><dt>Pembalikan</dt><dd>{row.reversalOf === null ? 'Bukan jurnal pembalikan' : `Membalik jurnal ${row.reversalOf}`}</dd></div></dl>
-                <div className={styles.tableScroll} tabIndex={0} role="region" aria-label={`Baris jurnal ${row.id}, dapat digeser mendatar`}>
-                  <table><caption>Baris asli jurnal {row.id}</caption><thead><tr><th scope="col">Akun dan pemetaan</th><th scope="col">Debit</th><th scope="col">Kredit</th></tr></thead>
-                    <tbody>{row.lines.map((line, index) => <tr key={line.mappingKey + ':' + index}><th scope="row">{line.accountCode}<span className={styles.accountId}>{line.mappingKey} · Akun {line.accountId}</span></th>
-                      <td>{formatAccountingReportMoney(line.debit, report.book.key.currency)}</td><td>{formatAccountingReportMoney(line.credit, report.book.key.currency)}</td></tr>)}</tbody></table>
+                <div className={styles.journalBody}>
+                  <Facts items={[{term: 'Sumber', value: <>{row.source.namespace} · {row.source.documentId}</>}, {term: 'Peristiwa dan kejadian', value: <>{row.source.eventKind} · {row.source.occurrence}</>},
+                    {term: 'Bagan tersimpan', value: <>{row.chartId}, versi {row.chartVersion}</>}, {term: 'Pembalikan', value: row.reversalOf === null ? 'Bukan jurnal pembalikan' : `Membalik jurnal ${row.reversalOf}`}]} />
+                  <DataTable caption={`Baris asli jurnal ${row.id}`} rows={row.lines.map((line, index) => ({line, index}))} getKey={({line, index}) => line.mappingKey + ':' + index}
+                    columns={[
+                      {key: 'account', header: 'Akun dan pemetaan', render: ({line}) => <>{line.accountCode}<span className={styles.accountId}>{line.mappingKey} · Akun {line.accountId}</span></>},
+                      {key: 'debit', header: 'Debit', align: 'end', render: ({line}) => formatAccountingReportMoney(line.debit, currency)},
+                      {key: 'credit', header: 'Kredit', align: 'end', render: ({line}) => formatAccountingReportMoney(line.credit, currency)},
+                    ]} />
                 </div>
               </details></li>)}
-            </ol><nav className={common.pagination} aria-label="Halaman jurnal"><button type="button" className={common.secondary} disabled={page === 0 || busy !== null}
-              onClick={() => setPage(value => value - 1)}>Jurnal sebelumnya</button><span>Halaman {page + 1} dari {Math.ceil(report.journals.length / pageSize)}</span>
-              <button type="button" className={common.secondary} disabled={(page + 1) * pageSize >= report.journals.length || busy !== null} onClick={() => setPage(value => value + 1)}>Jurnal berikutnya</button></nav></>}
-      </div>
-    </section>}
-  </div>;
+            </ol>
+            <nav className="ui-actions" aria-label="Halaman jurnal"><Button variant="secondary" type="button" disabled={page === 0 || busy !== null}
+              onClick={() => setPage(value => value - 1)}>Jurnal sebelumnya</Button><span>Halaman {page + 1} dari {Math.ceil(report.journals.length / pageSize)}</span>
+              <Button variant="secondary" type="button" disabled={(page + 1) * pageSize >= report.journals.length || busy !== null} onClick={() => setPage(value => value + 1)}>Jurnal berikutnya</Button></nav>
+          </>}
+      </Section>
+    </>}
+    </div>
+  </>;
 }
