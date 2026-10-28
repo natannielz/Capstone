@@ -18,7 +18,7 @@ import { PackExecutionEditor } from './pack-conversion-execution-state';
 import { conversionTransferredValue, type ConversionCommand, type ConversionPreview, type ConversionSource, type ConversionDetail } from './pack-conversion-execution-workflow';
 import common from '../administration/access.module.css';
 import styles from './stock-count.module.css';
-import { formatDateTime, numberFormatter } from '@/lib/format';
+import { formatDateTime, numberFormatter, formatDate } from '@/lib/format';
 
 const path = '/inventory/pack-conversion-executions';
 type Loaded = { actorId: string; actions: string[]; session: IdentitySession; observedAt: number; generation: number };
@@ -123,7 +123,7 @@ function ExecutionDesk({ loaded, onRefresh }: { loaded: Loaded; onRefresh: () =>
       <label><span id='execution-source-label'>Lot penerimaan</span><select aria-labelledby='execution-source-label' value={state.source?.sourceBalanceId ?? ''}
         disabled={locked || state.loadingSources} onChange={event => editor.chooseSource(event.target.value)}><option value=''>Pilih lot dengan sengaja</option>
         {state.sources.items.map(source => <option key={source.sourceBalanceId} value={source.sourceBalanceId} disabled={source.maximumSteps === '0'}>
-          {source.receiptReference} · {source.lotReference} · {source.source.packageLabel} · tersedia {amount(source.availableSourcePackages)} · kedaluwarsa {source.expiresOn ?? 'tidak ditetapkan'}</option>)}</select></label>
+          {source.receiptReference} · {source.lotReference} · {source.source.packageLabel} · tersedia {amount(source.availableSourcePackages)} · kedaluwarsa {source.expiresOn ? formatDate(source.expiresOn) : 'tidak ditetapkan'}</option>)}</select></label>
       {state.loadingSources ? <p role='status'>Memeriksa lot, ketersediaan, dan nilai sumber…</p> : !state.sources.items.length && <p className={common.empty}>Belum ada lot yang tersedia untuk aturan ini pada halaman sumber. Pastikan penerimaan telah dinilai dan dilepas; barang yang ditahan, kedaluwarsa, atau direservasi tidak dipakai.</p>}
       {state.sources.unavailableCount !== '0' && <p className={common.help}>{amount(state.sources.unavailableCount)} saldo pada halaman ini tidak mempunyai jumlah tersedia untuk satu langkah.</p>}
       <CursorButtons cursor={state.sourceCursor} next={state.sources.next} disabled={locked || state.loadingSources} onPage={cursor => void editor.loadSources(cursor)} />
@@ -154,7 +154,7 @@ function CursorButtons({ cursor, next, disabled, onPage }: { cursor: string | nu
 function SourceFacts({ source }: { source: ConversionSource }) {
   return <section className={styles.contents}><h3>{source.source.familyName} · {source.source.packageLabel}</h3><p>Penerimaan: {source.receiptReference}. Lot: {source.lotReference}.</p>
     <p>Tersedia {amount(source.availableSourcePackages)} kemasan; maksimal {amount(BigInt(source.maximumSteps) > BigInt("1000000") ? '1000000' : source.maximumSteps)} langkah.</p>
-    <p>Kedaluwarsa: {source.expiresOn ?? 'tidak ditetapkan'}. Nilai lot tersisa: {valueLabel(source.remainingValue)} untuk {amount(source.remainingPackages)} kemasan.</p>
+    <p>Kedaluwarsa: {source.expiresOn ? formatDate(source.expiresOn) : 'tidak ditetapkan'}. Nilai lot tersisa: {valueLabel(source.remainingValue)} untuk {amount(source.remainingPackages)} kemasan.</p>
     <p className={common.help}>Jumlah tersedia mengecualikan reservasi, barang ditahan, dan kedaluwarsa. Nilai lot dapat mencakup kemasan yang direservasi. Pratinjau memeriksa saldo terbaru.</p></section>;
 }
 function PreviewFacts({ preview }: { preview: ConversionPreview }) {

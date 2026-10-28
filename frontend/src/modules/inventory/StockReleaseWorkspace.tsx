@@ -17,7 +17,7 @@ import { StockReleaseEditor } from './stock-release-editor-state';
 import { releaseChoiceKey, releaseLocationKey, type ReleasePreview, type ReleaseReview, type ReleaseCommand } from './stock-release-workflow';
 import common from '../administration/access.module.css';
 import styles from './stock-source-policy.module.css';
-import { formatDateTime, formatMoney } from "@/lib/format";
+import { formatDate, formatDateTime, formatMoney } from "@/lib/format";
 import { Button } from '@/components/workspace-kit/button';
 import { PageHeader } from '@/components/workspace-kit/page-header';
 import { Section } from '@/components/workspace-kit/section';
@@ -140,7 +140,7 @@ function ReleaseDesk({ loaded, refresh }: { loaded: Loaded; refresh: () => Promi
       {state.loadingSources && <p role="status">Memeriksa barang, mutu dan penilaian…</p>}{!state.loadingSources && state.sources.length === 0 && <p>Belum ada barang yang dapat dilepas. Selesaikan pemeriksaan mutu, penilaian dan pengaturan sumber yang diperlukan.</p>}
       {state.unavailableCount !== '0' && <p className={common.help}>{state.unavailableCount} catatan belum dapat dinyatakan memenuhi pemeriksaan pelepasan.</p>}
       {state.choice && <><Facts items={[{ term: "Kemasan", value: state.choice.packagingLabel }, { term: "Lot", value: state.choice.lotReference },
-        { term: "Kedaluwarsa", value: state.choice.expiresOn ?? 'Tidak memiliki tanggal kedaluwarsa menurut catatan yang disetujui' },
+        { term: "Kedaluwarsa", value: state.choice.expiresOn ? formatDate(state.choice.expiresOn) : 'Tidak memiliki tanggal kedaluwarsa menurut catatan yang disetujui' },
         { term: "Dapat dilepas pada pemeriksaan ini", value: <>{state.choice.releaseablePackages} kemasan</> },
         { term: "Nilai penilaian terpilih", value: <>{amount(state.choice.capitalizedValue)} · nilai pelepasan dihitung dari sisa yang tercatat</> }]} />
         <form className={styles.form} onSubmit={event => { event.preventDefault(); void editor.previewProposal(); }}>
