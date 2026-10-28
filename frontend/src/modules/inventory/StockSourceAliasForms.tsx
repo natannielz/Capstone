@@ -61,7 +61,7 @@ export function AliasReview({ command, current, ownerLabel, requestedLabel, busy
   const base = proposal ? proposal.baseAliasVersion : "expectedAliasVersion" in command.body ? command.body.expectedAliasVersion : "";
   const enabled = proposal ? proposal.enabled : "enabled" in command.body && command.body.enabled;
   return <form className={styles.form} onSubmit={event => { event.preventDefault(); onSubmit(confirmed); }}>
-    <p className={styles.eyebrow}>Pemeriksaan akhir</p><h2>{aliasAction[command.operation]}</h2>
+    <h2>{aliasAction[command.operation]}</h2><p className={common.help}>Pemeriksaan akhir</p>
     <div className={styles.comparison}>
       <section><h3>Alokasi yang sama</h3><p><strong>{ownerLabel}</strong></p><p>Alokasi {command.poolId}</p>
         <p>Pengaturan yang ditinjau: versi {version}</p><p>Dasar pemetaan: {base === "0" ? "belum ada" : "versi " + base}</p></section>
