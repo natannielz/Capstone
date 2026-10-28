@@ -30,7 +30,7 @@ const blank = (): ReceivingDetails => ({ bankCode: '', accountNumber: '', holder
 const stateName: Record<string, string> = { pending: 'Menunggu keputusan', approve: 'Disetujui', reject: 'Ditolak', withdraw: 'Ditarik' };
 const actionName: Record<string, string> = { propose: 'Kirim usulan', observe: 'Simpan hasil pemeriksaan bank', approve: 'Setujui rekening', reject: 'Tolak usulan', withdraw: 'Tarik usulan' };
 function message(error: unknown) {
-  if (error instanceof IdentityFailure) return 'Masuk dengan akun organisasi Anda untuk melanjutkan.';
+  if (error instanceof IdentityFailure) return 'Sesi Anda perlu diperbarui. Masuk kembali untuk melanjutkan.';
   if (error instanceof AccessFailure) {
     if (error.code === 'receiving_account_changed') return 'Usulan, rekening atau kebijakan pemeriksaan berubah atau kedaluwarsa. Muat data terbaru sebelum melanjutkan.';
     if (error.code === 'receiving_account_observation_mismatch') return 'Hasil pemeriksaan bank tidak sama dengan usulan. Periksa selisih dan ajukan usulan baru bila perlu.';

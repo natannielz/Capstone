@@ -7,7 +7,7 @@ import { createAccessGateway } from '../administration/access-client';
 import { AdministrationNavigation } from '../administration/AdministrationNavigation';
 import { OperationRecovery, useOperationRecovery } from '../administration/OperationRecovery';
 import { submitTrackedRequest } from '../administration/operation-journal';
-import { AccessFailure, accessMessage } from '../administration/workflow';
+import { AccessFailure, accessMessage, businessRefusal } from '../administration/workflow';
 import { createIdentityGateway } from '../identity/identity-client';
 import { IdentityFailure, identityMessage, sessionTiming, type IdentitySession } from '../identity/identity-workflow';
 import { createCatalogPriceGateway } from './catalog-price-client';
@@ -37,7 +37,7 @@ function message(error: unknown): string {
     if (error.code === 'catalog_price_input_invalid') return 'Lengkapi mata uang, harga per kemasan dan alasan. Tulis harga seperti 12.000 atau 12000,50 (paling banyak dua angka di belakang koma).';
     if (error.code === 'step_up_required') return 'Verifikasi dua langkah terbaru diperlukan untuk meninjau harga dan memeriksa hasil keputusan.';
     if (error.status === 409) return 'Harga atau kemasan telah berubah. Muat ulang dan tinjau kembali sebelum mengirim.';
-    if (error.status === 403) return 'Tindakan tidak diizinkan. Pemeriksa harus orang terverifikasi yang berbeda dari pengaju dan memiliki penugasan yang masih berlaku.';
+    if (error.status === 403 && businessRefusal(error.code)) return 'Tindakan tidak diizinkan. Pemeriksa harus orang terverifikasi yang berbeda dari pengaju dan memiliki penugasan yang masih berlaku.';
     return accessMessage(error);
   }
   return 'Hasil belum dapat dipastikan. Periksa referensi permintaan yang tersimpan sebelum mengirim lagi.';
@@ -53,7 +53,7 @@ function PriceComparison({ base, proposed }: { base: { currency: string; unitPri
   const moved = change.kind === 'first' ? 'Harga pertama untuk kemasan ini' : change.kind === 'currency' ? 'Mata uang berbeda dari harga berlaku'
     : change.kind === 'same' ? 'Tidak berubah' : (change.kind === 'up' ? 'Naik ' : 'Turun ') + formatMoney(proposed.currency, change.difference!) + (change.percent ? ' (' + (change.kind === 'up' ? '+' : '−') + change.percent + '%)' : '');
   return <><Facts items={[{ term: 'Harga berlaku', value: amount(base) }, { term: 'Harga diajukan', value: <strong>{amount(proposed)}</strong> }, { term: 'Perubahan', value: moved }]} />
-    {change.large && <StateView kind="unknown" title="Perubahan besar. Periksa kontrak, acuan harga dan alasan sebelum memutuskan." />}</>;
+    {change.large && <div className="ui-notice" data-tone="warning">Perubahan besar. Periksa kontrak, acuan harga dan alasan sebelum memutuskan.</div>}</>;
 }
 const status = (value: PriceProposal['status']) => ({ proposed: 'Menunggu tinjauan', approve: 'Disetujui', reject: 'Ditolak', withdraw: 'Ditarik' })[value];
 /** " · +8%" after a proposal's date when the price moves (empty for a first price, a currency change or no change). */
@@ -175,12 +175,14 @@ function PriceDesk({ actorId, actions, session, observedAt, onRefresh, onFailure
     finally { if (request.current()) setDetailLoading(false); }
   }
   const fact = staged?.action === 'propose' ? staged.preview : staged ? staged.proposal : null;
+  // View tabs only when there is a choice: a single view needs no switch (§8.1).
+  const views = [...actions.includes('pricing.manage') ? [{ label: 'Ajukan harga', value: 'prepare' }] : [], ...actions.includes('pricing.approve') ? [{ label: 'Tinjau harga', value: 'review' }] : []];
   return <>
     <AdministrationNavigation current="prices" actions={actions} locked={locked} />
     <Section title="Ruang harga sesuai penugasan" description="Setiap harga berlaku untuk satu SKU dan kemasan tertentu. Pengajuan belum mengubah harga yang berlaku."
       actions={<Button variant="secondary" disabled={busy || recovering} onClick={() => void onRefresh()}>Muat ulang sesi dan akses</Button>}>
-      <Tabs label="Ruang harga sesuai penugasan" current={mode} disabled={locked} onSelect={value => { clear(); setMode(value === 'review' ? 'review' : 'prepare'); setAfter(null); }}
-        items={[...actions.includes('pricing.manage') ? [{ label: 'Ajukan harga', value: 'prepare' }] : [], ...actions.includes('pricing.approve') ? [{ label: 'Tinjau harga', value: 'review' }] : []]} />
+      {views.length > 1 && <Tabs label="Ruang harga sesuai penugasan" current={mode} disabled={locked} onSelect={value => { clear(); setMode(value === 'review' ? 'review' : 'prepare'); setAfter(null); }}
+        items={views} />}
       {(!timing.fresh && actions.includes('pricing.approve') || error instanceof AccessFailure && error.code === 'step_up_required') && <p className={editor.notice}>Verifikasi terbaru diperlukan. <Link href={factorHref}>Verifikasi dua langkah</Link></p>}
       {timing.expired && <SessionAccessState error={null} kind="expired" returnPath={pricePath} busy={busy || recovering} onRetry={() => void onRefresh()} />}
     </Section>
@@ -210,7 +212,7 @@ function PriceDesk({ actorId, actions, session, observedAt, onRefresh, onFailure
           {mode === 'prepare' && <form onSubmit={event => review(event, 'propose')}><fieldset className={styles.fields} disabled={locked || detailLoading || !preview.sku.active}>
             <legend><h3>Harga baru per kemasan</h3></legend><div className={styles.twoFields}><label>Mata uang<input value={currency} maxLength={3} onChange={event => setCurrency(event.target.value.toUpperCase())} required /></label>
               <label>Harga per kemasan<input inputMode="decimal" value={price} onChange={event => setPrice(event.target.value)} placeholder="Contoh: 12.000" required /></label>{currency === 'IDR' && price.trim() && <small>{rupiahAmount(price) === null ? 'Periksa angka harga, misalnya 12.000 atau 12000,50.' : 'Akan dicatat: ' + formatRupiah(rupiahAmount(price)!, { decimals: 2 })}</small>}</div>
-            <label>Alasan pengajuan<textarea value={reason} maxLength={1000} onChange={event => setReason(event.target.value)} required /></label><Button type="submit" variant="primary">Tinjau pengajuan harga</Button>
+            <label>Alasan pengajuan<textarea value={reason} maxLength={1000} onChange={event => setReason(event.target.value)} required /></label><Button type="submit" variant={selected || staged ? 'secondary' : 'primary'}>Tinjau pengajuan harga</Button>
           </fieldset></form>}
           <section className="ui-stack"><h3>Pengajuan harga</h3>
             <DataList label="Pengajuan harga" items={proposals} getKey={item => item.proposalId} empty={{ title: 'Belum ada pengajuan pada halaman ini.' }}
@@ -226,7 +228,7 @@ function PriceDesk({ actorId, actions, session, observedAt, onRefresh, onFailure
             {selected.status === 'proposed' && !(mode === 'review' && selected.ownProposal) && <form onSubmit={event => review(event, mode === 'review' ? 'approve' : 'withdraw')}><fieldset className={styles.fields} disabled={locked || detailLoading}>
               <label>Acuan pemeriksaan<input value={reference} maxLength={160} onChange={event => setReference(event.target.value)} required /></label><label>Alasan keputusan<textarea value={reason} maxLength={1000} onChange={event => setReason(event.target.value)} required /></label>
               <p className={styles.help}>{mode === 'review' ? 'Persetujuan dan penolakan harus dilakukan orang terverifikasi yang berbeda dari pengaju.' : 'Hanya akun pengaju asli yang dapat menarik pengajuan ini.'}</p>
-              <div className={styles.actions}><Button type="submit" variant="primary">{mode === 'review' ? 'Tinjau persetujuan' : 'Tinjau penarikan'}</Button>{mode === 'review' && <Button variant="danger" onClick={event => review(event, 'reject')}>Tinjau penolakan</Button>}</div>
+              <div className={styles.actions}><Button type="submit" variant={staged ? 'secondary' : 'primary'}>{mode === 'review' ? 'Tinjau persetujuan' : 'Tinjau penarikan'}</Button>{mode === 'review' && <Button variant="danger" onClick={event => review(event, 'reject')}>Tinjau penolakan</Button>}</div>
             </fieldset></form>}</section>}
           {staged && fact && <div ref={reviewRef} tabIndex={-1} className={editor.inset} role="region" aria-label="Konfirmasi harga"><h3>Periksa sebelum mengirim</h3><PackageFacts value={fact} />
             <p>Tindakan: <strong>{{ propose: 'Ajukan harga', approve: 'Setujui harga', reject: 'Tolak pengajuan', withdraw: 'Tarik pengajuan' }[staged.action]}</strong></p>

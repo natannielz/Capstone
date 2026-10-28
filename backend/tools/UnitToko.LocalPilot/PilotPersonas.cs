@@ -65,15 +65,16 @@ public static class PilotPersonas
         // The dispatch page needs shipment.dispatch (store-staff) and shipment.assign together.
         new("petugas-kirim", 3007, "Petugas pengiriman · SINTETIS", [Grant("store-staff", Warehouse, Permissions.ShipmentAssign, Permissions.OrganizationAddressRead)]),
         new("kurir", 3008, "Kurir · SINTETIS", [Grant("courier", Courier)]),
-        // Finance maker: invoice release proposal, invoice issue, payment recording/allocation, receiving accounts and stock valuation proposals.
+        // Finance maker: invoice release proposal, invoice issue, payment recording/allocation, receiving accounts, bank statement staging and stock valuation proposals.
         new("keuangan-tagihan", 3009, "Keuangan penagihan · SINTETIS", [Finance(["billing"], Shop, Permissions.InvoiceReleaseRead, Permissions.InvoiceReleasePropose,
             Permissions.PaymentReviewRead, Permissions.ReceivingAccountRead, Permissions.ReceivingAccountPropose, Permissions.ProcurementStockValuationRead,
             Permissions.ProcurementStockValuationPropose, Permissions.ProcurementDisbursementRead, Permissions.ProcurementDisbursementEvidenceRead,
+            Permissions.BankStatementRead, Permissions.BankStatementStage, Permissions.ReceivingAccountDetailsRead,
             Permissions.ProcurementRead, Permissions.StockRead, Permissions.CaseRead, Permissions.OrderRead, Permissions.OrganizationAddressRead)]),
         // Finance checker: payment verification, invoice release approval, bank sources, valuation, stock release and funding decisions.
         new("pemeriksa-pembayaran", 3010, "Pemeriksa pembayaran · SINTETIS", [Finance(["accounting"], Shop, Permissions.InvoiceRead, Permissions.PaymentReviewRead,
             Permissions.PaymentReviewCorrect, Permissions.PaymentReviewManual, Permissions.PaymentVerify, Permissions.BankReceiptRead, Permissions.BankReceiptConfirm,
-            Permissions.BankStatementRead, Permissions.BankStatementStage, Permissions.InvoiceReleaseRead, Permissions.InvoiceReleaseApprove,
+            Permissions.BankStatementRead, Permissions.InvoiceReleaseRead, Permissions.InvoiceReleaseApprove,
             Permissions.ReceivingAccountRead, Permissions.ReceivingAccountVerify, Permissions.ReceivingAccountApprove, Permissions.ProcurementStockValuationRead,
             Permissions.ProcurementStockValuationDecide, Permissions.StockReleaseApprove, Permissions.FundingRead, Permissions.FundingApprove,
             Permissions.ProcurementDisbursementRead, Permissions.ProcurementDisbursementEvidenceRead, Permissions.ProcurementSettlementRead,

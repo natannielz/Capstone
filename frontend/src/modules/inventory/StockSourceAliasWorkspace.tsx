@@ -190,7 +190,7 @@ function AliasDesk({ loaded, onRefresh }: { loaded: Loaded; onRefresh: () => Pro
           <p>Pemilik: {warehouseLabel(state.warehouse)}<br />Tujuan: {warehouseLabel(state.requested)}</p>
           <p className={common.help}>Alokasi {state.current.source.physicalPoolId}; pengaturan sumber versi {state.current.source.poolVersion}.
             Pemetaan {state.current.mapping?.appliedAliasVersion ? "versi " + state.current.mapping.appliedAliasVersion : "belum ada"}.</p>
-          {state.current.bindingState === "stale" && <StateView kind="unknown" title="Pengaturan sumber telah berubah. Pemetaan memerlukan pengajuan dan peninjauan ulang." />}
+          {state.current.bindingState === "stale" && <div className="ui-notice" data-tone="warning">Pengaturan sumber telah berubah. Pemetaan memerlukan pengajuan dan peninjauan ulang.</div>}
           <details><summary>Lihat pengaturan sumber saat ini</summary><RevisionFacts settings={state.current.source.settings} /></details>
           {editor.canPropose && <section className={styles.section}><AliasDraftForm enabled={state.enabled} reason={state.reason} disabled={locked}
             onChange={(enabled, reason) => editor.changeDraft(enabled, reason)} onReview={() => editor.reviewProposal()} /></section>}
@@ -208,8 +208,8 @@ function AliasDesk({ loaded, onRefresh }: { loaded: Loaded; onRefresh: () => Pro
         </div>
         <section className={styles.details} aria-busy={state.loadingDetail}>{state.loadingDetail ? <StateView kind="loading" title="Memeriksa pengajuan terbaru…" /> : state.selected ? <>
           <h2>Pengajuan #{state.selected.id}</h2><AliasFacts proposal={state.selected} />
-          {state.selected.status === "proposed" && editor.staleBase && <StateView kind="unknown" title="Dasar pengajuan telah berubah. Pengajuan ini belum dapat disetujui; periksa pemetaan dan pengaturan terbaru." />}
-          {state.selected.status === "proposed" && state.current.source.poolState === "active" && <StateView kind="unknown" title="Alokasi masih aktif. Pemetaan belum dapat disetujui." />}
+          {state.selected.status === "proposed" && editor.staleBase && <div role="status" className="ui-notice" data-tone="warning">Dasar pengajuan telah berubah. Pengajuan ini belum dapat disetujui; periksa pemetaan dan pengaturan terbaru.</div>}
+          {state.selected.status === "proposed" && state.current.source.poolState === "active" && <div className="ui-notice" data-tone="warning">Alokasi masih aktif. Pemetaan belum dapat disetujui.</div>}
           {state.selected.decision && <section className={styles.section}><h3>Keputusan tercatat</h3><p>{state.selected.decision.reviewReference}</p>
             <p className={common.preserve}>{state.selected.decision.reason}</p><p>{formatDateTime(state.selected.decision.decidedAt)}.</p></section>}
           <section className={styles.section}><AliasDecisionForm key={state.selected.id + ":" + state.current.source.poolVersion + ":" + state.current.mapping?.appliedAliasVersion}

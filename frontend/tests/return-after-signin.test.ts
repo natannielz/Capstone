@@ -69,3 +69,13 @@ test('an old checkout link survives sign-in and the checkout reopens the same dr
   assert.equal(order, '/ordering/orders?order=41');
   assert.equal(requestedOrderId(new URL(order, 'https://unit-toko.test').search), '41');
 });
+
+test('a signed-in visitor on the sign-in page without a destination continues to their own home (G-044)', async () => {
+  const { signedInContinuation } = await import('../src/modules/identity/identity-workflow');
+  const buyer = ['catalog.read', 'order.read', 'order.submit', 'invoice.read'], staff = ['catalog.read', 'stock.read', 'procurement.read'];
+  assert.equal(signedInContinuation('', buyer), '/shop');
+  assert.equal(signedInContinuation('', staff), '/workspace');
+  assert.equal(signedInContinuation('?returnPath=%2Fcart', staff), '/cart', 'a requested destination still wins');
+  const { readFileSync } = await import('node:fs');
+  assert.match(readFileSync(new URL('../src/modules/identity/IdentityLogin.tsx', import.meta.url), 'utf8'), /signedInContinuation\(/);
+});

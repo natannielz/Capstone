@@ -19,7 +19,7 @@ public sealed partial class AccessHttpTests
         var body = await Body(response);
         var roles = body["roles"]!.AsArray().ToDictionary(role => role!["id"]!.GetValue<string>(), role => role!);
         string[] Values(JsonNode role, string key) => role[key]!.AsArray().Select(item => item!.GetValue<string>()).ToArray();
-        Assert.Equal(6, roles.Count);
+        Assert.Equal(15, roles.Count);
         Assert.Equal(new[] { Permissions.BranchOrderRequestRead, Permissions.BranchOrderRequestSubmit, Permissions.SubstitutionAccept, Permissions.OrganizationAddressRead },
             Values(roles["buyer"], "suggestedPermissions"));
         Assert.Contains("order.accept", Values(roles["store-head"], "suggestedPermissions"));
@@ -27,14 +27,27 @@ public sealed partial class AccessHttpTests
         foreach (var role in roles.Values)
         {
             Assert.Equal(1, role["version"]!.GetValue<int>());
-            Assert.DoesNotContain("order.spend.approve", Values(role, "suggestedPermissions"));
+            // Spend approval is never granted by a template; only the branch approver job suggests it (F-006).
+            if (role["id"]!.GetValue<string>() != "branch-approver") Assert.DoesNotContain("order.spend.approve", Values(role, "suggestedPermissions"));
+            Assert.DoesNotContain("order.spend.approve", Values(role, "permissions"));
             Assert.Empty(Values(role, "suggestedPermissions").Intersect(Values(role, "permissions")));
         }
         // The finance template keeps growing with new finance work (funding, supplier banks, procurement evidence); the banking set must stay suggested.
-        foreach (var permission in new[] { Permissions.BankReceiptRead, Permissions.BankReceiptConfirm, Permissions.BankStatementRead, Permissions.BankStatementStage,
+        foreach (var permission in new[] { Permissions.BankReceiptRead, Permissions.BankReceiptConfirm, Permissions.BankStatementRead,
             Permissions.PaymentReviewRead, Permissions.PaymentReviewCorrect, Permissions.ReceivingAccountRead, Permissions.ReceivingAccountDetailsRead,
-            Permissions.ReceivingAccountPropose, Permissions.ReceivingAccountVerify, Permissions.ReceivingAccountApprove })
+            Permissions.ReceivingAccountPropose })
             Assert.Contains(permission, Values(roles["finance"], "suggestedPermissions"));
+        // The statement importer cannot confirm the receipt or verify the disbursement, so staging is offered by the maker job only.
+        Assert.DoesNotContain(Permissions.BankStatementStage, Values(roles["finance"], "suggestedPermissions"));
+        Assert.Contains(Permissions.BankStatementStage, Values(roles["finance-maker"], "suggestedPermissions"));
+        // The branch designation is suggested for explicit selection, never part of the template.
+        Assert.Contains(Permissions.BranchPic, Values(roles["branch-approver"], "suggestedPermissions"));
+        Assert.DoesNotContain(Permissions.BranchPic, Values(roles["branch-approver"], "permissions"));
+        // The deciding side of receiving accounts is offered by the finance checker job, never beside its proposing side (F-006).
+        foreach (var permission in new[] { Permissions.ReceivingAccountVerify, Permissions.ReceivingAccountApprove }) {
+            Assert.DoesNotContain(permission, Values(roles["finance"], "suggestedPermissions"));
+            Assert.Contains(permission, Values(roles["finance-checker"], "suggestedPermissions"));
+        }
         Assert.Empty(Values(roles["finance"], "permissions"));
         Assert.Empty(RoleTemplates.Materialize("finance", [], []).Permissions);
         Assert.DoesNotContain(Permissions.PaymentVerify, Values(roles["finance"], "suggestedPermissions"));

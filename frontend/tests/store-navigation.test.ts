@@ -1,11 +1,12 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
 import {catalogTabCurrent, storeMember, storeLinks, storeSignInHref} from '../src/components/store/store-navigation';
 
 const buyer = ['catalog.read', 'order.request.read', 'order.request.submit', 'branch.pic', 'order.submit', 'order.read', 'invoice.read'];
 
 test('buyers, approvers and staff are told apart by their permissions, never by their name', () => {
-  assert.deepEqual(storeMember('Rina', buyer), {kind: 'member', name: 'Rina', staff: false, approver: false, orders: true, tasks: [{href: '/billing/invoices', label: 'Tagihan'}]});
+  assert.deepEqual(storeMember('Rina', buyer), {kind: 'member', name: 'Rina', staff: false, approver: false, orders: true, requests: true, tasks: [{href: '/billing/invoices', label: 'Tagihan'}]});
   const andi = storeMember('Andi', [...buyer, 'order.spend.approve']);
   assert.deepEqual({staff: andi.staff, approver: andi.approver, orders: andi.orders}, {staff: false, approver: true, orders: true});
   assert.ok(andi.tasks.some(task => task.href === '/ordering/reviews'));
@@ -62,4 +63,47 @@ test('store staff who never place orders get no "Pesanan saya" entry that could 
   const storeStaff = ['catalog.read', 'order.read', 'stock.read', 'shipment.prepare', 'shipment.dispatch', 'procurement.read'];
   assert.equal(storeLinks(storeMember('Petugas', storeStaff), false, '/shop').orders, null);
   assert.equal(storeLinks(storeMember('Sari', [...storeStaff, 'order.submit']), false, '/shop').orders, '/ordering/orders');
+});
+
+test('cart and orders are offered only to members who can order; staff without ordering rights see neither (G-033)', () => {
+  for (const staff of [['shipment.read', 'delivery.attempt'], ['invite.manage', 'technical.configure'], ['invoice.read', 'invoice.issue'], ['payment.review.read', 'invoice.read']]) {
+    const links = storeLinks(storeMember('Petugas', staff), false, '/shop');
+    assert.equal(links.cart, null, staff.join());
+    assert.equal(links.orders, null, staff.join());
+  }
+  const buyer = storeLinks(storeMember('Rina', ['catalog.read', 'order.read', 'order.submit']), false, '/shop');
+  assert.equal(buyer.cart, '/cart'); assert.equal(buyer.orders, '/ordering/orders');
+  // First release: the cart is the branch request, offered to members who may request.
+  assert.equal(storeLinks(storeMember('Rina', ['catalog.read', 'order.request.submit']), true, '/shop').cart, '/ordering/requests');
+  assert.equal(storeLinks(storeMember('Petugas', ['catalog.manage']), true, '/shop').cart, null);
+  // Guests still meet the sign-in door for both.
+  assert.match(storeLinks({kind: 'guest'}, false, '/shop').cart!, /^\/identity\/login/);
+});
+
+
+test('while the viewer is still loading, the tab bar links neither cart nor orders (round 1)', () => {
+  const links = storeLinks({kind: 'loading'}, false, '/shop');
+  assert.equal(links.cart, null); assert.equal(links.orders, null);
+});
+
+// F-025: staff without branch-request grants are not offered "Permintaan saya" in the account menu or the footer.
+test('"Permintaan saya" is offered only to accounts that can read or submit branch requests (F-025)', () => {
+  assert.equal(storeMember('Rina', ['catalog.read', 'order.request.read']).requests, true);
+  assert.equal(storeMember('Rina', ['catalog.read', 'order.request.submit']).requests, true);
+  assert.equal(storeMember('Petugas', ['catalog.read', 'catalog.manage']).requests, false);
+  assert.equal(storeMember('Penyetuju', ['catalog.read', 'order.spend.approve']).requests, false);
+  const frame = readFileSync('src/components/store/store-frame.tsx', 'utf8');
+  const offered = frame.match(/>Permintaan saya</g) ?? [];
+  const guarded = frame.match(/\{requests && <Link href="\/ordering\/requests"[^\n]*?>Permintaan saya</g) ?? [];
+  assert.ok(offered.length > 0);
+  assert.equal(guarded.length, offered.length, 'every "Permintaan saya" link is guarded by the order.request.* flag');
+});
+
+// F-029: a buyer allowed to cancel (order.cancel) reaches "Pembatalan pesanan" on /ordering/reviews from the store, not only by typing the address.
+test('a buyer allowed to cancel finds Peninjauan pesanan in the account menu and on the order (F-029)', () => {
+  const pemohon = ['catalog.read', 'order.submit', 'order.read', 'order.cancel', 'invoice.read', 'branch.pic', 'order.request.read', 'order.request.submit', 'substitution.accept', 'organization.address.read'];
+  assert.ok(storeMember('Pemohon', pemohon).tasks.some(task => task.href === '/ordering/reviews'));
+  assert.ok(!storeMember('Pemohon', pemohon.filter(action => action !== 'order.cancel')).tasks.some(task => task.href === '/ordering/reviews'));
+  const history = readFileSync('src/modules/ordering/OrderHistoryWorkspace.tsx', 'utf8');
+  assert.match(history, /account\.actions\.includes\('order\.cancel'\) && !selected\.progress\.cancelled && <p><Link href="\/ordering\/reviews">/);
 });

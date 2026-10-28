@@ -207,7 +207,7 @@ function Desk({account, refresh}: {account: Account; refresh: () => void}) {
           ['Stok pengaman', value.inputs.safetyStockPackages, 'kemasan'], ['Batas peringatan', value.inputs.reorderPointPackages, 'kemasan'],
           ['Minimum pembelian', value.inputs.purchaseMinimumPackages, 'kemasan'], ['Kelipatan pembelian', value.inputs.purchaseIncrementPackages, 'kemasan']] as [string, string | null, string][])
           .map(([label, number, unit]) => ({ term: label, value: number === null ? 'Belum diketahui' : number + ' ' + unit }))} /></div>
-      {value.thresholdAlert !== null && (value.thresholdAlert ? <StateView kind="unknown" title="Stok berada pada atau di bawah batas peringatan." /> : <p>Stok berada di atas batas peringatan.</p>)}
+      {value.thresholdAlert !== null && (value.thresholdAlert ? <div className="ui-notice" data-tone="warning">Stok berada pada atau di bawah batas peringatan.</div> : <p>Stok berada di atas batas peringatan.</p>)}
       <Facts items={([['Stok layak sebelum reservasi', value.usableBeforeReservations], ['Direservasi untuk pesanan', value.reservedPackages], ['Komitmen tambahan di luar reservasi', value.additionalUnreservedCommitments],
         ['Tersedia setelah komitmen', value.availableAfterCommitments], ['Pasokan terverifikasi dalam masa tunggu', value.eligibleSupplyPackages], ['Posisi stok', value.inventoryPosition], ['Kebutuhan selama masa tunggu dan stok pengaman', value.requiredStockPackages],
         ['Saran jumlah pembelian', value.suggestedPurchasePackages]] as [string, string | null][]).map(([label, number]) => ({ term: label, value: <>{amount(number)}{number !== null ? ' kemasan' : ''}</> }))} />

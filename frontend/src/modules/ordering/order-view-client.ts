@@ -38,6 +38,9 @@ export function orderHistorySharePath(value: OrderHistoryFilter) {
 }
 export function parseOrderHistoryShare(search: string): OrderHistoryFilter {
   const params = new URLSearchParams(search);
+  // ?order= names the order to open (old /account/orders/<id> links, G-009); it is not a list filter (G-045).
+  if (params.getAll('order').length > 1) throw new AccessFailure(400, 'invalid_order_view_link');
+  params.delete('order');
   if (params.size === 0) return {...defaultOrderHistoryFilter};
   const supported = ['ov', 'sort', 'organization', 'branch', 'division'];
   if ([...params.keys()].some(value => !supported.includes(value) || params.getAll(value).length !== 1) || params.get('ov') !== '1' ||

@@ -18,7 +18,7 @@ import { StateView } from '@/components/workspace-kit/state-view';
 const REFRESH_MS = 60_000;
 
 function message(error: unknown) {
-  if (error instanceof IdentityFailure) return 'Masuk dengan akun organisasi Anda untuk melanjutkan.';
+  if (error instanceof IdentityFailure) return 'Sesi Anda perlu diperbarui. Masuk kembali untuk melanjutkan.';
   if (error instanceof AccessFailure && (error.status === 401 || error.status === 403)) return 'Halaman ini memerlukan izin pengaturan sistem.';
   return 'Laporan kesehatan belum dapat dibaca. Periksa ulang dalam beberapa saat; bila tetap gagal, periksa layanan API dan basis data.';
 }

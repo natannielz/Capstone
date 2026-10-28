@@ -7,8 +7,8 @@ import { IdentityFailure, sessionTiming, type IdentitySession } from '../identit
 import { createAccessGateway } from '../administration/access-client';
 import { AccessFailure, MutationLedger, accessMessage } from '../administration/workflow';
 import { OperationRecovery, useOperationRecovery } from '../administration/OperationRecovery';
-import { submitTrackedRequest } from '../administration/operation-journal';
-import { createReceiptGateway, parseReceiptLink, prepareReceipt, type Receipt, type ReceiptReview, type ReceiptDeclaration } from './receipt-client';
+import { OperationJournal, submitTrackedRequest } from '../administration/operation-journal';
+import { createReceiptGateway, parseReceiptLink, prepareReceipt, receiptPageAccess, type Receipt, type ReceiptReview, type ReceiptDeclaration } from './receipt-client';
 import { ReceiptSummary } from './ShipmentReceiptPanel';
 import { ReceiptProofPanel } from './ReceiptProofPanel';
 import { createReceiptProofGateway, type ReceiptProof } from './receipt-proof-client';
@@ -49,8 +49,12 @@ export function ReceiptWorkspace() {
       if (!session.authenticated || !session.account) throw new IdentityFailure(401, 'unauthenticated');
       const current = await access.current(); if (!active) return;
       if (current.userId !== session.account.userId) throw new AccessFailure(409, 'actor_changed');
-      const canReceive = current.allowedActions.includes('receipt.accept');
-      if (!canReceive && !current.allowedActions.includes('shipment.prepare')) throw new AccessFailure(403, 'scope_denied');
+      // A recipient gets the full page; a preparer with an unconfirmed receipt proof only its recovery; anyone else the standard denial (G-038).
+      let pending: string[] = [];
+      try { pending = new OperationJournal(() => window.localStorage).list(current.userId).map(entry => entry.operation); } catch { /* No readable journal: no recovery to offer. */ }
+      const pageAccess = receiptPageAccess(current.allowedActions, pending);
+      if (pageAccess === 'denied') throw new AccessFailure(403, 'scope_denied');
+      const canReceive = pageAccess === 'recipient';
       if (sessionTiming(session, performance.now() - observedAt).expired) throw new IdentityFailure(401, 'session_expired');
       setAccount({ actorId: current.userId, session, observedAt, canReceive }); setElapsed(performance.now() - observedAt);
     } catch (failure) { if (active) setError(failure); } finally { if (active) setLoading(false); }
@@ -128,7 +132,8 @@ function ReceiptForm({ account, link, onDenied }: { account: Account; link: Rece
       asRecipient={receipt ? true : recoveredProof!.issuedAsRecipient} canIssue={!!receipt} current={current} onDenied={failed} /></> : !review ? (!account.canReceive ? <p>Gunakan Periksa hasil untuk memulihkan bukti penerimaan yang telah Anda terbitkan.</p>
       : link ? <><p>Buka rincian kiriman sebelum menghitung barang.</p>
         <div className="ui-actions"><Button variant="primary" disabled={busy || offline || recovery.locked} onClick={() => void load()}>Periksa kiriman</Button></div></>
-      : <StateView kind="empty" title="Pindai QR dari kurir" message="Jika konfirmasi sebelumnya terputus, gunakan Periksa hasil di atas." />)
+      : <StateView kind="empty" title="Pindai QR dari kurir"
+        message={recovery.entries.length > 0 ? 'Jika konfirmasi sebelumnya terputus, gunakan Periksa hasil di atas.' : 'Arahkan kamera ponsel ke QR yang ditunjukkan kurir; halaman ini terbuka kembali dengan rincian kiriman.'} />)
       : command ? <div className={local.inset}><h2 ref={heading} tabIndex={-1}>Tinjau jumlah penerimaan</h2><p>{review.recipientName} · Kiriman {review.shipmentId} · Surat Jalan versi {review.documentVersion}</p>
         <ul>{command.body.lines.map(line => { const source = review.lines.find(item => item.skuId === line.skuId)!; return <li key={line.skuId}><strong>{source.productName}</strong>
           {groups.map(group => <p key={group}>{labels[group]}: {line[group].packages} {source.packageLabel} + {line[group].looseUnits} {source.baseUnitCode}</p>)}{line.exceptionReason && <p>{line.exceptionReason}</p>}</li>; })}</ul>

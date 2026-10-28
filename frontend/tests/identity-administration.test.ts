@@ -61,10 +61,24 @@ test("account search keeps private query text in scoped POST and retains string 
   const gateway = createIdentityAdministrationGateway(transport(async request => {
     assert.equal(request.url, "https://unit-toko.test/api/v1/identity/administration/directory/search");
     assert.equal(request.headers.get("X-Expected-Actor-Id"), "9007199254740993");
-    assert.deepEqual(await request.json(), { purpose: "account-directory", term: "staff@example.test", offset: 25, limit: 25 });
+    assert.deepEqual(await request.json(), { purpose: "access-review", term: "staff@example.test", offset: 25, limit: 25 });
     return Response.json({ total: "9007199254740995", items: [] });
   }));
   assert.equal((await gateway.profiles("9007199254740993", "staff@example.test", 25)).total, "9007199254740995");
+});
+
+// G-036: the API admits only the approved audited read purposes (AccessReadAudit: access-review, account-support,
+// security-investigation); the directory and invitation reads both state access-review, as the backend contract tests do.
+test("directory and invitation reads state an approved audit purpose", async () => {
+  const seen: unknown[] = [];
+  const gateway = createIdentityAdministrationGateway(transport(async request => {
+    seen.push({ path: new URL(request.url).pathname, body: await request.json() });
+    return Response.json({ total: "0", items: [] });
+  }));
+  await gateway.profiles("52"); await gateway.invitations("52");
+  assert.deepEqual(seen, [
+    { path: "/api/v1/identity/administration/directory/query", body: { purpose: "access-review", offset: 0, limit: 25 } },
+    { path: "/api/v1/identity/administration/invitations/query", body: { purpose: "access-review", offset: 0, limit: 25 } }]);
 });
 
 test("invitation decisions bind reviewed version, actor and same request key", async () => {
