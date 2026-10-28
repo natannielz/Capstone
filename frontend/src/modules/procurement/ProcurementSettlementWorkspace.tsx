@@ -16,7 +16,7 @@ import { createProcurementSettlementGateway, prepareProcurementSettlement, procu
   type ProcurementSettlementChoices, type ProcurementSettlementRead, type ProcurementSettlementDisbursement, type ProcurementSettlementOptions,
   type ProcurementSettlementPolicy, type ProcurementSettlementImports, type ProcurementSettlementDebits, type ProcurementSettlementPreview, type ProcurementSettlementHistory } from './procurement-settlement-client';
 import styles from '../administration/access.module.css';
-import { dateTimeFormatter, formatDate } from '@/lib/format';
+import { dateTimeFormatter, formatDate, formatMonth } from '@/lib/format';
 import { SessionAccessState } from "@/components/workspace-kit/session-access-state";
 import { recordNumber } from '@/lib/document-numbers';
 
@@ -55,7 +55,7 @@ function Policy({ value }: { value: ProcurementSettlementPolicy }) {
     {!value.allowReferenceOnly && <p role="status">Kebijakan ini memerlukan bukti verifikasi tambahan. Pemeriksaan melalui referensi saja tidak tersedia.</p>}</section>;
 }
 function Accounting({ value, postingDate, nominal }: { value: ProcurementSettlementPreview['accounting']; postingDate: string; nominal: string }) {
-  return <section aria-label="Jurnal verifikasi debit pemasok"><h3>Pencatatan akuntansi</h3><p>Tanggal jurnal {postingDate} (WIB) · Periode {value.periodMonth}</p><dl className={styles.facts}><div><dt>Debit uang muka pemasok</dt><dd>{value.supplierAdvance.accountCode} · {amount(nominal)}</dd></div><div><dt>Kredit kas/bank</dt><dd>{value.cash.accountCode} · {amount(nominal)}</dd></div></dl><p className={styles.help}>Pemetaan uang muka: {value.supplierAdvance.mappingKey}. Pemetaan kas/bank: {value.cash.mappingKey}.</p></section>;
+  return <section aria-label="Jurnal verifikasi debit pemasok"><h3>Pencatatan akuntansi</h3><p>Tanggal jurnal {formatDate(postingDate)} (WIB) · Periode {formatMonth(value.periodMonth)}</p><dl className={styles.facts}><div><dt>Debit uang muka pemasok</dt><dd>{value.supplierAdvance.accountCode} · {amount(nominal)}</dd></div><div><dt>Kredit kas/bank</dt><dd>{value.cash.accountCode} · {amount(nominal)}</dd></div></dl><p className={styles.help}>Pemetaan uang muka: {value.supplierAdvance.mappingKey}. Pemetaan kas/bank: {value.cash.mappingKey}.</p></section>;
 }
 function Settlement({ value }: { value: NonNullable<ProcurementSettlementRead['settlement']> }) {
   return <section className={styles.state} aria-label="Hasil verifikasi debit pemasok"><h2>Debit bank pemasok terverifikasi</h2><p role="status">{amount(value.amount)} telah dicocokkan dengan debit bank dan dicatat pada jurnal {value.journalId}.</p><p>Verifikasi {value.id} · {when(value.recordedAt)}</p><p>Transaksi bank {value.debit.transactionId} · Tanggal {formatDate(value.debit.bookedDate)} · Baris {value.debit.rowNumber}</p><p className={styles.preserve}>Referensi bank: {value.debit.reference ?? 'Tidak tercantum pada mutasi'}</p><Accounting value={value.accounting} postingDate={value.postingDate} nominal={value.amount} /><details><summary>Prosedur dan referensi pemeriksaan</summary><Policy value={value.policy} /><p className={styles.preserve}>Pemeriksaan penerima: {value.beneficiaryVerificationReference}</p><p className={styles.preserve}>Pemeriksaan transfer: {value.transferVerificationReference}</p><p className={styles.preserve}>Alasan: {value.reason}</p></details></section>;
