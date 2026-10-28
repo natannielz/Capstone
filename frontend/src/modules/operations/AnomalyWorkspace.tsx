@@ -186,9 +186,9 @@ function Desk({account, onDenied, header}: {account: Account; onDenied: () => vo
           {account.kinds.includes('order') && <option value="order">Harga dan jumlah pesanan</option>}{account.kinds.includes('refund') && <option value="refund">Pengembalian dana</option>}</select></Field>
         <Field id="anomaly-source" label="Sumber yang diizinkan"><select value={selected} disabled={busy || recoveryLocked} onChange={event => {setSelected(event.target.value); setValue(null); void refresh(items.find(item => item.id === event.target.value));}}>
           <option value="">Pilih sumber</option>{items.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select></Field>
-        <div className="ui-actions" role="group" aria-label="Halaman sumber">
+        {(cursors.length > 1 || nextCursor !== null) && <div className="ui-actions" role="group" aria-label="Halaman sumber">
           <Button type="button" disabled={busy || recoveryLocked || cursors.length === 1} onClick={() => {setBusy(true); setSelected(''); setValue(null); setItems([]); setCursors(current => current.slice(0, -1));}}>Sumber sebelumnya</Button>
-          <Button type="button" disabled={busy || recoveryLocked || nextCursor === null} onClick={() => {setBusy(true); setSelected(''); setValue(null); setItems([]); setCursors(current => [...current, nextCursor]);}}>Sumber berikutnya</Button></div>
+          <Button type="button" disabled={busy || recoveryLocked || nextCursor === null} onClick={() => {setBusy(true); setSelected(''); setValue(null); setItems([]); setCursors(current => [...current, nextCursor]);}}>Sumber berikutnya</Button></div>}
       </div>
       {items.length === 0 && !busy && error === null && <StateView kind="empty" title="Belum ada sumber yang dapat ditinjau dalam cakupan dan izin akun ini." />}
       <p className={common.help}>Penyesuaian stok: sumber dan pembanding yang disetujui belum tersedia. Hasil hitung fisik tidak dianggap sebagai penyesuaian.</p>
