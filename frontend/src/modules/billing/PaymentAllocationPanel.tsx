@@ -121,7 +121,7 @@ export function PaymentAllocationPanel({ actorId, owner, verified, allowed, fres
               const ledger = new MutationLedger(() => 'pa.' + confirm.verificationId + '.' + confirm.receiptId + '.' + crypto.randomUUID());
               const result = await submitTrackedRequest(ledger, journal, actorId, 'billing.payment.allocate', 'billing.payment.allocate', confirm, key => gateway.send(confirm, key, active));
               if (active()) setSaved(result); await read();
-            })}>Simpan alokasi pembayaran</Button><Button variant="secondary" type="button" disabled={disabled} onClick={() => { setConfirm(null); setShown(null); balanceHeading.current?.focus(); }}>Kembali ke nominal</Button>
+            })} busy={busy}>Simpan alokasi pembayaran</Button><Button variant="secondary" type="button" disabled={disabled} onClick={() => { setConfirm(null); setShown(null); balanceHeading.current?.focus(); }}>Kembali ke nominal</Button>
           </section>}</>}
       </form></>}
     {!allowed && <p>Akun ini dapat membaca saldo. Alokasi dana memerlukan kewenangan tersendiri.</p>}

@@ -337,7 +337,7 @@ export function AccessAdministration() {
     {error !== null && pageState === "ready" && <StateView kind="error" title={suspensionUncertain ? "Hasil penonaktifan belum dapat dipastikan. Periksa hasil melalui Pemulihan permintaan; jangan kirim ulang keputusan. Referensi permintaan akun semula tetap disimpan." : suspensionMessage(retry ? new AccessFailure(503, "commit_outcome_unknown") : error)}
       message={retry ? "Tetap di halaman ini sampai hasil permintaan yang sama terkonfirmasi." : undefined}
       detail={error instanceof AccessFailure && error.traceId ? <>Referensi bantuan: {error.traceId}</> : undefined}
-      action={retry ? <Button variant="primary" onClick={() => void retry.run()} disabled={busy}>{retry.label}</Button> : undefined}
+      action={retry ? <Button variant="primary" onClick={() => void retry.run()} disabled={busy} busy={busy}>{retry.label}</Button> : undefined}
       secondaryAction={error instanceof AccessFailure && error.code === "step_up_required" && !locked ? <Link href="/identity/account?returnPath=%2Fadministration%2Faccess">Verifikasi akun untuk melanjutkan</Link> : undefined} />}
 
     {pageState === "loading" && <StateView kind="loading" title="Memeriksa akses. Memuat keanggotaan, izin, dan pengajuan terbaru." />}
@@ -461,7 +461,7 @@ export function AccessAdministration() {
                   <PermissionList permissions={activePreview.permissions} />{mode === "historical" ? <><HistoricalReadNotice scope={activePreview.scope} /><p className={styles.preserve}>Alasan: {reviewedHistorical?.reason}</p></> : <><h3>Wewenang pemberian izin</h3><DelegationList permissions={activePreview.delegablePermissions} /></>}
                   <p className={styles.help}>{activePreview.existingPermissions.length} izin sudah tercatat pada cakupan ini. Pengajuan tetap menunggu persetujuan independen.</p>
                 </section>}
-                <Button variant="primary" type="submit" disabled={!reason.trim() || !toIsoDate(effective) || mode === "grant" && (!grant || !activePreview) || mode === "historical" && (!historicalBody || !activePreview || !reviewedHistorical)}>Ajukan untuk persetujuan</Button>
+                <Button variant="primary" type="submit" disabled={!reason.trim() || !toIsoDate(effective) || mode === "grant" && (!grant || !activePreview) || mode === "historical" && (!historicalBody || !activePreview || !reviewedHistorical)} busy={busy}>Ajukan untuk persetujuan</Button>
               </fieldset>
             </>}
           </form>}

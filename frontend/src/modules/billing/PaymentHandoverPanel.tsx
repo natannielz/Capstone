@@ -90,7 +90,7 @@ export function PaymentHandoverPanel({actorId, owner, allowed, fresh, locked, cu
           {!page.canClaim || !allowed ? <p>Akun ini belum dapat mengambil tugas tersebut. Kewenangan dan independensi reviewer harus masih berlaku.</p> : !review ? <Button variant="primary" type="submit" disabled={disabled || !fresh || pending.length > 0}>Tinjau serah-terima</Button> : <section className={styles.state} aria-label="Konfirmasi serah-terima pemeriksaan">
             <h3 ref={heading} tabIndex={-1}>Ambil tanggung jawab pemeriksaan</h3><p>Pengajuan {review.declarationId} · Versi tugas {review.reviewRevision} · Delegasi {review.handover.delegationId} versi {review.handover.delegationRevision}</p>
             <p>Dari akun {review.handover.originalAssigneeId} kepada akun Anda. Alasan: {review.body.reason}</p><p>Dana, invoice dan hasil verifikasi pembayaran tidak berubah.</p>
-            <Button variant="primary" type="button" disabled={disabled || !fresh || pending.length > 0} onClick={() => void run(() => claim(review))}>Konfirmasi ambil pemeriksaan</Button>
+            <Button variant="primary" type="button" disabled={disabled || !fresh || pending.length > 0} onClick={() => void run(() => claim(review))} busy={busy}>Konfirmasi ambil pemeriksaan</Button>
             <Button variant="secondary" type="button" disabled={disabled} onClick={() => setReview(null)}>Batalkan serah-terima</Button>
           </section>}
         </form>}

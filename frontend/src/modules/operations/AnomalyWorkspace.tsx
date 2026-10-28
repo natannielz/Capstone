@@ -208,7 +208,7 @@ function Desk({account, onDenied, header}: {account: Account; onDenied: () => vo
         {Object.entries(outcomes).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></Field>}
       <div className="ui-actions">
         <Button type="button" variant={reviewable ? 'secondary' : 'primary'} disabled={busy || !reason.trim() || recoveryLocked} onClick={() => void send('evaluate')}>Buat pemeriksaan baru</Button>
-        {reviewable && <Button type="button" variant="primary" disabled={busy || !reason.trim() || recoveryLocked} onClick={() => void send('review')}>Simpan tinjauan</Button>}
+        {reviewable && <Button type="button" variant="primary" disabled={busy || !reason.trim() || recoveryLocked} onClick={() => void send('review')} busy={busy}>Simpan tinjauan</Button>}
         {uncertain && <Button type="button" disabled={busy || storageBlocked} onClick={() => {if (pending.current) void send(pending.current.operation);}}>Ulangi permintaan yang sama</Button>}</div>
     </div></Section>}
     {account.configure && selectedSource && <AnomalyPolicyPanel key={selected} actorId={account.actorId} session={account.session} observedAt={account.observedAt}

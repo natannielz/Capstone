@@ -121,6 +121,7 @@ export function PersonReviewEditor({ selection, actorId, permissions, gateway, l
   const needsPreview = action === "propose" || action === "approve";
   const validPreview = preview !== null && Date.parse(preview.expiresAt) > now();
   const canAct = action === "propose" ? permissions.includes("person.review.propose") : action !== null && original !== null && personReviewActionAllowed(action, original, permissions);
+  const decisionItems = original ? (["approve", "reject", "withdraw"] as const).filter(item => personReviewActionAllowed(item, original, permissions)).map(item => ({ label: actionLabels[item], value: item })) : [];
   const editable = !locked && canAct;
   function invalidate() { reads.cancel(); previews.invalidate(); setPreview(null); setConfirmed(false); setBusy(false); setError(null); }
   function draft(): PersonReviewDraft {
@@ -153,8 +154,8 @@ export function PersonReviewEditor({ selection, actorId, permissions, gateway, l
     <p className={styles.help}>Versi keterkaitan yang diperiksa: {preview?.target.version ?? target?.version ?? original?.result.groupVersion}.</p>
     {selection.kind === "proposal" && selection.detail.decision && <section className={styles.preview}><h3>Keputusan yang tercatat</h3>
       <p className={styles.preserve}>Diputuskan oleh <strong>{name(selection.detail.decision.actor)}</strong> · {personReviewDate(selection.detail.decision.decidedAt)}</p><p className={styles.preserve}>{selection.detail.decision.reason}</p></section>}
-    {original?.result.status === "pending" && <Tabs label="Pilih keputusan" disabled={locked} current={action ?? ""} onSelect={value => { invalidate(); setAction(value as PersonReviewAction); }}
-      items={(["approve", "reject", "withdraw"] as const).filter(item => personReviewActionAllowed(item, original, permissions)).map(item => ({ label: actionLabels[item], value: item }))} />}
+    {original?.result.status === "pending" && (decisionItems.length > 1 ? <Tabs label="Pilih keputusan" disabled={locked} current={action ?? ""} onSelect={value => { invalidate(); setAction(value as PersonReviewAction); }}
+      items={decisionItems} /> : decisionItems.map(item => <Button key={item.value} variant="secondary" aria-pressed={action === item.value} disabled={locked} onClick={() => { invalidate(); setAction(item.value); }}>{item.label}</Button>))}
     {action && canAct && <form className="ui-form" onSubmit={event => void submit(event)}>
       <fieldset disabled={locked}>
         <legend>{action === "propose" ? "Alasan dan pratinjau" : actionLabels[action]}</legend>
@@ -169,7 +170,7 @@ export function PersonReviewEditor({ selection, actorId, permissions, gateway, l
         <label className={styles.checkbox}><input type="checkbox" checked={confirmed} disabled={busy || (needsPreview && !validPreview) || !fresh} onChange={event => setConfirmed(event.target.checked)} />Saya telah memeriksa akun, alasan, versi, dan dampak tindakan ini.</label>
         {!fresh && <p className={styles.help}>Verifikasi dua langkah terbaru diperlukan. Gunakan pilihan verifikasi di atas sebelum melanjutkan.</p>}
         {error !== null && <StateView kind="error" title={personReviewMessage(error)} />}
-        <div className="ui-actions"><Button type="submit" variant="primary" disabled={!reason.trim() || busy || !confirmed || !fresh || (needsPreview && !validPreview)}>{actionLabels[action]}</Button>
+        <div className="ui-actions"><Button type="submit" variant="primary" disabled={!reason.trim() || busy || !confirmed || !fresh || (needsPreview && !validPreview)} busy={busy}>{actionLabels[action]}</Button>
           <Button variant="secondary" type="button" onClick={onCancel}>Batal</Button></div>
       </fieldset>
     </form>}

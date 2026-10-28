@@ -63,7 +63,7 @@ export function PaymentManualReviewPanel({ actorId, owner, ocr, allowed, fresh, 
           const command = prepareManualReview(actorId, view, values, imageReviewed, reason.trim());
           await submitTrackedRequest(ledger, journal, actorId, 'billing.payment.review.manual', 'billing.payment.review.manual', command, key => gateway.save(command, key, active));
           await load(); if (active()) setNotice('Pemeriksaan manual tersimpan. Pembayaran tetap menunggu verifikasi bank.');
-        })}>Simpan pemeriksaan manual</Button><Button variant="secondary" type="button" disabled={disabled} onClick={() => setConfirm(false)}>Kembali ke isian manual</Button>
+        })} busy={busy}>Simpan pemeriksaan manual</Button><Button variant="secondary" type="button" disabled={disabled} onClick={() => setConfirm(false)}>Kembali ke isian manual</Button>
       </section>}
     </form>}
   </section>;

@@ -158,7 +158,7 @@ function ReceiptDesk({ account, fresh, onDenied }: { account: Account; fresh: bo
         const frozen = command, operation = 'billing.bank-receipt.confirm'; const ledger = new MutationLedger(() => `br.confirm.${frozen.body.importId}.${frozen.body.rowNumber}.${crypto.randomUUID()}`);
         const result = await submitTrackedRequest(ledger, recovery.journal, account.actorId, operation, operation, frozen, key => gateway.send(frozen, key, current));
         if (current()) { clearReview(); setView(null); setNotice(`Penerimaan ${result.receiptId} telah dipastikan. ${result.createdReceipt ? 'Kas tercatat sekali.' : 'Sumber terhubung tanpa kas tambahan.'} Muat data terbaru.`); }
-      })}>Konfirmasi kredit bank</Button><Button variant="secondary" disabled={locked} onClick={() => setCommand(null)}>Kembali memeriksa</Button></div>
+      })} busy={busy}>Konfirmasi kredit bank</Button><Button variant="secondary" disabled={locked} onClick={() => setCommand(null)}>Kembali memeriksa</Button></div>
     </section>}
     {!readFailed && <Section title="Penerimaan yang dikonfirmasi" label="Riwayat penerimaan" description="Riwayat kas mempertahankan identitas bank dan sumber pertamanya. Konfirmasi ini tidak menetapkan pembayar atau mengurangi tagihan.">
       <DataList label="Penerimaan yang dikonfirmasi" items={receipts.items} getKey={item => item.receiptId} loading={busy && !receipts.items.length} empty={{ title: 'Belum ada penerimaan dalam cakupan akses Anda.' }}

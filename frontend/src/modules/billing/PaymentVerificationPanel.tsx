@@ -118,7 +118,7 @@ export function PaymentVerificationPanel({ actorId, owner, allowed, allocationAl
             if (journal.list(actorId).length) throw new AccessFailure(400, 'resolve_previous_attempt');
             const ledger = new MutationLedger(() => 'pv.' + confirm.declarationId + '.' + confirm.body.receiptId + '.' + crypto.randomUUID());
             await submitTrackedRequest(ledger, journal, actorId, 'billing.payment.verify', 'billing.payment.verify', confirm, key => gateway.send(confirm, key, active)); await read();
-          })}>Simpan verifikasi pembayaran</Button><Button variant="secondary" type="button" disabled={disabled} onClick={() => { setConfirm(null); heading.current?.focus(); }}>Kembali ke pemeriksaan</Button>
+          })} busy={busy}>Simpan verifikasi pembayaran</Button><Button variant="secondary" type="button" disabled={disabled} onClick={() => { setConfirm(null); heading.current?.focus(); }}>Kembali ke pemeriksaan</Button>
         </section>}
         <p>Sumber isian: {shown.reviewSource === 'manual' ? 'Pemeriksaan manual melalui pengecualian OCR yang tercatat' : 'Hasil OCR dan koreksi petugas'}</p>
       </form>}

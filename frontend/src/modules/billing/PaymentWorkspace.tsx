@@ -266,7 +266,7 @@ function PaymentDesk({ account, now, fresh, onDenied }: { account: Account; now:
         <Field id="payment-bank-reference" label="Referensi bank" optional><input maxLength={160} value={input.bankReference ?? ''} onChange={event => setInput(value => ({ ...value, bankReference: event.target.value || null }))} /></Field>
         <Field id="payment-note" label="Catatan" optional><textarea maxLength={1000} value={input.note ?? ''} onChange={event => setInput(value => ({ ...value, note: event.target.value || null }))} /></Field>
         <Field id="payment-reason" label="Alasan pencatatan atau perubahan"><textarea required maxLength={1000} value={reason} onChange={event => setReason(event.target.value)} /></Field>
-        <Button variant="primary" type="submit" disabled={locked || input.invoiceIds.length === 0}>Simpan draf pembayaran</Button></fieldset></form>}
+        <Button variant="primary" type="submit" disabled={locked || input.invoiceIds.length === 0} busy={busy}>Simpan draf pembayaran</Button></fieldset></form>}
       {selected && <Button variant="secondary" disabled={locked} onClick={() => { closePreview(); setConfirmation(null); setReplacement(null); setOrigin(null); setSelected(null); setInput(empty(now)); setReason(''); setEvidence([]); setFile(null); }}>Buat draf baru</Button>}
     </section>}
     {submitted && selected && <Section title="Tindak lanjut pengajuan"
@@ -279,7 +279,7 @@ function PaymentDesk({ account, now, fresh, onDenied }: { account: Account; now:
         {followUp.state === 'replacement_requested' && <Button variant="secondary" disabled={locked} onClick={() => void previewReplacement()}>Siapkan bukti pengganti</Button>}
         {replacement?.parentId === selected.id && <section aria-label="Konfirmasi draf pengganti"><h3 ref={replacementHeading} tabIndex={-1}>Buat draf bukti pengganti</h3>
           <p>Invoice dan data transfer disalin ke draf terpisah. Periksa nilai transfer, unggah bukti asli baru, lalu ajukan untuk pemeriksaan. Pengajuan {selected.id} tetap terkunci; saldo invoice belum berubah.</p>
-          <div className="ui-actions"><Button variant="primary" disabled={locked} onClick={() => void createReplacement()}>Buat draf pengganti</Button>
+          <div className="ui-actions"><Button variant="primary" disabled={locked} onClick={() => void createReplacement()} busy={busy}>Buat draf pengganti</Button>
           <Button variant="secondary" disabled={locked} onClick={() => setReplacement(null)}>Kembali ke tindak lanjut</Button></div></section>}
         <p>Tindak lanjut bukti tidak menetapkan penerimaan dana atau saldo invoice.</p></>}
     </Section>}
@@ -300,7 +300,7 @@ function PaymentDesk({ account, now, fresh, onDenied }: { account: Account; now:
         <Button variant="secondary" type="button" disabled={locked || confirmation !== null} onClick={() => { setFile(null); fileInput.current?.focus(); }}>Hapus pilihan berkas</Button></div>
       </section>}
       {uploading && <div role="status"><progress aria-label="Proses unggah bukti asli" /><p>Menyimpan bukti asli. Tunggu hasil upaya ini sebelum mencoba kembali.</p></div>}
-      <Button variant="primary" disabled={locked || !file || hasPending || unsaved || confirmation !== null} onClick={() => void upload()}>Unggah bukti asli</Button></>}
+      <Button variant="primary" disabled={locked || !file || hasPending || unsaved || confirmation !== null} onClick={() => void upload()} busy={busy}>Unggah bukti asli</Button></>}
       <DataList label="Upaya unggah bukti" items={evidence.filter(item => !submitted || item.reservationId === selected.submission?.reservationId)} getKey={item => item.reservationId}
         renderTitle={item => <>Upaya unggah {item.reservationId}</>} renderMeta={item => submitted && item.scanStatus === 'clean' && item.decoderStatus === 'decoded' && item.safeFailure === null ? 'Bukti pengajuan · pemeriksaan keamanan selesai' : paymentEvidenceLabel(item)}
         renderActions={item => <>{item.scanStatus === 'clean' && item.decoderStatus === 'decoded' && item.safeFailure === null && <Button variant="secondary" disabled={locked || unsaved} onClick={event => void viewOriginal(item, event.currentTarget)}>Lihat bukti asli</Button>}
@@ -319,7 +319,7 @@ function PaymentDesk({ account, now, fresh, onDenied }: { account: Account; now:
       <p>Referensi bank: {selected.input.bankReference ?? 'Belum dicantumkan'}. Bukti terpilih: unggah {confirmation.body.reservationId}.</p>
       <ul>{selected.invoices.map(item => <li key={item.invoiceId}>{item.number} · {item.sellerName} · {rupiah(item.total)}</li>)}</ul>
       <p>Pengajuan mengunci data dan bukti ini untuk pemeriksaan. Pembacaan otomatis (OCR) dapat menyusul. Petugas yang berwenang tetap harus memeriksa dana masuk; pengajuan tidak mengurangi saldo tagihan.</p>
-      <div className="ui-actions"><Button variant="primary" disabled={locked} onClick={() => void submit()}>Ajukan untuk verifikasi</Button>
+      <div className="ui-actions"><Button variant="primary" disabled={locked} onClick={() => void submit()} busy={busy}>Ajukan untuk verifikasi</Button>
       <Button variant="secondary" disabled={locked} onClick={() => { setConfirmation(null); heading.current?.focus(); }}>Kembali ke draf</Button></div>
     </section>}
     <Section title="Pembayaran saya" label="Daftar draf pembayaran"

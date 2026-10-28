@@ -224,7 +224,7 @@ function ReleaseDesk({account, onDenied}: {account: Account; onDenied: (error: u
     {review && <section ref={focus} tabIndex={-1} className="ui-section" aria-label="Konfirmasi persetujuan invoice"><h2>Periksa {actionText[review.action].toLowerCase()} penerbitan</h2>
       <InputFacts value={review.preview.input} /><ReleaseFacts value={review.preview.facts} /><p>Alasan: {review.reason}</p>
       <label className={common.checkbox}><input type="checkbox" checked={confirmed} disabled={locked} onChange={event => setConfirmed(event.target.checked)} />Saya sudah memeriksa penerimaan, alokasi biaya, kalender, dan akun pembukuan yang ditampilkan.</label>
-      <div className="ui-actions"><Button variant="primary" disabled={locked || !confirmed} onClick={() => void commit()}>Konfirmasi {actionText[review.action].toLowerCase()} penerbitan</Button>
+      <div className="ui-actions"><Button variant="primary" disabled={locked || !confirmed} onClick={() => void commit()} busy={busy}>Konfirmasi {actionText[review.action].toLowerCase()} penerbitan</Button>
         <Button variant="secondary" disabled={locked} onClick={() => {epoch.current++; setReview(null); setConfirmed(false);}}>Batalkan perubahan persetujuan</Button></div></section>}
   </>;
 }
