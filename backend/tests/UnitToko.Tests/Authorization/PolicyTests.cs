@@ -83,7 +83,8 @@ public sealed class PolicyTests
         foreach (var template in RoleTemplates.Templates.Values)
         {
             var scope = template.Id switch { "buyer" => Buyer, "branch-approver" => Branch, "courier" => Courier, "system-admin" => SystemScope, _ => Shop };
-            var snapshot = Snapshot(template.Id, scope);
+            // A branch grant acts only with the explicit branch.pic designation, which the branch-approver job suggests but no template carries.
+            var snapshot = Snapshot(template.Id, scope, extras: template.Id == "branch-approver" ? [Permissions.BranchPic] : null);
             var resource = template.Id == "system-admin" ? new ResourceScope(IsAdministrative: true) : Order;
             foreach (var permission in template.Permissions) Assert.True(ScopePolicy.Compile(Actor, snapshot, permission, Now).Matches(resource), $"{template.Id}: {permission}");
         }

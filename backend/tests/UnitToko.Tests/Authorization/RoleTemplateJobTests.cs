@@ -29,6 +29,25 @@ internal static class MakerCheckerPairs
         (Permissions.AccountingBookPropose, Permissions.AccountingBookApprove), (Permissions.AccessPropose, Permissions.AccessApprove),
         (Permissions.MembershipPropose, Permissions.MembershipApprove), (Permissions.PersonReviewPropose, Permissions.PersonReviewApprove),
         (Permissions.TechnicalConfigure, Permissions.OrganizationApprove),
+        // Independence the services and ApprovalPolicy enforce from recorded history (RequestedBy / RecordedBy / ApprovedBy / SubmittedBy ...):
+        (Permissions.BankStatementStage, Permissions.BankReceiptConfirm),          // BankReceiptService.PeopleAsync: the statement importer
+        (Permissions.BankStatementStage, Permissions.DisbursementVerify),          // ProcurementSettlementService, RefundPayoutService.Settlement: the importer
+        (Permissions.FundingApprove, Permissions.DisbursementRecord),              // ProcurementDisbursementService, ApprovalPolicy: the funding approver
+        (Permissions.RefundApprove, Permissions.DisbursementRecord),               // RefundPayoutService, ApprovalPolicy: the refund approver
+        (Permissions.ProcurementSupplierDocumentMatch, Permissions.ProcurementStockValuationDecide), // ProcurementStockValuationService: the matcher
+        (Permissions.CaseRequest, Permissions.CaseManage),                         // ApprovalPolicy (AfterSalesCaseService): the case requester
+        (Permissions.CaseRequest, Permissions.CreditRequest), (Permissions.CaseRequest, Permissions.RefundRequest), // ReturnEntitlementService: the case requester
+        (Permissions.CaseRequest, Permissions.CreditApprove), (Permissions.CaseRequest, Permissions.RefundApprove), // ReturnFinancialApprovalService: every maker so far
+        (Permissions.PaymentEvidence, Permissions.PaymentVerify),                  // PaymentVerificationService: the payment submitter
+        (Permissions.PaymentEvidence, Permissions.PaymentAllocate),                // PaymentAllocationService (RecordedBy): the payment submitter
+        (Permissions.PaymentEvidence, Permissions.PaymentReviewManual),            // manual payment review: the payment submitter
+        (Permissions.PaymentEvidence, Permissions.PaymentReviewManage),            // payment review actions (RecordedBy): the payment submitter
+        (Permissions.PaymentEvidence, Permissions.CreditApprove), (Permissions.PaymentEvidence, Permissions.RefundApprove), // ReturnFinancialApprovalService
+        (Permissions.PaymentAllocate, Permissions.CreditApprove), (Permissions.PaymentAllocate, Permissions.RefundApprove), // ReturnFinancialApprovalService
+        (Permissions.PaymentVerify, Permissions.CreditApprove), (Permissions.PaymentVerify, Permissions.RefundApprove),     // ReturnFinancialApprovalService
+        (Permissions.StockCount, Permissions.StockAdjustApprove),                  // ApprovalPolicy: the counter (CountedBy)
+        (Permissions.PeriodSubmit, Permissions.PeriodClose), (Permissions.PeriodApprove, Permissions.PeriodClose), // ApprovalPolicy: submitter and approver
+        (Permissions.PeriodClose, Permissions.PeriodReopenApprove),                // ApprovalPolicy: ClosedBy
     ];
 }
 
@@ -44,7 +63,7 @@ public sealed class RoleTemplateJobTests
     [Fact]
     public void The_maker_checker_list_names_real_permissions_once()
     {
-        Assert.Equal(38, MakerCheckerPairs.All.Length);
+        Assert.Equal(62, MakerCheckerPairs.All.Length);
         Assert.Equal(MakerCheckerPairs.All.Length, MakerCheckerPairs.All.Distinct().Count());
         Assert.All(MakerCheckerPairs.All, pair => { Assert.NotNull(Permissions.Find(pair.Maker)); Assert.NotNull(Permissions.Find(pair.Checker)); });
     }
@@ -103,6 +122,15 @@ public sealed class RoleTemplateJobTests
         foreach (var permission in UnitToko.Platform.Billing.BankStatementService.PermissionsFor(true)) Assert.Contains(permission, maker);
     }
 
+    /// <summary>branch.pic designates a branch person in charge (a shipment-recipient candidate); it is never added implicitly
+    /// (AccessGrantCommands, OnboardingPolicy), so the branch approver job suggests it for explicit selection.</summary>
+    [Fact]
+    public void Branch_designation_is_suggested_never_granted_by_a_template()
+    {
+        Assert.All(RoleTemplates.Templates.Values, template => Assert.DoesNotContain(Permissions.BranchPic, template.Permissions));
+        Assert.Contains(Permissions.BranchPic, RoleTemplates.Suggestions["branch-approver"]);
+    }
+
     [Fact]
     public void The_dispatch_page_works_from_the_dispatcher_template_alone()
     {
@@ -155,5 +183,7 @@ public sealed class RoleTemplateJobTests
         foreach (var request in new[] { Permissions.CreditRequest, Permissions.RefundRequest })
             Assert.Contains(request, Offered("store-head"));
         Assert.Contains(Permissions.CaseManage, Offered("store-head")); Assert.Contains(Permissions.CaseRead, Offered("store-head"));
+        // The entitlement that follows a credit or refund decision reads the invoice (ReturnEntitlementService, CaseResolutionPanel).
+        Assert.Contains(Permissions.InvoiceRead, Offered("store-head"));
     }
 }

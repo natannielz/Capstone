@@ -33,10 +33,16 @@ public sealed partial class AccessHttpTests
             Assert.Empty(Values(role, "suggestedPermissions").Intersect(Values(role, "permissions")));
         }
         // The finance template keeps growing with new finance work (funding, supplier banks, procurement evidence); the banking set must stay suggested.
-        foreach (var permission in new[] { Permissions.BankReceiptRead, Permissions.BankReceiptConfirm, Permissions.BankStatementRead, Permissions.BankStatementStage,
+        foreach (var permission in new[] { Permissions.BankReceiptRead, Permissions.BankReceiptConfirm, Permissions.BankStatementRead,
             Permissions.PaymentReviewRead, Permissions.PaymentReviewCorrect, Permissions.ReceivingAccountRead, Permissions.ReceivingAccountDetailsRead,
             Permissions.ReceivingAccountPropose })
             Assert.Contains(permission, Values(roles["finance"], "suggestedPermissions"));
+        // The statement importer cannot confirm the receipt or verify the disbursement, so staging is offered by the maker job only.
+        Assert.DoesNotContain(Permissions.BankStatementStage, Values(roles["finance"], "suggestedPermissions"));
+        Assert.Contains(Permissions.BankStatementStage, Values(roles["finance-maker"], "suggestedPermissions"));
+        // The branch designation is suggested for explicit selection, never part of the template.
+        Assert.Contains(Permissions.BranchPic, Values(roles["branch-approver"], "suggestedPermissions"));
+        Assert.DoesNotContain(Permissions.BranchPic, Values(roles["branch-approver"], "permissions"));
         // The deciding side of receiving accounts is offered by the finance checker job, never beside its proposing side (F-006).
         foreach (var permission in new[] { Permissions.ReceivingAccountVerify, Permissions.ReceivingAccountApprove }) {
             Assert.DoesNotContain(permission, Values(roles["finance"], "suggestedPermissions"));

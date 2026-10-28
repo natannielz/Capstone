@@ -99,6 +99,13 @@ public sealed class CatalogVisibilityStore
     /// catalog.read with a current entitlement to an active assortment). Every catalog read still loads and fences its own authority.</summary>
     public async Task<bool> CanBrowseAsync(ActorContext actor, AuthorizationSnapshot snapshot, CancellationToken token)
     {
+        // Task discovery runs on every /access/current: an unreadable entitlement or assortment row withholds the catalog, never the whole read.
+        try { return await CanBrowseCoreAsync(actor, snapshot, token); }
+        catch (Exception failure) when (failure is not OperationCanceledException) { return false; }
+    }
+
+    private async Task<bool> CanBrowseCoreAsync(ActorContext actor, AuthorizationSnapshot snapshot, CancellationToken token)
+    {
         var now = clock.UtcNow;
         var rawEntitlements = await database.GetCollection<BsonDocument>("catalogEntitlements")
             .Find(EligibleEntitlements(actor.UserId, now)).Limit(MaximumAuthorityRecords + 1).ToListAsync(token);

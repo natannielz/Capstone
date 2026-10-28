@@ -418,7 +418,7 @@ public sealed partial class AccessHttpTests(MongoFixture fixture)
     }
 
     [Fact]
-    public async Task Catalog_has_six_roles_and_separate_finance_packs_without_implicit_payment_verification()
+    public async Task Catalog_lists_every_role_template_and_separate_finance_packs_without_implicit_payment_verification()
     {
         await using var data = await StoreTestData.CreateAsync(fixture);
         var actor = await data.AddActorAsync(1000, new(GrantScopeKind.System), Permissions.AccessPropose);
