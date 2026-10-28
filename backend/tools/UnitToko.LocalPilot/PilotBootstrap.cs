@@ -9,6 +9,7 @@ using UnitToko.Platform;
 using UnitToko.Platform.Authorization;
 using UnitToko.Platform.Catalog;
 using UnitToko.Platform.Mongo;
+using UnitToko.Platform.Organizations;
 
 namespace UnitToko.LocalPilot;
 
@@ -19,6 +20,84 @@ public static class PilotBootstrap
     {
         PilotBoundary.RequireDatabase(PilotBoundary.MongoUri, PilotBoundary.DatabaseName);
         await InitializeDatabaseAsync(client, client.GetDatabase(PilotBoundary.DatabaseName), secrets, ct);
+    }
+
+    /// <summary>The synthetic organisation: buying organisation 10 with branches 11 and 12; cooperative 100 with shop 101, its warehouse 102
+    /// and channel 103.</summary>
+    internal static readonly (long Id, ScopeNodeKind Kind, long? Parent, string Name)[] Nodes = [
+        (10, ScopeNodeKind.BuyingOrganization, null, "Organisasi pemohon SINTETIS"), (11, ScopeNodeKind.Branch, 10, "Cabang A SINTETIS"),
+        (12, ScopeNodeKind.Branch, 10, "Cabang B SINTETIS"), (100, ScopeNodeKind.FulfillmentOrganization, null, "Koperasi SINTETIS"),
+        (101, ScopeNodeKind.Shop, 100, "Toko pilot SINTETIS"), (102, ScopeNodeKind.Warehouse, 101, "Gudang pilot SINTETIS"),
+        (103, ScopeNodeKind.Channel, 100, "Kanal pilot SINTETIS")];
+    /// <summary>The two synthetic bootstrap people who name the organisation through the application: different people, maker and checker.</summary>
+    private static readonly (long Id, string Name, string Permission)[] ProfileActors = [
+        (890001, "Penyiap organisasi bootstrap · SINTETIS", Permissions.TechnicalConfigure),
+        (890002, "Pemeriksa organisasi bootstrap · SINTETIS", Permissions.OrganizationApprove)];
+
+    /// <summary>The two bootstrap people who name the organisation, added when missing (a database seeded before G-034 has neither). They are
+    /// synthetic, hold nothing beyond technical.configure and organization.approve, and are different people.</summary>
+    private static async Task EnsureProfileActorsAsync(IMongoDatabase database, DateTime at, CancellationToken ct)
+    {
+        var system = new BsonDocument("kind", "system");
+        async Task Add(string table, BsonDocument row)
+        {
+            var fields = row.DeepClone().AsBsonDocument; fields.Remove("_id");
+            await database.GetCollection<BsonDocument>(table).UpdateOneAsync(new BsonDocument("_id", row["_id"]), new BsonDocument("$setOnInsert", fields), new UpdateOptions { IsUpsert = true }, ct);
+        }
+        foreach (var (id, name, permission) in ProfileActors)
+        {
+            await Add("accountProfiles", new BsonDocument { { "_id", id }, { "schemaVersion", 1 }, { "displayName", name },
+                { "verifiedEmail", "bootstrap-" + id + "@unit-toko-pilot.home.arpa" }, { "verifiedAt", at }, { "updatedAt", at }, { "version", 1L } });
+            await Add("memberships", new BsonDocument { { "_id", id }, { "schemaVersion", 1 }, { "userId", id }, { "scope", system }, { "status", "active" },
+                { "approvedBy", 2002L }, { "effectiveAt", at }, { "version", 1L } });
+            await Add("authorizationGrants", new BsonDocument { { "_id", id }, { "schemaVersion", 1 }, { "userId", id }, { "membershipId", id },
+                { "templateId", "system-admin" }, { "templateVersion", 1 }, { "permissions", new BsonArray { permission } }, { "scope", system },
+                { "status", "active" }, { "requestedBy", 2001L }, { "approvedBy", 2002L }, { "reason", "SYNTHETIC local pilot bootstrap: names the synthetic organisation" },
+                { "effectiveAt", at }, { "version", 1L }, { "delegablePermissions", new BsonArray() } });
+        }
+    }
+
+    /// <summary>Every node's profile (name and code) approved through the real organisation service: 890001 proposes, 890002 approves, so each
+    /// profile carries the proposal, the proposed and approved history and the receipts that organisation, address, policy, procurement and
+    /// accounting first reads require (G-034). A new database gets each profile created. A database seeded before the fix, whose profiles
+    /// were written straight into it without any of that, gets each profile revised once with the same name and code (version 1 to 2), so
+    /// nothing is deleted or rewritten. Idempotent: a profile whose current version already has its approval is left alone, and our own
+    /// pending proposal is approved instead of proposing again.</summary>
+    private static async Task OrganizationProfilesAsync(IMongoDatabase database, MongoClient client, DateTime at, CancellationToken ct)
+    {
+        await EnsureProfileActorsAsync(database, at, ct);
+        var clock = new SystemClock(); var unit = new MongoUnitOfWork(client);
+        var organizations = new OrganizationMasterDataService(database, new AuthorizationStore(database, unit, clock), new IdAllocator(database), clock);
+        ActorContext Actor(long id) => new(id, PilotBoundary.Issuer, "synthetic-bootstrap-reviewer-" + id, 1, clock.UtcNow, FactorAssurance.MultiFactor);
+        static AuthorizationCommandMetadata Meta(string key) => new("local-pilot.org-profile-v1." + key, "SYNTHETIC: nama organisasi pilot, diajukan dan diperiksa dua orang berbeda", "local-pilot-organization");
+        var profiles = database.GetCollection<BsonDocument>("organizationProfiles");
+        var proposals = database.GetCollection<BsonDocument>("organizationProposals");
+        var history = database.GetCollection<BsonDocument>("authorizationHistory");
+        foreach (var (id, kind, parent, name) in Nodes)
+        {
+            var profile = await profiles.Find(new BsonDocument("_id", id)).FirstOrDefaultAsync(ct);
+            var version = profile?["version"].AsInt64 ?? 0;
+            if (profile is not null && await history.Find(new BsonDocument { { "operation", "organization.approved" }, { "after.profile._id", id }, { "after.profile.version", version } }).AnyAsync(ct)) continue;
+            var pending = await proposals.Find(new BsonDocument { { "scopeId", id }, { "status", "pending" }, { "requestedBy", 890001L }, { "expectedProfileVersion", version } }).FirstOrDefaultAsync(ct);
+            var scopeVersion = (await database.GetCollection<BsonDocument>("authorizationScopes").Find(new BsonDocument("_id", id)).SingleAsync(ct))["version"].ToInt64();
+            var key = id + ".v" + version;
+            var proposalId = pending?["_id"].AsInt64 ?? (await organizations.ProposeAsync(Actor(890001), new OrganizationChangeRequest(OrganizationChangeKind.UpdateProfile, kind, parent,
+                profile?["code"].AsString ?? "SYN-" + id, profile?["name"].AsString ?? name, id, scopeVersion, version), Meta(key + ".propose"), ct)).Id;
+            await organizations.ApproveAsync(Actor(890002), proposalId, 1, Meta(key + ".approve"), ct);
+        }
+    }
+
+    /// <summary>The same approvals for a full or review database that is already set up, on its next start (the persistent Release 1 pilot is
+    /// left as it is). A failure is reported and does not stop the start: every step is its own transaction, so nothing is half-written, and
+    /// the pages that need the approvals keep answering 409 until the next start retries.</summary>
+    private static async Task UpgradeOrganizationProfilesAsync(IMongoDatabase database, MongoClient client, DateTime at, CancellationToken ct)
+    {
+        if (!PilotBoundary.IsFullRelease) return;
+        try { await OrganizationProfilesAsync(database, client, at, ct); }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            Console.WriteLine("Nama organisasi pilot belum dapat disahkan lewat layanan organisasi (" + exception.GetType().Name + ": " + exception.Message + "). Mulai ulang pilot untuk mencoba lagi.");
+        }
     }
 
     /// <summary>The bootstrap on a database the caller has already verified: the pilot's own (above), or a test's disposable one.</summary>
@@ -40,6 +119,7 @@ public static class PilotBootstrap
         await new CollectionMigrations(database, clock).ApplyAsync(ct);
         if (marker["phase"] == "complete")
         {
+            await UpgradeOrganizationProfilesAsync(database, client, marker["createdAt"].ToUniversalTime(), ct);
             await GrowGrantsAsync(database, secrets, ct);
             await PilotCatalog.ExpandAsync(database, client, secrets, markers, PilotBoundary.Profile, ct);
             await SeedAfterCatalogAsync(database, client, secrets, markers, ct);
@@ -54,13 +134,12 @@ public static class PilotBootstrap
             await unit.ExecuteAsync(async (tx, token) =>
             {
                 async Task Insert(string name, IEnumerable<BsonDocument> rows) => await database.GetCollection<BsonDocument>(name).InsertManyAsync(tx, rows, cancellationToken: token);
-                var nodes = new[] { (10L, "buyingOrganization", (long?)null, "Organisasi pemohon SINTETIS"), (11L, "branch", (long?)10, "Cabang A SINTETIS"),
-                    (12L, "branch", (long?)10, "Cabang B SINTETIS"), (100L, "fulfillmentOrganization", (long?)null, "Koperasi SINTETIS"),
-                    (101L, "shop", (long?)100, "Toko pilot SINTETIS"), (102L, "warehouse", (long?)101, "Gudang pilot SINTETIS"), (103L, "channel", (long?)100, "Kanal pilot SINTETIS") };
-                await Insert("authorizationScopes", nodes.Select(x => { var row = new BsonDocument { { "_id", x.Item1 }, { "schemaVersion", 1 }, { "kind", x.Item2 }, { "status", "active" }, { "version", 1L }, { "fence", 0L } }; if (x.Item3 is { } parent) row["parentId"] = parent; return row; }));
-                await Insert("organizationProfiles", nodes.Select(x => new BsonDocument { { "_id", x.Item1 }, { "schemaVersion", 1 }, { "kind", x.Item2 },
-                    { "parentId", x.Item3 is { } parent ? new BsonInt64(parent) : BsonNull.Value }, { "code", "SYN-" + x.Item1 }, { "normalizedCode", "SYN-" + x.Item1 },
-                    { "name", x.Item4 }, { "version", 1L }, { "createdBy", 2001L }, { "updatedBy", 2002L }, { "createdAt", at }, { "updatedAt", at }, { "approvedProposalId", x.Item1 + 10000 } }));
+                // The organisation tree itself. Each node's name and code (its profile) is then approved through the application by
+                // OrganizationProfilesAsync, so it carries the approval history every first read checks (G-034).
+                await Insert("authorizationScopes", Nodes.Select(x => { var row = new BsonDocument { { "_id", x.Id }, { "schemaVersion", 1 },
+                    { "kind", char.ToLowerInvariant(x.Kind.ToString()[0]) + x.Kind.ToString()[1..] }, { "status", "active" }, { "version", 1L }, { "fence", 0L } };
+                    if (x.Parent is { } parent) row["parentId"] = parent; return row; }));
+                // The two bootstrap people who name the organisation have identities below; their account, membership and grant come from EnsureProfileActorsAsync.
                 await Insert("identities", originals.Select(x => new BsonDocument { { "_id", x.Id }, { "schemaVersion", 1 }, { "issuer", PilotBoundary.Issuer },
                     { "subject", x.Subject }, { "status", "active" }, { "grantVersion", 1L }, { "securityVersion", 1L }, { "fence", 0L } }));
                 await Insert("identities", new long[] { 890001, 890002 }.Select(id => new BsonDocument { { "_id", id }, { "schemaVersion", 1 }, { "issuer", PilotBoundary.Issuer },
@@ -88,7 +167,7 @@ public static class PilotBootstrap
                 await Insert("personEvidenceSources", [Reviewed(new BsonDocument { { "_id", 810000L }, { "schemaVersion", 1 }, { "version", 1L }, { "fence", 0L },
                     { "key", "synthetic-local-pilot" }, { "status", "approved" }, { "adapterId", "synthetic-local-pilot-v1" }, { "policyReference", "SYNTHETIC local pilot only; not real identity approval" } }, at, true)]);
                 foreach (var account in originals) await InsertSyntheticPersonAsync(database, tx, account, at, token);
-                foreach (var (name, floor) in new[] { ("authorizationScopes", 103L), ("organizationProfiles", 103L), ("identities", 890002L), ("memberships", 2002L),
+                foreach (var (name, floor) in new[] { ("authorizationScopes", 103L), ("identities", 890002L), ("memberships", 2002L),
                     ("authorizationGrants", 2101L), ("catalogAssortments", 501L), ("catalogEntitlements", 1002L) })
                     await database.GetCollection<BsonDocument>("idCounters").UpdateOneAsync(tx, new BsonDocument("_id", name),
                         Builders<BsonDocument>.Update.Max("value", floor), new UpdateOptions { IsUpsert = true }, token);
@@ -96,6 +175,7 @@ public static class PilotBootstrap
                 return true;
             }, ct);
         }
+        await OrganizationProfilesAsync(database, client, at, ct);
         var actor = new ActorContext(2001, PilotBoundary.Issuer, secrets.Accounts.Single(x => x.Id == 2001).Subject, 1, clock.UtcNow, FactorAssurance.MultiFactor);
         var service = new CatalogAuthoringService(database, unit, new(database), clock);
         var owner = new GrantScope(GrantScopeKind.FulfillmentWarehouse, 100, ShopId: 101, WarehouseId: 102, ChannelId: 103);

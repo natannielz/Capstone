@@ -38,6 +38,23 @@ public sealed class PilotSessionsTests
         (Permissions.TechnicalConfigure, Permissions.OrganizationApprove),
     ];
 
+    /// <summary>MakerCheckerPairs.All from backend/tests/UnitToko.Tests/Authorization/RoleTemplateJobTests.cs, read from the source (a separate test
+    /// project, so it cannot be referenced). Empty when this checkout does not have the class yet.</summary>
+    private static (string Maker, string Checker)[] CanonicalPairs()
+    {
+        for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
+        {
+            var file = Path.Combine(directory.FullName, "backend", "tests", "UnitToko.Tests", "Authorization", "RoleTemplateJobTests.cs");
+            if (!File.Exists(file)) continue;
+            var text = File.ReadAllText(file); var start = text.IndexOf("class MakerCheckerPairs", StringComparison.Ordinal);
+            if (start < 0) return [];
+            var body = text[start..text.IndexOf("];", start, StringComparison.Ordinal)];
+            string Value(string name) => (string)typeof(Permissions).GetField(name)!.GetRawConstantValue()!;
+            return [.. System.Text.RegularExpressions.Regex.Matches(body, @"\(Permissions\.(\w+),\s*Permissions\.(\w+)\)").Select(match => (Value(match.Groups[1].Value), Value(match.Groups[2].Value)))];
+        }
+        return [];
+    }
+
     [Fact]
     public async Task Review_profile_refuses_non_loopback_and_mints_one_session_per_persona()
     {
@@ -100,14 +117,27 @@ public sealed class PilotSessionsTests
         Assert.Contains(Permissions.ProcurementSupplierDocumentRecord, Held("pengadaan"));
         Assert.Contains(Permissions.ProcurementQualityAcceptanceDecide, Held("penyetuju-pengadaan"));
         // Maker/checker stays split across people: no persona holds both sides of any reviewed change. No exceptions.
-        foreach (var (maker, checker) in MakerChecker)
+        // The list above, plus MakerCheckerPairs.All read from the backend tests' source when this checkout has it (FIX-RULES owns that list).
+        foreach (var (maker, checker) in MakerChecker.Concat(CanonicalPairs()).Distinct())
         {
             Assert.NotNull(Permissions.Find(maker)); Assert.NotNull(Permissions.Find(checker));
             Assert.All(PilotPersonas.All, persona => Assert.False(Held(persona.Name).Contains(maker) && Held(persona.Name).Contains(checker),
                 persona.Name + " holds both " + maker + " and " + checker));
         }
+        // The bank statement importer is the maker of receipt confirmation and disbursement verification: only keuangan-tagihan stages (checked here
+        // too, so it holds even where the canonical list is not in this checkout).
+        foreach (var checker in new[] { Permissions.BankReceiptConfirm, Permissions.DisbursementVerify })
+            Assert.All(PilotPersonas.All, persona => Assert.False(Held(persona.Name).Contains(Permissions.BankStatementStage) && Held(persona.Name).Contains(checker), persona.Name));
         Assert.DoesNotContain(Permissions.OrderSubmit, Held("penyetuju-cabang"));
         Assert.DoesNotContain(Permissions.SupplierClaim, Held("penyetuju-pengadaan"));
+        // G-035: the payment checker reads the bank pages, which also require receiving-account details.
+        Assert.Contains(Permissions.ReceivingAccountDetailsRead, Held("pemeriksa-pembayaran"));
+        Assert.Contains(Permissions.BankStatementStage, Held("keuangan-tagihan"));
+        // F-027: each persona holds only its role's grants, so its workspace shows only its own work.
+        Assert.Equal(new[] { Permissions.CatalogPublicApprove, Permissions.CatalogRead, Permissions.OrderRead, Permissions.PricingApprove }, Held("peninjau-katalog").Order(StringComparer.Ordinal));
+        Assert.DoesNotContain(Permissions.CaseRead, Held("keuangan-tagihan")); Assert.DoesNotContain(Permissions.PaymentReviewRead, Held("keuangan-tagihan"));
+        Assert.DoesNotContain(Permissions.StockSourceRead, Held("petugas-gudang")); Assert.DoesNotContain(Permissions.StockSourceReconciliationRead, Held("petugas-gudang"));
+        Assert.DoesNotContain(Permissions.OrderSpendingPolicyRead, Held("penyetuju-cabang"));
         // The access checker approves what admin-akses proposes and cannot propose itself.
         Assert.Contains(Permissions.AccessApprove, Held("penyetuju-akses"));
         Assert.Contains(Permissions.MembershipApprove, Held("penyetuju-akses"));

@@ -12,6 +12,7 @@ using UnitToko.Platform.Authorization;
 using UnitToko.Platform;
 using UnitToko.Platform.Catalog;
 using UnitToko.Platform.Mongo;
+using UnitToko.Platform.Organizations;
 
 // The integration test below switches the process-wide pilot profile; nothing else may run beside it.
 [assembly: CollectionBehavior(DisableTestParallelization = true)]
@@ -80,6 +81,22 @@ public sealed class PilotSamplesTests
             await PilotBootstrap.InitializeDatabaseAsync(client, database, secrets, CancellationToken.None);
             BsonDocument[] Rows(string table) => [.. database.GetCollection<BsonDocument>(table).Find(FilterDefinition<BsonDocument>.Empty).Sort(new BsonDocument("_id", 1)).ToList()];
             var families = PilotSamples.ChosenSkus().Select(sku => database.GetCollection<BsonDocument>("skus").Find(new BsonDocument("sku", sku)).Single()["familyId"].AsInt64).ToArray();
+
+            // G-034: every organisation profile is named through the application (technical.configure proposes, a different person with
+            // organization.approve approves), so it carries the approval history the first reads require.
+            foreach (var node in new long[] { 10, 11, 12, 100, 101, 102, 103 })
+            {
+                Assert.Single(Rows("organizationProfiles"), row => row["_id"] == node);
+                var named = Assert.Single(Rows("organizationProposals"), row => row["scopeId"] == node);
+                Assert.Equal(("approved", 890001L, 890002L), (named["status"].AsString, named["requestedBy"].AsInt64, named["approvedBy"].AsInt64));
+                Assert.Single(Rows("authorizationHistory"), row => row["operation"] == "organization.approved" && row["after"]["profile"]["_id"] == node);
+            }
+            var store = new AuthorizationStore(database, new MongoUnitOfWork(client), new SystemClock());
+            var addresses = new OrganizationAddressService(database, new MongoUnitOfWork(client), new(database), new SystemClock(),
+                new OrganizationMasterDataService(database, store, new(database), new SystemClock()));
+            var pemohon = new ActorContext(3001, PilotBoundary.Issuer, "local-pilot|3001", 1, DateTimeOffset.UtcNow, FactorAssurance.MultiFactor);
+            var targets = await addresses.TargetsAsync(pemohon, UnitToko.Modules.Organizations.OrganizationAddressPurpose.Delivery);
+            Assert.Contains(targets["items"].AsBsonArray, item => item["target"]["id"].AsInt64 == 11);
 
             // Twelve samples, exactly the chosen products, through one proposal by petugas approved by peninjau.
             var samples = Rows("catalogPublicSamples");
