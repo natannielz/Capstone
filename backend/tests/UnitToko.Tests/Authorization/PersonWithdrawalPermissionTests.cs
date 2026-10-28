@@ -16,7 +16,7 @@ public sealed class PersonWithdrawalPermissionTests
             Assert.All(RoleTemplates.Suggestions.Values, suggestions => Assert.DoesNotContain(permission, suggestions));
             Assert.All(RoleTemplates.FinancePacks.Values, pack => Assert.DoesNotContain(permission, pack));
         }
-        Assert.Equal(6, RoleTemplates.Templates.Count);
+        Assert.Equal(15, RoleTemplates.Templates.Count);
         Assert.NotNull(Permissions.Find(Permissions.PersonReviewPropose)!.Assurance.MaximumAge);
         Assert.NotNull(Permissions.Find(Permissions.PersonReviewApprove)!.Assurance.MaximumAge);
     }
