@@ -9,14 +9,28 @@ param(
     # Without it the review catalog runs without product photos; the review stack never downloads signatures.
     [string]$ClamavSignatures,
     # Asks the running instance of this profile to stop (as Ctrl+C would) and waits for it to finish.
-    [switch]$Stop
+    [switch]$Stop,
+    # review only, while stopped: sets the review database (and its private photo store) aside under a timestamped name, so the next
+    # start seeds from empty. Nothing is deleted; accounts, keys and certificate stay. Never offered for release1 or full.
+    [switch]$ResetData
 )
 $ErrorActionPreference = 'Stop'
 $repository = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../../..'))
+$state = Join-Path $repository "tmp/pilot/$Profile"
+$lock = Join-Path $state 'launcher.lock'
+function Test-Running { try { $stream = [IO.File]::Open($lock, 'OpenOrCreate', 'ReadWrite', 'None'); $stream.Dispose(); return $false } catch [IO.IOException] { return $true } }
+if ($ResetData) {
+    if ($Profile -ne 'review') { throw '-ResetData is only for the review profile; the release1 and full pilots keep their data.' }
+    if ((Test-Path -LiteralPath $state) -and (Test-Running)) { throw 'Stop the review stack first (start-local-pilot.ps1 -Profile review -Stop).' }
+    $stamp = (Get-Date).ToUniversalTime().ToString('yyyyMMddTHHmmssZ')
+    $data = Join-Path $state 'mongo-data'
+    if (Test-Path -LiteralPath $data) { Rename-Item -LiteralPath $data -NewName "mongo-data.before-reset-$stamp"; Write-Output "Review database set aside: $data.before-reset-$stamp" }
+    $store = Join-Path $env:LOCALAPPDATA 'UnitToko.LocalPilot/review'
+    if (Test-Path -LiteralPath $store) { Rename-Item -LiteralPath $store -NewName "review.before-reset-$stamp"; Write-Output "Review photo store set aside: $store.before-reset-$stamp" }
+    Write-Output 'The next start of the review profile seeds from empty (run it under the heavy lock).'
+    exit 0
+}
 if ($Stop) {
-    $state = Join-Path $repository "tmp/pilot/$Profile"
-    $lock = Join-Path $state 'launcher.lock'
-    function Test-Running { try { $stream = [IO.File]::Open($lock, 'OpenOrCreate', 'ReadWrite', 'None'); $stream.Dispose(); return $false } catch [IO.IOException] { return $true } }
     if (-not (Test-Path -LiteralPath $state) -or -not (Test-Running)) { Write-Output "The $Profile pilot is not running."; exit 0 }
     Set-Content -LiteralPath (Join-Path $state 'stop-requested') -Value (Get-Date -Format o)
     $deadline = (Get-Date).AddSeconds(90)

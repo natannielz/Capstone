@@ -44,6 +44,10 @@ public static class PilotPersonas
     private static readonly GrantScope System = new(GrantScopeKind.System);
     private static PersonaGrant Grant(string template, GrantScope scope, params string[] additions) => new(template, [], additions, scope, []);
     private static PersonaGrant Finance(string[] packs, GrantScope scope, params string[] additions) => new("finance", packs, additions, scope, []);
+    /// <summary>A grant narrowed to its additions plus the named template permissions: the rest of the template is dropped, so the persona
+    /// holds only its role's work (F-027) until a job template of that exact shape exists.</summary>
+    private static PersonaGrant Only(PersonaGrant grant, params string[] keep) =>
+        grant with { Removed = [.. RoleTemplates.Templates[grant.TemplateId].Permissions.Where(permission => !keep.Contains(permission))] };
 
     public static readonly PilotPersona[] All = [
         new("tamu", 0, "Tamu (tanpa sesi)", []),
@@ -51,30 +55,30 @@ public static class PilotPersonas
             Permissions.BranchOrderRequestSubmit, Permissions.SubstitutionAccept, Permissions.OrganizationAddressRead)]),
         // The spending checker approves branch orders and does not place them: the buyer template's order.submit is dropped.
         new("penyetuju-cabang", 3002, "Penyetuju belanja cabang A · SINTETIS", [Grant("buyer", Branch11, Permissions.BranchPic, Permissions.OrderSpendApprove,
-            Permissions.OrderSpendingPolicyRead, Permissions.BranchOrderRequestRead, Permissions.OrganizationAddressRead) with { Removed = [Permissions.OrderSubmit] }]),
+            Permissions.BranchOrderRequestRead, Permissions.OrganizationAddressRead) with { Removed = [Permissions.OrderSubmit] }]),
         new("peninjau-toko", 3003, "Peninjau penerimaan toko · SINTETIS", [Grant("store-head", Shop, Permissions.OrderAccept, Permissions.BranchOrderRequestRead,
             Permissions.BranchOrderRequestDecide, Permissions.OrderCommercialPolicyRead, Permissions.AnomalyRead, Permissions.OrganizationAddressRead)]),
         // Catalog maker/checker: petugas-katalog proposes prices and the guest catalog; peninjau-katalog (no pricing.manage) approves them.
         new("petugas-katalog", 3004, "Petugas katalog · SINTETIS", [Grant("store-head", Shop, Permissions.CatalogPublicPropose)]),
-        new("peninjau-katalog", 3005, "Peninjau harga dan katalog publik · SINTETIS", [Grant("store-staff", Shop, Permissions.PricingApprove,
-            Permissions.CatalogPublicApprove)]),
+        new("peninjau-katalog", 3005, "Peninjau harga dan katalog publik · SINTETIS", [Only(Grant("store-staff", Shop, Permissions.PricingApprove, Permissions.CatalogPublicApprove), Permissions.CatalogRead, Permissions.OrderRead)]),
         new("petugas-gudang", 3006, "Petugas gudang (penyiapan dan penerimaan) · SINTETIS", [Grant("store-staff", Warehouse, Permissions.StockReleasePropose,
             Permissions.StockConvert, Permissions.SubstitutionPropose, Permissions.ReservationRelease, Permissions.ProcurementContainerReceive, Permissions.ProcurementInspect,
-            Permissions.ProcurementInspectionEvidenceRead, Permissions.ProcurementQualityAcceptanceRead, Permissions.ProcurementQualityAcceptancePropose,
-            Permissions.StockSourceRead, Permissions.StockSourceReconciliationRead, Permissions.OrganizationAddressRead)]),
+            Permissions.ProcurementInspectionEvidenceRead, Permissions.ProcurementQualityAcceptanceRead, Permissions.ProcurementQualityAcceptancePropose, Permissions.OrganizationAddressRead)]),
         // The dispatch page needs shipment.dispatch (store-staff) and shipment.assign together.
         new("petugas-kirim", 3007, "Petugas pengiriman · SINTETIS", [Grant("store-staff", Warehouse, Permissions.ShipmentAssign, Permissions.OrganizationAddressRead)]),
         new("kurir", 3008, "Kurir · SINTETIS", [Grant("courier", Courier)]),
-        // Finance maker: invoice release proposal, invoice issue, payment recording/allocation, receiving accounts and stock valuation proposals.
+        // Finance maker: invoice release proposal, invoice issue, bank statement staging (the maker side of bank receipt confirmation and disbursement
+        // verification), receiving accounts and stock valuation proposals. No complaints or payment-review pages (F-027).
         new("keuangan-tagihan", 3009, "Keuangan penagihan · SINTETIS", [Finance(["billing"], Shop, Permissions.InvoiceReleaseRead, Permissions.InvoiceReleasePropose,
-            Permissions.PaymentReviewRead, Permissions.ReceivingAccountRead, Permissions.ReceivingAccountPropose, Permissions.ProcurementStockValuationRead,
+            Permissions.BankStatementRead, Permissions.BankStatementStage, Permissions.ReceivingAccountRead, Permissions.ReceivingAccountDetailsRead, Permissions.ReceivingAccountPropose, Permissions.ProcurementStockValuationRead,
             Permissions.ProcurementStockValuationPropose, Permissions.ProcurementDisbursementRead, Permissions.ProcurementDisbursementEvidenceRead,
-            Permissions.ProcurementRead, Permissions.StockRead, Permissions.CaseRead, Permissions.OrderRead, Permissions.OrganizationAddressRead)]),
-        // Finance checker: payment verification, invoice release approval, bank sources, valuation, stock release and funding decisions.
+            Permissions.ProcurementRead, Permissions.StockRead, Permissions.OrderRead, Permissions.OrganizationAddressRead)]),
+        // Finance checker: payment verification, invoice release approval, bank receipt confirmation, receiving account decisions, valuation, stock release and funding
+        // decisions. It reads bank statements and does not stage them: no persona holds both sides of a maker/checker pair.
         new("pemeriksa-pembayaran", 3010, "Pemeriksa pembayaran · SINTETIS", [Finance(["accounting"], Shop, Permissions.InvoiceRead, Permissions.PaymentReviewRead,
             Permissions.PaymentReviewCorrect, Permissions.PaymentReviewManual, Permissions.PaymentVerify, Permissions.BankReceiptRead, Permissions.BankReceiptConfirm,
-            Permissions.BankStatementRead, Permissions.BankStatementStage, Permissions.InvoiceReleaseRead, Permissions.InvoiceReleaseApprove,
-            Permissions.ReceivingAccountRead, Permissions.ReceivingAccountVerify, Permissions.ReceivingAccountApprove, Permissions.ProcurementStockValuationRead,
+            Permissions.BankStatementRead, Permissions.InvoiceReleaseRead, Permissions.InvoiceReleaseApprove,
+            Permissions.ReceivingAccountRead, Permissions.ReceivingAccountDetailsRead, Permissions.ReceivingAccountVerify, Permissions.ReceivingAccountApprove, Permissions.ProcurementStockValuationRead,
             Permissions.ProcurementStockValuationDecide, Permissions.StockReleaseApprove, Permissions.FundingRead, Permissions.FundingApprove,
             Permissions.ProcurementDisbursementRead, Permissions.ProcurementDisbursementEvidenceRead, Permissions.ProcurementSettlementRead,
             Permissions.ProcurementRead, Permissions.StockRead, Permissions.AccountingBookRead, Permissions.ReportRead, Permissions.OrganizationAddressRead)]),
