@@ -170,7 +170,6 @@ function SubstitutionDesk({ account, orderId, onFailure }: { account: Account; o
     <OperationRecovery entries={recovery.entries} journal={recovery.journal} disabled={busy || reading || expired} onBusyChange={setRecovering} onFailure={onFailure}
       recoveryAdapters={{ 'ordering.substitution': { lookup: async entry => { const result = await gateway.recover(entry.actorId, substitutionOperation(entry.operation), entry.key, current); recovered.current = result?.result ?? null; return result; } } }}
       onResolved={() => { recovery.refresh(); ledger.resetAfterReconciliation(); setError(null); if (current() && recovered.current) saved(recovered.current); recovered.current = null; }} />
-    {reading && <StateView kind="loading" title="Memuat pesanan dan pengajuan…" rows={2} />}
     {!forBuyer && <Section title="Ajukan barang pengganti" description="Pilih sisa barang yang belum dikirim. Pengajuan ini belum mengubah pesanan atau cadangan barang.">
       <DataList label="Pesanan untuk penggantian" items={targets.items} getKey={value => value.suborderId} loading={reading}
         empty={error === null ? { title: 'Belum ada pesanan dalam penugasan Anda.' } : undefined}
@@ -200,7 +199,7 @@ function SubstitutionDesk({ account, orderId, onFailure }: { account: Account; o
         renderMeta={value => <>diajukan {formatDateTime(value.proposedAt)}{value.decidedAt ? ` · diputuskan ${formatDateTime(value.decidedAt)}` : ''}</>}
         renderContent={value => <><p>{value.input.originalPackages} × {label(value.original)} → {value.replacement.packages} × {label(value.replacement)}</p>
           <p>Harga pengganti {amount(value.replacement.price.currency, value.replacement.price.unitPrice)} per kemasan · subtotal {amount(value.replacement.price.currency, value.replacement.catalogSubtotal)}</p></>}
-        renderActions={value => forBuyer && value.status === 'pending' ? <><Button variant="primary" disabled={locked} onClick={() => void reviewDecision(value, 'Accept')}>Tinjau persetujuan</Button><Button variant="secondary" disabled={locked} onClick={() => void reviewDecision(value, 'Decline')}>Tinjau penolakan</Button></> : null} />
+        renderActions={value => forBuyer && value.status === 'pending' ? <><Button variant="secondary" disabled={locked} onClick={() => void reviewDecision(value, 'Accept')}>Tinjau persetujuan</Button><Button variant="secondary" disabled={locked} onClick={() => void reviewDecision(value, 'Decline')}>Tinjau penolakan</Button></> : null} />
       {history.hasMore && <div className="ui-actions"><Button variant="secondary" disabled={locked} onClick={() => { clearReview(); setHistoryBefore(history.items.at(-1)!.proposalId); }}>Pengajuan sebelumnya</Button></div>}
     </Section>
     {(proposalReview || decisionReview) && <section ref={panel} tabIndex={-1} className="ui-section" aria-labelledby="substitution-review-heading"><h2 id="substitution-review-heading">{proposalReview ? 'Konfirmasi pengajuan penggantian' : decisionReview!.decision === 'Accept' ? 'Konfirmasi persetujuan pembeli' : 'Konfirmasi penolakan pembeli'}</h2>

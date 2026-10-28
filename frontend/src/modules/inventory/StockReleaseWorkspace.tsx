@@ -17,7 +17,7 @@ import { StockReleaseEditor } from './stock-release-editor-state';
 import { releaseChoiceKey, releaseLocationKey, type ReleasePreview, type ReleaseReview, type ReleaseCommand } from './stock-release-workflow';
 import common from '../administration/access.module.css';
 import styles from './stock-source-policy.module.css';
-import { formatDateTime, formatMoney } from "@/lib/format";
+import { formatDate, formatDateTime, formatMoney } from "@/lib/format";
 import { Button } from '@/components/workspace-kit/button';
 import { PageHeader } from '@/components/workspace-kit/page-header';
 import { Section } from '@/components/workspace-kit/section';
@@ -140,12 +140,12 @@ function ReleaseDesk({ loaded, refresh }: { loaded: Loaded; refresh: () => Promi
       {state.loadingSources && <p role="status">Memeriksa barang, mutu dan penilaian…</p>}{!state.loadingSources && state.sources.length === 0 && <p>Belum ada barang yang dapat dilepas. Selesaikan pemeriksaan mutu, penilaian dan pengaturan sumber yang diperlukan.</p>}
       {state.unavailableCount !== '0' && <p className={common.help}>{state.unavailableCount} catatan belum dapat dinyatakan memenuhi pemeriksaan pelepasan.</p>}
       {state.choice && <><Facts items={[{ term: "Kemasan", value: state.choice.packagingLabel }, { term: "Lot", value: state.choice.lotReference },
-        { term: "Kedaluwarsa", value: state.choice.expiresOn ?? 'Tidak memiliki tanggal kedaluwarsa menurut catatan yang disetujui' },
+        { term: "Kedaluwarsa", value: state.choice.expiresOn ? formatDate(state.choice.expiresOn) : 'Tidak memiliki tanggal kedaluwarsa menurut catatan yang disetujui' },
         { term: "Dapat dilepas pada pemeriksaan ini", value: <>{state.choice.releaseablePackages} kemasan</> },
         { term: "Nilai penilaian terpilih", value: <>{amount(state.choice.capitalizedValue)} · nilai pelepasan dihitung dari sisa yang tercatat</> }]} />
         <form className={styles.form} onSubmit={event => { event.preventDefault(); void editor.previewProposal(); }}>
           <label>Jumlah kemasan yang dilepas<input required inputMode="numeric" pattern="[1-9][0-9]{0,6}" maxLength={7} value={state.packages} disabled={locked || state.loadingPreview}
-            onChange={event => editor.changePackages(event.target.value)} /></label><Button type="submit" variant="primary" disabled={locked || state.loadingPreview}>{state.loadingPreview ? 'Memeriksa jumlah…' : 'Periksa stok sebelum dan sesudah'}</Button></form></>}
+            onChange={event => editor.changePackages(event.target.value)} /></label><Button type="submit" variant={state.preview ? 'secondary' : 'primary'} disabled={locked || state.loadingPreview}>{state.loadingPreview ? 'Memeriksa jumlah…' : 'Periksa stok sebelum dan sesudah'}</Button></form></>}
       {state.preview && <><StockFacts value={state.preview} /><form className={styles.form} onSubmit={event => { event.preventDefault(); editor.reviewProposal(); }}>
         <label>Alasan pengajuan<textarea required rows={3} maxLength={1000} value={state.reason} disabled={locked} onChange={event => editor.changeReason(event.target.value)} /></label>
         <Button type="submit" variant="primary" disabled={locked}>Tinjau pengajuan</Button></form></>}
@@ -165,7 +165,7 @@ function ReleaseDesk({ loaded, refresh }: { loaded: Loaded; refresh: () => Promi
         {state.detail.decision && <><p>Alasan peninjau: {state.detail.decision.reason}</p><p>{time(state.detail.decision.decidedAt)}</p>
           {state.detail.decision.transferredValue !== null && <p>Nilai yang dilepas: {amount(state.detail.decision.transferredValue)}.</p>}</>}
         {state.detail.status === 'proposed' && editor.canApprove && <div className={common.actions}>
-          <Button variant="primary" disabled={locked || !state.fresh || state.loadingPreview} onClick={() => void editor.previewDecision('approve')}>Periksa pelepasan untuk disetujui</Button>
+          <Button variant={state.decision ? 'secondary' : 'primary'} disabled={locked || !state.fresh || state.loadingPreview} onClick={() => void editor.previewDecision('approve')}>Periksa pelepasan untuk disetujui</Button>
           <Button variant="secondary" disabled={locked || !state.fresh || state.loadingPreview} onClick={() => void editor.previewDecision('reject')}>Periksa penolakan</Button></div>}
       </section>}
       {state.decision && <section className={styles.detail}><h3>{state.decision.action === 'approve' ? 'Pemeriksaan stok terkini oleh peninjau' : 'Tinjau penolakan pengajuan'}</h3>

@@ -117,12 +117,14 @@ function CountDesk({ loaded, onRefresh }: { loaded: Loaded; onRefresh: () => Pro
   if (state.selectedPackage) {
     try { conversion = stockCountQuantity(state.draft.packages, state.selectedPackage.baseUnitsPerPackage).baseUnits; } catch { /* Empty or unfinished entry has no implied quantity. */ }
   }
+  // View tabs only when there is a choice: a single view needs no switch (§8.1).
+  const views = [...editor.canCount ? [{ label: "Catat hitungan", value: "count" }] : [], ...editor.canRead ? [{ label: "Riwayat pengamatan", value: "history" }] : []];
   return <>
     <AdministrationNavigation current="counts" actions={loaded.actions} locked={locked} />
     <Section title="Ruang kerja gudang" description={<>Petugas: <strong>{loaded.session.account?.displayName ?? loaded.session.account?.verifiedEmail}</strong></>}
       actions={<Button variant="secondary" disabled={locked} onClick={() => void onRefresh()}>Muat ulang sesi dan akses</Button>}>
-      <Tabs label="Jenis pekerjaan" current={state.mode} disabled={locked} onSelect={mode => void editor.changeMode(mode as typeof state.mode)}
-        items={[...editor.canCount ? [{ label: "Catat hitungan", value: "count" }] : [], ...editor.canRead ? [{ label: "Riwayat pengamatan", value: "history" }] : []]} />
+      {views.length > 1 && <Tabs label="Jenis pekerjaan" current={state.mode} disabled={locked} onSelect={mode => void editor.changeMode(mode as typeof state.mode)}
+        items={views} />}
       <label><span id="stock-warehouse-label">Gudang dan kanal</span>
         <select aria-labelledby="stock-warehouse-label" value={state.warehouse ? stockLocationKey(state.warehouse.location) : ""} disabled={locked || state.loadingWarehouses}
           onChange={event => {setScanSelection(null); setScanBlocked(false); void editor.chooseWarehouse(state.warehouses.find(item => stockLocationKey(item.location) === event.target.value)?.location ?? null);}}>

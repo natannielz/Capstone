@@ -27,7 +27,7 @@ const states = {consistent: 'Konsisten', flagged: 'Perlu tinjauan', within_polic
 const signalTone: Record<keyof typeof states, StatusTone> = {consistent: 'success', flagged: 'warning', within_policy: 'info', policy_needed: 'neutral', unavailable: 'neutral'};
 const outcomes = {acknowledged: 'Sudah ditinjau', requires_action: 'Perlu tindak lanjut', not_concerning: 'Tidak perlu tindak lanjut'};
 function message(error: unknown) {
-  if (error instanceof IdentityFailure) return 'Masuk dengan akun organisasi Anda untuk melanjutkan.';
+  if (error instanceof IdentityFailure) return 'Sesi Anda perlu diperbarui. Masuk kembali untuk melanjutkan.';
   if (error instanceof AccessFailure || error instanceof RequestNotSentError) {
     if (error.status === 401 || error.status === 403) return 'Sesi atau izin tinjauan belum tersedia. Periksa akun dan cakupan toko.';
     if (error.code === 'anomaly_source_changed') return 'Sumber atau kebijakan berubah. Tampilkan pemeriksaan baru sebelum menyimpan tindak lanjut.';
@@ -165,7 +165,7 @@ function Desk({account, onDenied, header}: {account: Account; onDenied: () => vo
           setRecoveryNotice('Hasil permintaan asli sudah ditemukan. Referensi lain tetap tersimpan.');}
         else setRecoveryNotice('Permintaan belum terkonfirmasi. Referensi asli tetap tersimpan; periksa kembali tanpa membuat permintaan baru.');
       }
-    } catch (failure) {if (context(version).isCurrent()) {setRecoveryNotice('Catatan belum dapat diperiksa. Referensi asli tetap tersimpan; periksa sesi dan izin.'); failed(failure);}}
+    } catch (failure) {if (context(version).isCurrent()) {setRecoveryNotice('Catatan belum dapat diperiksa. Referensi asli tetap tersimpan; muat ulang halaman untuk memeriksa izin Anda.'); failed(failure);}}
     finally {if (context(version).isCurrent()) setBusy(false);}
   }
   const reviewable = account.review && !!value?.current && !value.disposition;

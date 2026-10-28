@@ -129,12 +129,13 @@ function ReviewDesk({ account, elapsed, onFailure, onRefresh }: { account: Accou
     } catch (failure) { if (current()) { setStaged(false); setSelected(null); setError(failure); onFailure(failure); } }
     finally { pending.current = false; if (alive.current) { setBusy(false); recovery.refresh(); } }
   }
+  // View tabs only when there is a choice: a single view needs no switch (§8.1).
+  const views = [...actions.includes('order.spend.approve') ? [{ label: 'Belanja cabang', value: 'Spending' }] : [], ...actions.includes('order.accept') ? [{ label: 'Penerimaan toko', value: 'Store' }] : [], ...actions.includes('order.cancel') ? [{ label: 'Pembatalan pesanan', value: 'Cancellation' }] : []];
   return <>
     <AdministrationNavigation current="order-reviews" actions={actions} locked={locked} />
     <Section title="Keputusan sesuai penugasan" actions={<Button variant="secondary" disabled={busy || recovering} onClick={onRefresh}>Muat ulang sesi dan akses</Button>}>
-      <Tabs label="Keputusan sesuai penugasan" current={stage} disabled={locked} onSelect={value => { setStage(value as ReviewStage); setBefore(null); setNotice(null); }}
-        items={[...actions.includes('order.spend.approve') ? [{ label: 'Belanja cabang', value: 'Spending' }] : [], ...actions.includes('order.accept') ? [{ label: 'Penerimaan toko', value: 'Store' }] : [],
-          ...actions.includes('order.cancel') ? [{ label: 'Pembatalan pesanan', value: 'Cancellation' }] : []]} />
+      {views.length > 1 && <Tabs label="Keputusan sesuai penugasan" current={stage} disabled={locked} onSelect={value => { setStage(value as ReviewStage); setBefore(null); setNotice(null); }}
+        items={views} />}
       {(!fresh || error instanceof AccessFailure && error.code === 'step_up_required') && <p role="alert">Verifikasi terbaru diperlukan. <Link href={factorHref}>Verifikasi dua langkah</Link></p>}
     </Section>
     <OperationRecovery entries={recovery.entries} journal={recovery.journal} disabled={busy} onBusyChange={setRecovering}
@@ -143,14 +144,14 @@ function ReviewDesk({ account, elapsed, onFailure, onRefresh }: { account: Accou
         recovery.refresh(); ledger.resetAfterReconciliation(); setError(null); const result = recovered.current; recovered.current = null;
         if (result && current()) { setNotice(decisionNotice(result, true)); void select(result); }
       }} />
-    {error !== null && <StateView kind="error" title={message(error)} />}{recovery.error !== null && <StateView kind="error" title={accessMessage(recovery.error)} />}
+    {error !== null && page.items.length > 0 && <StateView kind="error" title={message(error)} />}{recovery.error !== null && <StateView kind="error" title={accessMessage(recovery.error)} />}
     {notice && <p role="status" className={common.success}>{notice}</p>}
     <Section title={stage === 'Store' ? 'Bagian pesanan toko' : stage === 'Spending' ? 'Pesanan cabang' : 'Pesanan untuk ditinjau pembatalannya'} id="order-review-list" label="Pesanan sesuai akses" busy={busy}
       actions={<Button variant="secondary" disabled={locked} onClick={() => { setBefore(null); setReload(value => value + 1); }}>Muat pesanan terbaru</Button>}>
-      <DataList label="Pesanan sesuai akses" items={page.items} getKey={item => item.suborderId ?? item.orderId} loading={busy}
+      <DataList label="Pesanan sesuai akses" items={page.items} error={error !== null && page.items.length === 0 ? { title: message(error), message: null, onRetry: () => { setBefore(null); setReload(value => value + 1); } } : undefined} getKey={item => item.suborderId ?? item.orderId} loading={busy}
         empty={error === null ? { title: 'Belum ada pesanan yang dapat ditinjau dalam penugasan ini.' } : undefined}
-        renderTitle={item => item.buyerName} renderBadge={item => <Badge status={statusText(item)} />}
-        renderMeta={item => <>Pesanan {orderNumber(item.orderId)} · {item.quote.lines.length} kemasan · {reviewWaiting(item.orderedAt, now).age}{reviewWaiting(item.orderedAt, now).overdue && <> <Badge status="Lewat 1 hari" /></>}</>}
+        renderTitle={item => <>Pesanan {orderNumber(item.orderId)}{item.suborderId ? ' / ' + item.suborderId : ''}</>} renderBadge={item => <Badge status={statusText(item)} />}
+        renderMeta={item => <>{item.buyerName} · {item.quote.lines.length} kemasan · {reviewWaiting(item.orderedAt, now).age}{reviewWaiting(item.orderedAt, now).overdue && <> <Badge status="Lewat 1 hari" /></>}</>}
         onSelect={item => void select(item)} disabled={locked || !fresh} selectedKey={selected ? selected.suborderId ?? selected.orderId : null}
         openLabel={item => 'Tinjau pesanan ' + orderNumber(item.orderId) + (item.suborderId ? ' / ' + item.suborderId : '')} />
       {page.hasMore && <div className="ui-actions"><Button variant="secondary" disabled={locked} onClick={() => { const last = page.items.at(-1); if (last) setBefore(last.suborderId ?? last.orderId); }}>Pesanan lebih lama</Button></div>}

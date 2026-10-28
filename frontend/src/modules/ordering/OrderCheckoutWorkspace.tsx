@@ -66,7 +66,7 @@ export function OrderCheckoutWorkspace() {
     <main id="checkout-main" tabIndex={-1} className={`${common.page} ${styles.page}`}><header className={styles.heading}>
       <Link href="/cart" className={styles.back}><ArrowLeft size={16} aria-hidden="true" />Kembali ke keranjang</Link>
       <h1>Pengajuan pesanan</h1><p>Isi pengiriman, tinjau biaya, lalu ajukan. Pesanan yang memerlukan persetujuan belanja dikirim ke penyetuju cabang.</p></header>
-    {error !== null && <p className={common.alert} role="alert">{message(error, true)}</p>}
+    {error !== null && account !== null && <p className={common.alert} role="alert">{message(error, true)}</p>}
     {loading ? <p className={styles.loading} role="status">Memeriksa akun…</p> : !account || expired ? <SessionAccessState kind={account ? "expired" : undefined} error={error} returnPath="/ordering/checkout" onRetry={() => setRevision(value => value + 1)} />
       : <CheckoutDesk key={account.actorId + ':' + account.observedAt} account={account} onFailure={failed} />}
   </main></div>;

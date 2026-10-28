@@ -36,7 +36,7 @@ function message(error: unknown) {
   if (error instanceof AccessFailure || error instanceof RequestNotSentError) {
     if (error.code === 'independent_person_required' || error.code === 'independent_actor_required') return 'Pemberi, penerima, dan penyetuju harus merupakan orang yang berbeda.';
     if (error.code === 'delegation_source_changed' || error.code === 'delegation_changed') return 'Akses sumber atau catatan delegasi berubah. Perbarui sebelum meninjau lagi.';
-    if (error.code === 'step_up_required') return 'Lakukan verifikasi dua langkah, lalu perbarui sesi sebelum meninjau lagi.';
+    if (error.code === 'step_up_required') return 'Lakukan verifikasi dua langkah, lalu pilih Muat ulang sesi dan akses sebelum meninjau lagi.';
     if ([401, 403].includes(error.status)) return 'Akses delegasi belum tersedia untuk akun ini. Periksa cakupan delegasi Anda.';
     if (error instanceof RequestNotSentError) return 'Periksa penerima, izin, masa berlaku, dan alasan. Permintaan belum dikirim.';
   }

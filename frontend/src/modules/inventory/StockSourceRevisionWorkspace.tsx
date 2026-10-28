@@ -173,8 +173,8 @@ function RevisionDesk({ loaded, onRefresh }: { loaded: Loaded; onRefresh: () => 
           <section className={styles.details} aria-busy={state.loadingDetail}>{state.loadingDetail ? <StateView kind="loading" title="Memeriksa pengajuan terbaru…" /> :
             state.selected ? <><h2>Pengajuan #{state.selected.id}</h2><Badge status={revisionStatus[state.selected.status]} />
               <p>{state.selected.reason}</p><p className={common.help}>Diajukan {formatDateTime(state.selected.proposedAt)}.</p>
-              {state.selected.status === "proposed" && editor.staleBase && <StateView kind="unknown" title="Dasar pengajuan sudah berbeda dari versi saat ini. Pengajuan ini belum dapat disetujui; periksa versi terbaru sebelum mengajukan pengganti." />}
-              {state.selected.status === "proposed" && state.current.poolState === "active" && <StateView kind="unknown" title="Alokasi masih aktif. Perubahan belum dapat disetujui." />}
+              {state.selected.status === "proposed" && editor.staleBase && <div role="status" className="ui-notice" data-tone="warning">Dasar pengajuan sudah berbeda dari versi saat ini. Pengajuan ini belum dapat disetujui; periksa versi terbaru sebelum mengajukan pengganti.</div>}
+              {state.selected.status === "proposed" && state.current.poolState === "active" && <div className="ui-notice" data-tone="warning">Alokasi masih aktif. Perubahan belum dapat disetujui.</div>}
               <RevisionComparison base={state.selected.baseSettings} proposed={state.selected.proposedSettings} baseVersion={state.selected.basePoolVersion} current={state.current} />
               {state.selected.decision && <section className={styles.section}><h3>Keputusan tercatat</h3><p>{state.selected.decision.reviewReference}</p><p>{state.selected.decision.reason}</p>
                 <p>{formatDateTime(state.selected.decision.decidedAt)}{state.selected.appliedPoolVersion ? " · diterapkan sebagai versi " + state.selected.appliedPoolVersion : ""}.</p></section>}

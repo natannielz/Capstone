@@ -89,9 +89,9 @@ public sealed class HistoricalReadPolicyTests
         Assert.False(Compile(request: new(permission, Branch, "historical-review")).IsAllowed);
 
     [Fact]
-    public void Historical_marker_is_not_a_seventh_role_and_never_authorizes_ordinary_access()
+    public void Historical_marker_is_not_a_role_template_and_never_authorizes_ordinary_access()
     {
-        Assert.Equal(6, RoleTemplates.Templates.Count);
+        Assert.Equal(15, RoleTemplates.Templates.Count);
         Assert.False(RoleTemplates.Templates.ContainsKey(HistoricalReadPolicy.TemplateId));
         foreach (var permission in new[] { Permissions.HistoryRead, Permissions.ReportRead, Permissions.OrderSubmit, Permissions.AccessApprove })
             Assert.False(ScopePolicy.Compile(Reader, Snapshot(), permission, Now).IsAllowed);

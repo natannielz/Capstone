@@ -34,7 +34,7 @@ public sealed partial class BankStatementService
         this.database=database; this.clock=clock; this.ids=ids; this.accounts=accounts; authorization=new(database,unit,clock); records=new(database);
     }
     private DateTimeOffset Now => DateTimeOffset.FromUnixTimeMilliseconds(clock.UtcNow.ToUnixTimeMilliseconds());
-    private static string[] PermissionsFor(bool stage) => stage ? [Permissions.BankStatementRead,Permissions.BankStatementStage,Permissions.ReceivingAccountRead,Permissions.ReceivingAccountDetailsRead]
+    internal static string[] PermissionsFor(bool stage) => stage ? [Permissions.BankStatementRead,Permissions.BankStatementStage,Permissions.ReceivingAccountRead,Permissions.ReceivingAccountDetailsRead]
         : [Permissions.BankStatementRead,Permissions.ReceivingAccountRead,Permissions.ReceivingAccountDetailsRead];
     private sealed record Context(ActorContext Actor,AuthorizationSnapshot Authority,IClientSessionHandle Tx,bool Stage,BsonDocument? Scope=null);
     private AuthorizationQuery[] Require(Context context) {

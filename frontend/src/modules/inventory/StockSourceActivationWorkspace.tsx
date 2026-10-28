@@ -134,7 +134,7 @@ function ActivationDesk({ loaded, refresh }: { loaded: Loaded; refresh: () => Pr
       <form className={styles.selection} onSubmit={event => { event.preventDefault(); void editor.loadPool(); }}>
         <label>Referensi sumber stok<input required inputMode="numeric" pattern="[1-9][0-9]{0,18}" maxLength={19} value={state.poolInput}
           disabled={locked || state.loadingPool} onChange={event => editor.changePool(event.target.value)} /></label>
-        <Button variant="primary" type="submit" disabled={locked || state.loadingPool}>{state.loadingPool ? 'Memeriksa sumber…' : 'Periksa sumber'}</Button>
+        <Button variant={state.preview ? 'secondary' : 'primary'} type="submit" disabled={locked || state.loadingPool}>{state.loadingPool ? 'Memeriksa sumber…' : 'Periksa sumber'}</Button>
       </form>
       {state.preview && <section className={styles.preview}><div><PolicyConfigurationFacts configuration={state.preview.configuration} />
         <p>Acuan serah terima yang disetujui: <strong>{state.preview.requiredHandoffReference}</strong></p></div><div><h3>Kewajiban pada pemeriksaan ini</h3>

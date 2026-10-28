@@ -88,6 +88,8 @@ function PreparationDesk({ account, onFailure }: { account: Account; onFailure: 
     setSelected(source); setSaved(preparation); setStaged(null); setReason(''); setScanSelection(null); setScanBlocked(false);
     setValues(initialPreparationValues(source, preparation));
   }
+  // The row button that started a read shows it is busy until the record arrives (§8).
+  const [opening, setOpening] = useState<string | null>(null);
   async function select(suborderId: string) {
     if (!current() || locked || pending.current) return; pending.current = true; setBusy(true); setError(null); setNotice(null);
     try { await load(suborderId); } catch (failure) { if (current()) { setError(failure); onFailure(failure); } }
@@ -126,14 +128,14 @@ function PreparationDesk({ account, onFailure }: { account: Account; onFailure: 
           if (current()) setNotice('Persiapan ditemukan dan tercatat. Kiriman belum diberangkatkan.');
         }).catch(failure => { if (current()) { setError(failure); onFailure(failure); } }).finally(() => { if (alive.current) setBusy(false); }); }
       }} />
-    {error !== null && <StateView kind="error" title={message(error)} />}{recovery.error !== null && <StateView kind="error" title={accessMessage(recovery.error)} />}
+    {error !== null && page.items.length > 0 && <StateView kind="error" title={message(error)} />}{recovery.error !== null && <StateView kind="error" title={accessMessage(recovery.error)} />}
     {notice && <p role="status" className={common.success}>{notice}</p>}
     <Section title="Pesanan diterima toko" label="Pesanan siap disiapkan" busy={busy}
       actions={<Button variant="secondary" disabled={locked} onClick={() => { setBefore(null); setReload(value => value + 1); }}>Muat pesanan terbaru</Button>}>
-      <DataList label="Pesanan siap disiapkan" items={page.items} getKey={item => item.suborderId} loading={busy}
+      <DataList label="Pesanan siap disiapkan" items={page.items} error={error !== null && page.items.length === 0 ? { title: message(error), message: null, onRetry: () => { setBefore(null); setReload(value => value + 1); } } : undefined} getKey={item => item.suborderId} loading={busy}
         empty={error === null ? { title: "Belum ada sisa pesanan yang dapat disiapkan dalam penugasan ini." } : undefined}
         renderTitle={item => item.buyerName} renderMeta={item => <>Pesanan {orderNumber(item.orderId)} · {item.lines.map(line => line.productName + ' — ' + line.definition.packageLabel).join(', ')}</>}
-        renderActions={item => <Button variant="secondary" disabled={locked} onClick={() => void select(item.suborderId)}>Siapkan pesanan {orderNumber(item.orderId)} / {item.suborderId}</Button>} />
+        renderActions={item => <Button variant="secondary" disabled={locked} busy={opening === item.suborderId} onClick={() => { setOpening(item.suborderId); void select(item.suborderId).finally(() => setOpening(null)); }}>Siapkan pesanan {orderNumber(item.orderId)} / {item.suborderId}</Button>} />
       {page.hasMore && <div className="ui-actions"><Button variant="secondary" disabled={locked} onClick={() => setBefore(page.items.at(-1)!.suborderId)}>Pesanan lebih lama</Button></div>}
     </Section>
     {selected && <section ref={panel} tabIndex={-1} className={"ui-section " + local.detail} aria-label="Rencana persiapan"><h2>Siapkan pesanan {orderNumber(selected.orderId)}</h2>

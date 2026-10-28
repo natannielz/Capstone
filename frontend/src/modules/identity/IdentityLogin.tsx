@@ -5,7 +5,8 @@ import Link from "next/link";
 import { Brand } from "../../components/brand";
 import { KemasanPoster } from "../../components/landing/KemasanPoster";
 import { createIdentityGateway } from "./identity-client";
-import { HOME_PATH, IdentityFailure, identityMessage, loginContinuation, loginFields, type IdentitySession } from "./identity-workflow";
+import { HOME_PATH, IdentityFailure, identityMessage, loginContinuation, loginFields, signedInContinuation, type IdentitySession } from "./identity-workflow";
+import { createAccessGateway } from "../administration/access-client";
 import { ProtectedNavigationForm } from "./ProtectedNavigationForm";
 import styles from "./identity-login.module.css";
 import { isPilotRelease } from '../../lib/release-scope';
@@ -29,6 +30,10 @@ export function IdentityLogin() {
         setReturnPath(continuation.returnPath); setLoggedOut(new URLSearchParams(window.location.search).get("loggedOut") === "1");
         // Someone already signed in who was sent here by a page continues to that page (G-010).
         if (value.authenticated && continuation.requested) { window.location.replace(continuation.returnPath); return; }
+        // Without a destination, "Lanjutkan" leads to the person's own home: the store for buyers, the workspace for staff (G-044).
+        if (value.authenticated && !continuation.requested) void createAccessGateway().current().then(scope => {
+          if (!controller.signal.aborted) setReturnPath(signedInContinuation(window.location.search, scope.allowedActions));
+        }, () => { /* The workspace forwards a buyer to the store. */ });
         setSession(value); setError(null); setLoading(false);
       }
     }, failure => {
