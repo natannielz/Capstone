@@ -18,7 +18,7 @@ import { ReplenishmentSuggestion } from './ReplenishmentSuggestion';
 import { dateTimeFormatter, formatDate } from '@/lib/format';
 import { SessionAccessState } from "@/components/workspace-kit/session-access-state";
 import { recordNumber } from '@/lib/document-numbers';
-import { keptTarget } from './procurement-desk';
+import { refreshAfterConfirmedSave, restoreKeptLocation, takeKeptKey } from './procurement-desk';
 
 type Account = { actorId: string; actions: readonly string[]; session: IdentitySession; observedAt: number };
 type DraftLine = { choice: ProcurementPackage; quantity: string; specification: string };
@@ -101,10 +101,10 @@ function RequestDesk({ account, fresh, onDenied }: { account: Account; fresh: bo
   useEffect(() => { alive.current = true; const connection = () => setOffline(!navigator.onLine); connection(); window.addEventListener('online', connection); window.addEventListener('offline', connection);
     return () => { alive.current = false; gate.cancel(); window.removeEventListener('online', connection); window.removeEventListener('offline', connection); }; }, [gate]);
   useEffect(() => { const read = gate.begin(account.actorId, 'procurement-targets'); void Promise.resolve().then(async () => {
-    if (!read.current() || !current()) return; setBusy(true); setTargets([]); clearSelection(); setError(null);
+    if (!read.current() || !current()) return; const remembered = takeKeptKey(keep); setBusy(true); setTargets([]); clearSelection(); setError(null);
     try { if (canRead) { const result = await gateway.targets(account.actorId, read.signal); if (read.current() && current()) { setTargets(result.items);
-      const kept = keptTarget(result.items, keep.current, item => procurementLocationKey(item.location)); keep.current = null;
-      if (kept) { const list = await gateway.list(account.actorId, kept.location, null, read.signal); if (read.current() && current()) { setSelected(kept); setPage(list); } } } } }
+      const kept = await restoreKeptLocation(result.items, remembered, item => procurementLocationKey(item.location), target => gateway.list(account.actorId, target.location, null, read.signal));
+      if (kept && read.current() && current()) { setSelected(kept.target); setPage(kept.page); } } } }
     catch (failure) { if (read.current() && current()) { setError(failure); onDenied(failure); } }
     finally { if (read.current()) setBusy(false); }
   }); return () => gate.cancel(); }, [gateway, gate, account.actorId, revision, current, onDenied, canRead, clearSelection]);
@@ -144,11 +144,12 @@ function RequestDesk({ account, fresh, onDenied }: { account: Account; fresh: bo
     if (!submissionReview || !confirmed || commandLocked || !canPrepare || !fresh) return;
     const command = submissionReview.command; keyPrefix.current = 'pr.' + procurementLocationKey(command.location).replaceAll(':', '.');
     await work(async (valid, signal) => {
-      const saved = await submitTrackedRequest(mutations(), recovery.journal, account.actorId, 'procurement-submit', 'procurement.request.submit', command.body,
-        requestKey => gateway.submit(command, requestKey, () => valid() && sessionTiming(account.session, performance.now() - account.observedAt).fresh));
-      if (!valid()) return; clearReview(); setNotice('Permintaan tersimpan dan menunggu pemeriksaan independen.');
-      const next = await gateway.request(account.actorId, saved.requestId, signal); if (valid()) setRequest(next);
-      const list = await gateway.list(account.actorId, command.location, null, signal); if (valid()) setPage(list); // listed without a reload (F-022)
+      await refreshAfterConfirmedSave(() => submitTrackedRequest(mutations(), recovery.journal, account.actorId, 'procurement-submit', 'procurement.request.submit', command.body,
+        requestKey => gateway.submit(command, requestKey, () => valid() && sessionTiming(account.session, performance.now() - account.observedAt).fresh)), {
+        valid, confirmed: () => { clearReview(); setNotice('Permintaan tersimpan dan menunggu pemeriksaan independen.'); },
+        list: async () => { const list = await gateway.list(account.actorId, command.location, null, signal); if (valid()) setPage(list); }, // listed without a reload (F-022)
+        detail: async saved => { const next = await gateway.request(account.actorId, saved.requestId, signal); if (valid()) setRequest(next); },
+      });
     });
   }
   async function previewDecision(value: ProcurementDecision) {
@@ -160,11 +161,12 @@ function RequestDesk({ account, fresh, onDenied }: { account: Account; fresh: bo
     if (!decisionReview || !confirmed || !canDecide || !fresh || commandLocked) return;
     const command = decisionReview.command; keyPrefix.current = `prd.${command.decision}.${command.requestId}`;
     await work(async (valid, signal) => {
-      const saved = await submitTrackedRequest(mutations(), recovery.journal, account.actorId, 'procurement-decision', 'procurement.request.' + command.decision, command.body,
-        requestKey => gateway.decide(command, requestKey, () => valid() && sessionTiming(account.session, performance.now() - account.observedAt).fresh));
-      if (!valid()) return; clearReview(); setNotice(command.decision === 'approve' ? 'Permintaan disetujui untuk tindak lanjut pengadaan.' : 'Penolakan permintaan tersimpan.');
-      const next = await gateway.request(account.actorId, saved.requestId, signal); if (valid()) setRequest(next);
-      if (selected) { const list = await gateway.list(account.actorId, selected.location, null, signal); if (valid()) setPage(list); }
+      await refreshAfterConfirmedSave(() => submitTrackedRequest(mutations(), recovery.journal, account.actorId, 'procurement-decision', 'procurement.request.' + command.decision, command.body,
+        requestKey => gateway.decide(command, requestKey, () => valid() && sessionTiming(account.session, performance.now() - account.observedAt).fresh)), {
+        valid, confirmed: () => { clearReview(); setNotice(command.decision === 'approve' ? 'Permintaan disetujui untuk tindak lanjut pengadaan.' : 'Penolakan permintaan tersimpan.'); },
+        list: async () => { if (selected) { const list = await gateway.list(account.actorId, selected.location, null, signal); if (valid()) setPage(list); } },
+        detail: async saved => { const next = await gateway.request(account.actorId, saved.requestId, signal); if (valid()) setRequest(next); },
+      });
     });
   }
   function reconcile() { ledger.current?.resetAfterReconciliation(); clearSelection(); recovery.refresh(); setRevision(value => value + 1); }

@@ -91,6 +91,16 @@ function toDate(value: DateInput): Date {
   return date;
 }
 
+/** What a screen shows for a date it cannot read: the text as given, or a dash when there is nothing to show. A render must never throw over one bad value. */
+function unreadable(value: DateInput): string {
+  return typeof value === "string" && value.trim() !== "" ? value : "—";
+}
+
+function display(value: DateInput, render: () => string): string {
+  if (value === null || value === undefined) return "—";
+  try { return render(); } catch (error) { if (error instanceof RangeError) return unreadable(value); throw error; }
+}
+
 function parts(value: DateInput, options: Intl.DateTimeFormatOptions, locale = "id-ID"): Record<string, string> {
   const result: Record<string, string> = {};
   for (const part of new Intl.DateTimeFormat(locale, { timeZone: TIME_ZONE, ...options }).formatToParts(toDate(value)))
@@ -100,18 +110,22 @@ function parts(value: DateInput, options: Intl.DateTimeFormatOptions, locale = "
 
 /** "17 Okt 2026"; "long" gives "17 Oktober 2026"; "full" gives "Sabtu, 17 Oktober 2026". Jakarta calendar day. */
 export function formatDate(value: DateInput, style: "short" | "long" | "full" = "short"): string {
-  if (style === "full") {
-    const p = parts(value, { weekday: "long", day: "numeric", month: "long", year: "numeric" });
-    return `${p.weekday}, ${p.day} ${p.month} ${p.year}`;
-  }
-  const p = parts(value, { day: "numeric", month: style === "long" ? "long" : "short", year: "numeric" });
-  return `${p.day} ${p.month.replace(/\.$/, "")} ${p.year}`;
+  return display(value, () => {
+    if (style === "full") {
+      const p = parts(value, { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+      return `${p.weekday}, ${p.day} ${p.month} ${p.year}`;
+    }
+    const p = parts(value, { day: "numeric", month: style === "long" ? "long" : "short", year: "numeric" });
+    return `${p.day} ${p.month.replace(/\.$/, "")} ${p.year}`;
+  });
 }
 
 /** "Oktober 2026". */
 export function formatMonth(value: DateInput): string {
-  const p = parts(value, { month: "long", year: "numeric" });
-  return `${p.month} ${p.year}`;
+  return display(value, () => {
+    const p = parts(value, { month: "long", year: "numeric" });
+    return `${p.month} ${p.year}`;
+  });
 }
 
 /** Jakarta calendar date as "2026-10-17" (for date inputs, grouping and comparisons, not display). */
@@ -122,13 +136,15 @@ export function jakartaDateKey(value: DateInput): string {
 
 /** "14.30 WIB"; seconds: true gives "14.30.05 WIB". */
 export function formatTime(value: DateInput, opts: { seconds?: boolean } = {}): string {
-  const p = parts(value, { hour: "2-digit", minute: "2-digit", ...(opts.seconds ? { second: "2-digit" } : {}), hourCycle: "h23" });
-  return `${p.hour}.${p.minute}${opts.seconds ? "." + p.second : ""} WIB`;
+  return display(value, () => {
+    const p = parts(value, { hour: "2-digit", minute: "2-digit", ...(opts.seconds ? { second: "2-digit" } : {}), hourCycle: "h23" });
+    return `${p.hour}.${p.minute}${opts.seconds ? "." + p.second : ""} WIB`;
+  });
 }
 
 /** "17 Okt 2026 14.30 WIB". */
 export function formatDateTime(value: DateInput, opts: { seconds?: boolean } = {}): string {
-  return `${formatDate(value)} ${formatTime(value, opts)}`;
+  return display(value, () => { toDate(value); return `${formatDate(value)} ${formatTime(value, opts)}`; });
 }
 
 /** Drop-in replacements for former `new Intl.*Format(...)` instances whose `.format()` call sites remain. */
