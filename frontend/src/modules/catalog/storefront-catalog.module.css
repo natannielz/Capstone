@@ -23,11 +23,15 @@
 .searchTerm { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin: 0; font-size: 15px; }
 /* Sort and view never shrink below their own labels ("Terbaru ditambahkan" is never clipped). */
 .sort { flex: none; }
-.view { display: inline-flex; flex: none; gap: var(--space-1); }
+/* Kisi / Daftar: one segmented control. Both segments carry the same border; the selected one differs by fill only. */
+.view { display: inline-flex; flex: none; gap: 0; }
 .view button { display: inline-flex; align-items: center; gap: var(--space-2); height: var(--control-h); padding: 0 var(--space-4); border: 1px solid var(--control-border);
-  border-radius: var(--radius-control); background: var(--card); color: var(--foreground); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
+  border-radius: 0; background: var(--card); color: var(--foreground); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
+.view button:first-child { border-radius: var(--radius-control) 0 0 var(--radius-control); }
+.view button:last-child { border-radius: 0 var(--radius-control) var(--radius-control) 0; }
+.view button + button { margin-left: -1px; }
 .view button:hover { background: var(--muted); }
-.view button[aria-pressed="true"] { border-color: var(--secondary); background: var(--secondary); color: var(--secondary-foreground); }
+.view button[aria-pressed="true"] { background: var(--secondary); color: var(--secondary-foreground); }
 .view svg { width: 16px; height: 16px; }
 
 /* Five across at 1280, two on a phone, for guests and buyers alike. */

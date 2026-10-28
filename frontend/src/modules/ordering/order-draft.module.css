@@ -33,7 +33,8 @@
 .orderLines small { color: var(--muted-foreground); font-size: 13px; }
 .orderThumb { display: grid; place-items: center; flex: none; width: 48px; height: 48px; border-radius: var(--radius-control); background: var(--secondary); color: var(--secondary-foreground); }
 .orderNext { margin: 0; color: var(--muted-foreground); font-size: 14px; }
-.orderTotal { margin: 0; font-size: 15px; }
+/* The total sits closer to the row buttons than the lines above it do: the row already adds its own gap before the actions. */
+.orderTotal { margin: 0 0 calc(-1 * var(--space-2)); font-size: 15px; line-height: 24px; }
 .orderTotal strong { font-size: 18px; font-variant-numeric: tabular-nums; }
 .saved { display: grid; gap: var(--space-2); padding: var(--space-4) var(--space-6); border-radius: var(--radius-card); background: var(--tone-success); color: var(--tone-success-foreground); }
 .saved h2, .saved p { margin: 0; }

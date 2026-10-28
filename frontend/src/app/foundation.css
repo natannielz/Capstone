@@ -215,7 +215,7 @@ button:disabled{cursor:not-allowed}
 @layer components{
 .quantity-stepper{display:grid;gap:var(--space-2)}
 .quantity-stepper-controls{display:flex;align-items:stretch;gap:var(--space-2);max-width:240px}
-.quantity-stepper-controls input{flex:1;min-width:0;height:var(--control-h);text-align:center;font-variant-numeric:tabular-nums}
+.quantity-stepper-controls input{flex:1;min-width:0;height:var(--control-h);padding:0 var(--space-2);border:1px solid var(--control-border);border-radius:var(--radius-control);background:var(--card);color:var(--foreground);font:inherit;text-align:center;font-variant-numeric:tabular-nums}
 .quantity-stepper-controls button{width:var(--control-h);height:var(--control-h);border:1px solid var(--control-border);border-radius:var(--radius-control);background:var(--card);color:var(--foreground);font-size:20px;font-weight:700}
 .quantity-stepper-controls button:hover:not(:disabled){background:var(--secondary)}
 .quantity-stepper-controls button:disabled,.quantity-stepper-controls button[aria-disabled="true"]{background:var(--muted);color:var(--muted-foreground);cursor:not-allowed}

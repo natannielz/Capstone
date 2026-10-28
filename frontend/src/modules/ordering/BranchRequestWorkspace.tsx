@@ -86,7 +86,7 @@ function RequestDesk({ account, incoming, onFailure }: { account: Account; incom
       setBusy(true); setPage({ items: [], nextRequestId: null }); setSelected(null); setPreview(null); setError(null);
       try { const result = await gateway.list(account.actorId, incoming ? 'incoming' : 'mine', cursor, controller.signal); if (!controller.signal.aborted && current()) setPage(result); }
       catch (failure) { if (!controller.signal.aborted) { setError({ value: failure, writing: false }); onFailure(failure); } }
-      finally { if (!controller.signal.aborted) setBusy(false); }
+      finally { if (!controller.signal.aborted) { setBusy(false); setActing(null); } }
     })(); return () => controller.abort();
   }, [gateway, account.actorId, incoming, cursor, reload, tab, canRead, current, onFailure]);
   async function select(id: string) {
@@ -144,7 +144,7 @@ function RequestDesk({ account, incoming, onFailure }: { account: Account; incom
     {confirmed && <section ref={detail} tabIndex={-1} className={styles.recorded} aria-label="Hasil permintaan"><h2>{confirmed.number} tercatat</h2><p role="status">{requestStateLabel(confirmed.state)}</p><p>{confirmed.state === 'pending' ? 'Permintaan telah tersimpan dan menunggu peninjauan toko.' : confirmed.state === 'accepted' ? 'Toko telah menerima permintaan untuk ditindaklanjuti.' : 'Penolakan toko telah tersimpan.'}</p></section>}
     {tab === 'new' && canSubmit && !confirmed && <BranchRequestComposer actorId={account.actorId} locked={locked} current={current} onSubmit={submit} onFailure={onFailure} />}
     {tab === 'history' && canRead && <Section title={incoming ? 'Kebutuhan yang ditujukan ke toko Anda' : 'Permintaan yang Anda ajukan'} label={incoming ? 'Daftar permintaan masuk' : 'Daftar permintaan saya'} busy={busy}
-      actions={<Button disabled={locked} onClick={() => { setCursor(null); setReload(value => value + 1); }}>Muat permintaan terbaru</Button>}>
+      actions={<Button disabled={locked} onClick={() => { setActing('refresh'); setCursor(null); setReload(value => value + 1); }} busy={acting === 'refresh'}>Muat permintaan terbaru</Button>}>
       <DataList label={incoming ? 'Permintaan masuk' : 'Permintaan saya'} items={page.items} getKey={item => item.id} loading={busy}
         empty={error ? undefined : { title: 'Belum ada permintaan pada halaman ini.' }}
         renderTitle={item => item.number} renderBadge={item => <Badge tone={stateTone(item.state)} label={requestStateLabel(item.state)} />}
@@ -159,7 +159,7 @@ function RequestDesk({ account, incoming, onFailure }: { account: Account; incom
           : <div className="ui-actions"><Button variant="primary" disabled={locked || reason.trim().length === 0} busy={acting === 'decision:accept'} onClick={() => void prepareDecision('accept')}>Terima permintaan</Button><Button variant="danger" disabled={locked || reason.trim().length === 0} busy={acting === 'decision:reject'} onClick={() => void prepareDecision('reject')}>Tolak permintaan</Button></div>}
       </>}
       {incoming && selected.state === 'pending' && selected.createdBy === account.actorId && <p>Permintaan Anda perlu ditinjau oleh petugas lain yang berwenang.</p>}
-      <div className="ui-actions"><Button disabled={locked} onClick={() => void select(selected.id)}>Perbarui rincian</Button></div>
+      <div className="ui-actions"><Button disabled={locked} onClick={() => void select(selected.id)} busy={acting === 'open:' + selected.id}>Perbarui rincian</Button></div>
     </section>}
   </>;
 }

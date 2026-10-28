@@ -242,3 +242,69 @@ test("review: the pressed button carries the busy state", () => {
   has(orders, /busy=\{acting === 'again:' \+ id\}/); has(orders, /busy=\{acting === 'open:' \+ id\}/);
   has(source("ordering/BranchRequestWorkspace.tsx"), /busy=\{acting === 'open:' \+ item\.id\}/);
 });
+
+// Fix round 1 (Task 3.6 review).
+const foundationCss = () => css("src/app/foundation.css");
+/** The declarations of every rule whose selector is exactly `selector` (plain string scan, no regex escaping). */
+const ruleBody = (sheet: string, selector: string) => {
+  const bodies: string[] = []; let from = 0;
+  for (;;) {
+    const at = sheet.indexOf(selector, from); if (at < 0) break; from = at + selector.length;
+    const before = sheet.slice(0, at).trimEnd().slice(-1), after = sheet.slice(from).trimStart();
+    if ((before === "" || before === "}" || before === "{") && after.startsWith("{")) bodies.push(after.slice(1, after.indexOf("}")));
+  }
+  return bodies.join(";");
+};
+
+test("review: the quantity stepper input has the field's border, radius and background (cart, product page, dialog)", () => {
+  const body = ruleBody(foundationCss(), ".quantity-stepper-controls input");
+  has(body, /border:\s*1px solid var\(--control-border\)/, "the stepper input has a border");
+  has(body, /border-radius:\s*var\(--radius-control\)/); has(body, /background:\s*var\(--card\)/);
+});
+
+test("review: BuyerCatalog keeps FIX-RULES' redirect for accounts that are not buyers", () => {
+  const code = source("catalog/BuyerCatalog.tsx");
+  has(code, /import \{[^}]*\bnonBuyerCatalogHref\b[^}]*\} from '\.\/catalog-history'/, "imports nonBuyerCatalogHref");
+  has(code, /const elsewhere = nonBuyerCatalogHref\(scope\.allowedActions, publicId, window\.location\.search\)/);
+  has(code, /const \[notBuyer, setNotBuyer\]/); has(code, /if \(notBuyer\) router\.replace\(notBuyer\)/);
+});
+
+test("review: refresh and secondary actions show the busy state on the pressed button", () => {
+  const orders = source("ordering/OrderHistoryWorkspace.tsx");
+  has(orders, /busy=\{acting === 'refresh'\}[^>]*>\{filter\?\.sort === 'oldest' \? 'Muat pesanan pertama' : 'Muat pesanan terbaru'\}/);
+  has(orders, /busy=\{acting === 'open:' \+ selected\.submission\.orderId\}[^>]*>Perbarui perkembangan/);
+  const requests = source("ordering/BranchRequestWorkspace.tsx");
+  has(requests, /busy=\{acting === 'refresh'\}[^>]*>Muat permintaan terbaru/);
+  has(requests, /busy=\{acting === 'open:' \+ selected\.id\}[^>]*>Perbarui rincian/);
+  has(source("ordering/OrderCheckoutWorkspace.tsx"), /busy=\{acting === 'reload:' \+ item\.group\.groupKey\}[^>]*>Muat kembali pesanan/);
+});
+
+test("review: Kisi / Daftar is one segmented control — same border on both segments, the selected one differs by fill only", () => {
+  const sheet = css("src/modules/catalog/storefront-catalog.module.css");
+  has(ruleBody(sheet, ".view"), /gap:\s*0/, "segments touch");
+  has(ruleBody(sheet, ".view button"), /border:\s*1px solid var\(--control-border\)/);
+  lacks(ruleBody(sheet, '.view button[aria-pressed="true"]'), /border/, "the selected segment keeps the shared border");
+  has(ruleBody(sheet, '.view button[aria-pressed="true"]'), /background:/);
+  has(ruleBody(sheet, ".view button:first-child"), /border-radius:\s*var\(--radius-control\) 0 0 var\(--radius-control\)/);
+  has(ruleBody(sheet, ".view button:last-child"), /border-radius:\s*0 var\(--radius-control\) var\(--radius-control\) 0/);
+});
+
+test("guests never see a price: the guest catalogue modules have none, and the buyer catalogue prices sit behind the signed-in gates", () => {
+  for (const file of ["catalog/PublicCatalog.tsx", "catalog/PublicCatalogParts.tsx", "catalog/public-catalog-client.ts"])
+    lacks(source(file), /currentPrice|unitPrice|formatDisplayMoney|orderDisplayAmount|catalog\.price\b|productPrice/, file + " must not know a price");
+  const buyer = source("catalog/BuyerCatalog.tsx");
+  // ProductPage is the non-pilot buyer page: it is rendered only for a signed-in account, in the non-request-only branch.
+  const productPage = buyer.slice(buyer.indexOf("function ProductPage"), buyer.indexOf("function PackageReview"));
+  const rest = buyer.replace(productPage, "");
+  for (const line of rest.split("\n").filter(line => line.includes("price(item.currentPrice)"))) has(line, /!requestOnly &&/, "a price element sits behind the request-only gate");
+  has(buyer, /account && !expired && selected && \(requestOnly \? <PackageReview[^]*?: <ProductPage/, "ProductPage needs a signed-in account");
+  has(buyer, /account && !expired && <>/, "the card list renders only for a signed-in account");
+});
+
+test("review: order rows close the gap between the total and the row buttons", () => {
+  has(ruleBody(css("src/modules/ordering/order-draft.module.css"), ".orderTotal"), /margin:\s*0 0 calc\(-1 \* var\(--space-2\)\)/);
+});
+
+test("ui-standard §12 says when a button may wrap its label", () => {
+  has(read("../docs/quality/website-ready/ui-standard.md"), /ui-button--wrap[^\n]*may wrap its label[^\n]*44 px or taller/);
+});
