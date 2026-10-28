@@ -206,7 +206,7 @@ test("U-023/U-006/U-009/U-010: these pages' stylesheets use tokens only — no h
 });
 
 test("U-040 and the shared one-primary rule: no source line and no action row of these pages holds two primary Buttons", () => {
-  const modules = ["billing", "invoice-releases", "administration", "identity", "organizations", "operations", "accounting", "reporting"];
+  const modules = ["billing", "invoice-releases", "administration", "identity", "organizations", "operations", "accounting", "reporting", "procurement"];
   const files = modules.flatMap(dir => readdirSync("src/modules/" + dir).filter(name => name.endsWith(".tsx")).map(name => `src/modules/${dir}/${name}`));
   assert.ok(files.length > 40, "the scan covers the pages and their panels");
   for (const file of files) {
@@ -217,5 +217,44 @@ test("U-040 and the shared one-primary rule: no source line and no action row of
     });
     // Neighbours in the same action row, even across lines.
     lacks(read(file), /variant="primary"[^<]*>[^<]*<\/Button>\s*<Button variant="primary"/, `${file}: two primaries side by side`);
+  }
+});
+
+// Procurement (U-040): the sixteen workspaces on the shared primitives, with D's logic (FIX-FLOW) untouched.
+const procurementDesks: Record<string, string> = {
+  "/procurement/requests": "ProcurementRequestWorkspace", "/procurement/purchase-orders": "PurchaseOrderWorkspace", "/procurement/receiving": "ProcurementReceivingWorkspace",
+  "/procurement/funding": "ProcurementFundingWorkspace", "/procurement/suppliers": "SupplierWorkspace", "/procurement/supplier-banks": "SupplierBankWorkspace",
+  "/procurement/supplier-claims": "SupplierClaimWorkspace", "/procurement/supplier-documents": "SupplierDocumentWorkspace", "/procurement/disbursements": "ProcurementDisbursementWorkspace",
+  "/procurement/inspections": "ProcurementInspectionWorkspace", "/procurement/settlements": "ProcurementSettlementWorkspace", "/procurement/stock-receipts": "ProcurementStockReceiptWorkspace",
+  "/procurement/stock-valuations": "ProcurementStockValuationWorkspace",
+};
+const procurementLists: Record<string, string> = {
+  "/procurement/advance-returns": "ProcurementAdvanceReturnWorkspace", "/procurement/quality-acceptances": "ProcurementQualityAcceptanceWorkspace", "/procurement/supplier-payables": "ProcurementSupplierPayableWorkspace",
+};
+const procurement = (name: string) => source("procurement/" + name + ".tsx");
+
+test("U-040 procurement: one h1 through PageHeader; the brand link, legacy header, alerts, states and look-alike buttons are gone", () => {
+  for (const [route, name] of Object.entries({ ...procurementDesks, ...procurementLists })) {
+    const code = procurement(name);
+    has(code, /from ['"]@\/components\/workspace-kit\/page-header['"]/, `${route}: imports PageHeader`);
+    has(code, /<PageHeader\b/, `${route}: renders PageHeader`);
+    lacks(code, /<h1\b/, `${route}: no hand-made h1`);
+    lacks(code, /\bstyles\.(header|brand|alert|empty|status|primary|secondary|danger|pagination|queue\w*|selectedRow)\b/, `${route}: legacy class`);
+    lacks(code, /<button\b[^>]*className=\{styles\.\w+\}/, `${route}: legacy button`);
+    has(code, /<StateView\b/, `${route}: states through StateView`);
+    lacks(code, /<p role="status" className=\{styles\.success\}>/, `${route}: a saved notice is a StateView`);
+    lacks(code, /href="\/identity\/account">Akun saya/, `${route}: no header link the frame already provides`);
+    // D's logic stays: the kept-location helpers and the formatters are still used where they were.
+  }
+  has(procurement("ProcurementReceivingWorkspace"), /refreshAfterConfirmedSave\b[\s\S]*restoreKeptLocation\b|restoreKeptLocation\b[\s\S]*refreshAfterConfirmedSave\b/, "D's refresh helpers are still used");
+});
+
+test("U-040 procurement desks: queue column through DataList in the shared desk; the location choice and refresh are one Section with the refresh as its header action", () => {
+  for (const [route, name] of Object.entries(procurementDesks)) {
+    const code = procurement(name);
+    has(code, /className="ui-desk"/, `${route}: the shared desk`);
+    has(code, /<DataList\b/, `${route}: the queue is a DataList (one state, pager rule)`);
+    has(code, /<Section title="Pilihan lokasi[^"]*"[^>]*actions=\{<Button variant="secondary"[^>]*>Muat (data|ulang)[^<]*<\/Button>\}/, `${route}: refresh is the location Section's header action`);
+    has(code, /<Facts\b/, `${route}: facts through Facts`);
   }
 });
