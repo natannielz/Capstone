@@ -254,7 +254,11 @@ test("U-040 procurement desks: queue column through DataList in the shared desk;
     const code = procurement(name);
     has(code, /className="ui-desk"/, `${route}: the shared desk`);
     has(code, /<DataList\b/, `${route}: the queue is a DataList (one state, pager rule)`);
-    has(code, /<Section title="Pilihan lokasi[^"]*"[^>]*actions=\{<Button variant="secondary"[^>]*>Muat (data|ulang)[^<]*<\/Button>\}/, `${route}: refresh is the location Section's header action`);
-    has(code, /<Facts\b/, `${route}: facts through Facts`);
+    has(code, /<Section title="Pilihan (lokasi|toko)[^"]*"[^>]*actions=\{<Button variant="secondary"[\s\S]{0,500}?>Muat (data|ulang)[^<]*<\/Button>\}/, `${route}: refresh is the location Section's header action`);
   }
+});
+
+test("U-040 procurement: facts through Facts; only the two conditional fact lists in the forms files keep the legacy dl", () => {
+  const remaining = readdirSync("src/modules/procurement").filter(name => name.endsWith(".tsx") && read("src/modules/procurement/" + name).includes("<dl className={styles.facts}>"));
+  assert.deepEqual(remaining.sort(), ["procurement-supplier-payable-forms.tsx", "supplier-document-forms.tsx"]);
 });
