@@ -36,9 +36,9 @@ test("a healthy system reads as good, and each problem raises its own finding", 
 
 test("the report view lists each queue with its counts and the findings as status badges", () => {
   const html = renderToStaticMarkup(createElement(HealthReportView, { report: { ...healthy, ocr: { ...queue, dead: 1, oldestWaitingAt: "2026-10-20T07:00:00Z" } } }));
-  assert.match(html, /<table[^>]*>[\s\S]*<caption>Antrean latar<\/caption>/);
-  assert.match(html, /<th scope="row">OCR dokumen<\/th>/);
-  assert.match(html, /class="status-badge" data-tone="danger"/);
+  assert.match(html, /<table[^>]*>[\s\S]*<caption[^>]*>Jumlah pekerjaan per antrean<\/caption>/);
+  assert.match(html, /<td[^>]*>OCR dokumen<\/td>/);
+  assert.match(html, /data-tone="danger" class="status-badge"/);
   assert.match(html, /Versi skema 118 dari 118/);
   assert.doesNotMatch(html, /Rahasia|undefined|NaN/);
 });
