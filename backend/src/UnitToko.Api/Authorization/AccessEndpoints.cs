@@ -154,7 +154,7 @@ public static partial class AccessEndpoints
     // UI task discovery is separate from administrative catalog admission. A permission is offered when the actor may use it now, or
     // when it needs a fresh factor the actor can renew: reviewers keep the verification entry when MFA ages; every protected read or
     // command still enforces current assurance.
-    private static string[] CurrentActions(ActorContext actor, AuthorizationSnapshot snapshot, DateTimeOffset now) =>
+    internal static string[] CurrentActions(ActorContext actor, AuthorizationSnapshot snapshot, DateTimeOffset now) =>
         AvailableActions(actor, snapshot, now).Concat(ReportingActions(actor, snapshot, now))
             .Concat(DiscoverablePermissions.Where(permission => permission != Permissions.ReportRead &&
                 (ScopePolicy.Compile(actor, snapshot, permission, now).IsAllowed || ScopePolicy.CanRequestStepUp(actor, snapshot, permission, now))))

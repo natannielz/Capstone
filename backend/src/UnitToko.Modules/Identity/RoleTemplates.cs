@@ -26,8 +26,8 @@ public static class RoleTemplates
         // Job templates (F-006). Each grants the routine work of one job; the decision authority that the explicit-grant rules keep out
         // of templates (fresh-MFA approvals, governance proposals, explicit reads) is offered as its suggestions. No template, with
         // its suggestions, holds both sides of a maker/checker pair. The six templates above keep their v1 contents unchanged.
-        // branch.pic is what lets a grant act for the whole branch, so the branch job carries it.
-        ["branch-approver"] = New("branch-approver", Permissions.BranchPic, Permissions.CatalogRead, Permissions.OrderRead, Permissions.ShipmentRead, Permissions.InvoiceRead,
+        // branch.pic designates a branch person in charge; like every explicit designation it is never in a template. The branch job suggests it.
+        ["branch-approver"] = New("branch-approver", Permissions.CatalogRead, Permissions.OrderRead, Permissions.ShipmentRead, Permissions.InvoiceRead,
             Permissions.CaseRead, Permissions.BranchOrderRequestRead),
         ["catalog-officer"] = New("catalog-officer", Permissions.CatalogRead, Permissions.CatalogManage, Permissions.PricingManage, Permissions.OrderRead,
             Permissions.StockRead),
@@ -63,17 +63,18 @@ public static class RoleTemplates
             ["store-staff"] = [Permissions.OrganizationAddressRead, Permissions.SubstitutionPropose, Permissions.StockConvert,
                 Permissions.ReservationRelease, Permissions.SupplierChangePropose, Permissions.StockReleasePropose],
             ["store-head"] = [Permissions.BranchOrderRequestRead, Permissions.BranchOrderRequestDecide, Permissions.OrderAccept, Permissions.SupplierChangeApprove, Permissions.OrganizationAddressRead, Permissions.FundingRead,
-                Permissions.CreditRequest, Permissions.RefundRequest],
+                Permissions.CreditRequest, Permissions.RefundRequest, Permissions.InvoiceRead],
             ["courier"] = [],
-            // The generic finance template offers the proposing side only; the deciding side is offered by finance-checker.
-            ["finance"] = [Permissions.OrganizationAddressRead, Permissions.BankReceiptRead, Permissions.BankReceiptConfirm, Permissions.BankStatementRead, Permissions.BankStatementStage, Permissions.PaymentReviewRead, Permissions.PaymentReviewCorrect, Permissions.ReceivingAccountRead, Permissions.ReceivingAccountDetailsRead,
+            // The generic finance template offers the proposing side only; the deciding side is offered by finance-checker. Statement staging
+        // (the importer cannot also confirm the receipt or verify the disbursement) is offered by finance-maker alone.
+            ["finance"] = [Permissions.OrganizationAddressRead, Permissions.BankReceiptRead, Permissions.BankReceiptConfirm, Permissions.BankStatementRead, Permissions.PaymentReviewRead, Permissions.PaymentReviewCorrect, Permissions.ReceivingAccountRead, Permissions.ReceivingAccountDetailsRead,
                 Permissions.ReceivingAccountPropose, Permissions.FundingRead,
                 Permissions.SupplierBankRead, Permissions.SupplierBankDetailsRead, Permissions.SupplierBankPropose,
                 Permissions.ProcurementDisbursementRead, Permissions.ProcurementDisbursementEvidenceRead,
                 Permissions.ProcurementStockValuationRead, Permissions.ProcurementStockValuationPropose,
                 Permissions.StockReleaseApprove],
             ["system-admin"] = [],
-            ["branch-approver"] = [Permissions.OrderSpendApprove, Permissions.OrderSpendingPolicyRead, Permissions.OrganizationAddressRead],
+            ["branch-approver"] = [Permissions.BranchPic, Permissions.OrderSpendApprove, Permissions.OrderSpendingPolicyRead, Permissions.OrganizationAddressRead],
             ["catalog-officer"] = [Permissions.CatalogPublicPropose, Permissions.OrganizationAddressRead],
             ["catalog-reviewer"] = [Permissions.PricingApprove, Permissions.CatalogPublicApprove],
             ["dispatcher"] = [Permissions.OrganizationAddressRead, Permissions.StockReleasePropose, Permissions.ReservationRelease, Permissions.SubstitutionPropose],
