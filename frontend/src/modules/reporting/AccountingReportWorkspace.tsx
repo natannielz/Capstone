@@ -177,7 +177,7 @@ function ReportDesk({account, onDenied, header}: {account: Account; onDenied: (e
     {!report && busy !== 'read' && <section className="ui-section" aria-label="Hasil laporan"><StateView kind="empty" title="Laporan belum ditampilkan"
       message="Pilih satu buku dan tanggal akhir, lalu tampilkan laporan. Saldo tidak berasal dari halaman pesanan, tagihan, atau stok saat ini." /></section>}
     {report && <>
-      <section className="ui-section" aria-labelledby="report-result-heading"><div className="ui-stack">
+      <section className="ui-section" data-variant="plain" aria-labelledby="report-result-heading"><div className="ui-stack">
         <div className="ui-form"><h2 id="report-result-heading" tabIndex={-1} ref={reportHeading}>Neraca saldo kumulatif</h2><Scope book={report.book} />
           <p>Dari awal buku sampai tanggal bisnis {report.endDate}, termasuk tanggal tersebut. Zona waktu: Asia/Jakarta.</p>
           <p className={common.scopeSummary}>Laporan dari jurnal tersimpan. Laporan ini bukan penutupan buku yang disetujui, dan tidak menerbitkan transaksi atau mengubah saldo.</p>
@@ -197,7 +197,7 @@ function ReportDesk({account, onDenied, header}: {account: Account; onDenied: (e
             {key: 'balance', header: 'Saldo debit dikurangi kredit', align: 'end', render: row => formatAccountingReportMoney(row.balance, currency)},
           ]} />
       </div></section>
-      <Section title="Jurnal tersimpan" id="report-journals-heading">
+      <Section title="Jurnal tersimpan" id="report-journals-heading" variant="plain">
         {report.journals.length === 0 ? <StateView kind="empty" title="Belum ada jurnal yang dibukukan sampai tanggal akhir pilihan ini. Akun pada bagan terkait tetap ditampilkan dengan saldo yang tercatat." />
           : <>
             <p className={common.help}>Menampilkan jurnal {page * pageSize + 1}–{Math.min((page + 1) * pageSize, report.journals.length)} dari {report.journals.length}. Jumlah saldo mencakup seluruh laporan.</p>

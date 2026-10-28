@@ -78,7 +78,7 @@
 .facts > div:first-child { grid-column: 1 / -1; }
 .card h2 { scroll-margin-top: 24px; }
 .workspace { margin: var(--space-8) 0 var(--space-12); display: grid; gap: var(--space-6); }
-.skip { position: absolute; top: -80px; left: 20px; padding: var(--space-3) var(--space-4); background: var(--card); color: var(--foreground); z-index: 20; }
+.skip { position: absolute; top: -80px; left: 20px; display: inline-flex; align-items: center; min-height: var(--control-h); padding: 0 var(--space-4); border-radius: var(--radius-control); background: var(--card); color: var(--foreground); z-index: 20; }
 .skip:focus { top: 10px; }
 .srOnly { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 @media (max-width: 960px) { .loginGrid { gap: var(--space-8); grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .accountGrid { grid-template-columns: minmax(0, 1fr); } }
