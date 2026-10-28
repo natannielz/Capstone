@@ -2,7 +2,7 @@
 
 import { SessionAccessState, lostAccessKind } from '@/components/workspace-kit/session-access-state';
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import type { components } from "../../api/generated/schema";
 import { createAccessGateway } from "../administration/access-client";
 import { AdministrationNavigation } from "../administration/AdministrationNavigation";
@@ -15,6 +15,9 @@ import { IdentityDecisionReview } from "./IdentityDecisionReview";
 import { InvitationProposalForm } from "./InvitationProposalForm";
 import { canManageAccounts } from "./identity-workflow";
 import styles from "../administration/access.module.css";
+import { Button } from '@/components/workspace-kit/button';
+import { PageHeader } from '@/components/workspace-kit/page-header';
+import { StateView } from '@/components/workspace-kit/state-view';
 
 type Schemas = components["schemas"];
 type Loaded = { current: Schemas["CurrentAccessDto"]; catalog: Schemas["AccessCatalogDto"] };
@@ -51,17 +54,16 @@ export function IdentityAdministration() {
       sequence.current++; setLoaded(null); setLoading(false); setError(failure); setLost(true);
     }
   }, []);
+  // The body owns the refresh (it knows when a command is in flight), so it renders the header with it; the access states without.
+  const header = (action?: ReactNode) => <PageHeader title="Akun dan undangan" description="Kelola akun terverifikasi, tinjau undangan, dan catat kebutuhan pemulihan sesuai lingkup tugas." secondaryAction={action} />;
   return <main className={styles.page}>
-    <header className={styles.header}><div><Link className={styles.brand} href="/identity/account">Unit Toko</Link><h1>Akun dan undangan</h1>
-      <p>Kelola akun terverifikasi, tinjau undangan, dan catat kebutuhan pemulihan sesuai lingkup tugas.</p></div></header>
-    {error !== null && loaded && <p role="alert" className={styles.alert}>{accessMessage(error)}</p>}
-    {loaded ? <IdentityAdministrationBody key={`${loaded.current.userId}:${revision}`} {...loaded} onFailure={onFailure} onRefresh={refresh} />
-      : loading ? <section className={styles.state} aria-busy="true"><h2>Memeriksa akses</h2></section>
-      : <SessionAccessState error={error} kind={lost ? lostAccessKind(error) : undefined} returnPath="/administration/accounts" onRetry={() => void refresh()} detail={error !== null ? accessMessage(error) : undefined} />}
+    {loaded ? <IdentityAdministrationBody key={`${loaded.current.userId}:${revision}`} {...loaded} header={header} alert={error !== null ? accessMessage(error) : null} onFailure={onFailure} onRefresh={refresh} />
+      : <>{header()}<div className="ui-stack">{loading ? <StateView kind="loading" title="Memeriksa akses" />
+      : <SessionAccessState error={error} kind={lost ? lostAccessKind(error) : undefined} returnPath="/administration/accounts" onRetry={() => void refresh()} detail={error !== null ? accessMessage(error) : undefined} />}</div></>}
   </main>;
 }
 
-function IdentityAdministrationBody({ current, catalog, onFailure, onRefresh }: Loaded & { onFailure: (error: unknown) => void; onRefresh: () => Promise<void> }) {
+function IdentityAdministrationBody({ current, catalog, onFailure, onRefresh, header, alert }: Loaded & { onFailure: (error: unknown) => void; onRefresh: () => Promise<void>; header: (action?: ReactNode) => ReactNode; alert: string | null }) {
   const [gateway] = useState(() => createIdentityAdministrationGateway());
   const [ledger] = useState(() => new MutationLedger());
   const recovery = useOperationRecovery(current.userId);
@@ -114,16 +116,17 @@ function IdentityAdministrationBody({ current, catalog, onFailure, onRefresh }: 
     } catch { /* The shared command state retains the error and exact uncertain request. */ }
   }
   function resolved() { setFormRevision(value => value + 1); ledger.resetAfterReconciliation(); setRetry(null); setSelected(null); setError(null); recovery.refresh(); setRevision(value => value + 1); }
-  return <>
+  return <>{header(<Button variant="secondary" disabled={locked} onClick={() => void onRefresh()}>Muat ulang akses</Button>)}<div className="ui-stack">
     <AdministrationNavigation current="accounts" actions={current.allowedActions} locked={locked} />
-    <div className={styles.actions}><p>Akun yang memeriksa: {current.userId}</p><button className={styles.secondary} disabled={locked} onClick={() => void onRefresh()}>Muat ulang akses</button><Link href="/identity/account">Verifikasi sesi dan dua langkah</Link></div>
-    {message && <p role="status" className={styles.success}>{message}</p>}
-    {error !== null && <div role="alert" className={styles.alert}><p>{accessMessage(error)}</p>{retry && <button className={styles.secondary} disabled={busy} onClick={() => void retry.run().catch(() => undefined)}>Periksa ulang permintaan yang sama</button>}</div>}
-    {recovery.error !== null && <p role="alert" className={styles.alert}>{accessMessage(recovery.error)}</p>}
+    <div className={styles.actions}><p>Akun yang memeriksa: {current.userId}</p><Link href="/identity/account">Verifikasi sesi dan dua langkah</Link></div>
+    {alert !== null && <StateView kind="error" title={alert} />}
+    {message && <StateView kind="success" title={message} />}
+    {error !== null && <StateView kind="error" title={accessMessage(error)} action={retry ? <Button variant="secondary" disabled={busy} onClick={() => void retry.run().catch(() => undefined)}>Periksa ulang permintaan yang sama</Button> : undefined} />}
+    {recovery.error !== null && <StateView kind="error" title={accessMessage(recovery.error)} />}
     <OperationRecovery entries={recovery.entries} journal={recovery.journal} disabled={busy} onResolved={resolved} onFailure={onFailure} />
     {selected && <IdentityDecisionReview key={selected.kind === "invitation" ? `${selected.kind}:${selected.value.id}:${selected.action}:${selected.value.version}` : `${selected.kind}:${selected.value.userId}:${selected.value.securityVersion}`} decision={selected} locked={locked} onCancel={() => setSelected(null)} onConfirm={confirm} />}
     {current.allowedActions.includes("invite.manage") && current.allowedActions.includes("membership.propose") && <InvitationProposalForm key={formRevision} current={current} catalog={catalog} locked={locked} onSubmit={propose} />}
     <InvitationQueue gateway={gateway} actorId={current.userId} revision={revision} locked={locked} onSelect={setSelected} onFailure={onFailure} />
     <AccountDirectory gateway={gateway} actorId={current.userId} revision={revision} locked={locked} onSelect={setSelected} onFailure={onFailure} canRecover={current.allowedActions.includes("recovery.initiate")} />
-  </>;
+  </div></>;
 }

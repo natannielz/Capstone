@@ -1,8 +1,7 @@
 'use client';
 
 import { SessionAccessState } from '@/components/workspace-kit/session-access-state';
-import Link from 'next/link';
-import {useCallback, useEffect, useRef, useState} from 'react';
+import {useCallback, useEffect, useRef, useState, type ReactNode} from 'react';
 import {RequestNotSentError} from '../../api/client';
 import {createIdentityGateway} from '../identity/identity-client';
 import {IdentityFailure, sessionTiming, stepUpFields, type IdentitySession} from '../identity/identity-workflow';
@@ -16,6 +15,13 @@ import {createDelegationGateway, parseDelegationCommand, type DelegationCommand,
 import {DelegationJournal, delegationJournalPrefix, type DelegationAction, type DelegationReference} from './delegation-journal';
 import styles from './access.module.css';
 import { formatDateTime } from '@/lib/format';
+import { PageHeader } from '@/components/workspace-kit/page-header';
+import { Section } from '@/components/workspace-kit/section';
+import { StateView } from '@/components/workspace-kit/state-view';
+import { DataList } from '@/components/workspace-kit/data-list';
+import { Field } from '@/components/workspace-kit/field';
+import { Badge } from '@/components/workspace-kit/badge';
+import { Button } from '@/components/workspace-kit/button';
 
 const path = '/administration/delegations';
 const names: Record<DelegationAction, string> = {propose: 'Ajukan delegasi', approve: 'Setujui delegasi', revoke: 'Hentikan delegasi', handover: 'Catat serah-terima'};
@@ -54,17 +60,19 @@ export function TemporaryDelegation() {
     const restored = (event: PageTransitionEvent) => {if (event.persisted) {setAccount(null); setRefresh(x => x + 1);}};
     window.addEventListener('pageshow', restored); return () => {window.clearInterval(timer); window.removeEventListener('pageshow', restored);};
   }, [account]);
+  // The desk owns the session refresh and the verification step, so it renders the header with them; the access states without.
+  const header = (actions?: ReactNode) => <PageHeader title="Delegasi sementara" description="Pilih izin dari akses Anda yang masih berlaku. Delegasi memerlukan persetujuan orang lain dan selalu memiliki waktu berakhir." secondaryAction={actions} />;
   return <main className={styles.page}>
-    <header className={styles.header}><div><Link className={styles.brand} href="/identity/account">Unit Toko</Link><h1>Delegasi sementara</h1>
-      <p>Pilih izin dari akses Anda yang masih berlaku. Delegasi memerlukan persetujuan orang lain dan selalu memiliki waktu berakhir.</p></div><Link href="/identity/account">Akun saya</Link></header>
-    {error !== null && account && <p role="alert" className={styles.alert}>{message(error)}</p>}
-    {!account && error === null ? <p role="status">Memeriksa sesi dan akses…</p> : !account || sessionTiming(account.session, elapsed).expired
-      ? <SessionAccessState error={error} kind={account ? "expired" : undefined} returnPath={path} onRetry={() => {setAccount(null); setError(null); setRefresh(v => v + 1);}} detail={error !== null ? message(error) : undefined} />
-      : <Desk key={account.actorId + ':' + account.observed} account={account} refreshSession={() => {setAccount(null); setRefresh(v => v + 1);}} />}
+    {account && !sessionTiming(account.session, elapsed).expired ? <Desk key={account.actorId + ':' + account.observed} account={account} header={header} alert={error !== null ? message(error) : null} refreshSession={() => {setAccount(null); setRefresh(v => v + 1);}} />
+      : <>{header()}<div className="ui-stack">
+        {error !== null && account && <StateView kind="error" title={message(error)} />}
+        {!account && error === null ? <StateView kind="loading" title="Memeriksa sesi dan akses…" />
+          : <SessionAccessState error={error} kind={account ? "expired" : undefined} returnPath={path} onRetry={() => {setAccount(null); setError(null); setRefresh(v => v + 1);}} detail={error !== null ? message(error) : undefined} />}
+      </div></>}
   </main>;
 }
 
-function Desk({account, refreshSession}: {account: Account; refreshSession: () => void}) {
+function Desk({account, refreshSession, header, alert}: {account: Account; refreshSession: () => void; header: (actions?: ReactNode) => ReactNode; alert: string | null}) {
   const [gateway] = useState(createDelegationGateway), [access] = useState(createAccessGateway), [journal] = useState(() => new DelegationJournal(() => window.localStorage));
   const alive = useRef(true), epoch = useRef(0), confirmRegion = useRef<HTMLElement>(null);
   const [items, setItems] = useState<DelegationItem[]>([]), [sources, setSources] = useState<DelegationSource[]>([]), [cursors, setCursors] = useState<(string | null)[]>([null]), [next, setNext] = useState<string | null>(null);
@@ -73,6 +81,8 @@ function Desk({account, refreshSession}: {account: Account; refreshSession: () =
   const [sourceId, setSourceId] = useState(''), [beneficiaryId, setBeneficiaryId] = useState(''), [subject, setSubject] = useState<AccessSubject | null>(null), [membershipId, setMembershipId] = useState('');
   const [permissions, setPermissions] = useState<string[]>([]), [effective, setEffective] = useState(''), [expiry, setExpiry] = useState(''), [reason, setReason] = useState('');
   const [review, setReview] = useState<DelegationCommand | null>(null), [accepted, setAccepted] = useState(false);
+  // A failed list read is the queue's own error state; a failed command keeps the page alert (U-037: one state per region).
+  const [readFailed, setReadFailed] = useState(false);
   const cursor = cursors[cursors.length - 1], source = sources.find(row => row.id === sourceId), locked = busy || storageBlocked || pending.length > 0;
   const canPropose = account.actions.includes('access.propose');
   const clearReview = useCallback(() => {setReview(null); setAccepted(false);}, []);
@@ -93,8 +103,8 @@ function Desk({account, refreshSession}: {account: Account; refreshSession: () =
     const version = ++epoch.current; let cancelled = false;
     void (async () => {try {
       const page = await gateway.list(context(version), cursor), choices = canPropose ? await gateway.sources(context(version)) : [];
-      if (!cancelled && context(version).isCurrent()) {setItems(page.items); setNext(page.nextId); setSources(choices); setError(null);}
-    } catch (failure) {if (!cancelled && alive.current && version === epoch.current) {setItems([]); setSources([]); setError(failure);}}
+      if (!cancelled && context(version).isCurrent()) {setItems(page.items); setNext(page.nextId); setSources(choices); setError(null); setReadFailed(false);}
+    } catch (failure) {if (!cancelled && alive.current && version === epoch.current) {setItems([]); setSources([]); setError(failure); setReadFailed(true);}}
     finally {if (!cancelled && alive.current && version === epoch.current) setBusy(false);}})();
     return () => {cancelled = true;};
   }, [gateway, context, cursor, reload, canPropose]);
@@ -152,58 +162,61 @@ function Desk({account, refreshSession}: {account: Account; refreshSession: () =
     ['access.approve', 'access.revoke'].find(value => account.session.stepUpOperations.includes(value)) ?? preferredOperation;
   try {fields = stepUpFields(account.session, operation, path);} catch { /* Only existing provider-authorized operations may start verification. */ }
   return <>
+    {header(<><Button variant="secondary" type="button" disabled={busy} onClick={refreshSession}>Muat ulang sesi dan akses</Button>
+      {fields && <ProtectedNavigationForm action="/auth/step-up" fields={fields} disabled={busy} label="Verifikasi dua langkah" secondary />}</>)}
+    <div className="ui-stack">
     <AdministrationNavigation current="delegations" actions={account.actions} locked={busy || review !== null} />
-    {error !== null && <p className={styles.alert} role="alert">{message(error)}</p>}
+    {alert !== null && <StateView kind="error" title={alert} />}
+    {error !== null && !readFailed && <StateView kind="error" title={message(error)} />}
     {notice && <p role="status">{notice}</p>}
     <p className={styles.help}>Serah-terima di halaman ini menyimpan catatan peserta. Pengambilalihan tugas pemeriksaan pembayaran tersedia pada meja pemeriksaan bagi reviewer berwenang. Jenis tugas lain belum tersedia. Tugas dan persetujuan operasional tetap mengikuti pemilik serta pemisahan tugas masing-masing.</p>
-    <div className={styles.actions}><button className={styles.secondary} type="button" disabled={busy} onClick={refreshSession}>Muat ulang sesi dan akses</button>
-      {fields && <ProtectedNavigationForm action="/auth/step-up" fields={fields} disabled={busy} label="Verifikasi dua langkah" secondary />}</div>
-    {storageBlocked && <p role="alert" className={styles.alert}>Penyimpanan referensi operasi belum tersedia. Pengiriman perubahan dikunci.</p>}
-    {pending.length > 0 && <section className={styles.accountSection} aria-label="Operasi delegasi belum terkonfirmasi"><h2>Periksa hasil asli</h2>
-      <p>Referensi ini tetap tersedia setelah peramban dibuka kembali.</p><ul className={styles.recoveryList}>{pending.map(ref => <li key={ref.key}>
-        <span>{names[ref.action]} · {ref.id ?? 'pengajuan baru'}</span><button type="button" className={styles.secondary} disabled={busy || storageBlocked} onClick={() => void recover(ref)}>Periksa hasil asli {ref.key}</button>
-      </li>)}</ul></section>}
-    <div className={styles.desk} aria-busy={busy}>
-      <section className={styles.queue} aria-label="Daftar delegasi"><h2>Delegasi dalam akses Anda</h2>
-        {items.length === 0 && !busy && <p>Belum ada catatan pada halaman ini.</p>}
-        <ul className={styles.queueList}>{items.map(row => <li key={row.id}><button className={detail?.item.id === row.id ? styles.selectedRow : styles.queueRow} type="button" disabled={locked || review !== null} onClick={() => void select(row.id)}>
-          <strong>Delegasi {row.id}</strong><span>Penerima {row.request.beneficiaryUserId}</span><span>{states[row.status]} · {row.sourceState === 'current' ? 'sumber berlaku' : 'sumber tidak tersedia'}</span></button></li>)}</ul>
-        <div className={styles.pagination}><button type="button" disabled={locked || review !== null || cursors.length === 1} onClick={() => {setBusy(true); setDetail(null); setCursors(v => v.slice(0, -1));}}>Sebelumnya</button>
-          <button type="button" disabled={locked || review !== null || next === null} onClick={() => {setBusy(true); setDetail(null); setCursors(v => [...v, next]);}}>Berikutnya</button></div>
-      </section>
-      <div className={styles.detail}>
-        {canPropose && <section className={styles.form} aria-label="Pengajuan delegasi"><h2>Ajukan delegasi sementara</h2>
-          <fieldset className={styles.fields} disabled={locked || review !== null}>
-            <label>Akses sumber<select value={sourceId} onChange={event => {setSourceId(event.target.value); setPermissions([]);}}><option value="">Pilih akses sumber</option>{sources.map(row => <option key={row.id} value={row.id}>{row.id} · {describeScope(row.scope)}</option>)}</select></label>
+    {storageBlocked && <StateView kind="error" title="Penyimpanan referensi operasi belum tersedia. Pengiriman perubahan dikunci." />}
+    {pending.length > 0 && <Section title="Periksa hasil asli" label="Operasi delegasi belum terkonfirmasi" description="Referensi ini tetap tersedia setelah peramban dibuka kembali.">
+      <DataList label="Operasi belum terkonfirmasi" items={pending} getKey={ref => ref.key} renderTitle={ref => <>{names[ref.action]} · {ref.id ?? 'pengajuan baru'}</>}
+        renderActions={ref => <Button variant="secondary" type="button" disabled={busy || storageBlocked} onClick={() => void recover(ref)}>Periksa hasil asli {ref.key}</Button>} /></Section>}
+    <div className="ui-desk" aria-busy={busy}>
+      <Section title="Delegasi dalam akses Anda" label="Daftar delegasi">
+        <DataList label="Delegasi dalam akses Anda" items={items} getKey={row => row.id} loading={busy && !items.length} disabled={locked || review !== null}
+          error={readFailed ? { message: message(error), onRetry: () => {setBusy(true); setReload(x => x + 1);} } : undefined}
+          empty={{ title: 'Belum ada catatan pada halaman ini.' }} selectedKey={detail?.item.id ?? null} onSelect={row => void select(row.id)}
+          renderTitle={row => <>Delegasi {row.id}</>} renderBadge={row => <Badge status={states[row.status]} />}
+          renderMeta={row => <>Penerima {row.request.beneficiaryUserId} · {row.sourceState === 'current' ? 'sumber berlaku' : 'sumber tidak tersedia'}</>}
+          pagination={{ start: (cursors.length - 1) * 25 + 1, end: (cursors.length - 1) * 25 + items.length, hasPrevious: cursors.length > 1, hasNext: next !== null, disabled: locked || review !== null,
+            onPrevious: () => {setBusy(true); setDetail(null); setCursors(v => v.slice(0, -1));}, onNext: () => {setBusy(true); setDetail(null); setCursors(v => [...v, next]);} }} />
+      </Section>
+      <div className="ui-stack">
+        {canPropose && <Section title="Ajukan delegasi sementara" label="Pengajuan delegasi">
+          <div className="ui-form"><fieldset disabled={locked || review !== null}>
+            <Field id="delegation-source" label="Akses sumber"><select value={sourceId} onChange={event => {setSourceId(event.target.value); setPermissions([]);}}><option value="">Pilih akses sumber</option>{sources.map(row => <option key={row.id} value={row.id}>{row.id} · {describeScope(row.scope)}</option>)}</select></Field>
             {!sources.length && <p>Tidak ada izin sumber milik akun ini yang dapat didelegasikan. Izin yang belum ditetapkan sebagai dapat didelegasikan tidak ditambahkan otomatis.</p>}
-            <label>Nomor akun penerima<input value={beneficiaryId} onChange={event => {setBeneficiaryId(event.target.value); setSubject(null); setMembershipId('');}} inputMode="numeric" /></label>
-            <button type="button" className={styles.secondary} onClick={() => void lookup()}>Periksa penerima</button>
-            <label>Keanggotaan penerima<select value={membershipId} onChange={event => setMembershipId(event.target.value)}><option value="">Pilih keanggotaan aktif</option>{subject?.memberships.filter(row => row.status === 'active').map(row => <option key={row.id} value={row.id}>{row.id} · {describeScope(row.scope)}</option>)}</select></label>
+            <Field id="delegation-beneficiary" label="Nomor akun penerima" width="search"><input value={beneficiaryId} onChange={event => {setBeneficiaryId(event.target.value); setSubject(null); setMembershipId('');}} inputMode="numeric" /></Field>
+            <Button variant="secondary" type="button" onClick={() => void lookup()}>Periksa penerima</Button>
+            <Field id="delegation-membership" label="Keanggotaan penerima"><select value={membershipId} onChange={event => setMembershipId(event.target.value)}><option value="">Pilih keanggotaan aktif</option>{subject?.memberships.filter(row => row.status === 'active').map(row => <option key={row.id} value={row.id}>{row.id} · {describeScope(row.scope)}</option>)}</select></Field>
             {source && <fieldset className={styles.choiceGroup}><legend>Izin yang didelegasikan</legend>{source.permissions.map(permission => <label key={permission} className={styles.checkbox}><input type="checkbox" checked={permissions.includes(permission)} onChange={event => setPermissions(rows => event.target.checked ? [...rows, permission] : rows.filter(p => p !== permission))} />{permissionLabel(permission)}</label>)}</fieldset>}
-            <div className={styles.twoFields}><label>Mulai berlaku (WIB)<input type="datetime-local" value={effective} onChange={event => setEffective(event.target.value)} /></label><label>Berakhir (WIB)<input type="datetime-local" value={expiry} onChange={event => setExpiry(event.target.value)} /></label></div>
+            <div className={styles.twoFields}><Field id="delegation-effective" label="Mulai berlaku (WIB)"><input type="datetime-local" value={effective} onChange={event => setEffective(event.target.value)} /></Field><Field id="delegation-expiry" label="Berakhir (WIB)"><input type="datetime-local" value={expiry} onChange={event => setExpiry(event.target.value)} /></Field></div>
             {source?.expiresAt && <p className={styles.help}>Izin sumber berakhir {formatDateTime(source.expiresAt)}.</p>}
-            <label>Alasan delegasi<textarea value={reason} maxLength={1000} onChange={event => setReason(event.target.value)} /></label>
-            <button type="button" className={styles.primary} onClick={() => preview('propose')}>Tinjau pengajuan delegasi</button>
-          </fieldset>
-        </section>}
-        {detail && <section className={styles.form} aria-label="Rincian delegasi"><h2>Delegasi {detail.item.id}</h2><p>{states[detail.item.status]} · {detail.item.sourceState === 'current' ? 'Sumber masih berlaku' : 'Sumber tidak tersedia; akses turunan tidak diberikan'}</p>
+            <Field id="delegation-reason" label="Alasan delegasi"><textarea value={reason} maxLength={1000} onChange={event => setReason(event.target.value)} /></Field>
+            <Button variant="primary" type="button" onClick={() => preview('propose')}>Tinjau pengajuan delegasi</Button>
+          </fieldset></div>
+        </Section>}
+        {detail && <Section title={'Delegasi ' + detail.item.id} label="Rincian delegasi" description={<>{states[detail.item.status]} · {detail.item.sourceState === 'current' ? 'Sumber masih berlaku' : 'Sumber tidak tersedia; akses turunan tidak diberikan'}</>}>
           <p>{describeScope(detail.item.request.scope)}</p><p>Pemberi {detail.item.sourceUserId} · penerima {detail.item.request.beneficiaryUserId} · penyetuju {detail.item.approvedBy ?? 'belum ada'}</p>
           <p>{formatDateTime(detail.item.request.effectiveAt)} sampai {formatDateTime(detail.item.request.expiresAt)}</p>
           <ul>{detail.item.request.permissions.map(permission => <li key={permission}>{permissionLabel(permission)}</li>)}</ul><p className={styles.preserve}>{detail.item.reason}</p>
-          <label>Alasan keputusan atau catatan serah-terima<textarea disabled={locked || review !== null} value={reason} maxLength={1000} onChange={event => setReason(event.target.value)} /></label>
-          <div className={styles.actions}>{detail.item.allowedActions.map(action => <button key={action} type="button" className={styles.secondary} disabled={locked || review !== null} onClick={() => preview(action)}>Tinjau: {names[action]}</button>)}</div>
+          <Field id="delegation-decision-reason" label="Alasan keputusan atau catatan serah-terima"><textarea disabled={locked || review !== null} value={reason} maxLength={1000} onChange={event => setReason(event.target.value)} /></Field>
+          <div className="ui-actions">{detail.item.allowedActions.map(action => <Button key={action} type="button" variant="secondary" disabled={locked || review !== null} onClick={() => preview(action)}>Tinjau: {names[action]}</Button>)}</div>
           <h3>Riwayat delegasi</h3><ol className={styles.historyList}>{detail.history.map(row => <li key={row.id}><strong>{names[row.action]}</strong><p>Akun {row.actorId} · revisi {row.revision}</p><p className={styles.preserve}>{row.reason}</p></li>)}</ol>
-        </section>}
-        {review && <section ref={confirmRegion} tabIndex={-1} className={styles.review} aria-label="Konfirmasi delegasi"><h2>{names[review.action]}</h2>
+        </Section>}
+        {review && <section ref={confirmRegion} tabIndex={-1} className="ui-section" aria-label="Konfirmasi delegasi"><h2>{names[review.action]}</h2>
           {review.request ? <><p>Penerima {review.request.beneficiaryUserId} · keanggotaan {review.request.beneficiaryMembershipId}</p><p>{describeScope(review.request.scope)}</p>
             <p>{formatDateTime(review.request.effectiveAt)} sampai {formatDateTime(review.request.expiresAt)}</p>
             <ul>{review.request.permissions.map(permission => <li key={permission}>{permissionLabel(permission)}</li>)}</ul></> : <p>Delegasi {review.id} · revisi {review.revision}</p>}
           <p className={styles.preserve}>{review.reason}</p><p>Catatan ini tidak memindahkan tugas operasional atau menggantikan persetujuan orang yang berbeda.</p>
           <label className={styles.checkbox}><input type="checkbox" checked={accepted} disabled={locked} onChange={event => setAccepted(event.target.checked)} />Saya sudah memeriksa penerima, izin, waktu, dan alasan.</label>
-          <div className={styles.actions}><button type="button" className={styles.primary} disabled={locked || !accepted} onClick={() => void send()}>Konfirmasi {names[review.action].toLocaleLowerCase('id-ID')}</button>
-            <button type="button" className={styles.secondary} disabled={busy} onClick={clearReview}>Batalkan tinjauan</button></div>
+          <div className="ui-actions"><Button variant="primary" type="button" disabled={locked || !accepted} onClick={() => void send()}>Konfirmasi {names[review.action].toLocaleLowerCase('id-ID')}</Button>
+            <Button variant="secondary" type="button" disabled={busy} onClick={clearReview}>Batalkan tinjauan</Button></div>
         </section>}
       </div>
     </div>
-  </>;
+  </div></>;
 }

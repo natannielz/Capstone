@@ -15,6 +15,14 @@ import { buildHistoricalGrant, historicalBranches, historicalDivisions, historic
 import { rolePermissionSuggestions } from "./role-permission-suggestions";
 import styles from "./access.module.css";
 import { formatDateTime } from "@/lib/format";
+import { Button } from '@/components/workspace-kit/button';
+import { PageHeader } from '@/components/workspace-kit/page-header';
+import { Section } from '@/components/workspace-kit/section';
+import { StateView } from '@/components/workspace-kit/state-view';
+import { DataList } from '@/components/workspace-kit/data-list';
+import { Field } from '@/components/workspace-kit/field';
+import { Facts } from '@/components/workspace-kit/facts';
+import { Badge } from '@/components/workspace-kit/badge';
 
 type Schemas = components["schemas"];
 type Proposal = Schemas["AccessProposalDto"];
@@ -301,14 +309,12 @@ export function AccessAdministration() {
   }
 
   return <main className={styles.page}>
-    <header className={styles.header}>
-      <div><Link className={styles.brand} href="/identity/account" onClick={event => { if (locked) event.preventDefault(); }} aria-disabled={locked}>Unit Toko</Link><h1>Kelola akses</h1>
-        <p>Ajukan tugas yang sesuai, periksa cakupannya, lalu minta persetujuan independen.</p></div>
-      <button className={styles.secondary} onClick={() => { setError(null); void refresh(); }} disabled={locked || pageState === "loading"}>Muat ulang</button>
-    </header>
+    <PageHeader title="Kelola akses" description="Ajukan tugas yang sesuai, periksa cakupannya, lalu minta persetujuan independen."
+      secondaryAction={<Button variant="secondary" onClick={() => { setError(null); void refresh(); }} disabled={locked || pageState === "loading"}>Muat ulang</Button>} />
 
+    <div className="ui-stack">
     {current && <AdministrationNavigation current="access" actions={current.allowedActions} locked={locked} />}
-    {recovery.error !== null && <p role="alert" className={styles.alert}>{accessMessage(recovery.error)}</p>}
+    {recovery.error !== null && <StateView kind="error" title={accessMessage(recovery.error)} />}
     {current && <OperationRecovery key={current.userId} entries={recovery.entries} journal={recovery.journal} disabled={busy} onResolved={() => {
       recovery.refresh();
       if (recovery.journal.list(current.userId).length === 0) {
@@ -327,97 +333,90 @@ export function AccessAdministration() {
       }
     }} />}
 
-    {message && <p className={styles.success} role="status">{message}</p>}
-    {error !== null && pageState === "ready" && <div className={styles.alert} role="alert"><p>{suspensionUncertain ? "Hasil penonaktifan belum dapat dipastikan. Periksa hasil melalui Pemulihan permintaan; jangan kirim ulang keputusan. Referensi permintaan akun semula tetap disimpan." : suspensionMessage(retry ? new AccessFailure(503, "commit_outcome_unknown") : error)}</p>
-      {error instanceof AccessFailure && error.code === "step_up_required" && !locked && <Link href="/identity/account?returnPath=%2Fadministration%2Faccess">Verifikasi akun untuk melanjutkan</Link>}
-      {retry && <p>Tetap di halaman ini sampai hasil permintaan yang sama terkonfirmasi.</p>}
-      {error instanceof AccessFailure && error.traceId && <small>Referensi bantuan: {error.traceId}</small>}
-      {retry && <button className={styles.primary} onClick={() => void retry.run()} disabled={busy}>{retry.label}</button>}
-    </div>}
+    {message && <StateView kind="success" title={message} />}
+    {error !== null && pageState === "ready" && <StateView kind="error" title={suspensionUncertain ? "Hasil penonaktifan belum dapat dipastikan. Periksa hasil melalui Pemulihan permintaan; jangan kirim ulang keputusan. Referensi permintaan akun semula tetap disimpan." : suspensionMessage(retry ? new AccessFailure(503, "commit_outcome_unknown") : error)}
+      message={retry ? "Tetap di halaman ini sampai hasil permintaan yang sama terkonfirmasi." : undefined}
+      detail={error instanceof AccessFailure && error.traceId ? <>Referensi bantuan: {error.traceId}</> : undefined}
+      action={retry ? <Button variant="primary" onClick={() => void retry.run()} disabled={busy}>{retry.label}</Button> : undefined}
+      secondaryAction={error instanceof AccessFailure && error.code === "step_up_required" && !locked ? <Link href="/identity/account?returnPath=%2Fadministration%2Faccess">Verifikasi akun untuk melanjutkan</Link> : undefined} />}
 
-    {pageState === "loading" && <section className={styles.state} aria-live="polite" aria-busy="true"><h2>Memeriksa akses</h2><p>Memuat keanggotaan, izin, dan pengajuan terbaru.</p></section>}
+    {pageState === "loading" && <StateView kind="loading" title="Memeriksa akses. Memuat keanggotaan, izin, dan pengajuan terbaru." />}
     {pageState !== "loading" && pageState !== "ready" && <SessionAccessState error={error} returnPath="/administration/access" onRetry={() => void refresh()} busy={locked}
       kind={pageState === "denied" ? "denied" : pageState === "unauthenticated" ? "expired" : "unavailable"} />}
 
     {pageState === "ready" && current && catalog && <>
-      <section className={styles.accountSection} aria-labelledby="account-heading">
-        <h2 id="account-heading">Akun yang dikelola</h2>
+      <Section title="Akun yang dikelola" id="account-heading">
         <form onSubmit={loadSubject} className={styles.lookup}>
-          <label>Referensi akun<input value={subjectReference} onChange={event => { setSubjectReference(event.target.value); setSubject(null); setPendingAction(null); setDecisionReason(""); setSuspensionConfirmed(false); setMembershipId(""); setPacks([]); setExtras([]); setDelegable([]); setHistoricalBranch(""); setHistoricalDivision(""); setHistoricalSelectedPermissions([]); setHistoricalDirectory(null); setReviewedHistorical(null); previewSession.invalidate(); setPreview(null); setPreviewDraft(""); }}
-            inputMode="numeric" autoComplete="off" placeholder="Contoh: 1032" maxLength={19} required disabled={locked || suspensionPending} aria-describedby="account-help" /></label>
-          <button className={styles.secondary} disabled={locked || suspensionPending || !validReference(subjectReference)}>Tampilkan akun</button>
+          <Field id="access-subject-reference" label="Referensi akun" width="search" help="Gunakan referensi akun yang diberikan pengelola."><input value={subjectReference} onChange={event => { setSubjectReference(event.target.value); setSubject(null); setPendingAction(null); setDecisionReason(""); setSuspensionConfirmed(false); setMembershipId(""); setPacks([]); setExtras([]); setDelegable([]); setHistoricalBranch(""); setHistoricalDivision(""); setHistoricalSelectedPermissions([]); setHistoricalDirectory(null); setReviewedHistorical(null); previewSession.invalidate(); setPreview(null); setPreviewDraft(""); }}
+            inputMode="numeric" autoComplete="off" placeholder="Contoh: 1032" maxLength={19} required disabled={locked || suspensionPending} /></Field>
+          <Button variant="secondary" type="submit" disabled={locked || suspensionPending || !validReference(subjectReference)}>Tampilkan akun</Button>
         </form>
-        <p id="account-help" className={styles.help}>Gunakan referensi akun yang diberikan pengelola.</p>
         {subject && <div className={styles.subjectSummary}>
-          <p><strong>Akun {subject.userId}</strong> <span className={styles.status}>{subject.status === "suspended" ? "Dinonaktifkan" : statusLabel(subject.status)}</span></p>
+          <p><strong>Akun {subject.userId}</strong> <Badge status={subject.status === "suspended" ? "Dinonaktifkan" : statusLabel(subject.status)} /></p>
           {subject.status === "suspended" && <p className={styles.help}>Akun ini tidak dapat masuk atau menggunakan izin di bawah. Keanggotaan dan izin tetap tercatat untuk peninjauan petugas.</p>}
-          {suspensionTarget && <div className={styles.actions}><button type="button" className={styles.danger} disabled={locked || suspensionPending} onClick={() => {
+          {suspensionTarget && <div className="ui-actions"><Button variant="danger" type="button" disabled={locked || suspensionPending} onClick={() => {
             setPendingAction({ ...suspensionTarget, label: `Nonaktifkan akun ${suspensionTarget.id}` }); setSelected(null); setDecisionReason(""); setSuspensionConfirmed(false); setError(null); setMessage("");
-          }}>Nonaktifkan akun</button></div>}
+          }}>Nonaktifkan akun</Button></div>}
           <div className={styles.accessLists}>
             <section><h3>Keanggotaan</h3>{subject.memberships.length === 0 && <p>Belum ada keanggotaan yang dapat ditampilkan.</p>}
               <ul>{subject.memberships.map(item => <li key={item.id}><div><strong>Keanggotaan {item.id}</strong><p>{describeScope(item.scope)}</p><small>{statusLabel(item.status)}</small><Validity effectiveAt={item.effectiveAt} expiresAt={item.expiresAt} /></div>
-                {item.allowedActions.includes("suspend") && <button className={styles.danger} disabled={locked} onClick={() => { setPendingAction({ action: "suspendMembership", id: item.id, version: item.version, label: `Tangguhkan keanggotaan ${item.id}` }); setSelected(null); }}>Tangguhkan</button>}
+                {item.allowedActions.includes("suspend") && <Button variant="danger" disabled={locked} onClick={() => { setPendingAction({ action: "suspendMembership", id: item.id, version: item.version, label: `Tangguhkan keanggotaan ${item.id}` }); setSelected(null); }}>Tangguhkan</Button>}
               </li>)}</ul>
             </section>
             <section><h3>Izin yang tercatat</h3>{subject.grants.length === 0 && <p>Belum ada izin akses yang dapat ditampilkan.</p>}
               <ul>{subject.grants.map(item => <li key={item.id}><div><strong>{grantProfileLabel(item.templateId, catalog.roles)}</strong><p>{item.templateId === "historical-read" ? historicalScopeLabel(item.scope) : describeScope(item.scope)}</p><small>{statusLabel(item.status)} · Izin {item.id}</small><Validity effectiveAt={item.effectiveAt} expiresAt={item.expiresAt} />
                 <details className={styles.recordedPermissions}><summary>Lihat izin dan wewenang</summary><PermissionList permissions={item.permissions} />{item.templateId === "historical-read" ? <HistoricalReadNotice scope={item.scope} /> : <><h3>Wewenang pemberian izin</h3><DelegationList permissions={item.delegablePermissions} /></>}</details></div>
-                {item.allowedActions.includes("revoke") && <button className={styles.danger} disabled={locked} onClick={() => { setPendingAction({ action: "revokeGrant", id: item.id, version: item.version, label: `Cabut ${item.templateId === "historical-read" ? "akses baca riwayat" : "izin"} ${item.id}` }); setSelected(null); }}>Cabut izin</button>}
+                {item.allowedActions.includes("revoke") && <Button variant="danger" disabled={locked} onClick={() => { setPendingAction({ action: "revokeGrant", id: item.id, version: item.version, label: `Cabut ${item.templateId === "historical-read" ? "akses baca riwayat" : "izin"} ${item.id}` }); setSelected(null); }}>Cabut izin</Button>}
               </li>)}</ul>
             </section>
           </div>
         </div>}
-      </section>
+      </Section>
 
-      <div className={styles.desk}>
-        <aside className={styles.queue} aria-labelledby="queue-heading">
-          <div className={styles.queueHeader}><h2 id="queue-heading">Antrian pengajuan</h2><span>{proposals.length} pada halaman ini</span></div>
-          <div className={styles.newActions}>
-            {canProposeGrant && <button className={styles.secondary} disabled={locked} onClick={() => startNew("grant")}>Ajukan izin</button>}
-            {canProposeGrant && <button className={styles.secondary} disabled={locked} onClick={() => startNew("historical")}>Ajukan akses baca riwayat</button>}
-            {canProposeMembership && <button className={styles.secondary} disabled={locked} onClick={() => startNew("membership")}>Ajukan keanggotaan</button>}
-          </div>
-          {proposals.length === 0 ? <p className={styles.empty}>Tidak ada pengajuan dalam cakupan Anda pada halaman ini.</p> : <ul className={styles.queueList}>
-            {proposals.map(item => <li key={item.id}><button disabled={locked} className={selected === item.id ? styles.selectedRow : styles.queueRow}
-              aria-pressed={selected === item.id} onClick={() => { setSelected(item.id); setPendingAction(null); setError(null); }}>
-              <strong>{item.kind === "membership" ? "Keanggotaan" : item.templateId === "historical-read" ? historicalGrantLabel : "Izin akses"} untuk akun {item.subjectId}</strong>
-              <span>{item.templateId === "historical-read" ? historicalScopeLabel(item.scope) : describeScope(item.scope)}</span><small>{statusLabel(item.status)} · Pengajuan {item.id}</small>
-            </button></li>)}
-          </ul>}
-          <nav className={styles.pagination} aria-label="Halaman pengajuan">
-            <button className={styles.secondary} disabled={locked || offset === 0} onClick={() => { setSelected(null); setPageState("loading"); setOffset(value => Math.max(0, value - 25)); }}>Sebelumnya</button>
-            <button className={styles.secondary} disabled={locked || proposals.length < 25 || offset >= 9975} onClick={() => { setSelected(null); setPageState("loading"); setOffset(value => value + 25); }}>Berikutnya</button>
-          </nav>
-        </aside>
+      <div className="ui-desk">
+        <Section title="Antrian pengajuan" id="queue-heading" description={<>{proposals.length} pada halaman ini</>}>
+          {(canProposeGrant || canProposeMembership) && <div className="ui-actions">
+            {canProposeGrant && <Button variant="secondary" disabled={locked} onClick={() => startNew("grant")}>Ajukan izin</Button>}
+            {canProposeGrant && <Button variant="secondary" disabled={locked} onClick={() => startNew("historical")}>Ajukan akses baca riwayat</Button>}
+            {canProposeMembership && <Button variant="secondary" disabled={locked} onClick={() => startNew("membership")}>Ajukan keanggotaan</Button>}
+          </div>}
+          <DataList label="Antrian pengajuan" items={proposals} getKey={item => item.id} disabled={locked} selectedKey={selected}
+            empty={{ title: "Tidak ada pengajuan dalam cakupan Anda pada halaman ini." }} onSelect={item => { setSelected(item.id); setPendingAction(null); setError(null); }}
+            renderTitle={item => <>{item.kind === "membership" ? "Keanggotaan" : item.templateId === "historical-read" ? historicalGrantLabel : "Izin akses"} untuk akun {item.subjectId}</>}
+            renderBadge={item => <Badge status={statusLabel(item.status)} />}
+            renderMeta={item => <>{item.templateId === "historical-read" ? historicalScopeLabel(item.scope) : describeScope(item.scope)} · Pengajuan {item.id}</>}
+            pagination={{ label: "Halaman pengajuan", start: offset + 1, end: offset + proposals.length, hasPrevious: offset > 0, hasNext: proposals.length >= 25 && offset < 9975, disabled: locked,
+              onPrevious: () => { setSelected(null); setPageState("loading"); setOffset(value => Math.max(0, value - 25)); },
+              onNext: () => { setSelected(null); setPageState("loading"); setOffset(value => value + 25); } }} />
+        </Section>
 
-        <section className={styles.detail} aria-label="Rincian dan pengajuan akses">
-          {pendingAction ? <form onSubmit={confirmAction} className={styles.form} aria-label={suspensionPending ? "Konfirmasi penonaktifan akun" : undefined}>
+        <section className="ui-section" aria-label="Rincian dan pengajuan akses">
+          {pendingAction ? <form onSubmit={confirmAction} className="ui-form" aria-label={suspensionPending ? "Konfirmasi penonaktifan akun" : undefined}>
             <h2>{pendingAction.label}</h2><p>Perubahan ini dicatat bersama akun pelaksana dan alasan. Server memeriksa kembali izin dan versi terbaru.</p>
-            {suspensionPending && <div className={styles.review} role="note"><h3>Seluruh akses akun dihentikan</h3><p>Akun <strong>{pendingAction.id}</strong> tidak dapat masuk atau menggunakan aksesnya pada semua cabang dan unit. Sesi yang sudah ada tidak dapat melanjutkan tindakan.</p><p>Riwayat tetap tersimpan. Penonaktifan ini tidak mengalihkan tugas, mengubah izin menjadi izin baru, atau mengaktifkan akun kembali secara otomatis.</p></div>}
+            {suspensionPending && <div className={styles.preview} role="note"><h3>Seluruh akses akun dihentikan</h3><p>Akun <strong>{pendingAction.id}</strong> tidak dapat masuk atau menggunakan aksesnya pada semua cabang dan unit. Sesi yang sudah ada tidak dapat melanjutkan tindakan.</p><p>Riwayat tetap tersimpan. Penonaktifan ini tidak mengalihkan tugas, mengubah izin menjadi izin baru, atau mengaktifkan akun kembali secara otomatis.</p></div>}
             {selectedProposal && pendingAction.id === selectedProposal.id && <ProposalReview proposal={selectedProposal} />}
-            <label><span id="access-decision-reason-label">Alasan keputusan</span><textarea aria-labelledby="access-decision-reason-label" ref={decisionInput} required maxLength={1000} value={decisionReason} onChange={event => { setDecisionReason(event.target.value); if (suspensionPending) setSuspensionConfirmed(false); }} disabled={locked} rows={4} /></label>
+            <Field id="access-decision-reason" label="Alasan keputusan"><textarea ref={decisionInput} required maxLength={1000} value={decisionReason} onChange={event => { setDecisionReason(event.target.value); if (suspensionPending) setSuspensionConfirmed(false); }} disabled={locked} rows={4} /></Field>
             {suspensionPending && <label className={styles.checkbox}><input type="checkbox" required checked={suspensionConfirmed} disabled={locked} onChange={event => setSuspensionConfirmed(event.target.checked)} /><span>Saya memahami bahwa seluruh akses dan proses masuk akun ini akan dihentikan.</span></label>}
-            <div className={styles.actions}><button className={suspensionPending ? styles.danger : styles.primary} disabled={locked || !decisionReason.trim() || suspensionPending && !suspensionConfirmed}>{suspensionPending ? "Pastikan dan nonaktifkan akun" : "Simpan keputusan"}</button><button type="button" className={styles.secondary} disabled={locked} onClick={() => { setPendingAction(null); setSuspensionConfirmed(false); }}>Batal</button></div>
+            <div className="ui-actions"><Button type="submit" variant={suspensionPending ? "danger-confirm" : "primary"} disabled={locked || !decisionReason.trim() || suspensionPending && !suspensionConfirmed}>{suspensionPending ? "Pastikan dan nonaktifkan akun" : "Simpan keputusan"}</Button><Button variant="secondary" type="button" disabled={locked} onClick={() => { setPendingAction(null); setSuspensionConfirmed(false); }}>Batal</Button></div>
           </form> : selectedProposal ? <ProposalDetails proposal={selectedProposal} catalog={catalog} disabled={locked} onApprove={() => {
             setDecisionReason(""); setPendingAction({ action: selectedProposal.kind === "membership" ? "approveMembership" : "approveGrant", id: selectedProposal.id, version: selectedProposal.version, label: `Setujui pengajuan ${selectedProposal.id}` });
           }} onDecision={action => {
             setDecisionReason(""); setPendingAction({ action, id: selectedProposal.id, version: selectedProposal.version,
               label: `${action === "rejectProposal" ? "Tolak" : "Tarik"} pengajuan ${selectedProposal.id}` });
-          }} /> : <form onSubmit={submitProposal} className={styles.form}>
+          }} /> : <form onSubmit={submitProposal} className="ui-form">
             <h2>{mode === "grant" ? "Ajukan izin akses" : mode === "historical" ? "Ajukan akses baca riwayat" : "Ajukan keanggotaan"}</h2>
-            {!subject ? <p className={styles.empty}>Tampilkan akun terlebih dahulu untuk memeriksa keanggotaan dan cakupan yang disetujui.</p> : <>
+            {!subject ? <StateView kind="empty" title="Tampilkan akun terlebih dahulu untuk memeriksa keanggotaan dan cakupan yang disetujui." /> : <>
               <p>Akun <strong>{subject.userId}</strong>. Setiap izin baru memerlukan persetujuan petugas lain yang ditunjuk.</p>
-              <fieldset disabled={locked || (mode !== "membership" ? !canProposeGrant : !canProposeMembership)} onChangeCapture={invalidateDraftPreview} className={styles.fields}>
+              <fieldset disabled={locked || (mode !== "membership" ? !canProposeGrant : !canProposeMembership)} onChangeCapture={invalidateDraftPreview}>
                 <legend className={styles.srOnly}>Rincian pengajuan</legend>
                 {mode === "grant" ? <>
-                  <label>Keanggotaan aktif<select required value={membershipId} onChange={event => { setMembershipId(event.target.value); setPacks([]); setExtras([]); setDelegable([]); previewSession.invalidate(); setPreview(null); setPreviewDraft(""); }}><option value="">Pilih keanggotaan</option>
+                  <Field id="access-membership" label="Keanggotaan aktif"><select required value={membershipId} onChange={event => { setMembershipId(event.target.value); setPacks([]); setExtras([]); setDelegable([]); previewSession.invalidate(); setPreview(null); setPreviewDraft(""); }}><option value="">Pilih keanggotaan</option>
                     {subject.memberships.filter(item => item.status === "active").map(item => <option key={item.id} value={item.id}>{item.id}: {describeScope(item.scope)}</option>)}
-                  </select></label>
+                  </select></Field>
                   {membership ? <p className={styles.scopeSummary}>{describeScope(membership.scope)}</p> : <p className={styles.help}>Izin hanya dapat diajukan untuk keanggotaan yang telah disetujui.</p>}
-                  <label>Peran awal<select value={templateId} onChange={event => { setTemplateId(event.target.value); setPacks([]); setExtras([]); setDelegable([]); previewSession.invalidate(); setPreview(null); setPreviewDraft(""); }}>
+                  <Field id="access-template" label="Peran awal"><select value={templateId} onChange={event => { setTemplateId(event.target.value); setPacks([]); setExtras([]); setDelegable([]); previewSession.invalidate(); setPreview(null); setPreviewDraft(""); }}>
                     {catalog.roles.map(role => <option key={role.id} value={role.id}>{role.label}</option>)}
-                  </select></label>
+                  </select></Field>
                   {templateId === "finance" && <fieldset className={styles.choiceGroup}><legend>Paket tugas keuangan</legend><p className={styles.help}>Peran Keuangan tanpa paket tidak memberikan izin transaksi. Pilih hanya tugas yang diperlukan.</p>
                     {catalog.financePacks.map(pack => <label className={styles.checkbox} key={pack.id}><input type="checkbox" checked={packs.includes(pack.id)} onChange={() => toggle(pack.id, packs, setPacks)} /><span>{pack.label}</span></label>)}
                   </fieldset>}
@@ -429,68 +428,68 @@ export function AccessAdministration() {
                   </details>
                 </> : mode === "historical" ? <>
                   <p className={styles.scopeSummary}>Pilih izin membaca riwayat atau laporan secara eksplisit. Akses ini hanya untuk membaca, termasuk unit yang ditangguhkan; tidak mengizinkan transaksi baru atau pemberian izin kepada orang lain.</p>
-                  <label>Keanggotaan organisasi pembeli aktif<select required value={membershipId} onChange={event => {
+                  <Field id="access-historical-membership" label="Keanggotaan organisasi pembeli aktif"><select required value={membershipId} onChange={event => {
                     setMembershipId(event.target.value); setHistoricalBranch(""); setHistoricalDivision(""); setHistoricalDirectory(null);
                     setPacks([]); setExtras([]); setDelegable([]);
                     previewSession.invalidate(); setPreview(null); setPreviewDraft(""); setReviewedHistorical(null);
-                  }}><option value="">Pilih keanggotaan organisasi</option>{historicalMemberships.map(item => <option key={item.id} value={item.id}>Keanggotaan {item.id} · Organisasi {item.scope.organizationId}</option>)}</select></label>
+                  }}><option value="">Pilih keanggotaan organisasi</option>{historicalMemberships.map(item => <option key={item.id} value={item.id}>Keanggotaan {item.id} · Organisasi {item.scope.organizationId}</option>)}</select></Field>
                   {!historicalMemberships.length && <p className={styles.help}>Akun memerlukan keanggotaan seluruh organisasi pembeli yang telah disetujui dan sedang aktif.</p>}
                   {directoryLoading && <p role="status">Memuat cabang dan divisi yang tersedia…</p>}
-                  {directoryFailure !== null && <div role="alert"><p>Daftar unit belum dapat dimuat. {accessMessage(directoryFailure)}</p><button type="button" className={styles.secondary} onClick={() => setDirectoryReload(value => value + 1)}>Periksa daftar unit kembali</button></div>}
+                  {directoryFailure !== null && <StateView kind="error" title={"Daftar unit belum dapat dimuat. " + accessMessage(directoryFailure)} action={<Button variant="secondary" type="button" onClick={() => setDirectoryReload(value => value + 1)}>Periksa daftar unit kembali</Button>} />}
                   {historicalMembership && !directoryLoading && directoryFailure === null && historicalNodes.length === 0 && <p className={styles.help}>Tidak ada cabang atau divisi yang dapat dipilih dalam organisasi ini.</p>}
-                  <label>Cakupan akses baca<select value={historicalKind} onChange={event => {
+                  <Field id="access-historical-kind" label="Cakupan akses baca"><select value={historicalKind} onChange={event => {
                     setHistoricalKind(event.target.value as "buyingBranch" | "buyingDivision"); setHistoricalDivision("");
-                  }}><option value="buyingBranch">Cabang beserta divisinya</option><option value="buyingDivision">Satu divisi</option></select></label>
-                  <label>Cabang yang dituju<select required disabled={directoryLoading || !historicalMembership || directoryFailure !== null} value={historicalBranch} onChange={event => { setHistoricalBranch(event.target.value); setHistoricalDivision(""); }}>
+                  }}><option value="buyingBranch">Cabang beserta divisinya</option><option value="buyingDivision">Satu divisi</option></select></Field>
+                  <Field id="access-historical-branch" label="Cabang yang dituju"><select required disabled={directoryLoading || !historicalMembership || directoryFailure !== null} value={historicalBranch} onChange={event => { setHistoricalBranch(event.target.value); setHistoricalDivision(""); }}>
                     <option value="">Pilih cabang</option>{historicalBranches(historicalNodes, historicalMembership?.scope.organizationId).map(node => <option key={node.id} value={node.id}>{historicalNodeLabel(node)}</option>)}
-                  </select></label>
-                  {historicalKind === "buyingDivision" && <label>Divisi yang dituju<select required disabled={!historicalBranch || directoryLoading} value={historicalDivision} onChange={event => setHistoricalDivision(event.target.value)}>
+                  </select></Field>
+                  {historicalKind === "buyingDivision" && <Field id="access-historical-division" label="Divisi yang dituju"><select required disabled={!historicalBranch || directoryLoading} value={historicalDivision} onChange={event => setHistoricalDivision(event.target.value)}>
                     <option value="">Pilih divisi</option>{historicalDivisions(historicalNodes, historicalBranch).map(node => <option key={node.id} value={node.id}>{historicalNodeLabel(node)}</option>)}
-                  </select></label>}
+                  </select></Field>}
                   <HistoricalReadNotice scope={{ kind: historicalKind }} />
                   <fieldset className={styles.choiceGroup}><legend>Izin baca yang diminta</legend><p className={styles.help}>Pilih sedikitnya satu izin. Tidak ada izin yang dipilih otomatis.</p>
                     {historicalPermissions.map(permission => <label className={styles.checkbox} key={permission}><input type="checkbox" checked={historicalSelectedPermissions.includes(permission)} onChange={() => toggle(permission, historicalSelectedPermissions, setHistoricalSelectedPermissions)} /><span>{permissionLabel(permission)}</span></label>)}
                   </fieldset>
                 </> : <ScopeFields value={membershipScope} onChange={setMembershipScope} />}
-                <div className={styles.twoFields}><label>Mulai berlaku<input type="datetime-local" value={effective} onChange={event => setEffective(event.target.value)} required /></label>
-                  <label>Berakhir <span className={styles.optional}>(opsional)</span><input type="datetime-local" value={expiry} onChange={event => setExpiry(event.target.value)} min={effective} /></label></div>
+                <div className={styles.twoFields}><Field id="access-effective" label="Mulai berlaku"><input type="datetime-local" value={effective} onChange={event => setEffective(event.target.value)} required /></Field>
+                  <Field id="access-expiry" label="Berakhir" optional><input type="datetime-local" value={expiry} onChange={event => setExpiry(event.target.value)} min={effective} /></Field></div>
                 <p className={styles.help}>Waktu mengikuti zona waktu perangkat Anda. Cakupan organisasi, toko, dan kanal diperiksa kembali oleh server.</p>
-                <label><span id="access-proposal-reason-label">Alasan pengajuan</span><textarea aria-labelledby="access-proposal-reason-label" value={reason} onChange={event => setReason(event.target.value)} required maxLength={mode === "historical" ? 500 : 1000} rows={3} placeholder="Jelaskan tugas dan kebutuhan akses akun ini." /></label>
-                {mode === "historical" && <p className={styles.help}>Maksimal 500 karakter. Perubahan isian memerlukan pratinjau ulang.</p>}
-                {mode !== "membership" && <button type="button" className={styles.secondary} disabled={mode === "historical" ? !historicalBody : !grant} onClick={() => void previewGrant()}>Periksa pratinjau izin</button>}
+                <Field id="access-proposal-reason" label="Alasan pengajuan" help={mode === "historical" ? "Maksimal 500 karakter. Perubahan isian memerlukan pratinjau ulang." : undefined}><textarea value={reason} onChange={event => setReason(event.target.value)} required maxLength={mode === "historical" ? 500 : 1000} rows={3} placeholder="Jelaskan tugas dan kebutuhan akses akun ini." /></Field>
+                {mode !== "membership" && <Button variant="secondary" type="button" disabled={mode === "historical" ? !historicalBody : !grant} onClick={() => void previewGrant()}>Periksa pratinjau izin</Button>}
                 {mode !== "membership" && activePreview && <section className={styles.preview} aria-live="polite"><h3>Pratinjau dari server</h3>{mode === "historical" && <strong>{historicalGrantLabel}</strong>}<p>{mode === "historical" ? historicalScopeLabel(activePreview.scope, historicalNodes) : describeScope(activePreview.scope)}</p>
                   <p>Keanggotaan {activePreview.membershipId}{mode === "grant" ? `; versi peran ${activePreview.templateVersion}` : ""}.</p><Validity effectiveAt={activePreview.effectiveAt} expiresAt={activePreview.expiresAt} />
                   <PermissionList permissions={activePreview.permissions} />{mode === "historical" ? <><HistoricalReadNotice scope={activePreview.scope} /><p className={styles.preserve}>Alasan: {reviewedHistorical?.reason}</p></> : <><h3>Wewenang pemberian izin</h3><DelegationList permissions={activePreview.delegablePermissions} /></>}
                   <p className={styles.help}>{activePreview.existingPermissions.length} izin sudah tercatat pada cakupan ini. Pengajuan tetap menunggu persetujuan independen.</p>
                 </section>}
-                <button className={styles.primary} disabled={!reason.trim() || !toIsoDate(effective) || mode === "grant" && (!grant || !activePreview) || mode === "historical" && (!historicalBody || !activePreview || !reviewedHistorical)}>Ajukan untuk persetujuan</button>
+                <Button variant="primary" type="submit" disabled={!reason.trim() || !toIsoDate(effective) || mode === "grant" && (!grant || !activePreview) || mode === "historical" && (!historicalBody || !activePreview || !reviewedHistorical)}>Ajukan untuk persetujuan</Button>
               </fieldset>
             </>}
           </form>}
         </section>
       </div>
     </>}
+    </div>
   </main>;
 }
 
 function ProposalDetails({ proposal, catalog, disabled, onApprove, onDecision }: { proposal: Proposal; catalog: Schemas["AccessCatalogDto"]; disabled: boolean; onApprove: () => void; onDecision: (action: "rejectProposal" | "withdrawProposal") => void }) {
-  return <div className={styles.form}><h2>Pengajuan {proposal.id}</h2><dl className={styles.facts}>
-    <div><dt>Akun penerima</dt><dd>{proposal.subjectId}</dd></div><div><dt>Diajukan oleh</dt><dd>Akun {proposal.requestedBy}</dd></div>
-    <div><dt>Status</dt><dd>{statusLabel(proposal.status)}</dd></div><div><dt>Diajukan pada</dt><dd>{formatDateTime(proposal.createdAt)}</dd></div>
-    {proposal.templateId && <div><dt>{proposal.templateId === "historical-read" ? "Profil izin" : "Peran awal"}</dt><dd>{grantProfileLabel(proposal.templateId, catalog.roles)}</dd></div>}
-  </dl><ProposalReview proposal={proposal} />
-    {proposal.allowedActions.includes("approve") ? <><p className={styles.help}>Persetujuan hanya berlaku untuk cakupan dan izin pada pengajuan ini. Izin terbaru serta independensi akun diperiksa saat disimpan.</p><button className={styles.primary} disabled={disabled} onClick={onApprove}>Tinjau dan setujui</button></>
+  return <div className="ui-form"><h2>Pengajuan {proposal.id}</h2><Facts items={[
+    { term: "Akun penerima", value: proposal.subjectId }, { term: "Diajukan oleh", value: <>Akun {proposal.requestedBy}</> },
+    { term: "Status", value: statusLabel(proposal.status) }, { term: "Diajukan pada", value: formatDateTime(proposal.createdAt) },
+    ...(proposal.templateId ? [{ term: proposal.templateId === "historical-read" ? "Profil izin" : "Peran awal", value: grantProfileLabel(proposal.templateId, catalog.roles) }] : [])]} />
+  <ProposalReview proposal={proposal} />
+    {proposal.allowedActions.includes("approve") ? <><p className={styles.help}>Persetujuan hanya berlaku untuk cakupan dan izin pada pengajuan ini. Izin terbaru serta independensi akun diperiksa saat disimpan.</p><div className="ui-actions"><Button variant="primary" disabled={disabled} onClick={onApprove}>Tinjau dan setujui</Button></div></>
       : <p className={styles.help}>Tidak ada tindakan persetujuan yang tersedia untuk akun Anda pada pengajuan ini.</p>}
-    <div className={styles.actions}>
-      {proposal.allowedActions.includes("reject") && <button className={styles.danger} disabled={disabled} onClick={() => onDecision("rejectProposal")}>Tolak pengajuan</button>}
-      {proposal.allowedActions.includes("withdraw") && <button className={styles.secondary} disabled={disabled} onClick={() => onDecision("withdrawProposal")}>Tarik pengajuan saya</button>}
+    <div className="ui-actions">
+      {proposal.allowedActions.includes("reject") && <Button variant="danger" disabled={disabled} onClick={() => onDecision("rejectProposal")}>Tolak pengajuan</Button>}
+      {proposal.allowedActions.includes("withdraw") && <Button variant="secondary" disabled={disabled} onClick={() => onDecision("withdrawProposal")}>Tarik pengajuan saya</Button>}
     </div>
   </div>;
 }
 
 function ProposalReview({ proposal }: { proposal: Proposal }) {
   const historical = proposal.templateId === "historical-read";
-  return <div className={styles.review}><section><h3>Akun dan cakupan yang ditinjau</h3>{historical && <strong>{historicalGrantLabel}</strong>}<p>Akun {proposal.subjectId}; diajukan oleh akun {proposal.requestedBy}.</p><p>{historical ? historicalScopeLabel(proposal.scope) : describeScope(proposal.scope)}</p>
+  return <div className={styles.preview}><section><h3>Akun dan cakupan yang ditinjau</h3>{historical && <strong>{historicalGrantLabel}</strong>}<p>Akun {proposal.subjectId}; diajukan oleh akun {proposal.requestedBy}.</p><p>{historical ? historicalScopeLabel(proposal.scope) : describeScope(proposal.scope)}</p>
     <p>{proposal.membershipId ? `Keanggotaan ${proposal.membershipId}` : "Pengajuan keanggotaan baru"}{!historical && proposal.templateVersion !== null ? `; versi peran ${proposal.templateVersion}` : ""}.</p>
     <Validity effectiveAt={proposal.effectiveAt} expiresAt={proposal.expiresAt} />
   </section><section><h3>Alasan pengajuan</h3><p className={styles.preserve}>{proposal.reason}</p></section>
@@ -520,14 +519,14 @@ function ScopeFields({ value, onChange }: { value: Scope; onChange: (scope: Scop
   const fields = value.kind === "system" ? [] : value.kind.startsWith("buy")
     ? [["organizationId", "Referensi organisasi pembeli"], ...(value.kind === "buyingOrganization" ? [] : [["branchId", "Referensi cabang"], ...(value.kind === "buyingBranch" ? [] : [["divisionId", "Referensi divisi"]])])]
     : [["organizationId", "Referensi organisasi pemenuhan"], ["shopId", "Referensi toko"], ["channelId", "Referensi kanal"], ...(value.kind === "fulfillmentShop" ? [] : [["warehouseId", "Referensi gudang"]])];
-  return <><label>Cakupan keanggotaan<select value={value.kind} onChange={event => onChange({ ...emptyScope, kind: event.target.value as ScopeKind })}>
+  return <><Field id="access-scope-kind" label="Cakupan keanggotaan"><select value={value.kind} onChange={event => onChange({ ...emptyScope, kind: event.target.value as ScopeKind })}>
     {Object.entries(scopeKindLabels).map(([kind, label]) => <option key={kind} value={kind}>{label}</option>)}
-  </select></label><p className={styles.help}>Gunakan referensi unit yang disetujui pemilik organisasi. Keanggotaan baru tidak aktif sebelum mendapat persetujuan independen.</p>
-    <div className={styles.twoFields}>{fields.map(([field, label]) => <label key={field}>{label}<input inputMode="numeric" autoComplete="off" maxLength={19}
+  </select></Field><p className={styles.help}>Gunakan referensi unit yang disetujui pemilik organisasi. Keanggotaan baru tidak aktif sebelum mendapat persetujuan independen.</p>
+    <div className={styles.twoFields}>{fields.map(([field, label]) => <Field key={field} id={"access-scope-" + field} label={label}><input inputMode="numeric" autoComplete="off" maxLength={19}
       value={typeof value[field as keyof Scope] === "string" ? String(value[field as keyof Scope]) : ""}
       onChange={event => onChange({ ...value, [field]: event.target.value || null })}
       required={field === "organizationId" || field === "shopId" || field === "channelId" || value.kind === "buyingDivision" || value.kind === "buyingBranch" || value.kind === "fulfillmentWarehouse"}
-      pattern="[1-9][0-9]{0,18}" /></label>)}</div></>;
+      pattern="[1-9][0-9]{0,18}" /></Field>)}</div></>;
 }
 
 function toggle(value: string, values: string[], update: (values: string[]) => void) { update(values.includes(value) ? values.filter(item => item !== value) : [...values, value]); }
