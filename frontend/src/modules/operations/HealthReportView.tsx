@@ -26,7 +26,7 @@ export function HealthReportView({ report }: { report: OperatorHealth }) {
           </ul>
         )}
       </Section>
-      <Section title="Antrean latar" id="health-queues">
+      <Section title="Antrean latar" id="health-queues" variant="plain">
         <DataTable caption="Jumlah pekerjaan per antrean" rows={queues} getKey={row => row.name}
           columns={[
             { key: 'name', header: 'Antrean', render: row => row.name },
