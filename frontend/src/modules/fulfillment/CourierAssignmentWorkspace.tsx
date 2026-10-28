@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {RequestNotSentError} from '../../api/client';
 import {createIdentityGateway} from '../identity/identity-client';
@@ -11,10 +10,16 @@ import {AdministrationNavigation} from '../administration/AdministrationNavigati
 import {createCourierAssignmentGateway, type CourierChange, type CourierChoice, type CourierPending, type CourierPreview, type CourierTask} from './courier-assignment-client';
 import {CourierAssignmentJournal, courierJournalPrefix} from './courier-assignment-journal';
 import common from '../administration/access.module.css';
-import styles from '../ordering/order-draft.module.css';
+import local from './fulfillment.module.css';
 import {formatDateTime} from '@/lib/format';
 import { SessionAccessState } from "@/components/workspace-kit/session-access-state";
 import { orderNumber } from '@/lib/document-numbers';
+import { Button } from '@/components/workspace-kit/button';
+import { PageHeader } from '@/components/workspace-kit/page-header';
+import { StateView } from '@/components/workspace-kit/state-view';
+import { Section } from '@/components/workspace-kit/section';
+import { DataList } from '@/components/workspace-kit/data-list';
+import { Badge } from '@/components/workspace-kit/badge';
 
 type Account = {actorId: string; actions: readonly string[]; session: IdentitySession; observedAt: number};
 const time = (value: string) => formatDateTime(value);
@@ -56,11 +61,11 @@ export function CourierAssignmentWorkspace() {
     if (failure instanceof AccessFailure && (failure.status === 401 || failure.status === 403 || failure.code === 'actor_changed')) {setAccount(null); setError(failure);}
   }, []);
   const expired = account !== null && sessionTiming(account.session, elapsed).expired;
-  return <main className={common.page}><header className={common.header}><div><Link href="/identity/account" className={common.brand}>Unit Toko</Link>
-    <h1>Penugasan kurir</h1><p>Tinjau kurir yang bertugas dan catat penyerahan tugas pengiriman.</p></div><Link href="/identity/account" className={common.secondary}>Akun saya</Link></header>
-    {error !== null && account !== null && <p role="alert" className={common.alert}>{message(error)}</p>}
-    {loading ? <p role="status">Memeriksa akun…</p> : !account || expired ? <SessionAccessState kind={account ? "expired" : undefined} error={error} returnPath="/fulfillment/courier-assignments" onRetry={() => setReload(value => value + 1)} /> :
-      <AssignmentDesk key={account.actorId + ':' + account.observedAt} account={account} onDenied={denied} />}
+  return <main className={common.page}><PageHeader title="Penugasan kurir" description="Tinjau kurir yang bertugas dan catat penyerahan tugas pengiriman." />
+    <div className="ui-stack">
+    {error !== null && account !== null && <StateView kind="error" title={message(error)} />}
+    {loading ? <StateView kind="loading" title="Memeriksa akun…" /> : !account || expired ? <SessionAccessState kind={account ? "expired" : undefined} error={error} returnPath="/fulfillment/courier-assignments" onRetry={() => setReload(value => value + 1)} /> :
+      <AssignmentDesk key={account.actorId + ':' + account.observedAt} account={account} onDenied={denied} />}</div>
   </main>;
 }
 function AssignmentDesk({account, onDenied}: {account: Account; onDenied: (failure: unknown) => void}) {
@@ -98,6 +103,8 @@ function AssignmentDesk({account, onDenied}: {account: Account; onDenied: (failu
   }, [gateway, account.actorId, before, reload, current, onDenied]);
   useEffect(() => {if (preview) reviewHeading.current?.focus();}, [preview]);
   const locked = busy || offline || storageError || refs.length > 0;
+  // The row button that started a read shows it is busy until the record arrives (§8).
+  const [opening, setOpening] = useState<string | null>(null);
   async function select(shipmentId: string) {
     if (!current() || locked || pending.current) return; pending.current = true; setBusy(true); setError(null); setNotice(''); setResult(null); invalidate();
     const ctx = context();
@@ -141,37 +148,38 @@ function AssignmentDesk({account, onDenied}: {account: Account; onDenied: (failu
     } catch (failure) {if (current()) {setError(failure); onDenied(failure);}} finally {pending.current = false; if (alive.current) {setBusy(false); refreshRefs();}}
   }
   return <><AdministrationNavigation current="courier-assignments" actions={account.actions} locked={locked} />
-    {error !== null && <p role="alert" className={common.alert}>{message(error)}</p>}
-    {storageError && <p role="alert">Referensi pemulihan belum dapat dibaca. Perubahan baru menunggu penyimpanan perangkat tersedia. Jangan hapus referensi yang belum terkonfirmasi.</p>}
-    {offline && <p role="status">Koneksi terputus. Muat kembali penugasan setelah tersambung.</p>}{notice && <p role="status">{notice}</p>}
-    {refs.length > 0 && <section className={common.accountSection} aria-label="Pemulihan penugasan"><h2>Periksa permintaan yang sudah dikirim</h2>
-      <p>Referensi ini tetap tersedia setelah tab atau browser dibuka kembali.</p><ul>{refs.map(ref => <li key={ref.key}>Kiriman {ref.shipmentId} · permintaan {ref.key}
-        <button className={common.secondary} disabled={busy || offline} onClick={() => void recover(ref)}>Periksa hasil penugasan {ref.shipmentId}</button></li>)}</ul></section>}
-    {result && <section className={common.state} aria-label="Hasil penugasan"><h2>Penugasan tersimpan</h2><p>Kiriman {result.shipmentId} · Kurir {result.courierName} · {time(result.recordedAt)}.</p>
-      <p>Ini hasil permintaan yang tercatat. Muat penugasan untuk melihat siapa yang bertugas saat ini.</p></section>}
-    <section className={common.accountSection} aria-label="Daftar penugasan" aria-busy={busy}><h2>Kiriman dalam tugas Anda</h2>
-      {busy && <p role="status">Memeriksa penugasan…</p>}{!busy && page.items.length === 0 && <p>Belum ada kiriman dalam akses penugasan Anda.</p>}
-      <ul className={styles.lines}>{page.items.map(row => <li key={row.shipmentId} className={styles.line}><strong>Kiriman {number(row)}</strong><p>Pesanan {orderNumber(row.orderId)} · bagian toko {row.suborderId}</p>
-        <p>Kurir yang bertugas: {row.currentAssignment.courierName}</p><p>{row.received ? 'Penerimaan sudah tercatat.' : 'Penerimaan belum tercatat.'}</p>
-        <button className={common.secondary} disabled={locked} onClick={() => void select(row.shipmentId)}>Tinjau penugasan {number(row)}</button></li>)}</ul>
-      <div className={common.actions}><button className={common.secondary} disabled={locked} onClick={() => {invalidate(); setBefore(null); setReload(value => value + 1);}}>Muat penugasan terbaru</button>
-        {page.hasMore && <button className={common.secondary} disabled={locked} onClick={() => {invalidate(); setBefore(page.items.at(-1)!.shipmentId);}}>Penugasan lebih lama</button>}</div>
-    </section>
-    {task && <section className={styles.review} aria-label="Rincian penugasan"><h2>Penugasan kiriman {number(task)}</h2>
+    {error !== null && page.items.length > 0 && <StateView kind="error" title={message(error)} />}
+    {storageError && <StateView kind="error" title="Referensi pemulihan belum dapat dibaca. Perubahan baru menunggu penyimpanan perangkat tersedia. Jangan hapus referensi yang belum terkonfirmasi." />}
+    {offline && <StateView kind="offline" title="Koneksi terputus. Muat kembali penugasan setelah tersambung." />}{notice && <p role="status">{notice}</p>}
+    {refs.length > 0 && <Section title="Periksa permintaan yang sudah dikirim" label="Pemulihan penugasan" description="Referensi ini tetap tersedia setelah tab atau browser dibuka kembali.">
+      <DataList label="Pemulihan penugasan" items={refs} getKey={ref => ref.key} renderTitle={ref => <>Kiriman {ref.shipmentId}</>} renderMeta={ref => <>permintaan {ref.key}</>}
+        renderActions={ref => <Button variant="secondary" disabled={busy || offline} onClick={() => void recover(ref)}>Periksa hasil penugasan {ref.shipmentId}</Button>} /></Section>}
+    {result && <Section title="Penugasan tersimpan" label="Hasil penugasan"><p>Kiriman {result.shipmentId} · Kurir {result.courierName} · {time(result.recordedAt)}.</p>
+      <p>Ini hasil permintaan yang tercatat. Muat penugasan untuk melihat siapa yang bertugas saat ini.</p></Section>}
+    <Section title="Kiriman dalam tugas Anda" label="Daftar penugasan" busy={busy}
+      actions={<Button variant="secondary" disabled={locked} onClick={() => {invalidate(); setBefore(null); setReload(value => value + 1);}}>Muat penugasan terbaru</Button>}>
+      <DataList label="Daftar penugasan" items={page.items} error={error !== null && page.items.length === 0 ? { title: message(error), message: null, onRetry: () => { invalidate(); setBefore(null); setReload(value => value + 1); } } : undefined} getKey={row => row.shipmentId} loading={busy}
+        empty={error === null ? { title: "Belum ada kiriman dalam akses penugasan Anda." } : undefined}
+        renderTitle={row => <>Kiriman {number(row)}</>} renderBadge={row => <Badge tone={row.received ? "success" : "neutral"} label={row.received ? 'Penerimaan sudah tercatat.' : 'Penerimaan belum tercatat.'} />}
+        renderMeta={row => <>Pesanan {orderNumber(row.orderId)} · bagian toko {row.suborderId} · Kurir yang bertugas: {row.currentAssignment.courierName}</>}
+        renderActions={row => <Button variant="secondary" disabled={locked} busy={opening === row.shipmentId} onClick={() => { setOpening(row.shipmentId); void select(row.shipmentId).finally(() => setOpening(null)); }}>Tinjau penugasan {number(row)}</Button>} />
+      {page.hasMore && <div className="ui-actions"><Button variant="secondary" disabled={locked} onClick={() => {invalidate(); setBefore(page.items.at(-1)!.shipmentId);}}>Penugasan lebih lama</Button></div>}
+    </Section>
+    {task && <section className={"ui-section " + local.detail} aria-label="Rincian penugasan"><h2>Penugasan kiriman {number(task)}</h2>
       <p>Kurir saat keberangkatan: {task.departureCourierName}</p><p>Kurir yang bertugas: <strong>{task.currentAssignment.courierName}</strong> · sejak {time(task.currentAssignment.effectiveAt)}.</p>
       {task.history.length > 0 && <details><summary>Riwayat penyerahan tugas</summary><ol>{task.history.map(event => <li key={event.id}>{time(event.recordedAt)} · {event.courierName}<p>{event.reason}</p></li>)}</ol></details>}
       {!task.canHandover ? <p>{task.received ? 'Penerimaan sudah tercatat; tugas kurir tidak dapat dialihkan.' : 'Tugas belum dapat dialihkan. Muat ulang untuk memeriksa keadaan terkini.'}</p> : preview ? <>
         <h3 ref={reviewHeading} tabIndex={-1}>Konfirmasi penyerahan tugas</h3><p>Dari {preview.task.currentAssignment.courierName} kepada <strong>{preview.courierName}</strong>.</p>
-        <p className={styles.address}>{reason.trim()}</p><p>QR penerimaan sebelumnya akan perlu diperbarui oleh kurir yang bertugas.</p>
-        <div className={common.actions}><button className={common.primary} disabled={locked} onClick={() => void handover()}>Konfirmasi penugasan kurir</button>
-          <button className={common.secondary} disabled={locked} onClick={() => setPreview(null)}>Kembali ke pilihan kurir</button></div></> :
+        <p className={local.address}>{reason.trim()}</p><p>QR penerimaan sebelumnya akan perlu diperbarui oleh kurir yang bertugas.</p>
+        <div className={common.actions}><Button variant="primary" disabled={locked} onClick={() => void handover()}>Konfirmasi penugasan kurir</Button>
+          <Button variant="secondary" disabled={locked} onClick={() => setPreview(null)}>Kembali ke pilihan kurir</Button></div></> :
         <form onSubmit={event => {event.preventDefault(); void review();}}><fieldset disabled={locked}><legend>Serahkan tugas kepada kurir</legend>
           <label htmlFor="handover-courier">Kurir penerima tugas</label><select id="handover-courier" required value={courierId} onChange={event => {setCourierId(event.target.value); setPreview(null);}}>
             <option value="">Pilih kurir</option>{couriers.filter(row => row.userId !== task.currentAssignment.courierId).map(row => <option key={row.userId} value={row.userId}>{row.displayName}</option>)}</select>
-          {moreCouriers && <button type="button" className={common.secondary} onClick={() => void loadCouriers()}>Tampilkan kurir lainnya</button>}
+          {moreCouriers && <Button variant="secondary" onClick={() => void loadCouriers()}>Tampilkan kurir lainnya</Button>}
           <label htmlFor="handover-reason">Catatan penyerahan tugas</label><textarea id="handover-reason" required maxLength={2000} rows={3} value={reason} onChange={event => {setReason(event.target.value); setPreview(null);}} />
-          <button className={common.primary} disabled={!courierId || !reason.trim()}>Tinjau penyerahan tugas</button></fieldset></form>}
-      <button className={common.secondary} disabled={locked} onClick={() => void select(task.shipmentId)}>Muat ulang penugasan</button>
+          <Button type="submit" variant="primary" disabled={!courierId || !reason.trim()}>Tinjau penyerahan tugas</Button></fieldset></form>}
+      <Button variant="secondary" disabled={locked} onClick={() => void select(task.shipmentId)}>Muat ulang penugasan</Button>
     </section>}
   </>;
 }

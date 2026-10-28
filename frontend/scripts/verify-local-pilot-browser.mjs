@@ -50,7 +50,7 @@ async function signedOutStates(page) {
   };
   // A visitor without any session cookie never sees the page shell: the proxy sends them to sign-in with the page as return target (G-012).
   await page.goto(origin + '/ordering/requests'); await page.waitForURL(url => url.pathname === '/identity/login' && url.searchParams.get('returnPath') === '/ordering/requests');
-  // An expired session (a stale cookie the server no longer knows) still meets the page's own sign-in state.
+  // An expired session (a stale cookie the server no longer knows) meets the page's shared ended-session state.
   await page.context().addCookies([{ name: '__Host-ut_session', value: 'expiredSyntheticSessionToken0000000000000000', domain: new URL(origin).hostname, path: '/', secure: true, httpOnly: true, sameSite: 'Lax' }]);
   await page.route(sessionPath, hold);
   try {
