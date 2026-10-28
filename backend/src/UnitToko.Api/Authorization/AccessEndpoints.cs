@@ -37,7 +37,7 @@ public static partial class AccessEndpoints
                     grant.TemplateVersion, [.. grant.Permissions], AccessScopeDto.From(grant.Scope),
                     grant.Status.ToString().ToLowerInvariant(), AccessResponses.Version(grant.Version), [],
                     grant.DelegablePermissions.IsDefault ? [] : [.. grant.DelegablePermissions], grant.EffectiveAt, grant.ExpiresAt)).ToArray(), scopes,
-                CurrentActions(actor, snapshot, clock.UtcNow));
+                await OfferedActionsAsync(http, actor, snapshot, CurrentActions(actor, snapshot, clock.UtcNow), ct));
             http.Response.Headers.ETag = AccessRequestMetadata.VersionTag(snapshot.GrantVersion);
             return TypedResults.Ok(result);
         }).WithName("CurrentAccess");
@@ -142,31 +142,36 @@ public static partial class AccessEndpoints
         return new(AccessRequestMetadata.IdempotencyKey(http.Request), reason.Trim(), http.TraceIdentifier);
     }
 
-    // UI task discovery is separate from administrative catalog admission. Reviewers retain
-    // the verification entry when MFA ages; every protected read or command still enforces current assurance.
-    private static string[] CurrentActions(ActorContext actor, AuthorizationSnapshot snapshot, DateTimeOffset now) =>
-        AvailableActions(actor, snapshot, now).Concat(ReportingActions(actor, snapshot, now)).Concat(new[] { Permissions.CaseRead, Permissions.CaseRequest, Permissions.JournalReverse, Permissions.PaymentAllocate, Permissions.PaymentVerify, Permissions.BankReceiptRead, Permissions.BankReceiptConfirm, Permissions.BankStatementRead, Permissions.BankStatementStage, Permissions.ReceivingAccountRead, Permissions.ReceivingAccountDetailsRead, Permissions.ReceivingAccountPropose, Permissions.ReceivingAccountVerify, Permissions.ReceivingAccountApprove, Permissions.PaymentReviewCorrect, Permissions.PaymentReviewRead, Permissions.PaymentEvidence, Permissions.InvoiceRead, Permissions.InvoiceIssue, Permissions.InvoiceReleaseRead, Permissions.InvoiceReleasePropose, Permissions.InvoiceReleaseApprove, Permissions.ShipmentRead, Permissions.ShipmentPrepare, Permissions.ShipmentDispatch, Permissions.ShipmentAssign, Permissions.DeliveryAttempt, Permissions.DeliveryEvidence, Permissions.ReceiptAccept, Permissions.OrderRead, Permissions.OrderSubmit, Permissions.BranchOrderRequestRead, Permissions.BranchOrderRequestSubmit, Permissions.BranchOrderRequestDecide, Permissions.OrderCancel, Permissions.OrderSpendApprove, Permissions.OrderAccept, Permissions.SubstitutionPropose, Permissions.SubstitutionAccept, Permissions.CatalogRead, Permissions.PricingManage, Permissions.PricingApprove, Permissions.CatalogPublicPropose, Permissions.CatalogPublicApprove, Permissions.StockRead, Permissions.StockCount,
-                Permissions.StockConvert, Permissions.StockSourceRead, Permissions.StockSourcePropose, Permissions.StockSourceApprove, Permissions.StockSourceSuspend, Permissions.StockSourcePolicyPropose, Permissions.StockSourcePolicyApprove, Permissions.StockSourceReconciliationRead, Permissions.StockSourceReconciliationPropose, Permissions.StockSourceReconciliationDecide, Permissions.PaymentReviewManual, Permissions.PaymentReviewManage, Permissions.CaseManage, Permissions.StockReceive, Permissions.CreditRequest, Permissions.RefundRequest, Permissions.CreditApprove, Permissions.RefundApprove, Permissions.DisbursementRecord, Permissions.DisbursementVerify, Permissions.OrganizationAddressRead, Permissions.OrganizationApprove,
-                Permissions.OrderSpendingPolicyRead, Permissions.OrderSpendingPolicyPropose, Permissions.OrderSpendingPolicyApprove,
-                Permissions.OrderCommercialPolicyRead, Permissions.OrderCommercialPolicyPropose, Permissions.OrderCommercialPolicyApprove,
-                Permissions.StockReleasePropose, Permissions.StockReleaseApprove,
-                Permissions.AccountingBookRead, Permissions.AccountingBookPropose, Permissions.AccountingBookApprove, Permissions.JournalPost,
-                Permissions.AnomalyRead, Permissions.AnomalyReview, Permissions.AnomalyPolicyConfigure,
-                Permissions.ProcurementRead, Permissions.ProcurementPrepare, Permissions.ProcurementApprove, Permissions.SupplierChangePropose, Permissions.SupplierChangeApprove,
-                Permissions.FundingRead, Permissions.FundingRequest, Permissions.FundingApprove, Permissions.SupplierBankRead, Permissions.SupplierBankDetailsRead, Permissions.SupplierBankPropose, Permissions.SupplierBankApprove,
-                Permissions.ProcurementDisbursementRead, Permissions.ProcurementDisbursementEvidenceRead, Permissions.ProcurementSettlementRead, Permissions.ProcurementContainerReceive,
-                Permissions.ProcurementInspect, Permissions.ProcurementInspectionEvidenceRead,
-                Permissions.ProcurementSupplierDocumentRecord, Permissions.ProcurementSupplierDocumentMatch, Permissions.ProcurementSupplierDocumentEvidenceRead,
-                Permissions.SupplierClaim, Permissions.SupplierClaimApprove,
-                Permissions.ProcurementStockValuationRead, Permissions.ProcurementStockValuationPropose, Permissions.ProcurementStockValuationDecide,
-                Permissions.ProcurementPayableRead, Permissions.ProcurementPayablePropose, Permissions.ProcurementPayableDecide,
-                Permissions.ProcurementAdvanceReturnRead, Permissions.ProcurementAdvanceReturnPropose, Permissions.ProcurementAdvanceReturnDecide,
-                Permissions.ProcurementQualityAcceptanceRead, Permissions.ProcurementQualityAcceptancePropose, Permissions.ProcurementQualityAcceptanceDecide }
-            .Where(permission => ScopePolicy.Compile(actor, snapshot, permission, now).IsAllowed ||
-                (permission is Permissions.AnomalyReview or Permissions.AnomalyPolicyConfigure) && ScopePolicy.CanRequestStepUp(actor, snapshot, permission, now) ||
-                permission == Permissions.StockReleaseApprove && ScopePolicy.CanRequestStepUp(actor, snapshot, permission, now) ||
-                (permission is Permissions.StockReceive or Permissions.ProcurementSupplierDocumentRecord or Permissions.ProcurementSupplierDocumentMatch or Permissions.SupplierClaim or Permissions.SupplierClaimApprove or Permissions.ProcurementStockValuationPropose or Permissions.ProcurementStockValuationDecide or Permissions.ProcurementPayablePropose or Permissions.ProcurementPayableDecide or Permissions.ProcurementAdvanceReturnPropose or Permissions.ProcurementAdvanceReturnDecide or Permissions.ProcurementQualityAcceptancePropose or Permissions.ProcurementQualityAcceptanceDecide or Permissions.StockSourceReconciliationPropose or Permissions.StockSourceReconciliationDecide) && ScopePolicy.CanRequestStepUp(actor, snapshot, permission, now) ||
-                (permission is Permissions.CaseManage or Permissions.PaymentReviewManage or Permissions.PaymentReviewManual or Permissions.JournalReverse or Permissions.PaymentAllocate or Permissions.PaymentVerify or Permissions.BankReceiptConfirm or Permissions.BankStatementStage or Permissions.ReceivingAccountVerify or Permissions.ReceivingAccountApprove or Permissions.PaymentReviewCorrect or Permissions.OrderSpendApprove or Permissions.PricingApprove or Permissions.CatalogPublicApprove or Permissions.StockSourceApprove or Permissions.StockSourceSuspend or Permissions.StockSourcePolicyApprove or Permissions.CreditApprove or Permissions.RefundApprove or Permissions.DisbursementRecord or Permissions.DisbursementVerify or Permissions.OrganizationApprove or Permissions.OrderSpendingPolicyPropose or Permissions.OrderSpendingPolicyApprove or Permissions.OrderCommercialPolicyPropose or Permissions.OrderCommercialPolicyApprove or Permissions.AccountingBookPropose or Permissions.AccountingBookApprove or Permissions.ProcurementPrepare or Permissions.ProcurementApprove or Permissions.ProcurementContainerReceive or Permissions.ProcurementInspect or Permissions.SupplierChangePropose or Permissions.SupplierChangeApprove or Permissions.FundingRequest or Permissions.FundingApprove or Permissions.SupplierBankPropose or Permissions.SupplierBankApprove) && ScopePolicy.CanRequestStepUp(actor, snapshot, permission, now))).Distinct(StringComparer.Ordinal).ToArray();
+    /// <summary>Capabilities that widen what a grant's scope covers (a branch or the whole buying organisation). They are part of a
+    /// grant, never a task a page offers, so they are not listed among the actions.</summary>
+    internal static readonly string[] ScopeCapabilities = [Permissions.BranchPic, Permissions.OrganizationWide];
+    /// <summary>Every permission a page may check. Pages decide what to offer from these names, so the list is the whole catalog:
+    /// a hand-kept list silently hid functions people were granted (F-001: invitations and account recovery). Report reading keeps
+    /// its own shop-only rule (<see cref="ReportingActions"/>).</summary>
+    internal static IReadOnlyList<string> DiscoverablePermissions { get; } =
+        [.. Permissions.Catalog.Keys.Where(permission => !ScopeCapabilities.Contains(permission)).Order(StringComparer.Ordinal)];
+
+    // UI task discovery is separate from administrative catalog admission. A permission is offered when the actor may use it now, or
+    // when it needs a fresh factor the actor can renew: reviewers keep the verification entry when MFA ages; every protected read or
+    // command still enforces current assurance.
+    internal static string[] CurrentActions(ActorContext actor, AuthorizationSnapshot snapshot, DateTimeOffset now) =>
+        AvailableActions(actor, snapshot, now).Concat(ReportingActions(actor, snapshot, now))
+            .Concat(DiscoverablePermissions.Where(permission => permission != Permissions.ReportRead &&
+                (ScopePolicy.Compile(actor, snapshot, permission, now).IsAllowed || ScopePolicy.CanRequestStepUp(actor, snapshot, permission, now))))
+            .Distinct(StringComparer.Ordinal).ToArray();
+    /// <summary>Pages offer a function only when it can work for this account. catalog.read means "browse the organisation catalog"
+    /// to every page, so staff whose catalog.read serves their own shop work, without a catalog entitlement, are not offered it
+    /// (G-032). Person reviews are not offered while no review trust adapter is configured (G-039). Grants are unchanged.</summary>
+    private static async Task<string[]> OfferedActionsAsync(HttpContext http, ActorContext actor, AuthorizationSnapshot snapshot, string[] actions,
+        CancellationToken ct)
+    {
+        var offered = actions.ToList();
+        if (offered.Contains(Permissions.CatalogRead) && (http.RequestServices.GetService<UnitToko.Platform.Catalog.CatalogVisibilityStore>() is not { } catalog ||
+            !await catalog.CanBrowseAsync(actor, snapshot, ct))) offered.Remove(Permissions.CatalogRead);
+        if (http.RequestServices.GetService<UnitToko.Platform.Identity.PersonWithdrawalService>() is not { ReviewAvailable: true })
+            offered.RemoveAll(permission => permission is Permissions.PersonReviewRead or Permissions.PersonReviewPropose or Permissions.PersonReviewApprove);
+        return [.. offered];
+    }
     private static string[] AvailableActions(ActorContext actor, AuthorizationSnapshot snapshot, DateTimeOffset now) =>
         AdministrativeActions.Where(permission => ScopePolicy.Compile(actor, snapshot, permission, now).IsAllowed).ToArray();
 
@@ -180,7 +185,10 @@ public static partial class AccessEndpoints
     private static string RoleLabel(string id) => id switch
     {
         "buyer" => "Pembeli", "store-staff" => "Staf toko", "store-head" => "Kepala toko",
-        "courier" => "Kurir", "finance" => "Keuangan", "system-admin" => "Administrator sistem", _ => id
+        "courier" => "Kurir", "finance" => "Keuangan", "system-admin" => "Administrator sistem",
+        "branch-approver" => "Penyetuju belanja cabang", "catalog-officer" => "Petugas katalog", "catalog-reviewer" => "Peninjau harga dan katalog tamu",
+        "dispatcher" => "Petugas pengiriman", "finance-maker" => "Keuangan penagihan", "finance-checker" => "Pemeriksa pembayaran",
+        "procurement-officer" => "Petugas pengadaan", "procurement-approver" => "Penyetuju pengadaan", "warehouse-receiver" => "Petugas penerimaan gudang", _ => id
     };
     private static string PackLabel(string id) => id switch
     {
